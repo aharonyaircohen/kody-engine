@@ -77,11 +77,12 @@ describe("profile: loadProfile", () => {
     expect(() => loadProfile(p)).toThrow(/permissionMode must be one of/)
   })
 
-  it("rejects empty tools", () => {
+  it("accepts empty tools (configless executables like init/release)", () => {
     const dir = tmpDir()
-    const bad = { ...VALID_MIN, claudeCode: { ...VALID_MIN.claudeCode, tools: [] } }
-    const p = writeProfile(dir, bad)
-    expect(() => loadProfile(p)).toThrow(/tools must declare at least one/)
+    const good = { ...VALID_MIN, claudeCode: { ...VALID_MIN.claudeCode, tools: [] } }
+    const p = writeProfile(dir, good)
+    const profile = loadProfile(p)
+    expect(profile.claudeCode.tools).toEqual([])
   })
 
   it("preserves runWhen on script entries", () => {
