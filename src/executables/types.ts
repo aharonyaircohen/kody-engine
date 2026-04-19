@@ -7,8 +7,8 @@
  * (build, review, plan, etc.) — it only executes what the profile declares.
  */
 
-import type { Kody2Config } from "../config.js"
 import type { AgentResult } from "../agent.js"
+import type { Kody2Config } from "../config.js"
 
 // ────────────────────────────────────────────────────────────────────────────
 // Profile shape (mirrors the JSON on disk).
@@ -144,11 +144,7 @@ export interface Context {
 
 export type PreflightScript = (ctx: Context, profile: Profile) => Promise<void>
 
-export type PostflightScript = (
-  ctx: Context,
-  profile: Profile,
-  agentResult: AgentResult | null,
-) => Promise<void>
+export type PostflightScript = (ctx: Context, profile: Profile, agentResult: AgentResult | null) => Promise<void>
 
 /** A registered script may be either phase; registry looks it up by name. */
 export type AnyScript = PreflightScript | PostflightScript

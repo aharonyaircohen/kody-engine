@@ -7,15 +7,18 @@
  * Profile as trustworthy.
  */
 
-import * as fs from "fs"
-import * as path from "path"
-import type { Profile, InputSpec, ScriptEntry, CliToolSpec, ClaudeCodeSpec } from "./executables/types.js"
+import * as fs from "node:fs"
+import * as path from "node:path"
+import type { ClaudeCodeSpec, CliToolSpec, InputSpec, Profile, ScriptEntry } from "./executables/types.js"
 
 const VALID_INPUT_TYPES = new Set(["int", "string", "bool", "enum"])
 const VALID_PERMISSION_MODES = new Set(["default", "acceptEdits", "plan", "bypassPermissions"])
 
 export class ProfileError extends Error {
-  constructor(public profilePath: string, message: string) {
+  constructor(
+    public profilePath: string,
+    message: string,
+  ) {
     super(`Invalid profile at ${profilePath}:\n  ${message}`)
     this.name = "ProfileError"
   }
@@ -57,10 +60,7 @@ export function loadProfile(profilePath: string): Profile {
  * Second-pass validation that every script referenced by the profile is
  * registered. Called by the executor after it imports the script catalog.
  */
-export function validateScriptReferences(
-  profile: Profile,
-  registeredScripts: Set<string>,
-): string[] {
+export function validateScriptReferences(profile: Profile, registeredScripts: Set<string>): string[] {
   const missing: string[] = []
   for (const e of [...profile.scripts.preflight, ...profile.scripts.postflight]) {
     if (!registeredScripts.has(e.script)) missing.push(e.script)
@@ -93,7 +93,9 @@ function parseInputs(p: string, raw: unknown): InputSpec[] {
       throw new ProfileError(p, `inputs[${i}].type must be one of int|string|bool|enum`)
     }
     const spec: InputSpec = {
-      name, flag, type,
+      name,
+      flag,
+      type,
       describe: typeof r.describe === "string" ? r.describe : "",
     }
     if (type === "enum") {
@@ -117,7 +119,9 @@ function parseClaudeCode(p: string, raw: unknown): ClaudeCodeSpec {
   }
   const r = raw as Record<string, unknown>
 
-  const permissionMode = (typeof r.permissionMode === "string" ? r.permissionMode : "acceptEdits") as ClaudeCodeSpec["permissionMode"]
+  const permissionMode = (
+    typeof r.permissionMode === "string" ? r.permissionMode : "acceptEdits"
+  ) as ClaudeCodeSpec["permissionMode"]
   if (!VALID_PERMISSION_MODES.has(permissionMode)) {
     throw new ProfileError(p, `claudeCode.permissionMode must be one of default|acceptEdits|plan|bypassPermissions`)
   }
@@ -129,8 +133,12 @@ function parseClaudeCode(p: string, raw: unknown): ClaudeCodeSpec {
 
   const hooksRaw = (r.hooks ?? {}) as Record<string, unknown>
   const hooks = {
-    PreToolUse: Array.isArray(hooksRaw.PreToolUse) ? (hooksRaw.PreToolUse as ClaudeCodeSpec["hooks"]["PreToolUse"]) : [],
-    PostToolUse: Array.isArray(hooksRaw.PostToolUse) ? (hooksRaw.PostToolUse as ClaudeCodeSpec["hooks"]["PostToolUse"]) : [],
+    PreToolUse: Array.isArray(hooksRaw.PreToolUse)
+      ? (hooksRaw.PreToolUse as ClaudeCodeSpec["hooks"]["PreToolUse"])
+      : [],
+    PostToolUse: Array.isArray(hooksRaw.PostToolUse)
+      ? (hooksRaw.PostToolUse as ClaudeCodeSpec["hooks"]["PostToolUse"])
+      : [],
     Stop: Array.isArray(hooksRaw.Stop) ? (hooksRaw.Stop as ClaudeCodeSpec["hooks"]["Stop"]) : [],
   }
 

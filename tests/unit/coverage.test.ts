@@ -1,10 +1,5 @@
-import { describe, it, expect } from "vitest"
-import {
-  patternToRegex,
-  renderSiblingPath,
-  checkCoverage,
-  formatMissesForFeedback,
-} from "../../src/coverage.js"
+import { describe, expect, it } from "vitest"
+import { checkCoverage, formatMissesForFeedback, patternToRegex, renderSiblingPath } from "../../src/coverage.js"
 
 describe("coverage: patternToRegex", () => {
   it("matches ** across path segments", () => {
@@ -27,12 +22,10 @@ describe("coverage: patternToRegex", () => {
 
 describe("coverage: renderSiblingPath", () => {
   it("expands {name} and {ext}", () => {
-    expect(renderSiblingPath("src/app/api/x/route.ts", "{name}.test{ext}"))
-      .toBe("src/app/api/x/route.test.ts")
+    expect(renderSiblingPath("src/app/api/x/route.ts", "{name}.test{ext}")).toBe("src/app/api/x/route.test.ts")
   })
   it("handles literal sibling names", () => {
-    expect(renderSiblingPath("src/app/api/x/route.ts", "route.test.ts"))
-      .toBe("src/app/api/x/route.test.ts")
+    expect(renderSiblingPath("src/app/api/x/route.ts", "route.test.ts")).toBe("src/app/api/x/route.test.ts")
   })
   it("works for files at the root", () => {
     expect(renderSiblingPath("foo.ts", "{name}.test.ts")).toBe("foo.test.ts")
@@ -52,16 +45,14 @@ describe("coverage: checkCoverage", () => {
   })
 
   it("passes when the sibling test is also added", () => {
-    const misses = checkCoverage(
-      ["src/app/api/x/route.ts", "src/app/api/x/route.test.ts"],
-      reqs,
-    )
+    const misses = checkCoverage(["src/app/api/x/route.ts", "src/app/api/x/route.test.ts"], reqs)
     expect(misses).toEqual([])
   })
 
   it("ignores files that are themselves tests", () => {
-    expect(checkCoverage(["src/foo.test.ts"], [{ pattern: "src/**/*.ts", requireSibling: "{name}.test.ts" }]))
-      .toEqual([])
+    expect(checkCoverage(["src/foo.test.ts"], [{ pattern: "src/**/*.ts", requireSibling: "{name}.test.ts" }])).toEqual(
+      [],
+    )
   })
 
   it("flags multiple misses across requirements", () => {
@@ -69,10 +60,7 @@ describe("coverage: checkCoverage", () => {
       { pattern: "src/app/api/**/route.ts", requireSibling: "{name}.test{ext}" },
       { pattern: "src/services/*.ts", requireSibling: "{name}.test{ext}" },
     ]
-    const misses = checkCoverage(
-      ["src/app/api/x/route.ts", "src/services/foo.ts"],
-      multi,
-    )
+    const misses = checkCoverage(["src/app/api/x/route.ts", "src/services/foo.ts"], multi)
     expect(misses).toHaveLength(2)
   })
 })

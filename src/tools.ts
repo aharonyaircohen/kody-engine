@@ -9,7 +9,7 @@
  *      install, leave it absent (the executable tolerates its absence).
  */
 
-import { execFileSync } from "child_process"
+import { execFileSync } from "node:child_process"
 import type { CliToolSpec } from "./executables/types.js"
 
 export interface ToolCheckResult {
@@ -60,5 +60,7 @@ function runShell(cmd: string, cwd?: string, timeoutMs = 30_000): boolean {
   try {
     execFileSync("sh", ["-c", cmd], { cwd, stdio: "pipe", timeout: timeoutMs })
     return true
-  } catch { return false }
+  } catch {
+    return false
+  }
 }

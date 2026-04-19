@@ -1,4 +1,4 @@
-import { execFileSync } from "child_process"
+import { execFileSync } from "node:child_process"
 
 const FORBIDDEN_PATH_PREFIXES = [
   ".kody/",
@@ -14,7 +14,17 @@ const FORBIDDEN_PATH_EXACT = new Set([".env"])
 const FORBIDDEN_PATH_SUFFIXES = [".log"]
 
 const CONVENTIONAL_PREFIXES = [
-  "feat:", "fix:", "chore:", "docs:", "refactor:", "test:", "perf:", "ci:", "style:", "build:", "revert:",
+  "feat:",
+  "fix:",
+  "chore:",
+  "docs:",
+  "refactor:",
+  "test:",
+  "perf:",
+  "ci:",
+  "style:",
+  "build:",
+  "revert:",
 ]
 
 export interface CommitResult {
@@ -44,11 +54,16 @@ function git(args: string[], cwd?: string): string {
 }
 
 function tryGit(args: string[], cwd?: string): boolean {
-  try { git(args, cwd); return true } catch { return false }
+  try {
+    git(args, cwd)
+    return true
+  } catch {
+    return false
+  }
 }
 
-import * as fs from "fs"
-import * as path from "path"
+import * as fs from "node:fs"
+import * as path from "node:path"
 
 /**
  * Real-world models sometimes run `git stash`, `git checkout`, `git merge`, etc.
@@ -70,10 +85,7 @@ export function abortUnfinishedGitOps(cwd?: string): string[] {
   if (fs.existsSync(path.join(gitDir, "REVERT_HEAD"))) {
     if (tryGit(["revert", "--abort"], cwd)) aborted.push("revert")
   }
-  if (
-    fs.existsSync(path.join(gitDir, "rebase-merge")) ||
-    fs.existsSync(path.join(gitDir, "rebase-apply"))
-  ) {
+  if (fs.existsSync(path.join(gitDir, "rebase-merge")) || fs.existsSync(path.join(gitDir, "rebase-apply"))) {
     if (tryGit(["rebase", "--abort"], cwd)) aborted.push("rebase")
   }
 
@@ -84,7 +96,9 @@ export function abortUnfinishedGitOps(cwd?: string): string[] {
       tryGit(["reset", "--mixed", "HEAD"], cwd)
       aborted.push("unmerged-paths-reset")
     }
-  } catch { /* best effort */ }
+  } catch {
+    /* best effort */
+  }
 
   return aborted
 }
@@ -111,7 +125,10 @@ export function listChangedFiles(cwd?: string): string[] {
 }
 
 export function normalizeCommitMessage(raw: string): string {
-  const trimmed = raw.trim().replace(/^['"]|['"]$/g, "").trim()
+  const trimmed = raw
+    .trim()
+    .replace(/^['"]|['"]$/g, "")
+    .trim()
   if (!trimmed) return "chore: kody2 update"
   const firstLine = trimmed.split("\n")[0]
   for (const prefix of CONVENTIONAL_PREFIXES) {
@@ -120,11 +137,7 @@ export function normalizeCommitMessage(raw: string): string {
   return `chore: ${trimmed}`
 }
 
-export function commitAndPush(
-  branch: string,
-  agentMessage: string,
-  cwd?: string,
-): CommitResult {
+export function commitAndPush(branch: string, agentMessage: string, cwd?: string): CommitResult {
   // Note: abortUnfinishedGitOps() is intentionally NOT called here anymore.
   // The postflight script (src/scripts/commitAndPush.ts) decides when to
   // abort (non-resolve modes) vs preserve (resolve mode keeps MERGE_HEAD so
@@ -142,7 +155,11 @@ export function commitAndPush(
   }
 
   for (const f of allowedFiles) {
-    try { git(["add", "--", f], cwd) } catch { /* skip individual file errors */ }
+    try {
+      git(["add", "--", f], cwd)
+    } catch {
+      /* skip individual file errors */
+    }
   }
 
   const message = normalizeCommitMessage(agentMessage)

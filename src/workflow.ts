@@ -1,4 +1,4 @@
-import { execFileSync } from "child_process"
+import { execFileSync } from "node:child_process"
 
 const GH_TIMEOUT_MS = 30_000
 
@@ -44,11 +44,16 @@ export function getLatestFailedRunForPr(prNumber: number, cwd?: string): FailedR
   try {
     const out = gh(
       [
-        "run", "list",
-        "--branch", headBranch,
-        "--status", "failure",
-        "--limit", "1",
-        "--json", "databaseId,workflowName,headBranch,conclusion,url,createdAt",
+        "run",
+        "list",
+        "--branch",
+        headBranch,
+        "--status",
+        "failure",
+        "--limit",
+        "1",
+        "--json",
+        "databaseId,workflowName,headBranch,conclusion,url,createdAt",
       ],
       cwd,
     )

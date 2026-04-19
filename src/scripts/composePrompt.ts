@@ -11,8 +11,8 @@
  * string (fail-soft).
  */
 
-import * as fs from "fs"
-import * as path from "path"
+import * as fs from "node:fs"
+import * as path from "node:path"
 import type { PreflightScript, Profile } from "../executables/types.js"
 import type { LoadedConvention } from "../prompt.js"
 
@@ -33,7 +33,10 @@ export const composePrompt: PreflightScript = async (ctx, profile) => {
 
   let templatePath = ""
   for (const c of candidates) {
-    if (fs.existsSync(c)) { templatePath = c; break }
+    if (fs.existsSync(c)) {
+      templatePath = c
+      break
+    }
   }
   if (!templatePath) {
     throw new Error(`profile at ${profile.dir}: no prompt template found (tried ${candidates.join(", ")})`)
@@ -43,14 +46,16 @@ export const composePrompt: PreflightScript = async (ctx, profile) => {
   const tokens: Record<string, string> = {
     ...stringifyAll(ctx.args, "args."),
     ...stringifyAll(ctx.data, ""),
-    "conventionsBlock": formatConventions(ctx.data.conventions as LoadedConvention[] | undefined),
-    "coverageBlock": formatCoverageBlock(ctx.data.coverageRules as { pattern: string; requireSibling: string }[] | undefined),
-    "toolsUsage": formatToolsUsage(profile),
-    "systemPromptAppend": profile.claudeCode.systemPromptAppend ?? "",
-    "repoOwner": ctx.config.github.owner,
-    "repoName": ctx.config.github.repo,
-    "defaultBranch": ctx.config.git.defaultBranch,
-    "branch": (ctx.data.branch as string) ?? "",
+    conventionsBlock: formatConventions(ctx.data.conventions as LoadedConvention[] | undefined),
+    coverageBlock: formatCoverageBlock(
+      ctx.data.coverageRules as { pattern: string; requireSibling: string }[] | undefined,
+    ),
+    toolsUsage: formatToolsUsage(profile),
+    systemPromptAppend: profile.claudeCode.systemPromptAppend ?? "",
+    repoOwner: ctx.config.github.owner,
+    repoName: ctx.config.github.repo,
+    defaultBranch: ctx.config.git.defaultBranch,
+    branch: (ctx.data.branch as string) ?? "",
   }
 
   ctx.data.prompt = template.replace(MUSTACHE, (_, key) => tokens[key] ?? "")
@@ -64,7 +69,7 @@ function stringifyAll(source: Record<string, unknown>, prefix: string): Record<s
     if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
       out[key] = String(v)
     } else if (Array.isArray(v)) {
-      out[key] = v.map((x) => typeof x === "string" ? x : JSON.stringify(x)).join("\n")
+      out[key] = v.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join("\n")
     } else if (typeof v === "object") {
       for (const [k2, v2] of Object.entries(v as Record<string, unknown>)) {
         if (typeof v2 === "string" || typeof v2 === "number" || typeof v2 === "boolean") {
@@ -78,10 +83,7 @@ function stringifyAll(source: Record<string, unknown>, prefix: string): Record<s
 
 function formatConventions(conventions: LoadedConvention[] | undefined): string {
   if (!conventions || conventions.length === 0) return ""
-  const lines = [
-    "# Project conventions (AUTHORITATIVE — follow these over patterns you infer from code)",
-    "",
-  ]
+  const lines = ["# Project conventions (AUTHORITATIVE — follow these over patterns you infer from code)", ""]
   for (const c of conventions) {
     lines.push(`## ${c.path}${c.truncated ? " (truncated)" : ""}`)
     lines.push("")
@@ -109,15 +111,12 @@ function formatCoverageBlock(reqs: { pattern: string; requireSibling: string }[]
 function formatToolsUsage(profile: Profile): string {
   const entries = (profile.cliTools ?? []).filter((t) => t.usage.trim().length > 0)
   if (entries.length === 0) return ""
-  const lines = [
-    "# Available CLI tools",
-    "",
-  ]
+  const lines = ["# Available CLI tools", ""]
   for (const t of entries) {
     lines.push(`## \`${t.name}\``)
     lines.push(t.usage)
     if (t.allowedUses.length > 0) {
-      lines.push(`Allowed sub-commands: ${t.allowedUses.map((u) => "`" + u + "`").join(", ")}`)
+      lines.push(`Allowed sub-commands: ${t.allowedUses.map((u) => `\`${u}\``).join(", ")}`)
     }
     lines.push("")
   }

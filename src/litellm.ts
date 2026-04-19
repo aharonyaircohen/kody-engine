@@ -1,13 +1,8 @@
-import * as fs from "fs"
-import * as os from "os"
-import * as path from "path"
-import { execFileSync, spawn, type ChildProcess } from "child_process"
-import {
-  type ProviderModel,
-  providerApiKeyEnvVar,
-  needsLitellmProxy,
-  LITELLM_DEFAULT_URL,
-} from "./config.js"
+import { execFileSync, spawn } from "node:child_process"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
+import { LITELLM_DEFAULT_URL, needsLitellmProxy, type ProviderModel, providerApiKeyEnvVar } from "./config.js"
 
 export async function checkLitellmHealth(url: string): Promise<boolean> {
   try {
@@ -50,7 +45,6 @@ export async function startLitellmIfNeeded(
   }
 
   let cmd = "litellm"
-  let args: string[]
   try {
     execFileSync("which", ["litellm"], { timeout: 3000, stdio: "pipe" })
   } catch {
@@ -67,9 +61,10 @@ export async function startLitellmIfNeeded(
 
   const portMatch = url.match(/:(\d+)/)
   const port = portMatch ? portMatch[1] : "4000"
-  args = cmd === "litellm"
-    ? ["--config", configPath, "--port", port]
-    : ["-m", "litellm", "--config", configPath, "--port", port]
+  const args =
+    cmd === "litellm"
+      ? ["--config", configPath, "--port", port]
+      : ["-m", "litellm", "--config", configPath, "--port", port]
 
   const dotenvVars = readDotenvApiKeys(projectDir)
   const logPath = path.join(os.tmpdir(), `kody2-litellm-${Date.now()}.log`)
@@ -85,13 +80,30 @@ export async function startLitellmIfNeeded(
   for (let i = 0; i < 30; i++) {
     await new Promise((r) => setTimeout(r, 2000))
     if (await checkLitellmHealth(url)) {
-      return { url, kill: () => { try { child.kill() } catch { /* best effort */ } } }
+      return {
+        url,
+        kill: () => {
+          try {
+            child.kill()
+          } catch {
+            /* best effort */
+          }
+        },
+      }
     }
   }
 
   let logTail = ""
-  try { logTail = fs.readFileSync(logPath, "utf-8").slice(-2000) } catch { /* ignore */ }
-  try { child.kill() } catch { /* ignore */ }
+  try {
+    logTail = fs.readFileSync(logPath, "utf-8").slice(-2000)
+  } catch {
+    /* ignore */
+  }
+  try {
+    child.kill()
+  } catch {
+    /* ignore */
+  }
   throw new Error(`LiteLLM proxy failed to start within 60s. Log tail:\n${logTail}`)
 }
 

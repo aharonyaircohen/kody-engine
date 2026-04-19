@@ -73,11 +73,12 @@
     ],
     "postflight": [
       { "script": "parseAgentResult" },
-      { "script": "verify" },
-      { "script": "checkCoverageWithRetry" },
+      { "script": "verify",                 "runWhen": { "args.mode": ["run", "fix", "fix-ci"] } },
+      { "script": "checkCoverageWithRetry", "runWhen": { "args.mode": ["run", "fix", "fix-ci"] } },
       { "script": "commitAndPush" },
       { "script": "ensurePr" },
-      { "script": "postIssueComment" }
+      { "script": "postIssueComment" },
+      { "script": "writeRunSummary" }
     ]
   }
 }

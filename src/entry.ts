@@ -1,9 +1,14 @@
+import pkg from "../package.json"
+import type { Kody2Config } from "./config.js"
 import { loadConfig } from "./config.js"
 import { runExecutable } from "./executor.js"
 import { runCi } from "./kody2-cli.js"
+import { hasExecutable, listExecutables, parseGenericFlags } from "./registry.js"
 
 interface ParsedArgs {
-  command: "run" | "fix" | "fix-ci" | "resolve" | "ci" | "help" | "version"
+  command: "run" | "fix" | "fix-ci" | "resolve" | "ci" | "help" | "version" | "__executable__"
+  executableName?: string
+  cliArgs?: Record<string, unknown>
   issueNumber?: number
   prNumber?: number
   feedback?: string
@@ -31,10 +36,10 @@ All commands dispatch to the Build executable with a specific mode. The
 executable is defined by \`src/executables/build/profile.json\`.
 
 Exit codes:
-  0   success (PR opened, verify passed)
+  0   success (PR opened, verify passed — or resolve produced a merge commit)
   1   agent reported FAILED (draft PR opened)
-  2   verify failed (draft PR opened)
-  3   no commits to ship
+  2   verify failed (draft PR opened) — skipped in resolve mode
+  3   no commits to ship (also the resolve clean-merge short-circuit)
   4   PR creation failed
   5   uncommitted changes on target branch
   64  invalid CLI args
@@ -58,7 +63,22 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return result
   }
 
-  result.errors.push(`unknown command: ${cmd}`)
+  // Fall through to registry: auto-discovered executables (init, review, watch-*, …).
+  if (hasExecutable(cmd)) {
+    result.command = "__executable__"
+    result.executableName = cmd
+    result.cliArgs = parseGenericFlags(argv.slice(1))
+    if (typeof result.cliArgs.cwd === "string") result.cwd = result.cliArgs.cwd
+    if (result.cliArgs.verbose === true) result.verbose = true
+    if (result.cliArgs.quiet === true) result.quiet = true
+    return result
+  }
+
+  const discovered = listExecutables()
+    .map((e) => e.name)
+    .filter((n) => n !== "build") // build is exposed via run/fix/fix-ci/resolve, not directly
+  const available = ["run", "fix", "fix-ci", "resolve", "ci", "help", "version", ...discovered]
+  result.errors.push(`unknown command: ${cmd} (available: ${available.join(", ")})`)
   return result
 }
 
@@ -96,7 +116,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 
   if (args.errors.length > 0) {
     for (const e of args.errors) process.stderr.write(`error: ${e}\n`)
-    process.stderr.write("\n" + HELP_TEXT)
+    process.stderr.write(`\n${HELP_TEXT}`)
     return 64
   }
   if (args.command === "help") {
@@ -104,7 +124,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     return 0
   }
   if (args.command === "version") {
-    process.stdout.write("kody2 0.2.1\n")
+    process.stdout.write(`kody2 ${pkg.version}\n`)
     return 0
   }
   if (args.command === "ci") {
@@ -113,22 +133,43 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       process.stderr.write(`[kody2] fatal: ${msg}\n`)
-      if (err instanceof Error && err.stack) process.stderr.write(err.stack + "\n")
+      if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`)
       return 99
     }
   }
 
-  // All four pipeline commands (run/fix/fix-ci/resolve) dispatch to the Build executable.
   const cwd = args.cwd ?? process.cwd()
-  let config
-  try { config = loadConfig(cwd) }
-  catch (err) {
+  let config: Kody2Config
+  try {
+    config = loadConfig(cwd)
+  } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     process.stderr.write(`[kody2] config error: ${msg}\n`)
     process.stdout.write(`PR_URL=FAILED: config error: ${msg}\n`)
     return 99
   }
 
+  // Auto-discovered executables (e.g. init, review, watch-*).
+  if (args.command === "__executable__") {
+    try {
+      const result = await runExecutable(args.executableName!, {
+        cliArgs: args.cliArgs ?? {},
+        cwd,
+        config,
+        verbose: args.verbose,
+        quiet: args.quiet,
+      })
+      return result.exitCode
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[kody2] ${args.executableName} crashed: ${msg}\n`)
+      if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`)
+      process.stdout.write(`PR_URL=FAILED: ${args.executableName} crashed: ${msg}\n`)
+      return 99
+    }
+  }
+
+  // The four pipeline commands (run/fix/fix-ci/resolve) dispatch to the Build executable.
   const cliArgs: Record<string, unknown> = { mode: args.command }
   if (args.issueNumber !== undefined) cliArgs.issue = args.issueNumber
   if (args.prNumber !== undefined) cliArgs.pr = args.prNumber
@@ -147,7 +188,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     process.stderr.write(`[kody2] wrapper crashed: ${msg}\n`)
-    if (err instanceof Error && err.stack) process.stderr.write(err.stack + "\n")
+    if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`)
     process.stdout.write(`PR_URL=FAILED: wrapper crashed: ${msg}\n`)
     return 99
   }

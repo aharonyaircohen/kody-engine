@@ -3,8 +3,8 @@
  * No-op if commitAndPush didn't produce any change and the branch isn't ahead.
  */
 
-import { ensurePr as doEnsurePr } from "../pr.js"
 import type { PostflightScript } from "../executables/types.js"
+import { ensurePr as doEnsurePr } from "../pr.js"
 
 export const ensurePr: PostflightScript = async (ctx) => {
   if (ctx.skipAgent && ctx.output.exitCode !== undefined && ctx.output.exitCode !== 0) {

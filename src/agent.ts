@@ -1,8 +1,8 @@
+import * as fs from "node:fs"
+import * as path from "node:path"
 import { query } from "@anthropic-ai/claude-agent-sdk"
-import * as fs from "fs"
-import * as path from "path"
-import { renderEvent, type SdkMessageLike } from "./format.js"
 import { getAnthropicApiKeyOrDummy, type ProviderModel } from "./config.js"
+import { renderEvent, type SdkMessageLike } from "./format.js"
 
 export interface AgentResult {
   outcome: "completed" | "failed"
@@ -34,7 +34,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const fullLog = fs.createWriteStream(ndjsonPath, { flags: "w" })
 
   const env: Record<string, string> = {
-    ...process.env as Record<string, string>,
+    ...(process.env as Record<string, string>),
     SKIP_HOOKS: "1",
     HUSKY: "0",
     CI: process.env.CI ?? "1",
@@ -61,10 +61,14 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     })
 
     for await (const msg of result) {
-      try { fullLog.write(JSON.stringify(msg) + "\n") } catch { /* best effort */ }
+      try {
+        fullLog.write(`${JSON.stringify(msg)}\n`)
+      } catch {
+        /* best effort */
+      }
 
       const line = renderEvent(msg as SdkMessageLike, { verbose: opts.verbose, quiet: opts.quiet })
-      if (line) process.stdout.write(line + "\n")
+      if (line) process.stdout.write(`${line}\n`)
 
       const m = msg as SdkMessageLike
       if (m.type === "result") {
@@ -81,7 +85,11 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     outcome = "failed"
     errorMessage = e instanceof Error ? e.message : String(e)
   } finally {
-    try { fullLog.end() } catch { /* best effort */ }
+    try {
+      fullLog.end()
+    } catch {
+      /* best effort */
+    }
   }
 
   return { outcome, finalText, error: errorMessage, ndjsonPath }

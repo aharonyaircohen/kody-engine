@@ -1,20 +1,16 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import * as fs from "fs"
-import * as os from "os"
-import * as path from "path"
-import { execFileSync } from "child_process"
+import { execFileSync } from "node:child_process"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
-  ensureFeatureBranch,
   deriveBranchName,
-  hasUncommittedChanges,
+  ensureFeatureBranch,
   getCurrentBranch,
+  hasUncommittedChanges,
   UncommittedChangesError,
 } from "../../src/branch.js"
-import {
-  commitAndPush,
-  hasCommitsAhead,
-  listChangedFiles,
-} from "../../src/commit.js"
+import { commitAndPush, hasCommitsAhead, listChangedFiles } from "../../src/commit.js"
 
 interface TempRepo {
   workdir: string
@@ -57,7 +53,11 @@ function makeTempRepo(): TempRepo {
     workdir,
     remote,
     cleanup: () => {
-      try { fs.rmSync(root, { recursive: true, force: true }) } catch { /* best effort */ }
+      try {
+        fs.rmSync(root, { recursive: true, force: true })
+      } catch {
+        /* best effort */
+      }
     },
   }
 }
@@ -65,8 +65,12 @@ function makeTempRepo(): TempRepo {
 describe("integration: git flow", () => {
   let repo: TempRepo
 
-  beforeEach(() => { repo = makeTempRepo() })
-  afterEach(() => { repo.cleanup() })
+  beforeEach(() => {
+    repo = makeTempRepo()
+  })
+  afterEach(() => {
+    repo.cleanup()
+  })
 
   it("creates a feature branch from main", () => {
     const result = ensureFeatureBranch(123, "Add cool thing", "main", repo.workdir)
@@ -87,8 +91,7 @@ describe("integration: git flow", () => {
     ensureFeatureBranch(8, "Y", "main", repo.workdir)
     fs.writeFileSync(path.join(repo.workdir, "README.md"), "# initial\nWIP edit\n")
     expect(hasUncommittedChanges(repo.workdir)).toBe(true)
-    expect(() => ensureFeatureBranch(8, "Y", "main", repo.workdir))
-      .toThrow(UncommittedChangesError)
+    expect(() => ensureFeatureBranch(8, "Y", "main", repo.workdir)).toThrow(UncommittedChangesError)
   })
 
   it("ignores untracked files (not protectable WIP)", () => {

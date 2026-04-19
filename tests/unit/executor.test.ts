@@ -8,11 +8,11 @@
  * behavior-compatibility). Here we lock in the new surface.
  */
 
-import { describe, it, expect } from "vitest"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
+import { describe, expect, it } from "vitest"
 import { loadProfile } from "../../src/profile.js"
-import * as fs from "fs"
-import * as os from "os"
-import * as path from "path"
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody2-exec-"))
@@ -78,9 +78,26 @@ describe("executor: Build profile is loadable + valid", () => {
     expect(profile.name).toBe("build")
     const modes = profile.inputs.find((i) => i.name === "mode")!.values
     expect(modes).toEqual(["run", "fix", "fix-ci", "resolve"])
-    const flowScripts = profile.scripts.preflight
-      .filter((s) => s.runWhen)
-      .map((s) => s.script)
+    const flowScripts = profile.scripts.preflight.filter((s) => s.runWhen).map((s) => s.script)
     expect(flowScripts).toEqual(["runFlow", "fixFlow", "fixCiFlow", "resolveFlow"])
+  })
+
+  it("gates verify + checkCoverageWithRetry to non-resolve modes", () => {
+    // Resolve is a merge operation; running verify on it turns pre-existing
+    // quality-gate failures into misleading exit code 2s.
+    const profilePath = path.resolve(__dirname, "../../src/executables/build/profile.json")
+    const profile = loadProfile(profilePath)
+    const verify = profile.scripts.postflight.find((s) => s.script === "verify")!
+    const coverage = profile.scripts.postflight.find((s) => s.script === "checkCoverageWithRetry")!
+    expect(verify.runWhen).toEqual({ "args.mode": ["run", "fix", "fix-ci"] })
+    expect(coverage.runWhen).toEqual({ "args.mode": ["run", "fix", "fix-ci"] })
+  })
+
+  it("registers writeRunSummary as the final postflight step", () => {
+    const profilePath = path.resolve(__dirname, "../../src/executables/build/profile.json")
+    const profile = loadProfile(profilePath)
+    const last = profile.scripts.postflight.at(-1)!
+    expect(last.script).toBe("writeRunSummary")
+    expect(last.runWhen).toBeUndefined()
   })
 })

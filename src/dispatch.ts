@@ -13,7 +13,7 @@
  * after the `@kody2` trigger. First match wins in the priority order above.
  */
 
-import * as fs from "fs"
+import * as fs from "node:fs"
 
 export interface DispatchResult {
   mode: "run" | "fix" | "fix-ci" | "resolve"
@@ -36,7 +36,11 @@ export function autoDispatch(explicit?: { mode?: string; target?: number }): Dis
   if (!eventName || !eventPath || !fs.existsSync(eventPath)) return null
 
   let event: Record<string, any> = {}
-  try { event = JSON.parse(fs.readFileSync(eventPath, "utf-8")) } catch { return null }
+  try {
+    event = JSON.parse(fs.readFileSync(eventPath, "utf-8"))
+  } catch {
+    return null
+  }
 
   if (eventName === "workflow_dispatch") {
     const n = parseInt(String(event.inputs?.issue_number ?? ""), 10)
@@ -86,8 +90,6 @@ function extractAfterTag(body: string): string {
  * then fall back to the latest PR review body.
  */
 function extractFeedback(afterTag: string): string | undefined {
-  const cleaned = afterTag
-    .replace(/^(fix|please|kindly)[\s:,.-]+/i, "")
-    .trim()
+  const cleaned = afterTag.replace(/^(fix|please|kindly)[\s:,.-]+/i, "").trim()
   return cleaned.length > 0 ? cleaned : undefined
 }

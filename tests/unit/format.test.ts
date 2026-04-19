@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { describe, expect, it } from "vitest"
 import { renderEvent, type SdkMessageLike } from "../../src/format.js"
 
 describe("format: renderEvent", () => {

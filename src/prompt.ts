@@ -1,7 +1,7 @@
-import * as fs from "fs"
-import * as path from "path"
+import * as fs from "node:fs"
+import * as path from "node:path"
 import type { Kody2Config } from "./config.js"
-import type { IssueData, IssueComment } from "./issue.js"
+import type { IssueComment, IssueData } from "./issue.js"
 
 const DEFAULT_COMMENT_LIMIT = 50
 const DEFAULT_COMMENT_MAX_BYTES = 10_000
@@ -34,9 +34,13 @@ export function loadProjectConventions(projectDir: string): LoadedConvention[] {
     const abs = path.join(projectDir, rel)
     if (!fs.existsSync(abs)) continue
     let content: string
-    try { content = fs.readFileSync(abs, "utf-8") } catch { continue }
+    try {
+      content = fs.readFileSync(abs, "utf-8")
+    } catch {
+      continue
+    }
     const truncated = content.length > CONVENTIONS_PER_FILE_MAX_BYTES
-    if (truncated) content = content.slice(0, CONVENTIONS_PER_FILE_MAX_BYTES) + "\n\n… (truncated)"
+    if (truncated) content = `${content.slice(0, CONVENTIONS_PER_FILE_MAX_BYTES)}\n\n… (truncated)`
     out.push({ path: rel, content, truncated })
   }
   return out
@@ -134,21 +138,15 @@ function formatConventions(conventions: LoadedConvention[]): string {
     lines.push("```")
     lines.push("")
   }
-  return lines.join("\n") + "\n"
+  return `${lines.join("\n")}\n`
 }
 
-function formatComments(
-  comments: IssueComment[],
-  limit: number,
-  maxBytes: number,
-): string {
+function formatComments(comments: IssueComment[], limit: number, maxBytes: number): string {
   if (comments.length === 0) return "Recent comments: (none)"
   const recent = comments.slice(-limit).reverse()
   const lines = [`Recent comments (most recent first, up to ${limit}, truncated to ${maxBytes} bytes each):`]
   for (const c of recent) {
-    const body = c.body.length > maxBytes
-      ? c.body.slice(0, maxBytes) + "… (truncated)"
-      : c.body
+    const body = c.body.length > maxBytes ? `${c.body.slice(0, maxBytes)}… (truncated)` : c.body
     lines.push(`- [${c.author}] ${body.replace(/\n/g, " ")}`)
   }
   return lines.join("\n")
@@ -182,7 +180,10 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
   let prSummary = ""
   if (summaryStart !== -1) {
     const afterMarker = text.slice(summaryStart).replace(/^[\s\S]*?PR_SUMMARY\s*:[ \t]*\n/i, "")
-    prSummary = afterMarker.replace(/\n\s*```\s*$/g, "").replace(/```\s*$/g, "").trim()
+    prSummary = afterMarker
+      .replace(/\n\s*```\s*$/g, "")
+      .replace(/```\s*$/g, "")
+      .trim()
   }
 
   return { done: true, commitMessage, prSummary, failureReason: "" }

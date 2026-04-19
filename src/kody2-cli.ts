@@ -1,10 +1,10 @@
-import * as fs from "fs"
-import * as path from "path"
-import { execFileSync } from "child_process"
+import { execFileSync } from "node:child_process"
+import * as fs from "node:fs"
+import * as path from "node:path"
+import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
+import { autoDispatch } from "./dispatch.js"
 import { runExecutable } from "./executor.js"
 import { reactToTriggerComment } from "./gha.js"
-import { autoDispatch } from "./dispatch.js"
-import { loadConfig, parseProviderModel, needsLitellmProxy } from "./config.js"
 import { postIssueComment, truncate } from "./issue.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
@@ -86,7 +86,11 @@ export function unpackAllSecrets(env: NodeJS.ProcessEnv = process.env): number {
   const raw = env.ALL_SECRETS
   if (!raw) return 0
   let parsed: unknown
-  try { parsed = JSON.parse(raw) } catch { return 0 }
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return 0
+  }
   if (!parsed || typeof parsed !== "object") return 0
   let count = 0
   for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
@@ -129,7 +133,9 @@ function isOnPath(bin: string): boolean {
   try {
     execFileSync("which", [bin], { stdio: "pipe" })
     return true
-  } catch { return false }
+  } catch {
+    return false
+  }
 }
 
 export function ensurePackageManagerInstalled(pm: PackageManager, cwd: string): number {
@@ -144,8 +150,8 @@ export function installDeps(pm: PackageManager, cwd: string): number {
   const args: Record<PackageManager, string[]> = {
     pnpm: ["install", "--frozen-lockfile"],
     yarn: ["install", "--frozen-lockfile"],
-    bun:  ["install", "--frozen-lockfile"],
-    npm:  ["ci"],
+    bun: ["install", "--frozen-lockfile"],
+    npm: ["ci"],
   }
   return shellOut(pm, args[pm], cwd)
 }
@@ -177,9 +183,19 @@ export function configureGitIdentity(cwd: string): void {
   try {
     const name = execFileSync("git", ["config", "user.name"], { cwd, stdio: "pipe", encoding: "utf-8" }).trim()
     if (name) return
-  } catch { /* not set */ }
-  try { execFileSync("git", ["config", "user.name", "kody2-bot"], { cwd, stdio: "pipe" }) } catch { /* best effort */ }
-  try { execFileSync("git", ["config", "user.email", "kody2-bot@users.noreply.github.com"], { cwd, stdio: "pipe" }) } catch { /* best effort */ }
+  } catch {
+    /* not set */
+  }
+  try {
+    execFileSync("git", ["config", "user.name", "kody2-bot"], { cwd, stdio: "pipe" })
+  } catch {
+    /* best effort */
+  }
+  try {
+    execFileSync("git", ["config", "user.email", "kody2-bot@users.noreply.github.com"], { cwd, stdio: "pipe" })
+  } catch {
+    /* best effort */
+  }
 }
 
 function postFailureTail(issueNumber: number | undefined, cwd: string, reason: string): void {
@@ -191,11 +207,17 @@ function postFailureTail(issueNumber: number | undefined, cwd: string, reason: s
       const content = fs.readFileSync(logPath, "utf-8")
       tail = content.slice(-3000)
     }
-  } catch { /* best effort */ }
+  } catch {
+    /* best effort */
+  }
   const body = tail
     ? `⚠️ kody2 preflight failed: ${truncate(reason, 500)}\n\n<details><summary>Last-run log tail</summary>\n\n\`\`\`\n${tail}\n\`\`\`\n\n</details>`
     : `⚠️ kody2 preflight failed: ${truncate(reason, 1500)}`
-  try { postIssueComment(issueNumber, body, cwd) } catch { /* best effort */ }
+  try {
+    postIssueComment(issueNumber, body, cwd)
+  } catch {
+    /* best effort */
+  }
 }
 
 export async function runCi(argv: string[]): Promise<number> {
@@ -206,9 +228,7 @@ export async function runCi(argv: string[]): Promise<number> {
 
   const args = parseCiArgs(argv)
   // --issue is only required when autoDispatch can't infer from GHA env.
-  const autoFallback = !args.issueNumber
-    ? autoDispatch()
-    : null
+  const autoFallback = !args.issueNumber ? autoDispatch() : null
   if (!args.issueNumber && !autoFallback) {
     // Neither explicit flag nor detectable event — keep the original error.
   } else {
@@ -217,7 +237,7 @@ export async function runCi(argv: string[]): Promise<number> {
   }
   if (args.errors.length > 0 && !args.errors.includes("__HELP__")) {
     for (const e of args.errors) process.stderr.write(`error: ${e}\n`)
-    process.stderr.write("\n" + CI_HELP)
+    process.stderr.write(`\n${CI_HELP}`)
     return 64
   }
 
@@ -295,7 +315,7 @@ export async function runCi(argv: string[]): Promise<number> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     process.stderr.write(`[kody2] run crashed: ${msg}\n`)
-    if (err instanceof Error && err.stack) process.stderr.write(err.stack + "\n")
+    if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`)
     postFailureTail(issueNumber, cwd, `run crashed: ${msg}`)
     return 99
   }

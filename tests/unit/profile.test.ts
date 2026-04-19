@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest"
-import * as fs from "fs"
-import * as os from "os"
-import * as path from "path"
-import { loadProfile, validateScriptReferences, ProfileError } from "../../src/profile.js"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
+import { describe, expect, it } from "vitest"
+import { loadProfile, ProfileError, validateScriptReferences } from "../../src/profile.js"
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody2-profile-"))
@@ -46,7 +46,7 @@ describe("profile: loadProfile", () => {
   })
 
   it("throws on missing file", () => {
-    expect(() => loadProfile("/tmp/nope-" + Math.random() + "/profile.json")).toThrow(ProfileError)
+    expect(() => loadProfile(`/tmp/nope-${Math.random()}/profile.json`)).toThrow(ProfileError)
   })
 
   it("throws on invalid JSON", () => {
@@ -102,13 +102,15 @@ describe("profile: loadProfile", () => {
 describe("profile: validateScriptReferences", () => {
   it("returns names not in the registry", () => {
     const dir = tmpDir()
-    const profile = loadProfile(writeProfile(dir, {
-      ...VALID_MIN,
-      scripts: {
-        preflight: [{ script: "unknownScript" }, { script: "composePrompt" }],
-        postflight: [{ script: "verify" }],
-      },
-    }))
+    const profile = loadProfile(
+      writeProfile(dir, {
+        ...VALID_MIN,
+        scripts: {
+          preflight: [{ script: "unknownScript" }, { script: "composePrompt" }],
+          postflight: [{ script: "verify" }],
+        },
+      }),
+    )
     const missing = validateScriptReferences(profile, new Set(["composePrompt", "verify"]))
     expect(missing).toEqual(["unknownScript"])
   })

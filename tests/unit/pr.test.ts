@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest"
-import { buildPrTitle, buildPrBody } from "../../src/pr.js"
+import { describe, expect, it } from "vitest"
+import { buildPrBody, buildPrTitle, stripTitlePrefixes } from "../../src/pr.js"
 
 describe("pr: buildPrTitle", () => {
   it("formats issue number and title", () => {
@@ -15,6 +15,32 @@ describe("pr: buildPrTitle", () => {
     const result = buildPrTitle(1, long, false)
     expect(result.length).toBeLessThanOrEqual(72)
     expect(result.endsWith("…")).toBe(true)
+  })
+
+  it("strips pre-existing [WIP] #N: / #N: prefixes to prevent stacking", () => {
+    // Title fetched from an existing PR may already include the WIP prefix.
+    // Wrapping it again would stack: "[WIP] #42: [WIP] #42: Add X".
+    expect(buildPrTitle(42, "[WIP] #42: Add X", true)).toBe("[WIP] #42: Add X")
+    expect(buildPrTitle(42, "[WIP] #42: [WIP] #42: Add X", true)).toBe("[WIP] #42: Add X")
+    expect(buildPrTitle(42, "#42: Add X", false)).toBe("#42: Add X")
+  })
+})
+
+describe("pr: stripTitlePrefixes", () => {
+  it("peels a single [WIP] #N: prefix", () => {
+    expect(stripTitlePrefixes("[WIP] #42: hello")).toBe("hello")
+  })
+
+  it("peels a single #N: prefix", () => {
+    expect(stripTitlePrefixes("#42: hello")).toBe("hello")
+  })
+
+  it("peels multiple stacked prefixes", () => {
+    expect(stripTitlePrefixes("[WIP] #1: [WIP] #1: #1: title")).toBe("title")
+  })
+
+  it("returns raw title untouched when no prefix present", () => {
+    expect(stripTitlePrefixes("plain title")).toBe("plain title")
   })
 })
 
@@ -62,7 +88,7 @@ describe("pr: buildPrBody", () => {
   })
 
   it("hides multi-line failure reason in a collapsible details block", () => {
-    const huge = "verify failed: typecheck\n" + "ERROR ".repeat(2000)
+    const huge = `verify failed: typecheck\n${"ERROR ".repeat(2000)}`
     const body = buildPrBody({ ...baseOpts, draft: true, failureReason: huge })
     const headline = body.split("\n")[0]!
     expect(headline.length).toBeLessThan(220)

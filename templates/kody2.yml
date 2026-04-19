@@ -1,17 +1,22 @@
 # Drop this file at .github/workflows/kody2.yml in your repo.
 #
-# Triggers: @kody2 comment on an issue, or manual workflow_dispatch.
+# Triggers: @kody2 comment on an issue or PR, or manual workflow_dispatch.
 # Everything else (install deps, set up LiteLLM, run the agent, open the PR)
-# is handled inside the @kody-ade/engine package. This template should
+# is handled inside the @kody-ade/kody-engine package. This template should
 # rarely need editing — future kody2 capabilities ship via npm publish.
 #
 # Required repo secrets: at least one model provider key (e.g. MINIMAX_API_KEY,
 # ANTHROPIC_API_KEY). kody2 reads any *_API_KEY secret automatically via
 # toJSON(secrets) — no need to list them here.
 #
-# Optional: KODY_TOKEN secret — a PAT or GitHub App token. Needed only if
-# you want kody2's pushes to trigger downstream workflows. Without it,
-# github.token works fine for the PR/commit itself but won't fire other CI.
+# Recommended: KODY_TOKEN secret — a fine-grained PAT or GitHub App token
+# with `repo` + `read:org` scopes. Without it, kody2's commits/PR-creation
+# still work via github.token, but two things degrade:
+#   1. PR body updates fail with "token lacks read:org scope" (cosmetic,
+#      surfaces as warnings in logs; the PR itself is still created/updated).
+#   2. Pushes from kody2 won't trigger downstream workflows (github.token
+#      pushes are deliberately blocked from re-triggering CI).
+# Set KODY_TOKEN in repo Settings → Secrets → Actions.
 
 name: kody2
 
@@ -27,10 +32,14 @@ on:
 
 jobs:
   run:
+    # Skip bot-authored comments (e.g. kody2-bot's own status posts) so we
+    # don't loop the workflow on our own output.
     if: >-
       ${{ github.event_name == 'workflow_dispatch' ||
           (github.event_name == 'issue_comment' &&
-            contains(github.event.comment.body, '@kody2')) }}
+            contains(github.event.comment.body, '@kody2') &&
+            github.event.comment.user.login != 'kody2-bot' &&
+            github.event.comment.user.type != 'Bot') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:

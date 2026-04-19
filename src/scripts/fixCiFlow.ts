@@ -3,11 +3,11 @@
  * Loads PR, checks it out, fetches the failing workflow run + log tail.
  */
 
-import { getPr, getPrDiff, postPrReviewComment } from "../issue.js"
 import { checkoutPrBranch, getCurrentBranch } from "../branch.js"
-import { getLatestFailedRunForPr, getFailedRunLogTail } from "../workflow.js"
-import { getRunUrl } from "../gha.js"
 import type { PreflightScript } from "../executables/types.js"
+import { getRunUrl } from "../gha.js"
+import { getPr, getPrDiff, postPrReviewComment } from "../issue.js"
+import { getFailedRunLogTail, getLatestFailedRunForPr } from "../workflow.js"
 
 const LOG_MAX_BYTES = 30_000
 
@@ -59,9 +59,17 @@ export const fixCiFlow: PreflightScript = async (ctx) => {
 
   const runUrl = getRunUrl()
   const runSuffix = runUrl ? `, kody2 run ${runUrl}` : ""
-  tryPostPr(prNumber, `⚙️ kody2 fix-ci started on \`${ctx.data.branch}\`${runSuffix} — analyzing workflow run ${runId}`, ctx.cwd)
+  tryPostPr(
+    prNumber,
+    `⚙️ kody2 fix-ci started on \`${ctx.data.branch}\`${runSuffix} — analyzing workflow run ${runId}`,
+    ctx.cwd,
+  )
 }
 
 function tryPostPr(prNumber: number, body: string, cwd?: string): void {
-  try { postPrReviewComment(prNumber, body, cwd) } catch { /* best effort */ }
+  try {
+    postPrReviewComment(prNumber, body, cwd)
+  } catch {
+    /* best effort */
+  }
 }

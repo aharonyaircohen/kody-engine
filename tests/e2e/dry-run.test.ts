@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest"
-import { spawnSync } from "child_process"
-import * as path from "path"
+import { spawnSync } from "node:child_process"
+import * as path from "node:path"
+import { describe, expect, it } from "vitest"
 
-const ROOT = path.resolve(__dirname, "..")
+const ROOT = path.resolve(__dirname, "..", "..")
 
 function runCli(args: string[], env: Record<string, string> = {}): { code: number; stdout: string; stderr: string } {
   const result = spawnSync("npx", ["tsx", "bin/kody2.ts", ...args], {

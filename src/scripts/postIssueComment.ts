@@ -4,8 +4,12 @@
  * collected ctx.data state.
  */
 
-import { postIssueComment as ghPostIssueComment, postPrReviewComment as ghPostPrReviewComment, truncate } from "../issue.js"
 import type { PostflightScript } from "../executables/types.js"
+import {
+  postIssueComment as ghPostIssueComment,
+  postPrReviewComment as ghPostPrReviewComment,
+  truncate,
+} from "../issue.js"
 
 export const postIssueComment: PostflightScript = async (ctx) => {
   // Preflight early-exit path: whoever set output.exitCode already did the user-facing comment.
@@ -67,5 +71,7 @@ function postWith(type: "issue" | "pr", n: number, body: string, cwd?: string): 
   try {
     if (type === "issue") ghPostIssueComment(n, body, cwd)
     else ghPostPrReviewComment(n, body, cwd)
-  } catch { /* best effort */ }
+  } catch {
+    /* best effort */
+  }
 }

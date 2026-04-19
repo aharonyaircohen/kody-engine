@@ -5,8 +5,14 @@
  * For the resolve flow: stages all files explicitly (merge commit needs -A).
  */
 
-import { execFileSync } from "child_process"
-import { commitAndPush as doCommitAndPush, hasCommitsAhead, listChangedFiles, isForbiddenPath, abortUnfinishedGitOps } from "../commit.js"
+import { execFileSync } from "node:child_process"
+import {
+  abortUnfinishedGitOps,
+  commitAndPush as doCommitAndPush,
+  hasCommitsAhead,
+  isForbiddenPath,
+  listChangedFiles,
+} from "../commit.js"
 import type { PostflightScript } from "../executables/types.js"
 
 export const commitAndPush: PostflightScript = async (ctx) => {
@@ -22,7 +28,9 @@ export const commitAndPush: PostflightScript = async (ctx) => {
   if (ctx.args.mode === "resolve") {
     try {
       execFileSync("git", ["add", "-A"], { cwd: ctx.cwd, env: { ...process.env, HUSKY: "0" }, stdio: "pipe" })
-    } catch { /* best effort */ }
+    } catch {
+      /* best effort */
+    }
   } else {
     // All other modes: clean up any agent-created unfinished git state
     // (e.g., stash/merge/rebase leftovers) before committing.
@@ -49,10 +57,15 @@ export const commitAndPush: PostflightScript = async (ctx) => {
 
 function defaultCommitMessage(mode: string | undefined, data: Record<string, unknown>): string {
   switch (mode) {
-    case "run":     return `chore: kody2 changes for #${data.commentTargetNumber}`
-    case "fix":     return `chore(fix): kody2 fix for PR #${data.commentTargetNumber}`
-    case "fix-ci":  return `fix(ci): kody2 fix-ci for PR #${data.commentTargetNumber}`
-    case "resolve": return `fix: resolve merge conflicts with ${data.baseBranch}`
-    default:        return `chore: kody2 changes`
+    case "run":
+      return `chore: kody2 changes for #${data.commentTargetNumber}`
+    case "fix":
+      return `chore(fix): kody2 fix for PR #${data.commentTargetNumber}`
+    case "fix-ci":
+      return `fix(ci): kody2 fix-ci for PR #${data.commentTargetNumber}`
+    case "resolve":
+      return `fix: resolve merge conflicts with ${data.baseBranch}`
+    default:
+      return `chore: kody2 changes`
   }
 }

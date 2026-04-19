@@ -9,10 +9,10 @@
  * script that re-invokes the agent.)
  */
 
-import { checkCoverage, getAddedFiles, formatMissesForFeedback, type MissingTest } from "../coverage.js"
-import type { PostflightScript, Context } from "../executables/types.js"
-import { parseAgentResult } from "../prompt.js"
 import type { AgentResult } from "../agent.js"
+import { checkCoverage, formatMissesForFeedback, getAddedFiles } from "../coverage.js"
+import type { Context, PostflightScript } from "../executables/types.js"
+import { parseAgentResult } from "../prompt.js"
 
 type Invoker = (prompt: string) => Promise<AgentResult>
 

@@ -7,17 +7,17 @@
  * it was handed and the script catalog.
  */
 
-import * as fs from "fs"
-import * as path from "path"
-import type { Kody2Config } from "./config.js"
-import type { Context, Profile, ScriptEntry, InputSpec } from "./executables/types.js"
+import * as fs from "node:fs"
+import * as path from "node:path"
 import type { AgentResult } from "./agent.js"
-import { loadProfile, validateScriptReferences } from "./profile.js"
-import { allScriptNames, preflightScripts, postflightScripts } from "./scripts/index.js"
 import { runAgent } from "./agent.js"
-import { verifyCliTools, firstRequiredFailure } from "./tools.js"
-import { startLitellmIfNeeded } from "./litellm.js"
+import type { Kody2Config } from "./config.js"
 import { parseProviderModel } from "./config.js"
+import type { Context, InputSpec, ScriptEntry } from "./executables/types.js"
+import { startLitellmIfNeeded } from "./litellm.js"
+import { loadProfile, validateScriptReferences } from "./profile.js"
+import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
+import { firstRequiredFailure, verifyCliTools } from "./tools.js"
 
 export interface ExecutorInput {
   cliArgs: Record<string, unknown>
@@ -58,17 +58,24 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
   }
 
   // Resolve model (profile "inherit" → config.agent.model).
-  const modelSpec = profile.claudeCode.model === "inherit"
-    ? input.config.agent.model
-    : profile.claudeCode.model
-  let model
-  try { model = parseProviderModel(modelSpec) }
-  catch (err) { return finish({ exitCode: 99, reason: `agent.model invalid: ${err instanceof Error ? err.message : String(err)}` }) }
+  const modelSpec = profile.claudeCode.model === "inherit" ? input.config.agent.model : profile.claudeCode.model
+  let model: ReturnType<typeof parseProviderModel>
+  try {
+    model = parseProviderModel(modelSpec)
+  } catch (err) {
+    return finish({ exitCode: 99, reason: `agent.model invalid: ${err instanceof Error ? err.message : String(err)}` })
+  }
 
   // Start LiteLLM for non-anthropic providers.
   let litellm: Awaited<ReturnType<typeof startLitellmIfNeeded>> = null
-  try { litellm = await startLitellmIfNeeded(model, input.cwd) }
-  catch (err) { return finish({ exitCode: 99, reason: `litellm startup failed: ${err instanceof Error ? err.message : String(err)}` }) }
+  try {
+    litellm = await startLitellmIfNeeded(model, input.cwd)
+  } catch (err) {
+    return finish({
+      exitCode: 99,
+      reason: `litellm startup failed: ${err instanceof Error ? err.message : String(err)}`,
+    })
+  }
 
   const ctx: Context = {
     args,
@@ -125,12 +132,29 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       if (!shouldRun(entry, ctx)) continue
       const fn = postflightScripts[entry.script]
       if (!fn) return finish({ exitCode: 99, reason: `postflight script not registered: ${entry.script}` })
-      await fn(ctx, profile, agentResult)
+      try {
+        await fn(ctx, profile, agentResult)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        process.stderr.write(`[kody2] postflight script "${entry.script}" crashed: ${msg}\n`)
+        // Don't let one failing postflight (e.g. writeRunSummary, flaky gh call)
+        // prevent subsequent postflights (e.g. PR comment) from running.
+        if (!ctx.output.reason) ctx.output.reason = `postflight ${entry.script} crashed: ${msg}`
+        if (ctx.output.exitCode === 0) ctx.output.exitCode = 99
+      }
     }
 
-    return finish(ctx.output)
+    return finish({
+      exitCode: ctx.output.exitCode ?? 0,
+      prUrl: ctx.output.prUrl,
+      reason: ctx.output.reason,
+    })
   } finally {
-    try { litellm?.kill() } catch { /* best effort */ }
+    try {
+      litellm?.kill()
+    } catch {
+      /* best effort */
+    }
   }
 }
 
@@ -142,8 +166,8 @@ function resolveProfilePath(profileName: string): string {
   //   - prod bundle: dist/bin/kody2.js → dist/executables/<name>/profile.json
   const here = path.dirname(new URL(import.meta.url).pathname)
   const candidates = [
-    path.join(here, "executables", profileName, "profile.json"),             // same-dir sibling (dev)
-    path.join(here, "..", "executables", profileName, "profile.json"),       // up one (prod: dist/bin → dist/executables)
+    path.join(here, "executables", profileName, "profile.json"), // same-dir sibling (dev)
+    path.join(here, "..", "executables", profileName, "profile.json"), // up one (prod: dist/bin → dist/executables)
     path.join(here, "..", "src", "executables", profileName, "profile.json"), // fallback
   ]
   for (const c of candidates) {
@@ -192,7 +216,8 @@ function coerce(spec: InputSpec, v: unknown): unknown {
       if (!spec.values?.includes(s)) throw new Error(`${spec.flag} must be one of: ${spec.values?.join("|")}`)
       return s
     }
-    default: return String(v)
+    default:
+      return String(v)
   }
 }
 

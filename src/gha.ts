@@ -4,8 +4,8 @@
  * so flow scripts stay generic.
  */
 
-import * as fs from "fs"
-import { execFileSync } from "child_process"
+import { execFileSync } from "node:child_process"
+import * as fs from "node:fs"
 
 /** Link to the currently-running workflow run, or "" when not in Actions. */
 export function getRunUrl(): string {
@@ -27,7 +27,11 @@ export function reactToTriggerComment(cwd?: string): void {
   if (!eventPath || !fs.existsSync(eventPath)) return
 
   let event: { comment?: { id?: number } } | null = null
-  try { event = JSON.parse(fs.readFileSync(eventPath, "utf-8")) } catch { return }
+  try {
+    event = JSON.parse(fs.readFileSync(eventPath, "utf-8"))
+  } catch {
+    return
+  }
   const commentId = event?.comment?.id
   const repo = process.env.GITHUB_REPOSITORY
   if (!commentId || !repo) return
@@ -38,10 +42,13 @@ export function reactToTriggerComment(cwd?: string): void {
       "gh",
       [
         "api",
-        "-X", "POST",
-        "-H", "Accept: application/vnd.github+json",
+        "-X",
+        "POST",
+        "-H",
+        "Accept: application/vnd.github+json",
         `/repos/${repo}/issues/comments/${commentId}/reactions`,
-        "-f", "content=eyes",
+        "-f",
+        "content=eyes",
       ],
       {
         cwd,
@@ -50,5 +57,7 @@ export function reactToTriggerComment(cwd?: string): void {
         timeout: 15_000,
       },
     )
-  } catch { /* best effort — never block the run on reaction failure */ }
+  } catch {
+    /* best effort — never block the run on reaction failure */
+  }
 }

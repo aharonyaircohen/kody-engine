@@ -41,7 +41,7 @@ export function renderEvent(msg: SdkMessageLike, opts: RenderOptions = {}): stri
   }
 }
 
-function formatAssistant(msg: SdkMessageLike, opts: RenderOptions): string | null {
+function formatAssistant(msg: SdkMessageLike, _opts: RenderOptions): string | null {
   const content = msg.message?.content ?? []
   const lines: string[] = []
   for (const block of content) {
@@ -117,7 +117,7 @@ function stringifyToolContent(content: unknown): string {
 
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s
-  return s.slice(0, max) + `… (+${s.length - max} chars)`
+  return `${s.slice(0, max)}… (+${s.length - max} chars)`
 }
 
 function formatBytes(bytes: number): string {

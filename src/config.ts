@@ -1,5 +1,5 @@
-import * as fs from "fs"
-import * as path from "path"
+import * as fs from "node:fs"
+import * as path from "node:path"
 
 export interface TestRequirement {
   pattern: string
@@ -40,9 +40,7 @@ export const LITELLM_DEFAULT_URL = `http://localhost:${LITELLM_DEFAULT_PORT}`
 export function parseProviderModel(s: string): ProviderModel {
   const slash = s.indexOf("/")
   if (slash <= 0 || slash === s.length - 1) {
-    throw new Error(
-      `Invalid model spec '${s}' — expected 'provider/model' (e.g. 'minimax/MiniMax-M2.7-highspeed')`,
-    )
+    throw new Error(`Invalid model spec '${s}' — expected 'provider/model' (e.g. 'minimax/MiniMax-M2.7-highspeed')`)
   }
   return { provider: s.slice(0, slash), model: s.slice(slash + 1) }
 }
@@ -108,7 +106,8 @@ function parseIssueContext(raw: unknown): Kody2Config["issueContext"] {
   const r = raw as { commentLimit?: unknown; commentMaxBytes?: unknown }
   const out: NonNullable<Kody2Config["issueContext"]> = {}
   if (typeof r.commentLimit === "number" && r.commentLimit > 0) out.commentLimit = Math.floor(r.commentLimit)
-  if (typeof r.commentMaxBytes === "number" && r.commentMaxBytes > 0) out.commentMaxBytes = Math.floor(r.commentMaxBytes)
+  if (typeof r.commentMaxBytes === "number" && r.commentMaxBytes > 0)
+    out.commentMaxBytes = Math.floor(r.commentMaxBytes)
   return Object.keys(out).length > 0 ? out : undefined
 }
 
@@ -116,8 +115,12 @@ function parseTestRequirements(raw: unknown): TestRequirement[] | undefined {
   if (!Array.isArray(raw)) return undefined
   const out: TestRequirement[] = []
   for (const item of raw) {
-    if (item && typeof item === "object" && typeof (item as { pattern?: unknown }).pattern === "string"
-        && typeof (item as { requireSibling?: unknown }).requireSibling === "string") {
+    if (
+      item &&
+      typeof item === "object" &&
+      typeof (item as { pattern?: unknown }).pattern === "string" &&
+      typeof (item as { requireSibling?: unknown }).requireSibling === "string"
+    ) {
       out.push({
         pattern: (item as { pattern: string }).pattern,
         requireSibling: (item as { requireSibling: string }).requireSibling,

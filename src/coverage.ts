@@ -1,4 +1,4 @@
-import { execFileSync } from "child_process"
+import { execFileSync } from "node:child_process"
 
 export interface TestRequirement {
   /** Glob-style pattern (limited: only `**` and `*` wildcards). */
@@ -23,7 +23,10 @@ export function patternToRegex(pattern: string): RegExp {
   let s = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&")
   // `**/` matches zero or more path segments; `**` matches anything across slashes;
   // `*` matches any chars within a single segment.
-  s = s.replace(/\*\*\//g, "§S").replace(/\*\*/g, "§A").replace(/\*/g, "[^/]*")
+  s = s
+    .replace(/\*\*\//g, "§S")
+    .replace(/\*\*/g, "§A")
+    .replace(/\*/g, "[^/]*")
   s = s.replace(/§S/g, "(?:.*/)?").replace(/§A/g, ".*")
   return new RegExp(`^${s}$`)
 }
@@ -46,7 +49,9 @@ export function renderSiblingPath(file: string, requireSibling: string): string 
 function safeGit(args: string[], cwd?: string): string {
   try {
     return execFileSync("git", args, { encoding: "utf-8", cwd, env: { ...process.env, HUSKY: "0" } }).trim()
-  } catch { return "" }
+  } catch {
+    return ""
+  }
 }
 
 /**
@@ -68,10 +73,7 @@ export function getAddedFiles(baseBranch: string, cwd?: string): string[] {
  * sibling test file is ALSO in the added-files set. Return the list of
  * misses.
  */
-export function checkCoverage(
-  addedFiles: string[],
-  requirements: TestRequirement[],
-): MissingTest[] {
+export function checkCoverage(addedFiles: string[], requirements: TestRequirement[]): MissingTest[] {
   if (requirements.length === 0) return []
   const addedSet = new Set(addedFiles)
   const misses: MissingTest[] = []
@@ -97,6 +99,8 @@ export function formatMissesForFeedback(misses: MissingTest[]): string {
   const lines = ["The following files were added without a sibling test file:"]
   for (const m of misses) lines.push(`- \`${m.file}\` → expected \`${m.expectedTest}\``)
   lines.push("")
-  lines.push("Add the missing test files. Each should cover the new file's public API with at least a happy path and one failure path. Then re-emit DONE / COMMIT_MSG / PR_SUMMARY.")
+  lines.push(
+    "Add the missing test files. Each should cover the new file's public API with at least a happy path and one failure path. Then re-emit DONE / COMMIT_MSG / PR_SUMMARY.",
+  )
   return lines.join("\n")
 }

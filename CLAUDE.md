@@ -1,0 +1,56 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Package
+
+`@kody-ade/kody-engine` — an autonomous development engine that runs Claude Code in CI against GitHub issues/PRs. ESM, Node ≥22, published to npm as a CLI (`kody2` binary). Only runtime dep is `@anthropic-ai/claude-agent-sdk`. Read [AGENTS.md](AGENTS.md) for full project context, invariants, and release history — it is the source of truth.
+
+## Commands
+
+```bash
+pnpm kody2 <mode> ...    # dev runner (tsx bin/kody2.ts)
+pnpm build               # tsup bundle + copy src/executables → dist/executables
+pnpm typecheck           # tsc --noEmit
+pnpm test                # vitest run tests/unit + tests/int
+pnpm test:e2e            # vitest run tests/e2e
+pnpm test:all            # all of tests/
+
+# Single test file / test name
+pnpm vitest run tests/unit/executor.test.ts
+pnpm vitest run -t "runs preflight scripts in order"
+```
+
+CI runs `typecheck` + `test` + `test:e2e` on PR/push to main ([.github/workflows/ci.yml](.github/workflows/ci.yml)).
+
+## Architecture
+
+Two-layer design: **generic executor** + **declarative executable profile** + **script catalog**.
+
+- **Executor** ([src/executor.ts](src/executor.ts)) — loads a profile, validates CLI inputs/cliTools, runs preflight scripts → agent → postflight scripts. Knows nothing about `build`/`fix`/`issue` — those concepts live only in profiles and scripts.
+- **Entry & dispatch** — [bin/kody2.ts](bin/kody2.ts) → [src/entry.ts](src/entry.ts) routes `run` / `fix` / `fix-ci` / `resolve` / `ci` / `help` / `version`. [src/dispatch.ts](src/dispatch.ts) auto-detects mode from the GHA event when invoked as `kody2 ci`.
+- **Executable profile** — [src/executables/build/profile.json](src/executables/build/profile.json) is pure JSON declaring CLI inputs, Claude Agent SDK config (tools, model, hooks, skills), `cliTools` the scripts expect, and script ordering with `runWhen` conditionals. Mode-specific agent prompts live in [src/executables/build/prompts/](src/executables/build/prompts/) as markdown.
+- **Scripts** ([src/scripts/](src/scripts/)) — small deterministic functions registered in [src/scripts/index.ts](src/scripts/index.ts). Flow entries (`runFlow`, `fixFlow`, `fixCiFlow`, `resolveFlow`), preflight (`loadConventions`, `composePrompt`), postflight (`verify`, `commitAndPush`, `ensurePr`, `postIssueComment`). The agent never commits — `commitAndPush` does.
+- **Agent invocation** ([src/agent.ts](src/agent.ts)) — calls `@anthropic-ai/claude-agent-sdk` with profile-declared tools/hooks/skills. [src/litellm.ts](src/litellm.ts) manages a proxy when a non-Anthropic model is configured.
+
+### Invariants (do not break — see AGENTS.md)
+
+1. Executor stays role-agnostic. No `build`/`fix`/`issue` strings or branching in [src/executor.ts](src/executor.ts).
+2. Profiles are pure JSON + markdown prompts. No TypeScript inside `src/executables/`.
+3. Scripts compose via `runWhen` — it is the only conditional primitive available to profiles.
+4. Wrapper/verification/git logic belongs in scripts (postflight), not inline in executor or profile.
+5. Consumer workflow YAML ([templates/kody2.yml](templates/kody2.yml)) stays thin; capabilities ship via npm.
+
+Adding a new role = new `src/executables/<name>/` + profile.json + prompts + register scripts. No executor edits.
+
+## Exit codes
+
+0 success · 1 agent FAILED · 2 verify failed · 3 no commits · 4 PR creation failed · 5 uncommitted changes · 64 invalid args · 99 crash.
+
+## Release
+
+Version is duplicated in `package.json` and [src/entry.ts](src/entry.ts) — update both, then tag `vX.Y.Z` and push with `--follow-tags`. Publish is currently manual (`pnpm publish --access public`, which runs `prepublishOnly → build`). Default to patch bumps unless the user requests otherwise.
+
+## Live testing
+
+End-to-end behavior is exercised against `aharonyaircohen/Kody-Engine-Tester` (Next.js + Payload CMS). That repo triggers `@kody2` comments on issues/PRs.

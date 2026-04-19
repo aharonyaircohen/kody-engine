@@ -5,11 +5,11 @@
  * conflicted files + markers preview for the agent to resolve.
  */
 
-import { execFileSync } from "child_process"
-import { getPr, postPrReviewComment } from "../issue.js"
+import { execFileSync } from "node:child_process"
 import { checkoutPrBranch, getCurrentBranch, mergeBase } from "../branch.js"
-import { getRunUrl } from "../gha.js"
 import type { PreflightScript } from "../executables/types.js"
+import { getRunUrl } from "../gha.js"
+import { getPr, postPrReviewComment } from "../issue.js"
 
 const CONFLICT_DIFF_MAX_BYTES = 40_000
 
@@ -60,7 +60,11 @@ export const resolveFlow: PreflightScript = async (ctx) => {
   ctx.data.conflictMarkersPreview = getConflictMarkersPreview(conflictedFiles, ctx.cwd)
   const runUrl = getRunUrl()
   const runSuffix = runUrl ? `, run ${runUrl}` : ""
-  tryPostPr(prNumber, `⚙️ kody2 resolve started on \`${ctx.data.branch}\`${runSuffix} — ${conflictedFiles.length} conflicted file(s)`, ctx.cwd)
+  tryPostPr(
+    prNumber,
+    `⚙️ kody2 resolve started on \`${ctx.data.branch}\`${runSuffix} — ${conflictedFiles.length} conflicted file(s)`,
+    ctx.cwd,
+  )
 }
 
 function getConflictedFiles(cwd?: string): string[] {
@@ -71,7 +75,9 @@ function getConflictedFiles(cwd?: string): string[] {
       env: { ...process.env, HUSKY: "0" },
     }).trim()
     return out ? out.split("\n").filter(Boolean) : []
-  } catch { return [] }
+  } catch {
+    return []
+  }
 }
 
 function getConflictMarkersPreview(files: string[], cwd?: string, maxBytes = CONFLICT_DIFF_MAX_BYTES): string {
@@ -84,11 +90,17 @@ function getConflictMarkersPreview(files: string[], cwd?: string, maxBytes = CON
       total += snippet.length
       chunks.push(snippet)
       if (total >= maxBytes) break
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
   return chunks.join("\n")
 }
 
 function tryPostPr(prNumber: number, body: string, cwd?: string): void {
-  try { postPrReviewComment(prNumber, body, cwd) } catch { /* best effort */ }
+  try {
+    postPrReviewComment(prNumber, body, cwd)
+  } catch {
+    /* best effort */
+  }
 }

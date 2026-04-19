@@ -1,4 +1,4 @@
-import { execFileSync } from "child_process"
+import { execFileSync } from "node:child_process"
 
 export interface BranchResult {
   branch: string
@@ -67,7 +67,11 @@ export function checkoutPrBranch(prNumber: number, cwd?: string): string {
  * working tree), "error" on any other git failure.
  */
 export function mergeBase(baseBranch: string, cwd?: string): "clean" | "conflict" | "error" {
-  try { git(["fetch", "origin", baseBranch], cwd) } catch { return "error" }
+  try {
+    git(["fetch", "origin", baseBranch], cwd)
+  } catch {
+    return "error"
+  }
   try {
     git(["merge", `origin/${baseBranch}`, "--no-edit", "--no-ff"], cwd)
     return "clean"
@@ -75,8 +79,14 @@ export function mergeBase(baseBranch: string, cwd?: string): "clean" | "conflict
     try {
       const unmerged = git(["diff", "--name-only", "--diff-filter=U"], cwd)
       if (unmerged.length > 0) return "conflict"
-    } catch { /* ignore */ }
-    try { git(["merge", "--abort"], cwd) } catch { /* best effort */ }
+    } catch {
+      /* ignore */
+    }
+    try {
+      git(["merge", "--abort"], cwd)
+    } catch {
+      /* best effort */
+    }
     return "error"
   }
 }
@@ -97,20 +107,32 @@ export function ensureFeatureBranch(
 
   if (hasUncommittedChanges(cwd)) throw new UncommittedChangesError(current || "(detached)")
 
-  try { git(["fetch", "origin"], cwd) } catch { /* best effort */ }
+  try {
+    git(["fetch", "origin"], cwd)
+  } catch {
+    /* best effort */
+  }
 
   try {
     git(["rev-parse", "--verify", `origin/${branchName}`], cwd)
     git(["checkout", branchName], cwd)
-    try { git(["pull", "origin", branchName], cwd) } catch { /* best effort */ }
+    try {
+      git(["pull", "origin", branchName], cwd)
+    } catch {
+      /* best effort */
+    }
     return { branch: branchName, created: false }
-  } catch { /* not on remote */ }
+  } catch {
+    /* not on remote */
+  }
 
   try {
     git(["rev-parse", "--verify", branchName], cwd)
     git(["checkout", branchName], cwd)
     return { branch: branchName, created: false }
-  } catch { /* not local either */ }
+  } catch {
+    /* not local either */
+  }
 
   try {
     git(["checkout", "-b", branchName, `origin/${defaultBranch}`], cwd)

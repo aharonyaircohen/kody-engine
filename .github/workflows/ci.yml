@@ -19,6 +19,7 @@ jobs:
         run: |
           git config --global user.name  "kody-test"
           git config --global user.email "test@kody"
+      - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm test:e2e

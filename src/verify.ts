@@ -1,4 +1,4 @@
-import { spawn } from "child_process"
+import { spawn } from "node:child_process"
 import type { Kody2Config } from "./config.js"
 
 export interface VerifyResult {
@@ -42,7 +42,9 @@ function runCommand(command: string, cwd?: string): Promise<RunResult> {
 
     const timer = setTimeout(() => {
       child.kill("SIGTERM")
-      setTimeout(() => { if (!child.killed) child.kill("SIGKILL") }, 5000)
+      setTimeout(() => {
+        if (!child.killed) child.kill("SIGKILL")
+      }, 5000)
     }, COMMAND_TIMEOUT_MS)
 
     child.on("exit", (code) => {
@@ -75,6 +77,7 @@ export async function verifyAll(config: Kody2Config, cwd?: string): Promise<Veri
   return { ok: failed.length === 0, failed, details }
 }
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: ESC (0x1B) is required to match ANSI escape sequences.
 const ANSI_RE = /\x1B\[[0-?]*[ -/]*[@-~]/g
 
 function stripAnsi(s: string): string {

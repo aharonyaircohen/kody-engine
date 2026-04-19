@@ -22,11 +22,28 @@ export interface EnsurePrOptions {
 
 const TITLE_MAX = 72
 
+/**
+ * Strip any leading `[WIP] #N: ` / `#N: ` prefixes that an earlier run may
+ * have already baked into the title. Without this the prefix stacks on every
+ * fix/fix-ci/resolve run (e.g. "[WIP] #42: [WIP] #42: [WIP] #42: ...").
+ */
+export function stripTitlePrefixes(raw: string): string {
+  let s = raw.trim()
+  // repeatedly peel `[WIP] #N:` or `#N:` until no match remains
+  while (true) {
+    const next = s.replace(/^(\[WIP\]\s*)?#\d+:\s*/, "")
+    if (next === s) break
+    s = next
+  }
+  return s
+}
+
 export function buildPrTitle(issueNumber: number, issueTitle: string, draft: boolean): string {
   const prefix = draft ? "[WIP] " : ""
-  const base = `${prefix}#${issueNumber}: ${issueTitle}`
+  const clean = stripTitlePrefixes(issueTitle)
+  const base = `${prefix}#${issueNumber}: ${clean}`
   if (base.length <= TITLE_MAX) return base
-  return base.slice(0, TITLE_MAX - 1) + "…"
+  return `${base.slice(0, TITLE_MAX - 1)}…`
 }
 
 export function buildPrBody(opts: EnsurePrOptions): string {
@@ -41,7 +58,7 @@ export function buildPrBody(opts: EnsurePrOptions): string {
 
   lines.push("## Summary")
   lines.push("")
-  if (opts.agentSummary && opts.agentSummary.trim()) {
+  if (opts.agentSummary?.trim()) {
     lines.push(opts.agentSummary.trim())
   } else {
     lines.push(`Implementation of issue #${opts.issueNumber} — ${opts.issueTitle}`)
@@ -82,7 +99,7 @@ function firstLine(s: string): string {
   const trimmed = s.trim()
   const nl = trimmed.indexOf("\n")
   const head = nl === -1 ? trimmed : trimmed.slice(0, nl)
-  return head.length > 200 ? head.slice(0, 197) + "…" : head
+  return head.length > 200 ? `${head.slice(0, 197)}…` : head
 }
 
 export function findExistingPr(branch: string, cwd?: string): { number: number; url: string } | null {
@@ -108,22 +125,26 @@ export function ensurePr(opts: EnsurePrOptions): PrResult {
     // regenerations stacked "[WIP] #N:" prefixes on each fix/fix-ci/resolve run
     // until the title was unreadable.
     try {
-      gh(
-        ["pr", "edit", String(existing.number), "--body-file", "-"],
-        { input: body, cwd: opts.cwd },
-      )
+      gh(["pr", "edit", String(existing.number), "--body-file", "-"], { input: body, cwd: opts.cwd })
     } catch (err) {
-      process.stderr.write(`[kody2] failed to update PR #${existing.number}: ${err instanceof Error ? err.message : String(err)}\n`)
+      process.stderr.write(
+        `[kody2] failed to update PR #${existing.number}: ${err instanceof Error ? err.message : String(err)}\n`,
+      )
     }
     return { url: existing.url, number: existing.number, draft: opts.draft, action: "updated" }
   }
 
   const args = [
-    "pr", "create",
-    "--head", opts.branch,
-    "--base", opts.defaultBranch,
-    "--title", title,
-    "--body-file", "-",
+    "pr",
+    "create",
+    "--head",
+    opts.branch,
+    "--base",
+    opts.defaultBranch,
+    "--title",
+    title,
+    "--body-file",
+    "-",
   ]
   if (opts.draft) args.push("--draft")
 

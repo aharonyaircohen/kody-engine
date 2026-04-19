@@ -1,6 +1,6 @@
 {
   "name": "@kody-ade/kody-engine",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "kody2 — autonomous development engine. Single-session Claude Code agent behind a generic executor + declarative executable profiles.",
   "license": "MIT",
   "type": "module",
@@ -15,16 +15,20 @@
   "scripts": {
     "kody2": "tsx bin/kody2.ts",
     "build": "tsup && node -e \"require('fs').cpSync('src/executables', 'dist/executables', { recursive: true })\"",
-    "test": "vitest run tests --no-coverage",
-    "test:e2e": "vitest run e2e --no-coverage",
-    "test:all": "vitest run tests e2e --no-coverage",
+    "test": "vitest run tests/unit tests/int --no-coverage",
+    "test:e2e": "vitest run tests/e2e --no-coverage",
+    "test:all": "vitest run tests --no-coverage",
     "typecheck": "tsc --noEmit",
+    "lint": "biome check",
+    "lint:fix": "biome check --write",
+    "format": "biome format --write",
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.92"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.12",
     "@types/node": "^22.5.4",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0",

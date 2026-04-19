@@ -82,8 +82,10 @@ src/
     index.ts             — registry that maps name → function
 bin/kody2.ts             — thin shebang wrapper
 templates/kody2.yml      — workflow to drop in consumer repos
-tests/                   — 169 unit + integration tests
-e2e/                     — 7 CLI smoke tests
+tests/
+  unit/                  — 169 unit tests
+  int/                   — integration tests
+  e2e/                   — 7 CLI smoke tests
 ```
 
 ## Key invariants (do not break)

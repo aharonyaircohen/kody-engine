@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest"
-import { verifyAll, summarizeFailure } from "../../src/verify.js"
+import { describe, expect, it } from "vitest"
 import type { Kody2Config } from "../../src/config.js"
+import { summarizeFailure, verifyAll } from "../../src/verify.js"
 
 const baseConfig: Kody2Config = {
   quality: { typecheck: "", testUnit: "", lint: "" },

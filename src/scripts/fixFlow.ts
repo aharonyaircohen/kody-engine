@@ -4,10 +4,10 @@
  * posts a "started" comment on the PR.
  */
 
-import { getPr, getPrDiff, getPrLatestReviewBody, postPrReviewComment, truncate } from "../issue.js"
 import { checkoutPrBranch, getCurrentBranch } from "../branch.js"
-import { getRunUrl } from "../gha.js"
 import type { PreflightScript } from "../executables/types.js"
+import { getRunUrl } from "../gha.js"
+import { getPr, getPrDiff, getPrLatestReviewBody, postPrReviewComment, truncate } from "../issue.js"
 
 export const fixFlow: PreflightScript = async (ctx) => {
   const prNumber = ctx.args.pr as number
@@ -38,11 +38,17 @@ export const fixFlow: PreflightScript = async (ctx) => {
 
   const runUrl = getRunUrl()
   const runSuffix = runUrl ? `, run ${runUrl}` : ""
-  tryPostPr(prNumber,
+  tryPostPr(
+    prNumber,
     `⚙️ kody2 fix started on \`${ctx.data.branch}\`${runSuffix} — applying feedback (${truncate(feedback.replace(/\n/g, " "), 200)})`,
-    ctx.cwd)
+    ctx.cwd,
+  )
 }
 
 function tryPostPr(prNumber: number, body: string, cwd?: string): void {
-  try { postPrReviewComment(prNumber, body, cwd) } catch { /* best effort */ }
+  try {
+    postPrReviewComment(prNumber, body, cwd)
+  } catch {
+    /* best effort */
+  }
 }

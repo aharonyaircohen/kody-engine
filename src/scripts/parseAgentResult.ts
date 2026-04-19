@@ -3,8 +3,8 @@
  * final message, stuff them into ctx.data.
  */
 
-import { parseAgentResult as parse } from "../prompt.js"
 import type { PostflightScript } from "../executables/types.js"
+import { parseAgentResult as parse } from "../prompt.js"
 
 export const parseAgentResult: PostflightScript = async (ctx, _profile, agentResult) => {
   if (!agentResult) {

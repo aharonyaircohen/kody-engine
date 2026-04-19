@@ -2,8 +2,8 @@
  * Postflight: re-run quality commands as a trust-but-verify gate.
  */
 
-import { verifyAll, summarizeFailure } from "../verify.js"
 import type { PostflightScript } from "../executables/types.js"
+import { summarizeFailure, verifyAll } from "../verify.js"
 
 export const verify: PostflightScript = async (ctx) => {
   try {

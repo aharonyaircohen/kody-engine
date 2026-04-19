@@ -4,10 +4,10 @@
  * comment. Issue number lives in `ctx.args.issue`.
  */
 
-import { getIssue, postIssueComment } from "../issue.js"
 import { ensureFeatureBranch, UncommittedChangesError } from "../branch.js"
-import { getRunUrl } from "../gha.js"
 import type { PreflightScript } from "../executables/types.js"
+import { getRunUrl } from "../gha.js"
+import { getIssue, postIssueComment } from "../issue.js"
 
 export const runFlow: PreflightScript = async (ctx) => {
   const issueNumber = ctx.args.issue as number
@@ -39,5 +39,9 @@ export const runFlow: PreflightScript = async (ctx) => {
 }
 
 function tryPost(issueNumber: number, body: string, cwd?: string): void {
-  try { postIssueComment(issueNumber, body, cwd) } catch { /* best effort */ }
+  try {
+    postIssueComment(issueNumber, body, cwd)
+  } catch {
+    /* best effort */
+  }
 }
