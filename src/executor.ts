@@ -99,6 +99,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       ndjsonDir,
       allowedToolsOverride: profile.claudeCode.tools,
       permissionModeOverride: profile.claudeCode.permissionMode,
+      mcpServers: profile.claudeCode.mcpServers as unknown as Array<Record<string, unknown>> | undefined,
     })
 
   // Stash for checkCoverageWithRetry.

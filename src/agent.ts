@@ -23,6 +23,12 @@ export interface AgentOptions {
   allowedToolsOverride?: string[]
   /** Override the default permissionMode (e.g. "default" for read-only flows). */
   permissionModeOverride?: "default" | "acceptEdits" | "plan" | "bypassPermissions"
+  /**
+   * MCP server specs declared by the profile (claudeCode.mcpServers).
+   * Each object is passed through to the SDK's `mcpServers` option so the
+   * agent can invoke whatever MCP tools the profile requires.
+   */
+  mcpServers?: Array<Record<string, unknown>>
 }
 
 const DEFAULT_ALLOWED_TOOLS = ["Bash", "Edit", "Read", "Write", "Glob", "Grep"]
@@ -49,15 +55,20 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   let errorMessage: string | undefined
 
   try {
+    const queryOptions: Record<string, unknown> = {
+      model: opts.model.model,
+      cwd: opts.cwd,
+      allowedTools: opts.allowedToolsOverride ?? DEFAULT_ALLOWED_TOOLS,
+      permissionMode: opts.permissionModeOverride ?? "acceptEdits",
+      env,
+    }
+    if (opts.mcpServers && opts.mcpServers.length > 0) {
+      queryOptions.mcpServers = opts.mcpServers
+    }
     const result = query({
       prompt: opts.prompt,
-      options: {
-        model: opts.model.model,
-        cwd: opts.cwd,
-        allowedTools: opts.allowedToolsOverride ?? DEFAULT_ALLOWED_TOOLS,
-        permissionMode: opts.permissionModeOverride ?? "acceptEdits",
-        env,
-      },
+      // biome-ignore lint/suspicious/noExplicitAny: SDK options type is narrow; mcpServers is runtime-passthrough.
+      options: queryOptions as any,
     })
 
     for await (const msg of result) {
