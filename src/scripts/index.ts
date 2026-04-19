@@ -22,6 +22,7 @@ import { resolveFlow } from "./resolveFlow.js"
 import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
 import { verify } from "./verify.js"
+import { watchStalePrsFlow } from "./watchStalePrsFlow.js"
 import { writeRunSummary } from "./writeRunSummary.js"
 
 export const preflightScripts: Record<string, PreflightScript> = {
@@ -32,6 +33,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   reviewFlow,
   initFlow,
   releaseFlow,
+  watchStalePrsFlow,
   loadConventions,
   loadCoverageRules,
   composePrompt,

@@ -1,0 +1,32 @@
+{
+  "name": "watch-stale-prs",
+  "describe": "Scheduled: list open PRs untouched for N days and report. No agent invocation.",
+
+  "kind": "scheduled",
+  "schedule": "0 8 * * MON",
+
+  "inputs": [],
+
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": { "PreToolUse": [], "PostToolUse": [], "Stop": [] },
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+
+  "cliTools": [],
+
+  "scripts": {
+    "preflight": [
+      { "script": "watchStalePrsFlow" }
+    ],
+    "postflight": []
+  }
+}

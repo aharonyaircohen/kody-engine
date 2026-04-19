@@ -19,10 +19,14 @@ describe("initFlow: performInit", () => {
   let dir: string
   afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }) })
 
-  it("writes both files on a clean repo", () => {
+  it("writes core files + scheduled workflows on a clean repo", () => {
     dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
     const result = performInit(dir, false)
-    expect(result.wrote.sort()).toEqual([".github/workflows/kody2.yml", "kody.config.json"])
+    expect(result.wrote).toContain("kody.config.json")
+    expect(result.wrote).toContain(".github/workflows/kody2.yml")
+    // Every discovered scheduled executable also gets its own workflow file.
+    const scheduledWorkflows = result.wrote.filter((f) => /\.github\/workflows\/kody2-.+\.yml$/.test(f))
+    expect(scheduledWorkflows.length).toBeGreaterThanOrEqual(1)
     expect(result.skipped).toEqual([])
     expect(fs.existsSync(path.join(dir, "kody.config.json"))).toBe(true)
     expect(fs.existsSync(path.join(dir, ".github/workflows/kody2.yml"))).toBe(true)
@@ -65,7 +69,8 @@ describe("initFlow: performInit", () => {
     fs.writeFileSync(path.join(dir, "kody.config.json"), `{"user-edit":"keep me"}`)
     const second = performInit(dir, false)
     expect(second.wrote).toEqual([])
-    expect(second.skipped.sort()).toEqual([".github/workflows/kody2.yml", "kody.config.json"])
+    expect(second.skipped).toContain("kody.config.json")
+    expect(second.skipped).toContain(".github/workflows/kody2.yml")
     const after = fs.readFileSync(path.join(dir, "kody.config.json"), "utf-8")
     expect(after).toMatch(/user-edit/)
   })

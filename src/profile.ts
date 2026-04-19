@@ -42,9 +42,16 @@ export function loadProfile(profilePath: string): Profile {
 
   const r = raw as Record<string, unknown>
 
+  const kind = r.kind === "scheduled" ? "scheduled" : "oneshot"
+  if (kind === "scheduled" && typeof r.schedule !== "string") {
+    throw new ProfileError(profilePath, `kind: "scheduled" requires a "schedule" cron string`)
+  }
+
   const profile: Profile = {
     name: requireString(profilePath, r, "name"),
     describe: typeof r.describe === "string" ? r.describe : "",
+    kind,
+    schedule: typeof r.schedule === "string" ? r.schedule : undefined,
     inputs: parseInputs(profilePath, r.inputs),
     claudeCode: parseClaudeCode(profilePath, r.claudeCode),
     cliTools: parseCliTools(profilePath, r.cliTools),

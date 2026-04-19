@@ -17,6 +17,14 @@ import type { Kody2Config } from "../config.js"
 export interface Profile {
   name: string
   describe: string
+  /**
+   * Execution model. `oneshot` (default): single invocation on demand.
+   * `scheduled`: fires periodically via an external cron (typically GHA
+   * `schedule:`). Scheduled profiles must declare a `schedule` cron string.
+   */
+  kind: "oneshot" | "scheduled"
+  /** Cron expression for scheduled profiles (e.g. "0 8 * * MON"). */
+  schedule?: string
   inputs: InputSpec[]
   claudeCode: ClaudeCodeSpec
   cliTools: CliToolSpec[]
