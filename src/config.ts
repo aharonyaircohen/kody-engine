@@ -27,6 +27,15 @@ export interface Kody2Config {
     commentMaxBytes?: number
   }
   testRequirements?: TestRequirement[]
+  release?: {
+    versionFiles?: string[]
+    publishCommand?: string
+    notifyCommand?: string
+    e2eCommand?: string
+    draftRelease?: boolean
+    releaseBranch?: string
+    timeoutMs?: number
+  }
 }
 
 export interface ProviderModel {
@@ -98,7 +107,22 @@ export function loadConfig(projectDir: string = process.cwd()): Kody2Config {
     },
     issueContext: parseIssueContext(raw.issueContext),
     testRequirements: parseTestRequirements(raw.testRequirements),
+    release: parseReleaseConfig(raw.release),
   }
+}
+
+function parseReleaseConfig(raw: unknown): Kody2Config["release"] {
+  if (!raw || typeof raw !== "object") return undefined
+  const r = raw as Record<string, unknown>
+  const out: NonNullable<Kody2Config["release"]> = {}
+  if (Array.isArray(r.versionFiles)) out.versionFiles = r.versionFiles.filter((f): f is string => typeof f === "string")
+  if (typeof r.publishCommand === "string") out.publishCommand = r.publishCommand
+  if (typeof r.notifyCommand === "string") out.notifyCommand = r.notifyCommand
+  if (typeof r.e2eCommand === "string") out.e2eCommand = r.e2eCommand
+  if (typeof r.draftRelease === "boolean") out.draftRelease = r.draftRelease
+  if (typeof r.releaseBranch === "string") out.releaseBranch = r.releaseBranch
+  if (typeof r.timeoutMs === "number" && r.timeoutMs > 0) out.timeoutMs = Math.floor(r.timeoutMs)
+  return Object.keys(out).length > 0 ? out : undefined
 }
 
 function parseIssueContext(raw: unknown): Kody2Config["issueContext"] {

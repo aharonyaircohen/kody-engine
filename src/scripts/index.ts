@@ -17,6 +17,7 @@ import { loadCoverageRules } from "./loadCoverageRules.js"
 import { parseAgentResult } from "./parseAgentResult.js"
 import { postIssueComment } from "./postIssueComment.js"
 import { postReviewResult } from "./postReviewResult.js"
+import { releaseFlow } from "./releaseFlow.js"
 import { resolveFlow } from "./resolveFlow.js"
 import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
@@ -30,6 +31,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   resolveFlow,
   reviewFlow,
   initFlow,
+  releaseFlow,
   loadConventions,
   loadCoverageRules,
   composePrompt,

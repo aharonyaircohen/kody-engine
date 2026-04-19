@@ -1,0 +1,53 @@
+{
+  "name": "release",
+  "describe": "Version bump + changelog + release PR (prepare), or tag + publish + GH release (finalize). No agent.",
+
+  "inputs": [
+    {
+      "name": "mode",
+      "flag": "--mode",
+      "type": "enum",
+      "values": ["prepare", "finalize"],
+      "required": false,
+      "describe": "`prepare` (default): bump + changelog + release PR. `finalize`: E2E gate + tag + publish + GH release."
+    },
+    {
+      "name": "bump",
+      "flag": "--bump",
+      "type": "enum",
+      "values": ["patch", "minor", "major"],
+      "required": false,
+      "describe": "Version bump when mode=prepare (ignored in finalize). Default patch."
+    },
+    {
+      "name": "dry-run",
+      "flag": "--dry-run",
+      "type": "bool",
+      "required": false,
+      "describe": "Print plan without writing files, creating PRs, tagging, or publishing."
+    }
+  ],
+
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "acceptEdits",
+    "maxTurns": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": { "PreToolUse": [], "PostToolUse": [], "Stop": [] },
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+
+  "cliTools": [],
+
+  "scripts": {
+    "preflight": [
+      { "script": "releaseFlow" }
+    ],
+    "postflight": []
+  }
+}
