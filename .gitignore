@@ -1,0 +1,52 @@
+node_modules/
+dist/
+.env
+*.tsbuildinfo
+.kody/memory/.tiers/
+# Graph memory — track nodes + edges, gitignore run-only episodes
+!.kody/graph/nodes.json
+!.kody/graph/edges.json
+!.kody/graph/episodes/
+.kody/graph/episodes/run_*.json
+.kody/graph/episodes/.seq
+# Transient: lock sentinel + proper-lockfile dir + rolling backups + tmp writes
+.kody/graph/.graph-lock
+.kody/graph/.graph-lock.lock/
+.kody/graph/*.bak
+.kody/graph/*.tmp.*
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dev-debug.log
+# Dependency directories
+# Environment variables
+# Editor directories and files
+.idea
+.vscode
+.history
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# OS specific
+.DS_Store
+
+# Task files
+tasks.json
+tasks/
+
+# Demo recording intermediates (final videos live in docs/assets/)
+demo/videos/
+
+# Test coverage
+coverage/
+.kody-engine/
+
+# kody2 (single-session pipeline) runtime artifacts
+.kody2/
+.kody-lean/

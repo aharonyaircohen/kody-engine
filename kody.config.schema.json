@@ -1,0 +1,406 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Kody Engine Lite Configuration",
+  "description": "Configuration for the Kody autonomous SDLC pipeline. See https://github.com/aharonyaircohen/Kody-Engine-Lite",
+  "type": "object",
+  "properties": {
+    "quality": {
+      "type": "object",
+      "description": "Quality gate commands run during the verify stage. Leave empty string to skip.",
+      "properties": {
+        "typecheck": {
+          "type": "string",
+          "description": "TypeScript type checking command (e.g., 'pnpm typecheck', 'pnpm tsc --noEmit')",
+          "default": "pnpm -s tsc --noEmit"
+        },
+        "lint": {
+          "type": "string",
+          "description": "Lint command (e.g., 'pnpm lint'). Empty to skip.",
+          "default": ""
+        },
+        "lintFix": {
+          "type": "string",
+          "description": "Auto-fix lint command, run when verify fails (e.g., 'pnpm lint:fix')",
+          "default": ""
+        },
+        "formatFix": {
+          "type": "string",
+          "description": "Auto-fix format command, run when verify fails (e.g., 'pnpm format')",
+          "default": ""
+        },
+        "testUnit": {
+          "type": "string",
+          "description": "Unit test command. Use test:unit to exclude integration/e2e tests (e.g., 'pnpm test:unit')",
+          "default": "pnpm -s test"
+        }
+      },
+      "additionalProperties": false
+    },
+    "git": {
+      "type": "object",
+      "description": "Git configuration",
+      "properties": {
+        "defaultBranch": {
+          "type": "string",
+          "description": "Default branch for PR base and branch syncing (e.g., 'main', 'dev')",
+          "default": "dev"
+        }
+      },
+      "additionalProperties": false
+    },
+    "github": {
+      "type": "object",
+      "description": "GitHub repository settings. Auto-detected from git remote by init.",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "GitHub organization or username (e.g., 'my-org')"
+        },
+        "repo": {
+          "type": "string",
+          "description": "GitHub repository name (e.g., 'my-repo')"
+        },
+        "postSummary": {
+          "type": "boolean",
+          "description": "Post a structured pipeline summary comment on the issue after completion. Default: true in CI, false locally.",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "timeouts": {
+      "type": "object",
+      "description": "Per-stage timeout overrides in seconds. Defaults: taskify=600, plan=600, build=2400, verify=300, review=600, review-fix=1200, ship=240",
+      "properties": {
+        "taskify": { "type": "number", "description": "Taskify stage timeout in seconds", "default": 600 },
+        "plan": { "type": "number", "description": "Plan stage timeout in seconds", "default": 600 },
+        "build": { "type": "number", "description": "Build stage timeout in seconds", "default": 2400 },
+        "verify": { "type": "number", "description": "Verify stage timeout in seconds", "default": 300 },
+        "review": { "type": "number", "description": "Review stage timeout in seconds", "default": 600 },
+        "review-fix": { "type": "number", "description": "Review-fix stage timeout in seconds", "default": 1200 },
+        "ship": { "type": "number", "description": "Ship stage timeout in seconds", "default": 240 }
+      },
+      "additionalProperties": false
+    },
+    "issueContext": {
+      "type": "object",
+      "description": "kody2: how many and how much of the issue's comments the agent sees in its prompt. Higher = more context but larger prompts. Defaults: 50 comments, 10000 bytes each.",
+      "properties": {
+        "commentLimit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Max number of comments (most recent first) to include in the agent prompt. Default: 50.",
+          "default": 50
+        },
+        "commentMaxBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Max bytes per comment before truncation. Default: 10000.",
+          "default": 10000
+        }
+      },
+      "additionalProperties": false
+    },
+    "testRequirements": {
+      "type": "array",
+      "description": "kody2 enforces that newly added files matching `pattern` ship with a sibling test file matching `requireSibling`. Misses fail the run; the agent gets one retry with the gap as feedback. Empty array or absent = no enforcement.",
+      "items": {
+        "type": "object",
+        "required": ["pattern", "requireSibling"],
+        "additionalProperties": false,
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "Glob-style pattern (* within segment, ** across segments). Example: 'src/app/api/**/route.ts'"
+          },
+          "requireSibling": {
+            "type": "string",
+            "description": "Sibling test path template. Tokens: {name} (filename without ext), {ext} (e.g. .ts). Example: '{name}.test{ext}'"
+          }
+        }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "description": "Agent execution configuration",
+      "properties": {
+        "model": {
+          "type": "string",
+          "pattern": "^[^/]+/.+$",
+          "description": "Single 'provider/model' string used by kody2 (single-session pipeline). Use 'claude/...' or 'anthropic/...' for direct Anthropic API; anything else routes through LiteLLM proxy.",
+          "examples": ["claude/claude-sonnet-4-6", "minimax/MiniMax-M2.7-highspeed"]
+        },
+        "modelMap": {
+          "type": "object",
+          "description": "Maps model tiers to 'provider/model' strings. Use 'claude/...' or 'anthropic/...' for direct Anthropic API; anything else routes through LiteLLM proxy.",
+          "properties": {
+            "cheap": {
+              "type": "string",
+              "pattern": "^[^/]+/.+$",
+              "description": "Fast/cheap 'provider/model' for taskify (e.g., 'claude/claude-haiku-4-5-20251001', 'minimax/MiniMax-M2.7-highspeed')",
+              "examples": ["claude/claude-haiku-4-5-20251001", "minimax/MiniMax-M2.7-highspeed"]
+            },
+            "mid": {
+              "type": "string",
+              "pattern": "^[^/]+/.+$",
+              "description": "Mid-tier 'provider/model' for build, review-fix, autofix (e.g., 'claude/claude-sonnet-4-6')",
+              "examples": ["claude/claude-sonnet-4-6", "minimax/MiniMax-M2.7-highspeed"]
+            },
+            "strong": {
+              "type": "string",
+              "pattern": "^[^/]+/.+$",
+              "description": "Strongest 'provider/model' for plan, review — deep reasoning (e.g., 'claude/claude-opus-4-6')",
+              "examples": ["claude/claude-opus-4-6", "minimax/MiniMax-M2.7-highspeed"]
+            }
+          },
+          "additionalProperties": false
+        },
+        "defaultRunner": {
+          "type": "string",
+          "description": "Name of the default runner when multiple runners are configured (advanced)",
+          "default": "claude"
+        },
+        "runners": {
+          "type": "object",
+          "description": "Named runner definitions (advanced)",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["claude-code"]
+              }
+            },
+            "required": ["type"]
+          }
+        },
+        "stageRunners": {
+          "type": "object",
+          "description": "Per-stage runner assignment (advanced). Maps stage name to runner name.",
+          "properties": {
+            "taskify": { "type": "string" },
+            "plan": { "type": "string" },
+            "build": { "type": "string" },
+            "autofix": { "type": "string" },
+            "review": { "type": "string" },
+            "review-fix": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "default": {
+          "type": "string",
+          "pattern": "^[^/]+/.+$",
+          "description": "Default 'provider/model' string applied to every stage. Use 'claude/<model>' for direct Anthropic API; anything else routes through LiteLLM proxy. Overridden by entries in 'stages'.",
+          "examples": ["claude/claude-sonnet-4-6", "minimax/MiniMax-M2.7-highspeed", "openai/gpt-4o"]
+        },
+        "stages": {
+          "type": "object",
+          "description": "Per-stage 'provider/model' overrides. Takes precedence over 'default' and 'modelMap'.",
+          "properties": {
+            "taskify": { "type": "string", "pattern": "^[^/]+/.+$" },
+            "plan": { "type": "string", "pattern": "^[^/]+/.+$" },
+            "build": { "type": "string", "pattern": "^[^/]+/.+$" },
+            "verify": { "type": "string", "pattern": "^[^/]+/.+$" },
+            "review": { "type": "string", "pattern": "^[^/]+/.+$" },
+            "review-fix": { "type": "string", "pattern": "^[^/]+/.+$" },
+            "ship": { "type": "string", "pattern": "^[^/]+/.+$" }
+          },
+          "additionalProperties": false
+        },
+        "escalateOnTimeout": {
+          "type": "boolean",
+          "description": "Escalate to a stronger model tier when a stage times out and retries. Default: true.",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "watch": {
+      "type": "object",
+      "description": "Kody Watch — periodic health monitoring. Runs every 30 minutes via GitHub Actions to check pipeline health, security, and configuration.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable Kody Watch periodic monitoring",
+          "default": false
+        },
+        "activityLog": {
+          "type": "number",
+          "description": "GitHub issue number for posting activity log reports. Auto-created by bootstrap."
+        },
+        "model": {
+          "type": "string",
+          "pattern": "^[^/]+/.+$",
+          "description": "'provider/model' string for watch agents. Falls back to agent.modelMap.cheap if not set.",
+          "examples": ["claude/claude-sonnet-4-6", "claude/claude-haiku-4-5-20251001", "minimax/MiniMax-M1"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "decompose": {
+      "type": "object",
+      "description": "Decompose command configuration for splitting complex tasks into parallel sub-tasks.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable the decompose command. Default: true.",
+          "default": true
+        },
+        "maxParallelSubTasks": {
+          "type": "number",
+          "description": "Maximum number of sub-tasks to build in parallel. Default: 3.",
+          "default": 3
+        },
+        "minComplexityScore": {
+          "type": "number",
+          "description": "Minimum complexity score (1-10) for a task to be decomposed. Set lower to decompose more tasks. Default: 4.",
+          "default": 4
+        }
+      },
+      "additionalProperties": false
+    },
+    "mcp": {
+      "type": "object",
+      "description": "MCP (Model Context Protocol) server configuration. Enables external tools like browser automation.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable MCP server integration",
+          "default": false
+        },
+        "servers": {
+          "type": "object",
+          "description": "Named MCP server definitions. Each key is a server name.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "Command to start the MCP server (e.g., 'npx')"
+              },
+              "args": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Command arguments"
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": { "type": "string" },
+                "description": "Environment variables for the server process"
+              }
+            },
+            "required": ["command"]
+          }
+        },
+        "stages": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Stages that can use MCP tools. Defaults to [\"build\", \"verify\", \"review\", \"review-fix\"]",
+          "default": ["build", "verify", "review", "review-fix"]
+        },
+        "devServer": {
+          "type": "object",
+          "description": "DEPRECATED: Use top-level devServer instead. Kept for backward compatibility.",
+          "properties": {
+            "command": {
+              "type": "string",
+              "description": "Command to start the dev server (e.g., 'pnpm dev')"
+            },
+            "url": {
+              "type": "string",
+              "description": "URL where the dev server will be accessible (e.g., 'http://localhost:3000')"
+            },
+            "readyPattern": {
+              "type": "string",
+              "description": "Regex pattern to match in stdout when server is ready. Default: 'Ready in|compiled|started server|Local:'"
+            },
+            "readyTimeout": {
+              "type": "number",
+              "description": "Seconds to wait for the server to be ready. Default: 180"
+            }
+          },
+          "required": ["command", "url"]
+        }
+      },
+      "required": ["enabled", "servers"],
+      "additionalProperties": false
+    },
+    "release": {
+      "type": "object",
+      "description": "Release automation configuration. Used by 'kody-engine release' command.",
+      "properties": {
+        "versionFiles": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files containing version strings to update on release. Default: [\"package.json\"]",
+          "default": ["package.json"]
+        },
+        "publishCommand": {
+          "type": "string",
+          "description": "Shell command to run after tagging for publishing. Empty = skip. NOT hardcoded to any registry.",
+          "default": "",
+          "examples": ["npm publish --access public", "cargo publish", "make publish"]
+        },
+        "notifyCommand": {
+          "type": "string",
+          "description": "Shell command for post-release notifications. $VERSION is interpolated at runtime. Empty = skip.",
+          "default": "",
+          "examples": ["curl -X POST $SLACK_WEBHOOK -d '{\"text\": \"Released v$VERSION\"}'"]
+        },
+        "e2eCommand": {
+          "type": "string",
+          "description": "Shell command to run E2E tests as a release gate. Runs before publishCommand. $VERSION is interpolated at runtime. Empty = skip (no E2E gate).",
+          "default": "",
+          "examples": ["pnpm test:e2e", "npm run e2e", "playwright test"]
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "description": "Timeout in milliseconds for e2eCommand, publishCommand, and notifyCommand. Default: 600000 (10 minutes).",
+          "default": 600000,
+          "examples": [600000, 1200000, 1800000]
+        },
+        "releaseBranch": {
+          "type": "string",
+          "description": "Production branch — E2E gates PRs into this branch. Release PR targets git.defaultBranch. Defaults to 'main'.",
+          "default": "main"
+        },
+        "labels": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Labels to add to the release PR. Default: [\"release\"]",
+          "default": ["kody:release"]
+        },
+        "draftRelease": {
+          "type": "boolean",
+          "description": "Create GitHub Releases as drafts. Default: false",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "devServer": {
+      "type": "object",
+      "description": "Dev server configuration for browser tool verification. Works with any provider (MCP or CLI-based).",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Command to start the dev server (e.g., 'pnpm dev')"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL where the dev server will be accessible (e.g., 'http://localhost:3000')"
+        },
+        "readyPattern": {
+          "type": "string",
+          "description": "Regex pattern to match in stdout when server is ready. Default: 'Ready in|compiled|started server|Local:'"
+        },
+        "readyTimeout": {
+          "type": "number",
+          "description": "Seconds to wait for the server to be ready. Default: 180"
+        }
+      },
+      "required": ["command", "url"]
+    }
+  },
+  "additionalProperties": false
+}

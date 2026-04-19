@@ -1,0 +1,43 @@
+{
+  "name": "@kody-ade/kody-engine",
+  "version": "0.1.0",
+  "description": "kody2 — autonomous development engine. Single-session Claude Code agent behind a generic executor + declarative executable profiles.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "kody2": "dist/bin/kody2.js"
+  },
+  "files": [
+    "dist",
+    "templates",
+    "kody.config.schema.json"
+  ],
+  "scripts": {
+    "kody2": "tsx bin/kody2.ts",
+    "build": "tsup && node -e \"require('fs').cpSync('src/executables', 'dist/executables', { recursive: true })\"",
+    "test": "vitest run tests --no-coverage",
+    "test:e2e": "vitest run e2e --no-coverage",
+    "test:all": "vitest run tests e2e --no-coverage",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.2.92"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "~5.7.0",
+    "vitest": "^4.1.1"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aharonyaircohen/kody-engine.git"
+  },
+  "homepage": "https://github.com/aharonyaircohen/kody-engine",
+  "bugs": "https://github.com/aharonyaircohen/kody-engine/issues"
+}
