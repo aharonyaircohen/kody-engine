@@ -3,12 +3,14 @@ import * as path from "path"
 import { execFileSync } from "child_process"
 import { runExecutable } from "./executor.js"
 import { reactToTriggerComment } from "./gha.js"
+import { autoDispatch } from "./dispatch.js"
 import { loadConfig, parseProviderModel, needsLitellmProxy } from "./config.js"
 import { postIssueComment, truncate } from "./issue.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
 export interface CiArgs {
+  /** Explicit issue number (legacy flag). If omitted, autoDispatch reads the GHA event. */
   issueNumber?: number
   cwd?: string
   verbose?: boolean
@@ -203,6 +205,16 @@ export async function runCi(argv: string[]): Promise<number> {
   }
 
   const args = parseCiArgs(argv)
+  // --issue is only required when autoDispatch can't infer from GHA env.
+  const autoFallback = !args.issueNumber
+    ? autoDispatch()
+    : null
+  if (!args.issueNumber && !autoFallback) {
+    // Neither explicit flag nor detectable event — keep the original error.
+  } else {
+    // Suppress "--issue required" error when autoDispatch resolved it.
+    args.errors = args.errors.filter((e) => !e.includes("--issue"))
+  }
   if (args.errors.length > 0 && !args.errors.includes("__HELP__")) {
     for (const e of args.errors) process.stderr.write(`error: ${e}\n`)
     process.stderr.write("\n" + CI_HELP)
@@ -210,9 +222,15 @@ export async function runCi(argv: string[]): Promise<number> {
   }
 
   const cwd = args.cwd ? path.resolve(args.cwd) : process.cwd()
-  const issueNumber = args.issueNumber!
 
-  process.stdout.write(`→ kody2 preflight (cwd=${cwd}, issue=${issueNumber})\n`)
+  const dispatch = autoFallback ?? {
+    mode: "run" as const,
+    target: args.issueNumber!,
+    feedback: undefined as string | undefined,
+  }
+  const issueNumber = dispatch.target
+
+  process.stdout.write(`→ kody2 preflight (cwd=${cwd}, mode=${dispatch.mode}, target=${issueNumber})\n`)
 
   try {
     const n = unpackAllSecrets()
@@ -253,12 +271,17 @@ export async function runCi(argv: string[]): Promise<number> {
     return 99
   }
 
-  process.stdout.write("→ kody2: preflight done, handing off to kody2 run\n\n")
+  process.stdout.write(`→ kody2: preflight done, handing off to kody2 ${dispatch.mode}\n\n`)
 
   try {
     const config = loadConfig(cwd)
+    const cliArgs: Record<string, unknown> = { mode: dispatch.mode }
+    if (dispatch.mode === "run") cliArgs.issue = issueNumber
+    else cliArgs.pr = issueNumber
+    if (dispatch.feedback) cliArgs.feedback = dispatch.feedback
+
     const result = await runExecutable("build", {
-      cliArgs: { mode: "run", issue: issueNumber },
+      cliArgs,
       cwd,
       config,
       verbose: args.verbose,
