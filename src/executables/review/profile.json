@@ -1,0 +1,41 @@
+{
+  "name": "review",
+  "describe": "Read-only structured review of an open PR. Posts one comment, never commits.",
+
+  "inputs": [
+    {
+      "name": "pr",
+      "flag": "--pr",
+      "type": "int",
+      "required": true,
+      "describe": "GitHub PR number to review."
+    }
+  ],
+
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": null,
+    "systemPromptAppend": null,
+    "tools": ["Read", "Grep", "Glob", "Bash"],
+    "hooks": { "PreToolUse": [], "PostToolUse": [], "Stop": [] },
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+
+  "cliTools": [],
+
+  "scripts": {
+    "preflight": [
+      { "script": "reviewFlow" },
+      { "script": "loadConventions" },
+      { "script": "composePrompt" }
+    ],
+    "postflight": [
+      { "script": "postReviewResult" }
+    ]
+  }
+}

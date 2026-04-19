@@ -16,7 +16,9 @@ import { loadConventions } from "./loadConventions.js"
 import { loadCoverageRules } from "./loadCoverageRules.js"
 import { parseAgentResult } from "./parseAgentResult.js"
 import { postIssueComment } from "./postIssueComment.js"
+import { postReviewResult } from "./postReviewResult.js"
 import { resolveFlow } from "./resolveFlow.js"
+import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
 import { verify } from "./verify.js"
 import { writeRunSummary } from "./writeRunSummary.js"
@@ -26,6 +28,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   fixFlow,
   fixCiFlow,
   resolveFlow,
+  reviewFlow,
   initFlow,
   loadConventions,
   loadCoverageRules,
@@ -39,6 +42,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   commitAndPush,
   ensurePr,
   postIssueComment,
+  postReviewResult,
   writeRunSummary,
 }
 
