@@ -11,6 +11,7 @@ import { composePrompt } from "./composePrompt.js"
 import { ensurePr } from "./ensurePr.js"
 import { fixCiFlow } from "./fixCiFlow.js"
 import { fixFlow } from "./fixFlow.js"
+import { initFlow } from "./initFlow.js"
 import { loadConventions } from "./loadConventions.js"
 import { loadCoverageRules } from "./loadCoverageRules.js"
 import { parseAgentResult } from "./parseAgentResult.js"
@@ -25,6 +26,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   fixFlow,
   fixCiFlow,
   resolveFlow,
+  initFlow,
   loadConventions,
   loadCoverageRules,
   composePrompt,

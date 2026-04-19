@@ -139,14 +139,30 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   }
 
   const cwd = args.cwd ?? process.cwd()
+
+  // init runs BEFORE a kody.config.json exists — bypass config load for it.
+  const configlessCommands = new Set(["init"])
+  const needsConfig = !(args.command === "__executable__" && configlessCommands.has(args.executableName ?? ""))
+
   let config: Kody2Config
-  try {
-    config = loadConfig(cwd)
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[kody2] config error: ${msg}\n`)
-    process.stdout.write(`PR_URL=FAILED: config error: ${msg}\n`)
-    return 99
+  if (needsConfig) {
+    try {
+      config = loadConfig(cwd)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[kody2] config error: ${msg}\n`)
+      process.stdout.write(`PR_URL=FAILED: config error: ${msg}\n`)
+      return 99
+    }
+  } else {
+    // Placeholder config for configless executables. The executor still requires
+    // a Kody2Config shape but these executables' scripts must not read from it.
+    config = {
+      quality: { typecheck: "", lint: "", testUnit: "" },
+      git: { defaultBranch: "main" },
+      github: { owner: "", repo: "" },
+      agent: { model: "claude/claude-haiku-4-5-20251001" },
+    }
   }
 
   // Auto-discovered executables (e.g. init, review, watch-*).

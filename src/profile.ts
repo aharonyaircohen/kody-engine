@@ -127,9 +127,10 @@ function parseClaudeCode(p: string, raw: unknown): ClaudeCodeSpec {
   }
 
   const tools = Array.isArray(r.tools) ? (r.tools as string[]) : []
-  if (tools.length === 0) {
-    throw new ProfileError(p, `claudeCode.tools must declare at least one SDK tool`)
-  }
+  // An empty tools array is permitted for configless / agentless executables
+  // (e.g. `init`, `release`). Such executables must set ctx.skipAgent in a
+  // preflight script — the executor refuses to invoke the agent without tools
+  // and without skipAgent, surfacing the misconfiguration loudly.
 
   const hooksRaw = (r.hooks ?? {}) as Record<string, unknown>
   const hooks = {
