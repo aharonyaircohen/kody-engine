@@ -104,7 +104,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     return 0
   }
   if (args.command === "version") {
-    process.stdout.write("kody2 0.1.0\n")
+    process.stdout.write("kody2 0.2.0\n")
     return 0
   }
   if (args.command === "ci") {
