@@ -14,6 +14,7 @@ import { fixFlow } from "./fixFlow.js"
 import { initFlow } from "./initFlow.js"
 import { loadConventions } from "./loadConventions.js"
 import { loadCoverageRules } from "./loadCoverageRules.js"
+import { loadIssueContext } from "./loadIssueContext.js"
 import { loadTaskState } from "./loadTaskState.js"
 import { parseAgentResult } from "./parseAgentResult.js"
 import { postIssueComment } from "./postIssueComment.js"
@@ -37,6 +38,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   releaseFlow,
   watchStalePrsFlow,
   loadTaskState,
+  loadIssueContext,
   loadConventions,
   loadCoverageRules,
   composePrompt,

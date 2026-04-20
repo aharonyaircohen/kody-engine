@@ -30,7 +30,7 @@
 
   "scripts": {
     "preflight": [
-      { "script": "runFlow" },
+      { "script": "loadIssueContext" },
       { "script": "loadTaskState" },
       { "script": "loadConventions" },
       { "script": "composePrompt" }
