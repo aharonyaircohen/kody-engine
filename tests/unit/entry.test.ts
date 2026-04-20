@@ -18,28 +18,19 @@ describe("entry: parseArgs", () => {
     expect(parseArgs(["-v"]).command).toBe("version")
   })
 
-  it("parses run --issue", () => {
+  it("routes a discovered executable to __executable__", () => {
     const a = parseArgs(["run", "--issue", "42"])
-    expect(a.command).toBe("run")
-    expect(a.issueNumber).toBe(42)
+    expect(a.command).toBe("__executable__")
+    expect(a.executableName).toBe("run")
+    expect(a.cliArgs).toEqual({ issue: "42" })
     expect(a.errors).toEqual([])
   })
 
-  it("requires --issue for run", () => {
-    const a = parseArgs(["run"])
-    expect(a.command).toBe("run")
-    expect(a.errors.length).toBeGreaterThan(0)
-  })
-
-  it("rejects non-positive issue numbers", () => {
-    expect(parseArgs(["run", "--issue", "0"]).errors.length).toBeGreaterThan(0)
-    expect(parseArgs(["run", "--issue", "abc"]).errors.length).toBeGreaterThan(0)
-  })
-
-  it("parses verbose / quiet / dry-run flags", () => {
-    const a = parseArgs(["run", "--issue", "1", "--verbose", "--dry-run"])
+  it("parses --verbose / --quiet flags through the generic parser", () => {
+    const a = parseArgs(["run", "--issue", "1", "--verbose"])
     expect(a.verbose).toBe(true)
-    expect(a.dryRun).toBe(true)
+    expect(a.cliArgs?.issue).toBe("1")
+    expect(a.cliArgs?.verbose).toBe(true)
   })
 
   it("parses --cwd", () => {
@@ -48,11 +39,14 @@ describe("entry: parseArgs", () => {
   })
 
   it("rejects unknown commands", () => {
-    expect(parseArgs(["frobnicate"]).errors.length).toBeGreaterThan(0)
+    const a = parseArgs(["frobnicate"])
+    expect(a.errors.length).toBeGreaterThan(0)
+    expect(a.errors[0]).toContain("unknown command")
   })
 
-  it("rejects unknown flags", () => {
-    const a = parseArgs(["run", "--issue", "1", "--bogus"])
-    expect(a.errors.some((e) => e.includes("--bogus"))).toBe(true)
+  it("routes ci to its own branch", () => {
+    const a = parseArgs(["ci", "--issue", "1"])
+    expect(a.command).toBe("ci")
+    expect(a.ciArgv).toEqual(["--issue", "1"])
   })
 })

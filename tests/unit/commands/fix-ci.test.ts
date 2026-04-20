@@ -2,25 +2,16 @@ import { describe, expect, it } from "vitest"
 import { parseArgs } from "../../../src/entry.js"
 
 describe("entry: fix-ci args", () => {
-  it("parses --pr", () => {
+  it("parses --pr into cliArgs", () => {
     const a = parseArgs(["fix-ci", "--pr", "42"])
-    expect(a.command).toBe("fix-ci")
-    expect(a.prNumber).toBe(42)
+    expect(a.command).toBe("__executable__")
+    expect(a.executableName).toBe("fix-ci")
+    expect(a.cliArgs).toEqual({ pr: "42" })
     expect(a.errors).toEqual([])
   })
 
-  it("parses --run-id", () => {
+  it("parses --run-id into cliArgs", () => {
     const a = parseArgs(["fix-ci", "--pr", "1", "--run-id", "123456789"])
-    expect(a.runId).toBe("123456789")
-  })
-
-  it("requires --pr", () => {
-    const a = parseArgs(["fix-ci"])
-    expect(a.errors.some((e) => e.includes("--pr"))).toBe(true)
-  })
-
-  it("rejects unknown flags", () => {
-    const a = parseArgs(["fix-ci", "--pr", "1", "--bogus"])
-    expect(a.errors.some((e) => e.includes("--bogus"))).toBe(true)
+    expect(a.cliArgs?.["run-id"]).toBe("123456789")
   })
 })

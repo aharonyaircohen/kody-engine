@@ -12,7 +12,7 @@ import * as path from "node:path"
 import type { AgentResult } from "./agent.js"
 import { runAgent } from "./agent.js"
 import type { Kody2Config } from "./config.js"
-import { parseProviderModel } from "./config.js"
+import { loadConfig, parseProviderModel } from "./config.js"
 import type { Context, InputSpec, ScriptEntry } from "./executables/types.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
@@ -22,7 +22,10 @@ import { firstRequiredFailure, verifyCliTools } from "./tools.js"
 export interface ExecutorInput {
   cliArgs: Record<string, unknown>
   cwd: string
-  config: Kody2Config
+  /** Pre-loaded config. If omitted, executor loads it from cwd after validating args. */
+  config?: Kody2Config
+  /** Skip config load entirely (for configless executables like `init`). */
+  skipConfig?: boolean
   verbose?: boolean
   quiet?: boolean
 }
@@ -42,7 +45,8 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     return finish({ exitCode: 99, reason: `profile references unknown scripts: ${missing.join(", ")}` })
   }
 
-  // Validate and coerce CLI args.
+  // Validate and coerce CLI args — BEFORE config load so arg errors surface
+  // as exit 64 even when a project has no kody.config.json yet.
   let args: Record<string, unknown>
   try {
     args = validateInputs(profile.inputs, input.cliArgs)
@@ -57,8 +61,28 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     return finish({ exitCode: 99, reason: `required CLI tool check failed: ${firstFail.error}` })
   }
 
+  // Resolve config: pre-loaded, loaded on demand, or a placeholder for
+  // configless executables.
+  let config: Kody2Config
+  if (input.config) {
+    config = input.config
+  } else if (input.skipConfig) {
+    config = {
+      quality: { typecheck: "", lint: "", testUnit: "" },
+      git: { defaultBranch: "main" },
+      github: { owner: "", repo: "" },
+      agent: { model: "claude/claude-haiku-4-5-20251001" },
+    }
+  } else {
+    try {
+      config = loadConfig(input.cwd)
+    } catch (err) {
+      return finish({ exitCode: 99, reason: `config error: ${err instanceof Error ? err.message : String(err)}` })
+    }
+  }
+
   // Resolve model (profile "inherit" → config.agent.model).
-  const modelSpec = profile.claudeCode.model === "inherit" ? input.config.agent.model : profile.claudeCode.model
+  const modelSpec = profile.claudeCode.model === "inherit" ? config.agent.model : profile.claudeCode.model
   let model: ReturnType<typeof parseProviderModel>
   try {
     model = parseProviderModel(modelSpec)
@@ -80,7 +104,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
   const ctx: Context = {
     args,
     cwd: input.cwd,
-    config: input.config,
+    config,
     verbose: input.verbose,
     quiet: input.quiet,
     data: {},
@@ -179,6 +203,24 @@ function resolveProfilePath(profileName: string): string {
 
 function validateInputs(specs: InputSpec[], raw: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
+
+  // Build the allowed-key set: the standard globals + every declared input's
+  // name, its bare flag key, and the camelCase alias of a dashed flag (since
+  // parseGenericFlags emits both shapes for convenience).
+  const allowedKeys = new Set<string>(["_", "cwd", "verbose", "quiet"])
+  for (const spec of specs) {
+    const flagKey = spec.flag.replace(/^--/, "")
+    allowedKeys.add(spec.name)
+    allowedKeys.add(flagKey)
+    if (flagKey.includes("-")) {
+      allowedKeys.add(flagKey.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase()))
+    }
+  }
+  for (const key of Object.keys(raw)) {
+    if (!allowedKeys.has(key)) {
+      throw new Error(`unknown arg: --${key}`)
+    }
+  }
 
   // First pass: type coerce provided values.
   for (const spec of specs) {

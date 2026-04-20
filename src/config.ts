@@ -29,8 +29,8 @@ export interface Kody2Config {
   testRequirements?: TestRequirement[]
   /**
    * Executable name to invoke when a user triggers bare `@kody2` with no
-   * subcommand. Defaults to "build" for back-compat. Set to "orchestrator"
-   * to chain multiple executables via a driving agent.
+   * subcommand. Defaults to "run". Set to "orchestrator" to chain multiple
+   * executables via a driving agent.
    */
   defaultExecutable?: string
   release?: {

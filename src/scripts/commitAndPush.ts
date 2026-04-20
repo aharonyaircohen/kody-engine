@@ -15,24 +15,26 @@ import {
 } from "../commit.js"
 import type { PostflightScript } from "../executables/types.js"
 
-export const commitAndPush: PostflightScript = async (ctx) => {
+export const commitAndPush: PostflightScript = async (ctx, profile) => {
   const branch = ctx.data.branch as string | undefined
   if (!branch) {
     ctx.data.commitResult = { committed: false, pushed: false }
     return
   }
 
+  const kind = profile.name
+
   // Resolve flow: make sure conflict-resolved files get staged.
   // Do NOT abort MERGE_HEAD in resolve mode — the resolveFlow intentionally
   // created it, and commitAndPush needs to produce the merge commit from it.
-  if (ctx.args.mode === "resolve") {
+  if (kind === "resolve") {
     try {
       execFileSync("git", ["add", "-A"], { cwd: ctx.cwd, env: { ...process.env, HUSKY: "0" }, stdio: "pipe" })
     } catch {
       /* best effort */
     }
   } else {
-    // All other modes: clean up any agent-created unfinished git state
+    // All other executables: clean up any agent-created unfinished git state
     // (e.g., stash/merge/rebase leftovers) before committing.
     const aborted = abortUnfinishedGitOps(ctx.cwd)
     if (aborted.length > 0) {
@@ -40,7 +42,7 @@ export const commitAndPush: PostflightScript = async (ctx) => {
     }
   }
 
-  const fallbackMsg = defaultCommitMessage(ctx.args.mode as string | undefined, ctx.data)
+  const fallbackMsg = defaultCommitMessage(kind, ctx.data)
   const message = (ctx.data.commitMessage as string) || fallbackMsg
 
   try {

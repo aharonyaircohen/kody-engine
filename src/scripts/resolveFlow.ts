@@ -1,5 +1,5 @@
 /**
- * Flow script for `args.mode === "resolve"`.
+ * Flow script for the `resolve` executable.
  * Loads PR, checks it out, attempts to merge origin/<base>. On clean merge,
  * sets ctx.skipAgent = true and marks success. On conflict, collects the
  * conflicted files + markers preview for the agent to resolve.

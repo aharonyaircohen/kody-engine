@@ -13,12 +13,12 @@
 │ kody2 CLI (@kody-ade/kody-engine)           │
 │   bin/kody2.ts — parses argv                │
 │   src/executor.ts — runs one profile        │
-│   src/executables/build/profile.json        │
+│   src/executables/<name>/profile.json       │
 │   src/scripts/*.ts — named hook catalog     │
 └─────────────────────────────────────────────┘
 ```
 
-`run`/`fix`/`fix-ci`/`resolve` are four modes of the same `build` executable, selected by `args.mode` via `runWhen` on preflight script entries. Executor knows nothing about any specific mode.
+Every top-level command is its own auto-discovered executable (`run`, `fix`, `fix-ci`, `resolve`, `review`, `plan`, `orchestrator`, `release`, `watch-*`, `init`). The router has no hardcoded command switch beyond `ci`/`help`/`version` — drop a new `src/executables/<name>/` directory with a `profile.json` + `prompt.md` and `kody2 <name>` starts working. The executor knows nothing about any specific command.
 
 ## Install in a consumer repo
 
@@ -31,13 +31,14 @@
 ## Commands
 
 ```
-kody2 run     --issue <N>                  # implement an issue
+kody2 run     --issue <N>                   # implement an issue
 kody2 fix     --pr    <N> [--feedback ...]  # apply PR review feedback
 kody2 fix-ci  --pr    <N> [--run-id <ID>]   # fix failing CI
 kody2 resolve --pr    <N>                   # merge default branch in, resolve conflicts
+kody2 review  --pr    <N>                   # read-only structured PR review
 kody2 ci      --issue <N>                   # CI preflight + run
 ```
 
 ## Profiles
 
-A profile is declarative JSON + an adjacent prompt. See `src/executables/build/profile.json`. Adding a new role = new profile + new prompt + registering any new scripts under `src/scripts/`. No executor changes.
+A profile is declarative JSON + an adjacent `prompt.md`. See any directory under `src/executables/` for examples. Adding a new command = new directory + profile + prompt + registering any new scripts under `src/scripts/`. No executor, entry, or dispatch changes.

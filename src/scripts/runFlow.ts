@@ -1,5 +1,5 @@
 /**
- * Flow script for `args.mode === "run"`.
+ * Flow script for the `run` executable.
  * Loads the issue, creates/checks out a feature branch, posts the "started"
  * comment. Issue number lives in `ctx.args.issue`.
  */

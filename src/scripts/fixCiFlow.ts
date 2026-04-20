@@ -1,5 +1,5 @@
 /**
- * Flow script for `args.mode === "fix-ci"`.
+ * Flow script for the `fix-ci` executable.
  * Loads PR, checks it out, fetches the failing workflow run + log tail.
  */
 

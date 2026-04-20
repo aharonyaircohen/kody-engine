@@ -1,0 +1,61 @@
+{
+  "name": "run",
+  "describe": "Implement a GitHub issue end-to-end: branch, code, commit, open PR.",
+
+  "inputs": [
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": true,
+      "describe": "GitHub issue number to implement."
+    }
+  ],
+
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "acceptEdits",
+    "maxTurns": null,
+    "systemPromptAppend": null,
+    "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+    "hooks": {
+      "PreToolUse": [],
+      "PostToolUse": [],
+      "Stop": []
+    },
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+
+  "cliTools": [],
+
+  "scripts": {
+    "preflight": [
+      { "script": "runFlow" },
+      { "script": "loadTaskState" },
+      { "script": "loadConventions" },
+      { "script": "loadCoverageRules" },
+      { "script": "composePrompt" }
+    ],
+    "postflight": [
+      { "script": "parseAgentResult" },
+      { "script": "verify" },
+      { "script": "checkCoverageWithRetry" },
+      { "script": "commitAndPush" },
+      { "script": "ensurePr" },
+      { "script": "postIssueComment" },
+      { "script": "writeRunSummary" },
+      { "script": "saveTaskState" }
+    ]
+  },
+  "output": {
+    "actionTypes": [
+      "RUN_COMPLETED",
+      "RUN_FAILED",
+      "AGENT_NOT_RUN"
+    ]
+  }
+}

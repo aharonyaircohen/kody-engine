@@ -122,6 +122,14 @@ describe("registry: parseGenericFlags", () => {
   })
 
   it("handles --flag followed by another --flag correctly", () => {
-    expect(parseGenericFlags(["--dry-run", "--verbose"])).toEqual({ "dry-run": true, verbose: true })
+    expect(parseGenericFlags(["--dry-run", "--verbose"])).toEqual({
+      "dry-run": true,
+      dryRun: true,
+      verbose: true,
+    })
+  })
+
+  it("emits camelCase alias for dashed keys", () => {
+    expect(parseGenericFlags(["--run-id", "123"])).toEqual({ "run-id": "123", runId: "123" })
   })
 })

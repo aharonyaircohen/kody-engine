@@ -3,18 +3,19 @@
  * triggering comment's body.
  *
  * Routing (on an issue):
+ *   @kody2 run         → run           args: { issue }
  *   @kody2 plan        → plan          args: { issue }
- *   @kody2 build       → build (run)   args: { mode: "run", issue }
  *   @kody2 orchestrate → orchestrator  args: { issue }
  *   @kody2 <other>     → <other>       args: { issue }   (generic pass-through)
- *   @kody2 (bare)      → config.defaultExecutable (fallback: "build" as run mode)
+ *   @kody2 (bare)      → config.defaultExecutable (fallback: "run")
  *
  * Routing (on a PR):
- *   @kody2 fix-ci      → build (fix-ci)
- *   @kody2 resolve     → build (resolve)
- *   @kody2 fix / bare  → build (fix) with extracted feedback
+ *   @kody2 fix-ci      → fix-ci        args: { pr }
+ *   @kody2 resolve     → resolve       args: { pr }
+ *   @kody2 review      → review        args: { pr }
+ *   @kody2 fix / bare  → fix           args: { pr, feedback? }
  *
- * workflow_dispatch → build (run) on the provided issue_number input.
+ * workflow_dispatch → run on the provided issue_number input.
  */
 
 import * as fs from "node:fs"
@@ -30,8 +31,8 @@ export interface DispatchResult {
 }
 
 /**
- * Explicit override from the CLI (legacy --issue flag): dispatch to build/run
- * mode on the given issue number.
+ * Explicit override from the CLI (legacy --issue flag): dispatch to the `run`
+ * executable on the given issue number.
  */
 export function autoDispatch(opts?: {
   explicit?: { issueNumber?: number }
@@ -40,8 +41,8 @@ export function autoDispatch(opts?: {
   const explicit = opts?.explicit
   if (explicit?.issueNumber && explicit.issueNumber > 0) {
     return {
-      executable: "build",
-      cliArgs: { mode: "run", issue: explicit.issueNumber },
+      executable: "run",
+      cliArgs: { issue: explicit.issueNumber },
       target: explicit.issueNumber,
     }
   }
@@ -60,7 +61,7 @@ export function autoDispatch(opts?: {
   if (eventName === "workflow_dispatch") {
     const n = parseInt(String(event.inputs?.issue_number ?? ""), 10)
     if (!Number.isNaN(n) && n > 0) {
-      return { executable: "build", cliArgs: { mode: "run", issue: n }, target: n }
+      return { executable: "run", cliArgs: { issue: n }, target: n }
     }
     return null
   }
@@ -74,36 +75,40 @@ export function autoDispatch(opts?: {
 
   const afterTag = extractAfterTag(body)
 
-  // PR routing: keep build-mode semantics (fix / fix-ci / resolve).
+  // PR routing: each subcommand is its own executable.
   if (isPr) {
     if (/\bfix-ci\b/.test(afterTag)) {
-      return { executable: "build", cliArgs: { mode: "fix-ci", pr: targetNum }, target: targetNum }
+      return { executable: "fix-ci", cliArgs: { pr: targetNum }, target: targetNum }
     }
     if (/\bresolve\b/.test(afterTag)) {
-      return { executable: "build", cliArgs: { mode: "resolve", pr: targetNum }, target: targetNum }
+      return { executable: "resolve", cliArgs: { pr: targetNum }, target: targetNum }
+    }
+    if (/\breview\b/.test(afterTag)) {
+      return { executable: "review", cliArgs: { pr: targetNum }, target: targetNum }
     }
     const feedback = extractFeedback(afterTag)
     return {
-      executable: "build",
-      cliArgs: { mode: "fix", pr: targetNum, ...(feedback ? { feedback } : {}) },
+      executable: "fix",
+      cliArgs: { pr: targetNum, ...(feedback ? { feedback } : {}) },
       target: targetNum,
     }
   }
 
   // Issue routing: named subcommand wins; bare falls to defaultExecutable.
   const sub = extractSubcommand(afterTag)
-  const defaultExec = opts?.config?.defaultExecutable ?? "build"
+  const defaultExec = opts?.config?.defaultExecutable ?? "run"
 
   if (!sub) {
     return asDispatch(defaultExec, targetNum)
   }
 
   // Known sub-aliases.
-  if (sub === "build") {
-    return { executable: "build", cliArgs: { mode: "run", issue: targetNum }, target: targetNum }
-  }
   if (sub === "orchestrate" || sub === "orchestrator") {
     return { executable: "orchestrator", cliArgs: { issue: targetNum }, target: targetNum }
+  }
+  if (sub === "build") {
+    // Backward-compat: `@kody2 build` on an issue used to map to build/run.
+    return { executable: "run", cliArgs: { issue: targetNum }, target: targetNum }
   }
 
   // Generic pass-through: @kody2 <name> → executable <name> with { issue }.
@@ -111,9 +116,6 @@ export function autoDispatch(opts?: {
 }
 
 function asDispatch(executable: string, target: number): DispatchResult {
-  if (executable === "build") {
-    return { executable, cliArgs: { mode: "run", issue: target }, target }
-  }
   return { executable, cliArgs: { issue: target }, target }
 }
 
@@ -124,7 +126,7 @@ function extractAfterTag(body: string): string {
 }
 
 /**
- * Extract the first word after `@kody2` — the subcommand (e.g. "plan", "build").
+ * Extract the first word after `@kody2` — the subcommand (e.g. "plan", "run").
  * Returns null if no recognizable subcommand (i.e. bare `@kody2` or free text).
  */
 function extractSubcommand(afterTag: string): string | null {

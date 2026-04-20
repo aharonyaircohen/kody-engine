@@ -1,5 +1,5 @@
 /**
- * Flow script for `args.mode === "fix"`.
+ * Flow script for the `fix` executable.
  * Loads the PR, checks it out, reads the PR's latest review (or --feedback),
  * posts a "started" comment on the PR.
  */

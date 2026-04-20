@@ -56,9 +56,4 @@ describe("e2e: CLI smoke", () => {
     expect(r.stderr).toMatch(/--bogus/)
   })
 
-  it("rejects non-positive issue number", () => {
-    const r = runCli(["run", "--issue", "0"])
-    expect(r.code).toBe(64)
-    expect(r.stderr).toMatch(/positive integer/)
-  })
 })

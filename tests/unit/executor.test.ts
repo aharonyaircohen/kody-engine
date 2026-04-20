@@ -70,36 +70,40 @@ describe("executor: profile input schema", () => {
   })
 })
 
-describe("executor: Build profile is loadable + valid", () => {
-  it("builds profile.json loads cleanly from src/executables/build/", () => {
-    const profilePath = path.resolve(__dirname, "../../src/executables/build/profile.json")
-    expect(fs.existsSync(profilePath)).toBe(true)
-    const profile = loadProfile(profilePath)
-    expect(profile.name).toBe("build")
-    const modes = profile.inputs.find((i) => i.name === "mode")!.values
-    expect(modes).toEqual(["run", "fix", "fix-ci", "resolve"])
-    const flowScripts = profile.scripts.preflight.filter((s) => s.runWhen).map((s) => s.script)
-    expect(flowScripts).toEqual(["runFlow", "fixFlow", "fixCiFlow", "resolveFlow"])
-  })
+describe("executor: split pipeline profiles are loadable + valid", () => {
+  const EXE_ROOT = path.resolve(__dirname, "../../src/executables")
 
-  it("gates verify + checkCoverageWithRetry to non-resolve modes", () => {
-    // Resolve is a merge operation; running verify on it turns pre-existing
-    // quality-gate failures into misleading exit code 2s.
-    const profilePath = path.resolve(__dirname, "../../src/executables/build/profile.json")
-    const profile = loadProfile(profilePath)
-    const verify = profile.scripts.postflight.find((s) => s.script === "verify")!
-    const coverage = profile.scripts.postflight.find((s) => s.script === "checkCoverageWithRetry")!
-    expect(verify.runWhen).toEqual({ "args.mode": ["run", "fix", "fix-ci"] })
-    expect(coverage.runWhen).toEqual({ "args.mode": ["run", "fix", "fix-ci"] })
-  })
-
-  it("registers saveTaskState as the final postflight step", () => {
-    const profilePath = path.resolve(__dirname, "../../src/executables/build/profile.json")
-    const profile = loadProfile(profilePath)
+  it("run profile loads cleanly with the expected shape", () => {
+    const profile = loadProfile(path.join(EXE_ROOT, "run/profile.json"))
+    expect(profile.name).toBe("run")
+    expect(profile.inputs.map((i) => i.name)).toEqual(["issue"])
+    expect(profile.scripts.preflight[0]!.script).toBe("runFlow")
+    expect(profile.scripts.preflight[0]!.runWhen).toBeUndefined()
     const last = profile.scripts.postflight.at(-1)!
     expect(last.script).toBe("saveTaskState")
-    expect(last.runWhen).toBeUndefined()
-    const summary = profile.scripts.postflight.find((s) => s.script === "writeRunSummary")
-    expect(summary).toBeDefined()
+  })
+
+  it("fix profile loads cleanly", () => {
+    const profile = loadProfile(path.join(EXE_ROOT, "fix/profile.json"))
+    expect(profile.name).toBe("fix")
+    expect(profile.inputs.map((i) => i.name).sort()).toEqual(["feedback", "pr"])
+    expect(profile.scripts.preflight[0]!.script).toBe("fixFlow")
+  })
+
+  it("fix-ci profile loads cleanly", () => {
+    const profile = loadProfile(path.join(EXE_ROOT, "fix-ci/profile.json"))
+    expect(profile.name).toBe("fix-ci")
+    expect(profile.inputs.map((i) => i.name).sort()).toEqual(["pr", "runId"])
+    expect(profile.scripts.preflight[0]!.script).toBe("fixCiFlow")
+  })
+
+  it("resolve profile skips verify + checkCoverageWithRetry (merge op)", () => {
+    const profile = loadProfile(path.join(EXE_ROOT, "resolve/profile.json"))
+    expect(profile.name).toBe("resolve")
+    expect(profile.inputs.map((i) => i.name)).toEqual(["pr"])
+    expect(profile.scripts.preflight[0]!.script).toBe("resolveFlow")
+    const postScripts = profile.scripts.postflight.map((s) => s.script)
+    expect(postScripts).not.toContain("verify")
+    expect(postScripts).not.toContain("checkCoverageWithRetry")
   })
 })

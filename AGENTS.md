@@ -4,7 +4,7 @@
 
 `@kody-ade/kody-engine` (npm) is **kody2**, an autonomous development engine. One `@kody2` comment on a GitHub issue (or PR) runs Claude Code in CI, implements the change, commits, and opens or updates a PR.
 
-Under the hood it is one **generic executor** running **one declarative executable profile** (`build`). No multi-stage pipeline, no orchestration logic baked into the engine.
+Under the hood it is one **generic executor** running one of several **declarative executable profiles**. No multi-stage pipeline, no orchestration logic baked into the engine — each top-level command is its own single-purpose executable.
 
 ## Architecture (two layers, nothing else)
 
@@ -22,7 +22,7 @@ Under the hood it is one **generic executor** running **one declarative executab
 │    - validates CLI args                                     │
 │    - verifies CLI tool contracts                            │
 │    - runs preflight scripts → agent → postflight scripts    │
-│    - knows nothing about build/run/fix — it just executes   │
+│    - knows nothing about run/fix/review — it just executes  │
 └─────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -31,29 +31,32 @@ Under the hood it is one **generic executor** running **one declarative executab
 │    features (hooks/skills/commands/subagents/plugins/MCP),  │
 │    cliTools with install/verify/usage contracts, preflight  │
 │    and postflight script lists with optional runWhen rules. │
-│    Adjacent prompt files under prompts/<mode>.md.           │
-│    Today there is exactly one executable: `build`.          │
+│    Adjacent prompt file at prompt.md. One directory per     │
+│    command: run, fix, fix-ci, resolve, review, plan,        │
+│    orchestrator, release, watch-*, init.                    │
 └─────────────────────────────────────────────────────────────┘
                               ↓
         Fixed script catalog (src/scripts/*.ts)
-        runFlow / fixFlow / fixCiFlow / resolveFlow
+        runFlow / fixFlow / fixCiFlow / resolveFlow / reviewFlow / …
         loadConventions / loadCoverageRules / composePrompt
         parseAgentResult / verify / checkCoverageWithRetry
         commitAndPush / ensurePr / postIssueComment
 ```
 
-## Modes of the `build` executable
+## Top-level commands
 
-Selected by the `--mode` input, resolved from the GHA event by `src/dispatch.ts`:
+Each is its own auto-discovered executable. [src/dispatch.ts](src/dispatch.ts) picks one from the GHA event.
 
-| Mode      | Input    | Triggered by                                   |
+| Command   | Input    | Triggered by                                   |
 |-----------|----------|------------------------------------------------|
 | `run`     | `--issue`| `@kody2` on an issue, or `workflow_dispatch`   |
 | `fix`     | `--pr`   | `@kody2` (or `@kody2 fix …`) on a PR comment   |
 | `fix-ci`  | `--pr`   | `@kody2 fix-ci` on a PR                        |
 | `resolve` | `--pr`   | `@kody2 resolve` on a PR                       |
+| `review`  | `--pr`   | `@kody2 review` on a PR (read-only)            |
+| `plan`    | `--issue`| `@kody2 plan` on an issue                      |
 
-CLI users can also invoke `kody2 run/fix/fix-ci/resolve` directly.
+CLI users can invoke any of these directly (`kody2 <command> …`).
 
 ## Repo layout
 
@@ -71,11 +74,15 @@ src/
   {branch,commit,pr,verify,issue,coverage,prompt,format,config}.ts
   executables/
     types.ts
-    build/
-      profile.json
-      prompts/{run,fix,fix-ci,resolve}.md
+    run/        { profile.json, prompt.md }
+    fix/        { profile.json, prompt.md }
+    fix-ci/     { profile.json, prompt.md }
+    resolve/    { profile.json, prompt.md }
+    review/     { profile.json, prompt.md }
+    plan/       { profile.json, prompt.md }
+    orchestrator/ … release/ … watch-stale-prs/ … init/
   scripts/
-    {runFlow,fixFlow,fixCiFlow,resolveFlow}.ts
+    {runFlow,fixFlow,fixCiFlow,resolveFlow,reviewFlow}.ts
     {loadConventions,loadCoverageRules,composePrompt}.ts
     {parseAgentResult,verify,checkCoverageWithRetry}.ts
     {commitAndPush,ensurePr,postIssueComment}.ts
@@ -90,8 +97,8 @@ tests/
 
 ## Key invariants (do not break)
 
-1. **The executor never references role-specific concepts.** No `build` / `run` / `fix` / `issue` / `pr` inside `executor.ts`. Only: profile, scripts, context, SDK call.
-2. **Profiles are data, not code.** A profile is pure JSON + markdown prompts. Adding a new executable = new `src/executables/<name>/` dir + register any new scripts.
+1. **The executor never references role-specific concepts.** No `run` / `fix` / `review` / `issue` / `pr` inside `executor.ts`. Only: profile, scripts, context, SDK call.
+2. **Profiles are data, not code.** A profile is pure JSON + a markdown `prompt.md`. Adding a new command = drop a new `src/executables/<name>/` dir with `profile.json` + `prompt.md`, register any new scripts.
 3. **Scripts compose freely, one does one thing.** Each script is a small deterministic function. `runWhen` (dotted-path equality against context) is the only conditional primitive.
 4. **Wrapper logic belongs in scripts, not inline.** No "wrapper layer" between executor and agent. `verify`/`commitAndPush`/`ensurePr`/`postIssueComment` etc. are all postflight scripts.
 5. **The workflow YAML stays minimal.** Any new capability ships via npm, not via consumer YAML edits.
@@ -112,8 +119,8 @@ tests/
 
 ## How to proceed on a new session
 
-1. Read the relevant code in `src/` — start with `executor.ts` and the profile it loads at `src/executables/build/profile.json`.
-2. For feature requests: is it an **executable profile** change (new mode or new role) or a **script** change (new hook) or an **executor** change (new conditional primitive / new SDK surface)? 90% of the time it's scripts or profile.
+1. Read the relevant code in `src/` — start with `executor.ts` and the profile directories under `src/executables/`.
+2. For feature requests: is it an **existing profile** change (tweak one command), a **new profile** (new top-level command — new dir under `src/executables/`), a **script** change (new postflight hook), or an **executor** change (new conditional primitive / new SDK surface)? 90% of the time it's scripts or a profile.
 3. `pnpm typecheck && pnpm test && pnpm test:e2e` before any commit.
 4. Release flow: bump patch in `package.json`, update version string in `src/entry.ts`, commit, tag `vX.Y.Z`, `git push --follow-tags`, `npm publish --access public`.
 5. Live-test on the tester before declaring success.

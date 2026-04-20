@@ -12,11 +12,11 @@ function writeEvent(body: unknown): string {
 }
 
 describe("dispatch: explicit override", () => {
-  it("routes to build/run when issueNumber provided", () => {
+  it("routes to run when issueNumber provided", () => {
     const r = autoDispatch({ explicit: { issueNumber: 42 } })
     expect(r).toEqual({
-      executable: "build",
-      cliArgs: { mode: "run", issue: 42 },
+      executable: "run",
+      cliArgs: { issue: 42 },
       target: 42,
     })
   })
@@ -40,12 +40,12 @@ describe("dispatch: workflow_dispatch event", () => {
     process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
   })
 
-  it("routes issue_number input to build/run", () => {
+  it("routes issue_number input to run", () => {
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
     process.env.GITHUB_EVENT_PATH = writeEvent({ inputs: { issue_number: "17" } })
     expect(autoDispatch()).toEqual({
-      executable: "build",
-      cliArgs: { mode: "run", issue: 17 },
+      executable: "run",
+      cliArgs: { issue: 17 },
       target: 17,
     })
   })
@@ -81,15 +81,27 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("routes '@kody2 build' to build/run", () => {
+  it("routes '@kody2 run' to run executable", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 build" },
+      comment: { body: "@kody2 run" },
       issue: { number: 8 },
     })
     expect(autoDispatch()).toEqual({
-      executable: "build",
-      cliArgs: { mode: "run", issue: 8 },
+      executable: "run",
+      cliArgs: { issue: 8 },
       target: 8,
+    })
+  })
+
+  it("routes legacy '@kody2 build' → run (backward-compat)", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody2 build" },
+      issue: { number: 15 },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "run",
+      cliArgs: { issue: 15 },
+      target: 15,
     })
   })
 
@@ -141,14 +153,14 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("bare '@kody2' with no config defaults to build/run", () => {
+  it("bare '@kody2' with no config defaults to run", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody2" },
       issue: { number: 13 },
     })
     expect(autoDispatch()).toEqual({
-      executable: "build",
-      cliArgs: { mode: "run", issue: 13 },
+      executable: "run",
+      cliArgs: { issue: 13 },
       target: 13,
     })
   })
@@ -174,50 +186,61 @@ describe("dispatch: issue_comment on PR", () => {
     process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
   })
 
-  it("'@kody2 fix-ci' on PR → build/fix-ci", () => {
+  it("'@kody2 fix-ci' on PR → fix-ci", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody2 fix-ci" },
       issue: { number: 20, pull_request: {} },
     })
     expect(autoDispatch()).toEqual({
-      executable: "build",
-      cliArgs: { mode: "fix-ci", pr: 20 },
+      executable: "fix-ci",
+      cliArgs: { pr: 20 },
       target: 20,
     })
   })
 
-  it("'@kody2 resolve' on PR → build/resolve", () => {
+  it("'@kody2 resolve' on PR → resolve", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody2 resolve" },
       issue: { number: 21, pull_request: {} },
     })
     expect(autoDispatch()).toEqual({
-      executable: "build",
-      cliArgs: { mode: "resolve", pr: 21 },
+      executable: "resolve",
+      cliArgs: { pr: 21 },
       target: 21,
     })
   })
 
-  it("'@kody2 please change foo' on PR → build/fix with feedback", () => {
+  it("'@kody2 review' on PR → review", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody2 review" },
+      issue: { number: 24, pull_request: {} },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "review",
+      cliArgs: { pr: 24 },
+      target: 24,
+    })
+  })
+
+  it("'@kody2 please change foo' on PR → fix with feedback", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody2 please change foo" },
       issue: { number: 22, pull_request: {} },
     })
     const r = autoDispatch()
-    expect(r?.executable).toBe("build")
-    expect(r?.cliArgs.mode).toBe("fix")
+    expect(r?.executable).toBe("fix")
     expect(r?.cliArgs.pr).toBe(22)
     expect(r?.cliArgs.feedback).toContain("change foo")
   })
 
-  it("bare '@kody2' on PR → build/fix without feedback", () => {
+  it("bare '@kody2' on PR → fix without feedback", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody2" },
       issue: { number: 23, pull_request: {} },
     })
     expect(autoDispatch()).toEqual({
-      executable: "build",
-      cliArgs: { mode: "fix", pr: 23 },
+      executable: "fix",
+      cliArgs: { pr: 23 },
       target: 23,
     })
   })

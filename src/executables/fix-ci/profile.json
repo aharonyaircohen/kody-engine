@@ -1,0 +1,68 @@
+{
+  "name": "fix-ci",
+  "describe": "Fix a failing CI workflow on an existing PR.",
+
+  "inputs": [
+    {
+      "name": "pr",
+      "flag": "--pr",
+      "type": "int",
+      "required": true,
+      "describe": "GitHub PR number whose CI is failing."
+    },
+    {
+      "name": "runId",
+      "flag": "--run-id",
+      "type": "string",
+      "required": false,
+      "describe": "Specific failed workflow run ID. Defaults to latest failed run on the PR branch."
+    }
+  ],
+
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "acceptEdits",
+    "maxTurns": null,
+    "systemPromptAppend": null,
+    "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+    "hooks": {
+      "PreToolUse": [],
+      "PostToolUse": [],
+      "Stop": []
+    },
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+
+  "cliTools": [],
+
+  "scripts": {
+    "preflight": [
+      { "script": "fixCiFlow" },
+      { "script": "loadTaskState" },
+      { "script": "loadConventions" },
+      { "script": "loadCoverageRules" },
+      { "script": "composePrompt" }
+    ],
+    "postflight": [
+      { "script": "parseAgentResult" },
+      { "script": "verify" },
+      { "script": "checkCoverageWithRetry" },
+      { "script": "commitAndPush" },
+      { "script": "ensurePr" },
+      { "script": "postIssueComment" },
+      { "script": "writeRunSummary" },
+      { "script": "saveTaskState" }
+    ]
+  },
+  "output": {
+    "actionTypes": [
+      "FIX_CI_COMPLETED",
+      "FIX_CI_FAILED",
+      "AGENT_NOT_RUN"
+    ]
+  }
+}

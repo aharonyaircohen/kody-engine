@@ -251,8 +251,8 @@ export async function runCi(argv: string[]): Promise<number> {
   }
 
   const dispatch = autoFallback ?? {
-    executable: "build" as const,
-    cliArgs: { mode: "run", issue: args.issueNumber! } as Record<string, unknown>,
+    executable: "run" as const,
+    cliArgs: { issue: args.issueNumber! } as Record<string, unknown>,
     target: args.issueNumber!,
   }
   const issueNumber = dispatch.target

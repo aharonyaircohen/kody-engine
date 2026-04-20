@@ -69,8 +69,10 @@ export function isSafeName(name: string): boolean {
  * Supports `--key value` and `--flag` (boolean). Unknown positionals
  * accumulate in `args._` for the executable to reject if it wishes.
  *
- * The executor's `validateInputs` is the authoritative validator — this
- * is only responsible for turning argv into a bag of key-value pairs.
+ * Dashed flags get both shapes in the output: `--run-id 42` produces
+ * `{ "run-id": "42", runId: "42" }` so profiles can name inputs with
+ * either convention. The executor's `validateInputs` is the authoritative
+ * validator — this is only responsible for turning argv into a bag.
  */
 export function parseGenericFlags(argv: string[]): Record<string, unknown> {
   const args: Record<string, unknown> = {}
@@ -83,11 +85,11 @@ export function parseGenericFlags(argv: string[]): Record<string, unknown> {
     }
     const key = arg.slice(2)
     const next = argv[i + 1]
-    if (next !== undefined && !next.startsWith("--")) {
-      args[key] = next
-      i++
-    } else {
-      args[key] = true
+    const value: unknown = next !== undefined && !next.startsWith("--") ? (i++, next) : true
+    args[key] = value
+    if (key.includes("-")) {
+      const camel = key.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase())
+      if (camel !== key && args[camel] === undefined) args[camel] = value
     }
   }
   if (positional.length > 0) args._ = positional
