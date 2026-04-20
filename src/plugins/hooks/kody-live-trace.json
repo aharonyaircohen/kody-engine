@@ -3,14 +3,13 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "tool == \"Read\"",
+        "matcher": "Read",
         "hooks": [
           {
             "type": "command",
             "command": "printf 'HOOK_FIRED_OK\\n' >> /tmp/kody-hook-signal.txt"
           }
-        ],
-        "description": "Kody2 live-test hook — appends HOOK_FIRED_OK to /tmp/kody-hook-signal.txt on every Read tool use, so the agent can verify the hook fired."
+        ]
       }
     ]
   }
