@@ -22,6 +22,7 @@ export const postIssueComment: PostflightScript = async (ctx) => {
   const commitResult = ctx.data.commitResult as { committed: boolean } | undefined
   const hasCommits = Boolean(ctx.data.hasCommitsAhead)
   const prUrl = ctx.output.prUrl
+  const prAction = (ctx.data.prResult as { action?: "created" | "updated" } | undefined)?.action
 
   if (!commitResult?.committed && !hasCommits) {
     const reason = "no changes to commit"
@@ -40,9 +41,9 @@ export const postIssueComment: PostflightScript = async (ctx) => {
   const failureReason = computeFailureReason(ctx)
   const isFailure = failureReason.length > 0
 
-  const msg = isFailure
-    ? `⚠️ kody2 FAILED: ${truncate(failureReason, 1500)}${prUrl ? ` — draft PR: ${prUrl}` : ""}`
-    : `✅ kody2 PR opened: ${prUrl}`
+  const successMsg = prAction === "updated" ? `✅ kody2 pushed to ${prUrl}` : `✅ kody2 PR opened: ${prUrl}`
+  const failurePrSuffix = prUrl ? (prAction === "updated" ? ` — PR: ${prUrl}` : ` — draft PR: ${prUrl}`) : ""
+  const msg = isFailure ? `⚠️ kody2 FAILED: ${truncate(failureReason, 1500)}${failurePrSuffix}` : successMsg
   postWith(targetType, targetNumber, msg, ctx.cwd)
 
   let exitCode = 0
