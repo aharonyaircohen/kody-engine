@@ -9,7 +9,15 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { ClaudeCodeSpec, CliToolSpec, InputSpec, Profile, ScriptEntry } from "./executables/types.js"
+import type {
+  ClaudeCodeSpec,
+  CliToolSpec,
+  InputArtifactSpec,
+  InputSpec,
+  OutputArtifactSpec,
+  Profile,
+  ScriptEntry,
+} from "./executables/types.js"
 
 const VALID_INPUT_TYPES = new Set(["int", "string", "bool", "enum"])
 const VALID_PERMISSION_MODES = new Set(["default", "acceptEdits", "plan", "bypassPermissions"])
@@ -57,6 +65,8 @@ export function loadProfile(profilePath: string): Profile {
     cliTools: parseCliTools(profilePath, r.cliTools),
     scripts: parseScripts(profilePath, r.scripts),
     outputContract: r.outputContract as Profile["outputContract"],
+    inputArtifacts: parseInputArtifacts(profilePath, r.input),
+    outputArtifacts: parseOutputArtifacts(profilePath, r.output),
     dir: path.dirname(profilePath),
   }
 
@@ -191,6 +201,53 @@ function parseScripts(p: string, raw: unknown): Profile["scripts"] {
     preflight: parseScriptList(p, "preflight", r.preflight),
     postflight: parseScriptList(p, "postflight", r.postflight),
   }
+}
+
+function parseInputArtifacts(p: string, raw: unknown): InputArtifactSpec[] {
+  if (raw === undefined || raw === null) return []
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ProfileError(p, `"input" must be an object with an "artifacts" array`)
+  }
+  const list = (raw as Record<string, unknown>).artifacts
+  if (list === undefined || list === null) return []
+  if (!Array.isArray(list)) throw new ProfileError(p, `"input.artifacts" must be an array`)
+  const out: InputArtifactSpec[] = []
+  for (const [i, item] of list.entries()) {
+    if (typeof item === "string") {
+      out.push({ name: item })
+      continue
+    }
+    if (!item || typeof item !== "object") {
+      throw new ProfileError(p, `input.artifacts[${i}] must be a string or object`)
+    }
+    const r = item as Record<string, unknown>
+    const name = requireString(p, r, "name")
+    const spec: InputArtifactSpec = { name }
+    if (typeof r.required === "boolean") spec.required = r.required
+    out.push(spec)
+  }
+  return out
+}
+
+function parseOutputArtifacts(p: string, raw: unknown): OutputArtifactSpec[] {
+  if (raw === undefined || raw === null) return []
+  if (typeof raw !== "object" || Array.isArray(raw)) return []
+  const list = (raw as Record<string, unknown>).artifacts
+  if (list === undefined || list === null) return []
+  if (!Array.isArray(list)) throw new ProfileError(p, `"output.artifacts" must be an array`)
+  const out: OutputArtifactSpec[] = []
+  for (const [i, item] of list.entries()) {
+    if (!item || typeof item !== "object") {
+      throw new ProfileError(p, `output.artifacts[${i}] must be an object`)
+    }
+    const r = item as Record<string, unknown>
+    out.push({
+      name: requireString(p, r, "name"),
+      format: typeof r.format === "string" ? r.format : "text",
+      from: requireString(p, r, "from"),
+    })
+  }
+  return out
 }
 
 function parseScriptList(p: string, key: string, raw: unknown): ScriptEntry[] {

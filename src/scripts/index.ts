@@ -18,9 +18,11 @@ import { loadCoverageRules } from "./loadCoverageRules.js"
 import { loadIssueContext } from "./loadIssueContext.js"
 import { loadTaskState } from "./loadTaskState.js"
 import { parseAgentResult } from "./parseAgentResult.js"
+import { persistArtifacts } from "./persistArtifacts.js"
 import { postIssueComment } from "./postIssueComment.js"
 import { postReviewResult } from "./postReviewResult.js"
 import { releaseFlow } from "./releaseFlow.js"
+import { resolveArtifacts } from "./resolveArtifacts.js"
 import { resolveFlow } from "./resolveFlow.js"
 import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
@@ -45,6 +47,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   loadConventions,
   loadCoverageRules,
   buildSyntheticPlugin,
+  resolveArtifacts,
   composePrompt,
 }
 
@@ -56,6 +59,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   ensurePr,
   postIssueComment,
   postReviewResult,
+  persistArtifacts,
   writeRunSummary,
   saveTaskState,
 }

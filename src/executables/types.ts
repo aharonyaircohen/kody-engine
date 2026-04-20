@@ -33,8 +33,37 @@ export interface Profile {
     postflight: ScriptEntry[]
   }
   outputContract?: OutputContract
+  /**
+   * Declared artifacts consumed by this executable. The resolveArtifacts
+   * preflight loads each into ctx.data.artifacts[name] from the task-state
+   * comment. If `required: true` and the artifact is absent, the executable
+   * fails fast.
+   */
+  inputArtifacts: InputArtifactSpec[]
+  /**
+   * Declared artifacts produced by this executable. The persistArtifacts
+   * postflight reads the named source field from ctx.data and writes an
+   * Artifact entry into the task-state comment's `artifacts` map.
+   */
+  outputArtifacts: OutputArtifactSpec[]
   /** Absolute directory the profile was loaded from. Used to resolve prompt.md. */
   dir: string
+}
+
+export interface InputArtifactSpec {
+  /** Artifact name (the key in state.artifacts). */
+  name: string
+  /** If true, the executable fails when this artifact is missing from state. */
+  required?: boolean
+}
+
+export interface OutputArtifactSpec {
+  /** Artifact name (the key in state.artifacts). */
+  name: string
+  /** Informational format tag ("markdown", "text", …). */
+  format: string
+  /** Dotted path into ctx.data to read the payload from (e.g. "prSummary"). */
+  from: string
 }
 
 export interface InputSpec {

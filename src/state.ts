@@ -45,7 +45,25 @@ export interface TaskState {
     runUrl?: string
   }
   executables: Record<string, ExecutableState>
+  /**
+   * Addressable, typed outputs produced by executables. Persisted as a
+   * top-level map so consumers never need to dig into executables/history.
+   * Producer declares output via profile.output.artifacts; consumer declares
+   * input via profile.input.artifacts.
+   */
+  artifacts: Record<string, Artifact>
   history: HistoryEntry[]
+}
+
+export interface Artifact {
+  /** "markdown" | "text" | … — informational. */
+  format: string
+  /** Name of the executable that produced this artifact. */
+  producedBy: string
+  /** ISO timestamp of production. */
+  createdAt: string
+  /** The artifact payload. Always a string today; can grow later. */
+  content: string
 }
 
 export interface ExecutableState {
@@ -73,6 +91,7 @@ export function emptyState(): TaskState {
       attempts: {},
     },
     executables: {},
+    artifacts: {},
     history: [],
   }
 }
@@ -134,6 +153,7 @@ export function parseStateComment(body: string): TaskState {
       schemaVersion: 1,
       core: { ...emptyState().core, ...parsed.core },
       executables: parsed.executables ?? {},
+      artifacts: parsed.artifacts && typeof parsed.artifacts === "object" ? parsed.artifacts : {},
       history: Array.isArray(parsed.history) ? parsed.history : [],
     }
   } catch {
@@ -166,6 +186,7 @@ export function reduce(state: TaskState, executable: string, action: Action | nu
       phase: phaseFromAction(executable, action),
     },
     executables: newExecutables,
+    artifacts: { ...(state.artifacts ?? {}) },
     history: newHistory,
   }
 }
@@ -201,7 +222,13 @@ export function renderStateComment(state: TaskState): string {
   lines.push("")
   lines.push("```json")
   lines.push(JSON.stringify(
-    { schemaVersion: state.schemaVersion, core: state.core, executables: state.executables, history: state.history },
+    {
+      schemaVersion: state.schemaVersion,
+      core: state.core,
+      artifacts: state.artifacts ?? {},
+      executables: state.executables,
+      history: state.history,
+    },
     null,
     2,
   ))
@@ -224,6 +251,10 @@ export function renderStateComment(state: TaskState): string {
   if (attempts) lines.push(`- **Attempts:** ${attempts}`)
   if (state.core.prUrl) lines.push(`- **PR:** ${state.core.prUrl}`)
   if (state.core.runUrl) lines.push(`- **Run:** ${state.core.runUrl}`)
+  const artifactNames = Object.keys(state.artifacts ?? {})
+  if (artifactNames.length > 0) {
+    lines.push(`- **Artifacts:** ${artifactNames.map((n) => `\`${n}\``).join(", ")}`)
+  }
   lines.push("")
   if (state.history.length > 0) {
     lines.push("### Recent history")
@@ -241,6 +272,17 @@ export function renderStateComment(state: TaskState): string {
 export function readTaskState(target: TaskTarget, number: number, cwd?: string): TaskState {
   const existing = findStateComment(target, number, cwd)
   return existing ? parseStateComment(existing.body) : emptyState()
+}
+
+/**
+ * Immutable update: return a new state with the named artifact set. Used by
+ * the persistArtifacts postflight so declared outputs land in a stable slot.
+ */
+export function setArtifact(state: TaskState, name: string, artifact: Artifact): TaskState {
+  return {
+    ...state,
+    artifacts: { ...(state.artifacts ?? {}), [name]: artifact },
+  }
 }
 
 export function writeTaskState(

@@ -49,6 +49,9 @@
         "script": "parseAgentResult"
       },
       {
+        "script": "persistArtifacts"
+      },
+      {
         "script": "writeRunSummary"
       },
       {
@@ -60,6 +63,13 @@
     "actionTypes": [
       "PLAN_COMPLETED",
       "PLAN_FAILED"
+    ],
+    "artifacts": [
+      {
+        "name": "plan",
+        "format": "markdown",
+        "from": "prSummary"
+      }
     ]
   }
 }

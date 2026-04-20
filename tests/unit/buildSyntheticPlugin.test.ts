@@ -43,6 +43,8 @@ function makeProfile(partial: Partial<Profile["claudeCode"]>): Profile {
     },
     cliTools: [],
     scripts: { preflight: [], postflight: [] },
+    inputArtifacts: [],
+    outputArtifacts: [],
     dir: "/tmp/fake",
   }
 }

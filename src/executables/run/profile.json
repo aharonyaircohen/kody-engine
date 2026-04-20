@@ -40,6 +40,9 @@
         "script": "loadTaskState"
       },
       {
+        "script": "resolveArtifacts"
+      },
+      {
         "script": "loadConventions"
       },
       {
@@ -74,6 +77,11 @@
       {
         "script": "saveTaskState"
       }
+    ]
+  },
+  "input": {
+    "artifacts": [
+      { "name": "plan", "required": false }
     ]
   },
   "output": {
