@@ -14,6 +14,7 @@ import { fixFlow } from "./fixFlow.js"
 import { initFlow } from "./initFlow.js"
 import { loadConventions } from "./loadConventions.js"
 import { loadCoverageRules } from "./loadCoverageRules.js"
+import { loadTaskState } from "./loadTaskState.js"
 import { parseAgentResult } from "./parseAgentResult.js"
 import { postIssueComment } from "./postIssueComment.js"
 import { postReviewResult } from "./postReviewResult.js"
@@ -21,6 +22,7 @@ import { releaseFlow } from "./releaseFlow.js"
 import { resolveFlow } from "./resolveFlow.js"
 import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
+import { saveTaskState } from "./saveTaskState.js"
 import { verify } from "./verify.js"
 import { watchStalePrsFlow } from "./watchStalePrsFlow.js"
 import { writeRunSummary } from "./writeRunSummary.js"
@@ -34,6 +36,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   initFlow,
   releaseFlow,
   watchStalePrsFlow,
+  loadTaskState,
   loadConventions,
   loadCoverageRules,
   composePrompt,
@@ -48,6 +51,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   postIssueComment,
   postReviewResult,
   writeRunSummary,
+  saveTaskState,
 }
 
 export const allScriptNames: Set<string> = new Set([

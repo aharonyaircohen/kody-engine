@@ -67,6 +67,7 @@
       { "script": "fixFlow",     "runWhen": { "args.mode": "fix" } },
       { "script": "fixCiFlow",   "runWhen": { "args.mode": "fix-ci" } },
       { "script": "resolveFlow", "runWhen": { "args.mode": "resolve" } },
+      { "script": "loadTaskState" },
       { "script": "loadConventions" },
       { "script": "loadCoverageRules" },
       { "script": "composePrompt" }
@@ -78,7 +79,21 @@
       { "script": "commitAndPush" },
       { "script": "ensurePr" },
       { "script": "postIssueComment" },
-      { "script": "writeRunSummary" }
+      { "script": "writeRunSummary" },
+      { "script": "saveTaskState" }
+    ]
+  },
+  "output": {
+    "actionTypes": [
+      "RUN_COMPLETED",
+      "RUN_FAILED",
+      "FIX_COMPLETED",
+      "FIX_FAILED",
+      "FIX_CI_COMPLETED",
+      "FIX_CI_FAILED",
+      "RESOLVE_COMPLETED",
+      "RESOLVE_FAILED",
+      "AGENT_NOT_RUN"
     ]
   }
 }

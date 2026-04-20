@@ -93,11 +93,13 @@ describe("executor: Build profile is loadable + valid", () => {
     expect(coverage.runWhen).toEqual({ "args.mode": ["run", "fix", "fix-ci"] })
   })
 
-  it("registers writeRunSummary as the final postflight step", () => {
+  it("registers saveTaskState as the final postflight step", () => {
     const profilePath = path.resolve(__dirname, "../../src/executables/build/profile.json")
     const profile = loadProfile(profilePath)
     const last = profile.scripts.postflight.at(-1)!
-    expect(last.script).toBe("writeRunSummary")
+    expect(last.script).toBe("saveTaskState")
     expect(last.runWhen).toBeUndefined()
+    const summary = profile.scripts.postflight.find((s) => s.script === "writeRunSummary")
+    expect(summary).toBeDefined()
   })
 })
