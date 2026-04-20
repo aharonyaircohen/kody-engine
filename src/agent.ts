@@ -40,6 +40,14 @@ export interface AgentOptions {
   maxTurns?: number | null
   /** Text appended to Claude Code's baseline system prompt. */
   systemPromptAppend?: string | null
+  /**
+   * Filesystem sources the SDK should auto-load. `"project"` loads
+   * `<cwd>/.claude/` (skills, commands, settings.json) and CLAUDE.md;
+   * `"local"` loads `<cwd>/.claude/settings.local.json`; `"user"` loads
+   * `~/.claude/`. Default: `["project", "local"]` so the target repo's
+   * configuration is picked up. Pass `[]` for SDK isolation.
+   */
+  settingSources?: Array<"user" | "project" | "local">
 }
 
 const DEFAULT_ALLOWED_TOOLS = ["Bash", "Edit", "Read", "Write", "Glob", "Grep"]
@@ -85,6 +93,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     if (typeof opts.systemPromptAppend === "string" && opts.systemPromptAppend.length > 0) {
       queryOptions.systemPrompt = { type: "preset", preset: "claude_code", append: opts.systemPromptAppend }
     }
+    queryOptions.settingSources = opts.settingSources ?? ["project", "local"]
     const result = query({
       prompt: opts.prompt,
       // biome-ignore lint/suspicious/noExplicitAny: SDK options type is narrow; mcpServers is runtime-passthrough.

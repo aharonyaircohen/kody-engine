@@ -134,6 +134,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       pluginPaths: pluginPaths.length > 0 ? pluginPaths : undefined,
       maxTurns: profile.claudeCode.maxTurns,
       systemPromptAppend: profile.claudeCode.systemPromptAppend,
+      settingSources: (profile.claudeCode as { settingSources?: Array<"user" | "project" | "local"> }).settingSources,
     })
   }
 
