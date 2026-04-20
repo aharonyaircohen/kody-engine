@@ -1,7 +1,6 @@
 {
   "name": "plan",
-  "describe": "Research an issue and produce a concrete implementation plan as a comment. Read-only — no branches, no commits.",
-
+  "describe": "Research an issue and produce a concrete implementation plan as a comment. Read-only \u2014 no branches, no commits.",
   "inputs": [
     {
       "name": "issue",
@@ -11,38 +10,56 @@
       "describe": "GitHub issue number to plan."
     }
   ],
-
   "claudeCode": {
     "model": "inherit",
     "permissionMode": "default",
     "maxTurns": null,
     "systemPromptAppend": null,
-    "tools": ["Read", "Grep", "Glob", "Bash"],
-    "hooks": { "PreToolUse": [], "PostToolUse": [], "Stop": [] },
+    "tools": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash"
+    ],
+    "hooks": [],
     "skills": [],
     "commands": [],
     "subagents": [],
     "plugins": [],
     "mcpServers": []
   },
-
   "cliTools": [],
-
   "scripts": {
     "preflight": [
-      { "script": "loadIssueContext" },
-      { "script": "loadTaskState" },
-      { "script": "loadConventions" },
-      { "script": "composePrompt" }
+      {
+        "script": "loadIssueContext"
+      },
+      {
+        "script": "loadTaskState"
+      },
+      {
+        "script": "loadConventions"
+      },
+      {
+        "script": "composePrompt"
+      }
     ],
     "postflight": [
-      { "script": "parseAgentResult" },
-      { "script": "writeRunSummary" },
-      { "script": "saveTaskState" }
+      {
+        "script": "parseAgentResult"
+      },
+      {
+        "script": "writeRunSummary"
+      },
+      {
+        "script": "saveTaskState"
+      }
     ]
   },
-
   "output": {
-    "actionTypes": ["PLAN_COMPLETED", "PLAN_FAILED"]
+    "actionTypes": [
+      "PLAN_COMPLETED",
+      "PLAN_FAILED"
+    ]
   }
 }

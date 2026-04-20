@@ -20,7 +20,7 @@ const VALID_BASE = {
     model: "inherit",
     permissionMode: "default",
     tools: [],
-    hooks: { PreToolUse: [], PostToolUse: [], Stop: [] },
+    hooks: [],
     skills: [], commands: [], subagents: [], plugins: [], mcpServers: [],
   },
   cliTools: [],

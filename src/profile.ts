@@ -139,24 +139,13 @@ function parseClaudeCode(p: string, raw: unknown): ClaudeCodeSpec {
   // preflight script — the executor refuses to invoke the agent without tools
   // and without skipAgent, surfacing the misconfiguration loudly.
 
-  const hooksRaw = (r.hooks ?? {}) as Record<string, unknown>
-  const hooks = {
-    PreToolUse: Array.isArray(hooksRaw.PreToolUse)
-      ? (hooksRaw.PreToolUse as ClaudeCodeSpec["hooks"]["PreToolUse"])
-      : [],
-    PostToolUse: Array.isArray(hooksRaw.PostToolUse)
-      ? (hooksRaw.PostToolUse as ClaudeCodeSpec["hooks"]["PostToolUse"])
-      : [],
-    Stop: Array.isArray(hooksRaw.Stop) ? (hooksRaw.Stop as ClaudeCodeSpec["hooks"]["Stop"]) : [],
-  }
-
   return {
     model: typeof r.model === "string" ? r.model : "inherit",
     permissionMode,
     maxTurns: typeof r.maxTurns === "number" ? r.maxTurns : null,
     systemPromptAppend: typeof r.systemPromptAppend === "string" ? r.systemPromptAppend : null,
     tools,
-    hooks,
+    hooks: Array.isArray(r.hooks) ? (r.hooks as string[]) : [],
     skills: Array.isArray(r.skills) ? (r.skills as string[]) : [],
     commands: Array.isArray(r.commands) ? (r.commands as string[]) : [],
     subagents: Array.isArray(r.subagents) ? (r.subagents as string[]) : [],

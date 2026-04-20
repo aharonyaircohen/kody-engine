@@ -1,7 +1,6 @@
 {
   "name": "init",
   "describe": "Scaffold a consumer repo with kody.config.json and the @kody2 workflow. No agent.",
-
   "inputs": [
     {
       "name": "force",
@@ -11,26 +10,25 @@
       "describe": "Overwrite existing files instead of skipping them."
     }
   ],
-
   "claudeCode": {
     "model": "inherit",
     "permissionMode": "acceptEdits",
     "maxTurns": null,
     "systemPromptAppend": null,
     "tools": [],
-    "hooks": { "PreToolUse": [], "PostToolUse": [], "Stop": [] },
+    "hooks": [],
     "skills": [],
     "commands": [],
     "subagents": [],
     "plugins": [],
     "mcpServers": []
   },
-
   "cliTools": [],
-
   "scripts": {
     "preflight": [
-      { "script": "initFlow" }
+      {
+        "script": "initFlow"
+      }
     ],
     "postflight": []
   }

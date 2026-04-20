@@ -1,7 +1,6 @@
 {
   "name": "fix-ci",
   "describe": "Fix a failing CI workflow on an existing PR.",
-
   "inputs": [
     {
       "name": "pr",
@@ -18,44 +17,70 @@
       "describe": "Specific failed workflow run ID. Defaults to latest failed run on the PR branch."
     }
   ],
-
   "claudeCode": {
     "model": "inherit",
     "permissionMode": "acceptEdits",
     "maxTurns": null,
     "systemPromptAppend": null,
-    "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
-    "hooks": {
-      "PreToolUse": [],
-      "PostToolUse": [],
-      "Stop": []
-    },
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Bash",
+      "Grep",
+      "Glob"
+    ],
+    "hooks": [],
     "skills": [],
     "commands": [],
     "subagents": [],
     "plugins": [],
     "mcpServers": []
   },
-
   "cliTools": [],
-
   "scripts": {
     "preflight": [
-      { "script": "fixCiFlow" },
-      { "script": "loadTaskState" },
-      { "script": "loadConventions" },
-      { "script": "loadCoverageRules" },
-      { "script": "composePrompt" }
+      {
+        "script": "fixCiFlow"
+      },
+      {
+        "script": "loadTaskState"
+      },
+      {
+        "script": "loadConventions"
+      },
+      {
+        "script": "loadCoverageRules"
+      },
+      {
+        "script": "composePrompt"
+      }
     ],
     "postflight": [
-      { "script": "parseAgentResult" },
-      { "script": "verify" },
-      { "script": "checkCoverageWithRetry" },
-      { "script": "commitAndPush" },
-      { "script": "ensurePr" },
-      { "script": "postIssueComment" },
-      { "script": "writeRunSummary" },
-      { "script": "saveTaskState" }
+      {
+        "script": "parseAgentResult"
+      },
+      {
+        "script": "verify"
+      },
+      {
+        "script": "checkCoverageWithRetry"
+      },
+      {
+        "script": "commitAndPush"
+      },
+      {
+        "script": "ensurePr"
+      },
+      {
+        "script": "postIssueComment"
+      },
+      {
+        "script": "writeRunSummary"
+      },
+      {
+        "script": "saveTaskState"
+      }
     ]
   },
   "output": {

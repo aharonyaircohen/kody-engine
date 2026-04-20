@@ -62,22 +62,24 @@ export interface ClaudeCodeSpec {
   systemPromptAppend: string | null
   /** SDK built-in tools this executable is allowed to use (capability pack). */
   tools: string[]
-  /** Claude Code hooks. `matcher` is a tool-name glob; `command` is a shell invocation. */
-  hooks: {
-    PreToolUse: HookEntry[]
-    PostToolUse: HookEntry[]
-    Stop: HookEntry[]
-  }
+  /**
+   * Names of bundled hook configs to load (from src/plugins/hooks/<name>.json).
+   * Each referenced file is a Claude Code hooks JSON ({ hooks: { PreToolUse: [...] } }).
+   * Merged into a synthetic plugin at runtime.
+   */
+  hooks: string[]
+  /** Names of bundled skills to load (from src/plugins/skills/<name>/SKILL.md). */
   skills: string[]
+  /** Names of bundled slash commands to load (from src/plugins/commands/<name>.md). */
   commands: string[]
+  /** Names of bundled subagents to load (from src/plugins/agents/<name>.md). */
   subagents: string[]
+  /**
+   * External plugin directory paths (absolute, or relative to the profile dir).
+   * Loaded as-is by the SDK via { type: 'local', path }.
+   */
   plugins: string[]
   mcpServers: McpServerSpec[]
-}
-
-export interface HookEntry {
-  matcher: string
-  command: string
 }
 
 export interface McpServerSpec {

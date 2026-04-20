@@ -1,7 +1,6 @@
 {
   "name": "orchestrator",
-  "describe": "Drive a chain of kody2 executables by posting @kody2 subcommand comments and polling the task-state comment. Atomic — one orchestrator run fires one flow.",
-
+  "describe": "Drive a chain of kody2 executables by posting @kody2 subcommand comments and polling the task-state comment. Atomic \u2014 one orchestrator run fires one flow.",
   "inputs": [
     {
       "name": "issue",
@@ -18,37 +17,51 @@
       "describe": "Named flow to run (e.g. 'plan-then-build'). Defaults to plan-then-build."
     }
   ],
-
   "claudeCode": {
     "model": "inherit",
     "permissionMode": "default",
     "maxTurns": null,
     "systemPromptAppend": null,
-    "tools": ["Bash", "Read"],
-    "hooks": { "PreToolUse": [], "PostToolUse": [], "Stop": [] },
+    "tools": [
+      "Bash",
+      "Read"
+    ],
+    "hooks": [],
     "skills": [],
     "commands": [],
     "subagents": [],
     "plugins": [],
     "mcpServers": []
   },
-
   "cliTools": [],
-
   "scripts": {
     "preflight": [
-      { "script": "loadIssueContext" },
-      { "script": "loadTaskState" },
-      { "script": "composePrompt" }
+      {
+        "script": "loadIssueContext"
+      },
+      {
+        "script": "loadTaskState"
+      },
+      {
+        "script": "composePrompt"
+      }
     ],
     "postflight": [
-      { "script": "parseAgentResult" },
-      { "script": "writeRunSummary" },
-      { "script": "saveTaskState" }
+      {
+        "script": "parseAgentResult"
+      },
+      {
+        "script": "writeRunSummary"
+      },
+      {
+        "script": "saveTaskState"
+      }
     ]
   },
-
   "output": {
-    "actionTypes": ["ORCHESTRATION_COMPLETED", "ORCHESTRATION_FAILED"]
+    "actionTypes": [
+      "ORCHESTRATION_COMPLETED",
+      "ORCHESTRATION_FAILED"
+    ]
   }
 }

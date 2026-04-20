@@ -29,6 +29,17 @@ export interface AgentOptions {
    * agent can invoke whatever MCP tools the profile requires.
    */
   mcpServers?: Array<Record<string, unknown>>
+  /**
+   * Absolute paths to plugin directories to load. Each is passed to the
+   * SDK's `plugins` option as `{ type: 'local', path }`. Kody2 uses this
+   * for both external plugins (from profile.claudeCode.plugins) and the
+   * synthetic plugin built by the buildSyntheticPlugin preflight.
+   */
+  pluginPaths?: string[]
+  /** Hard cap on agent turns. null/undefined = SDK default (unbounded). */
+  maxTurns?: number | null
+  /** Text appended to Claude Code's baseline system prompt. */
+  systemPromptAppend?: string | null
 }
 
 const DEFAULT_ALLOWED_TOOLS = ["Bash", "Edit", "Read", "Write", "Glob", "Grep"]
@@ -64,6 +75,15 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     }
     if (opts.mcpServers && opts.mcpServers.length > 0) {
       queryOptions.mcpServers = opts.mcpServers
+    }
+    if (opts.pluginPaths && opts.pluginPaths.length > 0) {
+      queryOptions.plugins = opts.pluginPaths.map((p) => ({ type: "local", path: p }))
+    }
+    if (typeof opts.maxTurns === "number" && opts.maxTurns > 0) {
+      queryOptions.maxTurns = opts.maxTurns
+    }
+    if (typeof opts.systemPromptAppend === "string" && opts.systemPromptAppend.length > 0) {
+      queryOptions.systemPrompt = { type: "preset", preset: "claude_code", append: opts.systemPromptAppend }
     }
     const result = query({
       prompt: opts.prompt,

@@ -1,0 +1,37 @@
+{
+  "name": "plan-verify",
+  "describe": "Live-test executable. Loads kody-live-marker skill, /kody-live-probe command, kody-live-trace hook, and the bundled test-plugin. Asks the agent to emit confirmation tokens for each feature so Kody2 can validate plugin wiring end-to-end.",
+  "inputs": [
+    { "name": "issue", "flag": "--issue", "type": "int", "required": true, "describe": "GitHub issue number to verify against." }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": 15,
+    "systemPromptAppend": "You are running Kody2's plugin-wiring live verification. Emit confirmation tokens exactly as the prompt instructs.",
+    "tools": ["Read", "Grep", "Glob", "Bash"],
+    "hooks": ["kody-live-trace"],
+    "skills": ["kody-live-marker"],
+    "commands": ["kody-live-probe"],
+    "subagents": [],
+    "plugins": ["../../plugins/test-plugin"],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "scripts": {
+    "preflight": [
+      { "script": "loadIssueContext" },
+      { "script": "loadTaskState" },
+      { "script": "buildSyntheticPlugin" },
+      { "script": "composePrompt" }
+    ],
+    "postflight": [
+      { "script": "parseAgentResult" },
+      { "script": "writeRunSummary" },
+      { "script": "saveTaskState" }
+    ]
+  },
+  "output": {
+    "actionTypes": ["VERIFY_COMPLETED", "VERIFY_FAILED"]
+  }
+}

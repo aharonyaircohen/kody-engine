@@ -5,6 +5,7 @@
  */
 
 import type { PostflightScript, PreflightScript } from "../executables/types.js"
+import { buildSyntheticPlugin } from "./buildSyntheticPlugin.js"
 import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
 import { commitAndPush } from "./commitAndPush.js"
 import { composePrompt } from "./composePrompt.js"
@@ -41,6 +42,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   loadIssueContext,
   loadConventions,
   loadCoverageRules,
+  buildSyntheticPlugin,
   composePrompt,
 }
 

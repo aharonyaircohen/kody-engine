@@ -1,6 +1,6 @@
 {
   "name": "@kody-ade/kody-engine",
-  "version": "0.2.12",
+  "version": "0.2.13",
   "description": "kody2 — autonomous development engine. Single-session Claude Code agent behind a generic executor + declarative executable profiles.",
   "license": "MIT",
   "type": "module",
@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "kody2": "tsx bin/kody2.ts",
-    "build": "tsup && node -e \"const fs=require('fs');fs.rmSync('dist/executables',{recursive:true,force:true});fs.cpSync('src/executables','dist/executables',{recursive:true})\"",
+    "build": "tsup && node scripts/copy-assets.cjs",
     "test": "vitest run tests/unit tests/int --no-coverage",
     "test:e2e": "vitest run tests/e2e --no-coverage",
     "test:all": "vitest run tests --no-coverage",

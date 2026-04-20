@@ -1,0 +1,6 @@
+{
+  "name": "kody2-test-plugin",
+  "version": "1.0.0",
+  "description": "Kody2 internal live-test plugin. Ships a single skill that proves external-plugin loading works.",
+  "skills": ["./skills/"]
+}

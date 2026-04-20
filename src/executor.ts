@@ -112,8 +112,15 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
   }
 
   const ndjsonDir = path.join(input.cwd, ".kody2")
-  const invokeAgent = async (prompt: string): Promise<AgentResult> =>
-    runAgent({
+  const invokeAgent = async (prompt: string): Promise<AgentResult> => {
+    // Resolve at call time — ctx.data.syntheticPluginPath is set during preflight.
+    const externalPlugins = (profile.claudeCode.plugins ?? [])
+      .map((p) => (path.isAbsolute(p) ? p : path.resolve(profile.dir, p)))
+      .filter((p) => p.length > 0)
+    const syntheticPath = ctx.data.syntheticPluginPath as string | undefined
+    const pluginPaths = [...externalPlugins, ...(syntheticPath ? [syntheticPath] : [])]
+
+    return runAgent({
       prompt,
       model,
       cwd: input.cwd,
@@ -124,7 +131,11 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       allowedToolsOverride: profile.claudeCode.tools,
       permissionModeOverride: profile.claudeCode.permissionMode,
       mcpServers: profile.claudeCode.mcpServers as unknown as Array<Record<string, unknown>> | undefined,
+      pluginPaths: pluginPaths.length > 0 ? pluginPaths : undefined,
+      maxTurns: profile.claudeCode.maxTurns,
+      systemPromptAppend: profile.claudeCode.systemPromptAppend,
     })
+  }
 
   // Stash for checkCoverageWithRetry.
   ctx.data.__invokeAgent = invokeAgent

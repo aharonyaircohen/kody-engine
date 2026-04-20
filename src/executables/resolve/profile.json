@@ -1,7 +1,6 @@
 {
   "name": "resolve",
   "describe": "Resolve merge conflicts between a PR branch and the default branch.",
-
   "inputs": [
     {
       "name": "pr",
@@ -11,42 +10,64 @@
       "describe": "GitHub PR number whose branch has conflicts with the default branch."
     }
   ],
-
   "claudeCode": {
     "model": "inherit",
     "permissionMode": "acceptEdits",
     "maxTurns": null,
     "systemPromptAppend": null,
-    "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
-    "hooks": {
-      "PreToolUse": [],
-      "PostToolUse": [],
-      "Stop": []
-    },
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Bash",
+      "Grep",
+      "Glob"
+    ],
+    "hooks": [],
     "skills": [],
     "commands": [],
     "subagents": [],
     "plugins": [],
     "mcpServers": []
   },
-
   "cliTools": [],
-
   "scripts": {
     "preflight": [
-      { "script": "resolveFlow" },
-      { "script": "loadTaskState" },
-      { "script": "loadConventions" },
-      { "script": "loadCoverageRules" },
-      { "script": "composePrompt" }
+      {
+        "script": "resolveFlow"
+      },
+      {
+        "script": "loadTaskState"
+      },
+      {
+        "script": "loadConventions"
+      },
+      {
+        "script": "loadCoverageRules"
+      },
+      {
+        "script": "composePrompt"
+      }
     ],
     "postflight": [
-      { "script": "parseAgentResult" },
-      { "script": "commitAndPush" },
-      { "script": "ensurePr" },
-      { "script": "postIssueComment" },
-      { "script": "writeRunSummary" },
-      { "script": "saveTaskState" }
+      {
+        "script": "parseAgentResult"
+      },
+      {
+        "script": "commitAndPush"
+      },
+      {
+        "script": "ensurePr"
+      },
+      {
+        "script": "postIssueComment"
+      },
+      {
+        "script": "writeRunSummary"
+      },
+      {
+        "script": "saveTaskState"
+      }
     ]
   },
   "output": {

@@ -31,7 +31,7 @@ const BASE = {
     maxTurns: null,
     systemPromptAppend: null,
     tools: ["Read"],
-    hooks: { PreToolUse: [], PostToolUse: [], Stop: [] },
+    hooks: [],
     skills: [],
     commands: [],
     subagents: [],
