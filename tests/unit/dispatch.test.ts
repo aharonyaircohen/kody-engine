@@ -222,6 +222,18 @@ describe("dispatch: issue_comment on PR", () => {
     })
   })
 
+  it("'@kody2 sync' on PR → sync", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody2 sync" },
+      issue: { number: 25, pull_request: {} },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "sync",
+      cliArgs: { pr: 25 },
+      target: 25,
+    })
+  })
+
   it("'@kody2 please change foo' on PR → fix with feedback", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody2 please change foo" },

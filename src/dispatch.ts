@@ -13,6 +13,7 @@
  *   @kody2 fix-ci      → fix-ci        args: { pr }
  *   @kody2 resolve     → resolve       args: { pr }
  *   @kody2 review      → review        args: { pr }
+ *   @kody2 sync        → sync          args: { pr }
  *   @kody2 fix / bare  → fix           args: { pr, feedback? }
  *
  * workflow_dispatch → run on the provided issue_number input.
@@ -85,6 +86,9 @@ export function autoDispatch(opts?: {
     }
     if (/\breview\b/.test(afterTag)) {
       return { executable: "review", cliArgs: { pr: targetNum }, target: targetNum }
+    }
+    if (/\bsync\b/.test(afterTag)) {
+      return { executable: "sync", cliArgs: { pr: targetNum }, target: targetNum }
     }
     const feedback = extractFeedback(afterTag)
     return {

@@ -25,6 +25,7 @@ import { resolveFlow } from "./resolveFlow.js"
 import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
 import { saveTaskState } from "./saveTaskState.js"
+import { syncFlow } from "./syncFlow.js"
 import { verify } from "./verify.js"
 import { watchStalePrsFlow } from "./watchStalePrsFlow.js"
 import { writeRunSummary } from "./writeRunSummary.js"
@@ -35,6 +36,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   fixCiFlow,
   resolveFlow,
   reviewFlow,
+  syncFlow,
   initFlow,
   releaseFlow,
   watchStalePrsFlow,
