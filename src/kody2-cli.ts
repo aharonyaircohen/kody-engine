@@ -187,12 +187,15 @@ export function configureGitIdentity(cwd: string): void {
     /* not set */
   }
   try {
-    execFileSync("git", ["config", "user.name", "kody2-bot"], { cwd, stdio: "pipe" })
+    execFileSync("git", ["config", "user.name", "github-actions[bot]"], { cwd, stdio: "pipe" })
   } catch {
     /* best effort */
   }
   try {
-    execFileSync("git", ["config", "user.email", "kody2-bot@users.noreply.github.com"], { cwd, stdio: "pipe" })
+    execFileSync("git", ["config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"], {
+      cwd,
+      stdio: "pipe",
+    })
   } catch {
     /* best effort */
   }
