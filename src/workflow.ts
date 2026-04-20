@@ -28,18 +28,18 @@ export interface FailedRun {
 }
 
 /**
- * Find the most recent failed workflow run on the PR's head branch.
- * Returns null if none found.
+ * Fetch recent failed workflow runs on the PR's head branch, most-recent-first.
+ * Returns an empty array if the branch can't be resolved or the listing fails.
  */
-export function getLatestFailedRunForPr(prNumber: number, cwd?: string): FailedRun | null {
+export function getRecentFailedRunsForPr(prNumber: number, limit: number, cwd?: string): FailedRun[] {
   let headBranch: string
   try {
     const out = gh(["pr", "view", String(prNumber), "--json", "headRefName"], cwd)
     headBranch = JSON.parse(out).headRefName
   } catch {
-    return null
+    return []
   }
-  if (!headBranch) return null
+  if (!headBranch) return []
 
   try {
     const out = gh(
@@ -51,25 +51,24 @@ export function getLatestFailedRunForPr(prNumber: number, cwd?: string): FailedR
         "--status",
         "failure",
         "--limit",
-        "1",
+        String(Math.max(1, limit)),
         "--json",
         "databaseId,workflowName,headBranch,conclusion,url,createdAt",
       ],
       cwd,
     )
     const parsed = JSON.parse(out)
-    if (!Array.isArray(parsed) || parsed.length === 0) return null
-    const r = parsed[0]
-    return {
+    if (!Array.isArray(parsed)) return []
+    return parsed.map((r) => ({
       id: String(r.databaseId ?? ""),
       workflowName: r.workflowName ?? "",
       headBranch: r.headBranch ?? headBranch,
       conclusion: r.conclusion ?? "failure",
       url: r.url ?? "",
       createdAt: r.createdAt ?? "",
-    }
+    }))
   } catch {
-    return null
+    return []
   }
 }
 
@@ -85,4 +84,35 @@ export function getFailedRunLogTail(runId: string, maxBytes: number, cwd?: strin
   } catch {
     return ""
   }
+}
+
+/**
+ * kody2's own dispatch workflow is skipped by fix-ci — its failures are the
+ * engine's own crashes, not the CI we're trying to repair. Match by name
+ * (the template ships as `name: kody2`).
+ */
+export function isKody2DispatchWorkflow(workflowName: string): boolean {
+  return workflowName.trim().toLowerCase() === "kody2"
+}
+
+/**
+ * Pick the first recent failed run that fix-ci can act on:
+ *   - not kody2's own dispatch workflow
+ *   - has a fetchable, non-empty `--log-failed` tail
+ *
+ * Returns the run plus its log tail, or null if nothing usable is found.
+ */
+export function pickFailedRunForFixCi(
+  prNumber: number,
+  maxBytes: number,
+  limit: number,
+  cwd?: string,
+): { run: FailedRun; logTail: string } | null {
+  const runs = getRecentFailedRunsForPr(prNumber, limit, cwd)
+  for (const run of runs) {
+    if (isKody2DispatchWorkflow(run.workflowName)) continue
+    const logTail = getFailedRunLogTail(run.id, maxBytes, cwd)
+    if (logTail) return { run, logTail }
+  }
+  return null
 }
