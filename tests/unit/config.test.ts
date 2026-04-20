@@ -97,4 +97,43 @@ describe("config: loadConfig", () => {
     const cfg = loadConfig(dir)
     expect(cfg.quality).toEqual({ typecheck: "tc", testUnit: "tu", lint: "ln" })
   })
+
+  it("loads defaultExecutable when set", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "m/x" },
+      defaultExecutable: "orchestrator",
+    })
+    expect(loadConfig(dir).defaultExecutable).toBe("orchestrator")
+  })
+
+  it("defaultExecutable is undefined when absent", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "m/x" },
+    })
+    expect(loadConfig(dir).defaultExecutable).toBeUndefined()
+  })
+
+  it("defaultExecutable is undefined when empty string", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "m/x" },
+      defaultExecutable: "",
+    })
+    expect(loadConfig(dir).defaultExecutable).toBeUndefined()
+  })
+
+  it("defaultExecutable is undefined when non-string", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "m/x" },
+      defaultExecutable: 42,
+    })
+    expect(loadConfig(dir).defaultExecutable).toBeUndefined()
+  })
 })

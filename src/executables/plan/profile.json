@@ -1,0 +1,49 @@
+{
+  "name": "plan",
+  "describe": "Research an issue and produce a concrete implementation plan as a comment. Read-only — no branches, no commits.",
+
+  "inputs": [
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": true,
+      "describe": "GitHub issue number to plan."
+    }
+  ],
+
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": null,
+    "systemPromptAppend": null,
+    "tools": ["Read", "Grep", "Glob", "Bash"],
+    "hooks": { "PreToolUse": [], "PostToolUse": [], "Stop": [] },
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+
+  "cliTools": [],
+
+  "scripts": {
+    "preflight": [
+      { "script": "runFlow" },
+      { "script": "loadTaskState" },
+      { "script": "loadConventions" },
+      { "script": "composePrompt" }
+    ],
+    "postflight": [
+      { "script": "parseAgentResult" },
+      { "script": "postIssueComment" },
+      { "script": "writeRunSummary" },
+      { "script": "saveTaskState" }
+    ]
+  },
+
+  "output": {
+    "actionTypes": ["PLAN_COMPLETED", "PLAN_FAILED"]
+  }
+}

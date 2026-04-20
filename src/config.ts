@@ -27,6 +27,12 @@ export interface Kody2Config {
     commentMaxBytes?: number
   }
   testRequirements?: TestRequirement[]
+  /**
+   * Executable name to invoke when a user triggers bare `@kody2` with no
+   * subcommand. Defaults to "build" for back-compat. Set to "orchestrator"
+   * to chain multiple executables via a driving agent.
+   */
+  defaultExecutable?: string
   release?: {
     versionFiles?: string[]
     publishCommand?: string
@@ -107,6 +113,9 @@ export function loadConfig(projectDir: string = process.cwd()): Kody2Config {
     },
     issueContext: parseIssueContext(raw.issueContext),
     testRequirements: parseTestRequirements(raw.testRequirements),
+    defaultExecutable: typeof raw.defaultExecutable === "string" && raw.defaultExecutable.length > 0
+      ? raw.defaultExecutable
+      : undefined,
     release: parseReleaseConfig(raw.release),
   }
 }

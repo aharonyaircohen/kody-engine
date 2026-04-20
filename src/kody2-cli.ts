@@ -227,8 +227,17 @@ export async function runCi(argv: string[]): Promise<number> {
   }
 
   const args = parseCiArgs(argv)
+  const cwd = args.cwd ? path.resolve(args.cwd) : process.cwd()
+  // Load config early so autoDispatch can consult defaultExecutable.
+  let earlyConfig: ReturnType<typeof loadConfig> | undefined
+  try {
+    earlyConfig = loadConfig(cwd)
+  } catch {
+    /* will surface later with a clearer message if needed */
+  }
+
   // --issue is only required when autoDispatch can't infer from GHA env.
-  const autoFallback = !args.issueNumber ? autoDispatch() : null
+  const autoFallback = !args.issueNumber ? autoDispatch({ config: earlyConfig }) : null
   if (!args.issueNumber && !autoFallback) {
     // Neither explicit flag nor detectable event — keep the original error.
   } else {
@@ -241,16 +250,14 @@ export async function runCi(argv: string[]): Promise<number> {
     return 64
   }
 
-  const cwd = args.cwd ? path.resolve(args.cwd) : process.cwd()
-
   const dispatch = autoFallback ?? {
-    mode: "run" as const,
+    executable: "build" as const,
+    cliArgs: { mode: "run", issue: args.issueNumber! } as Record<string, unknown>,
     target: args.issueNumber!,
-    feedback: undefined as string | undefined,
   }
   const issueNumber = dispatch.target
 
-  process.stdout.write(`→ kody2 preflight (cwd=${cwd}, mode=${dispatch.mode}, target=${issueNumber})\n`)
+  process.stdout.write(`→ kody2 preflight (cwd=${cwd}, executable=${dispatch.executable}, target=${issueNumber})\n`)
 
   try {
     const n = unpackAllSecrets()
@@ -291,17 +298,12 @@ export async function runCi(argv: string[]): Promise<number> {
     return 99
   }
 
-  process.stdout.write(`→ kody2: preflight done, handing off to kody2 ${dispatch.mode}\n\n`)
+  process.stdout.write(`→ kody2: preflight done, handing off to kody2 ${dispatch.executable}\n\n`)
 
   try {
-    const config = loadConfig(cwd)
-    const cliArgs: Record<string, unknown> = { mode: dispatch.mode }
-    if (dispatch.mode === "run") cliArgs.issue = issueNumber
-    else cliArgs.pr = issueNumber
-    if (dispatch.feedback) cliArgs.feedback = dispatch.feedback
-
-    const result = await runExecutable("build", {
-      cliArgs,
+    const config = earlyConfig ?? loadConfig(cwd)
+    const result = await runExecutable(dispatch.executable, {
+      cliArgs: dispatch.cliArgs,
       cwd,
       config,
       verbose: args.verbose,

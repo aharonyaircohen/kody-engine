@@ -1,33 +1,48 @@
 /**
- * Auto-detect which Build mode to run from the GHA event payload and the
+ * Auto-detect which executable to invoke from the GHA event payload and the
  * triggering comment's body.
  *
- *   - issue_comment on an issue ............ run
- *   - issue_comment on a PR, bare `@kody2` .. fix
- *   - issue_comment containing `fix-ci` ..... fix-ci
- *   - issue_comment containing `resolve` .... resolve
- *   - issue_comment containing `fix` ........ fix
- *   - workflow_dispatch ..................... run (issue_number input)
+ * Routing (on an issue):
+ *   @kody2 plan        → plan          args: { issue }
+ *   @kody2 build       → build (run)   args: { mode: "run", issue }
+ *   @kody2 orchestrate → orchestrator  args: { issue }
+ *   @kody2 <other>     → <other>       args: { issue }   (generic pass-through)
+ *   @kody2 (bare)      → config.defaultExecutable (fallback: "build" as run mode)
  *
- * All keywords are case-insensitive and matched against the comment body
- * after the `@kody2` trigger. First match wins in the priority order above.
+ * Routing (on a PR):
+ *   @kody2 fix-ci      → build (fix-ci)
+ *   @kody2 resolve     → build (resolve)
+ *   @kody2 fix / bare  → build (fix) with extracted feedback
+ *
+ * workflow_dispatch → build (run) on the provided issue_number input.
  */
 
 import * as fs from "node:fs"
+import type { Kody2Config } from "./config.js"
 
 export interface DispatchResult {
-  mode: "run" | "fix" | "fix-ci" | "resolve"
-  /** Issue number for run; PR number for fix/fix-ci/resolve. */
+  /** Which executable to invoke. */
+  executable: string
+  /** Args to pass to the executable (mirrors what `kody2 <executable>` CLI would receive). */
+  cliArgs: Record<string, unknown>
+  /** Issue or PR number, surfaced for post-failure comments. */
   target: number
-  /** Inline feedback extracted from the trigger comment body (fix mode). */
-  feedback?: string
 }
 
-export function autoDispatch(explicit?: { mode?: string; target?: number }): DispatchResult | null {
-  if (explicit?.mode && explicit.target) {
+/**
+ * Explicit override from the CLI (legacy --issue flag): dispatch to build/run
+ * mode on the given issue number.
+ */
+export function autoDispatch(opts?: {
+  explicit?: { issueNumber?: number }
+  config?: Kody2Config
+}): DispatchResult | null {
+  const explicit = opts?.explicit
+  if (explicit?.issueNumber && explicit.issueNumber > 0) {
     return {
-      mode: explicit.mode as DispatchResult["mode"],
-      target: explicit.target,
+      executable: "build",
+      cliArgs: { mode: "run", issue: explicit.issueNumber },
+      target: explicit.issueNumber,
     }
   }
 
@@ -44,39 +59,64 @@ export function autoDispatch(explicit?: { mode?: string; target?: number }): Dis
 
   if (eventName === "workflow_dispatch") {
     const n = parseInt(String(event.inputs?.issue_number ?? ""), 10)
-    if (!Number.isNaN(n) && n > 0) return { mode: "run", target: n }
+    if (!Number.isNaN(n) && n > 0) {
+      return { executable: "build", cliArgs: { mode: "run", issue: n }, target: n }
+    }
     return null
   }
 
-  if (eventName === "issue_comment") {
-    const body = String(event.comment?.body ?? "").toLowerCase()
-    const issueNum = Number(event.issue?.number ?? 0)
-    const isPr = !!event.issue?.pull_request
-    if (!issueNum) return null
+  if (eventName !== "issue_comment") return null
 
-    // Mode selection from comment body. Keywords are checked on the portion
-    // AFTER the @kody2 trigger phrase to avoid false positives.
-    const afterTag = extractAfterTag(body)
+  const body = String(event.comment?.body ?? "").toLowerCase()
+  const targetNum = Number(event.issue?.number ?? 0)
+  const isPr = !!event.issue?.pull_request
+  if (!targetNum) return null
 
-    if (isPr) {
-      if (/\bfix-ci\b/.test(afterTag)) return { mode: "fix-ci", target: issueNum }
-      if (/\bresolve\b/.test(afterTag)) return { mode: "resolve", target: issueNum }
-      const feedbackText = extractFeedback(afterTag)
-      // Bare @kody2 on a PR or explicit 'fix' → fix mode.
-      return { mode: "fix", target: issueNum, feedback: feedbackText }
+  const afterTag = extractAfterTag(body)
+
+  // PR routing: keep build-mode semantics (fix / fix-ci / resolve).
+  if (isPr) {
+    if (/\bfix-ci\b/.test(afterTag)) {
+      return { executable: "build", cliArgs: { mode: "fix-ci", pr: targetNum }, target: targetNum }
     }
-
-    // On an issue → always run mode.
-    return { mode: "run", target: issueNum }
+    if (/\bresolve\b/.test(afterTag)) {
+      return { executable: "build", cliArgs: { mode: "resolve", pr: targetNum }, target: targetNum }
+    }
+    const feedback = extractFeedback(afterTag)
+    return {
+      executable: "build",
+      cliArgs: { mode: "fix", pr: targetNum, ...(feedback ? { feedback } : {}) },
+      target: targetNum,
+    }
   }
 
-  return null
+  // Issue routing: named subcommand wins; bare falls to defaultExecutable.
+  const sub = extractSubcommand(afterTag)
+  const defaultExec = opts?.config?.defaultExecutable ?? "build"
+
+  if (!sub) {
+    return asDispatch(defaultExec, targetNum)
+  }
+
+  // Known sub-aliases.
+  if (sub === "build") {
+    return { executable: "build", cliArgs: { mode: "run", issue: targetNum }, target: targetNum }
+  }
+  if (sub === "orchestrate" || sub === "orchestrator") {
+    return { executable: "orchestrator", cliArgs: { issue: targetNum }, target: targetNum }
+  }
+
+  // Generic pass-through: @kody2 <name> → executable <name> with { issue }.
+  return asDispatch(sub, targetNum)
 }
 
-/**
- * Pull the body text that follows `@kody2` (if present). If `@kody2` doesn't
- * appear, return the whole body. Lowercased.
- */
+function asDispatch(executable: string, target: number): DispatchResult {
+  if (executable === "build") {
+    return { executable, cliArgs: { mode: "run", issue: target }, target }
+  }
+  return { executable, cliArgs: { issue: target }, target }
+}
+
 function extractAfterTag(body: string): string {
   const idx = body.indexOf("@kody2")
   if (idx === -1) return body
@@ -84,11 +124,15 @@ function extractAfterTag(body: string): string {
 }
 
 /**
- * Extract inline feedback from a PR comment body. We treat anything after
- * `@kody2` (and after a leading verb like "fix"/"please") as the feedback
- * payload. Empty string if nothing worth passing through — fix mode will
- * then fall back to the latest PR review body.
+ * Extract the first word after `@kody2` — the subcommand (e.g. "plan", "build").
+ * Returns null if no recognizable subcommand (i.e. bare `@kody2` or free text).
  */
+function extractSubcommand(afterTag: string): string | null {
+  const match = afterTag.match(/^([a-z][a-z0-9-]{1,40})\b/)
+  if (!match) return null
+  return match[1]!
+}
+
 function extractFeedback(afterTag: string): string | undefined {
   const cleaned = afterTag.replace(/^(fix|please|kindly)[\s:,.-]+/i, "").trim()
   return cleaned.length > 0 ? cleaned : undefined
