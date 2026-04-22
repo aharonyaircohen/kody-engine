@@ -23,7 +23,6 @@ import { postIssueComment } from "./postIssueComment.js"
 import { postPlanComment } from "./postPlanComment.js"
 import { postReviewResult } from "./postReviewResult.js"
 import { releaseFlow } from "./releaseFlow.js"
-import { requireFeedbackActions } from "./requireFeedbackActions.js"
 import { resolveArtifacts } from "./resolveArtifacts.js"
 import { resolveFlow } from "./resolveFlow.js"
 import { reviewFlow } from "./reviewFlow.js"
@@ -55,7 +54,6 @@ export const preflightScripts: Record<string, PreflightScript> = {
 
 export const postflightScripts: Record<string, PostflightScript> = {
   parseAgentResult,
-  requireFeedbackActions,
   verify,
   checkCoverageWithRetry,
   commitAndPush,
