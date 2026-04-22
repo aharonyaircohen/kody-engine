@@ -128,8 +128,27 @@ describe("state: parseStateComment / renderStateComment", () => {
     })
     s.core.prUrl = "https://ex/pull/42"
     const body = renderStateComment(s)
-    expect(body).toMatch(/## kody2 task state/)
+    expect(body).toMatch(/## .*kody2 task state/)
     expect(body).toMatch(/\*\*Attempts:\*\* build:1/)
     expect(body).toMatch(/\*\*PR:\*\* https:\/\/ex\/pull\/42/)
+  })
+
+  it("puts the title at the top and collapses the JSON in <details>", () => {
+    const s = reduce(emptyState(), "build", {
+      type: "RUN_COMPLETED",
+      payload: {},
+      timestamp: "t",
+    })
+    const body = renderStateComment(s)
+    const titleIdx = body.indexOf("kody2 task state")
+    const beginIdx = body.indexOf(STATE_BEGIN)
+    expect(titleIdx).toBeGreaterThanOrEqual(0)
+    expect(beginIdx).toBeGreaterThan(titleIdx) // title precedes machine block
+    expect(body).toContain("<details>")
+    expect(body).toContain("<summary>Raw state (JSON)</summary>")
+    expect(body).toContain("</details>")
+    // Round-trips through parseStateComment despite the wrapping markup.
+    const reloaded = parseStateComment(body)
+    expect(reloaded.core.lastOutcome?.type).toBe("RUN_COMPLETED")
   })
 })

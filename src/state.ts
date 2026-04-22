@@ -236,10 +236,60 @@ function noteFromAction(action: Action): string | undefined {
 }
 
 /**
- * Serialize state into the full comment body (machine block + human summary).
+ * Serialize state into the full comment body. Order is human-first:
+ *   1. Title + summary bullets
+ *   2. Recent history
+ *   3. Collapsed `<details>` block with the canonical machine state
+ *      (still bracketed by STATE_BEGIN/STATE_END so parseStateComment
+ *      finds it via positional slicing).
+ *
+ * Putting the machine state at the bottom inside <details> keeps the
+ * comment glanceable on GitHub while preserving the wire format.
  */
 export function renderStateComment(state: TaskState): string {
   const lines: string[] = []
+
+  // ── Human-readable header + summary ────────────────────────────────────
+  lines.push("## 📋 kody2 task state")
+  lines.push("")
+  if (state.flow) {
+    lines.push(`- **Flow:** \`${state.flow.name}\` (step: \`${state.flow.step}\`)`)
+  }
+  lines.push(`- **Phase:** \`${state.core.phase}\`  **Status:** \`${state.core.status}\``)
+  if (state.core.currentExecutable) {
+    lines.push(`- **Last executable:** \`${state.core.currentExecutable}\``)
+  }
+  if (state.core.lastOutcome) {
+    lines.push(`- **Last action:** \`${state.core.lastOutcome.type}\``)
+  }
+  const attempts = Object.entries(state.core.attempts)
+    .map(([k, v]) => `${k}:${v}`)
+    .join(", ")
+  if (attempts) lines.push(`- **Attempts:** ${attempts}`)
+  if (state.core.prUrl) lines.push(`- **PR:** ${state.core.prUrl}`)
+  if (state.core.runUrl) lines.push(`- **Run:** ${state.core.runUrl}`)
+  const artifactNames = Object.keys(state.artifacts ?? {})
+  if (artifactNames.length > 0) {
+    lines.push(`- **Artifacts:** ${artifactNames.map((n) => `\`${n}\``).join(", ")}`)
+  }
+  lines.push("")
+
+  // ── Recent history ─────────────────────────────────────────────────────
+  if (state.history.length > 0) {
+    lines.push("### Recent history")
+    lines.push("")
+    const recent = state.history.slice(-10).reverse()
+    for (const h of recent) {
+      const note = h.note ? ` — ${h.note}` : ""
+      lines.push(`- \`${h.timestamp}\` **${h.executable}** → \`${h.action}\`${note}`)
+    }
+    lines.push("")
+  }
+
+  // ── Machine state (collapsed) ──────────────────────────────────────────
+  lines.push("<details>")
+  lines.push("<summary>Raw state (JSON)</summary>")
+  lines.push("")
   lines.push(STATE_BEGIN)
   lines.push("")
   lines.push("```json")
@@ -261,36 +311,8 @@ export function renderStateComment(state: TaskState): string {
   lines.push("")
   lines.push(STATE_END)
   lines.push("")
-  lines.push("## kody2 task state")
-  lines.push("")
-  lines.push(`- **Phase:** \`${state.core.phase}\`  **Status:** \`${state.core.status}\``)
-  if (state.core.currentExecutable) {
-    lines.push(`- **Last executable:** \`${state.core.currentExecutable}\``)
-  }
-  if (state.core.lastOutcome) {
-    lines.push(`- **Last action:** \`${state.core.lastOutcome.type}\``)
-  }
-  const attempts = Object.entries(state.core.attempts)
-    .map(([k, v]) => `${k}:${v}`)
-    .join(", ")
-  if (attempts) lines.push(`- **Attempts:** ${attempts}`)
-  if (state.core.prUrl) lines.push(`- **PR:** ${state.core.prUrl}`)
-  if (state.core.runUrl) lines.push(`- **Run:** ${state.core.runUrl}`)
-  const artifactNames = Object.keys(state.artifacts ?? {})
-  if (artifactNames.length > 0) {
-    lines.push(`- **Artifacts:** ${artifactNames.map((n) => `\`${n}\``).join(", ")}`)
-  }
-  lines.push("")
-  if (state.history.length > 0) {
-    lines.push("### Recent history")
-    lines.push("")
-    const recent = state.history.slice(-10).reverse()
-    for (const h of recent) {
-      const note = h.note ? ` — ${h.note}` : ""
-      lines.push(`- \`${h.timestamp}\` **${h.executable}** → \`${h.action}\`${note}`)
-    }
-    lines.push("")
-  }
+  lines.push("</details>")
+
   return lines.join("\n")
 }
 
