@@ -54,19 +54,49 @@ export function summarizeFeedbackActions(block: string): FeedbackActionsSummary 
  * Only source-like paths are kept: the path must contain a `/`, end with a
  * code/test-file extension, and not start with a URL scheme.
  */
+const ACTIONABLE_HEADING = /^#{1,6}\s+(Concerns|Suggestions|Bugs)\b/i
+const ANY_HEADING = /^#{1,6}\s+/
+
+/**
+ * Restrict the review body to the substrings under actionable headings
+ * (### Concerns / ### Suggestions / ### Bugs). File paths praised in
+ * `### Strengths` or mentioned in `### Summary` are not things the
+ * reviewer wants changed — extracting them would cause false failures.
+ */
+function actionableSections(reviewBody: string): string {
+  const lines = reviewBody.split("\n")
+  const kept: string[] = []
+  let inside = false
+  for (const raw of lines) {
+    if (ACTIONABLE_HEADING.test(raw)) {
+      inside = true
+      kept.push(raw)
+      continue
+    }
+    if (inside && ANY_HEADING.test(raw)) {
+      inside = false
+      continue
+    }
+    if (inside) kept.push(raw)
+  }
+  return kept.join("\n")
+}
+
 export function extractReviewFileRefs(reviewBody: string): string[] {
   if (!reviewBody) return []
+  const scoped = actionableSections(reviewBody)
+  if (!scoped.trim()) return []
   const found = new Set<string>()
   // Match backticked paths first (reviewers tend to wrap file refs in ``).
   const backtick = /`([^`\s]+\.[a-zA-Z]{1,5})(?::\d+(?:-\d+)?)?`/g
   let m: RegExpExecArray | null
-  while ((m = backtick.exec(reviewBody)) !== null) {
+  while ((m = backtick.exec(scoped)) !== null) {
     const raw = m[1]!
     if (isPlausibleSourcePath(raw)) found.add(raw)
   }
   // Also match bare-text paths (e.g. "src/foo.ts:42") that aren't backticked.
   const bare = /(?<![A-Za-z0-9/_.-])((?:[A-Za-z0-9_./-]+\/)+[A-Za-z0-9_.-]+\.[a-zA-Z]{1,5})(?::\d+(?:-\d+)?)?/g
-  while ((m = bare.exec(reviewBody)) !== null) {
+  while ((m = bare.exec(scoped)) !== null) {
     const raw = m[1]!
     if (isPlausibleSourcePath(raw)) found.add(raw)
   }

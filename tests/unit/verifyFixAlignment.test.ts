@@ -156,27 +156,52 @@ describe("verifyFixAlignment postflight", () => {
 })
 
 describe("verifyFixAlignment: extractReviewFileRefs", () => {
-  it("pulls backticked code-file refs (deduped, no :line)", () => {
-    const body =
-      "see `src/services/foo.ts:12` and `src/services/foo.ts:40` — also `src/api/bar.ts` — then https://example.com/baz.ts"
+  it("pulls backticked code-file refs from actionable sections (deduped)", () => {
+    const body = [
+      "### Concerns",
+      "- issue at `src/services/foo.ts:12`",
+      "- issue at `src/services/foo.ts:40`",
+      "### Suggestions",
+      "- fix `src/api/bar.ts`",
+      "- link to https://example.com/baz.ts",
+    ].join("\n")
     expect(extractReviewFileRefs(body).sort()).toEqual(["src/api/bar.ts", "src/services/foo.ts"])
   })
 
-  it("pulls bare-text paths too", () => {
-    const body = "issue at src/utils/thing.ts:55 has a problem"
+  it("pulls bare-text paths from actionable sections too", () => {
+    const body = "### Concerns\n- issue at src/utils/thing.ts:55 has a problem"
     expect(extractReviewFileRefs(body)).toContain("src/utils/thing.ts")
   })
 
+  it("ignores paths mentioned in non-actionable sections (Strengths, Summary)", () => {
+    const body = [
+      "### Summary",
+      "Nice work on `src/utils/a.ts`.",
+      "### Strengths",
+      "- `src/utils/b.ts:5` is elegant.",
+      "### Concerns",
+      "- `src/utils/c.ts:10` has a bug.",
+    ].join("\n")
+    expect(extractReviewFileRefs(body)).toEqual(["src/utils/c.ts"])
+  })
+
   it("ignores doc / image / pdf extensions", () => {
-    expect(extractReviewFileRefs("see `docs/readme.md` and `logo.png`")).toEqual([])
+    const body = "### Suggestions\n- see `docs/readme.md` and `logo.png`"
+    expect(extractReviewFileRefs(body)).toEqual([])
   })
 
   it("ignores bare filenames without a directory", () => {
-    expect(extractReviewFileRefs("fix the `foo.ts` helper")).toEqual([])
+    const body = "### Concerns\n- fix the `foo.ts` helper"
+    expect(extractReviewFileRefs(body)).toEqual([])
   })
 
   it("returns [] for empty body", () => {
     expect(extractReviewFileRefs("")).toEqual([])
+  })
+
+  it("returns [] when there are no actionable headings", () => {
+    const body = "### Summary\nAll good.\n### Strengths\n- `src/foo.ts:1` is great."
+    expect(extractReviewFileRefs(body)).toEqual([])
   })
 })
 
