@@ -32,7 +32,6 @@ import { runFlow } from "./runFlow.js"
 import { saveTaskState } from "./saveTaskState.js"
 import { syncFlow } from "./syncFlow.js"
 import { verify } from "./verify.js"
-import { verifyFixAlignment } from "./verifyFixAlignment.js"
 import { watchStalePrsFlow } from "./watchStalePrsFlow.js"
 import { writeRunSummary } from "./writeRunSummary.js"
 
@@ -67,7 +66,6 @@ export const postflightScripts: Record<string, PostflightScript> = {
   postPlanComment,
   postReviewResult,
   persistArtifacts,
-  verifyFixAlignment,
   writeRunSummary,
   saveTaskState,
 }

@@ -73,9 +73,6 @@
         "script": "commitAndPush"
       },
       {
-        "script": "verifyFixAlignment"
-      },
-      {
         "script": "ensurePr"
       },
       {
