@@ -266,6 +266,9 @@ function parseScriptList(p: string, key: string, raw: unknown): ScriptEntry[] {
     if (r.runWhen && typeof r.runWhen === "object") {
       entry.runWhen = r.runWhen as ScriptEntry["runWhen"]
     }
+    if (r.with && typeof r.with === "object") {
+      entry.with = r.with as ScriptEntry["with"]
+    }
     out.push(entry)
   }
   return out

@@ -23,6 +23,7 @@ import { loadTaskState } from "./loadTaskState.js"
 import { mirrorStateToPr } from "./mirrorStateToPr.js"
 import { parseAgentResult } from "./parseAgentResult.js"
 import { persistArtifacts } from "./persistArtifacts.js"
+import { persistFlowState } from "./persistFlowState.js"
 import { postIssueComment } from "./postIssueComment.js"
 import { postPlanComment } from "./postPlanComment.js"
 import { postResearchComment } from "./postResearchComment.js"
@@ -82,6 +83,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   dispatch,
   finishFlow,
   advanceFlow,
+  persistFlowState,
 }
 
 export const allScriptNames: Set<string> = new Set([

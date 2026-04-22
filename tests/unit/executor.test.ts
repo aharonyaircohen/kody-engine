@@ -110,4 +110,29 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     expect(postScripts).not.toContain("verify")
     expect(postScripts).not.toContain("checkCoverageWithRetry")
   })
+
+  it("orchestrator-plan-build-review profile loads cleanly with transition table", () => {
+    const profile = loadProfile(path.join(EXE_ROOT, "orchestrator-plan-build-review/profile.json"))
+    expect(profile.name).toBe("orchestrator-plan-build-review")
+    expect(profile.inputs.map((i) => i.name).sort()).toEqual(["flow", "issue"])
+    expect(profile.claudeCode.maxTurns).toBe(0)
+    expect(profile.claudeCode.tools).toEqual([])
+    // Preflight ends with skipAgent so the executor bypasses runAgent.
+    const pre = profile.scripts.preflight.map((p) => p.script)
+    expect(pre).toContain("loadIssueContext")
+    expect(pre).toContain("loadTaskState")
+    expect(pre.at(-1)).toBe("skipAgent")
+    // Every transition entry is a dispatcher script with a runWhen guard
+    // (except the trailing persistFlowState which is unconditional).
+    const post = profile.scripts.postflight
+    expect(post.at(-1)!.script).toBe("persistFlowState")
+    expect(post.at(-1)!.runWhen).toBeUndefined()
+    const transitions = post.slice(0, -1)
+    expect(transitions.length).toBeGreaterThanOrEqual(8)
+    for (const entry of transitions) {
+      expect(["startFlow", "dispatch", "finishFlow"]).toContain(entry.script)
+      expect(entry.runWhen).toBeDefined()
+      expect(entry.with).toBeDefined()
+    }
+  })
 })

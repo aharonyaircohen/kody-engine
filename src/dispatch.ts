@@ -108,7 +108,21 @@ export function autoDispatch(opts?: {
 
   // Known sub-aliases.
   if (sub === "orchestrate" || sub === "orchestrator") {
-    return { executable: "orchestrator", cliArgs: { issue: targetNum }, target: targetNum }
+    const flow = extractFlowName(afterTag)
+    if (flow) {
+      // `@kody2 orchestrate --flow X` → orchestrator-X executable.
+      return {
+        executable: `orchestrator-${flow}`,
+        cliArgs: { issue: targetNum, flow },
+        target: targetNum,
+      }
+    }
+    // Bare `@kody2 orchestrate` defaults to the canonical 4-stage flow.
+    return {
+      executable: "orchestrator-plan-build-review",
+      cliArgs: { issue: targetNum, flow: "plan-build-review" },
+      target: targetNum,
+    }
   }
   if (sub === "build") {
     // Backward-compat: `@kody2 build` on an issue used to map to build/run.
@@ -137,6 +151,16 @@ function extractSubcommand(afterTag: string): string | null {
   const match = afterTag.match(/^([a-z][a-z0-9-]{1,40})\b/)
   if (!match) return null
   return match[1]!
+}
+
+/**
+ * Extract a `--flow <value>` argument from the comment body. Accepts only
+ * lowercase, dash-separated names so it round-trips with executable
+ * directory naming. Returns null if no `--flow` arg is present.
+ */
+function extractFlowName(afterTag: string): string | null {
+  const match = afterTag.match(/--flow[=\s]+([a-z][a-z0-9-]{0,60})/)
+  return match ? match[1]! : null
 }
 
 function extractFeedback(afterTag: string): string | undefined {

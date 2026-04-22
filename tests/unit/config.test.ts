@@ -103,9 +103,9 @@ describe("config: loadConfig", () => {
     writeConfig(dir, {
       github: { owner: "o", repo: "r" },
       agent: { model: "m/x" },
-      defaultExecutable: "orchestrator",
+      defaultExecutable: "orchestrator-plan-build-review",
     })
-    expect(loadConfig(dir).defaultExecutable).toBe("orchestrator")
+    expect(loadConfig(dir).defaultExecutable).toBe("orchestrator-plan-build-review")
   })
 
   it("defaultExecutable is undefined when absent", () => {
