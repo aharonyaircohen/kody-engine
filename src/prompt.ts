@@ -157,6 +157,7 @@ export interface ParsedAgentResult {
   commitMessage: string
   prSummary: string
   feedbackActions: string
+  planDeviations: string
   failureReason: string
 }
 
@@ -168,12 +169,20 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
       commitMessage: "",
       prSummary: "",
       feedbackActions: "",
+      planDeviations: "",
       failureReason: "agent produced no final message",
     }
 
   const failedMatch = text.match(/(?:^|\n)\s*FAILED\s*:\s*(.+?)\s*$/s)
   if (failedMatch) {
-    return { done: false, commitMessage: "", prSummary: "", feedbackActions: "", failureReason: failedMatch[1]!.trim() }
+    return {
+      done: false,
+      commitMessage: "",
+      prSummary: "",
+      feedbackActions: "",
+      planDeviations: "",
+      failureReason: failedMatch[1]!.trim(),
+    }
   }
 
   if (!/(^|\n)\s*DONE\b/i.test(text)) {
@@ -182,6 +191,7 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
       commitMessage: "",
       prSummary: "",
       feedbackActions: "",
+      planDeviations: "",
       failureReason: "no DONE or FAILED marker in agent output",
     }
   }
@@ -189,12 +199,24 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
   const commitMatch = text.match(/^[ \t]*COMMIT_MSG\s*:\s*(.+)$/im)
   const commitMessage = commitMatch ? commitMatch[1]!.trim() : ""
 
-  // FEEDBACK_ACTIONS: spans from the marker to the next top-level marker (COMMIT_MSG or PR_SUMMARY).
+  // FEEDBACK_ACTIONS: spans from the marker to the next top-level marker.
   const feedbackActions = extractBlock(
     text,
     /(?:^|\n)[ \t]*FEEDBACK_ACTIONS\s*:[ \t]*\n/i,
-    /(?:^|\n)[ \t]*(?:COMMIT_MSG|PR_SUMMARY)\s*:/i,
+    /(?:^|\n)[ \t]*(?:PLAN_DEVIATIONS|COMMIT_MSG|PR_SUMMARY)\s*:/i,
   )
+
+  // PLAN_DEVIATIONS: same shape. Supports inline (`PLAN_DEVIATIONS: none`) or
+  // block (newline + bullet list).
+  let planDeviations = extractBlock(
+    text,
+    /(?:^|\n)[ \t]*PLAN_DEVIATIONS\s*:[ \t]*\n/i,
+    /(?:^|\n)[ \t]*(?:COMMIT_MSG|PR_SUMMARY|FEEDBACK_ACTIONS)\s*:/i,
+  )
+  if (!planDeviations) {
+    const inline = text.match(/(?:^|\n)[ \t]*PLAN_DEVIATIONS\s*:[ \t]*(.+?)[ \t]*(?:\n|$)/i)
+    if (inline) planDeviations = inline[1]!.trim()
+  }
 
   // PR_SUMMARY: spans from the marker line to end-of-input (or to a closing ``` fence).
   const summaryStart = text.search(/(^|\n)[ \t]*PR_SUMMARY\s*:[ \t]*\n/i)
@@ -207,7 +229,7 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
       .trim()
   }
 
-  return { done: true, commitMessage, prSummary, feedbackActions, failureReason: "" }
+  return { done: true, commitMessage, prSummary, feedbackActions, planDeviations, failureReason: "" }
 }
 
 function extractBlock(text: string, startMarker: RegExp, endMarker: RegExp): string {

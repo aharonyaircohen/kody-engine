@@ -113,4 +113,30 @@ describe("postIssueComment message wording", () => {
     expect(lastPrBody()).toBe("⚠️ kody2 FAILED: no changes to commit")
     expect(ctx.output.exitCode).toBe(3)
   })
+
+  // Regression: previously any rerun on an existing PR said "pushed to" even
+  // when the current run made no new commit (only pre-existing commits were
+  // ahead). That masked no-op fix runs. See issue #4.
+  it("existing PR + this run made no commit: says 'no changes' — not 'pushed to'", async () => {
+    const ctx = makeCtx({
+      commitResult: { committed: false },
+      hasCommitsAhead: true,
+      prAction: "updated",
+    })
+    await postIssueComment(ctx, profile, null)
+    const body = lastPrBody()
+    expect(body).toContain("no changes")
+    expect(body).toContain("https://github.com/x/y/pull/42")
+    expect(body).not.toContain("pushed to")
+  })
+
+  it("existing PR + this run committed: still says 'pushed to'", async () => {
+    const ctx = makeCtx({
+      commitResult: { committed: true },
+      hasCommitsAhead: true,
+      prAction: "updated",
+    })
+    await postIssueComment(ctx, profile, null)
+    expect(lastPrBody()).toBe("✅ kody2 pushed to https://github.com/x/y/pull/42")
+  })
 })

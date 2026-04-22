@@ -138,12 +138,18 @@ export function parseStateComment(body: string): TaskState {
   const endIdx = body.indexOf(STATE_END, beginIdx + 1)
   if (beginIdx < 0 || endIdx < 0) return emptyState()
 
-  const between = body.slice(beginIdx + STATE_BEGIN.length, endIdx)
-  const fenceMatch = between.match(/```json\s*([\s\S]*?)\s*```/)
-  if (!fenceMatch) return emptyState()
+  // The span between STATE_BEGIN and STATE_END is always the ```json fence
+  // (see renderStateComment). Slice by position rather than regex-matching,
+  // because the JSON payload can contain ``` (e.g. plan artifacts embedding
+  // code blocks) which defeats a non-greedy regex and truncates the JSON.
+  const between = body.slice(beginIdx + STATE_BEGIN.length, endIdx).trim()
+  const OPEN = "```json"
+  const CLOSE = "```"
+  if (!between.startsWith(OPEN) || !between.endsWith(CLOSE)) return emptyState()
+  const jsonStr = between.slice(OPEN.length, between.length - CLOSE.length).trim()
 
   try {
-    const parsed = JSON.parse(fenceMatch[1]!) as TaskState
+    const parsed = JSON.parse(jsonStr) as TaskState
     if (parsed?.schemaVersion !== 1) return emptyState()
     return {
       schemaVersion: 1,

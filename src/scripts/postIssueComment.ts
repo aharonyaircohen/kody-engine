@@ -41,7 +41,15 @@ export const postIssueComment: PostflightScript = async (ctx) => {
   const failureReason = computeFailureReason(ctx)
   const isFailure = failureReason.length > 0
 
-  const successMsg = prAction === "updated" ? `✅ kody2 pushed to ${prUrl}` : `✅ kody2 PR opened: ${prUrl}`
+  // "pushed to" only applies when this run actually produced a commit. Without
+  // this gate, any rerun on an existing PR reports "pushed" even when fix
+  // made no changes, which hides no-op outcomes (see issue #4).
+  const justPushedToExistingPr = prAction === "updated" && commitResult?.committed === true
+  const successMsg = justPushedToExistingPr
+    ? `✅ kody2 pushed to ${prUrl}`
+    : prAction === "updated"
+      ? `ℹ️ kody2 made no changes — PR: ${prUrl}`
+      : `✅ kody2 PR opened: ${prUrl}`
   const failurePrSuffix = prUrl ? (prAction === "updated" ? ` — PR: ${prUrl}` : ` — draft PR: ${prUrl}`) : ""
   const msg = isFailure ? `⚠️ kody2 FAILED: ${truncate(failureReason, 1500)}${failurePrSuffix}` : successMsg
   postWith(targetType, targetNumber, msg, ctx.cwd)

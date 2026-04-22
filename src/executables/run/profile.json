@@ -57,6 +57,9 @@
         "script": "parseAgentResult"
       },
       {
+        "script": "requirePlanDeviations"
+      },
+      {
         "script": "verify"
       },
       {

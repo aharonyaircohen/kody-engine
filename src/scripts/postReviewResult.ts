@@ -6,11 +6,17 @@
  *   CONCERNS → exit 0 (review is advisory)
  *   FAIL     → exit 1 (signals a blocking verdict to external callers)
  *   missing/empty → exit 1
+ *
+ * Emits a typed Action into ctx.data.action so `saveTaskState` (if present in
+ * the profile postflight) records the review in history/lastOutcome. The
+ * action type mirrors the verdict so downstream executables (`fix`) can
+ * dispatch on it.
  */
 
 import type { AgentResult } from "../agent.js"
 import type { PostflightScript } from "../executables/types.js"
 import { postPrReviewComment, truncate } from "../issue.js"
+import type { Action } from "../state.js"
 
 export type ReviewVerdict = "PASS" | "CONCERNS" | "FAIL" | "UNKNOWN"
 
@@ -20,11 +26,28 @@ export function detectVerdict(body: string): ReviewVerdict {
   return m[1]!.toUpperCase() as ReviewVerdict
 }
 
+function reviewAction(verdict: ReviewVerdict, payload: Record<string, unknown>): Action {
+  const type =
+    verdict === "PASS"
+      ? "REVIEW_PASS"
+      : verdict === "CONCERNS"
+        ? "REVIEW_CONCERNS"
+        : verdict === "FAIL"
+          ? "REVIEW_FAIL"
+          : "REVIEW_COMPLETED"
+  return { type, payload: { verdict, ...payload }, timestamp: new Date().toISOString() }
+}
+
+function failedAction(reason: string): Action {
+  return { type: "REVIEW_FAILED", payload: { reason }, timestamp: new Date().toISOString() }
+}
+
 export const postReviewResult: PostflightScript = async (ctx, _profile, agentResult: AgentResult | null) => {
   const prNumber = ctx.data.commentTargetNumber as number | undefined
   if (!prNumber) {
     ctx.output.exitCode = 99
     ctx.output.reason = "review postflight: no PR number in context"
+    ctx.data.action = failedAction(ctx.output.reason)
     return
   }
 
@@ -37,6 +60,7 @@ export const postReviewResult: PostflightScript = async (ctx, _profile, agentRes
     }
     ctx.output.exitCode = 1
     ctx.output.reason = reason
+    ctx.data.action = failedAction(reason)
     return
   }
 
@@ -49,6 +73,7 @@ export const postReviewResult: PostflightScript = async (ctx, _profile, agentRes
     }
     ctx.output.exitCode = 1
     ctx.output.reason = "empty review body"
+    ctx.data.action = failedAction("empty review body")
     return
   }
 
@@ -58,11 +83,14 @@ export const postReviewResult: PostflightScript = async (ctx, _profile, agentRes
     const msg = err instanceof Error ? err.message : String(err)
     ctx.output.exitCode = 4
     ctx.output.reason = `failed to post review comment: ${msg}`
+    ctx.data.action = failedAction(ctx.output.reason)
     return
   }
 
   const verdict = detectVerdict(reviewBody)
   ctx.data.reviewVerdict = verdict
+  ctx.data.reviewBody = reviewBody
+  ctx.data.action = reviewAction(verdict, { bodyPreview: truncate(reviewBody, 500) })
   // FAIL is the only verdict that signals a blocking decision; PASS and
   // CONCERNS both exit 0 because the review is advisory.
   ctx.output.exitCode = verdict === "FAIL" ? 1 : 0

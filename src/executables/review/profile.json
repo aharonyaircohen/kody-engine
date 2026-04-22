@@ -35,6 +35,9 @@
         "script": "reviewFlow"
       },
       {
+        "script": "loadTaskState"
+      },
+      {
         "script": "loadConventions"
       },
       {
@@ -44,6 +47,9 @@
     "postflight": [
       {
         "script": "postReviewResult"
+      },
+      {
+        "script": "saveTaskState"
       }
     ]
   }

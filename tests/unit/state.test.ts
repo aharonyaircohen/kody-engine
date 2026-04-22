@@ -90,6 +90,36 @@ describe("state: parseStateComment / renderStateComment", () => {
     expect(parseStateComment(body)).toEqual(emptyState())
   })
 
+  it("preserves artifacts whose content contains triple-backtick code fences", () => {
+    // Regression: the non-greedy regex previously used to extract the JSON
+    // block would stop at the first ``` inside the plan artifact's content,
+    // producing invalid JSON and dropping all prior state.
+    const planWithFences =
+      "## Files to create\n\n### `src/utils/x.ts`\n```ts\nexport function x() {}\n```\n\nDone."
+    let s = reduce(emptyState(), "plan", {
+      type: "PLAN_COMPLETED",
+      payload: { commitMessage: "plan: x" },
+      timestamp: "2026-04-22T08:23:00Z",
+    })
+    s = {
+      ...s,
+      artifacts: {
+        ...s.artifacts,
+        plan: {
+          format: "markdown",
+          producedBy: "plan",
+          createdAt: "2026-04-22T08:23:00Z",
+          content: planWithFences,
+        },
+      },
+    }
+    const body = renderStateComment(s)
+    const reloaded = parseStateComment(body)
+    expect(Object.keys(reloaded.artifacts)).toContain("plan")
+    expect(reloaded.artifacts.plan?.content).toBe(planWithFences)
+    expect(reloaded.history.length).toBe(1)
+  })
+
   it("renders a human section with attempts + PR URL", () => {
     const s = reduce(emptyState(), "build", {
       type: "RUN_COMPLETED",

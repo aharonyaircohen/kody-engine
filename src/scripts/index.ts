@@ -24,6 +24,7 @@ import { postPlanComment } from "./postPlanComment.js"
 import { postReviewResult } from "./postReviewResult.js"
 import { releaseFlow } from "./releaseFlow.js"
 import { requireFeedbackActions } from "./requireFeedbackActions.js"
+import { requirePlanDeviations } from "./requirePlanDeviations.js"
 import { resolveArtifacts } from "./resolveArtifacts.js"
 import { resolveFlow } from "./resolveFlow.js"
 import { reviewFlow } from "./reviewFlow.js"
@@ -31,6 +32,7 @@ import { runFlow } from "./runFlow.js"
 import { saveTaskState } from "./saveTaskState.js"
 import { syncFlow } from "./syncFlow.js"
 import { verify } from "./verify.js"
+import { verifyFixAlignment } from "./verifyFixAlignment.js"
 import { watchStalePrsFlow } from "./watchStalePrsFlow.js"
 import { writeRunSummary } from "./writeRunSummary.js"
 
@@ -56,6 +58,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
 export const postflightScripts: Record<string, PostflightScript> = {
   parseAgentResult,
   requireFeedbackActions,
+  requirePlanDeviations,
   verify,
   checkCoverageWithRetry,
   commitAndPush,
@@ -64,6 +67,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   postPlanComment,
   postReviewResult,
   persistArtifacts,
+  verifyFixAlignment,
   writeRunSummary,
   saveTaskState,
 }
