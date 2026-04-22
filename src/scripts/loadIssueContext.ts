@@ -12,7 +12,10 @@ import type { PreflightScript } from "../executables/types.js"
 import { getIssue, truncate } from "../issue.js"
 
 const DEFAULT_COMMENT_LIMIT = 12
-const DEFAULT_COMMENT_MAX_BYTES = 4000
+// 16KB/comment is enough to pass through a full research artifact (findings
+// + ambiguities) without clipping. Override per-project via kody.config.json
+// > issueContext > commentMaxBytes.
+const DEFAULT_COMMENT_MAX_BYTES = 16_000
 
 export const loadIssueContext: PreflightScript = async (ctx) => {
   const issueNumber = ctx.args.issue as number
