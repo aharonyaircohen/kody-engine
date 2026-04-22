@@ -256,6 +256,27 @@ describe("dispatch: issue_comment on PR", () => {
       target: 23,
     })
   })
+
+  it("bare '@kody2 fix' on PR → fix WITHOUT inline feedback (reads PR review)", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody2 fix" },
+      issue: { number: 24, pull_request: {} },
+    })
+    const r = autoDispatch()
+    expect(r?.executable).toBe("fix")
+    expect(r?.cliArgs.pr).toBe(24)
+    expect(r?.cliArgs.feedback).toBeUndefined()
+  })
+
+  it("'@kody2 fix: address instructor.name' on PR → fix with inline feedback", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody2 fix: address the instructor.name concern" },
+      issue: { number: 25, pull_request: {} },
+    })
+    const r = autoDispatch()
+    expect(r?.executable).toBe("fix")
+    expect(r?.cliArgs.feedback).toBe("address the instructor.name concern")
+  })
 })
 
 describe("dispatch: defensive cases", () => {

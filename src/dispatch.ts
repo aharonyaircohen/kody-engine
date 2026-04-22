@@ -140,6 +140,10 @@ function extractSubcommand(afterTag: string): string | null {
 }
 
 function extractFeedback(afterTag: string): string | undefined {
-  const cleaned = afterTag.replace(/^(fix|please|kindly)[\s:,.-]+/i, "").trim()
+  // Strip an optional leading "fix" / "please" / "kindly" keyword whether it
+  // is followed by a separator or stands alone at end-of-string. Without the
+  // `|$` alternative, bare `@kody2 fix` returned "fix" as inline feedback,
+  // causing fixFlow to bypass the actual PR review body.
+  const cleaned = afterTag.replace(/^(fix|please|kindly)(?:[\s:,.-]+|$)/i, "").trim()
   return cleaned.length > 0 ? cleaned : undefined
 }
