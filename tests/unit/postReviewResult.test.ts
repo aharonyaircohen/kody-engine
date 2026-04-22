@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { describe, expect, it } from "vitest"
 import { detectVerdict } from "../../src/scripts/postReviewResult.js"
 
 describe("postReviewResult: detectVerdict", () => {

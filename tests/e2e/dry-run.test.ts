@@ -55,5 +55,4 @@ describe("e2e: CLI smoke", () => {
     expect(r.code).toBe(64)
     expect(r.stderr).toMatch(/--bogus/)
   })
-
 })

@@ -5,7 +5,7 @@ vi.mock("node:child_process", () => ({
   execFileSync: (...args: unknown[]) => execFileSyncMock(...args),
 }))
 
-import { isKody2DispatchWorkflow, pickFailedRunForFixCi, getRecentFailedRunsForPr } from "../../src/workflow.js"
+import { getRecentFailedRunsForPr, isKody2DispatchWorkflow, pickFailedRunForFixCi } from "../../src/workflow.js"
 
 type GhCall = { cmd: string; args: string[] }
 
@@ -158,9 +158,7 @@ describe("pickFailedRunForFixCi", () => {
     stubGh([
       () => JSON.stringify({ headRefName: "feature" }),
       () =>
-        JSON.stringify([
-          { databaseId: 1, workflowName: "kody2", conclusion: "failure", url: "u1", createdAt: "t1" },
-        ]),
+        JSON.stringify([{ databaseId: 1, workflowName: "kody2", conclusion: "failure", url: "u1", createdAt: "t1" }]),
     ])
     expect(pickFailedRunForFixCi(42, 1_000, 10)).toBeNull()
   })

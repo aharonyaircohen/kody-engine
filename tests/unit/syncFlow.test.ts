@@ -19,9 +19,9 @@ vi.mock("node:child_process", () => ({
 }))
 
 import { mergeBase } from "../../src/branch.js"
+import type { Context, Profile } from "../../src/executables/types.js"
 import { getPr, postPrReviewComment } from "../../src/issue.js"
 import { syncFlow } from "../../src/scripts/syncFlow.js"
-import type { Context, Profile } from "../../src/executables/types.js"
 
 const profile = {} as Profile
 
@@ -60,10 +60,7 @@ describe("syncFlow", () => {
   it("pushes and posts success when merge advances HEAD", async () => {
     vi.mocked(mergeBase).mockReturnValue("clean")
     // rev-parse before, rev-parse after (different SHAs), then git push succeeds.
-    execFileSyncMock
-      .mockReturnValueOnce("abc123\n")
-      .mockReturnValueOnce("def456\n")
-      .mockReturnValueOnce("") // push
+    execFileSyncMock.mockReturnValueOnce("abc123\n").mockReturnValueOnce("def456\n").mockReturnValueOnce("") // push
 
     const ctx = makeCtx()
     await syncFlow(ctx, profile)

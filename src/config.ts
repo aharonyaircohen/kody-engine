@@ -113,9 +113,8 @@ export function loadConfig(projectDir: string = process.cwd()): Kody2Config {
     },
     issueContext: parseIssueContext(raw.issueContext),
     testRequirements: parseTestRequirements(raw.testRequirements),
-    defaultExecutable: typeof raw.defaultExecutable === "string" && raw.defaultExecutable.length > 0
-      ? raw.defaultExecutable
-      : undefined,
+    defaultExecutable:
+      typeof raw.defaultExecutable === "string" && raw.defaultExecutable.length > 0 ? raw.defaultExecutable : undefined,
     release: parseReleaseConfig(raw.release),
   }
 }

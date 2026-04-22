@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { describe, expect, it } from "vitest"
 import { formatStaleReport } from "../../src/scripts/watchStalePrsFlow.js"
 
 describe("watchStalePrsFlow: formatStaleReport", () => {
@@ -37,13 +37,15 @@ describe("watchStalePrsFlow: formatStaleReport", () => {
   })
 
   it("truncates very long titles in report", () => {
-    const stale = [{
-      number: 1,
-      title: "x".repeat(200),
-      url: "https://gh/repo/pull/1",
-      updatedAt: "2026-04-01",
-      daysStale: 20,
-    }]
+    const stale = [
+      {
+        number: 1,
+        title: "x".repeat(200),
+        url: "https://gh/repo/pull/1",
+        updatedAt: "2026-04-01",
+        daysStale: 20,
+      },
+    ]
     const out = formatStaleReport(stale, 7)
     expect(out).toMatch(/\+/) // truncate marker
   })

@@ -8,12 +8,12 @@
  */
 
 import type { PostflightScript } from "../executables/types.js"
-import { reduce, renderStateComment, writeTaskState, type Action, type TaskTarget, type TaskState } from "../state.js"
+import { type Action, reduce, renderStateComment, type TaskState, type TaskTarget, writeTaskState } from "../state.js"
 
 export const saveTaskState: PostflightScript = async (ctx, profile) => {
   const target = ctx.data.commentTargetType as TaskTarget | undefined
   const number = ctx.data.commentTargetNumber as number | undefined
-  const state = (ctx.data.taskState as TaskState | undefined)
+  const state = ctx.data.taskState as TaskState | undefined
   if (!target || !number || !state) return
 
   const executable = profile.name

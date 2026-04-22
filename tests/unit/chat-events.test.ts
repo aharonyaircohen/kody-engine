@@ -2,15 +2,8 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import {
-  FileSink,
-  HttpSink,
-  TeeSink,
-  eventsFilePath,
-  makeRunId,
-  withSessionParam,
-} from "../../src/chat/events.js"
 import type { ChatEvent } from "../../src/chat/events.js"
+import { eventsFilePath, FileSink, HttpSink, makeRunId, TeeSink, withSessionParam } from "../../src/chat/events.js"
 
 const EV: ChatEvent = {
   event: "chat.message",
@@ -58,7 +51,10 @@ describe("chat/events", () => {
   })
 
   it("HttpSink swallows non-2xx without throwing", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 500 })))
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("boom", { status: 500 })),
+    )
     const warn = vi.fn()
     const sink = new HttpSink("https://dash/ingest?token=x", "s1", { warn })
     await expect(sink.emit(EV)).resolves.toBeUndefined()
@@ -66,7 +62,12 @@ describe("chat/events", () => {
   })
 
   it("HttpSink swallows network errors without throwing", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("ECONNREFUSED") }))
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("ECONNREFUSED")
+      }),
+    )
     const warn = vi.fn()
     const sink = new HttpSink("https://dash/ingest?token=x", "s1", { warn })
     await expect(sink.emit(EV)).resolves.toBeUndefined()
@@ -76,8 +77,16 @@ describe("chat/events", () => {
   it("TeeSink emits to every child sink concurrently", async () => {
     const a: ChatEvent[] = []
     const b: ChatEvent[] = []
-    const sinkA = { emit: async (e: ChatEvent) => { a.push(e) } }
-    const sinkB = { emit: async (e: ChatEvent) => { b.push(e) } }
+    const sinkA = {
+      emit: async (e: ChatEvent) => {
+        a.push(e)
+      },
+    }
+    const sinkB = {
+      emit: async (e: ChatEvent) => {
+        b.push(e)
+      },
+    }
     const tee = new TeeSink([sinkA, sinkB])
     await tee.emit(EV)
     expect(a).toEqual([EV])

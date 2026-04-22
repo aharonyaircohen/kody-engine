@@ -156,24 +156,45 @@ export interface ParsedAgentResult {
   done: boolean
   commitMessage: string
   prSummary: string
+  feedbackActions: string
   failureReason: string
 }
 
 export function parseAgentResult(finalText: string): ParsedAgentResult {
   const text = (finalText || "").trim()
-  if (!text) return { done: false, commitMessage: "", prSummary: "", failureReason: "agent produced no final message" }
+  if (!text)
+    return {
+      done: false,
+      commitMessage: "",
+      prSummary: "",
+      feedbackActions: "",
+      failureReason: "agent produced no final message",
+    }
 
   const failedMatch = text.match(/(?:^|\n)\s*FAILED\s*:\s*(.+?)\s*$/s)
   if (failedMatch) {
-    return { done: false, commitMessage: "", prSummary: "", failureReason: failedMatch[1]!.trim() }
+    return { done: false, commitMessage: "", prSummary: "", feedbackActions: "", failureReason: failedMatch[1]!.trim() }
   }
 
   if (!/(^|\n)\s*DONE\b/i.test(text)) {
-    return { done: false, commitMessage: "", prSummary: "", failureReason: "no DONE or FAILED marker in agent output" }
+    return {
+      done: false,
+      commitMessage: "",
+      prSummary: "",
+      feedbackActions: "",
+      failureReason: "no DONE or FAILED marker in agent output",
+    }
   }
 
   const commitMatch = text.match(/^[ \t]*COMMIT_MSG\s*:\s*(.+)$/im)
   const commitMessage = commitMatch ? commitMatch[1]!.trim() : ""
+
+  // FEEDBACK_ACTIONS: spans from the marker to the next top-level marker (COMMIT_MSG or PR_SUMMARY).
+  const feedbackActions = extractBlock(
+    text,
+    /(?:^|\n)[ \t]*FEEDBACK_ACTIONS\s*:[ \t]*\n/i,
+    /(?:^|\n)[ \t]*(?:COMMIT_MSG|PR_SUMMARY)\s*:/i,
+  )
 
   // PR_SUMMARY: spans from the marker line to end-of-input (or to a closing ``` fence).
   const summaryStart = text.search(/(^|\n)[ \t]*PR_SUMMARY\s*:[ \t]*\n/i)
@@ -186,5 +207,14 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
       .trim()
   }
 
-  return { done: true, commitMessage, prSummary, failureReason: "" }
+  return { done: true, commitMessage, prSummary, feedbackActions, failureReason: "" }
+}
+
+function extractBlock(text: string, startMarker: RegExp, endMarker: RegExp): string {
+  const startIdx = text.search(startMarker)
+  if (startIdx === -1) return ""
+  const afterStart = text.slice(startIdx).replace(startMarker, "")
+  const endIdx = afterStart.search(endMarker)
+  const body = endIdx === -1 ? afterStart : afterStart.slice(0, endIdx)
+  return body.replace(/\n\s*```\s*$/g, "").trim()
 }

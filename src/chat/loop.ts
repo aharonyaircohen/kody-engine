@@ -58,15 +58,17 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   }
 
   const prompt = buildPrompt(turns, opts.systemPrompt ?? CHAT_SYSTEM_PROMPT)
-  const invoke = opts.invokeAgent ?? ((p: string) =>
-    runAgent({
-      prompt: p,
-      model: opts.model,
-      cwd: opts.cwd,
-      litellmUrl: opts.litellmUrl,
-      verbose: opts.verbose,
-      quiet: opts.quiet,
-    }))
+  const invoke =
+    opts.invokeAgent ??
+    ((p: string) =>
+      runAgent({
+        prompt: p,
+        model: opts.model,
+        cwd: opts.cwd,
+        litellmUrl: opts.litellmUrl,
+        verbose: opts.verbose,
+        quiet: opts.quiet,
+      }))
 
   let result: AgentResult
   try {
@@ -105,9 +107,7 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
 
 export function buildPrompt(turns: ChatTurn[], systemPrompt: string): string {
   const header = `System: ${systemPrompt}`
-  const body = turns
-    .map((t) => `${t.role === "user" ? "User" : "Assistant"}: ${t.content}`)
-    .join("\n\n")
+  const body = turns.map((t) => `${t.role === "user" ? "User" : "Assistant"}: ${t.content}`).join("\n\n")
   return `${header}\n\n${body}\n\nAssistant:`
 }
 

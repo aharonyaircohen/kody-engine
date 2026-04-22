@@ -50,7 +50,7 @@ export function appendTurn(file: string, turn: ChatTurn): void {
     timestamp: turn.timestamp,
     toolCalls: turn.toolCalls ?? [],
   })
-  fs.appendFileSync(file, line + "\n")
+  fs.appendFileSync(file, `${line}\n`)
 }
 
 /**

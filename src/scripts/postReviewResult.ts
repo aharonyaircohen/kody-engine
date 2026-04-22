@@ -32,7 +32,9 @@ export const postReviewResult: PostflightScript = async (ctx, _profile, agentRes
     const reason = agentResult?.error ?? "agent did not complete"
     try {
       postPrReviewComment(prNumber, `⚠️ kody2 review FAILED: ${truncate(reason, 1000)}`, ctx.cwd)
-    } catch { /* best effort */ }
+    } catch {
+      /* best effort */
+    }
     ctx.output.exitCode = 1
     ctx.output.reason = reason
     return
@@ -42,7 +44,9 @@ export const postReviewResult: PostflightScript = async (ctx, _profile, agentRes
   if (!reviewBody) {
     try {
       postPrReviewComment(prNumber, `⚠️ kody2 review FAILED: agent produced no review body`, ctx.cwd)
-    } catch { /* best effort */ }
+    } catch {
+      /* best effort */
+    }
     ctx.output.exitCode = 1
     ctx.output.reason = "empty review body"
     return
@@ -62,5 +66,7 @@ export const postReviewResult: PostflightScript = async (ctx, _profile, agentRes
   // FAIL is the only verdict that signals a blocking decision; PASS and
   // CONCERNS both exit 0 because the review is advisory.
   ctx.output.exitCode = verdict === "FAIL" ? 1 : 0
-  process.stdout.write(`\nREVIEW_POSTED=https://github.com/${ctx.config.github.owner}/${ctx.config.github.repo}/pull/${prNumber} (verdict: ${verdict})\n`)
+  process.stdout.write(
+    `\nREVIEW_POSTED=https://github.com/${ctx.config.github.owner}/${ctx.config.github.repo}/pull/${prNumber} (verdict: ${verdict})\n`,
+  )
 }

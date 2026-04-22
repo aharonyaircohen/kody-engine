@@ -51,8 +51,7 @@ function detectOwnerRepo(cwd: string): OwnerRepo | null {
   }
   // Match both SSH (git@github.com:owner/repo.git) and HTTPS
   // (https://github.com/owner/repo.git or .../repo).
-  const m =
-    url.match(/[:/]([^/:]+)\/([^/]+?)(?:\.git)?$/) ?? null
+  const m = url.match(/[:/]([^/:]+)\/([^/]+?)(?:\.git)?$/) ?? null
   if (!m) return null
   return { owner: m[1]!, repo: m[2]! }
 }
@@ -139,11 +138,13 @@ function defaultBranchFromGit(cwd: string): string {
     return ref.replace("refs/remotes/origin/", "")
   } catch {
     try {
-      return execFileSync("git", ["branch", "--show-current"], {
-        cwd,
-        encoding: "utf-8",
-        stdio: ["ignore", "pipe", "pipe"],
-      }).trim() || "main"
+      return (
+        execFileSync("git", ["branch", "--show-current"], {
+          cwd,
+          encoding: "utf-8",
+          stdio: ["ignore", "pipe", "pipe"],
+        }).trim() || "main"
+      )
     } catch {
       return "main"
     }
@@ -186,7 +187,7 @@ export function performInit(cwd: string, force: boolean): InitResult {
 
   // 3. .github/workflows/kody2-<name>.yml for every discovered scheduled executable.
   for (const exe of listExecutables()) {
-    let profile
+    let profile: ReturnType<typeof loadProfile>
     try {
       profile = loadProfile(exe.profilePath)
     } catch {

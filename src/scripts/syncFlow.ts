@@ -69,11 +69,7 @@ export const syncFlow: PreflightScript = async (ctx) => {
   ctx.output.reason = `merged origin/${baseBranch} into ${ctx.data.branch}`
   const runUrl = getRunUrl()
   const runSuffix = runUrl ? ` ([logs](${runUrl}))` : ""
-  tryPostPr(
-    prNumber,
-    `✅ kody2 sync: merged \`origin/${baseBranch}\` into \`${ctx.data.branch}\`${runSuffix}`,
-    ctx.cwd,
-  )
+  tryPostPr(prNumber, `✅ kody2 sync: merged \`origin/${baseBranch}\` into \`${ctx.data.branch}\`${runSuffix}`, ctx.cwd)
 }
 
 function bail(ctx: Parameters<PreflightScript>[0], prNumber: number, reason: string): void {

@@ -239,4 +239,29 @@ describe("prompt: parseAgentResult", () => {
     const result = parseAgentResult("DONE\nCOMMIT_MSG: feat: x\nPR_SUMMARY:\n- Added foo\n```")
     expect(result.prSummary).toBe("- Added foo")
   })
+
+  it("extracts FEEDBACK_ACTIONS block between marker and COMMIT_MSG", () => {
+    const text = [
+      "DONE",
+      "FEEDBACK_ACTIONS:",
+      '- Item 1: "cache per-request" — fixed: moved cache to module scope',
+      '- Item 2: "case-insensitive match" — fixed: switched to $regex i',
+      "COMMIT_MSG: fix: address review",
+      "PR_SUMMARY:",
+      "- Cache moved",
+      "- Case insensitive added",
+    ].join("\n")
+    const result = parseAgentResult(text)
+    expect(result.done).toBe(true)
+    expect(result.feedbackActions).toContain("Item 1")
+    expect(result.feedbackActions).toContain("Item 2")
+    expect(result.feedbackActions).not.toContain("COMMIT_MSG")
+    expect(result.prSummary).toBe("- Cache moved\n- Case insensitive added")
+  })
+
+  it("returns empty feedbackActions when block is absent", () => {
+    const result = parseAgentResult("DONE\nCOMMIT_MSG: feat: x\nPR_SUMMARY:\n- y")
+    expect(result.done).toBe(true)
+    expect(result.feedbackActions).toBe("")
+  })
 })

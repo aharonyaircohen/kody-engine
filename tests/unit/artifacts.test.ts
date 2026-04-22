@@ -2,11 +2,11 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
+import type { Context, Profile } from "../../src/executables/types.js"
 import { loadProfile } from "../../src/profile.js"
 import { persistArtifacts } from "../../src/scripts/persistArtifacts.js"
 import { resolveArtifacts } from "../../src/scripts/resolveArtifacts.js"
-import { emptyState, parseStateComment, renderStateComment, reduce, setArtifact, type Action } from "../../src/state.js"
-import type { Context, Profile } from "../../src/executables/types.js"
+import { type Action, emptyState, parseStateComment, reduce, renderStateComment, setArtifact } from "../../src/state.js"
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody2-artifacts-"))

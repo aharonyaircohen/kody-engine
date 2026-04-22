@@ -29,7 +29,7 @@ export class FileSink implements EventSink {
   constructor(private readonly file: string) {}
   async emit(event: ChatEvent): Promise<void> {
     fs.mkdirSync(path.dirname(this.file), { recursive: true })
-    fs.appendFileSync(this.file, JSON.stringify(event) + "\n")
+    fs.appendFileSync(this.file, `${JSON.stringify(event)}\n`)
   }
 }
 

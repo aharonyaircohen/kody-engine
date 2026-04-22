@@ -16,14 +16,7 @@ export const STATE_END = "<!-- kody2:state:v1:end -->"
 const HISTORY_MAX_ENTRIES = 20
 const API_TIMEOUT_MS = 30_000
 
-export type Phase =
-  | "research"
-  | "planning"
-  | "implementing"
-  | "reviewing"
-  | "shipped"
-  | "failed"
-  | "idle"
+export type Phase = "research" | "planning" | "implementing" | "reviewing" | "shipped" | "failed" | "idle"
 
 export type Status = "pending" | "running" | "succeeded" | "failed"
 
@@ -122,9 +115,10 @@ export function findStateComment(
   number: number,
   cwd?: string,
 ): { id: string; body: string } | null {
-  const apiPath = target === "issue"
-    ? `repos/{owner}/{repo}/issues/${number}/comments`
-    : `repos/{owner}/{repo}/issues/${number}/comments`
+  const apiPath =
+    target === "issue"
+      ? `repos/{owner}/{repo}/issues/${number}/comments`
+      : `repos/{owner}/{repo}/issues/${number}/comments`
   try {
     const raw = gh(["api", "--paginate", apiPath], undefined, cwd)
     const list = JSON.parse(raw) as Array<{ id: number; body: string }>
@@ -133,7 +127,9 @@ export function findStateComment(
         return { id: String(c.id), body: c.body }
       }
     }
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
   return null
 }
 
@@ -221,17 +217,19 @@ export function renderStateComment(state: TaskState): string {
   lines.push(STATE_BEGIN)
   lines.push("")
   lines.push("```json")
-  lines.push(JSON.stringify(
-    {
-      schemaVersion: state.schemaVersion,
-      core: state.core,
-      artifacts: state.artifacts ?? {},
-      executables: state.executables,
-      history: state.history,
-    },
-    null,
-    2,
-  ))
+  lines.push(
+    JSON.stringify(
+      {
+        schemaVersion: state.schemaVersion,
+        core: state.core,
+        artifacts: state.artifacts ?? {},
+        executables: state.executables,
+        history: state.history,
+      },
+      null,
+      2,
+    ),
+  )
   lines.push("```")
   lines.push("")
   lines.push(STATE_END)
@@ -285,21 +283,12 @@ export function setArtifact(state: TaskState, name: string, artifact: Artifact):
   }
 }
 
-export function writeTaskState(
-  target: TaskTarget,
-  number: number,
-  state: TaskState,
-  cwd?: string,
-): void {
+export function writeTaskState(target: TaskTarget, number: number, state: TaskState, cwd?: string): void {
   const body = renderStateComment(state)
   const existing = findStateComment(target, number, cwd)
   try {
     if (existing) {
-      gh(
-        ["api", `repos/{owner}/{repo}/issues/comments/${existing.id}`, "-X", "PATCH", "-F", "body=@-"],
-        body,
-        cwd,
-      )
+      gh(["api", `repos/{owner}/{repo}/issues/comments/${existing.id}`, "-X", "PATCH", "-F", "body=@-"], body, cwd)
     } else {
       const sub = target === "issue" ? "issue" : "pr"
       gh([sub, "comment", String(number), "--body-file", "-"], body, cwd)

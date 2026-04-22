@@ -6,9 +6,12 @@ vi.mock("../../src/issue.js", () => ({
   truncate: (s: string) => s,
 }))
 
-import { postIssueComment as ghPostIssueComment, postPrReviewComment as ghPostPrReviewComment } from "../../src/issue.js"
-import { postIssueComment } from "../../src/scripts/postIssueComment.js"
 import type { Context, Profile } from "../../src/executables/types.js"
+import {
+  postIssueComment as ghPostIssueComment,
+  postPrReviewComment as ghPostPrReviewComment,
+} from "../../src/issue.js"
+import { postIssueComment } from "../../src/scripts/postIssueComment.js"
 
 const profile = {} as Profile
 

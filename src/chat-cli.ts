@@ -18,16 +18,12 @@
 import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { FileSink, HttpSink, TeeSink, eventsFilePath, makeRunId } from "./chat/events.js"
 import type { EventSink } from "./chat/events.js"
+import { eventsFilePath, FileSink, HttpSink, makeRunId, TeeSink } from "./chat/events.js"
 import { runChatTurn } from "./chat/loop.js"
-import { sessionFilePath, seedInitialMessage } from "./chat/session.js"
-import {
-  configureGitIdentity,
-  resolveAuthToken,
-  unpackAllSecrets,
-} from "./kody2-cli.js"
+import { seedInitialMessage, sessionFilePath } from "./chat/session.js"
 import { loadConfig, parseProviderModel } from "./config.js"
+import { configureGitIdentity, resolveAuthToken, unpackAllSecrets } from "./kody2-cli.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 
 const DEFAULT_MODEL = "claude/claude-haiku-4-5-20251001"

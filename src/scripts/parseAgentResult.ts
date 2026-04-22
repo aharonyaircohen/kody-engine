@@ -18,6 +18,7 @@ export const parseAgentResult: PostflightScript = async (ctx, profile, agentResu
   ctx.data.agentDone = parsed.done
   ctx.data.commitMessage = parsed.commitMessage
   ctx.data.prSummary = parsed.prSummary
+  ctx.data.feedbackActions = parsed.feedbackActions
   ctx.data.agentFailureReason = parsed.failureReason
   ctx.data.agentOutcome = agentResult.outcome
   ctx.data.agentError = agentResult.error

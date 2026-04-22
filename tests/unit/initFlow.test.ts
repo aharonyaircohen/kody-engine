@@ -1,8 +1,8 @@
-import { describe, it, expect, afterEach } from "vitest"
+import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { execFileSync } from "node:child_process"
+import { afterEach, describe, expect, it } from "vitest"
 import { performInit } from "../../src/scripts/initFlow.js"
 
 function mkRepo(opts: { lockFile?: "pnpm-lock.yaml" | "yarn.lock" | "bun.lockb"; gitInit?: boolean } = {}): string {
@@ -10,14 +10,18 @@ function mkRepo(opts: { lockFile?: "pnpm-lock.yaml" | "yarn.lock" | "bun.lockb";
   if (opts.lockFile) fs.writeFileSync(path.join(dir, opts.lockFile), "")
   if (opts.gitInit) {
     execFileSync("git", ["init", "--initial-branch=main", "--quiet", dir], { stdio: "pipe" })
-    execFileSync("git", ["-C", dir, "remote", "add", "origin", "https://github.com/ACME/widgets.git"], { stdio: "pipe" })
+    execFileSync("git", ["-C", dir, "remote", "add", "origin", "https://github.com/ACME/widgets.git"], {
+      stdio: "pipe",
+    })
   }
   return dir
 }
 
 describe("initFlow: performInit", () => {
   let dir: string
-  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }) })
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
 
   it("writes core files + scheduled workflows on a clean repo", () => {
     dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })

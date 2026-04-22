@@ -1,13 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import {
-  hasExecutable,
-  isSafeName,
-  listExecutables,
-  parseGenericFlags,
-} from "../../src/registry.js"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { hasExecutable, isSafeName, listExecutables, parseGenericFlags } from "../../src/registry.js"
 
 function mkFixture(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody2-registry-"))
@@ -40,8 +35,12 @@ describe("registry: isSafeName", () => {
 describe("registry: listExecutables", () => {
   let root: string
 
-  beforeEach(() => { root = mkFixture() })
-  afterEach(() => { fs.rmSync(root, { recursive: true, force: true }) })
+  beforeEach(() => {
+    root = mkFixture()
+  })
+  afterEach(() => {
+    fs.rmSync(root, { recursive: true, force: true })
+  })
 
   it("returns empty when root has no executables", () => {
     expect(listExecutables(root)).toEqual([])
@@ -79,8 +78,12 @@ describe("registry: listExecutables", () => {
 
 describe("registry: hasExecutable", () => {
   let root: string
-  beforeEach(() => { root = mkFixture() })
-  afterEach(() => { fs.rmSync(root, { recursive: true, force: true }) })
+  beforeEach(() => {
+    root = mkFixture()
+  })
+  afterEach(() => {
+    fs.rmSync(root, { recursive: true, force: true })
+  })
 
   it("true when the profile exists", () => {
     writeProfile(root, "review", {})

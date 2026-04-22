@@ -1,7 +1,7 @@
-import { describe, it, expect, afterEach } from "vitest"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
+import { afterEach, describe, expect, it } from "vitest"
 import { loadProfile, ProfileError } from "../../src/profile.js"
 import { renderScheduledWorkflow } from "../../src/scripts/initFlow.js"
 
@@ -21,7 +21,11 @@ const VALID_BASE = {
     permissionMode: "default",
     tools: [],
     hooks: [],
-    skills: [], commands: [], subagents: [], plugins: [], mcpServers: [],
+    skills: [],
+    commands: [],
+    subagents: [],
+    plugins: [],
+    mcpServers: [],
   },
   cliTools: [],
   scripts: { preflight: [], postflight: [] },
@@ -29,7 +33,9 @@ const VALID_BASE = {
 
 describe("profile: kind / schedule", () => {
   let p: string
-  afterEach(() => { fs.rmSync(path.dirname(p), { recursive: true, force: true }) })
+  afterEach(() => {
+    fs.rmSync(path.dirname(p), { recursive: true, force: true })
+  })
 
   it("defaults to kind=oneshot when omitted", () => {
     p = writeProfile(VALID_BASE)

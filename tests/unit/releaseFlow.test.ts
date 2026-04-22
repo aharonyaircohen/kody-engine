@@ -1,14 +1,9 @@
-import { describe, it, expect, afterEach } from "vitest"
+import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { execFileSync } from "node:child_process"
-import {
-  bumpVersion,
-  generateChangelog,
-  prependChangelog,
-  updateVersionInFile,
-} from "../../src/scripts/releaseFlow.js"
+import { afterEach, describe, expect, it } from "vitest"
+import { bumpVersion, generateChangelog, prependChangelog, updateVersionInFile } from "../../src/scripts/releaseFlow.js"
 
 function tmp(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody2-release-"))
@@ -30,7 +25,9 @@ describe("release: bumpVersion", () => {
 
 describe("release: updateVersionInFile", () => {
   let dir: string
-  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }) })
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
 
   it("updates the first version string in JSON", () => {
     dir = tmp()
@@ -54,7 +51,9 @@ describe("release: updateVersionInFile", () => {
 
 describe("release: generateChangelog", () => {
   let dir: string
-  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }) })
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
 
   it("groups conventional commits by type", () => {
     dir = tmp()
@@ -104,7 +103,9 @@ describe("release: generateChangelog", () => {
 
 describe("release: prependChangelog", () => {
   let dir: string
-  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }) })
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
 
   it("creates CHANGELOG.md with header when absent", () => {
     dir = tmp()

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest"
 import {
+  type Action,
   emptyState,
   parseStateComment,
   reduce,
   renderStateComment,
   STATE_BEGIN,
   STATE_END,
-  type Action,
 } from "../../src/state.js"
 
 describe("state: emptyState", () => {

@@ -24,9 +24,14 @@ export function bumpVersion(current: string, bump: BumpType): string {
   const m = current.match(/^(\d+)\.(\d+)\.(\d+)(.*)$/)
   if (!m) throw new Error(`cannot parse version '${current}' (expected x.y.z[-suffix])`)
   let [major, minor, patch] = [parseInt(m[1]!, 10), parseInt(m[2]!, 10), parseInt(m[3]!, 10)]
-  if (bump === "major") { major++; minor = 0; patch = 0 }
-  else if (bump === "minor") { minor++; patch = 0 }
-  else patch++
+  if (bump === "major") {
+    major++
+    minor = 0
+    patch = 0
+  } else if (bump === "minor") {
+    minor++
+    patch = 0
+  } else patch++
   return `${major}.${minor}.${patch}`
 }
 
@@ -50,14 +55,22 @@ export function generateChangelog(cwd: string, newVersion: string, lastTag: stri
   let log = ""
   try {
     log = execFileSync("git", ["log", range, "--pretty=format:%s||%h", "--no-merges"], {
-      cwd, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"],
+      cwd,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "pipe"],
     }).trim()
-  } catch { /* no commits or no tags */ }
+  } catch {
+    /* no commits or no tags */
+  }
 
-  const commits = log.split("\n").filter((l) => l.length > 0).map((line) => {
-    const [subject, sha] = line.split("||")
-    return { subject: subject ?? "", sha: sha ?? "" }
-  }).filter((c) => !/^chore:\s*release\s+v\d/i.test(c.subject))
+  const commits = log
+    .split("\n")
+    .filter((l) => l.length > 0)
+    .map((line) => {
+      const [subject, sha] = line.split("||")
+      return { subject: subject ?? "", sha: sha ?? "" }
+    })
+    .filter((c) => !/^chore:\s*release\s+v\d/i.test(c.subject))
 
   const groups: Record<string, string[]> = { feat: [], fix: [], perf: [], refactor: [], docs: [], chore: [], other: [] }
   for (const c of commits) {
@@ -109,7 +122,9 @@ export function prependChangelog(cwd: string, entry: string): void {
 
 function git(args: string[], cwd: string, timeout = 60_000): string {
   return execFileSync("git", args, {
-    encoding: "utf-8", timeout, cwd,
+    encoding: "utf-8",
+    timeout,
+    cwd,
     env: { ...process.env, HUSKY: "0", SKIP_HOOKS: "1" },
     stdio: ["pipe", "pipe", "pipe"],
   }).trim()
@@ -118,14 +133,18 @@ function git(args: string[], cwd: string, timeout = 60_000): string {
 function lastReleaseTag(cwd: string): string | null {
   try {
     return git(["describe", "--tags", "--abbrev=0", "--match", "v*"], cwd)
-  } catch { return null }
+  } catch {
+    return null
+  }
 }
 
 function runShell(cmd: string, cwd: string, timeoutMs: number): { exitCode: number; stdout: string; stderr: string } {
   const r = spawnSync(cmd, {
-    cwd, shell: true,
+    cwd,
+    shell: true,
     env: { ...process.env, HUSKY: "0", SKIP_HOOKS: "1", CI: process.env.CI ?? "1" },
-    encoding: "utf-8", timeout: timeoutMs,
+    encoding: "utf-8",
+    timeout: timeoutMs,
   })
   return { exitCode: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" }
 }
@@ -136,7 +155,8 @@ export const releaseFlow: PreflightScript = async (ctx) => {
   const dryRun = ctx.args["dry-run"] === true || ctx.args.dryRun === true
   const cwd = ctx.cwd
   const releaseCfg = ctx.config.release ?? {}
-  const versionFiles = releaseCfg.versionFiles && releaseCfg.versionFiles.length > 0 ? releaseCfg.versionFiles : ["package.json"]
+  const versionFiles =
+    releaseCfg.versionFiles && releaseCfg.versionFiles.length > 0 ? releaseCfg.versionFiles : ["package.json"]
   const timeoutMs = releaseCfg.timeoutMs ?? 600_000
 
   ctx.skipAgent = true
@@ -227,10 +247,10 @@ async function runPrepare(args: PrepareArgs): Promise<void> {
   const body = `Automated release PR opened by kody2.\n\n${entry}\n\nMerge this and then run \`kody2 release --mode finalize\`.`
   let prUrl = ""
   try {
-    prUrl = gh(
-      ["pr", "create", "--head", releaseBranch, "--base", base, "--title", title, "--body-file", "-"],
-      { input: body, cwd },
-    ).trim()
+    prUrl = gh(["pr", "create", "--head", releaseBranch, "--base", base, "--title", title, "--body-file", "-"], {
+      input: body,
+      cwd,
+    }).trim()
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     ctx.output.exitCode = 4
@@ -275,7 +295,9 @@ async function runFinalize(args: FinalizeArgs): Promise<void> {
     ctx.output.exitCode = 1
     ctx.output.reason = `release finalize: tag ${tag} already exists`
     return
-  } catch { /* good — tag doesn't exist */ }
+  } catch {
+    /* good — tag doesn't exist */
+  }
 
   if (dryRun) {
     ctx.output.exitCode = 0
@@ -321,15 +343,13 @@ async function runFinalize(args: FinalizeArgs): Promise<void> {
   // GitHub release.
   let releaseUrl = ""
   try {
-    const releaseArgs = [
-      "release", "create", tag,
-      "--title", tag,
-      "--notes", `Release ${tag} — automated by kody2.`,
-    ]
+    const releaseArgs = ["release", "create", tag, "--title", tag, "--notes", `Release ${tag} — automated by kody2.`]
     if (releaseCfg.draftRelease) releaseArgs.push("--draft")
     releaseUrl = gh(releaseArgs, { cwd }).trim()
   } catch (err) {
-    process.stderr.write(`[kody2 release] gh release create failed: ${err instanceof Error ? err.message : String(err)}\n`)
+    process.stderr.write(
+      `[kody2 release] gh release create failed: ${err instanceof Error ? err.message : String(err)}\n`,
+    )
   }
 
   // Optional notify.

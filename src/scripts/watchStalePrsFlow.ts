@@ -25,9 +25,7 @@ function readWatchConfig(ctx: Parameters<PreflightScript>[0]): WatchConfig {
   return {
     staleDays: typeof r.staleDays === "number" && r.staleDays > 0 ? Math.floor(r.staleDays) : undefined,
     reportIssueNumber:
-      typeof r.reportIssueNumber === "number" && r.reportIssueNumber > 0
-        ? Math.floor(r.reportIssueNumber)
-        : undefined,
+      typeof r.reportIssueNumber === "number" && r.reportIssueNumber > 0 ? Math.floor(r.reportIssueNumber) : undefined,
   }
 }
 
@@ -42,15 +40,7 @@ interface StalePr {
 export function findStalePrs(cwd: string, staleDays: number, now: Date = new Date()): StalePr[] {
   let raw = ""
   try {
-    raw = gh(
-      [
-        "pr", "list",
-        "--state", "open",
-        "--limit", "100",
-        "--json", "number,title,url,updatedAt",
-      ],
-      { cwd },
-    )
+    raw = gh(["pr", "list", "--state", "open", "--limit", "100", "--json", "number,title,url,updatedAt"], { cwd })
   } catch {
     return []
   }
@@ -101,7 +91,9 @@ export const watchStalePrsFlow: PreflightScript = async (ctx) => {
     try {
       postIssueComment(reportIssueNumber, report, ctx.cwd)
     } catch (err) {
-      process.stderr.write(`[kody2 watch] failed to post to issue #${reportIssueNumber}: ${err instanceof Error ? err.message : String(err)}\n`)
+      process.stderr.write(
+        `[kody2 watch] failed to post to issue #${reportIssueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
+      )
     }
   }
 
