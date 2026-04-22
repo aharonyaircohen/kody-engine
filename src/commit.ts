@@ -10,7 +10,7 @@ const FORBIDDEN_PATH_PREFIXES = [
   "build/",
 ]
 
-const FORBIDDEN_PATH_EXACT = new Set([".env"])
+const FORBIDDEN_PATH_EXACT = new Set([".env", ".kody2-pip-requirements.txt"])
 const FORBIDDEN_PATH_SUFFIXES = [".log"]
 
 const CONVENTIONAL_PREFIXES = [
