@@ -124,6 +124,26 @@ export function listChangedFiles(cwd?: string): string[] {
   return entries.map((e) => e.slice(3)).filter(Boolean)
 }
 
+/**
+ * Files modified in a specific commit (default HEAD). Unlike listChangedFiles
+ * this works AFTER commit — the working tree is clean, but the commit still
+ * names its files. Used by postflights that need to know what the agent
+ * actually committed (e.g. verifyFixAlignment checking review-named files).
+ */
+export function listFilesInCommit(ref: string = "HEAD", cwd?: string): string[] {
+  try {
+    const raw = execFileSync("git", ["show", "--name-only", "--pretty=format:", "-z", ref], {
+      encoding: "utf-8",
+      cwd,
+      env: { ...process.env, HUSKY: "0", SKIP_HOOKS: "1" },
+      stdio: ["pipe", "pipe", "pipe"],
+    })
+    return raw.split("\0").map((s) => s.trim()).filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
 export function normalizeCommitMessage(raw: string): string {
   const trimmed = raw
     .trim()

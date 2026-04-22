@@ -7,6 +7,7 @@ vi.mock("../../src/commit.js", () => ({
   hasCommitsAhead: () => false,
   isForbiddenPath: () => false,
   listChangedFiles: () => [],
+  listFilesInCommit: () => [],
 }))
 
 import type { Profile } from "../../src/executables/types.js"
