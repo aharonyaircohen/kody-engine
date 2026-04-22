@@ -80,9 +80,11 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     expect(profile.scripts.preflight[0]!.script).toBe("runFlow")
     expect(profile.scripts.preflight[0]!.runWhen).toBeUndefined()
     const names = profile.scripts.postflight.map((p) => p.script)
-    // saveTaskState writes issue state; mirrorStateToPr propagates it to the PR.
+    // saveTaskState writes issue state, mirrorStateToPr propagates it to the
+    // PR, advanceFlow re-triggers the orchestrator if a flow is active.
     expect(names).toContain("saveTaskState")
-    expect(names.at(-1)).toBe("mirrorStateToPr")
+    expect(names).toContain("mirrorStateToPr")
+    expect(names.at(-1)).toBe("advanceFlow")
   })
 
   it("fix profile loads cleanly", () => {

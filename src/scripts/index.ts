@@ -5,11 +5,14 @@
  */
 
 import type { PostflightScript, PreflightScript } from "../executables/types.js"
+import { advanceFlow } from "./advanceFlow.js"
 import { buildSyntheticPlugin } from "./buildSyntheticPlugin.js"
 import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
 import { commitAndPush } from "./commitAndPush.js"
 import { composePrompt } from "./composePrompt.js"
+import { dispatch } from "./dispatch.js"
 import { ensurePr } from "./ensurePr.js"
+import { finishFlow } from "./finishFlow.js"
 import { fixCiFlow } from "./fixCiFlow.js"
 import { fixFlow } from "./fixFlow.js"
 import { initFlow } from "./initFlow.js"
@@ -33,6 +36,7 @@ import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
 import { saveTaskState } from "./saveTaskState.js"
 import { skipAgent } from "./skipAgent.js"
+import { startFlow } from "./startFlow.js"
 import { syncFlow } from "./syncFlow.js"
 import { verify } from "./verify.js"
 import { watchStalePrsFlow } from "./watchStalePrsFlow.js"
@@ -74,6 +78,10 @@ export const postflightScripts: Record<string, PostflightScript> = {
   writeRunSummary,
   saveTaskState,
   mirrorStateToPr,
+  startFlow,
+  dispatch,
+  finishFlow,
+  advanceFlow,
 }
 
 export const allScriptNames: Set<string> = new Set([

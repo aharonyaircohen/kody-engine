@@ -46,6 +46,24 @@ export interface TaskState {
    */
   artifacts: Record<string, Artifact>
   history: HistoryEntry[]
+  /**
+   * Optional multi-executable flow context. Set by `startFlow`, cleared by
+   * `finishFlow`. Each child's `advanceFlow` postflight reads this to know
+   * whether to re-trigger the orchestrator. Absence means "no flow in
+   * progress" — children run standalone and advanceFlow is a no-op.
+   */
+  flow?: FlowState
+}
+
+export interface FlowState {
+  /** Flow definition name, e.g. "plan-build-review". */
+  name: string
+  /** Most recent child the orchestrator dispatched. */
+  step: string
+  /** Issue number where the flow was started — orchestrator's home. */
+  issueNumber: number
+  /** ISO timestamp of startFlow. */
+  startedAt: string
 }
 
 export interface Artifact {
@@ -157,6 +175,7 @@ export function parseStateComment(body: string): TaskState {
       executables: parsed.executables ?? {},
       artifacts: parsed.artifacts && typeof parsed.artifacts === "object" ? parsed.artifacts : {},
       history: Array.isArray(parsed.history) ? parsed.history : [],
+      flow: parsed.flow,
     }
   } catch {
     return emptyState()
@@ -190,6 +209,7 @@ export function reduce(state: TaskState, executable: string, action: Action | nu
     executables: newExecutables,
     artifacts: { ...(state.artifacts ?? {}) },
     history: newHistory,
+    flow: state.flow,
   }
 }
 
@@ -231,6 +251,7 @@ export function renderStateComment(state: TaskState): string {
         artifacts: state.artifacts ?? {},
         executables: state.executables,
         history: state.history,
+        ...(state.flow ? { flow: state.flow } : {}),
       },
       null,
       2,

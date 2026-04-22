@@ -83,6 +83,9 @@
       },
       {
         "script": "saveTaskState"
+      },
+      {
+        "script": "advanceFlow"
       }
     ]
   },

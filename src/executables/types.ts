@@ -140,6 +140,12 @@ export interface ScriptEntry {
    * The script runs only when every key matches. Missing `runWhen` = always.
    */
   runWhen?: Record<string, string | number | boolean | Array<string | number | boolean>>
+  /**
+   * Optional per-call arguments passed to the script as the last positional
+   * parameter. Used by the orchestrator's transition table so the same
+   * dispatcher script can be reused with different `next` targets.
+   */
+  with?: Record<string, string | number | boolean>
 }
 
 export interface OutputContract {
@@ -183,9 +189,16 @@ export interface Context {
 // Script signatures. Two phases, two contracts.
 // ────────────────────────────────────────────────────────────────────────────
 
-export type PreflightScript = (ctx: Context, profile: Profile) => Promise<void>
+export type ScriptArgs = Record<string, string | number | boolean>
 
-export type PostflightScript = (ctx: Context, profile: Profile, agentResult: AgentResult | null) => Promise<void>
+export type PreflightScript = (ctx: Context, profile: Profile, args?: ScriptArgs) => Promise<void>
+
+export type PostflightScript = (
+  ctx: Context,
+  profile: Profile,
+  agentResult: AgentResult | null,
+  args?: ScriptArgs,
+) => Promise<void>
 
 /** A registered script may be either phase; registry looks it up by name. */
 export type AnyScript = PreflightScript | PostflightScript

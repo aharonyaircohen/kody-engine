@@ -148,7 +148,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       if (!shouldRun(entry, ctx)) continue
       const fn = preflightScripts[entry.script]
       if (!fn) return finish({ exitCode: 99, reason: `preflight script not registered: ${entry.script}` })
-      await fn(ctx, profile)
+      await fn(ctx, profile, entry.with)
       if (ctx.skipAgent && ctx.output.exitCode !== undefined && ctx.output.exitCode !== 0) {
         // Hard bail from preflight (e.g. uncommitted-changes refusal).
         return finish(ctx.output)
@@ -171,7 +171,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       const fn = postflightScripts[entry.script]
       if (!fn) return finish({ exitCode: 99, reason: `postflight script not registered: ${entry.script}` })
       try {
-        await fn(ctx, profile, agentResult)
+        await fn(ctx, profile, agentResult, entry.with)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         process.stderr.write(`[kody2] postflight script "${entry.script}" crashed: ${msg}\n`)
