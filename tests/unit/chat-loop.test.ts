@@ -1,10 +1,7 @@
-import * as fs from "node:fs"
-import * as os from "node:os"
-import * as path from "node:path"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { ChatEvent, EventSink } from "../../src/chat/events.js"
-import { buildPrompt, CHAT_SYSTEM_PROMPT, runChatTurn } from "../../src/chat/loop.js"
-import { appendTurn, readSession } from "../../src/chat/session.js"
+import { buildPrompt, CHAT_SYSTEM_PROMPT, runChatSession } from "../../src/chat/loop.js"
+import type { PullFn } from "../../src/chat/loop.js"
 
 class MemSink implements EventSink {
   events: ChatEvent[] = []
@@ -15,17 +12,17 @@ class MemSink implements EventSink {
 
 const MODEL = { provider: "anthropic", model: "claude-haiku-4-5-20251001" }
 
-describe("chat/loop", () => {
-  let tmp: string
+function makePull(script: Array<{ turns: Array<{ role: "user" | "assistant"; content: string; timestamp: string }>; nextSince: number }>): PullFn {
+  let i = 0
+  return async (_since: number, _timeoutMs: number) => {
+    const next = script[i] ?? { turns: [], nextSince: script[script.length - 1]?.nextSince ?? 0 }
+    i++
+    return next
+  }
+}
 
-  beforeEach(() => {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody2-chat-loop-"))
-  })
-  afterEach(() => {
-    fs.rmSync(tmp, { recursive: true, force: true })
-  })
-
-  it("buildPrompt interleaves turns and tags assistant as the next speaker", () => {
+describe("chat/loop buildPrompt", () => {
+  it("interleaves turns and tags assistant as the next speaker", () => {
     const prompt = buildPrompt(
       [
         { role: "user", content: "hi", timestamp: "t1" },
@@ -40,104 +37,97 @@ describe("chat/loop", () => {
     expect(prompt).toContain("User: what now?")
     expect(prompt.endsWith("Assistant:")).toBe(true)
   })
+})
 
-  it("emits chat.error and returns 64 when session is empty", async () => {
-    const sessionFile = path.join(tmp, "s.jsonl")
-    const sink = new MemSink()
-    const res = await runChatTurn({
-      sessionId: "s1",
-      sessionFile,
-      cwd: tmp,
-      model: MODEL,
-      litellmUrl: null,
-      sink,
-      invokeAgent: async () => {
-        throw new Error("should not run agent on empty session")
-      },
-    })
-    expect(res.exitCode).toBe(64)
-    expect(sink.events.map((e) => e.event)).toEqual(["chat.error"])
+describe("runChatSession", () => {
+  let nowMs = 1_000_000
+
+  beforeEach(() => {
+    nowMs = 1_000_000
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
-  it("emits chat.error and returns 64 when last turn is assistant", async () => {
-    const sessionFile = path.join(tmp, "s.jsonl")
-    appendTurn(sessionFile, { role: "user", content: "hi", timestamp: "t1" })
-    appendTurn(sessionFile, { role: "assistant", content: "hello", timestamp: "t2" })
+  it("processes a user turn, emits chat.message, and exits on idle timeout", async () => {
     const sink = new MemSink()
-    const res = await runChatTurn({
-      sessionId: "s1",
-      sessionFile,
-      cwd: tmp,
-      model: MODEL,
-      litellmUrl: null,
-      sink,
-      invokeAgent: async () => {
-        throw new Error("should not run agent when assistant already replied")
-      },
-    })
-    expect(res.exitCode).toBe(64)
-    expect(sink.events.map((e) => e.event)).toEqual(["chat.error"])
-  })
+    const pull = makePull([
+      { turns: [{ role: "user", content: "hi", timestamp: "t1" }], nextSince: 1 },
+      { turns: [], nextSince: 1 },
+      { turns: [], nextSince: 1 }, // idle timeout elapses during this poll
+    ])
 
-  it("runs the agent, appends reply, emits message + done", async () => {
-    const sessionFile = path.join(tmp, "s.jsonl")
-    appendTurn(sessionFile, { role: "user", content: "hi", timestamp: "t1" })
-    const sink = new MemSink()
-    const res = await runChatTurn({
+    const result = await runChatSession({
       sessionId: "s1",
-      sessionFile,
-      cwd: tmp,
+      cwd: "/tmp",
       model: MODEL,
       litellmUrl: null,
       sink,
+      pull,
+      idleTimeoutMs: 500,
+      now: () => {
+        const current = nowMs
+        nowMs += 1000 // advance 1s per now() call
+        return current
+      },
       invokeAgent: async () => ({
         outcome: "completed",
         finalText: "  hello back  ",
         ndjsonPath: "/tmp/x.jsonl",
       }),
     })
-    expect(res.exitCode).toBe(0)
-    expect(res.reply).toBe("hello back")
-    const turns = readSession(sessionFile)
-    expect(turns).toHaveLength(2)
-    expect(turns[1]?.role).toBe("assistant")
-    expect(turns[1]?.content).toBe("hello back")
-    expect(sink.events.map((e) => e.event)).toEqual(["chat.message", "chat.done"])
-    expect(sink.events[0]?.payload.content).toBe("hello back")
+
+    expect(result.exitCode).toBe(0)
+    expect(result.turnsProcessed).toBe(1)
+    expect(result.reason).toBe("idle-timeout")
+    const types = sink.events.map((e) => e.event)
+    expect(types).toContain("chat.message")
+    expect(types).toContain("chat.done")
+    const msg = sink.events.find((e) => e.event === "chat.message")
+    expect(msg?.payload.content).toBe("hello back")
+    expect(msg?.payload.role).toBe("assistant")
   })
 
   it("emits chat.error and returns 99 when agent throws", async () => {
-    const sessionFile = path.join(tmp, "s.jsonl")
-    appendTurn(sessionFile, { role: "user", content: "hi", timestamp: "t1" })
     const sink = new MemSink()
-    const res = await runChatTurn({
+    const pull = makePull([
+      { turns: [{ role: "user", content: "hi", timestamp: "t1" }], nextSince: 1 },
+    ])
+
+    const result = await runChatSession({
       sessionId: "s1",
-      sessionFile,
-      cwd: tmp,
+      cwd: "/tmp",
       model: MODEL,
       litellmUrl: null,
       sink,
+      pull,
+      idleTimeoutMs: 10_000,
+      now: () => nowMs,
       invokeAgent: async () => {
         throw new Error("model exploded")
       },
     })
-    expect(res.exitCode).toBe(99)
+
+    expect(result.exitCode).toBe(99)
     expect(sink.events.map((e) => e.event)).toEqual(["chat.error"])
     expect(sink.events[0]?.payload.error).toBe("model exploded")
-    expect(readSession(sessionFile)).toHaveLength(1)
   })
 
   it("emits chat.error and returns 99 when agent reports failed outcome", async () => {
-    const sessionFile = path.join(tmp, "s.jsonl")
-    appendTurn(sessionFile, { role: "user", content: "hi", timestamp: "t1" })
     const sink = new MemSink()
-    const res = await runChatTurn({
+    const pull = makePull([
+      { turns: [{ role: "user", content: "hi", timestamp: "t1" }], nextSince: 1 },
+    ])
+
+    const result = await runChatSession({
       sessionId: "s1",
-      sessionFile,
-      cwd: tmp,
+      cwd: "/tmp",
       model: MODEL,
       litellmUrl: null,
       sink,
+      pull,
+      idleTimeoutMs: 10_000,
+      now: () => nowMs,
       invokeAgent: async () => ({
         outcome: "failed",
         finalText: "",
@@ -145,7 +135,102 @@ describe("chat/loop", () => {
         ndjsonPath: "/tmp/x.jsonl",
       }),
     })
-    expect(res.exitCode).toBe(99)
+
+    expect(result.exitCode).toBe(99)
     expect(sink.events[0]?.payload.error).toBe("rate limited")
+  })
+
+  it("emits chat.error and returns 99 when pull throws", async () => {
+    const sink = new MemSink()
+    const pull: PullFn = async () => {
+      throw new Error("ECONNREFUSED")
+    }
+
+    const result = await runChatSession({
+      sessionId: "s1",
+      cwd: "/tmp",
+      model: MODEL,
+      litellmUrl: null,
+      sink,
+      pull,
+      now: () => nowMs,
+      invokeAgent: async () => ({
+        outcome: "completed",
+        finalText: "x",
+        ndjsonPath: "/tmp/x.jsonl",
+      }),
+    })
+
+    expect(result.exitCode).toBe(99)
+    expect(sink.events[0]?.event).toBe("chat.error")
+    expect(String(sink.events[0]?.payload.error)).toContain("pull failed")
+  })
+
+  it("processes multiple turns sequentially and tracks turnsProcessed", async () => {
+    const sink = new MemSink()
+    let callIdx = 0
+    const pull: PullFn = async () => {
+      callIdx++
+      if (callIdx === 1) return { turns: [{ role: "user", content: "m1", timestamp: "t1" }], nextSince: 1 }
+      if (callIdx === 2) return { turns: [{ role: "user", content: "m2", timestamp: "t2" }], nextSince: 2 }
+      return { turns: [], nextSince: 2 } // triggers idle exit on subsequent calls
+    }
+
+    const replies = ["reply1", "reply2"]
+    let replyIdx = 0
+
+    const result = await runChatSession({
+      sessionId: "s1",
+      cwd: "/tmp",
+      model: MODEL,
+      litellmUrl: null,
+      sink,
+      pull,
+      idleTimeoutMs: 500,
+      now: () => {
+        const current = nowMs
+        nowMs += 1000
+        return current
+      },
+      invokeAgent: async () => ({
+        outcome: "completed",
+        finalText: replies[replyIdx++] ?? "fallback",
+        ndjsonPath: "/tmp/x.jsonl",
+      }),
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.turnsProcessed).toBe(2)
+    const msgs = sink.events.filter((e) => e.event === "chat.message")
+    expect(msgs.map((m) => m.payload.content)).toEqual(["reply1", "reply2"])
+  })
+
+  it("hard timeout exits with chat.done reason=hard-timeout", async () => {
+    const sink = new MemSink()
+    const pull: PullFn = async () => ({ turns: [], nextSince: 0 })
+    let t = 0
+    const result = await runChatSession({
+      sessionId: "s1",
+      cwd: "/tmp",
+      model: MODEL,
+      litellmUrl: null,
+      sink,
+      pull,
+      hardTimeoutMs: 100,
+      idleTimeoutMs: 10_000,
+      now: () => {
+        const current = t
+        t += 200 // jump past hardTimeoutMs each tick
+        return current
+      },
+      invokeAgent: async () => ({
+        outcome: "completed",
+        finalText: "noop",
+        ndjsonPath: "/tmp/x.jsonl",
+      }),
+    })
+    expect(result.exitCode).toBe(0)
+    expect(result.reason).toBe("hard-timeout")
+    expect(sink.events[0]?.payload.reason).toBe("hard-timeout")
   })
 })

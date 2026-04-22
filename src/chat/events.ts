@@ -1,14 +1,12 @@
 /**
- * Chat event emission — file JSONL + optional HTTP push, composed via Tee.
+ * Chat event emission — real-time HTTP push to the dashboard ingest endpoint.
  *
- * Events are what the Kody-Dashboard SSE stream consumes. The FileSink makes
- * them durable (committed back via git) so the dashboard's GitHub-poll path
- * can rehydrate a session on reconnect; the HttpSink gives real-time push
- * when the dashboard URL + inline token are provided.
+ * Chat is ephemeral: no git persistence, no FileSink. The runner POSTs events
+ * straight to /api/kody/events/ingest authenticated by the HMAC session
+ * token that the dashboard passed inline as `?token=...` in DASHBOARD_URL.
  */
 
-import * as fs from "node:fs"
-import * as path from "node:path"
+import { parseUrl } from "./pull.js"
 
 export interface ChatEvent {
   event: "chat.message" | "chat.tool" | "chat.thinking" | "chat.done" | "chat.error"
@@ -21,50 +19,55 @@ export interface EventSink {
   emit(event: ChatEvent): Promise<void>
 }
 
-export function eventsFilePath(cwd: string, sessionId: string): string {
-  return path.join(cwd, ".kody", "events", `${sessionId}.jsonl`)
-}
-
-export class FileSink implements EventSink {
-  constructor(private readonly file: string) {}
-  async emit(event: ChatEvent): Promise<void> {
-    fs.mkdirSync(path.dirname(this.file), { recursive: true })
-    fs.appendFileSync(this.file, `${JSON.stringify(event)}\n`)
-  }
-}
-
 /**
- * Posts each event to the dashboard ingest endpoint. The URL is expected to
- * carry an inline `?token=...` so the dashboard can verify the session HMAC
- * without a shared DB lookup. The sessionId is appended as a query param so
- * the endpoint can route events to the right SSE stream.
- *
- * Best-effort: swallowed errors won't fail the chat turn. The FileSink still
- * persists the event and the dashboard's GitHub-poll picks it up.
+ * Posts each event to the dashboard ingest endpoint. Base URL may include
+ * an inline `?token=...`. The sessionId is appended per request; token is
+ * sent as a Bearer header.
  */
 export class HttpSink implements EventSink {
+  private readonly origin: string
+  private readonly token: string
+
   constructor(
-    private readonly baseUrl: string,
+    baseUrl: string,
     private readonly sessionId: string,
+    token?: string,
+    private readonly fetchFn: typeof fetch = fetch,
     private readonly logger: { warn: (msg: string) => void } = {
       warn: (m) => process.stderr.write(`[kody2:chat] ${m}\n`),
     },
-  ) {}
+  ) {
+    const parsed = parseUrl(baseUrl)
+    this.origin = parsed.origin
+    const resolved = token ?? parsed.token
+    if (!resolved) {
+      throw new Error("HttpSink: session token not provided (expected inline ?token= in baseUrl)")
+    }
+    this.token = resolved
+  }
 
   async emit(event: ChatEvent): Promise<void> {
-    const url = withSessionParam(this.baseUrl, this.sessionId)
+    const url = new URL(this.origin)
+    url.pathname = "/api/kody/events/ingest"
+    url.searchParams.set("sessionId", this.sessionId)
+    url.searchParams.set("token", this.token)
     try {
-      const res = await fetch(url, {
+      const res = await this.fetchFn(url.toString(), {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${this.token}`,
+        },
         body: JSON.stringify(event),
         signal: AbortSignal.timeout(5000),
       })
       if (!res.ok) {
-        this.logger.warn(`HttpSink POST ${url} → ${res.status}`)
+        this.logger.warn(`HttpSink POST ${url.pathname} → ${res.status}`)
       }
     } catch (err) {
-      this.logger.warn(`HttpSink POST ${url} failed: ${err instanceof Error ? err.message : String(err)}`)
+      this.logger.warn(
+        `HttpSink POST ${url.pathname} failed: ${err instanceof Error ? err.message : String(err)}`,
+      )
     }
   }
 }
@@ -74,11 +77,6 @@ export class TeeSink implements EventSink {
   async emit(event: ChatEvent): Promise<void> {
     await Promise.all(this.sinks.map((s) => s.emit(event)))
   }
-}
-
-export function withSessionParam(baseUrl: string, sessionId: string): string {
-  const joiner = baseUrl.includes("?") ? "&" : "?"
-  return `${baseUrl}${joiner}sessionId=${encodeURIComponent(sessionId)}`
 }
 
 export function makeRunId(sessionId: string, suffix: string): string {

@@ -1,27 +1,24 @@
 /**
- * `kody2 chat` — dashboard-driven chat session entry point.
+ * `kody2 chat` — dashboard-driven persistent chat session.
  *
- * Called from the kody2.yml workflow when SESSION_ID is set (the dashboard
- * dispatched a chat message). Intentionally separate from `kody2 ci` —
- * which is an issue/PR automation dispatcher — because chat doesn't need
- * `pnpm install` on the target repo and doesn't key off a GHA event.
+ * Called from the kody2.yml workflow when SESSION_ID is set. The runner
+ * long-polls the dashboard for new user turns, runs one agent reply per
+ * turn, and pushes events back. Exits on idle-timeout, hard-timeout, or
+ * a terminal agent error. No git reads/writes — chat is ephemeral;
+ * transcripts live in dashboard memory + this runner's heap.
  *
- * Flow (one workflow run = one assistant reply):
+ * Flow:
  *  1. Light preflight (unpack ALL_SECRETS, resolve auth token, configure git).
- *  2. Load config if present, resolve model (CLI flag > config > default).
- *  3. Start LiteLLM proxy for non-anthropic models.
- *  4. Read session file, optionally seed INIT_MESSAGE.
- *  5. Run one chat turn via runAgent; emit events through File+Http sink.
- *  6. Commit + push session and events back so the dashboard sees the reply.
+ *  2. Resolve model (CLI flag > config > default).
+ *  3. Start LiteLLM proxy for non-anthropic providers.
+ *  4. Long-poll loop: pull → agent → push; exit on idle timeout.
  */
 
-import { execFileSync } from "node:child_process"
-import * as fs from "node:fs"
 import * as path from "node:path"
+import { HttpSink, makeRunId } from "./chat/events.js"
 import type { EventSink } from "./chat/events.js"
-import { eventsFilePath, FileSink, HttpSink, makeRunId, TeeSink } from "./chat/events.js"
-import { runChatTurn } from "./chat/loop.js"
-import { seedInitialMessage, sessionFilePath } from "./chat/session.js"
+import { runChatSession } from "./chat/loop.js"
+import { createPullClient } from "./chat/pull.js"
 import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
 import { configureGitIdentity, installLitellmIfNeeded, resolveAuthToken, unpackAllSecrets } from "./kody2-cli.js"
 import { startLitellmIfNeeded } from "./litellm.js"
@@ -30,7 +27,6 @@ const DEFAULT_MODEL = "claude/claude-haiku-4-5-20251001"
 
 export interface ChatArgs {
   sessionId?: string
-  initMessage?: string
   model?: string
   dashboardUrl?: string
   cwd?: string
@@ -42,16 +38,17 @@ export interface ChatArgs {
 export const CHAT_HELP = `kody2 chat — dashboard-driven chat session
 
 Usage:
-  kody2 chat [--session <id>] [--message <text>] [--model <provider/model>]
+  kody2 chat [--session <id>] [--model <provider/model>]
              [--dashboard-url <url>] [--cwd <path>] [--verbose|--quiet]
 
-All inputs may also come from env: SESSION_ID, INIT_MESSAGE, MODEL, DASHBOARD_URL.
-CLI flags take precedence over env. SESSION_ID is required.
+All inputs may also come from env: SESSION_ID, MODEL, DASHBOARD_URL.
+CLI flags take precedence over env. SESSION_ID and DASHBOARD_URL are required
+(the runner long-polls the dashboard for user turns and pushes events back).
 
 Exit codes:
-  0   reply emitted successfully
-  64  bad inputs (missing session, empty history)
-  99  runtime failure (agent crash, LiteLLM failure)
+  0   session exited cleanly (idle or hard timeout)
+  64  bad inputs
+  99  runtime failure (agent crash, pull failure, LiteLLM failure)
 `
 
 export function parseChatArgs(argv: string[], env: NodeJS.ProcessEnv = process.env): ChatArgs {
@@ -59,7 +56,6 @@ export function parseChatArgs(argv: string[], env: NodeJS.ProcessEnv = process.e
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === "--session") result.sessionId = argv[++i]
-    else if (arg === "--message") result.initMessage = argv[++i]
     else if (arg === "--model") result.model = argv[++i]
     else if (arg === "--dashboard-url") result.dashboardUrl = argv[++i]
     else if (arg === "--cwd") result.cwd = argv[++i]
@@ -70,41 +66,22 @@ export function parseChatArgs(argv: string[], env: NodeJS.ProcessEnv = process.e
     else if (arg) result.errors.push(`unexpected positional: ${arg}`)
   }
 
-  // Env fallback — CLI wins.
   result.sessionId = result.sessionId ?? env.SESSION_ID ?? undefined
-  result.initMessage = result.initMessage ?? env.INIT_MESSAGE ?? undefined
   result.model = result.model ?? env.MODEL ?? undefined
   result.dashboardUrl = result.dashboardUrl ?? env.DASHBOARD_URL ?? undefined
 
   // Normalize empty strings (GH Actions passes `""` for unset optional inputs).
-  for (const key of ["sessionId", "initMessage", "model", "dashboardUrl"] as const) {
+  for (const key of ["sessionId", "model", "dashboardUrl"] as const) {
     const v = result[key]
     if (typeof v === "string" && v.trim() === "") result[key] = undefined
   }
 
-  if (!result.sessionId && !result.errors.includes("__HELP__")) {
-    result.errors.push("--session <id> (or SESSION_ID env) is required")
+  if (!result.errors.includes("__HELP__")) {
+    if (!result.sessionId) result.errors.push("--session <id> (or SESSION_ID env) is required")
+    if (!result.dashboardUrl) result.errors.push("--dashboard-url <url> (or DASHBOARD_URL env) is required")
   }
 
   return result
-}
-
-function commitChatFiles(cwd: string, sessionId: string, verbose: boolean): void {
-  const sessionFile = path.relative(cwd, sessionFilePath(cwd, sessionId))
-  const eventsFile = path.relative(cwd, eventsFilePath(cwd, sessionId))
-  const paths = [sessionFile, eventsFile].filter((p) => fs.existsSync(path.join(cwd, p)))
-  if (paths.length === 0) return
-  const opts = { cwd, stdio: verbose ? "inherit" : "pipe" } as const
-  try {
-    execFileSync("git", ["add", ...paths], opts)
-    execFileSync("git", ["commit", "--quiet", "-m", `chat: reply for ${sessionId}`], opts)
-    execFileSync("git", ["push", "--quiet", "origin", "HEAD"], opts)
-  } catch (err) {
-    // Best-effort — if there's nothing staged or push fails, the HttpSink
-    // has already delivered the real-time event, so we don't abort the turn.
-    const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[kody2:chat] commit/push skipped: ${msg}\n`)
-  }
 }
 
 function tryLoadConfig(cwd: string): ReturnType<typeof loadConfig> | null {
@@ -113,12 +90,6 @@ function tryLoadConfig(cwd: string): ReturnType<typeof loadConfig> | null {
   } catch {
     return null
   }
-}
-
-function buildSink(cwd: string, sessionId: string, dashboardUrl?: string): EventSink {
-  const sinks: EventSink[] = [new FileSink(eventsFilePath(cwd, sessionId))]
-  if (dashboardUrl) sinks.push(new HttpSink(dashboardUrl, sessionId))
-  return new TeeSink(sinks)
 }
 
 export async function runChat(argv: string[]): Promise<number> {
@@ -136,6 +107,7 @@ export async function runChat(argv: string[]): Promise<number> {
 
   const cwd = args.cwd ? path.resolve(args.cwd) : process.cwd()
   const sessionId = args.sessionId!
+  const dashboardUrl = args.dashboardUrl!
 
   const unpackedSecrets = unpackAllSecrets()
   if (unpackedSecrets > 0) {
@@ -154,8 +126,6 @@ export async function runChat(argv: string[]): Promise<number> {
     return 64
   }
 
-  // Ensure LiteLLM is installed for non-anthropic providers before starting
-  // the proxy. `kody2 ci` does this in its preflight; chat reuses the helper.
   if (needsLitellmProxy(model)) {
     const code = installLitellmIfNeeded(cwd)
     if (code !== 0) {
@@ -164,12 +134,19 @@ export async function runChat(argv: string[]): Promise<number> {
     }
   }
 
+  let sink: EventSink
+  try {
+    sink = new HttpSink(dashboardUrl, sessionId)
+  } catch (err) {
+    process.stderr.write(`error: ${err instanceof Error ? err.message : String(err)}\n`)
+    return 64
+  }
+
   let litellm: Awaited<ReturnType<typeof startLitellmIfNeeded>> = null
   try {
     litellm = await startLitellmIfNeeded(model, cwd)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    const sink = buildSink(cwd, sessionId, args.dashboardUrl)
     await sink.emit({
       event: "chat.error",
       payload: { sessionId, error: `litellm startup failed: ${msg}` },
@@ -179,23 +156,29 @@ export async function runChat(argv: string[]): Promise<number> {
     return 99
   }
 
-  const sessionFile = sessionFilePath(cwd, sessionId)
-  if (args.initMessage) seedInitialMessage(sessionFile, args.initMessage)
+  let pull: ReturnType<typeof createPullClient>
+  try {
+    pull = createPullClient({ baseUrl: dashboardUrl, sessionId })
+  } catch (err) {
+    process.stderr.write(`error: ${err instanceof Error ? err.message : String(err)}\n`)
+    try { litellm?.kill() } catch { /* best effort */ }
+    return 64
+  }
 
-  const sink = buildSink(cwd, sessionId, args.dashboardUrl)
+  process.stdout.write(`→ kody2 chat: session ${sessionId}, model ${model.provider}/${model.model}\n`)
 
   try {
-    const result = await runChatTurn({
+    const result = await runChatSession({
       sessionId,
-      sessionFile,
       cwd,
       model,
       litellmUrl: litellm?.url ?? null,
       sink,
+      pull,
       verbose: args.verbose,
       quiet: args.quiet,
     })
-    commitChatFiles(cwd, sessionId, args.verbose ?? false)
+    process.stdout.write(`→ kody2 chat: exited (${result.reason ?? "ok"}) after ${result.turnsProcessed} turn(s)\n`)
     return result.exitCode
   } finally {
     try {
