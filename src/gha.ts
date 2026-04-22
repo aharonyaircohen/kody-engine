@@ -20,6 +20,11 @@ export function getRunUrl(): string {
  * When kody2 was triggered by an `issue_comment` event, read the comment id
  * from the GHA event payload and POST a 👀 reaction on it. Silent no-op when
  * not running in Actions or when the event isn't an issue_comment.
+ *
+ * The reaction is the user-visible signal that kody2 picked up the trigger,
+ * so it must be reliable. We retry on transient failures (network blip,
+ * GitHub 5xx, gh-cli flake) and log to stderr if all retries fail — that
+ * way "did kody2 see this?" stops being silently ambiguous.
  */
 export function reactToTriggerComment(cwd?: string): void {
   if (process.env.GITHUB_EVENT_NAME !== "issue_comment") return
@@ -37,27 +42,47 @@ export function reactToTriggerComment(cwd?: string): void {
   if (!commentId || !repo) return
 
   const token = process.env.KODY_TOKEN?.trim() || process.env.GH_TOKEN || process.env.GITHUB_TOKEN
+  const args = [
+    "api",
+    "-X",
+    "POST",
+    "-H",
+    "Accept: application/vnd.github+json",
+    `/repos/${repo}/issues/comments/${commentId}/reactions`,
+    "-f",
+    "content=eyes",
+  ]
+  const opts = {
+    cwd,
+    env: { ...process.env, GH_TOKEN: token ?? process.env.GH_TOKEN ?? "" },
+    stdio: "pipe" as const,
+    timeout: 15_000,
+  }
+
+  let lastErr: unknown = null
+  // 3 attempts total; 0ms, 500ms, 1500ms backoff. Keeps total worst-case
+  // under ~2s even if both retries fail, so the rest of preflight isn't
+  // delayed materially.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) sleepMs(attempt === 1 ? 500 : 1500)
+    try {
+      execFileSync("gh", args, opts)
+      return
+    } catch (err) {
+      lastErr = err
+    }
+  }
+  process.stderr.write(
+    `[kody2] 👀 reaction failed after 3 attempts on comment ${commentId}: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}\n`,
+  )
+}
+
+function sleepMs(ms: number): void {
+  // Synchronous sleep via posix `sleep` — cheaper than a busy-loop and only
+  // ever invoked between failed reaction-API attempts (a slow path already).
   try {
-    execFileSync(
-      "gh",
-      [
-        "api",
-        "-X",
-        "POST",
-        "-H",
-        "Accept: application/vnd.github+json",
-        `/repos/${repo}/issues/comments/${commentId}/reactions`,
-        "-f",
-        "content=eyes",
-      ],
-      {
-        cwd,
-        env: { ...process.env, GH_TOKEN: token ?? process.env.GH_TOKEN ?? "" },
-        stdio: "pipe",
-        timeout: 15_000,
-      },
-    )
+    execFileSync("sleep", [(ms / 1000).toString()], { stdio: "ignore", timeout: ms + 1_000 })
   } catch {
-    /* best effort — never block the run on reaction failure */
+    /* no big deal — worst case we retry sooner than intended */
   }
 }

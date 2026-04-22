@@ -48,7 +48,10 @@ export const advanceFlow: PostflightScript = async (ctx, profile) => {
     }
   }
 
-  const body = `@kody2 orchestrate --flow ${flow.name}`
+  // Bare `@kody2 orchestrate` is enough — dispatch.ts maps it to the
+  // canonical orchestrator-plan-build-review executable. Omitting --flow
+  // keeps the auto-posted comment short and visually unambiguous.
+  const body = "@kody2 orchestrate"
   try {
     execFileSync("gh", ["issue", "comment", String(flow.issueNumber), "--body", body], {
       timeout: API_TIMEOUT_MS,

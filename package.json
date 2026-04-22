@@ -1,6 +1,6 @@
 {
   "name": "@kody-ade/kody-engine",
-  "version": "0.2.49",
+  "version": "0.2.50",
   "description": "kody2 — autonomous development engine. Single-session Claude Code agent behind a generic executor + declarative executable profiles.",
   "license": "MIT",
   "type": "module",

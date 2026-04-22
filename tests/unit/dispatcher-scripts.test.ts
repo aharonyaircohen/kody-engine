@@ -191,7 +191,7 @@ describe("advanceFlow", () => {
     await advanceFlow(c, profile("plan"), null)
     expect(execFileSync).toHaveBeenCalledWith(
       "gh",
-      ["issue", "comment", "42", "--body", "@kody2 orchestrate --flow plan-build-review"],
+      ["issue", "comment", "42", "--body", "@kody2 orchestrate"],
       expect.any(Object),
     )
   })
