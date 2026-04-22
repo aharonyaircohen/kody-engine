@@ -155,21 +155,43 @@ export function getPrComments(prNumber: number, cwd?: string): PrComment[] {
   }
 }
 
-const KODY_COMMENT_PREFIXES = ["⚙️ kody2", "✅ kody2", "⚠️ kody2", "ℹ️ kody2", "→ kody2"]
+/**
+ * Matches a review body produced by the `review` executable or a similarly
+ * structured human-written review. The review prompt requires a verdict
+ * heading; a body without it is a trigger/status/state comment, not a review.
+ */
+const VERDICT_HEADING = /(^|\n)\s*#{1,6}\s*Verdict\s*:/i
 
 /**
- * Return the most recent HUMAN-authored PR feedback (review or comment).
- *   - Pulls both formal reviews and plain PR comments.
- *   - Filters out bot/wrapper posts (our own "⚙️/✅/⚠️ kody2…" statuses).
- *   - Picks whichever is newest by timestamp.
- *   - Falls back to the PR body if nothing remains.
+ * Whether a PR comment body is shaped like a review. True iff the body
+ * contains a `## Verdict:` heading anywhere. Exported for direct testing.
+ */
+export function isReviewShaped(body: string): boolean {
+  return VERDICT_HEADING.test(body)
+}
+
+/**
+ * Return the most recent review body on a PR.
+ *
+ * A "review" is either:
+ *   1. A formal PR review (submitted through GitHub's review UI — always a
+ *      review by construction), or
+ *   2. An issue comment whose body contains a `## Verdict:` heading (the
+ *      contract our review executable emits).
+ *
+ * Everything else — trigger comments like `@kody2 fix`, bot status pings
+ * (⚙️/✅/⚠️/👀 …), task-state blocks, random chatter — is ignored. This
+ * replaces the earlier hand-maintained prefix blacklist, which silently
+ * drifted as new bot comment shapes were added.
+ *
+ * Falls back to the PR body when no review is present (first-run case).
  */
 export function getPrLatestReviewBody(prNumber: number, cwd?: string): string {
   const reviews = getPrReviews(prNumber, cwd)
     .filter((r) => r.body.trim().length > 0)
     .map((r) => ({ body: r.body, at: r.submittedAt }))
   const comments = getPrComments(prNumber, cwd)
-    .filter((c) => !KODY_COMMENT_PREFIXES.some((p) => c.body.startsWith(p)))
+    .filter((c) => isReviewShaped(c.body))
     .map((c) => ({ body: c.body, at: c.createdAt }))
 
   const all = [...reviews, ...comments].sort((a, b) => (b.at || "").localeCompare(a.at || ""))
