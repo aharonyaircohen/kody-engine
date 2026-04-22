@@ -63,24 +63,27 @@ research stops at findings.>
 
 Before writing your findings, scan the "Recent comments" block above for a
 previous comment whose body starts with `## Research for issue`. If one
-exists, you are in **delta mode**:
+exists, you are in **delta mode**. In delta mode your ENTIRE PR_SUMMARY is
+ONLY the following, and nothing else:
 
-- Treat its Clarifying questions as the open set, not a blank slate.
-- For each prior question, check whether later comments (user replies or
-  other output) have answered it. If answered, fold the answer into
-  Understood request / Repo context / Proposed scope as appropriate and
-  drop the question.
-- Keep questions that are still open. Add new questions only if the latest
-  comments exposed genuinely new gaps.
-- Prepend a `## Delta since last research` section at the TOP of
-  PR_SUMMARY (before Understood request) with short bullets:
-  `**Answered:** …`, `**Still open:** …`, `**New:** …`.
-- For any section whose content has NOT changed, write
-  `(unchanged — see prior research)` in place of the body. Do not re-derive
-  what's already established.
+```
+## Delta since last research
+**Answered:** <one bullet per prior question whose answer appears in a later comment, with the answer>
+**Still open:** <one bullet per prior question nobody has answered>
+**New:** <one bullet per newly surfaced gap or question from the latest comments — only if genuinely new>
+
+## Updated scope (only if materially changed)
+Short bullet list of what's now in or out of scope because of the answers.
+If scope is unchanged, write: "Unchanged — see prior research."
+```
+
+Do NOT re-emit Understood request, Repo context, Clarifying questions, or
+Gaps & assumptions — they live in the prior comment. Keep the whole delta
+under 25 lines. If nothing has changed since the prior research, output
+`FAILED: no new information since last research` instead.
 
 If no prior `## Research for issue` comment exists in the thread, produce
-the full first-pass structure (no Delta section, all sections written out).
+the full first-pass structure below.
 
 # Rules
 - Read-only. Do NOT modify any file.
