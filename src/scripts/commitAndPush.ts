@@ -22,6 +22,15 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
     return
   }
 
+  // If an earlier postflight (e.g. requireFeedbackActions) flipped agentDone
+  // to false, we must not commit the agent's edits. Leave them in the working
+  // tree so the failure reason is surfaced without polluting the branch.
+  if (ctx.data.agentDone === false) {
+    ctx.data.commitResult = { committed: false, pushed: false, skippedReason: "agentDone=false" }
+    ctx.data.hasCommitsAhead = hasCommitsAhead(branch, ctx.config.git.defaultBranch, ctx.cwd)
+    return
+  }
+
   const kind = profile.name
 
   // Resolve flow: make sure conflict-resolved files get staged.
