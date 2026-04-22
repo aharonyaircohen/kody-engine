@@ -32,9 +32,15 @@ PR_SUMMARY:
 One paragraph restating what the issue is asking for, in your own words.
 
 ## Repo context
-Files, modules, and existing patterns most relevant to the request. Use
-`path/to/file.ts` references. Note anything that constrains the solution
-space (existing abstractions, invariants from AGENTS.md / CLAUDE.md).
+**Issue-specific only.** Surface whatever you actually discover during your
+read-only exploration — files, modules, or existing patterns the implementer
+would have to find by hand for *this* issue. Use real `path/to/file` references
+from the repo (no placeholders or invented paths).
+
+Do NOT restate general architecture, tech stack, or conventions already
+documented in `AGENTS.md` / `CLAUDE.md` — reference those files by path
+("see AGENTS.md") and move on. If a constraint lives in one of those files,
+cite it; don't copy it.
 
 ## Clarifying questions
 Numbered list. Each question must include a one-line "Why:" explaining why
