@@ -2,8 +2,8 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
-import { buildSyntheticPlugin, getPluginsCatalogRoot } from "../../src/scripts/buildSyntheticPlugin.js"
 import type { Profile } from "../../src/executables/types.js"
+import { buildSyntheticPlugin, getPluginsCatalogRoot } from "../../src/scripts/buildSyntheticPlugin.js"
 
 function makeCtx(): {
   args: Record<string, unknown>
@@ -15,7 +15,12 @@ function makeCtx(): {
   return {
     args: { issue: 1 },
     cwd: os.tmpdir(),
-    config: { quality: { typecheck: "", lint: "", testUnit: "" }, git: { defaultBranch: "main" }, github: { owner: "o", repo: "r" }, agent: { model: "claude/x" } },
+    config: {
+      quality: { typecheck: "", lint: "", testUnit: "" },
+      git: { defaultBranch: "main" },
+      github: { owner: "o", repo: "r" },
+      agent: { model: "claude/x" },
+    },
     data: {},
     output: { exitCode: 0 },
   }
