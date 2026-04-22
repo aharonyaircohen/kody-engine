@@ -52,6 +52,9 @@
         "script": "persistArtifacts"
       },
       {
+        "script": "postPlanComment"
+      },
+      {
         "script": "writeRunSummary"
       },
       {

@@ -20,6 +20,7 @@ import { loadTaskState } from "./loadTaskState.js"
 import { parseAgentResult } from "./parseAgentResult.js"
 import { persistArtifacts } from "./persistArtifacts.js"
 import { postIssueComment } from "./postIssueComment.js"
+import { postPlanComment } from "./postPlanComment.js"
 import { postReviewResult } from "./postReviewResult.js"
 import { releaseFlow } from "./releaseFlow.js"
 import { resolveArtifacts } from "./resolveArtifacts.js"
@@ -58,6 +59,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   commitAndPush,
   ensurePr,
   postIssueComment,
+  postPlanComment,
   postReviewResult,
   persistArtifacts,
   writeRunSummary,
