@@ -22,8 +22,8 @@ import type { EventSink } from "./chat/events.js"
 import { eventsFilePath, FileSink, HttpSink, makeRunId, TeeSink } from "./chat/events.js"
 import { runChatTurn } from "./chat/loop.js"
 import { seedInitialMessage, sessionFilePath } from "./chat/session.js"
-import { loadConfig, parseProviderModel } from "./config.js"
-import { configureGitIdentity, resolveAuthToken, unpackAllSecrets } from "./kody2-cli.js"
+import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
+import { configureGitIdentity, installLitellmIfNeeded, resolveAuthToken, unpackAllSecrets } from "./kody2-cli.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 
 const DEFAULT_MODEL = "claude/claude-haiku-4-5-20251001"
@@ -152,6 +152,16 @@ export async function runChat(argv: string[]): Promise<number> {
   } catch (err) {
     process.stderr.write(`error: invalid model '${modelSpec}': ${err instanceof Error ? err.message : String(err)}\n`)
     return 64
+  }
+
+  // Ensure LiteLLM is installed for non-anthropic providers before starting
+  // the proxy. `kody2 ci` does this in its preflight; chat reuses the helper.
+  if (needsLitellmProxy(model)) {
+    const code = installLitellmIfNeeded(cwd)
+    if (code !== 0) {
+      process.stderr.write(`error: litellm install failed (exit ${code})\n`)
+      return 99
+    }
   }
 
   let litellm: Awaited<ReturnType<typeof startLitellmIfNeeded>> = null
