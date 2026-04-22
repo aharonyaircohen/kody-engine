@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 import type { Profile } from "../../src/executables/types.js"
-import { summarizeFeedbackActions, verifyFixAlignment } from "../../src/scripts/verifyFixAlignment.js"
+import {
+  declinedFileRefs,
+  extractReviewFileRefs,
+  summarizeFeedbackActions,
+  verifyFixAlignment,
+} from "../../src/scripts/verifyFixAlignment.js"
 
 const fixProfile = { name: "fix" } as Profile
 const runProfile = { name: "run" } as Profile
@@ -104,6 +109,91 @@ describe("verifyFixAlignment postflight", () => {
     })
     await verifyFixAlignment(ctx as never, fixProfile, null)
     expect(ctx.data.agentDone).toBe(true)
-    expect(ctx.data.action).toBeUndefined() // no override, upstream action stays
+    expect(ctx.data.action).toBeUndefined()
+  })
+
+  it("fails when commit doesn't touch any file the review named", async () => {
+    const ctx = makeCtx({
+      agentDone: true,
+      feedback: "### Concerns\n- bug at `src/services/foo.ts:12`\n- bug at `src/api/bar.ts:3`",
+      feedbackActions: "- Item 1: fixed: refactored unrelated helper",
+      commitResult: { committed: true },
+      changedFiles: ["src/utils/helper.ts"],
+    })
+    await verifyFixAlignment(ctx as never, fixProfile, null)
+    expect(ctx.data.agentDone).toBe(false)
+    expect((ctx.data.action as { type: string } | undefined)?.type).toBe("FIX_FAILED")
+    expect(String(ctx.output.reason)).toMatch(/src\/services\/foo\.ts/)
+    expect(String(ctx.output.reason)).toMatch(/src\/api\/bar\.ts/)
+  })
+
+  it("passes when commit touches every review-named file", async () => {
+    const ctx = makeCtx({
+      agentDone: true,
+      feedback: "### Concerns\n- bug at `src/services/foo.ts:12`",
+      feedbackActions: "- Item 1: fixed: addressed foo.ts:12",
+      commitResult: { committed: true },
+      changedFiles: ["src/services/foo.ts"],
+    })
+    await verifyFixAlignment(ctx as never, fixProfile, null)
+    expect(ctx.data.agentDone).toBe(true)
+    expect(ctx.data.action).toBeUndefined()
+  })
+
+  it("passes when a review-named file is explicitly declined even if not touched", async () => {
+    const ctx = makeCtx({
+      agentDone: true,
+      feedback: "### Concerns\n- bug at `src/services/foo.ts:12`\n- bug at `src/api/bar.ts:3`",
+      feedbackActions:
+        "- Item 1: fixed: touched foo.ts\n- Item 2: declined: src/api/bar.ts:3 is out-of-scope per issue body",
+      commitResult: { committed: true },
+      changedFiles: ["src/services/foo.ts"],
+    })
+    await verifyFixAlignment(ctx as never, fixProfile, null)
+    expect(ctx.data.agentDone).toBe(true)
+    expect(ctx.data.action).toBeUndefined()
+  })
+})
+
+describe("verifyFixAlignment: extractReviewFileRefs", () => {
+  it("pulls backticked code-file refs (deduped, no :line)", () => {
+    const body =
+      "see `src/services/foo.ts:12` and `src/services/foo.ts:40` — also `src/api/bar.ts` — then https://example.com/baz.ts"
+    expect(extractReviewFileRefs(body).sort()).toEqual(["src/api/bar.ts", "src/services/foo.ts"])
+  })
+
+  it("pulls bare-text paths too", () => {
+    const body = "issue at src/utils/thing.ts:55 has a problem"
+    expect(extractReviewFileRefs(body)).toContain("src/utils/thing.ts")
+  })
+
+  it("ignores doc / image / pdf extensions", () => {
+    expect(extractReviewFileRefs("see `docs/readme.md` and `logo.png`")).toEqual([])
+  })
+
+  it("ignores bare filenames without a directory", () => {
+    expect(extractReviewFileRefs("fix the `foo.ts` helper")).toEqual([])
+  })
+
+  it("returns [] for empty body", () => {
+    expect(extractReviewFileRefs("")).toEqual([])
+  })
+})
+
+describe("verifyFixAlignment: declinedFileRefs", () => {
+  it("returns refs mentioned in declined: lines", () => {
+    const block = "- Item 1: declined: src/a.ts is fine\n- Item 2: fixed: patched src/b.ts"
+    const refs = ["src/a.ts", "src/b.ts"]
+    expect([...declinedFileRefs(block, refs)]).toEqual(["src/a.ts"])
+  })
+
+  it("ignores fixed: lines", () => {
+    const block = "- Item 1: fixed: src/a.ts"
+    expect([...declinedFileRefs(block, ["src/a.ts"])]).toEqual([])
+  })
+
+  it("returns empty for empty block or empty refs", () => {
+    expect([...declinedFileRefs("", ["src/a.ts"])]).toEqual([])
+    expect([...declinedFileRefs("- declined: anything", [])]).toEqual([])
   })
 })
