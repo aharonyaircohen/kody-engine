@@ -47,3 +47,42 @@ describe("runAgent: settingSources passthrough", () => {
     expect(args.options.settingSources).toEqual(["user"])
   })
 })
+
+describe("runAgent: maxThinkingTokens passthrough", () => {
+  beforeEach(() => {
+    querySpy.mockClear()
+  })
+  afterEach(() => {
+    querySpy.mockClear()
+  })
+
+  it("forwards maxThinkingTokens to the SDK when positive", async () => {
+    await runAgent({ ...baseOpts, maxThinkingTokens: 10_000 })
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options.maxThinkingTokens).toBe(10_000)
+  })
+
+  it("omits maxThinkingTokens when unset", async () => {
+    await runAgent(baseOpts)
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options).not.toHaveProperty("maxThinkingTokens")
+  })
+
+  it("omits maxThinkingTokens when null", async () => {
+    await runAgent({ ...baseOpts, maxThinkingTokens: null })
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options).not.toHaveProperty("maxThinkingTokens")
+  })
+
+  it("omits maxThinkingTokens when zero or negative", async () => {
+    await runAgent({ ...baseOpts, maxThinkingTokens: 0 })
+    const argsZero = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(argsZero.options).not.toHaveProperty("maxThinkingTokens")
+
+    querySpy.mockClear()
+
+    await runAgent({ ...baseOpts, maxThinkingTokens: -1 })
+    const argsNeg = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(argsNeg.options).not.toHaveProperty("maxThinkingTokens")
+  })
+})

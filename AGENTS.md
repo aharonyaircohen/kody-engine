@@ -53,6 +53,7 @@ Each is its own auto-discovered executable. [src/dispatch.ts](src/dispatch.ts) p
 | `fix`     | `--pr`   | `@kody2` (or `@kody2 fix …`) on a PR comment   |
 | `fix-ci`  | `--pr`   | `@kody2 fix-ci` on a PR                        |
 | `resolve` | `--pr`   | `@kody2 resolve` on a PR                       |
+| `sync`    | `--pr`   | `@kody2 sync` on a PR (merges base, no agent)  |
 | `review`  | `--pr`   | `@kody2 review` on a PR (read-only)            |
 | `plan`    | `--issue`| `@kody2 plan` on an issue                      |
 

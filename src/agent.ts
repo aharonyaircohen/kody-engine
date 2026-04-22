@@ -38,6 +38,8 @@ export interface AgentOptions {
   pluginPaths?: string[]
   /** Hard cap on agent turns. null/undefined = SDK default (unbounded). */
   maxTurns?: number | null
+  /** Extended-thinking token budget. null/undefined = SDK default. */
+  maxThinkingTokens?: number | null
   /** Text appended to Claude Code's baseline system prompt. */
   systemPromptAppend?: string | null
   /**
@@ -89,6 +91,9 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     }
     if (typeof opts.maxTurns === "number" && opts.maxTurns > 0) {
       queryOptions.maxTurns = opts.maxTurns
+    }
+    if (typeof opts.maxThinkingTokens === "number" && opts.maxThinkingTokens > 0) {
+      queryOptions.maxThinkingTokens = opts.maxThinkingTokens
     }
     if (typeof opts.systemPromptAppend === "string" && opts.systemPromptAppend.length > 0) {
       queryOptions.systemPrompt = { type: "preset", preset: "claude_code", append: opts.systemPromptAppend }

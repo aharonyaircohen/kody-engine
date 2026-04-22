@@ -22,6 +22,7 @@ const VALID_MIN = {
     model: "inherit",
     permissionMode: "acceptEdits",
     maxTurns: null,
+    maxThinkingTokens: null,
     systemPromptAppend: null,
     tools: ["Read"],
     hooks: [],

@@ -133,6 +133,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       mcpServers: profile.claudeCode.mcpServers as unknown as Array<Record<string, unknown>> | undefined,
       pluginPaths: pluginPaths.length > 0 ? pluginPaths : undefined,
       maxTurns: profile.claudeCode.maxTurns,
+      maxThinkingTokens: profile.claudeCode.maxThinkingTokens,
       systemPromptAppend: profile.claudeCode.systemPromptAppend,
       settingSources: (profile.claudeCode as { settingSources?: Array<"user" | "project" | "local"> }).settingSources,
     })

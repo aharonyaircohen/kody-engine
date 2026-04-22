@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm test *)",
+      "Bash(gh repo *)",
+      "Bash(env)",
+      "Bash(gh auth *)",
+      "Bash(curl -sI -L \"https://kody-dashboard-sable.vercel.app/\")"
+    ]
+  }
+}

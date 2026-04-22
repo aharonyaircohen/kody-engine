@@ -87,6 +87,8 @@ export interface ClaudeCodeSpec {
   permissionMode: "default" | "acceptEdits" | "plan" | "bypassPermissions"
   /** null = unbounded. */
   maxTurns: number | null
+  /** Extended-thinking token budget. null = SDK default. */
+  maxThinkingTokens: number | null
   /** Text appended on top of Claude Code's baseline system prompt. */
   systemPromptAppend: string | null
   /** SDK built-in tools this executable is allowed to use (capability pack). */
