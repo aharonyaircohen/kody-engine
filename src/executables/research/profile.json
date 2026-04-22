@@ -1,0 +1,78 @@
+{
+  "name": "research",
+  "describe": "Research an issue: understand the ask, map relevant repo context, and surface clarifying questions + gaps. Read-only — no branches, no commits, no prescribed next steps.",
+  "inputs": [
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": true,
+      "describe": "GitHub issue number to research."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": null,
+    "systemPromptAppend": null,
+    "tools": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash"
+    ],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "scripts": {
+    "preflight": [
+      {
+        "script": "loadIssueContext"
+      },
+      {
+        "script": "loadTaskState"
+      },
+      {
+        "script": "loadConventions"
+      },
+      {
+        "script": "composePrompt"
+      }
+    ],
+    "postflight": [
+      {
+        "script": "parseAgentResult"
+      },
+      {
+        "script": "persistArtifacts"
+      },
+      {
+        "script": "postResearchComment"
+      },
+      {
+        "script": "writeRunSummary"
+      },
+      {
+        "script": "saveTaskState"
+      }
+    ]
+  },
+  "output": {
+    "actionTypes": [
+      "RESEARCH_COMPLETED",
+      "RESEARCH_FAILED"
+    ],
+    "artifacts": [
+      {
+        "name": "research",
+        "format": "markdown",
+        "from": "prSummary"
+      }
+    ]
+  }
+}

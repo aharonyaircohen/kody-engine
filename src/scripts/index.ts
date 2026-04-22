@@ -21,6 +21,7 @@ import { parseAgentResult } from "./parseAgentResult.js"
 import { persistArtifacts } from "./persistArtifacts.js"
 import { postIssueComment } from "./postIssueComment.js"
 import { postPlanComment } from "./postPlanComment.js"
+import { postResearchComment } from "./postResearchComment.js"
 import { postReviewResult } from "./postReviewResult.js"
 import { releaseFlow } from "./releaseFlow.js"
 import { requireFeedbackActions } from "./requireFeedbackActions.js"
@@ -64,6 +65,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   ensurePr,
   postIssueComment,
   postPlanComment,
+  postResearchComment,
   postReviewResult,
   persistArtifacts,
   writeRunSummary,
