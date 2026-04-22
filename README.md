@@ -18,7 +18,7 @@
 └─────────────────────────────────────────────┘
 ```
 
-Every top-level command is its own auto-discovered executable (`run`, `fix`, `fix-ci`, `resolve`, `review`, `plan`, `orchestrator`, `release`, `watch-*`, `init`). The router has no hardcoded command switch beyond `ci`/`help`/`version` — drop a new `src/executables/<name>/` directory with a `profile.json` + `prompt.md` and `kody2 <name>` starts working. The executor knows nothing about any specific command.
+Every top-level command is its own auto-discovered executable (`run`, `fix`, `fix-ci`, `resolve`, `review`, `sync`, `plan`, `plan-verify`, `orchestrator`, `release`, `watch-*`, `init`). The router has no hardcoded command switch beyond `ci`/`help`/`version` — drop a new `src/executables/<name>/` directory with a `profile.json` + `prompt.md` and `kody2 <name>` starts working. The executor knows nothing about any specific command.
 
 ## Install in a consumer repo
 
@@ -32,12 +32,21 @@ Every top-level command is its own auto-discovered executable (`run`, `fix`, `fi
 
 ```
 kody2 run     --issue <N>                   # implement an issue
+kody2 plan    --issue <N>                   # produce a plan artifact for run
 kody2 fix     --pr    <N> [--feedback ...]  # apply PR review feedback
 kody2 fix-ci  --pr    <N> [--run-id <ID>]   # fix failing CI
 kody2 resolve --pr    <N>                   # merge default branch in, resolve conflicts
+kody2 sync    --pr    <N>                   # merge default branch into PR branch (no agent)
 kody2 review  --pr    <N>                   # read-only structured PR review
-kody2 ci      --issue <N>                   # CI preflight + run
+kody2 ci      --issue <N>                   # CI preflight + run (issue/PR automation)
+kody2 chat    [--session <id>]              # dashboard-driven chat session
 ```
+
+`kody2 chat` reads `.kody/sessions/<id>.jsonl`, runs one agent turn, appends
+the reply, and writes `chat.message` + `chat.done` events to
+`.kody/events/<id>.jsonl` (plus optional HTTP push to a dashboard ingest URL).
+Inputs can come from flags or env (`SESSION_ID`, `INIT_MESSAGE`, `MODEL`,
+`DASHBOARD_URL`) — the yaml template passes the latter.
 
 ## Profiles
 
