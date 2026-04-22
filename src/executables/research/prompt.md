@@ -59,6 +59,29 @@ Do NOT include a "Next steps" / "Recommendation" / "How to proceed" section —
 research stops at findings.>
 ```
 
+# Delta mode — if a prior research comment exists
+
+Before writing your findings, scan the "Recent comments" block above for a
+previous comment whose body starts with `## Research for issue`. If one
+exists, you are in **delta mode**:
+
+- Treat its Clarifying questions as the open set, not a blank slate.
+- For each prior question, check whether later comments (user replies or
+  other output) have answered it. If answered, fold the answer into
+  Understood request / Repo context / Proposed scope as appropriate and
+  drop the question.
+- Keep questions that are still open. Add new questions only if the latest
+  comments exposed genuinely new gaps.
+- Prepend a `## Delta since last research` section at the TOP of
+  PR_SUMMARY (before Understood request) with short bullets:
+  `**Answered:** …`, `**Still open:** …`, `**New:** …`.
+- For any section whose content has NOT changed, write
+  `(unchanged — see prior research)` in place of the body. Do not re-derive
+  what's already established.
+
+If no prior `## Research for issue` comment exists in the thread, produce
+the full first-pass structure (no Delta section, all sections written out).
+
 # Rules
 - Read-only. Do NOT modify any file.
 - Do NOT run git or gh commands.
