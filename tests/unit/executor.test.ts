@@ -79,8 +79,10 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     expect(profile.inputs.map((i) => i.name)).toEqual(["issue"])
     expect(profile.scripts.preflight[0]!.script).toBe("runFlow")
     expect(profile.scripts.preflight[0]!.runWhen).toBeUndefined()
-    const last = profile.scripts.postflight.at(-1)!
-    expect(last.script).toBe("saveTaskState")
+    const names = profile.scripts.postflight.map((p) => p.script)
+    // saveTaskState writes issue state; mirrorStateToPr propagates it to the PR.
+    expect(names).toContain("saveTaskState")
+    expect(names.at(-1)).toBe("mirrorStateToPr")
   })
 
   it("fix profile loads cleanly", () => {

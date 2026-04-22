@@ -17,6 +17,7 @@ import { loadConventions } from "./loadConventions.js"
 import { loadCoverageRules } from "./loadCoverageRules.js"
 import { loadIssueContext } from "./loadIssueContext.js"
 import { loadTaskState } from "./loadTaskState.js"
+import { mirrorStateToPr } from "./mirrorStateToPr.js"
 import { parseAgentResult } from "./parseAgentResult.js"
 import { persistArtifacts } from "./persistArtifacts.js"
 import { postIssueComment } from "./postIssueComment.js"
@@ -31,6 +32,7 @@ import { resolveFlow } from "./resolveFlow.js"
 import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
 import { saveTaskState } from "./saveTaskState.js"
+import { skipAgent } from "./skipAgent.js"
 import { syncFlow } from "./syncFlow.js"
 import { verify } from "./verify.js"
 import { watchStalePrsFlow } from "./watchStalePrsFlow.js"
@@ -53,6 +55,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   buildSyntheticPlugin,
   resolveArtifacts,
   composePrompt,
+  skipAgent,
 }
 
 export const postflightScripts: Record<string, PostflightScript> = {
@@ -70,6 +73,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   persistArtifacts,
   writeRunSummary,
   saveTaskState,
+  mirrorStateToPr,
 }
 
 export const allScriptNames: Set<string> = new Set([

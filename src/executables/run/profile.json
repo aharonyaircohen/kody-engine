@@ -79,6 +79,9 @@
       },
       {
         "script": "saveTaskState"
+      },
+      {
+        "script": "mirrorStateToPr"
       }
     ]
   },
