@@ -36,6 +36,7 @@ function makeProfile(partial: Partial<Profile["claudeCode"]>): Profile {
       model: "inherit",
       permissionMode: "default",
       maxTurns: null,
+      maxThinkingTokens: null,
       systemPromptAppend: null,
       tools: [],
       hooks: [],
