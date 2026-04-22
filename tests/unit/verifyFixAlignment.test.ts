@@ -66,16 +66,17 @@ describe("verifyFixAlignment postflight", () => {
     expect(ctx.data.action).toBeUndefined()
   })
 
-  it("fails with FIX_FAILED when agent claims fixed items but no commit was made", async () => {
+  it("accepts 'already fixed:' with no commit when no review file refs (idempotent re-run)", async () => {
     const ctx = makeCtx({
       agentDone: true,
-      feedbackActions: "- Item 1: fixed: moved cache",
+      feedbackActions: "- Item 1: already fixed: prior commit addressed it",
+      feedback: "### Concerns\n- prose concern without any file refs",
       commitResult: { committed: false },
     })
     await verifyFixAlignment(ctx as never, fixProfile, null)
-    expect(ctx.data.agentDone).toBe(false)
-    expect((ctx.data.action as { type: string } | undefined)?.type).toBe("FIX_FAILED")
-    expect(String(ctx.output.reason)).toMatch(/1 fixed item/)
+    expect(ctx.data.agentDone).toBe(true)
+    // upstream action (FIX_COMPLETED from parseAgentResult) stays
+    expect(ctx.data.action).toBeUndefined()
   })
 
   it("fails with FIX_FAILED when FEEDBACK_ACTIONS has zero items", async () => {

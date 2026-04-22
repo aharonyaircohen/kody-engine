@@ -153,15 +153,11 @@ export const verifyFixAlignment: PostflightScript = async (ctx, profile) => {
     return failOnce(ctx, "FIX_FAILED", "fix produced no FEEDBACK_ACTIONS items", summary)
   }
 
-  // B. Claimed fixed, nothing committed.
-  if (summary.fixedItems > 0 && !committed) {
-    return failOnce(
-      ctx,
-      "FIX_FAILED",
-      `fix claimed ${summary.fixedItems} fixed item(s) but produced no commit`,
-      summary,
-    )
-  }
+  // Rule B ("fixed: + no commit = FAIL") was a weak proxy kept from before
+  // the file-level check existed. It produces false positives when the agent
+  // says "already fixed:" (matches \bfixed\s*:\b) for items that were
+  // legitimately addressed in a previous commit on the same PR. The file-ref
+  // check below is the correct verification — leave it as the sole gate.
 
   // C. Review named files; commit doesn't touch the non-declined ones.
   const reviewBody = (ctx.data.feedback as string | undefined) ?? ""
