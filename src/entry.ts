@@ -1,10 +1,11 @@
 import pkg from "../package.json"
+import { runChat } from "./chat-cli.js"
 import { runExecutable } from "./executor.js"
 import { runCi } from "./kody2-cli.js"
 import { hasExecutable, listExecutables, parseGenericFlags } from "./registry.js"
 
 interface ParsedArgs {
-  command: "ci" | "help" | "version" | "__executable__"
+  command: "ci" | "chat" | "help" | "version" | "__executable__"
   executableName?: string
   cliArgs?: Record<string, unknown>
   cwd?: string
@@ -12,6 +13,7 @@ interface ParsedArgs {
   quiet?: boolean
   errors: string[]
   ciArgv?: string[]
+  chatArgv?: string[]
 }
 
 const HELP_TEXT = `kody2 — single-session autonomous engineer
@@ -24,6 +26,7 @@ Usage:
   kody2 review  --pr    <N>                    [--cwd <path>] [--verbose|--quiet]
   kody2 <other>                                [--cwd <path>] [--verbose|--quiet]
   kody2 ci      --issue <N> [preflight flags — see: kody2 ci --help]
+  kody2 chat    [chat flags — see: kody2 chat --help]
   kody2 help
   kody2 version
 
@@ -51,6 +54,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (cmd === "version" || cmd === "--version" || cmd === "-v") return { ...result, command: "version" }
   if (cmd === "ci") {
     return { ...result, command: "ci", ciArgv: argv.slice(1) }
+  }
+  if (cmd === "chat") {
+    return { ...result, command: "chat", chatArgv: argv.slice(1) }
   }
 
   // Every other top-level command is a discovered executable (run, fix, fix-ci,
@@ -90,6 +96,16 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   if (args.command === "ci") {
     try {
       return await runCi(args.ciArgv ?? [])
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[kody2] fatal: ${msg}\n`)
+      if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`)
+      return 99
+    }
+  }
+  if (args.command === "chat") {
+    try {
+      return await runChat(args.chatArgv ?? [])
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       process.stderr.write(`[kody2] fatal: ${msg}\n`)

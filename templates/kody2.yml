@@ -1,9 +1,13 @@
 # Drop this file at .github/workflows/kody2.yml in your repo.
 #
-# Triggers: @kody2 comment on an issue or PR, or manual workflow_dispatch.
-# Everything else (install deps, set up LiteLLM, run the agent, open the PR)
-# is handled inside the @kody-ade/kody-engine package. This template should
-# rarely need editing — future kody2 capabilities ship via npm publish.
+# Two triggers, two modes:
+#   - issue_comment / workflow_dispatch with issue_number → `kody2 ci`
+#     (the @kody2 issue/PR automation flow)
+#   - workflow_dispatch with sessionId                    → `kody2 chat`
+#     (dashboard-driven Gemini chat session)
+#
+# All orchestration lives in the kody2 npm package; future capabilities ship
+# via `npm publish`, not by editing this file.
 #
 # Required repo secrets: at least one model provider key (e.g. MINIMAX_API_KEY,
 # ANTHROPIC_API_KEY). kody2 reads any *_API_KEY secret automatically via
@@ -12,10 +16,8 @@
 # Recommended: KODY_TOKEN secret — a fine-grained PAT or GitHub App token
 # with `repo` + `read:org` scopes. Without it, kody2's commits/PR-creation
 # still work via github.token, but two things degrade:
-#   1. PR body updates fail with "token lacks read:org scope" (cosmetic,
-#      surfaces as warnings in logs; the PR itself is still created/updated).
-#   2. Pushes from kody2 won't trigger downstream workflows (github.token
-#      pushes are deliberately blocked from re-triggering CI).
+#   1. PR body updates fail with "token lacks read:org scope" (cosmetic).
+#   2. Pushes from kody2 won't trigger downstream workflows.
 # Set KODY_TOKEN in repo Settings → Secrets → Actions.
 
 name: kody2
@@ -24,16 +26,30 @@ on:
   workflow_dispatch:
     inputs:
       issue_number:
-        description: "GitHub issue number"
-        required: true
+        description: "GitHub issue number (agent mode)"
         type: string
+        default: ""
+      sessionId:
+        description: "Chat session ID (chat mode, from Kody-Dashboard)"
+        type: string
+        default: ""
+      message:
+        description: "Initial chat message (optional)"
+        type: string
+        default: ""
+      model:
+        description: "Model override (optional, e.g. anthropic/claude-haiku-4-5-20251001)"
+        type: string
+        default: ""
+      dashboardUrl:
+        description: "Dashboard event ingest URL with inline ?token=... (chat mode)"
+        type: string
+        default: ""
   issue_comment:
     types: [created]
 
 jobs:
   run:
-    # Skip bot-authored comments (e.g. kody2-bot's own status posts) so we
-    # don't loop the workflow on our own output.
     if: >-
       ${{ github.event_name == 'workflow_dispatch' ||
           (github.event_name == 'issue_comment' &&
@@ -41,7 +57,10 @@ jobs:
             github.event.comment.user.login != 'kody2-bot' &&
             github.event.comment.user.type != 'Bot') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 360
+    concurrency:
+      group: kody2-${{ inputs.sessionId || inputs.issue_number || github.event.issue.number || github.sha }}
+      cancel-in-progress: false
     permissions:
       issues: write
       pull-requests: write
@@ -61,5 +80,14 @@ jobs:
           python-version: "3.12"
 
       - env:
-          ALL_SECRETS: ${{ toJSON(secrets) }}
-        run: npx -y -p @kody-ade/kody-engine@latest kody2 ci
+          ALL_SECRETS:   ${{ toJSON(secrets) }}
+          SESSION_ID:    ${{ inputs.sessionId }}
+          INIT_MESSAGE:  ${{ inputs.message }}
+          MODEL:         ${{ inputs.model }}
+          DASHBOARD_URL: ${{ inputs.dashboardUrl }}
+        run: |
+          if [ -n "$SESSION_ID" ]; then
+            npx -y -p @kody-ade/kody-engine@latest kody2 chat
+          else
+            npx -y -p @kody-ade/kody-engine@latest kody2 ci
+          fi
