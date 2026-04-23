@@ -49,7 +49,11 @@ const DEFAULT_MAX_FILES = 20
 const DEFAULT_MAX_DELETIONS = 500
 
 export const riskGate: PostflightScript = async (ctx, profile, _agent, args) => {
-  const changedFiles = (ctx.data.changedFiles as string[] | undefined) ?? []
+  // Evaluate the FULL branch diff vs. base — not just the latest commit.
+  // On replay (nothing new to commit this run), the branch still carries the
+  // previously-gated changes and must re-trip the gate, so only an approval
+  // label can unblock progression.
+  const changedFiles = collectBranchChangedFiles(ctx)
   const gatesToRun = parseGates(args?.gates)
   const violations = evaluateGates(ctx, profile.name, changedFiles, gatesToRun, args)
 
@@ -247,6 +251,30 @@ function isDepFile(p: string): boolean {
 
 function isTestFile(p: string): boolean {
   return /(^|\/)(tests?|__tests__|spec)\//i.test(p) || /\.(test|spec)\.[a-z0-9]+$/i.test(p)
+}
+
+function collectBranchChangedFiles(ctx: {
+  cwd: string
+  data: Record<string, unknown>
+  config: { git: { defaultBranch: string } }
+}): string[] {
+  const base = ctx.config.git.defaultBranch
+  for (const ref of [`origin/${base}...HEAD`, `${base}...HEAD`]) {
+    try {
+      const out = execFileSync("git", ["diff", "--name-only", ref], {
+        cwd: ctx.cwd,
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+      })
+      const files = out.split("\n").map((s) => s.trim()).filter(Boolean)
+      if (files.length > 0) return files
+    } catch {
+      /* try next ref */
+    }
+  }
+  // Fallback for contexts where git diff against base isn't available
+  // (e.g. unit tests, non-git cwd): use what commitAndPush already gathered.
+  return (ctx.data.changedFiles as string[] | undefined) ?? []
 }
 
 function computeDiffStats(ctx: {
