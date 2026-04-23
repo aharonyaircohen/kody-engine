@@ -14,10 +14,14 @@
 # toJSON(secrets) — no need to list them here.
 #
 # Recommended: KODY_TOKEN secret — a fine-grained PAT or GitHub App token
-# with `repo` + `read:org` scopes. Without it, kody2's commits/PR-creation
-# still work via github.token, but two things degrade:
+# with `repo` + `read:org` + `workflow` scopes. Without it, kody2's
+# commits/PR-creation still work via github.token, but three things degrade:
 #   1. PR body updates fail with "token lacks read:org scope" (cosmetic).
 #   2. Pushes from kody2 won't trigger downstream workflows.
+#   3. Any commit that modifies `.github/workflows/*` is REJECTED by
+#      GitHub — the default GITHUB_TOKEN can't touch workflow files.
+#      (The `workflow-edit` risk gate is effectively unreachable without
+#      a token carrying the `workflow` scope.)
 # Set KODY_TOKEN in repo Settings → Secrets → Actions.
 
 name: kody2
