@@ -42,24 +42,12 @@
           "description": "kody2: implementing the change"
         }
       },
-      {
-        "script": "runFlow"
-      },
-      {
-        "script": "loadTaskState"
-      },
-      {
-        "script": "resolveArtifacts"
-      },
-      {
-        "script": "loadConventions"
-      },
-      {
-        "script": "loadCoverageRules"
-      },
-      {
-        "script": "composePrompt"
-      }
+      { "script": "runFlow" },
+      { "script": "loadTaskState" },
+      { "script": "resolveArtifacts" },
+      { "script": "loadConventions" },
+      { "script": "loadCoverageRules" },
+      { "script": "composePrompt" }
     ],
     "postflight": [
       { "script": "parseAgentResult" },
@@ -67,13 +55,12 @@
       { "script": "verify" },
       { "script": "checkCoverageWithRetry" },
       { "script": "commitAndPush" },
-      { "script": "riskGate" },
-      { "script": "ensurePr",          "runWhen": { "data.riskGate.decision": "allow" } },
-      { "script": "postIssueComment",  "runWhen": { "data.riskGate.decision": "allow" } },
+      { "script": "ensurePr" },
+      { "script": "postIssueComment" },
       { "script": "writeRunSummary" },
-      { "script": "saveTaskState",     "runWhen": { "data.riskGate.decision": "allow" } },
-      { "script": "mirrorStateToPr",   "runWhen": { "data.riskGate.decision": "allow" } },
-      { "script": "advanceFlow",       "runWhen": { "data.riskGate.decision": "allow" } }
+      { "script": "saveTaskState" },
+      { "script": "mirrorStateToPr" },
+      { "script": "advanceFlow" }
     ]
   },
   "input": {

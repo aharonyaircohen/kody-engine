@@ -218,30 +218,6 @@ describe("dispatch: issue_comment on PR", () => {
     })
   })
 
-  it("'@kody2 approve' on PR → approve", () => {
-    process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 approve" },
-      issue: { number: 88, pull_request: {} },
-    })
-    expect(autoDispatch()).toEqual({
-      executable: "approve",
-      cliArgs: { pr: 88 },
-      target: 88,
-    })
-  })
-
-  it("'@kody2 approve' on issue → approve (generic pass-through)", () => {
-    process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 approve" },
-      issue: { number: 89 },
-    })
-    expect(autoDispatch()).toEqual({
-      executable: "approve",
-      cliArgs: { issue: 89 },
-      target: 89,
-    })
-  })
-
   it("'@kody2 resolve' on PR → resolve", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody2 resolve" },

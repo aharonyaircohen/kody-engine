@@ -6,7 +6,6 @@
 
 import type { PostflightScript, PreflightScript } from "../executables/types.js"
 import { advanceFlow } from "./advanceFlow.js"
-import { applyApprovals } from "./applyApprovals.js"
 import { buildSyntheticPlugin } from "./buildSyntheticPlugin.js"
 import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
 import { classifyByLabel } from "./classifyByLabel.js"
@@ -40,7 +39,6 @@ import { resolveArtifacts } from "./resolveArtifacts.js"
 import { resolveFlow } from "./resolveFlow.js"
 import { resolvePreviewUrl } from "./resolvePreviewUrl.js"
 import { reviewFlow } from "./reviewFlow.js"
-import { riskGate } from "./riskGate.js"
 import { runFlow } from "./runFlow.js"
 import { saveTaskState } from "./saveTaskState.js"
 import { setLifecycleLabel } from "./setLifecycleLabel.js"
@@ -98,8 +96,6 @@ export const postflightScripts: Record<string, PostflightScript> = {
   advanceFlow,
   persistFlowState,
   postClassification,
-  riskGate,
-  applyApprovals,
 }
 
 export const allScriptNames: Set<string> = new Set([

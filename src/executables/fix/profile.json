@@ -49,21 +49,11 @@
           "description": "kody2: applying review feedback"
         }
       },
-      {
-        "script": "fixFlow"
-      },
-      {
-        "script": "loadTaskState"
-      },
-      {
-        "script": "loadConventions"
-      },
-      {
-        "script": "loadCoverageRules"
-      },
-      {
-        "script": "composePrompt"
-      }
+      { "script": "fixFlow" },
+      { "script": "loadTaskState" },
+      { "script": "loadConventions" },
+      { "script": "loadCoverageRules" },
+      { "script": "composePrompt" }
     ],
     "postflight": [
       { "script": "parseAgentResult" },
@@ -71,12 +61,11 @@
       { "script": "verify" },
       { "script": "checkCoverageWithRetry" },
       { "script": "commitAndPush" },
-      { "script": "riskGate" },
-      { "script": "ensurePr",         "runWhen": { "data.riskGate.decision": "allow" } },
-      { "script": "postIssueComment", "runWhen": { "data.riskGate.decision": "allow" } },
+      { "script": "ensurePr" },
+      { "script": "postIssueComment" },
       { "script": "writeRunSummary" },
-      { "script": "saveTaskState",    "runWhen": { "data.riskGate.decision": "allow" } },
-      { "script": "advanceFlow",      "runWhen": { "data.riskGate.decision": "allow" } }
+      { "script": "saveTaskState" },
+      { "script": "advanceFlow" }
     ]
   },
   "output": {

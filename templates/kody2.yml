@@ -20,8 +20,6 @@
 #   2. Pushes from kody2 won't trigger downstream workflows.
 #   3. Any commit that modifies `.github/workflows/*` is REJECTED by
 #      GitHub — the default GITHUB_TOKEN can't touch workflow files.
-#      (The `workflow-edit` risk gate is effectively unreachable without
-#      a token carrying the `workflow` scope.)
 # Set KODY_TOKEN in repo Settings → Secrets → Actions.
 
 name: kody2
