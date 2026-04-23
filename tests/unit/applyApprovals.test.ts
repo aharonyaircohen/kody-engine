@@ -5,7 +5,6 @@ vi.mock("node:child_process", () => ({
 }))
 
 vi.mock("../../src/issue.js", () => ({
-  gh: vi.fn(() => ""),
   postIssueComment: vi.fn(),
   postPrReviewComment: vi.fn(),
 }))
@@ -16,7 +15,7 @@ vi.mock("../../src/state.js", () => ({
 
 import { execFileSync } from "node:child_process"
 import type { Context, Profile } from "../../src/executables/types.js"
-import { gh, postIssueComment, postPrReviewComment } from "../../src/issue.js"
+import { postIssueComment, postPrReviewComment } from "../../src/issue.js"
 import { applyApprovals } from "../../src/scripts/applyApprovals.js"
 import { readTaskState } from "../../src/state.js"
 
@@ -32,93 +31,47 @@ function makeCtx(args: { issue?: number; pr?: number }): Context {
   }
 }
 
-beforeEach(() => {
-  vi.clearAllMocks()
+function stubState(overrides: { flow?: { name?: string; issueNumber?: number } }): void {
   vi.mocked(readTaskState).mockReturnValue({
     schemaVersion: 1,
     core: { phase: "idle", status: "succeeded", currentExecutable: null },
     attempts: {},
     history: [],
+    ...overrides,
   } as never)
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  stubState({})
 })
 
-describe("applyApprovals: target resolution", () => {
+describe("applyApprovals", () => {
   it("refuses to run without --issue or --pr", async () => {
     const ctx = makeCtx({})
     await applyApprovals(ctx, emptyProfile, null)
     expect(ctx.output.exitCode).toBe(64)
-    expect(gh).not.toHaveBeenCalled()
+    expect(postIssueComment).not.toHaveBeenCalled()
+    expect(postPrReviewComment).not.toHaveBeenCalled()
   })
 
-  it("applies labels to the issue when invoked with --issue", async () => {
-    vi.mocked(readTaskState).mockReturnValue({
-      schemaVersion: 1,
-      core: { phase: "idle", status: "succeeded", currentExecutable: null },
-      attempts: {},
-      history: [],
-    } as never)
+  it("posts confirmation on the issue when approved via issue", async () => {
     const ctx = makeCtx({ issue: 42 })
     await applyApprovals(ctx, emptyProfile, null)
-    const addLabelCalls = vi
-      .mocked(gh)
-      .mock.calls.filter((c) => c[0][0] === "issue" && c[0][1] === "edit" && c[0][3] === "--add-label")
-    expect(addLabelCalls.length).toBeGreaterThanOrEqual(6) // all + 5 gates
-    for (const c of addLabelCalls) {
-      expect(c[0][2]).toBe("42")
-      expect(String(c[0][4])).toMatch(/^kody-approve:/)
-    }
+    expect(postIssueComment).toHaveBeenCalledOnce()
+    expect(postPrReviewComment).not.toHaveBeenCalled()
   })
 
-  it("mirrors labels to PR when invoked on issue with prUrl in state", async () => {
-    vi.mocked(readTaskState).mockReturnValue({
-      schemaVersion: 1,
-      core: {
-        phase: "idle",
-        status: "succeeded",
-        currentExecutable: null,
-        prUrl: "https://github.com/o/r/pull/123",
-      },
-      attempts: {},
-      history: [],
-    } as never)
-    const ctx = makeCtx({ issue: 42 })
-    await applyApprovals(ctx, emptyProfile, null)
-    const addLabelCalls = vi
-      .mocked(gh)
-      .mock.calls.filter((c) => c[0][0] === "issue" && c[0][1] === "edit" && c[0][3] === "--add-label")
-    const targets = new Set(addLabelCalls.map((c) => c[0][2]))
-    expect(targets.has("42")).toBe(true)
-    expect(targets.has("123")).toBe(true)
-  })
-
-  it("mirrors labels to issue when invoked on PR with flow.issueNumber in state", async () => {
-    vi.mocked(readTaskState).mockReturnValue({
-      schemaVersion: 1,
-      core: { phase: "idle", status: "succeeded", currentExecutable: null },
-      attempts: {},
-      history: [],
-      flow: { name: "bug", issueNumber: 99, step: "run" },
-    } as never)
+  it("posts confirmation on the PR when approved via PR", async () => {
+    stubState({ flow: { name: "bug", issueNumber: 99 } })
     const ctx = makeCtx({ pr: 123 })
     await applyApprovals(ctx, emptyProfile, null)
-    const addLabelCalls = vi
-      .mocked(gh)
-      .mock.calls.filter((c) => c[0][0] === "issue" && c[0][1] === "edit" && c[0][3] === "--add-label")
-    const targets = new Set(addLabelCalls.map((c) => c[0][2]))
-    expect(targets.has("123")).toBe(true)
-    expect(targets.has("99")).toBe(true)
+    expect(postPrReviewComment).toHaveBeenCalledOnce()
+    expect(postIssueComment).not.toHaveBeenCalled()
   })
-})
 
-describe("applyApprovals: re-trigger", () => {
-  it("posts @kody2 <flow.name> on the issue when flow is known", async () => {
-    vi.mocked(readTaskState).mockReturnValue({
-      schemaVersion: 1,
-      core: { phase: "idle", status: "succeeded", currentExecutable: null },
-      attempts: {},
-      history: [],
-      flow: { name: "feature", issueNumber: 77, step: "run" },
-    } as never)
+  it("re-triggers @kody2 <flow.name> on the issue when flow is known", async () => {
+    stubState({ flow: { name: "feature", issueNumber: 77 } })
     const ctx = makeCtx({ issue: 77 })
     await applyApprovals(ctx, emptyProfile, null)
     const retrigger = vi
@@ -133,49 +86,25 @@ describe("applyApprovals: re-trigger", () => {
     expect(args).toContain("77")
   })
 
-  it("does NOT re-trigger when no flow is known", async () => {
-    vi.mocked(readTaskState).mockReturnValue({
-      schemaVersion: 1,
-      core: { phase: "idle", status: "succeeded", currentExecutable: null },
-      attempts: {},
-      history: [],
-    } as never)
+  it("re-triggers the flow on the originating issue even when approve came from PR side", async () => {
+    stubState({ flow: { name: "bug", issueNumber: 99 } })
+    const ctx = makeCtx({ pr: 123 })
+    await applyApprovals(ctx, emptyProfile, null)
+    const retrigger = vi
+      .mocked(execFileSync)
+      .mock.calls.find(
+        (c) => c[0] === "gh" && Array.isArray(c[1]) && (c[1] as string[]).includes("@kody2 bug"),
+      )
+    expect(retrigger).toBeDefined()
+    expect(retrigger?.[1] as string[]).toContain("99") // issue number, not PR
+  })
+
+  it("does NOT re-trigger when no flow is in state", async () => {
     const ctx = makeCtx({ issue: 77 })
     await applyApprovals(ctx, emptyProfile, null)
     const retrigger = vi
       .mocked(execFileSync)
       .mock.calls.find((c) => c[0] === "gh" && Array.isArray(c[1]) && (c[1] as string[]).some((s) => s.startsWith("@kody2")))
     expect(retrigger).toBeUndefined()
-  })
-})
-
-describe("applyApprovals: confirmation comment", () => {
-  it("posts confirmation on the issue when approved via issue", async () => {
-    const ctx = makeCtx({ issue: 42 })
-    await applyApprovals(ctx, emptyProfile, null)
-    expect(postIssueComment).toHaveBeenCalledOnce()
-    expect(postPrReviewComment).not.toHaveBeenCalled()
-  })
-
-  it("posts confirmation on the PR when approved via PR", async () => {
-    const ctx = makeCtx({ pr: 123 })
-    await applyApprovals(ctx, emptyProfile, null)
-    expect(postPrReviewComment).toHaveBeenCalledOnce()
-    expect(postIssueComment).not.toHaveBeenCalled()
-  })
-})
-
-describe("applyApprovals: label creation", () => {
-  it("ensures all approve labels exist in the repo", async () => {
-    const ctx = makeCtx({ issue: 42 })
-    await applyApprovals(ctx, emptyProfile, null)
-    const createCalls = vi.mocked(gh).mock.calls.filter((c) => c[0][0] === "label" && c[0][1] === "create")
-    const labels = createCalls.map((c) => c[0][2])
-    expect(labels).toContain("kody-approve:all")
-    expect(labels).toContain("kody-approve:secrets")
-    expect(labels).toContain("kody-approve:workflow-edit")
-    expect(labels).toContain("kody-approve:large-diff")
-    expect(labels).toContain("kody-approve:dep-change")
-    expect(labels).toContain("kody-approve:test-deletion")
   })
 })

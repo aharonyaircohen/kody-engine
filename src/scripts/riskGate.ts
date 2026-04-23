@@ -2,36 +2,36 @@
  * Postflight: evaluate risk gates on committed changes and halt flow
  * progression when a gate trips without human approval.
  *
- * Gates inspect `ctx.data.changedFiles` (set by commitAndPush) and the
- * current diff stats against the base branch. Each tripped gate produces
- * a Violation; a Violation is "acknowledged" iff the target issue/PR
- * carries `kody-approve:<gate>` (per-gate) or — for soft gates — the
- * wildcard `kody-approve:all`. Hard gates (e.g. `secrets`) require the
- * specific per-gate label.
+ * Approval is comment-based — not label-based. After the advisory comment
+ * is posted, a human approves by commenting `@kody2 approve` on the issue
+ * OR the PR. On the next CI run, riskGate scans recent comments on both
+ * surfaces (current target + originating issue, discovered via task state)
+ * for an `@kody2 approve` posted AFTER the latest advisory, and if found
+ * sets decision = "allow".
  *
- * When any violation is pending, the script:
- *   - sets `ctx.data.riskGate.decision = "halt"`,
- *   - applies the `kody:gated` lifecycle label (mutex with `kody:running`),
- *   - lazy-creates the per-gate `kody-approve:<name>` labels,
- *   - posts an advisory comment explaining how to approve and resume.
+ * Hard vs. soft severity is informational (shown in the advisory so a
+ * reviewer understands what they're approving) — the decision is all-or-
+ * nothing: one `@kody2 approve` unblocks every pending gate.
  *
- * Downstream scripts that should NOT run when gated (e.g. `advanceFlow`)
- * guard themselves in the profile:
- *   { "script": "advanceFlow", "runWhen": { "data.riskGate.decision": "allow" } }
+ * On halt, riskGate:
+ *   - sets ctx.data.riskGate.decision = "halt",
+ *   - applies the `kody:waiting` lifecycle label (mutex with `kody:running`),
+ *   - posts the advisory comment with a branch compare URL.
  *
- * Approval model matches the "GitHub is the durable store" design: a
- * gated flow is a replay, not a live resume. The branch + commits remain
- * on GitHub; the approval label unlocks the gate on the next trigger.
+ * Downstream scripts that should NOT run when halted (ensurePr,
+ * postIssueComment, saveTaskState, mirrorStateToPr, advanceFlow) guard
+ * themselves in the profile:
+ *   { "script": "ensurePr", "runWhen": { "data.riskGate.decision": "allow" } }
  */
 
 import { execFileSync } from "node:child_process"
 import type { PostflightScript } from "../executables/types.js"
 import {
-  gh,
+  getIssue,
   postIssueComment as ghPostIssueComment,
   postPrReviewComment as ghPostPrReviewComment,
 } from "../issue.js"
-import { getIssueLabels, setKodyLabel } from "../lifecycleLabels.js"
+import { setKodyLabel } from "../lifecycleLabels.js"
 
 export interface Violation {
   name: GateName
@@ -42,17 +42,17 @@ export interface Violation {
 export type GateName = "secrets" | "workflow-edit" | "large-diff" | "dep-change" | "test-deletion"
 
 const ALL_GATES: GateName[] = ["secrets", "workflow-edit", "large-diff", "dep-change", "test-deletion"]
-const HARD_GATES: Set<GateName> = new Set(["secrets"])
-const APPROVE_ALL = "kody-approve:all"
-const GATED_LABEL = "kody:gated"
+const WAITING_LABEL = "kody:waiting"
+const ADVISORY_MARKER = "kody2 risk gate halted the flow"
+const APPROVE_COMMAND = /(^|\s)@kody2\s+approve\b/i
 const DEFAULT_MAX_FILES = 20
 const DEFAULT_MAX_DELETIONS = 500
 
 export const riskGate: PostflightScript = async (ctx, profile, _agent, args) => {
-  // Evaluate the FULL branch diff vs. base — not just the latest commit.
-  // On replay (nothing new to commit this run), the branch still carries the
-  // previously-gated changes and must re-trip the gate, so only an approval
-  // label can unblock progression.
+  // Evaluate the FULL branch diff vs. base, not just the latest commit.
+  // On replay (nothing new to commit this run), the branch still carries
+  // the previously-gated changes — and must re-trip the gate unless the
+  // user has approved via `@kody2 approve`.
   const changedFiles = collectBranchChangedFiles(ctx)
   const gatesToRun = parseGates(args?.gates)
   const violations = evaluateGates(ctx, profile.name, changedFiles, gatesToRun, args)
@@ -64,32 +64,21 @@ export const riskGate: PostflightScript = async (ctx, profile, _agent, args) => 
 
   const targetType = ctx.data.commentTargetType as "issue" | "pr" | undefined
   const targetNumber = Number(ctx.data.commentTargetNumber ?? 0)
-  // Read labels from BOTH the current target AND the originating issue (if
-  // this is a PR-side primitive like fix) so an approval on either surface is
-  // recognized. Users `@kody2 approve` on whichever they happen to be reading.
-  const labels = collectApprovalLabels(ctx, targetType, targetNumber)
-  const approveAll = labels.includes(APPROVE_ALL)
-  const pending = violations.filter((v) => !isApproved(v, labels, approveAll))
+  const approved = hasApproval(ctx, targetType, targetNumber)
 
   ctx.data.riskGate = {
     violations,
-    pending,
-    decision: pending.length === 0 ? "allow" : "halt",
+    pending: approved ? [] : violations,
+    decision: approved ? "allow" : "halt",
   }
 
-  if (pending.length === 0 || !targetType || targetNumber <= 0) return
-
-  // Pre-create each per-gate approve label so the user can apply it via
-  // `gh issue edit --add-label` or the GitHub web UI without a chicken-and-egg.
-  for (const v of pending) {
-    ensureApproveLabel(v.name, ctx.cwd)
-  }
+  if (approved || !targetType || targetNumber <= 0) return
 
   try {
     setKodyLabel(
       targetNumber,
       {
-        label: GATED_LABEL,
+        label: WAITING_LABEL,
         color: "fbca04",
         description: "kody2: awaiting human approval of risk gate(s)",
       },
@@ -100,7 +89,7 @@ export const riskGate: PostflightScript = async (ctx, profile, _agent, args) => 
   }
 
   const compareUrl = computeCompareUrl(ctx)
-  const body = formatAdvisory(pending, compareUrl)
+  const body = formatAdvisory(violations, compareUrl)
   try {
     if (targetType === "issue") ghPostIssueComment(targetNumber, body, ctx.cwd)
     else ghPostPrReviewComment(targetNumber, body, ctx.cwd)
@@ -109,9 +98,72 @@ export const riskGate: PostflightScript = async (ctx, profile, _agent, args) => 
   }
 
   if (!ctx.output.reason) {
-    ctx.output.reason = `risk gate halt: ${pending.map((p) => p.name).join(", ")}`
+    ctx.output.reason = `risk gate halt: ${violations.map((p) => p.name).join(", ")}`
   }
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Approval scan
+// ────────────────────────────────────────────────────────────────────────────
+
+function hasApproval(
+  ctx: { cwd: string; data: Record<string, unknown> },
+  targetType: "issue" | "pr" | undefined,
+  targetNumber: number,
+): boolean {
+  const surfaces: number[] = []
+  if (targetNumber > 0) surfaces.push(targetNumber)
+  if (targetType === "pr") {
+    const state = ctx.data.taskState as { flow?: { issueNumber?: number } } | undefined
+    const issueNum = state?.flow?.issueNumber
+    if (typeof issueNum === "number" && issueNum > 0 && !surfaces.includes(issueNum)) {
+      surfaces.push(issueNum)
+    }
+  }
+  for (const n of surfaces) {
+    if (surfaceIsApproved(n, ctx.cwd)) return true
+  }
+  return false
+}
+
+/**
+ * A surface is approved iff it carries an `@kody2 approve` comment whose
+ * createdAt is strictly later than the most recent risk-gate advisory on
+ * the same surface. That ties the approval to the *current* gated state
+ * — an old approve from a prior flow stage doesn't silently re-approve.
+ * If no advisory has been posted yet, any approve comment counts (the
+ * pre-advisory case happens only in tests / synthetic scenarios).
+ */
+function surfaceIsApproved(n: number, cwd: string): boolean {
+  let comments: Array<{ body: string; createdAt: string; author: string }> = []
+  try {
+    comments = getIssue(n, cwd).comments
+  } catch {
+    return false
+  }
+  const advisoryAt = latestAdvisoryTimestamp(comments)
+  for (const c of comments) {
+    if (!APPROVE_COMMAND.test(c.body)) continue
+    if (advisoryAt !== null && c.createdAt <= advisoryAt) continue
+    return true
+  }
+  return false
+}
+
+function latestAdvisoryTimestamp(
+  comments: Array<{ body: string; createdAt: string }>,
+): string | null {
+  let latest: string | null = null
+  for (const c of comments) {
+    if (!c.body.includes(ADVISORY_MARKER)) continue
+    if (latest === null || c.createdAt > latest) latest = c.createdAt
+  }
+  return latest
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Gate evaluators
+// ────────────────────────────────────────────────────────────────────────────
 
 function evaluateGates(
   ctx: { cwd: string; config: { git: { defaultBranch: string } } },
@@ -190,32 +242,6 @@ function evaluateGates(
   return violations
 }
 
-function collectApprovalLabels(
-  ctx: { cwd: string; data: Record<string, unknown> },
-  targetType: "issue" | "pr" | undefined,
-  targetNumber: number,
-): string[] {
-  const seen = new Set<string>()
-  if (targetNumber > 0) {
-    for (const l of getIssueLabels(targetNumber, ctx.cwd)) seen.add(l)
-  }
-  // If on a PR, also check the originating issue (flow state knows it).
-  if (targetType === "pr") {
-    const state = ctx.data.taskState as { flow?: { issueNumber?: number } } | undefined
-    const issueNum = state?.flow?.issueNumber
-    if (typeof issueNum === "number" && issueNum > 0 && issueNum !== targetNumber) {
-      for (const l of getIssueLabels(issueNum, ctx.cwd)) seen.add(l)
-    }
-  }
-  return [...seen]
-}
-
-function isApproved(v: Violation, labels: string[], approveAll: boolean): boolean {
-  if (labels.includes(`kody-approve:${v.name}`)) return true
-  if (!HARD_GATES.has(v.name) && approveAll) return true
-  return false
-}
-
 function parseGates(spec: unknown): GateName[] {
   if (spec === undefined || spec === null || spec === "") return ALL_GATES
   const list = String(spec)
@@ -236,6 +262,10 @@ function preview(list: string[], max = 5): string {
   if (list.length <= max) return list.join(", ")
   return `${list.slice(0, max).join(", ")} (+${list.length - max} more)`
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Path classifiers
+// ────────────────────────────────────────────────────────────────────────────
 
 const SECRET_PATTERNS: RegExp[] = [
   /(^|\/)\.env(\.|$)/i,
@@ -282,6 +312,10 @@ function isTestFile(p: string): boolean {
   return /(^|\/)(tests?|__tests__|spec)\//i.test(p) || /\.(test|spec)\.[a-z0-9]+$/i.test(p)
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Git helpers
+// ────────────────────────────────────────────────────────────────────────────
+
 function collectBranchChangedFiles(ctx: {
   cwd: string
   data: Record<string, unknown>
@@ -301,8 +335,6 @@ function collectBranchChangedFiles(ctx: {
       /* try next ref */
     }
   }
-  // Fallback for contexts where git diff against base isn't available
-  // (e.g. unit tests, non-git cwd): use what commitAndPush already gathered.
   return (ctx.data.changedFiles as string[] | undefined) ?? []
 }
 
@@ -353,33 +385,17 @@ function listDeletedFilesInHeadCommit(cwd: string): string[] {
   }
 }
 
-function ensureApproveLabel(gate: GateName, cwd: string): void {
-  try {
-    gh(
-      [
-        "label",
-        "create",
-        `kody-approve:${gate}`,
-        "--force",
-        "--color",
-        "0e8a16",
-        "--description",
-        `kody2: approve the ${gate} risk gate and resume the flow`,
-      ],
-      { cwd },
-    )
-  } catch {
-    /* best effort — user can also create via the GitHub UI */
-  }
-}
+// ────────────────────────────────────────────────────────────────────────────
+// Advisory
+// ────────────────────────────────────────────────────────────────────────────
 
-function formatAdvisory(pending: Violation[], compareUrl: string | null): string {
+function formatAdvisory(violations: Violation[], compareUrl: string | null): string {
   const lines: string[] = []
-  lines.push("⏸️ **kody2 risk gate halted the flow.**")
+  lines.push(`⏸️ **${ADVISORY_MARKER}.**`)
   lines.push("")
   lines.push("The branch was pushed but **no PR was opened** — waiting for human approval:")
   lines.push("")
-  for (const v of pending) {
+  for (const v of violations) {
     lines.push(`- **\`${v.name}\`** _(${v.severity})_ — ${v.reason}`)
   }
   lines.push("")
@@ -387,12 +403,12 @@ function formatAdvisory(pending: Violation[], compareUrl: string | null): string
     lines.push(`📎 Review the branch diff: ${compareUrl}`)
     lines.push("")
   }
-  lines.push("**To approve and resume**, post a comment:")
+  lines.push("**To approve and resume**, post a comment on this issue or PR:")
   lines.push("")
   lines.push("> `@kody2 approve`")
   lines.push("")
   lines.push(
-    "kody2 will acknowledge all currently-pending gates (soft **and** hard), open the PR, and continue the flow from this checkpoint. No re-running the agent.",
+    "kody2 will open the PR and continue the flow from this checkpoint. No re-running the agent.",
   )
   return lines.join("\n")
 }
