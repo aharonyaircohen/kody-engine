@@ -1,0 +1,64 @@
+{
+  "name": "classify",
+  "role": "primitive",
+  "describe": "Classify an issue into one of {feature, bug, spec, chore} and dispatch the matching sub-orchestrator. Label-first fast path; LLM fallback when labels don't decide.",
+  "inputs": [
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": true,
+      "describe": "GitHub issue number to classify."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": null,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": [
+      "Read",
+      "Bash"
+    ],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "scripts": {
+    "preflight": [
+      {
+        "script": "setLifecycleLabel",
+        "with": {
+          "label": "kody:classifying",
+          "color": "0e8a16",
+          "description": "kody2: classifying the issue"
+        }
+      },
+      { "script": "loadIssueContext" },
+      { "script": "loadTaskState" },
+      { "script": "classifyByLabel" },
+      { "script": "loadConventions" },
+      { "script": "composePrompt" }
+    ],
+    "postflight": [
+      { "script": "parseAgentResult" },
+      { "script": "postClassification" },
+      { "script": "writeRunSummary" },
+      { "script": "saveTaskState" }
+    ]
+  },
+  "output": {
+    "actionTypes": [
+      "CLASSIFIED_AS_FEATURE",
+      "CLASSIFIED_AS_BUG",
+      "CLASSIFIED_AS_SPEC",
+      "CLASSIFIED_AS_CHORE",
+      "CLASSIFY_FAILED"
+    ]
+  }
+}

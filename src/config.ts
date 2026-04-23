@@ -29,10 +29,19 @@ export interface Kody2Config {
   testRequirements?: TestRequirement[]
   /**
    * Executable name to invoke when a user triggers bare `@kody2` with no
-   * subcommand. Defaults to "run". Set to "orchestrator" to chain multiple
-   * executables via a driving agent.
+   * subcommand. Defaults to "run". Set to "classify" to auto-triage into
+   * one of {feature, bug, spec, chore} before dispatching; "bug"/"feature"
+   * to force a specific sub-orchestrator.
    */
   defaultExecutable?: string
+  /**
+   * Classifier configuration (only honored when bare `@kody2` routes to
+   * the `classify` executable). `labelMap` lets you override the built-in
+   * label → flow mapping (see src/scripts/classifyByLabel.ts for defaults).
+   */
+  classify?: {
+    labelMap?: Record<string, string>
+  }
   release?: {
     versionFiles?: string[]
     publishCommand?: string
@@ -115,8 +124,24 @@ export function loadConfig(projectDir: string = process.cwd()): Kody2Config {
     testRequirements: parseTestRequirements(raw.testRequirements),
     defaultExecutable:
       typeof raw.defaultExecutable === "string" && raw.defaultExecutable.length > 0 ? raw.defaultExecutable : undefined,
+    classify: parseClassifyConfig(raw.classify),
     release: parseReleaseConfig(raw.release),
   }
+}
+
+function parseClassifyConfig(raw: unknown): Kody2Config["classify"] {
+  if (!raw || typeof raw !== "object") return undefined
+  const r = raw as Record<string, unknown>
+  const out: NonNullable<Kody2Config["classify"]> = {}
+  if (r.labelMap && typeof r.labelMap === "object") {
+    const entries = Object.entries(r.labelMap as Record<string, unknown>).filter(
+      ([, v]) => typeof v === "string" && (v as string).length > 0,
+    )
+    if (entries.length > 0) {
+      out.labelMap = Object.fromEntries(entries.map(([k, v]) => [k.toLowerCase(), String(v)]))
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined
 }
 
 function parseReleaseConfig(raw: unknown): Kody2Config["release"] {

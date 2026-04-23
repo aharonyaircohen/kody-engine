@@ -13,6 +13,12 @@ export interface IssueData {
   title: string
   body: string
   comments: IssueComment[]
+  /**
+   * GitHub labels applied to the issue. Used by the classifier's fast
+   * path. Optional for backward compat with call sites that construct an
+   * IssueData literal (e.g. tests) — getIssue always populates it.
+   */
+  labels?: string[]
 }
 
 function ghToken(): string | undefined {
@@ -33,7 +39,7 @@ export function gh(args: string[], options?: { input?: string; cwd?: string }): 
 }
 
 export function getIssue(issueNumber: number, cwd?: string): IssueData {
-  const output = gh(["issue", "view", String(issueNumber), "--json", "number,title,body,comments"], { cwd })
+  const output = gh(["issue", "view", String(issueNumber), "--json", "number,title,body,comments,labels"], { cwd })
   const parsed = JSON.parse(output)
   if (typeof parsed?.title !== "string") {
     throw new Error(`Issue #${issueNumber}: unexpected response shape`)
@@ -47,6 +53,9 @@ export function getIssue(issueNumber: number, cwd?: string): IssueData {
       author: c.author?.login ?? "unknown",
       createdAt: c.createdAt ?? "",
     })),
+    labels: Array.isArray(parsed.labels)
+      ? (parsed.labels as Array<{ name?: string }>).map((l) => l.name ?? "").filter((n) => n.length > 0)
+      : [],
   }
 }
 

@@ -8,6 +8,7 @@ import type { PostflightScript, PreflightScript } from "../executables/types.js"
 import { advanceFlow } from "./advanceFlow.js"
 import { buildSyntheticPlugin } from "./buildSyntheticPlugin.js"
 import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
+import { classifyByLabel } from "./classifyByLabel.js"
 import { commitAndPush } from "./commitAndPush.js"
 import { composePrompt } from "./composePrompt.js"
 import { discoverQaContext } from "./discoverQaContext.js"
@@ -26,6 +27,7 @@ import { mirrorStateToPr } from "./mirrorStateToPr.js"
 import { parseAgentResult } from "./parseAgentResult.js"
 import { persistArtifacts } from "./persistArtifacts.js"
 import { persistFlowState } from "./persistFlowState.js"
+import { postClassification } from "./postClassification.js"
 import { postIssueComment } from "./postIssueComment.js"
 import { postPlanComment } from "./postPlanComment.js"
 import { postResearchComment } from "./postResearchComment.js"
@@ -69,6 +71,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   composePrompt,
   setLifecycleLabel,
   skipAgent,
+  classifyByLabel,
 }
 
 export const postflightScripts: Record<string, PostflightScript> = {
@@ -92,6 +95,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   finishFlow,
   advanceFlow,
   persistFlowState,
+  postClassification,
 }
 
 export const allScriptNames: Set<string> = new Set([

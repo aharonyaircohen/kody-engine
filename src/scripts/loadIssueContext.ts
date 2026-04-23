@@ -37,7 +37,10 @@ export const loadIssueContext: PreflightScript = async (ctx) => {
           .map((c) => `- **${c.author}** (${c.createdAt}):\n  ${truncate(c.body, maxBytes).replace(/\n/g, "\n  ")}`)
           .join("\n\n")
 
-  ctx.data.issue = { ...issue, commentsFormatted }
+  const labels = issue.labels ?? []
+  const labelsFormatted = labels.length === 0 ? "(no labels)" : labels.map((l) => `\`${l}\``).join(", ")
+
+  ctx.data.issue = { ...issue, commentsFormatted, labelsFormatted }
   ctx.data.commentTargetType = "issue"
   ctx.data.commentTargetNumber = issueNumber
 }
