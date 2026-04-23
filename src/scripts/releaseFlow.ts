@@ -48,13 +48,19 @@ export function updateVersionInFile(file: string, newVersion: string, cwd: strin
 /**
  * Build changelog entries from `git log <lastTag>..HEAD --pretty=...`
  * Filters out merge commits and existing release commits. Groups by
- * conventional-commit type.
+ * conventional-commit type. When there is no prior `v*` tag (fresh repo,
+ * first release), cap the window to FIRST_RELEASE_COMMIT_CAP commits so
+ * the generated entry stays under GitHub's 65536-char PR body limit.
  */
+const FIRST_RELEASE_COMMIT_CAP = 100
+
 export function generateChangelog(cwd: string, newVersion: string, lastTag: string | null): string {
-  const range = lastTag ? `${lastTag}..HEAD` : "HEAD"
+  const logArgs = ["log", "--pretty=format:%s||%h", "--no-merges"]
+  if (lastTag) logArgs.splice(1, 0, `${lastTag}..HEAD`)
+  else logArgs.splice(1, 0, `-n${FIRST_RELEASE_COMMIT_CAP}`, "HEAD")
   let log = ""
   try {
-    log = execFileSync("git", ["log", range, "--pretty=format:%s||%h", "--no-merges"], {
+    log = execFileSync("git", logArgs, {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -241,10 +247,13 @@ async function runPrepare(args: PrepareArgs): Promise<void> {
     return
   }
 
-  // Open release PR.
+  // Open release PR. GitHub caps PR bodies at 65536 chars; the full entry
+  // always lives in CHANGELOG.md so truncation here is safe.
   const base = ctx.config.git.defaultBranch
   const title = `chore: release ${tag}`
-  const body = `Automated release PR opened by kody.\n\n${entry}\n\nMerge this and then run \`kody release --mode finalize\`.`
+  const bodyMax = 60000
+  const rawEntry = entry.length > bodyMax ? `${entry.slice(0, bodyMax)}\n\n_… truncated; see CHANGELOG.md_` : entry
+  const body = `Automated release PR opened by kody.\n\n${rawEntry}\n\nMerge this and then run \`kody release --mode finalize\`.`
   let prUrl = ""
   try {
     prUrl = gh(["pr", "create", "--head", releaseBranch, "--base", base, "--title", title, "--body-file", "-"], {
