@@ -1,0 +1,47 @@
+{
+  "name": "approve",
+  "role": "utility",
+  "describe": "Acknowledge pending risk gate(s) on an issue or PR: applies kody-approve:* labels on both the issue and its PR (if discoverable via task state), then re-triggers the paused flow. Invoked by `@kody2 approve`.",
+  "inputs": [
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": false,
+      "describe": "Issue number (when approving on the originating issue)."
+    },
+    {
+      "name": "pr",
+      "flag": "--pr",
+      "type": "int",
+      "required": false,
+      "describe": "PR number (when approving on the PR side)."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": 0,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "scripts": {
+    "preflight": [
+      { "script": "skipAgent" }
+    ],
+    "postflight": [
+      { "script": "applyApprovals" }
+    ]
+  },
+  "output": {
+    "actionTypes": []
+  }
+}

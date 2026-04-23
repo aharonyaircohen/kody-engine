@@ -82,6 +82,9 @@ export function autoDispatch(opts?: {
 
   // PR routing: each subcommand is its own executable.
   if (isPr) {
+    if (/\bapprove\b/.test(afterTag)) {
+      return { executable: "approve", cliArgs: { pr: targetNum }, target: targetNum }
+    }
     if (/\bfix-ci\b/.test(afterTag)) {
       return { executable: "fix-ci", cliArgs: { pr: targetNum }, target: targetNum }
     }

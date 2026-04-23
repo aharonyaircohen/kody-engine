@@ -64,7 +64,10 @@ export const riskGate: PostflightScript = async (ctx, profile, _agent, args) => 
 
   const targetType = ctx.data.commentTargetType as "issue" | "pr" | undefined
   const targetNumber = Number(ctx.data.commentTargetNumber ?? 0)
-  const labels = targetNumber > 0 ? getIssueLabels(targetNumber, ctx.cwd) : []
+  // Read labels from BOTH the current target AND the originating issue (if
+  // this is a PR-side primitive like fix) so an approval on either surface is
+  // recognized. Users `@kody2 approve` on whichever they happen to be reading.
+  const labels = collectApprovalLabels(ctx, targetType, targetNumber)
   const approveAll = labels.includes(APPROVE_ALL)
   const pending = violations.filter((v) => !isApproved(v, labels, approveAll))
 
@@ -96,7 +99,8 @@ export const riskGate: PostflightScript = async (ctx, profile, _agent, args) => 
     /* best effort */
   }
 
-  const body = formatAdvisory(pending)
+  const compareUrl = computeCompareUrl(ctx)
+  const body = formatAdvisory(pending, compareUrl)
   try {
     if (targetType === "issue") ghPostIssueComment(targetNumber, body, ctx.cwd)
     else ghPostPrReviewComment(targetNumber, body, ctx.cwd)
@@ -184,6 +188,26 @@ function evaluateGates(
   }
 
   return violations
+}
+
+function collectApprovalLabels(
+  ctx: { cwd: string; data: Record<string, unknown> },
+  targetType: "issue" | "pr" | undefined,
+  targetNumber: number,
+): string[] {
+  const seen = new Set<string>()
+  if (targetNumber > 0) {
+    for (const l of getIssueLabels(targetNumber, ctx.cwd)) seen.add(l)
+  }
+  // If on a PR, also check the originating issue (flow state knows it).
+  if (targetType === "pr") {
+    const state = ctx.data.taskState as { flow?: { issueNumber?: number } } | undefined
+    const issueNum = state?.flow?.issueNumber
+    if (typeof issueNum === "number" && issueNum > 0 && issueNum !== targetNumber) {
+      for (const l of getIssueLabels(issueNum, ctx.cwd)) seen.add(l)
+    }
+  }
+  return [...seen]
 }
 
 function isApproved(v: Violation, labels: string[], approveAll: boolean): boolean {
@@ -344,25 +368,40 @@ function ensureApproveLabel(gate: GateName, cwd: string): void {
   }
 }
 
-function formatAdvisory(pending: Violation[]): string {
+function formatAdvisory(pending: Violation[], compareUrl: string | null): string {
   const lines: string[] = []
   lines.push("⏸️ **kody2 risk gate halted the flow.**")
   lines.push("")
-  lines.push("The changes were committed and pushed, but the flow will **not progress** until a human approves:")
+  lines.push("The branch was pushed but **no PR was opened** — waiting for human approval:")
   lines.push("")
   for (const v of pending) {
     lines.push(`- **\`${v.name}\`** _(${v.severity})_ — ${v.reason}`)
   }
   lines.push("")
-  lines.push("**To approve and resume**, add one of these labels to this issue/PR:")
-  const perGate = pending.map((v) => `\`kody-approve:${v.name}\``).join(", ")
-  lines.push(`- ${perGate}`)
-  if (pending.some((v) => v.severity === "soft")) {
-    lines.push("- `kody-approve:all` — bypass **soft** gates at once (hard gates still require their specific label)")
+  if (compareUrl) {
+    lines.push(`📎 Review the branch diff: ${compareUrl}`)
+    lines.push("")
   }
+  lines.push("**To approve and resume**, post a comment:")
+  lines.push("")
+  lines.push("> `@kody2 approve`")
   lines.push("")
   lines.push(
-    "Then re-trigger kody2 (e.g. post a new `@kody2 …` comment). The branch already holds the committed work, so the re-run resumes from the same point.",
+    "kody2 will acknowledge all currently-pending gates (soft **and** hard), open the PR, and continue the flow from this checkpoint. No re-running the agent.",
   )
   return lines.join("\n")
+}
+
+function computeCompareUrl(ctx: {
+  cwd: string
+  config: { git: { defaultBranch: string }; github?: { owner?: string; repo?: string } }
+  data: Record<string, unknown>
+}): string | null {
+  const branch = ctx.data.branch as string | undefined
+  if (!branch) return null
+  const owner = ctx.config.github?.owner
+  const repo = ctx.config.github?.repo
+  if (!owner || !repo) return null
+  const base = ctx.config.git.defaultBranch
+  return `https://github.com/${owner}/${repo}/compare/${base}...${branch}`
 }

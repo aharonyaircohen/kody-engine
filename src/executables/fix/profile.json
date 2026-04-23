@@ -66,40 +66,17 @@
       }
     ],
     "postflight": [
-      {
-        "script": "parseAgentResult"
-      },
-      {
-        "script": "requireFeedbackActions"
-      },
-      {
-        "script": "verify"
-      },
-      {
-        "script": "checkCoverageWithRetry"
-      },
-      {
-        "script": "commitAndPush"
-      },
-      {
-        "script": "ensurePr"
-      },
-      {
-        "script": "postIssueComment"
-      },
-      {
-        "script": "writeRunSummary"
-      },
-      {
-        "script": "saveTaskState"
-      },
-      {
-        "script": "riskGate"
-      },
-      {
-        "script": "advanceFlow",
-        "runWhen": { "data.riskGate.decision": "allow" }
-      }
+      { "script": "parseAgentResult" },
+      { "script": "requireFeedbackActions" },
+      { "script": "verify" },
+      { "script": "checkCoverageWithRetry" },
+      { "script": "commitAndPush" },
+      { "script": "riskGate" },
+      { "script": "ensurePr",         "runWhen": { "data.riskGate.decision": "allow" } },
+      { "script": "postIssueComment", "runWhen": { "data.riskGate.decision": "allow" } },
+      { "script": "writeRunSummary" },
+      { "script": "saveTaskState",    "runWhen": { "data.riskGate.decision": "allow" } },
+      { "script": "advanceFlow",      "runWhen": { "data.riskGate.decision": "allow" } }
     ]
   },
   "output": {
