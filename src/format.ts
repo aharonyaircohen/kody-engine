@@ -78,8 +78,13 @@ function formatUserToolResult(msg: SdkMessageLike, opts: RenderOptions): string 
 }
 
 function formatResult(msg: SdkMessageLike): string {
+  // Intentionally NOT "DONE" / "FAILED": those are reserved for the
+  // agent-contract markers parseAgentResult looks for. Using the same
+  // words here produced visual collisions in logs where operators
+  // couldn't tell whether the agent had emitted the contract sentinel
+  // or the SDK had just ended a query session.
   const ok = msg.subtype === "success"
-  const tag = ok ? "DONE" : `FAILED (${msg.subtype ?? "unknown"})`
+  const tag = ok ? "SESSION ok" : `SESSION failed (${msg.subtype ?? "unknown"})`
   const dur = msg.duration_ms ? ` ${(msg.duration_ms / 1000).toFixed(1)}s` : ""
   const turns = msg.num_turns ? ` ${msg.num_turns} turns` : ""
   const cost = typeof msg.total_cost_usd === "number" ? ` $${msg.total_cost_usd.toFixed(4)}` : ""

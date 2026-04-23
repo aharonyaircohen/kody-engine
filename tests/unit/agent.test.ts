@@ -1,14 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const querySpy = vi.fn()
+// Per-test override of the generator yielded by the mocked SDK's query()
+// so individual tests can exercise multi-result behavior.
+let queryMessages: unknown[] = [{ type: "result", subtype: "success", result: "DONE" }]
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   query: (args: unknown) => {
     querySpy(args)
-    async function* empty() {
-      yield { type: "result", subtype: "success", result: "DONE" }
+    const msgs = queryMessages
+    async function* gen() {
+      for (const m of msgs) yield m
     }
-    return empty()
+    return gen()
   },
 }))
 
@@ -84,5 +88,38 @@ describe("runAgent: maxThinkingTokens passthrough", () => {
     await runAgent({ ...baseOpts, maxThinkingTokens: -1 })
     const argsNeg = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
     expect(argsNeg.options).not.toHaveProperty("maxThinkingTokens")
+  })
+})
+
+describe("runAgent: finalText collection", () => {
+  beforeEach(() => {
+    queryMessages = [{ type: "result", subtype: "success", result: "DONE" }]
+  })
+  afterEach(() => {
+    queryMessages = [{ type: "result", subtype: "success", result: "DONE" }]
+  })
+
+  it("concatenates multiple result messages so earlier DONE markers survive", async () => {
+    // SDK can emit several `result` events when the session restarts
+    // mid-flight. Preserving only the last one clobbers valid DONE
+    // markers from earlier turns.
+    queryMessages = [
+      { type: "result", subtype: "success", result: "DONE\nCOMMIT_MSG: fix: x\nPR_SUMMARY:\n- x" },
+      { type: "result", subtype: "success", result: "background check complete" },
+    ]
+    const out = await runAgent(baseOpts)
+    expect(out.outcome).toBe("completed")
+    expect(out.finalText).toMatch(/^DONE/)
+    expect(out.finalText).toContain("COMMIT_MSG: fix: x")
+    expect(out.finalText).toContain("background check complete")
+  })
+
+  it("drops empty result payloads from the concatenation", async () => {
+    queryMessages = [
+      { type: "result", subtype: "success", result: "   " },
+      { type: "result", subtype: "success", result: "DONE" },
+    ]
+    const out = await runAgent(baseOpts)
+    expect(out.finalText).toBe("DONE")
   })
 })

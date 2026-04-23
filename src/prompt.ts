@@ -185,7 +185,14 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
     }
   }
 
-  if (!/(^|\n)\s*DONE\b/i.test(text)) {
+  // Primary signal: bare-word DONE line.
+  // Fallback signal: a parseable COMMIT_MSG: marker — the structured
+  // artifact the downstream ensurePr step actually consumes. Weaker
+  // models sometimes drop the sentinel but still produce the contract
+  // fields; if they did, treat the session as complete.
+  const hasDoneMarker = /(^|\n)\s*DONE\b/i.test(text)
+  const hasCommitMsg = /^[ \t]*COMMIT_MSG\s*:/im.test(text)
+  if (!hasDoneMarker && !hasCommitMsg) {
     return {
       done: false,
       commitMessage: "",

@@ -127,9 +127,12 @@ export function ensurePr(opts: EnsurePrOptions): PrResult {
     try {
       gh(["pr", "edit", String(existing.number), "--body-file", "-"], { input: body, cwd: opts.cwd })
     } catch (err) {
-      process.stderr.write(
-        `[kody2] failed to update PR #${existing.number}: ${err instanceof Error ? err.message : String(err)}\n`,
-      )
+      // Let the caller decide how to handle this. The ensurePr script
+      // already wraps doEnsurePr in try/catch and surfaces the error as
+      // ctx.output.reason. Previously this was swallowed to stderr and
+      // masked as a successful update, which buried the real cause of
+      // downstream failures.
+      throw new Error(`gh pr edit #${existing.number} failed: ${err instanceof Error ? err.message : String(err)}`)
     }
     return { url: existing.url, number: existing.number, draft: opts.draft, action: "updated" }
   }

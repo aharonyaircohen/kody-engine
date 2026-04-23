@@ -264,4 +264,20 @@ describe("prompt: parseAgentResult", () => {
     expect(result.done).toBe(true)
     expect(result.feedbackActions).toBe("")
   })
+
+  it("accepts COMMIT_MSG alone as a completion signal (missing DONE sentinel)", () => {
+    // Weaker models sometimes finish the contract body (COMMIT_MSG +
+    // PR_SUMMARY) but drop the bare DONE line. If the structured
+    // artifact is there, treat the session as complete.
+    const result = parseAgentResult("COMMIT_MSG: fix: y\nPR_SUMMARY:\n- fixed y")
+    expect(result.done).toBe(true)
+    expect(result.commitMessage).toBe("fix: y")
+    expect(result.prSummary).toBe("- fixed y")
+  })
+
+  it("still fails when neither DONE nor COMMIT_MSG is present", () => {
+    const result = parseAgentResult("All good, work complete, proceeding.")
+    expect(result.done).toBe(false)
+    expect(result.failureReason).toMatch(/no DONE or FAILED/)
+  })
 })

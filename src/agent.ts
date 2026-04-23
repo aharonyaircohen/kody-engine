@@ -71,7 +71,13 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     env.ANTHROPIC_API_KEY = getAnthropicApiKeyOrDummy()
   }
 
-  let finalText = ""
+  // Collect every `result` message's text. The SDK can emit multiple
+  // `result` events when the session restarts mid-flight (background
+  // checks, continuation turns). Keeping only the last one silently
+  // clobbers earlier terminal output — including a valid DONE marker
+  // from the turn that actually finished the work. Joining all of them
+  // gives the parser the full terminal stream.
+  const resultTexts: string[] = []
   let outcome: "completed" | "failed" = "failed"
   let errorMessage: string | undefined
 
@@ -119,7 +125,8 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       if (m.type === "result") {
         if (m.subtype === "success") {
           outcome = "completed"
-          finalText = (typeof m.result === "string" ? m.result : "").trim()
+          const text = (typeof m.result === "string" ? m.result : "").trim()
+          if (text) resultTexts.push(text)
         } else {
           outcome = "failed"
           errorMessage = `result subtype: ${m.subtype ?? "unknown"}`
@@ -137,5 +144,6 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     }
   }
 
+  const finalText = resultTexts.join("\n\n---\n\n")
   return { outcome, finalText, error: errorMessage, ndjsonPath }
 }

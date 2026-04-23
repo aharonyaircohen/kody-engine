@@ -63,16 +63,23 @@ describe("format: renderEvent", () => {
       total_cost_usd: 0.0125,
     }
     const result = renderEvent(msg)
-    expect(result).toMatch(/DONE/)
+    expect(result).toMatch(/SESSION ok/)
     expect(result).toMatch(/12\.5s/)
     expect(result).toMatch(/8 turns/)
     expect(result).toMatch(/\$0\.0125/)
   })
 
-  it("formats result with FAILED tag for non-success", () => {
+  it("does not use the word DONE in the session banner", () => {
+    // Reserved for the agent-contract sentinel parseAgentResult looks
+    // for. Banner must not collide with it.
+    const msg: SdkMessageLike = { type: "result", subtype: "success" }
+    expect(renderEvent(msg)).not.toMatch(/\bDONE\b/)
+  })
+
+  it("formats result with SESSION failed tag for non-success", () => {
     const msg: SdkMessageLike = { type: "result", subtype: "error_max_turns" }
     const result = renderEvent(msg)
-    expect(result).toMatch(/FAILED/)
+    expect(result).toMatch(/SESSION failed/)
     expect(result).toMatch(/error_max_turns/)
   })
 
@@ -87,6 +94,6 @@ describe("format: renderEvent", () => {
     }
     expect(renderEvent(tu, { quiet: true })).toBeNull()
     const r: SdkMessageLike = { type: "result", subtype: "success" }
-    expect(renderEvent(r, { quiet: true })).toMatch(/DONE/)
+    expect(renderEvent(r, { quiet: true })).toMatch(/SESSION ok/)
   })
 })
