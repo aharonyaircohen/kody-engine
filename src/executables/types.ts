@@ -9,6 +9,7 @@
 
 import type { AgentResult } from "../agent.js"
 import type { Kody2Config } from "../config.js"
+import type { Phase } from "../state.js"
 
 // ────────────────────────────────────────────────────────────────────────────
 // Profile shape (mirrors the JSON on disk).
@@ -37,6 +38,12 @@ export interface Profile {
   kind: "oneshot" | "scheduled"
   /** Cron expression for scheduled profiles (e.g. "0 8 * * MON"). */
   schedule?: string
+  /**
+   * Task-state phase label emitted when this executable completes successfully.
+   * Failing actions always set phase to "failed" regardless. Omitted → "idle".
+   * Lets state.ts stay generic — phase semantics live on the profile.
+   */
+  phase?: Phase
   inputs: InputSpec[]
   claudeCode: ClaudeCodeSpec
   cliTools: CliToolSpec[]

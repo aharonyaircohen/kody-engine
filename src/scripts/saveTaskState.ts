@@ -22,7 +22,7 @@ export const saveTaskState: PostflightScript = async (ctx, profile) => {
   if (ctx.output.prUrl && !state.core.prUrl) state.core.prUrl = ctx.output.prUrl
   if (typeof ctx.data.runUrl === "string") state.core.runUrl = ctx.data.runUrl as string
 
-  const next = reduce(state, executable, action)
+  const next = reduce(state, executable, action, profile.phase)
   if (ctx.output.prUrl) next.core.prUrl = ctx.output.prUrl
   if (typeof ctx.data.runUrl === "string") next.core.runUrl = ctx.data.runUrl as string
 

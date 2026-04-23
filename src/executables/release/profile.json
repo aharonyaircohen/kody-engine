@@ -1,6 +1,7 @@
 {
   "name": "release",
   "role": "utility",
+  "phase": "shipped",
   "describe": "Version bump + changelog + release PR (prepare), or tag + publish + GH release (finalize). No agent.",
   "inputs": [
     {

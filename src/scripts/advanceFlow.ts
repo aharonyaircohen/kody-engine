@@ -36,7 +36,7 @@ export const advanceFlow: PostflightScript = async (ctx, profile) => {
     try {
       const issueState = readTaskState("issue", flow.issueNumber, ctx.cwd)
       issueState.flow = flow
-      const next = reduce(issueState, profile.name, action)
+      const next = reduce(issueState, profile.name, action, profile.phase)
       // Preserve PR URL on the issue's state too.
       if (state?.core.prUrl && !next.core.prUrl) next.core.prUrl = state.core.prUrl
       next.flow = flow

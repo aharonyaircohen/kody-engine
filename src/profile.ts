@@ -22,6 +22,7 @@ import type {
 const VALID_INPUT_TYPES = new Set(["int", "string", "bool", "enum"])
 const VALID_PERMISSION_MODES = new Set(["default", "acceptEdits", "plan", "bypassPermissions"])
 const VALID_ROLES = new Set(["primitive", "orchestrator", "watch", "utility"])
+const VALID_PHASES = new Set(["research", "planning", "implementing", "reviewing", "shipped", "failed", "idle"])
 
 export class ProfileError extends Error {
   constructor(
@@ -64,12 +65,21 @@ export function loadProfile(profilePath: string): Profile {
   }
   const role = r.role as Profile["role"]
 
+  let phase: Profile["phase"]
+  if (r.phase !== undefined) {
+    if (typeof r.phase !== "string" || !VALID_PHASES.has(r.phase)) {
+      throw new ProfileError(profilePath, `"phase" must be one of: ${[...VALID_PHASES].join(" | ")}`)
+    }
+    phase = r.phase as Profile["phase"]
+  }
+
   const profile: Profile = {
     name: requireString(profilePath, r, "name"),
     describe: typeof r.describe === "string" ? r.describe : "",
     role,
     kind,
     schedule: typeof r.schedule === "string" ? r.schedule : undefined,
+    phase,
     inputs: parseInputs(profilePath, r.inputs),
     claudeCode: parseClaudeCode(profilePath, r.claudeCode),
     cliTools: parseCliTools(profilePath, r.cliTools),

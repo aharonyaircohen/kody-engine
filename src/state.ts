@@ -184,8 +184,13 @@ export function parseStateComment(body: string): TaskState {
 
 /**
  * Merge an action into state. This is the reducer. Pure function.
+ *
+ * `phase` is the label the caller's profile declares for successful runs.
+ * Failing actions always collapse to "failed" regardless; omitted phase → "idle".
+ * Keeping phase a caller-supplied parameter (rather than deriving from the
+ * executable name) lets this module stay generic — no executable names here.
  */
-export function reduce(state: TaskState, executable: string, action: Action | null): TaskState {
+export function reduce(state: TaskState, executable: string, action: Action | null, phase?: Phase): TaskState {
   if (!action) return state
   const newAttempts = { ...state.core.attempts, [executable]: (state.core.attempts[executable] ?? 0) + 1 }
   const newExecutables: Record<string, ExecutableState> = {
@@ -204,7 +209,7 @@ export function reduce(state: TaskState, executable: string, action: Action | nu
       lastOutcome: action,
       currentExecutable: executable,
       status: statusFromAction(action),
-      phase: phaseFromAction(executable, action),
+      phase: phaseFromAction(action, phase),
     },
     executables: newExecutables,
     artifacts: { ...(state.artifacts ?? {}) },
@@ -219,12 +224,9 @@ function statusFromAction(action: Action): Status {
   return "running"
 }
 
-function phaseFromAction(executable: string, action: Action): Phase {
+function phaseFromAction(action: Action, phase?: Phase): Phase {
   if (/FAILED$|ERROR$|REJECTED$/i.test(action.type)) return "failed"
-  if (executable === "build") return statusFromAction(action) === "succeeded" ? "implementing" : "implementing"
-  if (executable === "review") return "reviewing"
-  if (executable === "release") return "shipped"
-  return "idle"
+  return phase ?? "idle"
 }
 
 function noteFromAction(action: Action): string | undefined {
