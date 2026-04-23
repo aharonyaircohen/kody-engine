@@ -58,11 +58,11 @@ describe("MCP wiring: profile.claudeCode.mcpServers → SDK query options", () =
     vi.clearAllMocks()
   })
 
-  it("passes mcpServers into the query options when declared", async () => {
+  it("transforms mcpServers array into the SDK's record shape (keyed by name)", async () => {
     const root = tmp()
     const mcpServers = [
-      { type: "stdio", command: "npx", args: ["-y", "@playwright/mcp"] },
-      { type: "http", url: "http://localhost:4999" },
+      { name: "playwright", command: "npx", args: ["-y", "@playwright/mcp@latest"] },
+      { name: "other", command: "node", args: ["./other.js"], env: { FOO: "bar" } },
     ]
     writeProfile(root, "with-mcp", mcpServers)
 
@@ -71,12 +71,15 @@ describe("MCP wiring: profile.claudeCode.mcpServers → SDK query options", () =
       prompt: "test",
       model: { provider: "claude", model: "claude-haiku-4-5-20251001" },
       cwd: root,
-      mcpServers: mcpServers as Array<Record<string, unknown>>,
+      mcpServers,
     })
 
     expect(query).toHaveBeenCalledTimes(1)
     const opts = vi.mocked(query).mock.calls[0]![0].options as Record<string, unknown>
-    expect(opts.mcpServers).toEqual(mcpServers)
+    expect(opts.mcpServers).toEqual({
+      playwright: { command: "npx", args: ["-y", "@playwright/mcp@latest"] },
+      other: { command: "node", args: ["./other.js"], env: { FOO: "bar" } },
+    })
   })
 
   it("omits mcpServers from options when empty (no-op for agent)", async () => {

@@ -25,10 +25,10 @@ export interface AgentOptions {
   permissionModeOverride?: "default" | "acceptEdits" | "plan" | "bypassPermissions"
   /**
    * MCP server specs declared by the profile (claudeCode.mcpServers).
-   * Each object is passed through to the SDK's `mcpServers` option so the
-   * agent can invoke whatever MCP tools the profile requires.
+   * Transformed to the SDK's record shape (keyed by server name) before
+   * being forwarded to `query()`.
    */
-  mcpServers?: Array<Record<string, unknown>>
+  mcpServers?: Array<{ name: string; command: string; args?: string[]; env?: Record<string, string> }>
   /**
    * Absolute paths to plugin directories to load. Each is passed to the
    * SDK's `plugins` option as `{ type: 'local', path }`. Kody uses this
@@ -90,7 +90,14 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       env,
     }
     if (opts.mcpServers && opts.mcpServers.length > 0) {
-      queryOptions.mcpServers = opts.mcpServers
+      queryOptions.mcpServers = Object.fromEntries(
+        opts.mcpServers.map((s) => {
+          const cfg: Record<string, unknown> = { command: s.command }
+          if (s.args) cfg.args = s.args
+          if (s.env) cfg.env = s.env
+          return [s.name, cfg]
+        }),
+      )
     }
     if (opts.pluginPaths && opts.pluginPaths.length > 0) {
       queryOptions.plugins = opts.pluginPaths.map((p) => ({ type: "local", path: p }))

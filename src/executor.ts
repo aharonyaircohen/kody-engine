@@ -130,7 +130,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       ndjsonDir,
       allowedToolsOverride: profile.claudeCode.tools,
       permissionModeOverride: profile.claudeCode.permissionMode,
-      mcpServers: profile.claudeCode.mcpServers as unknown as Array<Record<string, unknown>> | undefined,
+      mcpServers: profile.claudeCode.mcpServers.length > 0 ? profile.claudeCode.mcpServers : undefined,
       pluginPaths: pluginPaths.length > 0 ? pluginPaths : undefined,
       maxTurns: profile.claudeCode.maxTurns,
       maxThinkingTokens: profile.claudeCode.maxThinkingTokens,

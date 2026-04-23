@@ -27,9 +27,26 @@
     "commands": [],
     "subagents": [],
     "plugins": [],
-    "mcpServers": []
+    "mcpServers": [
+      {
+        "name": "playwright",
+        "command": "npx",
+        "args": ["-y", "@playwright/mcp@latest"]
+      }
+    ]
   },
-  "cliTools": [],
+  "cliTools": [
+    {
+      "name": "playwright",
+      "install": {
+        "required": false,
+        "checkCommand": "npx --no-install playwright --version",
+        "installCommand": "npx --yes playwright install --with-deps chromium"
+      },
+      "verify": "npx --no-install playwright --version",
+      "usage": ""
+    }
+  ],
   "scripts": {
     "preflight": [
       {

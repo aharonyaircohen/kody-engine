@@ -38,7 +38,13 @@
     "commands": [],
     "subagents": [],
     "plugins": [],
-    "mcpServers": []
+    "mcpServers": [
+      {
+        "name": "playwright",
+        "command": "npx",
+        "args": ["-y", "@playwright/mcp@latest"]
+      }
+    ]
   },
   "cliTools": [
     {
