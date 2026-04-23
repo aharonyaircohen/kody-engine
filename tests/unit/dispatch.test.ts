@@ -105,47 +105,43 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("routes bare '@kody2 orchestrate' to the canonical plan-build-review orchestrator", () => {
+  it("routes '@kody2 bug' to the bug sub-orchestrator", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 orchestrate" },
+      comment: { body: "@kody2 bug" },
       issue: { number: 9 },
     })
     expect(autoDispatch()).toEqual({
-      executable: "orchestrator-plan-build-review",
-      cliArgs: { issue: 9, flow: "plan-build-review" },
+      executable: "bug",
+      cliArgs: { issue: 9 },
       target: 9,
     })
   })
 
-  it("routes '@kody2 orchestrator' (alias) the same way", () => {
+  it("legacy '@kody2 orchestrate' maps to the `bug` sub-orchestrator", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 orchestrator" },
+      comment: { body: "@kody2 orchestrate" },
       issue: { number: 10 },
     })
-    expect(autoDispatch()?.executable).toBe("orchestrator-plan-build-review")
+    expect(autoDispatch()?.executable).toBe("bug")
   })
 
-  it("routes '@kody2 orchestrate --flow plan-build-review' to orchestrator-plan-build-review", () => {
+  it("legacy '@kody2 orchestrator' (alias) also maps to `bug`", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 orchestrate --flow plan-build-review" },
+      comment: { body: "@kody2 orchestrator" },
+      issue: { number: 11 },
+    })
+    expect(autoDispatch()?.executable).toBe("bug")
+  })
+
+  it("routes '@kody2 feature' via generic pass-through", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody2 feature" },
       issue: { number: 21 },
     })
     expect(autoDispatch()).toEqual({
-      executable: "orchestrator-plan-build-review",
-      cliArgs: { issue: 21, flow: "plan-build-review" },
+      executable: "feature",
+      cliArgs: { issue: 21 },
       target: 21,
-    })
-  })
-
-  it("routes '@kody2 orchestrate --flow=other-flow' (= form) to orchestrator-other-flow", () => {
-    process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 orchestrate --flow=ship-it" },
-      issue: { number: 22 },
-    })
-    expect(autoDispatch()).toEqual({
-      executable: "orchestrator-ship-it",
-      cliArgs: { issue: 22, flow: "ship-it" },
-      target: 22,
     })
   })
 
@@ -244,6 +240,28 @@ describe("dispatch: issue_comment on PR", () => {
       cliArgs: { pr: 24 },
       target: 24,
     })
+  })
+
+  it("'@kody2 ui-review' on PR → ui-review (not review)", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody2 ui-review" },
+      issue: { number: 77, pull_request: {} },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "ui-review",
+      cliArgs: { pr: 77 },
+      target: 77,
+    })
+  })
+
+  it("'@kody2 ui-review please check login' on PR → ui-review (prefix win, feedback ignored)", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody2 ui-review please check login" },
+      issue: { number: 78, pull_request: {} },
+    })
+    const r = autoDispatch()
+    expect(r?.executable).toBe("ui-review")
+    expect(r?.cliArgs.pr).toBe(78)
   })
 
   it("'@kody2 sync' on PR → sync", () => {

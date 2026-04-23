@@ -27,6 +27,14 @@
   "scripts": {
     "preflight": [
       {
+        "script": "setLifecycleLabel",
+        "with": {
+          "label": "kody:syncing",
+          "color": "c5def5",
+          "description": "kody2: syncing PR with base"
+        }
+      },
+      {
         "script": "syncFlow"
       }
     ],

@@ -41,6 +41,14 @@
   "scripts": {
     "preflight": [
       {
+        "script": "setLifecycleLabel",
+        "with": {
+          "label": "kody:fixing",
+          "color": "e99695",
+          "description": "kody2: applying review feedback"
+        }
+      },
+      {
         "script": "fixCiFlow"
       },
       {

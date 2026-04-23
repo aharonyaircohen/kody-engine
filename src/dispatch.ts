@@ -3,15 +3,19 @@
  * triggering comment's body.
  *
  * Routing (on an issue):
- *   @kody2 run         → run           args: { issue }
  *   @kody2 plan        → plan          args: { issue }
- *   @kody2 orchestrate → orchestrator  args: { issue }
+ *   @kody2 run         → run           args: { issue }
+ *   @kody2 bug         → bug           args: { issue }   (sub-orchestrator)
+ *   @kody2 feature     → feature       args: { issue }   (sub-orchestrator)
+ *   @kody2 spec        → spec          args: { issue }   (sub-orchestrator)
+ *   @kody2 chore       → chore         args: { issue }   (sub-orchestrator)
  *   @kody2 <other>     → <other>       args: { issue }   (generic pass-through)
  *   @kody2 (bare)      → config.defaultExecutable (fallback: "run")
  *
  * Routing (on a PR):
  *   @kody2 fix-ci      → fix-ci        args: { pr }
  *   @kody2 resolve     → resolve       args: { pr }
+ *   @kody2 ui-review   → ui-review     args: { pr }
  *   @kody2 review      → review        args: { pr }
  *   @kody2 sync        → sync          args: { pr }
  *   @kody2 fix / bare  → fix           args: { pr, feedback? }
@@ -84,6 +88,12 @@ export function autoDispatch(opts?: {
     if (/\bresolve\b/.test(afterTag)) {
       return { executable: "resolve", cliArgs: { pr: targetNum }, target: targetNum }
     }
+    // `ui-review` must be checked before `review` — `\breview\b` matches
+    // "ui-review" (the "-" is a non-word char, so "review" has word
+    // boundaries on both sides) and would otherwise win.
+    if (/\bui-review\b/.test(afterTag)) {
+      return { executable: "ui-review", cliArgs: { pr: targetNum }, target: targetNum }
+    }
     if (/\breview\b/.test(afterTag)) {
       return { executable: "review", cliArgs: { pr: targetNum }, target: targetNum }
     }
@@ -106,30 +116,19 @@ export function autoDispatch(opts?: {
     return asDispatch(defaultExec, targetNum)
   }
 
-  // Known sub-aliases.
-  if (sub === "orchestrate" || sub === "orchestrator") {
-    const flow = extractFlowName(afterTag)
-    if (flow) {
-      // `@kody2 orchestrate --flow X` → orchestrator-X executable.
-      return {
-        executable: `orchestrator-${flow}`,
-        cliArgs: { issue: targetNum, flow },
-        target: targetNum,
-      }
-    }
-    // Bare `@kody2 orchestrate` defaults to the canonical 4-stage flow.
-    return {
-      executable: "orchestrator-plan-build-review",
-      cliArgs: { issue: targetNum, flow: "plan-build-review" },
-      target: targetNum,
-    }
-  }
+  // Backward-compat aliases that map to other names.
   if (sub === "build") {
-    // Backward-compat: `@kody2 build` on an issue used to map to build/run.
+    // Legacy: `@kody2 build` on an issue used to mean implement-the-issue.
     return { executable: "run", cliArgs: { issue: targetNum }, target: targetNum }
+  }
+  if (sub === "orchestrate" || sub === "orchestrator") {
+    // Legacy: bare `@kody2 orchestrate` used to mean the plan-build-review
+    // flow. Route to its semantic successor, `bug`.
+    return { executable: "bug", cliArgs: { issue: targetNum }, target: targetNum }
   }
 
   // Generic pass-through: @kody2 <name> → executable <name> with { issue }.
+  // Sub-orchestrators (bug, feature, spec, chore, …) route through here.
   return asDispatch(sub, targetNum)
 }
 
@@ -151,16 +150,6 @@ function extractSubcommand(afterTag: string): string | null {
   const match = afterTag.match(/^([a-z][a-z0-9-]{1,40})\b/)
   if (!match) return null
   return match[1]!
-}
-
-/**
- * Extract a `--flow <value>` argument from the comment body. Accepts only
- * lowercase, dash-separated names so it round-trips with executable
- * directory naming. Returns null if no `--flow` arg is present.
- */
-function extractFlowName(afterTag: string): string | null {
-  const match = afterTag.match(/--flow[=\s]+([a-z][a-z0-9-]{0,60})/)
-  return match ? match[1]! : null
 }
 
 function extractFeedback(afterTag: string): string | undefined {

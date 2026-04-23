@@ -28,7 +28,7 @@ CI runs `typecheck` + `test` + `test:e2e` on PR/push to main ([.github/workflows
 Two-layer design: **generic executor** + **declarative executable profile** + **script catalog**.
 
 - **Executor** ([src/executor.ts](src/executor.ts)) — loads a profile, validates CLI inputs/cliTools, runs preflight scripts → agent → postflight scripts. Knows nothing about `run`/`fix`/`review` — those concepts live only in profiles and scripts.
-- **Entry & dispatch** — [bin/kody2.ts](bin/kody2.ts) → [src/entry.ts](src/entry.ts). The only hardcoded verbs are `ci`, `help`, `version`. Everything else (`run`, `fix`, `fix-ci`, `resolve`, `review`, `plan`, `orchestrator`, `release`, `watch-*`, `init`) is an auto-discovered executable under [src/executables/](src/executables/). [src/dispatch.ts](src/dispatch.ts) picks an executable from the GHA event when invoked as `kody2 ci`.
+- **Entry & dispatch** — [bin/kody2.ts](bin/kody2.ts) → [src/entry.ts](src/entry.ts). The only hardcoded verbs are `ci`, `help`, `version`. Everything else (`run`, `fix`, `fix-ci`, `resolve`, `review`, `ui-review`, `plan`, `orchestrator`, `release`, `watch-*`, `init`) is an auto-discovered executable under [src/executables/](src/executables/). [src/dispatch.ts](src/dispatch.ts) picks an executable from the GHA event when invoked as `kody2 ci`.
 - **Executable profile** — each `src/executables/<name>/profile.json` is pure JSON declaring CLI inputs, Claude Agent SDK config (tools, model, hooks, skills), `cliTools` the scripts expect, and the ordered preflight/postflight script list. The agent prompt lives alongside as `prompt.md`.
 - **Scripts** ([src/scripts/](src/scripts/)) — small deterministic functions registered in [src/scripts/index.ts](src/scripts/index.ts). Flow entries (`runFlow`, `fixFlow`, `fixCiFlow`, `resolveFlow`, `reviewFlow`, …), preflight (`loadConventions`, `composePrompt`), postflight (`verify`, `commitAndPush`, `ensurePr`, `postIssueComment`). The agent never commits — `commitAndPush` does.
 - **Agent invocation** ([src/agent.ts](src/agent.ts)) — calls `@anthropic-ai/claude-agent-sdk` with profile-declared tools/hooks/skills. [src/litellm.ts](src/litellm.ts) manages a proxy when a non-Anthropic model is configured.
@@ -41,7 +41,7 @@ Two-layer design: **generic executor** + **declarative executable profile** + **
 4. Wrapper/verification/git logic belongs in scripts (postflight), not inline in executor or profile.
 5. Consumer workflow YAML ([templates/kody2.yml](templates/kody2.yml)) stays thin; capabilities ship via npm.
 
-Adding a new command = new `src/executables/<name>/` + `profile.json` + `prompt.md` + register scripts. No executor, entry, or dispatch edits.
+Adding a new command = new `src/executables/<name>/` + `profile.json` + `prompt.md` + register scripts. Issue-triggered commands need no dispatch edits — the PR switch in [src/dispatch.ts](src/dispatch.ts) does (no generic fallthrough there), and names overlapping via `\b…\b` word boundaries (e.g. `ui-review` vs `review`) must be ordered by specificity.
 
 ## Exit codes
 

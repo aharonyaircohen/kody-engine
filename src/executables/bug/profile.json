@@ -1,6 +1,6 @@
 {
-  "name": "orchestrator-plan-build-review",
-  "describe": "Deterministic orchestrator for the plan → build → review (→ fix on concerns/fail) flow. No agent — the postflight entries ARE the transition table, evaluated top-to-bottom via runWhen.",
+  "name": "bug",
+  "describe": "Sub-orchestrator for bug / enhancement issues — plan → run → review (→ fix on concerns/fail). No agent — the postflight entries ARE the transition table, evaluated top-to-bottom via runWhen.",
   "inputs": [
     {
       "name": "issue",
@@ -8,13 +8,6 @@
       "type": "int",
       "required": true,
       "describe": "GitHub issue number to drive the flow on."
-    },
-    {
-      "name": "flow",
-      "flag": "--flow",
-      "type": "string",
-      "required": false,
-      "describe": "Flow name (cosmetic — recorded in state.flow.name)."
     }
   ],
   "claudeCode": {
@@ -34,6 +27,14 @@
   "cliTools": [],
   "scripts": {
     "preflight": [
+      {
+        "script": "setLifecycleLabel",
+        "with": {
+          "label": "kody:orchestrating",
+          "color": "1d76db",
+          "description": "kody2: orchestrating a multi-stage flow"
+        }
+      },
       { "script": "loadIssueContext" },
       { "script": "loadTaskState" },
       { "script": "skipAgent" }
@@ -48,19 +49,23 @@
       { "script": "dispatch", "with": { "next": "review", "target": "pr" },
         "runWhen": { "data.taskState.core.lastOutcome.type": "RUN_COMPLETED" } },
 
-      { "script": "finishFlow", "with": { "reason": "review-passed" },
+      { "script": "finishFlow",
+        "with": { "reason": "review-passed", "label": "kody:done", "color": "0e8a16", "description": "kody2: PR ready for human review/merge" },
         "runWhen": { "data.taskState.core.lastOutcome.type": "REVIEW_PASS" } },
 
       { "script": "dispatch", "with": { "next": "fix", "target": "pr" },
         "runWhen": { "data.taskState.core.lastOutcome.type": ["REVIEW_CONCERNS", "REVIEW_FAIL"] } },
 
-      { "script": "finishFlow", "with": { "reason": "review-failed" },
+      { "script": "finishFlow",
+        "with": { "reason": "review-failed", "label": "kody:failed", "color": "e11d21", "description": "kody2: flow failed" },
         "runWhen": { "data.taskState.core.lastOutcome.type": "REVIEW_FAILED" } },
 
-      { "script": "finishFlow", "with": { "reason": "fix-applied" },
+      { "script": "finishFlow",
+        "with": { "reason": "fix-applied", "label": "kody:done", "color": "0e8a16", "description": "kody2: PR ready for human review/merge" },
         "runWhen": { "data.taskState.core.lastOutcome.type": "FIX_COMPLETED" } },
 
-      { "script": "finishFlow", "with": { "reason": "aborted" },
+      { "script": "finishFlow",
+        "with": { "reason": "aborted", "label": "kody:failed", "color": "e11d21", "description": "kody2: flow failed" },
         "runWhen": { "data.taskState.core.lastOutcome.type": ["PLAN_FAILED", "RUN_FAILED", "FIX_FAILED", "AGENT_NOT_RUN"] } },
 
       { "script": "persistFlowState" }

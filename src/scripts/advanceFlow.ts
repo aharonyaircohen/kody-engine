@@ -1,9 +1,9 @@
 /**
  * Postflight (added to every child executable's tail): if a flow is in
- * progress, re-trigger the orchestrator by posting `@kody2 orchestrate
- * --flow <name>` on the originating issue. Reads `state.flow` from the
- * current task-state (loaded by `loadTaskState` and updated by
- * `saveTaskState` earlier in the postflight).
+ * progress, re-trigger the flow orchestrator by posting `@kody2 <flow.name>`
+ * on the originating issue. `state.flow.name` is the executable name of the
+ * orchestrator itself (e.g. "bug", "feature", "spec", "chore") per the
+ * semantic-naming convention.
  *
  * No-op when:
  *   - state.flow is absent (child was triggered standalone), or
@@ -48,10 +48,9 @@ export const advanceFlow: PostflightScript = async (ctx, profile) => {
     }
   }
 
-  // Bare `@kody2 orchestrate` is enough — dispatch.ts maps it to the
-  // canonical orchestrator-plan-build-review executable. Omitting --flow
-  // keeps the auto-posted comment short and visually unambiguous.
-  const body = "@kody2 orchestrate"
+  // Post `@kody2 <flow-name>` so dispatch.ts routes the retrigger to the
+  // same sub-orchestrator that started this flow (e.g. "bug", "feature").
+  const body = `@kody2 ${flow.name}`
   try {
     execFileSync("gh", ["issue", "comment", String(flow.issueNumber), "--body", body], {
       timeout: API_TIMEOUT_MS,

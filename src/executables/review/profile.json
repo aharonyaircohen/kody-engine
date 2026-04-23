@@ -32,6 +32,14 @@
   "scripts": {
     "preflight": [
       {
+        "script": "setLifecycleLabel",
+        "with": {
+          "label": "kody:reviewing",
+          "color": "d93f0b",
+          "description": "kody2: reviewing a PR"
+        }
+      },
+      {
         "script": "reviewFlow"
       },
       {

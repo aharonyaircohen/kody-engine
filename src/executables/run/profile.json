@@ -34,6 +34,14 @@
   "scripts": {
     "preflight": [
       {
+        "script": "setLifecycleLabel",
+        "with": {
+          "label": "kody:running",
+          "color": "fbca04",
+          "description": "kody2: implementing the change"
+        }
+      },
+      {
         "script": "runFlow"
       },
       {

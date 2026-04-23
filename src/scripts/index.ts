@@ -10,6 +10,7 @@ import { buildSyntheticPlugin } from "./buildSyntheticPlugin.js"
 import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
 import { commitAndPush } from "./commitAndPush.js"
 import { composePrompt } from "./composePrompt.js"
+import { discoverQaContext } from "./discoverQaContext.js"
 import { dispatch } from "./dispatch.js"
 import { ensurePr } from "./ensurePr.js"
 import { finishFlow } from "./finishFlow.js"
@@ -19,6 +20,7 @@ import { initFlow } from "./initFlow.js"
 import { loadConventions } from "./loadConventions.js"
 import { loadCoverageRules } from "./loadCoverageRules.js"
 import { loadIssueContext } from "./loadIssueContext.js"
+import { loadQaGuide } from "./loadQaGuide.js"
 import { loadTaskState } from "./loadTaskState.js"
 import { mirrorStateToPr } from "./mirrorStateToPr.js"
 import { parseAgentResult } from "./parseAgentResult.js"
@@ -33,9 +35,11 @@ import { requireFeedbackActions } from "./requireFeedbackActions.js"
 import { requirePlanDeviations } from "./requirePlanDeviations.js"
 import { resolveArtifacts } from "./resolveArtifacts.js"
 import { resolveFlow } from "./resolveFlow.js"
+import { resolvePreviewUrl } from "./resolvePreviewUrl.js"
 import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
 import { saveTaskState } from "./saveTaskState.js"
+import { setLifecycleLabel } from "./setLifecycleLabel.js"
 import { skipAgent } from "./skipAgent.js"
 import { startFlow } from "./startFlow.js"
 import { syncFlow } from "./syncFlow.js"
@@ -57,9 +61,13 @@ export const preflightScripts: Record<string, PreflightScript> = {
   loadIssueContext,
   loadConventions,
   loadCoverageRules,
+  loadQaGuide,
   buildSyntheticPlugin,
   resolveArtifacts,
+  discoverQaContext,
+  resolvePreviewUrl,
   composePrompt,
+  setLifecycleLabel,
   skipAgent,
 }
 

@@ -32,6 +32,14 @@
   "scripts": {
     "preflight": [
       {
+        "script": "setLifecycleLabel",
+        "with": {
+          "label": "kody:researching",
+          "color": "1d76db",
+          "description": "kody2: researching the issue"
+        }
+      },
+      {
         "script": "loadIssueContext"
       },
       {

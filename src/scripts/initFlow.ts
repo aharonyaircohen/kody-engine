@@ -13,8 +13,11 @@ import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type { PreflightScript } from "../executables/types.js"
+import { ensureLabels, type EnsureLabelsResult } from "../lifecycleLabels.js"
 import { loadProfile } from "../profile.js"
 import { listExecutables } from "../registry.js"
+import { QA_GUIDE_REL_PATH } from "./loadQaGuide.js"
+import { generateQaGuideTemplate, runQaDiscovery } from "./discoverQaContext.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -154,6 +157,7 @@ function defaultBranchFromGit(cwd: string): string {
 export interface InitResult {
   wrote: string[]
   skipped: string[]
+  labels?: EnsureLabelsResult
 }
 
 export function performInit(cwd: string, force: boolean): InitResult {
@@ -185,7 +189,27 @@ export function performInit(cwd: string, force: boolean): InitResult {
     wrote.push(".github/workflows/kody2.yml")
   }
 
-  // 3. .github/workflows/kody2-<name>.yml for every discovered scheduled executable.
+  // 3. .kody2/qa-guide.md — starter template for the ui-review executable.
+  //    Only scaffolded when the repo looks like it has a UI (Next.js app dir,
+  //    or an /app folder with page.* files). Writes CHANGE_ME credential
+  //    placeholders; the maintainer fills them in and commits.
+  const hasUi =
+    fs.existsSync(path.join(cwd, "src/app")) ||
+    fs.existsSync(path.join(cwd, "app")) ||
+    fs.existsSync(path.join(cwd, "pages"))
+  if (hasUi) {
+    const qaGuidePath = path.join(cwd, QA_GUIDE_REL_PATH)
+    if (fs.existsSync(qaGuidePath) && !force) {
+      skipped.push(QA_GUIDE_REL_PATH)
+    } else {
+      fs.mkdirSync(path.dirname(qaGuidePath), { recursive: true })
+      const discovery = runQaDiscovery(cwd)
+      fs.writeFileSync(qaGuidePath, generateQaGuideTemplate(discovery))
+      wrote.push(QA_GUIDE_REL_PATH)
+    }
+  }
+
+  // 4. .github/workflows/kody2-<name>.yml for every discovered scheduled executable.
   for (const exe of listExecutables()) {
     let profile: ReturnType<typeof loadProfile>
     try {
@@ -203,7 +227,18 @@ export function performInit(cwd: string, force: boolean): InitResult {
     wrote.push(`.github/workflows/kody2-${exe.name}.yml`)
   }
 
-  return { wrote, skipped }
+  // 5. Create/update every kody-owned label declared across the executable
+  //    profile set. Best-effort: if `gh` isn't installed/authenticated, this
+  //    is skipped silently and setKodyLabel will lazily create the label on
+  //    first use during a real flow run.
+  let labels: EnsureLabelsResult | undefined
+  try {
+    labels = ensureLabels(cwd)
+  } catch {
+    labels = undefined
+  }
+
+  return { wrote, skipped, labels }
 }
 
 export function renderScheduledWorkflow(name: string, cron: string): string {
@@ -243,11 +278,21 @@ export const initFlow: PreflightScript = async (ctx) => {
   const force = ctx.args.force === true
   const cwd = ctx.cwd
 
-  const { wrote, skipped } = performInit(cwd, force)
+  const { wrote, skipped, labels } = performInit(cwd, force)
 
   process.stdout.write("→ kody2 init\n")
   for (const f of wrote) process.stdout.write(`  wrote    ${f}\n`)
   for (const f of skipped) process.stdout.write(`  skipped  ${f} (already exists; pass --force to overwrite)\n`)
+  if (labels) {
+    if (labels.created.length > 0) {
+      process.stdout.write(`  labels   ensured ${labels.created.length} lifecycle label(s)\n`)
+    }
+    if (labels.failed.length > 0) {
+      process.stdout.write(
+        `  labels   ${labels.failed.length} failed (gh auth missing? will self-heal on first run)\n`,
+      )
+    }
+  }
   process.stdout.write(
     wrote.length > 0
       ? `\nDone. Edit kody.config.json to pick your model, then push the workflow file.\n`

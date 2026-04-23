@@ -77,8 +77,9 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     const profile = loadProfile(path.join(EXE_ROOT, "run/profile.json"))
     expect(profile.name).toBe("run")
     expect(profile.inputs.map((i) => i.name)).toEqual(["issue"])
-    expect(profile.scripts.preflight[0]!.script).toBe("runFlow")
-    expect(profile.scripts.preflight[0]!.runWhen).toBeUndefined()
+    const preScripts = profile.scripts.preflight.map((p) => p.script)
+    expect(preScripts[0]).toBe("setLifecycleLabel")
+    expect(preScripts).toContain("runFlow")
     const names = profile.scripts.postflight.map((p) => p.script)
     // saveTaskState writes issue state, mirrorStateToPr propagates it to the
     // PR, advanceFlow re-triggers the orchestrator if a flow is active.
@@ -91,34 +92,41 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     const profile = loadProfile(path.join(EXE_ROOT, "fix/profile.json"))
     expect(profile.name).toBe("fix")
     expect(profile.inputs.map((i) => i.name).sort()).toEqual(["feedback", "pr"])
-    expect(profile.scripts.preflight[0]!.script).toBe("fixFlow")
+    const preScripts = profile.scripts.preflight.map((p) => p.script)
+    expect(preScripts[0]).toBe("setLifecycleLabel")
+    expect(preScripts).toContain("fixFlow")
   })
 
   it("fix-ci profile loads cleanly", () => {
     const profile = loadProfile(path.join(EXE_ROOT, "fix-ci/profile.json"))
     expect(profile.name).toBe("fix-ci")
     expect(profile.inputs.map((i) => i.name).sort()).toEqual(["pr", "runId"])
-    expect(profile.scripts.preflight[0]!.script).toBe("fixCiFlow")
+    const preScripts = profile.scripts.preflight.map((p) => p.script)
+    expect(preScripts[0]).toBe("setLifecycleLabel")
+    expect(preScripts).toContain("fixCiFlow")
   })
 
   it("resolve profile skips verify + checkCoverageWithRetry (merge op)", () => {
     const profile = loadProfile(path.join(EXE_ROOT, "resolve/profile.json"))
     expect(profile.name).toBe("resolve")
     expect(profile.inputs.map((i) => i.name)).toEqual(["pr"])
-    expect(profile.scripts.preflight[0]!.script).toBe("resolveFlow")
+    const preScripts = profile.scripts.preflight.map((p) => p.script)
+    expect(preScripts[0]).toBe("setLifecycleLabel")
+    expect(preScripts).toContain("resolveFlow")
     const postScripts = profile.scripts.postflight.map((s) => s.script)
     expect(postScripts).not.toContain("verify")
     expect(postScripts).not.toContain("checkCoverageWithRetry")
   })
 
-  it("orchestrator-plan-build-review profile loads cleanly with transition table", () => {
-    const profile = loadProfile(path.join(EXE_ROOT, "orchestrator-plan-build-review/profile.json"))
-    expect(profile.name).toBe("orchestrator-plan-build-review")
-    expect(profile.inputs.map((i) => i.name).sort()).toEqual(["flow", "issue"])
+  it("`bug` sub-orchestrator profile loads cleanly with transition table", () => {
+    const profile = loadProfile(path.join(EXE_ROOT, "bug/profile.json"))
+    expect(profile.name).toBe("bug")
+    expect(profile.inputs.map((i) => i.name)).toEqual(["issue"])
     expect(profile.claudeCode.maxTurns).toBe(0)
     expect(profile.claudeCode.tools).toEqual([])
     // Preflight ends with skipAgent so the executor bypasses runAgent.
     const pre = profile.scripts.preflight.map((p) => p.script)
+    expect(pre[0]).toBe("setLifecycleLabel")
     expect(pre).toContain("loadIssueContext")
     expect(pre).toContain("loadTaskState")
     expect(pre.at(-1)).toBe("skipAgent")
