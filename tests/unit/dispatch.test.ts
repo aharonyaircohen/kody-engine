@@ -145,16 +145,28 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("generic pass-through: '@kody custom-exec' → custom-exec", () => {
+  it("unknown subcommand falls back to defaultExecutable (no silent pass-through)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody custom-exec" },
       issue: { number: 11 },
     })
-    expect(autoDispatch()).toEqual({
-      executable: "custom-exec",
+    expect(
+      autoDispatch({
+        config: { defaultExecutable: "classify" } as any,
+      }),
+    ).toEqual({
+      executable: "classify",
       cliArgs: { issue: 11 },
       target: 11,
     })
+  })
+
+  it("unknown subcommand with no defaultExecutable returns null", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody custom-exec" },
+      issue: { number: 11 },
+    })
+    expect(autoDispatch()).toBeNull()
   })
 
   it("bare '@kody' falls back to config.defaultExecutable", () => {
@@ -314,6 +326,91 @@ describe("dispatch: issue_comment on PR", () => {
     const r = autoDispatch()
     expect(r?.executable).toBe("fix")
     expect(r?.cliArgs.feedback).toBe("address the instructor.name concern")
+  })
+})
+
+describe("dispatch: utility executables (no issue/pr declared)", () => {
+  const prev: Record<string, string | undefined> = {}
+  beforeEach(() => {
+    prev.EVENT_NAME = process.env.GITHUB_EVENT_NAME
+    prev.EVENT_PATH = process.env.GITHUB_EVENT_PATH
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+  })
+  afterEach(() => {
+    process.env.GITHUB_EVENT_NAME = prev.EVENT_NAME
+    process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
+  })
+
+  it("'@kody release' routes to release with no issue/pr injected", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody release" },
+      issue: { number: 30 },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "release",
+      cliArgs: {},
+      target: 30,
+    })
+  })
+
+  it("'@kody release finalize' parses the mode enum from comment text", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody release finalize" },
+      issue: { number: 31 },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "release",
+      cliArgs: { mode: "finalize" },
+      target: 31,
+    })
+  })
+
+  it("'@kody release finalize minor' parses mode + bump enums", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody release finalize minor" },
+      issue: { number: 32 },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "release",
+      cliArgs: { mode: "finalize", bump: "minor" },
+      target: 32,
+    })
+  })
+
+  it("'@kody release --mode finalize --bump patch' parses flag form", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody release --mode finalize --bump patch" },
+      issue: { number: 33 },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "release",
+      cliArgs: { mode: "finalize", bump: "patch" },
+      target: 33,
+    })
+  })
+
+  it("'@kody release finalize dry-run' parses the bare bool flag keyword", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody release finalize dry-run" },
+      issue: { number: 34 },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "release",
+      cliArgs: { mode: "finalize", "dry-run": true },
+      target: 34,
+    })
+  })
+
+  it("'@kody release' on a PR still routes to release with no pr injected", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody release finalize" },
+      issue: { number: 35, pull_request: {} },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "release",
+      cliArgs: { mode: "finalize" },
+      target: 35,
+    })
   })
 })
 

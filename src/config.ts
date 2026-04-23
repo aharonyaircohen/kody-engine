@@ -37,6 +37,20 @@ export interface KodyConfig {
    */
   defaultExecutable?: string
   /**
+   * Executable to run when a bare/unrecognized `@kody <rest>` lands on a PR.
+   * Defaults to "fix" — legacy behavior: any PR comment without a known
+   * subcommand becomes a fix with the comment body as feedback.
+   */
+  defaultPrExecutable?: string
+  /**
+   * Comment-subcommand aliases: map typed word → executable name. Merged
+   * with built-in legacy aliases ({ build: "run", orchestrate: "bug",
+   * orchestrator: "bug" }). User entries override built-ins. Dispatch
+   * resolves the first token against this map before the registry, so
+   * every name dispatch knows lives here, not in code.
+   */
+  aliases?: Record<string, string>
+  /**
    * Classifier configuration (only honored when bare `@kody` routes to
    * the `classify` executable). `labelMap` lets you override the built-in
    * label → flow mapping (see src/scripts/classifyByLabel.ts for defaults).
@@ -125,10 +139,38 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     issueContext: parseIssueContext(raw.issueContext),
     testRequirements: parseTestRequirements(raw.testRequirements),
     defaultExecutable:
-      typeof raw.defaultExecutable === "string" && raw.defaultExecutable.length > 0 ? raw.defaultExecutable : "classify",
+      typeof raw.defaultExecutable === "string" && raw.defaultExecutable.length > 0
+        ? raw.defaultExecutable
+        : "classify",
+    defaultPrExecutable:
+      typeof raw.defaultPrExecutable === "string" && raw.defaultPrExecutable.length > 0
+        ? raw.defaultPrExecutable
+        : "fix",
+    aliases: mergeAliases(raw.aliases),
     classify: parseClassifyConfig(raw.classify),
     release: parseReleaseConfig(raw.release),
   }
+}
+
+/**
+ * Legacy comment-subcommand aliases, always merged into config.aliases.
+ * Exported so dispatch can use them as a fallback when called without a
+ * loaded config (e.g. from tests).
+ */
+export const BUILTIN_ALIASES: Record<string, string> = {
+  build: "run",
+  orchestrate: "bug",
+  orchestrator: "bug",
+}
+
+function mergeAliases(raw: unknown): Record<string, string> {
+  const out: Record<string, string> = { ...BUILTIN_ALIASES }
+  if (raw && typeof raw === "object") {
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof v === "string" && v.length > 0) out[k.toLowerCase()] = v
+    }
+  }
+  return out
 }
 
 function parseClassifyConfig(raw: unknown): KodyConfig["classify"] {

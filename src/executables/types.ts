@@ -97,6 +97,13 @@ export interface InputSpec {
    * e.g. `{ mode: "run" }` or `{ mode: ["fix", "fix-ci", "resolve"] }`.
    */
   requiredWhen?: Record<string, string | string[]>
+  /**
+   * When true, this input collects any free-text left over from comment
+   * dispatch after flag/enum/bool parsing. Only one input per profile may
+   * set this. Used by e.g. `fix.feedback` so `@kody please change X` lands
+   * "please change X" in `feedback` without hardcoding that in the router.
+   */
+  bindsCommentRest?: boolean
   describe: string
 }
 

@@ -10,6 +10,7 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
+import type { InputSpec } from "./executables/types.js"
 
 export interface DiscoveredExecutable {
   name: string
@@ -62,6 +63,25 @@ export function hasExecutable(name: string, root: string = getExecutablesRoot())
 /** Executable names: lowercase letters, digits, and dashes. Rejects traversal. */
 export function isSafeName(name: string): boolean {
   return /^[a-z][a-z0-9-]*$/.test(name) && !name.includes("..")
+}
+
+/**
+ * Light-weight profile inspector: returns an executable's declared `inputs`
+ * without running the full profile validator. Dispatch uses this to drive
+ * comment-argument parsing entirely from profile metadata. Returns null if
+ * the executable doesn't exist or the profile is unreadable (dispatch
+ * should degrade gracefully, not throw).
+ */
+export function getProfileInputs(name: string, root: string = getExecutablesRoot()): InputSpec[] | null {
+  if (!hasExecutable(name, root)) return null
+  const profilePath = path.join(root, name, "profile.json")
+  try {
+    const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8"))
+    if (!raw || typeof raw !== "object" || !Array.isArray(raw.inputs)) return []
+    return raw.inputs as InputSpec[]
+  } catch {
+    return null
+  }
 }
 
 /**

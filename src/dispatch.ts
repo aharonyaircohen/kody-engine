@@ -1,45 +1,32 @@
 /**
- * Auto-detect which executable to invoke from the GHA event payload and the
- * triggering comment's body.
+ * Route a GitHub event / CLI invocation to an executable.
  *
- * Routing (on an issue):
- *   @kody plan        → plan          args: { issue }
- *   @kody run         → run           args: { issue }
- *   @kody bug         → bug           args: { issue }   (sub-orchestrator)
- *   @kody feature     → feature       args: { issue }   (sub-orchestrator)
- *   @kody spec        → spec          args: { issue }   (sub-orchestrator)
- *   @kody chore       → chore         args: { issue }   (sub-orchestrator)
- *   @kody <other>     → <other>       args: { issue }   (generic pass-through)
- *   @kody (bare)      → config.defaultExecutable (default baked in by
- *                        loadConfig — currently "classify"; never
- *                        hardcoded here)
+ * Dispatch contains ZERO executable names. What to route where comes from:
+ *   - the comment body (first token after `@kody`),
+ *   - the matched profile's declared `inputs[]` (what args it accepts),
+ *   - `config.aliases` (typed word → executable name),
+ *   - `config.defaultExecutable` / `config.defaultPrExecutable` (bare fallback).
  *
- * Routing (on a PR):
- *   @kody fix-ci      → fix-ci        args: { pr }
- *   @kody resolve     → resolve       args: { pr }
- *   @kody ui-review   → ui-review     args: { pr }
- *   @kody review      → review        args: { pr }
- *   @kody sync        → sync          args: { pr }
- *   @kody fix / bare  → fix           args: { pr, feedback? }
- *
- * workflow_dispatch → run on the provided issue_number input.
+ * Adding a new executable = drop a `src/executables/<name>/profile.json`.
+ * No edits here. Utilities that take no `issue`/`pr` work because we only
+ * inject those args when the profile declares them.
  */
 
 import * as fs from "node:fs"
-import type { KodyConfig } from "./config.js"
+import { BUILTIN_ALIASES, type KodyConfig } from "./config.js"
+import type { InputSpec } from "./executables/types.js"
+import { getProfileInputs } from "./registry.js"
 
 export interface DispatchResult {
-  /** Which executable to invoke. */
   executable: string
-  /** Args to pass to the executable (mirrors what `kody <executable>` CLI would receive). */
   cliArgs: Record<string, unknown>
-  /** Issue or PR number, surfaced for post-failure comments. */
   target: number
 }
 
 /**
- * Explicit override from the CLI (legacy --issue flag): dispatch to the `run`
- * executable on the given issue number.
+ * Explicit CLI override (legacy --issue flag): route to the `run` executable.
+ * Intentionally the one hardcoded path — it exists to support the historical
+ * `kody --issue N` shorthand and has no comment-dispatch analogue.
  */
 export function autoDispatch(opts?: {
   explicit?: { issueNumber?: number }
@@ -47,11 +34,7 @@ export function autoDispatch(opts?: {
 }): DispatchResult | null {
   const explicit = opts?.explicit
   if (explicit?.issueNumber && explicit.issueNumber > 0) {
-    return {
-      executable: "run",
-      cliArgs: { issue: explicit.issueNumber },
-      target: explicit.issueNumber,
-    }
+    return { executable: "run", cliArgs: { issue: explicit.issueNumber }, target: explicit.issueNumber }
   }
 
   const eventName = process.env.GITHUB_EVENT_NAME
@@ -81,65 +64,49 @@ export function autoDispatch(opts?: {
   if (!targetNum) return null
 
   const afterTag = extractAfterTag(body)
+  const firstToken = extractSubcommand(afterTag)
 
-  // PR routing: each subcommand is its own executable.
-  if (isPr) {
-    if (/\bfix-ci\b/.test(afterTag)) {
-      return { executable: "fix-ci", cliArgs: { pr: targetNum }, target: targetNum }
-    }
-    if (/\bresolve\b/.test(afterTag)) {
-      return { executable: "resolve", cliArgs: { pr: targetNum }, target: targetNum }
-    }
-    // `ui-review` must be checked before `review` — `\breview\b` matches
-    // "ui-review" (the "-" is a non-word char, so "review" has word
-    // boundaries on both sides) and would otherwise win.
-    if (/\bui-review\b/.test(afterTag)) {
-      return { executable: "ui-review", cliArgs: { pr: targetNum }, target: targetNum }
-    }
-    if (/\breview\b/.test(afterTag)) {
-      return { executable: "review", cliArgs: { pr: targetNum }, target: targetNum }
-    }
-    if (/\bsync\b/.test(afterTag)) {
-      return { executable: "sync", cliArgs: { pr: targetNum }, target: targetNum }
-    }
-    const feedback = extractFeedback(afterTag)
-    return {
-      executable: "fix",
-      cliArgs: { pr: targetNum, ...(feedback ? { feedback } : {}) },
-      target: targetNum,
-    }
+  // Resolve first token via aliases → registry. No match → fall back to the
+  // default executable for this event shape (issue vs PR). Alias map comes
+  // from config; BUILTIN_ALIASES covers callers that don't pass a config.
+  const aliases = opts?.config?.aliases ?? BUILTIN_ALIASES
+  const aliased = firstToken ? (aliases[firstToken] ?? firstToken) : null
+
+  let executable: string | null = null
+  let consumedFirstToken = false
+  if (aliased && getProfileInputs(aliased) !== null) {
+    executable = aliased
+    consumedFirstToken = true
+  }
+  if (!executable) {
+    executable = isPr ? (opts?.config?.defaultPrExecutable ?? "fix") : (opts?.config?.defaultExecutable ?? null)
+  }
+  if (!executable) return null
+
+  // Inputs drive arg parsing and injection. If the profile isn't registered
+  // (e.g. a consumer-configured default pointing at something not bundled),
+  // fall back to event-shape injection so context isn't silently dropped.
+  const inputs = getProfileInputs(executable)
+  const effectiveInputs = inputs ?? []
+  const unknownProfile = inputs === null
+  const rest = extractCommentRest(afterTag, consumedFirstToken ? firstToken : null)
+  const { args, leftover } = parseCommentArgs(rest, effectiveInputs)
+
+  if (isPr && (unknownProfile || effectiveInputs.some((s) => s.name === "pr"))) {
+    args.pr = targetNum
+  } else if (!isPr && (unknownProfile || effectiveInputs.some((s) => s.name === "issue"))) {
+    args.issue = targetNum
   }
 
-  // Issue routing: named subcommand wins; bare falls to defaultExecutable.
-  // The default is owned by the config layer (see KodyConfig.defaultExecutable
-  // / loadConfig) — this module never hardcodes an executable name.
-  const sub = extractSubcommand(afterTag)
-
-  if (!sub) {
-    const defaultExec = opts?.config?.defaultExecutable
-    if (!defaultExec) return null
-    return asDispatch(defaultExec, targetNum)
+  const restInput = effectiveInputs.find((s) => s.bindsCommentRest === true)
+  if (restInput && leftover.length > 0 && args[restInput.name] === undefined) {
+    args[restInput.name] = leftover
   }
 
-  // Backward-compat aliases that map to other names.
-  if (sub === "build") {
-    // Legacy: `@kody build` on an issue used to mean implement-the-issue.
-    return { executable: "run", cliArgs: { issue: targetNum }, target: targetNum }
-  }
-  if (sub === "orchestrate" || sub === "orchestrator") {
-    // Legacy: bare `@kody orchestrate` used to mean the plan-build-review
-    // flow. Route to its semantic successor, `bug`.
-    return { executable: "bug", cliArgs: { issue: targetNum }, target: targetNum }
-  }
-
-  // Generic pass-through: @kody <name> → executable <name> with { issue }.
-  // Sub-orchestrators (bug, feature, spec, chore, …) route through here.
-  return asDispatch(sub, targetNum)
+  return { executable, cliArgs: args, target: targetNum }
 }
 
-function asDispatch(executable: string, target: number): DispatchResult {
-  return { executable, cliArgs: { issue: target }, target }
-}
+// ────────────────────────────────────────────────────────────────────────────
 
 function extractAfterTag(body: string): string {
   const idx = body.indexOf("@kody")
@@ -147,21 +114,106 @@ function extractAfterTag(body: string): string {
   return body.slice(idx + "@kody".length).trim()
 }
 
-/**
- * Extract the first word after `@kody` — the subcommand (e.g. "plan", "run").
- * Returns null if no recognizable subcommand (i.e. bare `@kody` or free text).
- */
 function extractSubcommand(afterTag: string): string | null {
   const match = afterTag.match(/^([a-z][a-z0-9-]{1,40})\b/)
-  if (!match) return null
-  return match[1]!
+  return match ? match[1]! : null
 }
 
-function extractFeedback(afterTag: string): string | undefined {
-  // Strip an optional leading "fix" / "please" / "kindly" keyword whether it
-  // is followed by a separator or stands alone at end-of-string. Without the
-  // `|$` alternative, bare `@kody fix` returned "fix" as inline feedback,
-  // causing fixFlow to bypass the actual PR review body.
-  const cleaned = afterTag.replace(/^(fix|please|kindly)(?:[\s:,.-]+|$)/i, "").trim()
-  return cleaned.length > 0 ? cleaned : undefined
+/**
+ * Remove the matched subcommand (if any) and common politeness lead-ins,
+ * then trim leading punctuation. What's left is the user's free text /
+ * flag soup that will be parsed against the profile's inputs.
+ */
+function extractCommentRest(afterTag: string, consumedToken: string | null): string {
+  let rest = afterTag
+  if (consumedToken) {
+    const re = new RegExp(`^${consumedToken.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")}\\b`, "i")
+    rest = rest.replace(re, "")
+  }
+  rest = rest.replace(/^(please|kindly)(?:[\s:,.-]+|$)/i, "")
+  return rest.replace(/^[\s:,.-]+/, "").trim()
+}
+
+/**
+ * Parse free text against a profile's declared inputs. Recognizes:
+ *   --flag value | --flag=value   — any declared input
+ *   --bool-flag                   — type: "bool"
+ *   bare enum values              — type: "enum", matches InputSpec.values
+ *   bare integer                  — type: "int"
+ *   bare bool-flag keyword        — type: "bool", matches the flag word
+ *
+ * Unrecognized tokens accumulate in `leftover`, which callers may forward
+ * to a `bindsCommentRest` input.
+ */
+function parseCommentArgs(rest: string, inputs: InputSpec[]): { args: Record<string, unknown>; leftover: string } {
+  const tokens = rest.length === 0 ? [] : rest.split(/\s+/).filter((t) => t.length > 0)
+  const args: Record<string, unknown> = {}
+  const unmatched: string[] = []
+
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i]!
+
+    if (t.startsWith("--")) {
+      const eq = t.indexOf("=")
+      const key = eq >= 0 ? t.slice(2, eq) : t.slice(2)
+      const inlineValue = eq >= 0 ? t.slice(eq + 1) : undefined
+      const spec = findInputByFlag(inputs, key)
+      if (!spec) {
+        unmatched.push(t)
+        continue
+      }
+      if (spec.type === "bool") {
+        args[spec.name] = true
+        continue
+      }
+      const value = inlineValue ?? tokens[i + 1]
+      if (value === undefined || value.startsWith("--")) {
+        unmatched.push(t)
+        continue
+      }
+      args[spec.name] = coerceBare(spec, value)
+      if (inlineValue === undefined) i++
+      continue
+    }
+
+    const enumHit = inputs.find((s) => s.type === "enum" && s.values?.includes(t) && args[s.name] === undefined)
+    if (enumHit) {
+      args[enumHit.name] = t
+      continue
+    }
+
+    if (/^-?\d+$/.test(t)) {
+      const intHit = inputs.find((s) => s.type === "int" && args[s.name] === undefined)
+      if (intHit) {
+        args[intHit.name] = parseInt(t, 10)
+        continue
+      }
+    }
+
+    const boolHit = inputs.find((s) => s.type === "bool" && s.flag === `--${t}` && args[s.name] === undefined)
+    if (boolHit) {
+      args[boolHit.name] = true
+      continue
+    }
+
+    unmatched.push(t)
+  }
+
+  return { args, leftover: unmatched.join(" ") }
+}
+
+function findInputByFlag(inputs: InputSpec[], key: string): InputSpec | undefined {
+  return inputs.find((s) => s.name === key || s.flag === `--${key}`)
+}
+
+function coerceBare(spec: InputSpec, value: string): unknown {
+  if (spec.type === "int") {
+    const n = parseInt(value, 10)
+    return Number.isNaN(n) ? value : n
+  }
+  if (spec.type === "bool") {
+    const v = value.toLowerCase()
+    return v === "true" || v === "1" || v === "yes"
+  }
+  return value
 }

@@ -145,6 +145,7 @@ function parseInputs(p: string, raw: unknown): InputSpec[] {
     if (r.requiredWhen && typeof r.requiredWhen === "object") {
       spec.requiredWhen = r.requiredWhen as InputSpec["requiredWhen"]
     }
+    if (r.bindsCommentRest === true) spec.bindsCommentRest = true
     out.push(spec)
   }
   return out

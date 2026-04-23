@@ -15,6 +15,7 @@
       "flag": "--feedback",
       "type": "string",
       "required": false,
+      "bindsCommentRest": true,
       "describe": "Inline override. If absent, the flow reads the latest PR review comment."
     }
   ],
@@ -49,10 +50,10 @@
       "name": "playwright",
       "install": {
         "required": false,
-        "checkCommand": "npx --no-install playwright --version",
+        "checkCommand": "ls \"$HOME/.cache/ms-playwright\" 2>/dev/null | grep -q '^chromium'",
         "installCommand": "npx --yes playwright install --with-deps chromium"
       },
-      "verify": "npx --no-install playwright --version",
+      "verify": "ls \"$HOME/.cache/ms-playwright\" 2>/dev/null | grep -q '^chromium'",
       "usage": ""
     }
   ],
