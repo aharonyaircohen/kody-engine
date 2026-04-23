@@ -143,4 +143,31 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
       expect(entry.with).toBeDefined()
     }
   })
+
+  it.each(["feature", "spec", "chore"])("`%s` sub-orchestrator profile loads cleanly", (name) => {
+    const profile = loadProfile(path.join(EXE_ROOT, `${name}/profile.json`))
+    expect(profile.name).toBe(name)
+    expect(profile.inputs.map((i) => i.name)).toEqual(["issue"])
+    expect(profile.claudeCode.maxTurns).toBe(0)
+    const pre = profile.scripts.preflight.map((p) => p.script)
+    expect(pre[0]).toBe("setLifecycleLabel")
+    expect(pre.at(-1)).toBe("skipAgent")
+    const post = profile.scripts.postflight
+    expect(post[0]!.script).toBe("startFlow")
+    expect(post.at(-1)!.script).toBe("persistFlowState")
+  })
+
+  it("each sub-orchestrator's startFlow points at the expected entry stage", () => {
+    const entries: Record<string, string> = {
+      bug: "plan",
+      feature: "research",
+      spec: "research",
+      chore: "run",
+    }
+    for (const [name, expectedEntry] of Object.entries(entries)) {
+      const profile = loadProfile(path.join(EXE_ROOT, `${name}/profile.json`))
+      const startEntry = profile.scripts.postflight.find((p) => p.script === "startFlow")
+      expect(startEntry?.with?.entry).toBe(expectedEntry)
+    }
+  })
 })

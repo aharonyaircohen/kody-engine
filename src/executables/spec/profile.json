@@ -1,0 +1,67 @@
+{
+  "name": "spec",
+  "describe": "Sub-orchestrator for spec / RFC / design-doc issues — research → plan (stop). Terminates at the plan artifact; no run, no PR. No agent.",
+  "inputs": [
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": true,
+      "describe": "GitHub issue number to drive the flow on."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": 0,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "scripts": {
+    "preflight": [
+      {
+        "script": "setLifecycleLabel",
+        "with": {
+          "label": "kody:orchestrating",
+          "color": "1d76db",
+          "description": "kody2: orchestrating a multi-stage flow"
+        }
+      },
+      { "script": "loadIssueContext" },
+      { "script": "loadTaskState" },
+      { "script": "skipAgent" }
+    ],
+    "postflight": [
+      { "script": "startFlow", "with": { "entry": "research", "target": "issue" },
+        "runWhen": { "data.taskState.core.lastOutcome": null } },
+
+      { "script": "dispatch", "with": { "next": "plan", "target": "issue" },
+        "runWhen": { "data.taskState.core.lastOutcome.type": "RESEARCH_COMPLETED" } },
+
+      { "script": "finishFlow",
+        "with": { "reason": "spec-ready", "label": "kody:done", "color": "0e8a16", "description": "kody2: spec/plan artifact ready" },
+        "runWhen": { "data.taskState.core.lastOutcome.type": "PLAN_COMPLETED" } },
+
+      { "script": "finishFlow",
+        "with": { "reason": "aborted", "label": "kody:failed", "color": "e11d21", "description": "kody2: flow failed" },
+        "runWhen": { "data.taskState.core.lastOutcome.type": ["RESEARCH_FAILED", "PLAN_FAILED", "AGENT_NOT_RUN"] } },
+
+      { "script": "persistFlowState" }
+    ]
+  },
+  "output": {
+    "actionTypes": [
+      "FLOW_STARTED",
+      "FLOW_COMPLETED",
+      "FLOW_ABORTED"
+    ]
+  }
+}

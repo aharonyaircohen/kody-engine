@@ -8,7 +8,8 @@
  *   - target: "issue" | "pr" — where to post the @kody2 comment
  *
  * Reads:
- *   - ctx.args.flow      — orchestrator's --flow input
+ *   - profile.name       — orchestrator's own executable name, which IS
+ *                           the flow name (e.g. "bug", "feature", "spec")
  *   - ctx.args.issue     — orchestrator's --issue input
  *   - ctx.data.taskState — loaded by `loadTaskState` preflight
  *
@@ -23,7 +24,7 @@ import type { TaskState } from "../state.js"
 
 const API_TIMEOUT_MS = 30_000
 
-export const startFlow: PostflightScript = async (ctx, _profile, _agentResult, args?: ScriptArgs) => {
+export const startFlow: PostflightScript = async (ctx, profile, _agentResult, args?: ScriptArgs) => {
   const entry = args?.entry as string | undefined
   if (!entry) {
     process.stderr.write("[kody2 startFlow] missing `with.entry` — skipping\n")
@@ -31,7 +32,9 @@ export const startFlow: PostflightScript = async (ctx, _profile, _agentResult, a
   }
   const target = (args?.target as string | undefined) ?? "issue"
 
-  const flowName = (ctx.args.flow as string | undefined) ?? "default"
+  // Flow name = orchestrator's own executable name. This is what advanceFlow
+  // posts back (`@kody2 <flow-name>`) to retrigger the same sub-orchestrator.
+  const flowName = profile.name
   const issueNumber = ctx.args.issue as number | undefined
   if (!issueNumber) {
     process.stderr.write("[kody2 startFlow] no --issue arg — skipping\n")

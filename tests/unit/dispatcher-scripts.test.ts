@@ -75,11 +75,13 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks())
 
 describe("startFlow", () => {
-  it("seeds state.flow when none is set, then posts @kody2 <entry> on the issue", async () => {
+  it("seeds state.flow using the profile name, then posts @kody2 <entry> on the issue", async () => {
     const state: TaskState = { ...emptyState() }
-    const c = ctx({ data: { taskState: state }, args: { issue: 42, flow: "plan-build-review" } })
-    await startFlow(c, profile(), null, { entry: "plan", target: "issue" })
-    expect(state.flow).toMatchObject({ name: "plan-build-review", step: "plan", issueNumber: 42 })
+    const c = ctx({ data: { taskState: state }, args: { issue: 42 } })
+    await startFlow(c, profile("bug"), null, { entry: "plan", target: "issue" })
+    // flow.name must come from the profile (the orchestrator's own name),
+    // not from a removed --flow CLI arg.
+    expect(state.flow).toMatchObject({ name: "bug", step: "plan", issueNumber: 42 })
     expect(execFileSync).toHaveBeenCalledWith(
       "gh",
       ["issue", "comment", "42", "--body", "@kody2 plan"],
@@ -87,19 +89,26 @@ describe("startFlow", () => {
     )
   })
 
+  it("different profile name yields a different flow.name", async () => {
+    const state: TaskState = { ...emptyState() }
+    const c = ctx({ data: { taskState: state }, args: { issue: 7 } })
+    await startFlow(c, profile("feature"), null, { entry: "research", target: "issue" })
+    expect(state.flow?.name).toBe("feature")
+  })
+
   it("is idempotent: no-op when state.flow is already set", async () => {
     const flow: FlowState = { name: "x", step: "plan", issueNumber: 42, startedAt: "2026-01-01T00:00:00Z" }
     const state: TaskState = { ...emptyState(), flow }
-    const c = ctx({ data: { taskState: state }, args: { issue: 42, flow: "plan-build-review" } })
-    await startFlow(c, profile(), null, { entry: "plan" })
+    const c = ctx({ data: { taskState: state }, args: { issue: 42 } })
+    await startFlow(c, profile("bug"), null, { entry: "plan" })
     expect(execFileSync).not.toHaveBeenCalled()
     expect(state.flow).toBe(flow)
   })
 
   it("targets the PR when target=pr and prUrl is present in state", async () => {
     const state: TaskState = { ...emptyState(), core: { ...emptyState().core, prUrl: "https://github.com/o/r/pull/77" } }
-    const c = ctx({ data: { taskState: state }, args: { issue: 42, flow: "f" } })
-    await startFlow(c, profile(), null, { entry: "review", target: "pr" })
+    const c = ctx({ data: { taskState: state }, args: { issue: 42 } })
+    await startFlow(c, profile("bug"), null, { entry: "review", target: "pr" })
     expect(execFileSync).toHaveBeenCalledWith(
       "gh",
       ["pr", "comment", "77", "--body", "@kody2 review"],
@@ -109,8 +118,8 @@ describe("startFlow", () => {
 
   it("falls back to issue when target=pr but no prUrl exists", async () => {
     const state: TaskState = { ...emptyState() }
-    const c = ctx({ data: { taskState: state }, args: { issue: 42, flow: "f" } })
-    await startFlow(c, profile(), null, { entry: "review", target: "pr" })
+    const c = ctx({ data: { taskState: state }, args: { issue: 42 } })
+    await startFlow(c, profile("bug"), null, { entry: "review", target: "pr" })
     expect(execFileSync).toHaveBeenCalledWith(
       "gh",
       ["issue", "comment", "42", "--body", "@kody2 review"],
