@@ -49,8 +49,7 @@
       { "script": "skipAgent" }
     ],
     "postflight": [
-      { "script": "startFlow", "with": { "entry": "run", "target": "issue" },
-        "runWhen": { "data.taskState.core.lastOutcome": null } },
+      { "script": "startFlow", "with": { "entry": "run", "target": "issue" } },
 
       { "script": "dispatch", "with": { "next": "review", "target": "pr" },
         "runWhen": { "data.taskState.core.lastOutcome.type": "RUN_COMPLETED" } },

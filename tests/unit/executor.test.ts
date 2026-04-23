@@ -131,8 +131,10 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     expect(pre).toContain("loadIssueContext")
     expect(pre).toContain("loadTaskState")
     expect(pre.at(-1)).toBe("skipAgent")
-    // Every transition entry is a dispatcher script with a runWhen guard
-    // (except the trailing persistFlowState which is unconditional).
+    // Every transition entry is a dispatcher script with a `with` block.
+    // Most have runWhen guards; `startFlow` and the trailing `persistFlowState`
+    // are unconditional — startFlow is idempotent on state.flow, persistFlowState
+    // always writes.
     const post = profile.scripts.postflight
     expect(post.at(-1)!.script).toBe("persistFlowState")
     expect(post.at(-1)!.runWhen).toBeUndefined()
@@ -140,8 +142,8 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     expect(transitions.length).toBeGreaterThanOrEqual(8)
     for (const entry of transitions) {
       expect(["startFlow", "dispatch", "finishFlow"]).toContain(entry.script)
-      expect(entry.runWhen).toBeDefined()
       expect(entry.with).toBeDefined()
+      if (entry.script !== "startFlow") expect(entry.runWhen).toBeDefined()
     }
   })
 
