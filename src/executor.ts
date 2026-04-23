@@ -11,7 +11,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { AgentResult } from "./agent.js"
 import { runAgent } from "./agent.js"
-import type { Kody2Config } from "./config.js"
+import type { KodyConfig } from "./config.js"
 import { loadConfig, parseProviderModel } from "./config.js"
 import type { Context, InputSpec, ScriptEntry } from "./executables/types.js"
 import { startLitellmIfNeeded } from "./litellm.js"
@@ -23,7 +23,7 @@ export interface ExecutorInput {
   cliArgs: Record<string, unknown>
   cwd: string
   /** Pre-loaded config. If omitted, executor loads it from cwd after validating args. */
-  config?: Kody2Config
+  config?: KodyConfig
   /** Skip config load entirely (for configless executables like `init`). */
   skipConfig?: boolean
   verbose?: boolean
@@ -63,7 +63,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
 
   // Resolve config: pre-loaded, loaded on demand, or a placeholder for
   // configless executables.
-  let config: Kody2Config
+  let config: KodyConfig
   if (input.config) {
     config = input.config
   } else if (input.skipConfig) {
@@ -111,7 +111,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     output: { exitCode: 0 },
   }
 
-  const ndjsonDir = path.join(input.cwd, ".kody2")
+  const ndjsonDir = path.join(input.cwd, ".kody")
   const invokeAgent = async (prompt: string): Promise<AgentResult> => {
     // Resolve at call time — ctx.data.syntheticPluginPath is set during preflight.
     const externalPlugins = (profile.claudeCode.plugins ?? [])
@@ -174,7 +174,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
         await fn(ctx, profile, agentResult, entry.with)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        process.stderr.write(`[kody2] postflight script "${entry.script}" crashed: ${msg}\n`)
+        process.stderr.write(`[kody] postflight script "${entry.script}" crashed: ${msg}\n`)
         // Don't let one failing postflight (e.g. writeRunSummary, flaky gh call)
         // prevent subsequent postflights (e.g. PR comment) from running.
         if (!ctx.output.reason) ctx.output.reason = `postflight ${entry.script} crashed: ${msg}`
@@ -201,7 +201,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
 function resolveProfilePath(profileName: string): string {
   // Resolve profile in both layouts:
   //   - dev / tsx: src/executor.ts    → src/executables/<name>/profile.json
-  //   - prod bundle: dist/bin/kody2.js → dist/executables/<name>/profile.json
+  //   - prod bundle: dist/bin/kody.js → dist/executables/<name>/profile.json
   const here = path.dirname(new URL(import.meta.url).pathname)
   const candidates = [
     path.join(here, "executables", profileName, "profile.json"), // same-dir sibling (dev)

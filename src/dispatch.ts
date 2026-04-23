@@ -3,35 +3,35 @@
  * triggering comment's body.
  *
  * Routing (on an issue):
- *   @kody2 plan        → plan          args: { issue }
- *   @kody2 run         → run           args: { issue }
- *   @kody2 bug         → bug           args: { issue }   (sub-orchestrator)
- *   @kody2 feature     → feature       args: { issue }   (sub-orchestrator)
- *   @kody2 spec        → spec          args: { issue }   (sub-orchestrator)
- *   @kody2 chore       → chore         args: { issue }   (sub-orchestrator)
- *   @kody2 <other>     → <other>       args: { issue }   (generic pass-through)
- *   @kody2 (bare)      → config.defaultExecutable (default baked in by
+ *   @kody plan        → plan          args: { issue }
+ *   @kody run         → run           args: { issue }
+ *   @kody bug         → bug           args: { issue }   (sub-orchestrator)
+ *   @kody feature     → feature       args: { issue }   (sub-orchestrator)
+ *   @kody spec        → spec          args: { issue }   (sub-orchestrator)
+ *   @kody chore       → chore         args: { issue }   (sub-orchestrator)
+ *   @kody <other>     → <other>       args: { issue }   (generic pass-through)
+ *   @kody (bare)      → config.defaultExecutable (default baked in by
  *                        loadConfig — currently "classify"; never
  *                        hardcoded here)
  *
  * Routing (on a PR):
- *   @kody2 fix-ci      → fix-ci        args: { pr }
- *   @kody2 resolve     → resolve       args: { pr }
- *   @kody2 ui-review   → ui-review     args: { pr }
- *   @kody2 review      → review        args: { pr }
- *   @kody2 sync        → sync          args: { pr }
- *   @kody2 fix / bare  → fix           args: { pr, feedback? }
+ *   @kody fix-ci      → fix-ci        args: { pr }
+ *   @kody resolve     → resolve       args: { pr }
+ *   @kody ui-review   → ui-review     args: { pr }
+ *   @kody review      → review        args: { pr }
+ *   @kody sync        → sync          args: { pr }
+ *   @kody fix / bare  → fix           args: { pr, feedback? }
  *
  * workflow_dispatch → run on the provided issue_number input.
  */
 
 import * as fs from "node:fs"
-import type { Kody2Config } from "./config.js"
+import type { KodyConfig } from "./config.js"
 
 export interface DispatchResult {
   /** Which executable to invoke. */
   executable: string
-  /** Args to pass to the executable (mirrors what `kody2 <executable>` CLI would receive). */
+  /** Args to pass to the executable (mirrors what `kody <executable>` CLI would receive). */
   cliArgs: Record<string, unknown>
   /** Issue or PR number, surfaced for post-failure comments. */
   target: number
@@ -43,7 +43,7 @@ export interface DispatchResult {
  */
 export function autoDispatch(opts?: {
   explicit?: { issueNumber?: number }
-  config?: Kody2Config
+  config?: KodyConfig
 }): DispatchResult | null {
   const explicit = opts?.explicit
   if (explicit?.issueNumber && explicit.issueNumber > 0) {
@@ -111,7 +111,7 @@ export function autoDispatch(opts?: {
   }
 
   // Issue routing: named subcommand wins; bare falls to defaultExecutable.
-  // The default is owned by the config layer (see Kody2Config.defaultExecutable
+  // The default is owned by the config layer (see KodyConfig.defaultExecutable
   // / loadConfig) — this module never hardcodes an executable name.
   const sub = extractSubcommand(afterTag)
 
@@ -123,16 +123,16 @@ export function autoDispatch(opts?: {
 
   // Backward-compat aliases that map to other names.
   if (sub === "build") {
-    // Legacy: `@kody2 build` on an issue used to mean implement-the-issue.
+    // Legacy: `@kody build` on an issue used to mean implement-the-issue.
     return { executable: "run", cliArgs: { issue: targetNum }, target: targetNum }
   }
   if (sub === "orchestrate" || sub === "orchestrator") {
-    // Legacy: bare `@kody2 orchestrate` used to mean the plan-build-review
+    // Legacy: bare `@kody orchestrate` used to mean the plan-build-review
     // flow. Route to its semantic successor, `bug`.
     return { executable: "bug", cliArgs: { issue: targetNum }, target: targetNum }
   }
 
-  // Generic pass-through: @kody2 <name> → executable <name> with { issue }.
+  // Generic pass-through: @kody <name> → executable <name> with { issue }.
   // Sub-orchestrators (bug, feature, spec, chore, …) route through here.
   return asDispatch(sub, targetNum)
 }
@@ -142,14 +142,14 @@ function asDispatch(executable: string, target: number): DispatchResult {
 }
 
 function extractAfterTag(body: string): string {
-  const idx = body.indexOf("@kody2")
+  const idx = body.indexOf("@kody")
   if (idx === -1) return body
-  return body.slice(idx + "@kody2".length).trim()
+  return body.slice(idx + "@kody".length).trim()
 }
 
 /**
- * Extract the first word after `@kody2` — the subcommand (e.g. "plan", "run").
- * Returns null if no recognizable subcommand (i.e. bare `@kody2` or free text).
+ * Extract the first word after `@kody` — the subcommand (e.g. "plan", "run").
+ * Returns null if no recognizable subcommand (i.e. bare `@kody` or free text).
  */
 function extractSubcommand(afterTag: string): string | null {
   const match = afterTag.match(/^([a-z][a-z0-9-]{1,40})\b/)
@@ -160,7 +160,7 @@ function extractSubcommand(afterTag: string): string | null {
 function extractFeedback(afterTag: string): string | undefined {
   // Strip an optional leading "fix" / "please" / "kindly" keyword whether it
   // is followed by a separator or stands alone at end-of-string. Without the
-  // `|$` alternative, bare `@kody2 fix` returned "fix" as inline feedback,
+  // `|$` alternative, bare `@kody fix` returned "fix" as inline feedback,
   // causing fixFlow to bypass the actual PR review body.
   const cleaned = afterTag.replace(/^(fix|please|kindly)(?:[\s:,.-]+|$)/i, "").trim()
   return cleaned.length > 0 ? cleaned : undefined

@@ -39,7 +39,7 @@
         "with": {
           "label": "kody:resolving",
           "color": "b60205",
-          "description": "kody2: resolving merge conflicts"
+          "description": "kody: resolving merge conflicts"
         }
       },
       {

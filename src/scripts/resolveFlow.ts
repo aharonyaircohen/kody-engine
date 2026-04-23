@@ -37,14 +37,14 @@ export const resolveFlow: PreflightScript = async (ctx) => {
     ctx.output.exitCode = 0
     ctx.output.reason = `already up to date with origin/${baseBranch} — nothing to resolve`
     ctx.skipAgent = true
-    tryPostPr(prNumber, `ℹ️ kody2 resolve: ${ctx.output.reason}`, ctx.cwd)
+    tryPostPr(prNumber, `ℹ️ kody resolve: ${ctx.output.reason}`, ctx.cwd)
     return
   }
   if (mergeStatus === "error") {
     ctx.output.exitCode = 99
     ctx.output.reason = `failed to merge origin/${baseBranch} (non-conflict error); see runner log`
     ctx.skipAgent = true
-    tryPostPr(prNumber, `⚠️ kody2 resolve FAILED: ${ctx.output.reason}`, ctx.cwd)
+    tryPostPr(prNumber, `⚠️ kody resolve FAILED: ${ctx.output.reason}`, ctx.cwd)
     return
   }
 
@@ -62,7 +62,7 @@ export const resolveFlow: PreflightScript = async (ctx) => {
   const runSuffix = runUrl ? `, run ${runUrl}` : ""
   tryPostPr(
     prNumber,
-    `⚙️ kody2 resolve started on \`${ctx.data.branch}\`${runSuffix} — ${conflictedFiles.length} conflicted file(s)`,
+    `⚙️ kody resolve started on \`${ctx.data.branch}\`${runSuffix} — ${conflictedFiles.length} conflicted file(s)`,
     ctx.cwd,
   )
 }

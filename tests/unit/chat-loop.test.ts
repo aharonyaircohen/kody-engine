@@ -19,7 +19,7 @@ describe("chat/loop", () => {
   let tmp: string
 
   beforeEach(() => {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody2-chat-loop-"))
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-chat-loop-"))
   })
   afterEach(() => {
     fs.rmSync(tmp, { recursive: true, force: true })

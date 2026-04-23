@@ -14,7 +14,7 @@ import { performInit } from "../../src/scripts/initFlow.js"
 const ghMock = gh as unknown as ReturnType<typeof vi.fn>
 
 function mkRepo(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody2-init-labels-"))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-init-labels-"))
   fs.writeFileSync(path.join(dir, "pnpm-lock.yaml"), "")
   return dir
 }

@@ -4,7 +4,7 @@
  * executables (review, fix) and the orchestrator can read the same flow
  * context from either place.
  *
- * Idempotent: if the PR already has a kody2 state-comment, the existing
+ * Idempotent: if the PR already has a kody state-comment, the existing
  * writeTaskState call updates it in place. No-op when no PR exists.
  *
  * Must run AFTER saveTaskState (which writes the issue-side state) and
@@ -37,7 +37,7 @@ export const mirrorStateToPr: PostflightScript = async (ctx) => {
     writeTaskState("pr", prNumber, state, ctx.cwd)
   } catch (err) {
     process.stderr.write(
-      `[kody2 mirrorStateToPr] failed to mirror state to PR #${prNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
+      `[kody mirrorStateToPr] failed to mirror state to PR #${prNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
     )
   }
 }

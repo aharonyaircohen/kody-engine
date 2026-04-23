@@ -22,7 +22,7 @@ const baseOpts = {
   prompt: "hi",
   model: { provider: "minimax", model: "m" },
   cwd: process.cwd(),
-  ndjsonDir: "/tmp/kody2-agent-test",
+  ndjsonDir: "/tmp/kody-agent-test",
 }
 
 describe("runAgent: settingSources passthrough", () => {

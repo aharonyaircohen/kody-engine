@@ -47,7 +47,7 @@ export class HttpSink implements EventSink {
     private readonly baseUrl: string,
     private readonly sessionId: string,
     private readonly logger: { warn: (msg: string) => void } = {
-      warn: (m) => process.stderr.write(`[kody2:chat] ${m}\n`),
+      warn: (m) => process.stderr.write(`[kody:chat] ${m}\n`),
     },
   ) {}
 

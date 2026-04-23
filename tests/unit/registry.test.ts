@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { hasExecutable, isSafeName, listExecutables, parseGenericFlags } from "../../src/registry.js"
 
 function mkFixture(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "kody2-registry-"))
+  return fs.mkdtempSync(path.join(os.tmpdir(), "kody-registry-"))
 }
 
 function writeProfile(root: string, name: string, body: object = {}): void {

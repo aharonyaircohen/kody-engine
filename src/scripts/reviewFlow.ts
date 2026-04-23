@@ -32,7 +32,7 @@ export const reviewFlow: PreflightScript = async (ctx) => {
 
   const runUrl = getRunUrl()
   const runSuffix = runUrl ? `, run ${runUrl}` : ""
-  tryPostPr(prNumber, `👀 kody2 review started on PR #${prNumber}${runSuffix}`, ctx.cwd)
+  tryPostPr(prNumber, `👀 kody review started on PR #${prNumber}${runSuffix}`, ctx.cwd)
 }
 
 function tryPostPr(prNumber: number, body: string, cwd?: string): void {

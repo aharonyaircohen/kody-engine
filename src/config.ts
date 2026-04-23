@@ -6,7 +6,7 @@ export interface TestRequirement {
   requireSibling: string
 }
 
-export interface Kody2Config {
+export interface KodyConfig {
   quality: {
     typecheck: string
     lint: string
@@ -28,7 +28,7 @@ export interface Kody2Config {
   }
   testRequirements?: TestRequirement[]
   /**
-   * Executable name to invoke when a user triggers bare `@kody2` with no
+   * Executable name to invoke when a user triggers bare `@kody` with no
    * subcommand. Defaults to "classify" (auto-triages into one of {feature,
    * bug, spec, chore} before dispatching). Set to "run" to skip classification
    * and directly implement, or "bug"/"feature" to force a specific
@@ -37,7 +37,7 @@ export interface Kody2Config {
    */
   defaultExecutable?: string
   /**
-   * Classifier configuration (only honored when bare `@kody2` routes to
+   * Classifier configuration (only honored when bare `@kody` routes to
    * the `classify` executable). `labelMap` lets you override the built-in
    * label → flow mapping (see src/scripts/classifyByLabel.ts for defaults).
    */
@@ -80,7 +80,7 @@ export function needsLitellmProxy(model: ProviderModel): boolean {
   return model.provider !== "claude" && model.provider !== "anthropic"
 }
 
-export function loadConfig(projectDir: string = process.cwd()): Kody2Config {
+export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
   const configPath = path.join(projectDir, "kody.config.json")
   if (!fs.existsSync(configPath)) {
     throw new Error(`kody.config.json not found at ${configPath}`)
@@ -131,10 +131,10 @@ export function loadConfig(projectDir: string = process.cwd()): Kody2Config {
   }
 }
 
-function parseClassifyConfig(raw: unknown): Kody2Config["classify"] {
+function parseClassifyConfig(raw: unknown): KodyConfig["classify"] {
   if (!raw || typeof raw !== "object") return undefined
   const r = raw as Record<string, unknown>
-  const out: NonNullable<Kody2Config["classify"]> = {}
+  const out: NonNullable<KodyConfig["classify"]> = {}
   if (r.labelMap && typeof r.labelMap === "object") {
     const entries = Object.entries(r.labelMap as Record<string, unknown>).filter(
       ([, v]) => typeof v === "string" && (v as string).length > 0,
@@ -146,10 +146,10 @@ function parseClassifyConfig(raw: unknown): Kody2Config["classify"] {
   return Object.keys(out).length > 0 ? out : undefined
 }
 
-function parseReleaseConfig(raw: unknown): Kody2Config["release"] {
+function parseReleaseConfig(raw: unknown): KodyConfig["release"] {
   if (!raw || typeof raw !== "object") return undefined
   const r = raw as Record<string, unknown>
-  const out: NonNullable<Kody2Config["release"]> = {}
+  const out: NonNullable<KodyConfig["release"]> = {}
   if (Array.isArray(r.versionFiles)) out.versionFiles = r.versionFiles.filter((f): f is string => typeof f === "string")
   if (typeof r.publishCommand === "string") out.publishCommand = r.publishCommand
   if (typeof r.notifyCommand === "string") out.notifyCommand = r.notifyCommand
@@ -160,10 +160,10 @@ function parseReleaseConfig(raw: unknown): Kody2Config["release"] {
   return Object.keys(out).length > 0 ? out : undefined
 }
 
-function parseIssueContext(raw: unknown): Kody2Config["issueContext"] {
+function parseIssueContext(raw: unknown): KodyConfig["issueContext"] {
   if (!raw || typeof raw !== "object") return undefined
   const r = raw as { commentLimit?: unknown; commentMaxBytes?: unknown }
-  const out: NonNullable<Kody2Config["issueContext"]> = {}
+  const out: NonNullable<KodyConfig["issueContext"]> = {}
   if (typeof r.commentLimit === "number" && r.commentLimit > 0) out.commentLimit = Math.floor(r.commentLimit)
   if (typeof r.commentMaxBytes === "number" && r.commentMaxBytes > 0)
     out.commentMaxBytes = Math.floor(r.commentMaxBytes)

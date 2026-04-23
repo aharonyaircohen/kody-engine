@@ -87,17 +87,17 @@ export function getFailedRunLogTail(runId: string, maxBytes: number, cwd?: strin
 }
 
 /**
- * kody2's own dispatch workflow is skipped by fix-ci — its failures are the
+ * kody's own dispatch workflow is skipped by fix-ci — its failures are the
  * engine's own crashes, not the CI we're trying to repair. Match by name
- * (the template ships as `name: kody2`).
+ * (the template ships as `name: kody`).
  */
-export function isKody2DispatchWorkflow(workflowName: string): boolean {
-  return workflowName.trim().toLowerCase() === "kody2"
+export function isKodyDispatchWorkflow(workflowName: string): boolean {
+  return workflowName.trim().toLowerCase() === "kody"
 }
 
 /**
  * Pick the first recent failed run that fix-ci can act on:
- *   - not kody2's own dispatch workflow
+ *   - not kody's own dispatch workflow
  *   - has a fetchable, non-empty `--log-failed` tail
  *
  * Returns the run plus its log tail, or null if nothing usable is found.
@@ -110,7 +110,7 @@ export function pickFailedRunForFixCi(
 ): { run: FailedRun; logTail: string } | null {
   const runs = getRecentFailedRunsForPr(prNumber, limit, cwd)
   for (const run of runs) {
-    if (isKody2DispatchWorkflow(run.workflowName)) continue
+    if (isKodyDispatchWorkflow(run.workflowName)) continue
     const logTail = getFailedRunLogTail(run.id, maxBytes, cwd)
     if (logTail) return { run, logTail }
   }

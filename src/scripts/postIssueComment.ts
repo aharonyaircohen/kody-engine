@@ -26,14 +26,14 @@ export const postIssueComment: PostflightScript = async (ctx) => {
 
   if (!commitResult?.committed && !hasCommits) {
     const reason = "no changes to commit"
-    postWith(targetType, targetNumber, `⚠️ kody2 FAILED: ${reason}`, ctx.cwd)
+    postWith(targetType, targetNumber, `⚠️ kody FAILED: ${reason}`, ctx.cwd)
     ctx.output.exitCode = 3
     ctx.output.reason = reason
     return
   }
 
   if (ctx.output.exitCode === 4 && ctx.data.prCrashReason) {
-    postWith(targetType, targetNumber, `⚠️ kody2 FAILED: ${truncate(ctx.data.prCrashReason as string, 1500)}`, ctx.cwd)
+    postWith(targetType, targetNumber, `⚠️ kody FAILED: ${truncate(ctx.data.prCrashReason as string, 1500)}`, ctx.cwd)
     ctx.output.reason = ctx.data.prCrashReason as string
     return
   }
@@ -46,12 +46,12 @@ export const postIssueComment: PostflightScript = async (ctx) => {
   // made no changes, which hides no-op outcomes (see issue #4).
   const justPushedToExistingPr = prAction === "updated" && commitResult?.committed === true
   const successMsg = justPushedToExistingPr
-    ? `✅ kody2 pushed to ${prUrl}`
+    ? `✅ kody pushed to ${prUrl}`
     : prAction === "updated"
-      ? `ℹ️ kody2 made no changes — PR: ${prUrl}`
-      : `✅ kody2 PR opened: ${prUrl}`
+      ? `ℹ️ kody made no changes — PR: ${prUrl}`
+      : `✅ kody PR opened: ${prUrl}`
   const failurePrSuffix = prUrl ? (prAction === "updated" ? ` — PR: ${prUrl}` : ` — draft PR: ${prUrl}`) : ""
-  const msg = isFailure ? `⚠️ kody2 FAILED: ${truncate(failureReason, 1500)}${failurePrSuffix}` : successMsg
+  const msg = isFailure ? `⚠️ kody FAILED: ${truncate(failureReason, 1500)}${failurePrSuffix}` : successMsg
   postWith(targetType, targetNumber, msg, ctx.cwd)
 
   let exitCode = 0

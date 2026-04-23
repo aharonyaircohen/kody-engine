@@ -25,7 +25,7 @@ describe("writeRunSummary", () => {
   let prevEnv: string | undefined
 
   beforeEach(() => {
-    summaryFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "kody2-summary-")), "step-summary.md")
+    summaryFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "kody-summary-")), "step-summary.md")
     prevEnv = process.env.GITHUB_STEP_SUMMARY
     process.env.GITHUB_STEP_SUMMARY = summaryFile
   })

@@ -38,20 +38,20 @@ describe("issue: isReviewShaped", () => {
     expect(isReviewShaped("## verdict: pass")).toBe(true)
   })
 
-  it("rejects a plain `@kody2 fix` trigger", () => {
-    expect(isReviewShaped("@kody2 fix")).toBe(false)
+  it("rejects a plain `@kody fix` trigger", () => {
+    expect(isReviewShaped("@kody fix")).toBe(false)
   })
 
   it("rejects a task-state block", () => {
-    expect(isReviewShaped("<!-- kody2:state:v1:begin -->\n```json\n{}\n```")).toBe(false)
+    expect(isReviewShaped("<!-- kody:state:v1:begin -->\n```json\n{}\n```")).toBe(false)
   })
 
   it("rejects a progress ping", () => {
-    expect(isReviewShaped("👀 kody2 review started on PR #1, run …")).toBe(false)
+    expect(isReviewShaped("👀 kody review started on PR #1, run …")).toBe(false)
   })
 
   it("rejects a status message", () => {
-    expect(isReviewShaped("✅ kody2 pushed to https://github.com/x/y/pull/1")).toBe(false)
+    expect(isReviewShaped("✅ kody pushed to https://github.com/x/y/pull/1")).toBe(false)
   })
 
   it("rejects a body that only mentions the word verdict in prose", () => {

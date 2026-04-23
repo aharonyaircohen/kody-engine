@@ -10,9 +10,9 @@
  *                                  parseAgentResult earlier).
  *
  * Side effects:
- *   - Posts an audit comment "🔎 kody2 classified as `<type>` — <reason>"
+ *   - Posts an audit comment "🔎 kody classified as `<type>` — <reason>"
  *     on the issue (human-readable; sanitized so it doesn't self-trigger).
- *   - Posts `@kody2 <type>` on the issue via execFileSync directly so GHA
+ *   - Posts `@kody <type>` on the issue via execFileSync directly so GHA
  *     picks it up and routes to the chosen sub-orchestrator.
  *   - Writes a typed action into ctx.data.action so saveTaskState records
  *     the outcome in state history.
@@ -44,7 +44,7 @@ export const postClassification: PostflightScript = async (ctx) => {
 
   if (!classification) {
     ctx.data.action = failedAction("classification missing or invalid")
-    tryAuditComment(issueNumber, "⚠️ kody2 classifier could not decide — please re-run with an explicit `@kody2 <type>`.", ctx.cwd)
+    tryAuditComment(issueNumber, "⚠️ kody classifier could not decide — please re-run with an explicit `@kody <type>`.", ctx.cwd)
     ctx.output.exitCode = 1
     ctx.output.reason = "classify: no decision"
     return
@@ -53,21 +53,21 @@ export const postClassification: PostflightScript = async (ctx) => {
   // Audit trail (human-readable, sanitized).
   tryAuditComment(
     issueNumber,
-    `🔎 kody2 classified as \`${classification}\`${reason ? ` — ${reason}` : ""}`,
+    `🔎 kody classified as \`${classification}\`${reason ? ` — ${reason}` : ""}`,
     ctx.cwd,
   )
 
   // Dispatch the chosen sub-orchestrator. Goes through execFileSync so it
   // reaches GHA's issue_comment filter; postIssueComment would sanitize.
   try {
-    execFileSync("gh", ["issue", "comment", String(issueNumber), "--body", `@kody2 ${classification}`], {
+    execFileSync("gh", ["issue", "comment", String(issueNumber), "--body", `@kody ${classification}`], {
       cwd: ctx.cwd,
       timeout: API_TIMEOUT_MS,
       stdio: ["ignore", "pipe", "pipe"],
     })
   } catch (err) {
     process.stderr.write(
-      `[kody2 postClassification] failed to dispatch @kody2 ${classification}: ${err instanceof Error ? err.message : String(err)}\n`,
+      `[kody postClassification] failed to dispatch @kody ${classification}: ${err instanceof Error ? err.message : String(err)}\n`,
     )
     ctx.data.action = failedAction("dispatch post failed")
     ctx.output.exitCode = 1

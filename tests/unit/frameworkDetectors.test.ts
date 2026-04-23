@@ -11,7 +11,7 @@ import {
 } from "../../src/scripts/frameworkDetectors.js"
 
 function mktmp(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "kody2-fwdetect-"))
+  return fs.mkdtempSync(path.join(os.tmpdir(), "kody-fwdetect-"))
 }
 
 function writeFile(root: string, rel: string, content: string): void {

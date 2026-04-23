@@ -5,7 +5,7 @@ vi.mock("node:child_process", () => ({
   execFileSync: (...args: unknown[]) => execFileSyncMock(...args),
 }))
 
-import { getRecentFailedRunsForPr, isKody2DispatchWorkflow, pickFailedRunForFixCi } from "../../src/workflow.js"
+import { getRecentFailedRunsForPr, isKodyDispatchWorkflow, pickFailedRunForFixCi } from "../../src/workflow.js"
 
 type GhCall = { cmd: string; args: string[] }
 
@@ -27,17 +27,17 @@ beforeEach(() => {
   execFileSyncMock.mockReset()
 })
 
-describe("isKody2DispatchWorkflow", () => {
+describe("isKodyDispatchWorkflow", () => {
   it("matches the template workflow name case-insensitively", () => {
-    expect(isKody2DispatchWorkflow("kody2")).toBe(true)
-    expect(isKody2DispatchWorkflow("KODY2")).toBe(true)
-    expect(isKody2DispatchWorkflow(" kody2 ")).toBe(true)
+    expect(isKodyDispatchWorkflow("kody")).toBe(true)
+    expect(isKodyDispatchWorkflow("KODY")).toBe(true)
+    expect(isKodyDispatchWorkflow(" kody ")).toBe(true)
   })
 
   it("does not match other workflows", () => {
-    expect(isKody2DispatchWorkflow("CI")).toBe(false)
-    expect(isKody2DispatchWorkflow(".github/workflows/codeql.yml")).toBe(false)
-    expect(isKody2DispatchWorkflow("")).toBe(false)
+    expect(isKodyDispatchWorkflow("CI")).toBe(false)
+    expect(isKodyDispatchWorkflow(".github/workflows/codeql.yml")).toBe(false)
+    expect(isKodyDispatchWorkflow("")).toBe(false)
   })
 })
 
@@ -77,14 +77,14 @@ describe("getRecentFailedRunsForPr", () => {
 })
 
 describe("pickFailedRunForFixCi", () => {
-  it("skips kody2 dispatch workflow runs", () => {
+  it("skips kody dispatch workflow runs", () => {
     stubGh([
       () => JSON.stringify({ headRefName: "feature" }),
       () =>
         JSON.stringify([
           {
             databaseId: 1,
-            workflowName: "kody2",
+            workflowName: "kody",
             headBranch: "feature",
             conclusion: "failure",
             url: "u1",
@@ -158,7 +158,7 @@ describe("pickFailedRunForFixCi", () => {
     stubGh([
       () => JSON.stringify({ headRefName: "feature" }),
       () =>
-        JSON.stringify([{ databaseId: 1, workflowName: "kody2", conclusion: "failure", url: "u1", createdAt: "t1" }]),
+        JSON.stringify([{ databaseId: 1, workflowName: "kody", conclusion: "failure", url: "u1", createdAt: "t1" }]),
     ])
     expect(pickFailedRunForFixCi(42, 1_000, 10)).toBeNull()
   })

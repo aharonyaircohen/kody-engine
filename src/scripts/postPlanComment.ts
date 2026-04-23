@@ -6,10 +6,10 @@
  *
  * No-op when the agent did not complete or produced no plan body.
  *
- * Footer must NEVER contain a literal `@kody2 X` string — the GHA
- * `contains(comment.body, '@kody2')` filter ignores markdown backticks and
+ * Footer must NEVER contain a literal `@kody X` string — the GHA
+ * `contains(comment.body, '@kody')` filter ignores markdown backticks and
  * would re-fire the workflow on this very comment. We render the trigger as
- * inert code (`kody2 run`, no @) and instruct the reader to add the @.
+ * inert code (`kody run`, no @) and instruct the reader to add the @.
  */
 
 import type { PostflightScript } from "../executables/types.js"
@@ -39,5 +39,5 @@ export function renderPlanComment(issueNumber: number, plan: string, opts?: { fl
   }
   // Inert: no `@` in the rendered code so the GHA contains() filter doesn't
   // self-fire when this comment is posted.
-  return `${head}\n\n---\nComment \`kody2 run\` (prefixed with \`@\`) to execute this plan.`
+  return `${head}\n\n---\nComment \`kody run\` (prefixed with \`@\`) to execute this plan.`
 }

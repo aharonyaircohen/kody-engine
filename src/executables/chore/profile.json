@@ -33,7 +33,7 @@
         "with": {
           "label": "kody-flow:chore",
           "color": "c5def5",
-          "description": "kody2 flow: chore / docs / dep-bump"
+          "description": "kody flow: chore / docs / dep-bump"
         }
       },
       {
@@ -41,7 +41,7 @@
         "with": {
           "label": "kody:orchestrating",
           "color": "1d76db",
-          "description": "kody2: orchestrating a multi-stage flow"
+          "description": "kody: orchestrating a multi-stage flow"
         }
       },
       { "script": "loadIssueContext" },
@@ -55,22 +55,22 @@
         "runWhen": { "data.taskState.core.lastOutcome.type": "RUN_COMPLETED" } },
 
       { "script": "finishFlow",
-        "with": { "reason": "review-passed", "label": "kody:done", "color": "0e8a16", "description": "kody2: PR ready for human review/merge" },
+        "with": { "reason": "review-passed", "label": "kody:done", "color": "0e8a16", "description": "kody: PR ready for human review/merge" },
         "runWhen": { "data.taskState.core.lastOutcome.type": "REVIEW_PASS" } },
 
       { "script": "dispatch", "with": { "next": "fix", "target": "pr" },
         "runWhen": { "data.taskState.core.lastOutcome.type": ["REVIEW_CONCERNS", "REVIEW_FAIL"] } },
 
       { "script": "finishFlow",
-        "with": { "reason": "review-failed", "label": "kody:failed", "color": "e11d21", "description": "kody2: flow failed" },
+        "with": { "reason": "review-failed", "label": "kody:failed", "color": "e11d21", "description": "kody: flow failed" },
         "runWhen": { "data.taskState.core.lastOutcome.type": "REVIEW_FAILED" } },
 
       { "script": "finishFlow",
-        "with": { "reason": "fix-applied", "label": "kody:done", "color": "0e8a16", "description": "kody2: PR ready for human review/merge" },
+        "with": { "reason": "fix-applied", "label": "kody:done", "color": "0e8a16", "description": "kody: PR ready for human review/merge" },
         "runWhen": { "data.taskState.core.lastOutcome.type": "FIX_COMPLETED" } },
 
       { "script": "finishFlow",
-        "with": { "reason": "aborted", "label": "kody:failed", "color": "e11d21", "description": "kody2: flow failed" },
+        "with": { "reason": "aborted", "label": "kody:failed", "color": "e11d21", "description": "kody: flow failed" },
         "runWhen": { "data.taskState.core.lastOutcome.type": ["RUN_FAILED", "FIX_FAILED", "AGENT_NOT_RUN"] } },
 
       { "script": "persistFlowState" }

@@ -2,10 +2,10 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
-import type { Kody2Config } from "../../src/config.js"
+import type { KodyConfig } from "../../src/config.js"
 import { buildPrompt, loadProjectConventions, parseAgentResult } from "../../src/prompt.js"
 
-const baseConfig: Kody2Config = {
+const baseConfig: KodyConfig = {
   quality: { typecheck: "pnpm tc", testUnit: "pnpm test", lint: "" },
   git: { defaultBranch: "main" },
   github: { owner: "o", repo: "r" },
@@ -114,7 +114,7 @@ describe("prompt: buildPrompt", () => {
 
 describe("prompt: loadProjectConventions", () => {
   function tmpDir(): string {
-    return fs.mkdtempSync(path.join(os.tmpdir(), "kody2-conv-"))
+    return fs.mkdtempSync(path.join(os.tmpdir(), "kody-conv-"))
   }
 
   it("returns empty array when no convention files exist", () => {

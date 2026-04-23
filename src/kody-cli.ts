@@ -21,10 +21,10 @@ export interface CiArgs {
   errors: string[]
 }
 
-export const CI_HELP = `kody2 ci — minimal-YAML autonomous engineer (CI preflight + run)
+export const CI_HELP = `kody ci — minimal-YAML autonomous engineer (CI preflight + run)
 
 Usage:
-  kody2 ci --issue <N> [--cwd <path>] [--verbose|--quiet]
+  kody ci --issue <N> [--cwd <path>] [--verbose|--quiet]
            [--skip-install] [--skip-litellm] [--package-manager pnpm|yarn|bun|npm]
 
 Options:
@@ -40,7 +40,7 @@ Environment:
   ALL_SECRETS          JSON blob of all GitHub secrets (auto-populated in CI)
   KODY_TOKEN|GH_TOKEN|GITHUB_TOKEN|GH_PAT   auth token for gh/git operations
 
-Exit codes (inherited from kody2 run):
+Exit codes (inherited from kody run):
   0   success (PR opened, verify passed)
   1   agent reported FAILED (draft PR opened)
   2   verify failed (draft PR opened)
@@ -140,7 +140,7 @@ function isOnPath(bin: string): boolean {
 
 export function ensurePackageManagerInstalled(pm: PackageManager, cwd: string): number {
   if (pm === "npm" || isOnPath(pm)) return 0
-  process.stdout.write(`→ kody2: ${pm} not on PATH — installing via npm install -g ${pm}\n`)
+  process.stdout.write(`→ kody: ${pm} not on PATH — installing via npm install -g ${pm}\n`)
   return shellOut("npm", ["install", "-g", pm], cwd)
 }
 
@@ -161,7 +161,7 @@ export function installLitellmIfNeeded(cwd: string): number {
     const cfg = loadConfig(cwd)
     const model = parseProviderModel(cfg.agent.model)
     if (!needsLitellmProxy(model)) {
-      process.stdout.write("→ kody2: provider is anthropic/claude, skipping LiteLLM install\n")
+      process.stdout.write("→ kody: provider is anthropic/claude, skipping LiteLLM install\n")
       return 0
     }
   } catch {
@@ -170,12 +170,12 @@ export function installLitellmIfNeeded(cwd: string): number {
   // Check if litellm already importable
   try {
     execFileSync("python3", ["-c", "import litellm"], { stdio: "pipe" })
-    process.stdout.write("→ kody2: litellm already installed\n")
+    process.stdout.write("→ kody: litellm already installed\n")
     return 0
   } catch {
     // not installed
   }
-  process.stdout.write("→ kody2: installing litellm (pip install 'litellm[proxy]')\n")
+  process.stdout.write("→ kody: installing litellm (pip install 'litellm[proxy]')\n")
   return shellOut("pip", ["install", "litellm[proxy]"], cwd)
 }
 
@@ -203,7 +203,7 @@ export function configureGitIdentity(cwd: string): void {
 
 function postFailureTail(issueNumber: number | undefined, cwd: string, reason: string): void {
   if (!issueNumber) return
-  const logPath = path.join(cwd, ".kody2", "last-run.jsonl")
+  const logPath = path.join(cwd, ".kody", "last-run.jsonl")
   let tail = ""
   try {
     if (fs.existsSync(logPath)) {
@@ -214,8 +214,8 @@ function postFailureTail(issueNumber: number | undefined, cwd: string, reason: s
     /* best effort */
   }
   const body = tail
-    ? `⚠️ kody2 preflight failed: ${truncate(reason, 500)}\n\n<details><summary>Last-run log tail</summary>\n\n\`\`\`\n${tail}\n\`\`\`\n\n</details>`
-    : `⚠️ kody2 preflight failed: ${truncate(reason, 1500)}`
+    ? `⚠️ kody preflight failed: ${truncate(reason, 500)}\n\n<details><summary>Last-run log tail</summary>\n\n\`\`\`\n${tail}\n\`\`\`\n\n</details>`
+    : `⚠️ kody preflight failed: ${truncate(reason, 1500)}`
   try {
     postIssueComment(issueNumber, body, cwd)
   } catch {
@@ -260,18 +260,18 @@ export async function runCi(argv: string[]): Promise<number> {
   }
   const issueNumber = dispatch.target
 
-  process.stdout.write(`→ kody2 preflight (cwd=${cwd}, executable=${dispatch.executable}, target=${issueNumber})\n`)
+  process.stdout.write(`→ kody preflight (cwd=${cwd}, executable=${dispatch.executable}, target=${issueNumber})\n`)
 
   try {
     const n = unpackAllSecrets()
-    if (n > 0) process.stdout.write(`→ kody2: unpacked ${n} secret(s) from ALL_SECRETS\n`)
+    if (n > 0) process.stdout.write(`→ kody: unpacked ${n} secret(s) from ALL_SECRETS\n`)
     resolveAuthToken()
-    // Acknowledge the triggering @kody2 comment with 👀 so the user sees
-    // kody2 picked up the request before deps/model spin up.
+    // Acknowledge the triggering @kody comment with 👀 so the user sees
+    // kody picked up the request before deps/model spin up.
     reactToTriggerComment(cwd)
 
     const pm = args.packageManager ?? detectPackageManager(cwd)
-    process.stdout.write(`→ kody2: package manager = ${pm}\n`)
+    process.stdout.write(`→ kody: package manager = ${pm}\n`)
 
     if (!args.skipInstall) {
       const code = installDeps(pm, cwd)
@@ -280,7 +280,7 @@ export async function runCi(argv: string[]): Promise<number> {
         return 99
       }
     } else {
-      process.stdout.write("→ kody2: skipping dep install (--skip-install)\n")
+      process.stdout.write("→ kody: skipping dep install (--skip-install)\n")
     }
 
     if (!args.skipLitellm) {
@@ -290,18 +290,18 @@ export async function runCi(argv: string[]): Promise<number> {
         return 99
       }
     } else {
-      process.stdout.write("→ kody2: skipping LiteLLM install (--skip-litellm)\n")
+      process.stdout.write("→ kody: skipping LiteLLM install (--skip-litellm)\n")
     }
 
     configureGitIdentity(cwd)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[kody2] preflight crashed: ${msg}\n`)
+    process.stderr.write(`[kody] preflight crashed: ${msg}\n`)
     postFailureTail(issueNumber, cwd, `preflight crashed: ${msg}`)
     return 99
   }
 
-  process.stdout.write(`→ kody2: preflight done, handing off to kody2 ${dispatch.executable}\n\n`)
+  process.stdout.write(`→ kody: preflight done, handing off to kody ${dispatch.executable}\n\n`)
 
   try {
     const config = earlyConfig ?? loadConfig(cwd)
@@ -319,7 +319,7 @@ export async function runCi(argv: string[]): Promise<number> {
     return result.exitCode
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[kody2] run crashed: ${msg}\n`)
+    process.stderr.write(`[kody] run crashed: ${msg}\n`)
     if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`)
     postFailureTail(issueNumber, cwd, `run crashed: ${msg}`)
     return 99

@@ -5,7 +5,7 @@
  *
  * Args (from profile entry's `with` object):
  *   - entry: name of the first child executable to invoke (e.g. "plan")
- *   - target: "issue" | "pr" — where to post the @kody2 comment
+ *   - target: "issue" | "pr" — where to post the @kody comment
  *
  * Reads:
  *   - profile.name       — orchestrator's own executable name, which IS
@@ -15,7 +15,7 @@
  *
  * Writes:
  *   - ctx.data.taskState.flow — initialized
- *   - posts an `@kody2 <entry>` comment via `gh`
+ *   - posts an `@kody <entry>` comment via `gh`
  */
 
 import { execFileSync } from "node:child_process"
@@ -27,17 +27,17 @@ const API_TIMEOUT_MS = 30_000
 export const startFlow: PostflightScript = async (ctx, profile, _agentResult, args?: ScriptArgs) => {
   const entry = args?.entry as string | undefined
   if (!entry) {
-    process.stderr.write("[kody2 startFlow] missing `with.entry` — skipping\n")
+    process.stderr.write("[kody startFlow] missing `with.entry` — skipping\n")
     return
   }
   const target = (args?.target as string | undefined) ?? "issue"
 
   // Flow name = orchestrator's own executable name. This is what advanceFlow
-  // posts back (`@kody2 <flow-name>`) to retrigger the same sub-orchestrator.
+  // posts back (`@kody <flow-name>`) to retrigger the same sub-orchestrator.
   const flowName = profile.name
   const issueNumber = ctx.args.issue as number | undefined
   if (!issueNumber) {
-    process.stderr.write("[kody2 startFlow] no --issue arg — skipping\n")
+    process.stderr.write("[kody startFlow] no --issue arg — skipping\n")
     return
   }
 
@@ -56,10 +56,10 @@ export const startFlow: PostflightScript = async (ctx, profile, _agentResult, ar
     }
   }
 
-  postKody2Comment(target, issueNumber, state, entry, ctx.cwd)
+  postKodyComment(target, issueNumber, state, entry, ctx.cwd)
 }
 
-function postKody2Comment(
+function postKodyComment(
   target: string,
   issueNumber: number,
   state: TaskState | undefined,
@@ -68,7 +68,7 @@ function postKody2Comment(
 ): void {
   const targetNumber = target === "pr" && state?.core.prUrl ? parsePr(state.core.prUrl) ?? issueNumber : issueNumber
   const sub = target === "pr" && state?.core.prUrl ? "pr" : "issue"
-  const body = `@kody2 ${next}`
+  const body = `@kody ${next}`
   try {
     execFileSync("gh", [sub, "comment", String(targetNumber), "--body", body], {
       timeout: API_TIMEOUT_MS,
@@ -77,7 +77,7 @@ function postKody2Comment(
     })
   } catch (err) {
     process.stderr.write(
-      `[kody2 startFlow] failed to post @kody2 ${next} on ${sub} #${targetNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
+      `[kody startFlow] failed to post @kody ${next} on ${sub} #${targetNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
     )
   }
 }

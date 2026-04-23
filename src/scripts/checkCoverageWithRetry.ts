@@ -40,7 +40,7 @@ export const checkCoverageWithRetry: PostflightScript = async (ctx) => {
     return
   }
 
-  process.stderr.write(`[kody2] coverage check found ${misses.length} missing test(s); retrying agent once\n`)
+  process.stderr.write(`[kody] coverage check found ${misses.length} missing test(s); retrying agent once\n`)
   const retryPrompt = `${basePrompt}\n\n# Coverage failure (retry)\n${formatMissesForFeedback(misses)}`
   const retry = await invoker(retryPrompt)
   const retryParsed = parseAgentResult(retry.finalText)

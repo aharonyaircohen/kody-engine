@@ -38,7 +38,7 @@ export const buildSyntheticPlugin: PreflightScript = async (ctx, profile) => {
 
   const catalog = getPluginsCatalogRoot()
   const runId = `${profile.name}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  const root = path.join(os.tmpdir(), `kody2-synth-${runId}`)
+  const root = path.join(os.tmpdir(), `kody-synth-${runId}`)
   fs.mkdirSync(path.join(root, ".claude-plugin"), { recursive: true })
 
   // Skills: copy each src/plugins/skills/<name>/ directory verbatim.
@@ -93,9 +93,9 @@ export const buildSyntheticPlugin: PreflightScript = async (ctx, profile) => {
   }
 
   const manifest: Record<string, unknown> = {
-    name: `kody2-synth-${profile.name}`,
+    name: `kody-synth-${profile.name}`,
     version: "1.0.0",
-    description: `Synthetic plugin assembled by Kody2 for profile '${profile.name}' at runtime.`,
+    description: `Synthetic plugin assembled by Kody for profile '${profile.name}' at runtime.`,
   }
   if (cc.skills.length > 0) manifest.skills = ["./skills/"]
   if (cc.commands.length > 0) manifest.commands = ["./commands/"]

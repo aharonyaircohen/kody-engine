@@ -1,7 +1,7 @@
 {
   "name": "ui-review",
   "role": "primitive",
-  "describe": "UI/UX review of an open PR: browses the running preview with Playwright, compares behavior to diff intent, posts one structured review comment. Read-only on the repo (no commits); writes a throwaway Playwright spec under .kody2/.",
+  "describe": "UI/UX review of an open PR: browses the running preview with Playwright, compares behavior to diff intent, posts one structured review comment. Read-only on the repo (no commits); writes a throwaway Playwright spec under .kody/.",
   "kind": "oneshot",
   "inputs": [
     {
@@ -49,7 +49,7 @@
         "installCommand": "npx --yes playwright install --with-deps chromium"
       },
       "verify": "npx --no-install playwright --version",
-      "usage": "Use `npx playwright test <file>` to run a Playwright spec. Write ad-hoc specs under `.kody2/ui-review/*.spec.ts`. If `npx playwright test` errors with `Cannot find package '@playwright/test'`, install it once with `npm install -D @playwright/test` (or the repo's package-manager equivalent) before retrying — the `playwright` browser binaries are already set up by preflight, but the per-repo test framework may not be. Prefer `page.goto(process.env.UI_REVIEW_BASE_URL)` — the base URL is injected as `UI_REVIEW_BASE_URL` at run time. Capture screenshots with `await page.screenshot({ path: '.kody2/ui-review/<name>.png' })` and reference those paths in your final review.",
+      "usage": "Use `npx playwright test <file>` to run a Playwright spec. Write ad-hoc specs under `.kody/ui-review/*.spec.ts`. If `npx playwright test` errors with `Cannot find package '@playwright/test'`, install it once with `npm install -D @playwright/test` (or the repo's package-manager equivalent) before retrying — the `playwright` browser binaries are already set up by preflight, but the per-repo test framework may not be. Prefer `page.goto(process.env.UI_REVIEW_BASE_URL)` — the base URL is injected as `UI_REVIEW_BASE_URL` at run time. Capture screenshots with `await page.screenshot({ path: '.kody/ui-review/<name>.png' })` and reference those paths in your final review.",
       "allowedUses": [
         "test",
         "--version"
@@ -60,7 +60,7 @@
   "outputArtifacts": [],
   "scripts": {
     "preflight": [
-      { "script": "setLifecycleLabel", "with": { "label": "kody:reviewing", "color": "d93f0b", "description": "kody2: reviewing a PR" } },
+      { "script": "setLifecycleLabel", "with": { "label": "kody:reviewing", "color": "d93f0b", "description": "kody: reviewing a PR" } },
       { "script": "reviewFlow" },
       { "script": "loadTaskState" },
       { "script": "loadConventions" },

@@ -40,7 +40,7 @@ export const fixFlow: PreflightScript = async (ctx) => {
   const runSuffix = runUrl ? `, run ${runUrl}` : ""
   tryPostPr(
     prNumber,
-    `⚙️ kody2 fix started on \`${ctx.data.branch}\`${runSuffix} — applying feedback (${truncate(feedback.replace(/\n/g, " "), 200)})`,
+    `⚙️ kody fix started on \`${ctx.data.branch}\`${runSuffix} — applying feedback (${truncate(feedback.replace(/\n/g, " "), 200)})`,
     ctx.cwd,
   )
 }

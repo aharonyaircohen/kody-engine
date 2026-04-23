@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest"
 const ROOT = path.resolve(__dirname, "..", "..")
 
 function runCli(args: string[], env: Record<string, string> = {}): { code: number; stdout: string; stderr: string } {
-  const result = spawnSync("npx", ["tsx", "bin/kody2.ts", ...args], {
+  const result = spawnSync("npx", ["tsx", "bin/kody.ts", ...args], {
     cwd: ROOT,
     encoding: "utf-8",
     env: { ...process.env, ...env },
@@ -22,14 +22,14 @@ describe("e2e: CLI smoke", () => {
   it("prints help with no args", () => {
     const r = runCli([])
     expect(r.code).toBe(0)
-    expect(r.stdout).toMatch(/kody2/)
+    expect(r.stdout).toMatch(/kody/)
     expect(r.stdout).toMatch(/Usage/)
   })
 
   it("prints help with --help", () => {
     const r = runCli(["--help"])
     expect(r.code).toBe(0)
-    expect(r.stdout).toMatch(/kody2/)
+    expect(r.stdout).toMatch(/kody/)
   })
 
   it("prints version", () => {

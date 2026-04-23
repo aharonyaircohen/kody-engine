@@ -21,7 +21,7 @@ export const setLifecycleLabel: PreflightScript = async (ctx, _profile, args) =>
   const label = args?.label
   if (typeof label !== "string" || !label.startsWith(KODY_NAMESPACE)) {
     process.stderr.write(
-      `[kody2] setLifecycleLabel: missing or invalid "label" arg (must start with "${KODY_NAMESPACE}"): ${String(label)}\n`,
+      `[kody] setLifecycleLabel: missing or invalid "label" arg (must start with "${KODY_NAMESPACE}"): ${String(label)}\n`,
     )
     return
   }

@@ -1,6 +1,6 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { Kody2Config } from "./config.js"
+import type { KodyConfig } from "./config.js"
 import type { IssueComment, IssueData } from "./issue.js"
 
 const DEFAULT_COMMENT_LIMIT = 50
@@ -12,7 +12,7 @@ const CONVENTIONS_PER_FILE_MAX_BYTES = 30_000
  *
  *   CLAUDE.md  — Claude Code's canonical project-conventions file. Primary.
  *   AGENTS.md  — Cross-tool fallback used by Aider/Cursor/Codex/etc.
- *                Loaded so kody2 also works on repos that follow the
+ *                Loaded so kody also works on repos that follow the
  *                broader industry convention rather than Claude's own.
  *
  * Both are loaded if present, in the order above (CLAUDE.md first so it's
@@ -47,7 +47,7 @@ export function loadProjectConventions(projectDir: string): LoadedConvention[] {
 }
 
 export interface BuildPromptOptions {
-  config: Kody2Config
+  config: KodyConfig
   issue: IssueData
   featureBranch: string
   conventions?: LoadedConvention[]

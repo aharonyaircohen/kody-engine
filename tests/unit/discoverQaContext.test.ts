@@ -11,7 +11,7 @@ import {
 import type { Context, Profile } from "../../src/executables/types.js"
 
 function mktmp(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "kody2-qactx-"))
+  return fs.mkdtempSync(path.join(os.tmpdir(), "kody-qactx-"))
 }
 
 function writeFile(root: string, rel: string, content: string): void {

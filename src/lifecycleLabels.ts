@@ -148,7 +148,7 @@ export function setKodyLabel(issueNumber: number, spec: KodyLabelSpec, cwd?: str
   const target = spec.label
   if (!target.startsWith(KODY_NAMESPACE)) {
     process.stderr.write(
-      `[kody2] setKodyLabel: refusing to set non-kody label "${target}"\n`,
+      `[kody] setKodyLabel: refusing to set non-kody label "${target}"\n`,
     )
     return
   }
@@ -171,13 +171,13 @@ export function setKodyLabel(issueNumber: number, spec: KodyLabelSpec, cwd?: str
         return
       } catch (retryErr) {
         process.stderr.write(
-          `[kody2] setKodyLabel: create+retry failed for ${target} on #${issueNumber}: ${errMsg(retryErr)}\n`,
+          `[kody] setKodyLabel: create+retry failed for ${target} on #${issueNumber}: ${errMsg(retryErr)}\n`,
         )
         return
       }
     }
     process.stderr.write(
-      `[kody2] setKodyLabel: failed to add ${target} on #${issueNumber}: ${errMsg(err)}\n`,
+      `[kody] setKodyLabel: failed to add ${target} on #${issueNumber}: ${errMsg(err)}\n`,
     )
   }
 }

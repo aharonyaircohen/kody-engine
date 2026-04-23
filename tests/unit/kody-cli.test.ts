@@ -2,13 +2,13 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
-import { detectPackageManager, parseCiArgs, resolveAuthToken, unpackAllSecrets } from "../../src/kody2-cli.js"
+import { detectPackageManager, parseCiArgs, resolveAuthToken, unpackAllSecrets } from "../../src/kody-cli.js"
 
 function tmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "kody2-cli-test-"))
+  return fs.mkdtempSync(path.join(os.tmpdir(), "kody-cli-test-"))
 }
 
-describe("kody2-cli: parseCiArgs", () => {
+describe("kody-cli: parseCiArgs", () => {
   it("parses --issue", () => {
     const a = parseCiArgs(["--issue", "42"])
     expect(a.issueNumber).toBe(42)
@@ -49,7 +49,7 @@ describe("kody2-cli: parseCiArgs", () => {
   })
 })
 
-describe("kody2-cli: unpackAllSecrets", () => {
+describe("kody-cli: unpackAllSecrets", () => {
   it("returns 0 when ALL_SECRETS missing", () => {
     const env: NodeJS.ProcessEnv = {}
     expect(unpackAllSecrets(env)).toBe(0)
@@ -99,7 +99,7 @@ describe("kody2-cli: unpackAllSecrets", () => {
   })
 })
 
-describe("kody2-cli: resolveAuthToken", () => {
+describe("kody-cli: resolveAuthToken", () => {
   it("picks KODY_TOKEN first", () => {
     const env: NodeJS.ProcessEnv = { KODY_TOKEN: "k", GH_TOKEN: "g", GITHUB_TOKEN: "gh", GH_PAT: "p" }
     expect(resolveAuthToken(env)).toBe("k")
@@ -131,7 +131,7 @@ describe("kody2-cli: resolveAuthToken", () => {
   })
 })
 
-describe("kody2-cli: detectPackageManager", () => {
+describe("kody-cli: detectPackageManager", () => {
   it("detects pnpm from pnpm-lock.yaml", () => {
     const d = tmpDir()
     fs.writeFileSync(path.join(d, "pnpm-lock.yaml"), "lockfile: 1")

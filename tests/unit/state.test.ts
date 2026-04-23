@@ -128,7 +128,7 @@ describe("state: parseStateComment / renderStateComment", () => {
     })
     s.core.prUrl = "https://ex/pull/42"
     const body = renderStateComment(s)
-    expect(body).toMatch(/## .*kody2 task state/)
+    expect(body).toMatch(/## .*kody task state/)
     expect(body).toMatch(/\*\*Attempts:\*\* build:1/)
     expect(body).toMatch(/\*\*PR:\*\* https:\/\/ex\/pull\/42/)
   })
@@ -140,7 +140,7 @@ describe("state: parseStateComment / renderStateComment", () => {
       timestamp: "t",
     })
     const body = renderStateComment(s)
-    const titleIdx = body.indexOf("kody2 task state")
+    const titleIdx = body.indexOf("kody task state")
     const beginIdx = body.indexOf(STATE_BEGIN)
     expect(titleIdx).toBeGreaterThanOrEqual(0)
     expect(beginIdx).toBeGreaterThan(titleIdx) // title precedes machine block

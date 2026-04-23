@@ -8,7 +8,7 @@
  */
 
 import type { AgentResult } from "../agent.js"
-import type { Kody2Config } from "../config.js"
+import type { KodyConfig } from "../config.js"
 import type { Phase } from "../state.js"
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -101,7 +101,7 @@ export interface InputSpec {
 }
 
 export interface ClaudeCodeSpec {
-  /** "inherit" → use Kody2Config.agent.model. Or a concrete "provider/model". */
+  /** "inherit" → use KodyConfig.agent.model. Or a concrete "provider/model". */
   model: string
   permissionMode: "default" | "acceptEdits" | "plan" | "bypassPermissions"
   /** null = unbounded. */
@@ -184,7 +184,7 @@ export interface Context {
   /** Project root. */
   cwd: string
   /** Loaded kody.config.json. */
-  config: Kody2Config
+  config: KodyConfig
   /** Stream-output verbosity. */
   verbose?: boolean
   quiet?: boolean

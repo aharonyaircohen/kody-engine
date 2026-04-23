@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process"
-import type { Kody2Config } from "./config.js"
+import type { KodyConfig } from "./config.js"
 
 export interface VerifyResult {
   ok: boolean
@@ -59,7 +59,7 @@ function runCommand(command: string, cwd?: string): Promise<RunResult> {
   })
 }
 
-export async function verifyAll(config: Kody2Config, cwd?: string): Promise<VerifyResult> {
+export async function verifyAll(config: KodyConfig, cwd?: string): Promise<VerifyResult> {
   const commands: { name: string; cmd: string }[] = []
   if (config.quality.typecheck) commands.push({ name: "typecheck", cmd: config.quality.typecheck })
   if (config.quality.testUnit) commands.push({ name: "test", cmd: config.quality.testUnit })

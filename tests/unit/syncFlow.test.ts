@@ -71,7 +71,7 @@ describe("syncFlow", () => {
     // Verify a push was invoked.
     const pushCall = execFileSyncMock.mock.calls.find((c) => (c[1] as string[]).includes("push"))
     expect(pushCall).toBeTruthy()
-    expect(vi.mocked(postPrReviewComment).mock.calls[0]![1]).toMatch(/✅ kody2 sync/)
+    expect(vi.mocked(postPrReviewComment).mock.calls[0]![1]).toMatch(/✅ kody sync/)
   })
 
   it("bails and tells user to run resolve on conflict", async () => {
@@ -84,7 +84,7 @@ describe("syncFlow", () => {
     expect(ctx.skipAgent).toBe(true)
     expect(ctx.output.exitCode).toBe(1)
     expect(ctx.output.reason).toMatch(/conflicts/)
-    expect(vi.mocked(postPrReviewComment).mock.calls[0]![1]).toMatch(/@kody2 resolve/)
+    expect(vi.mocked(postPrReviewComment).mock.calls[0]![1]).toMatch(/@kody resolve/)
   })
 
   it("bails on merge error", async () => {
@@ -96,7 +96,7 @@ describe("syncFlow", () => {
 
     expect(ctx.output.exitCode).toBe(1)
     expect(ctx.output.reason).toMatch(/non-conflict error/)
-    expect(vi.mocked(postPrReviewComment).mock.calls[0]![1]).toMatch(/❌ kody2 sync/)
+    expect(vi.mocked(postPrReviewComment).mock.calls[0]![1]).toMatch(/❌ kody sync/)
   })
 
   it("bails when PR is not OPEN", async () => {

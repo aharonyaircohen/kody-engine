@@ -7,19 +7,19 @@ describe("postPlanComment: renderPlanComment", () => {
     expect(out.startsWith("## Plan for issue #42\n\n## Files to change")).toBe(true)
   })
 
-  it("standalone (no flow): footer instructs the human but never embeds a literal @kody2 trigger", () => {
+  it("standalone (no flow): footer instructs the human but never embeds a literal @kody trigger", () => {
     const out = renderPlanComment(7, "body")
-    expect(out).toContain("kody2 run")
-    // The literal '@kody2' must NOT appear — GHA's contains() filter would
+    expect(out).toContain("kody run")
+    // The literal '@kody' must NOT appear — GHA's contains() filter would
     // otherwise re-fire this very workflow.
-    expect(out).not.toMatch(/@kody2/)
+    expect(out).not.toMatch(/@kody/)
   })
 
   it("inside a flow: footer points to the orchestrator, not a manual trigger", () => {
     const out = renderPlanComment(7, "body", { flowActive: true })
     expect(out).toContain("Orchestrator will advance")
-    expect(out).not.toMatch(/@kody2/)
-    expect(out).not.toMatch(/kody2 run/)
+    expect(out).not.toMatch(/@kody/)
+    expect(out).not.toMatch(/kody run/)
   })
 
   it("preserves the plan body verbatim", () => {

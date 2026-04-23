@@ -91,7 +91,7 @@ export function buildPrBody(opts: EnsurePrOptions): string {
   }
 
   lines.push("---")
-  lines.push("_Opened by kody2 (single-session autonomous run)._ ")
+  lines.push("_Opened by kody (single-session autonomous run)._ ")
   return lines.join("\n")
 }
 

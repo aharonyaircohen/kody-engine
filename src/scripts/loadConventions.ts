@@ -9,6 +9,6 @@ export const loadConventions: PreflightScript = async (ctx) => {
   const conventions = loadProjectConventions(ctx.cwd)
   ctx.data.conventions = conventions
   if (conventions.length > 0) {
-    process.stderr.write(`[kody2] loaded conventions: ${conventions.map((c) => c.path).join(", ")}\n`)
+    process.stderr.write(`[kody] loaded conventions: ${conventions.map((c) => c.path).join(", ")}\n`)
   }
 }

@@ -17,14 +17,14 @@ export function getRunUrl(): string {
 }
 
 /**
- * When kody2 was triggered by an `issue_comment` event, read the comment id
+ * When kody was triggered by an `issue_comment` event, read the comment id
  * from the GHA event payload and POST a 👀 reaction on it. Silent no-op when
  * not running in Actions or when the event isn't an issue_comment.
  *
- * The reaction is the user-visible signal that kody2 picked up the trigger,
+ * The reaction is the user-visible signal that kody picked up the trigger,
  * so it must be reliable. We retry on transient failures (network blip,
  * GitHub 5xx, gh-cli flake) and log to stderr if all retries fail — that
- * way "did kody2 see this?" stops being silently ambiguous.
+ * way "did kody see this?" stops being silently ambiguous.
  */
 export function reactToTriggerComment(cwd?: string): void {
   if (process.env.GITHUB_EVENT_NAME !== "issue_comment") return
@@ -73,7 +73,7 @@ export function reactToTriggerComment(cwd?: string): void {
     }
   }
   process.stderr.write(
-    `[kody2] 👀 reaction failed after 3 attempts on comment ${commentId}: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}\n`,
+    `[kody] 👀 reaction failed after 3 attempts on comment ${commentId}: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}\n`,
   )
 }
 

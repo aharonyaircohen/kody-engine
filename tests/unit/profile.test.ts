@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest"
 import { loadProfile, ProfileError, validateScriptReferences } from "../../src/profile.js"
 
 function tmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "kody2-profile-"))
+  return fs.mkdtempSync(path.join(os.tmpdir(), "kody-profile-"))
 }
 
 function writeProfile(dir: string, profile: unknown): string {

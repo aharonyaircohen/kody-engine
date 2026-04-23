@@ -1,7 +1,7 @@
 /**
  * Task state — the store for the reducer pattern.
  *
- * Each task (issue or PR) owns at most one kody2-authored comment whose
+ * Each task (issue or PR) owns at most one kody-authored comment whose
  * body holds the canonical state. Executables read the state at the start
  * of a run, emit a typed Action, and the reducer merges the action into a
  * new state which is written back into the same comment.
@@ -11,8 +11,8 @@
 
 import { execFileSync } from "node:child_process"
 
-export const STATE_BEGIN = "<!-- kody2:state:v1:begin -->"
-export const STATE_END = "<!-- kody2:state:v1:end -->"
+export const STATE_BEGIN = "<!-- kody:state:v1:begin -->"
+export const STATE_END = "<!-- kody:state:v1:end -->"
 const HISTORY_MAX_ENTRIES = 20
 const API_TIMEOUT_MS = 30_000
 
@@ -125,7 +125,7 @@ function gh(args: string[], input?: string, cwd?: string): string {
 }
 
 /**
- * Locate the kody2-owned state comment on a task. Returns the comment id +
+ * Locate the kody-owned state comment on a task. Returns the comment id +
  * body, or null if no such comment exists.
  */
 export function findStateComment(
@@ -252,7 +252,7 @@ export function renderStateComment(state: TaskState): string {
   const lines: string[] = []
 
   // ── Human-readable header + summary ────────────────────────────────────
-  lines.push("## 📋 kody2 task state")
+  lines.push("## 📋 kody task state")
   lines.push("")
   if (state.flow) {
     lines.push(`- **Flow:** \`${state.flow.name}\` (step: \`${state.flow.step}\`)`)
@@ -346,7 +346,7 @@ export function writeTaskState(target: TaskTarget, number: number, state: TaskSt
     }
   } catch (err) {
     process.stderr.write(
-      `[kody2 state] failed to write state on ${target} #${number}: ${err instanceof Error ? err.message : String(err)}\n`,
+      `[kody state] failed to write state on ${target} #${number}: ${err instanceof Error ? err.message : String(err)}\n`,
     )
   }
 }

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest"
 import { loadConfig, needsLitellmProxy, parseProviderModel, providerApiKeyEnvVar } from "../../src/config.js"
 
 function tmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "kody2-test-"))
+  return fs.mkdtempSync(path.join(os.tmpdir(), "kody-test-"))
 }
 
 function writeConfig(dir: string, contents: unknown): void {

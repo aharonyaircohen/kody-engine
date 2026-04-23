@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { performInit } from "../../src/scripts/initFlow.js"
 
 function mkRepo(opts: { lockFile?: "pnpm-lock.yaml" | "yarn.lock" | "bun.lockb"; gitInit?: boolean } = {}): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody2-init-"))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-init-"))
   if (opts.lockFile) fs.writeFileSync(path.join(dir, opts.lockFile), "")
   if (opts.gitInit) {
     execFileSync("git", ["init", "--initial-branch=main", "--quiet", dir], { stdio: "pipe" })
@@ -27,13 +27,13 @@ describe("initFlow: performInit", () => {
     dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
     const result = performInit(dir, false)
     expect(result.wrote).toContain("kody.config.json")
-    expect(result.wrote).toContain(".github/workflows/kody2.yml")
+    expect(result.wrote).toContain(".github/workflows/kody.yml")
     // Every discovered scheduled executable also gets its own workflow file.
-    const scheduledWorkflows = result.wrote.filter((f) => /\.github\/workflows\/kody2-.+\.yml$/.test(f))
+    const scheduledWorkflows = result.wrote.filter((f) => /\.github\/workflows\/kody-.+\.yml$/.test(f))
     expect(scheduledWorkflows.length).toBeGreaterThanOrEqual(1)
     expect(result.skipped).toEqual([])
     expect(fs.existsSync(path.join(dir, "kody.config.json"))).toBe(true)
-    expect(fs.existsSync(path.join(dir, ".github/workflows/kody2.yml"))).toBe(true)
+    expect(fs.existsSync(path.join(dir, ".github/workflows/kody.yml"))).toBe(true)
   })
 
   it("detects package manager from lockfile", () => {
@@ -74,7 +74,7 @@ describe("initFlow: performInit", () => {
     const second = performInit(dir, false)
     expect(second.wrote).toEqual([])
     expect(second.skipped).toContain("kody.config.json")
-    expect(second.skipped).toContain(".github/workflows/kody2.yml")
+    expect(second.skipped).toContain(".github/workflows/kody.yml")
     const after = fs.readFileSync(path.join(dir, "kody.config.json"), "utf-8")
     expect(after).toMatch(/user-edit/)
   })
@@ -95,7 +95,7 @@ describe("initFlow: performInit", () => {
     expect(stat.isDirectory()).toBe(true)
   })
 
-  it("scaffolds .kody2/qa-guide.md when the repo has a UI", () => {
+  it("scaffolds .kody/qa-guide.md when the repo has a UI", () => {
     dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
     fs.mkdirSync(path.join(dir, "src/app/login"), { recursive: true })
     fs.writeFileSync(path.join(dir, "src/app/page.tsx"), "export default () => null")
@@ -103,8 +103,8 @@ describe("initFlow: performInit", () => {
     fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ dependencies: { next: "16.0.0" } }))
 
     const result = performInit(dir, false)
-    expect(result.wrote).toContain(".kody2/qa-guide.md")
-    const md = fs.readFileSync(path.join(dir, ".kody2/qa-guide.md"), "utf-8")
+    expect(result.wrote).toContain(".kody/qa-guide.md")
+    const md = fs.readFileSync(path.join(dir, ".kody/qa-guide.md"), "utf-8")
     expect(md).toContain("# QA guide")
     expect(md).toContain("CHANGE_ME")
     expect(md).toContain("/login")
@@ -113,8 +113,8 @@ describe("initFlow: performInit", () => {
   it("does NOT scaffold qa-guide when no UI present", () => {
     dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
     const result = performInit(dir, false)
-    expect(result.wrote).not.toContain(".kody2/qa-guide.md")
-    expect(fs.existsSync(path.join(dir, ".kody2/qa-guide.md"))).toBe(false)
+    expect(result.wrote).not.toContain(".kody/qa-guide.md")
+    expect(fs.existsSync(path.join(dir, ".kody/qa-guide.md"))).toBe(false)
   })
 
   it("preserves an existing qa-guide.md without --force", () => {
@@ -122,11 +122,11 @@ describe("initFlow: performInit", () => {
     fs.mkdirSync(path.join(dir, "src/app"), { recursive: true })
     fs.writeFileSync(path.join(dir, "src/app/page.tsx"), "export default () => null")
     fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ dependencies: { next: "16.0.0" } }))
-    fs.mkdirSync(path.join(dir, ".kody2"), { recursive: true })
-    fs.writeFileSync(path.join(dir, ".kody2/qa-guide.md"), "# user-edited")
+    fs.mkdirSync(path.join(dir, ".kody"), { recursive: true })
+    fs.writeFileSync(path.join(dir, ".kody/qa-guide.md"), "# user-edited")
 
     const result = performInit(dir, false)
-    expect(result.skipped).toContain(".kody2/qa-guide.md")
-    expect(fs.readFileSync(path.join(dir, ".kody2/qa-guide.md"), "utf-8")).toBe("# user-edited")
+    expect(result.skipped).toContain(".kody/qa-guide.md")
+    expect(fs.readFileSync(path.join(dir, ".kody/qa-guide.md"), "utf-8")).toBe("# user-edited")
   })
 })

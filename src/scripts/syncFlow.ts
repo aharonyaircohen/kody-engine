@@ -2,7 +2,7 @@
  * Flow script for the `sync` executable.
  *
  * Merges `origin/<base>` into the PR branch and pushes. If the merge produces
- * conflicts, bails and tells the user to run `@kody2 resolve`. Never invokes
+ * conflicts, bails and tells the user to run `@kody resolve`. Never invokes
  * the agent — this is a pure git operation.
  */
 
@@ -43,7 +43,7 @@ export const syncFlow: PreflightScript = async (ctx) => {
     bail(
       ctx,
       prNumber,
-      `merge from origin/${baseBranch} produced conflicts — run \`@kody2 resolve\` to let kody2 resolve them`,
+      `merge from origin/${baseBranch} produced conflicts — run \`@kody resolve\` to let kody resolve them`,
     )
     return
   }
@@ -53,7 +53,7 @@ export const syncFlow: PreflightScript = async (ctx) => {
   if (headAfter === headBefore) {
     ctx.output.exitCode = 0
     ctx.output.reason = `already up to date with origin/${baseBranch}`
-    tryPostPr(prNumber, `ℹ️ kody2 sync: already up to date with origin/${baseBranch}`, ctx.cwd)
+    tryPostPr(prNumber, `ℹ️ kody sync: already up to date with origin/${baseBranch}`, ctx.cwd)
     return
   }
 
@@ -69,7 +69,7 @@ export const syncFlow: PreflightScript = async (ctx) => {
   ctx.output.reason = `merged origin/${baseBranch} into ${ctx.data.branch}`
   const runUrl = getRunUrl()
   const runSuffix = runUrl ? ` ([logs](${runUrl}))` : ""
-  tryPostPr(prNumber, `✅ kody2 sync: merged \`origin/${baseBranch}\` into \`${ctx.data.branch}\`${runSuffix}`, ctx.cwd)
+  tryPostPr(prNumber, `✅ kody sync: merged \`origin/${baseBranch}\` into \`${ctx.data.branch}\`${runSuffix}`, ctx.cwd)
 }
 
 function bail(ctx: Parameters<PreflightScript>[0], prNumber: number, reason: string): void {
@@ -77,7 +77,7 @@ function bail(ctx: Parameters<PreflightScript>[0], prNumber: number, reason: str
   ctx.output.reason = reason
   const runUrl = getRunUrl()
   const runSuffix = runUrl ? ` ([logs](${runUrl}))` : ""
-  tryPostPr(prNumber, `❌ kody2 sync could not complete${runSuffix}: ${reason}`, ctx.cwd)
+  tryPostPr(prNumber, `❌ kody sync could not complete${runSuffix}: ${reason}`, ctx.cwd)
 }
 
 function revParseHead(cwd?: string): string {

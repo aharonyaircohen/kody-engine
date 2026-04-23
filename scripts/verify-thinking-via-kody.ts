@@ -1,10 +1,10 @@
 /**
  * End-to-end verification: does `maxThinkingTokens` in a profile.json actually
- * change the thinking depth when invoked via the kody2 CLI? Exercises the full
+ * change the thinking depth when invoked via the kody CLI? Exercises the full
  * path: parseArgs → loadProfile → parseClaudeCode → executor → runAgent → SDK.
  *
  * For each budget, we create a temporary profile under src/executables/, run
- * `pnpm kody2 <name>` against a temp project dir, parse the NDJSON, and delete
+ * `pnpm kody <name>` against a temp project dir, parse the NDJSON, and delete
  * the profile. No commits, no persistent fixtures.
  */
 import { spawnSync } from "node:child_process"
@@ -72,7 +72,7 @@ function makeProfile(budget: number): string {
 }
 
 function makeProjectDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody2-verify-think-"))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-verify-think-"))
   const config = {
     quality: { typecheck: "", lint: "", testUnit: "" },
     git: { defaultBranch: "main" },
@@ -131,13 +131,13 @@ function runOne(budget: number): RunResult {
   const profileName = makeProfile(budget)
   const projectDir = makeProjectDir()
   try {
-    process.stderr.write(`[${budget}] invoking: pnpm kody2 ${profileName} --cwd ${projectDir}\n`)
+    process.stderr.write(`[${budget}] invoking: pnpm kody ${profileName} --cwd ${projectDir}\n`)
     const res = spawnSync(
       "pnpm",
-      ["kody2", profileName, "--cwd", projectDir, "--quiet"],
+      ["kody", profileName, "--cwd", projectDir, "--quiet"],
       { cwd: REPO_ROOT, stdio: ["ignore", "inherit", "inherit"], encoding: "utf-8" },
     )
-    const ndjsonPath = path.join(projectDir, ".kody2", "last-run.jsonl")
+    const ndjsonPath = path.join(projectDir, ".kody", "last-run.jsonl")
     if (!fs.existsSync(ndjsonPath)) {
       throw new Error(`no NDJSON at ${ndjsonPath} (exit=${res.status})`)
     }
@@ -155,7 +155,7 @@ async function main() {
   for (const b of budgets) {
     rows.push(runOne(b))
   }
-  console.log("\n=== results (via kody2 CLI) ===")
+  console.log("\n=== results (via kody CLI) ===")
   console.log("budget\texit\tblocks\tth-chars\tout-tok\tms\tcost")
   for (const r of rows) {
     console.log(

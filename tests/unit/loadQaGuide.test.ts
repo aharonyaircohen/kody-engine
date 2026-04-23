@@ -6,7 +6,7 @@ import { loadQaGuide, QA_GUIDE_REL_PATH } from "../../src/scripts/loadQaGuide.js
 import type { Context, Profile } from "../../src/executables/types.js"
 
 function mktmp(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "kody2-qaguide-"))
+  return fs.mkdtempSync(path.join(os.tmpdir(), "kody-qaguide-"))
 }
 
 function makeCtx(cwd: string): Context {
@@ -34,7 +34,7 @@ describe("loadQaGuide", () => {
   afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }))
 
   it("loads the file when present", async () => {
-    const dir = path.join(tmp, ".kody2")
+    const dir = path.join(tmp, ".kody")
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(path.join(dir, "qa-guide.md"), "# QA\nadmin@example.com / hunter2\n")
     const ctx = makeCtx(tmp)

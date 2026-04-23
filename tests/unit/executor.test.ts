@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest"
 import { loadProfile } from "../../src/profile.js"
 
 function tmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "kody2-exec-"))
+  return fs.mkdtempSync(path.join(os.tmpdir(), "kody-exec-"))
 }
 
 const BASE = {

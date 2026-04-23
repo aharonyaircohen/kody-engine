@@ -24,10 +24,10 @@ Schemas live in `profile.json` alongside the existing `inputs` block.
 
 ### 2. Task = store
 
-The GitHub issue or PR is the canonical state location. A single structured comment on the task holds the state, owned and rewritten by kody2:
+The GitHub issue or PR is the canonical state location. A single structured comment on the task holds the state, owned and rewritten by kody:
 
 ```
-<!-- kody2:state:begin -->
+<!-- kody:state:begin -->
 ```json
 {
   "schemaVersion": 1,
@@ -45,7 +45,7 @@ The GitHub issue or PR is the canonical state location. A single structured comm
   }
 }
 ```
-<!-- kody2:state:end -->
+<!-- kody:state:end -->
 
 History
 - 2026-04-20T09:12Z  build  BUILD_COMPLETED  abc123

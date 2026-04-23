@@ -21,7 +21,7 @@ export const writeRunSummary: PostflightScript = async (ctx, profile) => {
   const status = exitCode === 0 ? "✅ success" : exitCode === 3 ? "⏭️ no-op" : "⚠️ failed"
 
   const lines: string[] = []
-  lines.push(`## kody2 ${executable} — ${status}`)
+  lines.push(`## kody ${executable} — ${status}`)
   lines.push("")
   lines.push(`- **Executable:** \`${executable}\``)
   lines.push(`- **Target:** ${target}`)

@@ -6,7 +6,7 @@ import { loadProfile, ProfileError } from "../../src/profile.js"
 import { renderScheduledWorkflow } from "../../src/scripts/initFlow.js"
 
 function writeProfile(body: object): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody2-sched-"))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-sched-"))
   const p = path.join(dir, "profile.json")
   fs.writeFileSync(p, JSON.stringify(body))
   return p
@@ -68,9 +68,9 @@ describe("profile: kind / schedule", () => {
 describe("renderScheduledWorkflow", () => {
   it("emits a workflow with the declared cron", () => {
     const yaml = renderScheduledWorkflow("watch-stale-prs", "0 8 * * MON")
-    expect(yaml).toMatch(/name: kody2 watch-stale-prs/)
+    expect(yaml).toMatch(/name: kody watch-stale-prs/)
     expect(yaml).toMatch(/cron: "0 8 \* \* MON"/)
-    expect(yaml).toMatch(/kody2 watch-stale-prs/)
+    expect(yaml).toMatch(/kody watch-stale-prs/)
     expect(yaml).toMatch(/@kody-ade\/kody-engine@latest/)
   })
 

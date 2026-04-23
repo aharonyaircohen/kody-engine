@@ -1,7 +1,7 @@
 import { defineConfig } from "tsup"
 
 export default defineConfig({
-  entry: ["bin/kody2.ts"],
+  entry: ["bin/kody.ts"],
   format: ["esm"],
   outDir: "dist/bin",
   splitting: false,

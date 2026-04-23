@@ -4,7 +4,7 @@
  * Scans the filesystem for `<executables-root>/<name>/profile.json` and
  * returns the list of available executables. Lets `entry.ts` dispatch
  * purely by directory layout — drop a new `src/executables/<name>/` with
- * a `profile.json` and `kody2 <name>` works without any code change here
+ * a `profile.json` and `kody <name>` works without any code change here
  * or in the router.
  */
 

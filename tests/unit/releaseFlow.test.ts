@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { bumpVersion, generateChangelog, prependChangelog, updateVersionInFile } from "../../src/scripts/releaseFlow.js"
 
 function tmp(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "kody2-release-"))
+  return fs.mkdtempSync(path.join(os.tmpdir(), "kody-release-"))
 }
 
 function initGit(dir: string): void {

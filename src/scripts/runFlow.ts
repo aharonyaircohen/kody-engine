@@ -25,7 +25,7 @@ export const runFlow: PreflightScript = async (ctx) => {
       ctx.output.exitCode = 5
       ctx.output.reason = err.message
       ctx.skipAgent = true
-      tryPost(issueNumber, `⚠️ kody2 refused to start: ${err.message}`, ctx.cwd)
+      tryPost(issueNumber, `⚠️ kody refused to start: ${err.message}`, ctx.cwd)
       return
     }
     throw err
@@ -33,8 +33,8 @@ export const runFlow: PreflightScript = async (ctx) => {
 
   const runUrl = getRunUrl()
   const startMsg = runUrl
-    ? `⚙️ kody2 started — branch \`${ctx.data.branch}\`, run ${runUrl}`
-    : `⚙️ kody2 started — branch \`${ctx.data.branch}\``
+    ? `⚙️ kody started — branch \`${ctx.data.branch}\`, run ${runUrl}`
+    : `⚙️ kody started — branch \`${ctx.data.branch}\``
   tryPost(issueNumber, startMsg, ctx.cwd)
 }
 

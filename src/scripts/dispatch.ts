@@ -1,5 +1,5 @@
 /**
- * Postflight (orchestrator-only): post `@kody2 <next>` to either the issue
+ * Postflight (orchestrator-only): post `@kody <next>` to either the issue
  * or the PR, advancing `state.flow.step`. Pure dispatcher — assumes the
  * triggering `runWhen` already gated this entry.
  *
@@ -18,14 +18,14 @@ const API_TIMEOUT_MS = 30_000
 export const dispatch: PostflightScript = async (ctx, _profile, _agentResult, args?: ScriptArgs) => {
   const next = args?.next as string | undefined
   if (!next) {
-    process.stderr.write("[kody2 dispatch] missing `with.next` — skipping\n")
+    process.stderr.write("[kody dispatch] missing `with.next` — skipping\n")
     return
   }
   const target = (args?.target as string | undefined) ?? "issue"
 
   const issueNumber = ctx.args.issue as number | undefined
   if (!issueNumber) {
-    process.stderr.write("[kody2 dispatch] no --issue arg — skipping\n")
+    process.stderr.write("[kody dispatch] no --issue arg — skipping\n")
     return
   }
 
@@ -38,7 +38,7 @@ export const dispatch: PostflightScript = async (ctx, _profile, _agentResult, ar
   const usePr = target === "pr" && state?.core.prUrl
   const targetNumber = usePr ? parsePr(state!.core.prUrl!) ?? issueNumber : issueNumber
   const sub = usePr ? "pr" : "issue"
-  const body = `@kody2 ${next}`
+  const body = `@kody ${next}`
 
   try {
     execFileSync("gh", [sub, "comment", String(targetNumber), "--body", body], {
@@ -48,7 +48,7 @@ export const dispatch: PostflightScript = async (ctx, _profile, _agentResult, ar
     })
   } catch (err) {
     process.stderr.write(
-      `[kody2 dispatch] failed to post @kody2 ${next} on ${sub} #${targetNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
+      `[kody dispatch] failed to post @kody ${next} on ${sub} #${targetNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
     )
   }
 }

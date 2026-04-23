@@ -68,7 +68,7 @@ function countThinking(ndjsonPath: string): { blocks: number; chars: number; sam
 }
 
 async function runOne(budget: number): Promise<{ blocks: number; chars: number; sample: string; finalText: string }> {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `kody2-thinking-${budget}-`))
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `kody-thinking-${budget}-`))
   const result = await runAgent({
     prompt: PROMPT,
     model: { provider: "anthropic", model: "claude-sonnet-4-6" },

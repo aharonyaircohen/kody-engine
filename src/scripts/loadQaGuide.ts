@@ -1,5 +1,5 @@
 /**
- * Preflight: load `.kody2/qa-guide.md` from the project root, if present.
+ * Preflight: load `.kody/qa-guide.md` from the project root, if present.
  *
  * The QA guide is a committed file in the consumer repo that holds:
  *   - test-account credentials (email / password)
@@ -17,7 +17,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { PreflightScript } from "../executables/types.js"
 
-export const QA_GUIDE_REL_PATH = ".kody2/qa-guide.md"
+export const QA_GUIDE_REL_PATH = ".kody/qa-guide.md"
 
 export const loadQaGuide: PreflightScript = async (ctx) => {
   const full = path.join(ctx.cwd, QA_GUIDE_REL_PATH)

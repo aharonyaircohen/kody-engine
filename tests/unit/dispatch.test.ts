@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { autoDispatch } from "../../src/dispatch.js"
 
 function writeEvent(body: unknown): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody2-dispatch-"))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-dispatch-"))
   const p = path.join(dir, "event.json")
   fs.writeFileSync(p, JSON.stringify(body))
   return p
@@ -69,9 +69,9 @@ describe("dispatch: issue_comment on issue", () => {
     process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
   })
 
-  it("routes '@kody2 plan' to plan executable", () => {
+  it("routes '@kody plan' to plan executable", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 plan" },
+      comment: { body: "@kody plan" },
       issue: { number: 7 },
     })
     expect(autoDispatch()).toEqual({
@@ -81,9 +81,9 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("routes '@kody2 run' to run executable", () => {
+  it("routes '@kody run' to run executable", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 run" },
+      comment: { body: "@kody run" },
       issue: { number: 8 },
     })
     expect(autoDispatch()).toEqual({
@@ -93,9 +93,9 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("routes legacy '@kody2 build' → run (backward-compat)", () => {
+  it("routes legacy '@kody build' → run (backward-compat)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 build" },
+      comment: { body: "@kody build" },
       issue: { number: 15 },
     })
     expect(autoDispatch()).toEqual({
@@ -105,9 +105,9 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("routes '@kody2 bug' to the bug sub-orchestrator", () => {
+  it("routes '@kody bug' to the bug sub-orchestrator", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 bug" },
+      comment: { body: "@kody bug" },
       issue: { number: 9 },
     })
     expect(autoDispatch()).toEqual({
@@ -117,25 +117,25 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("legacy '@kody2 orchestrate' maps to the `bug` sub-orchestrator", () => {
+  it("legacy '@kody orchestrate' maps to the `bug` sub-orchestrator", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 orchestrate" },
+      comment: { body: "@kody orchestrate" },
       issue: { number: 10 },
     })
     expect(autoDispatch()?.executable).toBe("bug")
   })
 
-  it("legacy '@kody2 orchestrator' (alias) also maps to `bug`", () => {
+  it("legacy '@kody orchestrator' (alias) also maps to `bug`", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 orchestrator" },
+      comment: { body: "@kody orchestrator" },
       issue: { number: 11 },
     })
     expect(autoDispatch()?.executable).toBe("bug")
   })
 
-  it("routes '@kody2 feature' via generic pass-through", () => {
+  it("routes '@kody feature' via generic pass-through", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 feature" },
+      comment: { body: "@kody feature" },
       issue: { number: 21 },
     })
     expect(autoDispatch()).toEqual({
@@ -145,9 +145,9 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("generic pass-through: '@kody2 custom-exec' → custom-exec", () => {
+  it("generic pass-through: '@kody custom-exec' → custom-exec", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 custom-exec" },
+      comment: { body: "@kody custom-exec" },
       issue: { number: 11 },
     })
     expect(autoDispatch()).toEqual({
@@ -157,9 +157,9 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("bare '@kody2' falls back to config.defaultExecutable", () => {
+  it("bare '@kody' falls back to config.defaultExecutable", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2" },
+      comment: { body: "@kody" },
       issue: { number: 12 },
     })
     expect(
@@ -173,17 +173,17 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("bare '@kody2' with no config returns null (config layer owns the default)", () => {
+  it("bare '@kody' with no config returns null (config layer owns the default)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2" },
+      comment: { body: "@kody" },
       issue: { number: 13 },
     })
     expect(autoDispatch()).toBeNull()
   })
 
-  it("ignores case in '@KoDy2 PLAN'", () => {
+  it("ignores case in '@KoDy PLAN'", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@KoDy2 PLAN" },
+      comment: { body: "@KoDy PLAN" },
       issue: { number: 14 },
     })
     expect(autoDispatch()?.executable).toBe("plan")
@@ -202,9 +202,9 @@ describe("dispatch: issue_comment on PR", () => {
     process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
   })
 
-  it("'@kody2 fix-ci' on PR → fix-ci", () => {
+  it("'@kody fix-ci' on PR → fix-ci", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 fix-ci" },
+      comment: { body: "@kody fix-ci" },
       issue: { number: 20, pull_request: {} },
     })
     expect(autoDispatch()).toEqual({
@@ -214,9 +214,9 @@ describe("dispatch: issue_comment on PR", () => {
     })
   })
 
-  it("'@kody2 resolve' on PR → resolve", () => {
+  it("'@kody resolve' on PR → resolve", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 resolve" },
+      comment: { body: "@kody resolve" },
       issue: { number: 21, pull_request: {} },
     })
     expect(autoDispatch()).toEqual({
@@ -226,9 +226,9 @@ describe("dispatch: issue_comment on PR", () => {
     })
   })
 
-  it("'@kody2 review' on PR → review", () => {
+  it("'@kody review' on PR → review", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 review" },
+      comment: { body: "@kody review" },
       issue: { number: 24, pull_request: {} },
     })
     expect(autoDispatch()).toEqual({
@@ -238,9 +238,9 @@ describe("dispatch: issue_comment on PR", () => {
     })
   })
 
-  it("'@kody2 ui-review' on PR → ui-review (not review)", () => {
+  it("'@kody ui-review' on PR → ui-review (not review)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 ui-review" },
+      comment: { body: "@kody ui-review" },
       issue: { number: 77, pull_request: {} },
     })
     expect(autoDispatch()).toEqual({
@@ -250,9 +250,9 @@ describe("dispatch: issue_comment on PR", () => {
     })
   })
 
-  it("'@kody2 ui-review please check login' on PR → ui-review (prefix win, feedback ignored)", () => {
+  it("'@kody ui-review please check login' on PR → ui-review (prefix win, feedback ignored)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 ui-review please check login" },
+      comment: { body: "@kody ui-review please check login" },
       issue: { number: 78, pull_request: {} },
     })
     const r = autoDispatch()
@@ -260,9 +260,9 @@ describe("dispatch: issue_comment on PR", () => {
     expect(r?.cliArgs.pr).toBe(78)
   })
 
-  it("'@kody2 sync' on PR → sync", () => {
+  it("'@kody sync' on PR → sync", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 sync" },
+      comment: { body: "@kody sync" },
       issue: { number: 25, pull_request: {} },
     })
     expect(autoDispatch()).toEqual({
@@ -272,9 +272,9 @@ describe("dispatch: issue_comment on PR", () => {
     })
   })
 
-  it("'@kody2 please change foo' on PR → fix with feedback", () => {
+  it("'@kody please change foo' on PR → fix with feedback", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 please change foo" },
+      comment: { body: "@kody please change foo" },
       issue: { number: 22, pull_request: {} },
     })
     const r = autoDispatch()
@@ -283,9 +283,9 @@ describe("dispatch: issue_comment on PR", () => {
     expect(r?.cliArgs.feedback).toContain("change foo")
   })
 
-  it("bare '@kody2' on PR → fix without feedback", () => {
+  it("bare '@kody' on PR → fix without feedback", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2" },
+      comment: { body: "@kody" },
       issue: { number: 23, pull_request: {} },
     })
     expect(autoDispatch()).toEqual({
@@ -295,9 +295,9 @@ describe("dispatch: issue_comment on PR", () => {
     })
   })
 
-  it("bare '@kody2 fix' on PR → fix WITHOUT inline feedback (reads PR review)", () => {
+  it("bare '@kody fix' on PR → fix WITHOUT inline feedback (reads PR review)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 fix" },
+      comment: { body: "@kody fix" },
       issue: { number: 24, pull_request: {} },
     })
     const r = autoDispatch()
@@ -306,9 +306,9 @@ describe("dispatch: issue_comment on PR", () => {
     expect(r?.cliArgs.feedback).toBeUndefined()
   })
 
-  it("'@kody2 fix: address instructor.name' on PR → fix with inline feedback", () => {
+  it("'@kody fix: address instructor.name' on PR → fix with inline feedback", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody2 fix: address the instructor.name concern" },
+      comment: { body: "@kody fix: address the instructor.name concern" },
       issue: { number: 25, pull_request: {} },
     })
     const r = autoDispatch()
@@ -336,7 +336,7 @@ describe("dispatch: defensive cases", () => {
 
   it("returns null when EVENT_PATH does not exist", () => {
     process.env.GITHUB_EVENT_NAME = "issue_comment"
-    process.env.GITHUB_EVENT_PATH = "/tmp/nonexistent-kody2-event.json"
+    process.env.GITHUB_EVENT_PATH = "/tmp/nonexistent-kody-event.json"
     expect(autoDispatch()).toBeNull()
   })
 

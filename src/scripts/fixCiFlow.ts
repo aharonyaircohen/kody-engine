@@ -50,7 +50,7 @@ export const fixCiFlow: PreflightScript = async (ctx) => {
       bail(
         ctx,
         prNumber,
-        `no actionable failed workflow run found on PR #${prNumber}'s branch (looked at last ${RUN_LOOKBACK} failed runs — all were either kody2's own dispatch workflow or had no fetchable logs; pass --run-id to target a specific run)`,
+        `no actionable failed workflow run found on PR #${prNumber}'s branch (looked at last ${RUN_LOOKBACK} failed runs — all were either kody's own dispatch workflow or had no fetchable logs; pass --run-id to target a specific run)`,
       )
       return
     }
@@ -67,10 +67,10 @@ export const fixCiFlow: PreflightScript = async (ctx) => {
   ctx.data.prDiff = getPrDiff(prNumber, ctx.cwd)
 
   const runUrl = getRunUrl()
-  const runSuffix = runUrl ? `, kody2 run ${runUrl}` : ""
+  const runSuffix = runUrl ? `, kody run ${runUrl}` : ""
   tryPostPr(
     prNumber,
-    `⚙️ kody2 fix-ci started on \`${ctx.data.branch}\`${runSuffix} — analyzing workflow run ${runId}`,
+    `⚙️ kody fix-ci started on \`${ctx.data.branch}\`${runSuffix} — analyzing workflow run ${runId}`,
     ctx.cwd,
   )
 }
@@ -81,7 +81,7 @@ function bail(ctx: Parameters<PreflightScript>[0], prNumber: number, reason: str
   ctx.skipAgent = true
   const runUrl = getRunUrl()
   const runSuffix = runUrl ? ` ([logs](${runUrl}))` : ""
-  tryPostPr(prNumber, `❌ kody2 fix-ci could not run${runSuffix}: ${reason}`, ctx.cwd)
+  tryPostPr(prNumber, `❌ kody fix-ci could not run${runSuffix}: ${reason}`, ctx.cwd)
 }
 
 function tryPostPr(prNumber: number, body: string, cwd?: string): void {

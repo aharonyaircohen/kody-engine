@@ -1,5 +1,5 @@
 /**
- * watchStalePrsFlow — preflight for a scheduled kody2 executable.
+ * watchStalePrsFlow — preflight for a scheduled kody executable.
  * Lists open PRs not touched in N days, posts a digest comment to a
  * designated issue (or stdout-only if none configured).
  *
@@ -65,10 +65,10 @@ export function findStalePrs(cwd: string, staleDays: number, now: Date = new Dat
 
 export function formatStaleReport(stale: StalePr[], staleDays: number): string {
   if (stale.length === 0) {
-    return `🟢 **kody2 watch-stale-prs** — no open PRs untouched for more than ${staleDays} days. ✨`
+    return `🟢 **kody watch-stale-prs** — no open PRs untouched for more than ${staleDays} days. ✨`
   }
   const lines: string[] = [
-    `🟡 **kody2 watch-stale-prs** — ${stale.length} PR(s) untouched for > ${staleDays} days:`,
+    `🟡 **kody watch-stale-prs** — ${stale.length} PR(s) untouched for > ${staleDays} days:`,
     "",
   ]
   for (const pr of stale.slice(0, 50)) {
@@ -92,7 +92,7 @@ export const watchStalePrsFlow: PreflightScript = async (ctx) => {
       postIssueComment(reportIssueNumber, report, ctx.cwd)
     } catch (err) {
       process.stderr.write(
-        `[kody2 watch] failed to post to issue #${reportIssueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
+        `[kody watch] failed to post to issue #${reportIssueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
       )
     }
   }

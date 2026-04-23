@@ -9,7 +9,7 @@ import { resolveArtifacts } from "../../src/scripts/resolveArtifacts.js"
 import { type Action, emptyState, parseStateComment, reduce, renderStateComment, setArtifact } from "../../src/state.js"
 
 function tmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "kody2-artifacts-"))
+  return fs.mkdtempSync(path.join(os.tmpdir(), "kody-artifacts-"))
 }
 
 function writeProfile(dir: string, profile: unknown): string {

@@ -1,6 +1,6 @@
 /**
  * Postflight (added to every child executable's tail): if a flow is in
- * progress, re-trigger the flow orchestrator by posting `@kody2 <flow.name>`
+ * progress, re-trigger the flow orchestrator by posting `@kody <flow.name>`
  * on the originating issue. `state.flow.name` is the executable name of the
  * orchestrator itself (e.g. "bug", "feature", "spec", "chore") per the
  * semantic-naming convention.
@@ -43,14 +43,14 @@ export const advanceFlow: PostflightScript = async (ctx, profile) => {
       writeTaskState("issue", flow.issueNumber, next, ctx.cwd)
     } catch (err) {
       process.stderr.write(
-        `[kody2 advanceFlow] failed to mirror action to issue #${flow.issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
+        `[kody advanceFlow] failed to mirror action to issue #${flow.issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
       )
     }
   }
 
-  // Post `@kody2 <flow-name>` so dispatch.ts routes the retrigger to the
+  // Post `@kody <flow-name>` so dispatch.ts routes the retrigger to the
   // same sub-orchestrator that started this flow (e.g. "bug", "feature").
-  const body = `@kody2 ${flow.name}`
+  const body = `@kody ${flow.name}`
   try {
     execFileSync("gh", ["issue", "comment", String(flow.issueNumber), "--body", body], {
       timeout: API_TIMEOUT_MS,
@@ -59,7 +59,7 @@ export const advanceFlow: PostflightScript = async (ctx, profile) => {
     })
   } catch (err) {
     process.stderr.write(
-      `[kody2 advanceFlow] failed to re-trigger orchestrator on issue #${flow.issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
+      `[kody advanceFlow] failed to re-trigger orchestrator on issue #${flow.issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
     )
   }
 }

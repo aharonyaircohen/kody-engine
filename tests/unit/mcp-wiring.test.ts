@@ -27,7 +27,7 @@ vi.mock("../../src/litellm.js", () => ({
 
 import { query } from "@anthropic-ai/claude-agent-sdk"
 
-const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "kody2-mcp-"))
+const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "kody-mcp-"))
 
 function writeProfile(root: string, name: string, mcpServers: unknown[]): string {
   const dir = path.join(root, "executables", name)

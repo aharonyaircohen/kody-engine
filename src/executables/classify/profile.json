@@ -36,7 +36,7 @@
         "with": {
           "label": "kody:classifying",
           "color": "0e8a16",
-          "description": "kody2: classifying the issue"
+          "description": "kody: classifying the issue"
         }
       },
       { "script": "loadIssueContext" },

@@ -79,7 +79,7 @@ describe("buildSyntheticPlugin: skill copy", () => {
     expect(fs.existsSync(path.join(root, "skills", "kody-live-marker", "SKILL.md"))).toBe(true)
     const manifest = JSON.parse(fs.readFileSync(path.join(root, ".claude-plugin", "plugin.json"), "utf-8"))
     expect(manifest.skills).toEqual(["./skills/"])
-    expect(manifest.name).toContain("kody2-synth")
+    expect(manifest.name).toContain("kody-synth")
   })
 
   it("throws a clear error for unknown skill", async () => {

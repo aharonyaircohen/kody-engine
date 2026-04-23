@@ -2,7 +2,7 @@
  * initFlow — preflight for the `init` executable.
  *
  * Scaffolds a consumer repo: writes `kody.config.json` and
- * `.github/workflows/kody2.yml` if absent (or when `--force`). Detects the
+ * `.github/workflows/kody.yml` if absent (or when `--force`). Detects the
  * package manager from lockfiles to pre-fill `quality.*` commands. Reads
  * repo owner/name from `git remote get-url origin` when available; leaves
  * placeholders otherwise. Sets `ctx.skipAgent = true` — init never calls
@@ -74,20 +74,20 @@ function makeConfig(pm: PackageManager, ownerRepo: OwnerRepo | null, defaultBran
   }
 }
 
-const WORKFLOW_TEMPLATE = `# Drop this file at .github/workflows/kody2.yml in your repo.
+const WORKFLOW_TEMPLATE = `# Drop this file at .github/workflows/kody.yml in your repo.
 #
-# Triggers: @kody2 comment on an issue or PR, or manual workflow_dispatch.
+# Triggers: @kody comment on an issue or PR, or manual workflow_dispatch.
 # Everything else (install deps, set up LiteLLM, run the agent, open the PR)
 # is handled inside the @kody-ade/kody-engine package.
 #
 # Required repo secrets: at least one model provider key (e.g. MINIMAX_API_KEY,
-# ANTHROPIC_API_KEY). kody2 reads any *_API_KEY secret automatically via
+# ANTHROPIC_API_KEY). kody reads any *_API_KEY secret automatically via
 # toJSON(secrets) — no need to list them here.
 #
 # Recommended: KODY_TOKEN secret — a PAT or GitHub App token with repo
-# scope so kody2's pushes trigger downstream CI and PR-body edits succeed.
+# scope so kody's pushes trigger downstream CI and PR-body edits succeed.
 
-name: kody2
+name: kody
 
 on:
   workflow_dispatch:
@@ -105,7 +105,7 @@ jobs:
       \${{ github.event_name == 'workflow_dispatch' ||
           (github.event_name == 'issue_comment' &&
             !github.event.issue.pull_request &&
-            contains(github.event.comment.body, '@kody2')) }}
+            contains(github.event.comment.body, '@kody')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -128,7 +128,7 @@ jobs:
 
       - env:
           ALL_SECRETS: \${{ toJSON(secrets) }}
-        run: npx -y -p @kody-ade/kody-engine@latest kody2 ci --issue \${{ github.event.inputs.issue_number || github.event.issue.number }}
+        run: npx -y -p @kody-ade/kody-engine@latest kody ci --issue \${{ github.event.inputs.issue_number || github.event.issue.number }}
 `
 
 function defaultBranchFromGit(cwd: string): string {
@@ -178,18 +178,18 @@ export function performInit(cwd: string, force: boolean): InitResult {
     wrote.push("kody.config.json")
   }
 
-  // 2. .github/workflows/kody2.yml
+  // 2. .github/workflows/kody.yml
   const workflowDir = path.join(cwd, ".github", "workflows")
-  const workflowPath = path.join(workflowDir, "kody2.yml")
+  const workflowPath = path.join(workflowDir, "kody.yml")
   if (fs.existsSync(workflowPath) && !force) {
-    skipped.push(".github/workflows/kody2.yml")
+    skipped.push(".github/workflows/kody.yml")
   } else {
     fs.mkdirSync(workflowDir, { recursive: true })
     fs.writeFileSync(workflowPath, WORKFLOW_TEMPLATE)
-    wrote.push(".github/workflows/kody2.yml")
+    wrote.push(".github/workflows/kody.yml")
   }
 
-  // 3. .kody2/qa-guide.md — starter template for the ui-review executable.
+  // 3. .kody/qa-guide.md — starter template for the ui-review executable.
   //    Only scaffolded when the repo looks like it has a UI (Next.js app dir,
   //    or an /app folder with page.* files). Writes CHANGE_ME credential
   //    placeholders; the maintainer fills them in and commits.
@@ -209,7 +209,7 @@ export function performInit(cwd: string, force: boolean): InitResult {
     }
   }
 
-  // 4. .github/workflows/kody2-<name>.yml for every discovered scheduled executable.
+  // 4. .github/workflows/kody-<name>.yml for every discovered scheduled executable.
   for (const exe of listExecutables()) {
     let profile: ReturnType<typeof loadProfile>
     try {
@@ -218,13 +218,13 @@ export function performInit(cwd: string, force: boolean): InitResult {
       continue
     }
     if (profile.kind !== "scheduled" || !profile.schedule) continue
-    const target = path.join(workflowDir, `kody2-${exe.name}.yml`)
+    const target = path.join(workflowDir, `kody-${exe.name}.yml`)
     if (fs.existsSync(target) && !force) {
-      skipped.push(`.github/workflows/kody2-${exe.name}.yml`)
+      skipped.push(`.github/workflows/kody-${exe.name}.yml`)
       continue
     }
     fs.writeFileSync(target, renderScheduledWorkflow(exe.name, profile.schedule))
-    wrote.push(`.github/workflows/kody2-${exe.name}.yml`)
+    wrote.push(`.github/workflows/kody-${exe.name}.yml`)
   }
 
   // 5. Create/update every kody-owned label declared across the executable
@@ -242,11 +242,11 @@ export function performInit(cwd: string, force: boolean): InitResult {
 }
 
 export function renderScheduledWorkflow(name: string, cron: string): string {
-  return `# Scheduled kody2 executable: ${name}
-# Generated by \`kody2 init\`. Regenerate with \`kody2 init --force\`.
+  return `# Scheduled kody executable: ${name}
+# Generated by \`kody init\`. Regenerate with \`kody init --force\`.
 # Edit the cron below or the executable's profile.json#schedule.
 
-name: kody2 ${name}
+name: kody ${name}
 
 on:
   schedule:
@@ -270,7 +270,7 @@ jobs:
           node-version: 22
       - env:
           GH_TOKEN: \${{ secrets.KODY_TOKEN || github.token }}
-        run: npx -y -p @kody-ade/kody-engine@latest kody2 ${name}
+        run: npx -y -p @kody-ade/kody-engine@latest kody ${name}
 `
 }
 
@@ -280,7 +280,7 @@ export const initFlow: PreflightScript = async (ctx) => {
 
   const { wrote, skipped, labels } = performInit(cwd, force)
 
-  process.stdout.write("→ kody2 init\n")
+  process.stdout.write("→ kody init\n")
   for (const f of wrote) process.stdout.write(`  wrote    ${f}\n`)
   for (const f of skipped) process.stdout.write(`  skipped  ${f} (already exists; pass --force to overwrite)\n`)
   if (labels) {

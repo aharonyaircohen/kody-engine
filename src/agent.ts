@@ -31,7 +31,7 @@ export interface AgentOptions {
   mcpServers?: Array<Record<string, unknown>>
   /**
    * Absolute paths to plugin directories to load. Each is passed to the
-   * SDK's `plugins` option as `{ type: 'local', path }`. Kody2 uses this
+   * SDK's `plugins` option as `{ type: 'local', path }`. Kody uses this
    * for both external plugins (from profile.claudeCode.plugins) and the
    * synthetic plugin built by the buildSyntheticPlugin preflight.
    */
@@ -55,7 +55,7 @@ export interface AgentOptions {
 const DEFAULT_ALLOWED_TOOLS = ["Bash", "Edit", "Read", "Write", "Glob", "Grep"]
 
 export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
-  const ndjsonDir = opts.ndjsonDir ?? path.join(opts.cwd, ".kody2")
+  const ndjsonDir = opts.ndjsonDir ?? path.join(opts.cwd, ".kody")
   fs.mkdirSync(ndjsonDir, { recursive: true })
   const ndjsonPath = path.join(ndjsonDir, "last-run.jsonl")
   const fullLog = fs.createWriteStream(ndjsonPath, { flags: "w" })

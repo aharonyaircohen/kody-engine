@@ -52,7 +52,7 @@ describe("fixCiFlow: bail posts a PR comment", () => {
 
     expect(postPrReviewComment).toHaveBeenCalledTimes(1)
     const body = vi.mocked(postPrReviewComment).mock.calls[0]![1]
-    expect(body).toMatch(/kody2 fix-ci could not run/)
+    expect(body).toMatch(/kody fix-ci could not run/)
     expect(body).toMatch(/no actionable failed workflow run/)
   })
 
@@ -68,7 +68,7 @@ describe("fixCiFlow: bail posts a PR comment", () => {
 
     expect(postPrReviewComment).toHaveBeenCalledTimes(1)
     const body = vi.mocked(postPrReviewComment).mock.calls[0]![1]
-    expect(body).toMatch(/kody2 fix-ci could not run/)
+    expect(body).toMatch(/kody fix-ci could not run/)
   })
 
   it("posts a failure comment when the PR is not OPEN", async () => {
@@ -109,7 +109,7 @@ describe("fixCiFlow: happy path", () => {
     expect(ctx.data.failedLogTail).toBe("failing test output")
     expect(postPrReviewComment).toHaveBeenCalledTimes(1)
     const body = vi.mocked(postPrReviewComment).mock.calls[0]![1]
-    expect(body).toMatch(/kody2 fix-ci started/)
+    expect(body).toMatch(/kody fix-ci started/)
     expect(body).toMatch(/analyzing workflow run 12345/)
   })
 })

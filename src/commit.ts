@@ -3,14 +3,14 @@ import { execFileSync } from "node:child_process"
 const FORBIDDEN_PATH_PREFIXES = [
   ".kody/",
   ".kody-engine/",
-  ".kody2/",
+  ".kody/",
   ".kody-lean/", // back-compat: stale runtime dir from kody-lean v0.5.x
   "node_modules/",
   "dist/",
   "build/",
 ]
 
-const FORBIDDEN_PATH_EXACT = new Set([".env", ".kody2-pip-requirements.txt"])
+const FORBIDDEN_PATH_EXACT = new Set([".env", ".kody-pip-requirements.txt"])
 const FORBIDDEN_PATH_SUFFIXES = [".log"]
 
 const CONVENTIONAL_PREFIXES = [
@@ -149,7 +149,7 @@ export function normalizeCommitMessage(raw: string): string {
     .trim()
     .replace(/^['"]|['"]$/g, "")
     .trim()
-  if (!trimmed) return "chore: kody2 update"
+  if (!trimmed) return "chore: kody update"
   const firstLine = trimmed.split("\n")[0]
   for (const prefix of CONVENTIONAL_PREFIXES) {
     if (firstLine.toLowerCase().startsWith(prefix)) return trimmed

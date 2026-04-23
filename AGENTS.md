@@ -2,7 +2,7 @@
 
 ## What this is
 
-`@kody-ade/kody-engine` (npm) is **kody2**, an autonomous development engine. One `@kody2` comment on a GitHub issue (or PR) runs Claude Code in CI, implements the change, commits, and opens or updates a PR.
+`@kody-ade/kody-engine` (npm) is **kody**, an autonomous development engine. One `@kody` comment on a GitHub issue (or PR) runs Claude Code in CI, implements the change, commits, and opens or updates a PR.
 
 Under the hood it is one **generic executor** running one of several **declarative executable profiles**. No multi-stage pipeline, no orchestration logic baked into the engine — each top-level command is its own single-purpose executable.
 
@@ -10,10 +10,10 @@ Under the hood it is one **generic executor** running one of several **declarati
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Consumer repo .github/workflows/kody2.yml                   │
+│ Consumer repo .github/workflows/kody.yml                   │
 │   (≈20 lines of YAML — minimal, stays dumb)                 │
-│   trigger: @kody2 comment or workflow_dispatch              │
-│   runs: npx @kody-ade/kody-engine@latest kody2 ci           │
+│   trigger: @kody comment or workflow_dispatch              │
+│   runs: npx @kody-ade/kody-engine@latest kody ci           │
 └─────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -49,22 +49,22 @@ Each is its own auto-discovered executable. [src/dispatch.ts](src/dispatch.ts) p
 
 | Command                           | Input                    | Agent? | Triggered by                                                 |
 |-----------------------------------|--------------------------|--------|--------------------------------------------------------------|
-| `run`                             | `--issue`                | yes    | `@kody2` on an issue, or `workflow_dispatch`                 |
-| `plan`                            | `--issue`                | yes    | `@kody2 plan` on an issue                                    |
-| `research`                        | `--issue`                | yes    | `@kody2 research` on an issue                                |
-| `fix`                             | `--pr`, `--feedback`     | yes    | `@kody2` (or `@kody2 fix …`) on a PR comment (fallback)      |
-| `fix-ci`                          | `--pr`, `--run-id`       | yes    | `@kody2 fix-ci` on a PR                                      |
-| `resolve`                         | `--pr`                   | yes    | `@kody2 resolve` on a PR                                     |
-| `review`                          | `--pr`                   | yes    | `@kody2 review` on a PR (read-only, diff only)               |
-| `ui-review`                       | `--pr`, `--preview-url`  | yes    | `@kody2 ui-review` on a PR (browses preview via Playwright)  |
-| `sync`                            | `--pr`                   | no     | `@kody2 sync` on a PR                                        |
-| `orchestrator-plan-build-review`  | `--issue`, `--flow`      | no     | `@kody2 orchestrate` on an issue                             |
+| `run`                             | `--issue`                | yes    | `@kody` on an issue, or `workflow_dispatch`                 |
+| `plan`                            | `--issue`                | yes    | `@kody plan` on an issue                                    |
+| `research`                        | `--issue`                | yes    | `@kody research` on an issue                                |
+| `fix`                             | `--pr`, `--feedback`     | yes    | `@kody` (or `@kody fix …`) on a PR comment (fallback)      |
+| `fix-ci`                          | `--pr`, `--run-id`       | yes    | `@kody fix-ci` on a PR                                      |
+| `resolve`                         | `--pr`                   | yes    | `@kody resolve` on a PR                                     |
+| `review`                          | `--pr`                   | yes    | `@kody review` on a PR (read-only, diff only)               |
+| `ui-review`                       | `--pr`, `--preview-url`  | yes    | `@kody ui-review` on a PR (browses preview via Playwright)  |
+| `sync`                            | `--pr`                   | no     | `@kody sync` on a PR                                        |
+| `orchestrator-plan-build-review`  | `--issue`, `--flow`      | no     | `@kody orchestrate` on an issue                             |
 | `release`                         | `--mode`, `--bump`       | no     | CLI or `workflow_dispatch`                                   |
-| `init`                            | `--force`                | no     | CLI (`kody2 init` in a fresh consumer repo)                  |
+| `init`                            | `--force`                | no     | CLI (`kody init` in a fresh consumer repo)                  |
 | `watch-stale-prs`                 | (none)                   | no     | scheduled (`0 8 * * MON`)                                    |
 | `plan-verify`                     | `--issue`                | yes    | CLI (live-test — validates plugin/skill/hook wiring)         |
 
-CLI users can invoke any of these directly (`kody2 <command> …`).
+CLI users can invoke any of these directly (`kody <command> …`).
 
 ### `run` — implement an issue end-to-end
 
@@ -80,7 +80,7 @@ Sibling of `plan` for cases where the ask isn't yet clear. Agent maps repo conte
 
 ### `fix` — apply review feedback to a PR
 
-Bare `@kody2` on a PR defaults here (with feedback extracted from the comment body after stripping "fix"/"please"/"kindly"). `requireFeedbackActions` postflight enforces that the agent addressed at least one feedback point; `checkCoverageWithRetry` re-runs the agent up to N times if test-coverage gaps are detected.
+Bare `@kody` on a PR defaults here (with feedback extracted from the comment body after stripping "fix"/"please"/"kindly"). `requireFeedbackActions` postflight enforces that the agent addressed at least one feedback point; `checkCoverageWithRetry` re-runs the agent up to N times if test-coverage gaps are detected.
 
 ### `fix-ci` — fix failing CI on a PR
 
@@ -103,9 +103,9 @@ Read-only. Fetches the PR and its diff, composes a prompt with the two-pass revi
 Extends the review surface by driving the running preview deployment with the Playwright CLI. Separate executable (not a mode flag on `review`) so the fast read-only `review` stays fast and `ui-review` carries the extra cost (preview URL, browser, optional creds) only when asked.
 
 - **Preview URL** resolves from `--preview-url` → `$PREVIEW_URL` → `http://localhost:3000`. If unreachable, the agent is instructed to skip browsing and fall back to a diff-only review with the gap called out.
-- **Credentials** live in `.kody2/qa-guide.md` — a committed file in the consumer repo. `kody2 init` scaffolds a starter with `CHANGE_ME` placeholders and pre-filled role rows (inferred from discovered enums/select fields); the maintainer fills in real preview creds and commits. No GitHub secrets required.
+- **Credentials** live in `.kody/qa-guide.md` — a committed file in the consumer repo. `kody init` scaffolds a starter with `CHANGE_ME` placeholders and pre-filled role rows (inferred from discovered enums/select fields); the maintainer fills in real preview creds and commits. No GitHub secrets required.
 - **QA auto-discovery** ([src/scripts/discoverQaContext.ts](src/scripts/discoverQaContext.ts) + [frameworkDetectors.ts](src/scripts/frameworkDetectors.ts)) scans routes, login/admin paths, roles, Payload CMS collections, API routes, and env templates. Output is serialized into the prompt as `{{qaContext}}`.
-- **Playwright** is declared in the profile's `cliTools` with `installCommand: npx --yes playwright install --with-deps chromium`. Browser binaries are set up by preflight; if the consumer repo doesn't already have `@playwright/test`, the prompt instructs the agent to run `npm install -D @playwright/test` on first test failure. Throwaway specs live under `.kody2/ui-review/` (gitignored by convention).
+- **Playwright** is declared in the profile's `cliTools` with `installCommand: npx --yes playwright install --with-deps chromium`. Browser binaries are set up by preflight; if the consumer repo doesn't already have `@playwright/test`, the prompt instructs the agent to run `npm install -D @playwright/test` on first test failure. Throwaway specs live under `.kody/ui-review/` (gitignored by convention).
 - **Verdict** is `PASS | CONCERNS | FAIL`. Agent's review comment is posted verbatim via the existing `postReviewResult` postflight (same machinery as `review`).
 
 ### `orchestrator-plan-build-review` — deterministic flow controller
@@ -122,11 +122,11 @@ Two modes on a single flag:
 
 ### `init` — scaffold a consumer repo
 
-Writes `kody.config.json` (with package-manager-aware `quality.*` commands and owner/repo detected from `git remote`), `.github/workflows/kody2.yml` (from the template), per-scheduled-executable workflows (e.g. `kody2-watch-stale-prs.yml`), and when a UI is detected (`src/app/`, `app/`, or `pages/` exists) a `.kody2/qa-guide.md` stub for `ui-review`. Idempotent — skips anything already present unless `--force`. No agent.
+Writes `kody.config.json` (with package-manager-aware `quality.*` commands and owner/repo detected from `git remote`), `.github/workflows/kody.yml` (from the template), per-scheduled-executable workflows (e.g. `kody-watch-stale-prs.yml`), and when a UI is detected (`src/app/`, `app/`, or `pages/` exists) a `.kody/qa-guide.md` stub for `ui-review`. Idempotent — skips anything already present unless `--force`. No agent.
 
 ### `watch-stale-prs` — scheduled PR hygiene report
 
-`kind: scheduled` with cron `0 8 * * MON`. `kody2 init` auto-generates `.github/workflows/kody2-watch-stale-prs.yml` to drive it. Lists open PRs untouched for N days and posts a summary issue. No agent — all deterministic.
+`kind: scheduled` with cron `0 8 * * MON`. `kody init` auto-generates `.github/workflows/kody-watch-stale-prs.yml` to drive it. Lists open PRs untouched for N days and posts a summary issue. No agent — all deterministic.
 
 ### `plan-verify` — live-test harness for plugin wiring
 
@@ -142,7 +142,7 @@ src/
   dispatch.ts            — auto-detects mode from GHA event
   agent.ts               — Claude Code SDK invocation
   litellm.ts             — proxy lifecycle (for non-Anthropic providers)
-  kody2-cli.ts           — `kody2 ci` preflight (install, secrets, git identity)
+  kody-cli.ts           — `kody ci` preflight (install, secrets, git identity)
   entry.ts               — CLI dispatcher (run/fix/fix-ci/resolve/ci/help)
   gha.ts                 — GHA helpers (run URL, 👀 reaction on trigger)
   {branch,commit,pr,verify,issue,coverage,prompt,format,config}.ts
@@ -163,8 +163,8 @@ src/
     {parseAgentResult,verify,checkCoverageWithRetry}.ts
     {commitAndPush,ensurePr,postIssueComment}.ts
     index.ts             — registry that maps name → function
-bin/kody2.ts             — thin shebang wrapper
-templates/kody2.yml      — workflow to drop in consumer repos
+bin/kody.ts             — thin shebang wrapper
+templates/kody.yml      — workflow to drop in consumer repos
 tests/
   unit/                  — unit tests (~466 at time of writing)
   int/                   — integration tests (including ui-review prompt rendering)
@@ -189,9 +189,9 @@ tests/
 
 **`aharonyaircohen/Kody-Engine-Tester`** is the live-test bed. It is a Next.js + Payload CMS LMS with intentional pre-existing quality-gate failures (TypeScript errors, time-sensitive tests, missing Postgres) so verify drafts are informative, not scary.
 
-- Its `.github/workflows/kody2.yml` pulls `@kody-ade/kody-engine@latest` via `npx`. Version bumps propagate automatically on next run.
+- Its `.github/workflows/kody.yml` pulls `@kody-ade/kody-engine@latest` via `npx`. Version bumps propagate automatically on next run.
 - Its `kody.config.json` declares `agent.model`, quality commands, and `testRequirements` (route.ts files require a sibling `route.test.ts`).
-- To live-test a change: publish the new kody2 version, comment `@kody2` on a fresh issue there (or PR comment for fix/fix-ci/resolve).
+- To live-test a change: publish the new kody version, comment `@kody` on a fresh issue there (or PR comment for fix/fix-ci/resolve).
 
 ## How to proceed on a new session
 
@@ -205,4 +205,4 @@ tests/
 
 - **`@anthropic-ai/claude-agent-sdk`** — the Claude Code SDK the executor calls via `runAgent`.
 - **LiteLLM** — started by `src/litellm.ts` when the configured model isn't Anthropic-native.
-- **`gh` CLI** — the only way kody2 talks to GitHub. Never use the raw API directly in new scripts.
+- **`gh` CLI** — the only way kody talks to GitHub. Never use the raw API directly in new scripts.

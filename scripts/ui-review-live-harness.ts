@@ -85,7 +85,7 @@ async function main(): Promise<void> {
       litellmUrl: litellm?.url ?? null,
       verbose: true,
       quiet: false,
-      ndjsonDir: path.join(repoRoot, ".kody2"),
+      ndjsonDir: path.join(repoRoot, ".kody"),
       allowedToolsOverride: profile.claudeCode.tools,
       permissionModeOverride: profile.claudeCode.permissionMode,
       mcpServers: profile.claudeCode.mcpServers as unknown as Array<Record<string, unknown>> | undefined,

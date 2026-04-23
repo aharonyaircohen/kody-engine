@@ -8,7 +8,7 @@ describe("chat/session", () => {
   let tmp: string
 
   beforeEach(() => {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody2-chat-session-"))
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-chat-session-"))
   })
   afterEach(() => {
     fs.rmSync(tmp, { recursive: true, force: true })

@@ -1,11 +1,11 @@
 {
   "name": "@kody-ade/kody-engine",
-  "version": "0.2.63",
-  "description": "kody2 — autonomous development engine. Single-session Claude Code agent behind a generic executor + declarative executable profiles.",
+  "version": "0.3.0",
+  "description": "kody — autonomous development engine. Single-session Claude Code agent behind a generic executor + declarative executable profiles.",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "kody2": "dist/bin/kody2.js"
+    "kody": "dist/bin/kody.js"
   },
   "files": [
     "dist",
@@ -13,7 +13,7 @@
     "kody.config.schema.json"
   ],
   "scripts": {
-    "kody2": "tsx bin/kody2.ts",
+    "kody": "tsx bin/kody.ts",
     "build": "tsup && node scripts/copy-assets.cjs",
     "test": "vitest run tests/unit tests/int --no-coverage",
     "test:e2e": "vitest run tests/e2e --no-coverage",

@@ -1,6 +1,6 @@
 /**
  * Preflight: read the task's state comment into ctx.data.taskState.
- * Returns emptyState() if no kody2 state comment exists yet.
+ * Returns emptyState() if no kody state comment exists yet.
  *
  * Must run AFTER the mode flow (runFlow/fixFlow/...) so that
  * ctx.data.commentTargetType + ctx.data.commentTargetNumber are populated.

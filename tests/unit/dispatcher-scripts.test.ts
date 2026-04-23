@@ -76,7 +76,7 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks())
 
 describe("startFlow", () => {
-  it("seeds state.flow using the profile name, then posts @kody2 <entry> on the issue", async () => {
+  it("seeds state.flow using the profile name, then posts @kody <entry> on the issue", async () => {
     const state: TaskState = { ...emptyState() }
     const c = ctx({ data: { taskState: state }, args: { issue: 42 } })
     await startFlow(c, profile("bug"), null, { entry: "plan", target: "issue" })
@@ -85,7 +85,7 @@ describe("startFlow", () => {
     expect(state.flow).toMatchObject({ name: "bug", step: "plan", issueNumber: 42 })
     expect(execFileSync).toHaveBeenCalledWith(
       "gh",
-      ["issue", "comment", "42", "--body", "@kody2 plan"],
+      ["issue", "comment", "42", "--body", "@kody plan"],
       expect.any(Object),
     )
   })
@@ -112,7 +112,7 @@ describe("startFlow", () => {
     await startFlow(c, profile("bug"), null, { entry: "review", target: "pr" })
     expect(execFileSync).toHaveBeenCalledWith(
       "gh",
-      ["pr", "comment", "77", "--body", "@kody2 review"],
+      ["pr", "comment", "77", "--body", "@kody review"],
       expect.any(Object),
     )
   })
@@ -123,7 +123,7 @@ describe("startFlow", () => {
     await startFlow(c, profile("bug"), null, { entry: "review", target: "pr" })
     expect(execFileSync).toHaveBeenCalledWith(
       "gh",
-      ["issue", "comment", "42", "--body", "@kody2 review"],
+      ["issue", "comment", "42", "--body", "@kody review"],
       expect.any(Object),
     )
   })
@@ -136,7 +136,7 @@ describe("startFlow", () => {
 })
 
 describe("dispatch", () => {
-  it("posts @kody2 <next> on the issue and updates state.flow.step", async () => {
+  it("posts @kody <next> on the issue and updates state.flow.step", async () => {
     const flow: FlowState = { name: "f", step: "plan", issueNumber: 42, startedAt: "t" }
     const state: TaskState = { ...emptyState(), flow }
     const c = ctx({ data: { taskState: state } })
@@ -144,7 +144,7 @@ describe("dispatch", () => {
     expect(state.flow?.step).toBe("run")
     expect(execFileSync).toHaveBeenCalledWith(
       "gh",
-      ["issue", "comment", "42", "--body", "@kody2 run"],
+      ["issue", "comment", "42", "--body", "@kody run"],
       expect.any(Object),
     )
   })
@@ -159,7 +159,7 @@ describe("dispatch", () => {
     await dispatch(c, profile(), null, { next: "review", target: "pr" })
     expect(execFileSync).toHaveBeenCalledWith(
       "gh",
-      ["pr", "comment", "9", "--body", "@kody2 review"],
+      ["pr", "comment", "9", "--body", "@kody review"],
       expect.any(Object),
     )
   })
@@ -248,12 +248,12 @@ describe("advanceFlow", () => {
     await advanceFlow(c, profile("plan"), null)
     expect(execFileSync).toHaveBeenCalledWith(
       "gh",
-      ["issue", "comment", "42", "--body", "@kody2 bug"],
+      ["issue", "comment", "42", "--body", "@kody bug"],
       expect.any(Object),
     )
   })
 
-  it("posts @kody2 <flow.name> regardless of which child just finished", async () => {
+  it("posts @kody <flow.name> regardless of which child just finished", async () => {
     const state: TaskState = {
       ...emptyState(),
       flow: { name: "feature", step: "run", issueNumber: 7, startedAt: "t" },
@@ -262,7 +262,7 @@ describe("advanceFlow", () => {
     await advanceFlow(c, profile("run"), null)
     expect(execFileSync).toHaveBeenCalledWith(
       "gh",
-      ["issue", "comment", "7", "--body", "@kody2 feature"],
+      ["issue", "comment", "7", "--body", "@kody feature"],
       expect.any(Object),
     )
   })
@@ -288,7 +288,7 @@ describe("advanceFlow", () => {
     await advanceFlow(c, profile("review"), null)
     const calls = execFileSync.mock.calls.map((c) => (c[1] as string[]) ?? [])
     const patchCall = calls.find((a) => a.includes("PATCH"))
-    const triggerCall = calls.find((a) => a.join(" ").includes("@kody2 bug"))
+    const triggerCall = calls.find((a) => a.join(" ").includes("@kody bug"))
     expect(patchCall).toBeDefined()
     expect(triggerCall).toBeDefined()
   })

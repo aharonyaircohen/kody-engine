@@ -244,7 +244,7 @@ async function runPrepare(args: PrepareArgs): Promise<void> {
   // Open release PR.
   const base = ctx.config.git.defaultBranch
   const title = `chore: release ${tag}`
-  const body = `Automated release PR opened by kody2.\n\n${entry}\n\nMerge this and then run \`kody2 release --mode finalize\`.`
+  const body = `Automated release PR opened by kody.\n\n${entry}\n\nMerge this and then run \`kody release --mode finalize\`.`
   let prUrl = ""
   try {
     prUrl = gh(["pr", "create", "--head", releaseBranch, "--base", base, "--title", title, "--body-file", "-"], {
@@ -267,12 +267,12 @@ interface FinalizeArgs {
   cwd: string
   dryRun: boolean
   timeoutMs: number
-  releaseCfg: NonNullable<Kody2Config["release"]>
+  releaseCfg: NonNullable<KodyConfig["release"]>
   ctx: Parameters<PreflightScript>[0]
 }
 
 // Re-import for the closure type above.
-import type { Kody2Config } from "../config.js"
+import type { KodyConfig } from "../config.js"
 
 async function runFinalize(args: FinalizeArgs): Promise<void> {
   const { cwd, dryRun, timeoutMs, releaseCfg, ctx } = args
@@ -336,19 +336,19 @@ async function runFinalize(args: FinalizeArgs): Promise<void> {
     const r = runShell(cmd, cwd, timeoutMs)
     publishStatus = r.exitCode === 0 ? "ok" : "failed"
     if (r.exitCode !== 0) {
-      process.stderr.write(`[kody2 release] publishCommand exit ${r.exitCode}\n${truncate(r.stderr, 2000)}\n`)
+      process.stderr.write(`[kody release] publishCommand exit ${r.exitCode}\n${truncate(r.stderr, 2000)}\n`)
     }
   }
 
   // GitHub release.
   let releaseUrl = ""
   try {
-    const releaseArgs = ["release", "create", tag, "--title", tag, "--notes", `Release ${tag} — automated by kody2.`]
+    const releaseArgs = ["release", "create", tag, "--title", tag, "--notes", `Release ${tag} — automated by kody.`]
     if (releaseCfg.draftRelease) releaseArgs.push("--draft")
     releaseUrl = gh(releaseArgs, { cwd }).trim()
   } catch (err) {
     process.stderr.write(
-      `[kody2 release] gh release create failed: ${err instanceof Error ? err.message : String(err)}\n`,
+      `[kody release] gh release create failed: ${err instanceof Error ? err.message : String(err)}\n`,
     )
   }
 

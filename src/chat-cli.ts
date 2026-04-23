@@ -1,8 +1,8 @@
 /**
- * `kody2 chat` — dashboard-driven chat session entry point.
+ * `kody chat` — dashboard-driven chat session entry point.
  *
- * Called from the kody2.yml workflow when SESSION_ID is set (the dashboard
- * dispatched a chat message). Intentionally separate from `kody2 ci` —
+ * Called from the kody.yml workflow when SESSION_ID is set (the dashboard
+ * dispatched a chat message). Intentionally separate from `kody ci` —
  * which is an issue/PR automation dispatcher — because chat doesn't need
  * `pnpm install` on the target repo and doesn't key off a GHA event.
  *
@@ -23,7 +23,7 @@ import { eventsFilePath, FileSink, HttpSink, makeRunId, TeeSink } from "./chat/e
 import { runChatTurn } from "./chat/loop.js"
 import { seedInitialMessage, sessionFilePath } from "./chat/session.js"
 import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
-import { configureGitIdentity, installLitellmIfNeeded, resolveAuthToken, unpackAllSecrets } from "./kody2-cli.js"
+import { configureGitIdentity, installLitellmIfNeeded, resolveAuthToken, unpackAllSecrets } from "./kody-cli.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 
 const DEFAULT_MODEL = "claude/claude-haiku-4-5-20251001"
@@ -39,10 +39,10 @@ export interface ChatArgs {
   errors: string[]
 }
 
-export const CHAT_HELP = `kody2 chat — dashboard-driven chat session
+export const CHAT_HELP = `kody chat — dashboard-driven chat session
 
 Usage:
-  kody2 chat [--session <id>] [--message <text>] [--model <provider/model>]
+  kody chat [--session <id>] [--message <text>] [--model <provider/model>]
              [--dashboard-url <url>] [--cwd <path>] [--verbose|--quiet]
 
 All inputs may also come from env: SESSION_ID, INIT_MESSAGE, MODEL, DASHBOARD_URL.
@@ -103,7 +103,7 @@ function commitChatFiles(cwd: string, sessionId: string, verbose: boolean): void
     // Best-effort — if there's nothing staged or push fails, the HttpSink
     // has already delivered the real-time event, so we don't abort the turn.
     const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[kody2:chat] commit/push skipped: ${msg}\n`)
+    process.stderr.write(`[kody:chat] commit/push skipped: ${msg}\n`)
   }
 }
 
@@ -139,7 +139,7 @@ export async function runChat(argv: string[]): Promise<number> {
 
   const unpackedSecrets = unpackAllSecrets()
   if (unpackedSecrets > 0) {
-    process.stdout.write(`→ kody2: unpacked ${unpackedSecrets} secret(s) from ALL_SECRETS\n`)
+    process.stdout.write(`→ kody: unpacked ${unpackedSecrets} secret(s) from ALL_SECRETS\n`)
   }
   resolveAuthToken()
   configureGitIdentity(cwd)
@@ -155,7 +155,7 @@ export async function runChat(argv: string[]): Promise<number> {
   }
 
   // Ensure LiteLLM is installed for non-anthropic providers before starting
-  // the proxy. `kody2 ci` does this in its preflight; chat reuses the helper.
+  // the proxy. `kody ci` does this in its preflight; chat reuses the helper.
   if (needsLitellmProxy(model)) {
     const code = installLitellmIfNeeded(cwd)
     if (code !== 0) {

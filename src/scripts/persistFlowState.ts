@@ -26,7 +26,7 @@ export const persistFlowState: PostflightScript = async (ctx) => {
     writeTaskState("issue", issueNumber, state, ctx.cwd)
   } catch (err) {
     process.stderr.write(
-      `[kody2 persistFlowState] failed to write state on issue #${issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
+      `[kody persistFlowState] failed to write state on issue #${issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
     )
   }
 }

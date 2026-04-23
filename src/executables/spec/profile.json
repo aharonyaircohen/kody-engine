@@ -33,7 +33,7 @@
         "with": {
           "label": "kody-flow:spec",
           "color": "7057ff",
-          "description": "kody2 flow: spec / RFC / design-doc"
+          "description": "kody flow: spec / RFC / design-doc"
         }
       },
       {
@@ -41,7 +41,7 @@
         "with": {
           "label": "kody:orchestrating",
           "color": "1d76db",
-          "description": "kody2: orchestrating a multi-stage flow"
+          "description": "kody: orchestrating a multi-stage flow"
         }
       },
       { "script": "loadIssueContext" },
@@ -55,11 +55,11 @@
         "runWhen": { "data.taskState.core.lastOutcome.type": "RESEARCH_COMPLETED" } },
 
       { "script": "finishFlow",
-        "with": { "reason": "spec-ready", "label": "kody:done", "color": "0e8a16", "description": "kody2: spec/plan artifact ready" },
+        "with": { "reason": "spec-ready", "label": "kody:done", "color": "0e8a16", "description": "kody: spec/plan artifact ready" },
         "runWhen": { "data.taskState.core.lastOutcome.type": "PLAN_COMPLETED" } },
 
       { "script": "finishFlow",
-        "with": { "reason": "aborted", "label": "kody:failed", "color": "e11d21", "description": "kody2: flow failed" },
+        "with": { "reason": "aborted", "label": "kody:failed", "color": "e11d21", "description": "kody: flow failed" },
         "runWhen": { "data.taskState.core.lastOutcome.type": ["RESEARCH_FAILED", "PLAN_FAILED", "AGENT_NOT_RUN"] } },
 
       { "script": "persistFlowState" }

@@ -70,14 +70,14 @@ describe("postIssueComment message wording", () => {
   it("success + newly-created PR: says 'PR opened'", async () => {
     const ctx = makeCtx({ prAction: "created" })
     await postIssueComment(ctx, profile, null)
-    expect(lastPrBody()).toBe("✅ kody2 PR opened: https://github.com/x/y/pull/42")
+    expect(lastPrBody()).toBe("✅ kody PR opened: https://github.com/x/y/pull/42")
   })
 
   it("success + existing PR (updated): says 'pushed to' — not 'PR opened'", async () => {
     const ctx = makeCtx({ prAction: "updated" })
     await postIssueComment(ctx, profile, null)
     const body = lastPrBody()
-    expect(body).toBe("✅ kody2 pushed to https://github.com/x/y/pull/42")
+    expect(body).toBe("✅ kody pushed to https://github.com/x/y/pull/42")
     expect(body).not.toContain("PR opened")
   })
 
@@ -88,7 +88,7 @@ describe("postIssueComment message wording", () => {
       verifyReason: "typecheck failed",
     })
     await postIssueComment(ctx, profile, null)
-    expect(lastPrBody()).toBe("⚠️ kody2 FAILED: typecheck failed — draft PR: https://github.com/x/y/pull/42")
+    expect(lastPrBody()).toBe("⚠️ kody FAILED: typecheck failed — draft PR: https://github.com/x/y/pull/42")
   })
 
   it("failure + updated PR: uses plain 'PR' suffix (not 'draft PR')", async () => {
@@ -99,7 +99,7 @@ describe("postIssueComment message wording", () => {
     })
     await postIssueComment(ctx, profile, null)
     const body = lastPrBody()
-    expect(body).toBe("⚠️ kody2 FAILED: typecheck failed — PR: https://github.com/x/y/pull/42")
+    expect(body).toBe("⚠️ kody FAILED: typecheck failed — PR: https://github.com/x/y/pull/42")
     expect(body).not.toContain("draft PR")
   })
 
@@ -110,7 +110,7 @@ describe("postIssueComment message wording", () => {
       prAction: "updated",
     })
     await postIssueComment(ctx, profile, null)
-    expect(lastPrBody()).toBe("⚠️ kody2 FAILED: no changes to commit")
+    expect(lastPrBody()).toBe("⚠️ kody FAILED: no changes to commit")
     expect(ctx.output.exitCode).toBe(3)
   })
 
@@ -137,6 +137,6 @@ describe("postIssueComment message wording", () => {
       prAction: "updated",
     })
     await postIssueComment(ctx, profile, null)
-    expect(lastPrBody()).toBe("✅ kody2 pushed to https://github.com/x/y/pull/42")
+    expect(lastPrBody()).toBe("✅ kody pushed to https://github.com/x/y/pull/42")
   })
 })

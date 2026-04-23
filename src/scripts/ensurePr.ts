@@ -30,7 +30,7 @@ export const ensurePr: PostflightScript = async (ctx) => {
   const issue = ctx.data.issue as { title?: string } | undefined
   const pr = ctx.data.pr as { title?: string } | undefined
   const targetNumber = Number(ctx.data.commentTargetNumber ?? 0)
-  const title = issue?.title ?? pr?.title ?? `kody2 changes`
+  const title = issue?.title ?? pr?.title ?? `kody changes`
 
   try {
     const result = doEnsurePr({

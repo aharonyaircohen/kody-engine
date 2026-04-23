@@ -54,7 +54,7 @@ export const postReviewResult: PostflightScript = async (ctx, _profile, agentRes
   if (!agentResult || agentResult.outcome !== "completed") {
     const reason = agentResult?.error ?? "agent did not complete"
     try {
-      postPrReviewComment(prNumber, `⚠️ kody2 review FAILED: ${truncate(reason, 1000)}`, ctx.cwd)
+      postPrReviewComment(prNumber, `⚠️ kody review FAILED: ${truncate(reason, 1000)}`, ctx.cwd)
     } catch {
       /* best effort */
     }
@@ -67,7 +67,7 @@ export const postReviewResult: PostflightScript = async (ctx, _profile, agentRes
   const reviewBody = agentResult.finalText.trim()
   if (!reviewBody) {
     try {
-      postPrReviewComment(prNumber, `⚠️ kody2 review FAILED: agent produced no review body`, ctx.cwd)
+      postPrReviewComment(prNumber, `⚠️ kody review FAILED: agent produced no review body`, ctx.cwd)
     } catch {
       /* best effort */
     }

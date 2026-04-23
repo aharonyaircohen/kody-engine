@@ -21,7 +21,7 @@ import { resolvePreviewUrl } from "../../src/scripts/resolvePreviewUrl.js"
 const PROFILE_PATH = path.resolve(__dirname, "../../src/executables/ui-review/profile.json")
 
 function mktmp(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "kody2-uir-int-"))
+  return fs.mkdtempSync(path.join(os.tmpdir(), "kody-uir-int-"))
 }
 
 function writeFile(root: string, rel: string, content: string): void {
@@ -85,7 +85,7 @@ describe("ui-review: preflight + composePrompt end-to-end", () => {
     // Commit a qa-guide with real creds the agent will see
     writeFile(
       tmp,
-      ".kody2/qa-guide.md",
+      ".kody/qa-guide.md",
       `# QA guide
 
 ## Test accounts
@@ -129,7 +129,7 @@ describe("ui-review: preflight + composePrompt end-to-end", () => {
 
     // Final-message contract reminder is present
     expect(prompt).toContain("## Verdict:")
-    expect(prompt).toContain("UI review by kody2")
+    expect(prompt).toContain("UI review by kody")
   })
 
   it("falls back to default preview URL and reports an empty QA guide when absent", async () => {

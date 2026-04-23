@@ -50,7 +50,7 @@ export const finishFlow: PostflightScript = async (ctx, _profile, _agentResult, 
 
   const icon = STATUS_ICON[reason] ?? "ℹ️"
   const prSuffix = state?.core.prUrl ? `\n\n**PR:** ${state.core.prUrl}` : ""
-  const body = `${icon} kody2 flow \`${flowName}\` finished — \`${reason}\`${prSuffix}`
+  const body = `${icon} kody flow \`${flowName}\` finished — \`${reason}\`${prSuffix}`
 
   try {
     execFileSync("gh", ["issue", "comment", String(issueNumber), "--body", body], {
@@ -60,7 +60,7 @@ export const finishFlow: PostflightScript = async (ctx, _profile, _agentResult, 
     })
   } catch (err) {
     process.stderr.write(
-      `[kody2 finishFlow] failed to post final summary on issue #${issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
+      `[kody finishFlow] failed to post final summary on issue #${issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
     )
   }
 }

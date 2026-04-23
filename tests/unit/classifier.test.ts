@@ -148,7 +148,7 @@ describe("parseClassification", () => {
 })
 
 describe("postClassification", () => {
-  it("uses a pre-set classification (from classifyByLabel) and dispatches @kody2 <type>", async () => {
+  it("uses a pre-set classification (from classifyByLabel) and dispatches @kody <type>", async () => {
     const c = ctx({
       data: {
         classification: "bug",
@@ -159,8 +159,8 @@ describe("postClassification", () => {
     await postClassification(c, profile(), null)
     const dispatches = execFileSync.mock.calls
       .map((call) => (call[1] as string[]) ?? [])
-      .filter((a) => a[3] === "--body" && a[4]?.startsWith("@kody2 "))
-    expect(dispatches.some((a) => a[4] === "@kody2 bug")).toBe(true)
+      .filter((a) => a[3] === "--body" && a[4]?.startsWith("@kody "))
+    expect(dispatches.some((a) => a[4] === "@kody bug")).toBe(true)
     expect((c.data.action as { type: string }).type).toBe("CLASSIFIED_AS_BUG")
   })
 
@@ -173,8 +173,8 @@ describe("postClassification", () => {
     await postClassification(c, profile(), null)
     const dispatches = execFileSync.mock.calls
       .map((call) => (call[1] as string[]) ?? [])
-      .filter((a) => a[3] === "--body" && a[4]?.startsWith("@kody2 "))
-    expect(dispatches.some((a) => a[4] === "@kody2 spec")).toBe(true)
+      .filter((a) => a[3] === "--body" && a[4]?.startsWith("@kody "))
+    expect(dispatches.some((a) => a[4] === "@kody spec")).toBe(true)
     expect((c.data.action as { type: string }).type).toBe("CLASSIFIED_AS_SPEC")
   })
 

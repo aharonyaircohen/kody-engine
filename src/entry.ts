@@ -1,7 +1,7 @@
 import pkg from "../package.json"
 import { runChat } from "./chat-cli.js"
 import { runExecutable } from "./executor.js"
-import { runCi } from "./kody2-cli.js"
+import { runCi } from "./kody-cli.js"
 import { hasExecutable, listExecutables, parseGenericFlags } from "./registry.js"
 
 interface ParsedArgs {
@@ -16,19 +16,19 @@ interface ParsedArgs {
   chatArgv?: string[]
 }
 
-const HELP_TEXT = `kody2 — single-session autonomous engineer
+const HELP_TEXT = `kody — single-session autonomous engineer
 
 Usage:
-  kody2 run     --issue <N> [--cwd <path>] [--verbose|--quiet]
-  kody2 fix     --pr    <N> [--feedback "..."] [--cwd <path>] [--verbose|--quiet]
-  kody2 fix-ci  --pr    <N> [--run-id <ID>]    [--cwd <path>] [--verbose|--quiet]
-  kody2 resolve --pr    <N>                    [--cwd <path>] [--verbose|--quiet]
-  kody2 review  --pr    <N>                    [--cwd <path>] [--verbose|--quiet]
-  kody2 <other>                                [--cwd <path>] [--verbose|--quiet]
-  kody2 ci      --issue <N> [preflight flags — see: kody2 ci --help]
-  kody2 chat    [chat flags — see: kody2 chat --help]
-  kody2 help
-  kody2 version
+  kody run     --issue <N> [--cwd <path>] [--verbose|--quiet]
+  kody fix     --pr    <N> [--feedback "..."] [--cwd <path>] [--verbose|--quiet]
+  kody fix-ci  --pr    <N> [--run-id <ID>]    [--cwd <path>] [--verbose|--quiet]
+  kody resolve --pr    <N>                    [--cwd <path>] [--verbose|--quiet]
+  kody review  --pr    <N>                    [--cwd <path>] [--verbose|--quiet]
+  kody <other>                                [--cwd <path>] [--verbose|--quiet]
+  kody ci      --issue <N> [preflight flags — see: kody ci --help]
+  kody chat    [chat flags — see: kody chat --help]
+  kody help
+  kody version
 
 Each top-level command (run, fix, fix-ci, resolve, review, …) is a discovered
 executable under \`src/executables/<name>/profile.json\`. Drop in a new
@@ -90,7 +90,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     return 0
   }
   if (args.command === "version") {
-    process.stdout.write(`kody2 ${pkg.version}\n`)
+    process.stdout.write(`kody ${pkg.version}\n`)
     return 0
   }
   if (args.command === "ci") {
@@ -98,7 +98,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       return await runCi(args.ciArgv ?? [])
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`[kody2] fatal: ${msg}\n`)
+      process.stderr.write(`[kody] fatal: ${msg}\n`)
       if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`)
       return 99
     }
@@ -108,7 +108,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       return await runChat(args.chatArgv ?? [])
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`[kody2] fatal: ${msg}\n`)
+      process.stderr.write(`[kody] fatal: ${msg}\n`)
       if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`)
       return 99
     }
@@ -134,7 +134,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     return result.exitCode
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[kody2] ${args.executableName} crashed: ${msg}\n`)
+    process.stderr.write(`[kody] ${args.executableName} crashed: ${msg}\n`)
     if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`)
     process.stdout.write(`PR_URL=FAILED: ${args.executableName} crashed: ${msg}\n`)
     return 99

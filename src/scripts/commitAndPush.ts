@@ -48,7 +48,7 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
     // (e.g., stash/merge/rebase leftovers) before committing.
     const aborted = abortUnfinishedGitOps(ctx.cwd)
     if (aborted.length > 0) {
-      process.stderr.write(`[kody2] cleaned up unfinished git ops: ${aborted.join(", ")}\n`)
+      process.stderr.write(`[kody] cleaned up unfinished git ops: ${aborted.join(", ")}\n`)
     }
   }
 
@@ -77,14 +77,14 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
 function defaultCommitMessage(mode: string | undefined, data: Record<string, unknown>): string {
   switch (mode) {
     case "run":
-      return `chore: kody2 changes for #${data.commentTargetNumber}`
+      return `chore: kody changes for #${data.commentTargetNumber}`
     case "fix":
-      return `chore(fix): kody2 fix for PR #${data.commentTargetNumber}`
+      return `chore(fix): kody fix for PR #${data.commentTargetNumber}`
     case "fix-ci":
-      return `fix(ci): kody2 fix-ci for PR #${data.commentTargetNumber}`
+      return `fix(ci): kody fix-ci for PR #${data.commentTargetNumber}`
     case "resolve":
       return `fix: resolve merge conflicts with ${data.baseBranch}`
     default:
-      return `chore: kody2 changes`
+      return `chore: kody changes`
   }
 }

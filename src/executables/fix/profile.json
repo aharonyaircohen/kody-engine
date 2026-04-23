@@ -46,7 +46,7 @@
         "with": {
           "label": "kody:fixing",
           "color": "e99695",
-          "description": "kody2: applying review feedback"
+          "description": "kody: applying review feedback"
         }
       },
       { "script": "fixFlow" },

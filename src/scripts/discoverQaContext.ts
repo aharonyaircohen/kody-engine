@@ -269,10 +269,10 @@ export function serializeDiscoveryForLLM(d: QaDiscovery): string {
   return result
 }
 
-// ─── QA guide template (for `kody2 init` scaffolding) ────────────────────
+// ─── QA guide template (for `kody init` scaffolding) ────────────────────
 
 /**
- * Generate a starter `.kody2/qa-guide.md` for a repo. Uses discovery to
+ * Generate a starter `.kody/qa-guide.md` for a repo. Uses discovery to
  * pre-fill routes, login page, roles, admin path, and framework context.
  * Credentials are left as CHANGE_ME placeholders — the repo maintainer
  * fills them in and commits.
@@ -281,7 +281,7 @@ export function generateQaGuideTemplate(d: QaDiscovery): string {
   const lines: string[] = []
   lines.push("# QA guide")
   lines.push("")
-  lines.push("This file is read by `kody2 ui-review`. Fill in the credential placeholders")
+  lines.push("This file is read by `kody ui-review`. Fill in the credential placeholders")
   lines.push("below and commit — the agent uses them to log in to your preview deployment.")
   lines.push("")
 
