@@ -1,7 +1,7 @@
 {
   "name": "approve",
   "role": "utility",
-  "describe": "Acknowledge pending risk gate(s) on an issue or PR: applies kody-approve:* labels on both the issue and its PR (if discoverable via task state), then re-triggers the paused flow. Invoked by `@kody2 approve`.",
+  "describe": "Acknowledge pending risk gate(s) on an issue or PR: posts a confirmation comment (the comment itself is the durable approval signal riskGate reads on replay) and re-triggers the paused flow. Invoked by `@kody2 approve`.",
   "inputs": [
     {
       "name": "issue",
