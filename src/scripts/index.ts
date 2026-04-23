@@ -39,6 +39,7 @@ import { resolveArtifacts } from "./resolveArtifacts.js"
 import { resolveFlow } from "./resolveFlow.js"
 import { resolvePreviewUrl } from "./resolvePreviewUrl.js"
 import { reviewFlow } from "./reviewFlow.js"
+import { riskGate } from "./riskGate.js"
 import { runFlow } from "./runFlow.js"
 import { saveTaskState } from "./saveTaskState.js"
 import { setLifecycleLabel } from "./setLifecycleLabel.js"
@@ -96,6 +97,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   advanceFlow,
   persistFlowState,
   postClassification,
+  riskGate,
 }
 
 export const allScriptNames: Set<string> = new Set([

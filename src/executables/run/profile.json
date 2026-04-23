@@ -93,7 +93,11 @@
         "script": "mirrorStateToPr"
       },
       {
-        "script": "advanceFlow"
+        "script": "riskGate"
+      },
+      {
+        "script": "advanceFlow",
+        "runWhen": { "data.riskGate.decision": "allow" }
       }
     ]
   },

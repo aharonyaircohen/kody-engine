@@ -94,7 +94,11 @@
         "script": "saveTaskState"
       },
       {
-        "script": "advanceFlow"
+        "script": "riskGate"
+      },
+      {
+        "script": "advanceFlow",
+        "runWhen": { "data.riskGate.decision": "allow" }
       }
     ]
   },
