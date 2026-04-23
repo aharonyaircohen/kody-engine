@@ -1,5 +1,6 @@
 {
   "name": "bug",
+  "role": "orchestrator",
   "describe": "Sub-orchestrator for bug / enhancement issues — plan → run → review (→ fix on concerns/fail). No agent — the postflight entries ARE the transition table, evaluated top-to-bottom via runWhen.",
   "inputs": [
     {
@@ -27,6 +28,14 @@
   "cliTools": [],
   "scripts": {
     "preflight": [
+      {
+        "script": "setLifecycleLabel",
+        "with": {
+          "label": "kody-flow:bug",
+          "color": "d73a4a",
+          "description": "kody2 flow: bug / enhancement"
+        }
+      },
       {
         "script": "setLifecycleLabel",
         "with": {

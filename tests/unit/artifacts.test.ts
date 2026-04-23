@@ -20,6 +20,7 @@ function writeProfile(dir: string, profile: unknown): string {
 
 const MIN_PROFILE = {
   name: "demo",
+  role: "primitive",
   describe: "demo",
   inputs: [{ name: "issue", flag: "--issue", type: "int", describe: "" }],
   claudeCode: {

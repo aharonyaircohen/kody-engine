@@ -27,6 +27,7 @@ const execFileSync = childProcess.execFileSync as unknown as Mock
 function profile(name = "orchestrator"): Profile {
   return {
     name,
+    role: "orchestrator",
     describe: "test",
     kind: "oneshot",
     inputs: [],

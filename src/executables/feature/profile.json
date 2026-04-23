@@ -1,5 +1,6 @@
 {
   "name": "feature",
+  "role": "orchestrator",
   "describe": "Sub-orchestrator for feature / refactor issues — research → plan → run → review (→ fix on concerns/fail). No agent — the postflight entries ARE the transition table, evaluated top-to-bottom via runWhen.",
   "inputs": [
     {
@@ -27,6 +28,14 @@
   "cliTools": [],
   "scripts": {
     "preflight": [
+      {
+        "script": "setLifecycleLabel",
+        "with": {
+          "label": "kody-flow:feature",
+          "color": "a2eeef",
+          "description": "kody2 flow: feature / refactor"
+        }
+      },
       {
         "script": "setLifecycleLabel",
         "with": {

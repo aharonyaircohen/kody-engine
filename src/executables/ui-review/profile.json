@@ -1,5 +1,6 @@
 {
   "name": "ui-review",
+  "role": "primitive",
   "describe": "UI/UX review of an open PR: browses the running preview with Playwright, compares behavior to diff intent, posts one structured review comment. Read-only on the repo (no commits); writes a throwaway Playwright spec under .kody2/.",
   "kind": "oneshot",
   "inputs": [

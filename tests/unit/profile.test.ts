@@ -16,6 +16,7 @@ function writeProfile(dir: string, profile: unknown): string {
 
 const VALID_MIN = {
   name: "mini",
+  role: "primitive",
   describe: "smallest valid profile",
   inputs: [{ name: "foo", flag: "--foo", type: "string", describe: "" }],
   claudeCode: {
@@ -62,6 +63,21 @@ describe("profile: loadProfile", () => {
     delete bad.name
     const p = writeProfile(dir, bad)
     expect(() => loadProfile(p)).toThrow(/"name" must be a non-empty string/)
+  })
+
+  it("rejects missing role", () => {
+    const dir = tmpDir()
+    const bad = { ...VALID_MIN } as Record<string, unknown>
+    delete bad.role
+    const p = writeProfile(dir, bad)
+    expect(() => loadProfile(p)).toThrow(/"role" is required/)
+  })
+
+  it("rejects invalid role value", () => {
+    const dir = tmpDir()
+    const bad = { ...VALID_MIN, role: "bogus" }
+    const p = writeProfile(dir, bad)
+    expect(() => loadProfile(p)).toThrow(/"role" is required/)
   })
 
   it("rejects enum input without values", () => {

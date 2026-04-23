@@ -1,5 +1,6 @@
 {
   "name": "run",
+  "role": "primitive",
   "describe": "Implement a GitHub issue end-to-end: branch, code, commit, open PR.",
   "inputs": [
     {

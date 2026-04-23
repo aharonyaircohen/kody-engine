@@ -1,5 +1,6 @@
 {
   "name": "watch-stale-prs",
+  "role": "watch",
   "describe": "Scheduled: list open PRs untouched for N days and report. No agent invocation.",
   "kind": "scheduled",
   "schedule": "0 8 * * MON",

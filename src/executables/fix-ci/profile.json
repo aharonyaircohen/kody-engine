@@ -1,5 +1,6 @@
 {
   "name": "fix-ci",
+  "role": "primitive",
   "describe": "Fix a failing CI workflow on an existing PR.",
   "inputs": [
     {

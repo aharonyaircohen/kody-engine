@@ -1,20 +1,29 @@
 /**
- * Kody labels — applied to issues/PRs as flows transition. The lifecycle
- * set is NOT enumerated here: each executable's profile declares its own
- * label inline (see e.g. src/executables/run/profile.json), keeping the
- * executor and this module role-agnostic.
+ * Kody labels — mechanism-only helper. No executable, phase, or group
+ * names live here: every label is declared inline by whichever profile
+ * wants it (via a script entry's `with` block). This module just:
  *
- * Convention: every kody2-owned label name starts with `kody:`. That's
- * how `setKodyLabel` knows which existing labels are siblings (to be
- * removed on transition) vs labels the user owns (to leave alone).
+ *   - collects label specs from the profile set,
+ *   - ensures them in the target repo,
+ *   - applies one to an issue/PR with same-group mutex.
  *
- * - setKodyLabel(n, spec, cwd): set the label on issue/PR #n, removing
- *   any other `kody:*` label present. Lazy-creates the label on-demand
- *   if `gh issue edit --add-label` reports it missing.
- * - collectProfileLabels(): scans every executable profile for label
- *   specs on script entries' `with` blocks, dedupes by name.
- * - ensureLabels(cwd): at init time, creates every collected label in
- *   the repo via `gh label create --force`.
+ * Rules:
+ *   - A label is kody-owned iff its name starts with `KODY_NAMESPACE`.
+ *     Non-kody labels are ignored (never created, never removed).
+ *   - Two kody-owned labels share an exclusivity group iff they share
+ *     the same prefix up to and including the first `:`. Setting one
+ *     removes any same-group sibling on the target; different-group
+ *     labels coexist.
+ *   - Labels without a `:` are in their own degenerate group (just the
+ *     whole name); they will never conflict with a prefixed label.
+ *
+ * Public surface:
+ *   - setKodyLabel(n, spec, cwd): set the label on issue/PR #n, lazy-
+ *     creating via spec's color/description if `gh` reports it missing.
+ *   - collectProfileLabels(): walk every profile's script entries and
+ *     harvest `{label, color, description}` from their `with` blocks.
+ *   - ensureLabels(cwd): at init time, `gh label create --force` every
+ *     collected spec. Best-effort, never throws.
  */
 
 import { gh } from "./issue.js"
@@ -22,7 +31,17 @@ import { loadProfile } from "./profile.js"
 import { listExecutables } from "./registry.js"
 import type { ScriptEntry } from "./executables/types.js"
 
-export const KODY_LABEL_PREFIX = "kody:"
+/** Namespace prefix — labels starting with this are kody-owned and safe to touch. */
+export const KODY_NAMESPACE = "kody"
+
+/**
+ * Extract a label's exclusivity group: everything up to and including
+ * the first `:`. A label with no `:` is its own group (whole name).
+ */
+function groupOf(label: string): string {
+  const idx = label.indexOf(":")
+  return idx === -1 ? label : label.slice(0, idx + 1)
+}
 
 export interface KodyLabelSpec {
   label: string
@@ -61,7 +80,7 @@ function extractLabelSpec(entry: ScriptEntry): KodyLabelSpec | null {
   const w = entry.with
   if (!w) return null
   const label = typeof w.label === "string" ? w.label : null
-  if (!label || !label.startsWith(KODY_LABEL_PREFIX)) return null
+  if (!label || !label.startsWith(KODY_NAMESPACE)) return null
   return {
     label,
     color: typeof w.color === "string" ? w.color : undefined,
@@ -119,23 +138,25 @@ function createLabelInRepo(spec: KodyLabelSpec, cwd?: string): void {
 }
 
 /**
- * Set `spec.label` on issue/PR #n, removing any other `kody:*` label
- * present. Best-effort: failures log but never throw. If the target
- * label doesn't exist in the repo yet, creates it (using spec's
- * color/description) and retries once.
+ * Set `spec.label` on issue/PR #n, removing any same-group kody sibling
+ * present (group = prefix up to first `:`). Different groups coexist.
+ * Best-effort: failures log but never throw. If the target label doesn't
+ * exist in the repo yet, creates it (using spec's color/description)
+ * and retries once.
  */
 export function setKodyLabel(issueNumber: number, spec: KodyLabelSpec, cwd?: string): void {
   const target = spec.label
-  if (!target.startsWith(KODY_LABEL_PREFIX)) {
+  if (!target.startsWith(KODY_NAMESPACE)) {
     process.stderr.write(
       `[kody2] setKodyLabel: refusing to set non-kody label "${target}"\n`,
     )
     return
   }
 
+  const targetGroup = groupOf(target)
   const present = getIssueLabels(issueNumber, cwd)
   for (const label of present) {
-    if (label !== target && label.startsWith(KODY_LABEL_PREFIX)) {
+    if (label !== target && label.startsWith(KODY_NAMESPACE) && groupOf(label) === targetGroup) {
       removeLabel(issueNumber, label, cwd)
     }
   }

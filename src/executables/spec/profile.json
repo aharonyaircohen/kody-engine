@@ -1,5 +1,6 @@
 {
   "name": "spec",
+  "role": "orchestrator",
   "describe": "Sub-orchestrator for spec / RFC / design-doc issues — research → plan (stop). Terminates at the plan artifact; no run, no PR. No agent.",
   "inputs": [
     {
@@ -27,6 +28,14 @@
   "cliTools": [],
   "scripts": {
     "preflight": [
+      {
+        "script": "setLifecycleLabel",
+        "with": {
+          "label": "kody-flow:spec",
+          "color": "7057ff",
+          "description": "kody2 flow: spec / RFC / design-doc"
+        }
+      },
       {
         "script": "setLifecycleLabel",
         "with": {

@@ -18,7 +18,19 @@ export interface Profile {
   name: string
   describe: string
   /**
-   * Execution model. `oneshot` (default): single invocation on demand.
+   * Semantic role — what this executable IS, not when it runs.
+   *   - primitive:    single-step agent executor (flow → agent → verify → commit → PR).
+   *   - orchestrator: no-agent, drives primitives via a postflight transition table.
+   *   - watch:        scheduled observer that inspects repo state and may trigger other executables.
+   *   - utility:      no-agent, one-off administrative work (scaffolding, release, etc.).
+   *
+   * Roles enforce shape at profile-load time and let help/dispatch treat
+   * executables differently by category.
+   */
+  role: "primitive" | "orchestrator" | "watch" | "utility"
+  /**
+   * Execution model — orthogonal to `role`.
+   * `oneshot` (default): single invocation on demand.
    * `scheduled`: fires periodically via an external cron (typically GHA
    * `schedule:`). Scheduled profiles must declare a `schedule` cron string.
    */

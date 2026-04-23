@@ -1,5 +1,6 @@
 {
   "name": "chore",
+  "role": "orchestrator",
   "describe": "Sub-orchestrator for chore / docs / dep-bump issues — run → review (→ fix on concerns/fail). Skips planning entirely. No agent.",
   "inputs": [
     {
@@ -27,6 +28,14 @@
   "cliTools": [],
   "scripts": {
     "preflight": [
+      {
+        "script": "setLifecycleLabel",
+        "with": {
+          "label": "kody-flow:chore",
+          "color": "c5def5",
+          "description": "kody2 flow: chore / docs / dep-bump"
+        }
+      },
       {
         "script": "setLifecycleLabel",
         "with": {

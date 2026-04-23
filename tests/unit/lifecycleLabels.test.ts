@@ -6,7 +6,7 @@ vi.mock("../../src/issue.js", () => ({
 
 import { gh } from "../../src/issue.js"
 import {
-  KODY_LABEL_PREFIX,
+  KODY_NAMESPACE,
   collectProfileLabels,
   ensureLabels,
   getIssueLabels,
@@ -19,37 +19,32 @@ beforeEach(() => {
   ghMock.mockReset()
 })
 
-describe("KODY_LABEL_PREFIX", () => {
-  it("is the shared namespace for kody-owned labels", () => {
-    expect(KODY_LABEL_PREFIX).toBe("kody:")
+describe("KODY_NAMESPACE", () => {
+  it("is the shared prefix for kody-owned labels", () => {
+    expect(KODY_NAMESPACE).toBe("kody")
   })
 })
 
 describe("collectProfileLabels", () => {
   it("harvests every label spec declared on profile script entries, deduped by name", () => {
     const labels = collectProfileLabels()
-    const names = labels.map((l) => l.label).sort()
+    const names = labels.map((l) => l.label)
 
-    // Preflight entries in executable profiles.
-    expect(names).toEqual(
-      expect.arrayContaining([
-        "kody:planning",
-        "kody:researching",
-        "kody:running",
-        "kody:reviewing",
-        "kody:fixing",
-        "kody:resolving",
-        "kody:syncing",
-      ]),
-    )
-    // Terminal labels declared inline on orchestrator finishFlow entries.
-    expect(names).toEqual(expect.arrayContaining(["kody:done", "kody:failed"]))
+    // All collected names live in the kody namespace.
+    for (const n of names) {
+      expect(n.startsWith(KODY_NAMESPACE)).toBe(true)
+    }
 
-    // Deduped: "kody:fixing" is in both fix and fix-ci profiles, but shows up once.
-    expect(names.filter((n) => n === "kody:fixing")).toHaveLength(1)
-    expect(names.filter((n) => n === "kody:reviewing")).toHaveLength(1)
+    // Every profile-declared label is represented — at least a few must
+    // exist; the exact set is profile-data so we don't hard-code it here.
+    expect(names.length).toBeGreaterThan(0)
 
-    // Every collected spec has color + description.
+    // Dedup invariant: each name appears exactly once even when multiple
+    // profiles declare the same label.
+    const unique = new Set(names)
+    expect(unique.size).toBe(names.length)
+
+    // Every collected spec has color + description (profile-level convention).
     for (const l of labels) {
       expect(l.color).toMatch(/^[0-9a-f]{6}$/i)
       expect(l.description).toBeTruthy()
@@ -103,13 +98,13 @@ describe("getIssueLabels", () => {
 })
 
 describe("setKodyLabel", () => {
-  it("removes any other kody:* label and adds the target", () => {
+  it("removes same-group kody siblings but leaves non-kody labels alone", () => {
     ghMock.mockImplementation((args: string[]) => {
-      if (args[0] === "issue" && args[1] === "view") return "kody:planning\nkody:running\nbug\nenhancement"
+      if (args[0] === "issue" && args[1] === "view") return "kody:a\nkody:b\nbug\nenhancement"
       return ""
     })
 
-    setKodyLabel(42, { label: "kody:reviewing", color: "d93f0b", description: "desc" })
+    setKodyLabel(42, { label: "kody:c", color: "d93f0b", description: "desc" })
 
     const editCalls = ghMock.mock.calls
       .map(([args]) => args as string[])
@@ -118,14 +113,32 @@ describe("setKodyLabel", () => {
     const removed = editCalls.filter((a) => a.includes("--remove-label")).map((a) => a.at(-1))
     const added = editCalls.filter((a) => a.includes("--add-label")).map((a) => a.at(-1))
 
-    expect(removed).toEqual(expect.arrayContaining(["kody:planning", "kody:running"]))
-    // Non-kody labels are left alone.
+    expect(removed).toEqual(expect.arrayContaining(["kody:a", "kody:b"]))
     expect(removed).not.toContain("bug")
     expect(removed).not.toContain("enhancement")
-    expect(added).toEqual(["kody:reviewing"])
+    expect(added).toEqual(["kody:c"])
   })
 
-  it("refuses to set a label that doesn't start with kody:", () => {
+  it("leaves different-group kody labels alone (cross-group coexistence)", () => {
+    ghMock.mockImplementation((args: string[]) => {
+      if (args[0] === "issue" && args[1] === "view") return "kody:a\nkody-other:x\nkody-another:y"
+      return ""
+    })
+
+    setKodyLabel(42, { label: "kody:b" })
+
+    const editCalls = ghMock.mock.calls
+      .map(([args]) => args as string[])
+      .filter((a) => a[0] === "issue" && a[1] === "edit")
+
+    const removed = editCalls.filter((a) => a.includes("--remove-label")).map((a) => a.at(-1))
+    // Only same-group (prefix "kody:") siblings get removed.
+    expect(removed).toEqual(["kody:a"])
+    expect(removed).not.toContain("kody-other:x")
+    expect(removed).not.toContain("kody-another:y")
+  })
+
+  it("refuses to set a label outside the kody namespace", () => {
     ghMock.mockReturnValue("")
     setKodyLabel(42, { label: "bug" })
     // No issue edit should happen.

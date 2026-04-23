@@ -29,6 +29,7 @@ function makeCtx(): {
 function makeProfile(partial: Partial<Profile["claudeCode"]>): Profile {
   return {
     name: "plan-verify",
+    role: "utility",
     describe: "test",
     kind: "oneshot",
     inputs: [],

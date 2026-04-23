@@ -50,9 +50,23 @@ export function getIssue(issueNumber: number, cwd?: string): IssueData {
   }
 }
 
+/**
+ * Neutralize any `@kody2 X` substring in an agent-authored comment body so
+ * GHA's `contains(comment.body, '@kody2')` filter doesn't self-fire on it.
+ * Inserts a zero-width space between `@` and `kody2`; humans see the same
+ * text, the filter no longer matches. Orchestrator-side trigger comments
+ * (startFlow, dispatch, advanceFlow, finishFlow) go through execFileSync
+ * directly and are exempt.
+ */
+export function stripKody2Mentions(body: string): string {
+  // Preserve case via capture groups. Match any `@kody2…` substring (including
+  // `@kody2-bot`) because GHA's contains() does a raw substring check.
+  return body.replace(/(@)(kody2)/gi, "$1​$2")
+}
+
 export function postIssueComment(issueNumber: number, body: string, cwd?: string): void {
   try {
-    gh(["issue", "comment", String(issueNumber), "--body-file", "-"], { input: body, cwd })
+    gh(["issue", "comment", String(issueNumber), "--body-file", "-"], { input: stripKody2Mentions(body), cwd })
   } catch (err) {
     process.stderr.write(
       `[kody2] failed to post comment on #${issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
@@ -203,7 +217,7 @@ export function getPrLatestReviewBody(prNumber: number, cwd?: string): string {
 
 export function postPrReviewComment(prNumber: number, body: string, cwd?: string): void {
   try {
-    gh(["pr", "comment", String(prNumber), "--body-file", "-"], { input: body, cwd })
+    gh(["pr", "comment", String(prNumber), "--body-file", "-"], { input: stripKody2Mentions(body), cwd })
   } catch (err) {
     process.stderr.write(
       `[kody2] failed to post review comment on PR #${prNumber}: ${err instanceof Error ? err.message : String(err)}\n`,

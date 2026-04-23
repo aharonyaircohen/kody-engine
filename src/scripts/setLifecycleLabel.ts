@@ -4,15 +4,10 @@
  * about the set of valid labels — it just applies what the profile told
  * it to.
  *
- * Example profile entry:
- *   {
- *     "script": "setLifecycleLabel",
- *     "with": {
- *       "label": "kody:running",
- *       "color": "fbca04",
- *       "description": "kody2: implementing the change"
- *     }
- *   }
+ * Expected `with` shape:
+ *   - label:       required, string, must start with KODY_NAMESPACE
+ *   - color:       optional, 6-char hex (used for lazy-create)
+ *   - description: optional, string   (used for lazy-create)
  *
  * Best-effort — labeling never blocks the flow. Reads the target number
  * from `ctx.args.issue` (preferred) or `ctx.args.pr`. PRs and issues
@@ -20,13 +15,13 @@
  */
 
 import type { PreflightScript } from "../executables/types.js"
-import { KODY_LABEL_PREFIX, setKodyLabel } from "../lifecycleLabels.js"
+import { KODY_NAMESPACE, setKodyLabel } from "../lifecycleLabels.js"
 
 export const setLifecycleLabel: PreflightScript = async (ctx, _profile, args) => {
   const label = args?.label
-  if (typeof label !== "string" || !label.startsWith(KODY_LABEL_PREFIX)) {
+  if (typeof label !== "string" || !label.startsWith(KODY_NAMESPACE)) {
     process.stderr.write(
-      `[kody2] setLifecycleLabel: missing or invalid "label" arg (must start with "${KODY_LABEL_PREFIX}"): ${String(label)}\n`,
+      `[kody2] setLifecycleLabel: missing or invalid "label" arg (must start with "${KODY_NAMESPACE}"): ${String(label)}\n`,
     )
     return
   }

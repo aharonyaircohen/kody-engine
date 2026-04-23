@@ -21,6 +21,7 @@ import type {
 
 const VALID_INPUT_TYPES = new Set(["int", "string", "bool", "enum"])
 const VALID_PERMISSION_MODES = new Set(["default", "acceptEdits", "plan", "bypassPermissions"])
+const VALID_ROLES = new Set(["primitive", "orchestrator", "watch", "utility"])
 
 export class ProfileError extends Error {
   constructor(
@@ -55,9 +56,18 @@ export function loadProfile(profilePath: string): Profile {
     throw new ProfileError(profilePath, `kind: "scheduled" requires a "schedule" cron string`)
   }
 
+  if (typeof r.role !== "string" || !VALID_ROLES.has(r.role)) {
+    throw new ProfileError(
+      profilePath,
+      `"role" is required and must be one of: ${[...VALID_ROLES].join(" | ")}`,
+    )
+  }
+  const role = r.role as Profile["role"]
+
   const profile: Profile = {
     name: requireString(profilePath, r, "name"),
     describe: typeof r.describe === "string" ? r.describe : "",
+    role,
     kind,
     schedule: typeof r.schedule === "string" ? r.schedule : undefined,
     inputs: parseInputs(profilePath, r.inputs),

@@ -1,5 +1,6 @@
 {
   "name": "init",
+  "role": "utility",
   "describe": "Scaffold a consumer repo with kody.config.json and the @kody2 workflow. No agent.",
   "inputs": [
     {

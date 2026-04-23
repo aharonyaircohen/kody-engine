@@ -20,6 +20,7 @@ function tmpDir(): string {
 
 const BASE = {
   name: "t",
+  role: "primitive",
   describe: "",
   inputs: [
     { name: "mode", flag: "--mode", type: "enum", values: ["a", "b"], required: true, describe: "" },

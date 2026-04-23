@@ -1,5 +1,6 @@
 {
   "name": "research",
+  "role": "primitive",
   "describe": "Research an issue: understand the ask, map relevant repo context, and surface clarifying questions + gaps. Read-only — no branches, no commits, no prescribed next steps.",
   "inputs": [
     {
@@ -67,6 +68,9 @@
       },
       {
         "script": "saveTaskState"
+      },
+      {
+        "script": "advanceFlow"
       }
     ]
   },

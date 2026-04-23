@@ -1,5 +1,6 @@
 {
   "name": "fix",
+  "role": "primitive",
   "describe": "Apply review feedback to an existing PR branch.",
   "inputs": [
     {

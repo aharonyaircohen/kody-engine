@@ -14,6 +14,7 @@ function writeProfile(body: object): string {
 
 const VALID_BASE = {
   name: "watch-x",
+  role: "watch",
   describe: "scheduled thing",
   inputs: [],
   claudeCode: {

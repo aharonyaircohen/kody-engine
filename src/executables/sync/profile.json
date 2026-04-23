@@ -1,5 +1,6 @@
 {
   "name": "sync",
+  "role": "primitive",
   "describe": "Merge the default (base) branch into a PR branch and push. No agent.",
   "inputs": [
     {

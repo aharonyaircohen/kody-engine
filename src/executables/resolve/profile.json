@@ -1,5 +1,6 @@
 {
   "name": "resolve",
+  "role": "primitive",
   "describe": "Resolve merge conflicts between a PR branch and the default branch.",
   "inputs": [
     {

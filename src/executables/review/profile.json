@@ -1,5 +1,6 @@
 {
   "name": "review",
+  "role": "primitive",
   "describe": "Read-only structured review of an open PR. Posts one comment, never commits.",
   "inputs": [
     {
