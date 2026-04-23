@@ -25,6 +25,7 @@ Your FINAL message must be exactly this shape (no extra text before or after):
 ```
 DONE
 COMMIT_MSG: research: <very short title>
+PRIOR_ART: <JSON array of closed or merged PR numbers from this repo that are prior attempts at THIS issue, or [] if none. Include only PRs that actually touched the same feature/area — not every PR your research happens to mention. Example: [1086] or []. Must be valid JSON parseable as number[].>
 PR_SUMMARY:
 <A research doc in markdown with EXACTLY these sections, in order:
 
@@ -81,6 +82,9 @@ Do NOT re-emit Understood request, Repo context, Clarifying questions, or
 Gaps & assumptions — they live in the prior comment. Keep the whole delta
 under 25 lines. If nothing has changed since the prior research, output
 `FAILED: no new information since last research` instead.
+
+`PRIOR_ART:` is still required in delta mode (carry forward the prior list,
+or update it if new PRs became relevant since).
 
 If no prior `## Research for issue` comment exists in the thread, produce
 the full first-pass structure below.

@@ -84,6 +84,11 @@
         "name": "research",
         "format": "markdown",
         "from": "prSummary"
+      },
+      {
+        "name": "priorArt",
+        "format": "json",
+        "from": "priorArt"
       }
     ]
   }

@@ -280,4 +280,29 @@ describe("prompt: parseAgentResult", () => {
     expect(result.done).toBe(false)
     expect(result.failureReason).toMatch(/no DONE or FAILED/)
   })
+
+  it("extracts inline PRIOR_ART JSON array", () => {
+    const text = [
+      "DONE",
+      "COMMIT_MSG: research: x",
+      "PRIOR_ART: [1086, 1090]",
+      "PR_SUMMARY:",
+      "- findings",
+    ].join("\n")
+    const result = parseAgentResult(text)
+    expect(result.done).toBe(true)
+    expect(result.priorArt).toBe("[1086, 1090]")
+    expect(result.prSummary).toBe("- findings")
+  })
+
+  it("defaults priorArt to empty string when marker is absent", () => {
+    const result = parseAgentResult("DONE\nCOMMIT_MSG: feat: x\nPR_SUMMARY:\n- y")
+    expect(result.priorArt).toBe("")
+  })
+
+  it("accepts empty PRIOR_ART array", () => {
+    const text = ["DONE", "COMMIT_MSG: research: x", "PRIOR_ART: []", "PR_SUMMARY:", "- findings"].join("\n")
+    const result = parseAgentResult(text)
+    expect(result.priorArt).toBe("[]")
+  })
 })

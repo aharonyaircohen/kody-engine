@@ -50,6 +50,9 @@
         "script": "loadConventions"
       },
       {
+        "script": "loadPriorArt"
+      },
+      {
         "script": "composePrompt"
       }
     ],

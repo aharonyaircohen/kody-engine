@@ -158,6 +158,15 @@ export interface ParsedAgentResult {
   prSummary: string
   feedbackActions: string
   planDeviations: string
+  /**
+   * Optional JSON payload following a `PRIOR_ART:` marker. Generic channel
+   * for any executable that wants to flag "here is structured data downstream
+   * consumers may want." Research uses it to list closed/merged PRs whose
+   * diffs should be loaded by a later `loadPriorArt` preflight. The parser
+   * does NOT validate the shape — it just captures the trimmed string so
+   * downstream consumers can JSON.parse themselves.
+   */
+  priorArt: string
   failureReason: string
 }
 
@@ -170,6 +179,7 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
       prSummary: "",
       feedbackActions: "",
       planDeviations: "",
+      priorArt: "",
       failureReason: "agent produced no final message",
     }
 
@@ -181,6 +191,7 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
       prSummary: "",
       feedbackActions: "",
       planDeviations: "",
+      priorArt: "",
       failureReason: failedMatch[1]!.trim(),
     }
   }
@@ -199,6 +210,7 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
       prSummary: "",
       feedbackActions: "",
       planDeviations: "",
+      priorArt: "",
       failureReason: "no DONE or FAILED marker in agent output",
     }
   }
@@ -210,7 +222,7 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
   const feedbackActions = extractBlock(
     text,
     /(?:^|\n)[ \t]*FEEDBACK_ACTIONS\s*:[ \t]*\n/i,
-    /(?:^|\n)[ \t]*(?:PLAN_DEVIATIONS|COMMIT_MSG|PR_SUMMARY)\s*:/i,
+    /(?:^|\n)[ \t]*(?:PLAN_DEVIATIONS|COMMIT_MSG|PR_SUMMARY|PRIOR_ART)\s*:/i,
   )
 
   // PLAN_DEVIATIONS: same shape. Supports inline (`PLAN_DEVIATIONS: none`) or
@@ -218,12 +230,19 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
   let planDeviations = extractBlock(
     text,
     /(?:^|\n)[ \t]*PLAN_DEVIATIONS\s*:[ \t]*\n/i,
-    /(?:^|\n)[ \t]*(?:COMMIT_MSG|PR_SUMMARY|FEEDBACK_ACTIONS)\s*:/i,
+    /(?:^|\n)[ \t]*(?:COMMIT_MSG|PR_SUMMARY|FEEDBACK_ACTIONS|PRIOR_ART)\s*:/i,
   )
   if (!planDeviations) {
     const inline = text.match(/(?:^|\n)[ \t]*PLAN_DEVIATIONS\s*:[ \t]*(.+?)[ \t]*(?:\n|$)/i)
     if (inline) planDeviations = inline[1]!.trim()
   }
+
+  // PRIOR_ART: inline-only marker. Expected payload is a JSON array (e.g.
+  // `PRIOR_ART: [1086, 1090]`) or `[]` when there is none. Captured as a raw
+  // string — downstream consumers JSON.parse it themselves.
+  let priorArt = ""
+  const priorArtInline = text.match(/(?:^|\n)[ \t]*PRIOR_ART\s*:[ \t]*(.+?)[ \t]*(?:\n|$)/i)
+  if (priorArtInline) priorArt = priorArtInline[1]!.trim()
 
   // PR_SUMMARY: spans from the marker line to end-of-input (or to a closing ``` fence).
   const summaryStart = text.search(/(^|\n)[ \t]*PR_SUMMARY\s*:[ \t]*\n/i)
@@ -236,7 +255,7 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
       .trim()
   }
 
-  return { done: true, commitMessage, prSummary, feedbackActions, planDeviations, failureReason: "" }
+  return { done: true, commitMessage, prSummary, feedbackActions, planDeviations, priorArt, failureReason: "" }
 }
 
 function extractBlock(text: string, startMarker: RegExp, endMarker: RegExp): string {

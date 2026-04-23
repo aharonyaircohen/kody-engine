@@ -21,6 +21,7 @@ import { initFlow } from "./initFlow.js"
 import { loadConventions } from "./loadConventions.js"
 import { loadCoverageRules } from "./loadCoverageRules.js"
 import { loadIssueContext } from "./loadIssueContext.js"
+import { loadPriorArt } from "./loadPriorArt.js"
 import { loadQaGuide } from "./loadQaGuide.js"
 import { loadTaskState } from "./loadTaskState.js"
 import { mirrorStateToPr } from "./mirrorStateToPr.js"
@@ -63,6 +64,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   loadIssueContext,
   loadConventions,
   loadCoverageRules,
+  loadPriorArt,
   loadQaGuide,
   buildSyntheticPlugin,
   resolveArtifacts,
