@@ -10,7 +10,9 @@
  *   @kody2 spec        → spec          args: { issue }   (sub-orchestrator)
  *   @kody2 chore       → chore         args: { issue }   (sub-orchestrator)
  *   @kody2 <other>     → <other>       args: { issue }   (generic pass-through)
- *   @kody2 (bare)      → config.defaultExecutable (fallback: "run")
+ *   @kody2 (bare)      → config.defaultExecutable (default baked in by
+ *                        loadConfig — currently "classify"; never
+ *                        hardcoded here)
  *
  * Routing (on a PR):
  *   @kody2 fix-ci      → fix-ci        args: { pr }
@@ -109,10 +111,13 @@ export function autoDispatch(opts?: {
   }
 
   // Issue routing: named subcommand wins; bare falls to defaultExecutable.
+  // The default is owned by the config layer (see Kody2Config.defaultExecutable
+  // / loadConfig) — this module never hardcodes an executable name.
   const sub = extractSubcommand(afterTag)
-  const defaultExec = opts?.config?.defaultExecutable ?? "run"
 
   if (!sub) {
+    const defaultExec = opts?.config?.defaultExecutable
+    if (!defaultExec) return null
     return asDispatch(defaultExec, targetNum)
   }
 

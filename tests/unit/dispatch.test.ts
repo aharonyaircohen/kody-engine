@@ -173,16 +173,12 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("bare '@kody2' with no config defaults to run", () => {
+  it("bare '@kody2' with no config returns null (config layer owns the default)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody2" },
       issue: { number: 13 },
     })
-    expect(autoDispatch()).toEqual({
-      executable: "run",
-      cliArgs: { issue: 13 },
-      target: 13,
-    })
+    expect(autoDispatch()).toBeNull()
   })
 
   it("ignores case in '@KoDy2 PLAN'", () => {

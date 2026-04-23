@@ -108,32 +108,32 @@ describe("config: loadConfig", () => {
     expect(loadConfig(dir).defaultExecutable).toBe("orchestrator-plan-build-review")
   })
 
-  it("defaultExecutable is undefined when absent", () => {
+  it("defaultExecutable defaults to 'classify' when absent", () => {
     const dir = tmpDir()
     writeConfig(dir, {
       github: { owner: "o", repo: "r" },
       agent: { model: "m/x" },
     })
-    expect(loadConfig(dir).defaultExecutable).toBeUndefined()
+    expect(loadConfig(dir).defaultExecutable).toBe("classify")
   })
 
-  it("defaultExecutable is undefined when empty string", () => {
+  it("defaultExecutable defaults to 'classify' when empty string", () => {
     const dir = tmpDir()
     writeConfig(dir, {
       github: { owner: "o", repo: "r" },
       agent: { model: "m/x" },
       defaultExecutable: "",
     })
-    expect(loadConfig(dir).defaultExecutable).toBeUndefined()
+    expect(loadConfig(dir).defaultExecutable).toBe("classify")
   })
 
-  it("defaultExecutable is undefined when non-string", () => {
+  it("defaultExecutable defaults to 'classify' when non-string", () => {
     const dir = tmpDir()
     writeConfig(dir, {
       github: { owner: "o", repo: "r" },
       agent: { model: "m/x" },
       defaultExecutable: 42,
     })
-    expect(loadConfig(dir).defaultExecutable).toBeUndefined()
+    expect(loadConfig(dir).defaultExecutable).toBe("classify")
   })
 })

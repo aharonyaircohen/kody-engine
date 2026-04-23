@@ -29,9 +29,11 @@ export interface Kody2Config {
   testRequirements?: TestRequirement[]
   /**
    * Executable name to invoke when a user triggers bare `@kody2` with no
-   * subcommand. Defaults to "run". Set to "classify" to auto-triage into
-   * one of {feature, bug, spec, chore} before dispatching; "bug"/"feature"
-   * to force a specific sub-orchestrator.
+   * subcommand. Defaults to "classify" (auto-triages into one of {feature,
+   * bug, spec, chore} before dispatching). Set to "run" to skip classification
+   * and directly implement, or "bug"/"feature" to force a specific
+   * sub-orchestrator. The default is baked in by `loadConfig` so dispatch
+   * has a single source of truth — never hardcoded in dispatch logic.
    */
   defaultExecutable?: string
   /**
@@ -123,7 +125,7 @@ export function loadConfig(projectDir: string = process.cwd()): Kody2Config {
     issueContext: parseIssueContext(raw.issueContext),
     testRequirements: parseTestRequirements(raw.testRequirements),
     defaultExecutable:
-      typeof raw.defaultExecutable === "string" && raw.defaultExecutable.length > 0 ? raw.defaultExecutable : undefined,
+      typeof raw.defaultExecutable === "string" && raw.defaultExecutable.length > 0 ? raw.defaultExecutable : "classify",
     classify: parseClassifyConfig(raw.classify),
     release: parseReleaseConfig(raw.release),
   }
