@@ -43,6 +43,10 @@ plan under the Required output structure below.
 
 ---
 
+# External references (MUST be fetched before planning)
+
+If the issue body or recent comments contain URLs (http/https), you MUST use the **Playwright MCP** tools (`mcp__playwright__browser_navigate`, `mcp__playwright__browser_snapshot`, optionally `mcp__playwright__browser_take_screenshot`) to load each one and read its content **before** you start planning. Referenced pages — especially demos, specs, and design mocks — are part of the specification. Features visible in a linked demo are in scope unless the issue explicitly excludes them. If a URL cannot be loaded, record that as an Ambiguity rather than silently dropping it.
+
 # Research floor (MUST be done before writing the plan)
 
 Before producing the final plan, you MUST have read:

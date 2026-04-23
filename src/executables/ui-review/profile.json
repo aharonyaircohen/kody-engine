@@ -31,7 +31,8 @@
       "Glob",
       "Bash",
       "Write",
-      "Edit"
+      "Edit",
+      "mcp__playwright"
     ],
     "hooks": [],
     "skills": [],
@@ -51,10 +52,10 @@
       "name": "playwright",
       "install": {
         "required": false,
-        "checkCommand": "npx --no-install playwright --version",
+        "checkCommand": "ls \"$HOME/.cache/ms-playwright\" 2>/dev/null | grep -q '^chromium'",
         "installCommand": "npx --yes playwright install --with-deps chromium"
       },
-      "verify": "npx --no-install playwright --version",
+      "verify": "ls \"$HOME/.cache/ms-playwright\" 2>/dev/null | grep -q '^chromium'",
       "usage": "Use `npx playwright test <file>` to run a Playwright spec. Write ad-hoc specs under `.kody/ui-review/*.spec.ts`. If `npx playwright test` errors with `Cannot find package '@playwright/test'`, install it once with `npm install -D @playwright/test` (or the repo's package-manager equivalent) before retrying — the `playwright` browser binaries are already set up by preflight, but the per-repo test framework may not be. Prefer `page.goto(process.env.UI_REVIEW_BASE_URL)` — the base URL is injected as `UI_REVIEW_BASE_URL` at run time. Capture screenshots with `await page.screenshot({ path: '.kody/ui-review/<name>.png' })` and reference those paths in your final review.",
       "allowedUses": [
         "test",

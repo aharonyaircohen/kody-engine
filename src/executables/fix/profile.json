@@ -30,7 +30,8 @@
       "Edit",
       "Bash",
       "Grep",
-      "Glob"
+      "Glob",
+      "mcp__playwright"
     ],
     "hooks": [],
     "skills": [],
