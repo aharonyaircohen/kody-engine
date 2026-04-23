@@ -99,6 +99,30 @@ describe("riskGate: secrets (hard gate)", () => {
     expect((ctx.data.riskGate as { decision: string }).decision).toBe("halt")
   })
 
+  it("halts on filenames containing 'secrets' anywhere in the basename", async () => {
+    const ctx = makeCtx({ changedFiles: ["config/api-secrets.json"] })
+    await riskGate(ctx, runProfile, null)
+    expect((ctx.data.riskGate as { decision: string }).decision).toBe("halt")
+  })
+
+  it("halts on filenames containing 'credentials' as a word", async () => {
+    const ctx = makeCtx({ changedFiles: ["src/db.credentials.yaml"] })
+    await riskGate(ctx, runProfile, null)
+    expect((ctx.data.riskGate as { decision: string }).decision).toBe("halt")
+  })
+
+  it("halts on filenames containing 'password'", async () => {
+    const ctx = makeCtx({ changedFiles: ["data/user-passwords.txt"] })
+    await riskGate(ctx, runProfile, null)
+    expect((ctx.data.riskGate as { decision: string }).decision).toBe("halt")
+  })
+
+  it("does NOT false-positive on 'secretary.md' (word boundary)", async () => {
+    const ctx = makeCtx({ changedFiles: ["docs/secretary.md"] })
+    await riskGate(ctx, runProfile, null)
+    expect((ctx.data.riskGate as { decision: string }).decision).toBe("allow")
+  })
+
   it("is NOT bypassed by kody-approve:all (hard gate)", async () => {
     const ctx = makeCtx({ changedFiles: [".env"], labels: ["kody-approve:all"] })
     await riskGate(ctx, runProfile, null)

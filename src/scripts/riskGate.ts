@@ -242,8 +242,13 @@ const SECRET_PATTERNS: RegExp[] = [
   /\.pem$/i,
   /\.key$/i,
   /(^|\/)(id_rsa|id_ed25519|id_ecdsa)(\.|$)/i,
-  /credentials?(\.|\/|$)/i,
-  /(^|\/)(private|secret)[^/]*\.json$/i,
+  // Match the keyword anywhere inside the filename, as a whole word (so e.g.
+  // `api-secrets.json`, `config/app.credentials.yaml`, `user-passwords.txt`
+  // all trip — while false friends like `secretary.md` do not).
+  /(^|\/)[^/]*\bsecrets?\b[^/]*$/i,
+  /(^|\/)[^/]*\bcredentials?\b[^/]*$/i,
+  /(^|\/)[^/]*\bpasswords?\b[^/]*$/i,
+  /(^|\/)[^/]*\bapi[-_]keys?\b[^/]*$/i,
   /(^|\/)\.netrc$/i,
   /(^|\/)\.npmrc$/i,
 ]
