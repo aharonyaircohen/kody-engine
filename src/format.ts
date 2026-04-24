@@ -10,6 +10,7 @@ export interface SdkMessageLike {
       | { type: string; [key: string]: unknown }
     >
   }
+  mcp_servers?: Array<{ name: string; status?: string }>
   duration_ms?: number
   duration_api_ms?: number
   total_cost_usd?: number
@@ -29,7 +30,7 @@ export function renderEvent(msg: SdkMessageLike, opts: RenderOptions = {}): stri
 
   switch (msg.type) {
     case "system":
-      return null
+      return formatSystemEvent(msg)
     case "assistant":
       return formatAssistant(msg, opts)
     case "user":
@@ -75,6 +76,14 @@ function formatUserToolResult(msg: SdkMessageLike, opts: RenderOptions): string 
     }
   }
   return lines.length > 0 ? lines.join("\n") : null
+}
+
+function formatSystemEvent(msg: SdkMessageLike): string | null {
+  if (msg.subtype !== "init") return null
+  const servers = msg.mcp_servers ?? []
+  if (servers.length === 0) return null
+  const lines = servers.map((s) => `  - ${s.name}: ${s.status ?? "unknown"}`)
+  return `[mcp servers]\n${lines.join("\n")}`
 }
 
 function formatResult(msg: SdkMessageLike): string {

@@ -11,6 +11,7 @@ import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
 import { classifyByLabel } from "./classifyByLabel.js"
 import { commitAndPush } from "./commitAndPush.js"
 import { composePrompt } from "./composePrompt.js"
+import { diagMcp } from "./diagMcp.js"
 import { discoverQaContext } from "./discoverQaContext.js"
 import { dispatch } from "./dispatch.js"
 import { ensurePr } from "./ensurePr.js"
@@ -74,6 +75,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   setLifecycleLabel,
   skipAgent,
   classifyByLabel,
+  diagMcp,
 }
 
 export const postflightScripts: Record<string, PostflightScript> = {
