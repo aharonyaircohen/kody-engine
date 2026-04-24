@@ -110,7 +110,7 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
   it("resolve profile skips verify + checkCoverageWithRetry (merge op)", () => {
     const profile = loadProfile(path.join(EXE_ROOT, "resolve/profile.json"))
     expect(profile.name).toBe("resolve")
-    expect(profile.inputs.map((i) => i.name)).toEqual(["pr"])
+    expect(profile.inputs.map((i) => i.name)).toEqual(["pr", "prefer"])
     const preScripts = profile.scripts.preflight.map((p) => p.script)
     expect(preScripts[0]).toBe("setLifecycleLabel")
     expect(preScripts).toContain("resolveFlow")

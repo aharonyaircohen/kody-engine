@@ -58,6 +58,7 @@ export const resolveFlow: PreflightScript = async (ctx) => {
 
   ctx.data.conflictedFiles = conflictedFiles
   ctx.data.conflictMarkersPreview = getConflictMarkersPreview(conflictedFiles, ctx.cwd)
+  ctx.data.preferBlock = buildPreferBlock(ctx.args.prefer as string | undefined, baseBranch)
   const runUrl = getRunUrl()
   const runSuffix = runUrl ? `, run ${runUrl}` : ""
   tryPostPr(
@@ -65,6 +66,27 @@ export const resolveFlow: PreflightScript = async (ctx) => {
     `⚙️ kody resolve started on \`${ctx.data.branch}\`${runSuffix} — ${conflictedFiles.length} conflicted file(s)`,
     ctx.cwd,
   )
+}
+
+function buildPreferBlock(prefer: string | undefined, baseBranch: string): string {
+  if (prefer !== "ours" && prefer !== "theirs") return ""
+  const keepSide = prefer === "ours" ? "HEAD (this PR branch)" : `origin/${baseBranch} (base branch)`
+  const keepMarkers =
+    prefer === "ours"
+      ? "content between `<<<<<<< HEAD` and `=======`"
+      : `content between \`=======\` and \`>>>>>>> origin/${baseBranch}\``
+  const dropSide = prefer === "ours" ? `origin/${baseBranch}` : "HEAD"
+  return [
+    "# Conflict resolution directive (AUTHORITATIVE — overrides defaults below)",
+    "",
+    `The user requested \`--prefer ${prefer}\`. For **every** conflict in **every** file:`,
+    "",
+    `- Keep the **${prefer}** side: ${keepSide} — ${keepMarkers}.`,
+    `- Discard the **${prefer === "ours" ? "theirs" : "ours"}** side (from ${dropSide}) entirely.`,
+    "- Remove all `<<<<<<<`, `=======`, `>>>>>>>` markers.",
+    "- Do NOT attempt to merge the two sides or apply judgement.",
+    "",
+  ].join("\n")
 }
 
 function getConflictedFiles(cwd?: string): string[] {

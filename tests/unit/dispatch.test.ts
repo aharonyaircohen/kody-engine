@@ -238,6 +238,30 @@ describe("dispatch: issue_comment on PR", () => {
     })
   })
 
+  it("'@kody resolve --prefer ours' parses prefer flag", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody resolve --prefer ours" },
+      issue: { number: 22, pull_request: {} },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "resolve",
+      cliArgs: { pr: 22, prefer: "ours" },
+      target: 22,
+    })
+  })
+
+  it("'@kody resolve theirs' binds bare enum value to prefer", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody resolve theirs" },
+      issue: { number: 23, pull_request: {} },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "resolve",
+      cliArgs: { pr: 23, prefer: "theirs" },
+      target: 23,
+    })
+  })
+
   it("'@kody review' on PR → review", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody review" },

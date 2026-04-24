@@ -9,6 +9,14 @@
       "type": "int",
       "required": true,
       "describe": "GitHub PR number whose branch has conflicts with the default branch."
+    },
+    {
+      "name": "prefer",
+      "flag": "--prefer",
+      "type": "enum",
+      "values": ["ours", "theirs"],
+      "required": false,
+      "describe": "Force one side for every conflict: 'ours' = PR branch (HEAD), 'theirs' = base branch. Omit to let the agent merge by judgement."
     }
   ],
   "claudeCode": {
