@@ -40,6 +40,17 @@
       "type": "int",
       "required": false,
       "describe": "Issue number to post success/failure follow-up on. Auto-populated by dispatch when triggered via @kody comment."
+    },
+    {
+      "name": "prefer",
+      "flag": "--prefer",
+      "type": "enum",
+      "values": [
+        "ours",
+        "theirs"
+      ],
+      "required": false,
+      "describe": "On release/vX.Y.Z branch collision (prepare mode): 'ours' force-pushes over the remote branch; 'theirs' reuses the existing branch and its open PR. Default (unset): refuse on non-ff."
     }
   ],
   "claudeCode": {

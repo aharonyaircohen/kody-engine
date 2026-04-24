@@ -28,6 +28,7 @@ function notifyIssue(issueNumber: number | undefined, body: string, cwd: string)
 
 export type BumpType = "patch" | "minor" | "major"
 export type ReleaseMode = "prepare" | "finalize"
+export type PreferSide = "ours" | "theirs"
 
 export function bumpVersion(current: string, bump: BumpType): string {
   const m = current.match(/^(\d+)\.(\d+)\.(\d+)(.*)$/)
@@ -153,6 +154,37 @@ function lastReleaseTag(cwd: string): string | null {
   }
 }
 
+/**
+ * True iff `origin/<branch>` exists. `git ls-remote` prints one line per
+ * matching ref; empty output ⇒ no branch. Network failures raise — caller
+ * treats an error as "unknown" and falls through to the normal push path,
+ * where the push itself will report a clearer message.
+ */
+export function remoteBranchExists(branch: string, cwd: string): boolean {
+  try {
+    const out = git(["ls-remote", "--heads", "origin", branch], cwd, 30_000)
+    return out.length > 0
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Return the URL of the single open PR whose head is `branch`, or null if
+ * none exists (or gh is unavailable). Used by `--prefer theirs` to link back
+ * to the previously-opened release PR instead of re-creating work.
+ */
+export function findOpenPrForBranch(branch: string, cwd: string): string | null {
+  try {
+    const out = gh(["pr", "list", "--head", branch, "--state", "open", "--json", "url", "--limit", "1"], { cwd })
+    const parsed = JSON.parse(out || "[]") as Array<{ url?: string }>
+    const first = parsed[0]
+    return first?.url ?? null
+  } catch {
+    return null
+  }
+}
+
 function runShell(cmd: string, cwd: string, timeoutMs: number): { exitCode: number; stdout: string; stderr: string } {
   const r = spawnSync(cmd, {
     cwd,
@@ -168,6 +200,7 @@ export const releaseFlow: PreflightScript = async (ctx) => {
   const mode = (ctx.args.mode as ReleaseMode | undefined) ?? "prepare"
   const bump = (ctx.args.bump as BumpType | undefined) ?? "patch"
   const dryRun = ctx.args["dry-run"] === true || ctx.args.dryRun === true
+  const prefer = (ctx.args.prefer as PreferSide | undefined) ?? undefined
   const issueNumber = typeof ctx.args.issue === "number" ? ctx.args.issue : undefined
   const cwd = ctx.cwd
   const releaseCfg = ctx.config.release ?? {}
@@ -178,7 +211,7 @@ export const releaseFlow: PreflightScript = async (ctx) => {
   ctx.skipAgent = true
 
   if (mode === "prepare") {
-    await runPrepare({ cwd, bump, dryRun, versionFiles, ctx })
+    await runPrepare({ cwd, bump, dryRun, prefer, versionFiles, ctx })
   } else if (mode === "finalize") {
     await runFinalize({ cwd, dryRun, timeoutMs, releaseCfg, ctx })
   } else {
@@ -224,12 +257,13 @@ interface PrepareArgs {
   cwd: string
   bump: BumpType
   dryRun: boolean
+  prefer: PreferSide | undefined
   versionFiles: string[]
   ctx: Parameters<PreflightScript>[0]
 }
 
 async function runPrepare(args: PrepareArgs): Promise<void> {
-  const { cwd, bump, dryRun, versionFiles, ctx } = args
+  const { cwd, bump, dryRun, prefer, versionFiles, ctx } = args
 
   const pkgPath = path.join(cwd, "package.json")
   if (!fs.existsSync(pkgPath)) {
@@ -251,9 +285,35 @@ async function runPrepare(args: PrepareArgs): Promise<void> {
 
   if (dryRun) {
     ctx.output.exitCode = 0
-    ctx.output.reason = `dry-run — would bump to ${newVersion}`
+    ctx.output.reason = `dry-run — would bump to ${newVersion}${prefer ? ` (--prefer ${prefer})` : ""}`
     process.stdout.write(`RELEASE_PLAN=bump=${newVersion} tag=${tag}\n`)
     return
+  }
+
+  const releaseBranch = `release/${tag}`
+
+  // Branch-collision gate. Check BEFORE doing work so `--prefer theirs` can
+  // short-circuit to the existing PR without any local bump/commit.
+  const collides = remoteBranchExists(releaseBranch, cwd)
+  if (collides) {
+    if (prefer === "theirs") {
+      const existingPr = findOpenPrForBranch(releaseBranch, cwd)
+      if (existingPr) {
+        process.stdout.write(`  reusing existing PR (--prefer theirs): ${existingPr}\n`)
+        ctx.output.prUrl = existingPr
+        ctx.output.exitCode = 0
+        return
+      }
+      ctx.output.exitCode = 4
+      ctx.output.reason = `release prepare --prefer theirs: ${releaseBranch} exists on remote but has no open PR — nothing to reuse`
+      return
+    }
+    if (prefer !== "ours") {
+      ctx.output.exitCode = 4
+      ctx.output.reason = `release prepare: branch ${releaseBranch} already exists on remote. Use --prefer ours to force-push, or --prefer theirs to reuse the existing PR.`
+      return
+    }
+    process.stdout.write(`  branch ${releaseBranch} exists on remote — will force-push (--prefer ours)\n`)
   }
 
   // Bump version files.
@@ -273,13 +333,18 @@ async function runPrepare(args: PrepareArgs): Promise<void> {
   prependChangelog(cwd, entry)
   process.stdout.write(`  wrote    CHANGELOG.md\n`)
 
-  // Commit on a release branch.
-  const releaseBranch = `release/${tag}`
+  // Commit on a release branch. When the remote branch already exists and
+  // --prefer ours was given, push with --force-with-lease — safer than
+  // --force (fails if someone else landed a commit we don't know about).
   try {
     git(["checkout", "-b", releaseBranch], cwd)
     for (const f of [...touched, "CHANGELOG.md"]) git(["add", "--", f], cwd)
     git(["commit", "--no-gpg-sign", "-m", `chore: release ${tag}`], cwd)
-    git(["push", "-u", "origin", releaseBranch], cwd, 120_000)
+    const pushArgs =
+      collides && prefer === "ours"
+        ? ["push", "-u", "--force-with-lease", "origin", releaseBranch]
+        : ["push", "-u", "origin", releaseBranch]
+    git(pushArgs, cwd, 120_000)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     ctx.output.exitCode = 4
@@ -287,24 +352,31 @@ async function runPrepare(args: PrepareArgs): Promise<void> {
     return
   }
 
-  // Open release PR. GitHub caps PR bodies at 65536 chars; the full entry
-  // always lives in CHANGELOG.md so truncation here is safe.
+  // Open release PR — or, if `--prefer ours` force-pushed over an existing
+  // branch that already has an open PR, link to that PR instead of failing
+  // with "a pull request for branch already exists."
   const base = ctx.config.git.defaultBranch
   const title = `chore: release ${tag}`
   const bodyMax = 60000
   const rawEntry = entry.length > bodyMax ? `${entry.slice(0, bodyMax)}\n\n_… truncated; see CHANGELOG.md_` : entry
   const body = `Automated release PR opened by kody.\n\n${rawEntry}\n\nMerge this and then run \`kody release --mode finalize\`.`
   let prUrl = ""
-  try {
-    prUrl = gh(["pr", "create", "--head", releaseBranch, "--base", base, "--title", title, "--body-file", "-"], {
-      input: body,
-      cwd,
-    }).trim()
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    ctx.output.exitCode = 4
-    ctx.output.reason = `release prepare: gh pr create failed: ${msg}`
-    return
+  const preexistingPr = collides && prefer === "ours" ? findOpenPrForBranch(releaseBranch, cwd) : null
+  if (preexistingPr) {
+    process.stdout.write(`  PR already open for ${releaseBranch}: ${preexistingPr}\n`)
+    prUrl = preexistingPr
+  } else {
+    try {
+      prUrl = gh(["pr", "create", "--head", releaseBranch, "--base", base, "--title", title, "--body-file", "-"], {
+        input: body,
+        cwd,
+      }).trim()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      ctx.output.exitCode = 4
+      ctx.output.reason = `release prepare: gh pr create failed: ${msg}`
+      return
+    }
   }
 
   ctx.output.prUrl = prUrl

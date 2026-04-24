@@ -425,6 +425,41 @@ describe("dispatch: release executable (utility with optional issue)", () => {
     })
   })
 
+  it("'@kody release --prefer ours' parses the prefer enum via flag form", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody release --prefer ours" },
+      issue: { number: 40 },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "release",
+      cliArgs: { issue: 40, prefer: "ours" },
+      target: 40,
+    })
+  })
+
+  it("'@kody release prefer theirs' parses prefer via bare-flag+value", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody release prefer theirs" },
+      issue: { number: 41 },
+    })
+    const r = autoDispatch()
+    expect(r?.executable).toBe("release")
+    expect(r?.cliArgs.prefer).toBe("theirs")
+    expect(r?.cliArgs.issue).toBe(41)
+  })
+
+  it("'@kody release prepare theirs' combines mode enum + prefer enum positionally", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody release prepare theirs" },
+      issue: { number: 42 },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "release",
+      cliArgs: { issue: 42, mode: "prepare", prefer: "theirs" },
+      target: 42,
+    })
+  })
+
   it("'@kody release finalize' on a PR routes to release (no issue/pr injected — profile takes neither from PR events)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody release finalize" },
