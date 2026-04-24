@@ -241,6 +241,15 @@ export async function runCi(argv: string[]): Promise<number> {
 
   // --issue is only required when autoDispatch can't infer from GHA env.
   const autoFallback = !args.issueNumber ? autoDispatch({ config: earlyConfig }) : null
+
+  // Event present but dispatch returned null (e.g. merged non-release PR,
+  // non-@kody comment) — exit 0 before paying for dep install. The consumer
+  // YAML subscribes broadly on purpose so routing stays in dispatch.ts.
+  if (!args.issueNumber && !autoFallback && process.env.GITHUB_EVENT_NAME) {
+    process.stdout.write(`→ kody: no action for event ${process.env.GITHUB_EVENT_NAME} — exiting cleanly\n`)
+    return 0
+  }
+
   if (!args.issueNumber && !autoFallback) {
     // Neither explicit flag nor detectable event — keep the original error.
   } else {

@@ -68,9 +68,37 @@ export function autoDispatch(opts?: {
     return { executable: "mission-scheduler", cliArgs: {}, target: 0 }
   }
 
+  // A merged `release/vX.Y.Z` PR auto-runs `release --mode finalize` so the
+  // tag is always created — the previous manual-only path left v0.25.1 un-
+  // tagged, and the next `prepare` rolled its commits into v0.25.2's changelog.
+  // The consumer YAML subscribes with `types: [closed]`, so the action is
+  // already narrowed; only `merged` + branch-name need checking here.
+  if (eventName === "pull_request") {
+    const merged = event.pull_request?.merged === true
+    const headRef = String(event.pull_request?.head?.ref ?? "")
+    const prNumber = Number(event.pull_request?.number ?? 0)
+    if (merged && /^release\/v\d+\.\d+\.\d+/.test(headRef) && prNumber > 0) {
+      return {
+        executable: "release",
+        cliArgs: { mode: "finalize", issue: prNumber },
+        target: prNumber,
+      }
+    }
+    return null
+  }
+
   if (eventName !== "issue_comment") return null
 
-  const body = String(event.comment?.body ?? "").toLowerCase()
+  // Gate on @kody mention + non-bot author here so the consumer workflow
+  // YAML stays trigger-only (no routing logic leaks). Returning null lets
+  // kody-cli exit 0 cleanly instead of running the agent on unrelated chatter.
+  const rawBody = String(event.comment?.body ?? "")
+  const authorLogin = String(event.comment?.user?.login ?? "")
+  const authorType = String(event.comment?.user?.type ?? "")
+  if (!rawBody.toLowerCase().includes("@kody")) return null
+  if (authorLogin === "kody-bot" || authorType === "Bot") return null
+
+  const body = rawBody.toLowerCase()
   const targetNum = Number(event.issue?.number ?? 0)
   const isPr = !!event.issue?.pull_request
   if (!targetNum) return null

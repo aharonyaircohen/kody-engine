@@ -1,13 +1,9 @@
 # Drop this file at .github/workflows/kody.yml in your repo.
 #
-# Two triggers, two modes:
-#   - issue_comment / workflow_dispatch with issue_number → `kody ci`
-#     (the @kody issue/PR automation flow)
-#   - workflow_dispatch with sessionId                    → `kody chat`
-#     (dashboard-driven Gemini chat session)
-#
-# All orchestration lives in the kody npm package; future capabilities ship
-# via `npm publish`, not by editing this file.
+# Triggers forward every relevant event to `kody`; the engine decides what
+# (if anything) to do. The job runs `npx kody` — no shell branching, no
+# routing logic in YAML. All orchestration lives in the kody npm package;
+# future capabilities ship via `npm publish`, not by editing this file.
 #
 # Required repo secrets: at least one model provider key (e.g. MINIMAX_API_KEY,
 # ANTHROPIC_API_KEY). kody reads any *_API_KEY secret automatically via
@@ -49,15 +45,12 @@ on:
         default: ""
   issue_comment:
     types: [created]
+  pull_request:
+    types: [closed]
 
 jobs:
   run:
-    if: >-
-      ${{ github.event_name == 'workflow_dispatch' ||
-          (github.event_name == 'issue_comment' &&
-            contains(github.event.comment.body, '@kody') &&
-            github.event.comment.user.login != 'kody-bot' &&
-            github.event.comment.user.type != 'Bot') }}
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.merged == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     concurrency:
@@ -71,6 +64,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.base.ref || github.ref }}
           token: ${{ secrets.KODY_TOKEN || github.token }}
 
       - uses: actions/setup-node@v4
@@ -92,9 +86,4 @@ jobs:
           INIT_MESSAGE:  ${{ inputs.message }}
           MODEL:         ${{ inputs.model }}
           DASHBOARD_URL: ${{ inputs.dashboardUrl }}
-        run: |
-          if [ -n "$SESSION_ID" ]; then
-            npx -y -p @kody-ade/kody-engine@latest kody chat
-          else
-            npx -y -p @kody-ade/kody-engine@latest kody ci
-          fi
+        run: npx -y -p @kody-ade/kody-engine@latest kody
