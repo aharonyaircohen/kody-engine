@@ -88,6 +88,13 @@ export function truncate(s: string, maxBytes: number): string {
   return `${s.slice(0, maxBytes)}… (+${s.length - maxBytes} chars)`
 }
 
+export function parsePrNumber(url: string): number | null {
+  const m = url.match(/\/pull\/(\d+)(?:[/?#]|$)/)
+  if (!m) return null
+  const n = parseInt(m[1]!, 10)
+  return Number.isFinite(n) ? n : null
+}
+
 export interface PrData {
   number: number
   title: string

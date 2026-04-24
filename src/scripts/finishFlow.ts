@@ -11,6 +11,7 @@
 
 import { execFileSync } from "node:child_process"
 import type { PostflightScript, ScriptArgs } from "../executables/types.js"
+import { parsePrNumber } from "../issue.js"
 import { KODY_NAMESPACE, setKodyLabel } from "../lifecycleLabels.js"
 import type { TaskState } from "../state.js"
 
@@ -35,17 +36,20 @@ export const finishFlow: PostflightScript = async (ctx, _profile, _agentResult, 
 
   // Terminal label is profile-declared (via `with.label` on this entry).
   // We don't know which labels exist — we just apply what the caller asked.
+  // Apply to the issue AND the PR (when one exists) so neither is left
+  // stamped with a mid-flow label like `kody:reviewing`.
   const label = typeof args?.label === "string" ? args.label : undefined
   if (label && label.startsWith(KODY_NAMESPACE)) {
-    setKodyLabel(
-      issueNumber,
-      {
-        label,
-        color: typeof args?.color === "string" ? args.color : undefined,
-        description: typeof args?.description === "string" ? args.description : undefined,
-      },
-      ctx.cwd,
-    )
+    const spec = {
+      label,
+      color: typeof args?.color === "string" ? args.color : undefined,
+      description: typeof args?.description === "string" ? args.description : undefined,
+    }
+    setKodyLabel(issueNumber, spec, ctx.cwd)
+    const prNumber = state?.core.prUrl ? parsePrNumber(state.core.prUrl) : null
+    if (prNumber && prNumber !== issueNumber) {
+      setKodyLabel(prNumber, spec, ctx.cwd)
+    }
   }
 
   const icon = STATUS_ICON[reason] ?? "ℹ️"

@@ -196,24 +196,31 @@ describe("finishFlow", () => {
     expect(args[4]).toContain("weird-thing")
   })
 
-  it("applies the profile-declared terminal label when `with.label` is set", async () => {
+  it("applies the profile-declared terminal label to the issue and the PR when `with.label` is set", async () => {
     const state: TaskState = {
       ...emptyState(),
-      core: { ...emptyState().core, prUrl: "https://github.com/o/r/pull/42" },
+      core: { ...emptyState().core, prUrl: "https://github.com/o/r/pull/99" },
       flow: { name: "f", step: "x", issueNumber: 42, startedAt: "t" },
     }
-    const c = ctx({ data: { taskState: state } })
+    const c = ctx({ args: { issue: 42 }, data: { taskState: state } })
     await finishFlow(c, profile(), null, {
       reason: "review-passed",
       label: "kody:done",
       color: "0e8a16",
       description: "done",
     })
-    expect(setKodyLabelMock).toHaveBeenCalledWith(
-      42,
-      { label: "kody:done", color: "0e8a16", description: "done" },
-      "/tmp",
-    )
+    const spec = { label: "kody:done", color: "0e8a16", description: "done" }
+    expect(setKodyLabelMock).toHaveBeenCalledWith(42, spec, "/tmp")
+    expect(setKodyLabelMock).toHaveBeenCalledWith(99, spec, "/tmp")
+    expect(setKodyLabelMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("labels only the issue when no PR URL is on state", async () => {
+    const state: TaskState = { ...emptyState(), flow: { name: "f", step: "x", issueNumber: 42, startedAt: "t" } }
+    const c = ctx({ args: { issue: 42 }, data: { taskState: state } })
+    await finishFlow(c, profile(), null, { reason: "aborted", label: "kody:failed" })
+    expect(setKodyLabelMock).toHaveBeenCalledTimes(1)
+    expect(setKodyLabelMock).toHaveBeenCalledWith(42, expect.objectContaining({ label: "kody:failed" }), "/tmp")
   })
 
   it("does NOT label when `with.label` is missing", async () => {

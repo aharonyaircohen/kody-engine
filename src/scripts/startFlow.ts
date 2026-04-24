@@ -20,6 +20,7 @@
 
 import { execFileSync } from "node:child_process"
 import type { PostflightScript, ScriptArgs } from "../executables/types.js"
+import { parsePrNumber } from "../issue.js"
 import type { TaskState } from "../state.js"
 
 const API_TIMEOUT_MS = 30_000
@@ -66,7 +67,7 @@ function postKodyComment(
   next: string,
   cwd: string,
 ): void {
-  const targetNumber = target === "pr" && state?.core.prUrl ? parsePr(state.core.prUrl) ?? issueNumber : issueNumber
+  const targetNumber = target === "pr" && state?.core.prUrl ? parsePrNumber(state.core.prUrl) ?? issueNumber : issueNumber
   const sub = target === "pr" && state?.core.prUrl ? "pr" : "issue"
   const body = `@kody ${next}`
   try {
@@ -82,9 +83,3 @@ function postKodyComment(
   }
 }
 
-function parsePr(url: string): number | null {
-  const m = url.match(/\/pull\/(\d+)(?:[/?#]|$)/)
-  if (!m) return null
-  const n = parseInt(m[1]!, 10)
-  return Number.isFinite(n) ? n : null
-}
