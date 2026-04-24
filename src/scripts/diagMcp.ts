@@ -34,11 +34,11 @@ export const diagMcp: PreflightScript = async (_ctx) => {
   process.stderr.write(`[kody diag] chromium present: ${hasChromium ? "yes" : "no"}\n`)
 
   try {
-    const v = execFileSync("npx", ["-y", "@playwright/mcp@latest", "--version"], {
-      stdio: "pipe",
-      timeout: 60_000,
-      encoding: "utf8",
-    }).trim()
+    const v = execFileSync(
+      "npx",
+      ["-y", "--package=@playwright/mcp@latest", "--", "playwright-mcp", "--version"],
+      { stdio: "pipe", timeout: 60_000, encoding: "utf8" },
+    ).trim()
     process.stderr.write(`[kody diag] @playwright/mcp version: ${v}\n`)
   } catch (e) {
     const err = e instanceof Error ? e.message : String(e)

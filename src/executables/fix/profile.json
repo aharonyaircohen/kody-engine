@@ -42,7 +42,7 @@
       {
         "name": "playwright",
         "command": "npx",
-        "args": ["-y", "@playwright/mcp@latest"]
+        "args": ["-y", "--package=@playwright/mcp@latest", "--", "playwright-mcp"]
       }
     ]
   },
