@@ -29,14 +29,14 @@ Two-layer design: **generic executor** + **declarative executable profile** + **
 
 - **Executor** ([src/executor.ts](src/executor.ts)) — loads a profile, validates CLI inputs/cliTools, runs preflight scripts → agent → postflight scripts. Knows nothing about `run`/`fix`/`review` — those concepts live only in profiles and scripts.
 - **Entry & dispatch** — [bin/kody.ts](bin/kody.ts) → [src/entry.ts](src/entry.ts). The only hardcoded verbs are `ci`, `help`, `version`. Everything else (`run`, `fix`, `fix-ci`, `resolve`, `review`, `ui-review`, `plan`, `orchestrator`, `release`, `watch-*`, `init`) is an auto-discovered executable under [src/executables/](src/executables/). [src/dispatch.ts](src/dispatch.ts) picks an executable from the GHA event when invoked as `kody ci`.
-- **Executable profile** — each `src/executables/<name>/profile.json` is pure JSON declaring CLI inputs, Claude Agent SDK config (tools, model, hooks, skills), `cliTools` the scripts expect, and the ordered preflight/postflight script list. The agent prompt lives alongside as `prompt.md`.
-- **Scripts** ([src/scripts/](src/scripts/)) — small deterministic functions registered in [src/scripts/index.ts](src/scripts/index.ts). Flow entries (`runFlow`, `fixFlow`, `fixCiFlow`, `resolveFlow`, `reviewFlow`, …), preflight (`loadConventions`, `composePrompt`), postflight (`verify`, `commitAndPush`, `ensurePr`, `postIssueComment`). The agent never commits — `commitAndPush` does.
+- **Executable profile** — each `src/executables/<name>/profile.json` is pure JSON declaring CLI inputs, Claude Agent SDK config (tools, model, hooks, skills), `cliTools` the scripts expect, and the ordered preflight/postflight script list. The agent prompt lives alongside as `prompt.md`. Executable-local TypeScript/shell scripts (`flow.ts`, `apply-prefer.sh`, etc.) are **encouraged** and colocated in the same directory.
+- **Scripts** ([src/scripts/](src/scripts/)) — deterministic functions registered in [src/scripts/index.ts](src/scripts/index.ts). **Only genuinely cross-cutting utilities live here** (`commitAndPush`, `composePrompt`, `verify`, `ensurePr`, `postIssueComment`). Per-executable logic lives with its executable, not here. The agent never commits — `commitAndPush` does.
 - **Agent invocation** ([src/agent.ts](src/agent.ts)) — calls `@anthropic-ai/claude-agent-sdk` with profile-declared tools/hooks/skills. [src/litellm.ts](src/litellm.ts) manages a proxy when a non-Anthropic model is configured.
 
 ### Invariants (do not break — see AGENTS.md)
 
 1. Executor stays role-agnostic. No `run`/`fix`/`review` strings or branching in [src/executor.ts](src/executor.ts).
-2. Profiles are pure JSON + markdown prompts. No TypeScript inside `src/executables/`.
+2. **Profiles** (`profile.json`) are pure JSON. **Executable-local scripts** (`.ts`, `.sh`) are encouraged inside `src/executables/<name>/` — anything specific to one executable belongs with it. `src/scripts/` is for cross-cutting utilities used by multiple executables. Prefer a small shell script colocated with the executable over adding a TS function to `src/scripts/`.
 3. Scripts compose via `runWhen` — it is the only conditional primitive available to profiles.
 4. Wrapper/verification/git logic belongs in scripts (postflight), not inline in executor or profile.
 5. Consumer workflow YAML ([templates/kody.yml](templates/kody.yml)) stays thin; capabilities ship via npm.
