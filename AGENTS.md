@@ -128,22 +128,26 @@ Writes `kody.config.json` (with package-manager-aware `quality.*` commands and o
 
 `kind: scheduled` with cron `0 8 * * MON`. `kody init` auto-generates `.github/workflows/kody-watch-stale-prs.yml` to drive it. Lists open PRs untouched for N days and posts a summary issue. No agent — all deterministic.
 
-### `manager` + `manager-tick` — zero-code coordinator for issue-scoped missions
+### `mission-scheduler` + `mission-tick` — zero-code coordinator for issue-scoped missions
 
-A two-executable pair that lets a consumer define a coordinator mission *as a GitHub issue* — no per-mission code, no PR to kody, no deploy. Used for release pipelines, test-suite orchestration, pr-fleet supervision, or any multi-step flow that spans GitHub events.
+A two-executable pair that lets a consumer define a stateful goal *as a GitHub issue* — no per-mission code, no PR to kody, no deploy. Used for release pipelines, test-suite orchestration, pr-fleet supervision, or any multi-step flow that spans GitHub events.
 
-**The model.** Open an issue in a consumer repo, apply the `kody:manager` label, write the mission as free prose in the description. On every cron wake the scheduler finds the issue, ticks it, and the tick may spawn other kody runs (`gh workflow run …`) or wait on in-flight child runs.
+**Terminology.** A **mission** is a stateful, bounded goal expressed as a labeled GitHub issue. A **watch** is a stateless repeating loop (same action every tick). A **manager** is just a mission whose job happens to be overseeing other missions — same primitive, different prose. All three run on the same scheduled-executable substrate.
 
-- **`manager`** — `kind: scheduled` (default cron `*/5 * * * *`, `role: "watch"`). No agent. Preflight is `dispatchManagerTicks`, which lists every open `kody:manager` issue and invokes `manager-tick` once per issue in-process.
-- **`manager-tick`** — `kind: oneshot`, one required input `--issue N`. Reads two things: the issue body (the mission, human-owned prose) and a dedicated state comment (JSON, bot-owned, minimized via GraphQL so it's collapsed in the UI). Agent decides the next step using only `gh` + `Read`; it never edits the working tree. At the end of its turn it emits a fenced `kody-manager-next-state` block with `{ cursor, data, done }`, which the postflight persists back to the state comment (with auto-bumped `rev`).
+**The model.** Open an issue, apply the `kody:mission` label, write the goal as free prose in the description. On every cron wake the scheduler finds the issue, ticks it, and the tick may spawn other kody runs (`gh workflow run …`) or wait on in-flight child runs. `done: true` in state OR closing the issue stops future work.
 
-**The state-comment convention.** `src/scripts/issueStateComment.ts` defines the primitive: one comment per marker per issue, body starts with `<!-- <marker> -->` then a `json` fenced block with `{ version: 1, rev, cursor, data, done }`. `loadIssueStateComment` / `writeIssueStateComment` are registered generic pre/postflight scripts parameterized by `with.marker` — any future stateful executable (not just managers) can reuse them.
+- **`mission-scheduler`** — `kind: scheduled` (default cron `*/5 * * * *`, `role: "watch"`). No agent. Preflight is `dispatchMissionTicks`, which lists every open `kody:mission` issue and invokes `mission-tick` once per issue in-process.
+- **`mission-tick`** — `kind: oneshot`, one required input `--issue N`. Reads two things: the issue body (the mission, human-owned prose) and a dedicated state comment (JSON, bot-owned, minimized via GraphQL so it's collapsed in the UI). Agent decides the next step using only `gh` + `Read`; it never edits the working tree. At the end of its turn it emits a fenced `kody-mission-next-state` block with `{ cursor, data, done }`, which the postflight persists back to the state comment (with auto-bumped `rev`).
+
+**The state-comment convention.** `src/scripts/issueStateComment.ts` defines the primitive: one comment per marker per issue, body starts with `<!-- <marker> -->` then a `json` fenced block with `{ version: 1, rev, cursor, data, done }`. `loadIssueStateComment` / `writeIssueStateComment` are registered generic pre/postflight scripts parameterized by `with.marker` — any future stateful executable (not just missions) can reuse them.
 
 **Intent vs. state separation.** The issue description is 100% human-owned. Humans edit prose to steer the mission (extend a deadline, widen scope, abort). The bot never touches the description. State lives exclusively in the minimized state comment. Two fields, two owners, no collisions.
 
 **Spawning children.** A tick spawns other kody runs via `gh workflow run kody.yml -f issue_number=<N>`. Works without a PAT because `workflow_dispatch` isn't subject to GitHub's anti-recursion safety on the default `GITHUB_TOKEN` — that's why we prefer it over posting `@kody` comments (which would silently not trigger a child run).
 
-**Scale.** Fan-out is sequential in-process (`dispatchManagerTicks` calls `runExecutable("manager-tick", ...)` per issue). Fine for small N; if a consumer ever runs many managers simultaneously, swap to `gh workflow run` dispatch for parallelism. Scheduler itself always exits 0 — individual tick failures surface on the owning issue, not as a cron failure.
+**Trigger routing.** `src/dispatch.ts` routes `schedule` events and empty `workflow_dispatch` to `mission-scheduler`, so consumers add exactly one line (`schedule: - cron:`) to their existing single `kody.yml`. No per-capability workflow files.
+
+**Scale.** Fan-out is sequential in-process (`dispatchMissionTicks` calls `runExecutable("mission-tick", ...)` per issue). Fine for small N; if a consumer ever runs many missions simultaneously, swap to `gh workflow run` dispatch for parallelism. Scheduler itself always exits 0 — individual tick failures surface on the owning issue, not as a cron failure.
 
 ### `plan-verify` — live-test harness for plugin wiring
 

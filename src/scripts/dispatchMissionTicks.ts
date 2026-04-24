@@ -3,12 +3,12 @@
  * executable once per matching issue (in-process, sequentially). Each child
  * run is isolated — failures on one issue don't stop later issues.
  *
- * This is the fan-out primitive for "manager-style" scheduled executables:
- * one cron wake → N classifier ticks, one per live manager issue.
+ * This is the fan-out primitive for mission-style scheduled executables:
+ * one cron wake → N classifier ticks, one per live mission issue.
  *
  * Script args (via `with:`):
- *   label             required — e.g. "kody:manager"
- *   targetExecutable  required — e.g. "manager-tick"
+ *   label             required — e.g. "kody:mission"
+ *   targetExecutable  required — e.g. "mission-tick"
  *   issueArg          optional — CLI input name the target expects (default "issue")
  *
  * Sets ctx.skipAgent so the outer scheduler itself never invokes the SDK.
@@ -23,28 +23,28 @@ interface IssueRef {
   title: string
 }
 
-export const dispatchManagerTicks: PreflightScript = async (ctx, _profile, args) => {
+export const dispatchMissionTicks: PreflightScript = async (ctx, _profile, args) => {
   ctx.skipAgent = true
 
   const label = String(args?.label ?? "")
   const targetExecutable = String(args?.targetExecutable ?? "")
-  if (!label) throw new Error("dispatchManagerTicks: `with.label` is required")
-  if (!targetExecutable) throw new Error("dispatchManagerTicks: `with.targetExecutable` is required")
+  if (!label) throw new Error("dispatchMissionTicks: `with.label` is required")
+  if (!targetExecutable) throw new Error("dispatchMissionTicks: `with.targetExecutable` is required")
   const issueArg = String(args?.issueArg ?? "issue")
 
   const issues = listIssuesByLabel(label, ctx.cwd)
-  ctx.data.managerIssueCount = issues.length
+  ctx.data.missionIssueCount = issues.length
 
   if (issues.length === 0) {
-    process.stdout.write(`[manager] no open issues with label "${label}"\n`)
+    process.stdout.write(`[missions] no open issues with label "${label}"\n`)
     return
   }
 
-  process.stdout.write(`[manager] ticking ${issues.length} issue(s) via ${targetExecutable}\n`)
+  process.stdout.write(`[missions] ticking ${issues.length} issue(s) via ${targetExecutable}\n`)
 
   const results: Array<{ issue: number; exitCode: number; reason?: string }> = []
   for (const issue of issues) {
-    process.stdout.write(`[manager] → tick #${issue.number}: ${issue.title}\n`)
+    process.stdout.write(`[missions] → tick #${issue.number}: ${issue.title}\n`)
     try {
       const out = await runExecutable(targetExecutable, {
         cliArgs: { [issueArg]: issue.number },
@@ -55,19 +55,19 @@ export const dispatchManagerTicks: PreflightScript = async (ctx, _profile, args)
       })
       results.push({ issue: issue.number, exitCode: out.exitCode, reason: out.reason })
       if (out.exitCode !== 0) {
-        process.stderr.write(`[manager] tick #${issue.number} failed (exit ${out.exitCode}): ${out.reason ?? ""}\n`)
+        process.stderr.write(`[missions] tick #${issue.number} failed (exit ${out.exitCode}): ${out.reason ?? ""}\n`)
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`[manager] tick #${issue.number} crashed: ${msg}\n`)
+      process.stderr.write(`[missions] tick #${issue.number} crashed: ${msg}\n`)
       results.push({ issue: issue.number, exitCode: 99, reason: msg })
     }
   }
 
-  ctx.data.managerTickResults = results
+  ctx.data.missionTickResults = results
   // Scheduler itself always exits 0 — individual tick failures are reported
   // per-issue in stderr but don't fail the cron job. Humans will see errors
-  // on the manager issues themselves via the state comment.
+  // on the mission issues themselves via the state comment.
   ctx.output.exitCode = 0
 }
 

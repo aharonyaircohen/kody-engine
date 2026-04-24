@@ -50,11 +50,11 @@ describe("dispatch: workflow_dispatch event", () => {
     })
   })
 
-  it("routes workflow_dispatch with no issue_number to the manager (on-demand wake)", () => {
+  it("routes workflow_dispatch with no issue_number to the mission-scheduler (on-demand wake)", () => {
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
     process.env.GITHUB_EVENT_PATH = writeEvent({ inputs: {} })
     expect(autoDispatch()).toEqual({
-      executable: "manager",
+      executable: "mission-scheduler",
       cliArgs: {},
       target: 0,
     })
@@ -72,11 +72,11 @@ describe("dispatch: schedule event", () => {
     process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
   })
 
-  it("routes schedule/cron wakes to the manager executable", () => {
+  it("routes schedule/cron wakes to the mission-scheduler executable", () => {
     process.env.GITHUB_EVENT_NAME = "schedule"
     process.env.GITHUB_EVENT_PATH = writeEvent({ schedule: "*/5 * * * *" })
     expect(autoDispatch()).toEqual({
-      executable: "manager",
+      executable: "mission-scheduler",
       cliArgs: {},
       target: 0,
     })

@@ -15,7 +15,7 @@ import { composePrompt } from "./composePrompt.js"
 import { diagMcp } from "./diagMcp.js"
 import { discoverQaContext } from "./discoverQaContext.js"
 import { dispatch } from "./dispatch.js"
-import { dispatchManagerTicks } from "./dispatchManagerTicks.js"
+import { dispatchMissionTicks } from "./dispatchMissionTicks.js"
 import { ensurePr } from "./ensurePr.js"
 import { finishFlow } from "./finishFlow.js"
 import { fixCiFlow } from "./fixCiFlow.js"
@@ -83,7 +83,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   skipAgent,
   classifyByLabel,
   diagMcp,
-  dispatchManagerTicks,
+  dispatchMissionTicks,
 }
 
 export const postflightScripts: Record<string, PostflightScript> = {

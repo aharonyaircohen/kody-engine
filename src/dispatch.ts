@@ -53,19 +53,19 @@ export function autoDispatch(opts?: {
     if (!Number.isNaN(n) && n > 0) {
       return { executable: "run", cliArgs: { issue: n }, target: n }
     }
-    // No issue_number input → treat as an on-demand manager wake (same
+    // No issue_number input → treat as an on-demand mission wake (same
     // effect as a scheduled cron firing). Chat mode is already routed by
     // the consumer workflow before kody ci is invoked, so reaching this
-    // branch implies agent/manager mode.
-    return { executable: "manager", cliArgs: {}, target: 0 }
+    // branch implies agent/mission mode.
+    return { executable: "mission-scheduler", cliArgs: {}, target: 0 }
   }
 
-  // Cron-driven wake: route to the `manager` executable (the generic
-  // coordinator that fans out to per-issue manager-tick calls). Keeps the
-  // consumer workflow to a single file — users add `on: schedule: cron:`
-  // to their one kody.yml and kody ci takes it from there.
+  // Cron-driven wake: route to the mission-scheduler executable (the
+  // generic coordinator that fans out to per-issue mission-tick calls).
+  // Keeps the consumer workflow to a single file — users add
+  // `on: schedule: cron:` to their one kody.yml and kody ci takes it from there.
   if (eventName === "schedule") {
-    return { executable: "manager", cliArgs: {}, target: 0 }
+    return { executable: "mission-scheduler", cliArgs: {}, target: 0 }
   }
 
   if (eventName !== "issue_comment") return null
