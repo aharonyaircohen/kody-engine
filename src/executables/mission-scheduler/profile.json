@@ -1,7 +1,7 @@
 {
-  "name": "manager",
+  "name": "mission-scheduler",
   "role": "watch",
-  "describe": "Scheduled: for every open issue labeled kody:manager, invoke manager-tick once. No agent on the scheduler itself.",
+  "describe": "Scheduled: for every open issue labeled kody:mission, invoke mission-tick once. No agent on the scheduler itself.",
   "kind": "scheduled",
   "schedule": "*/5 * * * *",
   "inputs": [],
@@ -36,12 +36,12 @@
   "scripts": {
     "preflight": [
       {
-        "script": "dispatchManagerTicks",
+        "script": "dispatchMissionTicks",
         "with": {
-          "label": "kody:manager",
+          "label": "kody:mission",
           "color": "1d76db",
-          "description": "kody: issue is a manager mission — scheduler will tick it on every cron wake",
-          "targetExecutable": "manager-tick",
+          "description": "kody: issue is a mission — scheduler ticks it every cron wake",
+          "targetExecutable": "mission-tick",
           "issueArg": "issue"
         }
       }

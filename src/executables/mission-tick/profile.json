@@ -1,7 +1,7 @@
 {
-  "name": "manager-tick",
+  "name": "mission-tick",
   "role": "primitive",
-  "describe": "One classifier tick for one manager issue: read intent + state, decide and execute via gh, emit next state.",
+  "describe": "One classifier tick for one mission issue: read intent + state, decide and execute via gh, emit next state.",
   "kind": "oneshot",
   "inputs": [
     {
@@ -9,7 +9,7 @@
       "flag": "--issue",
       "type": "int",
       "required": true,
-      "describe": "GitHub issue number that owns this manager mission."
+      "describe": "GitHub issue number that owns this mission."
     }
   ],
   "claudeCode": {
@@ -45,7 +45,7 @@
       {
         "script": "loadIssueStateComment",
         "with": {
-          "marker": "kody-manager-state",
+          "marker": "kody-mission-state",
           "issueArg": "issue"
         }
       },
@@ -57,13 +57,13 @@
       {
         "script": "parseIssueStateFromAgentResult",
         "with": {
-          "fenceLabel": "kody-manager-next-state"
+          "fenceLabel": "kody-mission-next-state"
         }
       },
       {
         "script": "writeIssueStateComment",
         "with": {
-          "marker": "kody-manager-state",
+          "marker": "kody-mission-state",
           "issueArg": "issue"
         }
       }
