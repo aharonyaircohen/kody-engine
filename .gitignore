@@ -38,3 +38,7 @@ coverage/
 # kody (single-session pipeline) runtime artifacts
 .kody/
 .kody-lean/
+
+# Claude Code harness runtime artifacts (per-machine)
+.claude/scheduled_tasks.lock
+.claude/scheduled_tasks.log
