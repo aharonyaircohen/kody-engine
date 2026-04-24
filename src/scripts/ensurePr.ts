@@ -7,9 +7,14 @@ import type { PostflightScript } from "../executables/types.js"
 import { ensurePr as doEnsurePr } from "../pr.js"
 
 export const ensurePr: PostflightScript = async (ctx) => {
-  if (ctx.skipAgent && ctx.output.exitCode !== undefined && ctx.output.exitCode !== 0) {
-    // Preflight already decided to bail out without a PR (e.g. refused-to-start on WIP).
-    // No commit happened → nothing to PR.
+  if (ctx.skipAgent && ctx.output.exitCode !== undefined) {
+    // Preflight was authoritative — either it refused to start (exit != 0)
+    // or it did the work itself and short-circuited (exit === 0, e.g. a
+    // shell entry that emitted KODY_SKIP_AGENT=true, or resolveFlow's
+    // clean-merge path). In both cases ensurePr has nothing useful to do.
+    // Previously this check only bailed on failure, so short-circuit
+    // success paths tripped the "agent did not emit DONE" branch and
+    // tried to draftify an existing PR.
     return
   }
 

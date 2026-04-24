@@ -364,9 +364,13 @@ function runShellEntry(entry: ScriptEntry, ctx: Context, profile: Profile): void
   if (stdout) process.stdout.write(stdout)
   if (stderr) process.stderr.write(stderr)
 
-  // Stdout marker: opt-in signal that the agent should be bypassed.
+  // Stdout marker: opt-in signal that the agent should be bypassed AND
+  // the preflight already did all the work. Set exitCode=0 too so
+  // postflight scripts (ensurePr, postIssueComment) can bail uniformly
+  // on "short-circuited successfully."
   if (/^KODY_SKIP_AGENT=true\s*$/m.test(stdout)) {
     ctx.skipAgent = true
+    if (ctx.output.exitCode === undefined) ctx.output.exitCode = 0
   }
 
   const exit = r.status ?? -1
