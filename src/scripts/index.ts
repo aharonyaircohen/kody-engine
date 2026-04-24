@@ -15,6 +15,7 @@ import { composePrompt } from "./composePrompt.js"
 import { diagMcp } from "./diagMcp.js"
 import { discoverQaContext } from "./discoverQaContext.js"
 import { dispatch } from "./dispatch.js"
+import { dispatchManagerTicks } from "./dispatchManagerTicks.js"
 import { ensurePr } from "./ensurePr.js"
 import { finishFlow } from "./finishFlow.js"
 import { fixCiFlow } from "./fixCiFlow.js"
@@ -23,11 +24,13 @@ import { initFlow } from "./initFlow.js"
 import { loadConventions } from "./loadConventions.js"
 import { loadCoverageRules } from "./loadCoverageRules.js"
 import { loadIssueContext } from "./loadIssueContext.js"
+import { loadIssueStateComment } from "./loadIssueStateComment.js"
 import { loadPriorArt } from "./loadPriorArt.js"
 import { loadQaGuide } from "./loadQaGuide.js"
 import { loadTaskState } from "./loadTaskState.js"
 import { mirrorStateToPr } from "./mirrorStateToPr.js"
 import { parseAgentResult } from "./parseAgentResult.js"
+import { parseIssueStateFromAgentResult } from "./parseIssueStateFromAgentResult.js"
 import { persistArtifacts } from "./persistArtifacts.js"
 import { persistFlowState } from "./persistFlowState.js"
 import { postClassification } from "./postClassification.js"
@@ -51,6 +54,7 @@ import { startFlow } from "./startFlow.js"
 import { syncFlow } from "./syncFlow.js"
 import { verify } from "./verify.js"
 import { watchStalePrsFlow } from "./watchStalePrsFlow.js"
+import { writeIssueStateComment } from "./writeIssueStateComment.js"
 import { writeRunSummary } from "./writeRunSummary.js"
 
 export const preflightScripts: Record<string, PreflightScript> = {
@@ -65,6 +69,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   watchStalePrsFlow,
   loadTaskState,
   loadIssueContext,
+  loadIssueStateComment,
   loadConventions,
   loadCoverageRules,
   loadPriorArt,
@@ -78,10 +83,13 @@ export const preflightScripts: Record<string, PreflightScript> = {
   skipAgent,
   classifyByLabel,
   diagMcp,
+  dispatchManagerTicks,
 }
 
 export const postflightScripts: Record<string, PostflightScript> = {
   parseAgentResult,
+  parseIssueStateFromAgentResult,
+  writeIssueStateComment,
   requireFeedbackActions,
   requirePlanDeviations,
   verify,
