@@ -50,10 +50,14 @@ describe("dispatch: workflow_dispatch event", () => {
     })
   })
 
-  it("returns null when issue_number is missing", () => {
+  it("routes workflow_dispatch with no issue_number to the manager (on-demand wake)", () => {
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
     process.env.GITHUB_EVENT_PATH = writeEvent({ inputs: {} })
-    expect(autoDispatch()).toBeNull()
+    expect(autoDispatch()).toEqual({
+      executable: "manager",
+      cliArgs: {},
+      target: 0,
+    })
   })
 })
 
