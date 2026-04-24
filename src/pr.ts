@@ -102,12 +102,13 @@ function firstLine(s: string): string {
   return head.length > 200 ? `${head.slice(0, 197)}…` : head
 }
 
-export function findExistingPr(branch: string, cwd?: string): { number: number; url: string } | null {
+export function findExistingPr(branch: string, cwd?: string): { number: number; url: string; body: string } | null {
   try {
-    const output = gh(["pr", "view", branch, "--json", "number,url"], { cwd })
+    const output = gh(["pr", "view", branch, "--json", "number,url,body"], { cwd })
     const parsed = JSON.parse(output)
     if (typeof parsed?.number === "number" && typeof parsed?.url === "string") {
-      return { number: parsed.number, url: parsed.url }
+      const body = typeof parsed.body === "string" ? parsed.body : ""
+      return { number: parsed.number, url: parsed.url, body }
     }
     return null
   } catch {
@@ -115,11 +116,49 @@ export function findExistingPr(branch: string, cwd?: string): { number: number; 
   }
 }
 
-export function ensurePr(opts: EnsurePrOptions): PrResult {
-  const title = buildPrTitle(opts.issueNumber, opts.issueTitle, opts.draft)
-  const body = buildPrBody(opts)
+/**
+ * Recover the "source issue" a PR was opened against. We prefer the
+ * `Closes #N` line from the PR's existing body (set by the first ensurePr
+ * call from the `run` flow), falling back to the leading digits of the
+ * branch name (kody branch convention: `<issueNumber>-<slug>`).
+ *
+ * Without this, review-fix / fix / resolve cycles overwrite the PR body
+ * and emit `Closes #<PR own number>` — a self-reference that GitHub does
+ * not honor for auto-close.
+ */
+export function recoverSourceIssueNumber(
+  existingBody: string,
+  branch: string,
+  prNumber: number,
+): number | null {
+  const bodyMatch = existingBody.match(/\bCloses #(\d+)\b/i)
+  if (bodyMatch) {
+    const n = parseInt(bodyMatch[1], 10)
+    if (n > 0 && n !== prNumber) return n
+  }
+  const branchMatch = branch.match(/^(\d+)-/)
+  if (branchMatch) {
+    const n = parseInt(branchMatch[1], 10)
+    if (n > 0 && n !== prNumber) return n
+  }
+  return null
+}
 
+export function ensurePr(opts: EnsurePrOptions): PrResult {
   const existing = findExistingPr(opts.branch, opts.cwd)
+
+  // When UPDATING an existing PR, the caller may pass `issueNumber = prNumber`
+  // (fix/resolve/review-fix flows overwrite commentTargetNumber with the PR
+  // number). Recover the original source issue from the PR's existing body or
+  // branch name, so `Closes #N` keeps pointing at the real issue, not itself.
+  const effectiveIssueNumber = existing
+    ? (recoverSourceIssueNumber(existing.body, opts.branch, existing.number) ?? opts.issueNumber)
+    : opts.issueNumber
+  const effectiveOpts: EnsurePrOptions = { ...opts, issueNumber: effectiveIssueNumber }
+
+  const title = buildPrTitle(effectiveOpts.issueNumber, effectiveOpts.issueTitle, effectiveOpts.draft)
+  const body = buildPrBody(effectiveOpts)
+
   if (existing) {
     // Update body only — never rewrite the title on an existing PR. Past
     // regenerations stacked "[WIP] #N:" prefixes on each fix/fix-ci/resolve run

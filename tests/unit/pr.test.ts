@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildPrBody, buildPrTitle, stripTitlePrefixes } from "../../src/pr.js"
+import { buildPrBody, buildPrTitle, recoverSourceIssueNumber, stripTitlePrefixes } from "../../src/pr.js"
 
 describe("pr: buildPrTitle", () => {
   it("formats issue number and title", () => {
@@ -117,5 +117,35 @@ describe("pr: buildPrBody", () => {
     const matches = body.match(/`src\/file\d+\.ts`/g) ?? []
     expect(matches.length).toBe(50)
     expect(body).toMatch(/and 10 more/)
+  })
+})
+
+describe("pr: recoverSourceIssueNumber", () => {
+  it("extracts the real issue number from existing body's Closes line", () => {
+    // PR #1326 was opened against issue #1082. A fix cycle is about to rebuild
+    // the body — without this, it would overwrite `Closes #1082` with
+    // `Closes #1326` (the PR's own number), breaking GitHub auto-close.
+    const body = "## Summary\n\n...\n\nCloses #1082\n"
+    expect(recoverSourceIssueNumber(body, "1082-admin-should-see", 1326)).toBe(1082)
+  })
+
+  it("ignores a Closes line that points to the PR's own number (self-reference)", () => {
+    // An earlier buggy fix-cycle run already corrupted the body once. We must
+    // not re-propagate the corruption; fall through to the branch name.
+    const body = "## Summary\n\n...\n\nCloses #1326\n"
+    expect(recoverSourceIssueNumber(body, "1082-admin-should-see", 1326)).toBe(1082)
+  })
+
+  it("falls back to branch name leading digits when body has no Closes line", () => {
+    expect(recoverSourceIssueNumber("## Summary\n\n(no marker)\n", "1082-admin", 1326)).toBe(1082)
+  })
+
+  it("returns null when body and branch both fail to yield a valid source issue", () => {
+    expect(recoverSourceIssueNumber("## Summary\n\n(no marker)\n", "feature-x", 1326)).toBeNull()
+  })
+
+  it("returns null when the branch-parsed number equals the PR's own number", () => {
+    // Avoids the same self-reference trap as the body-parse case.
+    expect(recoverSourceIssueNumber("", "1326-slug", 1326)).toBeNull()
   })
 })
