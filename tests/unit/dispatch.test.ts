@@ -57,6 +57,28 @@ describe("dispatch: workflow_dispatch event", () => {
   })
 })
 
+describe("dispatch: schedule event", () => {
+  const prev: Record<string, string | undefined> = {}
+  beforeEach(() => {
+    prev.EVENT_NAME = process.env.GITHUB_EVENT_NAME
+    prev.EVENT_PATH = process.env.GITHUB_EVENT_PATH
+  })
+  afterEach(() => {
+    process.env.GITHUB_EVENT_NAME = prev.EVENT_NAME
+    process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
+  })
+
+  it("routes schedule/cron wakes to the manager executable", () => {
+    process.env.GITHUB_EVENT_NAME = "schedule"
+    process.env.GITHUB_EVENT_PATH = writeEvent({ schedule: "*/5 * * * *" })
+    expect(autoDispatch()).toEqual({
+      executable: "manager",
+      cliArgs: {},
+      target: 0,
+    })
+  })
+})
+
 describe("dispatch: issue_comment on issue", () => {
   const prev: Record<string, string | undefined> = {}
   beforeEach(() => {

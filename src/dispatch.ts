@@ -56,6 +56,14 @@ export function autoDispatch(opts?: {
     return null
   }
 
+  // Cron-driven wake: route to the `manager` executable (the generic
+  // coordinator that fans out to per-issue manager-tick calls). Keeps the
+  // consumer workflow to a single file — users add `on: schedule: cron:`
+  // to their one kody.yml and kody ci takes it from there.
+  if (eventName === "schedule") {
+    return { executable: "manager", cliArgs: {}, target: 0 }
+  }
+
   if (eventName !== "issue_comment") return null
 
   const body = String(event.comment?.body ?? "").toLowerCase()
