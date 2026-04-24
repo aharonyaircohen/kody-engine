@@ -15,7 +15,16 @@ import { execFileSync, spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type { PreflightScript } from "../executables/types.js"
-import { gh, truncate } from "../issue.js"
+import { gh, postIssueComment, truncate } from "../issue.js"
+
+function notifyIssue(issueNumber: number | undefined, body: string, cwd: string): void {
+  if (!issueNumber || issueNumber <= 0) return
+  try {
+    postIssueComment(issueNumber, body, cwd)
+  } catch {
+    /* best effort — issue-comment failure should not sink the release */
+  }
+}
 
 export type BumpType = "patch" | "minor" | "major"
 export type ReleaseMode = "prepare" | "finalize"
@@ -159,6 +168,7 @@ export const releaseFlow: PreflightScript = async (ctx) => {
   const mode = (ctx.args.mode as ReleaseMode | undefined) ?? "prepare"
   const bump = (ctx.args.bump as BumpType | undefined) ?? "patch"
   const dryRun = ctx.args["dry-run"] === true || ctx.args.dryRun === true
+  const issueNumber = typeof ctx.args.issue === "number" ? ctx.args.issue : undefined
   const cwd = ctx.cwd
   const releaseCfg = ctx.config.release ?? {}
   const versionFiles =
@@ -169,15 +179,45 @@ export const releaseFlow: PreflightScript = async (ctx) => {
 
   if (mode === "prepare") {
     await runPrepare({ cwd, bump, dryRun, versionFiles, ctx })
-    return
-  }
-  if (mode === "finalize") {
+  } else if (mode === "finalize") {
     await runFinalize({ cwd, dryRun, timeoutMs, releaseCfg, ctx })
-    return
+  } else {
+    ctx.output.exitCode = 64
+    ctx.output.reason = `release: unknown mode '${mode}'`
   }
 
-  ctx.output.exitCode = 64
-  ctx.output.reason = `release: unknown mode '${mode}'`
+  notifyIssue(issueNumber, buildIssueNotice(mode, dryRun, ctx), cwd)
+}
+
+/**
+ * Compose the follow-up comment body from the flow's terminal state. One
+ * call site ensures every exit path (success, dry-run, terminal failure,
+ * unknown-mode) reports back to the triggering issue uniformly.
+ */
+function buildIssueNotice(
+  mode: ReleaseMode | string,
+  dryRun: boolean,
+  ctx: Parameters<PreflightScript>[0],
+): string {
+  const exit = ctx.output.exitCode ?? 0
+  const url = ctx.output.prUrl
+  const reason = ctx.output.reason
+  const label = mode === "finalize" ? "release finalize" : mode === "prepare" ? "release prepare" : `release ${mode}`
+
+  if (exit !== 0) {
+    const suffix = url ? ` — ${url}` : ""
+    return `⚠️ kody ${label} failed: ${truncate(reason ?? "unknown error", 1500)}${suffix}`
+  }
+  if (dryRun) {
+    return `ℹ️ kody ${label} (dry-run): ${reason ?? "plan printed, no changes applied"}`
+  }
+  if (mode === "prepare") {
+    return url ? `✅ kody release PR opened: ${url}` : "✅ kody release prepared"
+  }
+  if (mode === "finalize") {
+    return url ? `✅ kody release published: ${url}` : "✅ kody release finalized (tag pushed)"
+  }
+  return `✅ kody ${label} complete`
 }
 
 interface PrepareArgs {

@@ -33,6 +33,13 @@
       "type": "bool",
       "required": false,
       "describe": "Print plan without writing files, creating PRs, tagging, or publishing."
+    },
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": false,
+      "describe": "Issue number to post success/failure follow-up on. Auto-populated by dispatch when triggered via @kody comment."
     }
   ],
   "claudeCode": {

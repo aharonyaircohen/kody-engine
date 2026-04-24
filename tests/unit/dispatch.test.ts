@@ -329,7 +329,7 @@ describe("dispatch: issue_comment on PR", () => {
   })
 })
 
-describe("dispatch: utility executables (no issue/pr declared)", () => {
+describe("dispatch: release executable (utility with optional issue)", () => {
   const prev: Record<string, string | undefined> = {}
   beforeEach(() => {
     prev.EVENT_NAME = process.env.GITHUB_EVENT_NAME
@@ -341,14 +341,14 @@ describe("dispatch: utility executables (no issue/pr declared)", () => {
     process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
   })
 
-  it("'@kody release' routes to release with no issue/pr injected", () => {
+  it("'@kody release' routes to release with the triggering issue injected", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody release" },
       issue: { number: 30 },
     })
     expect(autoDispatch()).toEqual({
       executable: "release",
-      cliArgs: {},
+      cliArgs: { issue: 30 },
       target: 30,
     })
   })
@@ -360,7 +360,7 @@ describe("dispatch: utility executables (no issue/pr declared)", () => {
     })
     expect(autoDispatch()).toEqual({
       executable: "release",
-      cliArgs: { mode: "finalize" },
+      cliArgs: { issue: 31, mode: "finalize" },
       target: 31,
     })
   })
@@ -372,7 +372,7 @@ describe("dispatch: utility executables (no issue/pr declared)", () => {
     })
     expect(autoDispatch()).toEqual({
       executable: "release",
-      cliArgs: { mode: "finalize", bump: "minor" },
+      cliArgs: { issue: 32, mode: "finalize", bump: "minor" },
       target: 32,
     })
   })
@@ -384,7 +384,7 @@ describe("dispatch: utility executables (no issue/pr declared)", () => {
     })
     expect(autoDispatch()).toEqual({
       executable: "release",
-      cliArgs: { mode: "finalize", bump: "patch" },
+      cliArgs: { issue: 33, mode: "finalize", bump: "patch" },
       target: 33,
     })
   })
@@ -396,12 +396,12 @@ describe("dispatch: utility executables (no issue/pr declared)", () => {
     })
     expect(autoDispatch()).toEqual({
       executable: "release",
-      cliArgs: { mode: "finalize", "dry-run": true },
+      cliArgs: { issue: 34, mode: "finalize", "dry-run": true },
       target: 34,
     })
   })
 
-  it("'@kody release' on a PR still routes to release with no pr injected", () => {
+  it("'@kody release finalize' on a PR routes to release (no issue/pr injected — profile takes neither from PR events)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody release finalize" },
       issue: { number: 35, pull_request: {} },
