@@ -5,6 +5,7 @@
  */
 
 import type { PostflightScript, PreflightScript } from "../executables/types.js"
+import { abortUnfinishedGitOps } from "./abortUnfinishedGitOps.js"
 import { advanceFlow } from "./advanceFlow.js"
 import { buildSyntheticPlugin } from "./buildSyntheticPlugin.js"
 import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
@@ -45,6 +46,7 @@ import { runFlow } from "./runFlow.js"
 import { saveTaskState } from "./saveTaskState.js"
 import { setLifecycleLabel } from "./setLifecycleLabel.js"
 import { skipAgent } from "./skipAgent.js"
+import { stageMergeConflicts } from "./stageMergeConflicts.js"
 import { startFlow } from "./startFlow.js"
 import { syncFlow } from "./syncFlow.js"
 import { verify } from "./verify.js"
@@ -84,6 +86,8 @@ export const postflightScripts: Record<string, PostflightScript> = {
   requirePlanDeviations,
   verify,
   checkCoverageWithRetry,
+  abortUnfinishedGitOps,
+  stageMergeConflicts,
   commitAndPush,
   ensurePr,
   postIssueComment,

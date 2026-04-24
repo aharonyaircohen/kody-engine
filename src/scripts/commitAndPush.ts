@@ -1,13 +1,19 @@
 /**
- * Postflight: stage allowed files, commit, push. Stashes the commit result
- * on ctx.data.commitResult for ensurePr/postIssueComment to consume.
+ * Postflight: commit whatever is staged and push the branch. Records the
+ * commit result on ctx.data.commitResult for downstream postflights
+ * (ensurePr, postIssueComment) to consume.
  *
- * For the resolve flow: stages all files explicitly (merge commit needs -A).
+ * Staging and pre-commit cleanup are the responsibility of earlier
+ * postflight entries (e.g. abortUnfinishedGitOps for normal flows,
+ * stageMergeConflicts for merge flows). This script does not branch on
+ * executable identity.
+ *
+ * Commit message source (in priority order):
+ *   1. ctx.data.commitMessage (agent's COMMIT_MSG line, parsed by parseAgentResult)
+ *   2. generic fallback ("chore: kody changes")
  */
 
-import { execFileSync } from "node:child_process"
 import {
-  abortUnfinishedGitOps,
   commitAndPush as doCommitAndPush,
   hasCommitsAhead,
   isForbiddenPath,
@@ -16,7 +22,9 @@ import {
 } from "../commit.js"
 import type { PostflightScript } from "../executables/types.js"
 
-export const commitAndPush: PostflightScript = async (ctx, profile) => {
+const DEFAULT_COMMIT_MESSAGE = "chore: kody changes"
+
+export const commitAndPush: PostflightScript = async (ctx) => {
   const branch = ctx.data.branch as string | undefined
   if (!branch) {
     ctx.data.commitResult = { committed: false, pushed: false }
@@ -32,28 +40,7 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
     return
   }
 
-  const kind = profile.name
-
-  // Resolve flow: make sure conflict-resolved files get staged.
-  // Do NOT abort MERGE_HEAD in resolve mode — the resolveFlow intentionally
-  // created it, and commitAndPush needs to produce the merge commit from it.
-  if (kind === "resolve") {
-    try {
-      execFileSync("git", ["add", "-A"], { cwd: ctx.cwd, env: { ...process.env, HUSKY: "0" }, stdio: "pipe" })
-    } catch {
-      /* best effort */
-    }
-  } else {
-    // All other executables: clean up any agent-created unfinished git state
-    // (e.g., stash/merge/rebase leftovers) before committing.
-    const aborted = abortUnfinishedGitOps(ctx.cwd)
-    if (aborted.length > 0) {
-      process.stderr.write(`[kody] cleaned up unfinished git ops: ${aborted.join(", ")}\n`)
-    }
-  }
-
-  const fallbackMsg = defaultCommitMessage(kind, ctx.data)
-  const message = (ctx.data.commitMessage as string) || fallbackMsg
+  const message = (ctx.data.commitMessage as string) || DEFAULT_COMMIT_MESSAGE
 
   try {
     const result = doCommitAndPush(branch, message, ctx.cwd)
@@ -62,9 +49,7 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
     // (which reads `git status`) returns []. Use the commit's own file list
     // so downstream postflights (verifyFixAlignment) know what we committed.
     // Fall back to working-tree status only if the commit was skipped.
-    const postCommitFiles = result.committed
-      ? listFilesInCommit("HEAD", ctx.cwd)
-      : listChangedFiles(ctx.cwd)
+    const postCommitFiles = result.committed ? listFilesInCommit("HEAD", ctx.cwd) : listChangedFiles(ctx.cwd)
     ctx.data.changedFiles = postCommitFiles.filter((f) => !isForbiddenPath(f))
   } catch (err) {
     ctx.data.commitCrash = err instanceof Error ? err.message : String(err)
@@ -72,19 +57,4 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
   }
 
   ctx.data.hasCommitsAhead = hasCommitsAhead(branch, ctx.config.git.defaultBranch, ctx.cwd)
-}
-
-function defaultCommitMessage(mode: string | undefined, data: Record<string, unknown>): string {
-  switch (mode) {
-    case "run":
-      return `chore: kody changes for #${data.commentTargetNumber}`
-    case "fix":
-      return `chore(fix): kody fix for PR #${data.commentTargetNumber}`
-    case "fix-ci":
-      return `fix(ci): kody fix-ci for PR #${data.commentTargetNumber}`
-    case "resolve":
-      return `fix: resolve merge conflicts with ${data.baseBranch}`
-    default:
-      return `chore: kody changes`
-  }
 }

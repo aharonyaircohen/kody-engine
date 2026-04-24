@@ -79,6 +79,7 @@
       { "script": "requireFeedbackActions" },
       { "script": "verify" },
       { "script": "checkCoverageWithRetry" },
+      { "script": "abortUnfinishedGitOps" },
       { "script": "commitAndPush" },
       { "script": "ensurePr" },
       { "script": "postIssueComment" },

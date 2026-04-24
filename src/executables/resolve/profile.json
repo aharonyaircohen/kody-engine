@@ -75,6 +75,9 @@
         "script": "parseAgentResult"
       },
       {
+        "script": "stageMergeConflicts"
+      },
+      {
         "script": "commitAndPush"
       },
       {

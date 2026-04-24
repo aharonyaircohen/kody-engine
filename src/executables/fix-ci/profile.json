@@ -76,6 +76,9 @@
         "script": "checkCoverageWithRetry"
       },
       {
+        "script": "abortUnfinishedGitOps"
+      },
+      {
         "script": "commitAndPush"
       },
       {
