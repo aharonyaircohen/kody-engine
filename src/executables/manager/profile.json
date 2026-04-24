@@ -1,0 +1,51 @@
+{
+  "name": "manager",
+  "role": "watch",
+  "describe": "Scheduled: for every open issue labeled kody:manager, invoke manager-tick once. No agent on the scheduler itself.",
+  "kind": "scheduled",
+  "schedule": "*/5 * * * *",
+  "inputs": [],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": null,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [
+    {
+      "name": "gh",
+      "install": {
+        "required": true,
+        "checkCommand": "command -v gh"
+      },
+      "verify": "gh auth status",
+      "usage": "",
+      "allowedUses": ["issue"]
+    }
+  ],
+  "inputArtifacts": [],
+  "outputArtifacts": [],
+  "scripts": {
+    "preflight": [
+      {
+        "script": "dispatchManagerTicks",
+        "with": {
+          "label": "kody:manager",
+          "color": "1d76db",
+          "description": "kody: issue is a manager mission — scheduler will tick it on every cron wake",
+          "targetExecutable": "manager-tick",
+          "issueArg": "issue"
+        }
+      }
+    ],
+    "postflight": []
+  }
+}

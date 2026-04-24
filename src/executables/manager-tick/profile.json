@@ -1,0 +1,72 @@
+{
+  "name": "manager-tick",
+  "role": "primitive",
+  "describe": "One classifier tick for one manager issue: read intent + state, decide and execute via gh, emit next state.",
+  "kind": "oneshot",
+  "inputs": [
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": true,
+      "describe": "GitHub issue number that owns this manager mission."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": 20,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": ["Bash", "Read"],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [
+    {
+      "name": "gh",
+      "install": {
+        "required": true,
+        "checkCommand": "command -v gh"
+      },
+      "verify": "gh auth status",
+      "usage": "Use `gh` for all GitHub actions: `gh workflow run <workflow> -f <key>=<val>` to spawn a child run, `gh run view <id> --json status,conclusion` to check status, `gh issue comment <n> --body \"...\"` to post narration. NEVER edit files in the working tree.",
+      "allowedUses": ["workflow", "run", "issue", "pr", "api"]
+    }
+  ],
+  "inputArtifacts": [],
+  "outputArtifacts": [],
+  "scripts": {
+    "preflight": [
+      {
+        "script": "loadIssueStateComment",
+        "with": {
+          "marker": "kody-manager-state",
+          "issueArg": "issue"
+        }
+      },
+      {
+        "script": "composePrompt"
+      }
+    ],
+    "postflight": [
+      {
+        "script": "parseIssueStateFromAgentResult",
+        "with": {
+          "fenceLabel": "kody-manager-next-state"
+        }
+      },
+      {
+        "script": "writeIssueStateComment",
+        "with": {
+          "marker": "kody-manager-state",
+          "issueArg": "issue"
+        }
+      }
+    ]
+  }
+}
