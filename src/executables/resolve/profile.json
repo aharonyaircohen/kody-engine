@@ -54,6 +54,10 @@
         "script": "resolveFlow"
       },
       {
+        "shell": "apply-prefer.sh",
+        "runWhen": { "args.prefer": ["ours", "theirs"] }
+      },
+      {
         "script": "loadTaskState"
       },
       {

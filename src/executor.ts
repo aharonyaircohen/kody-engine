@@ -7,13 +7,14 @@
  * it was handed and the script catalog.
  */
 
+import { spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type { AgentResult } from "./agent.js"
 import { runAgent } from "./agent.js"
 import type { KodyConfig } from "./config.js"
 import { loadConfig, parseProviderModel } from "./config.js"
-import type { Context, InputSpec, ScriptEntry } from "./executables/types.js"
+import type { Context, InputSpec, Profile, ScriptEntry } from "./executables/types.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
@@ -146,9 +147,13 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     // ── Preflight ────────────────────────────────────────────────────────────
     for (const entry of profile.scripts.preflight) {
       if (!shouldRun(entry, ctx)) continue
-      const fn = preflightScripts[entry.script]
-      if (!fn) return finish({ exitCode: 99, reason: `preflight script not registered: ${entry.script}` })
-      await fn(ctx, profile, entry.with)
+      if (entry.shell) {
+        runShellEntry(entry, ctx, profile)
+      } else {
+        const fn = preflightScripts[entry.script!]
+        if (!fn) return finish({ exitCode: 99, reason: `preflight script not registered: ${entry.script}` })
+        await fn(ctx, profile, entry.with)
+      }
       if (ctx.skipAgent && ctx.output.exitCode !== undefined && ctx.output.exitCode !== 0) {
         // Hard bail from preflight (e.g. uncommitted-changes refusal).
         return finish(ctx.output)
@@ -168,16 +173,19 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     // ── Postflight ────────────────────────────────────────────────────────────
     for (const entry of profile.scripts.postflight) {
       if (!shouldRun(entry, ctx)) continue
-      const fn = postflightScripts[entry.script]
-      if (!fn) return finish({ exitCode: 99, reason: `postflight script not registered: ${entry.script}` })
+      const label = entry.script ?? entry.shell ?? "<unknown>"
       try {
-        await fn(ctx, profile, agentResult, entry.with)
+        if (entry.shell) {
+          runShellEntry(entry, ctx, profile)
+        } else {
+          const fn = postflightScripts[entry.script!]
+          if (!fn) return finish({ exitCode: 99, reason: `postflight script not registered: ${entry.script}` })
+          await fn(ctx, profile, agentResult, entry.with)
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        process.stderr.write(`[kody] postflight script "${entry.script}" crashed: ${msg}\n`)
-        // Don't let one failing postflight (e.g. writeRunSummary, flaky gh call)
-        // prevent subsequent postflights (e.g. PR comment) from running.
-        if (!ctx.output.reason) ctx.output.reason = `postflight ${entry.script} crashed: ${msg}`
+        process.stderr.write(`[kody] postflight "${label}" crashed: ${msg}\n`)
+        if (!ctx.output.reason) ctx.output.reason = `postflight ${label} crashed: ${msg}`
         if (ctx.output.exitCode === 0) ctx.output.exitCode = 99
       }
     }
@@ -311,4 +319,65 @@ function finish(out: ExecutorOutput): ExecutorOutput {
   if (out.prUrl) process.stdout.write(`PR_URL=${out.prUrl}\n`)
   else if (out.reason) process.stdout.write(`PR_URL=FAILED: ${out.reason}\n`)
   return out
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Shell-script entries. See ScriptEntry.shell in executables/types.ts.
+// ────────────────────────────────────────────────────────────────────────────
+
+const SHELL_TIMEOUT_MS = 300_000
+
+/**
+ * Invoke a `.sh` entry. Args from `entry.with` are passed positionally;
+ * `ctx.args` are exposed as env vars (KODY_ARG_<UPPER_NAME>=<value>). The
+ * script's stdout + stderr are streamed to the parent, and a `KODY_SKIP_AGENT=true`
+ * line on stdout sets `ctx.skipAgent`. Non-zero exit is treated as a
+ * preflight failure (executor bails per the standard skipAgent + exit rule).
+ */
+function runShellEntry(entry: ScriptEntry, ctx: Context, profile: Profile): void {
+  const shellName = entry.shell!
+  const shellPath = path.join(profile.dir, shellName)
+  if (!fs.existsSync(shellPath)) {
+    ctx.skipAgent = true
+    ctx.output.exitCode = 99
+    ctx.output.reason = `shell script not found: ${shellName} (looked in ${profile.dir})`
+    return
+  }
+
+  const positional = entry.with ? Object.values(entry.with).map((v) => String(v)) : []
+  const env: NodeJS.ProcessEnv = { ...process.env, HUSKY: "0", SKIP_HOOKS: "1" }
+  for (const [k, v] of Object.entries(ctx.args)) {
+    if (v === undefined || v === null) continue
+    env[`KODY_ARG_${k.toUpperCase().replace(/-/g, "_")}`] = String(v)
+  }
+
+  const r = spawnSync("bash", [shellPath, ...positional], {
+    cwd: ctx.cwd,
+    encoding: "utf-8",
+    env,
+    stdio: ["pipe", "pipe", "pipe"],
+    timeout: SHELL_TIMEOUT_MS,
+  })
+
+  const stdout = r.stdout ?? ""
+  const stderr = r.stderr ?? ""
+  if (stdout) process.stdout.write(stdout)
+  if (stderr) process.stderr.write(stderr)
+
+  // Stdout marker: opt-in signal that the agent should be bypassed.
+  if (/^KODY_SKIP_AGENT=true\s*$/m.test(stdout)) {
+    ctx.skipAgent = true
+  }
+
+  const exit = r.status ?? -1
+  if (exit !== 0) {
+    ctx.skipAgent = true
+    if (ctx.output.exitCode === undefined || ctx.output.exitCode === 0) {
+      ctx.output.exitCode = exit
+    }
+    if (!ctx.output.reason) {
+      const tail = (stderr || stdout).slice(-800)
+      ctx.output.reason = `shell '${shellName}' exited ${exit}${tail ? `: ${tail}` : ""}`
+    }
+  }
 }

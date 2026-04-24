@@ -159,7 +159,20 @@ export interface CliToolSpec {
 }
 
 export interface ScriptEntry {
-  script: string
+  /**
+   * Name of a registered TS function in src/scripts/index.ts. Mutually
+   * exclusive with `shell` — exactly one must be set.
+   */
+  script?: string
+  /**
+   * Filename of a shell script colocated with the executable
+   * (e.g. "apply-prefer.sh"). Resolved relative to the profile's
+   * directory. Invoked via `bash <path> <with-args>` with ctx.args
+   * exposed as env vars (KODY_ARG_<UPPER_NAME>=<value>). A stdout
+   * line `KODY_SKIP_AGENT=true` signals the executor to bypass the
+   * agent. Non-zero exit is treated as a preflight failure.
+   */
+  shell?: string
   /**
    * Optional conditional. Keys are dotted paths into the context (e.g.
    * "args.mode"). Values are a single primitive or an array of primitives.

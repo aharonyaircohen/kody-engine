@@ -94,13 +94,14 @@ export function loadProfile(profilePath: string): Profile {
 }
 
 /**
- * Second-pass validation that every script referenced by the profile is
- * registered. Called by the executor after it imports the script catalog.
+ * Second-pass validation that every TS script referenced by the profile is
+ * registered. Shell-script entries skip this check — their existence is
+ * verified at invocation time by the executor.
  */
 export function validateScriptReferences(profile: Profile, registeredScripts: Set<string>): string[] {
   const missing: string[] = []
   for (const e of [...profile.scripts.preflight, ...profile.scripts.postflight]) {
-    if (!registeredScripts.has(e.script)) missing.push(e.script)
+    if (e.script && !registeredScripts.has(e.script)) missing.push(e.script)
   }
   return missing
 }
@@ -279,11 +280,20 @@ function parseScriptList(p: string, key: string, raw: unknown): ScriptEntry[] {
   const out: ScriptEntry[] = []
   for (const [i, item] of raw.entries()) {
     if (!item || typeof item !== "object") {
-      throw new ProfileError(p, `scripts.${key}[${i}] must be an object like { script, runWhen? }`)
+      throw new ProfileError(p, `scripts.${key}[${i}] must be an object like { script, runWhen? } or { shell, runWhen? }`)
     }
     const r = item as Record<string, unknown>
-    const script = requireString(p, r, "script")
-    const entry: ScriptEntry = { script }
+    const hasScript = typeof r.script === "string" && (r.script as string).length > 0
+    const hasShell = typeof r.shell === "string" && (r.shell as string).length > 0
+    if (hasScript && hasShell) {
+      throw new ProfileError(p, `scripts.${key}[${i}] cannot set both "script" and "shell" — pick one`)
+    }
+    if (!hasScript && !hasShell) {
+      throw new ProfileError(p, `scripts.${key}[${i}] must set "script" (registered TS function) or "shell" (filename in executable dir)`)
+    }
+    const entry: ScriptEntry = {}
+    if (hasScript) entry.script = r.script as string
+    if (hasShell) entry.shell = r.shell as string
     if (r.runWhen && typeof r.runWhen === "object") {
       entry.runWhen = r.runWhen as ScriptEntry["runWhen"]
     }
