@@ -26,6 +26,10 @@ bump="${KODY_ARG_BUMP:-patch}"
 dry_run="${KODY_ARG_DRY_RUN:-false}"
 prefer="${KODY_ARG_PREFER:-}"
 default_branch="${KODY_CFG_GIT_DEFAULTBRANCH:-main}"
+dev_branch="${KODY_CFG_RELEASE_DEVBRANCH:-}"
+# PR target: dev branch when configured (and different from default), else default.
+pr_base="${dev_branch:-$default_branch}"
+[[ "$pr_base" == "$default_branch" ]] && pr_base="$default_branch"
 version_files_json="${KODY_CFG_RELEASE_VERSIONFILES:-}"
 
 fail() {
@@ -313,8 +317,8 @@ _… truncated; see CHANGELOG.md_"
   else
     body_entry="$entry"
   fi
-  body=$'Automated release PR opened by kody.\n\n'"$body_entry"$'\n\nMerge this and then run `kody release --mode finalize`.'
-  pr_url=$(printf '%s' "$body" | gh pr create --head "$release_branch" --base "$default_branch" --title "chore: release ${tag}" --body-file -)
+  body=$'Automated release PR opened by kody.\n\n'"$body_entry"$'\n\nThe release orchestrator will merge this into `'"${pr_base}"$'` and continue to publish + deploy.'
+  pr_url=$(printf '%s' "$body" | gh pr create --head "$release_branch" --base "$pr_base" --title "chore: release ${tag}" --body-file -)
 fi
 
 if [[ -z "$pr_url" ]]; then

@@ -66,6 +66,16 @@ export interface KodyConfig {
     e2eCommand?: string
     draftRelease?: boolean
     releaseBranch?: string
+    /**
+     * Integration branch used as the release PR target. When set (and
+     * different from `git.defaultBranch`), the dev-promotion model applies:
+     *   - release-prepare opens its PR against `devBranch`
+     *   - release-publish tags on `devBranch`
+     *   - release-deploy merges `devBranch` into `git.defaultBranch`
+     * Unset → single-branch model: PR targets defaultBranch and deploy
+     * is a no-op success.
+     */
+    devBranch?: string
     timeoutMs?: number
   }
 }
@@ -200,6 +210,7 @@ function parseReleaseConfig(raw: unknown): KodyConfig["release"] {
   if (typeof r.e2eCommand === "string") out.e2eCommand = r.e2eCommand
   if (typeof r.draftRelease === "boolean") out.draftRelease = r.draftRelease
   if (typeof r.releaseBranch === "string") out.releaseBranch = r.releaseBranch
+  if (typeof r.devBranch === "string" && r.devBranch.length > 0) out.devBranch = r.devBranch
   if (typeof r.timeoutMs === "number" && r.timeoutMs > 0) out.timeoutMs = Math.floor(r.timeoutMs)
   return Object.keys(out).length > 0 ? out : undefined
 }

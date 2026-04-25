@@ -24,6 +24,13 @@ set -euo pipefail
 
 dry_run="${KODY_ARG_DRY_RUN:-false}"
 default_branch="${KODY_CFG_GIT_DEFAULTBRANCH:-main}"
+dev_branch="${KODY_CFG_RELEASE_DEVBRANCH:-}"
+# Tag the branch where the release-prepare PR was merged: devBranch when set
+# (and different from default), else defaultBranch.
+target_branch="$default_branch"
+if [[ -n "$dev_branch" && "$dev_branch" != "$default_branch" ]]; then
+  target_branch="$dev_branch"
+fi
 publish_cmd="${KODY_CFG_RELEASE_PUBLISHCOMMAND:-}"
 draft="${KODY_CFG_RELEASE_DRAFTRELEASE:-false}"
 timeout_ms="${KODY_CFG_RELEASE_TIMEOUTMS:-600000}"
@@ -46,10 +53,10 @@ fi
 export HUSKY=0 SKIP_HOOKS=1 CI="${CI:-1}"
 
 # Make sure we're on the merged commit. The orchestrator merged the release
-# PR into default_branch; pull so the local tree has the bump commit.
-git fetch origin "$default_branch" --tags
-git checkout "$default_branch"
-git reset --hard "origin/$default_branch"
+# PR into target_branch; pull so the local tree has the bump commit.
+git fetch origin "$target_branch" --tags
+git checkout "$target_branch"
+git reset --hard "origin/$target_branch"
 
 version=$(read_pkg_version)
 tag="v${version}"
