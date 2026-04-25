@@ -7,7 +7,7 @@ function makeCtx(args: Record<string, unknown> = {}): Context {
     args,
     cwd: "/tmp",
     config: {
-      quality: { typecheck: "", lint: "", testUnit: "" },
+      quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       git: { defaultBranch: "main" },
       github: { owner: "o", repo: "r" },
       agent: { model: "claude/haiku" },

@@ -45,7 +45,7 @@ function mkCtx(data: Record<string, unknown> = {}): Context {
     args: {},
     cwd: process.cwd(),
     config: {
-      quality: { typecheck: "", lint: "", testUnit: "" },
+      quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       git: { defaultBranch: "main" },
       github: { owner: "o", repo: "r" },
       agent: { model: "claude/sonnet" },

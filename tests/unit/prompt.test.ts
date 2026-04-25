@@ -6,7 +6,7 @@ import type { KodyConfig } from "../../src/config.js"
 import { buildPrompt, loadProjectConventions, parseAgentResult } from "../../src/prompt.js"
 
 const baseConfig: KodyConfig = {
-  quality: { typecheck: "pnpm tc", testUnit: "pnpm test", lint: "" },
+  quality: { typecheck: "pnpm tc", testUnit: "pnpm test", lint: "", format: "" },
   git: { defaultBranch: "main" },
   github: { owner: "o", repo: "r" },
   agent: { model: "minimax/m" },

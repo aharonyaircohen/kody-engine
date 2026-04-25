@@ -69,7 +69,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     config = input.config
   } else if (input.skipConfig) {
     config = {
-      quality: { typecheck: "", lint: "", testUnit: "" },
+      quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       git: { defaultBranch: "main" },
       github: { owner: "", repo: "" },
       agent: { model: "claude/claude-haiku-4-5-20251001" },

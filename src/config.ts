@@ -10,6 +10,7 @@ export interface KodyConfig {
   quality: {
     typecheck: string
     lint: string
+    format: string
     testUnit: string
   }
   git: {
@@ -130,6 +131,7 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     quality: {
       typecheck: typeof quality.typecheck === "string" ? quality.typecheck : "",
       lint: typeof quality.lint === "string" ? quality.lint : "",
+      format: typeof quality.format === "string" ? quality.format : "",
       testUnit: typeof quality.testUnit === "string" ? quality.testUnit : "",
     },
     git: {

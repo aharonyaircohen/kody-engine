@@ -95,7 +95,7 @@ describe("config: loadConfig", () => {
       quality: { typecheck: "tc", testUnit: "tu", lint: "ln" },
     })
     const cfg = loadConfig(dir)
-    expect(cfg.quality).toEqual({ typecheck: "tc", testUnit: "tu", lint: "ln" })
+    expect(cfg.quality).toEqual({ typecheck: "tc", testUnit: "tu", lint: "ln", format: "" })
   })
 
   it("loads defaultExecutable when set", () => {

@@ -64,6 +64,7 @@ export async function verifyAll(config: KodyConfig, cwd?: string): Promise<Verif
   if (config.quality.typecheck) commands.push({ name: "typecheck", cmd: config.quality.typecheck })
   if (config.quality.testUnit) commands.push({ name: "test", cmd: config.quality.testUnit })
   if (config.quality.lint) commands.push({ name: "lint", cmd: config.quality.lint })
+  if (config.quality.format) commands.push({ name: "format", cmd: config.quality.format })
 
   const failed: string[] = []
   const details: Record<string, RunResult> = {}

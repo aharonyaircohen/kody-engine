@@ -3,7 +3,7 @@ import type { KodyConfig } from "../../src/config.js"
 import { summarizeFailure, verifyAll } from "../../src/verify.js"
 
 const baseConfig: KodyConfig = {
-  quality: { typecheck: "", testUnit: "", lint: "" },
+  quality: { typecheck: "", testUnit: "", lint: "", format: "" },
   git: { defaultBranch: "main" },
   github: { owner: "o", repo: "r" },
   agent: { model: "m/x" },
@@ -33,11 +33,21 @@ describe("verify: verifyAll", () => {
   it("runs all configured commands", async () => {
     const cfg: KodyConfig = {
       ...baseConfig,
-      quality: { typecheck: "true", testUnit: "true", lint: "false" },
+      quality: { typecheck: "true", testUnit: "true", lint: "false", format: "" },
     }
     const result = await verifyAll(cfg)
     expect(result.failed).toEqual(["lint"])
     expect(Object.keys(result.details).sort()).toEqual(["lint", "test", "typecheck"])
+  })
+
+  it("runs format check when configured and surfaces failure", async () => {
+    const cfg: KodyConfig = {
+      ...baseConfig,
+      quality: { typecheck: "", testUnit: "", lint: "", format: "false" },
+    }
+    const result = await verifyAll(cfg)
+    expect(result.ok).toBe(false)
+    expect(result.failed).toEqual(["format"])
   })
 })
 

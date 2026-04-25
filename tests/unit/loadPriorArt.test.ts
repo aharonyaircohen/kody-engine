@@ -8,7 +8,7 @@ function makeCtx(taskState?: Partial<TaskState>): Context {
     args: { issue: 1 },
     cwd: "/tmp/nonexistent-" + Date.now(),
     config: {
-      quality: { typecheck: "", lint: "", testUnit: "" },
+      quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       git: { defaultBranch: "main" },
       github: { owner: "o", repo: "r" },
       agent: { model: "claude/haiku" },

@@ -23,6 +23,11 @@
           "description": "Auto-fix lint command, run when verify fails (e.g., 'pnpm lint:fix')",
           "default": ""
         },
+        "format": {
+          "type": "string",
+          "description": "Format check command (e.g., 'pnpm format:check', 'prettier --check .'). Empty to skip.",
+          "default": ""
+        },
         "formatFix": {
           "type": "string",
           "description": "Auto-fix format command, run when verify fails (e.g., 'pnpm format')",

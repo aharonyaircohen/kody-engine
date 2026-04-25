@@ -59,6 +59,7 @@ export function buildPrompt(opts: BuildPromptOptions): string {
   if (config.quality.typecheck) qualityLines.push(`- typecheck: \`${config.quality.typecheck}\``)
   if (config.quality.testUnit) qualityLines.push(`- tests:     \`${config.quality.testUnit}\``)
   if (config.quality.lint) qualityLines.push(`- lint:      \`${config.quality.lint}\``)
+  if (config.quality.format) qualityLines.push(`- format:    \`${config.quality.format}\``)
   if (qualityLines.length === 0) qualityLines.push("- (no quality commands configured)")
 
   const ctx = config.issueContext ?? {}

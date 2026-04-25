@@ -16,7 +16,7 @@ function makeCtx(): {
     args: { issue: 1 },
     cwd: os.tmpdir(),
     config: {
-      quality: { typecheck: "", lint: "", testUnit: "" },
+      quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       git: { defaultBranch: "main" },
       github: { owner: "o", repo: "r" },
       agent: { model: "claude/x" },

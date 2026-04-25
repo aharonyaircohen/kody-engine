@@ -58,7 +58,7 @@ function ctx(overrides: Partial<Context> = {}): Context {
     args: { issue: 42 },
     cwd: "/tmp",
     config: {
-      quality: { typecheck: "", lint: "", testUnit: "" },
+      quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       git: { defaultBranch: "main" },
       github: { owner: "o", repo: "r" },
       agent: { model: "claude/claude-haiku-4-5-20251001" },
