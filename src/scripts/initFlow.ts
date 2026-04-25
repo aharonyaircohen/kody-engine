@@ -112,6 +112,7 @@ jobs:
       issues: write
       pull-requests: write
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
         with:
