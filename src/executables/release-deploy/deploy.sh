@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 #
-# release-deploy: promote the integration branch (dev) to the default
-# branch (main). Runs AFTER release-publish has tagged the bump commit
-# on dev. No agent.
+# release-deploy: open a PR from the integration branch (dev) into the
+# default branch (main) — the human gate for production deploy. The
+# orchestrator's chain ENDS with this PR opened; merging it is a manual
+# step. No agent.
 #
 # Behavior:
 #   - If release.devBranch is unset OR equals git.defaultBranch:
-#       no-op success (single-branch repos have nothing to promote).
-#   - Else: fast-forward `defaultBranch` to `devBranch` and push. If a
-#     fast-forward isn't possible (defaultBranch has commits dev doesn't
-#     have), fall back to `git merge --no-ff` so history is preserved.
+#       no-op success (single-branch repos have nothing to deploy).
+#   - Else: idempotently open PR `devBranch` → `defaultBranch`. If an
+#     open PR already exists for that pair, reuse its URL.
 #
-# After the merge, runs `release.notifyCommand` (if set) as a best-effort
-# post-deploy hook.
+# After the PR is opened, runs `release.notifyCommand` (if set) as a
+# best-effort post-deploy hook.
 #
 # Inputs (env):
 #   KODY_ARG_DRY_RUN          true|false
@@ -25,6 +25,7 @@
 #   KODY_CFG_RELEASE_TIMEOUTMS         per-command timeout in ms (default 600000)
 #
 # Stdout signals:
+#   KODY_PR_URL=<deploy PR url>
 #   KODY_REASON=<text>
 #   KODY_SKIP_AGENT=true
 
@@ -44,49 +45,50 @@ read_pkg_version() {
 version=$(read_pkg_version)
 echo "→ release deploy: v${version}"
 
-# Single-branch repos: nothing to promote.
+# Single-branch repos: nothing to deploy.
 if [[ -z "$dev_branch" || "$dev_branch" == "$default_branch" ]]; then
-  echo "KODY_REASON=no devBranch configured (or equals defaultBranch) — nothing to promote"
+  echo "KODY_REASON=no devBranch configured (or equals defaultBranch) — nothing to deploy"
   echo "KODY_SKIP_AGENT=true"
   exit 0
 fi
 
 if [[ "$dry_run" == "true" ]]; then
-  echo "KODY_REASON=dry-run — would merge ${dev_branch} into ${default_branch}"
+  echo "KODY_REASON=dry-run — would open PR ${dev_branch} → ${default_branch}"
   echo "KODY_SKIP_AGENT=true"
   exit 0
 fi
 
 export HUSKY=0 SKIP_HOOKS=1 CI="${CI:-1}"
 
-# Sync local refs.
-git fetch origin "$dev_branch" "$default_branch" --tags
+# Idempotency: reuse an open PR for this branch pair if one exists.
+existing=$(gh pr list --head "$dev_branch" --base "$default_branch" --state open --json url --limit 1 2>/dev/null \
+  | python3 -c 'import json,sys; data=json.load(sys.stdin); print(data[0]["url"] if data else "")' 2>/dev/null \
+  || echo "")
 
-# Move to defaultBranch and reset to its remote tip.
-git checkout "$default_branch"
-git reset --hard "origin/$default_branch"
-
-# Try fast-forward first; fall back to a merge commit.
-if git merge --ff-only "origin/$dev_branch" 2>/dev/null; then
-  echo "  fast-forwarded ${default_branch} to origin/${dev_branch}"
+if [[ -n "$existing" ]]; then
+  echo "  reusing existing deploy PR: ${existing}"
+  pr_url="$existing"
 else
-  echo "  fast-forward not possible — using --no-ff merge"
-  if ! git -c commit.gpgsign=false merge --no-ff "origin/$dev_branch" -m "chore: deploy ${dev_branch} → ${default_branch} (v${version})"; then
-    echo "KODY_REASON=release deploy: merge ${dev_branch} into ${default_branch} failed (conflicts?)"
+  body="Automated deploy PR opened by kody — promotes \`${dev_branch}\` to \`${default_branch}\` for release **v${version}**.
+
+Merge this PR to deploy v${version} to \`${default_branch}\`."
+  if ! pr_url=$(printf '%s' "$body" | gh pr create --head "$dev_branch" --base "$default_branch" --title "deploy: ${dev_branch} → ${default_branch} (v${version})" --body-file -); then
+    echo "KODY_REASON=release deploy: gh pr create failed"
     echo "KODY_SKIP_AGENT=true"
     exit 1
   fi
 fi
 
-if ! git push origin "$default_branch"; then
-  echo "KODY_REASON=release deploy: push to origin/${default_branch} failed"
+if [[ -z "$pr_url" ]]; then
+  echo "KODY_REASON=release deploy: empty PR URL after gh pr create"
   echo "KODY_SKIP_AGENT=true"
   exit 1
 fi
 
-echo "  pushed ${default_branch}"
+echo "RELEASE_DEPLOY_PR=${pr_url}"
+echo "KODY_PR_URL=${pr_url}"
 
-# Optional post-deploy notification.
+# Optional post-deploy notification (e.g. Slack ping that a deploy PR is up).
 notify_status="skipped"
 if [[ -n "$notify_cmd" ]]; then
   cmd="${notify_cmd//\$VERSION/$version}"
@@ -99,5 +101,5 @@ if [[ -n "$notify_cmd" ]]; then
   fi
 fi
 
-echo "KODY_REASON=promoted ${dev_branch} → ${default_branch} (notify=${notify_status})"
+echo "KODY_REASON=opened deploy PR ${dev_branch} → ${default_branch} (notify=${notify_status})"
 echo "KODY_SKIP_AGENT=true"
