@@ -149,14 +149,19 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       if (!shouldRun(entry, ctx)) continue
       if (entry.shell) {
         runShellEntry(entry, ctx, profile)
+        // Shell entries record their outcome via postflight (recordOutcome →
+        // saveTaskState → notifyTerminal → advanceFlow). Even on non-zero
+        // exit, fall through so the state machine can advance — postflights
+        // that should bail (commitAndPush, ensurePr, postIssueComment)
+        // already check `ctx.skipAgent && exitCode !== undefined`.
       } else {
         const fn = preflightScripts[entry.script!]
         if (!fn) return finish({ exitCode: 99, reason: `preflight script not registered: ${entry.script}` })
         await fn(ctx, profile, entry.with)
-      }
-      if (ctx.skipAgent && ctx.output.exitCode !== undefined && ctx.output.exitCode !== 0) {
-        // Hard bail from preflight (e.g. uncommitted-changes refusal).
-        return finish(ctx.output)
+        if (ctx.skipAgent && ctx.output.exitCode !== undefined && ctx.output.exitCode !== 0) {
+          // Hard bail from a TS preflight (e.g. uncommitted-changes refusal).
+          return finish(ctx.output)
+        }
       }
     }
 
