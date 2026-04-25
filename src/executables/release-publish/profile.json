@@ -1,0 +1,53 @@
+{
+  "name": "release-publish",
+  "role": "utility",
+  "phase": "shipped",
+  "describe": "Tag the merged release commit, run the configured publishCommand, create the GitHub release. No agent.",
+  "inputs": [
+    {
+      "name": "dry-run",
+      "flag": "--dry-run",
+      "type": "bool",
+      "required": false,
+      "describe": "Print plan without tagging or publishing."
+    },
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": false,
+      "describe": "Issue/PR number to post the terminal notice on. Auto-injected by dispatch."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "acceptEdits",
+    "maxTurns": 0,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "inputArtifacts": [],
+  "outputArtifacts": [],
+  "scripts": {
+    "preflight": [
+      { "script": "setCommentTarget", "with": { "type": "issue" } },
+      { "script": "loadTaskState" },
+      { "shell": "publish.sh" },
+      { "script": "skipAgent" }
+    ],
+    "postflight": [
+      { "script": "recordOutcome" },
+      { "script": "saveTaskState" },
+      { "script": "notifyTerminal", "with": { "label": "release publish" } },
+      { "script": "advanceFlow" }
+    ]
+  }
+}

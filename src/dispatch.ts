@@ -68,24 +68,12 @@ export function autoDispatch(opts?: {
     return { executable: "mission-scheduler", cliArgs: {}, target: 0 }
   }
 
-  // A merged `release/vX.Y.Z` PR auto-runs `release --mode finalize` so the
-  // tag is always created — the previous manual-only path left v0.25.1 un-
-  // tagged, and the next `prepare` rolled its commits into v0.25.2's changelog.
-  // The consumer YAML subscribes with `types: [closed]`, so the action is
-  // already narrowed; only `merged` + branch-name need checking here.
-  if (eventName === "pull_request") {
-    const merged = event.pull_request?.merged === true
-    const headRef = String(event.pull_request?.head?.ref ?? "")
-    const prNumber = Number(event.pull_request?.number ?? 0)
-    if (merged && /^release\/v\d+\.\d+\.\d+/.test(headRef) && prNumber > 0) {
-      return {
-        executable: "release",
-        cliArgs: { mode: "finalize", issue: prNumber },
-        target: prNumber,
-      }
-    }
-    return null
-  }
+  // PR-merge events are no longer routed here for release: the `release`
+  // orchestrator merges its own PR via `mergeReleasePr` and then dispatches
+  // release-publish + release-deploy. A human merging a release PR manually
+  // doesn't auto-finalize; they'd run `kody release-publish` directly or
+  // re-trigger `@kody release` on the originating issue.
+  if (eventName === "pull_request") return null
 
   if (eventName !== "issue_comment") return null
 

@@ -28,7 +28,9 @@ import { loadIssueStateComment } from "./loadIssueStateComment.js"
 import { loadPriorArt } from "./loadPriorArt.js"
 import { loadQaGuide } from "./loadQaGuide.js"
 import { loadTaskState } from "./loadTaskState.js"
+import { mergeReleasePr } from "./mergeReleasePr.js"
 import { mirrorStateToPr } from "./mirrorStateToPr.js"
+import { notifyTerminal } from "./notifyTerminal.js"
 import { parseAgentResult } from "./parseAgentResult.js"
 import { parseIssueStateFromAgentResult } from "./parseIssueStateFromAgentResult.js"
 import { persistArtifacts } from "./persistArtifacts.js"
@@ -38,7 +40,7 @@ import { postIssueComment } from "./postIssueComment.js"
 import { postPlanComment } from "./postPlanComment.js"
 import { postResearchComment } from "./postResearchComment.js"
 import { postReviewResult } from "./postReviewResult.js"
-import { releaseFlow } from "./releaseFlow.js"
+import { recordOutcome } from "./recordOutcome.js"
 import { requireFeedbackActions } from "./requireFeedbackActions.js"
 import { requirePlanDeviations } from "./requirePlanDeviations.js"
 import { resolveArtifacts } from "./resolveArtifacts.js"
@@ -47,6 +49,7 @@ import { resolvePreviewUrl } from "./resolvePreviewUrl.js"
 import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
 import { saveTaskState } from "./saveTaskState.js"
+import { setCommentTarget } from "./setCommentTarget.js"
 import { setLifecycleLabel } from "./setLifecycleLabel.js"
 import { skipAgent } from "./skipAgent.js"
 import { stageMergeConflicts } from "./stageMergeConflicts.js"
@@ -65,7 +68,6 @@ export const preflightScripts: Record<string, PreflightScript> = {
   reviewFlow,
   syncFlow,
   initFlow,
-  releaseFlow,
   watchStalePrsFlow,
   loadTaskState,
   loadIssueContext,
@@ -79,6 +81,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   discoverQaContext,
   resolvePreviewUrl,
   composePrompt,
+  setCommentTarget,
   setLifecycleLabel,
   skipAgent,
   classifyByLabel,
@@ -112,6 +115,9 @@ export const postflightScripts: Record<string, PostflightScript> = {
   advanceFlow,
   persistFlowState,
   postClassification,
+  notifyTerminal,
+  recordOutcome,
+  mergeReleasePr,
 }
 
 export const allScriptNames: Set<string> = new Set([

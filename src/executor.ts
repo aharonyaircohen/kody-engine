@@ -329,10 +329,15 @@ const SHELL_TIMEOUT_MS = 300_000
 
 /**
  * Invoke a `.sh` entry. Args from `entry.with` are passed positionally;
- * `ctx.args` are exposed as env vars (KODY_ARG_<UPPER_NAME>=<value>). The
- * script's stdout + stderr are streamed to the parent, and a `KODY_SKIP_AGENT=true`
- * line on stdout sets `ctx.skipAgent`. Non-zero exit is treated as a
- * preflight failure (executor bails per the standard skipAgent + exit rule).
+ * `ctx.args` and `ctx.config` are exposed as env vars
+ * (`KODY_ARG_<UPPER_NAME>=<value>` and `KODY_CFG_<DOTTED_PATH>=<value>`).
+ * The script's stdout + stderr are streamed to the parent. Recognized
+ * stdout markers:
+ *   `KODY_SKIP_AGENT=true` — bypass the agent (preflight did all the work).
+ *   `KODY_PR_URL=<url>`    — write into ctx.output.prUrl.
+ *   `KODY_REASON=<text>`   — write into ctx.output.reason.
+ * Non-zero exit is treated as a preflight failure (executor bails per the
+ * standard skipAgent + exit rule).
  */
 function runShellEntry(entry: ScriptEntry, ctx: Context, profile: Profile): void {
   const shellName = entry.shell!
@@ -348,7 +353,10 @@ function runShellEntry(entry: ScriptEntry, ctx: Context, profile: Profile): void
   const env: NodeJS.ProcessEnv = { ...process.env, HUSKY: "0", SKIP_HOOKS: "1" }
   for (const [k, v] of Object.entries(ctx.args)) {
     if (v === undefined || v === null) continue
-    env[`KODY_ARG_${k.toUpperCase().replace(/-/g, "_")}`] = String(v)
+    env[`KODY_ARG_${envKey(k)}`] = String(v)
+  }
+  for (const [k, v] of flattenConfig(ctx.config as unknown as Record<string, unknown>)) {
+    env[`KODY_CFG_${k}`] = v
   }
 
   const r = spawnSync("bash", [shellPath, ...positional], {
@@ -372,6 +380,10 @@ function runShellEntry(entry: ScriptEntry, ctx: Context, profile: Profile): void
     ctx.skipAgent = true
     if (ctx.output.exitCode === undefined) ctx.output.exitCode = 0
   }
+  const prUrlMatch = stdout.match(/^KODY_PR_URL=(.+)$/m)
+  if (prUrlMatch?.[1]) ctx.output.prUrl = prUrlMatch[1].trim()
+  const reasonMatch = stdout.match(/^KODY_REASON=(.+)$/m)
+  if (reasonMatch?.[1]) ctx.output.reason = reasonMatch[1].trim()
 
   const exit = r.status ?? -1
   if (exit !== 0) {
@@ -384,4 +396,30 @@ function runShellEntry(entry: ScriptEntry, ctx: Context, profile: Profile): void
       ctx.output.reason = `shell '${shellName}' exited ${exit}${tail ? `: ${tail}` : ""}`
     }
   }
+}
+
+function envKey(name: string): string {
+  return name.toUpperCase().replace(/-/g, "_")
+}
+
+/**
+ * Flatten a config object into [DOTTED_KEY, value] pairs for env-var export.
+ * Leaves (string/number/boolean) emit a single entry per dotted path.
+ * Arrays are JSON-stringified so shells can `jq -r` them when needed.
+ * Nested objects recurse. Skips null/undefined values.
+ */
+function flattenConfig(obj: Record<string, unknown>, prefix = ""): Array<[string, string]> {
+  const out: Array<[string, string]> = []
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === null || v === undefined) continue
+    const key = prefix ? `${prefix}_${envKey(k)}` : envKey(k)
+    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+      out.push([key, String(v)])
+    } else if (Array.isArray(v)) {
+      out.push([key, JSON.stringify(v)])
+    } else if (typeof v === "object") {
+      out.push(...flattenConfig(v as Record<string, unknown>, key))
+    }
+  }
+  return out
 }

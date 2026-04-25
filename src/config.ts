@@ -62,6 +62,7 @@ export interface KodyConfig {
     versionFiles?: string[]
     publishCommand?: string
     notifyCommand?: string
+    deployCommand?: string
     e2eCommand?: string
     draftRelease?: boolean
     releaseBranch?: string
@@ -195,6 +196,7 @@ function parseReleaseConfig(raw: unknown): KodyConfig["release"] {
   if (Array.isArray(r.versionFiles)) out.versionFiles = r.versionFiles.filter((f): f is string => typeof f === "string")
   if (typeof r.publishCommand === "string") out.publishCommand = r.publishCommand
   if (typeof r.notifyCommand === "string") out.notifyCommand = r.notifyCommand
+  if (typeof r.deployCommand === "string") out.deployCommand = r.deployCommand
   if (typeof r.e2eCommand === "string") out.e2eCommand = r.e2eCommand
   if (typeof r.draftRelease === "boolean") out.draftRelease = r.draftRelease
   if (typeof r.releaseBranch === "string") out.releaseBranch = r.releaseBranch

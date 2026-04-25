@@ -1,62 +1,21 @@
 {
   "name": "release",
-  "role": "utility",
-  "phase": "shipped",
-  "describe": "Version bump + changelog + release PR (prepare), or tag + publish + GH release (finalize). No agent.",
+  "role": "orchestrator",
+  "describe": "Release orchestrator: drives release-prepare → merge PR → release-publish → release-deploy. No agent — postflight entries ARE the transition table, evaluated top-to-bottom via runWhen.",
   "inputs": [
-    {
-      "name": "mode",
-      "flag": "--mode",
-      "type": "enum",
-      "values": [
-        "prepare",
-        "finalize"
-      ],
-      "required": false,
-      "describe": "`prepare` (default): bump + changelog + release PR. `finalize`: E2E gate + tag + publish + GH release."
-    },
-    {
-      "name": "bump",
-      "flag": "--bump",
-      "type": "enum",
-      "values": [
-        "patch",
-        "minor",
-        "major"
-      ],
-      "required": false,
-      "describe": "Version bump when mode=prepare (ignored in finalize). Default patch."
-    },
-    {
-      "name": "dry-run",
-      "flag": "--dry-run",
-      "type": "bool",
-      "required": false,
-      "describe": "Print plan without writing files, creating PRs, tagging, or publishing."
-    },
     {
       "name": "issue",
       "flag": "--issue",
       "type": "int",
-      "required": false,
-      "describe": "Issue number to post success/failure follow-up on. Auto-populated by dispatch when triggered via @kody comment."
-    },
-    {
-      "name": "prefer",
-      "flag": "--prefer",
-      "type": "enum",
-      "values": [
-        "ours",
-        "theirs"
-      ],
-      "required": false,
-      "describe": "On release/vX.Y.Z branch collision (prepare mode): 'ours' force-pushes over the remote branch; 'theirs' reuses the existing branch and its open PR. Default (unset): refuse on non-ff."
+      "required": true,
+      "describe": "GitHub issue number to drive the release flow on."
     }
   ],
   "claudeCode": {
     "model": "inherit",
-    "permissionMode": "acceptEdits",
-    "maxTurns": null,
+    "permissionMode": "default",
+    "maxTurns": 0,
+    "maxThinkingTokens": null,
     "systemPromptAppend": null,
     "tools": [],
     "hooks": [],
@@ -67,12 +26,51 @@
     "mcpServers": []
   },
   "cliTools": [],
+  "inputArtifacts": [],
+  "outputArtifacts": [],
   "scripts": {
     "preflight": [
       {
-        "script": "releaseFlow"
-      }
+        "script": "setLifecycleLabel",
+        "with": {
+          "label": "kody-flow:release",
+          "color": "5319e7",
+          "description": "kody flow: release"
+        }
+      },
+      {
+        "script": "setLifecycleLabel",
+        "with": {
+          "label": "kody:orchestrating",
+          "color": "1d76db",
+          "description": "kody: orchestrating a multi-stage flow"
+        }
+      },
+      { "script": "loadIssueContext" },
+      { "script": "loadTaskState" },
+      { "script": "skipAgent" }
     ],
-    "postflight": []
+    "postflight": [
+      { "script": "startFlow", "with": { "entry": "release-prepare", "target": "issue" } },
+
+      { "script": "mergeReleasePr",
+        "runWhen": { "data.taskState.core.lastOutcome.type": "RELEASE_PREPARE_COMPLETED" } },
+
+      { "script": "dispatch", "with": { "next": "release-publish", "target": "issue" },
+        "runWhen": { "data.taskState.core.lastOutcome.type": "RELEASE_MERGE_COMPLETED" } },
+
+      { "script": "dispatch", "with": { "next": "release-deploy", "target": "issue" },
+        "runWhen": { "data.taskState.core.lastOutcome.type": "RELEASE_PUBLISH_COMPLETED" } },
+
+      { "script": "finishFlow",
+        "with": { "reason": "release-completed", "label": "kody:done", "color": "0e8a16", "description": "kody: release complete" },
+        "runWhen": { "data.taskState.core.lastOutcome.type": "RELEASE_DEPLOY_COMPLETED" } },
+
+      { "script": "finishFlow",
+        "with": { "reason": "release-failed", "label": "kody:failed", "color": "e11d21", "description": "kody: release flow failed" },
+        "runWhen": { "data.taskState.core.lastOutcome.type": ["RELEASE_PREPARE_FAILED", "RELEASE_MERGE_FAILED", "RELEASE_PUBLISH_FAILED", "RELEASE_DEPLOY_FAILED"] } },
+
+      { "script": "persistFlowState" }
+    ]
   }
 }

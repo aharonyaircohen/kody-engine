@@ -1,0 +1,70 @@
+{
+  "name": "release-prepare",
+  "role": "utility",
+  "phase": "shipped",
+  "describe": "Bump version files, generate CHANGELOG.md, commit on a release branch, open the release PR. No agent.",
+  "inputs": [
+    {
+      "name": "bump",
+      "flag": "--bump",
+      "type": "enum",
+      "values": ["patch", "minor", "major"],
+      "required": false,
+      "describe": "Version bump increment. Default patch."
+    },
+    {
+      "name": "dry-run",
+      "flag": "--dry-run",
+      "type": "bool",
+      "required": false,
+      "describe": "Print plan without writing files, committing, or opening a PR."
+    },
+    {
+      "name": "prefer",
+      "flag": "--prefer",
+      "type": "enum",
+      "values": ["ours", "theirs"],
+      "required": false,
+      "describe": "On release/vX.Y.Z branch collision: 'ours' force-pushes; 'theirs' reuses the existing PR. Default refuses non-ff."
+    },
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": false,
+      "describe": "Issue/PR number to post the terminal notice on. Auto-injected by dispatch."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "acceptEdits",
+    "maxTurns": 0,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "inputArtifacts": [],
+  "outputArtifacts": [],
+  "scripts": {
+    "preflight": [
+      { "script": "setCommentTarget", "with": { "type": "issue" } },
+      { "script": "loadTaskState" },
+      { "shell": "prepare.sh" },
+      { "script": "skipAgent" }
+    ],
+    "postflight": [
+      { "script": "recordOutcome" },
+      { "script": "saveTaskState" },
+      { "script": "mirrorStateToPr" },
+      { "script": "notifyTerminal", "with": { "label": "release prepare" } },
+      { "script": "advanceFlow" }
+    ]
+  }
+}

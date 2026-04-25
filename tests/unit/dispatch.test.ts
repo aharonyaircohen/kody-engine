@@ -379,7 +379,7 @@ describe("dispatch: issue_comment on PR", () => {
   })
 })
 
-describe("dispatch: release executable (utility with optional issue)", () => {
+describe("dispatch: release orchestrator + sibling primitives", () => {
   const prev: Record<string, string | undefined> = {}
   beforeEach(() => {
     prev.EVENT_NAME = process.env.GITHUB_EVENT_NAME
@@ -391,7 +391,7 @@ describe("dispatch: release executable (utility with optional issue)", () => {
     process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
   })
 
-  it("'@kody release' routes to release with the triggering issue injected", () => {
+  it("'@kody release' routes to the orchestrator with the triggering issue injected", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody release" },
       issue: { number: 30 },
@@ -403,98 +403,98 @@ describe("dispatch: release executable (utility with optional issue)", () => {
     })
   })
 
-  it("'@kody release finalize' parses the mode enum from comment text", () => {
+  it("'@kody release-prepare' routes to release-prepare with the triggering issue", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody release finalize" },
+      comment: { body: "@kody release-prepare" },
       issue: { number: 31 },
     })
     expect(autoDispatch()).toEqual({
-      executable: "release",
-      cliArgs: { issue: 31, mode: "finalize" },
+      executable: "release-prepare",
+      cliArgs: { issue: 31 },
       target: 31,
     })
   })
 
-  it("'@kody release finalize minor' parses mode + bump enums", () => {
+  it("'@kody release-prepare minor' parses bump from comment text", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody release finalize minor" },
+      comment: { body: "@kody release-prepare minor" },
       issue: { number: 32 },
     })
     expect(autoDispatch()).toEqual({
-      executable: "release",
-      cliArgs: { issue: 32, mode: "finalize", bump: "minor" },
+      executable: "release-prepare",
+      cliArgs: { issue: 32, bump: "minor" },
       target: 32,
     })
   })
 
-  it("'@kody release --mode finalize --bump patch' parses flag form", () => {
+  it("'@kody release-prepare --prefer ours' parses prefer via flag form", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody release --mode finalize --bump patch" },
-      issue: { number: 33 },
-    })
-    expect(autoDispatch()).toEqual({
-      executable: "release",
-      cliArgs: { issue: 33, mode: "finalize", bump: "patch" },
-      target: 33,
-    })
-  })
-
-  it("'@kody release finalize dry-run' parses the bare bool flag keyword", () => {
-    process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody release finalize dry-run" },
-      issue: { number: 34 },
-    })
-    expect(autoDispatch()).toEqual({
-      executable: "release",
-      cliArgs: { issue: 34, mode: "finalize", "dry-run": true },
-      target: 34,
-    })
-  })
-
-  it("'@kody release --prefer ours' parses the prefer enum via flag form", () => {
-    process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody release --prefer ours" },
+      comment: { body: "@kody release-prepare --prefer ours" },
       issue: { number: 40 },
     })
     expect(autoDispatch()).toEqual({
-      executable: "release",
+      executable: "release-prepare",
       cliArgs: { issue: 40, prefer: "ours" },
       target: 40,
     })
   })
 
-  it("'@kody release prefer theirs' parses prefer via bare-flag+value", () => {
+  it("'@kody release-prepare prefer theirs' parses prefer via bare-flag+value", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody release prefer theirs" },
+      comment: { body: "@kody release-prepare prefer theirs" },
       issue: { number: 41 },
     })
     const r = autoDispatch()
-    expect(r?.executable).toBe("release")
+    expect(r?.executable).toBe("release-prepare")
     expect(r?.cliArgs.prefer).toBe("theirs")
     expect(r?.cliArgs.issue).toBe(41)
   })
 
-  it("'@kody release prepare theirs' combines mode enum + prefer enum positionally", () => {
+  it("'@kody release-prepare patch dry-run' combines bump enum + bool keyword", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody release prepare theirs" },
+      comment: { body: "@kody release-prepare patch dry-run" },
       issue: { number: 42 },
     })
     expect(autoDispatch()).toEqual({
-      executable: "release",
-      cliArgs: { issue: 42, mode: "prepare", prefer: "theirs" },
+      executable: "release-prepare",
+      cliArgs: { issue: 42, bump: "patch", "dry-run": true },
       target: 42,
     })
   })
 
-  it("'@kody release finalize' on a PR routes to release (no issue/pr injected — profile takes neither from PR events)", () => {
+  it("'@kody release-publish' routes to release-publish with the triggering issue", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody release finalize" },
-      issue: { number: 35, pull_request: {} },
+      comment: { body: "@kody release-publish" },
+      issue: { number: 50 },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "release-publish",
+      cliArgs: { issue: 50 },
+      target: 50,
+    })
+  })
+
+  it("'@kody release-deploy' routes to release-deploy with the triggering issue", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody release-deploy" },
+      issue: { number: 51 },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "release-deploy",
+      cliArgs: { issue: 51 },
+      target: 51,
+    })
+  })
+
+  it("'@kody release minor' drops bump (orchestrator profile does not declare it)", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody release minor" },
+      issue: { number: 33 },
     })
     expect(autoDispatch()).toEqual({
       executable: "release",
-      cliArgs: { mode: "finalize" },
-      target: 35,
+      cliArgs: { issue: 33 },
+      target: 33,
     })
   })
 })
