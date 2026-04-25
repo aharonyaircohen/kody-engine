@@ -117,7 +117,6 @@ generate_changelog() {
 
 format_changelog() {
   local new_version="$1"
-  local raw="$2"
   local date_str
   date_str=$(date -u +%Y-%m-%d)
   python3 - "$new_version" "$date_str" <<PY
