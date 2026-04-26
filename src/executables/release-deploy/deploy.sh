@@ -78,9 +78,17 @@ if [[ -n "$existing" ]]; then
   echo "  reusing existing deploy PR: ${existing}"
   pr_url="$existing"
 else
+  # Same Tracking-Issue marker as release-prepare — non-closing reference
+  # so the originating release issue stays open through the deploy step
+  # while the Kody Dashboard can still link this PR to the task for preview.
+  issue_arg="${KODY_ARG_ISSUE:-}"
+  tracking_line=""
+  if [[ "$issue_arg" =~ ^[0-9]+$ && "$issue_arg" != "0" ]]; then
+    tracking_line=$'\n\nTracking-Issue: #'"${issue_arg}"
+  fi
   body="Automated deploy PR opened by kody — promotes \`${default_branch}\` to \`${release_branch}\` for release **v${version}**.
 
-Merge this PR to deploy v${version} to \`${release_branch}\`."
+Merge this PR to deploy v${version} to \`${release_branch}\`.${tracking_line}"
   if ! pr_url=$(printf '%s' "$body" | gh pr create --head "$default_branch" --base "$release_branch" --title "deploy: ${default_branch} → ${release_branch} (v${version})" --body-file -); then
     echo "KODY_REASON=release deploy: gh pr create failed"
     echo "KODY_SKIP_AGENT=true"
