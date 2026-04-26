@@ -313,7 +313,18 @@ _… truncated; see CHANGELOG.md_"
   else
     body_entry="$entry"
   fi
-  body=$'Automated release PR opened by kody.\n\n'"$body_entry"$'\n\nThe release orchestrator will merge this into `'"${default_branch}"$'` and continue to publish + deploy.'
+  # Link the PR back to the originating release issue so GitHub's
+  # `closingIssueNumbers` GraphQL signal picks it up — that's the strongest
+  # signal the Kody Dashboard uses to attach a PR preview to a task. The
+  # release orchestrator continues with publish + deploy after merge; closing
+  # the issue on merge is the right semantic since the user-visible
+  # "release request" is fulfilled once the PR lands.
+  issue_arg="${KODY_ARG_ISSUE:-}"
+  closes_line=""
+  if [[ "$issue_arg" =~ ^[0-9]+$ && "$issue_arg" != "0" ]]; then
+    closes_line=$'\n\nCloses #'"${issue_arg}"
+  fi
+  body=$'Automated release PR opened by kody.\n\n'"$body_entry"$'\n\nThe release orchestrator will merge this into `'"${default_branch}"$'` and continue to publish + deploy.'"${closes_line}"
   pr_url=$(printf '%s' "$body" | gh pr create --head "$release_branch" --base "$default_branch" --title "chore: release ${tag}" --body-file -)
 fi
 
