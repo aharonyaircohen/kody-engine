@@ -56,6 +56,7 @@ import { stageMergeConflicts } from "./stageMergeConflicts.js"
 import { startFlow } from "./startFlow.js"
 import { syncFlow } from "./syncFlow.js"
 import { verify } from "./verify.js"
+import { waitForCi } from "./waitForCi.js"
 import { watchStalePrsFlow } from "./watchStalePrsFlow.js"
 import { writeIssueStateComment } from "./writeIssueStateComment.js"
 import { writeRunSummary } from "./writeRunSummary.js"
@@ -118,6 +119,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   notifyTerminal,
   recordOutcome,
   mergeReleasePr,
+  waitForCi,
 }
 
 export const allScriptNames: Set<string> = new Set([

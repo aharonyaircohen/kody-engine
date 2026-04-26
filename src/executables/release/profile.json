@@ -62,13 +62,24 @@
       { "script": "dispatch", "with": { "next": "release-deploy", "target": "issue" },
         "runWhen": { "data.taskState.core.lastOutcome.type": "RELEASE_PUBLISH_COMPLETED" } },
 
+      { "script": "waitForCi",
+        "with": { "timeoutMinutes": 30, "pollSeconds": 30, "initialWaitSeconds": 15, "maxFixCiAttempts": 3 },
+        "runWhen": { "data.taskState.core.lastOutcome.type": ["RELEASE_DEPLOY_COMPLETED", "FIX_CI_COMPLETED"] } },
+
+      { "script": "dispatch", "with": { "next": "fix-ci", "target": "pr" },
+        "runWhen": { "data.action.type": "CI_FAILED" } },
+
       { "script": "finishFlow",
         "with": { "reason": "release-completed", "label": "kody:done", "color": "0e8a16", "description": "kody: release complete" },
-        "runWhen": { "data.taskState.core.lastOutcome.type": "RELEASE_DEPLOY_COMPLETED" } },
+        "runWhen": { "data.action.type": "CI_PASSED" } },
 
       { "script": "finishFlow",
         "with": { "reason": "release-failed", "label": "kody:failed", "color": "e11d21", "description": "kody: release flow failed" },
-        "runWhen": { "data.taskState.core.lastOutcome.type": ["RELEASE_PREPARE_FAILED", "RELEASE_MERGE_FAILED", "RELEASE_PUBLISH_FAILED", "RELEASE_DEPLOY_FAILED"] } },
+        "runWhen": { "data.action.type": ["CI_GIVEUP", "CI_TIMEOUT"] } },
+
+      { "script": "finishFlow",
+        "with": { "reason": "release-failed", "label": "kody:failed", "color": "e11d21", "description": "kody: release flow failed" },
+        "runWhen": { "data.taskState.core.lastOutcome.type": ["RELEASE_PREPARE_FAILED", "RELEASE_MERGE_FAILED", "RELEASE_PUBLISH_FAILED", "RELEASE_DEPLOY_FAILED", "FIX_CI_FAILED"] } },
 
       { "script": "persistFlowState" }
     ]
