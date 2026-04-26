@@ -5,13 +5,17 @@
  *
  * Args (from profile entry's `with` object):
  *   - next:   child executable to invoke (e.g. "run", "review", "fix")
- *   - target: "issue" | "pr" — where to post the comment. PR targets need
- *             state.core.prUrl to be set; otherwise falls back to the issue.
+ *   - target: "issue" | "pr" — where to post the comment. When target is "pr"
+ *             but `state.core.prUrl` is missing, the dispatch is aborted (the
+ *             child profile would reject `--issue` anyway). A synthetic
+ *             AGENT_NOT_RUN outcome is written so the orchestrator's existing
+ *             `aborted` finishFlow runWhen catches it and clears
+ *             `kody:orchestrating`.
  */
 
 import { execFileSync } from "node:child_process"
 import type { PostflightScript, ScriptArgs } from "../executables/types.js"
-import type { TaskState } from "../state.js"
+import type { Action, TaskState } from "../state.js"
 
 const API_TIMEOUT_MS = 30_000
 
@@ -30,6 +34,23 @@ export const dispatch: PostflightScript = async (ctx, _profile, _agentResult, ar
   }
 
   const state = ctx.data.taskState as TaskState | undefined
+
+  // target=pr requires a PR. Falling back to the issue would route to a
+  // profile (e.g. review) that doesn't accept `--issue`, surfacing as
+  // "required input missing: --pr" deep in the executor. Abort cleanly
+  // instead and let the orchestrator's aborted finishFlow handle cleanup.
+  if (target === "pr" && !state?.core.prUrl) {
+    const reason = `cannot dispatch @kody ${next}: target=pr but state.core.prUrl is not set`
+    process.stderr.write(`[kody dispatch] ${reason}\n`)
+    const action: Action = {
+      type: "AGENT_NOT_RUN",
+      payload: { reason, dispatchTarget: "pr", next },
+      timestamp: new Date().toISOString(),
+    }
+    ctx.data.action = action
+    if (state) state.core.lastOutcome = action
+    return
+  }
 
   if (state?.flow) {
     state.flow.step = next

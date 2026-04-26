@@ -169,6 +169,22 @@ describe("dispatch", () => {
     await dispatch(c, profile(), null, {})
     expect(execFileSync).not.toHaveBeenCalled()
   })
+
+  it("aborts when target=pr but no prUrl — emits AGENT_NOT_RUN and posts nothing", async () => {
+    const state: TaskState = {
+      ...emptyState(),
+      flow: { name: "f", step: "run", issueNumber: 42, startedAt: "t" },
+    }
+    const c = ctx({ data: { taskState: state } })
+    await dispatch(c, profile(), null, { next: "review", target: "pr" })
+    expect(execFileSync).not.toHaveBeenCalled()
+    const action = c.data.action as { type: string; payload: { reason: string; next: string } }
+    expect(action?.type).toBe("AGENT_NOT_RUN")
+    expect(action?.payload?.next).toBe("review")
+    expect(state.core.lastOutcome?.type).toBe("AGENT_NOT_RUN")
+    // Step is NOT advanced — there's no transition to record.
+    expect(state.flow?.step).toBe("run")
+  })
 })
 
 describe("finishFlow", () => {
