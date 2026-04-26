@@ -333,6 +333,24 @@ if [[ -z "$pr_url" ]]; then
   fail "release prepare: gh pr create returned empty URL" 4
 fi
 
+# Persist a release-PR marker on the originating issue body so the Kody
+# Dashboard can link the issue → PR even if @kody fix later overwrites the
+# PR body. Idempotent: any existing marker line is stripped before append,
+# so re-runs replace the previous PR ref. The issue body is owned by the
+# orchestrator (no @kody fix touches it), so this signal is durable.
+if [[ "${issue_arg:-}" =~ ^[0-9]+$ && "${issue_arg:-0}" != "0" ]]; then
+  pr_number="${pr_url##*/}"
+  if [[ "$pr_number" =~ ^[0-9]+$ ]]; then
+    cur_body=$(gh issue view "$issue_arg" --json body -q .body 2>/dev/null || echo "")
+    cleaned_body=$(printf '%s' "$cur_body" | sed -E '/<!-- kody-release-pr:[^>]*-->/d')
+    {
+      printf '%s' "$cleaned_body"
+      printf '\n\n<!-- kody-release-pr: #%s -->\n' "$pr_number"
+    } | gh issue edit "$issue_arg" --body-file - >/dev/null 2>&1 || \
+      echo "[kody release-prepare] WARN: failed to write kody-release-pr marker to issue #${issue_arg}"
+  fi
+fi
+
 echo "RELEASE_PR=${pr_url}"
 echo "KODY_PR_URL=${pr_url}"
 echo "KODY_REASON=opened release PR for ${tag}"

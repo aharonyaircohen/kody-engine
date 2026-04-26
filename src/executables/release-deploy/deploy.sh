@@ -74,6 +74,10 @@ existing=$(gh pr list --head "$default_branch" --base "$release_branch" --state 
   | python3 -c 'import json,sys; data=json.load(sys.stdin); print(data[0]["url"] if data else "")' 2>/dev/null \
   || echo "")
 
+# Hoisted so the kody-release-pr marker write below also runs in the
+# reuse-existing-PR path.
+issue_arg="${KODY_ARG_ISSUE:-}"
+
 if [[ -n "$existing" ]]; then
   echo "  reusing existing deploy PR: ${existing}"
   pr_url="$existing"
@@ -81,7 +85,6 @@ else
   # Same Tracking-Issue marker as release-prepare — non-closing reference
   # so the originating release issue stays open through the deploy step
   # while the Kody Dashboard can still link this PR to the task for preview.
-  issue_arg="${KODY_ARG_ISSUE:-}"
   tracking_line=""
   if [[ "$issue_arg" =~ ^[0-9]+$ && "$issue_arg" != "0" ]]; then
     tracking_line=$'\n\nTracking-Issue: #'"${issue_arg}"
@@ -100,6 +103,24 @@ if [[ -z "$pr_url" ]]; then
   echo "KODY_REASON=release deploy: empty PR URL after gh pr create"
   echo "KODY_SKIP_AGENT=true"
   exit 1
+fi
+
+# Persist the deploy-PR marker on the originating issue body. Mirrors the
+# release-prepare path — the issue body is owned by the orchestrator, so
+# this signal survives any @kody fix that overwrites the PR body. The
+# marker replaces the prepare-PR ref so the dashboard pivots to the deploy
+# PR (the now-current task) automatically.
+if [[ "${issue_arg:-}" =~ ^[0-9]+$ && "${issue_arg:-0}" != "0" ]]; then
+  pr_number="${pr_url##*/}"
+  if [[ "$pr_number" =~ ^[0-9]+$ ]]; then
+    cur_body=$(gh issue view "$issue_arg" --json body -q .body 2>/dev/null || echo "")
+    cleaned_body=$(printf '%s' "$cur_body" | sed -E '/<!-- kody-release-pr:[^>]*-->/d')
+    {
+      printf '%s' "$cleaned_body"
+      printf '\n\n<!-- kody-release-pr: #%s -->\n' "$pr_number"
+    } | gh issue edit "$issue_arg" --body-file - >/dev/null 2>&1 || \
+      echo "[kody release-deploy] WARN: failed to write kody-release-pr marker to issue #${issue_arg}"
+  fi
 fi
 
 echo "RELEASE_DEPLOY_PR=${pr_url}"
