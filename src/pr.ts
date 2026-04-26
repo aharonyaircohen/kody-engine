@@ -103,12 +103,21 @@ function firstLine(s: string): string {
 }
 
 export function findExistingPr(branch: string, cwd?: string): { number: number; url: string; body: string } | null {
+  // Use `gh pr list --head` rather than `gh pr view <branch>`. `gh pr view`
+  // treats a numeric arg as a PR number, so a branch literally named "1347"
+  // (kody convention `<issue>-<slug>` minus the slug) is misread as PR #1347
+  // and the existing PR is missed → the fall-through to `gh pr create` then
+  // crashes with "a pull request for branch X already exists".
   try {
-    const output = gh(["pr", "view", branch, "--json", "number,url,body"], { cwd })
-    const parsed = JSON.parse(output)
-    if (typeof parsed?.number === "number" && typeof parsed?.url === "string") {
-      const body = typeof parsed.body === "string" ? parsed.body : ""
-      return { number: parsed.number, url: parsed.url, body }
+    const output = gh(
+      ["pr", "list", "--head", branch, "--state", "open", "--json", "number,url,body", "--limit", "1"],
+      { cwd },
+    )
+    const arr = JSON.parse(output)
+    const first = Array.isArray(arr) ? arr[0] : null
+    if (first && typeof first.number === "number" && typeof first.url === "string") {
+      const body = typeof first.body === "string" ? first.body : ""
+      return { number: first.number, url: first.url, body }
     }
     return null
   } catch {
