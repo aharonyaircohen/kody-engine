@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
-import { autoDispatch } from "./dispatch.js"
+import { autoDispatch, dispatchScheduledWatches, type DispatchResult } from "./dispatch.js"
 import { runExecutable } from "./executor.js"
 import { reactToTriggerComment } from "./gha.js"
 import { postIssueComment, truncate } from "./issue.js"
@@ -242,6 +242,35 @@ export async function runCi(argv: string[]): Promise<number> {
   // --issue is only required when autoDispatch can't infer from GHA env.
   const autoFallback = !args.issueNumber ? autoDispatch({ config: earlyConfig }) : null
 
+  // Schedule wakes and parameterless workflow_dispatch fan out to every
+  // watch executable whose `schedule` cron matches the wake window
+  // (workflow_dispatch ignores the cron — it's an explicit "fire all").
+  // mission-scheduler is itself a watch and continues to fire from this
+  // path; nightly suites and any future watch executables join naturally,
+  // no kody.yml or config edits.
+  const eventName = process.env.GITHUB_EVENT_NAME
+  const dispatchEventPath = process.env.GITHUB_EVENT_PATH
+  let manualWorkflowDispatch = false
+  if (
+    !args.issueNumber &&
+    !autoFallback &&
+    eventName === "workflow_dispatch" &&
+    dispatchEventPath &&
+    fs.existsSync(dispatchEventPath)
+  ) {
+    try {
+      const evt = JSON.parse(fs.readFileSync(dispatchEventPath, "utf-8"))
+      const issueInput = parseInt(String(evt?.inputs?.issue_number ?? ""), 10)
+      const sessionInput = String(evt?.inputs?.sessionId ?? "")
+      manualWorkflowDispatch = !sessionInput && !(Number.isFinite(issueInput) && issueInput > 0)
+    } catch {
+      manualWorkflowDispatch = false
+    }
+  }
+  if (!args.issueNumber && !autoFallback && (eventName === "schedule" || manualWorkflowDispatch)) {
+    return runScheduledFanOut(cwd, args, { force: manualWorkflowDispatch })
+  }
+
   // Event present but dispatch returned null (e.g. merged non-release PR,
   // non-@kody comment) — exit 0 before paying for dep install. The consumer
   // YAML subscribes broadly on purpose so routing stays in dispatch.ts.
@@ -333,4 +362,82 @@ export async function runCi(argv: string[]): Promise<number> {
     postFailureTail(issueNumber, cwd, `run crashed: ${msg}`)
     return 99
   }
+}
+
+/**
+ * Run every watch executable whose `schedule` matches the wake window.
+ * Shares the same preflight (secret unpack, dep install, litellm, git
+ * identity) as the single-target path; runs each match sequentially.
+ * Aggregate exit code: 0 iff every watch returned 0.
+ */
+async function runScheduledFanOut(
+  cwd: string,
+  args: CiArgs,
+  opts: { force: boolean },
+): Promise<number> {
+  const matches: DispatchResult[] = dispatchScheduledWatches({ force: opts.force })
+  if (matches.length === 0) {
+    process.stdout.write(
+      `→ kody: scheduled wake — no watches matched ${opts.force ? "(force mode, no watches discovered)" : "(window)"}, exiting cleanly\n`,
+    )
+    return 0
+  }
+
+  const names = matches.map((m) => m.executable).join(", ")
+  process.stdout.write(`→ kody: scheduled wake — firing ${matches.length} watch(es): ${names}\n`)
+
+  try {
+    const n = unpackAllSecrets()
+    if (n > 0) process.stdout.write(`→ kody: unpacked ${n} secret(s) from ALL_SECRETS\n`)
+    resolveAuthToken()
+
+    const pm = args.packageManager ?? detectPackageManager(cwd)
+    process.stdout.write(`→ kody: package manager = ${pm}\n`)
+
+    if (!args.skipInstall) {
+      const code = installDeps(pm, cwd)
+      if (code !== 0) {
+        process.stderr.write(`[kody] dep install failed (${pm}, exit ${code})\n`)
+        return 99
+      }
+    }
+    if (!args.skipLitellm) {
+      const code = installLitellmIfNeeded(cwd)
+      if (code !== 0) {
+        process.stderr.write(`[kody] litellm install failed (exit ${code})\n`)
+        return 99
+      }
+    }
+    configureGitIdentity(cwd)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    process.stderr.write(`[kody] preflight crashed: ${msg}\n`)
+    return 99
+  }
+
+  const config = loadConfig(cwd)
+  let worstExit = 0
+  for (const match of matches) {
+    process.stdout.write(`\n→ kody: running watch \`${match.executable}\`\n`)
+    try {
+      const result = await runExecutable(match.executable, {
+        cliArgs: match.cliArgs,
+        cwd,
+        config,
+        verbose: args.verbose,
+        quiet: args.quiet,
+      })
+      if (result.exitCode !== 0) {
+        process.stderr.write(
+          `[kody] watch \`${match.executable}\` exited ${result.exitCode}: ${result.reason ?? "(no reason)"}\n`,
+        )
+        if (result.exitCode > worstExit) worstExit = result.exitCode
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[kody] watch \`${match.executable}\` crashed: ${msg}\n`)
+      worstExit = Math.max(worstExit, 99)
+    }
+  }
+  return worstExit
 }

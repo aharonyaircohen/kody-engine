@@ -14,8 +14,9 @@
 
 import * as fs from "node:fs"
 import { BUILTIN_ALIASES, type KodyConfig } from "./config.js"
+import { cronMatchesInWindow } from "./cron-match.js"
 import type { InputSpec } from "./executables/types.js"
-import { getProfileInputs } from "./registry.js"
+import { getProfileInputs, listExecutables } from "./registry.js"
 
 export interface DispatchResult {
   executable: string
@@ -53,20 +54,17 @@ export function autoDispatch(opts?: {
     if (!Number.isNaN(n) && n > 0) {
       return { executable: "run", cliArgs: { issue: n }, target: n }
     }
-    // No issue_number input → treat as an on-demand mission wake (same
-    // effect as a scheduled cron firing). Chat mode is already routed by
-    // the consumer workflow before kody ci is invoked, so reaching this
-    // branch implies agent/mission mode.
-    return { executable: "mission-scheduler", cliArgs: {}, target: 0 }
+    // No issue_number input → manual force-fire of all watch executables.
+    // The CLI handles this the same way as a schedule event but with the
+    // cron filter bypassed (humans want to test "now"). Returning null
+    // signals "fan out via dispatchScheduledWatches({ force: true })".
+    return null
   }
 
-  // Cron-driven wake: route to the mission-scheduler executable (the
-  // generic coordinator that fans out to per-issue mission-tick calls).
-  // Keeps the consumer workflow to a single file — users add
-  // `on: schedule: cron:` to their one kody.yml and kody ci takes it from there.
-  if (eventName === "schedule") {
-    return { executable: "mission-scheduler", cliArgs: {}, target: 0 }
-  }
+  // Cron-driven wakes are not handled here — they fire many executables
+  // (every watch whose `schedule` matches the wake window), not one. The
+  // CLI calls dispatchScheduledWatches() instead and iterates the result.
+  if (eventName === "schedule") return null
 
   // PR-merge events are no longer routed here for release: the `release`
   // orchestrator merges its own PR via `mergeReleasePr` and then dispatches
@@ -132,6 +130,55 @@ export function autoDispatch(opts?: {
   }
 
   return { executable, cliArgs: args, target: targetNum }
+}
+
+/**
+ * Fan-out for scheduled wakes. Returns a DispatchResult per watch executable
+ * (`role: "watch"`, `kind: "scheduled"`) whose `schedule` cron matched any
+ * minute in the wake window `(now - windowSec, now]`. With `force: true`
+ * the cron filter is skipped — used when a human runs workflow_dispatch
+ * manually to fire every watch right now.
+ *
+ * Window default: `KODY_SCHEDULE_WINDOW_SEC` env var, else 300s. The
+ * window absorbs GitHub Actions cron drift; pick something ≥ the workflow's
+ * own wake interval.
+ *
+ * The list is sorted by name for deterministic ordering. The CLI runs each
+ * sequentially; per-watch failures don't stop the rest.
+ */
+export function dispatchScheduledWatches(opts?: { now?: Date; windowSec?: number; force?: boolean }): DispatchResult[] {
+  const now = opts?.now ?? new Date()
+  const envWindow = Number(process.env.KODY_SCHEDULE_WINDOW_SEC)
+  const windowSec = opts?.windowSec ?? (Number.isFinite(envWindow) && envWindow > 0 ? envWindow : 300)
+  const out: DispatchResult[] = []
+  for (const exe of listExecutables()) {
+    let raw: string
+    try {
+      raw = fs.readFileSync(exe.profilePath, "utf-8")
+    } catch {
+      continue
+    }
+    let profile: Record<string, unknown>
+    try {
+      profile = JSON.parse(raw) as Record<string, unknown>
+    } catch {
+      continue
+    }
+    if (profile.role !== "watch") continue
+    if (profile.kind !== "scheduled") continue
+    const schedule = profile.schedule
+    if (typeof schedule !== "string" || schedule.trim().length === 0) continue
+    if (!opts?.force) {
+      try {
+        if (!cronMatchesInWindow(schedule, now, windowSec)) continue
+      } catch {
+        // Malformed cron in a profile — skip rather than crash the whole wake.
+        continue
+      }
+    }
+    out.push({ executable: exe.name, cliArgs: {}, target: 0 })
+  }
+  return out
 }
 
 // ────────────────────────────────────────────────────────────────────────────

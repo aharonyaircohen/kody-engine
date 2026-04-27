@@ -50,14 +50,10 @@ describe("dispatch: workflow_dispatch event", () => {
     })
   })
 
-  it("routes workflow_dispatch with no issue_number to the mission-scheduler (on-demand wake)", () => {
+  it("returns null for workflow_dispatch with no issue_number — caller fans out via dispatchScheduledWatches(force)", () => {
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
     process.env.GITHUB_EVENT_PATH = writeEvent({ inputs: {} })
-    expect(autoDispatch()).toEqual({
-      executable: "mission-scheduler",
-      cliArgs: {},
-      target: 0,
-    })
+    expect(autoDispatch()).toBeNull()
   })
 })
 
@@ -72,14 +68,10 @@ describe("dispatch: schedule event", () => {
     process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
   })
 
-  it("routes schedule/cron wakes to the mission-scheduler executable", () => {
+  it("returns null for schedule events — caller fans out via dispatchScheduledWatches", () => {
     process.env.GITHUB_EVENT_NAME = "schedule"
     process.env.GITHUB_EVENT_PATH = writeEvent({ schedule: "*/5 * * * *" })
-    expect(autoDispatch()).toEqual({
-      executable: "mission-scheduler",
-      cliArgs: {},
-      target: 0,
-    })
+    expect(autoDispatch()).toBeNull()
   })
 })
 
