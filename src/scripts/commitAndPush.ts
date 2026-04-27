@@ -52,8 +52,10 @@ export const commitAndPush: PostflightScript = async (ctx) => {
     const postCommitFiles = result.committed ? listFilesInCommit("HEAD", ctx.cwd) : listChangedFiles(ctx.cwd)
     ctx.data.changedFiles = postCommitFiles.filter((f) => !isForbiddenPath(f))
   } catch (err) {
-    ctx.data.commitCrash = err instanceof Error ? err.message : String(err)
+    const reason = err instanceof Error ? err.message : String(err)
+    ctx.data.commitCrash = reason
     ctx.data.commitResult = { committed: false, pushed: false }
+    process.stderr.write(`[kody commitAndPush] failed: ${reason}\n`)
   }
 
   ctx.data.hasCommitsAhead = hasCommitsAhead(branch, ctx.config.git.defaultBranch, ctx.cwd)

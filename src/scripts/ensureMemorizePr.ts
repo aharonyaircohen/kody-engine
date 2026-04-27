@@ -20,12 +20,24 @@ export const ensureMemorizePr: PostflightScript = async (ctx) => {
     return
   }
 
-  const commitResult = ctx.data.commitResult as { committed: boolean } | undefined
+  const commitResult = ctx.data.commitResult as { committed: boolean; pushed?: boolean } | undefined
   const hasCommits = Boolean(ctx.data.hasCommitsAhead)
   if (!commitResult?.committed && !hasCommits) {
     process.stdout.write("[kody memorize] no vault changes — skipping PR\n")
     ctx.output.exitCode = 0
     ctx.output.reason = "no vault changes"
+    return
+  }
+
+  // hasCommitsAhead compares the local branch against origin/<default>; a local
+  // commit can show as ahead even when the branch was never pushed (auth error,
+  // protected-branch rule, etc.). gh pr create needs the branch on origin —
+  // refuse to call it if commitAndPush couldn't push.
+  if (commitResult?.committed && commitResult.pushed === false) {
+    const reason = (ctx.data.commitCrash as string | undefined) ?? "push failed"
+    ctx.output.exitCode = 4
+    ctx.output.reason = `memorize: branch not pushed to origin — ${reason}`
+    process.stderr.write(`[kody memorize] not opening PR: ${ctx.output.reason}\n`)
     return
   }
 
