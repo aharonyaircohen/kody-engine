@@ -15,7 +15,9 @@ import { composePrompt } from "./composePrompt.js"
 import { diagMcp } from "./diagMcp.js"
 import { discoverQaContext } from "./discoverQaContext.js"
 import { dispatch } from "./dispatch.js"
+import { dispatchMissionFileTicks } from "./dispatchMissionFileTicks.js"
 import { dispatchMissionTicks } from "./dispatchMissionTicks.js"
+import { loadMissionFromFile } from "./loadMissionFromFile.js"
 import { ensurePr } from "./ensurePr.js"
 import { finishFlow } from "./finishFlow.js"
 import { fixCiFlow } from "./fixCiFlow.js"
@@ -33,6 +35,7 @@ import { mirrorStateToPr } from "./mirrorStateToPr.js"
 import { notifyTerminal } from "./notifyTerminal.js"
 import { parseAgentResult } from "./parseAgentResult.js"
 import { parseIssueStateFromAgentResult } from "./parseIssueStateFromAgentResult.js"
+import { parseMissionStateFromAgentResult } from "./parseMissionStateFromAgentResult.js"
 import { persistArtifacts } from "./persistArtifacts.js"
 import { persistFlowState } from "./persistFlowState.js"
 import { postClassification } from "./postClassification.js"
@@ -59,6 +62,7 @@ import { verify } from "./verify.js"
 import { waitForCi } from "./waitForCi.js"
 import { watchStalePrsFlow } from "./watchStalePrsFlow.js"
 import { writeIssueStateComment } from "./writeIssueStateComment.js"
+import { writeMissionGistState } from "./writeMissionGistState.js"
 import { writeRunSummary } from "./writeRunSummary.js"
 
 export const preflightScripts: Record<string, PreflightScript> = {
@@ -73,6 +77,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   loadTaskState,
   loadIssueContext,
   loadIssueStateComment,
+  loadMissionFromFile,
   loadConventions,
   loadCoverageRules,
   loadPriorArt,
@@ -88,12 +93,15 @@ export const preflightScripts: Record<string, PreflightScript> = {
   classifyByLabel,
   diagMcp,
   dispatchMissionTicks,
+  dispatchMissionFileTicks,
 }
 
 export const postflightScripts: Record<string, PostflightScript> = {
   parseAgentResult,
   parseIssueStateFromAgentResult,
+  parseMissionStateFromAgentResult,
   writeIssueStateComment,
+  writeMissionGistState,
   requireFeedbackActions,
   requirePlanDeviations,
   verify,

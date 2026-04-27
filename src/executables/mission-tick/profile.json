@@ -1,15 +1,15 @@
 {
   "name": "mission-tick",
   "role": "primitive",
-  "describe": "One classifier tick for one mission issue: read intent + state, decide and execute via gh, emit next state.",
+  "describe": "One classifier tick for one mission file: read intent + state, decide and execute via gh, emit next state.",
   "kind": "oneshot",
   "inputs": [
     {
-      "name": "issue",
-      "flag": "--issue",
-      "type": "int",
+      "name": "mission",
+      "flag": "--mission",
+      "type": "string",
       "required": true,
-      "describe": "GitHub issue number that owns this mission."
+      "describe": "Mission slug — basename (without .md) of the file under .kody/missions/."
     }
   ],
   "claudeCode": {
@@ -34,8 +34,8 @@
         "checkCommand": "command -v gh"
       },
       "verify": "gh auth status",
-      "usage": "Use `gh` for all GitHub actions: `gh workflow run <workflow> -f <key>=<val>` to spawn a child run, `gh run view <id> --json status,conclusion` to check status, `gh issue comment <n> --body \"...\"` to post narration. NEVER edit files in the working tree.",
-      "allowedUses": ["workflow", "run", "issue", "pr", "api"]
+      "usage": "Use `gh` for all GitHub actions: `gh pr list ...` to enumerate candidate PRs, `gh pr comment <n> --body \"...\"` to issue a Kody command, `gh pr view <n> --json mergeable,statusCheckRollup,headRefOid` to inspect state, `gh api ...` for anything else. NEVER edit files in the working tree.",
+      "allowedUses": ["pr", "api", "issue"]
     }
   ],
   "inputArtifacts": [],
@@ -43,10 +43,10 @@
   "scripts": {
     "preflight": [
       {
-        "script": "loadIssueStateComment",
+        "script": "loadMissionFromFile",
         "with": {
-          "marker": "kody-mission-state",
-          "issueArg": "issue"
+          "missionsDir": ".kody/missions",
+          "slugArg": "mission"
         }
       },
       {
@@ -55,17 +55,13 @@
     ],
     "postflight": [
       {
-        "script": "parseIssueStateFromAgentResult",
+        "script": "parseMissionStateFromAgentResult",
         "with": {
           "fenceLabel": "kody-mission-next-state"
         }
       },
       {
-        "script": "writeIssueStateComment",
-        "with": {
-          "marker": "kody-mission-state",
-          "issueArg": "issue"
-        }
+        "script": "writeMissionGistState"
       }
     ]
   }
