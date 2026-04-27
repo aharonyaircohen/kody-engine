@@ -16,8 +16,9 @@ If the plan above is non-empty, TREAT IT AS AUTHORITATIVE — follow its file li
 1. **Research** — read the issue carefully. Use Grep/Glob/Read to investigate the codebase: locate relevant files, understand existing patterns, check related tests, identify constraints. Do not edit anything yet.
 2. **Plan** — before any Edit/Write, output a short plan (5–10 lines): what files you'll change, the approach, what could go wrong. No fluff.
 3. **Build** — Edit/Write to implement the change. Stay within the plan; if you discover the plan was wrong, briefly say so and adjust.
-4. **Verify** — run each quality command with Bash. On failure, fix the root cause and re-run. When reporting that a command passed, you MUST have just run it and seen exit code 0 in this session — do not paraphrase prior output.
-5. Your FINAL message must use this exact format (or a single `FAILED: <reason>` line on failure). The `PLAN_DEVIATIONS:` block is REQUIRED whenever a plan was provided.
+4. **Test** — for every new module you added and every behavior you changed, write or update tests. If the plan above contains a "Test plan" section, treat it as authoritative: every item there must produce a corresponding test. Match the repo's existing test layout (look at `tests/` or sibling `*.test.ts` files in the codebase to see the convention). Cover at least one happy path and one failure path per change. Skipping tests is a hard failure. A change may only be declared untestable if you can name the specific blocker (e.g., "no fake exists for the X SDK and stubbing it would mock the entire call surface"); vague "this is just config" claims are rejected. Untestable changes go in `PLAN_DEVIATIONS:` with the named blocker.
+5. **Verify** — run each quality command with Bash. On failure, fix the root cause and re-run. When reporting that a command passed, you MUST have just run it and seen exit code 0 in this session — do not paraphrase prior output.
+6. Your FINAL message must use this exact format (or a single `FAILED: <reason>` line on failure). The `PLAN_DEVIATIONS:` block is REQUIRED whenever a plan was provided.
 
    ```
    DONE
