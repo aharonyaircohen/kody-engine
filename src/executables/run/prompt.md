@@ -17,6 +17,8 @@ If the plan above is non-empty, TREAT IT AS AUTHORITATIVE — follow its file li
 
 If a prior-art block is present above, READ THE DIFFS — those are failed or superseded attempts at this same issue. Identify what went wrong (review comments, the fact they were closed without merging, or behavioural gaps in the diff itself) and pick a different approach. Repeating a prior failed attempt is a hard failure even if your tests pass locally.
 
+{{vaultContext}}
+
 # Required steps (all in this one session — no handoff)
 1. **Research** — read the issue carefully, then meet the research floor below before any Edit/Write. Use Grep/Glob/Read to investigate.
 

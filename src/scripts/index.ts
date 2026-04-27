@@ -17,6 +17,7 @@ import { discoverQaContext } from "./discoverQaContext.js"
 import { dispatch } from "./dispatch.js"
 import { dispatchMissionFileTicks } from "./dispatchMissionFileTicks.js"
 import { dispatchMissionTicks } from "./dispatchMissionTicks.js"
+import { ensureMemorizePr } from "./ensureMemorizePr.js"
 import { ensurePr } from "./ensurePr.js"
 import { finishFlow } from "./finishFlow.js"
 import { fixCiFlow } from "./fixCiFlow.js"
@@ -30,6 +31,8 @@ import { loadMissionFromFile } from "./loadMissionFromFile.js"
 import { loadPriorArt } from "./loadPriorArt.js"
 import { loadQaGuide } from "./loadQaGuide.js"
 import { loadTaskState } from "./loadTaskState.js"
+import { loadVaultContext } from "./loadVaultContext.js"
+import { memorizeFlow } from "./memorizeFlow.js"
 import { mergeReleasePr } from "./mergeReleasePr.js"
 import { mirrorStateToPr } from "./mirrorStateToPr.js"
 import { notifyTerminal } from "./notifyTerminal.js"
@@ -74,7 +77,9 @@ export const preflightScripts: Record<string, PreflightScript> = {
   syncFlow,
   initFlow,
   watchStalePrsFlow,
+  memorizeFlow,
   loadTaskState,
+  loadVaultContext,
   loadIssueContext,
   loadIssueStateComment,
   loadMissionFromFile,
@@ -110,6 +115,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   stageMergeConflicts,
   commitAndPush,
   ensurePr,
+  ensureMemorizePr,
   postIssueComment,
   postPlanComment,
   postResearchComment,

@@ -46,6 +46,7 @@
       { "script": "loadTaskState" },
       { "script": "resolveArtifacts" },
       { "script": "loadPriorArt" },
+      { "script": "loadVaultContext" },
       { "script": "loadConventions" },
       { "script": "loadCoverageRules" },
       { "script": "composePrompt" }

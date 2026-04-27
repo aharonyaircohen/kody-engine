@@ -47,6 +47,10 @@ on:
     types: [created]
   pull_request:
     types: [closed]
+  schedule:
+    # Wakes every 5 minutes; kody fans out to whichever scheduled executables
+    # (mission-scheduler, memorize, watch-stale-prs, …) match this minute.
+    - cron: "*/5 * * * *"
 
 jobs:
   run:

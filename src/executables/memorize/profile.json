@@ -1,0 +1,48 @@
+{
+  "name": "memorize",
+  "role": "watch",
+  "describe": "Scheduled: synthesize recently merged PRs into the project's .kody/vault/ markdown wiki and open a PR with the changes.",
+  "kind": "scheduled",
+  "schedule": "0 3 * * *",
+  "inputs": [],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "acceptEdits",
+    "maxTurns": null,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+    "hooks": ["block-git"],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [
+    {
+      "name": "gh",
+      "install": {
+        "required": true,
+        "checkCommand": "command -v gh"
+      },
+      "verify": "gh auth status",
+      "usage": "Use `gh` only for read-only inspection (`gh pr view`, `gh pr list`, `gh api`) when you need extra context on a referenced PR. Never use it to commit, push, or open PRs — the wrapper does that.",
+      "allowedUses": ["pr", "api", "issue"]
+    }
+  ],
+  "inputArtifacts": [],
+  "outputArtifacts": [],
+  "scripts": {
+    "preflight": [
+      { "script": "memorizeFlow" },
+      { "script": "composePrompt" }
+    ],
+    "postflight": [
+      { "script": "parseAgentResult" },
+      { "script": "abortUnfinishedGitOps" },
+      { "script": "commitAndPush" },
+      { "script": "ensureMemorizePr" }
+    ]
+  }
+}

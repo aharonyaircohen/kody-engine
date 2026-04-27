@@ -64,6 +64,9 @@
         "script": "loadConventions"
       },
       {
+        "script": "loadVaultContext"
+      },
+      {
         "script": "loadCoverageRules"
       },
       {
