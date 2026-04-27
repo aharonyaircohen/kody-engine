@@ -18,7 +18,7 @@ export interface DiscoveredExecutable {
 }
 
 /**
- * Resolve the executables root directory. Mirrors `resolveProfilePath`
+ * Resolve the engine's built-in executables root. Mirrors `resolveProfilePath`
  * in executor.ts so dev (src/) and built (dist/) layouts both work.
  */
 export function getExecutablesRoot(): string {
@@ -35,29 +35,78 @@ export function getExecutablesRoot(): string {
 }
 
 /**
- * List every discovered executable. Each needs a directory containing
- * a readable `profile.json`. Directories without one are silently skipped
- * (allows for shared modules like `executables/types.ts`).
+ * Resolve the consumer-repo executables root. Looks for `.kody/executables/`
+ * relative to the current working directory (the engine runs from the
+ * consumer repo's checkout). Returns the path even if it doesn't exist;
+ * callers must check.
  */
-export function listExecutables(root: string = getExecutablesRoot()): DiscoveredExecutable[] {
-  if (!fs.existsSync(root)) return []
-  const entries = fs.readdirSync(root, { withFileTypes: true })
+export function getProjectExecutablesRoot(): string {
+  return path.join(process.cwd(), ".kody", "executables")
+}
+
+/**
+ * Ordered list of executable roots, project first, engine second. Project
+ * roots override engine roots on name conflict — the consumer repo always
+ * wins. Engine ships a stdlib (chat, run, plan, …); project repos can
+ * override or add new executables under `.kody/executables/<name>/`.
+ */
+export function getExecutableRoots(): string[] {
+  return [getProjectExecutablesRoot(), getExecutablesRoot()]
+}
+
+/**
+ * List every discovered executable across all roots. On name conflict the
+ * first root wins, so a `.kody/executables/chat/` in the consumer repo
+ * shadows the engine's `chat`. Each needs a directory containing a readable
+ * `profile.json`. Directories without one are silently skipped.
+ */
+export function listExecutables(
+  roots: string | string[] = getExecutableRoots(),
+): DiscoveredExecutable[] {
+  const rootList = typeof roots === "string" ? [roots] : roots
+  const seen = new Set<string>()
   const out: DiscoveredExecutable[] = []
-  for (const ent of entries) {
-    if (!ent.isDirectory()) continue
-    const profilePath = path.join(root, ent.name, "profile.json")
-    if (fs.existsSync(profilePath) && fs.statSync(profilePath).isFile()) {
-      out.push({ name: ent.name, profilePath })
+  for (const root of rootList) {
+    if (!fs.existsSync(root)) continue
+    const entries = fs.readdirSync(root, { withFileTypes: true })
+    for (const ent of entries) {
+      if (!ent.isDirectory()) continue
+      if (seen.has(ent.name)) continue // earlier root wins
+      const profilePath = path.join(root, ent.name, "profile.json")
+      if (fs.existsSync(profilePath) && fs.statSync(profilePath).isFile()) {
+        out.push({ name: ent.name, profilePath })
+        seen.add(ent.name)
+      }
     }
   }
   return out.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-/** Convenience: true iff `<root>/<name>/profile.json` exists. */
-export function hasExecutable(name: string, root: string = getExecutablesRoot()): boolean {
-  if (!isSafeName(name)) return false
-  const profilePath = path.join(root, name, "profile.json")
-  return fs.existsSync(profilePath) && fs.statSync(profilePath).isFile()
+/**
+ * Resolve a single executable by name across all roots. Returns the first
+ * matching `profile.json` path, or null if nothing matches.
+ */
+export function resolveExecutable(
+  name: string,
+  roots: string | string[] = getExecutableRoots(),
+): string | null {
+  if (!isSafeName(name)) return null
+  const rootList = typeof roots === "string" ? [roots] : roots
+  for (const root of rootList) {
+    const profilePath = path.join(root, name, "profile.json")
+    if (fs.existsSync(profilePath) && fs.statSync(profilePath).isFile()) {
+      return profilePath
+    }
+  }
+  return null
+}
+
+/** Convenience: true iff `<name>/profile.json` exists in any root. */
+export function hasExecutable(
+  name: string,
+  roots: string | string[] = getExecutableRoots(),
+): boolean {
+  return resolveExecutable(name, roots) !== null
 }
 
 /** Executable names: lowercase letters, digits, and dashes. Rejects traversal. */
@@ -72,9 +121,12 @@ export function isSafeName(name: string): boolean {
  * the executable doesn't exist or the profile is unreadable (dispatch
  * should degrade gracefully, not throw).
  */
-export function getProfileInputs(name: string, root: string = getExecutablesRoot()): InputSpec[] | null {
-  if (!hasExecutable(name, root)) return null
-  const profilePath = path.join(root, name, "profile.json")
+export function getProfileInputs(
+  name: string,
+  roots: string | string[] = getExecutableRoots(),
+): InputSpec[] | null {
+  const profilePath = resolveExecutable(name, roots)
+  if (!profilePath) return null
   try {
     const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8"))
     if (!raw || typeof raw !== "object" || !Array.isArray(raw.inputs)) return []
