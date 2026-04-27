@@ -17,6 +17,7 @@ import { loadConfig, parseProviderModel } from "./config.js"
 import type { Context, InputSpec, Profile, ScriptEntry } from "./executables/types.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
+import { resolveExecutable } from "./registry.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
 import { firstRequiredFailure, verifyCliTools } from "./tools.js"
 
@@ -212,9 +213,15 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
 // ────────────────────────────────────────────────────────────────────────────
 
 function resolveProfilePath(profileName: string): string {
-  // Resolve profile in both layouts:
-  //   - dev / tsx: src/executor.ts    → src/executables/<name>/profile.json
-  //   - prod bundle: dist/bin/kody.js → dist/executables/<name>/profile.json
+  // Delegate to the registry, which knows about both the consumer-repo
+  // root (`.kody/executables/`) and the engine-bundled root. Project roots
+  // win on name conflict — letting consumer repos override engine
+  // executables or add new ones without forking.
+  const found = resolveExecutable(profileName)
+  if (found) return found
+  // Fall back to the legacy engine-only search so the error surface (file
+  // not found) points at the expected engine location, not a project path
+  // that may not exist at all.
   const here = path.dirname(new URL(import.meta.url).pathname)
   const candidates = [
     path.join(here, "executables", profileName, "profile.json"), // same-dir sibling (dev)
