@@ -239,7 +239,9 @@ function walkApiRoutes(dir: string, prefix: string, cwd: string, out: ApiRouteIn
   if (routeFile) {
     try {
       const content = fs.readFileSync(path.join(dir, routeFile.name), "utf-8").slice(0, 5000)
-      const methods = HTTP_METHODS.filter((m) => new RegExp(`export\\s+(?:async\\s+)?function\\s+${m}\\b`).test(content))
+      const methods = HTTP_METHODS.filter((m) =>
+        new RegExp(`export\\s+(?:async\\s+)?function\\s+${m}\\b`).test(content),
+      )
       if (methods.length > 0) {
         out.push({
           path: prefix,

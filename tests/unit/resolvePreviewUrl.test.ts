@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { DEFAULT_PREVIEW_URL, resolvePreviewUrl } from "../../src/scripts/resolvePreviewUrl.js"
 import type { Context, Profile } from "../../src/executables/types.js"
+import { DEFAULT_PREVIEW_URL, resolvePreviewUrl } from "../../src/scripts/resolvePreviewUrl.js"
 
 function makeCtx(args: Record<string, unknown> = {}): Context {
   return {

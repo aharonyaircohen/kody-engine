@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { loadPriorArt } from "../../src/scripts/loadPriorArt.js"
 import type { Context, Profile } from "../../src/executables/types.js"
+import { loadPriorArt } from "../../src/scripts/loadPriorArt.js"
 import type { TaskState } from "../../src/state.js"
 
 function makeCtx(taskState?: Partial<TaskState>): Context {

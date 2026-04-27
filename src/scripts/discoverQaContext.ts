@@ -14,18 +14,13 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type { PreflightScript } from "../executables/types.js"
+import type { AdminComponentInfo, ApiRouteInfo, CollectionInfo, FrameworkInfo } from "./frameworkDetectors.js"
 import {
   detectFrameworks,
   discoverAdminComponents,
   discoverPayloadCollections,
   scanApiRoutes,
   scanEnvVars,
-} from "./frameworkDetectors.js"
-import type {
-  AdminComponentInfo,
-  ApiRouteInfo,
-  CollectionInfo,
-  FrameworkInfo,
 } from "./frameworkDetectors.js"
 
 export interface QaDiscovery {

@@ -57,7 +57,7 @@ export const dispatch: PostflightScript = async (ctx, _profile, _agentResult, ar
   }
 
   const usePr = target === "pr" && state?.core.prUrl
-  const targetNumber = usePr ? parsePr(state!.core.prUrl!) ?? issueNumber : issueNumber
+  const targetNumber = usePr ? (parsePr(state!.core.prUrl!) ?? issueNumber) : issueNumber
   const sub = usePr ? "pr" : "issue"
   const body = `@kody ${next}`
 

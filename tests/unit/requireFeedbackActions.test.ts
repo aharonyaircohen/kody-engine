@@ -17,9 +17,7 @@ function makeCtx(data: Record<string, unknown>) {
 
 describe("requireFeedbackActions: countActionItems", () => {
   it("counts dash-prefixed lines", () => {
-    expect(
-      countActionItems(["- Item 1: fixed", "- Item 2: declined: …", "- Item 3: fixed"].join("\n")),
-    ).toBe(3)
+    expect(countActionItems(["- Item 1: fixed", "- Item 2: declined: …", "- Item 3: fixed"].join("\n"))).toBe(3)
   })
   it("counts asterisk-prefixed lines", () => {
     expect(countActionItems("* Item 1\n* Item 2")).toBe(2)

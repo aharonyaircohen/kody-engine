@@ -44,18 +44,18 @@ export const postClassification: PostflightScript = async (ctx) => {
 
   if (!classification) {
     ctx.data.action = failedAction("classification missing or invalid")
-    tryAuditComment(issueNumber, "⚠️ kody classifier could not decide — please re-run with an explicit `@kody <type>`.", ctx.cwd)
+    tryAuditComment(
+      issueNumber,
+      "⚠️ kody classifier could not decide — please re-run with an explicit `@kody <type>`.",
+      ctx.cwd,
+    )
     ctx.output.exitCode = 1
     ctx.output.reason = "classify: no decision"
     return
   }
 
   // Audit trail (human-readable, sanitized).
-  tryAuditComment(
-    issueNumber,
-    `🔎 kody classified as \`${classification}\`${reason ? ` — ${reason}` : ""}`,
-    ctx.cwd,
-  )
+  tryAuditComment(issueNumber, `🔎 kody classified as \`${classification}\`${reason ? ` — ${reason}` : ""}`, ctx.cwd)
 
   // Dispatch the chosen sub-orchestrator. Goes through execFileSync so it
   // reaches GHA's issue_comment filter; postIssueComment would sanitize.

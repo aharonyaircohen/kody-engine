@@ -10,8 +10,8 @@ vi.mock("../../src/commit.js", () => ({
   listFilesInCommit: () => [],
 }))
 
-import type { Profile } from "../../src/executables/types.js"
 import { commitAndPush as doCommitAndPush } from "../../src/commit.js"
+import type { Profile } from "../../src/executables/types.js"
 import { commitAndPush } from "../../src/scripts/commitAndPush.js"
 
 const profile = { name: "fix" } as Profile

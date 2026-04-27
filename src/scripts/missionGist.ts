@@ -16,11 +16,11 @@
 
 import { gh } from "../issue.js"
 import {
-  type StateEnvelope,
   formatStateCommentBody,
   initialStateEnvelope,
   isStateEnvelope,
   parseStateCommentBody,
+  type StateEnvelope,
 } from "./issueStateComment.js"
 
 export interface LoadedMissionGist {
@@ -118,12 +118,7 @@ function readEnvelope(gist: GistRecord): StateEnvelope | null {
  * Find the mission's state gist. Returns `null` when no gist exists yet
  * (first-tick case) — callers should bootstrap via `createMissionGist`.
  */
-export function findMissionGist(
-  owner: string,
-  repo: string,
-  slug: string,
-  cwd?: string,
-): LoadedMissionGist | null {
+export function findMissionGist(owner: string, repo: string, slug: string, cwd?: string): LoadedMissionGist | null {
   const desc = gistDescription(owner, repo, slug)
   const gist = findGistByDescription(desc, cwd)
   if (!gist) return null

@@ -48,17 +48,18 @@ export const requirePlanDeviations: PostflightScript = async (ctx, profile) => {
 export function isNoneSentinel(block: string): boolean {
   const stripped = block
     .split("\n")
-    .map((l) => l.replace(/^\s*[-*]\s*/, "").trim().toLowerCase())
+    .map((l) =>
+      l
+        .replace(/^\s*[-*]\s*/, "")
+        .trim()
+        .toLowerCase(),
+    )
     .filter((l) => l.length > 0)
   if (stripped.length !== 1) return false
   return stripped[0] === "none"
 }
 
-function fail(
-  ctx: Parameters<PostflightScript>[0],
-  profile: Parameters<PostflightScript>[1],
-  reason: string,
-): void {
+function fail(ctx: Parameters<PostflightScript>[0], profile: Parameters<PostflightScript>[1], reason: string): void {
   ctx.data.agentDone = false
   ctx.data.agentFailureReason = reason
   const modeSeg = profile.name.replace(/-/g, "_").toUpperCase()

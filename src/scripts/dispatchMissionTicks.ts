@@ -74,10 +74,9 @@ export const dispatchMissionTicks: PreflightScript = async (ctx, _profile, args)
 function listIssuesByLabel(label: string, cwd: string): IssueRef[] {
   let raw = ""
   try {
-    raw = gh(
-      ["issue", "list", "--state", "open", "--label", label, "--limit", "100", "--json", "number,title"],
-      { cwd },
-    )
+    raw = gh(["issue", "list", "--state", "open", "--label", label, "--limit", "100", "--json", "number,title"], {
+      cwd,
+    })
   } catch {
     return []
   }

@@ -13,11 +13,11 @@ import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type { PreflightScript } from "../executables/types.js"
-import { ensureLabels, type EnsureLabelsResult } from "../lifecycleLabels.js"
+import { type EnsureLabelsResult, ensureLabels } from "../lifecycleLabels.js"
 import { loadProfile } from "../profile.js"
 import { listExecutables } from "../registry.js"
-import { QA_GUIDE_REL_PATH } from "./loadQaGuide.js"
 import { generateQaGuideTemplate, runQaDiscovery } from "./discoverQaContext.js"
+import { QA_GUIDE_REL_PATH } from "./loadQaGuide.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -289,9 +289,7 @@ export const initFlow: PreflightScript = async (ctx) => {
       process.stdout.write(`  labels   ensured ${labels.created.length} lifecycle label(s)\n`)
     }
     if (labels.failed.length > 0) {
-      process.stdout.write(
-        `  labels   ${labels.failed.length} failed (gh auth missing? will self-heal on first run)\n`,
-      )
+      process.stdout.write(`  labels   ${labels.failed.length} failed (gh auth missing? will self-heal on first run)\n`)
     }
   }
   process.stdout.write(

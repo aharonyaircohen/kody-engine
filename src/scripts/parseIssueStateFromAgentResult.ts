@@ -70,8 +70,7 @@ export const parseIssueStateFromAgentResult: PostflightScript = async (ctx, _pro
   }
 
   if (!isPartialEnvelope(parsed)) {
-    ctx.data.nextStateParseError =
-      "state must be an object with string `cursor`, object `data`, and boolean `done`"
+    ctx.data.nextStateParseError = "state must be an object with string `cursor`, object `data`, and boolean `done`"
     return
   }
 

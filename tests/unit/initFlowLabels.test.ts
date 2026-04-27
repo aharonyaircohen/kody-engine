@@ -52,8 +52,6 @@ describe("performInit: lifecycle labels", () => {
 
     expect(result.wrote).toContain("kody.config.json")
     expect(result.labels).toBeDefined()
-    expect(result.labels!.created.length + result.labels!.failed.length).toBe(
-      collectProfileLabels().length,
-    )
+    expect(result.labels!.created.length + result.labels!.failed.length).toBe(collectProfileLabels().length)
   })
 })

@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("../../src/lifecycleLabels.js", async () => {
-  const actual = await vi.importActual<typeof import("../../src/lifecycleLabels.js")>(
-    "../../src/lifecycleLabels.js",
-  )
+  const actual = await vi.importActual<typeof import("../../src/lifecycleLabels.js")>("../../src/lifecycleLabels.js")
   return {
     ...actual,
     setKodyLabel: vi.fn(),

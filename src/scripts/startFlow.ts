@@ -67,7 +67,8 @@ function postKodyComment(
   next: string,
   cwd: string,
 ): void {
-  const targetNumber = target === "pr" && state?.core.prUrl ? parsePrNumber(state.core.prUrl) ?? issueNumber : issueNumber
+  const targetNumber =
+    target === "pr" && state?.core.prUrl ? (parsePrNumber(state.core.prUrl) ?? issueNumber) : issueNumber
   const sub = target === "pr" && state?.core.prUrl ? "pr" : "issue"
   const body = `@kody ${next}`
   try {
@@ -82,4 +83,3 @@ function postKodyComment(
     )
   }
 }
-

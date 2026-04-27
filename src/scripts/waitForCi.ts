@@ -130,16 +130,12 @@ export const waitForCi: PostflightScript = async (ctx, _profile, _agentResult, a
 
 function fetchChecks(prNumber: number, cwd?: string): CheckRow[] | null {
   try {
-    const raw = execFileSync(
-      "gh",
-      ["pr", "checks", String(prNumber), "--json", "bucket,state,name,workflow,link"],
-      {
-        encoding: "utf-8",
-        timeout: API_TIMEOUT_MS,
-        cwd,
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    )
+    const raw = execFileSync("gh", ["pr", "checks", String(prNumber), "--json", "bucket,state,name,workflow,link"], {
+      encoding: "utf-8",
+      timeout: API_TIMEOUT_MS,
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+    })
     const parsed = JSON.parse(raw) as CheckRow[]
     return Array.isArray(parsed) ? parsed : []
   } catch (err) {

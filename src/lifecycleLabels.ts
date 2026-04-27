@@ -26,10 +26,10 @@
  *     collected spec. Best-effort, never throws.
  */
 
+import type { ScriptEntry } from "./executables/types.js"
 import { gh } from "./issue.js"
 import { loadProfile } from "./profile.js"
 import { listExecutables } from "./registry.js"
-import type { ScriptEntry } from "./executables/types.js"
 
 /** Namespace prefix — labels starting with this are kody-owned and safe to touch. */
 export const KODY_NAMESPACE = "kody"
@@ -108,10 +108,7 @@ export function ensureLabels(cwd?: string): EnsureLabelsResult {
 
 export function getIssueLabels(issueNumber: number, cwd?: string): string[] {
   try {
-    const output = gh(
-      ["issue", "view", String(issueNumber), "--json", "labels", "--jq", ".labels[].name"],
-      { cwd },
-    )
+    const output = gh(["issue", "view", String(issueNumber), "--json", "labels", "--jq", ".labels[].name"], { cwd })
     return output.split("\n").filter(Boolean)
   } catch {
     return []
@@ -147,9 +144,7 @@ function createLabelInRepo(spec: KodyLabelSpec, cwd?: string): void {
 export function setKodyLabel(issueNumber: number, spec: KodyLabelSpec, cwd?: string): void {
   const target = spec.label
   if (!target.startsWith(KODY_NAMESPACE)) {
-    process.stderr.write(
-      `[kody] setKodyLabel: refusing to set non-kody label "${target}"\n`,
-    )
+    process.stderr.write(`[kody] setKodyLabel: refusing to set non-kody label "${target}"\n`)
     return
   }
 
@@ -176,18 +171,14 @@ export function setKodyLabel(issueNumber: number, spec: KodyLabelSpec, cwd?: str
         return
       }
     }
-    process.stderr.write(
-      `[kody] setKodyLabel: failed to add ${target} on #${issueNumber}: ${errMsg(err)}\n`,
-    )
+    process.stderr.write(`[kody] setKodyLabel: failed to add ${target} on #${issueNumber}: ${errMsg(err)}\n`)
   }
 }
 
 function looksLikeMissingLabel(err: unknown): boolean {
   const msg = errMsg(err).toLowerCase()
   return (
-    msg.includes("not found") ||
-    msg.includes("could not add label") ||
-    msg.includes("could not resolve to a label")
+    msg.includes("not found") || msg.includes("could not add label") || msg.includes("could not resolve to a label")
   )
 }
 

@@ -60,9 +60,7 @@ export function getExecutableRoots(): string[] {
  * shadows the engine's `chat`. Each needs a directory containing a readable
  * `profile.json`. Directories without one are silently skipped.
  */
-export function listExecutables(
-  roots: string | string[] = getExecutableRoots(),
-): DiscoveredExecutable[] {
+export function listExecutables(roots: string | string[] = getExecutableRoots()): DiscoveredExecutable[] {
   const rootList = typeof roots === "string" ? [roots] : roots
   const seen = new Set<string>()
   const out: DiscoveredExecutable[] = []
@@ -86,10 +84,7 @@ export function listExecutables(
  * Resolve a single executable by name across all roots. Returns the first
  * matching `profile.json` path, or null if nothing matches.
  */
-export function resolveExecutable(
-  name: string,
-  roots: string | string[] = getExecutableRoots(),
-): string | null {
+export function resolveExecutable(name: string, roots: string | string[] = getExecutableRoots()): string | null {
   if (!isSafeName(name)) return null
   const rootList = typeof roots === "string" ? [roots] : roots
   for (const root of rootList) {
@@ -102,10 +97,7 @@ export function resolveExecutable(
 }
 
 /** Convenience: true iff `<name>/profile.json` exists in any root. */
-export function hasExecutable(
-  name: string,
-  roots: string | string[] = getExecutableRoots(),
-): boolean {
+export function hasExecutable(name: string, roots: string | string[] = getExecutableRoots()): boolean {
   return resolveExecutable(name, roots) !== null
 }
 
@@ -121,10 +113,7 @@ export function isSafeName(name: string): boolean {
  * the executable doesn't exist or the profile is unreadable (dispatch
  * should degrade gracefully, not throw).
  */
-export function getProfileInputs(
-  name: string,
-  roots: string | string[] = getExecutableRoots(),
-): InputSpec[] | null {
+export function getProfileInputs(name: string, roots: string | string[] = getExecutableRoots()): InputSpec[] | null {
   const profilePath = resolveExecutable(name, roots)
   if (!profilePath) return null
   try {

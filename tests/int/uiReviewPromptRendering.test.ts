@@ -73,11 +73,7 @@ describe("ui-review: preflight + composePrompt end-to-end", () => {
 
   it("renders a prompt containing discovered QA context, loaded QA guide, and the preview URL", async () => {
     // Set up a Next.js-like repo
-    writeFile(
-      tmp,
-      "package.json",
-      JSON.stringify({ dependencies: { next: "16.0.0" }, scripts: { dev: "next dev" } }),
-    )
+    writeFile(tmp, "package.json", JSON.stringify({ dependencies: { next: "16.0.0" }, scripts: { dev: "next dev" } }))
     writeFile(tmp, "src/app/page.tsx", "export default () => null")
     writeFile(tmp, "src/app/login/page.tsx", "export default () => null")
     writeFile(tmp, "src/app/lessons/page.tsx", "export default () => null")

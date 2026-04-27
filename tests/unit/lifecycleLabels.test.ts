@@ -6,10 +6,10 @@ vi.mock("../../src/issue.js", () => ({
 
 import { gh } from "../../src/issue.js"
 import {
-  KODY_NAMESPACE,
   collectProfileLabels,
   ensureLabels,
   getIssueLabels,
+  KODY_NAMESPACE,
   setKodyLabel,
 } from "../../src/lifecycleLabels.js"
 

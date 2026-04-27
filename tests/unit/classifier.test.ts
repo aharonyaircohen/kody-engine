@@ -135,7 +135,10 @@ describe("parseClassification", () => {
   })
 
   it("is case-insensitive on the class token and tolerates leading whitespace", () => {
-    expect(parseClassification("  classification:   Bug  \nreason: fix")).toEqual({ classification: "bug", reason: "fix" })
+    expect(parseClassification("  classification:   Bug  \nreason: fix")).toEqual({
+      classification: "bug",
+      reason: "fix",
+    })
   })
 
   it("returns null for an invalid class", () => {

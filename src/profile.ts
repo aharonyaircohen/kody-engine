@@ -58,10 +58,7 @@ export function loadProfile(profilePath: string): Profile {
   }
 
   if (typeof r.role !== "string" || !VALID_ROLES.has(r.role)) {
-    throw new ProfileError(
-      profilePath,
-      `"role" is required and must be one of: ${[...VALID_ROLES].join(" | ")}`,
-    )
+    throw new ProfileError(profilePath, `"role" is required and must be one of: ${[...VALID_ROLES].join(" | ")}`)
   }
   const role = r.role as Profile["role"]
 
@@ -280,7 +277,10 @@ function parseScriptList(p: string, key: string, raw: unknown): ScriptEntry[] {
   const out: ScriptEntry[] = []
   for (const [i, item] of raw.entries()) {
     if (!item || typeof item !== "object") {
-      throw new ProfileError(p, `scripts.${key}[${i}] must be an object like { script, runWhen? } or { shell, runWhen? }`)
+      throw new ProfileError(
+        p,
+        `scripts.${key}[${i}] must be an object like { script, runWhen? } or { shell, runWhen? }`,
+      )
     }
     const r = item as Record<string, unknown>
     const hasScript = typeof r.script === "string" && (r.script as string).length > 0
@@ -289,7 +289,10 @@ function parseScriptList(p: string, key: string, raw: unknown): ScriptEntry[] {
       throw new ProfileError(p, `scripts.${key}[${i}] cannot set both "script" and "shell" — pick one`)
     }
     if (!hasScript && !hasShell) {
-      throw new ProfileError(p, `scripts.${key}[${i}] must set "script" (registered TS function) or "shell" (filename in executable dir)`)
+      throw new ProfileError(
+        p,
+        `scripts.${key}[${i}] must set "script" (registered TS function) or "shell" (filename in executable dir)`,
+      )
     }
     const entry: ScriptEntry = {}
     if (hasScript) entry.script = r.script as string

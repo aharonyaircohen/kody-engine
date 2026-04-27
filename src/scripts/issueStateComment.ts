@@ -85,12 +85,7 @@ interface CommentRecord {
   body: string
 }
 
-export function listIssueComments(
-  owner: string,
-  repo: string,
-  issueNumber: number,
-  cwd?: string,
-): CommentRecord[] {
+export function listIssueComments(owner: string, repo: string, issueNumber: number, cwd?: string): CommentRecord[] {
   const raw = gh(["api", "--paginate", `repos/${owner}/${repo}/issues/${issueNumber}/comments`], { cwd })
   let parsed: unknown
   try {
@@ -129,10 +124,10 @@ export function createStateComment(
   cwd?: string,
 ): LoadedStateComment {
   const body = formatStateCommentBody(marker, state)
-  const raw = gh(
-    ["api", "--method", "POST", `repos/${owner}/${repo}/issues/${issueNumber}/comments`, "--input", "-"],
-    { cwd, input: JSON.stringify({ body }) },
-  )
+  const raw = gh(["api", "--method", "POST", `repos/${owner}/${repo}/issues/${issueNumber}/comments`, "--input", "-"], {
+    cwd,
+    input: JSON.stringify({ body }),
+  })
   const parsed = JSON.parse(raw) as CommentRecord
   try {
     minimizeComment(parsed.node_id, cwd)
@@ -152,10 +147,10 @@ export function updateStateComment(
   cwd?: string,
 ): void {
   const body = formatStateCommentBody(marker, state)
-  gh(
-    ["api", "--method", "PATCH", `repos/${owner}/${repo}/issues/comments/${commentId}`, "--input", "-"],
-    { cwd, input: JSON.stringify({ body }) },
-  )
+  gh(["api", "--method", "PATCH", `repos/${owner}/${repo}/issues/comments/${commentId}`, "--input", "-"], {
+    cwd,
+    input: JSON.stringify({ body }),
+  })
   try {
     minimizeComment(commentNodeId, cwd)
   } catch {

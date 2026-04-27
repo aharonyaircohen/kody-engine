@@ -1,9 +1,9 @@
 import * as childProcess from "node:child_process"
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest"
 import type { Context, Profile } from "../../src/executables/types.js"
+import { setKodyLabel } from "../../src/lifecycleLabels.js"
 import { advanceFlow } from "../../src/scripts/advanceFlow.js"
 import { dispatch } from "../../src/scripts/dispatch.js"
-import { setKodyLabel } from "../../src/lifecycleLabels.js"
 import { finishFlow } from "../../src/scripts/finishFlow.js"
 import { startFlow } from "../../src/scripts/startFlow.js"
 import { emptyState, type FlowState, STATE_BEGIN, STATE_END, type TaskState } from "../../src/state.js"
@@ -16,9 +16,7 @@ vi.mock("node:child_process", async () => {
 })
 
 vi.mock("../../src/lifecycleLabels.js", async () => {
-  const actual = await vi.importActual<typeof import("../../src/lifecycleLabels.js")>(
-    "../../src/lifecycleLabels.js",
-  )
+  const actual = await vi.importActual<typeof import("../../src/lifecycleLabels.js")>("../../src/lifecycleLabels.js")
   return { ...actual, setKodyLabel: vi.fn() }
 })
 
@@ -107,7 +105,10 @@ describe("startFlow", () => {
   })
 
   it("targets the PR when target=pr and prUrl is present in state", async () => {
-    const state: TaskState = { ...emptyState(), core: { ...emptyState().core, prUrl: "https://github.com/o/r/pull/77" } }
+    const state: TaskState = {
+      ...emptyState(),
+      core: { ...emptyState().core, prUrl: "https://github.com/o/r/pull/77" },
+    }
     const c = ctx({ data: { taskState: state }, args: { issue: 42 } })
     await startFlow(c, profile("bug"), null, { entry: "review", target: "pr" })
     expect(execFileSync).toHaveBeenCalledWith(

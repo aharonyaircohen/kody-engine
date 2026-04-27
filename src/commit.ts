@@ -138,7 +138,10 @@ export function listFilesInCommit(ref: string = "HEAD", cwd?: string): string[] 
       env: { ...process.env, HUSKY: "0", SKIP_HOOKS: "1" },
       stdio: ["pipe", "pipe", "pipe"],
     })
-    return raw.split("\0").map((s) => s.trim()).filter(Boolean)
+    return raw
+      .split("\0")
+      .map((s) => s.trim())
+      .filter(Boolean)
   } catch {
     return []
   }

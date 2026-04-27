@@ -94,8 +94,7 @@ describe("state: parseStateComment / renderStateComment", () => {
     // Regression: the non-greedy regex previously used to extract the JSON
     // block would stop at the first ``` inside the plan artifact's content,
     // producing invalid JSON and dropping all prior state.
-    const planWithFences =
-      "## Files to create\n\n### `src/utils/x.ts`\n```ts\nexport function x() {}\n```\n\nDone."
+    const planWithFences = "## Files to create\n\n### `src/utils/x.ts`\n```ts\nexport function x() {}\n```\n\nDone."
     let s = reduce(emptyState(), "plan", {
       type: "PLAN_COMPLETED",
       payload: { commitMessage: "plan: x" },

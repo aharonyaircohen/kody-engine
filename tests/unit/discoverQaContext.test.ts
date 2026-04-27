@@ -2,13 +2,13 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import type { Context, Profile } from "../../src/executables/types.js"
 import {
   discoverQaContext,
   generateQaGuideTemplate,
   runQaDiscovery,
   serializeDiscoveryForLLM,
 } from "../../src/scripts/discoverQaContext.js"
-import type { Context, Profile } from "../../src/executables/types.js"
 
 function mktmp(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-qactx-"))
@@ -45,11 +45,7 @@ describe("runQaDiscovery", () => {
   afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }))
 
   it("discovers Next.js routes, login page, admin path", () => {
-    writeFile(
-      tmp,
-      "package.json",
-      JSON.stringify({ dependencies: { next: "16.0.0" }, scripts: { dev: "next dev" } }),
-    )
+    writeFile(tmp, "package.json", JSON.stringify({ dependencies: { next: "16.0.0" }, scripts: { dev: "next dev" } }))
     writeFile(tmp, "src/app/page.tsx", "export default () => null")
     writeFile(tmp, "src/app/login/page.tsx", "export default () => null")
     writeFile(tmp, "src/app/admin/users/page.tsx", "export default () => null")

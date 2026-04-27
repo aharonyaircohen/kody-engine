@@ -103,10 +103,14 @@ describe("scanApiRoutes", () => {
   afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }))
 
   it("detects GET + POST route with dynamic segment", () => {
-    writeFile(tmp, "src/app/api/users/[id]/route.ts", `
+    writeFile(
+      tmp,
+      "src/app/api/users/[id]/route.ts",
+      `
       export async function GET() { return Response.json({}) }
       export async function POST() { return Response.json({}) }
-    `)
+    `,
+    )
     const out = scanApiRoutes(tmp)
     expect(out).toHaveLength(1)
     expect(out[0]!.path).toBe("/api/users/:id")
@@ -114,9 +118,13 @@ describe("scanApiRoutes", () => {
   })
 
   it("treats route groups transparently", () => {
-    writeFile(tmp, "app/api/(admin)/stats/route.ts", `
+    writeFile(
+      tmp,
+      "app/api/(admin)/stats/route.ts",
+      `
       export function GET() { return new Response() }
-    `)
+    `,
+    )
     const out = scanApiRoutes(tmp)
     expect(out[0]!.path).toBe("/api/stats")
   })

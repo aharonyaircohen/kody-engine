@@ -39,11 +39,7 @@ export const requireFeedbackActions: PostflightScript = async (ctx, profile) => 
   }
 }
 
-function fail(
-  ctx: Parameters<PostflightScript>[0],
-  profile: Parameters<PostflightScript>[1],
-  reason: string,
-): void {
+function fail(ctx: Parameters<PostflightScript>[0], profile: Parameters<PostflightScript>[1], reason: string): void {
   ctx.data.agentDone = false
   ctx.data.agentFailureReason = reason
   const modeSeg = profile.name.replace(/-/g, "_").toUpperCase()

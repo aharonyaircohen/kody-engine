@@ -67,10 +67,7 @@ export function formatStaleReport(stale: StalePr[], staleDays: number): string {
   if (stale.length === 0) {
     return `🟢 **kody watch-stale-prs** — no open PRs untouched for more than ${staleDays} days. ✨`
   }
-  const lines: string[] = [
-    `🟡 **kody watch-stale-prs** — ${stale.length} PR(s) untouched for > ${staleDays} days:`,
-    "",
-  ]
+  const lines: string[] = [`🟡 **kody watch-stale-prs** — ${stale.length} PR(s) untouched for > ${staleDays} days:`, ""]
   for (const pr of stale.slice(0, 50)) {
     lines.push(`- [#${pr.number}](${pr.url}) — *${truncate(pr.title, 80)}* (${pr.daysStale} days stale)`)
   }

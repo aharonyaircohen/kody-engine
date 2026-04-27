@@ -135,11 +135,7 @@ export function findExistingPr(branch: string, cwd?: string): { number: number; 
  * and emit `Closes #<PR own number>` — a self-reference that GitHub does
  * not honor for auto-close.
  */
-export function recoverSourceIssueNumber(
-  existingBody: string,
-  branch: string,
-  prNumber: number,
-): number | null {
+export function recoverSourceIssueNumber(existingBody: string, branch: string, prNumber: number): number | null {
   const bodyMatch = existingBody.match(/\bCloses #(\d+)\b/i)
   if (bodyMatch) {
     const n = parseInt(bodyMatch[1], 10)

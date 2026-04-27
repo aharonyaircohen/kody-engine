@@ -282,13 +282,7 @@ describe("prompt: parseAgentResult", () => {
   })
 
   it("extracts inline PRIOR_ART JSON array", () => {
-    const text = [
-      "DONE",
-      "COMMIT_MSG: research: x",
-      "PRIOR_ART: [1086, 1090]",
-      "PR_SUMMARY:",
-      "- findings",
-    ].join("\n")
+    const text = ["DONE", "COMMIT_MSG: research: x", "PRIOR_ART: [1086, 1090]", "PR_SUMMARY:", "- findings"].join("\n")
     const result = parseAgentResult(text)
     expect(result.done).toBe(true)
     expect(result.priorArt).toBe("[1086, 1090]")

@@ -27,18 +27,16 @@ export const diagMcp: PreflightScript = async (_ctx) => {
   const hasChromium = entries.some((e) => e.startsWith("chromium"))
 
   process.stderr.write(
-    `[kody diag] ms-playwright cache: ${
-      entries.length === 0 ? "EMPTY (or missing)" : entries.join(", ")
-    }\n`,
+    `[kody diag] ms-playwright cache: ${entries.length === 0 ? "EMPTY (or missing)" : entries.join(", ")}\n`,
   )
   process.stderr.write(`[kody diag] chromium present: ${hasChromium ? "yes" : "no"}\n`)
 
   try {
-    const v = execFileSync(
-      "npx",
-      ["-y", "--package=@playwright/mcp@latest", "--", "playwright-mcp", "--version"],
-      { stdio: "pipe", timeout: 60_000, encoding: "utf8" },
-    ).trim()
+    const v = execFileSync("npx", ["-y", "--package=@playwright/mcp@latest", "--", "playwright-mcp", "--version"], {
+      stdio: "pipe",
+      timeout: 60_000,
+      encoding: "utf8",
+    }).trim()
     process.stderr.write(`[kody diag] @playwright/mcp version: ${v}\n`)
   } catch (e) {
     const err = e instanceof Error ? e.message : String(e)
