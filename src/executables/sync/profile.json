@@ -36,7 +36,11 @@
         }
       },
       {
-        "script": "syncFlow"
+        "script": "syncFlow",
+        "with": { "announceOnSuccess": true }
+      },
+      {
+        "script": "skipAgent"
       }
     ],
     "postflight": []

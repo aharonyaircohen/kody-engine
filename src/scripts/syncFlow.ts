@@ -1,19 +1,35 @@
 /**
- * Flow script for the `sync` executable.
+ * Preflight: merges `origin/<base>` into the PR branch and pushes.
  *
- * Merges `origin/<base>` into the PR branch and pushes. If the merge produces
- * conflicts, bails and tells the user to run `@kody resolve`. Never invokes
- * the agent — this is a pure git operation.
+ * Cross-cutting — used by `sync`, `fix`, and `fix-ci`. Composable: success
+ * paths leave the run intact so downstream preflights/agent can proceed.
+ * Conflict / error paths bail the run by setting `ctx.skipAgent`,
+ * `ctx.output.exitCode = 1`, and posting a "kody sync" PR comment that
+ * tells the user how to recover (e.g. run `@kody resolve` on conflicts).
+ *
+ * Args (from profile entry's `with` object):
+ *   - announceOnSuccess (default false): when true, success paths post the
+ *     user-facing "✅ kody sync ..." / "ℹ️ kody sync ..." PR comment and set
+ *     `output.exitCode = 0` + `output.reason`. Set this in the `sync`
+ *     executable's profile, where syncFlow IS the run. Leave unset (false)
+ *     when used as a preflight in another executable — the parent owns the
+ *     user voice on success.
+ *
+ * Failure paths always announce — the user needs to know why their run
+ * stopped, regardless of which executable triggered it.
+ *
+ * Sets `ctx.data.syncResult` to "noop" | "merged" on success for downstream
+ * visibility. Failure paths leave `syncResult` unset and bail the run.
  */
 
 import { execFileSync } from "node:child_process"
 import { checkoutPrBranch, getCurrentBranch, mergeBase } from "../branch.js"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript, ScriptArgs } from "../executables/types.js"
 import { getRunUrl } from "../gha.js"
 import { getPr, postPrReviewComment } from "../issue.js"
 
-export const syncFlow: PreflightScript = async (ctx) => {
-  ctx.skipAgent = true
+export const syncFlow: PreflightScript = async (ctx, _profile, args?: ScriptArgs) => {
+  const announceOnSuccess = Boolean(args?.announceOnSuccess)
 
   const prNumber = ctx.args.pr as number
   const pr = getPr(prNumber, ctx.cwd)
@@ -22,8 +38,10 @@ export const syncFlow: PreflightScript = async (ctx) => {
     return
   }
   ctx.data.pr = pr
-  ctx.data.commentTargetType = "pr"
-  ctx.data.commentTargetNumber = prNumber
+  if (announceOnSuccess) {
+    ctx.data.commentTargetType = "pr"
+    ctx.data.commentTargetNumber = prNumber
+  }
 
   checkoutPrBranch(prNumber, ctx.cwd)
   ctx.data.branch = getCurrentBranch(ctx.cwd)
@@ -51,9 +69,12 @@ export const syncFlow: PreflightScript = async (ctx) => {
   // mergeStatus === "clean"
   const headAfter = revParseHead(ctx.cwd)
   if (headAfter === headBefore) {
-    ctx.output.exitCode = 0
-    ctx.output.reason = `already up to date with origin/${baseBranch}`
-    tryPostPr(prNumber, `ℹ️ kody sync: already up to date with origin/${baseBranch}`, ctx.cwd)
+    ctx.data.syncResult = "noop"
+    if (announceOnSuccess) {
+      ctx.output.exitCode = 0
+      ctx.output.reason = `already up to date with origin/${baseBranch}`
+      tryPostPr(prNumber, `ℹ️ kody sync: already up to date with origin/${baseBranch}`, ctx.cwd)
+    }
     return
   }
 
@@ -65,14 +86,22 @@ export const syncFlow: PreflightScript = async (ctx) => {
     return
   }
 
-  ctx.output.exitCode = 0
-  ctx.output.reason = `merged origin/${baseBranch} into ${ctx.data.branch}`
-  const runUrl = getRunUrl()
-  const runSuffix = runUrl ? ` ([logs](${runUrl}))` : ""
-  tryPostPr(prNumber, `✅ kody sync: merged \`origin/${baseBranch}\` into \`${ctx.data.branch}\`${runSuffix}`, ctx.cwd)
+  ctx.data.syncResult = "merged"
+  if (announceOnSuccess) {
+    ctx.output.exitCode = 0
+    ctx.output.reason = `merged origin/${baseBranch} into ${ctx.data.branch}`
+    const runUrl = getRunUrl()
+    const runSuffix = runUrl ? ` ([logs](${runUrl}))` : ""
+    tryPostPr(
+      prNumber,
+      `✅ kody sync: merged \`origin/${baseBranch}\` into \`${ctx.data.branch}\`${runSuffix}`,
+      ctx.cwd,
+    )
+  }
 }
 
 function bail(ctx: Parameters<PreflightScript>[0], prNumber: number, reason: string): void {
+  ctx.skipAgent = true
   ctx.output.exitCode = 1
   ctx.output.reason = reason
   const runUrl = getRunUrl()

@@ -94,7 +94,8 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     expect(profile.name).toBe("fix")
     expect(profile.inputs.map((i) => i.name).sort()).toEqual(["feedback", "pr"])
     const preScripts = profile.scripts.preflight.map((p) => p.script)
-    expect(preScripts[0]).toBe("setLifecycleLabel")
+    expect(preScripts[0]).toBe("syncFlow")
+    expect(preScripts).toContain("setLifecycleLabel")
     expect(preScripts).toContain("fixFlow")
   })
 
@@ -103,7 +104,8 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     expect(profile.name).toBe("fix-ci")
     expect(profile.inputs.map((i) => i.name).sort()).toEqual(["pr", "runId"])
     const preScripts = profile.scripts.preflight.map((p) => p.script)
-    expect(preScripts[0]).toBe("setLifecycleLabel")
+    expect(preScripts[0]).toBe("syncFlow")
+    expect(preScripts).toContain("setLifecycleLabel")
     expect(preScripts).toContain("fixCiFlow")
   })
 

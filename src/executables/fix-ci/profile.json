@@ -41,6 +41,7 @@
   "cliTools": [],
   "scripts": {
     "preflight": [
+      { "script": "syncFlow" },
       {
         "script": "setLifecycleLabel",
         "with": {
