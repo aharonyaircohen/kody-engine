@@ -10,6 +10,12 @@ const FORBIDDEN_PATH_PREFIXES = [
   "build/",
 ]
 
+// Paths that override the forbidden-prefix check. `.kody/` is blanket-blocked
+// to keep agents out of runtime state and configs during run/fix/resolve, but
+// the `memorize` watch legitimately writes to `.kody/vault/` (the markdown
+// knowledge base). Add narrow allowlist entries here, prefer-first.
+const ALLOWED_PATH_PREFIXES = [".kody/vault/"]
+
 const FORBIDDEN_PATH_EXACT = new Set([".env", ".kody-pip-requirements.txt"])
 const FORBIDDEN_PATH_SUFFIXES = [".log"]
 
@@ -105,6 +111,7 @@ export function abortUnfinishedGitOps(cwd?: string): string[] {
 
 export function isForbiddenPath(p: string): boolean {
   if (FORBIDDEN_PATH_EXACT.has(p)) return true
+  for (const pre of ALLOWED_PATH_PREFIXES) if (p.startsWith(pre)) return false
   for (const pre of FORBIDDEN_PATH_PREFIXES) if (p.startsWith(pre)) return true
   for (const suf of FORBIDDEN_PATH_SUFFIXES) if (p.endsWith(suf)) return true
   return false
