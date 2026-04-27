@@ -63,7 +63,10 @@ export const memorizeFlow: PreflightScript = async (ctx) => {
 
 function ensureBranch(ctx: Parameters<PreflightScript>[0], vaultAbs: string): void {
   const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "")
-  const branch = `kody/memorize-${stamp}`
+  // Flat namespace (no `/`) — many consumer repos already have a bare `kody`
+  // branch from kody-bootstrap, which makes any `kody/<sub>` push fail with a
+  // git "directory/file conflict" against `refs/heads/kody`.
+  const branch = `kody-memorize-${stamp}`
   const defaultBranch = ctx.config.git.defaultBranch
 
   try {
