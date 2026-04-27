@@ -62,7 +62,7 @@ import { verify } from "./verify.js"
 import { waitForCi } from "./waitForCi.js"
 import { watchStalePrsFlow } from "./watchStalePrsFlow.js"
 import { writeIssueStateComment } from "./writeIssueStateComment.js"
-import { writeMissionGistState } from "./writeMissionGistState.js"
+import { writeMissionStateFile } from "./writeMissionStateFile.js"
 import { writeRunSummary } from "./writeRunSummary.js"
 
 export const preflightScripts: Record<string, PreflightScript> = {
@@ -101,7 +101,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   parseIssueStateFromAgentResult,
   parseMissionStateFromAgentResult,
   writeIssueStateComment,
-  writeMissionGistState,
+  writeMissionStateFile,
   requireFeedbackActions,
   requirePlanDeviations,
   verify,

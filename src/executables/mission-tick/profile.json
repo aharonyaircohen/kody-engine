@@ -61,7 +61,7 @@
         }
       },
       {
-        "script": "writeMissionGistState"
+        "script": "writeMissionStateFile"
       }
     ]
   }

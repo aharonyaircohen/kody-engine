@@ -1,15 +1,17 @@
 /**
- * Preflight: load a file-based mission (body from disk, state from gist) into
- * ctx.data. Mirror of `loadIssueStateComment` for the file-based mission model.
+ * Preflight: load a file-based mission (body from disk, state from a tracked
+ * repo file) into ctx.data. Mirror of `loadIssueStateComment` for the
+ * file-based mission model.
  *
- * Reads the markdown file at `<missionsDir>/<slug>.md` and the mission's state
- * gist (created on first tick if missing). Sets:
+ * Reads the markdown body at `<missionsDir>/<slug>.md` and the mission's
+ * state file at `<missionsDir>/<slug>.state.json`. Both live under the same
+ * directory so they're easy to read together. Sets:
  *
  *   ctx.data.missionSlug         the slug
  *   ctx.data.missionTitle        first H1 of the body, or slug formatted
  *   ctx.data.missionIntent       the body (post-frontmatter, if any)
- *   ctx.data.missionStateJson    rendered prior state, or "null" on first run
- *   ctx.data.missionGist         { gistId, state } | null
+ *   ctx.data.missionStateJson    rendered prior state, or seed on first run
+ *   ctx.data.missionState        LoadedMissionState (path, sha, state, created)
  *
  * Script args (via `with:`):
  *   missionsDir   optional — default ".kody/missions"
@@ -19,7 +21,7 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type { PreflightScript } from "../executables/types.js"
-import { createMissionGist, findMissionGist } from "./missionGist.js"
+import { loadMissionState, stateFilePath } from "./missionStateFile.js"
 
 export const loadMissionFromFile: PreflightScript = async (ctx, _profile, args) => {
   const missionsDir = String(args?.missionsDir ?? ".kody/missions")
@@ -42,16 +44,14 @@ export const loadMissionFromFile: PreflightScript = async (ctx, _profile, args) 
   const raw = fs.readFileSync(absPath, "utf-8")
   const { title, body } = parseMissionFile(raw, slug)
 
-  // Load state from gist; bootstrap on first tick.
-  let loaded = findMissionGist(owner, repo, slug, ctx.cwd)
-  if (!loaded) {
-    loaded = createMissionGist(owner, repo, slug, "seed", ctx.cwd)
-  }
+  // Load state via the contents API (default GITHUB_TOKEN is sufficient).
+  // Returns a seed envelope when the file doesn't exist yet (first tick).
+  const loaded = loadMissionState(owner, repo, stateFilePath(missionsDir, slug), ctx.cwd)
 
   ctx.data.missionSlug = slug
   ctx.data.missionTitle = title
   ctx.data.missionIntent = body
-  ctx.data.missionGist = loaded
+  ctx.data.missionState = loaded
   ctx.data.missionStateJson = JSON.stringify(loaded.state, null, 2)
 }
 

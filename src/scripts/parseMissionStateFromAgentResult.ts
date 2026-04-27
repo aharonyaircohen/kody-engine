@@ -3,19 +3,19 @@
  * block, validate it, and place it on ctx.data.nextMissionState. Mirror of
  * `parseIssueStateFromAgentResult` for the file-based mission model.
  *
- * Reads previous rev from ctx.data.missionGist (loaded by loadMissionFromFile).
+ * Reads previous rev from ctx.data.missionState (loaded by loadMissionFromFile).
  *
  * Script args (via `with:`):
  *   fenceLabel  required — e.g. "kody-mission-next-state"
  *
- * Reads   ctx.data.missionGist
+ * Reads   ctx.data.missionState
  * Writes  ctx.data.nextMissionState ({ version, rev, cursor, data, done })
  *         ctx.data.nextStateParseError on failure
  */
 
 import type { PostflightScript } from "../executables/types.js"
 import type { StateEnvelope } from "./issueStateComment.js"
-import type { LoadedMissionGist } from "./missionGist.js"
+import type { LoadedMissionState } from "./missionStateFile.js"
 
 interface PartialEnvelope {
   cursor: string
@@ -47,7 +47,7 @@ export const parseMissionStateFromAgentResult: PostflightScript = async (ctx, _p
     return
   }
 
-  const fenceRegex = new RegExp("```" + escapeRegex(fenceLabel) + "\\s*\\n([\\s\\S]*?)\\n```", "m")
+  const fenceRegex = new RegExp(`\`\`\`${escapeRegex(fenceLabel)}\\s*\\n([\\s\\S]*?)\\n\`\`\``, "m")
   const match = fenceRegex.exec(agentResult.finalText)
   if (!match) {
     ctx.data.nextStateParseError = `agent did not emit a \`${fenceLabel}\` fenced block`
@@ -67,7 +67,7 @@ export const parseMissionStateFromAgentResult: PostflightScript = async (ctx, _p
     return
   }
 
-  const loaded = ctx.data.missionGist as LoadedMissionGist | null | undefined
+  const loaded = ctx.data.missionState as LoadedMissionState | null | undefined
   const prevRev = loaded?.state.rev ?? 0
 
   const next: StateEnvelope = {
