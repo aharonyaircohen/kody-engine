@@ -7,8 +7,15 @@
  * Why: Claude Code's SDK only accepts plugins as `{ type: 'local', path }`.
  * Individual skills/commands/hooks/subagents are NOT top-level options —
  * they must live inside a plugin directory on disk. This script builds one
- * on the fly per run, sourced from the engine's built-in catalog at
- * src/plugins/{skills,commands,hooks,agents}.
+ * on the fly per run.
+ *
+ * Resolution order for each declared name:
+ *   1. The executable's own directory:
+ *      src/executables/<name>/{skills,commands,agents,hooks}/<entry>
+ *      — for parts that are specific to one executable.
+ *   2. The engine's shared catalog:
+ *      src/plugins/{skills,commands,agents,hooks}/<entry>
+ *      — for parts reused across multiple executables.
  */
 
 import * as fs from "node:fs"
@@ -41,47 +48,55 @@ export const buildSyntheticPlugin: PreflightScript = async (ctx, profile) => {
   const root = path.join(os.tmpdir(), `kody-synth-${runId}`)
   fs.mkdirSync(path.join(root, ".claude-plugin"), { recursive: true })
 
-  // Skills: copy each src/plugins/skills/<name>/ directory verbatim.
+  // Resolve plugin parts from the executable's own directory first, then fall
+  // back to the engine's central catalog. Lets an executable ship local
+  // skills/commands/subagents/hooks under
+  //   src/executables/<name>/{skills,commands,agents,hooks}/
+  // without polluting the shared catalog.
+  const resolvePart = (bucket: "skills" | "commands" | "agents" | "hooks", entry: string): string => {
+    const local = path.join(profile.dir, bucket, entry)
+    if (fs.existsSync(local)) return local
+    const central = path.join(catalog, bucket, entry)
+    if (fs.existsSync(central)) return central
+    throw new Error(
+      `buildSyntheticPlugin: ${bucket} entry '${entry}' not found in executable dir (${profile.dir}/${bucket}/) or catalog (${catalog}/${bucket}/)`,
+    )
+  }
+
+  // Skills: copy each declared <name>/ directory verbatim.
   if (cc.skills.length > 0) {
     const dst = path.join(root, "skills")
     fs.mkdirSync(dst, { recursive: true })
     for (const name of cc.skills) {
-      const src = path.join(catalog, "skills", name)
-      if (!fs.existsSync(src)) throw new Error(`buildSyntheticPlugin: skill not found in catalog: ${name}`)
-      copyDir(src, path.join(dst, name))
+      copyDir(resolvePart("skills", name), path.join(dst, name))
     }
   }
 
-  // Commands: copy src/plugins/commands/<name>.md.
+  // Commands: copy each declared <name>.md.
   if (cc.commands.length > 0) {
     const dst = path.join(root, "commands")
     fs.mkdirSync(dst, { recursive: true })
     for (const name of cc.commands) {
-      const src = path.join(catalog, "commands", `${name}.md`)
-      if (!fs.existsSync(src)) throw new Error(`buildSyntheticPlugin: command not found in catalog: ${name}`)
-      fs.copyFileSync(src, path.join(dst, `${name}.md`))
+      fs.copyFileSync(resolvePart("commands", `${name}.md`), path.join(dst, `${name}.md`))
     }
   }
 
-  // Subagents: copy src/plugins/agents/<name>.md.
+  // Subagents: copy each declared <name>.md.
   if (cc.subagents.length > 0) {
     const dst = path.join(root, "agents")
     fs.mkdirSync(dst, { recursive: true })
     for (const name of cc.subagents) {
-      const src = path.join(catalog, "agents", `${name}.md`)
-      if (!fs.existsSync(src)) throw new Error(`buildSyntheticPlugin: subagent not found in catalog: ${name}`)
-      fs.copyFileSync(src, path.join(dst, `${name}.md`))
+      fs.copyFileSync(resolvePart("agents", `${name}.md`), path.join(dst, `${name}.md`))
     }
   }
 
-  // Hooks: merge all declared src/plugins/hooks/<name>.json into one hooks/hooks.json.
+  // Hooks: merge all declared <name>.json into one hooks/hooks.json.
   if (cc.hooks.length > 0) {
     const dst = path.join(root, "hooks")
     fs.mkdirSync(dst, { recursive: true })
     const merged: { hooks: Record<string, unknown[]> } = { hooks: {} }
     for (const name of cc.hooks) {
-      const src = path.join(catalog, "hooks", `${name}.json`)
-      if (!fs.existsSync(src)) throw new Error(`buildSyntheticPlugin: hook not found in catalog: ${name}`)
+      const src = resolvePart("hooks", `${name}.json`)
       const parsed = JSON.parse(fs.readFileSync(src, "utf-8")) as { hooks?: Record<string, unknown[]> }
       for (const [event, entries] of Object.entries(parsed.hooks ?? {})) {
         if (!Array.isArray(entries)) continue

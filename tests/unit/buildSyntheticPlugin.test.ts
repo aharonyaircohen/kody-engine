@@ -85,8 +85,47 @@ describe("buildSyntheticPlugin: skill copy", () => {
   it("throws a clear error for unknown skill", async () => {
     const ctx = makeCtx()
     await expect(buildSyntheticPlugin(ctx as any, makeProfile({ skills: ["does-not-exist"] }))).rejects.toThrow(
-      /skill not found in catalog: does-not-exist/,
+      /skills entry 'does-not-exist' not found in executable dir .* or catalog/,
     )
+  })
+
+  it("prefers an executable-local skill over the catalog", async () => {
+    const ctx = makeCtx()
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-local-skill-"))
+    try {
+      const skillDir = path.join(tmp, "skills", "kody-live-marker")
+      fs.mkdirSync(skillDir, { recursive: true })
+      fs.writeFileSync(path.join(skillDir, "SKILL.md"), "# local override\n")
+
+      const profile = makeProfile({ skills: ["kody-live-marker"] })
+      profile.dir = tmp
+      await buildSyntheticPlugin(ctx as any, profile)
+
+      const root = ctx.data.syntheticPluginPath as string
+      const copied = fs.readFileSync(path.join(root, "skills", "kody-live-marker", "SKILL.md"), "utf-8")
+      expect(copied).toBe("# local override\n")
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  it("loads an executable-local skill that is not in the catalog", async () => {
+    const ctx = makeCtx()
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-local-skill-only-"))
+    try {
+      const skillDir = path.join(tmp, "skills", "exec-only-skill")
+      fs.mkdirSync(skillDir, { recursive: true })
+      fs.writeFileSync(path.join(skillDir, "SKILL.md"), "# exec-only\n")
+
+      const profile = makeProfile({ skills: ["exec-only-skill"] })
+      profile.dir = tmp
+      await buildSyntheticPlugin(ctx as any, profile)
+
+      const root = ctx.data.syntheticPluginPath as string
+      expect(fs.existsSync(path.join(root, "skills", "exec-only-skill", "SKILL.md"))).toBe(true)
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
   })
 })
 
@@ -101,7 +140,7 @@ describe("buildSyntheticPlugin: command copy", () => {
   it("throws a clear error for unknown command", async () => {
     const ctx = makeCtx()
     await expect(buildSyntheticPlugin(ctx as any, makeProfile({ commands: ["does-not-exist"] }))).rejects.toThrow(
-      /command not found in catalog: does-not-exist/,
+      /commands entry 'does-not-exist.md' not found in executable dir .* or catalog/,
     )
   })
 })
@@ -119,7 +158,7 @@ describe("buildSyntheticPlugin: hook merge", () => {
   it("throws a clear error for unknown hook", async () => {
     const ctx = makeCtx()
     await expect(buildSyntheticPlugin(ctx as any, makeProfile({ hooks: ["does-not-exist"] }))).rejects.toThrow(
-      /hook not found in catalog: does-not-exist/,
+      /hooks entry 'does-not-exist.json' not found in executable dir .* or catalog/,
     )
   })
 })

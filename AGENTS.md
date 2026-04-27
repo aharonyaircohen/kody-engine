@@ -195,10 +195,11 @@ tests/
 ## Key invariants (do not break)
 
 1. **The executor never references role-specific concepts.** No `run` / `fix` / `review` / `issue` / `pr` inside `executor.ts`. Only: profile, scripts, context, SDK call.
-2. **Executable directories contain only `profile.json`, `prompt.md`, and `.sh` scripts — no TypeScript.** Three kinds of files, nothing else:
+2. **Executable directories contain only `profile.json`, `prompt.md`, `.sh` scripts, and optional plugin-part subdirs — no TypeScript.** Allowed contents:
    - `profile.json` — declaration (inputs, tools, ordered preflight/postflight).
    - `prompt.md` — what the agent should do (markdown, consumed when the agent runs).
    - `*.sh` — mechanical side-effect work (git, fs, tool invocations). Colocated with the executable so everything about a command is in one directory.
+   - `skills/<name>/`, `commands/<name>.md`, `agents/<name>.md`, `hooks/<name>.json` — optional Claude Agent SDK plugin parts that are specific to this one executable. The `buildSyntheticPlugin` preflight resolves names declared in `profile.claudeCode.{skills,commands,subagents,hooks}` from this directory first, then falls back to `src/plugins/`. Use the central `src/plugins/` catalog when a part is reused across multiple executables.
 
    `src/scripts/` is TypeScript — reserved for cross-cutting utilities used by multiple executables (`commitAndPush`, `composePrompt`, `verify`, `ensurePr`, `postIssueComment`). **Design smell**: if a piece of logic is too complex for shell AND specific to one executable, stop and redesign. Either simplify until shell expresses it cleanly, or promote into `src/scripts/` as a genuine cross-cutting utility. The middle ground — "executable-specific TypeScript tucked somewhere" — is what bloated the flow scripts and is explicitly banned. Adding a new command = drop a new `src/executables/<name>/` dir with its profile + prompt + any `.sh` scripts; register any new *shared* TS scripts in `src/scripts/`. Dispatch is profile-driven — no edits needed for issue- or PR-triggered commands.
 3. **Scripts compose freely, one does one thing.** Each script is a small deterministic function. `runWhen` (dotted-path equality against context) is the only conditional primitive.

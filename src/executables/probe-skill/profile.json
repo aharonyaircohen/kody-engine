@@ -1,0 +1,35 @@
+{
+  "name": "probe-skill",
+  "role": "utility",
+  "describe": "Live-test executable. Loads the executable-local 'probe-skill-marker' skill (resolved from src/executables/probe-skill/skills/, NOT the central catalog) and asks the agent to emit the skill's token back as an issue comment. Validates the new local-skill resolution path in buildSyntheticPlugin end-to-end.",
+  "inputs": [
+    { "name": "issue", "flag": "--issue", "type": "int", "required": true, "describe": "GitHub issue number to verify against." }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": 12,
+    "systemPromptAppend": "You are running Kody's executable-local skill live verification. Emit the token exactly as the skill instructs.",
+    "tools": ["Read", "Grep", "Glob", "Bash"],
+    "hooks": [],
+    "skills": ["probe-skill-marker"],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "scripts": {
+    "preflight": [
+      { "script": "loadIssueContext" },
+      { "script": "loadTaskState" },
+      { "script": "buildSyntheticPlugin" },
+      { "script": "composePrompt" }
+    ],
+    "postflight": [
+      { "script": "parseAgentResult" },
+      { "script": "writeRunSummary" },
+      { "script": "saveTaskState" }
+    ]
+  }
+}
