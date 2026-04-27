@@ -30,6 +30,39 @@ Pick **exactly one** of:
 **If the issue is "tweak config / bump dep / fix typo" with no real design choice → `chore`.**
 **Otherwise → `feature`.**
 
+# Worked disambiguation examples
+
+These are the cases that catch classifiers out. Read them before deciding.
+
+**Example A — label says "bug", body opens design space → `feature`**
+> Title: "Login is slow"  
+> Labels: `bug`  
+> Body: "Login takes 4 seconds. We should figure out why and fix it. Probably involves the auth service, the session cache, and possibly the new SSO integration."
+
+Pick: `feature`. The body opens an investigation across multiple subsystems — that's a design space, not a localized fix. Label loses to content.
+
+**Example B — body says "bug" but the ask is exploratory → `spec`**
+> Title: "Investigate why our queue throughput dropped"  
+> Body: "Throughput dropped 30% last week. Write up what you find — root cause, options for fixing, recommendation. We'll decide next steps from your write-up."
+
+Pick: `spec`. The deliverable is an analysis document. No code change is being requested in this issue.
+
+**Example C — labeled `feature` but trivial → `chore`**
+> Title: "Bump prettier to 3.4"  
+> Labels: `feature`, `dependencies`  
+> Body: "Bump devDep prettier to 3.4. Format will not change."
+
+Pick: `chore`. No design choice; mechanical dep bump. Label is wrong.
+
+**Example D — labeled `chore` but real → `bug`**
+> Title: "README typo"  
+> Labels: `chore`  
+> Body: "The README claims our API returns `data` but actually returns `result`. Fix the docs OR the API to make them match."
+
+Pick: `bug`. The "OR" forces a real decision and the fix may touch code, not just docs. Not chore-grade.
+
+**Precedence rule:** when label and body conflict, body wins. Labels are author hints, often stale or wrong; the body is the actual ask.
+
 # Required output
 
 Your FINAL message must be exactly this shape (no extra text before or after):

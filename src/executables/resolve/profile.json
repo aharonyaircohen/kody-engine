@@ -32,7 +32,7 @@
       "Grep",
       "Glob"
     ],
-    "hooks": [],
+    "hooks": ["block-git"],
     "skills": [],
     "commands": [],
     "subagents": [],

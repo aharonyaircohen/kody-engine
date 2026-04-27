@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e 'process.stderr.write(\"kody read-only mode: this executable does not modify files; do not call Write/Edit/NotebookEdit\\n\");process.exit(2)'"
+          }
+        ]
+      }
+    ]
+  }
+}

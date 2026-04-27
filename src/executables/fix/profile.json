@@ -33,7 +33,7 @@
       "Glob",
       "mcp__playwright"
     ],
-    "hooks": [],
+    "hooks": ["block-git"],
     "skills": [],
     "commands": [],
     "subagents": [],
@@ -72,6 +72,7 @@
       { "script": "fixFlow" },
       { "script": "loadTaskState" },
       { "script": "loadConventions" },
+      { "script": "loadPriorArt" },
       { "script": "loadCoverageRules" },
       { "script": "composePrompt" }
     ],

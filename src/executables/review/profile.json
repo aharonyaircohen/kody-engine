@@ -24,7 +24,7 @@
       "Bash",
       "mcp__playwright"
     ],
-    "hooks": [],
+    "hooks": ["block-write"],
     "skills": [],
     "commands": [],
     "subagents": [],

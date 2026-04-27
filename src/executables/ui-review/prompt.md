@@ -56,6 +56,16 @@ If the response is not 2xx or 3xx, the preview is unreachable. In that case, SKI
 
    Include a `playwright.config.ts` at `.kody/ui-review/playwright.config.ts` only if you need custom config; otherwise rely on defaults (headless chromium).
 
+   **UI-state checklist.** Browsing the happy path is not enough. For each UI surface the PR changes, verify the following states *if they're plausibly reachable*; explicitly note in "Gaps" any state you couldn't reach:
+
+   - **Loading.** What does the page look like before data resolves? Are there skeletons / spinners / placeholders? Does the layout shift on data arrival?
+   - **Empty.** What does it look like with zero items (no rows, no results, no notifications)? Is there an empty-state message, or is the screen confusingly blank?
+   - **Error.** What does it look like when a request fails? Force a failure if you can (network throttle, invalid input, broken nav). Is the error visible and actionable?
+   - **Mobile / narrow viewport.** Take a screenshot at ~375px wide. Is anything cut off, overlapping, or stacked illegibly?
+   - **Keyboard navigation.** Tab through the changed surface. Is focus visible at every step? Can the user reach every interactive element without a mouse? Does Enter/Space activate the right control?
+
+   These map directly to UI findings — flag any that fail or look broken. Do NOT pad your review by enumerating every state for trivial diffs (e.g. a copy change in static text); apply the checklist where the diff plausibly affects the state.
+
 4. **Run it.** Invoke:
 
    ```bash

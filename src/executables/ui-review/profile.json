@@ -34,7 +34,7 @@
       "Edit",
       "mcp__playwright"
     ],
-    "hooks": [],
+    "hooks": ["block-git"],
     "skills": [],
     "commands": [],
     "subagents": [],

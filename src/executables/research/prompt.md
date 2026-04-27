@@ -26,6 +26,11 @@ Recent comments (most recent first, truncated):
 
 {{conventionsBlock}}
 
+# Prior art (closed/merged PRs flagged in earlier research, if any)
+{{priorArt}}
+
+If a prior-art block is present above, scan the diffs and review comments — those are previously-attempted solutions to this same issue. Surface the *outcome* (what landed, what was rejected, what's still open) under "Repo context"; this is part of what an implementer needs to know. Do NOT re-recommend an approach the diffs show was already tried and abandoned.
+
 ---
 
 # Required output

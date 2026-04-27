@@ -24,7 +24,7 @@
       "Grep",
       "Glob"
     ],
-    "hooks": [],
+    "hooks": ["block-git"],
     "skills": [],
     "commands": [],
     "subagents": [],
@@ -45,6 +45,7 @@
       { "script": "runFlow" },
       { "script": "loadTaskState" },
       { "script": "resolveArtifacts" },
+      { "script": "loadPriorArt" },
       { "script": "loadConventions" },
       { "script": "loadCoverageRules" },
       { "script": "composePrompt" }

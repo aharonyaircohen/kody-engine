@@ -23,7 +23,7 @@
       "Bash",
       "mcp__playwright"
     ],
-    "hooks": [],
+    "hooks": ["block-write"],
     "skills": [],
     "commands": [],
     "subagents": [],
@@ -69,6 +69,9 @@
       },
       {
         "script": "loadConventions"
+      },
+      {
+        "script": "loadPriorArt"
       },
       {
         "script": "composePrompt"
