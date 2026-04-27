@@ -21,6 +21,10 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
+      - name: Configure git identity (for integration tests)
+        run: |
+          git config --global user.name  "kody-release"
+          git config --global user.email "release@kody"
       - name: Verify tag matches package.json version
         run: |
           TAG="${GITHUB_REF_NAME#v}"

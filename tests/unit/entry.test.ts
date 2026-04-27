@@ -1,7 +1,19 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { parseArgs } from "../../src/entry.js"
 
 describe("entry: parseArgs", () => {
+  // Isolate from GitHub Actions and chat-session env vars: parseArgs has
+  // env-based shortcuts (no-args → ci when GITHUB_EVENT_NAME is set, → chat
+  // when SESSION_ID is set) that are correct in production but masquerade as
+  // bugs when the unit test runs in CI.
+  beforeEach(() => {
+    vi.stubEnv("GITHUB_EVENT_NAME", "")
+    vi.stubEnv("SESSION_ID", "")
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it("returns help when no args", () => {
     expect(parseArgs([]).command).toBe("help")
   })
