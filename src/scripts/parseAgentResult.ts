@@ -27,9 +27,14 @@ export const parseAgentResult: PostflightScript = async (ctx, profile, agentResu
 
   const modeSeg = ((ctx.args.mode as string | undefined) ?? profile.name).replace(/-/g, "_").toUpperCase()
   if (parsed.done) {
+    // prSummary is intentionally NOT in the payload — for plan/run/research
+    // it's the entire artifact body (tens of KB). The reducer stores the
+    // full action under both `core.lastOutcome` and `executables[x].lastAction`,
+    // so embedding prSummary there would persist it 2× into the state comment.
+    // Consumers read prSummary from ctx.data within the same run, or from
+    // state.artifacts.<name>.content (set by persistArtifacts) across runs.
     ctx.data.action = makeAction(`${modeSeg}_COMPLETED`, {
       commitMessage: parsed.commitMessage,
-      prSummary: parsed.prSummary,
     })
   } else {
     ctx.data.action = makeAction(`${modeSeg}_FAILED`, {
