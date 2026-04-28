@@ -62,6 +62,7 @@ kody chore     --issue <N>                             # run → review (→ fix
 kody mission-scheduler                                 # fans out to per-issue mission-tick
 kody mission-tick      --issue <N>                     # one tick of a kody:mission issue
 kody watch-stale-prs                                   # weekly stale-PR report
+kody memorize                                          # daily vault wiki update from recent PRs
 
 # deterministic (no agent)
 kody sync      --pr    <N>                             # merge default into PR branch
@@ -90,6 +91,18 @@ Drives the running preview deployment via the Playwright MCP server alongside th
 - Preview URL: `--preview-url` → `$PREVIEW_URL` → `http://localhost:3000`. Unreachable → falls back to diff-only.
 - Credentials: `.kody/qa-guide.md` (committed, scaffolded by `kody init` with `CHANGE_ME` placeholders).
 - Auto-discovery: routes, roles, login/admin paths, Payload CMS collections, API routes, env vars — fed to the agent as context.
+
+### `memorize` — vault wiki
+
+A scheduled watch (cron `0 3 * * *`) that synthesizes recently merged PRs into a markdown knowledge base at `.kody/vault/` and opens a PR with the changes. Pages are entity-centric (`architecture/`, `conventions/`, `decisions/`, `components/`), not per-PR logs. Future kody runs see the relevant pages via the `loadVaultContext` preflight, which is wired into `run` / `fix` / `resolve` and exposes them as `{{vaultContext}}` in the prompt.
+
+To enable in a consumer repo: ensure `.gitignore` un-ignores the vault if `.kody/*` is otherwise ignored:
+
+```gitignore
+.kody/*
+!.kody/vault/
+!.kody/vault/**
+```
 
 ### `release`
 

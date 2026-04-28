@@ -62,6 +62,7 @@ Each is its own auto-discovered executable. [src/dispatch.ts](src/dispatch.ts) p
 | `release`                         | `--mode`, `--bump`       | no     | CLI or `workflow_dispatch`                                   |
 | `init`                            | `--force`                | no     | CLI (`kody init` in a fresh consumer repo)                  |
 | `watch-stale-prs`                 | (none)                   | no     | scheduled (`0 8 * * MON`)                                    |
+| `memorize`                        | (none)                   | yes    | scheduled (`0 3 * * *`) — synthesizes vault wiki             |
 | `plan-verify`                     | `--issue`                | yes    | CLI (live-test — validates plugin/skill/hook wiring)         |
 
 CLI users can invoke any of these directly (`kody <command> …`).
@@ -149,6 +150,17 @@ A two-executable pair that lets a consumer define a stateful goal *as a GitHub i
 
 **Scale.** Fan-out is sequential in-process (`dispatchMissionTicks` calls `runExecutable("mission-tick", ...)` per issue). Fine for small N; if a consumer ever runs many missions simultaneously, swap to `gh workflow run` dispatch for parallelism. Scheduler itself always exits 0 — individual tick failures surface on the owning issue, not as a cron failure.
 
+### `memorize` — scheduled vault wiki
+
+`kind: scheduled` with cron `0 3 * * *`, `role: "watch"`. Daily ingest of recently merged PRs into the consumer repo's `.kody/vault/` markdown knowledge base, then opens a PR with the changes. Implements the LLM-wiki pattern (Karpathy): entity-centric markdown pages — `architecture/<area>.md`, `conventions/<topic>.md`, `decisions/<slug>.md`, `components/<name>.md` — that the agent edits to capture decisions and conventions, NOT a per-PR log.
+
+- **Recall.** `loadVaultContext` is a generic preflight (registered in `src/scripts/index.ts`) that walks `.kody/vault/`, ranks pages by keyword overlap with the issue/PR title (or recency when no query is available), and exposes the top pages as `{{vaultContext}}`. Wired into `run` / `fix` / `resolve` preflights.
+- **Branching.** `memorizeFlow` (preflight) cuts a flat-namespace branch `kody-memorize-YYYYMMDD` off the default branch. **Not slashed** — many consumer repos already carry a bare `kody` branch from `kody-bootstrap`, which makes `kody/<sub>` pushes fail with a git "directory/file conflict" against `refs/heads/kody`.
+- **Path allowlist.** `commitAndPush`'s forbidden-path filter blocks `.kody/` to keep agents out of runtime state during `run`/`fix`/`resolve`. `isForbiddenPath` carries a narrow allowlist for `.kody/vault/` so memorize's writes survive staging. Other `.kody/*` paths remain blocked.
+- **PR creation.** `ensureMemorizePr` opens (or updates) a PR titled `kody memorize: vault update YYYY-MM-DD`. No issue coupling, never marked draft. Refuses to call `gh pr create` when `commitAndPush` reports `pushed: false` — `hasCommitsAhead` can return true on an orphaned local commit, which previously crashed PR creation with "Head ref must be a branch".
+- **Consumer gitignore.** Repos that ignore `.kody/*` must un-ignore the vault: `!.kody/vault/` + `!.kody/vault/**`. Without it, the agent's writes are filtered out by git itself before staging.
+- **Trigger.** Same scheduled fan-out as missions — `dispatchScheduledWatches` picks up any `role: "watch"`, `kind: "scheduled"` profile whose cron matches the wake window.
+
 ### `plan-verify` — live-test harness for plugin wiring
 
 Exists only to validate that the Claude Agent SDK is picking up bundled skills, slash commands, and hooks end-to-end. The profile declares `buildSyntheticPlugin` preflight which materializes a test plugin into a temp dir, and the prompt asks the agent to emit specific confirmation tokens (one per feature) that the test suite greps for. Not a user-facing command.
@@ -207,6 +219,7 @@ tests/
 5. **The workflow YAML stays minimal.** Any new capability ships via npm, not via consumer YAML edits.
 6. **Shared scripts stay generic — no branching on executable identity.** Anything in `src/scripts/` is cross-cutting and must treat `profile.name` as an opaque label (state keys, logs, action-type prefixes, `producedBy` tags). It may NOT branch on it (`if (profile.name === "resolve")`, `switch (profile.name)`, etc.). Per-executable behavior belongs in a profile-declared script/shell entry, not in a shared file. Enforced by [tests/unit/sharedScriptsInvariants.test.ts](tests/unit/sharedScriptsInvariants.test.ts).
 7. **Shared scripts do not import from `src/executables/`.** Structural rule: if `src/scripts/*.ts` can't see executable code, it can't couple to it. Only `../executables/types.js` (the shared type contract) is allowed. Same test enforces this.
+8. **Memorize / vault invariants.** `.kody/vault/` is the only `.kody/*` subtree the agent is permitted to write — enforced by the `ALLOWED_PATH_PREFIXES` allowlist in `src/commit.ts`. Memorize branches must use the flat `kody-memorize-YYYYMMDD` namespace (see `memorize` section above for why). Watches that open their own PR must check `commitResult.pushed === true` before calling `gh pr create`, not just `hasCommitsAhead`.
 
 ## Version history / split context
 

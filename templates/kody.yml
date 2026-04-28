@@ -50,6 +50,10 @@ on:
   schedule:
     # Wakes every 5 minutes; kody fans out to whichever scheduled executables
     # (mission-scheduler, memorize, watch-stale-prs, …) match this minute.
+    #
+    # `memorize` writes to `.kody/vault/` and opens a daily PR. If your
+    # `.gitignore` ignores `.kody/*`, add `!.kody/vault/` and `!.kody/vault/**`
+    # so memorize's pages are tracked.
     - cron: "*/5 * * * *"
 
 jobs:
