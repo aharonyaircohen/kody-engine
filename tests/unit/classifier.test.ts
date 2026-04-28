@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vite
 import type { Context, Profile } from "../../src/executables/types.js"
 import { loadProfile } from "../../src/profile.js"
 import { classifyByLabel, defaultLabelMap } from "../../src/scripts/classifyByLabel.js"
-import { parseClassification, postClassification } from "../../src/scripts/postClassification.js"
+import { dispatchClassified } from "../../src/scripts/dispatchClassified.js"
+import { parseClassification, recordClassification } from "../../src/scripts/recordClassification.js"
 
 vi.mock("node:child_process", async () => {
   const actual = await vi.importActual<typeof import("node:child_process")>("node:child_process")
@@ -150,8 +151,8 @@ describe("parseClassification", () => {
   })
 })
 
-describe("postClassification", () => {
-  it("uses a pre-set classification (from classifyByLabel) and dispatches @kody <type>", async () => {
+describe("recordClassification", () => {
+  it("uses a pre-set classification (from classifyByLabel) and records the action — no dispatch comment", async () => {
     const c = ctx({
       data: {
         classification: "bug",
@@ -159,12 +160,16 @@ describe("postClassification", () => {
         classificationReason: "label `bug` → bug",
       },
     })
-    await postClassification(c, profile(), null)
-    const dispatches = execFileSync.mock.calls
+    await recordClassification(c, profile(), null)
+    const ghBodies = execFileSync.mock.calls
       .map((call) => (call[1] as string[]) ?? [])
-      .filter((a) => a[3] === "--body" && a[4]?.startsWith("@kody "))
-    expect(dispatches.some((a) => a[4] === "@kody bug")).toBe(true)
+      .filter((a) => a[3] === "--body")
+      .map((a) => a[4] as string)
+    // Audit comment posted, but NOT the dispatch — that's dispatchClassified's job.
+    expect(ghBodies.some((b) => b.startsWith("🔎 kody classified as `bug`"))).toBe(true)
+    expect(ghBodies.some((b) => b === "@kody bug")).toBe(false)
     expect((c.data.action as { type: string }).type).toBe("CLASSIFIED_AS_BUG")
+    expect(c.data.classification).toBe("bug")
   })
 
   it("falls back to parsing the agent's PR_SUMMARY when classifyByLabel didn't set one", async () => {
@@ -173,19 +178,39 @@ describe("postClassification", () => {
         prSummary: "classification: spec\nreason: pure RFC ask",
       },
     })
-    await postClassification(c, profile(), null)
-    const dispatches = execFileSync.mock.calls
-      .map((call) => (call[1] as string[]) ?? [])
-      .filter((a) => a[3] === "--body" && a[4]?.startsWith("@kody "))
-    expect(dispatches.some((a) => a[4] === "@kody spec")).toBe(true)
+    await recordClassification(c, profile(), null)
     expect((c.data.action as { type: string }).type).toBe("CLASSIFIED_AS_SPEC")
+    expect(c.data.classification).toBe("spec")
   })
 
   it("records a CLASSIFY_FAILED action when neither source decides", async () => {
     const c = ctx({ data: { prSummary: "something unrelated" } })
-    await postClassification(c, profile(), null)
+    await recordClassification(c, profile(), null)
     expect((c.data.action as { type: string }).type).toBe("CLASSIFY_FAILED")
     expect(c.output.exitCode).toBe(1)
+  })
+})
+
+describe("dispatchClassified", () => {
+  it("posts `@kody <classification>` from ctx.data.classification", async () => {
+    const c = ctx({ data: { classification: "bug" } })
+    await dispatchClassified(c, profile(), null)
+    const dispatches = execFileSync.mock.calls
+      .map((call) => (call[1] as string[]) ?? [])
+      .filter((a) => a[3] === "--body" && a[4]?.startsWith("@kody "))
+    expect(dispatches.some((a) => a[4] === "@kody bug")).toBe(true)
+  })
+
+  it("is a no-op when no classification was recorded", async () => {
+    const c = ctx({ data: {} })
+    await dispatchClassified(c, profile(), null)
+    expect(execFileSync.mock.calls.length).toBe(0)
+  })
+
+  it("is a no-op for an invalid classification value", async () => {
+    const c = ctx({ data: { classification: "not-a-real-class" } })
+    await dispatchClassified(c, profile(), null)
+    expect(execFileSync.mock.calls.length).toBe(0)
   })
 })
 
@@ -202,7 +227,14 @@ describe("classify profile loadability", () => {
     expect(pre).toContain("composePrompt")
     const post = p.scripts.postflight.map((e) => e.script)
     expect(post).toContain("parseAgentResult")
-    expect(post).toContain("postClassification")
+    expect(post).toContain("recordClassification")
+    expect(post).toContain("dispatchClassified")
+    // dispatchClassified must run AFTER saveTaskState — that ordering is what
+    // makes the @kody <type> comment the newest pending issue_comment event.
+    const idxSave = post.indexOf("saveTaskState")
+    const idxDispatch = post.indexOf("dispatchClassified")
+    expect(idxSave).toBeGreaterThan(-1)
+    expect(idxDispatch).toBeGreaterThan(idxSave)
     // Sanity: prompt.md exists and references the label block.
     const prompt = fs.readFileSync(path.join(p.dir, "prompt.md"), "utf-8")
     expect(prompt).toContain("{{issue.labelsFormatted}}")

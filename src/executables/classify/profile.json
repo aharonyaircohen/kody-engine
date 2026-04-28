@@ -47,9 +47,10 @@
     ],
     "postflight": [
       { "script": "parseAgentResult" },
-      { "script": "postClassification" },
+      { "script": "recordClassification" },
       { "script": "writeRunSummary" },
-      { "script": "saveTaskState" }
+      { "script": "saveTaskState" },
+      { "script": "dispatchClassified" }
     ]
   },
   "output": {

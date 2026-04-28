@@ -15,6 +15,7 @@ import { composePrompt } from "./composePrompt.js"
 import { diagMcp } from "./diagMcp.js"
 import { discoverQaContext } from "./discoverQaContext.js"
 import { dispatch } from "./dispatch.js"
+import { dispatchClassified } from "./dispatchClassified.js"
 import { dispatchMissionFileTicks } from "./dispatchMissionFileTicks.js"
 import { dispatchMissionTicks } from "./dispatchMissionTicks.js"
 import { ensureMemorizePr } from "./ensureMemorizePr.js"
@@ -41,11 +42,11 @@ import { parseIssueStateFromAgentResult } from "./parseIssueStateFromAgentResult
 import { parseMissionStateFromAgentResult } from "./parseMissionStateFromAgentResult.js"
 import { persistArtifacts } from "./persistArtifacts.js"
 import { persistFlowState } from "./persistFlowState.js"
-import { postClassification } from "./postClassification.js"
 import { postIssueComment } from "./postIssueComment.js"
 import { postPlanComment } from "./postPlanComment.js"
 import { postResearchComment } from "./postResearchComment.js"
 import { postReviewResult } from "./postReviewResult.js"
+import { recordClassification } from "./recordClassification.js"
 import { recordOutcome } from "./recordOutcome.js"
 import { requireFeedbackActions } from "./requireFeedbackActions.js"
 import { requirePlanDeviations } from "./requirePlanDeviations.js"
@@ -129,7 +130,8 @@ export const postflightScripts: Record<string, PostflightScript> = {
   finishFlow,
   advanceFlow,
   persistFlowState,
-  postClassification,
+  recordClassification,
+  dispatchClassified,
   notifyTerminal,
   recordOutcome,
   mergeReleasePr,

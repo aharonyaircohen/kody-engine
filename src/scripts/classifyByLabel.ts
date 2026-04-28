@@ -2,8 +2,9 @@
  * Preflight (classify-only): label-first fast path for issue classification.
  * If the issue has a GitHub label matching one in `config.classify.labelMap`,
  * record the resulting classification and tell the executor to skip the
- * agent entirely. The postflight `postClassification` then posts the
- * dispatch comment using `ctx.data.classification`.
+ * agent entirely. The postflight `recordClassification` finalizes the
+ * action + audit comment, and `dispatchClassified` (last) posts the
+ * `@kody <type>` comment using `ctx.data.classification`.
  *
  * When no label matches, this script is a no-op — control falls through to
  * the agent, which picks a classification from the prompt rubric.

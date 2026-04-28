@@ -1,6 +1,8 @@
 /**
- * Postflight (classify-only): finalize the classification and dispatch the
- * chosen sub-orchestrator.
+ * Postflight (classify-only): finalize the classification and post the
+ * audit trail. Does NOT post the dispatch comment — that's split into
+ * `dispatchClassified` so it runs after `saveTaskState` and ends up as
+ * the newest pending issue_comment event in the kody concurrency group.
  *
  * Sources (in order):
  *   1. ctx.data.classification  — set by `classifyByLabel` when a label
@@ -12,8 +14,8 @@
  * Side effects:
  *   - Posts an audit comment "🔎 kody classified as `<type>` — <reason>"
  *     on the issue (human-readable; sanitized so it doesn't self-trigger).
- *   - Posts `@kody <type>` on the issue via execFileSync directly so GHA
- *     picks it up and routes to the chosen sub-orchestrator.
+ *   - Sets `ctx.data.classification` and `ctx.data.classificationReason`
+ *     for downstream scripts (saveTaskState, dispatchClassified).
  *   - Writes a typed action into ctx.data.action so saveTaskState records
  *     the outcome in state history.
  */
@@ -25,7 +27,7 @@ import type { Action } from "../state.js"
 const API_TIMEOUT_MS = 30_000
 const VALID_CLASSES = new Set(["feature", "bug", "spec", "chore"])
 
-export const postClassification: PostflightScript = async (ctx) => {
+export const recordClassification: PostflightScript = async (ctx) => {
   const issueNumber = ctx.args.issue as number | undefined
   if (!issueNumber) return
 
@@ -56,24 +58,6 @@ export const postClassification: PostflightScript = async (ctx) => {
 
   // Audit trail (human-readable, sanitized).
   tryAuditComment(issueNumber, `🔎 kody classified as \`${classification}\`${reason ? ` — ${reason}` : ""}`, ctx.cwd)
-
-  // Dispatch the chosen sub-orchestrator. Goes through execFileSync so it
-  // reaches GHA's issue_comment filter; postIssueComment would sanitize.
-  try {
-    execFileSync("gh", ["issue", "comment", String(issueNumber), "--body", `@kody ${classification}`], {
-      cwd: ctx.cwd,
-      timeout: API_TIMEOUT_MS,
-      stdio: ["ignore", "pipe", "pipe"],
-    })
-  } catch (err) {
-    process.stderr.write(
-      `[kody postClassification] failed to dispatch @kody ${classification}: ${err instanceof Error ? err.message : String(err)}\n`,
-    )
-    ctx.data.action = failedAction("dispatch post failed")
-    ctx.output.exitCode = 1
-    ctx.output.reason = "classify: dispatch failed"
-    return
-  }
 
   ctx.data.action = makeAction(`CLASSIFIED_AS_${classification.toUpperCase()}`, {
     classification,
