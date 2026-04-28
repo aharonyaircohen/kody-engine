@@ -153,8 +153,12 @@ export function findStateComment(
 
 export function parseStateComment(body: string): TaskState {
   const beginIdx = body.indexOf(STATE_BEGIN)
-  const endIdx = body.indexOf(STATE_END, beginIdx + 1)
-  if (beginIdx < 0 || endIdx < 0) return emptyState()
+  // Use lastIndexOf for END: artifact content embedded in the JSON (e.g. a
+  // plan markdown that discusses kody state) can contain literal STATE_END
+  // markers. The real END marker is rendered after the closing ``` fence,
+  // so it's always the last occurrence.
+  const endIdx = body.lastIndexOf(STATE_END)
+  if (beginIdx < 0 || endIdx < 0 || endIdx <= beginIdx) return emptyState()
 
   // The span between STATE_BEGIN and STATE_END is always the ```json fence
   // (see renderStateComment). Slice by position rather than regex-matching,

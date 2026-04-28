@@ -119,6 +119,38 @@ describe("state: parseStateComment / renderStateComment", () => {
     expect(reloaded.history.length).toBe(1)
   })
 
+  it("preserves state when artifact content embeds the literal STATE_END marker", () => {
+    // Regression: parseStateComment used `indexOf(STATE_END, beginIdx + 1)`,
+    // which matched the first occurrence — including any embedded inside the
+    // artifact JSON when a plan discussed the kody state schema. That
+    // truncated the slice, broke the JSON parse, and silently returned
+    // emptyState — losing flow context and putting the orchestrator in an
+    // infinite plan↔bug loop.
+    const planContentWithMarkers = `Plan example:\n\n${STATE_BEGIN}\n\`\`\`json\n{}\n\`\`\`\n${STATE_END}\n\nDone.`
+    let s = reduce(emptyState(), "plan", {
+      type: "PLAN_COMPLETED",
+      payload: { commitMessage: "plan: schema" },
+      timestamp: "2026-04-28T08:00:00Z",
+    })
+    s = {
+      ...s,
+      flow: { name: "bug", step: "plan", issueNumber: 1380, startedAt: "2026-04-28T08:00:00Z" },
+      artifacts: {
+        plan: {
+          format: "markdown",
+          producedBy: "plan",
+          createdAt: "2026-04-28T08:00:00Z",
+          content: planContentWithMarkers,
+        },
+      },
+    }
+    const body = renderStateComment(s)
+    const reloaded = parseStateComment(body)
+    expect(reloaded.flow?.name).toBe("bug")
+    expect(reloaded.core.lastOutcome?.type).toBe("PLAN_COMPLETED")
+    expect(reloaded.artifacts.plan?.content).toBe(planContentWithMarkers)
+  })
+
   it("renders a human section with attempts + PR URL", () => {
     const s = reduce(emptyState(), "build", {
       type: "RUN_COMPLETED",
