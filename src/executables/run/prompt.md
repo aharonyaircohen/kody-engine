@@ -26,6 +26,7 @@ If a prior-art block is present above, READ THE DIFFS — those are failed or su
    - Read the **full** contents of every file you intend to change (not just a grep hit).
    - Read the tests for each of those files, if tests exist for the module.
    - Read at least one sibling module that already implements the same pattern you're about to follow — your edits should mirror an existing convention unless you can name why a new one is needed.
+   - If your change requires writing or modifying a test, also check for repo-level testing guidance: `tests/README.md`, `TESTING.md`, or a "Testing"/"Tests" section in `AGENTS.md`/`CLAUDE.md`. If one exists, treat its patterns (auth setup, fixture creation, what NOT to do) as authoritative — they override anything you might infer from grepping individual files.
    - If a file you need to read does not exist, say so explicitly in your plan (step 2). Do not guess at its contents.
 2. **Plan** — before any Edit/Write, output a short plan (5–10 lines): what files you'll change, the approach, what could go wrong. No fluff.
 3. **Build** — Edit/Write to implement the change. Stay within the plan; if you discover the plan was wrong, briefly say so and adjust.
