@@ -10,8 +10,8 @@
  */
 
 import type { PostflightScript } from "../executables/types.js"
-import { findExistingPr } from "../pr.js"
 import { gh } from "../issue.js"
+import { findExistingPr } from "../pr.js"
 
 const TITLE_MAX = 72
 
@@ -69,18 +69,7 @@ export const ensureMemorizePr: PostflightScript = async (ctx) => {
 
   try {
     const output = gh(
-      [
-        "pr",
-        "create",
-        "--head",
-        branch,
-        "--base",
-        ctx.config.git.defaultBranch,
-        "--title",
-        title,
-        "--body-file",
-        "-",
-      ],
+      ["pr", "create", "--head", branch, "--base", ctx.config.git.defaultBranch, "--title", title, "--body-file", "-"],
       { input: body, cwd: ctx.cwd },
     )
     const url = output.trim()

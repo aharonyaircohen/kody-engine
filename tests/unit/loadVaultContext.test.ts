@@ -88,14 +88,8 @@ describe("loadVaultContext", () => {
   it("falls back to recency ordering when no query terms are extractable", async () => {
     const dir = path.join(tmp, ".kody/vault")
     fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(
-      path.join(dir, "old.md"),
-      `---\ntitle: Old page\nupdated: 2025-01-01\n---\n\nstale\n`,
-    )
-    fs.writeFileSync(
-      path.join(dir, "new.md"),
-      `---\ntitle: New page\nupdated: 2026-04-01\n---\n\nfresh\n`,
-    )
+    fs.writeFileSync(path.join(dir, "old.md"), `---\ntitle: Old page\nupdated: 2025-01-01\n---\n\nstale\n`)
+    fs.writeFileSync(path.join(dir, "new.md"), `---\ntitle: New page\nupdated: 2026-04-01\n---\n\nfresh\n`)
     const ctx = makeCtx(tmp)
     await loadVaultContext(ctx, dummyProfile, {})
     const block = ctx.data.vaultContext as string

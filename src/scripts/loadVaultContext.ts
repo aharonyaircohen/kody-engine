@@ -133,7 +133,12 @@ function sortByRecency(pages: VaultPage[]): VaultPage[] {
 
 function formatBlock(pages: VaultPage[]): string {
   if (pages.length === 0) return ""
-  const lines: string[] = ["# Project memory (`.kody/vault/`)", "", "Pages from prior memorize ticks. Treat as advisory context — confirm against the codebase before acting.", ""]
+  const lines: string[] = [
+    "# Project memory (`.kody/vault/`)",
+    "",
+    "Pages from prior memorize ticks. Treat as advisory context — confirm against the codebase before acting.",
+    "",
+  ]
   let total = 0
   for (const p of pages) {
     const block = [`## ${p.title} — \`${p.relPath}\``, "", p.content].join("\n")
@@ -149,7 +154,7 @@ function formatBlock(pages: VaultPage[]): string {
 }
 
 function walkMd(root: string, visit: (file: string) => void): void {
-  let stack: string[] = [root]
+  const stack: string[] = [root]
   while (stack.length > 0) {
     const dir = stack.pop()!
     let names: string[]

@@ -57,7 +57,9 @@ export const memorizeFlow: PreflightScript = async (ctx) => {
   if (recent.length === 0) {
     process.stdout.write(`[kody memorize] no merged PRs since ${sinceIso}; agent may emit no changes\n`)
   } else {
-    process.stdout.write(`[kody memorize] ${recent.length} merged PR(s) since ${sinceIso} → branch ${ctx.data.branch}\n`)
+    process.stdout.write(
+      `[kody memorize] ${recent.length} merged PR(s) since ${sinceIso} → branch ${ctx.data.branch}\n`,
+    )
   }
 }
 
@@ -204,7 +206,7 @@ function formatVaultIndex(vaultAbs: string): string {
 
 function walkMd(root: string, visit: (file: string) => void): void {
   if (!fs.existsSync(root)) return
-  let stack: string[] = [root]
+  const stack: string[] = [root]
   while (stack.length > 0) {
     const dir = stack.pop()!
     let names: string[]

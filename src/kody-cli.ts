@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
-import { autoDispatch, dispatchScheduledWatches, type DispatchResult } from "./dispatch.js"
+import { autoDispatch, type DispatchResult, dispatchScheduledWatches } from "./dispatch.js"
 import { runExecutable } from "./executor.js"
 import { reactToTriggerComment } from "./gha.js"
 import { postIssueComment, truncate } from "./issue.js"
@@ -370,11 +370,7 @@ export async function runCi(argv: string[]): Promise<number> {
  * identity) as the single-target path; runs each match sequentially.
  * Aggregate exit code: 0 iff every watch returned 0.
  */
-async function runScheduledFanOut(
-  cwd: string,
-  args: CiArgs,
-  opts: { force: boolean },
-): Promise<number> {
+async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: boolean }): Promise<number> {
   const matches: DispatchResult[] = dispatchScheduledWatches({ force: opts.force })
   if (matches.length === 0) {
     process.stdout.write(
