@@ -204,10 +204,11 @@ describe("prompt: parseAgentResult", () => {
     expect(result.failureReason).toBe("tests broken")
   })
 
-  it("returns failure when no marker present", () => {
+  it("treats missing-marker output as success (harness checks reality, not sentinels)", () => {
     const result = parseAgentResult("just some text")
-    expect(result.done).toBe(false)
-    expect(result.failureReason).toMatch(/no DONE or FAILED/)
+    expect(result.done).toBe(true)
+    expect(result.markerMissing).toBe(true)
+    expect(result.failureReason).toBe("")
   })
 
   it("returns failure when text is empty", () => {
@@ -315,31 +316,14 @@ describe("prompt: parseAgentResult", () => {
     expect(result.prSummary).toBe("- replaced the foo\n- added a guard")
   })
 
-  it("still fails when neither DONE nor COMMIT_MSG nor PR_SUMMARY is present", () => {
+  it("succeeds with markerMissing flag when neither DONE nor COMMIT_MSG nor PR_SUMMARY is present", () => {
+    // Old contract failed the run on missing marker; new contract treats
+    // marker as optional metadata and lets postflight verifiers (typecheck,
+    // lint, tests) be the real shipability gate.
     const result = parseAgentResult("All good, work complete, proceeding.")
-    expect(result.done).toBe(false)
-    expect(result.failureReason).toMatch(/no DONE or FAILED/)
-  })
-
-  it("includes the agent tail in the failure reason when no marker is found", () => {
-    // Diagnostic: the state comment should show what the agent actually
-    // emitted, so we can tell silent giveups from near-miss sentinels.
-    const result = parseAgentResult("This is the agent's last message — investigation complete, ready to ship.")
-    expect(result.done).toBe(false)
-    expect(result.failureReason).toMatch(/agent tail:/)
-    expect(result.failureReason).toContain("ready to ship")
-  })
-
-  it("truncates very long agent text in the failure reason tail", () => {
-    const long = `${"x".repeat(2000)} END_OF_AGENT_TEXT`
-    const result = parseAgentResult(long)
-    expect(result.done).toBe(false)
-    // Should keep the trailing portion (where the marker would be),
-    // not the leading filler.
-    expect(result.failureReason).toContain("END_OF_AGENT_TEXT")
-    expect(result.failureReason).toContain("…")
-    // Reason itself stays bounded (header + ellipsis + 400 char tail).
-    expect(result.failureReason.length).toBeLessThan(700)
+    expect(result.done).toBe(true)
+    expect(result.markerMissing).toBe(true)
+    expect(result.failureReason).toBe("")
   })
 
   it("extracts inline PRIOR_ART JSON array", () => {

@@ -1,15 +1,11 @@
 /**
- * Postflight for `run` (and any future plan-consuming executable): enforce
- * that when an input `plan` artifact was provided, the agent's final message
- * includes an explicit `PLAN_DEVIATIONS:` section — either the sentinel
- * `- none` or a bulleted list of deviations.
+ * Postflight for `run` (and any future plan-consuming executable): record
+ * the agent's `PLAN_DEVIATIONS:` block when present and warn when omitted
+ * or malformed. NOT a hard gate — verify/tests are the real shipability
+ * check; forgetting a bureaucratic checklist at the end of a long task
+ * should not throw away working code.
  *
- * Without this, the agent can silently depart from the plan (different file
- * names, different function names, missing pieces) without flagging it,
- * which defeats the plan→run handoff contract.
- *
- * Must run AFTER parseAgentResult (populates planDeviations + agentDone)
- * and BEFORE commitAndPush (so a silent deviation blocks the commit).
+ * Must run AFTER parseAgentResult (populates planDeviations + agentDone).
  *
  * No-op when:
  *   - the agent did not reach DONE (parseAgentResult already failed),
@@ -17,7 +13,6 @@
  */
 
 import type { PostflightScript } from "../executables/types.js"
-import type { Action } from "../state.js"
 
 export const requirePlanDeviations: PostflightScript = async (ctx, profile) => {
   if (!ctx.data.agentDone) return
@@ -28,7 +23,14 @@ export const requirePlanDeviations: PostflightScript = async (ctx, profile) => {
 
   const raw = String(ctx.data.planDeviations ?? "").trim()
   if (raw.length === 0) {
-    fail(ctx, profile, "agent omitted required PLAN_DEVIATIONS block — cannot verify whether the plan was followed")
+    // Missing block is no longer fatal: the harness checks reality (verify,
+    // tests, branch state) elsewhere. Forgetting a bureaucratic checklist
+    // at the end of a long task should not throw away working code. We
+    // record the omission for downstream visibility but let the run ship.
+    process.stderr.write(
+      "[kody requirePlanDeviations] warning: agent omitted PLAN_DEVIATIONS block — proceeding anyway (verify/tests are the real gate)\n",
+    )
+    ctx.data.planDeviationsOmitted = true
     return
   }
 
@@ -37,7 +39,12 @@ export const requirePlanDeviations: PostflightScript = async (ctx, profile) => {
 
   const bullets = raw.split("\n").filter((l) => /^\s*[-*]\s+/.test(l))
   if (bullets.length === 0) {
-    fail(ctx, profile, "agent PLAN_DEVIATIONS block is not 'none' and lists no bullet items")
+    // Block is present but malformed (no bullets, not 'none'). Still a
+    // soft warning — same reasoning as above.
+    process.stderr.write(
+      "[kody requirePlanDeviations] warning: PLAN_DEVIATIONS block is not 'none' and lists no bullet items — proceeding anyway\n",
+    )
+    ctx.data.planDeviationsMalformed = true
     return
   }
 
@@ -59,14 +66,3 @@ export function isNoneSentinel(block: string): boolean {
   return stripped[0] === "none"
 }
 
-function fail(ctx: Parameters<PostflightScript>[0], profile: Parameters<PostflightScript>[1], reason: string): void {
-  ctx.data.agentDone = false
-  ctx.data.agentFailureReason = reason
-  const modeSeg = profile.name.replace(/-/g, "_").toUpperCase()
-  const failedAction: Action = {
-    type: `${modeSeg}_FAILED`,
-    payload: { reason },
-    timestamp: new Date().toISOString(),
-  }
-  ctx.data.action = failedAction
-}

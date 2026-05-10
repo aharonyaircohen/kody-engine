@@ -18,7 +18,6 @@ import type { ContainerChild, Context, InputSpec, Profile, ScriptEntry } from ".
 import { KODY_NAMESPACE, removeLabel } from "./lifecycleLabels.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
-import { rescueMissingMarker } from "./rescueMissingMarker.js"
 import { resolveExecutable } from "./registry.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
 import { type Action, readTaskState, type TaskState, type TaskTarget } from "./state.js"
@@ -198,7 +197,6 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
         return finish({ exitCode: 99, reason: "composePrompt did not produce a prompt (ctx.data.prompt missing)" })
       }
       agentResult = await invokeAgent(prompt)
-      agentResult = await rescueMissingMarker(agentResult, invokeAgent)
     }
 
     // ── Postflight ────────────────────────────────────────────────────────────

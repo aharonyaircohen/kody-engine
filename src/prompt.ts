@@ -214,39 +214,17 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
     }
   }
 
-  // Primary signal: bare-word DONE line (with optional markdown decorators).
-  // Fallback signals (in order):
-  //   1. COMMIT_MSG: marker — the structured artifact ensurePr consumes.
-  //   2. PR_SUMMARY: marker — the artifact reviewers actually read.
-  // Weaker models sometimes drop the bare DONE sentinel but still emit
-  // one of the contract fields. If any of them is present, treat the
-  // session as complete — refusing to ship work the agent already did
-  // because of a missing five-letter sentinel is the worst-of-both
-  // outcomes (we paid for the run, then threw away the result).
+  // Source of truth: the agent did NOT emit a `FAILED:` line and produced
+  // non-empty output. The presence/absence of `DONE` / `COMMIT_MSG` /
+  // `PR_SUMMARY` markers is metadata used to extract structured artifacts —
+  // it is NOT used to gate completion. Throwing the run away over a missing
+  // five-letter sentinel costs a full agent invocation and orphans working
+  // branches; the harness checks reality (verify, tests, branch state) in
+  // postflights to decide whether the work is shippable.
   const hasDoneMarker = DONE_RE.test(text)
   const hasCommitMsg = /^[\s>*_#`~-]*COMMIT_MSG\s*:/im.test(text)
   const hasPrSummary = /^[\s>*_#`~-]*PR_SUMMARY\s*:/im.test(text)
-  if (!hasDoneMarker && !hasCommitMsg && !hasPrSummary) {
-    // Surface the last chunk of agent text so the state comment shows
-    // *what* the agent actually produced. Otherwise we'd just see
-    // "no DONE or FAILED marker" with no diagnostic — making it
-    // impossible to tell if the model is silently giving up, getting
-    // truncated by a length cap, or emitting some near-miss sentinel
-    // we should add to the parser. 400 chars fits within the 1500-char
-    // failure-comment cap and the 120-char history-line cap (truncated
-    // separately at render time).
-    const tail = text.length > 400 ? `…${text.slice(-400)}` : text
-    return {
-      done: false,
-      commitMessage: "",
-      prSummary: "",
-      feedbackActions: "",
-      planDeviations: "",
-      priorArt: "",
-      failureReason: `no DONE or FAILED marker in agent output — agent tail: ${tail}`,
-      markerMissing: true,
-    }
-  }
+  const markerMissing = !hasDoneMarker && !hasCommitMsg && !hasPrSummary
 
   const commitMatch = text.match(/^[\s>*_#`~-]*COMMIT_MSG[\s>*_#`~-]*\s*:\s*(.+)$/im)
   const commitMessage = commitMatch ? stripMarkdownEmphasis(commitMatch[1]!) : ""
@@ -296,7 +274,7 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
     planDeviations,
     priorArt,
     failureReason: "",
-    markerMissing: false,
+    markerMissing,
   }
 }
 

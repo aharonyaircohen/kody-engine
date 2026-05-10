@@ -47,12 +47,14 @@ describe("requirePlanDeviations postflight", () => {
     expect(ctx.data.action).toBeUndefined()
   })
 
-  it("flips DONE to FAILED when plan was provided but PLAN_DEVIATIONS is missing", async () => {
+  it("warns but does NOT fail when plan was provided but PLAN_DEVIATIONS is missing", async () => {
+    // Soft check: a missing checklist at the end of a long task should not
+    // throw away working code. The real shipability gate is verify/tests.
     const ctx = makeCtx({ agentDone: true, artifacts: { plan: "## Do X" }, planDeviations: "" })
     await requirePlanDeviations(ctx as never, runProfile, null)
-    expect(ctx.data.agentDone).toBe(false)
-    expect((ctx.data.action as { type: string } | undefined)?.type).toBe("RUN_FAILED")
-    expect(String(ctx.data.agentFailureReason)).toMatch(/omitted required PLAN_DEVIATIONS/)
+    expect(ctx.data.agentDone).toBe(true)
+    expect(ctx.data.action).toBeUndefined()
+    expect(ctx.data.planDeviationsOmitted).toBe(true)
   })
 
   it("passes when plan was provided and PLAN_DEVIATIONS is 'none'", async () => {
@@ -77,14 +79,15 @@ describe("requirePlanDeviations postflight", () => {
     expect(ctx.data.planDeviationCount).toBe(1)
   })
 
-  it("fails when PLAN_DEVIATIONS is prose without bullets or 'none'", async () => {
+  it("warns but does NOT fail when PLAN_DEVIATIONS is prose without bullets or 'none'", async () => {
     const ctx = makeCtx({
       agentDone: true,
       artifacts: { plan: "## Do X" },
       planDeviations: "I followed the plan basically",
     })
     await requirePlanDeviations(ctx as never, runProfile, null)
-    expect(ctx.data.agentDone).toBe(false)
-    expect((ctx.data.action as { type: string } | undefined)?.type).toBe("RUN_FAILED")
+    expect(ctx.data.agentDone).toBe(true)
+    expect(ctx.data.action).toBeUndefined()
+    expect(ctx.data.planDeviationsMalformed).toBe(true)
   })
 })
