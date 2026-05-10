@@ -18,6 +18,26 @@ import { cronMatchesInWindow } from "./cron-match.js"
 import type { InputSpec } from "./executables/types.js"
 import { getProfileInputs, listExecutables } from "./registry.js"
 
+/**
+ * Lowercased natural-language lead-ins that should NOT be treated as a
+ * subcommand attempt. With the firstToken set to one of these words,
+ * dispatch falls through to the default executable instead of surfacing
+ * the comment as an unrecognized-command error. Keep this small and
+ * conservative — every entry weakens the "typo'd command" detection.
+ */
+const POLITE_WORDS = new Set<string>([
+  "please",
+  "kindly",
+  "hi",
+  "hey",
+  "hello",
+  "thanks",
+  "thank",
+  "plz",
+  "pls",
+  "yo",
+])
+
 export interface DispatchResult {
   executable: string
   cliArgs: Record<string, unknown>
@@ -110,7 +130,12 @@ export function autoDispatch(opts?: {
   if (!targetNum) return null
 
   const afterTag = extractAfterTag(body)
-  const firstToken = extractSubcommand(afterTag)
+  const firstTokenRaw = extractSubcommand(afterTag)
+  // Politeness/natural-language words: skip them so "@kody please fix X"
+  // routes to the default executable instead of surfacing as unrecognized.
+  // Anything not in this small set is assumed to be a command attempt —
+  // typo'd or otherwise — and will surface for user feedback.
+  const firstToken = firstTokenRaw && POLITE_WORDS.has(firstTokenRaw) ? null : firstTokenRaw
 
   // Resolve first token via aliases → registry. No match → fall back to the
   // default executable for this event shape (issue vs PR). Alias map comes
@@ -136,7 +161,13 @@ export function autoDispatch(opts?: {
       )
     }
   }
-  if (!executable) {
+  // Fall through to default ONLY when the user did not type a specific
+  // subcommand token. If they typed something that didn't resolve (e.g.
+  // a typo, a renamed executable), bail with no executable so the typed
+  // wrapper can surface the unrecognized comment back to the user. The
+  // POLITE_WORDS filter above lets natural-language phrasings through to
+  // the default — the "no firstToken" condition here is what gates them.
+  if (!executable && !firstToken) {
     executable = isPr ? (opts?.config?.defaultPrExecutable ?? "fix") : (opts?.config?.defaultExecutable ?? null)
   }
   if (!executable) {
@@ -226,14 +257,22 @@ export function autoDispatchTyped(opts?: {
     return { kind: "silent", reason: "comment has no associated issue/PR number" }
   }
   const afterTag = extractAfterTag(rawBody.toLowerCase())
-  const token = extractSubcommand(afterTag) ?? ""
+  const tokenRaw = extractSubcommand(afterTag) ?? ""
+  // If firstToken is a politeness word, dispatch fell through to default —
+  // the legacy null wasn't from "user typo'd a command" but from "no
+  // default configured." That's an operator misconfig, not a user error;
+  // classify as silent so we don't post a misleading "I don't recognize
+  // `please`" comment.
+  if (!tokenRaw || POLITE_WORDS.has(tokenRaw)) {
+    return { kind: "silent", reason: tokenRaw ? `polite-word lead-in '${tokenRaw}', no default executable configured` : "no subcommand token, no default executable configured" }
+  }
 
   const available = listExecutables()
     .map((e) => e.name)
     .filter((n) => !n.startsWith("goal-") && !n.startsWith("job-"))
     .sort()
 
-  return { kind: "unrecognized", token, target: targetNum, isPr, available }
+  return { kind: "unrecognized", token: tokenRaw, target: targetNum, isPr, available }
 }
 
 /**

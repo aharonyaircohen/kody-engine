@@ -116,3 +116,56 @@ describe("autoDispatchTyped: unrecognized variant (user-facing feedback needed)"
   // user feedback. This is a known follow-up: PRs should also surface
   // unrecognized tokens instead of silently rerouting to fix.
 })
+
+describe("autoDispatchTyped: typo'd command does NOT fall through to default executable", () => {
+  it("returns unrecognized even when a default is configured (typo guard)", () => {
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody totally-not-a-real-command-035", user: { login: "alice", type: "User" } },
+      issue: { number: 11 },
+    })
+    // Reproduces the live-tested A-Guy-educ/A-Guy bug: defaultExecutable
+    // was 'classify', so any @kody comment routed there silently — a
+    // typo'd command was indistinguishable from `@kody` on its own.
+    const out = autoDispatchTyped({ config: { defaultExecutable: "classify" } as never })
+    expect(out.kind).toBe("unrecognized")
+    if (out.kind === "unrecognized") {
+      expect(out.token).toBe("totally-not-a-real-command-035")
+    }
+  })
+
+  it("falls through to the default for `@kody` alone (no typo to surface)", () => {
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody", user: { login: "alice", type: "User" } },
+      issue: { number: 12 },
+    })
+    const out = autoDispatchTyped({ config: { defaultExecutable: "classify" } as never })
+    expect(out.kind).toBe("route")
+    if (out.kind === "route") expect(out.executable).toBe("classify")
+  })
+
+  it("falls through to the default for natural-language lead-ins (please/kindly/etc)", () => {
+    for (const polite of ["please", "kindly", "hi", "hey", "thanks"]) {
+      process.env.GITHUB_EVENT_NAME = "issue_comment"
+      process.env.GITHUB_EVENT_PATH = writeEvent({
+        comment: { body: `@kody ${polite} fix the test failure`, user: { login: "alice", type: "User" } },
+        issue: { number: 13 },
+      })
+      const out = autoDispatchTyped({ config: { defaultExecutable: "classify" } as never })
+      expect(out.kind, `polite word "${polite}"`).toBe("route")
+      if (out.kind === "route") expect(out.executable).toBe("classify")
+    }
+  })
+
+  it("returns unrecognized for typo'd commands even with no default (no fallback at all)", () => {
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody panl", user: { login: "alice", type: "User" } },
+      issue: { number: 14 },
+    })
+    const out = autoDispatchTyped({ config: { defaultExecutable: undefined } as never })
+    expect(out.kind).toBe("unrecognized")
+    if (out.kind === "unrecognized") expect(out.token).toBe("panl")
+  })
+})

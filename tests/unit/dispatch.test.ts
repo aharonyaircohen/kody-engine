@@ -163,9 +163,45 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("unknown subcommand falls back to defaultExecutable (no silent pass-through)", () => {
+  it("unknown subcommand returns null even when defaultExecutable is set (typo guard)", () => {
+    // Behavior changed in 0.4.36: a typed-but-unrecognized subcommand no
+    // longer silently routes to the default executable. The kody-cli typed
+    // wrapper (autoDispatchTyped) now classifies these as `unrecognized`
+    // and posts a feedback comment back to the user. This was the bug
+    // behind A-Guy-educ/A-Guy issue #1545: `@kody feature` ended up at
+    // the configured `classify` default with no signal of what happened.
+    // Natural-language openings (`@kody please ...`) still fall through —
+    // see POLITE_WORDS in dispatch.ts.
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody custom-exec" },
+      issue: { number: 11 },
+    })
+    expect(
+      autoDispatch({
+        config: { defaultExecutable: "classify" } as any,
+      }),
+    ).toBeNull()
+  })
+
+  it("falls back to defaultExecutable for `@kody` alone (no typo to surface)", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody" },
+      issue: { number: 11 },
+    })
+    expect(
+      autoDispatch({
+        config: { defaultExecutable: "classify" } as any,
+      }),
+    ).toEqual({
+      executable: "classify",
+      cliArgs: { issue: 11 },
+      target: 11,
+    })
+  })
+
+  it("falls back to defaultExecutable for natural-language openings (please/kindly/...)", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody please fix the failing test" },
       issue: { number: 11 },
     })
     expect(
@@ -548,13 +584,21 @@ describe("dispatch: alias misconfig surfacing", () => {
         defaultExecutable: "classify",
       } as never,
     })
-    expect(result?.executable).toBe("classify")
+    // Behavior changed in 0.4.36: typed-but-unrecognized tokens no longer
+    // fall through to the default — the typed wrapper surfaces them to
+    // the user instead. The alias-misconfig warning still fires.
+    expect(result).toBeNull()
     const warnings = stderrSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n")
     expect(warnings).toMatch(/alias 'phantom-cmd' → 'no-such-executable'/)
     expect(warnings).toMatch(/has no matching executable/)
   })
 
-  it("does NOT warn for natural-language openings (no alias configured)", () => {
+  it("logs the no-executable-resolved breadcrumb for any unrecognized token", () => {
+    // Behavior changed in 0.4.36: the breadcrumb fires whenever firstToken
+    // is set but no executable resolves, so consumers (kody-cli) can
+    // distinguish "user typed a typo" from "no @kody mention." The
+    // breadcrumb itself is the diagnostic; the typed wrapper turns it
+    // into user-facing feedback.
     process.env.GITHUB_EVENT_NAME = "issue_comment"
     process.env.GITHUB_EVENT_PATH = writeEvent({
       issue: { number: 9, pull_request: null },
@@ -563,7 +607,9 @@ describe("dispatch: alias misconfig surfacing", () => {
     autoDispatch({
       config: { defaultExecutable: "classify", aliases: {} } as never,
     })
-    expect(stderrSpy.mock.calls.length).toBe(0)
+    const warnings = stderrSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n")
+    expect(warnings).toMatch(/no executable resolved/)
+    expect(warnings).toMatch(/firstToken=totally-unknown-thing/)
   })
 
   it("does NOT warn for politeness words like 'please'", () => {
