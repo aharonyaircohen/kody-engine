@@ -5,10 +5,22 @@ export interface VerifyResult {
   ok: boolean
   failed: string[]
   details: Record<string, { exitCode: number; durationMs: number; tail: string }>
+  /**
+   * Commands that initially failed but passed on retry — i.e. caught flakes.
+   * Empty when nothing was retried or all retries also failed.
+   */
+  recovered?: string[]
 }
 
 const TAIL_CHARS = 4000
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000
+/**
+ * Default retry count for the `test` command. typecheck/lint/format are
+ * deterministic — never retried. Two retries means up to three total
+ * attempts: enough to catch a non-deterministic test that fails ~30% of
+ * the time without burning budget on a real failure.
+ */
+export const DEFAULT_TEST_RETRIES = 2
 
 interface RunResult {
   exitCode: number
@@ -78,6 +90,62 @@ export async function verifyAll(config: KodyConfig, cwd?: string): Promise<Verif
   return { ok: failed.length === 0, failed, details }
 }
 
+/**
+ * Pure rerun-on-flake helper. Takes an initial verify result and a runner
+ * for the test command. Returns a new result with retries applied.
+ *
+ * Extracted as a pure function (no module-level dependencies) so tests can
+ * exercise the retry logic without spawning real processes or mocking ES
+ * module bindings.
+ *
+ * Only `test` is retried — typecheck/lint/format are deterministic and a
+ * failure there is always real.
+ */
+export async function applyTestRetries(
+  initial: VerifyResult,
+  testCommand: string | undefined,
+  cwd: string | undefined,
+  runner: (cmd: string, cwd?: string) => Promise<RunResult>,
+  testRetries: number = DEFAULT_TEST_RETRIES,
+): Promise<VerifyResult> {
+  if (initial.ok) return { ...initial, recovered: [] }
+  const recovered: string[] = []
+  const details = { ...initial.details }
+  let failed = [...initial.failed]
+
+  if (failed.includes("test") && testCommand && testRetries > 0) {
+    for (let attempt = 1; attempt <= testRetries; attempt++) {
+      const retry = await runner(testCommand, cwd)
+      details[`test (retry ${attempt})`] = retry
+      if (retry.exitCode === 0) {
+        failed = failed.filter((f) => f !== "test")
+        recovered.push("test")
+        break
+      }
+    }
+  }
+
+  return { ok: failed.length === 0, failed, details, recovered }
+}
+
+/**
+ * Wrap verifyAll with rerun-on-flake for the `test` command.
+ *
+ * Non-deterministic tests (e.g. a random number swap that occasionally rolls
+ * the same value) caused real PRs to be aborted even when the agent's
+ * change was unrelated to the failing test (see issue #1544). Retrying just
+ * the test command up to N times catches the flake; if every attempt fails,
+ * the failure is real and surfaces unchanged.
+ */
+export async function verifyAllWithRetry(
+  config: KodyConfig,
+  cwd?: string,
+  opts?: { testRetries?: number },
+): Promise<VerifyResult> {
+  const initial = await verifyAll(config, cwd)
+  return applyTestRetries(initial, config.quality.testUnit, cwd, runCommand, opts?.testRetries)
+}
+
 // biome-ignore lint/suspicious/noControlCharactersInRegex: ESC (0x1B) is required to match ANSI escape sequences.
 const ANSI_RE = /\x1B\[[0-?]*[ -/]*[@-~]/g
 
@@ -92,6 +160,15 @@ export function summarizeFailure(result: VerifyResult): string {
     if (!d) continue
     lines.push(`\n--- ${name} (exit ${d.exitCode}, ${(d.durationMs / 1000).toFixed(1)}s) ---`)
     lines.push(stripAnsi(d.tail))
+    // Surface retry attempts (only relevant for the `test` command — see
+    // verifyAllWithRetry). Helps the user see "we tried 3 times, all red"
+    // and not assume one transient failure was treated as final.
+    for (let attempt = 1; ; attempt++) {
+      const retry = result.details[`${name} (retry ${attempt})`]
+      if (!retry) break
+      lines.push(`\n--- ${name} (retry ${attempt}: exit ${retry.exitCode}, ${(retry.durationMs / 1000).toFixed(1)}s) ---`)
+      lines.push(stripAnsi(retry.tail))
+    }
   }
   return lines.join("\n")
 }

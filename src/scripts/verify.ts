@@ -9,13 +9,19 @@
 
 import type { PostflightScript } from "../executables/types.js"
 import type { Action } from "../state.js"
-import { summarizeFailure, verifyAll } from "../verify.js"
+import { summarizeFailure, verifyAllWithRetry } from "../verify.js"
 
 export const verify: PostflightScript = async (ctx) => {
   try {
-    const result = await verifyAll(ctx.config, ctx.cwd)
+    const result = await verifyAllWithRetry(ctx.config, ctx.cwd)
     ctx.data.verifyOk = result.ok
     ctx.data.verifyReason = result.ok ? "" : summarizeFailure(result)
+    ctx.data.verifyRecovered = result.recovered ?? []
+    if (result.recovered && result.recovered.length > 0) {
+      process.stderr.write(
+        `[kody verify] caught flake on: ${result.recovered.join(", ")} (passed on retry)\n`,
+      )
+    }
   } catch (err) {
     ctx.data.verifyOk = false
     ctx.data.verifyReason = `verify crashed: ${err instanceof Error ? err.message : String(err)}`
