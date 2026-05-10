@@ -1,39 +1,67 @@
 /**
  * Postflight: open or update the PR. Draft on any failure, normal on full success.
- * No-op if commitAndPush didn't produce any change and the branch isn't ahead.
+ *
+ * ALWAYS sets `ctx.data.prResult` to a typed PrOutcome — Created / Updated /
+ * Skipped / Crashed — even when this postflight chooses not to call gh. This
+ * eliminates the "downstream consumer can't tell whether ensurePr ran" class
+ * of bug: postIssueComment can switch exhaustively instead of templating
+ * undefined into a success message ("✅ kody PR opened: undefined").
  */
 
 import type { PostflightScript } from "../executables/types.js"
 import { ensurePr as doEnsurePr } from "../pr.js"
+import type { PrOutcome } from "./prOutcome.js"
+
+function setOutcome(ctx: Parameters<PostflightScript>[0], outcome: PrOutcome): void {
+  ctx.data.prResult = outcome
+  if (outcome.kind === "created" || outcome.kind === "updated") {
+    ctx.output.prUrl = outcome.url
+  }
+}
 
 export const ensurePr: PostflightScript = async (ctx) => {
   if (ctx.skipAgent && ctx.output.exitCode !== undefined) {
     // Preflight was authoritative — either it refused to start (exit != 0)
-    // or it did the work itself and short-circuited (exit === 0, e.g. a
-    // shell entry that emitted KODY_SKIP_AGENT=true, or resolveFlow's
-    // clean-merge path). In both cases ensurePr has nothing useful to do.
-    // Previously this check only bailed on failure, so short-circuit
-    // success paths tripped the "agent did not emit DONE" branch and
-    // tried to draftify an existing PR.
+    // or it did the work itself and short-circuited (exit === 0).
+    setOutcome(ctx, { kind: "skipped", reason: "preflight short-circuited (skipAgent)" })
     return
   }
 
   const commitResult = ctx.data.commitResult as { committed: boolean; pushed?: boolean } | undefined
   const hasCommits = Boolean(ctx.data.hasCommitsAhead)
   if (!commitResult?.committed && !hasCommits) {
-    // Nothing to ship. Let postIssueComment surface the "no changes" state.
+    setOutcome(ctx, { kind: "skipped", reason: "no commits to ship" })
     return
   }
 
   // Local commit succeeded but push failed (commitAndPush surfaced this via
   // exitCode=4). Don't try to open a PR — gh would 422 against a branch that
-  // origin has never seen. postIssueComment will surface the failure.
+  // origin has never seen.
   if (commitResult?.committed && commitResult.pushed === false) {
+    setOutcome(ctx, { kind: "skipped", reason: "local commit succeeded but push failed" })
+    return
+  }
+
+  // Gate previously enforced via profile runWhen={data.verifyOk:true}, but
+  // that left ctx.data.prResult unset when verifyOk was undefined or false —
+  // postIssueComment then templated "${prUrl}" as the literal string
+  // "undefined" because it had no signal that ensurePr was skipped.
+  // Keeping the gate inline guarantees a typed outcome in every code path.
+  //
+  // Only gate when the caller's profile actually ran the verify postflight
+  // (signaled by verifyOk being a boolean). Profiles like `resolve` and
+  // `revert` never run verify; for them, ensurePr proceeds unconditionally.
+  if (ctx.data.verifyOk === false) {
+    const reason = `verify failed: ${(ctx.data.verifyReason as string | undefined) ?? "unknown"}`
+    setOutcome(ctx, { kind: "skipped", reason })
     return
   }
 
   const branch = ctx.data.branch as string | undefined
-  if (!branch) return
+  if (!branch) {
+    setOutcome(ctx, { kind: "skipped", reason: "no branch context (ctx.data.branch missing)" })
+    return
+  }
 
   const failureReason = computeFailureReason(ctx)
   const isFailure = failureReason.length > 0
@@ -62,13 +90,29 @@ export const ensurePr: PostflightScript = async (ctx) => {
       baseBranch,
       cwd: ctx.cwd,
     })
-    ctx.output.prUrl = result.url
-    ctx.data.prResult = result
+    // Boundary assertion: gh pr create returning an empty URL is not a
+    // success we should claim — fail closed with a Crashed outcome so
+    // postIssueComment surfaces the truth instead of "PR opened: undefined".
+    if (!result.url || result.url.trim().length === 0) {
+      const reason = `gh pr create returned empty URL (action=${result.action}); refusing to claim success`
+      ctx.data.prCrashReason = reason
+      ctx.output.exitCode = 4
+      ctx.output.reason = reason
+      setOutcome(ctx, { kind: "crashed", reason })
+      return
+    }
+    setOutcome(ctx, {
+      kind: result.action === "created" ? "created" : "updated",
+      url: result.url,
+      number: result.number,
+      draft: result.draft,
+    })
   } catch (err) {
     const reason = `PR creation failed: ${err instanceof Error ? err.message : String(err)}`
     ctx.data.prCrashReason = reason
     ctx.output.exitCode = 4
     ctx.output.reason = reason
+    setOutcome(ctx, { kind: "crashed", reason })
   }
 }
 

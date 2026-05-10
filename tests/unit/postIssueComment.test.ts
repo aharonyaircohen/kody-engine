@@ -61,7 +61,11 @@ function makeCtx(overrides: {
       commentTargetNumber: targetNumber,
       commitResult,
       hasCommitsAhead,
-      prResult: { action: prAction, url: prUrl, number: targetNumber, draft: false },
+      // Typed PrOutcome shape — see src/scripts/prOutcome.ts. Tests in this
+      // suite simulate ensurePr having run successfully; for failure-path
+      // tests that need the prCrashReason exit-4 branch, override prResult
+      // explicitly via the `prResultOverride` field below.
+      prResult: { kind: prAction, url: prUrl, number: targetNumber, draft: false },
       agentDone,
       verifyOk,
       ...(agentFailureReason ? { agentFailureReason } : {}),

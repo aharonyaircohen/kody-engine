@@ -65,7 +65,7 @@
       { "script": "checkCoverageWithRetry" },
       { "script": "abortUnfinishedGitOps" },
       { "script": "commitAndPush" },
-      { "script": "ensurePr", "runWhen": { "data.verifyOk": true } },
+      { "script": "ensurePr" },
       { "script": "postIssueComment" },
       { "script": "writeRunSummary" },
       { "script": "saveTaskState" },

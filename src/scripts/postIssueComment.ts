@@ -11,6 +11,7 @@ import {
   truncate,
 } from "../issue.js"
 import { setKodyLabel } from "../lifecycleLabels.js"
+import { type PrOutcome, readPrOutcome } from "./prOutcome.js"
 
 const FAILED_LABEL_SPEC = {
   label: "kody:failed",
@@ -28,18 +29,13 @@ export const postIssueComment: PostflightScript = async (ctx) => {
 
   const commitResult = ctx.data.commitResult as { committed: boolean } | undefined
   const hasCommits = Boolean(ctx.data.hasCommitsAhead)
-  const prUrl = ctx.output.prUrl
-  const prAction = (ctx.data.prResult as { action?: "created" | "updated" } | undefined)?.action
+  const prResult = readPrOutcome(ctx.data)
 
   if (!commitResult?.committed && !hasCommits) {
-    // Prefer the specific agent failure reason (e.g. "no DONE or FAILED
-    // marker in agent output — agent tail: …") when one exists. The generic
-    // "no changes to commit" string was hiding the real cause from operators:
-    // an agent that completed the work but forgot the contract sentinel
-    // showed up identically to one that produced no diff at all, even though
-    // the diagnoses and fixes differ. Fall back to "no changes to commit"
-    // only when the agent has no failure to report (agentDone=true and the
-    // working tree was simply empty — e.g., all edits in forbidden paths).
+    // Prefer the specific agent failure reason when one exists (e.g.
+    // markerMissing diagnostic). Falls back to "no changes to commit" only
+    // when the agent has no failure to report — e.g. all edits in forbidden
+    // paths.
     const specific = computeFailureReason(ctx)
     const reason = specific.length > 0 ? specific : "no changes to commit"
     postWith(targetType, targetNumber, `⚠️ kody FAILED: ${truncate(reason, 1500)}`, ctx.cwd)
@@ -58,26 +54,24 @@ export const postIssueComment: PostflightScript = async (ctx) => {
 
   const failureReason = computeFailureReason(ctx)
   const isFailure = failureReason.length > 0
-
-  // "pushed to" only applies when this run actually produced a commit. Without
-  // this gate, any rerun on an existing PR reports "pushed" even when fix
-  // made no changes, which hides no-op outcomes (see issue #4).
-  const justPushedToExistingPr = prAction === "updated" && commitResult?.committed === true
-  const successMsg = justPushedToExistingPr
-    ? `✅ kody pushed to ${prUrl}`
-    : prAction === "updated"
-      ? `ℹ️ kody made no changes — PR: ${prUrl}`
-      : `✅ kody PR opened: ${prUrl}`
   const branch = ctx.data.branch as string | undefined
-  const failurePrSuffix = computeFailureSuffix({
-    prUrl,
-    prAction,
+
+  // Render the user-facing message by exhaustively switching on the typed
+  // PR outcome. There is NO default branch that templates `${prUrl}` — every
+  // case either has a guaranteed url field (created/updated) or carries an
+  // explicit `reason` (skipped/crashed). This eliminates the "PR opened:
+  // undefined" class of bug at the type level.
+  const msg = renderMessage({
+    prResult,
+    isFailure,
+    failureReason,
+    justPushedToExistingPr:
+      prResult?.kind === "updated" && commitResult?.committed === true,
     branch,
     branchPushed: commitResult?.committed === true,
     githubOwner: ctx.config.github?.owner,
     githubRepo: ctx.config.github?.repo,
   })
-  const msg = isFailure ? `⚠️ kody FAILED: ${truncate(failureReason, 1500)}${failurePrSuffix}` : successMsg
   postWith(targetType, targetNumber, msg, ctx.cwd)
 
   let exitCode = 0
@@ -112,25 +106,68 @@ function markRunFailed(ctx: Context): void {
 
 /**
  * Build the trailing "— PR: …" / "— draft PR: …" / "— branch: …" suffix for
- * the failure comment. When ensurePr was gated (verify failed → no PR) we
- * still want the user to have a one-click path to inspect the agent's edits,
- * so fall back to a branch URL whenever commitAndPush actually pushed.
+ * the failure comment. When ensurePr was skipped or crashed we still want
+ * the user to have a one-click path to inspect the agent's edits, so fall
+ * back to a branch URL whenever commitAndPush actually pushed.
  *
  * Exported for unit testing.
  */
 export function computeFailureSuffix(input: {
-  prUrl: string | undefined
-  prAction: "created" | "updated" | undefined
+  prResult: PrOutcome | null
   branch: string | undefined
   branchPushed: boolean
   githubOwner: string | undefined
   githubRepo: string | undefined
 }): string {
-  if (input.prUrl) {
-    return input.prAction === "updated" ? ` — PR: ${input.prUrl}` : ` — draft PR: ${input.prUrl}`
-  }
+  if (input.prResult?.kind === "created") return ` — draft PR: ${input.prResult.url}`
+  if (input.prResult?.kind === "updated") return ` — PR: ${input.prResult.url}`
+  // skipped / crashed / null → fall back to branch URL when available.
   if (!input.branchPushed || !input.branch || !input.githubOwner || !input.githubRepo) return ""
   return ` — branch: https://github.com/${input.githubOwner}/${input.githubRepo}/tree/${input.branch}`
+}
+
+/**
+ * Render the user-facing comment body. Exhaustive switch on the typed
+ * PR outcome guarantees every code path either uses a real URL (created /
+ * updated) or carries an explicit reason (skipped / crashed / null).
+ * No template ever interpolates an undefined value.
+ *
+ * Exported for unit testing.
+ */
+export function renderMessage(input: {
+  prResult: PrOutcome | null
+  isFailure: boolean
+  failureReason: string
+  justPushedToExistingPr: boolean
+  branch: string | undefined
+  branchPushed: boolean
+  githubOwner: string | undefined
+  githubRepo: string | undefined
+}): string {
+  const suffix = computeFailureSuffix(input)
+  if (input.isFailure) {
+    return `⚠️ kody FAILED: ${truncate(input.failureReason, 1500)}${suffix}`
+  }
+  // Success path. Each branch carries its own URL or explicit explanation —
+  // no template can interpolate `undefined` because PrCreated/PrUpdated
+  // require a url field at the type level.
+  switch (input.prResult?.kind) {
+    case "created":
+      return `✅ kody PR opened: ${input.prResult.url}`
+    case "updated":
+      return input.justPushedToExistingPr
+        ? `✅ kody pushed to ${input.prResult.url}`
+        : `ℹ️ kody made no changes — PR: ${input.prResult.url}`
+    case "skipped":
+      return `⚠️ kody finished but did not open a PR — ${input.prResult.reason}${suffix}`
+    case "crashed":
+      return `⚠️ kody PR step crashed: ${truncate(input.prResult.reason, 1500)}${suffix}`
+    case undefined:
+      // null prResult = ensurePr never executed (e.g., executor short-
+      // circuited before postflights). Boundary assertion: never claim
+      // success without evidence.
+      return `⚠️ kody finished but PR step did not run${suffix}`
+  }
 }
 
 function computeFailureReason(ctx: { data: Record<string, unknown> }): string {
