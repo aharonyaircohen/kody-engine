@@ -10,22 +10,33 @@ import { advanceFlow } from "./advanceFlow.js"
 import { buildSyntheticPlugin } from "./buildSyntheticPlugin.js"
 import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
 import { classifyByLabel } from "./classifyByLabel.js"
+import { closeMergedTaskIssues } from "./closeMergedTaskIssues.js"
 import { commitAndPush } from "./commitAndPush.js"
+import { commitGoalState } from "./commitGoalState.js"
 import { composePrompt } from "./composePrompt.js"
 import { createQaGoal } from "./createQaGoal.js"
+import { deriveGoalPhase } from "./deriveGoalPhase.js"
 import { diagMcp } from "./diagMcp.js"
 import { discoverQaContext } from "./discoverQaContext.js"
 import { dispatch } from "./dispatch.js"
 import { dispatchClassified } from "./dispatchClassified.js"
 import { dispatchJobFileTicks } from "./dispatchJobFileTicks.js"
 import { dispatchJobTicks } from "./dispatchJobTicks.js"
+import { dispatchNextTask } from "./dispatchNextTask.js"
+import { ensureGoalBranch } from "./ensureGoalBranch.js"
+import { ensureGoalPr } from "./ensureGoalPr.js"
+import { ensureLifecycleLabels } from "./ensureLifecycleLabels.js"
 import { ensurePr } from "./ensurePr.js"
+import { ensureUmbrellaIssue } from "./ensureUmbrellaIssue.js"
+import { finalizeGoal } from "./finalizeGoal.js"
 import { finishFlow } from "./finishFlow.js"
 import { fixCiFlow } from "./fixCiFlow.js"
 import { fixFlow } from "./fixFlow.js"
+import { handleAbandonedGoal } from "./handleAbandonedGoal.js"
 import { initFlow } from "./initFlow.js"
 import { loadConventions } from "./loadConventions.js"
 import { loadCoverageRules } from "./loadCoverageRules.js"
+import { loadGoalState } from "./loadGoalState.js"
 import { loadIssueContext } from "./loadIssueContext.js"
 import { loadIssueStateComment } from "./loadIssueStateComment.js"
 import { loadJobFromFile } from "./loadJobFromFile.js"
@@ -34,6 +45,7 @@ import { loadPriorArt } from "./loadPriorArt.js"
 import { loadQaGuide } from "./loadQaGuide.js"
 import { loadTaskState } from "./loadTaskState.js"
 import { markFlowSuccess } from "./markFlowSuccess.js"
+import { mergeReadyTaskPRs } from "./mergeReadyTaskPRs.js"
 import { mergeReleasePr } from "./mergeReleasePr.js"
 import { mirrorStateToPr } from "./mirrorStateToPr.js"
 import { notifyTerminal } from "./notifyTerminal.js"
@@ -60,6 +72,7 @@ import { revertFlow } from "./revertFlow.js"
 import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
 import { runTickScript } from "./runTickScript.js"
+import { saveGoalState } from "./saveGoalState.js"
 import { saveTaskState } from "./saveTaskState.js"
 import { setCommentTarget } from "./setCommentTarget.js"
 import { setLifecycleLabel } from "./setLifecycleLabel.js"
@@ -108,6 +121,18 @@ export const preflightScripts: Record<string, PreflightScript> = {
   dispatchJobTicks,
   dispatchJobFileTicks,
   runTickScript,
+  loadGoalState,
+  handleAbandonedGoal,
+  ensureLifecycleLabels,
+  ensureUmbrellaIssue,
+  ensureGoalPr,
+  mergeReadyTaskPRs,
+  closeMergedTaskIssues,
+  deriveGoalPhase,
+  ensureGoalBranch,
+  dispatchNextTask,
+  finalizeGoal,
+  saveGoalState,
 }
 
 export const postflightScripts: Record<string, PostflightScript> = {
@@ -148,6 +173,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   mergeReleasePr,
   waitForCi,
   markFlowSuccess,
+  commitGoalState,
 }
 
 export const allScriptNames: Set<string> = new Set([

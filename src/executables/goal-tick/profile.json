@@ -42,9 +42,56 @@
   "outputArtifacts": [],
   "scripts": {
     "preflight": [
-      { "shell": "tick.sh" },
+      { "script": "loadGoalState" },
+      {
+        "script": "handleAbandonedGoal",
+        "runWhen": { "data.goal.state": "abandoned" }
+      },
+      {
+        "script": "ensureLifecycleLabels",
+        "runWhen": { "data.goal.state": "active" }
+      },
+      {
+        "script": "ensureUmbrellaIssue",
+        "runWhen": { "data.goal.state": "active" }
+      },
+      {
+        "script": "ensureGoalPr",
+        "runWhen": { "data.goal.state": "active" }
+      },
+      {
+        "script": "mergeReadyTaskPRs",
+        "runWhen": { "data.goal.state": "active" }
+      },
+      {
+        "script": "ensureGoalPr",
+        "runWhen": { "data.goal.state": "active" }
+      },
+      {
+        "script": "closeMergedTaskIssues",
+        "runWhen": { "data.goal.state": "active" }
+      },
+      {
+        "script": "deriveGoalPhase",
+        "runWhen": { "data.goal.state": "active" }
+      },
+      {
+        "script": "finalizeGoal",
+        "runWhen": { "data.goal.phase": "all-done" }
+      },
+      {
+        "script": "ensureGoalBranch",
+        "runWhen": { "data.goal.phase": "ready-to-dispatch" }
+      },
+      {
+        "script": "dispatchNextTask",
+        "runWhen": { "data.goal.phase": "ready-to-dispatch" }
+      },
+      { "script": "saveGoalState" },
       { "script": "skipAgent" }
     ],
-    "postflight": []
+    "postflight": [
+      { "script": "commitGoalState" }
+    ]
   }
 }
