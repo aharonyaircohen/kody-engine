@@ -61,11 +61,17 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
     }> = []
     const now = Date.now()
     for (const slug of slugs) {
+      // Read the slug's frontmatter exactly once per tick — both the
+      // cadence guard (`every:`) and the routing rule (`tickScript:`)
+      // consume it. A previous version parsed the file twice; folded
+      // here to keep the dispatcher cheap on repos with many jobs.
+      const frontmatter = readJobFrontmatter(ctx.cwd, jobsDir, slug)
+
       // Decide whether this slug is due, given its frontmatter `every` and
       // the previously persisted `data.lastFiredAt`. Jobs without a
       // schedule (or with a malformed one) tick every wake — preserves
       // legacy behavior.
-      const decision = await decideShouldFire(ctx.cwd, jobsDir, slug, backend, now)
+      const decision = await decideShouldFire(frontmatter.every, slug, backend, now)
       if (decision.skip) {
         process.stdout.write(`[jobs] ⏭  skip ${slug}: ${decision.reason}\n`)
         results.push({ slug, exitCode: 0, skipped: true, reason: decision.reason })
@@ -78,7 +84,7 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
       // that may summarize it away. Everything else uses the configured
       // (LLM-driven) target. Decided here, not in the executable, so the
       // routing rule lives in one place and the executables stay simple.
-      const slugTarget = readTickScript(ctx.cwd, jobsDir, slug) ? "job-tick-scripted" : targetExecutable
+      const slugTarget = frontmatter.tickScript ? "job-tick-scripted" : targetExecutable
 
       process.stdout.write(`[jobs] → tick ${slug} (${slugTarget})\n`)
       try {
@@ -125,24 +131,17 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
  * skipped when their last `lastFiredAt` is more recent than the
  * cadence allows.
  *
- * Reads the .md off disk for frontmatter, then loads state via the
- * shared backend. Errors fall through to "fire" — we'd rather double-
- * tick once than silently swallow a job whose state file is malformed.
+ * Frontmatter is read once per slug by the caller (see `readJobFrontmatter`)
+ * and the pre-parsed `every` is passed in. State load failures fall
+ * through to "fire" — we'd rather double-tick once than silently swallow
+ * a job whose state file is malformed.
  */
 async function decideShouldFire(
-  cwd: string,
-  jobsDir: string,
+  every: ScheduleEvery | undefined,
   slug: string,
   backend: ReturnType<typeof resolveBackend>,
   now: number,
 ): Promise<{ skip: boolean; reason: string }> {
-  let every: ScheduleEvery | undefined
-  try {
-    const raw = fs.readFileSync(path.join(cwd, jobsDir, `${slug}.md`), "utf-8")
-    every = splitFrontmatter(raw).frontmatter.every
-  } catch {
-    return { skip: false, reason: "frontmatter unreadable" }
-  }
   if (!every) return { skip: false, reason: "no schedule (every cron tick)" }
   if (every === "manual") {
     return { skip: true, reason: "manual-only (no auto-fire; trigger via dashboard Run now)" }
@@ -190,17 +189,22 @@ function formatAgo(ms: number): string {
 }
 
 /**
- * Cheap-and-tolerant frontmatter peek used by per-slug routing.
- * Returns the raw `tickScript:` value when present, or null otherwise
- * (including when the file is missing/unreadable — caller falls back
- * to the default LLM-driven target).
+ * Cheap-and-tolerant frontmatter peek used per-tick by the dispatcher
+ * loop. Single source of truth for both cadence (`every:`) and routing
+ * (`tickScript:`). Returns an empty object on any read/parse failure so
+ * callers can apply their own defaults (cadence falls through to "fire",
+ * routing falls back to the LLM-driven target).
  */
-function readTickScript(cwd: string, jobsDir: string, slug: string): string | null {
+function readJobFrontmatter(
+  cwd: string,
+  jobsDir: string,
+  slug: string,
+): ReturnType<typeof splitFrontmatter>["frontmatter"] {
   try {
     const raw = fs.readFileSync(path.join(cwd, jobsDir, `${slug}.md`), "utf-8")
-    return splitFrontmatter(raw).frontmatter.tickScript ?? null
+    return splitFrontmatter(raw).frontmatter
   } catch {
-    return null
+    return {}
   }
 }
 

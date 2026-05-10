@@ -125,4 +125,95 @@ EOF
     expect(ctx.output.exitCode).toBe(1)
     expect(ctx.data.nextStateParseError).toMatch(/missing.*kody-job-next-state/)
   })
+
+  it("does not truncate stdout above Node's 1MB default — 2MB preamble + fence still parses", async () => {
+    // Pins the maxBuffer fix. Without `maxBuffer: 16MB` on spawnSync,
+    // stdout >1MB is silently truncated and the fenced block at the end
+    // is dropped — the exact "silent state drop" failure mode this
+    // executable was written to prevent. The script writes ~2MB of
+    // preamble, then the fenced block.
+    writeJob("demo", "tickScript: .kody/scripts/big.sh")
+    writeScript(
+      ".kody/scripts/big.sh",
+      `#!/usr/bin/env bash
+# Roughly 2MB of filler — well above Node's 1MB spawnSync default.
+yes "noisy line for buffer test" | head -n 50000
+cat <<'EOF'
+\`\`\`kody-job-next-state
+{ "cursor": "tick-big", "data": { "size": "2mb" }, "done": false }
+\`\`\`
+EOF
+`,
+    )
+
+    const ctx = ctxFor(tmp, "demo")
+    await runTickScript(ctx, PROFILE, { jobsDir: ".kody/jobs", slugArg: "job" })
+
+    expect(ctx.output.exitCode).toBe(0)
+    expect(ctx.data.nextStateParseError).toBeUndefined()
+    const next = ctx.data.nextJobState as { cursor: string; data: { size: string } }
+    expect(next.cursor).toBe("tick-big")
+    expect(next.data.size).toBe("2mb")
+  })
+
+  it("reports timeout via signal, not a misleading null exit", async () => {
+    // Pins the signal-aware timeout branch. Without it, a hung script
+    // bubbles up as `exited null` and operators can't tell timeout from
+    // exec failure. We override the 5min default by triggering a SIGTERM
+    // explicitly — `spawnSync`'s `timeout` option is the same code path.
+    writeJob("demo", "tickScript: .kody/scripts/hang.sh")
+    // `kill -SIGTERM $$` simulates what `timeout: ...` does to a hung
+    // script, without making the test wait 5 minutes.
+    writeScript(".kody/scripts/hang.sh", "#!/usr/bin/env bash\nkill -SIGTERM $$\nsleep 30\n")
+
+    const ctx = ctxFor(tmp, "demo")
+    await runTickScript(ctx, PROFILE, { jobsDir: ".kody/jobs", slugArg: "job" })
+
+    expect(ctx.output.exitCode).toBe(124)
+    expect(ctx.output.reason).toMatch(/killed by SIGTERM/)
+  })
+
+  it("does not leak parent secrets into the script's env", async () => {
+    // Pins the curated-env allow-list. Without it, KODY_VAULT_KEY and
+    // similar secrets from the runner would be visible to any tick
+    // script — a footgun amplified by `set -x`. The script echoes its
+    // env into the fenced data block; we assert the secret is absent
+    // and that allow-listed vars (PATH, GH_TOKEN) survive.
+    writeJob("demo", "tickScript: .kody/scripts/env.sh")
+    // Heredoc is QUOTED so backticks don't run as command substitution;
+    // we emit the JSON via a single printf (variable interpolation
+    // explicit) instead of mixing variable refs into the fenced block.
+    writeScript(
+      ".kody/scripts/env.sh",
+      `#!/usr/bin/env bash
+secret_present=$([ -n "\${KODY_VAULT_KEY:-}" ] && echo true || echo false)
+gh_present=$([ -n "\${GH_TOKEN:-}" ] && echo true || echo false)
+path_present=$([ -n "\${PATH:-}" ] && echo true || echo false)
+printf '%s\\n' '\`\`\`kody-job-next-state'
+printf '{ "cursor": "env-tick", "data": { "secret": %s, "gh": %s, "path": %s }, "done": false }\\n' \\
+  "$secret_present" "$gh_present" "$path_present"
+printf '%s\\n' '\`\`\`'
+`,
+    )
+
+    const prevSecret = process.env.KODY_VAULT_KEY
+    const prevGh = process.env.GH_TOKEN
+    process.env.KODY_VAULT_KEY = "test-vault-secret-do-not-leak"
+    process.env.GH_TOKEN = "test-gh-token"
+    try {
+      const ctx = ctxFor(tmp, "demo")
+      await runTickScript(ctx, PROFILE, { jobsDir: ".kody/jobs", slugArg: "job" })
+
+      expect(ctx.output.exitCode).toBe(0)
+      const next = ctx.data.nextJobState as { data: { secret: boolean; gh: boolean; path: boolean } }
+      expect(next.data.secret).toBe(false)
+      expect(next.data.gh).toBe(true)
+      expect(next.data.path).toBe(true)
+    } finally {
+      if (prevSecret === undefined) delete process.env.KODY_VAULT_KEY
+      else process.env.KODY_VAULT_KEY = prevSecret
+      if (prevGh === undefined) delete process.env.GH_TOKEN
+      else process.env.GH_TOKEN = prevGh
+    }
+  })
 })
