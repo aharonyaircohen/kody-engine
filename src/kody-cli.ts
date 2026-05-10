@@ -2,7 +2,8 @@ import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
-import { autoDispatch, type DispatchResult, dispatchScheduledWatches } from "./dispatch.js"
+import { autoDispatch, autoDispatchTyped, type DispatchResult, dispatchScheduledWatches } from "./dispatch.js"
+import { postIssueComment as ghPostIssueComment, postPrReviewComment as ghPostPrReviewComment } from "./issue.js"
 import { runExecutable } from "./executor.js"
 import { reactToTriggerComment } from "./gha.js"
 import { postIssueComment, truncate } from "./issue.js"
@@ -286,9 +287,35 @@ export async function runCi(argv: string[]): Promise<number> {
   }
 
   // Event present but dispatch returned null (e.g. merged non-release PR,
-  // non-@kody comment) — exit 0 before paying for dep install. The consumer
-  // YAML subscribes broadly on purpose so routing stays in dispatch.ts.
+  // non-@kody comment) — exit 0 before paying for dep install. BUT: if the
+  // null was because we couldn't recognize an `@kody <token>` the user
+  // typed, post a feedback comment so the user isn't left wondering. This
+  // turns the previously-silent "I typed @kody xyz and nothing happened"
+  // into an observable, actionable signal.
   if (!args.issueNumber && !autoFallback && process.env.GITHUB_EVENT_NAME) {
+    const outcome = autoDispatchTyped({ config: earlyConfig })
+    if (outcome.kind === "unrecognized") {
+      const tokenLabel = outcome.token ? `\`${outcome.token}\`` : "an empty subcommand"
+      const top = outcome.available.slice(0, 12).join(", ")
+      const more = outcome.available.length > 12 ? `, … (${outcome.available.length - 12} more)` : ""
+      const body = [
+        `⚠️ kody: I don't recognize ${tokenLabel}.`,
+        "",
+        `Available subcommands: ${top}${more}`,
+        "",
+        "Examples: `@kody`, `@kody fix`, `@kody plan`, `@kody review`.",
+      ].join("\n")
+      try {
+        if (outcome.isPr) ghPostPrReviewComment(outcome.target, body, cwd)
+        else ghPostIssueComment(outcome.target, body, cwd)
+      } catch (err) {
+        process.stderr.write(`[kody] dispatch: failed to post unrecognized-token feedback: ${err instanceof Error ? err.message : String(err)}\n`)
+      }
+      process.stdout.write(
+        `→ kody: unrecognized subcommand "${outcome.token}" on #${outcome.target} — feedback comment posted, exiting cleanly\n`,
+      )
+      return 0
+    }
     process.stdout.write(`→ kody: no action for event ${process.env.GITHUB_EVENT_NAME} — exiting cleanly\n`)
     return 0
   }

@@ -25,6 +25,26 @@ export interface DispatchResult {
 }
 
 /**
+ * Typed dispatch outcome. Discriminated union so kody-cli can switch
+ * exhaustively on the result instead of treating any null return as
+ * "exit cleanly." The previous null-on-failure pattern silently swallowed
+ * unrecognized `@kody <token>` comments — the user typed a real command,
+ * kody did nothing, no record was left.
+ *
+ * Variants:
+ *   - route: dispatch resolved an executable; run it.
+ *   - unrecognized: comment had `@kody <token>` but no executable was
+ *     found. The user should be told. Carries the token + the available
+ *     options so the comment can suggest alternatives.
+ *   - silent: comment was not addressed to kody (no @kody, bot author,
+ *     non-issue_comment event with no work to do). Exit cleanly, no log.
+ */
+export type DispatchOutcome =
+  | ({ kind: "route" } & DispatchResult)
+  | { kind: "unrecognized"; token: string; target: number; isPr: boolean; available: string[] }
+  | { kind: "silent"; reason: string }
+
+/**
  * Explicit CLI override (legacy --issue flag): route to the `run` executable.
  * Intentionally the one hardcoded path — it exists to support the historical
  * `kody --issue N` shorthand and has no comment-dispatch analogue.
@@ -155,6 +175,65 @@ export function autoDispatch(opts?: {
   }
 
   return { executable, cliArgs: args, target: targetNum }
+}
+
+/**
+ * Typed-outcome variant of autoDispatch. Instead of "null = anything that
+ * didn't route," returns a discriminated union the caller MUST handle
+ * exhaustively. The `unrecognized` variant carries the token the user
+ * typed and the list of available executables — kody-cli posts a feedback
+ * comment in that case so the user gets a clear "I don't know `<token>`"
+ * message instead of silent no-op.
+ */
+export function autoDispatchTyped(opts?: {
+  explicit?: { issueNumber?: number }
+  config?: KodyConfig
+}): DispatchOutcome {
+  // Reuse the legacy resolver: for every code path EXCEPT the
+  // unrecognized-token branch, the existing logic is right. We only need
+  // to re-classify the null returns into typed silent vs unrecognized.
+  const legacy = autoDispatch(opts)
+  if (legacy) return { kind: "route", ...legacy }
+
+  // Re-derive comment context to distinguish "no @kody mention" (silent)
+  // from "@kody <token> but no executable" (unrecognized → user feedback).
+  const eventName = process.env.GITHUB_EVENT_NAME
+  const eventPath = process.env.GITHUB_EVENT_PATH
+  if (!eventName || !eventPath || !fs.existsSync(eventPath)) {
+    return { kind: "silent", reason: "no GHA event context" }
+  }
+  if (eventName !== "issue_comment") {
+    return { kind: "silent", reason: `event ${eventName} has no comment to inspect` }
+  }
+  let event: Record<string, any> = {}
+  try {
+    event = JSON.parse(fs.readFileSync(eventPath, "utf-8"))
+  } catch {
+    return { kind: "silent", reason: "GHA event payload unreadable" }
+  }
+  const rawBody = String(event.comment?.body ?? "")
+  const authorLogin = String(event.comment?.user?.login ?? "")
+  const authorType = String(event.comment?.user?.type ?? "")
+  if (!rawBody.toLowerCase().includes("@kody")) {
+    return { kind: "silent", reason: "comment does not mention @kody" }
+  }
+  if (authorLogin === "kody-bot" || authorType === "Bot") {
+    return { kind: "silent", reason: `bot-authored comment (${authorLogin || authorType})` }
+  }
+  const targetNum = Number(event.issue?.number ?? 0)
+  const isPr = !!event.issue?.pull_request
+  if (!targetNum) {
+    return { kind: "silent", reason: "comment has no associated issue/PR number" }
+  }
+  const afterTag = extractAfterTag(rawBody.toLowerCase())
+  const token = extractSubcommand(afterTag) ?? ""
+
+  const available = listExecutables()
+    .map((e) => e.name)
+    .filter((n) => !n.startsWith("goal-") && !n.startsWith("job-"))
+    .sort()
+
+  return { kind: "unrecognized", token, target: targetNum, isPr, available }
 }
 
 /**
