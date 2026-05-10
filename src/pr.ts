@@ -7,6 +7,64 @@ export interface PrResult {
   action: "created" | "updated"
 }
 
+/**
+ * GitHub's authoritative answer to "can this PR be merged?" — single
+ * source of truth, no local-vs-remote drift.
+ *
+ * Surfaced separately from the local `mergeBase` action so callers can:
+ *   1. Ask GitHub first ("is there a real conflict to resolve?")
+ *   2. Only attempt a local merge when GitHub confirms a conflict.
+ *
+ * Mapping:
+ *   - `MERGEABLE`     — gh: mergeable=MERGEABLE, no conflicts; safe to merge.
+ *   - `CONFLICTING`   — gh: mergeable=CONFLICTING; resolve required.
+ *   - `BLOCKED`       — gh: mergeable=MERGEABLE but mergeStateStatus=BLOCKED
+ *                       (failing checks, missing reviews, etc.) — no resolve work.
+ *   - `UNKNOWN`       — gh hasn't computed yet (race); caller should retry.
+ *   - `ERROR`         — gh call failed; caller decides whether to retry/bail.
+ *
+ * Replaces ad-hoc `gh pr view ... --json mergeable,mergeStateStatus` calls
+ * scattered across syncFlow / resolveFlow / mergeReadyTaskPRs / etc.
+ */
+export type PrMergeStatus = "MERGEABLE" | "CONFLICTING" | "BLOCKED" | "UNKNOWN" | "ERROR"
+
+export interface PrMergeInfo {
+  status: PrMergeStatus
+  /** Raw `mergeable` value from gh (`MERGEABLE` | `CONFLICTING` | `UNKNOWN`). */
+  mergeable: string
+  /** Raw `mergeStateStatus` from gh (`CLEAN` | `DIRTY` | `BLOCKED` | `BEHIND` | `UNSTABLE` | `UNKNOWN`). */
+  mergeStateStatus: string
+}
+
+export function prMergeStatus(prNumber: number, cwd?: string): PrMergeInfo {
+  try {
+    const out = gh(
+      ["pr", "view", String(prNumber), "--json", "mergeable,mergeStateStatus"],
+      { cwd },
+    )
+    const parsed = JSON.parse(out) as { mergeable?: string; mergeStateStatus?: string }
+    const mergeable = parsed.mergeable ?? "UNKNOWN"
+    const mergeStateStatus = parsed.mergeStateStatus ?? "UNKNOWN"
+    return { status: classifyMergeStatus(mergeable, mergeStateStatus), mergeable, mergeStateStatus }
+  } catch {
+    return { status: "ERROR", mergeable: "", mergeStateStatus: "" }
+  }
+}
+
+function classifyMergeStatus(mergeable: string, mergeStateStatus: string): PrMergeStatus {
+  if (mergeable === "CONFLICTING") return "CONFLICTING"
+  if (mergeable === "UNKNOWN") return "UNKNOWN"
+  if (mergeable === "MERGEABLE") {
+    if (mergeStateStatus === "CLEAN") return "MERGEABLE"
+    if (mergeStateStatus === "DIRTY") return "CONFLICTING"
+    // BLOCKED, BEHIND, UNSTABLE, UNKNOWN — mergeable in principle but
+    // gated by external policy. Resolve has nothing to do; sync/CI
+    // belongs in a different flow.
+    return "BLOCKED"
+  }
+  return "UNKNOWN"
+}
+
 export interface EnsurePrOptions {
   branch: string
   defaultBranch: string
