@@ -72,9 +72,17 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
         continue
       }
 
-      process.stdout.write(`[jobs] → tick ${slug}\n`)
+      // Per-slug routing: jobs that declare a deterministic `tickScript:`
+      // in frontmatter run via `job-tick-scripted` (no agent), so their
+      // next-state block is parsed from script stdout — not from an LLM
+      // that may summarize it away. Everything else uses the configured
+      // (LLM-driven) target. Decided here, not in the executable, so the
+      // routing rule lives in one place and the executables stay simple.
+      const slugTarget = readTickScript(ctx.cwd, jobsDir, slug) ? "job-tick-scripted" : targetExecutable
+
+      process.stdout.write(`[jobs] → tick ${slug} (${slugTarget})\n`)
       try {
-        const out = await runExecutable(targetExecutable, {
+        const out = await runExecutable(slugTarget, {
           cliArgs: { [slugArg]: slug },
           cwd: ctx.cwd,
           config: ctx.config,
@@ -179,6 +187,21 @@ function formatAgo(ms: number): string {
   if (hr < 48) return `${hr}h`
   const day = Math.round(hr / 24)
   return `${day}d`
+}
+
+/**
+ * Cheap-and-tolerant frontmatter peek used by per-slug routing.
+ * Returns the raw `tickScript:` value when present, or null otherwise
+ * (including when the file is missing/unreadable — caller falls back
+ * to the default LLM-driven target).
+ */
+function readTickScript(cwd: string, jobsDir: string, slug: string): string | null {
+  try {
+    const raw = fs.readFileSync(path.join(cwd, jobsDir, `${slug}.md`), "utf-8")
+    return splitFrontmatter(raw).frontmatter.tickScript ?? null
+  } catch {
+    return null
+  }
 }
 
 function listJobSlugs(absDir: string): string[] {

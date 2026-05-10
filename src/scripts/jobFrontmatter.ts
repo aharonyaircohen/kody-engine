@@ -43,6 +43,15 @@ const SCHEDULE_EVERY_VALUES: readonly ScheduleEvery[] = [
 
 export interface JobFrontmatter {
   every?: ScheduleEvery
+  /**
+   * Path (relative to cwd) to a deterministic shell script that produces
+   * the next-state fenced block on stdout. When present, the dispatcher
+   * routes this slug to `job-tick-scripted` (no agent) instead of the
+   * default LLM-driven `job-tick`. The script's stdout is the single
+   * source of truth for the tick — must end with a `kody-job-next-state`
+   * fenced JSON block.
+   */
+  tickScript?: string
 }
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
@@ -105,6 +114,8 @@ function parseFlatYaml(text: string): JobFrontmatter {
     const value = stripQuotes(line.slice(colon + 1).trim())
     if (key === "every" && isScheduleEvery(value)) {
       out.every = value
+    } else if (key === "tickScript" && value.length > 0) {
+      out.tickScript = value
     }
   }
   return out

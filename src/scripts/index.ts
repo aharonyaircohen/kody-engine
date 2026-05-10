@@ -59,6 +59,7 @@ import { resolveQaUrl } from "./resolveQaUrl.js"
 import { revertFlow } from "./revertFlow.js"
 import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
+import { runTickScript } from "./runTickScript.js"
 import { saveTaskState } from "./saveTaskState.js"
 import { setCommentTarget } from "./setCommentTarget.js"
 import { setLifecycleLabel } from "./setLifecycleLabel.js"
@@ -106,6 +107,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   warmupMcp,
   dispatchJobTicks,
   dispatchJobFileTicks,
+  runTickScript,
 }
 
 export const postflightScripts: Record<string, PostflightScript> = {
