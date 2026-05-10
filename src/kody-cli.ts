@@ -295,6 +295,16 @@ export async function runCi(argv: string[]): Promise<number> {
   if (!args.issueNumber && !autoFallback && process.env.GITHUB_EVENT_NAME) {
     const outcome = autoDispatchTyped({ config: earlyConfig })
     if (outcome.kind === "unrecognized") {
+      // Unpack secrets and resolve GH_TOKEN before calling `gh` — the
+      // routed-dispatch path does this later inside the executable
+      // pipeline, but the unrecognized-token path bypasses that and would
+      // otherwise hit the "set GH_TOKEN" error from the gh CLI.
+      try {
+        unpackAllSecrets()
+        resolveAuthToken()
+      } catch {
+        /* best-effort — postIssueComment will surface the failure if auth is unusable */
+      }
       const tokenLabel = outcome.token ? `\`${outcome.token}\`` : "an empty subcommand"
       const top = outcome.available.slice(0, 12).join(", ")
       const more = outcome.available.length > 12 ? `, … (${outcome.available.length - 12} more)` : ""
@@ -312,7 +322,7 @@ export async function runCi(argv: string[]): Promise<number> {
         process.stderr.write(`[kody] dispatch: failed to post unrecognized-token feedback: ${err instanceof Error ? err.message : String(err)}\n`)
       }
       process.stdout.write(
-        `→ kody: unrecognized subcommand "${outcome.token}" on #${outcome.target} — feedback comment posted, exiting cleanly\n`,
+        `→ kody: unrecognized subcommand "${outcome.token}" on #${outcome.target} — feedback comment attempt finished, exiting cleanly\n`,
       )
       return 0
     }
