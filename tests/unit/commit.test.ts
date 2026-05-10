@@ -31,13 +31,13 @@ describe("commit: isForbiddenPath", () => {
     expect(isForbiddenPath(".env.example")).toBe(false)
   })
 
-  it("allows .kody/vault/ for memorize", () => {
-    expect(isForbiddenPath(".kody/vault/architecture/executor.md")).toBe(false)
-    expect(isForbiddenPath(".kody/vault/conventions/gitignore.md")).toBe(false)
-    expect(isForbiddenPath(".kody/vault/index.md")).toBe(false)
+  it("allows .kody/memory/ for memorize", () => {
+    expect(isForbiddenPath(".kody/memory/architecture/executor.md")).toBe(false)
+    expect(isForbiddenPath(".kody/memory/conventions/gitignore.md")).toBe(false)
+    expect(isForbiddenPath(".kody/memory/index.md")).toBe(false)
   })
 
-  it("still blocks other .kody/ paths even with vault allowlist", () => {
+  it("still blocks other .kody/ paths even with memory allowlist", () => {
     expect(isForbiddenPath(".kody/last-run.jsonl")).toBe(true)
     expect(isForbiddenPath(".kody/tasks/1.json")).toBe(true)
   })
