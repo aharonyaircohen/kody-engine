@@ -85,7 +85,7 @@ import type { Context } from "../../src/executables/types.js"
 import type { AgentResult } from "../../src/agent.js"
 
 function makeAgentResult(finalText: string, outcome: "completed" | "failed" = "completed"): AgentResult {
-  return { outcome, finalText }
+  return { outcome, finalText, ndjsonPath: "/tmp/fake.jsonl" }
 }
 
 function makeCtx(): Context {
@@ -187,10 +187,10 @@ describe("postflight chain: run profile, success path", () => {
     // prResult, postIssueComment never templates undefined.
     mocks.verifyAll.mockResolvedValueOnce({
       ok: false,
-      failed: ["typecheck"],
+      failed: ["typecheck"] as string[],
       details: { typecheck: { exitCode: 2, durationMs: 100, tail: "TS errors" } },
-      recovered: [],
-    })
+      recovered: [] as string[],
+    } as never)
     const ctx = makeCtx()
     const agent = makeAgentResult("DONE\nCOMMIT_MSG: feat: x")
     await runPostflights(ctx, agent, "run")
@@ -217,7 +217,7 @@ describe("postflight chain: run profile, success path", () => {
     // FAILED path still goes to ensurePr (with draft=true) so the user
     // has a one-click path to inspect what the agent did.
     expect(mocks.doEnsurePr).toHaveBeenCalledTimes(1)
-    const args = mocks.doEnsurePr.mock.calls[0]?.[0] as { draft?: boolean } | undefined
+    const args = (mocks.doEnsurePr.mock.calls[0] as unknown[] | undefined)?.[0] as { draft?: boolean } | undefined
     expect(args?.draft).toBe(true)
     expect(ctx.data.prResult).toMatchObject({ kind: "created", draft: true })
   })

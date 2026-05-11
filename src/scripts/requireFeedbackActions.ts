@@ -1,27 +1,28 @@
 /**
- * Postflight for the `fix` executable. Enforces only the minimum contract:
- * the agent's final message must contain a non-empty `FEEDBACK_ACTIONS:`
- * block. Anything stronger (did the fix actually touch the files the review
- * named?) belongs to `verifyFixAlignment`, which runs after the commit and
- * compares the diff to the review's file:line references.
+ * Postflight for the `fix` executable. Records whether the agent emitted a
+ * `FEEDBACK_ACTIONS:` block and counts its items, but does NOT hard-fail
+ * the run when the block is missing or empty.
  *
- * Previously this script also enforced bullet-count parity between the
- * FEEDBACK_ACTIONS and the review's Concerns/Suggestions/Bugs sections.
- * That produced false-positives when reviews paired each Concern with a
- * restating Suggestion (same underlying issue, counted twice). Correctness
- * is now anchored to locations the review points at, not how many bullets
- * the reviewer typed.
+ * Soft-check rationale (matches requirePlanDeviations softening in 0.4.30):
+ * verifyFixAlignment + verify/tests are the real shipability gates.
+ * Forgetting a bureaucratic checklist at the end of a long task should not
+ * throw away working code. Today's example: an agent that emitted natural
+ * prose summarizing what it did (no markers) was killed here, even though
+ * the diff itself was correct.
+ *
+ * Anything stronger (did the fix actually touch the files the review
+ * named?) belongs to verifyFixAlignment, which compares the diff to the
+ * review's file:line references — that's still a hard gate.
  *
  * Must run AFTER parseAgentResult (populates feedbackActions + action).
  * No-op unless the agent reported DONE.
  */
 
 import type { PostflightScript } from "../executables/types.js"
-import type { Action } from "../state.js"
 
 const MIN_ITEMS = 1
 
-export const requireFeedbackActions: PostflightScript = async (ctx, profile) => {
+export const requireFeedbackActions: PostflightScript = async (ctx) => {
   if (!ctx.data.agentDone) return
 
   const actions = String(ctx.data.feedbackActions ?? "").trim()
@@ -29,26 +30,16 @@ export const requireFeedbackActions: PostflightScript = async (ctx, profile) => 
   ctx.data.feedbackAgentItemCount = items
 
   if (items < MIN_ITEMS) {
-    fail(
-      ctx,
-      profile,
+    const reason =
       actions.length === 0
-        ? "agent omitted required FEEDBACK_ACTIONS block — cannot verify that review feedback was addressed"
-        : "agent FEEDBACK_ACTIONS block listed no items — cannot verify that review feedback was addressed",
+        ? "FEEDBACK_ACTIONS block missing"
+        : "FEEDBACK_ACTIONS block listed no items"
+    process.stderr.write(
+      `[kody requireFeedbackActions] warning: ${reason} — proceeding anyway (verifyFixAlignment + tests are the real gate)\n`,
     )
+    ctx.data.feedbackActionsOmitted = actions.length === 0
+    ctx.data.feedbackActionsMalformed = actions.length > 0
   }
-}
-
-function fail(ctx: Parameters<PostflightScript>[0], profile: Parameters<PostflightScript>[1], reason: string): void {
-  ctx.data.agentDone = false
-  ctx.data.agentFailureReason = reason
-  const modeSeg = profile.name.replace(/-/g, "_").toUpperCase()
-  const failedAction: Action = {
-    type: `${modeSeg}_FAILED`,
-    payload: { reason },
-    timestamp: new Date().toISOString(),
-  }
-  ctx.data.action = failedAction
 }
 
 /**

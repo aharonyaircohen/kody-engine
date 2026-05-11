@@ -50,28 +50,31 @@ describe("requireFeedbackActions postflight", () => {
     expect((ctx.data.action as { type: string }).type).toBe("FIX_COMPLETED")
   })
 
-  it("fails when FEEDBACK_ACTIONS is empty", async () => {
+  it("warns but does NOT fail when FEEDBACK_ACTIONS is empty (0.4.39 softening)", async () => {
+    // Same architectural pattern as PLAN_DEVIATIONS softening: missing
+    // bureaucratic checklist should not throw away working code.
+    // verifyFixAlignment + tests are the real shipability gates.
     const ctx = makeCtx({
       agentDone: true,
       feedbackActions: "",
       action: { type: "FIX_COMPLETED", payload: {}, timestamp: "" },
     })
     await requireFeedbackActions(ctx as never, profile, null)
-    expect(ctx.data.agentDone).toBe(false)
-    expect((ctx.data.action as { type: string }).type).toBe("FIX_FAILED")
-    expect(String(ctx.data.agentFailureReason)).toMatch(/omitted required FEEDBACK_ACTIONS/)
+    expect(ctx.data.agentDone).toBe(true)
+    expect((ctx.data.action as { type: string }).type).toBe("FIX_COMPLETED")
+    expect(ctx.data.feedbackActionsOmitted).toBe(true)
   })
 
-  it("fails when FEEDBACK_ACTIONS has no bullet items", async () => {
+  it("warns but does NOT fail when FEEDBACK_ACTIONS has no bullet items", async () => {
     const ctx = makeCtx({
       agentDone: true,
       feedbackActions: "I handled everything.",
       action: { type: "FIX_COMPLETED", payload: {}, timestamp: "" },
     })
     await requireFeedbackActions(ctx as never, profile, null)
-    expect(ctx.data.agentDone).toBe(false)
-    expect((ctx.data.action as { type: string }).type).toBe("FIX_FAILED")
-    expect(String(ctx.data.agentFailureReason)).toMatch(/listed no items/)
+    expect(ctx.data.agentDone).toBe(true)
+    expect((ctx.data.action as { type: string }).type).toBe("FIX_COMPLETED")
+    expect(ctx.data.feedbackActionsMalformed).toBe(true)
   })
 
   it("accepts DONE with fewer items than review has bullets (parity check dropped)", async () => {
