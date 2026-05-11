@@ -226,10 +226,18 @@ export function mergePrSquash(prNumber: number, cwd?: string): OperationResult {
  * Retarget a PR's base branch. finalizeGoal calls this on every non-root
  * stacked PR before merging it, so the merge lands in the repo default
  * (e.g. `dev`) instead of the now-deleted predecessor's branch.
+ *
+ * Uses REST PATCH instead of `gh pr edit --base` because gh's edit path
+ * goes through GraphQL and requires `read:org` scope, which KODY_TOKEN
+ * (a plain `repo`-scoped PAT) typically lacks. Same trick we use in
+ * `pr.ts` for body updates.
  */
 export function editPrBase(prNumber: number, baseBranch: string, cwd?: string): OperationResult {
   try {
-    gh(["pr", "edit", String(prNumber), "--base", baseBranch], { cwd })
+    gh(
+      ["api", "--method", "PATCH", `repos/{owner}/{repo}/pulls/${prNumber}`, "-f", `base=${baseBranch}`],
+      { cwd },
+    )
     return { ok: true }
   } catch (err) {
     return fail(err)
