@@ -341,45 +341,68 @@ describe("finalizeGoal", () => {
     vi.mocked(ops.markPrReady).mockReset().mockReturnValue({ ok: true })
   })
 
-  it("merges the leaf PR with squash and sets state=done", async () => {
+  it("squash-merges each open task PR in dispatch order, then sets state=done", async () => {
+    // Stack: PR #888 (head=11-x, base=main) ← PR #999 (head=12-x, base=11-x).
+    // Dispatch order = ascending head-ref issue number, so #888 merges first.
+    const root = {
+      number: 888,
+      url: "u1",
+      isDraft: false,
+      headRefName: "11-x",
+      baseRefName: "main",
+      body: "",
+    }
+    const leaf = {
+      number: 999,
+      url: "u2",
+      isDraft: false,
+      headRefName: "12-x",
+      baseRefName: "11-x",
+      body: "",
+    }
     const ctx = fakeCtx({
       data: {
         goal: {
           id: "g",
           state: "active",
           defaultBranch: "main",
-          leafPr: {
-            number: 999,
-            url: "u",
-            isDraft: false,
-            headRefName: "12-x",
-            baseRefName: "11-x",
-            body: "",
-          },
+          openTaskPrs: [leaf, root], // intentionally reversed
+          leafPr: leaf,
         } satisfies Partial<GoalCtx>,
       },
     })
     await finalizeGoal(ctx, fakeProfile())
-    expect(ops.mergePrSquash).toHaveBeenCalledWith(999, "/tmp")
+    expect(ops.mergePrSquash).toHaveBeenNthCalledWith(1, 888, "/tmp")
+    expect(ops.mergePrSquash).toHaveBeenNthCalledWith(2, 999, "/tmp")
     expect(ops.markPrReady).not.toHaveBeenCalled()
     expect((ctx.data.goal as GoalCtx).state).toBe("done")
   })
 
-  it("promotes draft leaf to ready before merging", async () => {
+  it("promotes draft PRs to ready before merging each", async () => {
+    const root = {
+      number: 100,
+      url: "u",
+      isDraft: false,
+      headRefName: "11-x",
+      baseRefName: "main",
+      body: "",
+    }
+    const draftLeaf = {
+      number: 200,
+      url: "u",
+      isDraft: true,
+      headRefName: "12-x",
+      baseRefName: "11-x",
+      body: "",
+    }
     const ctx = fakeCtx({
       data: {
         goal: {
           id: "g",
           state: "active",
           defaultBranch: "main",
-          leafPr: {
-            number: 200,
-            url: "u",
-            isDraft: true,
-            headRefName: "12-x",
-            baseRefName: "11-x",
-            body: "",
-          },
+          openTaskPrs: [root, draftLeaf],
+          leafPr: draftLeaf,
         } satisfies Partial<GoalCtx>,
       },
     })
@@ -388,10 +411,10 @@ describe("finalizeGoal", () => {
     expect(ops.mergePrSquash).toHaveBeenCalledWith(200, "/tmp")
   })
 
-  it("sets state=done even when there is no leaf PR (issues closed manually)", async () => {
+  it("sets state=done even when there are no open task PRs (issues closed manually)", async () => {
     const ctx = fakeCtx({
       data: {
-        goal: { id: "g", state: "active", defaultBranch: "main" } satisfies Partial<GoalCtx>,
+        goal: { id: "g", state: "active", defaultBranch: "main", openTaskPrs: [] } satisfies Partial<GoalCtx>,
       },
     })
     await finalizeGoal(ctx, fakeProfile())
