@@ -12,7 +12,7 @@ import {
   writeGoalState,
 } from "../../../src/goal/state.js"
 
-describe("parseGoalState", () => {
+describe("parseGoalState (stacked-PR)", () => {
   it("rejects non-objects", () => {
     expect(() => parseGoalState("/x", null)).toThrow(GoalStateError)
     expect(() => parseGoalState("/x", [])).toThrow(GoalStateError)
@@ -28,62 +28,69 @@ describe("parseGoalState", () => {
     const s = parseGoalState("/x", { state: "active" })
     expect(s.state).toBe("active")
     expect(s.extra).toEqual({})
-    expect(s.goalIssueNumber).toBeUndefined()
+    expect(s.lastDispatchedIssue).toBeUndefined()
   })
 
   it("parses every known field", () => {
     const raw = {
       state: "done",
-      goalIssueNumber: 42,
       lastDispatchedIssue: 41,
-      goalPrUrl: "https://github.com/o/r/pull/100",
       updatedAt: "2026-05-10T12:00:00Z",
       createdAt: "2026-05-09T12:00:00Z",
       startedAt: "2026-05-09T12:00:00Z",
-      completedAt: "2026-05-10T12:00:00Z",
     }
     const s = parseGoalState("/x", raw)
     expect(s).toMatchObject({
       state: "done",
-      goalIssueNumber: 42,
       lastDispatchedIssue: 41,
-      goalPrUrl: "https://github.com/o/r/pull/100",
       updatedAt: "2026-05-10T12:00:00Z",
       createdAt: "2026-05-09T12:00:00Z",
       startedAt: "2026-05-09T12:00:00Z",
-      completedAt: "2026-05-10T12:00:00Z",
     })
     expect(s.extra).toEqual({})
   })
 
-  it("preserves unknown fields on extra", () => {
-    const raw = { state: "active", title: "x", description: "y", version: 1 }
+  it("preserves unknown fields on extra (including legacy umbrella fields)", () => {
+    const raw = {
+      state: "active",
+      title: "x",
+      description: "y",
+      version: 1,
+      // Legacy umbrella-era fields — round-trip via extra so older repos
+      // upgrade losslessly.
+      goalIssueNumber: 42,
+      goalPrUrl: "https://github.com/o/r/pull/100",
+      completedAt: "2026-05-10T12:00:00Z",
+    }
     const s = parseGoalState("/x", raw)
-    expect(s.extra).toEqual({ title: "x", description: "y", version: 1 })
+    expect(s.extra).toEqual({
+      title: "x",
+      description: "y",
+      version: 1,
+      goalIssueNumber: 42,
+      goalPrUrl: "https://github.com/o/r/pull/100",
+      completedAt: "2026-05-10T12:00:00Z",
+    })
   })
 
   it("ignores invalid number/string fields without throwing", () => {
     const raw = {
       state: "active",
-      goalIssueNumber: "not-a-number",
       lastDispatchedIssue: NaN,
-      goalPrUrl: "",
       updatedAt: 5,
     }
     const s = parseGoalState("/x", raw)
-    expect(s.goalIssueNumber).toBeUndefined()
     expect(s.lastDispatchedIssue).toBeUndefined()
-    expect(s.goalPrUrl).toBeUndefined()
     expect(s.updatedAt).toBeUndefined()
   })
 })
 
 describe("serializeGoalState", () => {
-  it("round-trips through parseGoalState", () => {
+  it("round-trips through parseGoalState (incl. legacy extras)", () => {
     const raw = {
       state: "active",
-      goalIssueNumber: 7,
       title: "extra",
+      goalIssueNumber: 7, // legacy — kept via extra
     }
     const parsed = parseGoalState("/x", raw)
     const out = serializeGoalState(parsed)
@@ -116,15 +123,15 @@ describe("readGoalState/writeGoalState (disk)", () => {
     expect(() => readGoalState(tmp, "g")).toThrow(/invalid JSON/)
   })
 
-  it("write then read round-trips", () => {
+  it("write then read round-trips (with extras)", () => {
     writeGoalState(tmp, "g", {
       state: "active",
-      goalIssueNumber: 3,
+      lastDispatchedIssue: 3,
       extra: { keep: "me" },
     })
     const round = readGoalState(tmp, "g")
     expect(round.state).toBe("active")
-    expect(round.goalIssueNumber).toBe(3)
+    expect(round.lastDispatchedIssue).toBe(3)
     expect(round.extra).toEqual({ keep: "me" })
   })
 })

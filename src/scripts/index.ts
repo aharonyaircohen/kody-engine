@@ -10,7 +10,6 @@ import { advanceFlow } from "./advanceFlow.js"
 import { buildSyntheticPlugin } from "./buildSyntheticPlugin.js"
 import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
 import { classifyByLabel } from "./classifyByLabel.js"
-import { closeMergedTaskIssues } from "./closeMergedTaskIssues.js"
 import { commitAndPush } from "./commitAndPush.js"
 import { commitGoalState } from "./commitGoalState.js"
 import { composePrompt } from "./composePrompt.js"
@@ -23,11 +22,7 @@ import { dispatchClassified } from "./dispatchClassified.js"
 import { dispatchJobFileTicks } from "./dispatchJobFileTicks.js"
 import { dispatchJobTicks } from "./dispatchJobTicks.js"
 import { dispatchNextTask } from "./dispatchNextTask.js"
-import { ensureGoalBranch } from "./ensureGoalBranch.js"
-import { ensureGoalPr } from "./ensureGoalPr.js"
-import { ensureLifecycleLabels } from "./ensureLifecycleLabels.js"
 import { ensurePr } from "./ensurePr.js"
-import { ensureUmbrellaIssue } from "./ensureUmbrellaIssue.js"
 import { finalizeGoal } from "./finalizeGoal.js"
 import { finishFlow } from "./finishFlow.js"
 import { fixCiFlow } from "./fixCiFlow.js"
@@ -45,7 +40,6 @@ import { loadPriorArt } from "./loadPriorArt.js"
 import { loadQaGuide } from "./loadQaGuide.js"
 import { loadTaskState } from "./loadTaskState.js"
 import { markFlowSuccess } from "./markFlowSuccess.js"
-import { mergeReadyTaskPRs } from "./mergeReadyTaskPRs.js"
 import { mergeReleasePr } from "./mergeReleasePr.js"
 import { mirrorStateToPr } from "./mirrorStateToPr.js"
 import { notifyTerminal } from "./notifyTerminal.js"
@@ -123,13 +117,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   runTickScript,
   loadGoalState,
   handleAbandonedGoal,
-  ensureLifecycleLabels,
-  ensureUmbrellaIssue,
-  ensureGoalPr,
-  mergeReadyTaskPRs,
-  closeMergedTaskIssues,
   deriveGoalPhase,
-  ensureGoalBranch,
   dispatchNextTask,
   finalizeGoal,
   saveGoalState,

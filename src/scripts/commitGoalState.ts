@@ -61,8 +61,5 @@ function describeCommitMessage(goal: GoalCtx): string {
   if (goal.phase === "in-flight") {
     return `chore(goals): tick ${goal.id} (waiting for in-flight task)`
   }
-  if (goal.phase === "blocked-by-failure") {
-    return `chore(goals): tick ${goal.id} (blocked by failed task)`
-  }
   return `chore(goals): tick ${goal.id} (idle)`
 }

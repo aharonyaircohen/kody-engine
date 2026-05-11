@@ -1,7 +1,13 @@
 /**
- * Preflight (runWhen state==="active"): pull the current child-task
- * snapshot from GitHub, classify the goal's phase via the pure
- * `derivePhase` function, and store both on `ctx.data.goal`.
+ * Preflight (runWhen state==="active"): pull a fresh snapshot of the
+ * goal's world from GitHub — child task issues + open PRs stacked
+ * against them — and classify the phase via `derivePhase`.
+ *
+ * Stacked-PR model: PR state is observed directly (open + draft = in
+ * flight, open + ready = done waiting for finalize); no kody-managed
+ * sync labels. The leaf PR — topmost in the base-chain — is cached on
+ * `ctx.data.goal.leafPr` so `dispatchNextTask` can use it as the next
+ * task's base and `finalizeGoal` knows what to merge.
  *
  * Downstream scripts (finalizeGoal, dispatchNextTask) gate on
  * `data.goal.phase` via runWhen — this is the ONE script in the chain
@@ -9,7 +15,14 @@
  */
 
 import type { PreflightScript } from "../executables/types.js"
-import { listGoalIssues } from "../goal/operations.js"
+import {
+  extractClosesIssues,
+  listGoalIssues,
+  listOpenPrs,
+  pairIssuesWithPrs,
+  pickLeafPr,
+  type OpenTaskPr,
+} from "../goal/operations.js"
 import { derivePhase } from "../goal/phase.js"
 import type { GoalCtx } from "./goalCtx.js"
 
@@ -17,21 +30,57 @@ export const deriveGoalPhase: PreflightScript = async (ctx) => {
   const goal = ctx.data.goal as GoalCtx | undefined
   if (!goal) return
 
-  const issues = listGoalIssues(goal.id, goal.goalIssueNumber, ctx.cwd)
+  const issues = listGoalIssues(goal.id, ctx.cwd)
   if (!issues.ok) {
-    process.stderr.write(`[goal-tick] deriveGoalPhase: list failed: ${issues.error}\n`)
-    // Conservative fallback: treat as idle so dispatch + finalize don't fire on
-    // bad data.
+    process.stderr.write(`[goal-tick] deriveGoalPhase: list issues failed: ${issues.error}\n`)
     goal.childTasks = []
+    goal.openTaskPrs = []
+    goal.phase = "idle"
+    return
+  }
+  const rawIssues = issues.value ?? []
+
+  const allPrs = listOpenPrs(ctx.cwd)
+  if (!allPrs.ok) {
+    process.stderr.write(`[goal-tick] deriveGoalPhase: list PRs failed: ${allPrs.error}\n`)
+    goal.childTasks = rawIssues.map((i) => ({ ...i, prState: "absent" as const }))
+    goal.openTaskPrs = []
     goal.phase = "idle"
     return
   }
 
-  const childTasks = issues.value ?? []
-  goal.childTasks = childTasks
+  const taskPrs = filterGoalTaskPrs(allPrs.value ?? [], rawIssues.map((i) => i.number))
+  goal.openTaskPrs = taskPrs
+  goal.leafPr = pickLeafPr(taskPrs)
+
+  goal.childTasks = pairIssuesWithPrs(rawIssues, taskPrs)
   goal.phase = derivePhase({
     lifecycleState: goal.state,
-    childTasks,
+    childTasks: goal.childTasks,
   })
-  process.stdout.write(`[goal-tick] phase=${goal.phase} goal=${goal.id} tasks=${childTasks.length}\n`)
+  process.stdout.write(
+    `[goal-tick] phase=${goal.phase} goal=${goal.id} tasks=${rawIssues.length} stack=${taskPrs.length}` +
+      (goal.leafPr ? ` leaf=#${goal.leafPr.number}` : "") +
+      "\n",
+  )
+}
+
+/**
+ * From the repo-wide open PR list, keep only those that target a child
+ * task of THIS goal — matched by "Closes #N" in the body or by the
+ * head-ref convention `<issueNumber>-…` (kody branch naming).
+ */
+function filterGoalTaskPrs(prs: readonly OpenTaskPr[], taskIssueNumbers: readonly number[]): OpenTaskPr[] {
+  const taskSet = new Set(taskIssueNumbers)
+  return prs.filter((pr) => {
+    for (const n of extractClosesIssues(pr.body)) {
+      if (taskSet.has(n)) return true
+    }
+    const headMatch = pr.headRefName.match(/^(\d+)-/)
+    if (headMatch) {
+      const n = Number.parseInt(headMatch[1]!, 10)
+      if (Number.isFinite(n) && taskSet.has(n)) return true
+    }
+    return false
+  })
 }

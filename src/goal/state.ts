@@ -1,10 +1,14 @@
 /**
  * Goal state file: shape, parsing, and disk I/O.
  *
- * Mirrors the JSON written by tick.sh (and now by the TS chain) at
- * `.kody/goals/<id>/state.json`. Schema is intentionally permissive
- * (unknown fields preserved on round-trip) so existing repos upgrade
- * without losing data.
+ * Stacked-PR model: state.json carries only what's not derivable from
+ * GitHub. The umbrella issue + goal PR + completedAt fields are gone —
+ * the leaf PR's existence and child task PRs are the source of truth
+ * for "where is this goal?".
+ *
+ * Schema is permissive (unknown fields preserved on round-trip) so
+ * existing repos upgrade without losing data, and dashboard-written
+ * fields (title, description) don't get stomped by the tick.
  */
 
 import * as fs from "node:fs"
@@ -17,30 +21,27 @@ const VALID_STATES: ReadonlySet<string> = new Set(["active", "abandoned", "close
 
 /**
  * Strict view of fields the tick reads or writes. Other fields (e.g.
- * `title`, `description` written by the dashboard) round-trip via
- * the `extra` bag below.
+ * `title`, `description` written by the dashboard) round-trip via the
+ * `extra` bag below.
  */
 export interface GoalState {
   /** Lifecycle state. Required — drives phase derivation. */
   state: GoalLifecycleState
-  /** Umbrella GitHub issue number. Set by ensureUmbrellaIssue. */
-  goalIssueNumber?: number
   /** Most recently dispatched task issue number. Audit trail. */
   lastDispatchedIssue?: number
-  /** Final goal-PR URL (`goal-<id>` → default-branch). Set by ensureGoalPr / finalize. */
-  goalPrUrl?: string
   /** ISO timestamp updated on every tick. */
   updatedAt?: string
   /** ISO timestamp set when the goal first transitioned to `state==="active"`. */
   createdAt?: string
   /** Same as createdAt for older goals; legacy field name. */
   startedAt?: string
-  /** ISO timestamp set when the goal transitioned to `state==="done"`. */
-  completedAt?: string
   /**
    * Forward-compat: any other JSON keys present on disk pass through
    * unchanged on save. Lets the dashboard write fields the tick doesn't
    * understand without the tick stomping them.
+   *
+   * Legacy fields like `goalIssueNumber`, `goalPrUrl`, `completedAt`
+   * (umbrella-era) round-trip here untouched.
    */
   extra: Record<string, unknown>
 }
@@ -78,31 +79,16 @@ export function parseGoalState(filePath: string, raw: unknown): GoalState {
     extra: {},
   }
 
-  if (typeof r.goalIssueNumber === "number" && Number.isFinite(r.goalIssueNumber)) {
-    parsed.goalIssueNumber = r.goalIssueNumber
-  }
   if (typeof r.lastDispatchedIssue === "number" && Number.isFinite(r.lastDispatchedIssue)) {
     parsed.lastDispatchedIssue = r.lastDispatchedIssue
   }
-  if (typeof r.goalPrUrl === "string" && r.goalPrUrl.length > 0) {
-    parsed.goalPrUrl = r.goalPrUrl
-  }
-  for (const ts of ["updatedAt", "createdAt", "startedAt", "completedAt"] as const) {
+  for (const ts of ["updatedAt", "createdAt", "startedAt"] as const) {
     const v = r[ts]
     if (typeof v === "string" && v.length > 0) parsed[ts] = v
   }
 
   // Capture every other field on `extra` so it round-trips on save.
-  const known = new Set([
-    "state",
-    "goalIssueNumber",
-    "lastDispatchedIssue",
-    "goalPrUrl",
-    "updatedAt",
-    "createdAt",
-    "startedAt",
-    "completedAt",
-  ])
+  const known = new Set(["state", "lastDispatchedIssue", "updatedAt", "createdAt", "startedAt"])
   for (const [k, v] of Object.entries(r)) {
     if (!known.has(k)) parsed.extra[k] = v
   }
@@ -116,12 +102,9 @@ export function parseGoalState(filePath: string, raw: unknown): GoalState {
  */
 export function serializeGoalState(s: GoalState): string {
   const obj: Record<string, unknown> = { ...s.extra, state: s.state }
-  if (s.goalIssueNumber !== undefined) obj.goalIssueNumber = s.goalIssueNumber
   if (s.lastDispatchedIssue !== undefined) obj.lastDispatchedIssue = s.lastDispatchedIssue
-  if (s.goalPrUrl !== undefined) obj.goalPrUrl = s.goalPrUrl
   if (s.createdAt !== undefined) obj.createdAt = s.createdAt
   if (s.startedAt !== undefined) obj.startedAt = s.startedAt
-  if (s.completedAt !== undefined) obj.completedAt = s.completedAt
   if (s.updatedAt !== undefined) obj.updatedAt = s.updatedAt
   return `${JSON.stringify(obj, null, 2)}\n`
 }

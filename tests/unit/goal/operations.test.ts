@@ -8,19 +8,16 @@ import {
   closeIssue,
   closePr,
   commentOnIssue,
-  compareBranches,
-  createIssue,
-  createPr,
-  editPrBody,
-  ensureLabel,
+  extractClosesIssues,
   fetchDefaultBranch,
-  findUmbrellaByTitle,
-  getIssueState,
-  inferLinkedIssue,
   listGoalIssues,
-  listPrsByBase,
+  listOpenPrs,
   markPrReady,
   mergePrSquash,
+  type OpenTaskPr,
+  pairIssuesWithPrs,
+  pickLeafPr,
+  type RawGoalIssue,
 } from "../../../src/goal/operations.js"
 import { gh } from "../../../src/issue.js"
 
@@ -30,54 +27,136 @@ beforeEach(() => {
   ghMock.mockReset()
 })
 
-describe("listGoalIssues", () => {
-  it("filters out the umbrella issue", () => {
+function fixturePr(overrides: Partial<OpenTaskPr>): OpenTaskPr {
+  return {
+    number: 1,
+    url: "https://example/pull/1",
+    isDraft: false,
+    headRefName: "h",
+    baseRefName: "main",
+    body: "",
+    ...overrides,
+  }
+}
+
+describe("listGoalIssues (stacked-PR)", () => {
+  it("parses each issue with the minimal RawGoalIssue shape", () => {
     ghMock.mockReturnValue(
       JSON.stringify([
-        { number: 10, state: "OPEN", labels: ["goal:x"] },
-        { number: 11, state: "OPEN", labels: ["goal:x"] },
+        { number: 11, state: "OPEN" },
+        { number: 12, state: "CLOSED" },
       ]),
     )
-    const res = listGoalIssues("x", 10, "/repo")
+    const res = listGoalIssues("x", "/repo")
     expect(res.ok).toBe(true)
-    expect(res.value).toEqual([{ number: 11, state: "OPEN", labels: ["goal:x"] }])
+    expect(res.value).toEqual([
+      { number: 11, state: "OPEN" },
+      { number: 12, state: "CLOSED" },
+    ])
   })
 
   it("returns ok=false on gh failure", () => {
     ghMock.mockImplementation(() => {
       throw new Error("boom")
     })
-    const res = listGoalIssues("x", undefined)
+    const res = listGoalIssues("x")
     expect(res.ok).toBe(false)
     expect(res.error).toBe("boom")
   })
+})
 
-  it("returns full list when excludeIssueNumber is undefined", () => {
-    ghMock.mockReturnValue(JSON.stringify([{ number: 1, state: "OPEN", labels: [] }]))
-    const res = listGoalIssues("x", undefined)
-    expect(res.value).toHaveLength(1)
+describe("listOpenPrs", () => {
+  it("calls gh pr list with the stacked-PR JSON fields", () => {
+    ghMock.mockReturnValue(JSON.stringify([]))
+    listOpenPrs("/repo")
+    expect(ghMock).toHaveBeenCalledWith(
+      [
+        "pr",
+        "list",
+        "--state",
+        "open",
+        "--limit",
+        "200",
+        "--json",
+        "number,url,isDraft,headRefName,baseRefName,body",
+      ],
+      { cwd: "/repo" },
+    )
   })
 })
 
-describe("ensureLabel/addLabel/comment", () => {
-  it("ensureLabel forwards args to gh label create --force", () => {
-    ghMock.mockReturnValue("")
-    ensureLabel("kody:x", "ff0000", "desc")
-    expect(ghMock).toHaveBeenCalledWith(
-      ["label", "create", "kody:x", "--color", "ff0000", "--description", "desc", "--force"],
-      expect.anything(),
-    )
+describe("extractClosesIssues", () => {
+  it("matches Closes/Fixes/Resolves with case-insensitive variants", () => {
+    expect(extractClosesIssues("Closes #42")).toEqual([42])
+    expect(extractClosesIssues("fixes #7\nresolved #8")).toEqual([7, 8])
+    expect(extractClosesIssues("nothing here")).toEqual([])
+  })
+})
+
+describe("pairIssuesWithPrs", () => {
+  const issues: RawGoalIssue[] = [
+    { number: 11, state: "OPEN" },
+    { number: 12, state: "OPEN" },
+    { number: 13, state: "CLOSED" },
+  ]
+
+  it("draft PR via body Closes #N → prState=draft", () => {
+    const prs = [fixturePr({ number: 100, isDraft: true, headRefName: "100-x", body: "Closes #11" })]
+    const out = pairIssuesWithPrs(issues, prs)
+    expect(out.find((i) => i.number === 11)?.prState).toBe("draft")
   })
 
+  it("ready PR via head ref convention → prState=ready", () => {
+    const prs = [fixturePr({ number: 101, isDraft: false, headRefName: "12-add-button", body: "" })]
+    const out = pairIssuesWithPrs(issues, prs)
+    expect(out.find((i) => i.number === 12)?.prState).toBe("ready")
+  })
+
+  it("no PR found → prState=absent", () => {
+    const out = pairIssuesWithPrs(issues, [])
+    expect(out.every((i) => i.prState === "absent")).toBe(true)
+  })
+
+  it("body Closes wins when both heuristics resolve to different issues", () => {
+    const prs = [fixturePr({ number: 200, isDraft: true, headRefName: "13-from-branch", body: "Closes #11" })]
+    const out = pairIssuesWithPrs(issues, prs)
+    expect(out.find((i) => i.number === 11)?.prState).toBe("draft")
+    // 13 should NOT pick up the same PR — the first heuristic already claimed it.
+    expect(out.find((i) => i.number === 13)?.prState).toBe("absent")
+  })
+})
+
+describe("pickLeafPr", () => {
+  it("returns undefined when empty", () => {
+    expect(pickLeafPr([])).toBeUndefined()
+  })
+
+  it("identifies the leaf in a true stack", () => {
+    const prs = [
+      fixturePr({ number: 1, headRefName: "task-1", baseRefName: "main" }),
+      fixturePr({ number: 2, headRefName: "task-2", baseRefName: "task-1" }),
+      fixturePr({ number: 3, headRefName: "task-3", baseRefName: "task-2" }),
+    ]
+    expect(pickLeafPr(prs)?.number).toBe(3)
+  })
+
+  it("picks the highest PR number when stack is malformed (parallel leaves)", () => {
+    const prs = [
+      fixturePr({ number: 1, headRefName: "task-1", baseRefName: "main" }),
+      fixturePr({ number: 2, headRefName: "task-2", baseRefName: "main" }),
+    ]
+    expect(pickLeafPr(prs)?.number).toBe(2)
+  })
+})
+
+describe("commentOnIssue + closeIssue + closePr + mergePrSquash + markPrReady", () => {
   it("commentOnIssue posts the body verbatim", () => {
     ghMock.mockReturnValue("")
     commentOnIssue(123, "hi")
     expect(ghMock).toHaveBeenCalledWith(["issue", "comment", "123", "--body", "hi"], expect.anything())
   })
-})
 
-describe("closeIssue", () => {
-  it("posts comment + closes with reason", () => {
+  it("closeIssue posts comment + closes with reason", () => {
     ghMock.mockReturnValue("")
     closeIssue(7, { comment: "bye", reason: "not planned" })
     expect(ghMock).toHaveBeenCalledTimes(2)
@@ -85,155 +164,35 @@ describe("closeIssue", () => {
     expect(ghMock.mock.calls[1]?.[0]).toEqual(["issue", "close", "7", "--reason", "not planned"])
   })
 
-  it("skips comment when not provided", () => {
+  it("closeIssue skips comment when not provided", () => {
     ghMock.mockReturnValue("")
     closeIssue(7, {})
     expect(ghMock).toHaveBeenCalledTimes(1)
     expect(ghMock.mock.calls[0]?.[0]).toEqual(["issue", "close", "7"])
   })
-})
 
-describe("getIssueState", () => {
-  it("normalizes to upper case", () => {
-    ghMock.mockReturnValue("open")
-    expect(getIssueState(1)).toEqual({ ok: true, value: "OPEN" })
-  })
-
-  it("rejects unknown states", () => {
-    ghMock.mockReturnValue("weird")
-    const r = getIssueState(1)
-    expect(r.ok).toBe(false)
-    expect(r.error).toMatch(/unexpected state/)
-  })
-})
-
-describe("findUmbrellaByTitle", () => {
-  it("returns null on empty output", () => {
+  it("closePr forwards comment", () => {
     ghMock.mockReturnValue("")
-    expect(findUmbrellaByTitle("g", "goal: g")).toEqual({ ok: true, value: null })
+    closePr(5, "bye")
+    expect(ghMock).toHaveBeenCalledWith(["pr", "close", "5", "--comment", "bye"], expect.anything())
   })
 
-  it("returns the parsed issue number", () => {
-    ghMock.mockReturnValue("42\n")
-    expect(findUmbrellaByTitle("g", "goal: g")).toEqual({ ok: true, value: 42 })
-  })
-})
-
-describe("createIssue", () => {
-  it("parses the issue number from the URL gh prints", () => {
-    ghMock.mockReturnValue("https://github.com/o/r/issues/123")
-    expect(createIssue({ title: "t", body: "b", labels: ["goal:g"] })).toEqual({
-      ok: true,
-      value: 123,
-    })
-  })
-
-  it("fails when URL is malformed", () => {
-    ghMock.mockReturnValue("not-a-url")
-    const r = createIssue({ title: "t", body: "b", labels: [] })
-    expect(r.ok).toBe(false)
-  })
-})
-
-describe("PR ops", () => {
-  it("listPrsByBase parses JSON output", () => {
-    ghMock.mockReturnValue(
-      JSON.stringify([{ number: 1, isDraft: false, mergeable: "MERGEABLE", mergeStateStatus: "CLEAN", url: "u" }]),
-    )
-    const r = listPrsByBase("goal-x", "open")
-    expect(r.value?.[0]?.number).toBe(1)
-  })
-
-  it("createPr requires the URL to contain /pull/", () => {
-    ghMock.mockReturnValue("not-a-pr-url")
-    const r = createPr({ head: "h", base: "b", title: "t", body: "b" })
-    expect(r.ok).toBe(false)
-  })
-
-  it("createPr returns the URL on success", () => {
-    ghMock.mockReturnValue("https://github.com/o/r/pull/9")
-    expect(createPr({ head: "h", base: "b", title: "t", body: "b" }).value).toBe("https://github.com/o/r/pull/9")
-  })
-
-  it("mergePrSquash + closePr + editPrBody + markPrReady all forward args", () => {
+  it("mergePrSquash forwards --squash --delete-branch", () => {
     ghMock.mockReturnValue("")
     mergePrSquash(5)
-    closePr(5, "x")
-    editPrBody(5, "new body")
+    expect(ghMock).toHaveBeenCalledWith(["pr", "merge", "5", "--squash", "--delete-branch"], expect.anything())
+  })
+
+  it("markPrReady forwards pr ready", () => {
+    ghMock.mockReturnValue("")
     markPrReady(5)
-    expect(ghMock.mock.calls.map((c) => c[0]?.[0])).toEqual(["pr", "pr", "pr", "pr"])
+    expect(ghMock).toHaveBeenCalledWith(["pr", "ready", "5"], expect.anything())
   })
 })
 
-describe("fetchDefaultBranch + compareBranches", () => {
-  it("fetchDefaultBranch returns the value from gh api", () => {
+describe("fetchDefaultBranch", () => {
+  it("returns the value from gh api", () => {
     ghMock.mockReturnValue("dev\n")
     expect(fetchDefaultBranch()).toEqual({ ok: true, value: "dev" })
-  })
-
-  it("compareBranches parses ahead+behind", () => {
-    ghMock.mockReturnValue("3 1")
-    expect(compareBranches("main", "feat")).toEqual({
-      ok: true,
-      value: { ahead: 3, behind: 1 },
-    })
-  })
-
-  it("compareBranches fails on unexpected output", () => {
-    ghMock.mockReturnValue("garbage")
-    const r = compareBranches("main", "feat")
-    expect(r.ok).toBe(false)
-  })
-})
-
-describe("inferLinkedIssue", () => {
-  it("matches Closes/Fixes/Resolves with case-insensitive variants", () => {
-    expect(
-      inferLinkedIssue({
-        number: 1,
-        isDraft: false,
-        mergeable: "",
-        mergeStateStatus: "",
-        url: "",
-        body: "Closes #42",
-      }),
-    ).toBe(42)
-    expect(
-      inferLinkedIssue({
-        number: 1,
-        isDraft: false,
-        mergeable: "",
-        mergeStateStatus: "",
-        url: "",
-        body: "fixes #7\nlater text",
-      }),
-    ).toBe(7)
-  })
-
-  it("falls back to leading-digits headRefName when body has no link", () => {
-    expect(
-      inferLinkedIssue({
-        number: 1,
-        isDraft: false,
-        mergeable: "",
-        mergeStateStatus: "",
-        url: "",
-        headRefName: "1453-add-button",
-      }),
-    ).toBe(1453)
-  })
-
-  it("returns undefined when neither path yields a number", () => {
-    expect(
-      inferLinkedIssue({
-        number: 1,
-        isDraft: false,
-        mergeable: "",
-        mergeStateStatus: "",
-        url: "",
-        body: "",
-        headRefName: "no-leading-digits",
-      }),
-    ).toBeUndefined()
   })
 })

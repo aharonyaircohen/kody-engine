@@ -33,23 +33,19 @@ export const loadGoalState: PreflightScript = async (ctx) => {
     ctx.data.goal = {
       id: goalId,
       state: state.state,
-      goalIssueNumber: state.goalIssueNumber,
       lastDispatchedIssue: state.lastDispatchedIssue,
-      goalPrUrl: state.goalPrUrl,
       // Cache the full parsed object so saveGoalState can preserve `extra`.
       raw: state,
-      // `phase` is populated by deriveGoalPhase later in the chain. Initialize
-      // to undefined so runWhen on `data.goal.phase` can match correctly.
+      // `phase`, `childTasks`, `openTaskPrs`, `leafPr` are populated by
+      // deriveGoalPhase later in the chain. Initialize to undefined so
+      // runWhen on `data.goal.phase` can match correctly.
       phase: undefined,
-      // Populated by ensureGoalBranch / configured by config.git.defaultBranch.
       defaultBranch: ctx.config.git.defaultBranch,
-      // Convenience derivations.
-      goalBranch: `goal-${goalId}`,
     }
   } catch (err) {
     // No state file or parse error — emit a log line and let the tick
-    // exit cleanly (skipAgent without a non-zero exit). Matches tick.sh's
-    // "no state file at … — nothing to tick" behavior.
+    // exit cleanly (skipAgent without a non-zero exit). Matches the
+    // legacy "no state file at … — nothing to tick" behavior.
     process.stdout.write(`[goal-tick] ${err instanceof Error ? err.message : String(err)}\n`)
     ctx.skipAgent = true
     ctx.output.exitCode = 0
