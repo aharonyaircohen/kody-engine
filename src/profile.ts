@@ -19,6 +19,10 @@ import type {
   Profile,
   ScriptEntry,
 } from "./executables/types.js"
+import { applyLifecycle } from "./lifecycles/index.js"
+import { ProfileError } from "./profile-error.js"
+
+export { ProfileError } from "./profile-error.js"
 
 const VALID_INPUT_TYPES = new Set(["int", "string", "bool", "enum"])
 const VALID_PERMISSION_MODES = new Set(["default", "acceptEdits", "plan", "bypassPermissions"])
@@ -42,6 +46,8 @@ const KNOWN_PROFILE_KEYS = new Set([
   "inputs",
   "claudeCode",
   "cliTools",
+  "lifecycle",
+  "lifecycleConfig",
   "scripts",
   "outputContract",
   "inputArtifacts",
@@ -52,15 +58,6 @@ const KNOWN_PROFILE_KEYS = new Set([
   "resetBetweenChildren",
 ])
 
-export class ProfileError extends Error {
-  constructor(
-    public profilePath: string,
-    message: string,
-  ) {
-    super(`Invalid profile at ${profilePath}:\n  ${message}`)
-    this.name = "ProfileError"
-  }
-}
 
 export function loadProfile(profilePath: string): Profile {
   if (!fs.existsSync(profilePath)) {
@@ -113,6 +110,26 @@ export function loadProfile(profilePath: string): Profile {
 
   const children = parseContainerChildren(profilePath, role, r.children)
 
+  let lifecycle: string | undefined
+  if (r.lifecycle !== undefined) {
+    if (typeof r.lifecycle !== "string" || r.lifecycle.length === 0) {
+      throw new ProfileError(profilePath, `"lifecycle" must be a non-empty string`)
+    }
+    lifecycle = r.lifecycle
+  }
+
+  let lifecycleConfig: Record<string, unknown> | undefined
+  if (r.lifecycleConfig !== undefined) {
+    if (!r.lifecycleConfig || typeof r.lifecycleConfig !== "object" || Array.isArray(r.lifecycleConfig)) {
+      throw new ProfileError(profilePath, `"lifecycleConfig" must be an object`)
+    }
+    lifecycleConfig = r.lifecycleConfig as Record<string, unknown>
+  }
+
+  if (lifecycleConfig && !lifecycle) {
+    throw new ProfileError(profilePath, `"lifecycleConfig" is only meaningful when "lifecycle" is set`)
+  }
+
   const profile: Profile = {
     name: requireString(profilePath, r, "name"),
     describe: typeof r.describe === "string" ? r.describe : "",
@@ -123,6 +140,8 @@ export function loadProfile(profilePath: string): Profile {
     inputs: parseInputs(profilePath, r.inputs),
     claudeCode: parseClaudeCode(profilePath, r.claudeCode),
     cliTools: parseCliTools(profilePath, r.cliTools),
+    lifecycle,
+    lifecycleConfig,
     scripts: parseScripts(profilePath, r.scripts),
     outputContract: r.outputContract as Profile["outputContract"],
     inputArtifacts: parseInputArtifacts(profilePath, r.input),
@@ -133,6 +152,10 @@ export function loadProfile(profilePath: string): Profile {
     // Containers opt out by setting `"resetBetweenChildren": false`.
     resetBetweenChildren: typeof r.resetBetweenChildren === "boolean" ? r.resetBetweenChildren : true,
     dir: path.dirname(profilePath),
+  }
+
+  if (lifecycle) {
+    applyLifecycle(profile, profilePath)
   }
 
   return profile

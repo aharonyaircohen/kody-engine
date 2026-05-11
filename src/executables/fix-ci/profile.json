@@ -44,62 +44,21 @@
     "mcpServers": []
   },
   "cliTools": [],
+  "lifecycle": "pr-branch",
+  "lifecycleConfig": {
+    "label": {
+      "name": "kody:fixing",
+      "color": "e99695",
+      "description": "kody: applying review feedback"
+    },
+    "context": "ci-fix",
+    "advance": false
+  },
   "scripts": {
     "preflight": [
-      { "script": "syncFlow" },
-      {
-        "script": "setLifecycleLabel",
-        "with": {
-          "label": "kody:fixing",
-          "color": "e99695",
-          "description": "kody: applying review feedback"
-        }
-      },
-      {
-        "script": "fixCiFlow"
-      },
-      {
-        "script": "loadTaskState"
-      },
-      {
-        "script": "loadConventions"
-      },
-      {
-        "script": "loadCoverageRules"
-      },
-      {
-        "script": "composePrompt"
-      }
+      { "script": "fixCiFlow" }
     ],
-    "postflight": [
-      {
-        "script": "parseAgentResult"
-      },
-      {
-        "script": "verify"
-      },
-      {
-        "script": "checkCoverageWithRetry"
-      },
-      {
-        "script": "abortUnfinishedGitOps"
-      },
-      {
-        "script": "commitAndPush"
-      },
-      {
-        "script": "ensurePr"
-      },
-      {
-        "script": "postIssueComment"
-      },
-      {
-        "script": "writeRunSummary"
-      },
-      {
-        "script": "saveTaskState"
-      }
-    ]
+    "postflight": []
   },
   "output": {
     "actionTypes": [

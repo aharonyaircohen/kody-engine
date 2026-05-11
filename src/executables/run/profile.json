@@ -44,38 +44,24 @@
     "mcpServers": []
   },
   "cliTools": [],
+  "lifecycle": "pr-branch",
+  "lifecycleConfig": {
+    "label": {
+      "name": "kody:running",
+      "color": "fbca04",
+      "description": "kody: implementing the change"
+    },
+    "context": "task",
+    "contextExtras": ["resolveArtifacts"],
+    "sync": false,
+    "mirrorState": true
+  },
   "scripts": {
     "preflight": [
-      {
-        "script": "setLifecycleLabel",
-        "with": {
-          "label": "kody:running",
-          "color": "fbca04",
-          "description": "kody: implementing the change"
-        }
-      },
-      { "script": "runFlow" },
-      { "script": "loadTaskState" },
-      { "script": "resolveArtifacts" },
-      { "script": "loadPriorArt" },
-      { "script": "loadMemoryContext" },
-      { "script": "loadConventions" },
-      { "script": "loadCoverageRules" },
-      { "script": "composePrompt" }
+      { "script": "runFlow" }
     ],
     "postflight": [
-      { "script": "parseAgentResult" },
-      { "script": "requirePlanDeviations" },
-      { "script": "verify" },
-      { "script": "checkCoverageWithRetry" },
-      { "script": "abortUnfinishedGitOps" },
-      { "script": "commitAndPush" },
-      { "script": "ensurePr" },
-      { "script": "postIssueComment" },
-      { "script": "writeRunSummary" },
-      { "script": "saveTaskState" },
-      { "script": "mirrorStateToPr" },
-      { "script": "advanceFlow" }
+      { "script": "requirePlanDeviations" }
     ]
   },
   "input": {

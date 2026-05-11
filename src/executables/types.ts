@@ -51,6 +51,24 @@ export interface Profile {
   inputs: InputSpec[]
   claudeCode: ClaudeCodeSpec
   cliTools: CliToolSpec[]
+  /**
+   * Optional lifecycle macro. When set, the profile loader applies a
+   * predefined preflight/postflight wrapper around `scripts.preflight` and
+   * `scripts.postflight` before returning the profile. Registry of lifecycles
+   * lives in src/lifecycles/. Unknown values are rejected at load time.
+   *
+   * Lifecycles exist to consolidate orchestration boilerplate (label,
+   * context loading, verify, commit, comment) that recurs across many
+   * executables. Per-executable specifics still go in `scripts.preflight`
+   * and `scripts.postflight` — the lifecycle wraps them, it doesn't
+   * replace them.
+   */
+  lifecycle?: string
+  /**
+   * Lifecycle-specific configuration. Shape depends on `lifecycle`. Validated
+   * by each lifecycle expander, not by the generic profile parser.
+   */
+  lifecycleConfig?: Record<string, unknown>
   scripts: {
     preflight: ScriptEntry[]
     postflight: ScriptEntry[]

@@ -221,6 +221,110 @@ tests/
 7. **Shared scripts do not import from `src/executables/`.** Structural rule: if `src/scripts/*.ts` can't see executable code, it can't couple to it. Only `../executables/types.js` (the shared type contract) is allowed. Same test enforces this.
 8. **Memorize / vault invariants.** `.kody/vault/` is the only `.kody/*` subtree the agent is permitted to write — enforced by the `ALLOWED_PATH_PREFIXES` allowlist in `src/commit.ts`. Memorize branches must use the flat `kody-memorize-YYYYMMDD` namespace (see `memorize` section above for why). Watches that open their own PR must check `commitResult.pushed === true` before calling `gh pr create`, not just `hasCommitsAhead`.
 
+## Lifecycle catalog (refactor target)
+
+> **Status:** documentation only. Code refactor sequenced in [docs/script-catalog-dsl-refactor.md](docs/script-catalog-dsl-refactor.md).
+>
+> **Why this exists:** today 35 of 69 registered scripts (~51%) in `src/scripts/` are referenced by exactly one executable — the `xxxFlow.ts` family is the worst offender. This violates invariant 2 ("cross-cutting utilities used by multiple executables"). The catalog below names the actual orchestration shapes hidden in those solo scripts so the next-step refactor (profile-level `lifecycle:` macros) has a concrete target.
+
+### Shape 1 — `pr-branch` (migrated: 3 of 5)
+
+**Members migrated:** `fix`, `fix-ci`, `run`.
+**Members deferred (intentionally bespoke):** `resolve`, `revert`. See "Why not all five" below.
+
+**Lifecycle config knobs** ([src/lifecycles/prBranch.ts](src/lifecycles/prBranch.ts)):
+- `label: { name, color, description }` — required.
+- `context: "task" | "ci-fix" | "minimal"` — controls which context-loading scripts populate `ctx.data`. Default `"task"`.
+- `contextExtras: string[]` — additional context-loading scripts slotted in after `loadTaskState`. `run` uses this for `resolveArtifacts`.
+- `sync: boolean` — include `syncFlow` (default `true`; `run` sets `false`).
+- `verify: boolean` — include the `verify`/`checkCoverageWithRetry`/`abortUnfinishedGitOps` chain (default `true`).
+- `advance: boolean` — include `advanceFlow` (default `true`; `fix-ci` sets `false`).
+- `mirrorState: boolean` — include `mirrorStateToPr` between `saveTaskState` and `advanceFlow` (default `false`; `run` sets `true`).
+
+**Per-executable solo scripts that survive after migration (still 1-executable):**
+| Solo script | Executable | What it does (one line) |
+| --- | --- | --- |
+| `fixFlow` | `fix` | Open feedback PR branch, derive feedback text from latest PR review comment. |
+| `fixCiFlow` | `fix-ci` | Open PR branch, attach failing CI run-id to context. |
+| `runFlow` | `run` (also `reproduce`) | Open or create branch from issue, set up task state. *(Dual-use — already shared, leave as-is.)* |
+| `requireFeedbackActions` | `fix` | Postflight assertion: feedback text must contain actionable items. |
+| `requirePlanDeviations` | `run` | Postflight: if the agent deviated from the saved plan, require it to document why. |
+| `resolveArtifacts` | `run` | Preflight: pull in artifacts from a prior `plan` run. Slotted via `contextExtras`. |
+
+These remain as profile-declared steps. The `xxxFlow` bootstraps stay solo until phase-2 of cleanup reveals enough cross-executable overlap to extract a shared `openPrBranch` (PR validation + branch checkout + started-comment). Not premature-abstracted in this pass.
+
+**Why not all five.** The original plan grouped `resolve` and `revert` with the pr-branch cluster based on `commitAndPush` + `ensurePr` overlap, but the deeper structure diverges:
+- `resolve` is a merge operation — by design it skips the entire `verify`/`checkCoverageWithRetry`/`abortUnfinishedGitOps` chain (locked in by [tests/unit/executor.test.ts](tests/unit/executor.test.ts) `"resolve profile skips verify + checkCoverageWithRetry (merge op)"`), and it has its own postflight `stageMergeConflicts`. Fitting it would require a `verify: false` + custom postflight slot, and the result still wouldn't share the *intent* of the lifecycle (run agent, verify code, ship). Bespoke is the right answer.
+- `revert` is no-agent (`maxTurns: 0`, no `tools`) and runs `revert.sh` deterministically. Its postflight uses `markFlowSuccess` + `recordOutcome` and flips `writeRunSummary`/`saveTaskState` order — almost nothing shared with the agent-driven shape. The `pr-branch` lifecycle is agent-shaped; forcing `revert` to fit would add an `agentless` flag whose only consumer is `revert`. Bespoke is the right answer.
+
+If a future no-agent PR executable lands, a separate `lifecycle: "pr-mechanical"` is the path — *not* widening `pr-branch`.
+
+### Shape 2 — `flow-state` (4 executables, no agent)
+
+**Members:** `spec`, `bug`, `feature`, `chore`.
+
+**Signature:** all 4 share `finishFlow`, `persistFlowState`, `loadIssueContext`, `setLifecycleLabel`, `skipAgent`. These are pre-implementation flow controllers — they classify an issue, persist intent state, and hand off to `run`.
+
+**Per-executable solo scripts in this cluster:**
+| Solo script | Executable |
+| --- | --- |
+| `startFlow` | `spec` (likely promotable — pattern fits the others) |
+| `dispatch` | `spec` |
+
+**Lifecycle:** `lifecycle: "flow-state"`. Probable that `startFlow` and `dispatch` collapse into the lifecycle module itself (shared between all four members but currently only wired into `spec`).
+
+### Shape 3 — `goal-chain` — DEFERRED, goal-tick stays bespoke
+
+**Member:** `goal-tick`.
+
+**Per-executable solo scripts:** `loadGoalState`, `saveGoalState`, `commitGoalState`, `deriveGoalPhase`, `dispatchNextTask`, `finalizeGoal`, `handleAbandonedGoal`.
+
+**Outcome:** the stop-condition fired. `goal-tick` is a state machine: `loadGoalState → handleAbandonedGoal (if abandoned) → deriveGoalPhase (if active) → finalizeGoal (if all-done) → dispatchNextTask (if ready) → saveGoalState → skipAgent`, then `commitGoalState` postflight. The `runWhen` clauses ARE the lifecycle. Moving these into a `lifecycle: "goal-chain"` module would relocate identical code — `goalFlow.ts` rebadged — not abstract anything. Mechanical enforcement (the modularity invariant in [tests/unit/sharedScriptsInvariants.test.ts](tests/unit/sharedScriptsInvariants.test.ts)) catches if any of these scripts accidentally get reused by another executable.
+
+### Shape 4 — `release-stage` (4 executables, no agent)
+
+**Members:** `release`, `release-prepare`, `release-deploy`, `release-publish`.
+
+**Signature:** all 4 share `notifyTerminal`, `setCommentTarget`, `recordOutcome`, `skipAgent`, `advanceFlow`. These are the multi-stage release orchestrator. **Note:** [docs/release-merge-refactor.md](docs/release-merge-refactor.md) already proposes collapsing these into a single executable. **Sequencing:** ship release-merge-refactor *first*; if it lands, this shape disappears and no lifecycle work is needed here.
+
+### Shape 5 — `init-bootstrap` (1 executable)
+
+**Member:** `init`.
+
+**Solo script:** `initFlow` (330 lines — writes consumer workflow template, creates initial config files).
+
+**Lifecycle:** likely *no* lifecycle — `init` is a one-shot bootstrap, not a recurring flow. **Treat as residual** (phase 5 of refactor) and relocate to `src/scripts/executable/init/`.
+
+### Shape 6 — `dispatch` (small, 3 executables)
+
+**Members:** `classify`, `job-scheduler`, partly `spec`.
+
+**Per-executable solo scripts:** `classifyByLabel`, `dispatchClassified`, `recordClassification` (classify); `dispatchJobFileTicks` (job-scheduler).
+
+**Lifecycle:** probably **not worth abstracting** — these are too few and too divergent. Treat as residual.
+
+### Residual (no cluster, ~10 scripts)
+
+Genuinely executable-specific things that should relocate to `src/scripts/executable/<name>/` in phase 5 of the refactor:
+
+`parseReproOutput`, `verifyReproFails` (reproduce); `resolvePreviewUrl`, `resolveQaUrl`, `discoverQaContext`, `loadQaGuide`, `warmupMcp`, `createQaGoal` (qa-engineer/ui-review — but several are already dual-use, watch these); `diagMcp`, `postResearchComment` (research); `postPlanComment` (plan); `loadJobFromFile`, `runTickScript` (job-tick variants).
+
+### How to use this catalog
+
+- **Adding a new executable:** check whether it fits an existing shape. If yes, target the corresponding lifecycle. If no, ask whether the new shape generalises (3+ candidates means a new lifecycle is justified; 1–2 means leave it as residual).
+- **Touching an existing solo script:** check this catalog before "promoting" anything new to `src/scripts/`. If it falls into a shape, the shape's lifecycle is the right target — not a new shared script.
+- **Adding a new solo script:** add it to `KNOWN_SOLO_SCRIPTS` in [tests/unit/sharedScriptsInvariants.test.ts](tests/unit/sharedScriptsInvariants.test.ts) with the owning executable and a one-sentence reason. The test fails loudly if you skip this. If the script ends up referenced by ≥2 executables later, remove the allowlist entry (the test will tell you).
+
+### Mechanical enforcement
+
+[tests/unit/sharedScriptsInvariants.test.ts](tests/unit/sharedScriptsInvariants.test.ts) runs three modularity checks alongside the existing executor-name branching checks:
+
+1. **No false positives in the allowlist.** A script the allowlist claims is solo, but profiles reference from ≥2 executables, fails — push it out of the allowlist (it's genuinely shared).
+2. **No unaccounted solos.** A script referenced by exactly one executable that isn't in the allowlist fails — either add an entry with a reason, or generalise so a second executable consumes it.
+3. **No stale entries.** An allowlisted script no longer referenced (or whose declared owner doesn't match reality) fails — clean up the allowlist.
+
+The check counts **lifecycle-expanded references** (a profile that opts into `lifecycle: "pr-branch"` is counted as referencing every script the lifecycle injects), so promoting a script into a lifecycle bookend doesn't silently turn it into a solo.
+
 ## Version history / split context
 
 - Legacy engine lives at **`aharonyaircohen/Kody-Engine-Lite`** under the package name `@kody-ade/engine`, frozen at v0.7.14. Do not add features there.

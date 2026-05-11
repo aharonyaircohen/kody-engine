@@ -63,37 +63,21 @@
       "usage": ""
     }
   ],
+  "lifecycle": "pr-branch",
+  "lifecycleConfig": {
+    "label": {
+      "name": "kody:fixing",
+      "color": "e99695",
+      "description": "kody: applying review feedback"
+    },
+    "context": "task"
+  },
   "scripts": {
     "preflight": [
-      { "script": "syncFlow" },
-      {
-        "script": "setLifecycleLabel",
-        "with": {
-          "label": "kody:fixing",
-          "color": "e99695",
-          "description": "kody: applying review feedback"
-        }
-      },
-      { "script": "fixFlow" },
-      { "script": "loadTaskState" },
-      { "script": "loadConventions" },
-      { "script": "loadPriorArt" },
-      { "script": "loadMemoryContext" },
-      { "script": "loadCoverageRules" },
-      { "script": "composePrompt" }
+      { "script": "fixFlow" }
     ],
     "postflight": [
-      { "script": "parseAgentResult" },
-      { "script": "requireFeedbackActions" },
-      { "script": "verify" },
-      { "script": "checkCoverageWithRetry" },
-      { "script": "abortUnfinishedGitOps" },
-      { "script": "commitAndPush" },
-      { "script": "ensurePr" },
-      { "script": "postIssueComment" },
-      { "script": "writeRunSummary" },
-      { "script": "saveTaskState" },
-      { "script": "advanceFlow" }
+      { "script": "requireFeedbackActions" }
     ]
   },
   "output": {
