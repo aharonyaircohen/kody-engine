@@ -24,6 +24,7 @@ vi.mock("../../../src/goal/operations.js", async () => {
     closePr: vi.fn(() => ({ ok: true })),
     mergePrSquash: vi.fn(() => ({ ok: true })),
     markPrReady: vi.fn(() => ({ ok: true })),
+    editPrBase: vi.fn(() => ({ ok: true })),
   }
 })
 
@@ -339,6 +340,49 @@ describe("finalizeGoal", () => {
   beforeEach(() => {
     vi.mocked(ops.mergePrSquash).mockReset().mockReturnValue({ ok: true })
     vi.mocked(ops.markPrReady).mockReset().mockReturnValue({ ok: true })
+    vi.mocked(ops.editPrBase).mockReset().mockReturnValue({ ok: true })
+  })
+
+  it("retargets non-root PRs to defaultBranch and merges in dispatch order", async () => {
+    // Stack: PR #888 (base=main, head=11-x) ← PR #999 (base=11-x, head=12-x).
+    // #888 is already at main → no retarget. #999 must retarget BEFORE merge,
+    // otherwise GitHub may close it when the 11-x branch is deleted.
+    const root = {
+      number: 888,
+      url: "u1",
+      isDraft: false,
+      headRefName: "11-x",
+      baseRefName: "main",
+      body: "",
+    }
+    const leaf = {
+      number: 999,
+      url: "u2",
+      isDraft: false,
+      headRefName: "12-x",
+      baseRefName: "11-x",
+      body: "",
+    }
+    const ctx = fakeCtx({
+      data: {
+        goal: {
+          id: "g",
+          state: "active",
+          defaultBranch: "main",
+          openTaskPrs: [leaf, root], // intentionally reversed
+          leafPr: leaf,
+        } satisfies Partial<GoalCtx>,
+      },
+    })
+    await finalizeGoal(ctx, fakeProfile())
+    // Root: NOT retargeted (already at default).
+    expect(ops.editPrBase).not.toHaveBeenCalledWith(888, "main", "/tmp")
+    // Leaf: retargeted to default before merge.
+    expect(ops.editPrBase).toHaveBeenCalledWith(999, "main", "/tmp")
+    // Merges happen in dispatch order.
+    expect(ops.mergePrSquash).toHaveBeenNthCalledWith(1, 888, "/tmp")
+    expect(ops.mergePrSquash).toHaveBeenNthCalledWith(2, 999, "/tmp")
+    expect((ctx.data.goal as GoalCtx).state).toBe("done")
   })
 
   it("squash-merges each open task PR in dispatch order, then sets state=done", async () => {

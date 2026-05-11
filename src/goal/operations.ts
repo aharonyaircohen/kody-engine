@@ -222,6 +222,20 @@ export function mergePrSquash(prNumber: number, cwd?: string): OperationResult {
   }
 }
 
+/**
+ * Retarget a PR's base branch. finalizeGoal calls this on every non-root
+ * stacked PR before merging it, so the merge lands in the repo default
+ * (e.g. `dev`) instead of the now-deleted predecessor's branch.
+ */
+export function editPrBase(prNumber: number, baseBranch: string, cwd?: string): OperationResult {
+  try {
+    gh(["pr", "edit", String(prNumber), "--base", baseBranch], { cwd })
+    return { ok: true }
+  } catch (err) {
+    return fail(err)
+  }
+}
+
 /** Promote a draft PR to ready-for-review. */
 export function markPrReady(prNumber: number, cwd?: string): OperationResult {
   try {

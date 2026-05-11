@@ -1,18 +1,27 @@
 /**
  * Preflight (runWhen phase==="all-done"): every child task is closed or
- * has a ready (non-draft) open PR. Squash-merge each stacked task PR in
- * dispatch order so each one cascades cleanly into the repo default
- * branch (GitHub auto-retargets subsequent PRs when their base is
- * deleted). The cumulative goal lands as a series of squash commits.
+ * has a ready (non-draft) open PR. Squash-merge each stacked task PR
+ * into the repo default branch in dispatch order, so the cumulative
+ * goal lands as a series of squash commits.
+ *
+ * Cascade gotcha: `gh pr merge --delete-branch` removes the merged
+ * head, which GitHub treats as "base branch deleted" for any PR still
+ * stacked on it. Depending on divergence, GitHub may either auto-
+ * retarget to the repo default OR close the PR. We saw the latter
+ * happen during the v9 live test on Tester (#3330 closed after #3326
+ * merged). To force a deterministic outcome, we explicitly retarget
+ * every non-root stacked PR to the default branch BEFORE merging it.
  *
  * Stacked-PR model:
- *   - Promote any draft leaf to ready-for-review (defensive — phase
+ *   - Promote any draft PR to ready-for-review (defensive — phase
  *     "all-done" already implies non-draft, but a stray draft would
  *     otherwise block the merge).
- *   - Sort open task PRs by their head-ref issue number (= dispatch
- *     order; root PR first, leaf last).
- *   - Squash-merge each with --delete-branch. Stop and bail on the
- *     first failure so a partial finalize is observable and retryable.
+ *   - Sort open task PRs by their head-ref issue number (root first,
+ *     leaf last).
+ *   - For each PR in order: retarget base to defaultBranch (if it
+ *     isn't already there), then squash-merge with --delete-branch.
+ *   - Bail on the first failure so a partial finalize is observable
+ *     and retryable on the next tick.
  *   - Transition `state` → "done"; the next tick exits as `terminal`.
  *
  * No-op (state still transitions to "done") when there are no open
@@ -20,7 +29,7 @@
  */
 
 import type { PreflightScript } from "../executables/types.js"
-import { markPrReady, mergePrSquash, type OpenTaskPr } from "../goal/operations.js"
+import { editPrBase, markPrReady, mergePrSquash, type OpenTaskPr } from "../goal/operations.js"
 import type { GoalCtx } from "./goalCtx.js"
 
 export const finalizeGoal: PreflightScript = async (ctx) => {
@@ -36,9 +45,6 @@ export const finalizeGoal: PreflightScript = async (ctx) => {
     return
   }
 
-  // Merge in dispatch order so each PR's base is already in main by the
-  // time its turn arrives. The convention is `<issueNumber>-<slug>`; the
-  // leading int is the dispatch order.
   const ordered = [...taskPrs].sort((a, b) => extractIssueNumber(a) - extractIssueNumber(b))
 
   for (const pr of ordered) {
@@ -50,7 +56,19 @@ export const finalizeGoal: PreflightScript = async (ctx) => {
         return
       }
     }
-    process.stdout.write(`[goal-tick] squash-merging PR #${pr.number} (base=${pr.baseRefName}, head=${pr.headRefName})\n`)
+
+    if (pr.baseRefName !== goal.defaultBranch) {
+      process.stdout.write(
+        `[goal-tick] retargeting PR #${pr.number} base ${pr.baseRefName} → ${goal.defaultBranch}\n`,
+      )
+      const retarget = editPrBase(pr.number, goal.defaultBranch, ctx.cwd)
+      if (!retarget.ok) {
+        process.stderr.write(`[goal-tick] finalizeGoal: editPrBase #${pr.number} failed: ${retarget.error}\n`)
+        return
+      }
+    }
+
+    process.stdout.write(`[goal-tick] squash-merging PR #${pr.number} → ${goal.defaultBranch} (head=${pr.headRefName})\n`)
     const merged = mergePrSquash(pr.number, ctx.cwd)
     if (!merged.ok) {
       process.stderr.write(`[goal-tick] finalizeGoal: mergePrSquash #${pr.number} failed: ${merged.error}\n`)
