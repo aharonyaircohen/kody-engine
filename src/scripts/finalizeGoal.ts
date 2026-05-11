@@ -31,7 +31,7 @@
  */
 
 import type { PreflightScript } from "../executables/types.js"
-import { closePr, editPrBase, markPrReady, mergePrSquash } from "../goal/operations.js"
+import { closeIssue, closePr, editPrBase, markPrReady, mergePrSquash } from "../goal/operations.js"
 import type { GoalCtx } from "./goalCtx.js"
 
 export const finalizeGoal: PreflightScript = async (ctx) => {
@@ -91,6 +91,28 @@ export const finalizeGoal: PreflightScript = async (ctx) => {
     )
     if (!closed.ok) {
       process.stderr.write(`[goal-tick] finalizeGoal: closePr #${pr.number} failed: ${closed.error}\n`)
+    }
+  }
+
+  // Explicitly close every still-open child task issue. GitHub's
+  // `Closes #N` keyword auto-closes only when a PR merges into the
+  // *GitHub repo default branch* — but stacked goals usually merge
+  // into the engine's `git.defaultBranch` (`dev`/`integration`/…),
+  // which often differs. Doing it explicitly here is the only way to
+  // guarantee task issues track the goal's "done" state.
+  const openIssues = (goal.childTasks ?? []).filter((t) => t.state === "OPEN")
+  for (const t of openIssues) {
+    process.stdout.write(`[goal-tick] closing task issue #${t.number} (goal finalized)\n`)
+    const closed = closeIssue(
+      t.number,
+      {
+        comment: `_Goal \`${goal.id}\` finalized — leaf PR #${leaf.number} squash-merged to \`${goal.defaultBranch}\` carries this task's changes._`,
+        reason: "completed",
+      },
+      ctx.cwd,
+    )
+    if (!closed.ok) {
+      process.stderr.write(`[goal-tick] finalizeGoal: closeIssue #${t.number} failed: ${closed.error}\n`)
     }
   }
 

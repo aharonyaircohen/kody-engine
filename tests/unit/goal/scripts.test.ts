@@ -344,7 +344,7 @@ describe("finalizeGoal", () => {
     vi.mocked(ops.closePr).mockReset().mockReturnValue({ ok: true })
   })
 
-  it("leaf-only merge: retargets leaf to default, squash-merges leaf, closes intermediates", async () => {
+  it("leaf-only merge: retargets leaf, squash-merges leaf, closes intermediates + task issues", async () => {
     // Stack: PR #888 (root, base=main, head=11-x) ← PR #999 (leaf, base=11-x, head=12-x).
     // Leaf carries the cumulative diff vs main, so we merge it only.
     // Sequential merge would conflict because squashing the root produces a new
@@ -373,6 +373,10 @@ describe("finalizeGoal", () => {
           defaultBranch: "main",
           openTaskPrs: [root, leaf],
           leafPr: leaf,
+          childTasks: [
+            { number: 11, state: "OPEN", prState: "ready" },
+            { number: 12, state: "OPEN", prState: "ready" },
+          ],
         } satisfies Partial<GoalCtx>,
       },
     })
@@ -385,6 +389,11 @@ describe("finalizeGoal", () => {
     // Root (intermediate) is closed with a courtesy comment.
     expect(ops.closePr).toHaveBeenCalledTimes(1)
     expect(ops.closePr).toHaveBeenCalledWith(888, expect.any(String), "/tmp")
+    // Both task issues closed (GitHub auto-close only fires on the repo
+    // default branch, which may differ from goal.defaultBranch).
+    expect(ops.closeIssue).toHaveBeenCalledTimes(2)
+    expect(ops.closeIssue).toHaveBeenCalledWith(11, expect.objectContaining({ reason: "completed" }), "/tmp")
+    expect(ops.closeIssue).toHaveBeenCalledWith(12, expect.objectContaining({ reason: "completed" }), "/tmp")
     expect((ctx.data.goal as GoalCtx).state).toBe("done")
   })
 
