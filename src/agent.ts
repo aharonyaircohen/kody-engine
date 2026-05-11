@@ -4,11 +4,24 @@ import { query } from "@anthropic-ai/claude-agent-sdk"
 import { getAnthropicApiKeyOrDummy, type ProviderModel } from "./config.js"
 import { renderEvent, type SdkMessageLike } from "./format.js"
 
+export interface AgentTokenUsage {
+  input: number
+  output: number
+  cacheRead: number
+  cacheCreate: number
+}
+
 export interface AgentResult {
   outcome: "completed" | "failed"
   finalText: string
   error?: string
   ndjsonPath: string
+  /** Wall-clock duration of the agent invocation, in milliseconds. */
+  durationMs?: number
+  /** Cumulative token usage across all `result` messages. */
+  tokens?: AgentTokenUsage
+  /** Number of SDK messages observed (proxy for turn count). */
+  messageCount?: number
 }
 
 export interface AgentOptions {
@@ -88,6 +101,9 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const resultTexts: string[] = []
   let outcome: "completed" | "failed" = "failed"
   let errorMessage: string | undefined
+  const tokens: AgentTokenUsage = { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 }
+  let messageCount = 0
+  const startedAt = Date.now()
 
   try {
     const queryOptions: Record<string, unknown> = {
@@ -127,6 +143,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     })
 
     for await (const msg of result) {
+      messageCount++
       try {
         fullLog.write(`${JSON.stringify(msg)}\n`)
       } catch {
@@ -137,6 +154,21 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       if (line) process.stdout.write(`${line}\n`)
 
       const m = msg as SdkMessageLike
+      // Accumulate token usage. The SDK attaches `usage` to result messages
+      // (and sometimes to assistant messages); we sum whatever surfaces so
+      // that the per-stage event log captures the real cost regardless of
+      // where the SDK chose to put it.
+      const usage = (m as { usage?: Record<string, unknown> }).usage
+      if (usage && typeof usage === "object") {
+        const i = Number(usage.input_tokens ?? 0)
+        const o = Number(usage.output_tokens ?? 0)
+        const cr = Number(usage.cache_read_input_tokens ?? 0)
+        const cc = Number(usage.cache_creation_input_tokens ?? 0)
+        if (Number.isFinite(i)) tokens.input += i
+        if (Number.isFinite(o)) tokens.output += o
+        if (Number.isFinite(cr)) tokens.cacheRead += cr
+        if (Number.isFinite(cc)) tokens.cacheCreate += cc
+      }
       if (m.type === "result") {
         if (m.subtype === "success") {
           outcome = "completed"
@@ -160,5 +192,13 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   }
 
   const finalText = resultTexts.join("\n\n---\n\n")
-  return { outcome, finalText, error: errorMessage, ndjsonPath }
+  return {
+    outcome,
+    finalText,
+    error: errorMessage,
+    ndjsonPath,
+    durationMs: Date.now() - startedAt,
+    tokens,
+    messageCount,
+  }
 }

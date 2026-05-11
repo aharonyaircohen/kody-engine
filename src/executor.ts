@@ -14,6 +14,7 @@ import type { AgentResult } from "./agent.js"
 import { runAgent } from "./agent.js"
 import type { KodyConfig } from "./config.js"
 import { loadConfig, parseProviderModel } from "./config.js"
+import { emitEvent } from "./events.js"
 import type { ContainerChild, Context, InputSpec, Profile, ScriptEntry } from "./executables/types.js"
 import { KODY_NAMESPACE, removeLabel } from "./lifecycleLabels.js"
 import { startLitellmIfNeeded } from "./litellm.js"
@@ -55,12 +56,31 @@ export interface ExecutorOutput {
 }
 
 export async function runExecutable(profileName: string, input: ExecutorInput): Promise<ExecutorOutput> {
+  const stageStartedAt = Date.now()
+  emitEvent(input.cwd, { executable: profileName, kind: "stage_start" })
+  const finishAndEnd = (out: ExecutorOutput): ExecutorOutput => {
+    emitEvent(input.cwd, {
+      executable: profileName,
+      kind: "stage_end",
+      durationMs: Date.now() - stageStartedAt,
+      outcome: out.exitCode === 0 ? "ok" : "failed",
+      meta: {
+        exitCode: out.exitCode,
+        ...(out.reason ? { reason: out.reason } : {}),
+        ...(out.prUrl ? { prUrl: out.prUrl } : {}),
+      },
+    })
+    if (out.prUrl) process.stdout.write(`PR_URL=${out.prUrl}\n`)
+    else if (out.reason) process.stdout.write(`PR_URL=FAILED: ${out.reason}\n`)
+    return out
+  }
+
   const profilePath = resolveProfilePath(profileName)
   const profile = loadProfile(profilePath)
 
   const missing = validateScriptReferences(profile, allScriptNames)
   if (missing.length > 0) {
-    return finish({ exitCode: 99, reason: `profile references unknown scripts: ${missing.join(", ")}` })
+    return finishAndEnd({ exitCode: 99, reason: `profile references unknown scripts: ${missing.join(", ")}` })
   }
 
   // Validate and coerce CLI args — BEFORE config load so arg errors surface
@@ -69,14 +89,14 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
   try {
     args = validateInputs(profile.inputs, input.cliArgs)
   } catch (err) {
-    return finish({ exitCode: 64, reason: err instanceof Error ? err.message : String(err) })
+    return finishAndEnd({ exitCode: 64, reason: err instanceof Error ? err.message : String(err) })
   }
 
   // Verify required CLI tools up front.
   const toolResults = verifyCliTools(profile.cliTools, input.cwd)
   const firstFail = firstRequiredFailure(toolResults, profile.cliTools)
   if (firstFail) {
-    return finish({ exitCode: 99, reason: `required CLI tool check failed: ${firstFail.error}` })
+    return finishAndEnd({ exitCode: 99, reason: `required CLI tool check failed: ${firstFail.error}` })
   }
 
   // Resolve config: pre-loaded, loaded on demand, or a placeholder for
@@ -95,7 +115,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     try {
       config = loadConfig(input.cwd)
     } catch (err) {
-      return finish({ exitCode: 99, reason: `config error: ${err instanceof Error ? err.message : String(err)}` })
+      return finishAndEnd({ exitCode: 99, reason: `config error: ${err instanceof Error ? err.message : String(err)}` })
     }
   }
 
@@ -105,7 +125,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
   try {
     model = parseProviderModel(modelSpec)
   } catch (err) {
-    return finish({ exitCode: 99, reason: `agent.model invalid: ${err instanceof Error ? err.message : String(err)}` })
+    return finishAndEnd({ exitCode: 99, reason: `agent.model invalid: ${err instanceof Error ? err.message : String(err)}` })
   }
 
   // Start LiteLLM for non-anthropic providers.
@@ -113,7 +133,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
   try {
     litellm = await startLitellmIfNeeded(model, input.cwd)
   } catch (err) {
-    return finish({
+    return finishAndEnd({
       exitCode: 99,
       reason: `litellm startup failed: ${err instanceof Error ? err.message : String(err)}`,
     })
@@ -163,7 +183,17 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
   try {
     // ── Preflight ────────────────────────────────────────────────────────────
     for (const entry of profile.scripts.preflight) {
-      if (!shouldRun(entry, ctx)) continue
+      const preLabel = entry.script ?? entry.shell ?? "<unknown>"
+      if (!shouldRun(entry, ctx)) {
+        emitEvent(input.cwd, {
+          executable: profileName,
+          kind: "preflight",
+          name: preLabel,
+          outcome: "skipped",
+        })
+        continue
+      }
+      const t0 = Date.now()
       if (entry.shell) {
         await runShellEntry(entry, ctx, profile)
         // Shell entries record their outcome via postflight (recordOutcome →
@@ -171,13 +201,27 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
         // exit, fall through so the state machine can advance — postflights
         // that should bail (commitAndPush, ensurePr, postIssueComment)
         // already check `ctx.skipAgent && exitCode !== undefined`.
+        emitEvent(input.cwd, {
+          executable: profileName,
+          kind: "preflight",
+          name: preLabel,
+          durationMs: Date.now() - t0,
+          outcome: ctx.output.exitCode && ctx.output.exitCode !== 0 ? "failed" : "ok",
+        })
       } else {
         const fn = preflightScripts[entry.script!]
-        if (!fn) return finish({ exitCode: 99, reason: `preflight script not registered: ${entry.script}` })
+        if (!fn) return finishAndEnd({ exitCode: 99, reason: `preflight script not registered: ${entry.script}` })
         await fn(ctx, profile, entry.with)
+        emitEvent(input.cwd, {
+          executable: profileName,
+          kind: "preflight",
+          name: preLabel,
+          durationMs: Date.now() - t0,
+          outcome: ctx.skipAgent && ctx.output.exitCode && ctx.output.exitCode !== 0 ? "failed" : "ok",
+        })
         if (ctx.skipAgent && ctx.output.exitCode !== undefined && ctx.output.exitCode !== 0) {
           // Hard bail from a TS preflight (e.g. uncommitted-changes refusal).
-          return finish(ctx.output)
+          return finishAndEnd(ctx.output)
         }
       }
     }
@@ -194,9 +238,21 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     } else if (!ctx.skipAgent) {
       const prompt = ctx.data.prompt as string | undefined
       if (!prompt) {
-        return finish({ exitCode: 99, reason: "composePrompt did not produce a prompt (ctx.data.prompt missing)" })
+        return finishAndEnd({ exitCode: 99, reason: "composePrompt did not produce a prompt (ctx.data.prompt missing)" })
       }
+      emitEvent(input.cwd, { executable: profileName, kind: "agent_start" })
       agentResult = await invokeAgent(prompt)
+      emitEvent(input.cwd, {
+        executable: profileName,
+        kind: "agent_end",
+        durationMs: agentResult.durationMs,
+        outcome: agentResult.outcome === "completed" ? "ok" : "failed",
+        meta: {
+          ...(agentResult.tokens ? { tokens: agentResult.tokens } : {}),
+          ...(typeof agentResult.messageCount === "number" ? { messageCount: agentResult.messageCount } : {}),
+          ...(agentResult.error ? { error: agentResult.error } : {}),
+        },
+      })
     }
 
     // ── Postflight ────────────────────────────────────────────────────────────
@@ -226,18 +282,27 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
           }
           process.stderr.write(`[kody postflight] skip ${entryLabel}: ${reasons.join("; ")}\n`)
         }
+        emitEvent(input.cwd, {
+          executable: profileName,
+          kind: "postflight",
+          name: entryLabel,
+          outcome: "skipped",
+        })
         continue
       }
       const label = entryLabel
+      const t0 = Date.now()
+      let postOutcome: "ok" | "failed" = "ok"
       try {
         if (entry.shell) {
           await runShellEntry(entry, ctx, profile)
         } else {
           const fn = postflightScripts[entry.script!]
-          if (!fn) return finish({ exitCode: 99, reason: `postflight script not registered: ${entry.script}` })
+          if (!fn) return finishAndEnd({ exitCode: 99, reason: `postflight script not registered: ${entry.script}` })
           await fn(ctx, profile, agentResult, entry.with)
         }
       } catch (err) {
+        postOutcome = "failed"
         const msg = err instanceof Error ? err.message : String(err)
         process.stderr.write(`[kody] postflight "${label}" crashed: ${msg}\n`)
         // Accumulate reasons across cascading postflight crashes — the first
@@ -248,9 +313,16 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
         ctx.output.reason = ctx.output.reason ? `${ctx.output.reason}; ${summary}` : summary
         if (ctx.output.exitCode === 0) ctx.output.exitCode = 99
       }
+      emitEvent(input.cwd, {
+        executable: profileName,
+        kind: "postflight",
+        name: label,
+        durationMs: Date.now() - t0,
+        outcome: postOutcome,
+      })
     }
 
-    return finish({
+    return finishAndEnd({
       exitCode: ctx.output.exitCode ?? 0,
       prUrl: ctx.output.prUrl,
       reason: ctx.output.reason,
@@ -399,12 +471,6 @@ function resolveDottedPath(root: unknown, key: string): unknown {
     cur = (cur as Record<string, unknown>)[p]
   }
   return cur
-}
-
-function finish(out: ExecutorOutput): ExecutorOutput {
-  if (out.prUrl) process.stdout.write(`PR_URL=${out.prUrl}\n`)
-  else if (out.reason) process.stdout.write(`PR_URL=FAILED: ${out.reason}\n`)
-  return out
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -684,6 +750,7 @@ async function runContainerLoop(profile: Profile, ctx: Context, input: ExecutorI
       }
 
       let childOut: ExecutorOutput
+      const childStartedAt = Date.now()
       try {
         childOut = await runChild(child.exec, {
           cliArgs,
@@ -693,7 +760,23 @@ async function runContainerLoop(profile: Profile, ctx: Context, input: ExecutorI
           verbose: input.verbose,
           quiet: input.quiet,
         })
+        emitEvent(input.cwd, {
+          executable: profile.name,
+          kind: "container_child",
+          name: child.exec,
+          durationMs: Date.now() - childStartedAt,
+          outcome: childOut.exitCode === 0 ? "ok" : "failed",
+          meta: { exitCode: childOut.exitCode, iteration },
+        })
       } catch (err) {
+        emitEvent(input.cwd, {
+          executable: profile.name,
+          kind: "container_child",
+          name: child.exec,
+          durationMs: Date.now() - childStartedAt,
+          outcome: "failed",
+          meta: { iteration, error: err instanceof Error ? err.message : String(err) },
+        })
         const msg = err instanceof Error ? err.message : String(err)
         process.stderr.write(`[kody container] child "${child.exec}" crashed: ${msg}\n`)
         ctx.output.exitCode = 1

@@ -3,9 +3,10 @@ import { runChat } from "./chat-cli.js"
 import { runExecutable } from "./executor.js"
 import { runCi } from "./kody-cli.js"
 import { hasExecutable, listExecutables, parseGenericFlags } from "./registry.js"
+import { runStats } from "./stats.js"
 
 interface ParsedArgs {
-  command: "ci" | "chat" | "help" | "version" | "__executable__"
+  command: "ci" | "chat" | "help" | "version" | "stats" | "__executable__"
   executableName?: string
   cliArgs?: Record<string, unknown>
   cwd?: string
@@ -14,6 +15,7 @@ interface ParsedArgs {
   errors: string[]
   ciArgv?: string[]
   chatArgv?: string[]
+  statsArgv?: string[]
 }
 
 const HELP_TEXT = `kody — single-session autonomous engineer
@@ -27,6 +29,7 @@ Usage:
   kody <other>                                [--cwd <path>] [--verbose|--quiet]
   kody ci      --issue <N> [preflight flags — see: kody ci --help]
   kody chat    [chat flags — see: kody chat --help]
+  kody stats   [--since 7d|--run <id>|--json|--cwd <path>]
   kody help
   kody version
 
@@ -67,6 +70,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (cmd === "chat") {
     return { ...result, command: "chat", chatArgv: argv.slice(1) }
   }
+  if (cmd === "stats") {
+    return { ...result, command: "stats", statsArgv: argv.slice(1) }
+  }
 
   // Every other top-level command is a discovered executable (run, fix, fix-ci,
   // resolve, review, plan, orchestrator, init, release, watch-*, …).
@@ -81,7 +87,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   }
 
   const discovered = listExecutables().map((e) => e.name)
-  const available = ["ci", "help", "version", ...discovered]
+  const available = ["ci", "chat", "stats", "help", "version", ...discovered]
   result.errors.push(`unknown command: ${cmd} (available: ${available.join(", ")})`)
   return result
 }
@@ -115,6 +121,16 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   if (args.command === "chat") {
     try {
       return await runChat(args.chatArgv ?? [])
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[kody] fatal: ${msg}\n`)
+      if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`)
+      return 99
+    }
+  }
+  if (args.command === "stats") {
+    try {
+      return await runStats(args.statsArgv ?? [])
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       process.stderr.write(`[kody] fatal: ${msg}\n`)
