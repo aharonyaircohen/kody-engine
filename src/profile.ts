@@ -180,6 +180,7 @@ function parseClaudeCode(p: string, raw: unknown): ClaudeCodeSpec {
     maxThinkingTokens: typeof r.maxThinkingTokens === "number" ? r.maxThinkingTokens : null,
     maxTurnTimeoutSec: typeof r.maxTurnTimeoutSec === "number" ? r.maxTurnTimeoutSec : null,
     systemPromptAppend: typeof r.systemPromptAppend === "string" ? r.systemPromptAppend : null,
+    cacheable: r.cacheable === true,
     tools,
     hooks: Array.isArray(r.hooks) ? (r.hooks as string[]) : [],
     skills: Array.isArray(r.skills) ? (r.skills as string[]) : [],

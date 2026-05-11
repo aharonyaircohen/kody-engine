@@ -185,6 +185,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
           ? Math.floor(profile.claudeCode.maxTurnTimeoutSec * 1000)
           : undefined,
       systemPromptAppend: profile.claudeCode.systemPromptAppend,
+      cacheable: profile.claudeCode.cacheable,
       settingSources: (profile.claudeCode as { settingSources?: Array<"user" | "project" | "local"> }).settingSources,
     })
   }

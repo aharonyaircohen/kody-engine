@@ -24,6 +24,7 @@
     "maxTurns": null,
     "maxTurnTimeoutSec": 1200,
     "systemPromptAppend": null,
+    "cacheable": true,
     "tools": [
       "Read",
       "Write",

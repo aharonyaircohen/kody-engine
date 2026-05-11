@@ -163,6 +163,20 @@ export interface ClaudeCodeSpec {
   maxTurnTimeoutSec?: number | null
   /** Text appended on top of Claude Code's baseline system prompt. */
   systemPromptAppend: string | null
+  /**
+   * Cross-process prompt caching opt-in. When true, the agent invocation
+   * sets `systemPrompt.excludeDynamicSections: true` so per-user dynamic
+   * content (cwd, git status, auto-memory) is stripped from the preset
+   * and re-injected as the first user message. The remaining preset
+   * becomes byte-identical across runs and benefits from Anthropic's
+   * 5-min server-side prompt cache. Recommended for hot-path stages
+   * (`run`, `fix`, `classify`) where the same workflow fires many
+   * times in a short window.
+   *
+   * Default: false (preserves legacy behaviour). No-op if the SDK does
+   * not support `excludeDynamicSections` (forward-compatible).
+   */
+  cacheable?: boolean
   /** SDK built-in tools this executable is allowed to use (capability pack). */
   tools: string[]
   /**

@@ -97,6 +97,16 @@ export interface AgentOptions {
   /** Text appended to Claude Code's baseline system prompt. */
   systemPromptAppend?: string | null
   /**
+   * When true, set `systemPrompt.excludeDynamicSections: true` so the
+   * Claude Code preset becomes byte-identical across runs and is
+   * eligible for cross-process prompt caching. The SDK strips per-user
+   * dynamic sections (cwd, git status, auto-memory) from the preset
+   * and re-injects them as the first user message so the agent does
+   * not lose context. Forward-compatible: silently ignored if the SDK
+   * lacks the option. Default false.
+   */
+  cacheable?: boolean
+  /**
    * Filesystem sources the SDK should auto-load. `"project"` loads
    * `<cwd>/.claude/` (skills, commands, settings.json) and CLAUDE.md;
    * `"local"` loads `<cwd>/.claude/settings.local.json`; `"user"` loads
@@ -203,7 +213,21 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       queryOptions.maxThinkingTokens = opts.maxThinkingTokens
     }
     if (typeof opts.systemPromptAppend === "string" && opts.systemPromptAppend.length > 0) {
-      queryOptions.systemPrompt = { type: "preset", preset: "claude_code", append: opts.systemPromptAppend }
+      const systemPrompt: Record<string, unknown> = {
+        type: "preset",
+        preset: "claude_code",
+        append: opts.systemPromptAppend,
+      }
+      if (opts.cacheable) systemPrompt.excludeDynamicSections = true
+      queryOptions.systemPrompt = systemPrompt
+    } else if (opts.cacheable) {
+      // Cacheable opt-in without an append still wants the preset's
+      // dynamic sections stripped so the prefix is cacheable.
+      queryOptions.systemPrompt = {
+        type: "preset",
+        preset: "claude_code",
+        excludeDynamicSections: true,
+      }
     }
     queryOptions.settingSources = opts.settingSources ?? ["project", "local"]
     const result = query({

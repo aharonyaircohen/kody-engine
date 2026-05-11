@@ -24,6 +24,7 @@
     "maxTurns": null,
     "maxThinkingTokens": null,
     "systemPromptAppend": null,
+    "cacheable": true,
     "tools": [
       "Read",
       "Bash"
