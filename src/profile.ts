@@ -26,6 +26,32 @@ const VALID_ROLES = new Set(["primitive", "orchestrator", "container", "watch", 
 const VALID_CONTAINER_CHILD_TARGETS = new Set(["issue", "pr"])
 const VALID_PHASES = new Set(["research", "planning", "implementing", "reviewing", "shipped", "failed", "idle"])
 
+/**
+ * Top-level profile keys that the loader understands. Unknown keys are
+ * warned about on load so typos like `clude_code` or `mcpServer` surface
+ * immediately instead of being silently dropped. Warnings are non-fatal
+ * — operators can still ship a profile with experimental fields.
+ */
+const KNOWN_PROFILE_KEYS = new Set([
+  "name",
+  "describe",
+  "role",
+  "kind",
+  "schedule",
+  "phase",
+  "inputs",
+  "claudeCode",
+  "cliTools",
+  "scripts",
+  "outputContract",
+  "inputArtifacts",
+  "outputArtifacts",
+  "input", // legacy JSON name for inputArtifacts source
+  "output", // legacy JSON name for outputArtifacts source
+  "children",
+  "resetBetweenChildren",
+])
+
 export class ProfileError extends Error {
   constructor(
     public profilePath: string,
@@ -53,6 +79,19 @@ export function loadProfile(profilePath: string): Profile {
   }
 
   const r = raw as Record<string, unknown>
+
+  // Phase 4g: surface unknown top-level keys. Silently-dropped typos in
+  // profile.json (e.g. `mcpServer` instead of `mcpServers` at the wrong
+  // level, or experimental `cacheabl` instead of `cacheable`) used to be
+  // invisible because the loader ignored anything it didn't recognise.
+  // Non-fatal so consumer repos can stage experimental fields, but loud
+  // enough that operators see the warning in GHA logs.
+  const unknownKeys = Object.keys(r).filter((k) => !KNOWN_PROFILE_KEYS.has(k))
+  if (unknownKeys.length > 0) {
+    process.stderr.write(
+      `[kody profile] ${path.basename(path.dirname(profilePath))}: unknown top-level keys ignored: ${unknownKeys.join(", ")}\n`,
+    )
+  }
 
   const kind = r.kind === "scheduled" ? "scheduled" : "oneshot"
   if (kind === "scheduled" && typeof r.schedule !== "string") {
@@ -89,6 +128,10 @@ export function loadProfile(profilePath: string): Profile {
     inputArtifacts: parseInputArtifacts(profilePath, r.input),
     outputArtifacts: parseOutputArtifacts(profilePath, r.output),
     children,
+    // Default true: preserves legacy bug-safe behaviour where each
+    // container child sees a clean tracked tree (see executor.ts).
+    // Containers opt out by setting `"resetBetweenChildren": false`.
+    resetBetweenChildren: typeof r.resetBetweenChildren === "boolean" ? r.resetBetweenChildren : true,
     dir: path.dirname(profilePath),
   }
 

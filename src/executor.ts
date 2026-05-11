@@ -323,6 +323,38 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
         postOutcome = "failed"
         const msg = err instanceof Error ? err.message : String(err)
         process.stderr.write(`[kody] postflight "${label}" crashed: ${msg}\n`)
+        // Phase 4h: persist a structured crash artifact so post-mortem
+        // analysis isn't limited to stderr (which evaporates with the
+        // GHA runner). Best-effort: failure to write the artifact must
+        // not mask the original crash.
+        try {
+          const fsMod = await import("node:fs")
+          const pathMod = await import("node:path")
+          const { resolveRunId } = await import("./events.js")
+          const runId = resolveRunId()
+          const dir = pathMod.join(input.cwd, ".kody", "runs", runId, "crashes")
+          fsMod.mkdirSync(dir, { recursive: true })
+          const file = pathMod.join(
+            dir,
+            `${label.replace(/[^a-zA-Z0-9_-]/g, "_")}-${Date.now()}.json`,
+          )
+          fsMod.writeFileSync(
+            file,
+            JSON.stringify(
+              {
+                executable: profileName,
+                postflight: label,
+                message: msg,
+                stack: err instanceof Error ? err.stack : undefined,
+                ts: new Date().toISOString(),
+              },
+              null,
+              2,
+            ),
+          )
+        } catch {
+          /* best effort */
+        }
         // Accumulate reasons across cascading postflight crashes — the first
         // failure may not be the most informative one (e.g. ensurePr crash
         // followed by postIssueComment crash). Operators want every reason
@@ -737,7 +769,15 @@ async function runContainerLoop(profile: Profile, ctx: Context, input: ExecutorI
     // left alone (UncommittedChangesError uses --untracked-files=no, so
     // they don't trigger the gate; preserving them keeps node_modules,
     // pip caches, and similar resident.) Best-effort: failures don't abort.
-    resetWorkingTree(input.cwd)
+    //
+    // Opt-out: profiles can set `resetBetweenChildren: false` when their
+    // children deliberately share intermediate state (e.g. bug's
+    // `reproduce` writes a failing test that `run` then makes pass).
+    if (profile.resetBetweenChildren !== false) {
+      resetWorkingTree(input.cwd)
+    } else {
+      process.stderr.write(`[kody container] resetBetweenChildren=false; preserving tracked tree\n`)
+    }
 
     // Idempotency: if state already shows a *_COMPLETED action for this child,
     // skip the invocation and use the stored outcome to route. Lets a

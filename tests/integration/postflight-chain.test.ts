@@ -153,6 +153,16 @@ describe("postflight chain: run profile, success path", () => {
     mocks.ghPr.mockClear()
     mocks.verifyAll.mockClear()
     mocks.doEnsurePr.mockClear()
+    // Phase 4f added a sentinel-based commitAndPush idempotency replay.
+    // The tests share `/tmp/fake-repo` as cwd, so sentinels from one
+    // test would replay into the next. Clear them between tests so
+    // each case sees a fresh "first commit" state.
+    try {
+      const fs = require("node:fs") as typeof import("node:fs")
+      fs.rmSync("/tmp/fake-repo/.kody", { recursive: true, force: true })
+    } catch {
+      /* best effort */
+    }
   })
 
   it("agent returns DONE+COMMIT_MSG → action is RUN_COMPLETED + comment posted", async () => {

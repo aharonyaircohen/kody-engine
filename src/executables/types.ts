@@ -74,6 +74,16 @@ export interface Profile {
    * Defines the in-process step sequence and routing map. See ContainerChild.
    */
   children?: ContainerChild[]
+  /**
+   * Whether the container should `git reset --hard HEAD` between
+   * children to discard tracked-file modifications a prior child left
+   * behind. Default `true` (preserves the legacy bug-safe behaviour
+   * — see executor.ts:runContainerLoop notes). Set `false` for
+   * containers whose children are expected to share intermediate
+   * state (e.g. bug's `reproduce` writing a failing test that `run`
+   * then makes pass). Only honoured when `role === "container"`.
+   */
+  resetBetweenChildren?: boolean
   /** Absolute directory the profile was loaded from. Used to resolve prompt.md. */
   dir: string
 }

@@ -13,6 +13,8 @@
  *   2. generic fallback ("chore: kody changes")
  */
 
+import * as fs from "node:fs"
+import * as path from "node:path"
 import {
   commitAndPush as doCommitAndPush,
   hasCommitsAhead,
@@ -20,15 +22,55 @@ import {
   listChangedFiles,
   listFilesInCommit,
 } from "../commit.js"
+import { resolveRunId } from "../events.js"
 import type { PostflightScript } from "../executables/types.js"
 
 const DEFAULT_COMMIT_MESSAGE = "chore: kody changes"
 
-export const commitAndPush: PostflightScript = async (ctx) => {
+/**
+ * Sentinel file written by commitAndPush on its first successful execution
+ * per task run. A second invocation within the same run (e.g. an
+ * accidentally double-wired postflight or a container retry) sees the
+ * sentinel, replays the recorded result, and short-circuits — preventing
+ * duplicate commits on the agent's branch.
+ *
+ * Disabled when KODY_COMMIT_IDEMPOTENCY=0.
+ */
+function sentinelPathForStage(cwd: string, profileName: string): string {
+  const runId = resolveRunId()
+  return path.join(cwd, ".kody", "runs", runId, `commit-${profileName}.lock`)
+}
+
+export const commitAndPush: PostflightScript = async (ctx, profile) => {
   const branch = ctx.data.branch as string | undefined
   if (!branch) {
     ctx.data.commitResult = { committed: false, pushed: false }
     return
+  }
+
+  // Idempotency sentinel — short-circuit if this commitAndPush has
+  // already run successfully for the same (runId, executable) tuple.
+  const idempotencyEnabled = process.env.KODY_COMMIT_IDEMPOTENCY !== "0"
+  const sentinel = idempotencyEnabled ? sentinelPathForStage(ctx.cwd, profile.name) : null
+  if (sentinel && fs.existsSync(sentinel)) {
+    try {
+      const replay = JSON.parse(fs.readFileSync(sentinel, "utf-8")) as {
+        commitResult?: unknown
+        changedFiles?: string[]
+        hasCommitsAhead?: boolean
+        salvagedFromMissingMarker?: boolean
+      }
+      ctx.data.commitResult = replay.commitResult ?? { committed: false, pushed: false }
+      if (Array.isArray(replay.changedFiles)) ctx.data.changedFiles = replay.changedFiles
+      if (typeof replay.hasCommitsAhead === "boolean") ctx.data.hasCommitsAhead = replay.hasCommitsAhead
+      if (replay.salvagedFromMissingMarker) ctx.data.salvagedFromMissingMarker = true
+      ctx.data.commitIdempotencyReplay = true
+      process.stderr.write(`[kody commitAndPush] idempotency replay (sentinel ${sentinel})\n`)
+      return
+    } catch {
+      // Sentinel unreadable — fall through and re-attempt. Safer than
+      // crashing on a corrupted lock file.
+    }
   }
 
   // If an earlier postflight (e.g. requireFeedbackActions) flipped agentDone
@@ -89,4 +131,31 @@ export const commitAndPush: PostflightScript = async (ctx) => {
   }
 
   ctx.data.hasCommitsAhead = hasCommitsAhead(branch, ctx.config.git.defaultBranch, ctx.cwd)
+
+  // Persist the sentinel so a re-entry within the same run replays
+  // these results rather than committing twice. Best-effort: write
+  // failures don't propagate (no sentinel just means non-idempotent
+  // behaviour, same as the legacy path).
+  const result = ctx.data.commitResult as { committed?: boolean } | undefined
+  if (sentinel && result?.committed) {
+    try {
+      fs.mkdirSync(path.dirname(sentinel), { recursive: true })
+      fs.writeFileSync(
+        sentinel,
+        JSON.stringify(
+          {
+            commitResult: ctx.data.commitResult,
+            changedFiles: ctx.data.changedFiles,
+            hasCommitsAhead: ctx.data.hasCommitsAhead,
+            salvagedFromMissingMarker: ctx.data.salvagedFromMissingMarker === true,
+            writtenAt: new Date().toISOString(),
+          },
+          null,
+          2,
+        ),
+      )
+    } catch {
+      /* best effort */
+    }
+  }
 }
