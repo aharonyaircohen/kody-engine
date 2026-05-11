@@ -1,6 +1,7 @@
 {
   "name": "chore",
   "role": "container",
+  "preloadContext": true,
   "describe": "Chore / docs / dep-bump flow — run → review (→ fix on concerns/fail). Skips planning entirely. Children run sequentially in one process via the container loop.",
   "inputs": [
     {

@@ -755,6 +755,45 @@ async function runContainerLoop(profile: Profile, ctx: Context, input: ExecutorI
   const reader = input.__readTaskState ?? readTaskState
 
   const issueNumber = ctx.args.issue as number | undefined
+
+  // Phase 5 in-process handoff: when `preloadContext: true`, run the
+  // shared context loaders ONCE at container start and pass the
+  // resulting snapshot to every child. Each child's loaders take their
+  // fast path and skip the redundant GH/filesystem round-trips. The
+  // container's own preflight already loaded `issue` and `taskState`
+  // via its declared preflight chain; here we top up the remaining
+  // four loaders (conventions, priorArt, memoryContext, coverageRules)
+  // against the container's ctx so the snapshot is complete.
+  let preloadedSnapshot: Record<string, unknown> | undefined
+  if (profile.preloadContext) {
+    try {
+      const { loadConventions } = await import("./scripts/loadConventions.js")
+      const { loadPriorArt } = await import("./scripts/loadPriorArt.js")
+      const { loadMemoryContext } = await import("./scripts/loadMemoryContext.js")
+      const { loadCoverageRules } = await import("./scripts/loadCoverageRules.js")
+      await loadConventions(ctx, profile)
+      await loadPriorArt(ctx, profile)
+      await loadMemoryContext(ctx, profile)
+      await loadCoverageRules(ctx, profile)
+      preloadedSnapshot = {}
+      // Only forward keys the children's loaders know how to fast-path on.
+      // Forwarding the entire ctx.data would also carry container-private
+      // bookkeeping (lifecycleLabelsSet, etc.) which children shouldn't see.
+      for (const k of ["issue", "conventions", "priorArt", "memoryContext", "coverageRules", "taskContext"]) {
+        if (ctx.data[k] !== undefined) preloadedSnapshot[k] = ctx.data[k]
+      }
+      process.stderr.write(
+        `[kody container] preloadContext: snapshot keys=${Object.keys(preloadedSnapshot).join(",")}\n`,
+      )
+    } catch (err) {
+      // Pre-loading must never wedge the flow. On failure, fall back to
+      // legacy behaviour (each child re-loads).
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[kody container] preloadContext failed (falling back to per-child loads): ${msg}\n`)
+      preloadedSnapshot = undefined
+    }
+  }
+
   let currentIdx = 0
   let iteration = 0
   // prUrl is written by the run child to the issue thread, but later
@@ -879,6 +918,9 @@ async function runContainerLoop(profile: Profile, ctx: Context, input: ExecutorI
           skipConfig: input.skipConfig,
           verbose: input.verbose,
           quiet: input.quiet,
+          // Phase 5 in-process handoff — undefined when preloadContext
+          // is off, so children fall back to their own loaders.
+          preloadedData: preloadedSnapshot,
         })
         emitEvent(input.cwd, {
           executable: profile.name,

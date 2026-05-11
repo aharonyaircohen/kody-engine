@@ -1,6 +1,7 @@
 {
   "name": "feature",
   "role": "container",
+  "preloadContext": true,
   "describe": "Feature / refactor flow — research → plan → run → review (→ fix on concerns/fail). Children run sequentially in one process via the container loop.",
   "inputs": [
     {

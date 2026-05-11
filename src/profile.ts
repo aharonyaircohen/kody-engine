@@ -56,6 +56,7 @@ const KNOWN_PROFILE_KEYS = new Set([
   "output", // legacy JSON name for outputArtifacts source
   "children",
   "resetBetweenChildren",
+  "preloadContext",
 ])
 
 
@@ -151,6 +152,9 @@ export function loadProfile(profilePath: string): Profile {
     // container child sees a clean tracked tree (see executor.ts).
     // Containers opt out by setting `"resetBetweenChildren": false`.
     resetBetweenChildren: typeof r.resetBetweenChildren === "boolean" ? r.resetBetweenChildren : true,
+    // Phase 5 in-process handoff opt-in. Default false; containers
+    // flip to true after end-to-end verification.
+    preloadContext: r.preloadContext === true,
     dir: path.dirname(profilePath),
   }
 

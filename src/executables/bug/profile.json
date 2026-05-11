@@ -1,6 +1,7 @@
 {
   "name": "bug",
   "role": "container",
+  "preloadContext": true,
   "describe": "Bug / enhancement flow — reproduce → plan → run → review (→ fix on concerns/fail). Children run sequentially in one process via the container loop.",
   "inputs": [
     {

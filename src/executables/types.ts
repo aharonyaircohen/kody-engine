@@ -102,6 +102,20 @@ export interface Profile {
    * then makes pass). Only honoured when `role === "container"`.
    */
   resetBetweenChildren?: boolean
+  /**
+   * Phase 5 in-process handoff: when true, the container's loop runs
+   * the shared context loaders (loadConventions, loadPriorArt,
+   * loadMemoryContext, loadCoverageRules) ONCE after its own preflight
+   * completes, then passes the resulting `ctx.data` snapshot to every
+   * child via `ExecutorInput.preloadedData`. Each child's loaders take
+   * their fast path (added in 0.4.63) and skip the redundant
+   * GitHub/filesystem round-trips.
+   *
+   * Default `false` (opt-in) so the change is gated to containers
+   * that have been verified end-to-end. Only honoured when
+   * `role === "container"`.
+   */
+  preloadContext?: boolean
   /** Absolute directory the profile was loaded from. Used to resolve prompt.md. */
   dir: string
 }
