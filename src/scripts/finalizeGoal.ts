@@ -47,6 +47,25 @@ export const finalizeGoal: PreflightScript = async (ctx) => {
 
   const ordered = [...taskPrs].sort((a, b) => extractIssueNumber(a) - extractIssueNumber(b))
 
+  // Phase 1: retarget every non-root PR's base to defaultBranch UP FRONT,
+  // before any merges run. If we did this lazily (right before each
+  // merge), the first merge's `--delete-branch` would delete the
+  // predecessor's head before the next PR's retarget got a chance —
+  // GitHub then auto-closes that PR for "base branch deleted". Retarget
+  // all of them first, then we can squash-merge each cleanly.
+  for (const pr of ordered) {
+    if (pr.baseRefName === goal.defaultBranch) continue
+    process.stdout.write(
+      `[goal-tick] retargeting PR #${pr.number} base ${pr.baseRefName} → ${goal.defaultBranch}\n`,
+    )
+    const retarget = editPrBase(pr.number, goal.defaultBranch, ctx.cwd)
+    if (!retarget.ok) {
+      process.stderr.write(`[goal-tick] finalizeGoal: editPrBase #${pr.number} failed: ${retarget.error}\n`)
+      return
+    }
+  }
+
+  // Phase 2: promote drafts + squash-merge each PR in dispatch order.
   for (const pr of ordered) {
     if (pr.isDraft) {
       process.stdout.write(`[goal-tick] promoting draft PR #${pr.number} → ready\n`)
@@ -56,18 +75,6 @@ export const finalizeGoal: PreflightScript = async (ctx) => {
         return
       }
     }
-
-    if (pr.baseRefName !== goal.defaultBranch) {
-      process.stdout.write(
-        `[goal-tick] retargeting PR #${pr.number} base ${pr.baseRefName} → ${goal.defaultBranch}\n`,
-      )
-      const retarget = editPrBase(pr.number, goal.defaultBranch, ctx.cwd)
-      if (!retarget.ok) {
-        process.stderr.write(`[goal-tick] finalizeGoal: editPrBase #${pr.number} failed: ${retarget.error}\n`)
-        return
-      }
-    }
-
     process.stdout.write(`[goal-tick] squash-merging PR #${pr.number} → ${goal.defaultBranch} (head=${pr.headRefName})\n`)
     const merged = mergePrSquash(pr.number, ctx.cwd)
     if (!merged.ok) {
