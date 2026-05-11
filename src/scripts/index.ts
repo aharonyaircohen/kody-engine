@@ -38,6 +38,7 @@ import { loadJobFromFile } from "./loadJobFromFile.js"
 import { loadMemoryContext } from "./loadMemoryContext.js"
 import { loadPriorArt } from "./loadPriorArt.js"
 import { loadQaGuide } from "./loadQaGuide.js"
+import { loadTaskContext } from "./loadTaskContext.js"
 import { loadTaskState } from "./loadTaskState.js"
 import { markFlowSuccess } from "./markFlowSuccess.js"
 import { mergeReleasePr } from "./mergeReleasePr.js"
@@ -92,6 +93,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   syncFlow,
   initFlow,
   loadTaskState,
+  loadTaskContext,
   loadIssueContext,
   loadIssueStateComment,
   loadJobFromFile,
