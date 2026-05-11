@@ -13,20 +13,29 @@ describe("UncommittedChangesError", () => {
 
 describe("runFlow: resolveBaseOverride", () => {
   // The --base override is the only way a comment can redirect kody onto a
-  // non-default branch. We allowlist:
-  //   - `<digits>-<slug>` — kody-task branch (stacked-PR base, new in 0.4.39)
-  //   - `goal-<id>`       — legacy umbrella-era goal branch (still tolerated)
-  // anything else (random branches, traversal attempts) is rejected.
-  it("accepts a kody-task branch (stacked-PR base)", () => {
+  // non-default branch. dispatchNextTask is the intended caller; it passes
+  // either the leaf task branch or the repo's default branch (dev / main /
+  // master). We accept any safe ref but reject path-traversal / shell-meta.
+  it("accepts kody-task branches (stacked-PR base)", () => {
     expect(resolveBaseOverride("42-add-button")).toBe("42-add-button")
     expect(resolveBaseOverride("1453-fix-typo")).toBe("1453-fix-typo")
-    expect(resolveBaseOverride("1-x")).toBe("1-x")
   })
 
-  it("accepts a well-formed legacy goal branch", () => {
+  it("accepts ordinary default branches", () => {
+    expect(resolveBaseOverride("main")).toBe("main")
+    expect(resolveBaseOverride("dev")).toBe("dev")
+    expect(resolveBaseOverride("master")).toBe("master")
+    expect(resolveBaseOverride("develop")).toBe("develop")
+  })
+
+  it("accepts legacy goal branches", () => {
     expect(resolveBaseOverride("goal-add-chat-memory")).toBe("goal-add-chat-memory")
     expect(resolveBaseOverride("goal-x")).toBe("goal-x")
-    expect(resolveBaseOverride("goal-1234")).toBe("goal-1234")
+  })
+
+  it("accepts branches with slashes and dots (release/v1.2.3 style)", () => {
+    expect(resolveBaseOverride("release/v1.2.3")).toBe("release/v1.2.3")
+    expect(resolveBaseOverride("feat/foo")).toBe("feat/foo")
   })
 
   it("rejects empty / undefined", () => {
@@ -34,19 +43,23 @@ describe("runFlow: resolveBaseOverride", () => {
     expect(resolveBaseOverride("")).toBeNull()
   })
 
-  it("rejects arbitrary branches", () => {
-    expect(resolveBaseOverride("main")).toBeNull()
-    expect(resolveBaseOverride("feat/foo")).toBeNull()
-    expect(resolveBaseOverride("release-1.2")).toBeNull()
-    expect(resolveBaseOverride("dev")).toBeNull()
+  it("rejects path traversal and unsafe leads", () => {
+    expect(resolveBaseOverride("../etc/passwd")).toBeNull()
+    expect(resolveBaseOverride("foo/../bar")).toBeNull()
+    expect(resolveBaseOverride("-rm")).toBeNull() // leading dash
+    expect(resolveBaseOverride("/abs")).toBeNull() // leading slash
+    expect(resolveBaseOverride(".hidden")).toBeNull() // leading dot
   })
 
-  it("rejects values with disallowed characters", () => {
-    expect(resolveBaseOverride("42-Bad")).toBeNull() // uppercase
-    expect(resolveBaseOverride("42-foo/bar")).toBeNull() // slash
-    expect(resolveBaseOverride("42-foo bar")).toBeNull() // space
-    expect(resolveBaseOverride("42-")).toBeNull() // trailing dash with empty slug
-    expect(resolveBaseOverride("goal-Bad")).toBeNull()
-    expect(resolveBaseOverride("goal-")).toBeNull()
+  it("rejects shell-meta / whitespace / disallowed chars", () => {
+    expect(resolveBaseOverride("foo bar")).toBeNull()
+    expect(resolveBaseOverride("foo;rm")).toBeNull()
+    expect(resolveBaseOverride("foo$bar")).toBeNull()
+    expect(resolveBaseOverride("FooUpper")).toBeNull()
+  })
+
+  it("rejects values longer than 200 chars", () => {
+    expect(resolveBaseOverride("a".repeat(201))).toBeNull()
+    expect(resolveBaseOverride("a".repeat(200))).toBe("a".repeat(200))
   })
 })

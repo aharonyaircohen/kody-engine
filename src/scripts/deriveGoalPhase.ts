@@ -17,7 +17,6 @@
 import type { PreflightScript } from "../executables/types.js"
 import {
   extractClosesIssues,
-  fetchDefaultBranch,
   listGoalIssues,
   listOpenPrs,
   pairIssuesWithPrs,
@@ -31,19 +30,11 @@ export const deriveGoalPhase: PreflightScript = async (ctx) => {
   const goal = ctx.data.goal as GoalCtx | undefined
   if (!goal) return
 
-  // goal-tick is configless (see entry.ts), so ctx.config.git.defaultBranch
-  // defaults to "main" — wrong for repos defaulting to `dev`, `master`, etc.
-  // Resolve from GitHub instead. Fall back to the configless default on
-  // failure so a transient gh outage doesn't break the tick entirely.
-  const defaultBranchResult = fetchDefaultBranch(ctx.cwd)
-  if (defaultBranchResult.ok && defaultBranchResult.value) {
-    goal.defaultBranch = defaultBranchResult.value
-  } else if (defaultBranchResult.error) {
-    process.stderr.write(
-      `[goal-tick] deriveGoalPhase: fetchDefaultBranch failed (${defaultBranchResult.error}); ` +
-        `falling back to ${goal.defaultBranch}\n`,
-    )
-  }
+  // goal.defaultBranch was set from ctx.config.git.defaultBranch by
+  // loadGoalState — that's now the source of truth (goal-tick is no
+  // longer configless, see entry.ts). The consumer's kody.config.json
+  // wins over GitHub's repo default because repos may merge to a
+  // non-default branch (e.g. main is release, `dev` is integration).
 
   const issues = listGoalIssues(goal.id, ctx.cwd)
   if (!issues.ok) {

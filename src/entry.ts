@@ -143,11 +143,16 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 
   // Configless executables: skip config load.
   // - init runs BEFORE a kody.config.json exists.
-  // - goal-tick / goal-scheduler are lifecycle tools that only touch state
-  //   files + the gh CLI; they never use config.quality / config.git etc.
-  //   Requiring kody.config.json would force every consumer repo to install
-  //   a "real" Kody config just to run the goal runner, which we don't want.
-  const configlessCommands = new Set(["init", "goal-tick", "goal-scheduler"])
+  // - goal-scheduler is a scan-only lifecycle tool: walks `.kody/goals/*`
+  //   and dispatches a goal-tick subprocess for each active goal. No
+  //   config use of its own.
+  //
+  // goal-tick IS NOT configless — it needs config.git.defaultBranch to
+  // resolve the base for the first task in a stacked-PR run. The
+  // configless fallback in executor.ts hardcodes "main", which is wrong
+  // for repos defaulting to `dev`, `master`, etc. and silently collapsed
+  // the stack onto the wrong branch.
+  const configlessCommands = new Set(["init", "goal-scheduler"])
   const skipConfig = configlessCommands.has(args.executableName ?? "")
 
   try {

@@ -67,19 +67,20 @@ function tryPost(issueNumber: number, body: string, cwd?: string): void {
 }
 
 /**
- * Validate a --base override. Returns the value if it matches a known
- * safe pattern, otherwise null. Keeping the allowlist tight prevents
- * comment-driven redirection of kody onto arbitrary branches.
+ * Validate a --base override. Returns the value if it parses as a safe
+ * git branch ref, otherwise null. dispatchNextTask is the only intended
+ * caller; it passes either the leaf task branch or the repo's default
+ * branch (dev, main, etc.), so we need to accept any ordinary branch
+ * name without leaving the door open for path-traversal / shell-meta
+ * injection.
  *
- * Accepted patterns:
- *   - `<issueNumber>-<slug>` — kody-task branch (the stacked-PR base).
- *     Examples: `42-add-button`, `1453-fix-typo`.
- *   - `goal-<id>` — legacy umbrella-era goal branch. Kept so older repos
- *     mid-upgrade don't break on the first cross-version tick.
+ * Allowed: lowercase letters, digits, slash, dot, underscore, hyphen.
+ * No leading slash/dash/dot; no `..`; max 200 chars.
  */
 export function resolveBaseOverride(value: string | undefined): string | null {
   if (!value) return null
-  if (/^\d+-[a-z0-9-]+$/.test(value)) return value
-  if (/^goal-[a-z0-9-]+$/.test(value)) return value
-  return null
+  if (value.length > 200) return null
+  if (value.includes("..")) return null
+  if (!/^[a-z0-9][a-z0-9/._-]*$/.test(value)) return null
+  return value
 }
