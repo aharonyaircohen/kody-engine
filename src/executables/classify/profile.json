@@ -9,6 +9,13 @@
       "type": "int",
       "required": true,
       "describe": "GitHub issue number to classify."
+    },
+    {
+      "name": "base",
+      "flag": "--base",
+      "type": "string",
+      "required": false,
+      "describe": "Optional base branch override forwarded by goal-tick's stacked-PR dispatch. dispatchClassified re-emits this on the `@kody <classification>` comment so the downstream container/run keeps the stacked base."
     }
   ],
   "claudeCode": {

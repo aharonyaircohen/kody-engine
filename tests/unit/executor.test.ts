@@ -125,7 +125,8 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     const profile = loadProfile(path.join(EXE_ROOT, "bug/profile.json"))
     expect(profile.name).toBe("bug")
     expect(profile.role).toBe("container")
-    expect(profile.inputs.map((i) => i.name)).toEqual(["issue"])
+    // `base` is forwarded by goal-tick's stacked-PR dispatch (optional).
+    expect(profile.inputs.map((i) => i.name)).toEqual(["issue", "base"])
     expect(profile.claudeCode.maxTurns).toBe(0)
     expect(profile.claudeCode.tools).toEqual([])
     const pre = profile.scripts.preflight.map((p) => p.script)
@@ -172,7 +173,8 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     const profile = loadProfile(path.join(EXE_ROOT, `${name}/profile.json`))
     expect(profile.name).toBe(name)
     expect(profile.role).toBe("container")
-    expect(profile.inputs.map((i) => i.name)).toEqual(["issue"])
+    // `base` is forwarded by goal-tick's stacked-PR dispatch (optional).
+    expect(profile.inputs.map((i) => i.name)).toEqual(["issue", "base"])
     expect(profile.claudeCode.maxTurns).toBe(0)
     const pre = profile.scripts.preflight.map((p) => p.script)
     expect(pre[0]).toBe("setLifecycleLabel")

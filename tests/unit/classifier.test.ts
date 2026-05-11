@@ -220,7 +220,8 @@ describe("classify profile loadability", () => {
     const p = loadProfile(path.join(EXE_ROOT, "classify/profile.json"))
     expect(p.name).toBe("classify")
     expect(p.role).toBe("primitive")
-    expect(p.inputs.map((i) => i.name)).toEqual(["issue"])
+    // `base` is forwarded by goal-tick's stacked-PR dispatch (optional).
+    expect(p.inputs.map((i) => i.name)).toEqual(["issue", "base"])
     const pre = p.scripts.preflight.map((e) => e.script)
     expect(pre).toContain("classifyByLabel")
     expect(pre).toContain("loadIssueContext")

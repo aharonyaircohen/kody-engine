@@ -9,6 +9,13 @@
       "type": "int",
       "required": true,
       "describe": "GitHub issue number to drive the flow on."
+    },
+    {
+      "name": "base",
+      "flag": "--base",
+      "type": "string",
+      "required": false,
+      "describe": "Optional base branch override (stacked-PR). Forwarded to the `run` child by the container loop."
     }
   ],
   "claudeCode": {

@@ -29,17 +29,25 @@ export const dispatchClassified: PostflightScript = async (ctx) => {
   const classification = ctx.data.classification as string | undefined
   if (!classification || !VALID_CLASSES.has(classification)) return
 
+  // Forward `--base <branch>` from the originating dispatch comment so
+  // the chosen sub-orchestrator (chore / feature / etc.) sees it and
+  // can pass it through to its `run` child. Without this, goal-tick's
+  // stacked-PR dispatch (`@kody --base <leafBranch>`) loses the base
+  // here because classify rewrites the issue comment to `@kody chore`.
+  const baseArg = typeof ctx.args.base === "string" && ctx.args.base.length > 0 ? ` --base ${ctx.args.base}` : ""
+  const body = `@kody ${classification}${baseArg}`
+
   // Goes through execFileSync directly so it reaches GHA's issue_comment
   // filter; postIssueComment would sanitize the @kody mention out.
   try {
-    execFileSync("gh", ["issue", "comment", String(issueNumber), "--body", `@kody ${classification}`], {
+    execFileSync("gh", ["issue", "comment", String(issueNumber), "--body", body], {
       cwd: ctx.cwd,
       timeout: API_TIMEOUT_MS,
       stdio: ["ignore", "pipe", "pipe"],
     })
   } catch (err) {
     process.stderr.write(
-      `[kody dispatchClassified] failed to dispatch @kody ${classification}: ${err instanceof Error ? err.message : String(err)}\n`,
+      `[kody dispatchClassified] failed to dispatch ${body}: ${err instanceof Error ? err.message : String(err)}\n`,
     )
     ctx.data.action = failedAction("dispatch post failed")
     ctx.output.exitCode = 1
