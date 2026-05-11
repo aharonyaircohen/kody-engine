@@ -36,6 +36,9 @@ export const dispatchClassified: PostflightScript = async (ctx) => {
   // here because classify rewrites the issue comment to `@kody chore`.
   const baseArg = typeof ctx.args.base === "string" && ctx.args.base.length > 0 ? ` --base ${ctx.args.base}` : ""
   const body = `@kody ${classification}${baseArg}`
+  process.stderr.write(
+    `[kody dispatchClassified] ctx.args.base=${JSON.stringify(ctx.args.base)} typeof=${typeof ctx.args.base} ctx.args=${JSON.stringify(ctx.args)}\n`,
+  )
 
   // Goes through execFileSync directly so it reaches GHA's issue_comment
   // filter; postIssueComment would sanitize the @kody mention out.
