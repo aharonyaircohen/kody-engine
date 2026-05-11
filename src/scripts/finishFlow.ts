@@ -13,7 +13,20 @@ import { execFileSync } from "node:child_process"
 import type { PostflightScript, ScriptArgs } from "../executables/types.js"
 import { parsePrNumber } from "../issue.js"
 import { KODY_NAMESPACE, setKodyLabel } from "../lifecycleLabels.js"
-import type { TaskState } from "../state.js"
+import { type TaskState, type TaskTarget, writeTaskState } from "../state.js"
+
+/**
+ * Map a finishFlow `reason` to the terminal task-state phase + status.
+ * The mirror comment header reads these fields; without an explicit
+ * write here it stays frozen at the last child's "reviewing/running"
+ * because no postflight rewrites the comment after the container exits.
+ */
+const TERMINAL_PHASE: Record<string, { phase: TaskState["core"]["phase"]; status: TaskState["core"]["status"] }> = {
+  "review-passed": { phase: "shipped", status: "succeeded" },
+  "fix-applied": { phase: "shipped", status: "succeeded" },
+  "review-failed": { phase: "failed", status: "failed" },
+  aborted: { phase: "failed", status: "failed" },
+}
 
 const API_TIMEOUT_MS = 30_000
 
@@ -72,5 +85,28 @@ export const finishFlow: PostflightScript = async (ctx, profile, _agentResult, a
     process.stderr.write(
       `[kody finishFlow] failed to post final summary on issue #${issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
     )
+  }
+
+  // Flip the state-mirror comment to the terminal phase/status. Without
+  // this, the mirror's "📋 kody task state" header keeps showing the last
+  // child's intermediate state (e.g. `Phase: reviewing, Status: running`)
+  // after the container exits — users seeing the mirror conclude the flow
+  // is still running even though kody:done is set and the finish comment
+  // is posted. Best-effort: a failed write is logged but does not throw,
+  // since the user-visible terminal label/comment are already in place.
+  const terminal = TERMINAL_PHASE[reason]
+  if (terminal && state) {
+    state.core.phase = terminal.phase
+    state.core.status = terminal.status
+    state.core.currentExecutable = null
+    const target = (ctx.data.commentTargetType as TaskTarget | undefined) ?? "issue"
+    const targetNumber = (ctx.data.commentTargetNumber as number | undefined) ?? issueNumber
+    try {
+      writeTaskState(target, targetNumber, state, ctx.cwd)
+    } catch (err) {
+      process.stderr.write(
+        `[kody finishFlow] failed to update state mirror: ${err instanceof Error ? err.message : String(err)}\n`,
+      )
+    }
   }
 }

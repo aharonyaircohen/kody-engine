@@ -197,8 +197,12 @@ describe("finishFlow", () => {
     const c = ctx({ data: { taskState: state } })
     await finishFlow(c, profile(), null, { reason: "fix-applied" })
     expect(state.flow).toBeUndefined()
-    expect(execFileSync).toHaveBeenCalledTimes(1)
-    const args = execFileSync.mock.calls[0]![1] as string[]
+    // finishFlow now also writes the state mirror to flip phase=shipped on
+    // success terminations; the first execFileSync call must still be the
+    // human-readable summary comment, but subsequent calls write the state.
+    const summaryCall = execFileSync.mock.calls.find((c) => (c[1] as string[])[0] === "issue")
+    expect(summaryCall).toBeDefined()
+    const args = summaryCall![1] as string[]
     expect(args.slice(0, 3)).toEqual(["issue", "comment", "42"])
     expect(args[4]).toContain("plan-build-review")
     expect(args[4]).toContain("fix-applied")
