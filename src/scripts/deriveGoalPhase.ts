@@ -17,6 +17,7 @@
 import type { PreflightScript } from "../executables/types.js"
 import {
   extractClosesIssues,
+  fetchDefaultBranch,
   listGoalIssues,
   listOpenPrs,
   pairIssuesWithPrs,
@@ -29,6 +30,20 @@ import type { GoalCtx } from "./goalCtx.js"
 export const deriveGoalPhase: PreflightScript = async (ctx) => {
   const goal = ctx.data.goal as GoalCtx | undefined
   if (!goal) return
+
+  // goal-tick is configless (see entry.ts), so ctx.config.git.defaultBranch
+  // defaults to "main" — wrong for repos defaulting to `dev`, `master`, etc.
+  // Resolve from GitHub instead. Fall back to the configless default on
+  // failure so a transient gh outage doesn't break the tick entirely.
+  const defaultBranchResult = fetchDefaultBranch(ctx.cwd)
+  if (defaultBranchResult.ok && defaultBranchResult.value) {
+    goal.defaultBranch = defaultBranchResult.value
+  } else if (defaultBranchResult.error) {
+    process.stderr.write(
+      `[goal-tick] deriveGoalPhase: fetchDefaultBranch failed (${defaultBranchResult.error}); ` +
+        `falling back to ${goal.defaultBranch}\n`,
+    )
+  }
 
   const issues = listGoalIssues(goal.id, ctx.cwd)
   if (!issues.ok) {
