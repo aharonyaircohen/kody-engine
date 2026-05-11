@@ -47,6 +47,21 @@ export interface ExecutorInput {
    * child "wrote" to skip the gh round-trip.
    */
   __readTaskState?: (target: TaskTarget, number: number, cwd?: string) => TaskState
+  /**
+   * Phase 5 foundation: pre-populated `ctx.data` entries seeded into the
+   * child's context before any preflight runs. Container loops use this
+   * to hand the cached `taskContext` (and individual loader outputs
+   * like `issue`, `conventions`, `priorArt`, `memoryContext`,
+   * `coverageRules`) to children so the children's context-loading
+   * preflights can short-circuit instead of re-querying GitHub +
+   * re-reading the filesystem.
+   *
+   * Entries here merge into `ctx.data` BEFORE preflights run; loaders
+   * check for their respective fields and skip when already populated.
+   * Safe to leave unset for everything — the loaders' fast paths are
+   * additive.
+   */
+  preloadedData?: Record<string, unknown>
 }
 
 export interface ExecutorOutput {
@@ -153,7 +168,11 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     config,
     verbose: input.verbose,
     quiet: input.quiet,
-    data: {},
+    // Phase 5 foundation: seed ctx.data with any preloaded values handed
+    // in by a parent (typically a container loop). Loaders that see
+    // their field already populated take the fast path and skip the
+    // re-fetch. Always-on; preloadedData defaults to {} when unset.
+    data: { ...(input.preloadedData ?? {}) },
     output: { exitCode: 0 },
   }
 

@@ -6,6 +6,9 @@ import type { PreflightScript } from "../executables/types.js"
 import { loadProjectConventions } from "../prompt.js"
 
 export const loadConventions: PreflightScript = async (ctx) => {
+  // Phase 5 fast path: container handed us pre-loaded conventions.
+  if (Array.isArray(ctx.data.conventions)) return
+
   const conventions = loadProjectConventions(ctx.cwd)
   ctx.data.conventions = conventions
   if (conventions.length > 0) {

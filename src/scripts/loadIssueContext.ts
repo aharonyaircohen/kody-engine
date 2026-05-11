@@ -23,6 +23,17 @@ export const loadIssueContext: PreflightScript = async (ctx) => {
     throw new Error("loadIssueContext: ctx.args.issue (positive integer) is required")
   }
 
+  // Phase 5 fast path: if a parent container already loaded this
+  // issue's snapshot and seeded ctx.data, skip the gh round-trip.
+  // The seeded snapshot is trusted as-is — the container fetched it
+  // once for the whole task instead of once per stage.
+  const preloaded = ctx.data.issue as { number?: number } | undefined
+  if (preloaded && typeof preloaded === "object" && preloaded.number === issueNumber) {
+    if (!ctx.data.commentTargetType) ctx.data.commentTargetType = "issue"
+    if (!ctx.data.commentTargetNumber) ctx.data.commentTargetNumber = issueNumber
+    return
+  }
+
   const issue = getIssue(issueNumber, ctx.cwd)
   const cfgCtx = ctx.config.issueContext ?? {}
   const limit = cfgCtx.commentLimit ?? DEFAULT_COMMENT_LIMIT

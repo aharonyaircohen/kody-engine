@@ -34,6 +34,10 @@ interface MemoryPage {
 }
 
 export const loadMemoryContext: PreflightScript = async (ctx) => {
+  // Phase 5 fast path: container already loaded memory pages. Detect by
+  // "key present" so empty-memory ("") is honoured too.
+  if (typeof ctx.data.memoryContext === "string") return
+
   const memoryAbs = path.join(ctx.cwd, MEMORY_DIR_RELATIVE)
   if (!fs.existsSync(memoryAbs)) {
     ctx.data.memoryContext = ""

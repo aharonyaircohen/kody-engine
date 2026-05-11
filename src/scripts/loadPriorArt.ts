@@ -28,6 +28,11 @@ const TOTAL_MAX_BYTES = 30_000
 const TRUNCATED_SUFFIX = "\n\n… (truncated)"
 
 export const loadPriorArt: PreflightScript = async (ctx, _profile, args) => {
+  // Phase 5 fast path: container already loaded prior-art for the whole
+  // task. Detect via "key present" (even when the value is the empty
+  // string, which is the loader's legitimate output when no prior PRs).
+  if (typeof ctx.data.priorArt === "string") return
+
   const artifactName = typeof args?.artifactName === "string" ? args.artifactName : "priorArt"
 
   const state = ctx.data.taskState as TaskState | undefined
