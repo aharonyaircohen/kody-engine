@@ -44,6 +44,16 @@ export function hasUncommittedChanges(cwd?: string): boolean {
 /**
  * Check out an existing PR locally via `gh pr checkout`. Returns the
  * local branch name (gh picks a name matching the PR head ref).
+ *
+ * Discards any uncommitted local changes first. The runner's working tree
+ * is ephemeral and may carry build artifacts written by earlier steps
+ * (e.g. payload's `importMap.js` regenerated during `pnpm install`); these
+ * would otherwise make `gh pr checkout` refuse with "Your local changes
+ * would be overwritten by checkout" and crash the executable.
+ *
+ * Discarding is safe because nothing the engine cares about lives in the
+ * runner's pre-checkout working tree — the PR's branch contents are the
+ * source of truth.
  */
 export function checkoutPrBranch(prNumber: number, cwd?: string): string {
   const env: NodeJS.ProcessEnv = {
@@ -51,6 +61,20 @@ export function checkoutPrBranch(prNumber: number, cwd?: string): string {
     HUSKY: "0",
     SKIP_HOOKS: "1",
     GH_TOKEN: process.env.GH_PAT?.trim() || process.env.GH_TOKEN || "",
+  }
+  // Discard tracked-file modifications and remove untracked files so
+  // gh pr checkout has a clean tree to switch into. Best effort — if
+  // either git command fails (e.g. cwd isn't a git repo yet), let the
+  // gh checkout call surface the real error.
+  try {
+    execFileSync("git", ["reset", "--hard", "HEAD"], { cwd, env, stdio: ["ignore", "pipe", "pipe"], timeout: 30_000 })
+  } catch {
+    /* best effort */
+  }
+  try {
+    execFileSync("git", ["clean", "-fd"], { cwd, env, stdio: ["ignore", "pipe", "pipe"], timeout: 30_000 })
+  } catch {
+    /* best effort */
   }
   execFileSync("gh", ["pr", "checkout", String(prNumber)], {
     cwd,
