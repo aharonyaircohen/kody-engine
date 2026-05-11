@@ -354,8 +354,11 @@ function extractCommentRest(afterTag: string, consumedToken: string | null): str
     const re = new RegExp(`^${consumedToken.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")}\\b`, "i")
     rest = rest.replace(re, "")
   }
-  rest = rest.replace(/^(please|kindly)(?:[\s:,.-]+|$)/i, "")
-  return rest.replace(/^[\s:,.-]+/, "").trim()
+  rest = rest.replace(/^(please|kindly)(?:[\s:,.]+|\s|$)/i, "")
+  // Strip leading whitespace + punctuation BUT NOT hyphens — hyphens are the
+  // flag prefix ("--base dev"). Older regexes included `-` in the class,
+  // which silently destroyed comment-supplied flags like `@kody --base X`.
+  return rest.replace(/^[\s:,.]+/, "").trim()
 }
 
 /**

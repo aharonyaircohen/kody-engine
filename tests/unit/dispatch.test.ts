@@ -183,6 +183,27 @@ describe("dispatch: issue_comment on issue", () => {
     ).toBeNull()
   })
 
+  it("preserves `--flag value` when no subcommand precedes it (stacked-PR base)", () => {
+    // Regression: extractCommentRest's old `^[\s:,.-]+` strip ate the
+    // leading `--` of a flag-first comment, so parseCommentArgs saw
+    // `base dev` instead of `--base dev` and never set args.base.
+    // goal-tick's stacked-PR dispatch posts `@kody --base <branch>` —
+    // dropping --base collapses the stack onto the repo default.
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody --base 3293-stacked-test-1" },
+      issue: { number: 42 },
+    })
+    expect(
+      autoDispatch({
+        config: { defaultExecutable: "classify" } as any,
+      }),
+    ).toEqual({
+      executable: "classify",
+      cliArgs: { issue: 42, base: "3293-stacked-test-1" },
+      target: 42,
+    })
+  })
+
   it("falls back to defaultExecutable for `@kody` alone (no typo to surface)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody" },
