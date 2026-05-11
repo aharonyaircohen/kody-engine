@@ -341,12 +341,14 @@ describe("finalizeGoal", () => {
     vi.mocked(ops.mergePrSquash).mockReset().mockReturnValue({ ok: true })
     vi.mocked(ops.markPrReady).mockReset().mockReturnValue({ ok: true })
     vi.mocked(ops.editPrBase).mockReset().mockReturnValue({ ok: true })
+    vi.mocked(ops.closePr).mockReset().mockReturnValue({ ok: true })
   })
 
-  it("retargets non-root PRs to defaultBranch and merges in dispatch order", async () => {
-    // Stack: PR #888 (base=main, head=11-x) ← PR #999 (base=11-x, head=12-x).
-    // #888 is already at main → no retarget. #999 must retarget BEFORE merge,
-    // otherwise GitHub may close it when the 11-x branch is deleted.
+  it("leaf-only merge: retargets leaf to default, squash-merges leaf, closes intermediates", async () => {
+    // Stack: PR #888 (root, base=main, head=11-x) ← PR #999 (leaf, base=11-x, head=12-x).
+    // Leaf carries the cumulative diff vs main, so we merge it only.
+    // Sequential merge would conflict because squashing the root produces a new
+    // SHA that diverges from the leaf's branch history.
     const root = {
       number: 888,
       url: "u1",
@@ -369,68 +371,50 @@ describe("finalizeGoal", () => {
           id: "g",
           state: "active",
           defaultBranch: "main",
-          openTaskPrs: [leaf, root], // intentionally reversed
+          openTaskPrs: [root, leaf],
           leafPr: leaf,
         } satisfies Partial<GoalCtx>,
       },
     })
     await finalizeGoal(ctx, fakeProfile())
-    // Root: NOT retargeted (already at default).
-    expect(ops.editPrBase).not.toHaveBeenCalledWith(888, "main", "/tmp")
-    // Leaf: retargeted to default before merge.
+    // Leaf retargeted to default before merge.
     expect(ops.editPrBase).toHaveBeenCalledWith(999, "main", "/tmp")
-    // Merges happen in dispatch order.
-    expect(ops.mergePrSquash).toHaveBeenNthCalledWith(1, 888, "/tmp")
-    expect(ops.mergePrSquash).toHaveBeenNthCalledWith(2, 999, "/tmp")
+    // Only the leaf is merged.
+    expect(ops.mergePrSquash).toHaveBeenCalledTimes(1)
+    expect(ops.mergePrSquash).toHaveBeenCalledWith(999, "/tmp")
+    // Root (intermediate) is closed with a courtesy comment.
+    expect(ops.closePr).toHaveBeenCalledTimes(1)
+    expect(ops.closePr).toHaveBeenCalledWith(888, expect.any(String), "/tmp")
     expect((ctx.data.goal as GoalCtx).state).toBe("done")
   })
 
-  it("squash-merges each open task PR in dispatch order, then sets state=done", async () => {
-    // Stack: PR #888 (head=11-x, base=main) ← PR #999 (head=12-x, base=11-x).
-    // Dispatch order = ascending head-ref issue number, so #888 merges first.
-    const root = {
-      number: 888,
-      url: "u1",
-      isDraft: false,
-      headRefName: "11-x",
-      baseRefName: "main",
-      body: "",
-    }
+  it("skips retarget when leaf is already at defaultBranch (single-task goal)", async () => {
     const leaf = {
-      number: 999,
-      url: "u2",
-      isDraft: false,
-      headRefName: "12-x",
-      baseRefName: "11-x",
-      body: "",
-    }
-    const ctx = fakeCtx({
-      data: {
-        goal: {
-          id: "g",
-          state: "active",
-          defaultBranch: "main",
-          openTaskPrs: [leaf, root], // intentionally reversed
-          leafPr: leaf,
-        } satisfies Partial<GoalCtx>,
-      },
-    })
-    await finalizeGoal(ctx, fakeProfile())
-    expect(ops.mergePrSquash).toHaveBeenNthCalledWith(1, 888, "/tmp")
-    expect(ops.mergePrSquash).toHaveBeenNthCalledWith(2, 999, "/tmp")
-    expect(ops.markPrReady).not.toHaveBeenCalled()
-    expect((ctx.data.goal as GoalCtx).state).toBe("done")
-  })
-
-  it("promotes draft PRs to ready before merging each", async () => {
-    const root = {
-      number: 100,
+      number: 200,
       url: "u",
       isDraft: false,
       headRefName: "11-x",
       baseRefName: "main",
       body: "",
     }
+    const ctx = fakeCtx({
+      data: {
+        goal: {
+          id: "g",
+          state: "active",
+          defaultBranch: "main",
+          openTaskPrs: [leaf],
+          leafPr: leaf,
+        } satisfies Partial<GoalCtx>,
+      },
+    })
+    await finalizeGoal(ctx, fakeProfile())
+    expect(ops.editPrBase).not.toHaveBeenCalled()
+    expect(ops.mergePrSquash).toHaveBeenCalledWith(200, "/tmp")
+    expect(ops.closePr).not.toHaveBeenCalled()
+  })
+
+  it("promotes draft leaf to ready before merging", async () => {
     const draftLeaf = {
       number: 200,
       url: "u",
@@ -445,7 +429,7 @@ describe("finalizeGoal", () => {
           id: "g",
           state: "active",
           defaultBranch: "main",
-          openTaskPrs: [root, draftLeaf],
+          openTaskPrs: [draftLeaf],
           leafPr: draftLeaf,
         } satisfies Partial<GoalCtx>,
       },
@@ -455,7 +439,7 @@ describe("finalizeGoal", () => {
     expect(ops.mergePrSquash).toHaveBeenCalledWith(200, "/tmp")
   })
 
-  it("sets state=done even when there are no open task PRs (issues closed manually)", async () => {
+  it("sets state=done even when there is no leaf PR (issues closed manually)", async () => {
     const ctx = fakeCtx({
       data: {
         goal: { id: "g", state: "active", defaultBranch: "main", openTaskPrs: [] } satisfies Partial<GoalCtx>,
