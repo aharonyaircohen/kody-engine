@@ -15,6 +15,7 @@
     "model": "inherit",
     "permissionMode": "acceptEdits",
     "maxTurns": null,
+    "maxTurnTimeoutSec": 900,
     "systemPromptAppend": null,
     "tools": [
       "Read",

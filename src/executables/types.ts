@@ -153,6 +153,14 @@ export interface ClaudeCodeSpec {
   maxTurns: number | null
   /** Extended-thinking token budget. null = SDK default. */
   maxThinkingTokens: number | null
+  /**
+   * Watchdog: abort the agent if no SDK message arrives within this many
+   * seconds. Per-profile override for the global 600s default. Useful on
+   * `run`/`fix` stages where a long test suite can leave the SDK silent
+   * longer than the default. Set to 0 or a negative number to disable
+   * the watchdog entirely. null/undefined → use the global default.
+   */
+  maxTurnTimeoutSec?: number | null
   /** Text appended on top of Claude Code's baseline system prompt. */
   systemPromptAppend: string | null
   /** SDK built-in tools this executable is allowed to use (capability pack). */

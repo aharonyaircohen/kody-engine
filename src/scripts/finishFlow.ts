@@ -24,12 +24,18 @@ const STATUS_ICON: Record<string, string> = {
   aborted: "⚠️",
 }
 
-export const finishFlow: PostflightScript = async (ctx, _profile, _agentResult, args?: ScriptArgs) => {
+export const finishFlow: PostflightScript = async (ctx, profile, _agentResult, args?: ScriptArgs) => {
   const reason = (args?.reason as string | undefined) ?? "completed"
   const issueNumber = ctx.args.issue as number | undefined
   const state = ctx.data.taskState as TaskState | undefined
 
-  const flowName = state?.flow?.name ?? "(unknown flow)"
+  // Container profiles (bug/feature/chore) drive the flow in-process via
+  // runContainerLoop and never call the startFlow postflight that seeded
+  // state.flow.name historically. Fall back to the orchestrator's own
+  // profile name — which IS the flow name (bug → "bug" flow, feature →
+  // "feature" flow). Previously rendered the placeholder "(unknown flow)"
+  // on every container-driven finish.
+  const flowName = state?.flow?.name || profile.name || "(unknown flow)"
   if (state) state.flow = undefined
 
   if (!issueNumber) return

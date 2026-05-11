@@ -107,7 +107,15 @@ export interface AgentOptions {
 }
 
 const DEFAULT_ALLOWED_TOOLS = ["Bash", "Edit", "Read", "Write", "Glob", "Grep"]
-const DEFAULT_TURN_TIMEOUT_MS = 300_000
+// Default watchdog: 10 min between SDK messages. Tuned for real `run` /
+// `fix` stages on production-sized repos where the agent may go silent
+// while a multi-minute test suite executes inside Bash. Stages with
+// genuinely longer silent windows (full e2e runs, big migrations) can
+// override per-profile via claudeCode.maxTurnTimeoutSec, or globally via
+// KODY_TURN_TIMEOUT_SEC. An earlier 300s default fired during real
+// production runs (#1562) where the watchdog itself became the failure
+// cause rather than a stall detector.
+const DEFAULT_TURN_TIMEOUT_MS = 600_000
 
 /**
  * Resolve the inter-message watchdog timeout. Precedence:
