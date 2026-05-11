@@ -256,6 +256,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
         durationMs: agentResult.durationMs,
         outcome: agentResult.outcome === "completed" ? "ok" : "failed",
         meta: {
+          kind: agentResult.outcomeKind,
           ...(agentResult.tokens ? { tokens: agentResult.tokens } : {}),
           ...(typeof agentResult.messageCount === "number" ? { messageCount: agentResult.messageCount } : {}),
           ...(agentResult.error ? { error: agentResult.error } : {}),

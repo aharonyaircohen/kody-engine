@@ -24,6 +24,7 @@ export const parseAgentResult: PostflightScript = async (ctx, profile, agentResu
   ctx.data.agentFailureReason = parsed.failureReason
   ctx.data.agentMarkerMissing = parsed.markerMissing
   ctx.data.agentOutcome = agentResult.outcome
+  ctx.data.agentOutcomeKind = agentResult.outcomeKind
   ctx.data.agentError = agentResult.error
 
   const modeSeg = ((ctx.args.mode as string | undefined) ?? profile.name).replace(/-/g, "_").toUpperCase()

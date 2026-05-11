@@ -11,8 +11,30 @@ export interface AgentTokenUsage {
   cacheCreate: number
 }
 
+/**
+ * Structured outcome kind for an agent run. Lets the container loop and
+ * postflight scripts route on the reason for failure instead of treating
+ * every non-success as the same. The legacy two-way `outcome` string is
+ * kept on AgentResult for backward compatibility with existing scripts
+ * (parseAgentResult, postReviewResult, openQaIssue, createQaGoal).
+ */
+export type AgentOutcomeKind =
+  | "ok"                // result subtype === "success"
+  | "stalled"           // per-turn watchdog fired
+  | "out_of_turns"      // SDK reported max-turns hit
+  | "rate_limit"        // SDK reported rate-limit / 429
+  | "tool_error"        // SDK reported a tool execution failure
+  | "model_error"       // exception thrown inside the SDK call
+  | "generic_failed"    // any other non-success result subtype
+
 export interface AgentResult {
   outcome: "completed" | "failed"
+  /**
+   * Structured kind — preferred for new routing decisions. Optional so
+   * existing test fixtures that only mock the legacy `outcome` string
+   * still compile; runAgent itself always populates it.
+   */
+  outcomeKind?: AgentOutcomeKind
   finalText: string
   error?: string
   ndjsonPath: string
@@ -22,6 +44,18 @@ export interface AgentResult {
   tokens?: AgentTokenUsage
   /** Number of SDK messages observed (proxy for turn count). */
   messageCount?: number
+}
+
+/** Map an SDK result subtype string into a structured outcome kind. */
+function classifySubtype(subtype: string | undefined): AgentOutcomeKind {
+  if (!subtype) return "generic_failed"
+  const lower = subtype.toLowerCase()
+  if (lower === "success") return "ok"
+  if (lower.includes("max_turns") || lower.includes("max-turns")) return "out_of_turns"
+  if (lower.includes("rate_limit") || lower.includes("rate-limit")) return "rate_limit"
+  if (lower.includes("tool")) return "tool_error"
+  if (lower.includes("error")) return "model_error"
+  return "generic_failed"
 }
 
 export interface AgentOptions {
@@ -124,6 +158,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   // gives the parser the full terminal stream.
   const resultTexts: string[] = []
   let outcome: "completed" | "failed" = "failed"
+  let outcomeKind: AgentOutcomeKind = "generic_failed"
   let errorMessage: string | undefined
   const tokens: AgentTokenUsage = { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 }
   let messageCount = 0
@@ -199,6 +234,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       }
       if (timedOut) {
         outcome = "failed"
+        outcomeKind = "stalled"
         errorMessage = `agent stalled: no SDK message in ${Math.round(turnTimeoutMs / 1000)}s`
         // Best-effort iterator cleanup so the SDK can release tool processes.
         if (typeof iterator.return === "function") {
@@ -242,16 +278,19 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       if (m.type === "result") {
         if (m.subtype === "success") {
           outcome = "completed"
+          outcomeKind = "ok"
           const text = (typeof m.result === "string" ? m.result : "").trim()
           if (text) resultTexts.push(text)
         } else {
           outcome = "failed"
+          outcomeKind = classifySubtype(m.subtype)
           errorMessage = `result subtype: ${m.subtype ?? "unknown"}`
         }
       }
     }
   } catch (e) {
     outcome = "failed"
+    outcomeKind = "model_error"
     errorMessage = e instanceof Error ? e.message : String(e)
   } finally {
     try {
@@ -271,6 +310,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const finalText = resultTexts.join("\n\n---\n\n")
   return {
     outcome,
+    outcomeKind,
     finalText,
     error: errorMessage,
     ndjsonPath,
