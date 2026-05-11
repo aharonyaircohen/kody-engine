@@ -177,6 +177,21 @@ export interface ClaudeCodeSpec {
    * not support `excludeDynamicSections` (forward-compatible).
    */
   cacheable?: boolean
+  /**
+   * Phase 3 opt-in: expose an in-process `verify` MCP tool to the agent
+   * so it can iterate on typecheck/lint/test failures inside one SDK
+   * session instead of needing a `fix-ci` round trip. The tool is
+   * bounded by `verifyAttempts` (default 4). The postflight `verify`
+   * script still runs after the agent finishes as the final ratifier.
+   * Default false.
+   */
+  enableVerifyTool?: boolean
+  /**
+   * Hard cap on verify-tool invocations per agent session when
+   * `enableVerifyTool` is true. Default 4 (≈3 fix iterations after the
+   * first attempt). Set to 0 or omit to use the default.
+   */
+  verifyAttempts?: number | null
   /** SDK built-in tools this executable is allowed to use (capability pack). */
   tools: string[]
   /**

@@ -186,6 +186,10 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
           : undefined,
       systemPromptAppend: profile.claudeCode.systemPromptAppend,
       cacheable: profile.claudeCode.cacheable,
+      enableVerifyTool: profile.claudeCode.enableVerifyTool,
+      verifyToolMaxAttempts: profile.claudeCode.verifyAttempts ?? null,
+      verifyConfig: profile.claudeCode.enableVerifyTool ? config : undefined,
+      executableName: profileName,
       settingSources: (profile.claudeCode as { settingSources?: Array<"user" | "project" | "local"> }).settingSources,
     })
   }

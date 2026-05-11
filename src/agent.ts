@@ -107,6 +107,19 @@ export interface AgentOptions {
    */
   cacheable?: boolean
   /**
+   * Phase 3 opt-in: build an in-process MCP server exposing a `verify`
+   * tool the agent can call to run typecheck/lint/tests and iterate
+   * inside one session. Requires `verifyConfig` (the project config)
+   * to be set. Default false.
+   */
+  enableVerifyTool?: boolean
+  /** Max number of verify-tool calls per session. Falls back to default. */
+  verifyToolMaxAttempts?: number | null
+  /** Config passed to the verify tool's underlying `verifyAllWithRetry` call. */
+  verifyConfig?: unknown
+  /** Executable name (for event-emission attribution from the verify tool). */
+  executableName?: string
+  /**
    * Filesystem sources the SDK should auto-load. `"project"` loads
    * `<cwd>/.claude/` (skills, commands, settings.json) and CLAUDE.md;
    * `"local"` loads `<cwd>/.claude/settings.local.json`; `"user"` loads
@@ -193,15 +206,32 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       permissionMode: opts.permissionModeOverride ?? "acceptEdits",
       env,
     }
+    const mcpEntries: Array<[string, Record<string, unknown>]> = []
     if (opts.mcpServers && opts.mcpServers.length > 0) {
-      queryOptions.mcpServers = Object.fromEntries(
-        opts.mcpServers.map((s) => {
-          const cfg: Record<string, unknown> = { command: s.command }
-          if (s.args) cfg.args = s.args
-          if (s.env) cfg.env = s.env
-          return [s.name, cfg]
-        }),
-      )
+      for (const s of opts.mcpServers) {
+        const cfg: Record<string, unknown> = { command: s.command }
+        if (s.args) cfg.args = s.args
+        if (s.env) cfg.env = s.env
+        mcpEntries.push([s.name, cfg])
+      }
+    }
+    if (opts.enableVerifyTool && opts.verifyConfig) {
+      // Lazy import — keeps the SDK + zod off the cold path when the
+      // tool is not enabled (most short-running flows like classify).
+      const { buildVerifyMcpServer } = await import("./verifyMcp.js")
+      const verifyServer = buildVerifyMcpServer({
+        config: opts.verifyConfig as Parameters<typeof buildVerifyMcpServer>[0]["config"],
+        cwd: opts.cwd,
+        executable: opts.executableName ?? "agent",
+        maxAttempts:
+          typeof opts.verifyToolMaxAttempts === "number" && opts.verifyToolMaxAttempts > 0
+            ? opts.verifyToolMaxAttempts
+            : undefined,
+      })
+      mcpEntries.push(["kody-verify", verifyServer as unknown as Record<string, unknown>])
+    }
+    if (mcpEntries.length > 0) {
+      queryOptions.mcpServers = Object.fromEntries(mcpEntries)
     }
     if (opts.pluginPaths && opts.pluginPaths.length > 0) {
       queryOptions.plugins = opts.pluginPaths.map((p) => ({ type: "local", path: p }))

@@ -25,13 +25,16 @@
     "maxTurnTimeoutSec": 1200,
     "systemPromptAppend": null,
     "cacheable": true,
+    "enableVerifyTool": true,
+    "verifyAttempts": 4,
     "tools": [
       "Read",
       "Write",
       "Edit",
       "Bash",
       "Grep",
-      "Glob"
+      "Glob",
+      "mcp__kody-verify"
     ],
     "hooks": ["block-git"],
     "skills": [],

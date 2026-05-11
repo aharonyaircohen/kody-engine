@@ -32,7 +32,7 @@ If a prior-art block is present above, scan it before editing — those are earl
    - Read the **full** contents of every file you intend to change.
    - Read the test file for each of those files, if one exists.
    - Skipping the floor on the assumption "feedback says exactly what to change" is a hard failure when the change touches code with non-obvious invariants.
-4. **Verify** — run each quality command with Bash. Fix the root cause of any failure you introduced by this round of edits.
+4. **Verify** — before declaring DONE, call the `verify` tool (mcp__kody-verify__verify). It runs the project's typecheck/lint/test gates and returns `{ ok, failures, attemptsRemaining }`. If `ok: true`, proceed to DONE. If `ok: false`, read the truncated `failures` list, fix what you introduced this round (not pre-existing breakages unrelated to the feedback), and call `verify` again. Bounded by 4 attempts; after that the tool returns `locked: true` and you must wrap up. The postflight verifier still runs after this session as the final ratifier.
 5. Your FINAL message MUST use this exact format (or a single `FAILED: <reason>` line on failure). The `FEEDBACK_ACTIONS:` block is REQUIRED — omitting it or leaving it empty makes your DONE invalid.
 
    ```
