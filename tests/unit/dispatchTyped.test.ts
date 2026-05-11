@@ -168,4 +168,32 @@ describe("autoDispatchTyped: typo'd command does NOT fall through to default exe
     expect(out.kind).toBe("unrecognized")
     if (out.kind === "unrecognized") expect(out.token).toBe("panl")
   })
+
+  it("returns unrecognized for typo'd commands on a PR (isPr=true)", () => {
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody fxi", user: { login: "alice", type: "User" } },
+      issue: { number: 99, pull_request: { url: "https://x" } },
+    })
+    // Even with the hardcoded "fix" PR fallback, a non-null firstToken
+    // that doesn't resolve should bail (not silently route to fix). The
+    // user typed something specific; we tell them we don't know it.
+    const out = autoDispatchTyped()
+    expect(out.kind).toBe("unrecognized")
+    if (out.kind === "unrecognized") {
+      expect(out.token).toBe("fxi")
+      expect(out.isPr).toBe(true)
+    }
+  })
+
+  it("falls through to defaultPrExecutable for `@kody` alone on a PR", () => {
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody", user: { login: "alice", type: "User" } },
+      issue: { number: 99, pull_request: { url: "https://x" } },
+    })
+    const out = autoDispatchTyped()
+    expect(out.kind).toBe("route")
+    if (out.kind === "route") expect(out.executable).toBe("fix")
+  })
 })
