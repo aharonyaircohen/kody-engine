@@ -15,13 +15,14 @@
       "flag": "--base",
       "type": "string",
       "required": false,
-      "describe": "Optional base branch override. Must match /^goal-[a-z0-9-]+$/; used by goal-tick so the feature branch forks from the shared goal branch and the PR targets it."
+      "describe": "Optional base branch override. Used by goal-tick's stacked-PR dispatch so each task PR forks from the previous task's head ref. Accepts any safe git ref (see resolveBaseOverride in runFlow.ts)."
     }
   ],
   "claudeCode": {
     "model": "inherit",
     "permissionMode": "acceptEdits",
     "maxTurns": null,
+    "maxTurnTimeoutSec": 1200,
     "systemPromptAppend": null,
     "tools": [
       "Read",

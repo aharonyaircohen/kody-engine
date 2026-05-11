@@ -180,6 +180,10 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       pluginPaths: pluginPaths.length > 0 ? pluginPaths : undefined,
       maxTurns: profile.claudeCode.maxTurns,
       maxThinkingTokens: profile.claudeCode.maxThinkingTokens,
+      maxTurnTimeoutMs:
+        typeof profile.claudeCode.maxTurnTimeoutSec === "number"
+          ? Math.floor(profile.claudeCode.maxTurnTimeoutSec * 1000)
+          : undefined,
       systemPromptAppend: profile.claudeCode.systemPromptAppend,
       settingSources: (profile.claudeCode as { settingSources?: Array<"user" | "project" | "local"> }).settingSources,
     })
@@ -366,6 +370,22 @@ function clearStampedLifecycleLabels(profile: Profile, ctx: Context): void {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Read the input specs of a child executable's profile, returning null if the
+ * profile can't be loaded. Used by the container loop to know which
+ * parent-supplied args (e.g. `--base` from a goal-tick dispatch comment) to
+ * forward to the child without crashing the parent on profile-load errors.
+ */
+function getProfileInputsForChild(profileName: string, _cwd: string): InputSpec[] | null {
+  try {
+    const profilePath = resolveProfilePath(profileName)
+    if (!fs.existsSync(profilePath)) return null
+    return loadProfile(profilePath).inputs
+  } catch {
+    return null
+  }
+}
 
 function resolveProfilePath(profileName: string): string {
   // Delegate to the registry, which knows about both the consumer-repo
@@ -756,6 +776,23 @@ async function runContainerLoop(profile: Profile, ctx: Context, input: ExecutorI
           return
         }
         cliArgs = { issue: issueNumber }
+      }
+
+      // Forward any parent-supplied args the child profile declares but
+      // that container's target-derivation doesn't already inject. Without
+      // this, comment-supplied flags like `@kody --base <branch>` are
+      // silently dropped between the container (e.g. chore/feature/fix/bug)
+      // and the run primitive — the stacked-PR flow depends on `--base`
+      // making it from goal-tick's dispatch comment through to runFlow.
+      const childInputs = getProfileInputsForChild(child.exec, input.cwd)
+      if (childInputs) {
+        for (const spec of childInputs) {
+          if (spec.name === "issue" || spec.name === "pr") continue
+          const parentValue = ctx.args[spec.name]
+          if (parentValue !== undefined && cliArgs[spec.name] === undefined) {
+            cliArgs[spec.name] = parentValue
+          }
+        }
       }
 
       let childOut: ExecutorOutput
