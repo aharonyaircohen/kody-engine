@@ -53,6 +53,13 @@ export interface AgentOptions {
   maxTurns?: number | null
   /** Extended-thinking token budget. null/undefined = SDK default. */
   maxThinkingTokens?: number | null
+  /**
+   * Watchdog: abort the agent if no SDK message arrives within this window.
+   * Catches stalls (hung tool calls, network deadlock) that maxTurns can't
+   * see. Default: 300_000 (5 min). Override with `KODY_TURN_TIMEOUT_SEC`.
+   * Pass 0 or a negative number to disable the watchdog.
+   */
+  maxTurnTimeoutMs?: number | null
   /** Text appended to Claude Code's baseline system prompt. */
   systemPromptAppend?: string | null
   /**
@@ -66,6 +73,23 @@ export interface AgentOptions {
 }
 
 const DEFAULT_ALLOWED_TOOLS = ["Bash", "Edit", "Read", "Write", "Glob", "Grep"]
+const DEFAULT_TURN_TIMEOUT_MS = 300_000
+
+/**
+ * Resolve the inter-message watchdog timeout. Precedence:
+ *   1. opts.maxTurnTimeoutMs (per-call override; 0 / negative disables)
+ *   2. KODY_TURN_TIMEOUT_SEC env var
+ *   3. 300_000 ms (5 min) default
+ */
+function resolveTurnTimeoutMs(opts: AgentOptions): number {
+  if (opts.maxTurnTimeoutMs !== undefined && opts.maxTurnTimeoutMs !== null) {
+    return opts.maxTurnTimeoutMs > 0 ? opts.maxTurnTimeoutMs : 0
+  }
+  const envSec = Number(process.env.KODY_TURN_TIMEOUT_SEC)
+  if (Number.isFinite(envSec) && envSec > 0) return Math.floor(envSec * 1000)
+  if (Number.isFinite(envSec) && envSec <= 0) return 0
+  return DEFAULT_TURN_TIMEOUT_MS
+}
 
 export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const ndjsonDir = opts.ndjsonDir ?? path.join(opts.cwd, ".kody")
@@ -104,6 +128,9 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const tokens: AgentTokenUsage = { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 }
   let messageCount = 0
   const startedAt = Date.now()
+  const turnTimeoutMs = resolveTurnTimeoutMs(opts)
+  let ndjsonWriteFailed = false
+  let ndjsonWriteError: string | undefined
 
   try {
     const queryOptions: Record<string, unknown> = {
@@ -142,12 +169,55 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       options: queryOptions as any,
     })
 
-    for await (const msg of result) {
+    // Manual iterator loop so we can race each `next()` against a watchdog
+    // timer. A `for await` hides the underlying promise and offers no way
+    // to bail out when the SDK stalls mid-turn (hung tool call, network
+    // deadlock). Racing makes a hang surface as a structured failure
+    // (outcome=failed, error=stalled) within `turnTimeoutMs` instead of
+    // wedging the executor until the outer shell timeout fires.
+    const iterator =
+      typeof (result as { [Symbol.asyncIterator]?: () => AsyncIterator<unknown> })[Symbol.asyncIterator] === "function"
+        ? (result as unknown as AsyncIterable<unknown>)[Symbol.asyncIterator]()
+        : (result as unknown as AsyncIterator<unknown>)
+
+    while (true) {
+      const nextPromise = iterator.next()
+      let timedOut = false
+      let timer: NodeJS.Timeout | undefined
+      let next: IteratorResult<unknown>
+      if (turnTimeoutMs > 0) {
+        const timeoutPromise = new Promise<IteratorResult<unknown>>((resolve) => {
+          timer = setTimeout(() => {
+            timedOut = true
+            resolve({ done: true, value: undefined })
+          }, turnTimeoutMs)
+        })
+        next = await Promise.race([nextPromise, timeoutPromise])
+        if (timer) clearTimeout(timer)
+      } else {
+        next = await nextPromise
+      }
+      if (timedOut) {
+        outcome = "failed"
+        errorMessage = `agent stalled: no SDK message in ${Math.round(turnTimeoutMs / 1000)}s`
+        // Best-effort iterator cleanup so the SDK can release tool processes.
+        if (typeof iterator.return === "function") {
+          try {
+            await iterator.return(undefined)
+          } catch {
+            /* ignore — we already know we're aborting */
+          }
+        }
+        break
+      }
+      if (next.done) break
+      const msg = next.value
       messageCount++
       try {
         fullLog.write(`${JSON.stringify(msg)}\n`)
-      } catch {
-        /* best effort */
+      } catch (e) {
+        ndjsonWriteFailed = true
+        ndjsonWriteError = e instanceof Error ? e.message : String(e)
       }
 
       const line = renderEvent(msg as SdkMessageLike, { verbose: opts.verbose, quiet: opts.quiet })
@@ -191,6 +261,13 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     }
   }
 
+  if (ndjsonWriteFailed) {
+    // Phase 0 made the executor record agent durations + tokens via events.
+    // If the NDJSON message log went silent mid-run the post-mortem is
+    // incomplete — surface that to stderr so the operator knows a "successful"
+    // log file may be truncated. Previously this was swallowed.
+    process.stderr.write(`[kody agent] NDJSON write failed (post-mortem may be incomplete): ${ndjsonWriteError ?? "unknown error"}\n`)
+  }
   const finalText = resultTexts.join("\n\n---\n\n")
   return {
     outcome,

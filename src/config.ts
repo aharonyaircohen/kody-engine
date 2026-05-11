@@ -22,6 +22,25 @@ export interface KodyConfig {
   }
   agent: {
     model: string
+    /**
+     * Per-executable model override. Lets consumers route specific stages to
+     * cheaper or stronger models without forking the profile:
+     *
+     *   "agent": {
+     *     "model": "claude/claude-sonnet-4-6",
+     *     "perExecutable": {
+     *       "classify":      "claude/claude-haiku-4-5-20251001",
+     *       "research":      "claude/claude-haiku-4-5-20251001",
+     *       "plan":          "claude/claude-opus-4-7",
+     *       "goal-tick":     "claude/claude-haiku-4-5-20251001"
+     *     }
+     *   }
+     *
+     * Resolution order in the executor: perExecutable[name] → profile.model
+     * (when non-"inherit") → agent.model. Missing entries fall through —
+     * existing configs without this key see no behaviour change.
+     */
+    perExecutable?: Record<string, string>
   }
   issueContext?: {
     commentLimit?: number

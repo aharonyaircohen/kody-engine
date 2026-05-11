@@ -13,6 +13,21 @@ export async function checkLitellmHealth(url: string): Promise<boolean> {
   }
 }
 
+const DEFAULT_LITELLM_STARTUP_TIMEOUT_SEC = 60
+const LITELLM_HEALTH_POLL_INTERVAL_MS = 2000
+
+/**
+ * Resolve the LiteLLM startup deadline. Precedence:
+ *   1. KODY_LITELLM_TIMEOUT_SEC env var
+ *   2. 60s default
+ * Returns the total time (ms) we'll wait for `/health` to return ok.
+ */
+function resolveLitellmTimeoutMs(): number {
+  const envSec = Number(process.env.KODY_LITELLM_TIMEOUT_SEC)
+  if (Number.isFinite(envSec) && envSec > 0) return Math.floor(envSec * 1000)
+  return DEFAULT_LITELLM_STARTUP_TIMEOUT_SEC * 1000
+}
+
 export function generateLitellmConfigYaml(model: ProviderModel): string {
   const apiKeyVar = providerApiKeyEnvVar(model.provider)
   return [
@@ -77,8 +92,10 @@ export async function startLitellmIfNeeded(
   })
   fs.closeSync(outFd)
 
-  for (let i = 0; i < 30; i++) {
-    await new Promise((r) => setTimeout(r, 2000))
+  const timeoutMs = resolveLitellmTimeoutMs()
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, LITELLM_HEALTH_POLL_INTERVAL_MS))
     if (await checkLitellmHealth(url)) {
       return {
         url,
@@ -104,7 +121,8 @@ export async function startLitellmIfNeeded(
   } catch {
     /* ignore */
   }
-  throw new Error(`LiteLLM proxy failed to start within 60s. Log tail:\n${logTail}`)
+  const seconds = Math.round(timeoutMs / 1000)
+  throw new Error(`LiteLLM proxy failed to start within ${seconds}s (KODY_LITELLM_TIMEOUT_SEC overrides). Log tail:\n${logTail}`)
 }
 
 function readDotenvApiKeys(projectDir: string): Record<string, string> {

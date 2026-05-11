@@ -463,8 +463,15 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
   }
 
   const config = loadConfig(cwd)
-  let worstExit = 0
-  for (const match of matches) {
+  // Parallel watch fanout — typical wake fires 2–3 independent watches
+  // (job-scheduler, goal-scheduler, watch-stale-prs) that operate on
+  // disjoint targets and don't share working-tree state. Running them
+  // sequentially makes the second one wait through MCP boot + agent
+  // turns of the first for no reason. Aggregate via allSettled so one
+  // crash doesn't strand the rest. Set `KODY_SERIAL_WATCHES=1` to
+  // restore the legacy behaviour while the new mode bakes in.
+  const serial = process.env.KODY_SERIAL_WATCHES === "1"
+  const runWatch = async (match: DispatchResult): Promise<number> => {
     process.stdout.write(`\n→ kody: running watch \`${match.executable}\`\n`)
     try {
       const result = await runExecutable(match.executable, {
@@ -478,12 +485,27 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
         process.stderr.write(
           `[kody] watch \`${match.executable}\` exited ${result.exitCode}: ${result.reason ?? "(no reason)"}\n`,
         )
-        if (result.exitCode > worstExit) worstExit = result.exitCode
+        return result.exitCode
       }
+      return 0
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       process.stderr.write(`[kody] watch \`${match.executable}\` crashed: ${msg}\n`)
-      worstExit = Math.max(worstExit, 99)
+      return 99
+    }
+  }
+
+  let worstExit = 0
+  if (serial) {
+    for (const match of matches) {
+      const code = await runWatch(match)
+      if (code > worstExit) worstExit = code
+    }
+  } else {
+    const settled = await Promise.allSettled(matches.map((m) => runWatch(m)))
+    for (const r of settled) {
+      const code = r.status === "fulfilled" ? r.value : 99
+      if (code > worstExit) worstExit = code
     }
   }
   return worstExit

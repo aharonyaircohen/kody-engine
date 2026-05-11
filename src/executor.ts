@@ -119,8 +119,16 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     }
   }
 
-  // Resolve model (profile "inherit" → config.agent.model).
-  const modelSpec = profile.claudeCode.model === "inherit" ? config.agent.model : profile.claudeCode.model
+  // Resolve model. Precedence:
+  //   1. config.agent.perExecutable[profileName] (per-stage override)
+  //   2. profile.claudeCode.model (when not "inherit")
+  //   3. config.agent.model (default for everything else)
+  const perExecutableModel = config.agent.perExecutable?.[profileName]
+  const modelSpec = perExecutableModel
+    ? perExecutableModel
+    : profile.claudeCode.model === "inherit"
+      ? config.agent.model
+      : profile.claudeCode.model
   let model: ReturnType<typeof parseProviderModel>
   try {
     model = parseProviderModel(modelSpec)

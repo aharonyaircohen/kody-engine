@@ -135,6 +135,14 @@
           "description": "Single 'provider/model' string used by kody (single-session pipeline). Use 'claude/...' or 'anthropic/...' for direct Anthropic API; anything else routes through LiteLLM proxy.",
           "examples": ["claude/claude-sonnet-4-6", "minimax/MiniMax-M2.7-highspeed"]
         },
+        "perExecutable": {
+          "type": "object",
+          "description": "Per-executable model override. Wins over agent.model for the matching stage. Example: {\"classify\": \"claude/claude-haiku-4-5-20251001\", \"plan\": \"claude/claude-opus-4-7\"}.",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[^/]+/.+$"
+          }
+        },
         "modelMap": {
           "type": "object",
           "description": "Maps model tiers to 'provider/model' strings. Use 'claude/...' or 'anthropic/...' for direct Anthropic API; anything else routes through LiteLLM proxy.",

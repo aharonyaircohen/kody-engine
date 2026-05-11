@@ -20,34 +20,16 @@
       "Read",
       "Grep",
       "Glob",
-      "Bash",
-      "mcp__playwright"
+      "Bash"
     ],
     "hooks": ["block-write"],
     "skills": [],
     "commands": [],
     "subagents": [],
     "plugins": [],
-    "mcpServers": [
-      {
-        "name": "playwright",
-        "command": "npx",
-        "args": ["-y", "--package=@playwright/mcp@latest", "--", "playwright-mcp"]
-      }
-    ]
+    "mcpServers": []
   },
-  "cliTools": [
-    {
-      "name": "playwright",
-      "install": {
-        "required": false,
-        "checkCommand": "ls \"$HOME/.cache/ms-playwright\" 2>/dev/null | grep -q '^chromium'",
-        "installCommand": "npx --yes playwright install --with-deps chromium"
-      },
-      "verify": "ls \"$HOME/.cache/ms-playwright\" 2>/dev/null | grep -q '^chromium'",
-      "usage": ""
-    }
-  ],
+  "cliTools": [],
   "scripts": {
     "preflight": [
       {
