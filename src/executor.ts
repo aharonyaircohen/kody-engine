@@ -797,6 +797,16 @@ async function runContainerLoop(profile: Profile, ctx: Context, input: ExecutorI
 
       let childOut: ExecutorOutput
       const childStartedAt = Date.now()
+      // Mark the child as running under a container parent so postflights
+      // that gate user-facing messages (postIssueComment, finishFlow) can
+      // distinguish "this is a final terminal state" from "an intermediate
+      // child result that the container will route past". The parent name
+      // gives postflights enough context to format informational messages
+      // without pretending to own the flow's terminal state. Cleared in
+      // finally so a child crash doesn't leak the marker across iterations
+      // or beyond the loop.
+      const priorParent = process.env.KODY_CONTAINER_PARENT
+      process.env.KODY_CONTAINER_PARENT = profile.name
       try {
         childOut = await runChild(child.exec, {
           cliArgs,
@@ -828,6 +838,9 @@ async function runContainerLoop(profile: Profile, ctx: Context, input: ExecutorI
         ctx.output.exitCode = 1
         ctx.output.reason = `child "${child.exec}" crashed: ${msg}`
         return
+      } finally {
+        if (priorParent === undefined) delete process.env.KODY_CONTAINER_PARENT
+        else process.env.KODY_CONTAINER_PARENT = priorParent
       }
 
       // Reload the freshly-written state to discover the action this child

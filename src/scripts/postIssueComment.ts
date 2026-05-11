@@ -19,7 +19,7 @@ const FAILED_LABEL_SPEC = {
   description: "kody: flow failed",
 }
 
-export const postIssueComment: PostflightScript = async (ctx) => {
+export const postIssueComment: PostflightScript = async (ctx, profile) => {
   // Preflight early-exit path: whoever set output.exitCode already did the user-facing comment.
   if (ctx.skipAgent && ctx.output.exitCode !== undefined) return
 
@@ -38,6 +38,29 @@ export const postIssueComment: PostflightScript = async (ctx) => {
     // paths.
     const specific = computeFailureReason(ctx)
     const reason = specific.length > 0 ? specific : "no changes to commit"
+    // When this primitive is running as a container child, the parent's
+    // `next` routing table — not the child — owns the terminal status.
+    // Posting a ⚠️ "kody FAILED" comment here misleads users watching the
+    // issue thread (A-Guy #1568: reproduce returned REPRODUCE_FAILED, which
+    // the bug container is designed to route forward to plan; the alarming
+    // comment + kody:failed label made the in-progress flow look dead).
+    // Container children emit a softer informational comment and leave the
+    // terminal label/comment to the container's `finishFlow` postflight.
+    const containerParent = process.env.KODY_CONTAINER_PARENT
+    if (containerParent) {
+      postWith(
+        targetType,
+        targetNumber,
+        `ℹ️ kody ${profile.name}: ${truncate(reason, 1200)} — ${containerParent} container will route to the next stage`,
+        ctx.cwd,
+      )
+      // Still report a non-zero exit so the container's action-type fallback
+      // synthesises <EXEC>_FAILED when the child didn't write a fresh state
+      // action. Routing logic stays unchanged.
+      ctx.output.exitCode = 3
+      ctx.output.reason = reason
+      return
+    }
     postWith(targetType, targetNumber, `⚠️ kody FAILED: ${truncate(reason, 1500)}`, ctx.cwd)
     markRunFailed(ctx)
     ctx.output.exitCode = 3
