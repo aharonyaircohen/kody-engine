@@ -150,6 +150,7 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   saveGoalState: { owner: "goal-tick", reason: "goal-tick state-machine step." },
   stageMergeConflicts: { owner: "resolve", reason: "resolve-only postflight." },
   startFlow: { owner: "spec", reason: "spec-only entry point." },
+  startLocalServer: { owner: "ui-review", reason: "ui-review boots the PR branch on localhost so it doesn't depend on Vercel previews." },
   verifyReproFails: { owner: "reproduce", reason: "Reproduce-only assertion." },
   warmupMcp: { owner: "qa-engineer", reason: "qa-engineer MCP warmup." },
 }

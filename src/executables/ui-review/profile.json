@@ -73,6 +73,7 @@
       { "script": "loadConventions" },
       { "script": "discoverQaContext" },
       { "script": "loadQaGuide" },
+      { "script": "startLocalServer" },
       { "script": "resolvePreviewUrl" },
       { "script": "composePrompt" }
     ],
