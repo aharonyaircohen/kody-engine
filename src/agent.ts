@@ -127,7 +127,27 @@ export interface AgentOptions {
    * configuration is picked up. Pass `[]` for SDK isolation.
    */
   settingSources?: Array<"user" | "project" | "local">
+  /**
+   * Per-turn progress callback. Invoked with structured events as the
+   * SDK streams messages back from the model. Chat mode wires this to
+   * the event sink so the dashboard can render thinking + tool calls
+   * live instead of waiting for the final reply. Best-effort — errors
+   * inside the callback are swallowed so progress instrumentation can
+   * never break the actual agent turn.
+   */
+  onProgress?: (event: AgentProgressEvent) => void | Promise<void>
 }
+
+/**
+ * Structured progress event surfaced from the agent loop as SDK
+ * messages arrive. Lossy by design — the consumer (chat-mode sink)
+ * picks the fields it needs and ignores the rest.
+ */
+export type AgentProgressEvent =
+  | { kind: "thinking"; thinking: string }
+  | { kind: "tool_use"; name: string; input?: Record<string, unknown>; id?: string }
+  | { kind: "tool_result"; toolUseId?: string; content: string; isError?: boolean }
+  | { kind: "text"; text: string }
 
 const DEFAULT_ALLOWED_TOOLS = ["Bash", "Edit", "Read", "Write", "Glob", "Grep"]
 // Default watchdog: 10 min between SDK messages. Tuned for real `run` /
@@ -322,6 +342,51 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       if (line) process.stdout.write(`${line}\n`)
 
       const m = msg as SdkMessageLike
+
+      // Stream progress events (thinking / tool calls / text deltas) to
+      // the consumer. Chat mode hooks this to push live updates to the
+      // dashboard SSE; non-chat callers can leave onProgress unset and
+      // pay zero cost. Errors are swallowed — instrumentation must not
+      // break the actual turn.
+      if (opts.onProgress) {
+        const blocks = m.message?.content ?? []
+        for (const block of blocks) {
+          try {
+            if (block.type === "thinking") {
+              const t = (block as { thinking?: unknown }).thinking
+              if (typeof t === "string" && t.length > 0) {
+                await opts.onProgress({ kind: "thinking", thinking: t })
+              }
+            } else if (block.type === "tool_use") {
+              const b = block as { name?: string; input?: Record<string, unknown>; id?: string }
+              await opts.onProgress({
+                kind: "tool_use",
+                name: b.name ?? "tool",
+                input: b.input,
+                id: b.id,
+              })
+            } else if (block.type === "tool_result") {
+              const b = block as { tool_use_id?: string; content?: unknown; is_error?: boolean }
+              const content = typeof b.content === "string"
+                ? b.content
+                : (() => { try { return JSON.stringify(b.content) } catch { return "" } })()
+              await opts.onProgress({
+                kind: "tool_result",
+                toolUseId: b.tool_use_id,
+                content,
+                isError: b.is_error,
+              })
+            } else if (block.type === "text") {
+              const b = block as { text?: string }
+              if (typeof b.text === "string" && b.text.length > 0) {
+                await opts.onProgress({ kind: "text", text: b.text })
+              }
+            }
+          } catch {
+            /* progress callback must not break the run */
+          }
+        }
+      }
       // Accumulate token usage. The SDK attaches `usage` to result messages
       // (and sometimes to assistant messages); we sum whatever surfaces so
       // that the per-stage event log captures the real cost regardless of

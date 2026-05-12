@@ -110,6 +110,11 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
 
   const systemPrompt = opts.systemPrompt ?? CHAT_SYSTEM_PROMPT
   const prompt = buildPrompt(turns)
+
+  // Sequence counter for deterministic ordering of progress events on the
+  // dashboard. Same sessionId across multiple events, so the existing
+  // runId-based dedup needs a unique suffix per emit.
+  let progressSeq = 0
   const invoke =
     opts.invokeAgent ??
     ((p: string) =>
@@ -121,6 +126,31 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
         verbose: opts.verbose,
         quiet: opts.quiet,
         systemPromptAppend: systemPrompt,
+        onProgress: async (ev) => {
+          progressSeq += 1
+          if (ev.kind === "thinking") {
+            await emit(opts.sink, "chat.thinking", opts.sessionId, `think-${progressSeq}`, {
+              text: ev.thinking,
+            })
+          } else if (ev.kind === "tool_use") {
+            await emit(opts.sink, "chat.tool", opts.sessionId, `tool-${progressSeq}`, {
+              phase: "use",
+              id: ev.id,
+              name: ev.name,
+              input: ev.input ?? {},
+            })
+          } else if (ev.kind === "tool_result") {
+            await emit(opts.sink, "chat.tool", opts.sessionId, `tool-${progressSeq}`, {
+              phase: "result",
+              toolUseId: ev.toolUseId,
+              content: ev.content,
+              isError: ev.isError === true,
+            })
+          }
+          // `text` events are not forwarded here — the final assistant
+          // reply is already pushed via `chat.message` once the turn
+          // completes, so streaming text deltas would duplicate content.
+        },
       }))
 
   let result: AgentResult
