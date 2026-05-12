@@ -486,6 +486,13 @@ function validateInputs(specs: InputSpec[], raw: Record<string, unknown>): Recor
     }
   }
 
+  // Pass positionals through verbatim — they're declared allowed above but
+  // skipped by the per-spec coerce loop. Profiles that take subcommands
+  // (e.g. `serve vscode`) read them from ctx.args._.
+  if (Array.isArray(raw._)) {
+    out._ = raw._
+  }
+
   // First pass: type coerce provided values.
   for (const spec of specs) {
     const v = raw[spec.name]

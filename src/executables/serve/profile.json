@@ -1,16 +1,8 @@
 {
   "name": "serve",
   "role": "utility",
-  "describe": "Start a LiteLLM proxy and launch VS Code with ANTHROPIC_BASE_URL pointed at it. Long-lived — Ctrl+C to stop.",
-  "inputs": [
-    {
-      "name": "noEditor",
-      "flag": "--no-editor",
-      "type": "bool",
-      "required": false,
-      "describe": "Run the LiteLLM proxy only; do not launch VS Code."
-    }
-  ],
+  "describe": "Start a LiteLLM proxy and optionally launch an editor pointed at it. Usage: `kody serve` (proxy only), `kody serve vscode`, `kody serve claude`. Long-lived — Ctrl+C to stop.",
+  "inputs": [],
   "claudeCode": {
     "model": "inherit",
     "permissionMode": "acceptEdits",

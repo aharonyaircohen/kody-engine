@@ -2,13 +2,18 @@
  * serveFlow — preflight for the `serve` executable.
  *
  * Starts a LiteLLM proxy for the configured model (when the model needs one)
- * and launches VS Code with ANTHROPIC_BASE_URL / ANTHROPIC_API_KEY pointed
- * at the proxy, so the editor's Claude Code extension routes through Kody's
- * LiteLLM. Sets ctx.skipAgent — serve never invokes the Kody agent.
+ * and optionally launches an editor pointed at it. Three forms:
  *
- * Long-lived: returns a never-resolving promise so the executor stays alive
- * until SIGINT/SIGTERM, at which point the proxy is killed and the process
- * exits.
+ *   kody serve          — proxy only, long-lived until Ctrl+C
+ *   kody serve vscode   — proxy + launch VS Code (detaches, proxy stays
+ *                          alive in foreground until Ctrl+C)
+ *   kody serve claude   — proxy + launch Claude Code CLI (inherits stdio;
+ *                          proxy exits when claude exits)
+ *
+ * VS Code / Claude Code routes through the proxy via ANTHROPIC_BASE_URL +
+ * ANTHROPIC_API_KEY env vars (only set when the configured model actually
+ * needs the proxy — Anthropic models go direct). Sets ctx.skipAgent — serve
+ * never invokes the Kody agent.
  */
 
 import { spawn } from "node:child_process"
@@ -16,9 +21,28 @@ import { getAnthropicApiKeyOrDummy, LITELLM_DEFAULT_URL, needsLitellmProxy, pars
 import type { PreflightScript } from "../executables/types.js"
 import { type LitellmHandle, startLitellmIfNeeded } from "../litellm.js"
 
+type EditorTarget = "none" | "vscode" | "claude"
+
+function parseTarget(positional: unknown): EditorTarget {
+  if (!Array.isArray(positional) || positional.length === 0) return "none"
+  const first = String(positional[0]).toLowerCase()
+  if (first === "vscode" || first === "code") return "vscode"
+  if (first === "claude") return "claude"
+  throw new Error(`unknown serve subcommand: "${positional[0]}" (expected: vscode, claude, or omit)`)
+}
+
+function buildProxyEnv(url: string): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    ANTHROPIC_BASE_URL: url,
+    ANTHROPIC_API_KEY: getAnthropicApiKeyOrDummy(),
+  }
+}
+
 export const serveFlow: PreflightScript = async (ctx) => {
   ctx.skipAgent = true
 
+  const target = parseTarget(ctx.args._)
   const model = parseProviderModel(ctx.config.agent.model)
   const usesProxy = needsLitellmProxy(model)
 
@@ -32,18 +56,44 @@ export const serveFlow: PreflightScript = async (ctx) => {
   }
 
   const url = handle?.url ?? LITELLM_DEFAULT_URL
-  const noEditor = ctx.args.noEditor === true
+  const editorEnv = usesProxy ? buildProxyEnv(url) : { ...process.env }
 
-  if (!noEditor) {
-    const env: NodeJS.ProcessEnv = { ...process.env }
-    if (usesProxy) {
-      env.ANTHROPIC_BASE_URL = url
-      env.ANTHROPIC_API_KEY = getAnthropicApiKeyOrDummy()
+  const killProxy = () => {
+    if (handle) {
+      process.stdout.write(`[kody serve] stopping LiteLLM proxy...\n`)
+      try {
+        handle.kill()
+      } catch {
+        /* best effort */
+      }
     }
+  }
+
+  // ─── claude: synchronous foreground — exits with the editor ──────────────
+  if (target === "claude") {
+    process.stdout.write(`[kody serve] launching Claude Code at ${ctx.cwd}\n`)
+    if (usesProxy) process.stdout.write(`  ANTHROPIC_BASE_URL=${url}\n`)
+    const args = ["--dangerously-skip-permissions", "--model", model.model]
+    const child = spawn("claude", args, { stdio: "inherit", env: editorEnv, cwd: ctx.cwd })
+    const exitCode = await new Promise<number>((resolve) => {
+      child.on("exit", (code) => resolve(code ?? 0))
+      child.on("error", (err) => {
+        process.stderr.write(`[kody serve] failed to launch Claude Code: ${err.message}\n`)
+        process.stderr.write(`  Install: https://docs.anthropic.com/claude/docs/claude-code\n`)
+        resolve(1)
+      })
+    })
+    killProxy()
+    ctx.output.exitCode = exitCode
+    return
+  }
+
+  // ─── vscode | none: launch editor (if any), then block until SIGINT ──────
+  if (target === "vscode") {
     process.stdout.write(`[kody serve] launching VS Code at ${ctx.cwd}\n`)
     if (usesProxy) process.stdout.write(`  ANTHROPIC_BASE_URL=${url}\n`)
     try {
-      const code = spawn("code", [ctx.cwd], { stdio: "inherit", env, detached: true })
+      const code = spawn("code", [ctx.cwd], { stdio: "inherit", env: editorEnv, detached: true })
       code.on("error", (err) => {
         process.stderr.write(`[kody serve] failed to launch VS Code: ${err.message}\n`)
         process.stderr.write(`  Install the 'code' CLI: VS Code → Command Palette → "Shell Command: Install 'code' command in PATH"\n`)
@@ -57,27 +107,19 @@ export const serveFlow: PreflightScript = async (ctx) => {
 
   process.stdout.write(`[kody serve] running. Press Ctrl+C to stop.\n`)
 
-  // Keep the Node event loop alive. An unresolved Promise alone is not
-  // enough — Node will exit when the loop is empty even with a pending
-  // Promise. A no-op interval is the cheapest way to keep the loop ticking
-  // and let SIGINT/SIGTERM handlers fire when the user presses Ctrl+C.
+  // Keep the Node event loop alive — an unresolved Promise alone is not
+  // enough; a no-op interval lets SIGINT/SIGTERM handlers fire when the
+  // user presses Ctrl+C.
   const keepAlive = setInterval(() => {}, 60_000)
 
-  const cleanup = (signal: NodeJS.Signals, exitCode: number) => {
+  const shutdown = (signal: NodeJS.Signals, exitCode: number) => {
     clearInterval(keepAlive)
-    if (handle) {
-      process.stdout.write(`[kody serve] received ${signal}, stopping LiteLLM proxy...\n`)
-      try {
-        handle.kill()
-      } catch {
-        /* best effort */
-      }
-    }
+    process.stdout.write(`[kody serve] received ${signal}\n`)
+    killProxy()
     process.exit(exitCode)
   }
-  process.on("SIGINT", () => cleanup("SIGINT", 130))
-  process.on("SIGTERM", () => cleanup("SIGTERM", 143))
+  process.on("SIGINT", () => shutdown("SIGINT", 130))
+  process.on("SIGTERM", () => shutdown("SIGTERM", 143))
 
-  // Block forever — the executor stays alive until a signal triggers cleanup().
   await new Promise<void>(() => {})
 }
