@@ -92,3 +92,37 @@ describe("commitAndPush: gate on agentDone", () => {
     })
   })
 })
+
+// Verify-gate: the verify postflight runs before commitAndPush in the
+// pr-branch lifecycle chain. When it fails, the action is downgraded to
+// *_FAILED but agentDone is left intact (the agent may have self-reported
+// DONE). Pushing the agent's edits anyway pollutes the branch with broken
+// commits that compound across retry attempts (see A-Guy issue #1592 where
+// 4 failed runs left a growing pile of test files that subsequent attempts
+// excused as "pre-existing").
+describe("commitAndPush: gate on verifyOk", () => {
+  it("skips commit when verifyOk is false, even with agentDone=true", async () => {
+    vi.mocked(doCommitAndPush).mockClear()
+    const ctx = makeCtx({ agentDone: true, verifyOk: false, commitMessage: "fix: x" })
+    await commitAndPush(ctx as never, profile, null)
+    expect(doCommitAndPush).not.toHaveBeenCalled()
+    const res = ctx.data.commitResult as { committed: boolean; pushed: boolean; skippedReason?: string }
+    expect(res.committed).toBe(false)
+    expect(res.pushed).toBe(false)
+    expect(res.skippedReason).toBe("verifyFailed")
+  })
+
+  it("proceeds when verifyOk is true", async () => {
+    vi.mocked(doCommitAndPush).mockClear()
+    const ctx = makeCtx({ agentDone: true, verifyOk: true, commitMessage: "fix: x" })
+    await commitAndPush(ctx as never, profile, null)
+    expect(doCommitAndPush).toHaveBeenCalledOnce()
+  })
+
+  it("proceeds when verifyOk is undefined (lifecycleConfig.verify=false skips the script)", async () => {
+    vi.mocked(doCommitAndPush).mockClear()
+    const ctx = makeCtx({ agentDone: true, commitMessage: "fix: x" })
+    await commitAndPush(ctx as never, profile, null)
+    expect(doCommitAndPush).toHaveBeenCalledOnce()
+  })
+})

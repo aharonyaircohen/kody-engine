@@ -73,6 +73,23 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
     }
   }
 
+  // If the verify postflight (which runs earlier in the pr-branch chain)
+  // found typecheck/lint/test failures, do NOT push the agent's edits. The
+  // agent may have self-reported DONE (agentDone=true) but verify is the
+  // ratifier — pushing code that verify just rejected pollutes the branch
+  // with broken commits that compound across retry attempts. The agent's
+  // working-tree changes stay locally for the duration of this process so
+  // run logs / artifacts capture what was tried; subsequent retries see a
+  // clean branch.
+  //
+  // Skipped when verify didn't run (lifecycleConfig.verify=false), in which
+  // case verifyOk stays undefined and the strict `=== false` check is a no-op.
+  if (ctx.data.verifyOk === false) {
+    ctx.data.commitResult = { committed: false, pushed: false, skippedReason: "verifyFailed" }
+    ctx.data.hasCommitsAhead = hasCommitsAhead(branch, ctx.config.git.defaultBranch, ctx.cwd)
+    return
+  }
+
   // If an earlier postflight (e.g. requireFeedbackActions) flipped agentDone
   // to false, we must not commit the agent's edits. Leave them in the working
   // tree so the failure reason is surfaced without polluting the branch.
