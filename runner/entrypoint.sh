@@ -22,8 +22,15 @@ mkdir -p "$WORKDIR"
 # Authenticated clone. The remote URL keeps the token so the engine's
 # subsequent commits/pushes work without re-supplying creds. `x-access-token`
 # is the standard username GitHub expects when the token is the password.
+# Shallow by default — chat sessions don't need history. The engine can
+# `git fetch --unshallow` later if a tool needs deeper log/blame.
 AUTH_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git"
-git clone "$AUTH_URL" "$WORKDIR"
+CLONE_DEPTH="${CLONE_DEPTH:-1}"
+if [ "$CLONE_DEPTH" = "0" ] || [ "$CLONE_DEPTH" = "full" ]; then
+  git clone "$AUTH_URL" "$WORKDIR"
+else
+  git clone --depth="$CLONE_DEPTH" --single-branch "$AUTH_URL" "$WORKDIR"
+fi
 
 cd "$WORKDIR"
 
