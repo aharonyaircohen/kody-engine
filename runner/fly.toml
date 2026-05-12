@@ -1,0 +1,16 @@
+app = "kody-runner"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[experimental]
+  auto_rollback = true
+
+[[vm]]
+  size = "performance-2x"
+  memory = "4gb"
+
+# No [http_service] block on purpose:
+# kody-runner Machines are spawned per job via the Fly Machines API
+# and exit when the engine finishes. They do not receive HTTP traffic.
