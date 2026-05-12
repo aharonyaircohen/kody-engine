@@ -74,7 +74,6 @@ import { setLifecycleLabel } from "./setLifecycleLabel.js"
 import { skipAgent } from "./skipAgent.js"
 import { stageMergeConflicts } from "./stageMergeConflicts.js"
 import { startFlow } from "./startFlow.js"
-import { startLocalServer } from "./startLocalServer.js"
 import { syncFlow } from "./syncFlow.js"
 import { verify } from "./verify.js"
 import { verifyReproFails } from "./verifyReproFails.js"
@@ -106,7 +105,6 @@ export const preflightScripts: Record<string, PreflightScript> = {
   buildSyntheticPlugin,
   resolveArtifacts,
   discoverQaContext,
-  startLocalServer,
   resolvePreviewUrl,
   resolveQaUrl,
   composePrompt,
