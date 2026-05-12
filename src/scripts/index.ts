@@ -67,6 +67,7 @@ import { revertFlow } from "./revertFlow.js"
 import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
 import { runTickScript } from "./runTickScript.js"
+import { serveFlow } from "./serveFlow.js"
 import { saveGoalState } from "./saveGoalState.js"
 import { saveTaskState } from "./saveTaskState.js"
 import { setCommentTarget } from "./setCommentTarget.js"
@@ -117,6 +118,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   dispatchJobTicks,
   dispatchJobFileTicks,
   runTickScript,
+  serveFlow,
   loadGoalState,
   handleAbandonedGoal,
   deriveGoalPhase,

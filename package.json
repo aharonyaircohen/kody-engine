@@ -1,6 +1,6 @@
 {
   "name": "@kody-ade/kody-engine",
-  "version": "0.4.69",
+  "version": "0.4.70",
   "description": "kody — autonomous development engine. Single-session Claude Code agent behind a generic executor + declarative executable profiles.",
   "license": "MIT",
   "type": "module",
@@ -14,6 +14,7 @@
   ],
   "scripts": {
     "kody": "tsx bin/kody.ts",
+    "serve": "tsx bin/kody.ts serve",
     "build": "tsup && node scripts/copy-assets.cjs",
     "check:modularity": "tsx scripts/check-script-modularity.ts",
     "pretest": "pnpm check:modularity",

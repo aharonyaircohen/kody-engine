@@ -1,0 +1,36 @@
+{
+  "name": "serve",
+  "role": "utility",
+  "describe": "Start a LiteLLM proxy and launch VS Code with ANTHROPIC_BASE_URL pointed at it. Long-lived — Ctrl+C to stop.",
+  "inputs": [
+    {
+      "name": "noEditor",
+      "flag": "--no-editor",
+      "type": "bool",
+      "required": false,
+      "describe": "Run the LiteLLM proxy only; do not launch VS Code."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "acceptEdits",
+    "maxTurns": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "scripts": {
+    "preflight": [
+      {
+        "script": "serveFlow"
+      }
+    ],
+    "postflight": []
+  }
+}

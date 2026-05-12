@@ -148,6 +148,7 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   revertFlow: { owner: "revert", reason: "revert is bespoke (no-agent)." },
   runTickScript: { owner: "job-tick-scripted", reason: "Scripted job-tick variant runner." },
   saveGoalState: { owner: "goal-tick", reason: "goal-tick state-machine step." },
+  serveFlow: { owner: "serve", reason: "serve is bespoke (no-agent, long-lived local infra). Same shape as initFlow." },
   stageMergeConflicts: { owner: "resolve", reason: "resolve-only postflight." },
   startFlow: { owner: "spec", reason: "spec-only entry point." },
   verifyReproFails: { owner: "reproduce", reason: "Reproduce-only assertion." },
