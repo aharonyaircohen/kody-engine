@@ -24,12 +24,18 @@ mkdir -p "$WORKDIR"
 # is the standard username GitHub expects when the token is the password.
 # Shallow by default — chat sessions don't need history. The engine can
 # `git fetch --unshallow` later if a tool needs deeper log/blame.
+#
+# BRANCH defaults to "main" to match the GH Actions path (kody.yml's
+# workflow_dispatch always uses ref:main; session JSONL is written to main
+# by the dashboard). If the repo's default branch is not main, the GH path
+# would also fail — this is a kody-engine contract, not a runner choice.
 AUTH_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git"
 CLONE_DEPTH="${CLONE_DEPTH:-1}"
+BRANCH="${REF:-${BRANCH:-main}}"
 if [ "$CLONE_DEPTH" = "0" ] || [ "$CLONE_DEPTH" = "full" ]; then
-  git clone "$AUTH_URL" "$WORKDIR"
+  git clone --branch "$BRANCH" "$AUTH_URL" "$WORKDIR"
 else
-  git clone --depth="$CLONE_DEPTH" --single-branch "$AUTH_URL" "$WORKDIR"
+  git clone --depth="$CLONE_DEPTH" --single-branch --branch "$BRANCH" "$AUTH_URL" "$WORKDIR"
 fi
 
 cd "$WORKDIR"
@@ -37,11 +43,6 @@ cd "$WORKDIR"
 # Configure committer identity so the engine's git commit calls succeed.
 git config user.name  "${GIT_AUTHOR_NAME:-Kody Bot}"
 git config user.email "${GIT_AUTHOR_EMAIL:-kody-bot@users.noreply.github.com}"
-
-if [ -n "${REF:-}" ]; then
-  git fetch origin "$REF" --depth=1
-  git checkout "$REF"
-fi
 
 export SESSION_ID="${SESSION_ID:-}"
 export INIT_MESSAGE="${INIT_MESSAGE:-}"
