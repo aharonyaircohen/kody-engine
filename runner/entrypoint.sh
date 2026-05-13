@@ -174,4 +174,13 @@ export DASHBOARD_URL="${DASHBOARD_URL:-}"
 export ALL_SECRETS="${ALL_SECRETS:-{\}}"
 export ISSUE_NUMBER="${ISSUE_NUMBER:-}"
 
-exec kody
+# Translate runtime-native env (ISSUE_NUMBER) to engine-native CLI flag.
+# The engine's stable surface is `kody run --issue N`; the entrypoint owns
+# env→flag translation so the engine doesn't grow a new env convention per
+# runtime. SESSION_ID stays env-driven because the engine has no CLI flag
+# for chat sessions (chat-cli falls back to env directly).
+if [ -n "$ISSUE_NUMBER" ]; then
+  exec kody run --issue "$ISSUE_NUMBER"
+else
+  exec kody
+fi
