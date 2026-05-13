@@ -48,6 +48,31 @@ LITELLM_PID=""
 LITELLM_PROVIDERS="anthropic:ANTHROPIC_API_KEY openai:OPENAI_API_KEY gemini:GEMINI_API_KEY minimax:MINIMAX_API_KEY groq:GROQ_API_KEY mistral:MISTRAL_API_KEY deepseek:DEEPSEEK_API_KEY"
 
 prewarm_litellm() {
+  # When KODY_LITELLM_URL is set, an always-on LiteLLM lives elsewhere
+  # (typically the kody-litellm Fly app). Forward localhost:4000 to that
+  # URL with socat so the engine's checkLitellmHealth() succeeds against
+  # localhost without modification — no spawn, no per-session cold start.
+  if [ -n "${KODY_LITELLM_URL:-}" ]; then
+    if ! command -v socat >/dev/null 2>&1; then
+      echo "→ runner: KODY_LITELLM_URL set but socat missing — skipping forward"
+      return 0
+    fi
+    local target_host target_port
+    target_host="$(echo "$KODY_LITELLM_URL" | sed -E 's#^https?://([^:/]+).*#\1#')"
+    target_port="$(echo "$KODY_LITELLM_URL" | sed -nE 's#^https?://[^:]+:([0-9]+).*#\1#p')"
+    target_port="${target_port:-4000}"
+    if [ -z "$target_host" ]; then
+      echo "→ runner: KODY_LITELLM_URL malformed ('${KODY_LITELLM_URL}') — skipping forward"
+      return 0
+    fi
+    echo "→ runner: forwarding localhost:${LITELLM_PORT} → ${target_host}:${target_port} (always-on litellm)"
+    socat "TCP-LISTEN:${LITELLM_PORT},reuseaddr,fork" \
+          "TCP:${target_host}:${target_port}" \
+          >>/tmp/socat.log 2>&1 &
+    LITELLM_PID=$!
+    return 0
+  fi
+
   if ! command -v litellm >/dev/null 2>&1; then
     echo "→ runner: pre-warm skipped (litellm not in PATH)"
     return 0

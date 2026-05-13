@@ -1,0 +1,50 @@
+# Wildcard model list — accepts any model id under each provider; the
+# provider's API key is read from this container's env (set via Fly
+# secrets, one per provider). Keep this list in sync with the providers
+# the engine knows about: see kody2/src/config.ts providerApiKeyEnvVar().
+
+model_list:
+  - model_name: "anthropic/*"
+    litellm_params:
+      model: "anthropic/*"
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: "claude/*"
+    litellm_params:
+      model: "anthropic/*"
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: "openai/*"
+    litellm_params:
+      model: "openai/*"
+      api_key: os.environ/OPENAI_API_KEY
+  - model_name: "gemini/*"
+    litellm_params:
+      model: "gemini/*"
+      api_key: os.environ/GEMINI_API_KEY
+  - model_name: "minimax/*"
+    litellm_params:
+      model: "minimax/*"
+      api_key: os.environ/MINIMAX_API_KEY
+  - model_name: "groq/*"
+    litellm_params:
+      model: "groq/*"
+      api_key: os.environ/GROQ_API_KEY
+  - model_name: "mistral/*"
+    litellm_params:
+      model: "mistral/*"
+      api_key: os.environ/MISTRAL_API_KEY
+  - model_name: "deepseek/*"
+    litellm_params:
+      model: "deepseek/*"
+      api_key: os.environ/DEEPSEEK_API_KEY
+
+litellm_settings:
+  # Pass through provider-specific params we don't know about — matches
+  # what the engine's local litellm config does (kody2/src/litellm.ts).
+  drop_params: true
+
+general_settings:
+  # Skip the boot-time "test call" to every provider — those add 5-20s
+  # of startup and we'd rather find out a key is bad at request time
+  # than block the proxy from accepting traffic.
+  disable_spend_logs: true
+  disable_master_key_return: true
