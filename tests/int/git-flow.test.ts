@@ -3,13 +3,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import {
-  deriveBranchName,
-  ensureFeatureBranch,
-  getCurrentBranch,
-  hasUncommittedChanges,
-  UncommittedChangesError,
-} from "../../src/branch.js"
+import { deriveBranchName, ensureFeatureBranch, getCurrentBranch } from "../../src/branch.js"
 import { commitAndPush, hasCommitsAhead, listChangedFiles } from "../../src/commit.js"
 
 interface TempRepo {
@@ -87,18 +81,21 @@ describe("integration: git flow", () => {
     expect(getCurrentBranch(repo.workdir)).toBe(second.branch)
   })
 
-  it("refuses to run on a branch with uncommitted changes to tracked files", () => {
+  it("resets tracked-file modifications before checkout (ephemeral CI tree)", () => {
+    // kody runs on a fresh runner where pnpm install / codegen can dirty
+    // tracked files (e.g. Payload's importMap.js). ensureFeatureBranch
+    // hard-resets so the next branch op isn't blocked by leftover edits.
     ensureFeatureBranch(8, "Y", "main", repo.workdir)
     fs.writeFileSync(path.join(repo.workdir, "README.md"), "# initial\nWIP edit\n")
-    expect(hasUncommittedChanges(repo.workdir)).toBe(true)
-    expect(() => ensureFeatureBranch(8, "Y", "main", repo.workdir)).toThrow(UncommittedChangesError)
+    expect(() => ensureFeatureBranch(8, "Y", "main", repo.workdir)).not.toThrow()
+    expect(fs.readFileSync(path.join(repo.workdir, "README.md"), "utf-8")).toBe("# initial\n")
   })
 
-  it("ignores untracked files (not protectable WIP)", () => {
+  it("removes untracked files too (no work-in-progress protection)", () => {
     ensureFeatureBranch(81, "Z", "main", repo.workdir)
     fs.writeFileSync(path.join(repo.workdir, "scratch.tmp"), "junk")
-    expect(hasUncommittedChanges(repo.workdir)).toBe(false)
     expect(() => ensureFeatureBranch(81, "Z", "main", repo.workdir)).not.toThrow()
+    expect(fs.existsSync(path.join(repo.workdir, "scratch.tmp"))).toBe(false)
   })
 
   it("commits allowed files and pushes to remote", () => {

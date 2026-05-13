@@ -43,7 +43,6 @@ Exit codes:
   2   verify failed (no PR opened — branch pushed for inspection) — skipped in resolve mode
   3   no commits to ship (also the resolve clean-merge short-circuit)
   4   PR creation failed
-  5   uncommitted changes on target branch
   64  invalid CLI args
   99  wrapper crashed
 `

@@ -4,7 +4,7 @@
  * comment. Issue number lives in `ctx.args.issue`.
  */
 
-import { ensureFeatureBranch, UncommittedChangesError } from "../branch.js"
+import { ensureFeatureBranch } from "../branch.js"
 import type { PreflightScript } from "../executables/types.js"
 import { getRunUrl } from "../gha.js"
 import { getIssue, postIssueComment } from "../issue.js"
@@ -37,19 +37,8 @@ export const runFlow: PreflightScript = async (ctx) => {
     process.stderr.write(`[kody runFlow] resolved base branch: ${base} (from --base)\n`)
   }
 
-  try {
-    const branchInfo = ensureFeatureBranch(issueNumber, issue.title, ctx.config.git.defaultBranch, ctx.cwd, base ?? undefined)
-    ctx.data.branch = branchInfo.branch
-  } catch (err) {
-    if (err instanceof UncommittedChangesError) {
-      ctx.output.exitCode = 5
-      ctx.output.reason = err.message
-      ctx.skipAgent = true
-      tryPost(issueNumber, `⚠️ kody refused to start: ${err.message}`, ctx.cwd)
-      return
-    }
-    throw err
-  }
+  const branchInfo = ensureFeatureBranch(issueNumber, issue.title, ctx.config.git.defaultBranch, ctx.cwd, base ?? undefined)
+  ctx.data.branch = branchInfo.branch
 
   const runUrl = getRunUrl()
   const startMsg = runUrl

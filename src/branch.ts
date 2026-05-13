@@ -5,13 +5,6 @@ export interface BranchResult {
   created: boolean
 }
 
-export class UncommittedChangesError extends Error {
-  constructor(public branch: string) {
-    super(`Uncommitted changes on branch '${branch}' — refusing to run to protect work in progress`)
-    this.name = "UncommittedChangesError"
-  }
-}
-
 function git(args: string[], cwd?: string): string {
   return execFileSync("git", args, {
     encoding: "utf-8",
@@ -37,8 +30,24 @@ export function getCurrentBranch(cwd?: string): string {
   return git(["branch", "--show-current"], cwd)
 }
 
-export function hasUncommittedChanges(cwd?: string): boolean {
-  return git(["status", "--porcelain", "--untracked-files=no"], cwd).length > 0
+/**
+ * Hard-reset tracked changes and remove untracked files. Used before
+ * any checkout to ensure a clean working tree — kody runs on an
+ * ephemeral CI runner, so nothing of value lives in the working tree
+ * between invocations. Best-effort: failures don't abort (e.g. when
+ * cwd isn't a git repo yet, downstream calls surface the real error).
+ */
+function resetWorkingTree(cwd?: string): void {
+  try {
+    execFileSync("git", ["reset", "--hard", "HEAD"], { cwd, stdio: ["ignore", "pipe", "pipe"], timeout: 30_000 })
+  } catch {
+    /* best effort */
+  }
+  try {
+    execFileSync("git", ["clean", "-fd"], { cwd, stdio: ["ignore", "pipe", "pipe"], timeout: 30_000 })
+  } catch {
+    /* best effort */
+  }
 }
 
 /**
@@ -129,15 +138,19 @@ export function ensureFeatureBranch(
   // fork point only matters at creation time. The caller is responsible for
   // ensuring the base branch exists on origin first; if it doesn't, fall back
   // to defaultBranch so we don't crash.
+  //
+  // Working-tree hygiene: kody runs on an ephemeral CI runner. By the time
+  // this is called, earlier workflow steps (pnpm install, codegen) may have
+  // dirtied tracked files (e.g. Payload's `importMap.js`). Hard-reset and
+  // clean any such state — nothing of value lives in the runner's pre-
+  // checkout tree, and a dirty tree would otherwise block `git checkout`.
   const branchName = deriveBranchName(issueNumber, title)
+  resetWorkingTree(cwd)
   const current = getCurrentBranch(cwd)
 
   if (current === branchName) {
-    if (hasUncommittedChanges(cwd)) throw new UncommittedChangesError(branchName)
     return { branch: branchName, created: false }
   }
-
-  if (hasUncommittedChanges(cwd)) throw new UncommittedChangesError(current || "(detached)")
 
   try {
     git(["fetch", "origin"], cwd)

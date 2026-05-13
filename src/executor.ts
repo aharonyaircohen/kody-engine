@@ -827,13 +827,11 @@ async function runContainerLoop(profile: Profile, ctx: Context, input: ExecutorI
     // a fresh `actions/checkout`). When children share one process, an
     // earlier child's side effects (engine cache writes, generated files,
     // .kody/ artifacts) can leave tracked-file modifications behind that
-    // make the next child's runFlow throw UncommittedChangesError.
-    // Surfaced on A-Guy issue #1440: plan succeeded, run's preflight bailed
-    // because the tree was dirty — we don't know exactly what dirtied it,
-    // but a hard reset is a deterministic recovery. Untracked files are
-    // left alone (UncommittedChangesError uses --untracked-files=no, so
-    // they don't trigger the gate; preserving them keeps node_modules,
-    // pip caches, and similar resident.) Best-effort: failures don't abort.
+    // would otherwise interfere with the next child's branch operations.
+    // Surfaced on A-Guy issue #1440: plan succeeded, run started on a
+    // dirty tree — a hard reset is a deterministic recovery. Untracked
+    // files are left alone (preserving node_modules, pip caches, etc.).
+    // Best-effort: failures don't abort.
     //
     // Opt-out: profiles can set `resetBetweenChildren: false` when their
     // children deliberately share intermediate state (e.g. bug's
@@ -967,8 +965,9 @@ async function runContainerLoop(profile: Profile, ctx: Context, input: ExecutorI
       // same-ms tests, and clocks aren't monotonic anyway). Reference
       // comparison fails across deserialized state reads.
       //
-      // When the child bailed before saveTaskState (e.g. runFlow's
-      // UncommittedChangesError path on A-Guy issue #1440), the counter
+      // When the child bailed before saveTaskState (e.g. a non-zero exit
+      // from a preflight script — historically runFlow's now-removed
+      // uncommitted-changes refusal on A-Guy issue #1440), the counter
       // is unchanged and we synthesize <EXEC>_COMPLETED|FAILED from the
       // exit code so finishFlow's runWhens can match the actual outcome
       // instead of leaking the prior child's action.

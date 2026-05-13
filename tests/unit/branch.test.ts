@@ -1,15 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { UncommittedChangesError } from "../../src/branch.js"
 import { resolveBaseOverride } from "../../src/scripts/runFlow.js"
-
-describe("UncommittedChangesError", () => {
-  it("includes branch name in the message + exposes it as a property", () => {
-    const err = new UncommittedChangesError("feat-branch")
-    expect(err.message).toMatch(/feat-branch/)
-    expect(err.name).toBe("UncommittedChangesError")
-    expect(err.branch).toBe("feat-branch")
-  })
-})
 
 describe("runFlow: resolveBaseOverride", () => {
   // The --base override is the only way a comment can redirect kody onto a

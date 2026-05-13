@@ -47,7 +47,6 @@ Exit codes (inherited from kody run):
   2   verify failed (no PR opened — branch pushed for inspection)
   3   no commits to ship
   4   PR creation failed
-  5   uncommitted changes on target branch
   99  wrapper crashed
 `
 

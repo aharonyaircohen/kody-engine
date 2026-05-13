@@ -500,12 +500,12 @@ describe("container: failure-shape regression suite", () => {
   // synthetic happy-path tests above couldn't catch.
 
   it("synthesizes <EXEC>_FAILED when child exits non-zero without writing a new action", async () => {
-    // Reproduces A-Guy #1440: run's preflight (runFlow) threw
-    // UncommittedChangesError, set skipAgent + exitCode=5, but never called
-    // saveTaskState. The container then re-read state and saw the prior
-    // child's PLAN_COMPLETED still sitting there, routed via wildcard to
-    // abort, and finishFlow's RUN_FAILED runWhen never fired — leaving
-    // intermediate kody:running on the issue.
+    // Reproduces A-Guy #1440: run's preflight (runFlow) exited non-zero
+    // without calling saveTaskState (historically via the now-removed
+    // UncommittedChangesError refusal). The container then re-read state
+    // and saw the prior child's PLAN_COMPLETED still sitting there, routed
+    // via wildcard to abort, and finishFlow's RUN_FAILED runWhen never
+    // fired — leaving intermediate kody:running on the issue.
     //
     // The fix: when the post-invoke read returns the SAME lastOutcome as
     // pre-invoke (child didn't write), synthesize <EXEC>_COMPLETED or
