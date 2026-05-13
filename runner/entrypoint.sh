@@ -21,64 +21,75 @@ mkdir -p "$WORKDIR"
 
 # ─── In parallel: pre-warm LiteLLM while the repo clones ───────────────────
 #
-# The engine spawns LiteLLM lazily, after it's read the session file from the
-# cloned repo. That serializes ~24s clone + ~17s LiteLLM start. LiteLLM
-# doesn't need the repo, so we kick it off in the background while git
-# runs. The engine's checkLitellmHealth() detects the existing process and
-# skips its own spawn.
+# The engine spawns LiteLLM lazily, after reading the session file from
+# the cloned repo. That serializes ~24s clone + ~27s LiteLLM start.
+# LiteLLM doesn't need the repo (or any specific model — it only needs
+# provider keys), so we kick it off in the background while git runs.
+# The engine's checkLitellmHealth() detects the live process and reuses
+# it instead of spawning a duplicate.
 #
-# Tightly coupled to engine internals (config format, port 4000, env-var
-# naming) — kept in sync with kody2/src/litellm.ts and config.ts. If the
-# pre-warm fails (no MODEL set, no API key, LiteLLM not in path), the
-# engine falls back to its own spawn — same wall time as today, no worse.
+# We don't pick a model here — that's the engine's job. Instead we
+# build a LiteLLM config from whichever provider keys exist in
+# ALL_SECRETS using LiteLLM's wildcard syntax (`<provider>/*`). Any
+# model the engine eventually picks routes to its provider via the
+# matching key.
+#
+# If LiteLLM isn't installed, jq is missing, or ALL_SECRETS contains
+# no recognized provider key, pre-warm silently skips and the engine
+# falls back to its own spawn — same wall time as today, no worse.
 LITELLM_PORT=4000
 LITELLM_LOG=/tmp/litellm.log
 LITELLM_PID=""
 
+# Provider → API key env var. Mirrors kody2/src/config.ts
+# providerApiKeyEnvVar(). Add new providers in lockstep when the
+# engine learns about them.
+declare -A LITELLM_PROVIDER_KEY=(
+  [anthropic]=ANTHROPIC_API_KEY
+  [openai]=OPENAI_API_KEY
+  [gemini]=GEMINI_API_KEY
+  [minimax]=MINIMAX_API_KEY
+  [groq]=GROQ_API_KEY
+  [mistral]=MISTRAL_API_KEY
+  [deepseek]=DEEPSEEK_API_KEY
+)
+
 prewarm_litellm() {
-  if [ -z "${MODEL:-}" ] || ! command -v litellm >/dev/null 2>&1; then
-    return 0
-  fi
+  if ! command -v litellm >/dev/null 2>&1; then return 0; fi
+  if ! command -v jq >/dev/null 2>&1; then return 0; fi
+  if [ -z "${ALL_SECRETS:-}" ]; then return 0; fi
 
-  # Parse "provider/model" — bail if it doesn't match.
-  local provider="${MODEL%%/*}"
-  local modelName="${MODEL#*/}"
-  if [ -z "$provider" ] || [ "$provider" = "$MODEL" ]; then
-    return 0
-  fi
-
-  # Resolve the env-var name for this provider's API key. Mirrors
-  # providerApiKeyEnvVar() in kody2/src/config.ts.
-  local apiKeyVar
-  if [ "$provider" = "anthropic" ] || [ "$provider" = "claude" ]; then
-    apiKeyVar="ANTHROPIC_API_KEY"
-  else
-    apiKeyVar="$(echo "$provider" | tr '[:lower:]' '[:upper:]')_API_KEY"
-  fi
-
-  # Pull the key out of ALL_SECRETS so LiteLLM can read it from env.
-  local apiKey=""
-  if [ -n "${ALL_SECRETS:-}" ] && command -v jq >/dev/null 2>&1; then
-    apiKey="$(printf '%s' "$ALL_SECRETS" | jq -r --arg k "$apiKeyVar" '.[$k] // empty' 2>/dev/null || true)"
-  fi
-  if [ -z "$apiKey" ]; then
-    return 0  # No key for this provider — let the engine handle it.
-  fi
-  export "$apiKeyVar=$apiKey"
-
-  # Generate the same config shape as generateLitellmConfigYaml().
   local cfg=/tmp/kody-litellm.yaml
-  cat >"$cfg" <<EOF
-model_list:
-  - model_name: ${modelName}
+  : >"$cfg"
+  printf 'model_list:\n' >>"$cfg"
+
+  local providersAdded=0
+  for provider in "${!LITELLM_PROVIDER_KEY[@]}"; do
+    local apiKeyVar="${LITELLM_PROVIDER_KEY[$provider]}"
+    local apiKey
+    apiKey="$(printf '%s' "$ALL_SECRETS" | jq -r --arg k "$apiKeyVar" '.[$k] // empty' 2>/dev/null || true)"
+    [ -z "$apiKey" ] && continue
+    export "$apiKeyVar=$apiKey"
+    cat >>"$cfg" <<EOF
+  - model_name: "${provider}/*"
     litellm_params:
-      model: ${provider}/${modelName}
+      model: "${provider}/*"
       api_key: os.environ/${apiKeyVar}
+EOF
+    providersAdded=$((providersAdded + 1))
+  done
+
+  if [ "$providersAdded" -eq 0 ]; then
+    return 0  # No provider keys to warm with.
+  fi
+
+  cat >>"$cfg" <<'EOF'
+
 litellm_settings:
   drop_params: true
 EOF
 
-  echo "→ runner: pre-warming litellm (model=${MODEL}, port=${LITELLM_PORT})"
+  echo "→ runner: pre-warming litellm (providers=${providersAdded}, port=${LITELLM_PORT})"
   litellm --config "$cfg" --port "$LITELLM_PORT" --host 0.0.0.0 \
     >"$LITELLM_LOG" 2>&1 &
   LITELLM_PID=$!
