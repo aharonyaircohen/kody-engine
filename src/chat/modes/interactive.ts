@@ -15,6 +15,7 @@
 
 import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
+import * as os from "node:os"
 import * as path from "node:path"
 import type { AgentResult } from "../../agent.js"
 import type { ProviderModel } from "../../config.js"
@@ -173,26 +174,100 @@ function findNextUserTurn(turns: ReturnType<typeof readSession>, fromIdx: number
 }
 
 /**
- * Commit + push the chat session/events files. Robust against concurrent
- * pushes to the same branch: on a non-fast-forward rejection, fetch,
- * rebase the runner's commit on top of origin, and retry the push.
+ * Commit + push the chat session/events files. The session/event JSONLs
+ * are runner-internal bookkeeping — they belong on the default branch
+ * (where the dashboard's poll reads from via the Contents API), NOT on
+ * whatever branch the runner happens to be checked out on.
  *
- * Why this matters: when the dashboard's user-turn append (Contents API)
- * races the runner's chat.message commit, OR when two interactive
- * sessions push to the same branch back-to-back, the second push gets
- * rejected. Without retry the events file never reaches origin and the
- * dashboard's poll sees nothing forever.
+ * For vibe sessions HEAD is the PR branch — committing the JSONLs there
+ * pollutes the PR diff with `.kody/sessions/<id>.jsonl` and
+ * `.kody/events/<id>.jsonl` rows that reviewers have to scroll past,
+ * and the files persist forever in main's history once the PR merges.
+ * Route the commit through a temporary worktree on `main` instead so
+ * the runner's working tree stays untouched and the PR diff is clean.
+ *
+ * For default-branch runs HEAD is already main, so we skip the worktree
+ * detour and commit + push directly.
+ *
+ * Both paths use the same retry-on-non-fast-forward push loop: when the
+ * dashboard's user-turn append (Contents API) races the runner's
+ * chat.message commit, OR when two interactive sessions push to the
+ * same branch back-to-back, the second push gets rejected. Without the
+ * retry the events file never reaches origin and the dashboard's poll
+ * sees nothing forever.
  */
 function commitTurn(cwd: string, sessionId: string, verbose: boolean): void {
   const sessionRel = path.relative(cwd, sessionFilePath(cwd, sessionId))
   const eventsRel = path.relative(cwd, eventsFilePath(cwd, sessionId))
   const paths = [sessionRel, eventsRel].filter((p) => fs.existsSync(path.join(cwd, p)))
   if (paths.length === 0) return
+
+  const startBranch = currentBranch(cwd)
+  const eventsBranch = defaultBranch(cwd) ?? "main"
+
+  if (startBranch === eventsBranch) {
+    // Already on main — commit + push in place.
+    commitPathsAndPush(cwd, paths, sessionId, verbose, "HEAD")
+    return
+  }
+
+  // Spin up a detached worktree on origin/<defaultBranch>, copy the
+  // JSONLs into it, then commit + push. The runner's main checkout
+  // (sitting on the PR branch) is untouched. We use a temp dir under
+  // os.tmpdir() so worktree teardown can't trash anything inside the
+  // repo cwd.
+  const stdio = verbose ? "inherit" : "pipe"
+  const exec = (args: string[]) => execFileSync("git", args, { cwd, stdio })
+  const worktreeDir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-events-"))
+  let worktreeAdded = false
+  try {
+    exec(["fetch", "--quiet", "origin", eventsBranch])
+    exec(["worktree", "add", "--detach", "--quiet", worktreeDir, `origin/${eventsBranch}`])
+    worktreeAdded = true
+    // Mirror the JSONL files from the runner's working tree into the
+    // worktree. They're append-only so a straight copy is correct;
+    // we don't need to merge with anything already on main (the
+    // dashboard's appends will have been pulled in by the runner's
+    // session-file polling loop before this commit fires).
+    for (const rel of paths) {
+      const src = path.join(cwd, rel)
+      const dst = path.join(worktreeDir, rel)
+      fs.mkdirSync(path.dirname(dst), { recursive: true })
+      fs.copyFileSync(src, dst)
+    }
+    commitPathsAndPush(worktreeDir, paths, sessionId, verbose, `HEAD:${eventsBranch}`)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    process.stderr.write(`[kody:chat:interactive] worktree commit failed: ${msg}\n`)
+  } finally {
+    if (worktreeAdded) {
+      try { exec(["worktree", "remove", "--force", "--quiet", worktreeDir]) } catch {
+        // Worktree teardown best-effort — the temp dir cleanup below still runs.
+      }
+    }
+    try { fs.rmSync(worktreeDir, { recursive: true, force: true }) } catch {
+      // Same — best-effort.
+    }
+  }
+}
+
+/**
+ * Stage the named paths, commit, and push to `pushSpec` (e.g. `HEAD` or
+ * `HEAD:main`). Retries up to 3× on non-fast-forward rejection by
+ * fetching and rebasing on top of the target ref.
+ */
+function commitPathsAndPush(
+  cwd: string,
+  paths: string[],
+  sessionId: string,
+  verbose: boolean,
+  pushSpec: string,
+): void {
   const stdio = verbose ? "inherit" : "pipe"
   const exec = (args: string[]) => execFileSync("git", args, { cwd, stdio })
 
-  // Stage + commit. `-f` because consumer repos sometimes gitignore .kody/*.
   try {
+    // `-f` because consumer repos sometimes gitignore .kody/*.
     exec(["add", "-f", ...paths])
     exec(["commit", "--quiet", "-m", `chat: interactive turn for ${sessionId}`])
   } catch (err) {
@@ -201,13 +276,10 @@ function commitTurn(cwd: string, sessionId: string, verbose: boolean): void {
     return
   }
 
-  // Push, retrying on non-fast-forward by fetch + rebase + push. Up to 3
-  // attempts so a contended branch with multiple concurrent writers
-  // eventually settles instead of dropping the events file.
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      exec(["push", "--quiet", "origin", "HEAD"])
-      return // pushed successfully
+      exec(["push", "--quiet", "origin", pushSpec])
+      return
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       const isNonFf = /non-fast-forward|fetch first|rejected/i.test(msg)
@@ -218,20 +290,47 @@ function commitTurn(cwd: string, sessionId: string, verbose: boolean): void {
       process.stderr.write(`[kody:chat:interactive] push rejected (attempt ${attempt}); fetch+rebase+retry\n`)
       try {
         exec(["fetch", "--quiet", "origin"])
-        const branch = currentBranch(cwd)
-        if (branch) {
-          exec(["rebase", "--quiet", `origin/${branch}`])
-        } else {
-          // Detached HEAD or unresolved branch — bail rather than guess.
-          process.stderr.write(`[kody:chat:interactive] cannot rebase: no current branch\n`)
+        // For pushSpec='HEAD:main' the rebase target is origin/main; for
+        // pushSpec='HEAD' we still want to rebase on the current
+        // upstream, which symbolic-ref returns.
+        const upstream = pushSpec.includes(":")
+          ? `origin/${pushSpec.split(":")[1]}`
+          : (() => {
+              const branch = currentBranch(cwd)
+              return branch ? `origin/${branch}` : null
+            })()
+        if (!upstream) {
+          process.stderr.write(`[kody:chat:interactive] cannot rebase: no upstream resolved\n`)
           return
         }
+        exec(["rebase", "--quiet", upstream])
       } catch (rebaseErr) {
         const rmsg = rebaseErr instanceof Error ? rebaseErr.message : String(rebaseErr)
         process.stderr.write(`[kody:chat:interactive] rebase failed: ${rmsg}\n`)
         return
       }
     }
+  }
+}
+
+/**
+ * Returns the repo's default branch name (the branch HEAD points at on
+ * the remote — typically `main`). Falls back to `null` if it can't be
+ * determined; callers should default to `"main"`.
+ */
+function defaultBranch(cwd: string): string | null {
+  try {
+    const out = execFileSync(
+      "git",
+      ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+      { cwd, stdio: ["ignore", "pipe", "ignore"] },
+    )
+    const symbolic = out.toString("utf-8").trim()
+    // Output shape: `origin/main` → strip the remote prefix.
+    if (symbolic.startsWith("origin/")) return symbolic.slice("origin/".length)
+    return symbolic || null
+  } catch {
+    return null
   }
 }
 
