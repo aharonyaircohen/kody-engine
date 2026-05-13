@@ -16,6 +16,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       socat \
     && rm -rf /var/lib/apt/lists/*
 
+# GitHub CLI — the engine shells out to `gh` for labels, comments, and PR
+# creation in agent mode (kody run). Pinned binary install avoids adding
+# an apt repo + key. Update the version pin manually when needed.
+ARG GH_VERSION=2.62.0
+RUN ARCH=$(dpkg --print-architecture) \
+ && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${ARCH}.tar.gz" \
+    | tar -xz -C /tmp \
+ && mv "/tmp/gh_${GH_VERSION}_linux_${ARCH}/bin/gh" /usr/local/bin/gh \
+ && rm -rf "/tmp/gh_${GH_VERSION}_linux_${ARCH}"
+
 RUN python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
     && /opt/venv/bin/pip install --no-cache-dir 'litellm[proxy]'
