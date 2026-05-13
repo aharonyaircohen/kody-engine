@@ -7,7 +7,7 @@ set -euo pipefail
 #   GITHUB_TOKEN    PAT or installation token with repo scope (required)
 #   SESSION_ID      chat session id (chat mode)
 #   INIT_MESSAGE    initial chat message (chat mode)
-#   MODEL           model override (optional)
+#   MODEL           model override (optional, e.g. "gemini/gemini-2.5-flash")
 #   DASHBOARD_URL   event ingest URL with inline ?token=... (chat mode)
 #   ALL_SECRETS     JSON blob of secrets the engine reads (mirrors Actions toJSON(secrets))
 #   ISSUE_NUMBER    issue number (agent mode)
@@ -19,16 +19,78 @@ WORKDIR="/workspace/repo"
 rm -rf "$WORKDIR"
 mkdir -p "$WORKDIR"
 
-# Authenticated clone. The remote URL keeps the token so the engine's
-# subsequent commits/pushes work without re-supplying creds. `x-access-token`
-# is the standard username GitHub expects when the token is the password.
-# Shallow by default — chat sessions don't need history. The engine can
-# `git fetch --unshallow` later if a tool needs deeper log/blame.
+# ─── In parallel: pre-warm LiteLLM while the repo clones ───────────────────
+#
+# The engine spawns LiteLLM lazily, after it's read the session file from the
+# cloned repo. That serializes ~24s clone + ~17s LiteLLM start. LiteLLM
+# doesn't need the repo, so we kick it off in the background while git
+# runs. The engine's checkLitellmHealth() detects the existing process and
+# skips its own spawn.
+#
+# Tightly coupled to engine internals (config format, port 4000, env-var
+# naming) — kept in sync with kody2/src/litellm.ts and config.ts. If the
+# pre-warm fails (no MODEL set, no API key, LiteLLM not in path), the
+# engine falls back to its own spawn — same wall time as today, no worse.
+LITELLM_PORT=4000
+LITELLM_LOG=/tmp/litellm.log
+LITELLM_PID=""
+
+prewarm_litellm() {
+  if [ -z "${MODEL:-}" ] || ! command -v litellm >/dev/null 2>&1; then
+    return 0
+  fi
+
+  # Parse "provider/model" — bail if it doesn't match.
+  local provider="${MODEL%%/*}"
+  local modelName="${MODEL#*/}"
+  if [ -z "$provider" ] || [ "$provider" = "$MODEL" ]; then
+    return 0
+  fi
+
+  # Resolve the env-var name for this provider's API key. Mirrors
+  # providerApiKeyEnvVar() in kody2/src/config.ts.
+  local apiKeyVar
+  if [ "$provider" = "anthropic" ] || [ "$provider" = "claude" ]; then
+    apiKeyVar="ANTHROPIC_API_KEY"
+  else
+    apiKeyVar="$(echo "$provider" | tr '[:lower:]' '[:upper:]')_API_KEY"
+  fi
+
+  # Pull the key out of ALL_SECRETS so LiteLLM can read it from env.
+  local apiKey=""
+  if [ -n "${ALL_SECRETS:-}" ] && command -v jq >/dev/null 2>&1; then
+    apiKey="$(printf '%s' "$ALL_SECRETS" | jq -r --arg k "$apiKeyVar" '.[$k] // empty' 2>/dev/null || true)"
+  fi
+  if [ -z "$apiKey" ]; then
+    return 0  # No key for this provider — let the engine handle it.
+  fi
+  export "$apiKeyVar=$apiKey"
+
+  # Generate the same config shape as generateLitellmConfigYaml().
+  local cfg=/tmp/kody-litellm.yaml
+  cat >"$cfg" <<EOF
+model_list:
+  - model_name: ${modelName}
+    litellm_params:
+      model: ${provider}/${modelName}
+      api_key: os.environ/${apiKeyVar}
+litellm_settings:
+  drop_params: true
+EOF
+
+  echo "→ runner: pre-warming litellm (model=${MODEL}, port=${LITELLM_PORT})"
+  litellm --config "$cfg" --port "$LITELLM_PORT" --host 0.0.0.0 \
+    >"$LITELLM_LOG" 2>&1 &
+  LITELLM_PID=$!
+}
+
+prewarm_litellm
+
+# ─── Foreground: clone the repo ────────────────────────────────────────────
 #
 # BRANCH defaults to "main" to match the GH Actions path (kody.yml's
 # workflow_dispatch always uses ref:main; session JSONL is written to main
-# by the dashboard). If the repo's default branch is not main, the GH path
-# would also fail — this is a kody-engine contract, not a runner choice.
+# by the dashboard).
 AUTH_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git"
 CLONE_DEPTH="${CLONE_DEPTH:-1}"
 BRANCH="${REF:-${BRANCH:-main}}"
@@ -43,6 +105,26 @@ cd "$WORKDIR"
 # Configure committer identity so the engine's git commit calls succeed.
 git config user.name  "${GIT_AUTHOR_NAME:-Kody Bot}"
 git config user.email "${GIT_AUTHOR_EMAIL:-kody-bot@users.noreply.github.com}"
+
+# ─── Wait for the LiteLLM pre-warm to be ready (or timeout) ────────────────
+#
+# By the time the clone finishes, LiteLLM is usually already listening.
+# We block briefly to make sure it's up before exec'ing kody — otherwise
+# the engine would spawn its own and waste the parallelism we just gained.
+if [ -n "$LITELLM_PID" ]; then
+  for _ in $(seq 1 30); do
+    if curl -sf "http://localhost:${LITELLM_PORT}/health" >/dev/null 2>&1; then
+      echo "→ runner: pre-warmed litellm is ready"
+      break
+    fi
+    if ! kill -0 "$LITELLM_PID" 2>/dev/null; then
+      echo "→ runner: pre-warm litellm exited early (engine will spawn its own)"
+      LITELLM_PID=""
+      break
+    fi
+    sleep 1
+  done
+fi
 
 export SESSION_ID="${SESSION_ID:-}"
 export INIT_MESSAGE="${INIT_MESSAGE:-}"
