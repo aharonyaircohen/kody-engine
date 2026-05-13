@@ -34,6 +34,13 @@ ENV PATH="/opt/venv/bin:${PATH}"
 ARG KODY_ENGINE_VERSION=latest
 RUN npm install -g @kody-ade/kody-engine@${KODY_ENGINE_VERSION}
 
+# Package managers — the engine's preflight + verify shell out to whatever
+# the cloned repo uses (pnpm/yarn/npm). Corepack ships with Node 22 and
+# shims all three so the right one is on PATH. Pre-activate pnpm@latest so
+# the first agent run doesn't pay the corepack-download delay.
+RUN corepack enable \
+ && corepack prepare pnpm@latest --activate
+
 WORKDIR /workspace
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
