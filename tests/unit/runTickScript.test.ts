@@ -174,7 +174,7 @@ EOF
   })
 
   it("does not leak parent secrets into the script's env", async () => {
-    // Pins the curated-env allow-list. Without it, KODY_VAULT_KEY and
+    // Pins the curated-env allow-list. Without it, KODY_MASTER_KEY and
     // similar secrets from the runner would be visible to any tick
     // script — a footgun amplified by `set -x`. The script echoes its
     // env into the fenced data block; we assert the secret is absent
@@ -186,7 +186,7 @@ EOF
     writeScript(
       ".kody/scripts/env.sh",
       `#!/usr/bin/env bash
-secret_present=$([ -n "\${KODY_VAULT_KEY:-}" ] && echo true || echo false)
+secret_present=$([ -n "\${KODY_MASTER_KEY:-}" ] && echo true || echo false)
 gh_present=$([ -n "\${GH_TOKEN:-}" ] && echo true || echo false)
 path_present=$([ -n "\${PATH:-}" ] && echo true || echo false)
 printf '%s\\n' '\`\`\`kody-job-next-state'
@@ -196,9 +196,9 @@ printf '%s\\n' '\`\`\`'
 `,
     )
 
-    const prevSecret = process.env.KODY_VAULT_KEY
+    const prevSecret = process.env.KODY_MASTER_KEY
     const prevGh = process.env.GH_TOKEN
-    process.env.KODY_VAULT_KEY = "test-vault-secret-do-not-leak"
+    process.env.KODY_MASTER_KEY = "test-vault-secret-do-not-leak"
     process.env.GH_TOKEN = "test-gh-token"
     try {
       const ctx = ctxFor(tmp, "demo")
@@ -210,8 +210,8 @@ printf '%s\\n' '\`\`\`'
       expect(next.data.gh).toBe(true)
       expect(next.data.path).toBe(true)
     } finally {
-      if (prevSecret === undefined) delete process.env.KODY_VAULT_KEY
-      else process.env.KODY_VAULT_KEY = prevSecret
+      if (prevSecret === undefined) delete process.env.KODY_MASTER_KEY
+      else process.env.KODY_MASTER_KEY = prevSecret
       if (prevGh === undefined) delete process.env.GH_TOKEN
       else process.env.GH_TOKEN = prevGh
     }

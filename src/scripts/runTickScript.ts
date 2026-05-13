@@ -89,7 +89,7 @@ export const runTickScript: PreflightScript = async (ctx, _profile, args) => {
   ctx.data.jobState = loaded
 
   // Curated env — do NOT pass `process.env` wholesale. Workflow runners
-  // hold KODY_VAULT_KEY, KODY_SESSION_SECRET, GitHub OAuth secrets, etc.;
+  // hold KODY_MASTER_KEY, GitHub OAuth secrets, model API keys, etc.;
   // a script with `set -x` would echo any of those into stdout/logs. The
   // allow-list covers what tick scripts actually need: PATH for binaries,
   // HOME/locale for tools that read them, GH_TOKEN/GH_PAT for `gh`, and
