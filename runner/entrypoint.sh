@@ -43,32 +43,36 @@ LITELLM_PID=""
 
 # Provider → API key env var. Mirrors kody2/src/config.ts
 # providerApiKeyEnvVar(). Add new providers in lockstep when the
-# engine learns about them.
-declare -A LITELLM_PROVIDER_KEY=(
-  [anthropic]=ANTHROPIC_API_KEY
-  [openai]=OPENAI_API_KEY
-  [gemini]=GEMINI_API_KEY
-  [minimax]=MINIMAX_API_KEY
-  [groq]=GROQ_API_KEY
-  [mistral]=MISTRAL_API_KEY
-  [deepseek]=DEEPSEEK_API_KEY
-)
+# engine learns about them. Plain space-separated list so this works
+# under any bash version (no `declare -A` requirement).
+LITELLM_PROVIDERS="anthropic:ANTHROPIC_API_KEY openai:OPENAI_API_KEY gemini:GEMINI_API_KEY minimax:MINIMAX_API_KEY groq:GROQ_API_KEY mistral:MISTRAL_API_KEY deepseek:DEEPSEEK_API_KEY"
 
 prewarm_litellm() {
-  if ! command -v litellm >/dev/null 2>&1; then return 0; fi
-  if ! command -v jq >/dev/null 2>&1; then return 0; fi
-  if [ -z "${ALL_SECRETS:-}" ]; then return 0; fi
+  if ! command -v litellm >/dev/null 2>&1; then
+    echo "→ runner: pre-warm skipped (litellm not in PATH)"
+    return 0
+  fi
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "→ runner: pre-warm skipped (jq not in PATH)"
+    return 0
+  fi
+  if [ -z "${ALL_SECRETS:-}" ] || [ "${ALL_SECRETS}" = "{}" ]; then
+    echo "→ runner: pre-warm skipped (ALL_SECRETS empty)"
+    return 0
+  fi
 
-  local cfg=/tmp/kody-litellm.yaml
+  cfg=/tmp/kody-litellm.yaml
   : >"$cfg"
   printf 'model_list:\n' >>"$cfg"
 
-  local providersAdded=0
-  for provider in "${!LITELLM_PROVIDER_KEY[@]}"; do
-    local apiKeyVar="${LITELLM_PROVIDER_KEY[$provider]}"
-    local apiKey
+  providersAdded=0
+  for entry in $LITELLM_PROVIDERS; do
+    provider="${entry%:*}"
+    apiKeyVar="${entry#*:}"
     apiKey="$(printf '%s' "$ALL_SECRETS" | jq -r --arg k "$apiKeyVar" '.[$k] // empty' 2>/dev/null || true)"
-    [ -z "$apiKey" ] && continue
+    if [ -z "$apiKey" ]; then
+      continue
+    fi
     export "$apiKeyVar=$apiKey"
     cat >>"$cfg" <<EOF
   - model_name: "${provider}/*"
@@ -80,7 +84,8 @@ EOF
   done
 
   if [ "$providersAdded" -eq 0 ]; then
-    return 0  # No provider keys to warm with.
+    echo "→ runner: pre-warm skipped (no provider keys in ALL_SECRETS)"
+    return 0
   fi
 
   cat >>"$cfg" <<'EOF'
