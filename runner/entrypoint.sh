@@ -152,10 +152,12 @@ git config user.email "${GIT_AUTHOR_EMAIL:-kody-bot@users.noreply.github.com}"
 # By the time the clone finishes, LiteLLM is usually already listening.
 # We block briefly to make sure it's up before exec'ing kody — otherwise
 # the engine would spawn its own and waste the parallelism we just gained.
+LITELLM_READY=0
 if [ -n "$LITELLM_PID" ]; then
   for _ in $(seq 1 30); do
     if curl -sf "http://localhost:${LITELLM_PORT}/health" >/dev/null 2>&1; then
       echo "→ runner: pre-warmed litellm is ready"
+      LITELLM_READY=1
       break
     fi
     if ! kill -0 "$LITELLM_PID" 2>/dev/null; then
@@ -165,6 +167,18 @@ if [ -n "$LITELLM_PID" ]; then
     fi
     sleep 1
   done
+
+  # If the forward never answered /health, it's broken — kill socat so it
+  # stops squatting on port 4000. Otherwise the engine's startLitellmIfNeeded
+  # spawns its own litellm with --port 4000, uvicorn falls back to a random
+  # free port because socat owns 4000, and the engine then health-polls 4000
+  # forever (it doesn't know the real port) → 60s timeout → exit 99.
+  if [ "$LITELLM_READY" = "0" ] && [ -n "$LITELLM_PID" ]; then
+    echo "→ runner: pre-warm forward never responded — releasing port for engine"
+    kill "$LITELLM_PID" 2>/dev/null || true
+    wait "$LITELLM_PID" 2>/dev/null || true
+    LITELLM_PID=""
+  fi
 fi
 
 export SESSION_ID="${SESSION_ID:-}"
