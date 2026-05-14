@@ -39,7 +39,7 @@ Two-layer design: **generic executor** + **declarative executable profile** + **
 2. **Executable directories contain only `profile.json`, `prompt.md`, `.sh` scripts, and optional plugin-part subdirs (`skills/`, `commands/`, `agents/`, `hooks/`).** TypeScript lives exclusively in `src/scripts/`, and only for logic shared across multiple executables. Plugin-part subdirs ship Claude Agent SDK assets (markdown / JSON, no TS) that are specific to this one executable; `buildSyntheticPlugin` resolves them from the executable dir first, then falls back to the central catalog under `src/plugins/`. **Design smell**: if a piece of logic is too complex for shell AND specific to one executable, that's a warning sign — either simplify the logic so shell can express it, or promote the piece into a cross-cutting utility in `src/scripts/`. Never the middle ground ("just this once I'll put executable-specific TS somewhere").
 3. Scripts compose via `runWhen` — it is the only conditional primitive available to profiles.
 4. Wrapper/verification/git logic belongs in scripts (postflight), not inline in executor or profile.
-5. **Never touch YAML.** [templates/kody.yml](templates/kody.yml) is read-only — no edits, no new inputs, no permission bumps. No new `.github/workflows/*.yml` files (no `kody-<feature>.yml`). No edits to [src/scripts/initFlow.ts](src/scripts/initFlow.ts)'s `WORKFLOW_TEMPLATE` or `renderScheduledWorkflow`. No multi-job `needs:` / matrix / `if:` flow logic in any workflow. All capability ships via `npm publish`.
+5. **Never touch YAML, except as part of a release.** [templates/kody.yml](templates/kody.yml) is otherwise read-only — no edits, no new inputs, no permission bumps. The one exception: when the template itself must change (e.g. infra step added/removed), the edit must land in the same commit as a `package.json` version bump that updates the `@kody-ade/kody-engine@X.Y.Z` pin in the template to the new version. No new `.github/workflows/*.yml` files (no `kody-<feature>.yml`). No edits to [src/scripts/initFlow.ts](src/scripts/initFlow.ts)'s `WORKFLOW_TEMPLATE` or `renderScheduledWorkflow`. No multi-job `needs:` / matrix / `if:` flow logic in any workflow. All capability ships via `npm publish`.
 6. **"Kody Job" means `.kody/jobs/<slug>.md`** — a markdown file in the consumer repo describing the job's intent. Ticked by the existing `job-scheduler` watch on every `templates/kody.yml` wake. Contract: [src/executables/job-tick/prompt.md](src/executables/job-tick/prompt.md). When the user asks for "a job", this is the default shape — no YAML, no engine code, no publish.
 7. **Watch executables are a separate shape** — engine-shipped at `src/executables/<name>/profile.json` with `role: "watch"`, `kind: "scheduled"`, and a `schedule` cron. Fanned out by [`dispatchScheduledWatches`](src/dispatch.ts) on each wake. Output via `postIssueComment`, never `commitAndPush`. Use only for cross-consumer features that must ship in the npm package. Canonical: [src/executables/watch-stale-prs/](src/executables/watch-stale-prs/). Don't call these "jobs".
 
@@ -51,7 +51,13 @@ Adding a new command = new `src/executables/<name>/` + `profile.json` + `prompt.
 
 ## Release
 
-Version lives in `package.json` only ([src/entry.ts](src/entry.ts) reads it from there at runtime). Bump, tag `vX.Y.Z`, and push with `--follow-tags`. Publish is manual (`pnpm publish --access public`, which runs `prepublishOnly → build`). Default to patch bumps unless the user requests otherwise.
+Version lives in `package.json` only ([src/entry.ts](src/entry.ts) reads it from there at runtime). Every release:
+
+1. Bump `package.json` version.
+2. Update the `@kody-ade/kody-engine@X.Y.Z` pin in [templates/kody.yml](templates/kody.yml) to match — the template always references its own engine version, so consumers never get a template/engine mismatch.
+3. Tag `vX.Y.Z`, push with `--follow-tags`. Publish is manual (`pnpm publish --access public`, which runs `prepublishOnly → build`).
+
+Default to patch bumps unless the user requests otherwise. Consumer repos are version-pinned: they will **not** auto-pick-up a new engine — their `kody.yml` must be resynced to upgrade.
 
 ## Live testing
 

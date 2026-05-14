@@ -335,7 +335,7 @@ The check counts **lifecycle-expanded references** (a profile that opts into `li
 
 **`aharonyaircohen/Kody-Engine-Tester`** is the live-test bed. It is a Next.js + Payload CMS LMS with intentional pre-existing quality-gate failures (TypeScript errors, time-sensitive tests, missing Postgres) so verify drafts are informative, not scary.
 
-- Its `.github/workflows/kody.yml` pulls `@kody-ade/kody-engine@latest` via `npx`. Version bumps propagate automatically on next run.
+- Its `.github/workflows/kody.yml` pins an exact `@kody-ade/kody-engine@X.Y.Z` version via `npx`. Version bumps do **not** propagate automatically — the tester's workflow must be resynced from the new template to pick up a new engine.
 - Its `kody.config.json` declares `agent.model`, quality commands, and `testRequirements` (route.ts files require a sibling `route.test.ts`).
 - To live-test a change: publish the new kody version, comment `@kody` on a fresh issue there (or PR comment for fix/fix-ci/resolve).
 
@@ -344,7 +344,7 @@ The check counts **lifecycle-expanded references** (a profile that opts into `li
 1. Read the relevant code in `src/` — start with `executor.ts` and the profile directories under `src/executables/`.
 2. For feature requests: is it an **existing profile** change (tweak one command), a **new profile** (new top-level command — new dir under `src/executables/`), a **script** change (new postflight hook), or an **executor** change (new conditional primitive / new SDK surface)? 90% of the time it's scripts or a profile.
 3. `pnpm typecheck && pnpm test && pnpm test:e2e` before any commit.
-4. Release flow: bump patch in `package.json`, update version string in `src/entry.ts`, commit, tag `vX.Y.Z`, `git push --follow-tags`, `npm publish --access public`.
+4. Release flow: bump patch in `package.json`, update the `@kody-ade/kody-engine@X.Y.Z` pin in `templates/kody.yml` to the same version, commit, tag `vX.Y.Z`, `git push --follow-tags`, `npm publish --access public`. (`src/entry.ts` reads the version from `package.json` at runtime — no separate string to update.)
 5. Live-test on the tester before declaring success.
 
 ## External dependencies worth knowing

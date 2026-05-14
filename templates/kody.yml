@@ -80,17 +80,9 @@ jobs:
         with:
           node-version: 22
 
-      - name: Write pip cache key for LiteLLM
-        run: echo "litellm[proxy]" > .kody-pip-requirements.txt
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
-          cache-dependency-path: .kody-pip-requirements.txt
-
-      - name: Remove pip cache key file (avoid blocking branch switches)
-        run: rm -f .kody-pip-requirements.txt
 
       - env:
           ALL_SECRETS:   ${{ toJSON(secrets) }}
@@ -98,4 +90,4 @@ jobs:
           INIT_MESSAGE:  ${{ inputs.message }}
           MODEL:         ${{ inputs.model }}
           DASHBOARD_URL: ${{ inputs.dashboardUrl }}
-        run: npx -y -p @kody-ade/kody-engine@latest kody
+        run: npx -y -p @kody-ade/kody-engine@0.4.75 kody
