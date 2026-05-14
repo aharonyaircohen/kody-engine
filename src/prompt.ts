@@ -197,10 +197,21 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
   // `**DONE**`, `### DONE`, `> FAILED: …`, `- DONE`). The leading character
   // class also matches plain whitespace, so unstyled output keeps working.
   const MARKDOWN_PREFIX = "[\\s>*_#`~\\-]*"
-  const FAILED_RE = new RegExp(`(?:^|\\n)${MARKDOWN_PREFIX}FAILED${MARKDOWN_PREFIX}\\s*:\\s*(.+?)\\s*$`, "is")
-  const DONE_RE = new RegExp(`(?:^|\\n)${MARKDOWN_PREFIX}DONE\\b`, "i")
+  // Markers are uppercase by contract. Case-insensitive matching on `FAILED:`
+  // turned out to be load-bearing-wrong: a planner output that quoted a
+  // status-config map like `failed: { color: ... }` inside a fenced code
+  // block was treated as an explicit failure declaration, with the lazy
+  // dotall capture slurping the rest of the document as the failure reason.
+  // Marker detection also runs against a copy of the text with fenced code
+  // blocks stripped, so any quoted markers (DONE / FAILED:) inside example
+  // code can't masquerade as contract sentinels. Artifact extraction
+  // (PR_SUMMARY, COMMIT_MSG, …) still uses the original text — those are
+  // expected at the top level, not buried in code blocks.
+  const FAILED_RE = new RegExp(`(?:^|\\n)${MARKDOWN_PREFIX}FAILED${MARKDOWN_PREFIX}\\s*:\\s*(.+?)\\s*$`, "s")
+  const DONE_RE = new RegExp(`(?:^|\\n)${MARKDOWN_PREFIX}DONE\\b`)
+  const scanText = stripFencedCodeBlocks(text)
 
-  const failedMatch = text.match(FAILED_RE)
+  const failedMatch = scanText.match(FAILED_RE)
   if (failedMatch) {
     return {
       done: false,
@@ -221,7 +232,7 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
   // five-letter sentinel costs a full agent invocation and orphans working
   // branches; the harness checks reality (verify, tests, branch state) in
   // postflights to decide whether the work is shippable.
-  const hasDoneMarker = DONE_RE.test(text)
+  const hasDoneMarker = DONE_RE.test(scanText)
   const hasCommitMsg = /^[\s>*_#`~-]*COMMIT_MSG\s*:/im.test(text)
   const hasPrSummary = /^[\s>*_#`~-]*PR_SUMMARY\s*:/im.test(text)
   const markerMissing = !hasDoneMarker && !hasCommitMsg && !hasPrSummary
@@ -288,6 +299,17 @@ function stripMarkdownEmphasis(s: string): string {
     .trim()
     .replace(/^[*_`~]+|[*_`~]+$/g, "")
     .trim()
+}
+
+/**
+ * Replace fenced code blocks (``` … ``` and ~~~ … ~~~) with empty strings so
+ * the marker scanner can't be fooled by quoted code containing `failed:` /
+ * `DONE` / etc. Only used for marker detection — artifact extractors still
+ * see the original text, since legitimate `PR_SUMMARY:` bodies may contain
+ * fenced code that we must preserve verbatim.
+ */
+function stripFencedCodeBlocks(s: string): string {
+  return s.replace(/```[\s\S]*?```/g, "").replace(/~~~[\s\S]*?~~~/g, "")
 }
 
 function extractBlock(text: string, startMarker: RegExp, endMarker: RegExp): string {

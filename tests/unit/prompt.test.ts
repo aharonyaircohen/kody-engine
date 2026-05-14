@@ -204,6 +204,54 @@ describe("prompt: parseAgentResult", () => {
     expect(result.failureReason).toBe("tests broken")
   })
 
+  // Regression: planner output that quoted a status-config map
+  //   ```
+  //   failed: { color: '...', label: 'Failed' },
+  //   ```
+  // matched FAILED_RE case-insensitively, and the lazy dotall capture
+  // slurped the rest of the document as the failure reason.
+  // See issue A-Guy-educ/A-Guy#1618.
+  it("ignores lowercase 'failed:' inside a fenced code block", () => {
+    const plan = [
+      "Here is the plan:",
+      "",
+      "```tsx",
+      "const STATUS_CONFIG = {",
+      "  pending: { color: 'var(--theme-warning)', label: 'Pending' },",
+      "  failed: { color: 'var(--theme-error)', label: 'Failed' },",
+      "  refunded: { color: 'var(--theme-elevation-500)', label: 'Refunded' },",
+      "}",
+      "```",
+      "",
+      "DONE",
+      "COMMIT_MSG: feat: add status config",
+      "PR_SUMMARY:",
+      "- status badges",
+    ].join("\n")
+    const result = parseAgentResult(plan)
+    expect(result.done).toBe(true)
+    expect(result.failureReason).toBe("")
+    expect(result.commitMessage).toBe("feat: add status config")
+  })
+
+  it("ignores uppercase FAILED inside a fenced code block", () => {
+    const plan = [
+      "Example error message we handle:",
+      "",
+      "```",
+      "FAILED: some upstream tool error we are quoting",
+      "```",
+      "",
+      "DONE",
+      "COMMIT_MSG: fix: handle upstream error",
+      "PR_SUMMARY:",
+      "- handled",
+    ].join("\n")
+    const result = parseAgentResult(plan)
+    expect(result.done).toBe(true)
+    expect(result.failureReason).toBe("")
+  })
+
   it("treats missing-marker output as success (harness checks reality, not sentinels)", () => {
     const result = parseAgentResult("just some text")
     expect(result.done).toBe(true)
