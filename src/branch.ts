@@ -220,6 +220,31 @@ export function ensureFeatureBranch(
     } catch {
       /* best effort */
     }
+
+    // Stale-branch guard: a feature branch left over from a prior session
+    // may be hundreds of commits behind origin/<defaultBranch>. Resuming on
+    // that tip causes the PR to surface every drift commit as a "change"
+    // and triggers spurious merge conflicts at PR time. Merge the current
+    // default branch in now so the resume continues from an up-to-date base.
+    //
+    // Skipped when a caller-supplied `baseBranch` is in play (goal flow):
+    // those branches are intentionally forked from a non-default base and
+    // the earlier descends-from-base guard already handled corruption.
+    if (!baseBranch || baseBranch === defaultBranch) {
+      try {
+        git(["merge", "--no-edit", `origin/${defaultBranch}`], cwd)
+      } catch {
+        try {
+          git(["merge", "--abort"], cwd)
+        } catch {
+          /* best effort */
+        }
+        throw new Error(
+          `Branch '${branchName}' has merge conflicts with 'origin/${defaultBranch}'. ` +
+            "Resolve manually or delete the branch to start fresh.",
+        )
+      }
+    }
     return { branch: branchName, created: false }
   }
 
