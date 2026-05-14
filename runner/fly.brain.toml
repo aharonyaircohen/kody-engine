@@ -1,0 +1,40 @@
+# Template config for a per-user Brain app on Fly.
+#
+# The dashboard provisioner (Kody-Dashboard → /api/kody/brain/provision)
+# creates one app per user — name is "kody-brain-<userId>" — and one
+# Machine inside it. This toml is the reference shape; it is NOT used by
+# `fly deploy` against a single shared app. The provisioner sets the
+# fields below via the Fly Machines API directly.
+#
+# Notable: auto_stop_machines = "suspend" suspends after idle (resume in
+# ~1s on next request), so per-user cost approaches zero when not in use.
+
+app = "kody-brain-template"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile.brain"
+
+[experimental]
+  auto_rollback = true
+
+# One HTTP service. Fly terminates TLS on :443 and forwards to the Node
+# HTTP server inside the machine on PORT=8080.
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 50
+    hard_limit = 100
+
+# Performance-1x is the sweet spot for chat (see runner PERF_GUEST). The
+# provisioner picks the actual size from the user's perf tier — this is
+# only a default when no tier is set.
+[[vm]]
+  size = "performance-1x"
+  memory = "2gb"

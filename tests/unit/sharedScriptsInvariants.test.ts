@@ -149,6 +149,11 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   runTickScript: { owner: "job-tick-scripted", reason: "Scripted job-tick variant runner." },
   saveGoalState: { owner: "goal-tick", reason: "goal-tick state-machine step." },
   serveFlow: { owner: "serve", reason: "serve is bespoke (no-agent, long-lived local infra). Same shape as initFlow." },
+  brainServe: {
+    owner: "brain-serve",
+    reason:
+      "brain-serve is a long-lived HTTP server wrapping the chat loop for the Kody-Dashboard Brain proxy. Single-purpose; no other executable should share it.",
+  },
   stageMergeConflicts: { owner: "resolve", reason: "resolve-only postflight." },
   startFlow: { owner: "spec", reason: "spec-only entry point." },
   verifyReproFails: { owner: "reproduce", reason: "Reproduce-only assertion." },
