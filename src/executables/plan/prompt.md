@@ -89,7 +89,19 @@ For EACH file you will change or create, include:
  - Target state — what will be there after the change, at the same level of specificity.
  - Exact locations of edits (function name, line range if stable, or anchor like "after the `meta` group field, before the closing `fields: []`").
  - For new files: rough shape including exports, key functions with signatures, and top-level module comment. **Do not paste full function bodies** — signatures and 1–2 sentence intent per export are enough for an implementer to write the body. Single-line type/interface declarations and short config snippets are fine.
- - Dependencies touched (imports added/removed, new packages) — call out if anything needs installing.
+ - Dependencies touched (imports added/removed) — call out per file; list any new third-party packages here AND aggregate them in the `## Dependencies to install` section below.
+
+## Dependencies to install
+REQUIRED if the plan introduces any third-party import not already present in
+the repo's manifest (`package.json` / `requirements.txt` / `go.mod` / etc).
+One line per dep with the exact install command the implementer should run,
+picked from the repo's lockfile (`pnpm-lock.yaml` → pnpm, `package-lock.json`
+→ npm, `yarn.lock` → yarn, `bun.lockb` → bun):
+ - `pnpm add <pkg>` — runtime dep, used by `<file>`
+ - `pnpm add -D <pkg>` — dev/types-only dep (`@types/*`, test tooling)
+If no new deps are needed, write the single line `- none`. Omitting this
+section when new deps ARE needed is a planning failure — the implementer will
+hit a `Cannot find module` typecheck error and have to recover blind.
 
 ## Algorithms & pseudocode
 REQUIRED for any non-trivial logic (sorting, diffing, state transitions, concurrency, batching, caching, conflict resolution).
