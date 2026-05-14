@@ -33,6 +33,33 @@ LITELLM_PID=""
 
 LITELLM_PROVIDERS="anthropic:ANTHROPIC_API_KEY openai:OPENAI_API_KEY gemini:GEMINI_API_KEY minimax:MINIMAX_API_KEY groq:GROQ_API_KEY mistral:MISTRAL_API_KEY deepseek:DEEPSEEK_API_KEY"
 
+# Flatten ALL_SECRETS into top-level env vars BEFORE anything else looks
+# at them. The chat loop / startLitellmIfNeeded reads provider keys from
+# process.env directly, and the local-fallback LiteLLM config also uses
+# `os.environ/<KEY>`. We do this even when KODY_LITELLM_URL is set — if
+# the shared proxy is unreachable, the engine will spawn its own and
+# expects the keys to already be in env.
+extract_secrets_to_env() {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "→ brain: secret-extract skipped (jq not in PATH)"
+    return 0
+  fi
+  if [ -z "${ALL_SECRETS:-}" ] || [ "${ALL_SECRETS}" = "{}" ]; then
+    echo "→ brain: secret-extract skipped (ALL_SECRETS empty)"
+    return 0
+  fi
+  for entry in $LITELLM_PROVIDERS; do
+    apiKeyVar="${entry#*:}"
+    apiKey="$(printf '%s' "$ALL_SECRETS" | jq -r --arg k "$apiKeyVar" '.[$k] // empty' 2>/dev/null || true)"
+    if [ -n "$apiKey" ]; then
+      export "$apiKeyVar=$apiKey"
+      echo "→ brain: exported $apiKeyVar from ALL_SECRETS"
+    fi
+  done
+}
+
+extract_secrets_to_env
+
 prewarm_litellm() {
   if [ -n "${KODY_LITELLM_URL:-}" ]; then
     if ! command -v socat >/dev/null 2>&1; then
