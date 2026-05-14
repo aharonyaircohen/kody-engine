@@ -153,4 +153,15 @@ export MODEL="${MODEL:-}"
 export ALL_SECRETS="${ALL_SECRETS:-{\}}"
 
 echo "→ brain: starting kody brain-serve on :${PORT} (repo=${REPO} ref=${BRANCH})"
-exec kody brain-serve
+
+# Use the absolute path to the engine's bin script. The `kody` shim on
+# PATH is a symlink whose target may be lost between Docker layers in
+# some build paths; the absolute path is invariant. If this fails the
+# subsequent error will name the missing file directly.
+KODY_BIN="/usr/local/lib/node_modules/@kody-ade/kody-engine/dist/bin/kody.js"
+if [ ! -f "$KODY_BIN" ]; then
+  echo "→ brain: ERROR: $KODY_BIN missing — image build is broken"
+  ls -la /usr/local/lib/node_modules/@kody-ade/kody-engine/ 2>&1 || true
+  exit 127
+fi
+exec node "$KODY_BIN" brain-serve

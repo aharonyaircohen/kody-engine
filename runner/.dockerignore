@@ -1,3 +1,5 @@
 **
 !Dockerfile
+!Dockerfile.brain
 !entrypoint.sh
+!entrypoint-brain.sh

@@ -30,8 +30,33 @@ RUN python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir 'litellm[proxy]'
 ENV PATH="/opt/venv/bin:${PATH}"
 
-ARG KODY_ENGINE_VERSION=latest
-RUN npm install -g @kody-ade/kody-engine@${KODY_ENGINE_VERSION}
+# Install from git so unreleased changes (e.g. the brain-serve executable
+# itself) are available before the next npm publish. Pin via KODY_ENGINE_REF
+# for reproducibility. We build inside the image because `npm install
+# git+...` does NOT trigger the package's `prepublishOnly` hook, so dist/
+# would otherwise be empty and the `kody` bin would be missing. Once
+# brain-serve lands in a published version this can revert to
+# `npm install -g @kody-ade/kody-engine@<version>`.
+ARG KODY_ENGINE_REF=main
+# Build → pack → install via tarball. `npm install -g /local/path` on a
+# pnpm-managed repo doesn't reliably include the dist/ directory at the
+# install root (the file made it into the layer at build time but not into
+# the installed package). Going through `npm pack` honors the package's
+# `files` field deterministically, and `npm install -g <tarball>` then
+# behaves the same way a published package would.
+RUN corepack enable \
+ && git clone --depth=1 --branch "${KODY_ENGINE_REF}" \
+      https://github.com/aharonyaircohen/kody-engine.git /tmp/kody-engine \
+ && cd /tmp/kody-engine \
+ && pnpm install --frozen-lockfile --ignore-scripts \
+ && pnpm build \
+ && test -f dist/bin/kody.js \
+ && PKG_TARBALL="$(npm pack --silent)" \
+ && npm install -g "/tmp/kody-engine/$PKG_TARBALL" \
+ && which kody \
+ && test -f /usr/local/lib/node_modules/@kody-ade/kody-engine/dist/bin/kody.js \
+ && kody version \
+ && rm -rf /tmp/kody-engine
 
 # Package managers — same rationale as the runner: chat loop can run repo
 # scripts, so pnpm/yarn/npm need to be on PATH.
