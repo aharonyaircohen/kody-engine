@@ -6,9 +6,12 @@
  * message is a fresh dispatch with the full session history already on disk.
  */
 
+import * as fs from "node:fs"
+
 import type { AgentResult } from "../agent.js"
 import { runAgent } from "../agent.js"
 import type { ProviderModel } from "../config.js"
+import { listExecutables } from "../registry.js"
 import type { ChatEvent, EventSink } from "./events.js"
 import { makeRunId } from "./events.js"
 import type { ChatTurn } from "./session.js"
@@ -76,6 +79,46 @@ export const CHAT_SYSTEM_PROMPT = [
   "cite something concrete, you must have just read or run it in this session.",
 ].join("\n")
 
+/**
+ * Discover engine + project executables and render a markdown catalog the
+ * chat agent can read. Rebuilt each call so a freshly-added `<name>/profile.json`
+ * is picked up without a restart. Failures degrade silently (empty string)
+ * because the rest of the chat loop must not depend on this list being present.
+ */
+export function buildExecutableCatalog(): string {
+  let discovered: ReturnType<typeof listExecutables>
+  try {
+    discovered = listExecutables()
+  } catch {
+    return ""
+  }
+  const entries: { name: string; describe: string }[] = []
+  for (const { name, profilePath } of discovered) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as Record<string, unknown>
+      const describe = typeof raw.describe === "string" ? raw.describe : ""
+      const firstSentence = describe.split(/(?<=[.!?])\s+/, 1)[0] ?? ""
+      entries.push({ name, describe: firstSentence.trim() })
+    } catch {
+      // Skip unreadable / malformed profiles — they would fail at dispatch anyway.
+    }
+  }
+  if (entries.length === 0) return ""
+  const lines = [
+    "",
+    "# Available executables",
+    "These run inside the engine, NOT inside this chat. You cannot invoke them",
+    "directly — to run one, tell the user to post `@kody <name>` (with any flags)",
+    "as a comment on the relevant issue or PR. The dispatcher binds the issue/PR",
+    "number to the executable's inputs automatically.",
+    "",
+  ]
+  for (const e of entries) {
+    lines.push(`- \`${e.name}\` — ${e.describe || "(no description)"}`)
+  }
+  return lines.join("\n")
+}
+
 export interface ChatTurnOptions {
   sessionId: string
   sessionFile: string
@@ -111,7 +154,9 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
     return { exitCode: 64, error }
   }
 
-  const systemPrompt = opts.systemPrompt ?? CHAT_SYSTEM_PROMPT
+  const basePrompt = opts.systemPrompt ?? CHAT_SYSTEM_PROMPT
+  const catalog = buildExecutableCatalog()
+  const systemPrompt = catalog ? `${basePrompt}\n\n${catalog}` : basePrompt
   const prompt = buildPrompt(turns)
 
   // Sequence counter for deterministic ordering of progress events on the
