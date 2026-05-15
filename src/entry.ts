@@ -18,20 +18,20 @@ interface ParsedArgs {
   statsArgv?: string[]
 }
 
-const HELP_TEXT = `kody — single-session autonomous engineer
+const HELP_TEXT = `kody-engine — single-session autonomous engineer
 
 Usage:
-  kody run     --issue <N> [--cwd <path>] [--verbose|--quiet]
-  kody fix     --pr    <N> [--feedback "..."] [--cwd <path>] [--verbose|--quiet]
-  kody fix-ci  --pr    <N> [--run-id <ID>]    [--cwd <path>] [--verbose|--quiet]
-  kody resolve --pr    <N>                    [--cwd <path>] [--verbose|--quiet]
-  kody review  --pr    <N>                    [--cwd <path>] [--verbose|--quiet]
-  kody <other>                                [--cwd <path>] [--verbose|--quiet]
-  kody ci      --issue <N> [preflight flags — see: kody ci --help]
-  kody chat    [chat flags — see: kody chat --help]
-  kody stats   [--since 7d|--run <id>|--json|--cwd <path>]
-  kody help
-  kody version
+  kody-engine run     --issue <N> [--cwd <path>] [--verbose|--quiet]
+  kody-engine fix     --pr    <N> [--feedback "..."] [--cwd <path>] [--verbose|--quiet]
+  kody-engine fix-ci  --pr    <N> [--run-id <ID>]    [--cwd <path>] [--verbose|--quiet]
+  kody-engine resolve --pr    <N>                    [--cwd <path>] [--verbose|--quiet]
+  kody-engine review  --pr    <N>                    [--cwd <path>] [--verbose|--quiet]
+  kody-engine <other>                                [--cwd <path>] [--verbose|--quiet]
+  kody-engine ci      --issue <N> [preflight flags — see: kody-engine ci --help]
+  kody-engine chat    [chat flags — see: kody-engine chat --help]
+  kody-engine stats   [--since 7d|--run <id>|--json|--cwd <path>]
+  kody-engine help
+  kody-engine version
 
 Each top-level command (run, fix, fix-ci, resolve, review, …) is a discovered
 executable under \`src/executables/<name>/profile.json\`. Drop in a new

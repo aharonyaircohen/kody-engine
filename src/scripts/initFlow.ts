@@ -129,7 +129,7 @@ jobs:
 
       - env:
           ALL_SECRETS: \${{ toJSON(secrets) }}
-        run: npx -y -p @kody-ade/kody-engine@latest kody ci --issue \${{ github.event.inputs.issue_number || github.event.issue.number }}
+        run: npx -y -p @kody-ade/kody-engine@latest kody-engine ci --issue \${{ github.event.inputs.issue_number || github.event.issue.number }}
 `
 
 function defaultBranchFromGit(cwd: string): string {
@@ -297,7 +297,7 @@ jobs:
           node-version: 22
       - env:
           GH_TOKEN: \${{ secrets.KODY_TOKEN || github.token }}
-        run: npx -y -p @kody-ade/kody-engine@latest kody ${name}
+        run: npx -y -p @kody-ade/kody-engine@latest kody-engine ${name}
 `
 }
 
