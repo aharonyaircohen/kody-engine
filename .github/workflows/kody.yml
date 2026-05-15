@@ -103,6 +103,5 @@ jobs:
           DASHBOARD_URL: ${{ inputs.dashboardUrl }}
         run: |
           set -x
-          npx --loglevel verbose -y -p @kody-ade/kody-engine@0.4.76 kody version
-          echo "---second invocation---"
-          npx -y -p @kody-ade/kody-engine@0.4.76 kody
+          cd /tmp
+          npx -y -p @kody-ade/kody-engine@0.4.76 kody version
