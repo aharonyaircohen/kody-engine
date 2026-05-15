@@ -52,6 +52,13 @@ export interface JobFrontmatter {
    * fenced JSON block.
    */
   tickScript?: string
+  /**
+   * When `true`, the scheduler skips this slug on every cron wake. Manual
+   * triggers (workflow_dispatch via the dashboard "Run now" button) still
+   * fire — disabling only blocks autonomous execution, not deliberate user
+   * action. Absent or `false` keeps the job active.
+   */
+  disabled?: boolean
 }
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
@@ -116,6 +123,10 @@ function parseFlatYaml(text: string): JobFrontmatter {
       out.every = value
     } else if (key === "tickScript" && value.length > 0) {
       out.tickScript = value
+    } else if (key === "disabled") {
+      const lower = value.toLowerCase()
+      if (lower === "true") out.disabled = true
+      else if (lower === "false") out.disabled = false
     }
   }
   return out

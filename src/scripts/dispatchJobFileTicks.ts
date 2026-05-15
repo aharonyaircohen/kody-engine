@@ -67,6 +67,17 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
       // here to keep the dispatcher cheap on repos with many jobs.
       const frontmatter = readJobFrontmatter(ctx.cwd, jobsDir, slug)
 
+      // Hard kill-switch — when the dashboard's enable/disable toggle
+      // flips a job off, the frontmatter carries `disabled: true`. Skip
+      // before cadence math so a disabled job never re-arms its
+      // lastFiredAt or churns state. Manual `workflow_dispatch` runs
+      // (the dashboard "Run now" button) bypass this dispatcher entirely.
+      if (frontmatter.disabled === true) {
+        process.stdout.write(`[jobs] ⏭  skip ${slug}: disabled in frontmatter\n`)
+        results.push({ slug, exitCode: 0, skipped: true, reason: "disabled" })
+        continue
+      }
+
       // Decide whether this slug is due, given its frontmatter `every` and
       // the previously persisted `data.lastFiredAt`. Jobs without a
       // schedule (or with a malformed one) tick every wake — preserves
