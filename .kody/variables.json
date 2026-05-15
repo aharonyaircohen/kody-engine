@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "variables": {
+    "LLM_MODELS": {
+      "value": "[{\"id\":\"minimax/MiniMax-M2.7-highspeed\",\"label\":\"MiniMax\",\"provider\":\"custom\",\"protocol\":\"openai\",\"baseURL\":\"https://api.minimax.io/v1\",\"modelName\":\"MiniMax-M2.7-highspeed\",\"apiKeySecret\":\"MINIMAX_API_KEY\",\"enabled\":true,\"default\":true,\"maxSteps\":200}]",
+      "updatedAt": "2026-05-15T03:33:56.813Z",
+      "updatedBy": "aguyaharonyair"
+    }
+  }
+}
