@@ -13,7 +13,7 @@
     "kody.config.schema.json"
   ],
   "scripts": {
-    "run": "tsx bin/kody.ts",
+    "kody:run": "tsx bin/kody.ts",
     "serve": "tsx bin/kody.ts serve",
     "serve:vscode": "tsx bin/kody.ts serve vscode",
     "serve:claude": "tsx bin/kody.ts serve claude",
