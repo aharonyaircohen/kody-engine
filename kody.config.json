@@ -1,0 +1,17 @@
+{
+  "$schema": "./kody.config.schema.json",
+  "agent": {
+    "model": "minimax/MiniMax-M2.7-highspeed"
+  },
+  "github": {
+    "owner": "aharonyaircohen",
+    "repo": "kody-engine"
+  },
+  "git": {
+    "defaultBranch": "main"
+  },
+  "quality": {
+    "typecheck": "pnpm typecheck",
+    "testUnit": "pnpm test"
+  }
+}
