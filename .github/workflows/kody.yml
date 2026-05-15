@@ -90,12 +90,4 @@ jobs:
           INIT_MESSAGE:  ${{ inputs.message }}
           MODEL:         ${{ inputs.model }}
           DASHBOARD_URL: ${{ inputs.dashboardUrl }}
-        # Self-hosting workaround: this repo IS @kody-ade/kody-engine, so
-        # `npx -p @kody-ade/kody-engine kody-engine` short-circuits (npx
-        # thinks the local checkout already provides the package and skips
-        # install). Install globally instead, then invoke the bin directly.
-        # Consumers don't hit this — see templates/kody.yml for the canonical
-        # one-liner.
-        run: |
-          npm install -g @kody-ade/kody-engine@0.4.78
-          kody-engine
+        run: npx -y -p @kody-ade/kody-engine@0.4.78 kody-engine
