@@ -73,7 +73,7 @@ describe('lifecycle: "pr-branch"', () => {
     expect(post).toEqual([
       "parseAgentResult",
       "requireFeedbackActions",
-      "verify",
+      "verifyWithRetry",
       "checkCoverageWithRetry",
       "abortUnfinishedGitOps",
       "commitAndPush",
@@ -197,7 +197,7 @@ describe('lifecycle: "pr-branch" — config knobs', () => {
       }),
     )
     const post = loadProfile(p).scripts.postflight.map((e) => e.script)
-    expect(post).not.toContain("verify")
+    expect(post).not.toContain("verifyWithRetry")
     expect(post).not.toContain("checkCoverageWithRetry")
     expect(post).not.toContain("abortUnfinishedGitOps")
     expect(post).toContain("commitAndPush")
@@ -319,7 +319,7 @@ describe("live profiles using pr-branch lifecycle", () => {
     expect(pre.indexOf("composePrompt")).toBe(pre.length - 1)
     const post = profile.scripts.postflight.map((e) => e.script)
     expect(post.at(-1)).toBe("advanceFlow")
-    expect(post).toContain("verify")
+    expect(post).toContain("verifyWithRetry")
   })
 
   it("fix-ci expands with ci-fix context + advance:false", () => {

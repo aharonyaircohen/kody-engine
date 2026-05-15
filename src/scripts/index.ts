@@ -79,6 +79,7 @@ import { startFlow } from "./startFlow.js"
 import { syncFlow } from "./syncFlow.js"
 import { verify } from "./verify.js"
 import { verifyReproFails } from "./verifyReproFails.js"
+import { verifyWithRetry } from "./verifyWithRetry.js"
 import { waitForCi } from "./waitForCi.js"
 import { warmupMcp } from "./warmupMcp.js"
 import { writeIssueStateComment } from "./writeIssueStateComment.js"
@@ -139,6 +140,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   requireFeedbackActions,
   requirePlanDeviations,
   verify,
+  verifyWithRetry,
   verifyReproFails,
   checkCoverageWithRetry,
   abortUnfinishedGitOps,

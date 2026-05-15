@@ -16,7 +16,7 @@
  *   postflight:
  *     parseAgentResult
  *     ...profile.scripts.postflight
- *     [verify, checkCoverageWithRetry, abortUnfinishedGitOps]
+ *     [verifyWithRetry, checkCoverageWithRetry, abortUnfinishedGitOps]
  *     commitAndPush
  *     ensurePr
  *     postIssueComment
@@ -96,7 +96,7 @@ export function prBranchLifecycle(profile: Profile, profilePath: string): void {
   const beforePostflight: ScriptEntry[] = [{ script: "parseAgentResult" }]
 
   const verifyChain: ScriptEntry[] = cfg.verify
-    ? [{ script: "verify" }, { script: "checkCoverageWithRetry" }, { script: "abortUnfinishedGitOps" }]
+    ? [{ script: "verifyWithRetry" }, { script: "checkCoverageWithRetry" }, { script: "abortUnfinishedGitOps" }]
     : []
 
   const tail: ScriptEntry[] = [
