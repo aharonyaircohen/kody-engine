@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-pnpm kody <mode> ...    # dev runner (tsx bin/kody.ts)
+pnpm kody:run <mode> ...    # dev runner (tsx bin/kody.ts)
 pnpm build               # tsup bundle + copy src/executables → dist/executables
 pnpm typecheck           # tsc --noEmit
 pnpm test                # vitest run tests/unit + tests/int

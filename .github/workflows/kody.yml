@@ -84,24 +84,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Debug env
-        run: |
-          set -x
-          which node npx npm
-          node --version
-          npm --version
-          echo "PATH=$PATH"
-          echo "SHELL=$SHELL"
-          ls -la $(npm config get prefix)/bin/ | head -20 || true
-          npm config get cache
-          ls -la $(npm config get cache) 2>&1 | head -10 || true
       - env:
           ALL_SECRETS:   ${{ toJSON(secrets) }}
           SESSION_ID:    ${{ inputs.sessionId }}
           INIT_MESSAGE:  ${{ inputs.message }}
           MODEL:         ${{ inputs.model }}
           DASHBOARD_URL: ${{ inputs.dashboardUrl }}
-        run: |
-          set -x
-          cd /tmp
-          npx -y -p @kody-ade/kody-engine@0.4.76 kody version
+        run: npx -y -p @kody-ade/kody-engine@0.4.76 kody

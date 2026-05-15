@@ -4,7 +4,7 @@
  * path: parseArgs → loadProfile → parseClaudeCode → executor → runAgent → SDK.
  *
  * For each budget, we create a temporary profile under src/executables/, run
- * `pnpm kody <name>` against a temp project dir, parse the NDJSON, and delete
+ * `pnpm kody:run <name>` against a temp project dir, parse the NDJSON, and delete
  * the profile. No commits, no persistent fixtures.
  */
 import { spawnSync } from "node:child_process"
@@ -131,10 +131,10 @@ function runOne(budget: number): RunResult {
   const profileName = makeProfile(budget)
   const projectDir = makeProjectDir()
   try {
-    process.stderr.write(`[${budget}] invoking: pnpm kody ${profileName} --cwd ${projectDir}\n`)
+    process.stderr.write(`[${budget}] invoking: pnpm kody:run ${profileName} --cwd ${projectDir}\n`)
     const res = spawnSync(
       "pnpm",
-      ["kody", profileName, "--cwd", projectDir, "--quiet"],
+      ["kody:run", profileName, "--cwd", projectDir, "--quiet"],
       { cwd: REPO_ROOT, stdio: ["ignore", "inherit", "inherit"], encoding: "utf-8" },
     )
     const ndjsonPath = path.join(projectDir, ".kody", "last-run.jsonl")
