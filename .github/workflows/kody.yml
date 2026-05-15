@@ -97,5 +97,5 @@ jobs:
         # Consumers don't hit this — see templates/kody.yml for the canonical
         # one-liner.
         run: |
-          npm install -g @kody-ade/kody-engine@0.4.77
+          npm install -g @kody-ade/kody-engine@0.4.78
           kody-engine
