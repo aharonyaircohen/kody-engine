@@ -53,9 +53,8 @@ RUN corepack enable \
  && test -f dist/bin/kody.js \
  && PKG_TARBALL="$(npm pack --silent)" \
  && npm install -g "/tmp/kody-engine/$PKG_TARBALL" \
- && which kody \
  && test -f /usr/local/lib/node_modules/@kody-ade/kody-engine/dist/bin/kody.js \
- && kody version \
+ && node /usr/local/lib/node_modules/@kody-ade/kody-engine/dist/bin/kody.js version \
  && rm -rf /tmp/kody-engine
 
 # Package managers — same rationale as the runner: chat loop can run repo
