@@ -1,0 +1,74 @@
+{
+  "name": "worker-tick",
+  "role": "primitive",
+  "describe": "One classifier tick for one worker file: read intent + state, decide and execute via gh, emit next state. Parallel to job-tick but reads .kody/workers/.",
+  "kind": "oneshot",
+  "inputs": [
+    {
+      "name": "job",
+      "flag": "--job",
+      "type": "string",
+      "required": true,
+      "describe": "Worker slug — basename (without .md) of the file under .kody/workers/."
+    },
+    {
+      "name": "force",
+      "flag": "--force",
+      "type": "bool",
+      "describe": "When true, the agent ignores the worker body's cadence guard and executes the work this tick. All other body rules (allowed commands, restrictions, state schema) still apply. Used for manual triggers from the dashboard's 'Run now' button."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": 20,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": ["Bash", "Read"],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [
+    {
+      "name": "gh",
+      "install": {
+        "required": true,
+        "checkCommand": "command -v gh"
+      },
+      "verify": "gh auth status",
+      "usage": "Use `gh` for all GitHub actions: `gh pr list ...` to enumerate candidate PRs, `gh pr comment <n> --body \"...\"` to issue a Kody command, `gh pr view <n> --json mergeable,statusCheckRollup,headRefOid` to inspect state, `gh api ...` for anything else. NEVER edit files in the working tree.",
+      "allowedUses": ["pr", "api", "issue"]
+    }
+  ],
+  "inputArtifacts": [],
+  "outputArtifacts": [],
+  "scripts": {
+    "preflight": [
+      {
+        "script": "loadJobFromFile",
+        "with": {
+          "jobsDir": ".kody/workers",
+          "slugArg": "job"
+        }
+      },
+      {
+        "script": "composePrompt"
+      }
+    ],
+    "postflight": [
+      {
+        "script": "parseJobStateFromAgentResult",
+        "with": {
+          "fenceLabel": "kody-job-next-state"
+        }
+      },
+      {
+        "script": "writeJobStateFile"
+      }
+    ]
+  }
+}

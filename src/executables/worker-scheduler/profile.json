@@ -1,0 +1,50 @@
+{
+  "name": "worker-scheduler",
+  "role": "watch",
+  "describe": "Scheduled: for every worker file under .kody/workers/, invoke worker-tick once. No agent on the scheduler itself. Parallel to job-scheduler.",
+  "kind": "scheduled",
+  "schedule": "*/5 * * * *",
+  "inputs": [],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": null,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [
+    {
+      "name": "gh",
+      "install": {
+        "required": true,
+        "checkCommand": "command -v gh"
+      },
+      "verify": "gh auth status",
+      "usage": "",
+      "allowedUses": ["api", "issue", "pr"]
+    }
+  ],
+  "inputArtifacts": [],
+  "outputArtifacts": [],
+  "scripts": {
+    "preflight": [
+      {
+        "script": "dispatchJobFileTicks",
+        "with": {
+          "jobsDir": ".kody/workers",
+          "targetExecutable": "worker-tick",
+          "scriptedExecutable": "worker-tick-scripted",
+          "slugArg": "job"
+        }
+      }
+    ],
+    "postflight": []
+  }
+}

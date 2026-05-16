@@ -1,0 +1,69 @@
+{
+  "name": "worker-tick-scripted",
+  "role": "utility",
+  "describe": "Deterministic worker tick: runs the slug's `tickScript:` (declared in worker frontmatter), parses next-state from its stdout, persists. No agent. Parallel to job-tick-scripted but reads .kody/workers/.",
+  "kind": "oneshot",
+  "inputs": [
+    {
+      "name": "job",
+      "flag": "--job",
+      "type": "string",
+      "required": true,
+      "describe": "Worker slug — basename (without .md) of the file under .kody/workers/."
+    },
+    {
+      "name": "force",
+      "flag": "--force",
+      "type": "bool",
+      "describe": "Accepted for parity with `worker-tick`. Scripted ticks have no agent cadence guard to bypass — the dispatcher already gated on frontmatter `every:`. Forwarded to the script via env if it cares."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": null,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [
+    {
+      "name": "gh",
+      "install": {
+        "required": true,
+        "checkCommand": "command -v gh"
+      },
+      "verify": "gh auth status",
+      "usage": "Available to the tickScript via PATH; this executable shells out to `bash <tickScript>`. Scripts use `gh pr list`, `gh pr comment`, etc.",
+      "allowedUses": ["pr", "api", "issue"]
+    }
+  ],
+  "inputArtifacts": [],
+  "outputArtifacts": [],
+  "scripts": {
+    "preflight": [
+      {
+        "script": "runTickScript",
+        "with": {
+          "jobsDir": ".kody/workers",
+          "slugArg": "job",
+          "fenceLabel": "kody-job-next-state"
+        }
+      }
+    ],
+    "postflight": [
+      {
+        "script": "writeJobStateFile",
+        "with": {
+          "jobsDir": ".kody/workers"
+        }
+      }
+    ]
+  }
+}

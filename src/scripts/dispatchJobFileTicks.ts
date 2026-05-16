@@ -14,6 +14,8 @@
  * Script args (via `with:`):
  *   jobsDir        optional — relative path under cwd (default ".kody/jobs")
  *   targetExecutable   required — e.g. "job-tick"
+ *   scriptedExecutable optional — target for slugs with `tickScript:`
+ *                      frontmatter (default "job-tick-scripted")
  *   slugArg            optional — CLI input name on the target (default "job")
  */
 
@@ -32,6 +34,7 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
     throw new Error("dispatchJobFileTicks: `with.targetExecutable` is required")
   }
   const jobsDir = String(args?.jobsDir ?? ".kody/jobs")
+  const scriptedExecutable = String(args?.scriptedExecutable ?? "job-tick-scripted")
   const slugArg = String(args?.slugArg ?? "job")
 
   // Resolve once, hydrate once, persist once. Per-tick scripts re-resolve
@@ -95,7 +98,7 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
       // that may summarize it away. Everything else uses the configured
       // (LLM-driven) target. Decided here, not in the executable, so the
       // routing rule lives in one place and the executables stay simple.
-      const slugTarget = frontmatter.tickScript ? "job-tick-scripted" : targetExecutable
+      const slugTarget = frontmatter.tickScript ? scriptedExecutable : targetExecutable
 
       process.stdout.write(`[jobs] → tick ${slug} (${slugTarget})\n`)
       try {
