@@ -6,8 +6,15 @@
  * proxy so a Fly-hosted Brain alternative needs zero dashboard changes.
  *
  * Endpoints:
- *   POST /chats/:chatId/messages    — body { message }, returns SSE stream
- *   GET  /healthz                   — 200 ok
+ *   POST /chats/:chatId/messages       — body { message }, returns SSE stream
+ *   GET  /chats/:chatId/stream?since=N — reconnect: replay events after N then
+ *                                        live-tail the running turn to its end
+ *   GET  /healthz                      — 200 ok
+ *
+ * A turn runs to completion server-side regardless of the client connection;
+ * every event after the handshake carries a per-chat monotonic `seq`. If the
+ * connection drops mid-turn (e.g. the Vercel proxy's request-duration cap),
+ * the client reconnects to /stream with the highest seq it saw.
  *
  * Auth: every request must carry `X-Api-Key: $BRAIN_API_KEY` (or
  * `Authorization: Bearer $BRAIN_API_KEY`). The key is set at machine boot —
@@ -31,6 +38,12 @@ import { type LitellmHandle, startLitellmIfNeeded } from "../litellm.js"
 import { runChatTurn, type ChatTurnOptions, type ChatTurnResult } from "../chat/loop.js"
 import type { ChatEvent, EventSink } from "../chat/events.js"
 import { appendTurn, sessionFilePath } from "../chat/session.js"
+import {
+  beginTurn,
+  endTurnIfUnterminated,
+  getLastSeq,
+  subscribe,
+} from "./brainTurnLog.js"
 
 export interface BrainEvent {
   type: "chat" | "text" | "tool_use" | "done" | "error"
@@ -102,9 +115,49 @@ function emitSse(res: ServerResponse, event: BrainEvent): void {
 }
 
 /**
+ * Pure translation: kody ChatEvent → Brain SSE event, or null when the event
+ * has no Brain-protocol equivalent (chat.thinking / chat.ready / chat.exit,
+ * empty chat.message, chat.tool result phase).
+ */
+export function translateChatEvent(
+  event: ChatEvent,
+  chatId: string,
+): BrainEvent | null {
+  switch (event.event) {
+    case "chat.message": {
+      const content = String(event.payload.content ?? "")
+      if (content.length === 0) return null
+      return { type: "text", text: content, chatId }
+    }
+    case "chat.tool": {
+      if (event.payload.phase !== "use") return null
+      return {
+        type: "tool_use",
+        name: typeof event.payload.name === "string" ? event.payload.name : "tool",
+        input: event.payload.input ?? {},
+        chatId,
+      }
+    }
+    case "chat.done":
+      return { type: "done", chatId }
+    case "chat.error":
+      return {
+        type: "error",
+        error:
+          typeof event.payload.error === "string"
+            ? event.payload.error
+            : "agent error",
+        chatId,
+      }
+    default:
+      return null
+  }
+}
+
+/**
  * Adapter sink — translates kody ChatEvents into Brain SSE events on the
- * response stream. `chat.thinking` is dropped (Brain protocol has no
- * dedicated thinking channel; the agent's final text reply is what matters).
+ * response stream. Kept for direct/unit use; the live request path uses
+ * BrokerSink so a turn survives a disconnected client.
  */
 export class BrainSseSink implements EventSink {
   constructor(
@@ -113,41 +166,83 @@ export class BrainSseSink implements EventSink {
   ) {}
 
   async emit(event: ChatEvent): Promise<void> {
-    switch (event.event) {
-      case "chat.message": {
-        const content = String(event.payload.content ?? "")
-        if (content.length > 0) {
-          emitSse(this.res, { type: "text", text: content, chatId: this.chatId })
-        }
-        return
-      }
-      case "chat.tool": {
-        if (event.payload.phase !== "use") return
-        emitSse(this.res, {
-          type: "tool_use",
-          name: typeof event.payload.name === "string" ? event.payload.name : "tool",
-          input: event.payload.input ?? {},
-          chatId: this.chatId,
-        })
-        return
-      }
-      case "chat.done": {
-        emitSse(this.res, { type: "done", chatId: this.chatId })
-        return
-      }
-      case "chat.error": {
-        const errMsg =
-          typeof event.payload.error === "string"
-            ? event.payload.error
-            : "agent error"
-        emitSse(this.res, { type: "error", error: errMsg, chatId: this.chatId })
-        return
-      }
-      // chat.thinking / chat.ready / chat.exit — not part of the Brain protocol.
-      default:
-        return
-    }
+    const be = translateChatEvent(event, this.chatId)
+    if (be) emitSse(this.res, be)
   }
+}
+
+/**
+ * Sink that feeds the turn broker instead of a response. The turn runs to
+ * completion server-side; the broker sequences + persists every event and
+ * fans it out to whichever SSE connection is currently attached (or replays
+ * it on reconnect).
+ */
+export class BrokerSink implements EventSink {
+  constructor(
+    private readonly emitToLog: (event: BrainEvent) => void,
+    private readonly chatId: string,
+  ) {}
+
+  async emit(event: ChatEvent): Promise<void> {
+    const be = translateChatEvent(event, this.chatId)
+    if (be) this.emitToLog(be)
+  }
+}
+
+// Per-chat turn serialization — a chat's turns must not interleave (shared
+// session JSONL + worktree). Mirrors the VPS brain's enqueue().
+const chatQueues = new Map<string, Promise<unknown>>()
+
+function enqueue(chatId: string, fn: () => Promise<unknown>): Promise<unknown> {
+  const prev = chatQueues.get(chatId) ?? Promise.resolve()
+  const next = prev.catch(() => {}).then(fn)
+  chatQueues.set(
+    chatId,
+    next.finally(() => {
+      if (chatQueues.get(chatId) === next) chatQueues.delete(chatId)
+    }),
+  )
+  return next
+}
+
+/**
+ * Stream a chat's events to an SSE response starting after `since`, replaying
+ * the persisted gap then live-tailing until the turn's terminal event. The
+ * turn keeps running even if this response disconnects. Every event after the
+ * handshake carries its `seq` so the client can reconnect from it.
+ */
+function streamToRes(
+  res: ServerResponse,
+  dir: string,
+  chatId: string,
+  since: number,
+): void {
+  writeSseHeaders(res)
+  // Unsequenced handshake — confirms the chat id, ignored by cursor tracking.
+  emitSse(res, { type: "chat", chatId })
+
+  let maxSent = since
+  const unsubscribe = subscribe(
+    dir,
+    chatId,
+    since,
+    (rec) => {
+      if (rec.seq <= maxSent) return // dedupe backlog↔live boundary
+      maxSent = rec.seq
+      if (res.writableEnded) return
+      res.write(`data: ${JSON.stringify({ ...rec.event, seq: rec.seq })}\n\n`)
+    },
+    () => {
+      if (!res.writableEnded) {
+        try {
+          res.end()
+        } catch {
+          /* best effort */
+        }
+      }
+    },
+  )
+  res.on("close", unsubscribe)
 }
 
 export interface BuildServerOptions {
@@ -197,35 +292,38 @@ async function handleChatTurn(
     timestamp: new Date().toISOString(),
   })
 
-  writeSseHeaders(res)
-  emitSse(res, { type: "chat", chatId })
+  // Cursor floor for this turn = the chat's last seq before it starts. The
+  // turn runs detached (server-side, independent of this connection); this
+  // response just tails it from the floor and can be reconnected via
+  // GET /chats/:id/stream?since=<seq> after a Vercel-ceiling disconnect.
+  const sinceFloor = getLastSeq(opts.cwd, chatId)
+  const emitToLog = beginTurn(opts.cwd, chatId)
+  const sink = new BrokerSink(emitToLog, chatId)
 
-  const sink = new BrainSseSink(res, chatId)
+  void enqueue(chatId, () =>
+    opts
+      .runTurn({
+        sessionId: chatId,
+        sessionFile,
+        cwd: opts.cwd,
+        model: opts.model,
+        litellmUrl: opts.litellmUrl,
+        sink,
+      })
+      .catch((err) => {
+        const errMsg = err instanceof Error ? err.message : String(err)
+        process.stderr.write(`[brain-serve] chat turn failed: ${errMsg}\n`)
+        endTurnIfUnterminated(opts.cwd, chatId, errMsg)
+      })
+      .finally(() => {
+        // runTurn normally emits its own done/error; this only fires if it
+        // returned without a terminal event, so reconnecting clients never
+        // hang waiting for an end that won't come.
+        endTurnIfUnterminated(opts.cwd, chatId, "turn ended without a result")
+      }),
+  )
 
-  try {
-    await opts.runTurn({
-      sessionId: chatId,
-      sessionFile,
-      cwd: opts.cwd,
-      model: opts.model,
-      litellmUrl: opts.litellmUrl,
-      sink,
-    })
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[brain-serve] chat turn failed: ${errMsg}\n`)
-    try {
-      emitSse(res, { type: "error", error: errMsg, chatId })
-    } catch {
-      /* response may already be torn down */
-    }
-  } finally {
-    try {
-      res.end()
-    } catch {
-      /* best effort */
-    }
-  }
+  streamToRes(res, opts.cwd, chatId, sinceFloor)
 }
 
 /**
@@ -266,6 +364,23 @@ export function buildServer(opts: BuildServerOptions): Server {
         litellmUrl: opts.litellmUrl,
         runTurn,
       })
+      return
+    }
+
+    // Reconnect/resume: replay events after ?since then live-tail the running
+    // turn until it ends. This is what lets a Brain reply outlive the
+    // dashboard's ~300s Vercel ceiling — the browser reconnects here with its
+    // last-seen seq instead of losing the turn.
+    const sm = url.pathname.match(/^\/chats\/([^/]+)\/stream\/?$/)
+    if (req.method === "GET" && sm) {
+      const chatId = decodeURIComponent(sm[1] ?? "")
+      if (!chatId) {
+        sendJson(res, 400, { error: "chatId required" })
+        return
+      }
+      const sinceRaw = url.searchParams.get("since")
+      const since = Number.isFinite(Number(sinceRaw)) ? Number(sinceRaw) : 0
+      streamToRes(res, opts.cwd, chatId, since)
       return
     }
 

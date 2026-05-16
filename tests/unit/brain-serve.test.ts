@@ -180,11 +180,13 @@ async function boot(
   }
 }
 
-async function readSseBody(res: Response): Promise<BrainEvent[]> {
+type WireEvent = BrainEvent & { seq?: number }
+
+async function readSseBody(res: Response): Promise<WireEvent[]> {
   const reader = res.body!.getReader()
   const decoder = new TextDecoder()
   let buf = ""
-  const events: BrainEvent[] = []
+  const events: WireEvent[] = []
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
@@ -192,7 +194,7 @@ async function readSseBody(res: Response): Promise<BrainEvent[]> {
   }
   for (const line of buf.split("\n")) {
     if (line.startsWith("data: ")) {
-      events.push(JSON.parse(line.slice(6)) as BrainEvent)
+      events.push(JSON.parse(line.slice(6)) as WireEvent)
     }
   }
   return events
@@ -276,11 +278,13 @@ describe("buildServer routes", () => {
     expect(res.status).toBe(200)
     expect(res.headers.get("content-type")).toContain("text/event-stream")
     const events = await readSseBody(res)
-    expect(events).toEqual([
-      { type: "chat", chatId: "c1" },
-      { type: "text", text: "hi back", chatId: "c1" },
-      { type: "done", chatId: "c1" },
-    ])
+    // Turn now flows through the broker: handshake is unsequenced, every
+    // subsequent event carries a per-chat monotonic seq.
+    expect(events[0]).toEqual({ type: "chat", chatId: "c1" })
+    expect(events[1]).toMatchObject({ type: "text", text: "hi back", chatId: "c1" })
+    expect(events[2]).toMatchObject({ type: "done", chatId: "c1" })
+    expect(events[1]!.seq).toBe(1)
+    expect(events[2]!.seq).toBe(2)
   })
 
   it("appends the user message to the session file before invoking the turn", async () => {
@@ -316,7 +320,7 @@ describe("buildServer routes", () => {
     })
     const events = await readSseBody(res)
     expect(events[0]).toEqual({ type: "chat", chatId: "c1" })
-    expect(events[events.length - 1]).toEqual({
+    expect(events[events.length - 1]).toMatchObject({
       type: "error",
       error: "agent kaboom",
       chatId: "c1",
@@ -372,5 +376,157 @@ describe("buildServer routes", () => {
       .map((l) => JSON.parse(l) as { role: string; content: string })
       .filter((t) => t.role === "user")
     expect(userTurns.map((t) => t.content)).toEqual(["first", "second"])
+  })
+})
+
+// ────────────────────────────────────────────────────────────────────────────
+// Resume / reconnect — the 300s-ceiling fix
+// ────────────────────────────────────────────────────────────────────────────
+
+describe("buildServer resume (/chats/:id/stream)", () => {
+  let tmp: string
+  let booted: BootedServer | null = null
+
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-brain-resume-"))
+  })
+  afterEach(async () => {
+    if (booted) {
+      await booted.close()
+      booted = null
+    }
+    fs.rmSync(tmp, { recursive: true, force: true })
+  })
+
+  it("replays a finished turn from cursor 0 then closes (no hang)", async () => {
+    const cid = `c-replay-${Date.now()}`
+    booted = await boot(async (opts) => {
+      await opts.sink.emit(makeEvent("chat.message", { content: "full reply" }))
+      await opts.sink.emit(makeEvent("chat.done", {}))
+      return { exitCode: 0 }
+    }, tmp)
+
+    await readSseBody(
+      await fetch(`${booted.url}/chats/${cid}/messages`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-api-key": KEY },
+        body: JSON.stringify({ message: "hi" }),
+      }),
+    )
+
+    const res = await fetch(`${booted.url}/chats/${cid}/stream?since=0`, {
+      headers: { "x-api-key": KEY },
+    })
+    expect(res.status).toBe(200)
+    expect(res.headers.get("content-type")).toContain("text/event-stream")
+    const ev = await readSseBody(res)
+    expect(ev[0]).toEqual({ type: "chat", chatId: cid })
+    expect(ev.some((e) => e.type === "text" && e.text === "full reply")).toBe(true)
+    expect(ev[ev.length - 1]).toMatchObject({ type: "done" })
+  })
+
+  it("replays only events after the cursor", async () => {
+    const cid = `c-cursor-${Date.now()}`
+    booted = await boot(async (opts) => {
+      await opts.sink.emit(makeEvent("chat.message", { content: "part one" }))
+      await opts.sink.emit(makeEvent("chat.done", {}))
+      return { exitCode: 0 }
+    }, tmp)
+    await readSseBody(
+      await fetch(`${booted.url}/chats/${cid}/messages`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-api-key": KEY },
+        body: JSON.stringify({ message: "hi" }),
+      }),
+    )
+    // seq 1 = text, seq 2 = done. Resume from 1 → only the done remains.
+    const ev = await readSseBody(
+      await fetch(`${booted.url}/chats/${cid}/stream?since=1`, {
+        headers: { "x-api-key": KEY },
+      }),
+    )
+    const seqd = ev.filter((e) => typeof e.seq === "number")
+    expect(seqd.every((e) => (e.seq ?? 0) > 1)).toBe(true)
+    expect(ev[ev.length - 1]).toMatchObject({ type: "done" })
+  })
+
+  it("reconnect mid-turn: replays the gap then live-tails to the terminal event", async () => {
+    const cid = `c-live-${Date.now()}`
+    let release!: () => void
+    const gate = new Promise<void>((r) => {
+      release = r
+    })
+    booted = await boot(async (opts) => {
+      await opts.sink.emit(makeEvent("chat.message", { content: "before cut" }))
+      await gate // turn is "still running" while the client is disconnected
+      await opts.sink.emit(makeEvent("chat.message", { content: "after cut" }))
+      await opts.sink.emit(makeEvent("chat.done", {}))
+      return { exitCode: 0 }
+    }, tmp)
+
+    // Start the turn but abort the connection almost immediately (simulated
+    // Vercel kill) — the turn keeps running server-side.
+    const ac = new AbortController()
+    const startP = fetch(`${booted.url}/chats/${cid}/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": KEY },
+      body: JSON.stringify({ message: "go" }),
+      signal: ac.signal,
+    }).catch(() => null)
+    await new Promise((r) => setTimeout(r, 150))
+    ac.abort()
+    await startP
+
+    // Reconnect from cursor 0; release the turn so it finishes while attached.
+    const resP = fetch(`${booted.url}/chats/${cid}/stream?since=0`, {
+      headers: { "x-api-key": KEY },
+    })
+    await new Promise((r) => setTimeout(r, 100))
+    release()
+    const ev = await readSseBody(await resP)
+
+    const texts = ev.filter((e) => e.type === "text").map((e) => e.text)
+    expect(texts).toContain("before cut") // replayed gap
+    expect(texts).toContain("after cut") // live-tailed
+    expect(ev[ev.length - 1]).toMatchObject({ type: "done" })
+  })
+
+  it("seq stays monotonic across two turns of the same chat", async () => {
+    const cid = `c-mono-${Date.now()}`
+    booted = await boot(async (opts) => {
+      await opts.sink.emit(makeEvent("chat.message", { content: "turn reply" }))
+      await opts.sink.emit(makeEvent("chat.done", {}))
+      return { exitCode: 0 }
+    }, tmp)
+    const url = `${booted.url}/chats/${cid}/messages`
+    const send = async () =>
+      readSseBody(
+        await fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-api-key": KEY },
+          body: JSON.stringify({ message: "x" }),
+        }),
+      )
+    await send()
+    const ev2 = await send()
+    const seqs = ev2.filter((e) => typeof e.seq === "number").map((e) => e.seq!)
+    // Second turn's first seq continues past the first turn (which ended at 2).
+    expect(Math.min(...seqs)).toBeGreaterThan(2)
+  })
+
+  it("unknown chat stream → handshake then close, never hangs", async () => {
+    booted = await boot(async () => ({ exitCode: 0 }), tmp)
+    const ev = await readSseBody(
+      await fetch(`${booted.url}/chats/never-existed/stream?since=0`, {
+        headers: { "x-api-key": KEY },
+      }),
+    )
+    expect(ev).toEqual([{ type: "chat", chatId: "never-existed" }])
+  })
+
+  it("rejects unauthenticated stream with 401", async () => {
+    booted = await boot(async () => ({ exitCode: 0 }), tmp)
+    const res = await fetch(`${booted.url}/chats/c1/stream?since=0`)
+    expect(res.status).toBe(401)
   })
 })
