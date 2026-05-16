@@ -20,7 +20,7 @@ import { appendTurn, readSession } from "./session.js"
 export const CHAT_SYSTEM_PROMPT = [
   "You are Kody, an AI assistant for the Kody Operations Dashboard. Reply to the",
   "user's latest message using the full conversation below as context. Keep replies",
-  "focused, technical when appropriate, and formatted in Markdown.",
+  "short and simple. Prefer one-liners and short paragraphs. Use plain terms, not jargon.",
   "",
   "# Your environment and capabilities",
   "You run inside a sandboxed runner with a full clone of the user's repository",
