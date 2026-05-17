@@ -73,7 +73,9 @@ export const syncFlow: PreflightScript = async (ctx, _profile, args?: ScriptArgs
     if (announceOnSuccess) {
       ctx.output.exitCode = 0
       ctx.output.reason = `already up to date with origin/${baseBranch}`
-      tryPostPr(prNumber, `ℹ️ kody sync: already up to date with origin/${baseBranch}`, ctx.cwd)
+      // No PR comment on a clean no-op: each issue_comment re-triggers the
+      // kody workflow, so commenting on every open PR every sync tick is a
+      // 35x-per-tick amplifier. Only failures/conflicts (bail) comment.
     }
     return
   }
@@ -90,13 +92,11 @@ export const syncFlow: PreflightScript = async (ctx, _profile, args?: ScriptArgs
   if (announceOnSuccess) {
     ctx.output.exitCode = 0
     ctx.output.reason = `merged origin/${baseBranch} into ${ctx.data.branch}`
-    const runUrl = getRunUrl()
-    const runSuffix = runUrl ? ` ([logs](${runUrl}))` : ""
-    tryPostPr(
-      prNumber,
-      `✅ kody sync: merged \`origin/${baseBranch}\` into \`${ctx.data.branch}\`${runSuffix}`,
-      ctx.cwd,
-    )
+    // No PR comment on a successful merge: the comment is an issue_comment
+    // event that re-dispatches the kody workflow. Posting it on every open
+    // PR every sync tick is the runaway-Actions leak. The merge result is
+    // still in ctx.output.reason (runner log); only failures/conflicts
+    // (bail) post a human-actionable comment.
   }
 }
 
