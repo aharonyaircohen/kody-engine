@@ -49,10 +49,14 @@ for state_file in "${state_files[@]}"; do
   # dispatch" rather than "origin/<defaultBranch> at goal activation", which
   # is better for short-lived QA-style goals where main may have moved on.
 
-  # Run the tick. Top-level kody invocation is `kody <executable>` —
-  # there's no `dispatch` subcommand. A non-zero exit logs and continues
-  # so one stuck goal doesn't starve the rest of the schedule.
-  if ! kody goal-tick --goal "$goal_id"; then
+  # Run the tick. The published CLI bin is `kody-engine` (see package.json
+  # "bin") — NOT `kody`. Calling bare `kody` here failed with
+  # `kody: command not found`, so every active goal silently failed to
+  # advance. `kody-engine` is on PATH because the workflow invokes the
+  # engine via `npx -p @kody-ade/kody-engine ... kody-engine`, and child
+  # processes inherit that PATH. A non-zero exit logs and continues so one
+  # stuck goal doesn't starve the rest of the schedule.
+  if ! kody-engine goal-tick --goal "$goal_id"; then
     echo "[goal-scheduler] tick $goal_id failed (continuing)"
   fi
 done
