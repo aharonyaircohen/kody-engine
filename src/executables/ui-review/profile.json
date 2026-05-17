@@ -67,7 +67,7 @@
   "outputArtifacts": [],
   "scripts": {
     "preflight": [
-      { "script": "setLifecycleLabel", "with": { "label": "kody:reviewing", "color": "d93f0b", "description": "kody: reviewing a PR" } },
+      { "script": "setLifecycleLabel", "with": { "label": "kody:reviewing-ui", "color": "d93f0b", "description": "kody: UI-reviewing a PR" } },
       { "script": "reviewFlow" },
       { "script": "loadTaskState" },
       { "script": "loadConventions" },

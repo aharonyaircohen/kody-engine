@@ -47,9 +47,9 @@
   "lifecycle": "pr-branch",
   "lifecycleConfig": {
     "label": {
-      "name": "kody:fixing",
+      "name": "kody:fixing-ci",
       "color": "e99695",
-      "description": "kody: applying review feedback"
+      "description": "kody: fixing CI failures"
     },
     "context": "ci-fix",
     "advance": false
