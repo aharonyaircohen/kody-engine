@@ -319,7 +319,11 @@ async function handleChatTurn(
         // runTurn normally emits its own done/error; this only fires if it
         // returned without a terminal event, so reconnecting clients never
         // hang waiting for an end that won't come.
-        endTurnIfUnterminated(opts.cwd, chatId, "turn ended without a result")
+        endTurnIfUnterminated(
+          opts.cwd,
+          chatId,
+          "Brain turn ended without a reply (the machine may have restarted mid-turn) — please resend your message",
+        )
       }),
   )
 

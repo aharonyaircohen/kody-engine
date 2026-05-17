@@ -217,6 +217,15 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   }
 
   const reply = result.finalText.trim()
+  if (reply.length === 0) {
+    // The agent finished without producing any text. Emitting an empty
+    // chat.message + chat.done looks like a successful blank reply and
+    // leaves the user staring at nothing; surface it as a real error so
+    // the UI shows something actionable and the turn is cleanly terminal.
+    const error = "agent completed without producing a reply — please resend your message"
+    await emit(opts.sink, "chat.error", opts.sessionId, "error", { error })
+    return { exitCode: 99, error }
+  }
   const now = new Date().toISOString()
 
   appendTurn(opts.sessionFile, {
