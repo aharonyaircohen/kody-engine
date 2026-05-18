@@ -57,6 +57,12 @@ export interface GoalIssueSnapshot {
   number: number
   state: "OPEN" | "CLOSED"
   prState: TaskPrState
+  /**
+   * True when the issue carries the `kody:qa-gate` label — the
+   * goal-manager's verification gate, not a real task. Never dispatched;
+   * blocks `all-done` while OPEN. Absent/false on ordinary task issues.
+   */
+  isQaGate?: boolean
 }
 
 export interface GoalSnapshot {
@@ -77,16 +83,28 @@ export function derivePhase(snap: GoalSnapshot): GoalPhase {
   if (snap.lifecycleState === "awaiting-merge") return "awaiting-merge"
 
   // lifecycleState === "active" from here on.
-  const hasInFlight = snap.childTasks.some((t) => t.state === "OPEN" && t.prState === "draft")
+  //
+  // QA-gate issues are the goal-manager's verification marker, not work:
+  // they're never dispatched and never get a PR. Split them out so they
+  // don't distort task-progress logic. An OPEN qa-gate forces the goal
+  // to stay short of `all-done` (no finalize / deliverable PR) until the
+  // manager verifies the journey and closes it.
+  const tasks = snap.childTasks.filter((t) => !t.isQaGate)
+  const qaGateOpen = snap.childTasks.some((t) => t.isQaGate && t.state === "OPEN")
+
+  const hasInFlight = tasks.some((t) => t.state === "OPEN" && t.prState === "draft")
   if (hasInFlight) return "in-flight"
 
-  if (snap.childTasks.length === 0) return "idle"
+  if (tasks.length === 0) return "idle"
 
-  const allDone = snap.childTasks.every((t) => t.state === "CLOSED" || t.prState === "ready")
-  if (allDone) return "all-done"
-
-  const dispatchable = snap.childTasks.some((t) => t.state === "OPEN" && t.prState === "absent")
+  const dispatchable = tasks.some((t) => t.state === "OPEN" && t.prState === "absent")
   if (dispatchable) return "ready-to-dispatch"
+
+  const allDone = tasks.every((t) => t.state === "CLOSED" || t.prState === "ready")
+  // Real work is finished, but an open qa-gate means the manager hasn't
+  // signed off the end-to-end journey yet — hold at `idle` (goal-tick
+  // no-ops; the goal-manager worker drives QA) instead of finalizing.
+  if (allDone) return qaGateOpen ? "idle" : "all-done"
 
   return "idle"
 }
@@ -97,6 +115,6 @@ export function derivePhase(snap: GoalSnapshot): GoalPhase {
  */
 export function pickNextDispatchable(snap: GoalSnapshot): GoalIssueSnapshot | undefined {
   return snap.childTasks
-    .filter((t) => t.state === "OPEN" && t.prState === "absent")
+    .filter((t) => !t.isQaGate && t.state === "OPEN" && t.prState === "absent")
     .sort((a, b) => a.number - b.number)[0]
 }

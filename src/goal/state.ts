@@ -17,12 +17,13 @@ import * as path from "node:path"
 /**
  * All state values a goal may occupy. Drives the phase machine.
  *
- * `awaiting-merge`: every child task is done but the cumulative goal diff
- * has NOT been merged. The engine parks here instead of auto-merging;
- * the dashboard's "Merge goal" button is the only thing that advances it
- * (it flips state back to `active` + sets `mergeApproved`, letting the
- * existing finalize run once). The scheduler skips this state, so a
- * parked goal never ticks on its own.
+ * `awaiting-merge`: DEPRECATED. The engine no longer auto-merges, so
+ * nothing writes this state anymore — `finalizeGoal` now leaves the
+ * cumulative diff as a single open, review-ready leaf PR and a human
+ * merges it in GitHub. Retained only so existing state.json files
+ * parked at `awaiting-merge` (pre-deprecation) still parse; the
+ * scheduler skips the state, so such a legacy goal is inert until an
+ * operator flips it back to `active`.
  */
 export type GoalLifecycleState = "active" | "abandoned" | "closed" | "awaiting-merge" | "done"
 
@@ -37,11 +38,10 @@ export interface GoalState {
   /** Lifecycle state. Required — drives phase derivation. */
   state: GoalLifecycleState
   /**
-   * One-shot "the user clicked Merge" flag, written by the dashboard
-   * alongside `state="active"`. `parkGoalForMerge` consumes it: when
-   * true it lets the existing finalize merge run this tick and clears
-   * the flag; when false/absent an all-done goal parks at
-   * `awaiting-merge` instead of auto-merging.
+   * DEPRECATED. Was a one-shot "the user clicked Merge" flag consumed by
+   * the now-deleted `parkGoalForMerge`. The engine no longer auto-merges,
+   * so this flag is inert — kept only so legacy state.json files that
+   * still carry it round-trip without a parse error.
    */
   mergeApproved?: boolean
   /** Most recently dispatched task issue number. Audit trail. */

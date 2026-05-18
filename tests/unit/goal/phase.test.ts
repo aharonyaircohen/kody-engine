@@ -11,6 +11,10 @@ function task(number: number, state: "OPEN" | "CLOSED", prState: TaskPrState = "
   return { number, state, prState }
 }
 
+function gate(number: number, state: "OPEN" | "CLOSED"): GoalIssueSnapshot {
+  return { number, state, prState: "absent", isQaGate: true }
+}
+
 function snap(lifecycleState: GoalSnapshot["lifecycleState"], ...childTasks: GoalIssueSnapshot[]): GoalSnapshot {
   return { lifecycleState, childTasks }
 }
@@ -64,6 +68,28 @@ describe("derivePhase (stacked-PR)", () => {
     const s = snap("active", task(1, "OPEN", "ready"), task(2, "OPEN", "draft"))
     expect(derivePhase(s)).toBe("in-flight")
   })
+
+  it("open qa-gate holds an otherwise-all-done goal at idle (no finalize)", () => {
+    const s = snap("active", task(1, "OPEN", "ready"), task(2, "CLOSED"), gate(99, "OPEN"))
+    expect(derivePhase(s)).toBe("idle")
+  })
+
+  it("closed qa-gate lets an all-done goal finalize", () => {
+    const s = snap("active", task(1, "OPEN", "ready"), task(2, "CLOSED"), gate(99, "CLOSED"))
+    expect(derivePhase(s)).toBe("all-done")
+  })
+
+  it("qa-gate issue is not itself a dispatchable task", () => {
+    // Only the gate is open+absent — without the exclusion this would be
+    // ready-to-dispatch (and goal-tick would @kody the gate issue).
+    const s = snap("active", task(1, "CLOSED"), gate(99, "OPEN"))
+    expect(derivePhase(s)).toBe("idle")
+  })
+
+  it("real dispatchable work still wins while the gate is open", () => {
+    const s = snap("active", task(1, "OPEN", "absent"), gate(99, "OPEN"))
+    expect(derivePhase(s)).toBe("ready-to-dispatch")
+  })
 })
 
 describe("pickNextDispatchable", () => {
@@ -83,5 +109,11 @@ describe("pickNextDispatchable", () => {
       task(2, "CLOSED"),
     )
     expect(pickNextDispatchable(s)?.number).toBe(3)
+  })
+
+  it("never picks the qa-gate issue even though it is open+absent", () => {
+    const s = snap("active", gate(1, "OPEN"), task(4, "OPEN", "absent"))
+    expect(pickNextDispatchable(s)?.number).toBe(4)
+    expect(pickNextDispatchable(snap("active", gate(1, "OPEN")))).toBeUndefined()
   })
 })

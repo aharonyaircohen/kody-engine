@@ -19,7 +19,7 @@
  */
 
 import { gh } from "../issue.js"
-import { goalLabel } from "./labels.js"
+import { goalLabel, QA_GATE_LABEL } from "./labels.js"
 import type { GoalIssueSnapshot, TaskPrState } from "./phase.js"
 
 export interface OperationResult<T = void> {
@@ -42,6 +42,12 @@ function fail(err: unknown): OperationResult<never> {
 export interface RawGoalIssue {
   number: number
   state: "OPEN" | "CLOSED"
+  /**
+   * True when the issue carries the `kody:qa-gate` label. The live `gh`
+   * query always populates this (jq `any` → boolean); optional only so
+   * ordinary-task test fixtures don't have to spell out `false`.
+   */
+  isQaGate?: boolean
 }
 
 /**
@@ -56,7 +62,7 @@ export function listGoalIssues(goalId: string, cwd?: string): OperationResult<Ra
         "api",
         `repos/{owner}/{repo}/issues?labels=${goalLabel(goalId)}&state=all&per_page=100`,
         "--jq",
-        "[.[] | select(.pull_request == null) | {number, state: (.state | ascii_upcase)}]",
+        `[.[] | select(.pull_request == null) | {number, state: (.state | ascii_upcase), isQaGate: ([.labels[].name] | any(. == "${QA_GATE_LABEL}"))}]`,
       ],
       { cwd },
     )
@@ -126,7 +132,7 @@ export function pairIssuesWithPrs(
     const pr = prByIssue.get(i.number)
     let prState: TaskPrState = "absent"
     if (pr) prState = pr.isDraft ? "draft" : "ready"
-    return { number: i.number, state: i.state, prState }
+    return { number: i.number, state: i.state, prState, isQaGate: i.isQaGate }
   })
 }
 

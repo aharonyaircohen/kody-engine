@@ -344,11 +344,10 @@ describe("finalizeGoal", () => {
     vi.mocked(ops.closePr).mockReset().mockReturnValue({ ok: true })
   })
 
-  it("leaf-only merge: retargets leaf, squash-merges leaf, closes intermediates + task issues", async () => {
+  it("leaf-only deliverable: retargets leaf, never merges, closes intermediates + task issues", async () => {
     // Stack: PR #888 (root, base=main, head=11-x) ← PR #999 (leaf, base=11-x, head=12-x).
-    // Leaf carries the cumulative diff vs main, so we merge it only.
-    // Sequential merge would conflict because squashing the root produces a new
-    // SHA that diverges from the leaf's branch history.
+    // Leaf carries the cumulative diff vs main, so it becomes the single
+    // open deliverable PR. The engine never auto-merges to the default branch.
     const root = {
       number: 888,
       url: "u1",
@@ -381,11 +380,10 @@ describe("finalizeGoal", () => {
       },
     })
     await finalizeGoal(ctx, fakeProfile())
-    // Leaf retargeted to default before merge.
+    // Leaf retargeted to default so its open diff is the cumulative goal.
     expect(ops.editPrBase).toHaveBeenCalledWith(999, "main", "/tmp")
-    // Only the leaf is merged.
-    expect(ops.mergePrSquash).toHaveBeenCalledTimes(1)
-    expect(ops.mergePrSquash).toHaveBeenCalledWith(999, "/tmp")
+    // The engine never merges — the leaf stays open for a human.
+    expect(ops.mergePrSquash).not.toHaveBeenCalled()
     // Root (intermediate) is closed with a courtesy comment.
     expect(ops.closePr).toHaveBeenCalledTimes(1)
     expect(ops.closePr).toHaveBeenCalledWith(888, expect.any(String), "/tmp")
@@ -419,11 +417,11 @@ describe("finalizeGoal", () => {
     })
     await finalizeGoal(ctx, fakeProfile())
     expect(ops.editPrBase).not.toHaveBeenCalled()
-    expect(ops.mergePrSquash).toHaveBeenCalledWith(200, "/tmp")
+    expect(ops.mergePrSquash).not.toHaveBeenCalled()
     expect(ops.closePr).not.toHaveBeenCalled()
   })
 
-  it("promotes draft leaf to ready before merging", async () => {
+  it("promotes draft leaf to ready (deliverable PR must be reviewable)", async () => {
     const draftLeaf = {
       number: 200,
       url: "u",
@@ -445,7 +443,7 @@ describe("finalizeGoal", () => {
     })
     await finalizeGoal(ctx, fakeProfile())
     expect(ops.markPrReady).toHaveBeenCalledWith(200, "/tmp")
-    expect(ops.mergePrSquash).toHaveBeenCalledWith(200, "/tmp")
+    expect(ops.mergePrSquash).not.toHaveBeenCalled()
   })
 
   it("sets state=done even when there is no leaf PR (issues closed manually)", async () => {

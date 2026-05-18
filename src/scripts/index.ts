@@ -46,7 +46,6 @@ import { mergeReleasePr } from "./mergeReleasePr.js"
 import { mirrorStateToPr } from "./mirrorStateToPr.js"
 import { notifyTerminal } from "./notifyTerminal.js"
 import { openQaIssue } from "./openQaIssue.js"
-import { parkGoalForMerge } from "./parkGoalForMerge.js"
 import { parseAgentResult } from "./parseAgentResult.js"
 import { parseIssueStateFromAgentResult } from "./parseIssueStateFromAgentResult.js"
 import { parseJobStateFromAgentResult } from "./parseJobStateFromAgentResult.js"
@@ -127,7 +126,6 @@ export const preflightScripts: Record<string, PreflightScript> = {
   handleAbandonedGoal,
   deriveGoalPhase,
   dispatchNextTask,
-  parkGoalForMerge,
   finalizeGoal,
   saveGoalState,
 }
