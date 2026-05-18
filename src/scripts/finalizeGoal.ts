@@ -37,8 +37,28 @@
  */
 
 import type { PreflightScript } from "../executables/types.js"
-import { closeIssue, closePr, editPrBase, markPrReady } from "../goal/operations.js"
+import {
+  branchContains,
+  closeIssue,
+  closePr,
+  commentOnIssue,
+  editPrBase,
+  extractClosesIssues,
+  markPrReady,
+} from "../goal/operations.js"
+import type { OpenTaskPr } from "../goal/operations.js"
 import type { GoalCtx } from "./goalCtx.js"
+
+/** Issue numbers a PR speaks for: `Closes #N` refs ∪ the `<n>-slug` head convention. */
+function prIssueNumbers(pr: OpenTaskPr): number[] {
+  const nums = new Set(extractClosesIssues(pr.body))
+  const headMatch = pr.headRefName.match(/^(\d+)-/)
+  if (headMatch) {
+    const n = Number.parseInt(headMatch[1]!, 10)
+    if (Number.isFinite(n)) nums.add(n)
+  }
+  return [...nums]
+}
 
 export const finalizeGoal: PreflightScript = async (ctx) => {
   const goal = ctx.data.goal as GoalCtx | undefined
@@ -79,11 +99,32 @@ export const finalizeGoal: PreflightScript = async (ctx) => {
     `[goal-tick] leaf PR #${leaf.number} is the deliverable (cumulative goal diff vs ${goal.defaultBranch}) — left open for human merge\n`,
   )
 
-  // Close every other open task PR — the leaf branch already carries
-  // their commits, so they're redundant once the leaf is the single
-  // deliverable. Best-effort: a failure here doesn't block finalize.
+  // Close every other open task PR — but ONLY after verifying the leaf
+  // branch actually carries that PR's commits. The "leaf carries
+  // everything" invariant holds only for a strictly linear stack; a
+  // broken chain (a task branch cut fresh off the default branch
+  // instead of stacked on its predecessor) would otherwise be silently
+  // dropped here. Uncarried PRs (and their issues) are left OPEN.
+  // Best-effort: a failure here doesn't block finalize.
+  const uncarriedIssues = new Set<number>()
   const others = (goal.openTaskPrs ?? []).filter((p) => p.number !== leaf.number)
   for (const pr of others) {
+    const contained = branchContains(leaf.headRefName, pr.headRefName, ctx.cwd)
+    if (!contained.ok || contained.value !== true) {
+      const why = contained.ok
+        ? `commits on \`${pr.headRefName}\` are NOT reachable from the deliverable leaf \`${leaf.headRefName}\``
+        : `could not verify containment (${contained.error})`
+      process.stderr.write(
+        `[goal-tick] finalizeGoal: NOT closing PR #${pr.number} — ${why}; leaving it open (broken stack)\n`,
+      )
+      for (const n of prIssueNumbers(pr)) uncarriedIssues.add(n)
+      commentOnIssue(
+        pr.number,
+        `⚠️ _Stacked-PR finalize: this PR's commits are **not** carried by the goal's deliverable PR #${leaf.number} (the stack chain was broken). Leaving this PR open so its work isn't lost — review and land it manually._`,
+        ctx.cwd,
+      )
+      continue
+    }
     process.stdout.write(`[goal-tick] closing intermediate stacked PR #${pr.number} (carried by deliverable leaf)\n`)
     const closed = closePr(
       pr.number,
@@ -101,6 +142,12 @@ export const finalizeGoal: PreflightScript = async (ctx) => {
   // "done" state rather than waiting on a merge the engine never does.
   const openIssues = (goal.childTasks ?? []).filter((t) => t.state === "OPEN")
   for (const t of openIssues) {
+    if (uncarriedIssues.has(t.number)) {
+      process.stderr.write(
+        `[goal-tick] finalizeGoal: NOT closing task issue #${t.number} — its PR's work is not carried by the deliverable (broken stack)\n`,
+      )
+      continue
+    }
     process.stdout.write(`[goal-tick] closing task issue #${t.number} (goal finalized — carried by PR #${leaf.number})\n`)
     const closed = closeIssue(
       t.number,

@@ -250,6 +250,42 @@ export function editPrBase(prNumber: number, baseBranch: string, cwd?: string): 
   }
 }
 
+/**
+ * True when every commit on `candidateHead` is already reachable from
+ * `leafHead` — i.e. the leaf branch genuinely carries that branch's
+ * work. finalizeGoal uses this to decide whether closing an intermediate
+ * stacked PR is safe: the "leaf carries everything" invariant only holds
+ * for a strictly linear stack, and a broken chain (a task branch cut
+ * fresh off the default branch instead of stacked on its predecessor)
+ * silently drops that task's diff if we close it blindly.
+ *
+ * `compare/<leafHead>...<candidateHead>`: `ahead_by` counts commits on
+ * candidate not reachable from leaf. 0 ⇒ fully contained. A 404 (branch
+ * already deleted) or any API error returns ok:false so the caller can
+ * fail safe (keep the PR open) rather than assume containment.
+ */
+export function branchContains(
+  leafHead: string,
+  candidateHead: string,
+  cwd?: string,
+): OperationResult<boolean> {
+  if (leafHead === candidateHead) return { ok: true, value: true }
+  try {
+    const out = gh(
+      [
+        "api",
+        `repos/{owner}/{repo}/compare/${encodeURIComponent(leafHead)}...${encodeURIComponent(candidateHead)}`,
+        "--jq",
+        ".ahead_by",
+      ],
+      { cwd },
+    )
+    return { ok: true, value: Number.parseInt(out.trim(), 10) === 0 }
+  } catch (err) {
+    return fail(err)
+  }
+}
+
 /** Promote a draft PR to ready-for-review. */
 export function markPrReady(prNumber: number, cwd?: string): OperationResult {
   try {

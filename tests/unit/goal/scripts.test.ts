@@ -22,6 +22,7 @@ vi.mock("../../../src/goal/operations.js", async () => {
     commentOnIssue: vi.fn(() => ({ ok: true })),
     closeIssue: vi.fn(() => ({ ok: true })),
     closePr: vi.fn(() => ({ ok: true })),
+    branchContains: vi.fn(() => ({ ok: true, value: true })),
     mergePrSquash: vi.fn(() => ({ ok: true })),
     markPrReady: vi.fn(() => ({ ok: true })),
     editPrBase: vi.fn(() => ({ ok: true })),
@@ -342,6 +343,9 @@ describe("finalizeGoal", () => {
     vi.mocked(ops.markPrReady).mockReset().mockReturnValue({ ok: true })
     vi.mocked(ops.editPrBase).mockReset().mockReturnValue({ ok: true })
     vi.mocked(ops.closePr).mockReset().mockReturnValue({ ok: true })
+    vi.mocked(ops.closeIssue).mockReset().mockReturnValue({ ok: true })
+    vi.mocked(ops.commentOnIssue).mockReset().mockReturnValue({ ok: true })
+    vi.mocked(ops.branchContains).mockReset().mockReturnValue({ ok: true, value: true })
   })
 
   it("leaf-only deliverable: retargets leaf, never merges, closes intermediates + task issues", async () => {
@@ -392,6 +396,57 @@ describe("finalizeGoal", () => {
     expect(ops.closeIssue).toHaveBeenCalledTimes(2)
     expect(ops.closeIssue).toHaveBeenCalledWith(11, expect.objectContaining({ reason: "completed" }), "/tmp")
     expect(ops.closeIssue).toHaveBeenCalledWith(12, expect.objectContaining({ reason: "completed" }), "/tmp")
+    expect((ctx.data.goal as GoalCtx).state).toBe("done")
+  })
+
+  it("broken stack: leaf does NOT carry an intermediate PR → that PR + its issue stay open", async () => {
+    // Regression for goal #1644: the leaf branch was cut fresh off the
+    // default branch instead of stacked on its predecessor, so its diff
+    // does NOT contain the root's commits. Closing the root here would
+    // silently drop that task's work — finalize must leave it open.
+    const root = {
+      number: 888,
+      url: "u1",
+      isDraft: false,
+      headRefName: "11-x",
+      baseRefName: "main",
+      body: "Closes #11",
+    }
+    const leaf = {
+      number: 999,
+      url: "u2",
+      isDraft: false,
+      headRefName: "12-x",
+      baseRefName: "main",
+      body: "Closes #12",
+    }
+    // Leaf carries #12's branch but NOT #11's (broken chain).
+    vi.mocked(ops.branchContains).mockImplementation((_leafHead, candidate) =>
+      candidate === "11-x" ? { ok: true, value: false } : { ok: true, value: true },
+    )
+    const ctx = fakeCtx({
+      data: {
+        goal: {
+          id: "g",
+          state: "active",
+          defaultBranch: "main",
+          openTaskPrs: [root, leaf],
+          leafPr: leaf,
+          childTasks: [
+            { number: 11, state: "OPEN", prState: "ready" },
+            { number: 12, state: "OPEN", prState: "ready" },
+          ],
+        } satisfies Partial<GoalCtx>,
+      },
+    })
+    await finalizeGoal(ctx, fakeProfile())
+    // Uncarried root PR is NOT closed; it gets a warning comment instead.
+    expect(ops.closePr).not.toHaveBeenCalled()
+    expect(ops.commentOnIssue).toHaveBeenCalledWith(888, expect.stringContaining("not"), "/tmp")
+    // Its issue (#11) stays open; the carried task (#12) is still closed.
+    expect(ops.closeIssue).toHaveBeenCalledTimes(1)
+    expect(ops.closeIssue).toHaveBeenCalledWith(12, expect.objectContaining({ reason: "completed" }), "/tmp")
+    expect(ops.closeIssue).not.toHaveBeenCalledWith(11, expect.anything(), expect.anything())
     expect((ctx.data.goal as GoalCtx).state).toBe("done")
   })
 
