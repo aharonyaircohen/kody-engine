@@ -1,6 +1,7 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { query } from "@anthropic-ai/claude-agent-sdk"
+import { ensureStableClaudeBinary } from "./claudeBinary.js"
 import { getAnthropicApiKeyOrDummy, type ProviderModel } from "./config.js"
 import { renderEvent, type SdkMessageLike } from "./format.js"
 
@@ -280,6 +281,13 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       }
     }
     queryOptions.settingSources = opts.settingSources ?? ["project", "local"]
+    // Pin the SDK's native binary to a job-stable path so npm pruning the
+    // `_npx` cache mid-job (during a long run phase) can't make a later
+    // phase fail with "native binary not found". Null => SDK default.
+    const stableBinary = ensureStableClaudeBinary()
+    if (stableBinary) {
+      queryOptions.pathToClaudeCodeExecutable = stableBinary
+    }
     const result = query({
       prompt: opts.prompt,
       // biome-ignore lint/suspicious/noExplicitAny: SDK options type is narrow; mcpServers is runtime-passthrough.
