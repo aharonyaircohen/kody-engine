@@ -14,10 +14,19 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 
-/** All state values a goal may occupy. Drives the phase machine. */
-export type GoalLifecycleState = "active" | "abandoned" | "closed" | "done"
+/**
+ * All state values a goal may occupy. Drives the phase machine.
+ *
+ * `awaiting-merge`: every child task is done but the cumulative goal diff
+ * has NOT been merged. The engine parks here instead of auto-merging;
+ * the dashboard's "Merge goal" button is the only thing that advances it
+ * (it flips state back to `active` + sets `mergeApproved`, letting the
+ * existing finalize run once). The scheduler skips this state, so a
+ * parked goal never ticks on its own.
+ */
+export type GoalLifecycleState = "active" | "abandoned" | "closed" | "awaiting-merge" | "done"
 
-const VALID_STATES: ReadonlySet<string> = new Set(["active", "abandoned", "closed", "done"])
+const VALID_STATES: ReadonlySet<string> = new Set(["active", "abandoned", "closed", "awaiting-merge", "done"])
 
 /**
  * Strict view of fields the tick reads or writes. Other fields (e.g.
@@ -27,6 +36,14 @@ const VALID_STATES: ReadonlySet<string> = new Set(["active", "abandoned", "close
 export interface GoalState {
   /** Lifecycle state. Required — drives phase derivation. */
   state: GoalLifecycleState
+  /**
+   * One-shot "the user clicked Merge" flag, written by the dashboard
+   * alongside `state="active"`. `parkGoalForMerge` consumes it: when
+   * true it lets the existing finalize merge run this tick and clears
+   * the flag; when false/absent an all-done goal parks at
+   * `awaiting-merge` instead of auto-merging.
+   */
+  mergeApproved?: boolean
   /** Most recently dispatched task issue number. Audit trail. */
   lastDispatchedIssue?: number
   /** ISO timestamp updated on every tick. */
@@ -79,6 +96,9 @@ export function parseGoalState(filePath: string, raw: unknown): GoalState {
     extra: {},
   }
 
+  if (typeof r.mergeApproved === "boolean") {
+    parsed.mergeApproved = r.mergeApproved
+  }
   if (typeof r.lastDispatchedIssue === "number" && Number.isFinite(r.lastDispatchedIssue)) {
     parsed.lastDispatchedIssue = r.lastDispatchedIssue
   }
@@ -88,7 +108,7 @@ export function parseGoalState(filePath: string, raw: unknown): GoalState {
   }
 
   // Capture every other field on `extra` so it round-trips on save.
-  const known = new Set(["state", "lastDispatchedIssue", "updatedAt", "createdAt", "startedAt"])
+  const known = new Set(["state", "mergeApproved", "lastDispatchedIssue", "updatedAt", "createdAt", "startedAt"])
   for (const [k, v] of Object.entries(r)) {
     if (!known.has(k)) parsed.extra[k] = v
   }
@@ -102,6 +122,7 @@ export function parseGoalState(filePath: string, raw: unknown): GoalState {
  */
 export function serializeGoalState(s: GoalState): string {
   const obj: Record<string, unknown> = { ...s.extra, state: s.state }
+  if (s.mergeApproved !== undefined) obj.mergeApproved = s.mergeApproved
   if (s.lastDispatchedIssue !== undefined) obj.lastDispatchedIssue = s.lastDispatchedIssue
   if (s.createdAt !== undefined) obj.createdAt = s.createdAt
   if (s.startedAt !== undefined) obj.startedAt = s.startedAt

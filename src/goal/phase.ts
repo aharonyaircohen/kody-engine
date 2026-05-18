@@ -27,6 +27,13 @@ export type GoalPhase =
   | "abandoned"
   /** state="closed" or "done" — fully terminal, no-op. */
   | "terminal"
+  /**
+   * state="awaiting-merge" — every task done, cumulative diff NOT
+   * merged. No-op for the tick: nothing is gated on this phase, so
+   * finalize/dispatch both skip. Only the dashboard "Merge goal"
+   * button advances it (→ active + mergeApproved).
+   */
+  | "awaiting-merge"
   /** Active, no work to do (no open issues). */
   | "idle"
   /** Active, leaf task PR is still draft (kody is working) — wait. */
@@ -67,6 +74,7 @@ export function derivePhase(snap: GoalSnapshot): GoalPhase {
   if (!snap.lifecycleState) return "missing"
   if (snap.lifecycleState === "abandoned") return "abandoned"
   if (snap.lifecycleState === "closed" || snap.lifecycleState === "done") return "terminal"
+  if (snap.lifecycleState === "awaiting-merge") return "awaiting-merge"
 
   // lifecycleState === "active" from here on.
   const hasInFlight = snap.childTasks.some((t) => t.state === "OPEN" && t.prState === "draft")

@@ -1,7 +1,7 @@
 {
   "name": "goal-tick",
   "role": "primitive",
-  "describe": "One deterministic tick for one goal in the stacked-PR model: read .kody/goals/<id>/state.json, dispatch @kody on the next ready task (stacked on the leaf PR), or squash-merge the leaf when all tasks are done. No agent.",
+  "describe": "One deterministic tick for one goal in the stacked-PR model: read .kody/goals/<id>/state.json, dispatch @kody on the next ready task (stacked on the leaf PR), or — when all tasks are done — park the goal at awaiting-merge (the dashboard Merge button later flips it back to active+mergeApproved, which lets finalize squash-merge the leaf). No agent.",
   "kind": "oneshot",
   "inputs": [
     {
@@ -50,6 +50,10 @@
       {
         "script": "deriveGoalPhase",
         "runWhen": { "data.goal.state": "active" }
+      },
+      {
+        "script": "parkGoalForMerge",
+        "runWhen": { "data.goal.phase": "all-done" }
       },
       {
         "script": "finalizeGoal",

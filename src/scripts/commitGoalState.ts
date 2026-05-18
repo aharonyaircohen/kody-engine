@@ -54,6 +54,7 @@ export const commitGoalState: PostflightScript = async (ctx) => {
 
 function describeCommitMessage(goal: GoalCtx): string {
   if (goal.state === "closed") return `chore(goals): abandon ${goal.id} (cleanup complete)`
+  if (goal.state === "awaiting-merge") return `chore(goals): park ${goal.id} awaiting merge`
   if (goal.state === "done") return `chore(goals): mark ${goal.id} done`
   if (goal.lastDispatchedIssue !== undefined) {
     return `chore(goals): dispatched #${goal.lastDispatchedIssue} for ${goal.id}`

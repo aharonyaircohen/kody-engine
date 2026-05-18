@@ -7,6 +7,7 @@
 import type { PostflightScript, PreflightScript } from "../executables/types.js"
 import { abortUnfinishedGitOps } from "./abortUnfinishedGitOps.js"
 import { advanceFlow } from "./advanceFlow.js"
+import { brainServe } from "./brainServe.js"
 import { buildSyntheticPlugin } from "./buildSyntheticPlugin.js"
 import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
 import { classifyByLabel } from "./classifyByLabel.js"
@@ -45,6 +46,7 @@ import { mergeReleasePr } from "./mergeReleasePr.js"
 import { mirrorStateToPr } from "./mirrorStateToPr.js"
 import { notifyTerminal } from "./notifyTerminal.js"
 import { openQaIssue } from "./openQaIssue.js"
+import { parkGoalForMerge } from "./parkGoalForMerge.js"
 import { parseAgentResult } from "./parseAgentResult.js"
 import { parseIssueStateFromAgentResult } from "./parseIssueStateFromAgentResult.js"
 import { parseJobStateFromAgentResult } from "./parseJobStateFromAgentResult.js"
@@ -67,10 +69,9 @@ import { revertFlow } from "./revertFlow.js"
 import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
 import { runTickScript } from "./runTickScript.js"
-import { brainServe } from "./brainServe.js"
-import { serveFlow } from "./serveFlow.js"
 import { saveGoalState } from "./saveGoalState.js"
 import { saveTaskState } from "./saveTaskState.js"
+import { serveFlow } from "./serveFlow.js"
 import { setCommentTarget } from "./setCommentTarget.js"
 import { setLifecycleLabel } from "./setLifecycleLabel.js"
 import { skipAgent } from "./skipAgent.js"
@@ -126,6 +127,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   handleAbandonedGoal,
   deriveGoalPhase,
   dispatchNextTask,
+  parkGoalForMerge,
   finalizeGoal,
   saveGoalState,
 }
