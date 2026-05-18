@@ -92,6 +92,7 @@ describe("fixCiFlow: happy path", () => {
         id: "12345",
         workflowName: "CI",
         headBranch: "feature-branch",
+        headSha: "sha-head",
         conclusion: "failure",
         url: "https://example.com/runs/12345",
         createdAt: "t",

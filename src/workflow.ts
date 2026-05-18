@@ -22,24 +22,31 @@ export interface FailedRun {
   id: string
   workflowName: string
   headBranch: string
+  headSha: string
   conclusion: string
   url: string
   createdAt: string
 }
 
 /**
- * Fetch recent failed workflow runs on the PR's head branch, most-recent-first.
- * Returns an empty array if the branch can't be resolved or the listing fails.
+ * Fetch recent failed workflow runs for the PR's *current head commit*,
+ * most-recent-first. Scoping to the head SHA (not just the branch) means
+ * historical noise — especially kody's own dispatch reruns from earlier
+ * commits — can never crowd the real CI failure out of the window.
+ * Returns an empty array if the PR can't be resolved or the listing fails.
  */
 export function getRecentFailedRunsForPr(prNumber: number, limit: number, cwd?: string): FailedRun[] {
   let headBranch: string
+  let headSha: string
   try {
-    const out = gh(["pr", "view", String(prNumber), "--json", "headRefName"], cwd)
-    headBranch = JSON.parse(out).headRefName
+    const out = gh(["pr", "view", String(prNumber), "--json", "headRefName,headRefOid"], cwd)
+    const parsed = JSON.parse(out)
+    headBranch = parsed.headRefName
+    headSha = parsed.headRefOid
   } catch {
     return []
   }
-  if (!headBranch) return []
+  if (!headBranch || !headSha) return []
 
   try {
     const out = gh(
@@ -53,20 +60,23 @@ export function getRecentFailedRunsForPr(prNumber: number, limit: number, cwd?: 
         "--limit",
         String(Math.max(1, limit)),
         "--json",
-        "databaseId,workflowName,headBranch,conclusion,url,createdAt",
+        "databaseId,workflowName,headBranch,headSha,conclusion,url,createdAt",
       ],
       cwd,
     )
     const parsed = JSON.parse(out)
     if (!Array.isArray(parsed)) return []
-    return parsed.map((r) => ({
-      id: String(r.databaseId ?? ""),
-      workflowName: r.workflowName ?? "",
-      headBranch: r.headBranch ?? headBranch,
-      conclusion: r.conclusion ?? "failure",
-      url: r.url ?? "",
-      createdAt: r.createdAt ?? "",
-    }))
+    return parsed
+      .map((r) => ({
+        id: String(r.databaseId ?? ""),
+        workflowName: r.workflowName ?? "",
+        headBranch: r.headBranch ?? headBranch,
+        headSha: r.headSha ?? "",
+        conclusion: r.conclusion ?? "failure",
+        url: r.url ?? "",
+        createdAt: r.createdAt ?? "",
+      }))
+      .filter((r) => r.headSha === headSha)
   } catch {
     return []
   }

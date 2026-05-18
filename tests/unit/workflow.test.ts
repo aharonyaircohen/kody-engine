@@ -47,15 +47,16 @@ describe("getRecentFailedRunsForPr", () => {
     expect(getRecentFailedRunsForPr(42, 10)).toEqual([])
   })
 
-  it("maps gh run list output into FailedRun objects", () => {
+  it("maps gh run list output into FailedRun objects for the head SHA", () => {
     stubGh([
-      () => JSON.stringify({ headRefName: "feature" }),
+      () => JSON.stringify({ headRefName: "feature", headRefOid: "sha-head" }),
       () =>
         JSON.stringify([
           {
             databaseId: 111,
             workflowName: "CI",
             headBranch: "feature",
+            headSha: "sha-head",
             conclusion: "failure",
             url: "https://example.com/runs/111",
             createdAt: "2026-04-20T00:00:00Z",
@@ -68,24 +69,44 @@ describe("getRecentFailedRunsForPr", () => {
         id: "111",
         workflowName: "CI",
         headBranch: "feature",
+        headSha: "sha-head",
         conclusion: "failure",
         url: "https://example.com/runs/111",
         createdAt: "2026-04-20T00:00:00Z",
       },
     ])
   })
+
+  it("drops failed runs that belong to an earlier commit", () => {
+    stubGh([
+      () => JSON.stringify({ headRefName: "feature", headRefOid: "sha-head" }),
+      () =>
+        JSON.stringify([
+          { databaseId: 1, workflowName: "CI", headSha: "sha-old", conclusion: "failure", url: "u1", createdAt: "t1" },
+          { databaseId: 2, workflowName: "CI", headSha: "sha-head", conclusion: "failure", url: "u2", createdAt: "t2" },
+        ]),
+    ])
+    const runs = getRecentFailedRunsForPr(42, 10)
+    expect(runs.map((r) => r.id)).toEqual(["2"])
+  })
+
+  it("returns empty array when the head SHA cannot be resolved", () => {
+    stubGh([() => JSON.stringify({ headRefName: "feature" })])
+    expect(getRecentFailedRunsForPr(42, 10)).toEqual([])
+  })
 })
 
 describe("pickFailedRunForFixCi", () => {
   it("skips kody dispatch workflow runs", () => {
     stubGh([
-      () => JSON.stringify({ headRefName: "feature" }),
+      () => JSON.stringify({ headRefName: "feature", headRefOid: "sha-head" }),
       () =>
         JSON.stringify([
           {
             databaseId: 1,
             workflowName: "kody",
             headBranch: "feature",
+            headSha: "sha-head",
             conclusion: "failure",
             url: "u1",
             createdAt: "t1",
@@ -94,6 +115,7 @@ describe("pickFailedRunForFixCi", () => {
             databaseId: 2,
             workflowName: "CI",
             headBranch: "feature",
+            headSha: "sha-head",
             conclusion: "failure",
             url: "u2",
             createdAt: "t2",
@@ -109,13 +131,14 @@ describe("pickFailedRunForFixCi", () => {
 
   it("skips runs whose --log-failed fetch fails (e.g. CodeQL logs not available)", () => {
     stubGh([
-      () => JSON.stringify({ headRefName: "feature" }),
+      () => JSON.stringify({ headRefName: "feature", headRefOid: "sha-head" }),
       () =>
         JSON.stringify([
           {
             databaseId: 10,
             workflowName: ".github/workflows/codeql.yml",
             headBranch: "feature",
+            headSha: "sha-head",
             conclusion: "failure",
             url: "u10",
             createdAt: "t10",
@@ -124,6 +147,7 @@ describe("pickFailedRunForFixCi", () => {
             databaseId: 20,
             workflowName: "CI",
             headBranch: "feature",
+            headSha: "sha-head",
             conclusion: "failure",
             url: "u20",
             createdAt: "t20",
@@ -141,11 +165,11 @@ describe("pickFailedRunForFixCi", () => {
 
   it("skips runs whose log tail is empty (log exists but no failed-step output)", () => {
     stubGh([
-      () => JSON.stringify({ headRefName: "feature" }),
+      () => JSON.stringify({ headRefName: "feature", headRefOid: "sha-head" }),
       () =>
         JSON.stringify([
-          { databaseId: 1, workflowName: "A", conclusion: "failure", url: "u1", createdAt: "t1" },
-          { databaseId: 2, workflowName: "B", conclusion: "failure", url: "u2", createdAt: "t2" },
+          { databaseId: 1, workflowName: "A", headSha: "sha-head", conclusion: "failure", url: "u1", createdAt: "t1" },
+          { databaseId: 2, workflowName: "B", headSha: "sha-head", conclusion: "failure", url: "u2", createdAt: "t2" },
         ]),
       () => "",
       () => "real log",
@@ -156,9 +180,11 @@ describe("pickFailedRunForFixCi", () => {
 
   it("returns null when no runs are usable", () => {
     stubGh([
-      () => JSON.stringify({ headRefName: "feature" }),
+      () => JSON.stringify({ headRefName: "feature", headRefOid: "sha-head" }),
       () =>
-        JSON.stringify([{ databaseId: 1, workflowName: "kody", conclusion: "failure", url: "u1", createdAt: "t1" }]),
+        JSON.stringify([
+          { databaseId: 1, workflowName: "kody", headSha: "sha-head", conclusion: "failure", url: "u1", createdAt: "t1" },
+        ]),
     ])
     expect(pickFailedRunForFixCi(42, 1_000, 10)).toBeNull()
   })
