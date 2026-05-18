@@ -121,30 +121,24 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     expect(postScripts).not.toContain("checkCoverageWithRetry")
   })
 
-  it("`bug` container profile loads cleanly with children routing table", () => {
+  it("`bug` is a single-session pr-branch primitive (collapsed orchestration)", () => {
     const profile = loadProfile(path.join(EXE_ROOT, "bug/profile.json"))
     expect(profile.name).toBe("bug")
-    expect(profile.role).toBe("container")
-    // `base` is forwarded by goal-tick's stacked-PR dispatch (optional).
+    expect(profile.role).toBe("primitive")
+    expect(profile.children ?? []).toEqual([])
+    // `base` still forwarded by goal-tick's stacked-PR dispatch (optional).
     expect(profile.inputs.map((i) => i.name)).toEqual(["issue", "base"])
-    expect(profile.claudeCode.maxTurns).toBe(0)
-    expect(profile.claudeCode.tools).toEqual([])
+    // pr-branch lifecycle + verify-loop, same plumbing as `feature`/`run`.
+    expect(profile.lifecycle).toBe("pr-branch")
+    expect(profile.claudeCode.enableVerifyTool).toBe(true)
+    expect(profile.claudeCode.verifyAttempts).toBe(4)
+    // Single-session: no orchestrator to re-trigger, stamps its own terminus.
+    expect(profile.lifecycleConfig?.advance).toBe(false)
+    expect(profile.lifecycleConfig?.finalize).toBe(true)
     const pre = profile.scripts.preflight.map((p) => p.script)
-    expect(pre[0]).toBe("setLifecycleLabel")
-    expect(pre).toContain("loadIssueContext")
-    expect(pre).toContain("loadTaskState")
-    // Children sequence the flow: reproduce → plan → run → review (→ fix).
-    const childExecs = (profile.children ?? []).map((c) => c.exec)
-    expect(childExecs).toEqual(["reproduce", "plan", "run", "review", "fix"])
-    // Postflight is finishFlow-only, gated on the last child's outcome.
-    const post = profile.scripts.postflight
-    expect(post.at(-1)!.script).toBe("persistFlowState")
-    const transitions = post.slice(0, -1)
-    for (const entry of transitions) {
-      expect(entry.script).toBe("finishFlow")
-      expect(entry.with).toBeDefined()
-      expect(entry.runWhen).toBeDefined()
-    }
+    expect(pre).toContain("runFlow")
+    const post = profile.scripts.postflight.map((p) => p.script)
+    expect(post.at(-1)).toBe("finalizeTerminal")
   })
 
   it("`spec` sub-orchestrator profile loads cleanly", () => {
