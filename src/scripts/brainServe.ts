@@ -33,6 +33,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 
 import { parseProviderModel, needsLitellmProxy, LITELLM_DEFAULT_URL } from "../config.js"
+import { unpackAllSecrets } from "../kody-cli.js"
 import type { PreflightScript } from "../executables/types.js"
 import { type LitellmHandle, startLitellmIfNeeded } from "../litellm.js"
 import { runChatTurn, type ChatTurnOptions, type ChatTurnResult } from "../chat/loop.js"
@@ -394,6 +395,18 @@ export function buildServer(opts: BuildServerOptions): Server {
 
 export const brainServe: PreflightScript = async (ctx) => {
   ctx.skipAgent = true
+
+  // The dashboard ships the per-repo secrets vault to this machine as a
+  // JSON ALL_SECRETS env var (see Kody-Dashboard fly-context/brain-fly).
+  // Spread it into process.env so the chat agent's tools and the LiteLLM
+  // proxy see provider keys — mirrors chat-cli's boot. BRAIN_API_KEY and
+  // any machine-level env already set win (unpack skips existing keys).
+  const unpacked = unpackAllSecrets()
+  if (unpacked > 0) {
+    process.stdout.write(
+      `[brain-serve] unpacked ${unpacked} secret(s) from ALL_SECRETS\n`,
+    )
+  }
 
   const apiKey = getApiKey()
   const port = Number(process.env.PORT ?? DEFAULT_PORT)
