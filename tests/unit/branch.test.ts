@@ -1,5 +1,25 @@
 import { describe, expect, it } from "vitest"
+import { deriveBranchName } from "../../src/branch.js"
 import { resolveBaseOverride } from "../../src/scripts/runFlow.js"
+
+describe("deriveBranchName", () => {
+  it("uses the slugified title", () => {
+    expect(deriveBranchName(42, "Add revenue metrics")).toBe("42-add-revenue-metrics")
+  })
+
+  it("never returns a bare number when the slug is empty (non-ASCII title)", () => {
+    // Regression: a Hebrew-only title slugged to "" → branch "1678" →
+    // `git rev-parse --verify 1678` resolved an object → detached HEAD →
+    // `git push origin 1678` failed "cannot be resolved to branch".
+    const branch = deriveBranchName(1678, "הוספת המלצה לשיעור עוקב בדף סיום שיעור")
+    expect(branch).toBe("1678-task")
+    expect(branch).not.toMatch(/^\d+$/)
+  })
+
+  it("emoji/punctuation-only title also falls back to <n>-task", () => {
+    expect(deriveBranchName(7, "🚀🔥 — ✅")).toBe("7-task")
+  })
+})
 
 describe("runFlow: resolveBaseOverride", () => {
   // The --base override is the only way a comment can redirect kody onto a

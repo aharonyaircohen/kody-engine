@@ -23,7 +23,15 @@ export function deriveBranchName(issueNumber: number, title: string): string {
     .replace(/-+/g, "-")
     .slice(0, 50)
     .replace(/-$/, "")
-  return slug ? `${issueNumber}-${slug}` : `${issueNumber}`
+  // Never return a bare number: a purely-numeric branch name (e.g. when the
+  // issue title is all non-ASCII and the slug comes out empty) makes git
+  // ref-resolution ambiguous — `git rev-parse --verify 1678` resolves the
+  // number as an object, so `git checkout 1678` detaches HEAD instead of
+  // creating the branch and the later `git push origin 1678` fails with
+  // "1678 cannot be resolved to branch". The `-task` suffix keeps the
+  // leading `<issue>-` convention (goal/base allowlist patterns still match)
+  // while guaranteeing a non-numeric name.
+  return slug ? `${issueNumber}-${slug}` : `${issueNumber}-task`
 }
 
 export function getCurrentBranch(cwd?: string): string {
@@ -165,7 +173,10 @@ export function ensureFeatureBranch(
   // case and delete the stale ref so we re-fork below.
   let originBranchExists = false
   try {
-    git(["rev-parse", "--verify", `origin/${branchName}`], cwd)
+    // Explicit remote-tracking ref (not a bare `origin/<name>` rev-parse,
+    // which can resolve non-branch objects) so a stale tag/object can't be
+    // mistaken for the remote branch.
+    git(["rev-parse", "--verify", "--quiet", `refs/remotes/origin/${branchName}`], cwd)
     originBranchExists = true
   } catch {
     /* not on remote */
@@ -248,12 +259,20 @@ export function ensureFeatureBranch(
     return { branch: branchName, created: false }
   }
 
+  // Only treat this as "local branch already exists" if an actual local
+  // BRANCH ref exists — verify `refs/heads/<name>` explicitly. A bare
+  // `rev-parse --verify <name>` also resolves tags/abbrev-SHAs/other
+  // objects, so a name that happens to look like an object would make
+  // `git checkout <name>` detach HEAD onto the base and the later push
+  // fail with "<name> cannot be resolved to branch". Forcing the
+  // refs/heads/ path means we fall through to the create branch below
+  // instead of detaching.
   try {
-    git(["rev-parse", "--verify", branchName], cwd)
+    git(["rev-parse", "--verify", "--quiet", `refs/heads/${branchName}`], cwd)
     git(["checkout", branchName], cwd)
     return { branch: branchName, created: false }
   } catch {
-    /* not local either */
+    /* no local branch by that name — fall through to create it */
   }
 
   // Resolve fork point: caller-supplied base (if it exists on origin), else
