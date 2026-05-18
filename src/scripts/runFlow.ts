@@ -7,13 +7,25 @@
 import { ensureFeatureBranch } from "../branch.js"
 import type { PreflightScript } from "../executables/types.js"
 import { getRunUrl } from "../gha.js"
-import { getIssue, postIssueComment } from "../issue.js"
+import {
+  DEFAULT_COMMENT_LIMIT,
+  DEFAULT_COMMENT_MAX_BYTES,
+  formatIssueComments,
+  getIssue,
+  postIssueComment,
+} from "../issue.js"
 
 export const runFlow: PreflightScript = async (ctx) => {
   const issueNumber = ctx.args.issue as number
 
   const issue = getIssue(issueNumber, ctx.cwd)
-  ctx.data.issue = issue
+  const cfgCtx = ctx.config.issueContext ?? {}
+  const commentsFormatted = formatIssueComments(
+    issue.comments,
+    cfgCtx.commentLimit ?? DEFAULT_COMMENT_LIMIT,
+    cfgCtx.commentMaxBytes ?? DEFAULT_COMMENT_MAX_BYTES,
+  )
+  ctx.data.issue = { ...issue, commentsFormatted }
   ctx.data.commentTargetType = "issue"
   ctx.data.commentTargetNumber = issueNumber
 

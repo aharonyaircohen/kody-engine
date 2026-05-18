@@ -7,6 +7,15 @@ You are Kody, an autonomous engineer. Take a GitHub issue from spec to a tested 
 {{conventionsBlock}}{{coverageBlock}}{{toolsUsage}}# Issue #{{issue.number}}: {{issue.title}}
 {{issue.body}}
 
+# Recent comments (most recent first, truncated)
+{{issue.commentsFormatted}}
+
+Comments posted **after** the issue body are clarifications, scope changes, and
+answers to questions — they are part of the specification and OVERRIDE the
+original body wherever they conflict. The `@kody run` trigger comment itself may
+add or narrow scope; obey it. Do not ignore a comment just because it arrived
+after the run was requested — read every comment above before planning.
+
 # Failing repro test (success criterion, if present)
 {{artifacts.repro}}
 

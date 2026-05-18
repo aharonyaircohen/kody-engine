@@ -88,6 +88,28 @@ export function truncate(s: string, maxBytes: number): string {
   return `${s.slice(0, maxBytes)}… (+${s.length - maxBytes} chars)`
 }
 
+/** Default comment window, shared by loadIssueContext and runFlow. */
+export const DEFAULT_COMMENT_LIMIT = 12
+// 16KB/comment is enough to pass through a full research artifact (findings
+// + ambiguities) without clipping. Override per-project via kody.config.json
+// > issueContext > commentMaxBytes.
+export const DEFAULT_COMMENT_MAX_BYTES = 16_000
+
+/**
+ * Format issue comments into the markdown block used by prompt templates
+ * (`{{issue.commentsFormatted}}`). Most-recent first, capped at `limit`
+ * comments and `maxBytes` per body. Shared so every issue-driven
+ * executable (plan, research, run) renders comments identically.
+ */
+export function formatIssueComments(comments: IssueComment[], limit: number, maxBytes: number): string {
+  const sorted = [...comments].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+  const kept = sorted.slice(0, limit)
+  if (kept.length === 0) return "(no comments yet)"
+  return kept
+    .map((c) => `- **${c.author}** (${c.createdAt}):\n  ${truncate(c.body, maxBytes).replace(/\n/g, "\n  ")}`)
+    .join("\n\n")
+}
+
 export function parsePrNumber(url: string): number | null {
   const m = url.match(/\/pull\/(\d+)(?:[/?#]|$)/)
   if (!m) return null

@@ -1,5 +1,34 @@
 import { describe, expect, it } from "vitest"
-import { isReviewShaped, truncate } from "../../src/issue.js"
+import { formatIssueComments, isReviewShaped, truncate } from "../../src/issue.js"
+
+describe("issue: formatIssueComments", () => {
+  const c = (body: string, author: string, createdAt: string) => ({ body, author, createdAt })
+
+  it("returns placeholder when there are no comments", () => {
+    expect(formatIssueComments([], 12, 16_000)).toBe("(no comments yet)")
+  })
+
+  it("orders most-recent first and includes author + timestamp", () => {
+    const out = formatIssueComments(
+      [c("first", "alice", "2026-01-01T00:00:00Z"), c("second", "bob", "2026-01-02T00:00:00Z")],
+      12,
+      16_000,
+    )
+    expect(out.indexOf("second")).toBeLessThan(out.indexOf("first"))
+    expect(out).toContain("**bob** (2026-01-02T00:00:00Z)")
+  })
+
+  it("caps the number of comments at the limit", () => {
+    const many = Array.from({ length: 20 }, (_, i) => c(`body${i}`, "u", `2026-01-${i + 1}T00:00:00Z`))
+    const out = formatIssueComments(many, 3, 16_000)
+    expect(out.split("\n\n")).toHaveLength(3)
+  })
+
+  it("truncates an over-long comment body", () => {
+    const out = formatIssueComments([c("x".repeat(100), "u", "2026-01-01T00:00:00Z")], 12, 10)
+    expect(out).toContain("… (+90 chars)")
+  })
+})
 
 describe("issue: truncate", () => {
   it("returns string unchanged when within limit", () => {
