@@ -1,0 +1,74 @@
+{
+  "name": "featurex",
+  "role": "primitive",
+  "describe": "EXPERIMENTAL single-session feature/refactor: research → plan → build → test → verify in ONE agent session, then branch, commit, open PR. Collapsed replacement for the `feature` container (no multi-stage orchestration). Trial alongside `feature` before promotion.",
+  "inputs": [
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": true,
+      "describe": "GitHub issue number to implement."
+    },
+    {
+      "name": "base",
+      "flag": "--base",
+      "type": "string",
+      "required": false,
+      "describe": "Optional base branch override (stacked-PR). Used by goal-tick so each task PR forks from the previous task's head ref."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "acceptEdits",
+    "maxTurns": null,
+    "maxTurnTimeoutSec": 1200,
+    "systemPromptAppend": null,
+    "cacheable": true,
+    "enableVerifyTool": true,
+    "verifyAttempts": 4,
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Bash",
+      "Grep",
+      "Glob",
+      "mcp__kody-verify"
+    ],
+    "hooks": ["block-git"],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "lifecycle": "pr-branch",
+  "lifecycleConfig": {
+    "label": {
+      "name": "kody:running",
+      "color": "fbca04",
+      "description": "kody: implementing the change"
+    },
+    "context": "task",
+    "sync": false,
+    "verify": true,
+    "advance": false,
+    "mirrorState": true,
+    "finalize": true
+  },
+  "scripts": {
+    "preflight": [
+      { "script": "runFlow" }
+    ],
+    "postflight": []
+  },
+  "output": {
+    "actionTypes": [
+      "RUN_COMPLETED",
+      "RUN_FAILED",
+      "AGENT_NOT_RUN"
+    ]
+  }
+}

@@ -24,6 +24,7 @@
  *     saveTaskState
  *     [mirrorStateToPr]
  *     [advanceFlow]
+ *     [finalizeTerminal]
  *
  * Config (`profile.lifecycleConfig`):
  *   label:          { name, color, description }   (required)
@@ -36,6 +37,7 @@
  *   verify:         boolean                        (default true)
  *   advance:        boolean                        (default true)
  *   mirrorState:    boolean                        (default false)
+ *   finalize:       boolean                        (default false)
  *
  * Why these specific knobs (not a free-form config):
  * - `sync`: not all PR-branch executables fast-forward the local branch
@@ -45,6 +47,9 @@
  *   the orchestrator.
  * - `mirrorState`: only the issue-driven `run` mirrors task state into the
  *   PR body — fix and friends already have the PR.
+ * - `finalize`: single-session executables (feature, bug — no orchestrator)
+ *   stamp their own terminal kody:done/kody:failed label + phase. Container
+ *   children leave it false; their orchestrator's finishFlow does it.
  * - `context`: pre-set bundles for task work (full) vs CI-fix (lean) vs
  *   minimal (declare-everything-manually).
  *
@@ -70,6 +75,7 @@ interface PrBranchConfig {
   verify: boolean
   advance: boolean
   mirrorState: boolean
+  finalize: boolean
 }
 
 export function prBranchLifecycle(profile: Profile, profilePath: string): void {
@@ -109,6 +115,10 @@ export function prBranchLifecycle(profile: Profile, profilePath: string): void {
   ]
   if (cfg.mirrorState) tail.push({ script: "mirrorStateToPr" })
   if (cfg.advance) tail.push({ script: "advanceFlow" })
+  // Single-session executables (no orchestrator) stamp their own terminal
+  // label + phase here, after the PR exists and state is saved. Always
+  // last so it reads the authoritative post-saveTaskState state.
+  if (cfg.finalize) tail.push({ script: "finalizeTerminal" })
 
   profile.scripts.postflight = [...beforePostflight, ...profile.scripts.postflight, ...tail]
 }
@@ -182,6 +192,7 @@ function validateConfig(raw: Record<string, unknown> | undefined, profilePath: s
     verify: parseBool(raw, profilePath, "verify", true),
     advance: parseBool(raw, profilePath, "advance", true),
     mirrorState: parseBool(raw, profilePath, "mirrorState", false),
+    finalize: parseBool(raw, profilePath, "finalize", false),
   }
 }
 

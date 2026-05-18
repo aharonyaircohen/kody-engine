@@ -126,6 +126,7 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   dispatchClassified: { owner: "classify", reason: "Post-classification routing — classify-only." },
   dispatchNextTask: { owner: "goal-tick", reason: "goal-tick state-machine step." },
   finalizeGoal: { owner: "goal-tick", reason: "goal-tick terminal step." },
+  finalizeTerminal: { owner: "featurex", reason: "pr-branch `finalize` knob — terminal label/phase for single-session executables. Solo while featurex is the only collapsed executable; remove when bug/feature also collapse onto it." },
   fixCiFlow: { owner: "fix-ci", reason: "fix-ci bootstrap. Survives pr-branch migration; pending cross-executable extraction." },
   fixFlow: { owner: "fix", reason: "fix bootstrap. Survives pr-branch migration; pending cross-executable extraction." },
   handleAbandonedGoal: { owner: "goal-tick", reason: "goal-tick state-machine branch." },

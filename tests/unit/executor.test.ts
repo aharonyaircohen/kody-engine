@@ -160,6 +160,26 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     expect(post.at(-1)!.script).toBe("persistFlowState")
   })
 
+  it("`featurex` is a single-session pr-branch primitive (collapsed `feature`)", () => {
+    const profile = loadProfile(path.join(EXE_ROOT, "featurex/profile.json"))
+    expect(profile.name).toBe("featurex")
+    expect(profile.role).toBe("primitive")
+    expect(profile.children ?? []).toEqual([])
+    // `base` still forwarded by goal-tick's stacked-PR dispatch (optional).
+    expect(profile.inputs.map((i) => i.name)).toEqual(["issue", "base"])
+    // pr-branch lifecycle + verify-loop, same shape as `run`.
+    expect(profile.lifecycle).toBe("pr-branch")
+    expect(profile.claudeCode.enableVerifyTool).toBe(true)
+    expect(profile.claudeCode.verifyAttempts).toBe(4)
+    // Single-session: no orchestrator to re-trigger, stamps its own terminus.
+    expect(profile.lifecycleConfig?.advance).toBe(false)
+    expect(profile.lifecycleConfig?.finalize).toBe(true)
+    const pre = profile.scripts.preflight.map((p) => p.script)
+    expect(pre).toContain("runFlow")
+    const post = profile.scripts.postflight.map((p) => p.script)
+    expect(post.at(-1)).toBe("finalizeTerminal")
+  })
+
   it.each([
     {
       name: "chore",

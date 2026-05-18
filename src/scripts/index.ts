@@ -25,6 +25,7 @@ import { dispatchJobTicks } from "./dispatchJobTicks.js"
 import { dispatchNextTask } from "./dispatchNextTask.js"
 import { ensurePr } from "./ensurePr.js"
 import { finalizeGoal } from "./finalizeGoal.js"
+import { finalizeTerminal } from "./finalizeTerminal.js"
 import { finishFlow } from "./finishFlow.js"
 import { fixCiFlow } from "./fixCiFlow.js"
 import { fixFlow } from "./fixFlow.js"
@@ -158,6 +159,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   startFlow,
   dispatch,
   finishFlow,
+  finalizeTerminal,
   advanceFlow,
   persistFlowState,
   recordClassification,
