@@ -35,11 +35,14 @@ vi.mock("../../src/prompt.js", async () => {
 })
 
 describe("Phase 5 wire-up: preloadContext on container profiles", () => {
-  it("feature container declares preloadContext: true", () => {
+  it("feature is a single-session primitive — no container preloadContext", () => {
     const dir = path.dirname(new URL(import.meta.url).pathname)
     const repoRoot = path.resolve(dir, "..", "..")
     const profile = loadProfile(path.join(repoRoot, "src/executables/feature/profile.json"))
-    expect(profile.preloadContext).toBe(true)
+    // Collapsed: feature loads its own context via the pr-branch task
+    // bundle, so the container-only preloadContext no longer applies.
+    expect(profile.role).toBe("primitive")
+    expect(profile.preloadContext).toBe(false)
   })
 
   it("bug container declares preloadContext: true", () => {

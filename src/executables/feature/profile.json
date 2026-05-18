@@ -1,32 +1,42 @@
 {
   "name": "feature",
-  "role": "container",
-  "preloadContext": true,
-  "describe": "Feature / refactor flow — research → plan → run → review (→ fix on concerns/fail). Children run sequentially in one process via the container loop.",
+  "role": "primitive",
+  "describe": "Implement a feature / refactor issue end-to-end in ONE session: research → plan → build → test → verify, then branch, commit, open PR. Single-session — no multi-stage orchestration.",
   "inputs": [
     {
       "name": "issue",
       "flag": "--issue",
       "type": "int",
       "required": true,
-      "describe": "GitHub issue number to drive the flow on."
+      "describe": "GitHub issue number to implement."
     },
     {
       "name": "base",
       "flag": "--base",
       "type": "string",
       "required": false,
-      "describe": "Optional base branch override (stacked-PR). Forwarded to the `run` child by the container loop."
+      "describe": "Optional base branch override (stacked-PR). Used by goal-tick so each task PR forks from the previous task's head ref."
     }
   ],
   "claudeCode": {
     "model": "inherit",
-    "permissionMode": "default",
-    "maxTurns": 0,
-    "maxThinkingTokens": null,
+    "permissionMode": "acceptEdits",
+    "maxTurns": null,
+    "maxTurnTimeoutSec": 1200,
     "systemPromptAppend": null,
-    "tools": [],
-    "hooks": [],
+    "cacheable": true,
+    "enableVerifyTool": true,
+    "verifyAttempts": 4,
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Bash",
+      "Grep",
+      "Glob",
+      "mcp__kody-verify"
+    ],
+    "hooks": ["block-git"],
     "skills": [],
     "commands": [],
     "subagents": [],
@@ -34,95 +44,31 @@
     "mcpServers": []
   },
   "cliTools": [],
+  "lifecycle": "pr-branch",
+  "lifecycleConfig": {
+    "label": {
+      "name": "kody:running",
+      "color": "fbca04",
+      "description": "kody: implementing the change"
+    },
+    "context": "task",
+    "sync": false,
+    "verify": true,
+    "advance": false,
+    "mirrorState": true,
+    "finalize": true
+  },
   "scripts": {
     "preflight": [
-      {
-        "script": "setLifecycleLabel",
-        "with": {
-          "label": "kody-flow:feature",
-          "color": "a2eeef",
-          "description": "kody flow: feature / refactor"
-        }
-      },
-      {
-        "script": "setLifecycleLabel",
-        "with": {
-          "label": "kody:orchestrating",
-          "color": "1d76db",
-          "description": "kody: orchestrating a multi-stage flow"
-        }
-      },
-      { "script": "loadIssueContext" },
-      { "script": "loadTaskState" }
+      { "script": "runFlow" }
     ],
-    "postflight": [
-      { "script": "finishFlow",
-        "with": { "reason": "review-passed", "label": "kody:done", "color": "0e8a16", "description": "kody: PR ready for human review/merge" },
-        "runWhen": { "data.taskState.core.lastOutcome.type": "REVIEW_PASS" } },
-
-      { "script": "finishFlow",
-        "with": { "reason": "fix-applied", "label": "kody:done", "color": "0e8a16", "description": "kody: PR ready for human review/merge" },
-        "runWhen": { "data.taskState.core.lastOutcome.type": "FIX_COMPLETED" } },
-
-      { "script": "finishFlow",
-        "with": { "reason": "review-failed", "label": "kody:failed", "color": "e11d21", "description": "kody: flow failed" },
-        "runWhen": { "data.taskState.core.lastOutcome.type": "REVIEW_FAILED" } },
-
-      { "script": "finishFlow",
-        "with": { "reason": "aborted", "label": "kody:failed", "color": "e11d21", "description": "kody: flow failed" },
-        "runWhen": { "data.taskState.core.lastOutcome.type": ["RESEARCH_FAILED", "PLAN_FAILED", "RUN_FAILED", "FIX_FAILED", "AGENT_NOT_RUN"] } },
-
-      { "script": "persistFlowState" }
-    ]
+    "postflight": []
   },
-  "children": [
-    {
-      "exec": "research",
-      "target": "issue",
-      "next": {
-        "RESEARCH_COMPLETED": "plan",
-        "*": "abort"
-      }
-    },
-    {
-      "exec": "plan",
-      "target": "issue",
-      "next": {
-        "PLAN_COMPLETED": "run",
-        "*": "abort"
-      }
-    },
-    {
-      "exec": "run",
-      "target": "issue",
-      "next": {
-        "RUN_COMPLETED": "review",
-        "*": "abort"
-      }
-    },
-    {
-      "exec": "review",
-      "target": "pr",
-      "next": {
-        "REVIEW_PASS": "done",
-        "REVIEW_CONCERNS": "fix",
-        "REVIEW_FAIL": "fix",
-        "*": "abort"
-      }
-    },
-    {
-      "exec": "fix",
-      "target": "pr",
-      "next": {
-        "FIX_COMPLETED": "done",
-        "*": "abort"
-      }
-    }
-  ],
   "output": {
     "actionTypes": [
-      "FLOW_COMPLETED",
-      "FLOW_ABORTED"
+      "FEATURE_COMPLETED",
+      "FEATURE_FAILED",
+      "AGENT_NOT_RUN"
     ]
   }
 }

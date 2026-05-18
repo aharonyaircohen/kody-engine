@@ -160,9 +160,9 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     expect(post.at(-1)!.script).toBe("persistFlowState")
   })
 
-  it("`featurex` is a single-session pr-branch primitive (collapsed `feature`)", () => {
-    const profile = loadProfile(path.join(EXE_ROOT, "featurex/profile.json"))
-    expect(profile.name).toBe("featurex")
+  it("`feature` is a single-session pr-branch primitive (collapsed orchestration)", () => {
+    const profile = loadProfile(path.join(EXE_ROOT, "feature/profile.json"))
+    expect(profile.name).toBe("feature")
     expect(profile.role).toBe("primitive")
     expect(profile.children ?? []).toEqual([])
     // `base` still forwarded by goal-tick's stacked-PR dispatch (optional).
@@ -184,10 +184,6 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     {
       name: "chore",
       childExecs: ["run", "review", "fix"],
-    },
-    {
-      name: "feature",
-      childExecs: ["research", "plan", "run", "review", "fix"],
     },
   ])("`$name` container profile loads cleanly with children routing table", ({ name, childExecs }) => {
     const profile = loadProfile(path.join(EXE_ROOT, `${name}/profile.json`))
