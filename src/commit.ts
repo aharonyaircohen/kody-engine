@@ -48,6 +48,16 @@ export interface CommitResult {
   pushError?: string
 }
 
+// Backoff delays between push attempts. A transient failure (GitHub 5xx,
+// network blip, brief auth hiccup) otherwise loses the only copy of the
+// commit when the ephemeral runner is torn down. Total ~14s worst case.
+const PUSH_RETRY_DELAYS_MS = [2_000, 4_000, 8_000]
+
+/** Synchronous sleep — commit/push runs in a sync code path. */
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+}
+
 function git(args: string[], cwd?: string): string {
   try {
     return execFileSync("git", args, {
@@ -213,28 +223,34 @@ export function commitAndPush(branch: string, agentMessage: string, cwd?: string
 
   const sha = git(["rev-parse", "HEAD"], cwd).slice(0, 7)
 
-  try {
-    git(["push", "-u", "origin", branch], cwd)
-    return { committed: true, pushed: true, sha, message }
-  } catch (firstErr) {
+  // Retry the full push (plain, then force-with-lease) with backoff. The
+  // two variants cover different failures — plain for the normal case,
+  // force-with-lease for a stale remote — so the retry loop wraps both.
+  let pushError = "push failed (no error detail)"
+  for (let attempt = 0; attempt <= PUSH_RETRY_DELAYS_MS.length; attempt++) {
     try {
-      git(["push", "--force-with-lease", "-u", "origin", branch], cwd)
+      git(["push", "-u", "origin", branch], cwd)
       return { committed: true, pushed: true, sha, message }
-    } catch (secondErr) {
-      // Commit landed locally but neither push variant succeeded. Report
-      // the partial outcome so downstream postflights (ensurePr) can bail
-      // instead of opening a PR against a branch that is not on origin.
-      const tail = (secondErr instanceof Error ? secondErr.message : String(secondErr)).slice(-400)
-      const initial = firstErr instanceof Error ? firstErr.message : String(firstErr)
-      return {
-        committed: true,
-        pushed: false,
-        sha,
-        message,
-        pushError: `push failed: ${initial.slice(-200)} | force-with-lease failed: ${tail}`,
+    } catch (firstErr) {
+      try {
+        git(["push", "--force-with-lease", "-u", "origin", branch], cwd)
+        return { committed: true, pushed: true, sha, message }
+      } catch (secondErr) {
+        const tail = (secondErr instanceof Error ? secondErr.message : String(secondErr)).slice(-400)
+        const initial = firstErr instanceof Error ? firstErr.message : String(firstErr)
+        pushError = `push failed: ${initial.slice(-200)} | force-with-lease failed: ${tail}`
+        const delay = PUSH_RETRY_DELAYS_MS[attempt]
+        if (delay === undefined) break // retries exhausted
+        process.stderr.write(`[kody:commit] push failed (attempt ${attempt + 1}); retrying in ${delay}ms\n`)
+        sleepSync(delay)
       }
     }
   }
+
+  // Commit landed locally but no push attempt succeeded. Report the
+  // partial outcome so downstream postflights (ensurePr) can bail
+  // instead of opening a PR against a branch that is not on origin.
+  return { committed: true, pushed: false, sha, message, pushError }
 }
 
 export function hasCommitsAhead(branch: string, defaultBranch: string, cwd?: string): boolean {
