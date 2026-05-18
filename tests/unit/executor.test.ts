@@ -174,31 +174,24 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     expect(post.at(-1)).toBe("finalizeTerminal")
   })
 
-  it.each([
-    {
-      name: "chore",
-      childExecs: ["run", "review", "fix"],
-    },
-  ])("`$name` container profile loads cleanly with children routing table", ({ name, childExecs }) => {
-    const profile = loadProfile(path.join(EXE_ROOT, `${name}/profile.json`))
-    expect(profile.name).toBe(name)
-    expect(profile.role).toBe("container")
-    // `base` is forwarded by goal-tick's stacked-PR dispatch (optional).
+  it("`chore` is a single-session pr-branch primitive (collapsed orchestration)", () => {
+    const profile = loadProfile(path.join(EXE_ROOT, "chore/profile.json"))
+    expect(profile.name).toBe("chore")
+    expect(profile.role).toBe("primitive")
+    expect(profile.children ?? []).toEqual([])
+    // `base` still forwarded by goal-tick's stacked-PR dispatch (optional).
     expect(profile.inputs.map((i) => i.name)).toEqual(["issue", "base"])
-    expect(profile.claudeCode.maxTurns).toBe(0)
+    // pr-branch lifecycle + verify-loop, same plumbing as feature/bug/run.
+    expect(profile.lifecycle).toBe("pr-branch")
+    expect(profile.claudeCode.enableVerifyTool).toBe(true)
+    expect(profile.claudeCode.verifyAttempts).toBe(4)
+    // Single-session: no orchestrator to re-trigger, stamps its own terminus.
+    expect(profile.lifecycleConfig?.advance).toBe(false)
+    expect(profile.lifecycleConfig?.finalize).toBe(true)
     const pre = profile.scripts.preflight.map((p) => p.script)
-    expect(pre[0]).toBe("setLifecycleLabel")
-    expect(pre).toContain("loadIssueContext")
-    expect(pre).toContain("loadTaskState")
-    const actualChildren = (profile.children ?? []).map((c) => c.exec)
-    expect(actualChildren).toEqual(childExecs)
-    const post = profile.scripts.postflight
-    expect(post.at(-1)!.script).toBe("persistFlowState")
-    for (const entry of post.slice(0, -1)) {
-      expect(entry.script).toBe("finishFlow")
-      expect(entry.with).toBeDefined()
-      expect(entry.runWhen).toBeDefined()
-    }
+    expect(pre).toContain("runFlow")
+    const post = profile.scripts.postflight.map((p) => p.script)
+    expect(post.at(-1)).toBe("finalizeTerminal")
   })
 
   it("each sub-orchestrator's startFlow points at the expected entry stage", () => {

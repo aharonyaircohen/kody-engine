@@ -54,11 +54,13 @@ describe("Phase 5 wire-up: preloadContext on container profiles", () => {
     expect(profile.preloadContext).toBe(false)
   })
 
-  it("chore container declares preloadContext: true", () => {
+  it("chore is a single-session primitive — no container preloadContext", () => {
     const dir = path.dirname(new URL(import.meta.url).pathname)
     const repoRoot = path.resolve(dir, "..", "..")
     const profile = loadProfile(path.join(repoRoot, "src/executables/chore/profile.json"))
-    expect(profile.preloadContext).toBe(true)
+    // Collapsed: chore loads its own context via the pr-branch task bundle.
+    expect(profile.role).toBe("primitive")
+    expect(profile.preloadContext).toBe(false)
   })
 
   it("non-container profiles default to preloadContext: false", () => {

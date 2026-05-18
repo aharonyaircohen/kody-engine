@@ -133,6 +133,7 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   loadGoalState: { owner: "goal-tick", reason: "goal-tick state-machine step." },
   markFlowSuccess: { owner: "revert", reason: "revert is bespoke (no-agent, see AGENTS.md)." },
   parseReproOutput: { owner: "reproduce", reason: "Reproduce-only output parser." },
+  persistFlowState: { owner: "spec", reason: "Orchestrator-only flow-state persistence. Solo since feature/bug/chore collapsed to single-session primitives — spec is the last multi-stage flow." },
   postPlanComment: { owner: "plan", reason: "plan-specific posting format." },
   postResearchComment: { owner: "research", reason: "research-specific posting format." },
   recordClassification: { owner: "classify", reason: "Classification-only persistence." },
