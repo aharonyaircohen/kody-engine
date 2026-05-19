@@ -123,6 +123,25 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   deriveGoalPhase: { owner: "goal-tick", reason: "goal-tick state-machine step." },
   diagMcp: { owner: "research", reason: "MCP diagnostics specific to research mode." },
   dispatch: { owner: "spec", reason: "spec-only dispatch script." },
+  dispatchJobFileTicks: {
+    owner: "job-scheduler",
+    reason:
+      "Solo since the worker model changed: a worker is now a stateless persona, not a ticked file, so worker-scheduler/worker-tick were deleted. job-scheduler is the only fan-out over .kody/jobs.",
+  },
+  loadJobFromFile: {
+    owner: "job-tick",
+    reason:
+      "Solo since worker-tick was deleted (workers are personas, not ticked files). job-tick is the only executable that loads a job body + its assigned worker persona.",
+  },
+  parseJobStateFromAgentResult: {
+    owner: "job-tick",
+    reason: "Solo since worker-tick was deleted. job-tick is the only LLM-driven ticked-file executable.",
+  },
+  runTickScript: {
+    owner: "job-tick-scripted",
+    reason:
+      "Solo since worker-tick-scripted was deleted (no worker tick-loop in the persona model). job-tick-scripted is the only deterministic ticked-file executable.",
+  },
   dispatchClassified: { owner: "classify", reason: "Post-classification routing — classify-only." },
   dispatchNextTask: { owner: "goal-tick", reason: "goal-tick state-machine step." },
   finalizeGoal: { owner: "goal-tick", reason: "goal-tick terminal step." },

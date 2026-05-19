@@ -11,9 +11,18 @@
  *   ctx.data.jobIntent       the body (post-frontmatter, if any)
  *   ctx.data.jobStateJson    rendered prior state, or seed on first run
  *   ctx.data.jobState        LoadedJobState (path, handle, state, created)
+ *   ctx.data.workerSlug      the assigned worker slug (or "" if none)
+ *   ctx.data.workerTitle     worker file H1, or humanized worker slug
+ *   ctx.data.workerPersona   worker persona body (post-frontmatter), or ""
+ *
+ * The worker is *who* the tick runs as: a job names exactly one worker via
+ * `worker:` frontmatter; its persona is injected ahead of the job body by
+ * `job-tick`. A `worker:` that points at a missing file is a hard error —
+ * a job must not silently run with no executor identity.
  *
  * Script args (via `with:`):
- *   jobsDir   optional — default ".kody/jobs"
+ *   jobsDir       optional — default ".kody/jobs"
+ *   workersDir    optional — default ".kody/workers"
  *   slugArg       optional — name of the CLI input holding the slug (default "job")
  */
 
@@ -21,9 +30,11 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { PreflightScript } from "../executables/types.js"
 import { resolveBackend } from "./jobState/index.js"
+import { splitFrontmatter } from "./jobFrontmatter.js"
 
 export const loadJobFromFile: PreflightScript = async (ctx, _profile, args) => {
   const jobsDir = String(args?.jobsDir ?? ".kody/jobs")
+  const workersDir = String(args?.workersDir ?? ".kody/workers")
   const slugArg = String(args?.slugArg ?? "job")
   const slug = String(ctx.args[slugArg] ?? "").trim()
   if (!slug) {
@@ -37,6 +48,26 @@ export const loadJobFromFile: PreflightScript = async (ctx, _profile, args) => {
   const raw = fs.readFileSync(absPath, "utf-8")
   const { title, body } = parseJobFile(raw, slug)
 
+  // Resolve the assigned worker (persona) — *who* this tick runs as. The
+  // job owns scheduling; the worker is identity/doctrine injected ahead
+  // of the job body. A `worker:` pointing at a missing file is fatal: a
+  // job must never run without the executor identity it declared.
+  const workerSlug = (splitFrontmatter(raw).frontmatter.worker ?? "").trim()
+  let workerTitle = ""
+  let workerPersona = ""
+  if (workerSlug) {
+    const workerPath = path.join(ctx.cwd, workersDir, `${workerSlug}.md`)
+    if (!fs.existsSync(workerPath)) {
+      throw new Error(
+        `loadJobFromFile: job '${slug}' declares worker '${workerSlug}' but ${workerPath} does not exist`,
+      )
+    }
+    const workerRaw = fs.readFileSync(workerPath, "utf-8")
+    const parsed = parseJobFile(workerRaw, workerSlug)
+    workerTitle = parsed.title
+    workerPersona = parsed.body
+  }
+
   // Backend-agnostic load. Returns a seed envelope on first run.
   const backend = resolveBackend({ config: ctx.config, cwd: ctx.cwd, jobsDir })
   const loaded = await backend.load(slug)
@@ -46,6 +77,9 @@ export const loadJobFromFile: PreflightScript = async (ctx, _profile, args) => {
   ctx.data.jobIntent = body
   ctx.data.jobState = loaded
   ctx.data.jobStateJson = JSON.stringify(loaded.state, null, 2)
+  ctx.data.workerSlug = workerSlug
+  ctx.data.workerTitle = workerTitle
+  ctx.data.workerPersona = workerPersona
 }
 
 interface ParsedJob {

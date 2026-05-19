@@ -59,6 +59,15 @@ export interface JobFrontmatter {
    * action. Absent or `false` keeps the job active.
    */
   disabled?: boolean
+  /**
+   * Slug of the worker (persona) under `.kody/workers/<worker>.md` that
+   * executes this job. The job owns the schedule; the worker is *who* the
+   * tick runs as — its persona body is injected ahead of the job body in
+   * `job-tick`. A job with no `worker:` is skipped by the scheduler
+   * (every job must name an executor). Many jobs may share one worker; a
+   * job has exactly one.
+   */
+  worker?: string
 }
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
@@ -127,6 +136,8 @@ function parseFlatYaml(text: string): JobFrontmatter {
       const lower = value.toLowerCase()
       if (lower === "true") out.disabled = true
       else if (lower === "false") out.disabled = false
+    } else if (key === "worker" && value.length > 0) {
+      out.worker = value
     }
   }
   return out

@@ -81,6 +81,19 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
         continue
       }
 
+      // Every job must name an executor. The worker is the persona the
+      // tick runs as; with none declared there's no identity to run, so
+      // skip (loudly) rather than fall back to an implicit default. Manual
+      // `workflow_dispatch` "Run now" bypasses this dispatcher, but
+      // job-tick's loader rejects a missing/dangling worker there too.
+      if (!frontmatter.worker || frontmatter.worker.trim().length === 0) {
+        process.stderr.write(
+          `[jobs] ⏭  skip ${slug}: no worker assigned (add 'worker: <slug>' frontmatter)\n`,
+        )
+        results.push({ slug, exitCode: 0, skipped: true, reason: "no worker assigned" })
+        continue
+      }
+
       // Decide whether this slug is due, given its frontmatter `every` and
       // the previously persisted `data.lastFiredAt`. Jobs without a
       // schedule (or with a malformed one) tick every wake — preserves
