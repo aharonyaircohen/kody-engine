@@ -29,16 +29,27 @@ Repo: `{{repoOwner}}/{{repoName}}`.
 
 `thread = {{thread}}`
 
-- If `thread` is a discussion number, **post your reply as a comment on that discussion** so the person who mentioned you sees it in-app. Resolve the discussion node id, then add the comment:
+Post your reply **back into the exact thread you were mentioned in** so the
+person sees it in place. The `thread` value tells you where; it is one of:
+
+- **`discussion:<n>`** (or a bare number — same thing) → comment on
+  discussion `<n>`. Resolve its node id, then add the comment:
 
   ```
-  gh api graphql -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){discussion(number:$n){id}}}' -F o={{repoOwner}} -F r={{repoName}} -F n={{thread}} --jq '.data.repository.discussion.id'
+  gh api graphql -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){discussion(number:$n){id}}}' -F o={{repoOwner}} -F r={{repoName}} -F n=<n> --jq '.data.repository.discussion.id'
   gh api graphql -f query='mutation($d:ID!,$b:String!){addDiscussionComment(input:{discussionId:$d,body:$b}){comment{url}}}' -F d=<id> -F b="<your reply, markdown>"
   ```
 
-  Sign the reply so it reads as you, e.g. lead with `**{{workerTitle}}** —`.
+- **`issue:<n>`** → comment on issue/PR `<n>` (the issues API serves both):
 
-- If `thread` is empty, just produce your reply as your final response (no GitHub post).
+  ```
+  gh api -X POST repos/{{repoOwner}}/{{repoName}}/issues/<n>/comments -f body="<your reply, markdown>"
+  ```
+
+Sign the reply so it reads as you, e.g. lead with `**{{workerTitle}}** —`.
+
+If `thread` is empty, just produce your reply as your final response (no
+GitHub post).
 
 ## Rules
 

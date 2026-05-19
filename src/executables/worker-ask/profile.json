@@ -15,7 +15,7 @@
       "name": "thread",
       "flag": "--thread",
       "type": "string",
-      "describe": "Discussion number to post the reply back into. When set, the worker answers as a comment on that discussion."
+      "describe": "Where to post the reply: `discussion:<n>` (or a bare number) for a Discussion, or `issue:<n>` for an issue/PR. When set, the worker answers as a comment on that thread."
     },
     {
       "name": "message",
