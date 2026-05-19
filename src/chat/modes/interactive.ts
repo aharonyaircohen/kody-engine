@@ -15,10 +15,10 @@
 
 import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
-import * as os from "node:os"
 import * as path from "node:path"
 import type { AgentResult } from "../../agent.js"
 import type { ProviderModel } from "../../config.js"
+import { gh } from "../../issue.js"
 import type { EventSink } from "../events.js"
 import { eventsFilePath, makeRunId } from "../events.js"
 import { waitForNextUserMessage } from "../inbox.js"
@@ -69,7 +69,9 @@ export async function runInteractiveMode(opts: InteractiveModeOptions): Promise<
   const serverUrl = process.env.GITHUB_SERVER_URL ?? "https://github.com"
   const runUrl = runId && repository ? `${serverUrl}/${repository}/actions/runs/${runId}` : undefined
 
-  process.stdout.write(`→ kody:chat:interactive: emitting chat.ready (idleExitMs=${idleExitMs}, hardCapMs=${hardCapMs}, runUrl=${runUrl ?? "n/a"})\n`)
+  process.stdout.write(
+    `→ kody:chat:interactive: emitting chat.ready (idleExitMs=${idleExitMs}, hardCapMs=${hardCapMs}, runUrl=${runUrl ?? "n/a"})\n`,
+  )
   await emit(opts.sink, "chat.ready", opts.sessionId, "ready", {
     sessionId: opts.sessionId,
     startedAt: new Date(startedAt).toISOString(),
@@ -174,141 +176,123 @@ function findNextUserTurn(turns: ReturnType<typeof readSession>, fromIdx: number
 }
 
 /**
- * Commit + push the chat session/events files. The session/event JSONLs
- * are runner-internal bookkeeping — they belong on the default branch
- * (where the dashboard's poll reads from via the Contents API), NOT on
- * whatever branch the runner happens to be checked out on.
+ * Persist the chat session/event JSONLs to the default branch via the
+ * GitHub Contents API (one PUT per file) instead of `git commit` + `push`.
  *
- * For vibe sessions HEAD is the PR branch — committing the JSONLs there
- * pollutes the PR diff with `.kody/sessions/<id>.jsonl` and
- * `.kody/events/<id>.jsonl` rows that reviewers have to scroll past,
- * and the files persist forever in main's history once the PR merges.
- * Route the commit through a temporary worktree on `main` instead so
- * the runner's working tree stays untouched and the PR diff is clean.
+ * Why not git push: every interactive session — default-branch *and*
+ * vibe/PR runs — funnels these files onto a single shared branch (main).
+ * A push updates the whole branch ref, so N concurrent sessions reject
+ * each other with non-fast-forward and grind through a rebase-retry
+ * storm. The Contents API commits server-side and only conflicts when
+ * the *same file* changed under us (stale blob sha) — distinct sessions
+ * write distinct files, so they never contend. As a bonus the PR diff
+ * stays clean (the commit lands on the default branch, not the runner's
+ * checked-out PR branch) with no worktree detour.
  *
- * For default-branch runs HEAD is already main, so we skip the worktree
- * detour and commit + push directly.
- *
- * Both paths use the same retry-on-non-fast-forward push loop: when the
- * dashboard's user-turn append (Contents API) races the runner's
- * chat.message commit, OR when two interactive sessions push to the
- * same branch back-to-back, the second push gets rejected. Without the
- * retry the events file never reaches origin and the dashboard's poll
- * sees nothing forever.
+ * The files are append-only and the runner has already polled the
+ * dashboard's user-turn appends into its local copy before this fires,
+ * so the local file is authoritative — a straight overwrite is correct.
+ * The only residual race is the dashboard appending a user turn between
+ * our GET and PUT (same file); that surfaces as a 409/422 and is handled
+ * by the refetch + line-union retry below.
  */
-function commitTurn(cwd: string, sessionId: string, verbose: boolean): void {
+function commitTurn(cwd: string, sessionId: string, _verbose: boolean): void {
   const sessionRel = path.relative(cwd, sessionFilePath(cwd, sessionId))
   const eventsRel = path.relative(cwd, eventsFilePath(cwd, sessionId))
-  const paths = [sessionRel, eventsRel].filter((p) => fs.existsSync(path.join(cwd, p)))
-  if (paths.length === 0) return
+  const rels = [sessionRel, eventsRel].filter((p) => fs.existsSync(path.join(cwd, p)))
+  if (rels.length === 0) return
 
-  const startBranch = currentBranch(cwd)
-  const eventsBranch = defaultBranch(cwd) ?? "main"
-
-  if (startBranch === eventsBranch) {
-    // Already on main — commit + push in place.
-    commitPathsAndPush(cwd, paths, sessionId, verbose, "HEAD")
+  const repository = process.env.GITHUB_REPOSITORY
+  if (!repository) {
+    process.stderr.write(
+      `[kody:chat:interactive] GITHUB_REPOSITORY unset; cannot persist session/events via Contents API\n`,
+    )
     return
   }
+  const branch = defaultBranch(cwd) ?? "main"
 
-  // Spin up a detached worktree on origin/<defaultBranch>, copy the
-  // JSONLs into it, then commit + push. The runner's main checkout
-  // (sitting on the PR branch) is untouched. We use a temp dir under
-  // os.tmpdir() so worktree teardown can't trash anything inside the
-  // repo cwd.
-  const stdio = verbose ? "inherit" : "pipe"
-  const exec = (args: string[]) => execFileSync("git", args, { cwd, stdio })
-  const worktreeDir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-events-"))
-  let worktreeAdded = false
+  for (const rel of rels) {
+    const repoPath = rel.split(path.sep).join("/")
+    const localText = fs.readFileSync(path.join(cwd, rel), "utf-8")
+    putJsonlViaContents(repository, branch, repoPath, localText, sessionId, cwd)
+  }
+}
+
+/** Split JSONL text into non-empty lines (trailing newline tolerated). */
+function jsonlLines(text: string): string[] {
+  return text.split("\n").filter((l) => l.length > 0)
+}
+
+interface RemoteBlob {
+  sha: string | null
+  lines: string[]
+}
+
+/** GET the file's current blob sha + decoded lines. 404 ⇒ file is new. */
+function getRemoteBlob(repository: string, branch: string, repoPath: string, cwd: string): RemoteBlob {
   try {
-    exec(["fetch", "--quiet", "origin", eventsBranch])
-    exec(["worktree", "add", "--detach", "--quiet", worktreeDir, `origin/${eventsBranch}`])
-    worktreeAdded = true
-    // Mirror the JSONL files from the runner's working tree into the
-    // worktree. They're append-only so a straight copy is correct;
-    // we don't need to merge with anything already on main (the
-    // dashboard's appends will have been pulled in by the runner's
-    // session-file polling loop before this commit fires).
-    for (const rel of paths) {
-      const src = path.join(cwd, rel)
-      const dst = path.join(worktreeDir, rel)
-      fs.mkdirSync(path.dirname(dst), { recursive: true })
-      fs.copyFileSync(src, dst)
+    const raw = gh(["api", `/repos/${repository}/contents/${repoPath}?ref=${encodeURIComponent(branch)}`], { cwd })
+    const o = JSON.parse(raw) as { type?: string; encoding?: string; content?: string; sha?: string }
+    if (o.type === "file" && o.encoding === "base64" && typeof o.content === "string" && typeof o.sha === "string") {
+      return { sha: o.sha, lines: jsonlLines(Buffer.from(o.content, "base64").toString("utf-8")) }
     }
-    commitPathsAndPush(worktreeDir, paths, sessionId, verbose, `HEAD:${eventsBranch}`)
+    return { sha: null, lines: [] }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[kody:chat:interactive] worktree commit failed: ${msg}\n`)
-  } finally {
-    if (worktreeAdded) {
-      try { exec(["worktree", "remove", "--force", "--quiet", worktreeDir]) } catch {
-        // Worktree teardown best-effort — the temp dir cleanup below still runs.
-      }
-    }
-    try { fs.rmSync(worktreeDir, { recursive: true, force: true }) } catch {
-      // Same — best-effort.
-    }
+    if (/HTTP 404/i.test(msg) || /Not Found/i.test(msg)) return { sha: null, lines: [] }
+    throw err
   }
 }
 
 /**
- * Stage the named paths, commit, and push to `pushSpec` (e.g. `HEAD` or
- * `HEAD:main`). Retries up to 3× on non-fast-forward rejection by
- * fetching and rebasing on top of the target ref.
+ * PUT one append-only JSONL file via the Contents API, retrying on a
+ * same-file sha conflict (409/422). On retry the local lines are unioned
+ * with any remote-only lines so a concurrent dashboard append is never
+ * clobbered (append-only ⇒ union is safe; the resulting order matches
+ * what a git-rebase replay would have produced).
  */
-function commitPathsAndPush(
-  cwd: string,
-  paths: string[],
+function putJsonlViaContents(
+  repository: string,
+  branch: string,
+  repoPath: string,
+  localText: string,
   sessionId: string,
-  verbose: boolean,
-  pushSpec: string,
+  cwd: string,
 ): void {
-  const stdio = verbose ? "inherit" : "pipe"
-  const exec = (args: string[]) => execFileSync("git", args, { cwd, stdio })
-
-  try {
-    // `-f` because consumer repos sometimes gitignore .kody/*.
-    exec(["add", "-f", ...paths])
-    exec(["commit", "--quiet", "-m", `chat: interactive turn for ${sessionId}`])
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[kody:chat:interactive] commit failed: ${msg}\n`)
-    return
-  }
-
   for (let attempt = 1; attempt <= 3; attempt++) {
+    const remote = getRemoteBlob(repository, branch, repoPath, cwd)
+
+    let body = localText
+    if (attempt > 1 && remote.lines.length > 0) {
+      const localLines = jsonlLines(localText)
+      const localSet = new Set(localLines)
+      const extra = remote.lines.filter((l) => !localSet.has(l))
+      if (extra.length > 0) body = [...localLines, ...extra].join("\n") + "\n"
+    }
+
+    const payload: Record<string, unknown> = {
+      message: `chat: interactive turn for ${sessionId}`,
+      content: Buffer.from(body, "utf-8").toString("base64"),
+      branch,
+    }
+    if (remote.sha) payload.sha = remote.sha
+
     try {
-      exec(["push", "--quiet", "origin", pushSpec])
+      gh(["api", "--method", "PUT", `/repos/${repository}/contents/${repoPath}`, "--input", "-"], {
+        cwd,
+        input: JSON.stringify(payload),
+      })
       return
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      const isNonFf = /non-fast-forward|fetch first|rejected/i.test(msg)
-      if (!isNonFf || attempt === 3) {
-        process.stderr.write(`[kody:chat:interactive] push failed (attempt ${attempt}): ${msg}\n`)
+      const isConflict = /HTTP 409/i.test(msg) || /HTTP 422/i.test(msg) || /does not match|but expected/i.test(msg)
+      if (!isConflict || attempt === 3) {
+        process.stderr.write(`[kody:chat:interactive] Contents PUT failed (${repoPath}, attempt ${attempt}): ${msg}\n`)
         return
       }
-      process.stderr.write(`[kody:chat:interactive] push rejected (attempt ${attempt}); fetch+rebase+retry\n`)
-      try {
-        exec(["fetch", "--quiet", "origin"])
-        // For pushSpec='HEAD:main' the rebase target is origin/main; for
-        // pushSpec='HEAD' we still want to rebase on the current
-        // upstream, which symbolic-ref returns.
-        const upstream = pushSpec.includes(":")
-          ? `origin/${pushSpec.split(":")[1]}`
-          : (() => {
-              const branch = currentBranch(cwd)
-              return branch ? `origin/${branch}` : null
-            })()
-        if (!upstream) {
-          process.stderr.write(`[kody:chat:interactive] cannot rebase: no upstream resolved\n`)
-          return
-        }
-        exec(["rebase", "--quiet", upstream])
-      } catch (rebaseErr) {
-        const rmsg = rebaseErr instanceof Error ? rebaseErr.message : String(rebaseErr)
-        process.stderr.write(`[kody:chat:interactive] rebase failed: ${rmsg}\n`)
-        return
-      }
+      process.stderr.write(
+        `[kody:chat:interactive] Contents PUT conflict (${repoPath}, attempt ${attempt}); refetch+union+retry\n`,
+      )
     }
   }
 }
@@ -320,27 +304,14 @@ function commitPathsAndPush(
  */
 function defaultBranch(cwd: string): string | null {
   try {
-    const out = execFileSync(
-      "git",
-      ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
-      { cwd, stdio: ["ignore", "pipe", "ignore"] },
-    )
+    const out = execFileSync("git", ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], {
+      cwd,
+      stdio: ["ignore", "pipe", "ignore"],
+    })
     const symbolic = out.toString("utf-8").trim()
     // Output shape: `origin/main` → strip the remote prefix.
     if (symbolic.startsWith("origin/")) return symbolic.slice("origin/".length)
     return symbolic || null
-  } catch {
-    return null
-  }
-}
-
-function currentBranch(cwd: string): string | null {
-  try {
-    const out = execFileSync("git", ["symbolic-ref", "--short", "HEAD"], {
-      cwd,
-      stdio: ["ignore", "pipe", "ignore"],
-    })
-    return out.toString("utf-8").trim() || null
   } catch {
     return null
   }
