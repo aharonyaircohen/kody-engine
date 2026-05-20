@@ -7,6 +7,7 @@
  */
 
 import * as fs from "node:fs"
+import * as path from "node:path"
 import {
   prepareTaskArtifactsDir,
   taskArtifactsPromptAddendum,
@@ -192,7 +193,8 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
     taskType: "chat",
     relDir: taskArtifactsPaths.relDir,
   })
-  const systemPrompt = [basePrompt, catalog, artifactAddendum]
+  const memoryBlock = readMemoryIndexBlock(opts.cwd)
+  const systemPrompt = [basePrompt, memoryBlock, catalog, artifactAddendum]
     .filter((s): s is string => typeof s === "string" && s.length > 0)
     .join("\n\n")
   const prompt = buildPrompt(turns)
@@ -319,4 +321,38 @@ async function emit(
     runId: makeRunId(sessionId, suffix),
     emittedAt: new Date().toISOString(),
   })
+}
+
+/**
+ * Read `.kody/memory/INDEX.md` (if present) and wrap it for inclusion in
+ * the chat session's system prompt. Returns "" when there is no memory
+ * folder or the index is empty — memory is advisory, not required.
+ *
+ * Capped at MAX_INDEX_BYTES to protect the prompt budget. Truncation
+ * appends a short note so the agent knows there is more on disk.
+ */
+const MEMORY_INDEX_REL = ".kody/memory/INDEX.md"
+const MAX_INDEX_BYTES = 8_000
+
+function readMemoryIndexBlock(cwd: string): string {
+  const indexPath = path.join(cwd, MEMORY_INDEX_REL)
+  let raw: string
+  try {
+    raw = fs.readFileSync(indexPath, "utf-8")
+  } catch {
+    return ""
+  }
+  const trimmed = raw.trim()
+  if (!trimmed) return ""
+  const body =
+    trimmed.length > MAX_INDEX_BYTES
+      ? trimmed.slice(0, MAX_INDEX_BYTES) + "\n\n_… (memory index truncated; open individual files under `.kody/memory/` to read more)_"
+      : trimmed
+  return [
+    "# Project memory index (`.kody/memory/INDEX.md`)",
+    "",
+    "These are the lessons, decisions, and preferences already captured for this repo. Skim before acting; read individual files only if a line looks relevant to the current task.",
+    "",
+    body,
+  ].join("\n")
 }

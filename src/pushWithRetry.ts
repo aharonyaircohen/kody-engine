@@ -27,7 +27,8 @@
 import { execFileSync } from "node:child_process"
 
 export interface PushWithRetryOptions {
-  cwd: string
+  /** Repo working dir. Defaults to process.cwd(). */
+  cwd?: string
   /** Branch to fetch/rebase against. Falls back to current HEAD's symbolic ref. */
   branch?: string
   maxRetries?: number
@@ -81,8 +82,8 @@ function resolveBranch(cwd: string, explicit?: string): string {
   return r.ok ? r.stdout.trim() : ""
 }
 
-export function pushWithRetry(opts: PushWithRetryOptions): PushWithRetryResult {
-  const cwd = opts.cwd
+export function pushWithRetry(opts: PushWithRetryOptions = {}): PushWithRetryResult {
+  const cwd = opts.cwd ?? process.cwd()
   const maxRetries = opts.maxRetries ?? DEFAULT_MAX_RETRIES
   const baseBackoff = opts.backoffMs ?? DEFAULT_BACKOFF_MS
   const branch = resolveBranch(cwd, opts.branch)

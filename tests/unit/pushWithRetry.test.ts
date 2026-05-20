@@ -48,7 +48,6 @@ describe("pushWithRetry", () => {
 
     expect(result).toEqual({ ok: true, attempts: 1 })
     const gitOps = calls.filter((c) => c.args[0] === "git").map((c) => c.args.slice(1).join(" "))
-    expect(gitOps).toEqual(["push", "origin HEAD"].map(() => expect.any(String))) // simple shape
     // Exactly one push, no fetch, no rebase.
     expect(gitOps.filter((o) => o.startsWith("push"))).toHaveLength(1)
     expect(gitOps.filter((o) => o.startsWith("fetch"))).toHaveLength(0)

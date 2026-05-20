@@ -13,9 +13,13 @@ const FORBIDDEN_PATH_PREFIXES = [
 
 // Paths that override the forbidden-prefix check. `.kody/` is blanket-blocked
 // to keep agents out of runtime state and configs during run/fix/resolve, but
-// the `memorize` job legitimately writes to `.kody/memory/` (the markdown
-// knowledge base). Add narrow allowlist entries here, prefer-first.
-const ALLOWED_PATH_PREFIXES = [".kody/memory/"]
+// a few narrow paths are legitimate write targets for the agent:
+//   - `.kody/memory/` — the markdown knowledge base (memorize + sticky-note
+//     inbox + filed memories).
+//   - `.kody/tasks/` — per-task artifacts (context.json, memory-recs.json,
+//     followups.json, handoff-notes.md) written by the agent at end of
+//     every issue/agent-mode task per the task-artifacts contract.
+const ALLOWED_PATH_PREFIXES = [".kody/memory/", ".kody/tasks/"]
 
 const FORBIDDEN_PATH_EXACT = new Set([".env", ".kody-pip-requirements.txt"])
 const FORBIDDEN_PATH_SUFFIXES = [".log"]

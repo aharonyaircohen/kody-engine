@@ -58,7 +58,16 @@ export const loadMemoryContext: PreflightScript = async (ctx) => {
 
   const queryTerms = extractQueryTerms(ctx)
   const ranked = queryTerms.length > 0 ? scorePages(pages, queryTerms) : sortByRecency(pages)
-  const top = ranked.slice(0, MAX_PAGES)
+
+  // Always promote INDEX.md to the top of the prompt. It is the cheap
+  // table of contents and exists specifically so the agent learns what
+  // memory is available without opening every file. Without explicit
+  // promotion, a high-relevance lesson can outrank INDEX.md and the
+  // agent never sees the full catalog.
+  const indexPage = pages.find((p) => p.relPath === "INDEX.md")
+  const withoutIndex = ranked.filter((p) => p.relPath !== "INDEX.md")
+  const ordered = indexPage ? [indexPage, ...withoutIndex] : withoutIndex
+  const top = ordered.slice(0, MAX_PAGES)
 
   ctx.data.memoryContext = formatBlock(top)
 }
