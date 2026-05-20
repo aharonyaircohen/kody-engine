@@ -152,7 +152,7 @@ describe("parseClassification", () => {
 })
 
 describe("recordClassification", () => {
-  it("uses a pre-set classification (from classifyByLabel) and records the action — no dispatch comment", async () => {
+  it("uses a pre-set classification (from classifyByLabel) and stashes audit text on ctx — no comments posted", async () => {
     const c = ctx({
       data: {
         classification: "bug",
@@ -161,15 +161,14 @@ describe("recordClassification", () => {
       },
     })
     await recordClassification(c, profile(), null)
-    const ghBodies = execFileSync.mock.calls
-      .map((call) => (call[1] as string[]) ?? [])
-      .filter((a) => a[3] === "--body")
-      .map((a) => a[4] as string)
-    // Audit comment posted, but NOT the dispatch — that's dispatchClassified's job.
-    expect(ghBodies.some((b) => b.startsWith("🔎 kody classified as `bug`"))).toBe(true)
-    expect(ghBodies.some((b) => b === "@kody bug")).toBe(false)
+    // Success path: recordClassification must NOT post any comment. The
+    // combined dispatch + audit + state comment is dispatchClassified's
+    // sole responsibility, which is what removes the concurrency race
+    // that previously stalled classify pipelines.
+    expect(execFileSync.mock.calls.length).toBe(0)
     expect((c.data.action as { type: string }).type).toBe("CLASSIFIED_AS_BUG")
     expect(c.data.classification).toBe("bug")
+    expect(c.data.classificationAudit).toBe("🔎 kody classified as `bug` — label `bug` → bug")
   })
 
   it("falls back to parsing the agent's PR_SUMMARY when classifyByLabel didn't set one", async () => {
@@ -192,13 +191,43 @@ describe("recordClassification", () => {
 })
 
 describe("dispatchClassified", () => {
-  it("posts `@kody <classification>` from ctx.data.classification", async () => {
-    const c = ctx({ data: { classification: "bug" } })
+  it("posts a single combined comment with @kody <type>, audit line, and state markers", async () => {
+    const c = ctx({
+      data: {
+        classification: "bug",
+        classificationAudit: "🔎 kody classified as `bug` — label `bug` → bug",
+        action: { type: "CLASSIFIED_AS_BUG", payload: {}, timestamp: "2026-05-19T00:00:00.000Z" },
+      },
+    })
     await dispatchClassified(c, profile(), null)
-    const dispatches = execFileSync.mock.calls
+    const bodies = execFileSync.mock.calls
       .map((call) => (call[1] as string[]) ?? [])
-      .filter((a) => a[3] === "--body" && a[4]?.startsWith("@kody "))
-    expect(dispatches.some((a) => a[4] === "@kody bug")).toBe(true)
+      .filter((a) => a[3] === "--body")
+      .map((a) => a[4] as string)
+    // Exactly ONE comment posted — removes the concurrency race.
+    expect(bodies.length).toBe(1)
+    const body = bodies[0]!
+    expect(body.startsWith("@kody bug")).toBe(true)
+    expect(body).toContain("🔎 kody classified as `bug`")
+    expect(body).toContain("<!-- kody:state:v1:begin -->")
+    expect(body).toContain("<!-- kody:state:v1:end -->")
+    expect(body).toContain("CLASSIFIED_AS_BUG")
+  })
+
+  it("forwards --base when goal-tick passes it through", async () => {
+    const c = ctx({
+      args: { issue: 99, base: "feat/leaf" },
+      data: {
+        classification: "chore",
+        action: { type: "CLASSIFIED_AS_CHORE", payload: {}, timestamp: "2026-05-19T00:00:00.000Z" },
+      },
+    })
+    await dispatchClassified(c, profile(), null)
+    const bodies = execFileSync.mock.calls
+      .map((call) => (call[1] as string[]) ?? [])
+      .filter((a) => a[3] === "--body")
+      .map((a) => a[4] as string)
+    expect(bodies[0]!.startsWith("@kody chore --base feat/leaf")).toBe(true)
   })
 
   it("is a no-op when no classification was recorded", async () => {
@@ -209,6 +238,12 @@ describe("dispatchClassified", () => {
 
   it("is a no-op for an invalid classification value", async () => {
     const c = ctx({ data: { classification: "not-a-real-class" } })
+    await dispatchClassified(c, profile(), null)
+    expect(execFileSync.mock.calls.length).toBe(0)
+  })
+
+  it("is a no-op when classification is set but action is missing", async () => {
+    const c = ctx({ data: { classification: "bug" } })
     await dispatchClassified(c, profile(), null)
     expect(execFileSync.mock.calls.length).toBe(0)
   })
@@ -230,12 +265,14 @@ describe("classify profile loadability", () => {
     expect(post).toContain("parseAgentResult")
     expect(post).toContain("recordClassification")
     expect(post).toContain("dispatchClassified")
-    // dispatchClassified must run AFTER saveTaskState — that ordering is what
-    // makes the @kody <type> comment the newest pending issue_comment event.
-    const idxSave = post.indexOf("saveTaskState")
+    // saveTaskState is NOT in classify's postflight: dispatchClassified
+    // posts a single combined comment that carries the rendered state
+    // block, so classify emits exactly one issue_comment.created event
+    // (no concurrency race with sibling bookkeeping comments).
+    expect(post).not.toContain("saveTaskState")
+    const idxRecord = post.indexOf("recordClassification")
     const idxDispatch = post.indexOf("dispatchClassified")
-    expect(idxSave).toBeGreaterThan(-1)
-    expect(idxDispatch).toBeGreaterThan(idxSave)
+    expect(idxDispatch).toBeGreaterThan(idxRecord)
     // Sanity: prompt.md exists and references the label block.
     const prompt = fs.readFileSync(path.join(p.dir, "prompt.md"), "utf-8")
     expect(prompt).toContain("{{issue.labelsFormatted}}")

@@ -1,8 +1,9 @@
 /**
- * Postflight (classify-only): finalize the classification and post the
- * audit trail. Does NOT post the dispatch comment — that's split into
- * `dispatchClassified` so it runs after `saveTaskState` and ends up as
- * the newest pending issue_comment event in the kody concurrency group.
+ * Postflight (classify-only): finalize the classification decision and
+ * stash the audit text + typed action into ctx.data. Does NOT post any
+ * comment in the success path — `dispatchClassified` posts a single
+ * combined comment (dispatch + audit + state) so classify emits exactly
+ * one `issue_comment.created` event into the kody concurrency group.
  *
  * Sources (in order):
  *   1. ctx.data.classification  — set by `classifyByLabel` when a label
@@ -11,13 +12,18 @@
  *                                  line in ctx.data.prSummary (parsed by
  *                                  parseAgentResult earlier).
  *
- * Side effects:
- *   - Posts an audit comment "🔎 kody classified as `<type>` — <reason>"
- *     on the issue (human-readable; sanitized so it doesn't self-trigger).
+ * Side effects (success path):
  *   - Sets `ctx.data.classification` and `ctx.data.classificationReason`
- *     for downstream scripts (saveTaskState, dispatchClassified).
- *   - Writes a typed action into ctx.data.action so saveTaskState records
- *     the outcome in state history.
+ *     for downstream scripts (writeRunSummary, dispatchClassified).
+ *   - Sets `ctx.data.classificationAudit` — the human-readable audit
+ *     line that dispatchClassified embeds in its combined comment.
+ *   - Writes a typed action into ctx.data.action so dispatchClassified
+ *     can apply it to ctx.data.taskState and render the state block.
+ *
+ * Side effects (failure path):
+ *   - Posts a single audit comment explaining the decision could not be
+ *     made and asks the user to re-run with an explicit `@kody <type>`.
+ *     Safe to post here because no dispatch follows — no race.
  */
 
 import { execFileSync } from "node:child_process"
@@ -56,9 +62,6 @@ export const recordClassification: PostflightScript = async (ctx) => {
     return
   }
 
-  // Audit trail (human-readable, sanitized).
-  tryAuditComment(issueNumber, `🔎 kody classified as \`${classification}\`${reason ? ` — ${reason}` : ""}`, ctx.cwd)
-
   ctx.data.action = makeAction(`CLASSIFIED_AS_${classification.toUpperCase()}`, {
     classification,
     reason: reason ?? "",
@@ -66,6 +69,7 @@ export const recordClassification: PostflightScript = async (ctx) => {
   })
   ctx.data.classification = classification
   ctx.data.classificationReason = reason ?? ""
+  ctx.data.classificationAudit = `🔎 kody classified as \`${classification}\`${reason ? ` — ${reason}` : ""}`
 }
 
 export function parseClassification(prSummary: string): { classification: string; reason: string } | null {
