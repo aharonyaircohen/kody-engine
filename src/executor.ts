@@ -22,6 +22,11 @@ import { loadProfile, validateScriptReferences } from "./profile.js"
 import { resolveExecutable } from "./registry.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
 import { type Action, readTaskState, type TaskState, type TaskTarget } from "./state.js"
+import {
+  prepareTaskArtifactsDir,
+  taskArtifactsPromptAddendum,
+  verifyTaskArtifacts,
+} from "./task-artifacts.js"
 import { firstRequiredFailure, verifyCliTools } from "./tools.js"
 
 const CONTAINER_MAX_ITERATIONS = 50
@@ -176,6 +181,29 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     output: { exitCode: 0 },
   }
 
+  // Per-task artifacts: if this run targets a concrete issue or PR,
+  // prepare `.kody/tasks/<id>/` so the agent can write context.json /
+  // memory-recs.json / followups.json / handoff-notes.md as its final
+  // act. Skipped for executables that have no issue/PR target (e.g.
+  // brain-serve, dispatchers, system tasks) — those produce no artifacts.
+  const taskTarget = (args.issue ?? args.pr) as number | undefined
+  const taskArtifacts =
+    typeof taskTarget === "number" && Number.isFinite(taskTarget)
+      ? (() => {
+          const taskType: "issue" | "pr" = args.issue ? "issue" : "pr"
+          const paths = prepareTaskArtifactsDir(input.cwd, taskTarget)
+          return {
+            ...paths,
+            taskType,
+            promptAddendum: taskArtifactsPromptAddendum({
+              taskId: paths.taskId,
+              taskType,
+              relDir: paths.relDir,
+            }),
+          }
+        })()
+      : null
+
   const ndjsonDir = path.join(input.cwd, ".kody")
   const invokeAgent = async (prompt: string): Promise<AgentResult> => {
     // Resolve at call time — ctx.data.syntheticPluginPath is set during preflight.
@@ -203,7 +231,9 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
         typeof profile.claudeCode.maxTurnTimeoutSec === "number"
           ? Math.floor(profile.claudeCode.maxTurnTimeoutSec * 1000)
           : undefined,
-      systemPromptAppend: profile.claudeCode.systemPromptAppend,
+      systemPromptAppend: [profile.claudeCode.systemPromptAppend, taskArtifacts?.promptAddendum]
+        .filter((s): s is string => typeof s === "string" && s.length > 0)
+        .join("\n\n") || undefined,
       cacheable: profile.claudeCode.cacheable,
       enableVerifyTool: profile.claudeCode.enableVerifyTool,
       verifyToolMaxAttempts: profile.claudeCode.verifyAttempts ?? null,
@@ -402,6 +432,20 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     // preflight bail, thrown exception) so labels never strand a PR/issue
     // outside the lifecycle taxonomy. Best-effort, never throws.
     clearStampedLifecycleLabels(profile, ctx)
+    // Best-effort: warn if the agent didn't produce the per-task artifacts.
+    // Missing artifacts never fail the task — this is observability only.
+    if (taskArtifacts) {
+      try {
+        const missing = verifyTaskArtifacts(taskArtifacts.absDir)
+        if (missing.length > 0) {
+          process.stderr.write(
+            `[task-artifacts] task ${taskArtifacts.taskId} missing: ${missing.join(", ")}\n`,
+          )
+        }
+      } catch {
+        /* best effort */
+      }
+    }
     try {
       litellm?.kill()
     } catch {

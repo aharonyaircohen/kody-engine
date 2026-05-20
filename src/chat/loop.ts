@@ -7,6 +7,11 @@
  */
 
 import * as fs from "node:fs"
+import {
+  prepareTaskArtifactsDir,
+  taskArtifactsPromptAddendum,
+  verifyTaskArtifacts,
+} from "../task-artifacts.js"
 
 import type { AgentResult } from "../agent.js"
 import { runAgent } from "../agent.js"
@@ -178,7 +183,18 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
 
   const basePrompt = opts.systemPrompt ?? CHAT_SYSTEM_PROMPT
   const catalog = buildExecutableCatalog()
-  const systemPrompt = catalog ? `${basePrompt}\n\n${catalog}` : basePrompt
+  // Per-task artifacts contract appended to every chat session so the
+  // agent writes context.json / memory-recs.json / followups.json /
+  // handoff-notes.md to .kody/tasks/<sessionId>/ before its final reply.
+  const taskArtifactsPaths = prepareTaskArtifactsDir(opts.cwd, opts.sessionId)
+  const artifactAddendum = taskArtifactsPromptAddendum({
+    taskId: taskArtifactsPaths.taskId,
+    taskType: "chat",
+    relDir: taskArtifactsPaths.relDir,
+  })
+  const systemPrompt = [basePrompt, catalog, artifactAddendum]
+    .filter((s): s is string => typeof s === "string" && s.length > 0)
+    .join("\n\n")
   const prompt = buildPrompt(turns)
 
   // Sequence counter for deterministic ordering of progress events on the
@@ -263,6 +279,18 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
     timestamp: now,
   })
   await emit(opts.sink, "chat.done", opts.sessionId, "done", { sessionId: opts.sessionId })
+
+  // Best-effort artifact verification — never fails the chat turn.
+  try {
+    const missing = verifyTaskArtifacts(taskArtifactsPaths.absDir)
+    if (missing.length > 0) {
+      process.stderr.write(
+        `[task-artifacts] chat session ${taskArtifactsPaths.taskId} missing: ${missing.join(", ")}\n`,
+      )
+    }
+  } catch {
+    /* best effort */
+  }
 
   return { exitCode: 0, reply }
 }
