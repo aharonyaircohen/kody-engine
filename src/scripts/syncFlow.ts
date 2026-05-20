@@ -27,6 +27,7 @@ import { checkoutPrBranch, getCurrentBranch, mergeBase } from "../branch.js"
 import type { PreflightScript, ScriptArgs } from "../executables/types.js"
 import { getRunUrl } from "../gha.js"
 import { getPr, postPrReviewComment } from "../issue.js"
+import { pushWithRetry } from "../pushWithRetry.js"
 
 export const syncFlow: PreflightScript = async (ctx, _profile, args?: ScriptArgs) => {
   const announceOnSuccess = Boolean(args?.announceOnSuccess)
@@ -120,15 +121,12 @@ function revParseHead(cwd?: string): string {
 }
 
 function pushBranch(branch: string, cwd?: string): void {
-  const env = { ...process.env, HUSKY: "0", SKIP_HOOKS: "1" }
-  try {
-    execFileSync("git", ["push", "-u", "origin", branch], { cwd, env, stdio: ["ignore", "pipe", "pipe"] })
-  } catch {
-    execFileSync("git", ["push", "--force-with-lease", "-u", "origin", branch], {
-      cwd,
-      env,
-      stdio: ["ignore", "pipe", "pipe"],
-    })
+  // Fetch+rebase retry on non-fast-forward. Replaces the old plain →
+  // force-with-lease fallback, which could silently overwrite a concurrent
+  // push when the remote moved between fetch and push.
+  const result = pushWithRetry({ cwd: cwd ?? process.cwd(), branch, setUpstream: true })
+  if (!result.ok) {
+    throw new Error(result.reason)
   }
 }
 

@@ -26,6 +26,7 @@ import { readMeta, seedInitialMessage, sessionFilePath } from "./chat/session.js
 import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
 import { configureGitIdentity, installLitellmIfNeeded, resolveAuthToken, unpackAllSecrets } from "./kody-cli.js"
 import { startLitellmIfNeeded } from "./litellm.js"
+import { pushWithRetry } from "./pushWithRetry.js"
 
 const DEFAULT_MODEL = "claude/claude-haiku-4-5-20251001"
 
@@ -93,7 +94,14 @@ export function parseChatArgs(argv: string[], env: NodeJS.ProcessEnv = process.e
 function commitChatFiles(cwd: string, sessionId: string, verbose: boolean): void {
   const sessionFile = path.relative(cwd, sessionFilePath(cwd, sessionId))
   const eventsFile = path.relative(cwd, eventsFilePath(cwd, sessionId))
-  const paths = [sessionFile, eventsFile].filter((p) => fs.existsSync(path.join(cwd, p)))
+  // Per-task artifacts written by the agent at end of session
+  // (.kody/tasks/<sessionId>/{context,memory-recs,followups}.json +
+  // handoff-notes.md). Committing the whole dir is durable even if
+  // the agent renamed/added files we don't know about.
+  const safeSession = sessionId.replace(/[^a-zA-Z0-9._-]/g, "_")
+  const tasksDir = path.join(".kody", "tasks", safeSession)
+  const candidatePaths = [sessionFile, eventsFile, tasksDir]
+  const paths = candidatePaths.filter((p) => fs.existsSync(path.join(cwd, p)))
   if (paths.length === 0) return
   const opts = { cwd, stdio: verbose ? "inherit" : "pipe" } as const
   try {
@@ -102,12 +110,23 @@ function commitChatFiles(cwd: string, sessionId: string, verbose: boolean): void
     // not a user-content path that needs to be opt-in.
     execFileSync("git", ["add", "-f", ...paths], opts)
     execFileSync("git", ["commit", "--quiet", "-m", `chat: reply for ${sessionId}`], opts)
-    execFileSync("git", ["push", "--quiet", "origin", "HEAD"], opts)
   } catch (err) {
-    // Best-effort — if there's nothing staged or push fails, the HttpSink
-    // has already delivered the real-time event, so we don't abort the turn.
+    // Add/commit failed (nothing staged, hook failure, etc). HttpSink
+    // already delivered the real-time event, so we surface as a warning
+    // and stop — there's nothing to push.
     const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[kody:chat] commit/push skipped: ${msg}\n`)
+    process.stderr.write(`[kody:chat] commit skipped: ${msg}\n`)
+    return
+  }
+
+  // Push with fetch+rebase retry. A bare `git push` here used to silently
+  // drop the commit when a concurrent push landed first (cron fan-out hits
+  // the same branch). Persistent failure is now a hard error so an operator
+  // notices instead of seeing "SESSION ok" with no commit on origin.
+  const result = pushWithRetry({ cwd })
+  if (!result.ok) {
+    process.stderr.write(`[kody:chat] push FAILED after ${result.attempts} attempt(s): ${result.reason}\n`)
+    throw new Error(`chat push failed: ${result.reason}`)
   }
 }
 

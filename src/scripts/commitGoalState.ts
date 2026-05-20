@@ -9,6 +9,7 @@
 import { execFileSync } from "node:child_process"
 import * as path from "node:path"
 import type { PostflightScript } from "../executables/types.js"
+import { pushWithRetry } from "../pushWithRetry.js"
 import type { GoalCtx } from "./goalCtx.js"
 
 export const commitGoalState: PostflightScript = async (ctx) => {
@@ -45,10 +46,12 @@ export const commitGoalState: PostflightScript = async (ctx) => {
     return
   }
 
-  try {
-    execFileSync("git", ["push", "--quiet"], { cwd: ctx.cwd, stdio: "pipe" })
-  } catch {
-    process.stderr.write("[goal-tick] commitGoalState: push failed (will retry next tick)\n")
+  // Fetch+rebase retry handles the race against other ticks pushing
+  // concurrently. On persistent failure we surface a warning — the goal
+  // state file will be re-staged on the next tick anyway.
+  const result = pushWithRetry({ cwd: ctx.cwd })
+  if (!result.ok) {
+    process.stderr.write(`[goal-tick] commitGoalState: push failed (${result.reason}); will retry next tick\n`)
   }
 }
 
