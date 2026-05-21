@@ -33,6 +33,10 @@ ENV PATH="/opt/venv/bin:${PATH}"
 
 ARG KODY_ENGINE_VERSION=latest
 RUN npm install -g @kody-ade/kody-engine@${KODY_ENGINE_VERSION}
+# The published bin is `kody-engine`; entrypoint.sh / entrypoint-serve.sh
+# invoke bare `kody`. Symlink so both resolve (older images shipped a `kody`
+# bin; this restores that name after the rename).
+RUN ln -sf "$(npm root -g)/@kody-ade/kody-engine/dist/bin/kody.js" /usr/local/bin/kody
 
 # Package managers — the engine's preflight + verify shell out to whatever
 # the cloned repo uses (pnpm/yarn/npm). Corepack ships with Node 22 and

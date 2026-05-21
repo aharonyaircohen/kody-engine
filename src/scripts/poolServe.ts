@@ -125,8 +125,11 @@ export const poolServe: PreflightScript = async (ctx) => {
   const poolApiKey = derivePoolApiKey(master)
   const runnerApiKey = deriveRunnerApiKey(master)
 
-  const app = process.env.FLY_APP_NAME ?? "kody-runner"
-  const region = process.env.FLY_REGION ?? "fra"
+  // NOTE: do NOT read FLY_APP_NAME here — Fly auto-injects it as the OWNER's
+  // own app (kody-litellm), which would make us create pooled runners in the
+  // wrong app. POOL_RUNNER_APP is the canonical knob for the runner pool app.
+  const app = process.env.POOL_RUNNER_APP ?? "kody-runner"
+  const region = process.env.POOL_REGION ?? "fra"
   const perf = (process.env.POOL_PERF ?? "medium") as keyof typeof PERF_GUEST
   const guest = PERF_GUEST[perf] ?? PERF_GUEST.medium
   const litellmUrl = process.env.KODY_LITELLM_URL ?? "http://kody-litellm.internal:4000"

@@ -1,0 +1,4 @@
+{
+  "agent": { "model": "minimax/MiniMax-M2.7-highspeed" },
+  "github": { "owner": "kody-ade", "repo": "pool" }
+}

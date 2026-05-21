@@ -30,12 +30,19 @@ ENV PATH="/opt/venv/bin:${PATH}"
 # defaults to latest so a fresh build picks up the newest published engine.
 ARG KODY_ENGINE_VERSION=latest
 RUN npm install -g @kody-ade/kody-engine@${KODY_ENGINE_VERSION}
+# Published bin is `kody-engine`; the ENTRYPOINT below uses bare `kody`.
+RUN ln -sf "$(npm root -g)/@kody-ade/kody-engine/dist/bin/kody.js" /usr/local/bin/kody
 
 WORKDIR /app
 
 # Static wildcard config — keys come from env (Fly secrets). The pool owner
 # spawns: litellm --config /app/config.yaml --port 4000 --host 0.0.0.0
 COPY config.yaml /app/config.yaml
+
+# The engine refuses to boot any executable without a kody.config.json in cwd.
+# pool-serve runs in /app with no repo, so ship a minimal placeholder (it's
+# never used for an agent run — pool-serve sets skipAgent).
+COPY kody.config.json /app/kody.config.json
 
 # Pool owner serves on 4100 (public, authed); litellm on 4000 (6PN internal).
 EXPOSE 4000 4100
