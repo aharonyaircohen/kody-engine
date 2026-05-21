@@ -17,9 +17,12 @@ Return ONLY this block — no preamble:
 
 ```
 STRUCTURE
+- status: DONE | NEEDS_CONTEXT | BLOCKED
 - severity: WARN | NONE
 - findings:
   - <file:line — concrete structural/convention/doc gap and the existing pattern it should follow, or "None">
 ```
 
 Structure findings never `BLOCK` — they are advisory. Use `WARN` for real gaps, `NONE` otherwise.
+
+`status`: `DONE` = you reviewed the full diff. `NEEDS_CONTEXT` = you need a file or context the lead must supply to finish — say exactly what. `BLOCKED` = you could not read the diff/files at all — say why. Never emit `severity: NONE` to fake a clean review when you were actually blocked; report the block.

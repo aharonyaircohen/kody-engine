@@ -22,7 +22,7 @@
       "Grep",
       "Glob",
       "Bash",
-      "Task",
+      "Agent",
       "mcp__playwright"
     ],
     "hooks": ["block-write"],

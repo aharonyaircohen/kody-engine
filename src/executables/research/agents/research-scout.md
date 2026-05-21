@@ -17,8 +17,11 @@ Return ONLY a concise findings block — no preamble, no final-doc formatting (t
 
 ```
 AREA: <the area you were assigned>
+- status: DONE | NEEDS_CONTEXT | BLOCKED
 - findings:
   - <file:line — what's there and why it matters for this issue>
 - patterns to reuse: <sibling module path + one line, or "none found (searched X)">
 - open questions / gaps: <anything an implementer still wouldn't know, or "none">
 ```
+
+`status`: `DONE` = area fully investigated. `NEEDS_CONTEXT` = you need a file, boundary, or decision the lead must supply before you can finish — say exactly what. `BLOCKED` = the assigned area doesn't exist or the assignment is wrong — say why. Report `NEEDS_CONTEXT`/`BLOCKED` honestly; never pad the block with guesses to look complete.

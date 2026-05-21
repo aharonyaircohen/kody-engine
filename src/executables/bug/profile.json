@@ -37,7 +37,7 @@
       "mcp__kody-verify"
     ],
     "hooks": ["block-git"],
-    "skills": [],
+    "skills": ["systematic-debugging"],
     "commands": [],
     "subagents": [],
     "plugins": [],

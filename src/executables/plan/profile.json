@@ -23,7 +23,7 @@
       "Grep",
       "Glob",
       "Bash",
-      "Task"
+      "Agent"
     ],
     "hooks": ["block-write"],
     "skills": [],

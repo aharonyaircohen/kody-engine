@@ -14,6 +14,7 @@ import type { AgentResult } from "./agent.js"
 import { runAgent } from "./agent.js"
 import type { KodyConfig } from "./config.js"
 import { loadConfig, parseProviderModel } from "./config.js"
+import { DISCIPLINE } from "./discipline.js"
 import { emitEvent } from "./events.js"
 import type { ContainerChild, Context, InputSpec, Profile, ScriptEntry } from "./executables/types.js"
 import { KODY_NAMESPACE, removeLabel } from "./lifecycleLabels.js"
@@ -234,7 +235,9 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
         typeof profile.claudeCode.maxTurnTimeoutSec === "number"
           ? Math.floor(profile.claudeCode.maxTurnTimeoutSec * 1000)
           : undefined,
-      systemPromptAppend: [profile.claudeCode.systemPromptAppend, taskArtifacts?.promptAddendum]
+      // DISCIPLINE leads so the stable, role-agnostic block sits at the front
+      // of the cacheable system-prompt prefix; profile/task appends follow.
+      systemPromptAppend: [DISCIPLINE, profile.claudeCode.systemPromptAppend, taskArtifacts?.promptAddendum]
         .filter((s): s is string => typeof s === "string" && s.length > 0)
         .join("\n\n") || undefined,
       cacheable: profile.claudeCode.cacheable,

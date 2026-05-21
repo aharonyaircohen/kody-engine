@@ -17,9 +17,12 @@ Return ONLY this block — no preamble:
 
 ```
 SECURITY
+- status: DONE | NEEDS_CONTEXT | BLOCKED
 - severity: BLOCK | WARN | NONE
 - findings:
   - <file:line — concrete issue and the exploit it enables, or "None">
 ```
 
 Use `BLOCK` only for a real, exploitable vulnerability introduced by this diff. Pre-existing issues the diff didn't touch are out of scope.
+
+`status`: `DONE` = you reviewed the full diff. `NEEDS_CONTEXT` = you need a file or context the lead must supply to finish — say exactly what. `BLOCKED` = you could not read the diff/files at all — say why. Never emit `severity: NONE` to fake a clean review when you were actually blocked; report the block.

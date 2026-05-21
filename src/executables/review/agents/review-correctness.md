@@ -18,9 +18,12 @@ Return ONLY this block — no preamble:
 
 ```
 CORRECTNESS
+- status: DONE | NEEDS_CONTEXT | BLOCKED
 - severity: BLOCK | WARN | NONE
 - findings:
   - <file:line — concrete bug/regression and how it manifests at runtime, or "None">
 ```
 
 Use `BLOCK` only for a clear correctness or regression risk (wrong output, broken caller, dropped tested case). Test-coverage gaps that aren't outright bugs are `WARN`.
+
+`status`: `DONE` = you reviewed the full diff. `NEEDS_CONTEXT` = you need a file or context the lead must supply to finish — say exactly what. `BLOCKED` = you could not read the diff/files at all — say why. Never emit `severity: NONE` to fake a clean review when you were actually blocked; report the block.

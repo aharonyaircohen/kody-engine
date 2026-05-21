@@ -16,19 +16,21 @@ Base: {{pr.baseRefName}} ← Head: {{pr.headRefName}}
 
 # How to run this review
 
-1. **Fan out in parallel.** In a SINGLE message, issue three `Task` calls — one to each subagent — so they run concurrently:
+1. **Fan out in parallel.** In a SINGLE message, issue three `Agent` calls — one to each subagent — so they run concurrently:
    - `review-security` — security vulnerabilities.
    - `review-correctness` — logic bugs, regressions, test gaps.
    - `review-style` — structure, conventions, duplication, docs.
 
    Give each subagent the same context: PR #{{pr.number}}, the base/head refs above, and the diff. Instruct each to read the full changed files (not just hunks) before reporting, and to return only its structured block.
 
-2. **Synthesize.** Once all three return, merge their findings into the single comment below. Resolve the verdict from the worst severity reported:
+2. **Check each reviewer's `status` before trusting its verdict.** A reviewer that returns `NEEDS_CONTEXT` or `BLOCKED` did not actually complete its review — do NOT treat its `severity: NONE` as a clean pass. Do NOT re-dispatch the same reviewer with the same instructions; change something: give it the context it asked for, or note in the comment that this dimension could not be reviewed. A review missing a whole dimension cannot be **PASS**.
+
+3. **Synthesize.** Once all three have genuinely completed, merge their findings into the single comment below. Resolve the verdict from the worst severity reported:
    - any `BLOCK` (security or correctness) → **FAIL**
    - no BLOCK but any `WARN` → **CONCERNS**
    - all `NONE` → **PASS**
 
-3. Drop duplicate findings, keep every distinct `file:line` citation. Do not invent citations — only pass through what the subagents reported from files they actually read.
+4. Drop duplicate findings, keep every distinct `file:line` citation. Do not invent citations — only pass through what the subagents reported from files they actually read.
 
 # Required output
 

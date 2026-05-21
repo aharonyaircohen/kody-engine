@@ -18,8 +18,11 @@ Return ONLY a concise findings block — no preamble, no final-plan formatting (
 
 ```
 AREA: <the area/files you were assigned>
+- status: DONE | NEEDS_CONTEXT | BLOCKED
 - changes: <file:line — current state → target state, exact edit location>
 - pattern to reuse: <sibling path + which idioms/APIs are mirrored, or "new convention because …">
 - API surface: <symbol → definition path, or UNVERIFIED>
 - risks/edge cases/tests: <bullets an implementer must handle>
 ```
+
+`status`: `DONE` = area fully investigated. `NEEDS_CONTEXT` = you need a file, boundary, or decision the lead must supply before you can finish — say exactly what. `BLOCKED` = the assigned area doesn't exist or the assignment is wrong — say why. Report `NEEDS_CONTEXT`/`BLOCKED` honestly; never pad the block with guesses to look complete.

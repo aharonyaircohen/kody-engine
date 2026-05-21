@@ -21,6 +21,8 @@ export interface LoadedAgent {
   description: string
   prompt: string
   tools?: string[]
+  /** Model alias ('sonnet'|'opus'|'haiku') or full ID; omitted = inherit. */
+  model?: string
 }
 
 /** Split `---\n<frontmatter>\n---\n<body>` into [frontmatter, body]. */
@@ -69,6 +71,9 @@ export function loadSubagents(profile: Profile): Record<string, LoadedAgent> | u
         .filter(Boolean)
       if (tools.length > 0) def.tools = tools
     }
+    // A declared `model` lets a subagent run on a cheaper/faster model than the
+    // lead (e.g. review-* scouts on haiku). Dropped silently before this.
+    if (fm.model) def.model = fm.model
     // Key by the frontmatter `name` when present so the invocable type
     // matches the file's declared identity, else fall back to the filename.
     agents[fm.name || name] = def

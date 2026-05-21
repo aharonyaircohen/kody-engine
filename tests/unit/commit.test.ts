@@ -3,9 +3,8 @@ import { isForbiddenPath, normalizeCommitMessage } from "../../src/commit.js"
 
 describe("commit: isForbiddenPath", () => {
   it("blocks .kody/ artifacts", () => {
-    expect(isForbiddenPath(".kody/tasks/1/x.json")).toBe(true)
-    expect(isForbiddenPath(".kody-engine/event-log.json")).toBe(true)
     expect(isForbiddenPath(".kody/last-run.jsonl")).toBe(true)
+    expect(isForbiddenPath(".kody-engine/event-log.json")).toBe(true)
     expect(isForbiddenPath(".kody-lean/last-run.jsonl")).toBe(true)
   })
 
@@ -37,9 +36,18 @@ describe("commit: isForbiddenPath", () => {
     expect(isForbiddenPath(".kody/memory/index.md")).toBe(false)
   })
 
-  it("still blocks other .kody/ paths even with memory allowlist", () => {
+  it("allows .kody/tasks/ for per-task artifacts", () => {
+    expect(isForbiddenPath(".kody/tasks/1/context.json")).toBe(false)
+    expect(isForbiddenPath(".kody/tasks/abc/memory-recs.json")).toBe(false)
+    expect(isForbiddenPath(".kody/tasks/1.json")).toBe(false)
+  })
+
+  it("still blocks other .kody/ paths even with the memory/tasks allowlists", () => {
     expect(isForbiddenPath(".kody/last-run.jsonl")).toBe(true)
-    expect(isForbiddenPath(".kody/tasks/1.json")).toBe(true)
+    // Allowlist prefixes are directory-scoped: lookalikes that aren't under
+    // .kody/memory/ or .kody/tasks/ stay blocked.
+    expect(isForbiddenPath(".kody/memory.md")).toBe(true)
+    expect(isForbiddenPath(".kody/tasksfoo.json")).toBe(true)
   })
 })
 
