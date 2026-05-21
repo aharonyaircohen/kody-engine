@@ -105,6 +105,24 @@ export interface KodyConfig {
     stateBackend?: "contents-api" | "local-file"
   }
   /**
+   * Who may trigger kody via an `@kody` comment. Gates on the GitHub
+   * `comment.author_association` already present on the issue_comment event
+   * (no API call, no read:org token needed).
+   *
+   *   unset / empty  → anyone may trigger (current/default behavior).
+   *   non-empty list → only comments whose author_association is in the
+   *                    list run; all others are silently ignored.
+   *
+   * Valid values (GitHub's enum): OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR,
+   * FIRST_TIME_CONTRIBUTOR, FIRST_TIMER, MANNEQUIN, NONE. For "only the
+   * team", use ["OWNER", "MEMBER", "COLLABORATOR"]. Note MEMBER only
+   * applies to org-owned repos; on a user-owned repo the owner is OWNER
+   * and invited people are COLLABORATOR.
+   */
+  access?: {
+    allowedAssociations?: string[]
+  }
+  /**
    * `qa-engineer` defaults. Used by the resolveQaUrl preflight when no
    * explicit `--url` is passed and no `$PREVIEW_URL` env var is set.
    */
@@ -203,8 +221,51 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     classify: parseClassifyConfig(raw.classify),
     release: parseReleaseConfig(raw.release),
     jobs: parseJobsConfig(raw.jobs),
+    access: parseAccessConfig(raw.access),
     qa: parseQaConfig(raw.qa),
   }
+}
+
+/**
+ * GitHub's `author_association` enum. Used to validate access.allowedAssociations
+ * so a typo (e.g. "MEMBERS") fails loudly at config load rather than silently
+ * locking everyone out at dispatch time.
+ */
+export const GITHUB_AUTHOR_ASSOCIATIONS = [
+  "OWNER",
+  "MEMBER",
+  "COLLABORATOR",
+  "CONTRIBUTOR",
+  "FIRST_TIME_CONTRIBUTOR",
+  "FIRST_TIMER",
+  "MANNEQUIN",
+  "NONE",
+] as const
+
+function parseAccessConfig(raw: unknown): KodyConfig["access"] {
+  if (!raw || typeof raw !== "object") return undefined
+  const r = raw as Record<string, unknown>
+  if (r.allowedAssociations === undefined) return undefined
+  if (!Array.isArray(r.allowedAssociations)) {
+    throw new Error(`kody.config.json: access.allowedAssociations must be an array of strings`)
+  }
+  const valid = new Set<string>(GITHUB_AUTHOR_ASSOCIATIONS)
+  const out: string[] = []
+  for (const v of r.allowedAssociations) {
+    if (typeof v !== "string") {
+      throw new Error(`kody.config.json: access.allowedAssociations entries must be strings`)
+    }
+    const up = v.trim().toUpperCase()
+    if (!valid.has(up)) {
+      throw new Error(
+        `kody.config.json: access.allowedAssociations contains "${v}" — must be one of ${GITHUB_AUTHOR_ASSOCIATIONS.join(", ")}`,
+      )
+    }
+    out.push(up)
+  }
+  // An explicit empty list means "no gate" (same as unset) rather than
+  // "lock everyone out" — the latter would be a footgun.
+  return out.length > 0 ? { allowedAssociations: out } : undefined
 }
 
 function parseQaConfig(raw: unknown): KodyConfig["qa"] {

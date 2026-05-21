@@ -39,13 +39,24 @@ const DEFAULT_WORKDIR = "/workspace/repo"
 export interface RunnerJob {
   jobId: string
   repo: string
-  issueNumber: number
   githubToken: string
+  /**
+   * "issue" (default): one-shot `kody run --issue N` → branch → PR → exit.
+   * "interactive": boot a long-lived `kody` chat session (the Vibe runner) —
+   * emits chat.ready, takes turns via the dashboard's append/event path.
+   */
+  mode?: "issue" | "interactive"
+  /** Required for mode "issue". */
+  issueNumber?: number
+  /** Required for mode "interactive" — the chat session id. */
+  sessionId?: string
+  /** Interactive idle/hard-cap (ms) — mirrors spawnRunner. */
+  idleExitMs?: number
+  hardCapMs?: number
   ref?: string
   /** Provider keys etc. (mirrors GH Actions toJSON(secrets)). Object or JSON string. */
   allSecrets?: Record<string, string> | string
   model?: string
-  sessionId?: string
   /** Event-ingest URL with inline ?token=... (engine streams events here). */
   dashboardUrl?: string
 }
@@ -109,15 +120,26 @@ export function parseJob(body: unknown): { job: RunnerJob } | { error: string } 
   const repo = typeof b.repo === "string" ? b.repo.trim() : ""
   if (!/^[^/\s]+\/[^/\s]+$/.test(repo)) return { error: "repo must be 'owner/name'" }
 
-  const issueNumber = Number(b.issueNumber)
-  if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
-    return { error: "issueNumber (positive integer) required" }
-  }
-
   const githubToken = typeof b.githubToken === "string" ? b.githubToken.trim() : ""
   if (!githubToken) return { error: "githubToken required" }
 
-  const job: RunnerJob = { jobId, repo, issueNumber, githubToken }
+  const mode = b.mode === "interactive" ? "interactive" : "issue"
+  const job: RunnerJob = { jobId, repo, githubToken, mode }
+
+  if (mode === "issue") {
+    const issueNumber = Number(b.issueNumber)
+    if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
+      return { error: "issueNumber (positive integer) required for issue mode" }
+    }
+    job.issueNumber = issueNumber
+  } else {
+    const sessionId = typeof b.sessionId === "string" ? b.sessionId.trim() : ""
+    if (!sessionId) return { error: "sessionId required for interactive mode" }
+    job.sessionId = sessionId
+    if (Number.isFinite(Number(b.idleExitMs))) job.idleExitMs = Number(b.idleExitMs)
+    if (Number.isFinite(Number(b.hardCapMs))) job.hardCapMs = Number(b.hardCapMs)
+  }
+
   if (typeof b.ref === "string" && b.ref.trim()) job.ref = b.ref.trim()
   if (typeof b.model === "string" && b.model.trim()) job.model = b.model.trim()
   if (typeof b.sessionId === "string" && b.sessionId.trim()) job.sessionId = b.sessionId.trim()
@@ -146,16 +168,21 @@ async function defaultRunJob(job: RunnerJob): Promise<void> {
       ? job.allSecrets
       : JSON.stringify(job.allSecrets ?? {})
 
+  const interactive = job.mode === "interactive"
   const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
     REPO: job.repo,
     REF: branch,
     GITHUB_TOKEN: job.githubToken,
-    ISSUE_NUMBER: String(job.issueNumber),
+    // Issue mode bakes ISSUE_NUMBER → `kody run --issue N`. Interactive mode
+    // leaves it empty and sets SESSION_ID so the engine boots a chat session.
+    ISSUE_NUMBER: interactive ? "" : String(job.issueNumber),
     ALL_SECRETS: allSecrets,
     SESSION_ID: job.sessionId ?? "",
     DASHBOARD_URL: job.dashboardUrl ?? "",
     MODEL: job.model ?? "",
+    ...(interactive && job.idleExitMs ? { KODY_IDLE_EXIT_MS: String(job.idleExitMs) } : {}),
+    ...(interactive && job.hardCapMs ? { KODY_HARD_CAP_MS: String(job.hardCapMs) } : {}),
   }
 
   const run = (cmd: string, args: string[], cwd?: string) =>
@@ -193,8 +220,14 @@ async function defaultRunJob(job: RunnerJob): Promise<void> {
   await run("git", ["config", "user.name", authorName], workdir)
   await run("git", ["config", "user.email", authorEmail], workdir)
 
-  process.stdout.write(`[runner-serve] job ${job.jobId}: running issue #${job.issueNumber}\n`)
-  const runCode = await run("kody", ["run", "--issue", String(job.issueNumber)], workdir)
+  // Issue mode: one-shot `kody run --issue N`. Interactive mode: bare `kody`,
+  // which the engine routes to a chat session when SESSION_ID is set (mirrors
+  // entrypoint.sh's chat path) — the long-lived Vibe runner, now pre-warmed.
+  const runArgs = interactive ? [] : ["run", "--issue", String(job.issueNumber)]
+  process.stdout.write(
+    `[runner-serve] job ${job.jobId}: ${interactive ? `interactive session ${job.sessionId}` : `running issue #${job.issueNumber}`}\n`,
+  )
+  const runCode = await run("kody", runArgs, workdir)
   process.stdout.write(`[runner-serve] job ${job.jobId}: finished (exit ${runCode})\n`)
   process.exit(runCode)
 }

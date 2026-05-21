@@ -87,6 +87,52 @@ describe("autoDispatchTyped: silent variants (legitimate no-op)", () => {
   })
 })
 
+describe("autoDispatchTyped: membership gate (access.allowedAssociations)", () => {
+  const teamOnly = { access: { allowedAssociations: ["OWNER", "MEMBER", "COLLABORATOR"] } } as any
+
+  it("routes a recognized command from an allowed association (MEMBER)", () => {
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody fix", user: { login: "alice", type: "User" }, author_association: "MEMBER" },
+      issue: { number: 7 },
+    })
+    const out = autoDispatchTyped({ config: teamOnly })
+    expect(out.kind).toBe("route")
+    if (out.kind === "route") expect(out.executable).toBe("fix")
+  })
+
+  it("silently ignores a blocked association even when the subcommand is real", () => {
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody fix", user: { login: "stranger", type: "User" }, author_association: "NONE" },
+      issue: { number: 7 },
+    })
+    const out = autoDispatchTyped({ config: teamOnly })
+    expect(out.kind).toBe("silent")
+    if (out.kind === "silent") expect(out.reason).toMatch(/association 'NONE' not in/i)
+  })
+
+  it("treats a missing author_association as blocked when a gate is configured", () => {
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody fix", user: { login: "ghost", type: "User" } },
+      issue: { number: 7 },
+    })
+    const out = autoDispatchTyped({ config: teamOnly })
+    expect(out.kind).toBe("silent")
+  })
+
+  it("does not gate when no allowlist is configured (open default)", () => {
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody fix", user: { login: "stranger", type: "User" }, author_association: "NONE" },
+      issue: { number: 7 },
+    })
+    const out = autoDispatchTyped()
+    expect(out.kind).toBe("route")
+  })
+})
+
 describe("autoDispatchTyped: unrecognized variant (user-facing feedback needed)", () => {
   it("returns unrecognized when @kody is followed by an unknown token", () => {
     process.env.GITHUB_EVENT_NAME = "issue_comment"

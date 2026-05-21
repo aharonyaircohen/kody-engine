@@ -25,10 +25,16 @@ export interface ClaimRequest {
   jobId: string
   /** owner/name */
   repo: string
-  issueNumber: number
+  /** "issue" (default, one-shot run) | "interactive" (long-lived chat session). */
+  mode?: "issue" | "interactive"
+  /** Required for issue mode. */
+  issueNumber?: number
+  /** Required for interactive mode. */
+  sessionId?: string
+  idleExitMs?: number
+  hardCapMs?: number
   ref?: string
   model?: string
-  sessionId?: string
   dashboardUrl?: string
 }
 
@@ -130,12 +136,15 @@ export class PoolRegistry {
     const job: PoolJob = {
       jobId: req.jobId,
       repo: `${owner}/${repo}`,
-      issueNumber: req.issueNumber,
       githubToken: this.cfg.githubToken,
+      mode: req.mode ?? "issue",
+      issueNumber: req.issueNumber,
+      sessionId: req.sessionId,
+      idleExitMs: req.idleExitMs,
+      hardCapMs: req.hardCapMs,
       ref: req.ref,
       allSecrets,
       model: req.model,
-      sessionId: req.sessionId,
       dashboardUrl: req.dashboardUrl,
     }
     return pm.claim(job)

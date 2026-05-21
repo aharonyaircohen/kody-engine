@@ -37,12 +37,18 @@ export interface PoolConfig {
 export interface PoolJob {
   jobId: string
   repo: string
-  issueNumber: number
   githubToken: string
+  /** "issue" (one-shot run) | "interactive" (long-lived chat session). */
+  mode?: "issue" | "interactive"
+  /** Required for issue mode. */
+  issueNumber?: number
+  /** Required for interactive mode. */
+  sessionId?: string
+  idleExitMs?: number
+  hardCapMs?: number
   ref?: string
   allSecrets?: Record<string, string>
   model?: string
-  sessionId?: string
   dashboardUrl?: string
 }
 

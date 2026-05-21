@@ -123,6 +123,9 @@ export function autoDispatch(opts?: {
   const authorType = String(event.comment?.user?.type ?? "")
   if (!rawBody.toLowerCase().includes("@kody")) return null
   if (authorLogin === "kody-bot" || authorType === "Bot") return null
+  // Membership gate: when configured, only commenters whose GitHub
+  // author_association is allowlisted may trigger kody. Unset → anyone.
+  if (!associationAllowed(event, opts?.config)) return null
 
   const body = rawBody.toLowerCase()
   const targetNum = Number(event.issue?.number ?? 0)
@@ -251,6 +254,13 @@ export function autoDispatchTyped(opts?: {
   if (authorLogin === "kody-bot" || authorType === "Bot") {
     return { kind: "silent", reason: `bot-authored comment (${authorLogin || authorType})` }
   }
+  // Membership gate (see autoDispatch). Classify a blocked commenter as
+  // silent — not unrecognized — so a non-member typing a real subcommand
+  // (e.g. "@kody fix") gets no "I don't know that command" feedback.
+  if (!associationAllowed(event, opts?.config)) {
+    const assoc = String(event.comment?.author_association ?? "").toUpperCase() || "<none>"
+    return { kind: "silent", reason: `commenter association '${assoc}' not in access.allowedAssociations` }
+  }
   const targetNum = Number(event.issue?.number ?? 0)
   const isPr = !!event.issue?.pull_request
   if (!targetNum) {
@@ -331,6 +341,22 @@ export function dispatchScheduledWatches(opts?: { now?: Date; windowSec?: number
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Membership gate. Returns true (allowed to trigger) unless the config
+ * declares a non-empty `access.allowedAssociations` allowlist AND the
+ * comment author's GitHub `author_association` is not in it.
+ *
+ * No allowlist configured → always true (open, current default). The
+ * association comes straight off the issue_comment event payload, so this
+ * needs no API call and no read:org token.
+ */
+function associationAllowed(event: Record<string, any>, config?: KodyConfig): boolean {
+  const allowed = config?.access?.allowedAssociations
+  if (!allowed || allowed.length === 0) return true
+  const assoc = String(event.comment?.author_association ?? "").toUpperCase()
+  return allowed.includes(assoc)
+}
 
 function extractAfterTag(body: string): string {
   const idx = body.indexOf("@kody")

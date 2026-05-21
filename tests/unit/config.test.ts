@@ -98,6 +98,36 @@ describe("config: loadConfig", () => {
     expect(cfg.quality).toEqual({ typecheck: "tc", testUnit: "tu", lint: "ln", format: "" })
   })
 
+  it("normalizes access.allowedAssociations to upper-case", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "m/x" },
+      access: { allowedAssociations: ["owner", "Member", "COLLABORATOR"] },
+    })
+    expect(loadConfig(dir).access?.allowedAssociations).toEqual(["OWNER", "MEMBER", "COLLABORATOR"])
+  })
+
+  it("treats empty access.allowedAssociations as no gate (undefined)", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "m/x" },
+      access: { allowedAssociations: [] },
+    })
+    expect(loadConfig(dir).access).toBeUndefined()
+  })
+
+  it("throws on an invalid association value", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "m/x" },
+      access: { allowedAssociations: ["MEMBERS"] },
+    })
+    expect(() => loadConfig(dir)).toThrow(/access\.allowedAssociations contains "MEMBERS"/)
+  })
+
   it("loads defaultExecutable when set", () => {
     const dir = tmpDir()
     writeConfig(dir, {

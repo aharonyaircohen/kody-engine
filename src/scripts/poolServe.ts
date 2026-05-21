@@ -77,9 +77,20 @@ export function parseClaimRequest(body: unknown): { req: ClaimRequest } | { erro
   if (!jobId) return { error: "jobId required" }
   const repo = typeof b.repo === "string" ? b.repo.trim() : ""
   if (!/^[^/\s]+\/[^/\s]+$/.test(repo)) return { error: "repo must be 'owner/name'" }
-  const issueNumber = Number(b.issueNumber)
-  if (!Number.isInteger(issueNumber) || issueNumber <= 0) return { error: "issueNumber required" }
-  const req: ClaimRequest = { jobId, repo, issueNumber }
+
+  const mode = b.mode === "interactive" ? "interactive" : "issue"
+  const req: ClaimRequest = { jobId, repo, mode }
+  if (mode === "issue") {
+    const issueNumber = Number(b.issueNumber)
+    if (!Number.isInteger(issueNumber) || issueNumber <= 0) return { error: "issueNumber required for issue mode" }
+    req.issueNumber = issueNumber
+  } else {
+    const sessionId = typeof b.sessionId === "string" ? b.sessionId.trim() : ""
+    if (!sessionId) return { error: "sessionId required for interactive mode" }
+    req.sessionId = sessionId
+    if (Number.isFinite(Number(b.idleExitMs))) req.idleExitMs = Number(b.idleExitMs)
+    if (Number.isFinite(Number(b.hardCapMs))) req.hardCapMs = Number(b.hardCapMs)
+  }
   if (typeof b.ref === "string" && b.ref.trim()) req.ref = b.ref.trim()
   if (typeof b.model === "string" && b.model.trim()) req.model = b.model.trim()
   if (typeof b.sessionId === "string" && b.sessionId.trim()) req.sessionId = b.sessionId.trim()

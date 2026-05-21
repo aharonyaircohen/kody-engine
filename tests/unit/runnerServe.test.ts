@@ -49,6 +49,22 @@ describe("runnerServe: parseJob", () => {
     expect("error" in parseJob(null)).toBe(true)
     expect("error" in parseJob("nope")).toBe(true)
   })
+
+  it("accepts interactive mode with a sessionId (no issueNumber needed)", () => {
+    const out = parseJob({ jobId: "j1", repo: "o/r", githubToken: "ghp_x", mode: "interactive", sessionId: "sess-1", idleExitMs: 600000 })
+    expect("job" in out).toBe(true)
+    if ("job" in out) {
+      expect(out.job.mode).toBe("interactive")
+      expect(out.job.sessionId).toBe("sess-1")
+      expect(out.job.idleExitMs).toBe(600000)
+    }
+  })
+
+  it("rejects interactive mode without a sessionId", () => {
+    const out = parseJob({ jobId: "j1", repo: "o/r", githubToken: "ghp_x", mode: "interactive" })
+    expect("error" in out).toBe(true)
+    if ("error" in out) expect(out.error).toMatch(/sessionId/)
+  })
 })
 
 // ── authOk ──────────────────────────────────────────────────────────────────
