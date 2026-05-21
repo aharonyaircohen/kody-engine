@@ -404,6 +404,22 @@
       },
       "additionalProperties": false
     },
+    "access": {
+      "type": "object",
+      "description": "Who may trigger kody via an @kody comment. Gates on the GitHub comment.author_association already present on the issue_comment event (no API call, no read:org token).",
+      "properties": {
+        "allowedAssociations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR", "FIRST_TIME_CONTRIBUTOR", "FIRST_TIMER", "MANNEQUIN", "NONE"]
+          },
+          "description": "Allowlist of author_association values permitted to trigger kody. OMIT this key for the secure default — only the team (OWNER, MEMBER, COLLABORATOR) may trigger; public drive-by comments are silently ignored. A non-empty list overrides which associations are allowed. An explicit empty list ([]) DISABLES the gate (anyone may trigger). MEMBER applies only to org-owned repos; on a user-owned repo the owner is OWNER and invited people are COLLABORATOR.",
+          "default": ["OWNER", "MEMBER", "COLLABORATOR"]
+        }
+      },
+      "additionalProperties": false
+    },
     "qa": {
       "type": "object",
       "description": "qa-engineer defaults. Used by the resolveQaUrl preflight when no explicit --url is passed and no $PREVIEW_URL env var is set.",
