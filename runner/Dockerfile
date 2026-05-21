@@ -1,8 +1,13 @@
 FROM node:22-bookworm-slim
 
+# NOTE: do NOT set NODE_ENV=production here. The runner clones user repos and
+# runs their quality gate (typecheck/lint/tests). With NODE_ENV=production,
+# React ships its production build, `react-dom/test-utils` drops `act`, and
+# every @testing-library component test fails ("React.act is not a function")
+# — which silently fails the engine's verify gate so no PR is ever opened.
+# Each tool sets the NODE_ENV it needs (vitest=test, `next build`=production).
 ENV DEBIAN_FRONTEND=noninteractive \
-    PYTHONUNBUFFERED=1 \
-    NODE_ENV=production
+    PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git \
