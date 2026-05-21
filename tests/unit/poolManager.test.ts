@@ -12,6 +12,7 @@ const CONFIG: PoolConfig = {
   litellmUrl: "http://kody-litellm.internal:4000",
   port: 8080,
   healthTimeoutMs: 5_000,
+  repoTag: "o/r",
 }
 
 const JOB: PoolJob = { jobId: "j1", repo: "o/r", issueNumber: 3, githubToken: "ghp_x" }

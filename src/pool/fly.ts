@@ -15,6 +15,8 @@ const FLY_API_BASE = "https://api.machines.dev/v1"
 
 export const POOL_METADATA_KEY = "kody_pool"
 export const POOL_METADATA_VALUE = "1"
+/** Per-repo tag so each repo's pool only manages its own machines. */
+export const POOL_REPO_METADATA_KEY = "kody_pool_repo"
 
 export interface FlyGuest {
   cpu_kind: "shared" | "performance"
@@ -73,13 +75,14 @@ export class FlyClient {
     return JSON.parse(raw) as T
   }
 
-  /** Create + start a pooled machine in serve mode. */
+  /** Create + start a pooled machine in serve mode, tagged for `repoTag`. */
   async createPooled(input: {
     image: string
     region: string
     guest: FlyGuest
     runnerApiKey: string
     litellmUrl: string
+    repoTag: string
     port?: number
   }): Promise<FlyMachine> {
     const body = {
@@ -90,7 +93,10 @@ export class FlyClient {
         auto_destroy: true,
         restart: { policy: "no" },
         init: { entrypoint: ["/usr/local/bin/entrypoint-serve.sh"] },
-        metadata: { [POOL_METADATA_KEY]: POOL_METADATA_VALUE },
+        metadata: {
+          [POOL_METADATA_KEY]: POOL_METADATA_VALUE,
+          [POOL_REPO_METADATA_KEY]: input.repoTag,
+        },
         env: {
           RUNNER_API_KEY: input.runnerApiKey,
           KODY_LITELLM_URL: input.litellmUrl,
@@ -107,12 +113,16 @@ export class FlyClient {
     return this.call<FlyMachine>(`/apps/${enc(this.opts.app)}/machines/${enc(id)}`, { allow404: true })
   }
 
-  /** List the app's pooled (kody_pool) machines, excluding destroyed/destroying. */
-  async listPooled(): Promise<FlyMachine[]> {
+  /**
+   * List pooled machines for `repoTag` (kody_pool + matching repo tag),
+   * excluding destroyed/destroying. Each repo's pool sees only its own.
+   */
+  async listPooled(repoTag: string): Promise<FlyMachine[]> {
     const all = (await this.call<FlyMachine[]>(`/apps/${enc(this.opts.app)}/machines`, { allow404: true })) ?? []
     return all.filter(
       (m) =>
         m.config?.metadata?.[POOL_METADATA_KEY] === POOL_METADATA_VALUE &&
+        m.config?.metadata?.[POOL_REPO_METADATA_KEY] === repoTag &&
         m.state !== "destroyed" &&
         m.state !== "destroying",
     )

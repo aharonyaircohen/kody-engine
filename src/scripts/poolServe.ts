@@ -24,8 +24,8 @@ import { spawn, type ChildProcess } from "node:child_process"
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 
 import type { PreflightScript } from "../executables/types.js"
-import { FlyClient, type FlyGuest } from "../pool/fly.js"
-import { PoolManager, type PoolJob } from "../pool/manager.js"
+import type { FlyGuest } from "../pool/fly.js"
+import { PoolRegistry, type ClaimRequest } from "../pool/registry.js"
 import { bearerOk, derivePoolApiKey, deriveRunnerApiKey, masterKeyBytes } from "../pool/keys.js"
 
 const PERF_GUEST: Record<string, FlyGuest> = {
@@ -65,7 +65,12 @@ function readJsonBody(req: IncomingMessage): Promise<unknown> {
   })
 }
 
-export function parsePoolJob(body: unknown): { job: PoolJob } | { error: string } {
+/**
+ * Parse a slim claim request from the dashboard. Carries NO secrets — the
+ * owner resolves the repo's Fly token + provider keys from its vault and the
+ * GitHub clone token from the operator env.
+ */
+export function parseClaimRequest(body: unknown): { req: ClaimRequest } | { error: string } {
   if (typeof body !== "object" || body === null) return { error: "body must be an object" }
   const b = body as Record<string, unknown>
   const jobId = typeof b.jobId === "string" ? b.jobId.trim() : ""
@@ -74,15 +79,12 @@ export function parsePoolJob(body: unknown): { job: PoolJob } | { error: string 
   if (!/^[^/\s]+\/[^/\s]+$/.test(repo)) return { error: "repo must be 'owner/name'" }
   const issueNumber = Number(b.issueNumber)
   if (!Number.isInteger(issueNumber) || issueNumber <= 0) return { error: "issueNumber required" }
-  const githubToken = typeof b.githubToken === "string" ? b.githubToken.trim() : ""
-  if (!githubToken) return { error: "githubToken required" }
-  const job: PoolJob = { jobId, repo, issueNumber, githubToken }
-  if (typeof b.ref === "string" && b.ref.trim()) job.ref = b.ref.trim()
-  if (typeof b.model === "string" && b.model.trim()) job.model = b.model.trim()
-  if (typeof b.sessionId === "string" && b.sessionId.trim()) job.sessionId = b.sessionId.trim()
-  if (typeof b.dashboardUrl === "string" && b.dashboardUrl.trim()) job.dashboardUrl = b.dashboardUrl.trim()
-  if (b.allSecrets && typeof b.allSecrets === "object") job.allSecrets = b.allSecrets as Record<string, string>
-  return { job }
+  const req: ClaimRequest = { jobId, repo, issueNumber }
+  if (typeof b.ref === "string" && b.ref.trim()) req.ref = b.ref.trim()
+  if (typeof b.model === "string" && b.model.trim()) req.model = b.model.trim()
+  if (typeof b.sessionId === "string" && b.sessionId.trim()) req.sessionId = b.sessionId.trim()
+  if (typeof b.dashboardUrl === "string" && b.dashboardUrl.trim()) req.dashboardUrl = b.dashboardUrl.trim()
+  return { req }
 }
 
 /** Supervise the LiteLLM proxy child — restart it if it dies, so a pool-owner
@@ -123,16 +125,19 @@ export const poolServe: PreflightScript = async (ctx) => {
 
   const masterRaw = process.env.KODY_MASTER_KEY?.trim()
   if (!masterRaw) throw new Error("KODY_MASTER_KEY required for pool-serve")
-  const flyToken = process.env.FLY_API_TOKEN?.trim()
-  if (!flyToken) throw new Error("FLY_API_TOKEN required for pool-serve")
+  // The owner reads each repo's vault to get THAT repo's FLY_API_TOKEN (so its
+  // pool runs in its own Fly account) and to clone — it needs a GitHub token,
+  // not a global Fly token.
+  const githubToken = process.env.GITHUB_TOKEN?.trim()
+  if (!githubToken) throw new Error("GITHUB_TOKEN required for pool-serve (reads per-repo vaults)")
 
   const master = masterKeyBytes(masterRaw)
   const poolApiKey = derivePoolApiKey(master)
   const runnerApiKey = deriveRunnerApiKey(master)
 
   // NOTE: do NOT read FLY_APP_NAME here — Fly auto-injects it as the OWNER's
-  // own app (kody-litellm), which would make us create pooled runners in the
-  // wrong app. POOL_RUNNER_APP is the canonical knob for the runner pool app.
+  // own app (kody-litellm). POOL_RUNNER_APP is the canonical runner-app name
+  // (it must exist in each repo-owner's Fly account).
   const app = process.env.POOL_RUNNER_APP ?? "kody-runner"
   const region = process.env.POOL_REGION ?? "fra"
   const perf = (process.env.POOL_PERF ?? "medium") as keyof typeof PERF_GUEST
@@ -146,21 +151,29 @@ export const poolServe: PreflightScript = async (ctx) => {
   // Keep the always-on proxy hot regardless of pool health.
   const litellm = superviseLitellm()
 
-  const fly = new FlyClient({ token: flyToken, app })
-  const manager = new PoolManager({
-    fly,
-    config: { min, image: process.env.FLY_RUNNER_IMAGE ?? "registry.fly.io/kody-runner:latest", region, guest, runnerApiKey, litellmUrl, port: runnerPort, healthTimeoutMs },
+  // One pool per repo, each created with that repo's own vault Fly token.
+  const registry = new PoolRegistry({
+    githubToken,
+    masterKey: master,
+    base: {
+      min,
+      image: process.env.FLY_RUNNER_IMAGE ?? "registry.fly.io/kody-runner:latest",
+      region,
+      guest,
+      runnerApiKey,
+      litellmUrl,
+      port: runnerPort,
+      healthTimeoutMs,
+      app,
+    },
     log,
   })
 
-  // Initial reconcile, then a periodic resync tick. resync prunes machines
-  // that vanished out-of-band (heals drift), adopts orphans, and tops up — so
-  // the pool self-heals from manual ops, post-job auto-destroys, and transient
-  // Fly errors without needing a restart.
-  manager.reconcile().catch((err) => log(`reconcile failed: ${err instanceof Error ? err.message : String(err)}`))
+  // Periodic self-heal across every active repo pool: prune vanished machines,
+  // adopt orphans, top up — no restart needed after manual ops / auto-destroys.
   const refillMs = envInt("POOL_REFILL_INTERVAL_MS", 60_000)
   const tick = setInterval(() => {
-    manager.resync().catch((err) => log(`resync tick failed: ${err instanceof Error ? err.message : String(err)}`))
+    registry.resyncAll().catch((err) => log(`resync tick failed: ${err instanceof Error ? err.message : String(err)}`))
   }, refillMs)
 
   const server = createServer(async (req, res) => {
@@ -169,7 +182,11 @@ export const poolServe: PreflightScript = async (ctx) => {
       const url = new URL(req.url, "http://localhost")
 
       if (req.method === "GET" && url.pathname === "/healthz") {
-        return sendJson(res, 200, { ok: true, litellm: litellm ? "supervised" : "off", pool: manager.status() })
+        return sendJson(res, 200, {
+          ok: true,
+          litellm: litellm ? "supervised" : "off",
+          repos: registry.activeRepos(),
+        })
       }
 
       const authed = bearerOk(
@@ -179,8 +196,12 @@ export const poolServe: PreflightScript = async (ctx) => {
       )
       if (!authed) return sendJson(res, 401, { error: "unauthorized" })
 
+      // Per-repo status: GET /pool/status?repo=owner/name
       if (req.method === "GET" && url.pathname === "/pool/status") {
-        return sendJson(res, 200, manager.status())
+        const repoParam = (url.searchParams.get("repo") ?? "").trim()
+        const [owner, repo] = repoParam.split("/")
+        if (!owner || !repo) return sendJson(res, 400, { error: "repo query (owner/name) required" })
+        return sendJson(res, 200, { status: registry.status(owner, repo) })
       }
 
       if (req.method === "POST" && url.pathname === "/pool/claim") {
@@ -190,9 +211,10 @@ export const poolServe: PreflightScript = async (ctx) => {
         } catch {
           return sendJson(res, 400, { error: "invalid JSON body" })
         }
-        const parsed = parsePoolJob(body)
+        const parsed = parseClaimRequest(body)
         if ("error" in parsed) return sendJson(res, 400, { error: parsed.error })
-        const result = await manager.claim(parsed.job)
+        const [owner, repo] = parsed.req.repo.split("/")
+        const result = await registry.claim(owner!, repo!, parsed.req)
         if (result.ok) return sendJson(res, 200, { ok: true, machineId: result.machineId })
         // 503 → the dashboard falls back to create-fresh.
         return sendJson(res, 503, { ok: false, reason: result.reason ?? "pool unavailable" })

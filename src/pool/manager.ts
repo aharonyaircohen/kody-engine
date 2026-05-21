@@ -28,6 +28,9 @@ export interface PoolConfig {
   litellmUrl: string
   port: number
   healthTimeoutMs: number
+  /** owner/repo tag — pooled machines are tagged with it so each repo's pool
+   * (running in that repo's own Fly account) only manages its own machines. */
+  repoTag: string
 }
 
 /** The job payload forwarded to a woken machine's POST /run. */
@@ -90,7 +93,7 @@ export class PoolManager {
    * free; anything else is left to finish/auto-destroy. Then refill to `min`.
    */
   async reconcile(): Promise<void> {
-    const machines = await this.deps.fly.listPooled()
+    const machines = await this.deps.fly.listPooled(this.deps.config.repoTag)
     this.free = []
     for (const m of machines) {
       if ((m.state === "suspended" || m.state === "suspending") && m.private_ip) {
@@ -162,7 +165,7 @@ export class PoolManager {
   async resync(): Promise<void> {
     let machines: FlyMachine[]
     try {
-      machines = await this.deps.fly.listPooled()
+      machines = await this.deps.fly.listPooled(this.deps.config.repoTag)
     } catch (err) {
       this.log(`resync: listPooled failed: ${errMsg(err)}`)
       return
@@ -221,6 +224,7 @@ export class PoolManager {
       guest: cfg.guest,
       runnerApiKey: cfg.runnerApiKey,
       litellmUrl: cfg.litellmUrl,
+      repoTag: cfg.repoTag,
       port: cfg.port,
     })
     if (!m.private_ip) {
