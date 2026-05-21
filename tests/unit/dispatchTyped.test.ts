@@ -122,13 +122,26 @@ describe("autoDispatchTyped: membership gate (access.allowedAssociations)", () =
     expect(out.kind).toBe("silent")
   })
 
-  it("does not gate when no allowlist is configured (open default)", () => {
+  it("does not gate when dispatch is called without a config (allowlist enforced only when present)", () => {
+    // The team-only default lives in loadConfig; dispatch's rule is "allowlist
+    // present → enforce, absent → open". Callers that pass no config (tests,
+    // legacy paths) therefore route freely — production always loads config.
     process.env.GITHUB_EVENT_NAME = "issue_comment"
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody fix", user: { login: "stranger", type: "User" }, author_association: "NONE" },
       issue: { number: 7 },
     })
     const out = autoDispatchTyped()
+    expect(out.kind).toBe("route")
+  })
+
+  it("reopens to everyone when config sets an explicit empty allowlist", () => {
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody fix", user: { login: "stranger", type: "User" }, author_association: "NONE" },
+      issue: { number: 7 },
+    })
+    const out = autoDispatchTyped({ config: { access: { allowedAssociations: [] } } as any })
     expect(out.kind).toBe("route")
   })
 })

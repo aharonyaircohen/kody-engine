@@ -108,14 +108,23 @@ describe("config: loadConfig", () => {
     expect(loadConfig(dir).access?.allowedAssociations).toEqual(["OWNER", "MEMBER", "COLLABORATOR"])
   })
 
-  it("treats empty access.allowedAssociations as no gate (undefined)", () => {
+  it("defaults to team-only when access is omitted", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "m/x" },
+    })
+    expect(loadConfig(dir).access?.allowedAssociations).toEqual(["OWNER", "MEMBER", "COLLABORATOR"])
+  })
+
+  it("treats an explicit empty access.allowedAssociations as gate disabled (open)", () => {
     const dir = tmpDir()
     writeConfig(dir, {
       github: { owner: "o", repo: "r" },
       agent: { model: "m/x" },
       access: { allowedAssociations: [] },
     })
-    expect(loadConfig(dir).access).toBeUndefined()
+    expect(loadConfig(dir).access?.allowedAssociations).toEqual([])
   })
 
   it("throws on an invalid association value", () => {

@@ -109,13 +109,16 @@ export interface KodyConfig {
    * `comment.author_association` already present on the issue_comment event
    * (no API call, no read:org token needed).
    *
-   *   unset / empty  → anyone may trigger (current/default behavior).
-   *   non-empty list → only comments whose author_association is in the
-   *                    list run; all others are silently ignored.
+   *   unset            → DEFAULT: only the team may trigger, i.e.
+   *                      ["OWNER", "MEMBER", "COLLABORATOR"]. Drive-by
+   *                      public comments are silently ignored.
+   *   non-empty list   → only comments whose author_association is in the
+   *                      list run; all others are silently ignored.
+   *   explicit []      → gate disabled, anyone may trigger (opt back into
+   *                      fully-open behavior).
    *
    * Valid values (GitHub's enum): OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR,
-   * FIRST_TIME_CONTRIBUTOR, FIRST_TIMER, MANNEQUIN, NONE. For "only the
-   * team", use ["OWNER", "MEMBER", "COLLABORATOR"]. Note MEMBER only
+   * FIRST_TIME_CONTRIBUTOR, FIRST_TIMER, MANNEQUIN, NONE. Note MEMBER only
    * applies to org-owned repos; on a user-owned repo the owner is OWNER
    * and invited people are COLLABORATOR.
    */
@@ -242,10 +245,27 @@ export const GITHUB_AUTHOR_ASSOCIATIONS = [
   "NONE",
 ] as const
 
+/**
+ * Default trigger allowlist applied when `access` is omitted: the team only
+ * (repo/org owner, org members, invited collaborators). Public drive-by
+ * commenters (CONTRIBUTOR/NONE/…) are silently ignored. Consumers reopen
+ * to everyone with an explicit `access.allowedAssociations: []`.
+ */
+export const DEFAULT_ALLOWED_ASSOCIATIONS = ["OWNER", "MEMBER", "COLLABORATOR"] as const
+
 function parseAccessConfig(raw: unknown): KodyConfig["access"] {
-  if (!raw || typeof raw !== "object") return undefined
+  // Omitted → secure-by-default team-only gate.
+  if (raw === undefined || raw === null) {
+    return { allowedAssociations: [...DEFAULT_ALLOWED_ASSOCIATIONS] }
+  }
+  if (typeof raw !== "object") {
+    throw new Error(`kody.config.json: access must be an object`)
+  }
   const r = raw as Record<string, unknown>
-  if (r.allowedAssociations === undefined) return undefined
+  // `access` present but no allowlist key → still apply the default.
+  if (r.allowedAssociations === undefined) {
+    return { allowedAssociations: [...DEFAULT_ALLOWED_ASSOCIATIONS] }
+  }
   if (!Array.isArray(r.allowedAssociations)) {
     throw new Error(`kody.config.json: access.allowedAssociations must be an array of strings`)
   }
@@ -263,9 +283,10 @@ function parseAccessConfig(raw: unknown): KodyConfig["access"] {
     }
     out.push(up)
   }
-  // An explicit empty list means "no gate" (same as unset) rather than
-  // "lock everyone out" — the latter would be a footgun.
-  return out.length > 0 ? { allowedAssociations: out } : undefined
+  // Explicit empty list → gate disabled (open to everyone). Distinct from
+  // "unset", which defaults to team-only above. dispatch treats a
+  // zero-length allowlist as "no gate".
+  return { allowedAssociations: out }
 }
 
 function parseQaConfig(raw: unknown): KodyConfig["qa"] {
