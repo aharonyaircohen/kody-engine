@@ -15,6 +15,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
       curl \
+      socat \
       python3 \
       python3-venv \
       python3-pip \
@@ -44,6 +45,11 @@ COPY config.yaml /app/config.yaml
 # never used for an agent run — pool-serve sets skipAgent).
 COPY kody.config.json /app/kody.config.json
 
+# Wrapper entrypoint: start the IPv6 bridge (socat [::]:4000 → litellm) then
+# exec `kody pool-serve`. See entrypoint.sh for why the bridge is needed.
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # Pool owner serves on 4100 (public, authed); litellm on 4000 (6PN internal).
 EXPOSE 4000 4100
 
@@ -51,6 +57,5 @@ EXPOSE 4000 4100
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
   CMD curl -sf http://localhost:4100/healthz >/dev/null || exit 1
 
-# `kody pool-serve` is PID 1: it supervises the litellm child and serves the
-# pool API. A pool-owner crash restarts via Fly; litellm is restarted in-proc.
-ENTRYPOINT ["kody", "pool-serve"]
+# Wrapper starts the IPv6 bridge then execs `kody pool-serve` as PID 1.
+ENTRYPOINT ["/app/entrypoint.sh"]

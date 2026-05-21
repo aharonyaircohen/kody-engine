@@ -2,3 +2,4 @@
 !Dockerfile
 !config.yaml
 !kody.config.json
+!entrypoint.sh

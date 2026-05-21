@@ -259,9 +259,14 @@ export const runnerServe: PreflightScript = async (ctx) => {
 
   const server = buildServer({ apiKey })
 
+  // Bind IPv6 dual-stack ("::"), NOT 0.0.0.0. The pool owner reaches this
+  // machine over Fly's IPv6-only 6PN network (http://[fdaa:...]:PORT), so an
+  // IPv4-only listener is unreachable and the machine never passes the pool's
+  // health check. "::" on Linux also accepts IPv4-mapped localhost checks.
+  const host = process.env.RUNNER_HOST ?? "::"
   await new Promise<void>((resolve) => {
-    server.listen(port, "0.0.0.0", () => {
-      process.stdout.write(`[runner-serve] listening on 0.0.0.0:${port} (idle, awaiting job)\n`)
+    server.listen(port, host, () => {
+      process.stdout.write(`[runner-serve] listening on ${host}:${port} (idle, awaiting job)\n`)
       resolve()
     })
   })
