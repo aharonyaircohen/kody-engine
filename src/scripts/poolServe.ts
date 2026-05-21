@@ -208,9 +208,13 @@ export const poolServe: PreflightScript = async (ctx) => {
     }
   })
 
+  // Bind IPv6 dual-stack ("::"), NOT 0.0.0.0. Fly's edge proxy reaches the
+  // service over the IPv6 6PN network, so an IPv4-only listener makes the
+  // public endpoint (443 → 4100) unreachable even though localhost works.
+  const apiHost = process.env.POOL_API_HOST ?? "::"
   await new Promise<void>((resolve) => {
-    server.listen(apiPort, "0.0.0.0", () => {
-      log(`listening on 0.0.0.0:${apiPort} (min=${min}, app=${app}, region=${region})`)
+    server.listen(apiPort, apiHost, () => {
+      log(`listening on ${apiHost}:${apiPort} (min=${min}, app=${app}, region=${region})`)
       resolve()
     })
   })
