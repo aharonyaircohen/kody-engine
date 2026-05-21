@@ -187,6 +187,11 @@ export MODEL="${MODEL:-}"
 export DASHBOARD_URL="${DASHBOARD_URL:-}"
 export ALL_SECRETS="${ALL_SECRETS:-{\}}"
 export ISSUE_NUMBER="${ISSUE_NUMBER:-}"
+# GitHub Actions injects these; on Fly we must set them so the engine's
+# interactive mode can persist chat.ready/events to .kody/events via the
+# Contents API (commitTurn bails without GITHUB_REPOSITORY). GH_TOKEN auths gh.
+export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$REPO}"
+export GH_TOKEN="${GH_TOKEN:-$GITHUB_TOKEN}"
 
 # Translate runtime-native env (ISSUE_NUMBER) to engine-native CLI flag.
 # The engine's stable surface is `kody run --issue N`; the entrypoint owns

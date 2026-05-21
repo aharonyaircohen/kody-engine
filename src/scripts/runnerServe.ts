@@ -174,6 +174,13 @@ async function defaultRunJob(job: RunnerJob): Promise<void> {
     REPO: job.repo,
     REF: branch,
     GITHUB_TOKEN: job.githubToken,
+    // GITHUB_REPOSITORY + GH_TOKEN are normally injected by GitHub Actions.
+    // The engine's interactive mode needs GITHUB_REPOSITORY to persist
+    // chat.ready / events to .kody/events via the Contents API (the durable
+    // signal the dashboard polls for readiness) — without it commitTurn bails
+    // and the session never appears "ready". GH_TOKEN auths the `gh` CLI.
+    GITHUB_REPOSITORY: job.repo,
+    GH_TOKEN: job.githubToken,
     // Issue mode bakes ISSUE_NUMBER → `kody run --issue N`. Interactive mode
     // leaves it empty and sets SESSION_ID so the engine boots a chat session.
     ISSUE_NUMBER: interactive ? "" : String(job.issueNumber),
