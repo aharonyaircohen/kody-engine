@@ -92,10 +92,15 @@ function superviseLitellm(): ChildProcess | null {
   if (process.env.POOL_DISABLE_LITELLM === "1") return null
   const port = String(envInt("LITELLM_PORT", 4000))
   const config = process.env.LITELLM_CONFIG ?? "/app/config.yaml"
+  // Bind IPv6 dual-stack ("::"), NOT 0.0.0.0. Fly's private 6PN network is
+  // IPv6-only, so runners reaching kody-litellm.internal:4000 need the proxy
+  // listening on IPv6 — 0.0.0.0 (IPv4) is unreachable over 6PN. On Linux ::
+  // accepts IPv4-mapped connections too, so localhost health checks still work.
+  const host = process.env.LITELLM_HOST ?? "::"
   let restarts = 0
   const start = (): ChildProcess => {
-    log(`starting litellm child (port ${port})`)
-    const child = spawn("litellm", ["--config", config, "--port", port, "--host", "0.0.0.0"], {
+    log(`starting litellm child (port ${port}, host ${host})`)
+    const child = spawn("litellm", ["--config", config, "--port", port, "--host", host], {
       stdio: "inherit",
     })
     child.on("exit", (code) => {
