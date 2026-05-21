@@ -184,6 +184,15 @@ async function defaultRunJob(job: RunnerJob): Promise<void> {
     return
   }
 
+  // Configure the git committer identity — without it `git commit` in the
+  // engine's postflight fails ("Please tell me who you are") and the agent's
+  // changes are never committed/pushed (no PR). The one-shot entrypoint.sh
+  // does the same after cloning.
+  const authorName = process.env.GIT_AUTHOR_NAME ?? "Kody Bot"
+  const authorEmail = process.env.GIT_AUTHOR_EMAIL ?? "kody-bot@users.noreply.github.com"
+  await run("git", ["config", "user.name", authorName], workdir)
+  await run("git", ["config", "user.email", authorEmail], workdir)
+
   process.stdout.write(`[runner-serve] job ${job.jobId}: running issue #${job.issueNumber}\n`)
   const runCode = await run("kody", ["run", "--issue", String(job.issueNumber)], workdir)
   process.stdout.write(`[runner-serve] job ${job.jobId}: finished (exit ${runCode})\n`)
