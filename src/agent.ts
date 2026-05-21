@@ -84,6 +84,12 @@ export interface AgentOptions {
    * synthetic plugin built by the buildSyntheticPlugin preflight.
    */
   pluginPaths?: string[]
+  /**
+   * Subagents to register for the Agent/Task tool, keyed by name. Passed
+   * straight to the SDK's `agents` query option — the reliable path for
+   * custom subagents (the plugin-manifest route does not register them).
+   */
+  agents?: Record<string, { description: string; prompt: string; tools?: string[]; model?: string }>
   /** Hard cap on agent turns. null/undefined = SDK default (unbounded). */
   maxTurns?: number | null
   /** Extended-thinking token budget. null/undefined = SDK default. */
@@ -256,6 +262,9 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     }
     if (opts.pluginPaths && opts.pluginPaths.length > 0) {
       queryOptions.plugins = opts.pluginPaths.map((p) => ({ type: "local", path: p }))
+    }
+    if (opts.agents && Object.keys(opts.agents).length > 0) {
+      queryOptions.agents = opts.agents
     }
     if (typeof opts.maxTurns === "number" && opts.maxTurns > 0) {
       queryOptions.maxTurns = opts.maxTurns

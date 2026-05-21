@@ -33,6 +33,18 @@ If a prior-art block is present above, scan the diffs and review comments — th
 
 ---
 
+# Parallel investigation (do this before writing the doc)
+
+You have a `research-scout` subagent available via the `Task` tool. Use it to investigate the repo in parallel:
+
+1. **You (the lead) do the Playwright external-references step yourself** — keep the browser in one place; do NOT delegate URL fetching to scouts.
+2. From the issue, identify 2–4 distinct investigation areas (e.g. "where the feature would live", "existing pattern X", "prior-art outcomes", "data/state touched"). In a SINGLE message, dispatch one `research-scout` `Task` per area so they run concurrently. Give each scout its specific area and the issue context.
+3. Wait for all scouts, then synthesize their findings into the doc below. Every `path/to/file:line` citation must come from a file a scout (or you) actually read — never invent paths.
+
+For a trivial issue where one area suffices, a single scout (or your own reading) is fine — don't manufacture parallelism that isn't there.
+
+---
+
 # Required output
 
 Your FINAL message must be exactly this shape (no extra text before or after):

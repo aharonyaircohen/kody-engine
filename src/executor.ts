@@ -20,6 +20,7 @@ import { KODY_NAMESPACE, removeLabel } from "./lifecycleLabels.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
 import { resolveExecutable } from "./registry.js"
+import { loadSubagents } from "./subagents.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
 import { type Action, readTaskState, type TaskState, type TaskTarget } from "./state.js"
 import {
@@ -212,6 +213,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       .filter((p) => p.length > 0)
     const syntheticPath = ctx.data.syntheticPluginPath as string | undefined
     const pluginPaths = [...externalPlugins, ...(syntheticPath ? [syntheticPath] : [])]
+    const agents = loadSubagents(profile)
 
     return runAgent({
       prompt,
@@ -225,6 +227,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       permissionModeOverride: profile.claudeCode.permissionMode,
       mcpServers: profile.claudeCode.mcpServers.length > 0 ? profile.claudeCode.mcpServers : undefined,
       pluginPaths: pluginPaths.length > 0 ? pluginPaths : undefined,
+      agents,
       maxTurns: profile.claudeCode.maxTurns,
       maxThinkingTokens: profile.claudeCode.maxThinkingTokens,
       maxTurnTimeoutMs:

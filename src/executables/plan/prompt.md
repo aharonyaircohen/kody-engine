@@ -60,6 +60,18 @@ If a file you need to read does not exist, say so explicitly in the plan under "
 
 ---
 
+# Parallel investigation (do this to meet the Research floor faster)
+
+You have a `plan-scout` subagent available via the `Task` tool. Use it to satisfy the Research floor in parallel:
+
+1. **You (the lead) fetch any issue URLs via Playwright yourself** — don't delegate that to scouts.
+2. Identify the distinct areas/files this change will touch (e.g. "the field component", "the data hook", "the migration", "the tests"). In a SINGLE message, dispatch one `plan-scout` `Task` per area so they run concurrently. Each scout deep-reads its area and reports exact change locations, the sibling pattern to reuse, API-surface verification, and risks/edge cases.
+3. Wait for all scouts, then synthesize their findings into the plan below. Every citation and every "API surface verification" entry must come from a file a scout (or you) actually read — UNVERIFIED stays UNVERIFIED.
+
+For a small single-file change, one scout (or your own reading) is fine — don't manufacture parallelism that isn't there.
+
+---
+
 # Required output
 
 Your FINAL message must be exactly this shape (no extra text before or after):

@@ -42,7 +42,20 @@ export const checkCoverageWithRetry: PostflightScript = async (ctx) => {
 
   process.stderr.write(`[kody] coverage check found ${misses.length} missing test(s); retrying agent once\n`)
   const retryPrompt = `${basePrompt}\n\n# Coverage failure (retry)\n${formatMissesForFeedback(misses)}`
-  const retry = await invoker(retryPrompt)
+  let retry: AgentResult
+  try {
+    retry = await invoker(retryPrompt)
+  } catch (err) {
+    // The retry agent threw (model 5xx, MCP crash, auth, etc.). Preserve the
+    // KNOWN gaps so downstream ensurePr opens a DRAFT PR flagged with the
+    // missing tests instead of silently shipping a non-draft PR — without
+    // this, coverageMisses would stay unset and the gate would read "no
+    // misses". Best-effort: the agent crash is logged, the draft signal kept.
+    const msg = err instanceof Error ? err.message : String(err)
+    process.stderr.write(`[kody] coverage retry agent failed (${msg}); keeping ${misses.length} miss(es) — PR will draft\n`)
+    ctx.data.coverageMisses = misses
+    return
+  }
   const retryParsed = parseAgentResult(retry.finalText)
   if (retry.outcome === "completed" && retryParsed.done) {
     ctx.data.agentDone = true

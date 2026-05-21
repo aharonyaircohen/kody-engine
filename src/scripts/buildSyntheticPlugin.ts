@@ -39,8 +39,10 @@ export function getPluginsCatalogRoot(): string {
 
 export const buildSyntheticPlugin: PreflightScript = async (ctx, profile) => {
   const cc = profile.claudeCode
-  const needsSynthetic =
-    cc.skills.length > 0 || cc.commands.length > 0 || cc.hooks.length > 0 || cc.subagents.length > 0
+  // Subagents are intentionally NOT handled here: the plugin-manifest route
+  // does not register them for the Agent/Task tool. They are loaded directly
+  // via the SDK `agents` query option in the executor (see loadSubagents).
+  const needsSynthetic = cc.skills.length > 0 || cc.commands.length > 0 || cc.hooks.length > 0
   if (!needsSynthetic) return
 
   const catalog = getPluginsCatalogRoot()
@@ -81,15 +83,6 @@ export const buildSyntheticPlugin: PreflightScript = async (ctx, profile) => {
     }
   }
 
-  // Subagents: copy each declared <name>.md.
-  if (cc.subagents.length > 0) {
-    const dst = path.join(root, "agents")
-    fs.mkdirSync(dst, { recursive: true })
-    for (const name of cc.subagents) {
-      fs.copyFileSync(resolvePart("agents", `${name}.md`), path.join(dst, `${name}.md`))
-    }
-  }
-
   // Hooks: merge all declared <name>.json into one hooks/hooks.json.
   if (cc.hooks.length > 0) {
     const dst = path.join(root, "hooks")
@@ -114,7 +107,6 @@ export const buildSyntheticPlugin: PreflightScript = async (ctx, profile) => {
   }
   if (cc.skills.length > 0) manifest.skills = ["./skills/"]
   if (cc.commands.length > 0) manifest.commands = ["./commands/"]
-  if (cc.subagents.length > 0) manifest.agents = cc.subagents.map((n) => `./agents/${n}.md`)
   fs.writeFileSync(path.join(root, ".claude-plugin", "plugin.json"), `${JSON.stringify(manifest, null, 2)}\n`)
 
   ctx.data.syntheticPluginPath = root

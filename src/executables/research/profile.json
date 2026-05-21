@@ -16,17 +16,19 @@
     "permissionMode": "default",
     "maxTurns": null,
     "systemPromptAppend": null,
+    "cacheable": true,
     "tools": [
       "Read",
       "Grep",
       "Glob",
       "Bash",
+      "Task",
       "mcp__playwright"
     ],
     "hooks": ["block-write"],
     "skills": [],
     "commands": [],
-    "subagents": [],
+    "subagents": ["research-scout"],
     "plugins": [],
     "mcpServers": [
       {

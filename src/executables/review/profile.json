@@ -16,17 +16,20 @@
     "model": "inherit",
     "permissionMode": "default",
     "maxTurns": null,
+    "maxThinkingTokens": 8000,
     "systemPromptAppend": null,
+    "cacheable": true,
     "tools": [
       "Read",
       "Grep",
       "Glob",
-      "Bash"
+      "Bash",
+      "Task"
     ],
     "hooks": ["block-write"],
     "skills": [],
     "commands": [],
-    "subagents": [],
+    "subagents": ["review-security", "review-correctness", "review-style"],
     "plugins": [],
     "mcpServers": []
   },
