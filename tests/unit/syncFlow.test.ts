@@ -43,7 +43,7 @@ beforeEach(() => {
 })
 
 describe("syncFlow with announceOnSuccess=true (sync executable)", () => {
-  it("posts 'already up to date' when merge is a no-op", async () => {
+  it("reports 'already up to date' without commenting when merge is a no-op", async () => {
     vi.mocked(mergeBase).mockReturnValue("clean")
     execFileSyncMock.mockReturnValue("abc123\n")
 
@@ -54,11 +54,12 @@ describe("syncFlow with announceOnSuccess=true (sync executable)", () => {
     expect(ctx.output.exitCode).toBe(0)
     expect(ctx.output.reason).toMatch(/already up to date/)
     expect(ctx.data.syncResult).toBe("noop")
-    expect(postPrReviewComment).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(postPrReviewComment).mock.calls[0]![1]).toMatch(/already up to date with origin\/main/)
+    // No PR comment on a clean no-op — commenting re-triggers the workflow on
+    // every open PR each sync tick. The result lives in output.reason only.
+    expect(postPrReviewComment).not.toHaveBeenCalled()
   })
 
-  it("pushes and posts success when merge advances HEAD", async () => {
+  it("pushes without commenting when merge advances HEAD", async () => {
     vi.mocked(mergeBase).mockReturnValue("clean")
     execFileSyncMock.mockReturnValueOnce("abc123\n").mockReturnValueOnce("def456\n").mockReturnValueOnce("")
 
@@ -71,7 +72,8 @@ describe("syncFlow with announceOnSuccess=true (sync executable)", () => {
     expect(ctx.data.syncResult).toBe("merged")
     const pushCall = execFileSyncMock.mock.calls.find((c) => (c[1] as string[]).includes("push"))
     expect(pushCall).toBeTruthy()
-    expect(vi.mocked(postPrReviewComment).mock.calls[0]![1]).toMatch(/✅ kody sync/)
+    // Success is silent — only conflicts/errors post a human-actionable comment.
+    expect(postPrReviewComment).not.toHaveBeenCalled()
   })
 
   it("bails and tells user to run resolve on conflict", async () => {

@@ -150,6 +150,7 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   handleAbandonedGoal: { owner: "goal-tick", reason: "goal-tick state-machine branch." },
   initFlow: { owner: "init", reason: "init is residual — bootstrap, not a recurring flow." },
   loadGoalState: { owner: "goal-tick", reason: "goal-tick state-machine step." },
+  loadWorkerAdhoc: { owner: "worker-ask", reason: "worker-ask-only ad-hoc worker-persona loader." },
   markFlowSuccess: { owner: "revert", reason: "revert is bespoke (no-agent, see AGENTS.md)." },
   parseReproOutput: { owner: "reproduce", reason: "Reproduce-only output parser." },
   persistFlowState: { owner: "spec", reason: "Orchestrator-only flow-state persistence. Solo since feature/bug/chore collapsed to single-session primitives — spec is the last multi-stage flow." },
