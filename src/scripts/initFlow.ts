@@ -12,6 +12,7 @@
 import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
+import pkg from "../../package.json"
 import type { PreflightScript } from "../executables/types.js"
 import { type EnsureLabelsResult, ensureLabels } from "../lifecycleLabels.js"
 import { loadProfile } from "../profile.js"
@@ -41,6 +42,17 @@ interface OwnerRepo {
   repo: string
 }
 
+// Derive the published config schema URL from this package's own
+// repository.url, so a fork that republishes under its own scope points
+// `kody init` consumers at the fork's schema instead of the original repo.
+function schemaUrlFromPkg(): string {
+  const fallback = "https://raw.githubusercontent.com/aharonyaircohen/kody-engine/main/kody.config.schema.json"
+  const repoUrl = (pkg as { repository?: { url?: string } }).repository?.url
+  const m = repoUrl?.match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/) ?? null
+  if (!m) return fallback
+  return `https://raw.githubusercontent.com/${m[1]}/${m[2]}/main/kody.config.schema.json`
+}
+
 function detectOwnerRepo(cwd: string): OwnerRepo | null {
   let url: string
   try {
@@ -61,7 +73,7 @@ function detectOwnerRepo(cwd: string): OwnerRepo | null {
 
 function makeConfig(pm: PackageManager, ownerRepo: OwnerRepo | null, defaultBranch: string): Record<string, unknown> {
   return {
-    $schema: "https://raw.githubusercontent.com/aharonyaircohen/kody-engine/main/kody.config.schema.json",
+    $schema: schemaUrlFromPkg(),
     quality: qualityCommandsFor(pm),
     git: { defaultBranch },
     github: {
