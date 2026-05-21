@@ -46,6 +46,19 @@ if [ -n "${KODY_LITELLM_URL:-}" ]; then
       socat "TCP-LISTEN:${LITELLM_PORT},reuseaddr,fork" \
             "TCP:${target_host}:${target_port}" \
             >>/tmp/socat.log 2>&1 &
+
+      # CRITICAL: wait for the forward to answer /health BEFORE exec'ing kody.
+      # The engine's executor calls startLitellmIfNeeded() at boot; if the
+      # forward isn't healthy yet it spawns its own litellm, which then races
+      # socat for port 4000 and the engine exits 99. Block until 4000 is up
+      # (or give up and let the engine spawn its own) — mirrors entrypoint.sh.
+      for _ in $(seq 1 30); do
+        if curl -sf "http://localhost:${LITELLM_PORT}/health" >/dev/null 2>&1; then
+          echo "→ runner-serve: litellm forward is ready"
+          break
+        fi
+        sleep 1
+      done
     else
       echo "→ runner-serve: KODY_LITELLM_URL malformed ('${KODY_LITELLM_URL}') — skipping forward"
     fi
