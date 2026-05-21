@@ -45,27 +45,89 @@ Under the hood it is one **generic executor** running one of several **declarati
 
 ## Top-level commands
 
-Each is its own auto-discovered executable. [src/dispatch.ts](src/dispatch.ts) picks one from the GHA event.
+Each is its own auto-discovered executable. [src/dispatch.ts](src/dispatch.ts) picks one from the GHA event. CLI users can invoke any of them directly (`kody <command> …`).
 
-| Command                           | Input                    | Agent? | Triggered by                                                 |
-|-----------------------------------|--------------------------|--------|--------------------------------------------------------------|
-| `run`                             | `--issue`                | yes    | `@kody` on an issue, or `workflow_dispatch`                 |
-| `plan`                            | `--issue`                | yes    | `@kody plan` on an issue                                    |
-| `research`                        | `--issue`                | yes    | `@kody research` on an issue                                |
-| `fix`                             | `--pr`, `--feedback`     | yes    | `@kody` (or `@kody fix …`) on a PR comment (fallback)      |
-| `fix-ci`                          | `--pr`, `--run-id`       | yes    | `@kody fix-ci` on a PR                                      |
-| `resolve`                         | `--pr`                   | yes    | `@kody resolve` on a PR                                     |
-| `review`                          | `--pr`                   | yes    | `@kody review` on a PR (read-only, diff only)               |
-| `ui-review`                       | `--pr`, `--preview-url`  | yes    | `@kody ui-review` on a PR (browses preview via Playwright)  |
-| `sync`                            | `--pr`                   | no     | `@kody sync` on a PR                                        |
-| `orchestrator-plan-build-review`  | `--issue`, `--flow`      | no     | `@kody orchestrate` on an issue                             |
-| `release`                         | `--mode`, `--bump`       | no     | CLI or `workflow_dispatch`                                   |
-| `init`                            | `--force`                | no     | CLI (`kody init` in a fresh consumer repo)                  |
-| `watch-stale-prs`                 | (none)                   | no     | scheduled (`0 8 * * MON`)                                    |
-| `memorize`                        | (none)                   | yes    | scheduled (`0 3 * * *`) — synthesizes vault wiki             |
-| `plan-verify`                     | `--issue`                | yes    | CLI (live-test — validates plugin/skill/hook wiring)         |
+### Vocabulary (canonical — read before the table)
 
-CLI users can invoke any of these directly (`kody <command> …`).
+The repo has carried several near-synonyms over time; these are the current, authoritative meanings. If a doc or comment uses a different word, it is stale.
+
+- **executable** — one `src/executables/<name>/` directory; the atomic unit the executor runs. Every command below is one.
+- **watch** — an executable with `role: "watch"`, `kind: "scheduled"`, and a `schedule` cron, fanned out by `dispatchScheduledWatches` on each wake. The *scheduler* itself runs no agent. Two exist: `job-scheduler`, `goal-scheduler`.
+- **job** — a unit of intent expressed as a markdown file at `.kody/jobs/<slug>.md` (human-owned prose + frontmatter). `job-scheduler` ticks each file; `job-tick` (agent classifier) or `job-tick-scripted` (deterministic `tickScript:`) advances it. Per-slug state is persisted to a sidecar state file by the engine, not to a GitHub issue.
+- **goal** — a stacked-PR state machine rooted at `.kody/goals/<id>/state.json`. `goal-scheduler` ticks each goal; `goal-tick` dispatches `@kody` on the next ready task stacked on the leaf PR, then finalizes the leaf into one review-ready PR. `qa-engineer` opens goals from QA findings. The engine never auto-merges.
+- **manager** — *not an executable.* Prose for a job whose intent happens to be overseeing other jobs.
+- **mission** — *dead term.* Renamed away; no `mission-*` executable exists. Do not use it.
+
+### Commands (grouped by function)
+
+**Issue → code (agent, end-to-end in one session)**
+
+| Command | Input | Agent? | Triggered by |
+|---|---|---|---|
+| `run` | `--issue` | yes | `@kody` on an issue, or `workflow_dispatch` |
+| `feature` | `--issue` | yes | `classify` routes here (feature/refactor) |
+| `bug` | `--issue` | yes | `classify` routes here (reproduce → fix) |
+| `chore` | `--issue` | yes | `classify` routes here (docs/dep-bump/chore) |
+| `reproduce` | `--issue` | yes | write a failing test only — leaves it failing |
+
+**Issue triage & planning**
+
+| Command | Input | Agent? | Triggered by |
+|---|---|---|---|
+| `classify` | `--issue` | yes | `@kody` on an issue → dispatches the matching sub-orchestrator |
+| `plan` | `--issue` | yes | `@kody plan` — read-only, posts a plan comment |
+| `research` | `--issue` | yes | `@kody research` — read-only, maps context + gaps |
+| `spec` | `--issue` | no (orchestrator) | sub-orchestrator for spec/RFC issues: research → plan (stop) |
+
+**PR operations**
+
+| Command | Input | Agent? | Triggered by |
+|---|---|---|---|
+| `fix` | `--pr`, `--feedback` | yes | `@kody` (or `@kody fix …`) on a PR comment (fallback) |
+| `fix-ci` | `--pr`, `--run-id` | yes | `@kody fix-ci` on a PR |
+| `resolve` | `--pr` | yes | `@kody resolve` — resolves merge conflicts |
+| `review` | `--pr` | yes | `@kody review` — read-only, one comment |
+| `ui-review` | `--pr`, `--preview-url` | yes | `@kody ui-review` — browses preview via Playwright |
+| `qa-engineer` | `--url`, `--scope`, … | yes | free-form QA; opens findings as goals |
+| `sync` | `--pr` | no | `@kody sync` — merge base into PR branch, push |
+| `revert` | `--pr` | no | `git revert` one or more commits, fully mechanical |
+
+**Scheduled watch substrate (scheduler runs no agent)**
+
+| Command | Role / kind | Schedule | Notes |
+|---|---|---|---|
+| `job-scheduler` | watch / scheduled | `*/5 * * * *` | ticks every `.kody/jobs/<slug>.md` via `job-tick` |
+| `job-tick` | primitive / oneshot | — | one classifier tick for one job file (agent) |
+| `job-tick-scripted` | utility / oneshot | — | deterministic tick: runs the slug's `tickScript:` |
+| `goal-scheduler` | watch / scheduled | `*/5 * * * *` | ticks every `.kody/goals/<id>/state.json` via `goal-tick` |
+| `goal-tick` | primitive / oneshot | — | one stacked-PR tick (no agent) |
+
+**Release stages (no agent, deterministic)**
+
+| Command | Purpose |
+|---|---|
+| `release` | single-job release flow: prepare → wait CI → merge → publish → deploy → notify |
+| `release-prepare` | bump version files, generate `CHANGELOG.md`, open the release PR |
+| `release-publish` | tag the merged commit, run `publishCommand`, create the GH release |
+| `release-deploy` | run `deployCommand` + `notifyCommand` after publish |
+
+**Infra daemons (long-lived servers)**
+
+| Command | Purpose |
+|---|---|
+| `serve` | start a LiteLLM proxy and optionally launch an editor pointed at it |
+| `brain-serve` | HTTP server wrapping the chat loop, speaks the Brain SSE protocol |
+| `pool-serve` | always-on warm-pool owner co-located on the litellm machine |
+| `runner-serve` | idle HTTP server for a warm-pool one-shot runner |
+
+**Bootstrap & live-test**
+
+| Command | Purpose |
+|---|---|
+| `init` | scaffold a consumer repo (`kody.config.json` + workflow). No agent |
+| `worker-ask` | ad-hoc one-shot: run a worker persona against an inline message |
+| `plan-verify` | live-test: validates plugin/skill/hook wiring end-to-end |
+| `probe-skill` | live-test: validates executable-local skill resolution |
 
 ### `run` — implement an issue end-to-end
 
@@ -109,10 +171,6 @@ Extends the review surface by driving the running preview deployment with the Pl
 - **Playwright** is declared in the profile's `cliTools` with `installCommand: npx --yes playwright install --with-deps chromium`. Browser binaries are set up by preflight; if the consumer repo doesn't already have `@playwright/test`, the prompt instructs the agent to run `npm install -D @playwright/test` on first test failure. Throwaway specs live under `.kody/ui-review/` (gitignored by convention).
 - **Verdict** is `PASS | CONCERNS | FAIL`. Agent's review comment is posted verbatim via the existing `postReviewResult` postflight (same machinery as `review`).
 
-### `orchestrator-plan-build-review` — deterministic flow controller
-
-Chains `plan` → `run` → `review` → (`fix` on CONCERNS/FAIL) with no agent of its own — the postflight entries ARE the transition table, evaluated top-to-bottom via `runWhen` on `data.taskState.core.lastOutcome.type`. `dispatch` postflight spawns the next executable via a self-re-entry comment; `finishFlow` terminates when a success or hard-fail action is reached. Adding a new flow shape = new `orchestrator-<flow>/` directory with a different transition table, no engine changes.
-
 ### `release` — version bump + publish, no agent
 
 Two modes on a single flag:
@@ -123,43 +181,27 @@ Two modes on a single flag:
 
 ### `init` — scaffold a consumer repo
 
-Writes `kody.config.json` (with package-manager-aware `quality.*` commands and owner/repo detected from `git remote`), `.github/workflows/kody.yml` (from the template), per-scheduled-executable workflows (e.g. `kody-watch-stale-prs.yml`), and when a UI is detected (`src/app/`, `app/`, or `pages/` exists) a `.kody/qa-guide.md` stub for `ui-review`. Idempotent — skips anything already present unless `--force`. No agent.
+Writes `kody.config.json` (with package-manager-aware `quality.*` commands and owner/repo detected from `git remote`), `.github/workflows/kody.yml` (from the template), per-scheduled-executable workflows (e.g. `kody-job-scheduler.yml`), and when a UI is detected (`src/app/`, `app/`, or `pages/` exists) a `.kody/qa-guide.md` stub for `ui-review`. Idempotent — skips anything already present unless `--force`. No agent.
 
-### `watch-stale-prs` — scheduled PR hygiene report
+### `job-scheduler` + `job-tick` — zero-code coordinator for file-defined jobs
 
-`kind: scheduled` with cron `0 8 * * MON`. `kody init` auto-generates `.github/workflows/kody-watch-stale-prs.yml` to drive it. Lists open PRs untouched for N days and posts a summary issue. No agent — all deterministic.
+A two-executable pair that lets a consumer define a stateful, recurring job *as a markdown file* — no per-job code, no PR to kody, no deploy. Used for digests, release pipelines, test-suite orchestration, pr-fleet supervision, or any multi-step flow that spans GitHub events. For what *job* / *goal* / *watch* / *manager* mean, see the **Vocabulary** glossary above — this section does not redefine them.
 
-### `job-scheduler` + `job-tick` — zero-code coordinator for issue-scoped jobs
+**The model.** Drop a file at `.kody/jobs/<slug>.md`: frontmatter on top (`every:` cadence, optional `tickScript:`), human-owned prose below (the `## Job` intent). On every cron wake `job-scheduler` enumerates the job files, reads each one's frontmatter once, and ticks only the slugs whose `every:` interval is due. `done: true` in the slug's persisted state OR deleting the file stops future work. `kody init` copies the engine's built-in job files (e.g. [src/jobs/watch-stale-prs.md](src/jobs/watch-stale-prs.md)) into the consumer repo as starters.
 
-A two-executable pair that lets a consumer define a stateful goal *as a GitHub issue* — no per-job code, no PR to kody, no deploy. Used for release pipelines, test-suite orchestration, pr-fleet supervision, or any multi-step flow that spans GitHub events.
+- **`job-scheduler`** — `role: "watch"`, `kind: "scheduled"` (default cron `*/5 * * * *`). No agent. Preflight is `dispatchJobFileTicks`, which lists `.kody/jobs/<slug>.md`, gates each on its `every:` cadence, routes slugs carrying `tickScript:` frontmatter to `job-tick-scripted` and the rest to `job-tick`, and invokes the target once per due slug in-process.
+- **`job-tick`** — `kind: oneshot`, required input `--job <slug>` (basename without `.md`), optional `--force` (bypass the cadence/prose guard — the dashboard's "Run now" button). Preflight `loadJobFromFile` → `composePrompt`. The agent decides the next step using only `gh` + `Read`; it never edits the working tree. It emits a fenced `kody-job-next-state` block with `{ cursor, data, done }`, which postflight `parseJobStateFromAgentResult` → `writeJobStateFile` persists.
+- **`job-tick-scripted`** — same `--job <slug>` input, no agent. Preflight `runTickScript` runs the slug's frontmatter `tickScript:` and parses next-state from its stdout; postflight `writeJobStateFile` persists. For fully deterministic jobs that don't need an LLM tick.
 
-**Terminology.** A **job** is a stateful, bounded goal expressed as a labeled GitHub issue. A **watch** is a stateless repeating loop (same action every tick). A **manager** is just a job whose job happens to be overseeing other jobs — same primitive, different prose. All three run on the same scheduled-executable substrate.
+**State.** Per-slug job state is persisted by `writeJobStateFile` through a resolved backend (a state file — *not* a GitHub issue comment), and a write is skipped when the next state is structurally unchanged. Job *output* is whatever the prose asks for — e.g. `watch-stale-prs` writes a report at `.kody/reports/<slug>.md`.
 
-**The model.** Open an issue, apply the `kody:job` label, write the goal as free prose in the description. On every cron wake the scheduler finds the issue, ticks it, and the tick may spawn other kody runs (`gh workflow run …`) or wait on in-flight child runs. `done: true` in state OR closing the issue stops future work.
+**Intent vs. state separation.** The job file body is 100% human-owned — edit prose to steer the job (widen scope, change thresholds, abort). The bot never rewrites the body; it only advances the persisted state. Two surfaces, two owners, no collisions.
 
-- **`job-scheduler`** — `kind: scheduled` (default cron `*/5 * * * *`, `role: "watch"`). No agent. Preflight is `dispatchJobTicks`, which lists every open `kody:job` issue and invokes `job-tick` once per issue in-process.
-- **`job-tick`** — `kind: oneshot`, one required input `--issue N`. Reads two things: the issue body (the job, human-owned prose) and a dedicated state comment (JSON, bot-owned, minimized via GraphQL so it's collapsed in the UI). Agent decides the next step using only `gh` + `Read`; it never edits the working tree. At the end of its turn it emits a fenced `kody-job-next-state` block with `{ cursor, data, done }`, which the postflight persists back to the state comment (with auto-bumped `rev`).
+**Spawning children.** An agent tick spawns other kody runs via `gh workflow run kody.yml -f issue_number=<N>`. Works without a PAT because `workflow_dispatch` isn't subject to GitHub's anti-recursion safety on the default `GITHUB_TOKEN` — that's why we prefer it over posting `@kody` comments (which would silently not trigger a child run).
 
-**The state-comment convention.** `src/scripts/issueStateComment.ts` defines the primitive: one comment per marker per issue, body starts with `<!-- <marker> -->` then a `json` fenced block with `{ version: 1, rev, cursor, data, done }`. `loadIssueStateComment` / `writeIssueStateComment` are registered generic pre/postflight scripts parameterized by `with.marker` — any future stateful executable (not just jobs) can reuse them.
+**Trigger routing.** `src/dispatch.ts` routes `schedule` events and empty `workflow_dispatch` through `dispatchScheduledWatches`, which fans out to every `role: "watch"`, `kind: "scheduled"` profile whose cron matches the wake window (today: `job-scheduler`, `goal-scheduler`). Consumers add exactly one line (`schedule: - cron:`) to their existing single `kody.yml` — no per-capability workflow files.
 
-**Intent vs. state separation.** The issue description is 100% human-owned. Humans edit prose to steer the job (extend a deadline, widen scope, abort). The bot never touches the description. State lives exclusively in the minimized state comment. Two fields, two owners, no collisions.
-
-**Spawning children.** A tick spawns other kody runs via `gh workflow run kody.yml -f issue_number=<N>`. Works without a PAT because `workflow_dispatch` isn't subject to GitHub's anti-recursion safety on the default `GITHUB_TOKEN` — that's why we prefer it over posting `@kody` comments (which would silently not trigger a child run).
-
-**Trigger routing.** `src/dispatch.ts` routes `schedule` events and empty `workflow_dispatch` to `job-scheduler`, so consumers add exactly one line (`schedule: - cron:`) to their existing single `kody.yml`. No per-capability workflow files.
-
-**Scale.** Fan-out is sequential in-process (`dispatchJobTicks` calls `runExecutable("job-tick", ...)` per issue). Fine for small N; if a consumer ever runs many jobs simultaneously, swap to `gh workflow run` dispatch for parallelism. Scheduler itself always exits 0 — individual tick failures surface on the owning issue, not as a cron failure.
-
-### `memorize` — scheduled vault wiki
-
-`kind: scheduled` with cron `0 3 * * *`, `role: "watch"`. Daily ingest of recently merged PRs into the consumer repo's `.kody/vault/` markdown knowledge base, then opens a PR with the changes. Implements the LLM-wiki pattern (Karpathy): entity-centric markdown pages — `architecture/<area>.md`, `conventions/<topic>.md`, `decisions/<slug>.md`, `components/<name>.md` — that the agent edits to capture decisions and conventions, NOT a per-PR log.
-
-- **Recall.** `loadVaultContext` is a generic preflight (registered in `src/scripts/index.ts`) that walks `.kody/vault/`, ranks pages by keyword overlap with the issue/PR title (or recency when no query is available), and exposes the top pages as `{{vaultContext}}`. Wired into `run` / `fix` / `resolve` preflights.
-- **Branching.** `memorizeFlow` (preflight) cuts a flat-namespace branch `kody-memorize-YYYYMMDD` off the default branch. **Not slashed** — many consumer repos already carry a bare `kody` branch from `kody-bootstrap`, which makes `kody/<sub>` pushes fail with a git "directory/file conflict" against `refs/heads/kody`.
-- **Path allowlist.** `commitAndPush`'s forbidden-path filter blocks `.kody/` to keep agents out of runtime state during `run`/`fix`/`resolve`. `isForbiddenPath` carries a narrow allowlist for `.kody/vault/` so memorize's writes survive staging. Other `.kody/*` paths remain blocked.
-- **PR creation.** `ensureMemorizePr` opens (or updates) a PR titled `kody memorize: vault update YYYY-MM-DD`. No issue coupling, never marked draft. Refuses to call `gh pr create` when `commitAndPush` reports `pushed: false` — `hasCommitsAhead` can return true on an orphaned local commit, which previously crashed PR creation with "Head ref must be a branch".
-- **Consumer gitignore.** Repos that ignore `.kody/*` must un-ignore the vault: `!.kody/vault/` + `!.kody/vault/**`. Without it, the agent's writes are filtered out by git itself before staging.
-- **Trigger.** Same scheduled fan-out as jobs — `dispatchScheduledWatches` picks up any `role: "watch"`, `kind: "scheduled"` profile whose cron matches the wake window.
+**Scale.** Fan-out is sequential in-process (one `runExecutable` call per due slug). Fine for small N; the scheduler itself always exits 0 — individual tick failures surface on the owning job, not as a cron failure.
 
 ### `plan-verify` — live-test harness for plugin wiring
 
@@ -188,7 +230,7 @@ src/
     review/     { profile.json, prompt.md }
     ui-review/  { profile.json, prompt.md }
     plan/       { profile.json, prompt.md }
-    orchestrator/ … release/ … watch-stale-prs/ … init/
+    release/ … job-scheduler/ … goal-scheduler/ … init/
   scripts/
     {runFlow,fixFlow,fixCiFlow,resolveFlow,reviewFlow}.ts
     {loadConventions,loadCoverageRules,composePrompt}.ts
@@ -219,7 +261,7 @@ tests/
 5. **The workflow YAML stays minimal.** Any new capability ships via npm, not via consumer YAML edits.
 6. **Shared scripts stay generic — no branching on executable identity.** Anything in `src/scripts/` is cross-cutting and must treat `profile.name` as an opaque label (state keys, logs, action-type prefixes, `producedBy` tags). It may NOT branch on it (`if (profile.name === "resolve")`, `switch (profile.name)`, etc.). Per-executable behavior belongs in a profile-declared script/shell entry, not in a shared file. Enforced by [tests/unit/sharedScriptsInvariants.test.ts](tests/unit/sharedScriptsInvariants.test.ts).
 7. **Shared scripts do not import from `src/executables/`.** Structural rule: if `src/scripts/*.ts` can't see executable code, it can't couple to it. Only `../executables/types.js` (the shared type contract) is allowed. Same test enforces this.
-8. **Memorize / vault invariants.** `.kody/vault/` is the only `.kody/*` subtree the agent is permitted to write — enforced by the `ALLOWED_PATH_PREFIXES` allowlist in `src/commit.ts`. Memorize branches must use the flat `kody-memorize-YYYYMMDD` namespace (see `memorize` section above for why). Watches that open their own PR must check `commitResult.pushed === true` before calling `gh pr create`, not just `hasCommitsAhead`.
+8. **`.kody/` write allowlist.** The agent may write only the `.kody/` subtrees named in `ALLOWED_PATH_PREFIXES` in [src/commit.ts](src/commit.ts) — currently `.kody/memory/` and `.kody/tasks/`. Every other `.kody/*` path is blocked by `commitAndPush`'s forbidden-path filter to keep agents out of runtime state during `run`/`fix`/`resolve`. Watches that open their own PR must check `commitResult.pushed === true` before calling `gh pr create`, not just `hasCommitsAhead`.
 
 ## Lifecycle catalog (refactor target)
 
