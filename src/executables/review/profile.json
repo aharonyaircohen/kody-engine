@@ -29,7 +29,7 @@
     "hooks": ["block-write"],
     "skills": [],
     "commands": [],
-    "subagents": ["review-security", "review-correctness", "review-style"],
+    "subagents": ["review-security", "review-correctness", "review-style", "review-architecture"],
     "plugins": [],
     "mcpServers": []
   },

@@ -16,17 +16,18 @@ Base: {{pr.baseRefName}} ← Head: {{pr.headRefName}}
 
 # How to run this review
 
-1. **Fan out in parallel.** In a SINGLE message, issue three `Agent` calls — one to each subagent — so they run concurrently:
-   - `review-security` — security vulnerabilities.
-   - `review-correctness` — logic bugs, regressions, test gaps.
-   - `review-style` — structure, conventions, duplication, docs.
+1. **Fan out in parallel.** In a SINGLE message, issue the `Agent` calls — one per subagent — so they run concurrently:
+   - `review-security` — security vulnerabilities. **Always.**
+   - `review-correctness` — logic bugs, regressions, test gaps. **Always.**
+   - `review-style` — structure, conventions, duplication, docs. **Always.**
+   - `review-architecture` — component boundaries, coupling, dependency direction, blast radius. **Only when the diff is structural**: it adds/moves/deletes modules, changes a public interface/export, or wires a new dependency between areas. Skip it for a localized change (a single function body, a copy tweak, a test-only or config-only diff) — a fourth reviewer with nothing to say only costs time.
 
    Give each subagent the same context: PR #{{pr.number}}, the base/head refs above, and the diff. Instruct each to read the full changed files (not just hunks) before reporting, and to return only its structured block.
 
 2. **Check each reviewer's `status` before trusting its verdict.** A reviewer that returns `NEEDS_CONTEXT` or `BLOCKED` did not actually complete its review — do NOT treat its `severity: NONE` as a clean pass. Do NOT re-dispatch the same reviewer with the same instructions; change something: give it the context it asked for, or note in the comment that this dimension could not be reviewed. A review missing a whole dimension cannot be **PASS**.
 
-3. **Synthesize.** Once all three have genuinely completed, merge their findings into the single comment below. Resolve the verdict from the worst severity reported:
-   - any `BLOCK` (security or correctness) → **FAIL**
+3. **Synthesize.** Once all dispatched subagents have genuinely completed, merge their findings into the single comment below. Resolve the verdict from the worst severity reported:
+   - any `BLOCK` (security, correctness, or architecture) → **FAIL**
    - no BLOCK but any `WARN` → **CONCERNS**
    - all `NONE` → **PASS**
 
@@ -61,7 +62,7 @@ Your FINAL message must be exactly this markdown — no preamble, no DONE/COMMIT
 ```
 ## Verdict: PASS | CONCERNS | FAIL
 
-> Reviewed in parallel by 3 subagents (security · correctness · structure).
+> Reviewed in parallel by specialist subagents (security · correctness · structure · architecture when the diff is structural).
 
 ### Summary
 <2-3 sentences: what this PR does, is the approach sound>
