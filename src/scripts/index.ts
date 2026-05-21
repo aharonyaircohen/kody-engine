@@ -8,6 +8,8 @@ import type { PostflightScript, PreflightScript } from "../executables/types.js"
 import { abortUnfinishedGitOps } from "./abortUnfinishedGitOps.js"
 import { advanceFlow } from "./advanceFlow.js"
 import { brainServe } from "./brainServe.js"
+import { runnerServe } from "./runnerServe.js"
+import { poolServe } from "./poolServe.js"
 import { buildSyntheticPlugin } from "./buildSyntheticPlugin.js"
 import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
 import { classifyByLabel } from "./classifyByLabel.js"
@@ -125,6 +127,8 @@ export const preflightScripts: Record<string, PreflightScript> = {
   runTickScript,
   serveFlow,
   brainServe,
+  runnerServe,
+  poolServe,
   loadGoalState,
   handleAbandonedGoal,
   deriveGoalPhase,

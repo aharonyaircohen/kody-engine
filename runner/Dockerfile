@@ -44,6 +44,11 @@ RUN corepack enable \
 WORKDIR /workspace
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+# entrypoint-serve.sh is the warm-pool variant: boots `kody runner-serve`
+# (idle, no issue baked in) instead of running one issue. The pool owner
+# overrides the machine entrypoint to this when creating pooled machines;
+# the default one-shot ENTRYPOINT below is unchanged.
+COPY entrypoint-serve.sh /usr/local/bin/entrypoint-serve.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/entrypoint-serve.sh
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

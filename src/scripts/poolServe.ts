@@ -1,0 +1,221 @@
+/**
+ * poolServe — preflight for the `pool-serve` executable.
+ *
+ * The warm-pool OWNER. Runs always-on, co-located on the kody-litellm Fly
+ * machine: it supervises the LiteLLM proxy child AND serves the pool API the
+ * dashboard calls to claim a pre-booted, frozen runner.
+ *
+ * Single process = single owner = the claim is a synchronous in-memory pick,
+ * which is why this sidesteps the distributed-lock problem (see PoolManager).
+ *
+ * Endpoints (POOL_API_PORT, default 4100 — exposed publicly + authed):
+ *   GET  /healthz       — 200 { ok, litellm, pool } (no auth)
+ *   GET  /pool/status   — auth: Bearer/X-Api-Key $POOL_API_KEY → counts
+ *   POST /pool/claim    — auth: $POOL_API_KEY; body = the runner job.
+ *                         200 { ok:true, machineId } on success,
+ *                         503 { ok:false, reason } when empty/failed
+ *                         (the dashboard then falls back to create-fresh).
+ *
+ * Secrets: POOL_API_KEY (dashboard↔owner) and RUNNER_API_KEY (owner↔machine)
+ * are both derived from KODY_MASTER_KEY via HKDF — never transmitted.
+ */
+
+import { spawn, type ChildProcess } from "node:child_process"
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
+
+import type { PreflightScript } from "../executables/types.js"
+import { FlyClient, type FlyGuest } from "../pool/fly.js"
+import { PoolManager, type PoolJob } from "../pool/manager.js"
+import { bearerOk, derivePoolApiKey, deriveRunnerApiKey, masterKeyBytes } from "../pool/keys.js"
+
+const PERF_GUEST: Record<string, FlyGuest> = {
+  low: { cpu_kind: "shared", cpus: 2, memory_mb: 2048 },
+  medium: { cpu_kind: "performance", cpus: 1, memory_mb: 2048 },
+  high: { cpu_kind: "performance", cpus: 2, memory_mb: 4096 },
+}
+
+function envInt(name: string, dflt: number): number {
+  const v = Number(process.env[name])
+  return Number.isFinite(v) && v > 0 ? v : dflt
+}
+
+function log(msg: string): void {
+  process.stdout.write(`[pool-serve] ${msg}\n`)
+}
+
+function sendJson(res: ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { "content-type": "application/json" })
+  res.end(JSON.stringify(body))
+}
+
+function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    req.on("data", (c: Buffer) => chunks.push(c))
+    req.on("end", () => {
+      const raw = Buffer.concat(chunks).toString("utf-8")
+      if (!raw.trim()) return resolve({})
+      try {
+        resolve(JSON.parse(raw))
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error(String(err)))
+      }
+    })
+    req.on("error", reject)
+  })
+}
+
+export function parsePoolJob(body: unknown): { job: PoolJob } | { error: string } {
+  if (typeof body !== "object" || body === null) return { error: "body must be an object" }
+  const b = body as Record<string, unknown>
+  const jobId = typeof b.jobId === "string" ? b.jobId.trim() : ""
+  if (!jobId) return { error: "jobId required" }
+  const repo = typeof b.repo === "string" ? b.repo.trim() : ""
+  if (!/^[^/\s]+\/[^/\s]+$/.test(repo)) return { error: "repo must be 'owner/name'" }
+  const issueNumber = Number(b.issueNumber)
+  if (!Number.isInteger(issueNumber) || issueNumber <= 0) return { error: "issueNumber required" }
+  const githubToken = typeof b.githubToken === "string" ? b.githubToken.trim() : ""
+  if (!githubToken) return { error: "githubToken required" }
+  const job: PoolJob = { jobId, repo, issueNumber, githubToken }
+  if (typeof b.ref === "string" && b.ref.trim()) job.ref = b.ref.trim()
+  if (typeof b.model === "string" && b.model.trim()) job.model = b.model.trim()
+  if (typeof b.sessionId === "string" && b.sessionId.trim()) job.sessionId = b.sessionId.trim()
+  if (typeof b.dashboardUrl === "string" && b.dashboardUrl.trim()) job.dashboardUrl = b.dashboardUrl.trim()
+  if (b.allSecrets && typeof b.allSecrets === "object") job.allSecrets = b.allSecrets as Record<string, string>
+  return { job }
+}
+
+/** Supervise the LiteLLM proxy child — restart it if it dies, so a pool-owner
+ * crash never leaves the always-on proxy down. Best-effort, isolated from the
+ * pool logic. */
+function superviseLitellm(): ChildProcess | null {
+  if (process.env.POOL_DISABLE_LITELLM === "1") return null
+  const port = String(envInt("LITELLM_PORT", 4000))
+  const config = process.env.LITELLM_CONFIG ?? "/app/config.yaml"
+  let restarts = 0
+  const start = (): ChildProcess => {
+    log(`starting litellm child (port ${port})`)
+    const child = spawn("litellm", ["--config", config, "--port", port, "--host", "0.0.0.0"], {
+      stdio: "inherit",
+    })
+    child.on("exit", (code) => {
+      restarts++
+      if (restarts > 50) {
+        process.stderr.write("[pool-serve] litellm restarted too many times — giving up\n")
+        return
+      }
+      log(`litellm exited (${code}) — restarting in 2s`)
+      setTimeout(start, 2_000)
+    })
+    child.on("error", (err) => process.stderr.write(`[pool-serve] litellm spawn error: ${err.message}\n`))
+    return child
+  }
+  return start()
+}
+
+export const poolServe: PreflightScript = async (ctx) => {
+  ctx.skipAgent = true
+
+  const masterRaw = process.env.KODY_MASTER_KEY?.trim()
+  if (!masterRaw) throw new Error("KODY_MASTER_KEY required for pool-serve")
+  const flyToken = process.env.FLY_API_TOKEN?.trim()
+  if (!flyToken) throw new Error("FLY_API_TOKEN required for pool-serve")
+
+  const master = masterKeyBytes(masterRaw)
+  const poolApiKey = derivePoolApiKey(master)
+  const runnerApiKey = deriveRunnerApiKey(master)
+
+  const app = process.env.FLY_APP_NAME ?? "kody-runner"
+  const region = process.env.FLY_REGION ?? "fra"
+  const perf = (process.env.POOL_PERF ?? "medium") as keyof typeof PERF_GUEST
+  const guest = PERF_GUEST[perf] ?? PERF_GUEST.medium
+  const litellmUrl = process.env.KODY_LITELLM_URL ?? "http://kody-litellm.internal:4000"
+  const min = envInt("POOL_MIN", 2)
+  const runnerPort = envInt("RUNNER_PORT", 8080)
+  const apiPort = envInt("POOL_API_PORT", 4100)
+  const healthTimeoutMs = envInt("POOL_HEALTH_TIMEOUT_MS", 120_000)
+
+  // Keep the always-on proxy hot regardless of pool health.
+  const litellm = superviseLitellm()
+
+  const fly = new FlyClient({ token: flyToken, app })
+  const manager = new PoolManager({
+    fly,
+    config: { min, image: process.env.FLY_RUNNER_IMAGE ?? "registry.fly.io/kody-runner:latest", region, guest, runnerApiKey, litellmUrl, port: runnerPort, healthTimeoutMs },
+    log,
+  })
+
+  // Initial reconcile + refill, then a periodic top-up tick (a claim also
+  // triggers refill, but the tick recovers from transient Fly errors).
+  manager.reconcile().catch((err) => log(`reconcile failed: ${err instanceof Error ? err.message : String(err)}`))
+  const refillMs = envInt("POOL_REFILL_INTERVAL_MS", 60_000)
+  const tick = setInterval(() => {
+    manager.refill().catch((err) => log(`refill tick failed: ${err instanceof Error ? err.message : String(err)}`))
+  }, refillMs)
+
+  const server = createServer(async (req, res) => {
+    try {
+      if (!req.method || !req.url) return sendJson(res, 400, { error: "bad request" })
+      const url = new URL(req.url, "http://localhost")
+
+      if (req.method === "GET" && url.pathname === "/healthz") {
+        return sendJson(res, 200, { ok: true, litellm: litellm ? "supervised" : "off", pool: manager.status() })
+      }
+
+      const authed = bearerOk(
+        req.headers["authorization"] as string | undefined,
+        req.headers["x-api-key"] as string | undefined,
+        poolApiKey,
+      )
+      if (!authed) return sendJson(res, 401, { error: "unauthorized" })
+
+      if (req.method === "GET" && url.pathname === "/pool/status") {
+        return sendJson(res, 200, manager.status())
+      }
+
+      if (req.method === "POST" && url.pathname === "/pool/claim") {
+        let body: unknown
+        try {
+          body = await readJsonBody(req)
+        } catch {
+          return sendJson(res, 400, { error: "invalid JSON body" })
+        }
+        const parsed = parsePoolJob(body)
+        if ("error" in parsed) return sendJson(res, 400, { error: parsed.error })
+        const result = await manager.claim(parsed.job)
+        if (result.ok) return sendJson(res, 200, { ok: true, machineId: result.machineId })
+        // 503 → the dashboard falls back to create-fresh.
+        return sendJson(res, 503, { ok: false, reason: result.reason ?? "pool unavailable" })
+      }
+
+      return sendJson(res, 404, { error: "not found" })
+    } catch (err) {
+      // Never let a handler bug crash the process (and take litellm with it).
+      process.stderr.write(`[pool-serve] handler error: ${err instanceof Error ? err.message : String(err)}\n`)
+      try {
+        sendJson(res, 500, { error: "internal error" })
+      } catch {
+        /* response already started */
+      }
+    }
+  })
+
+  await new Promise<void>((resolve) => {
+    server.listen(apiPort, "0.0.0.0", () => {
+      log(`listening on 0.0.0.0:${apiPort} (min=${min}, app=${app}, region=${region})`)
+      resolve()
+    })
+  })
+
+  const shutdown = (signal: string) => {
+    log(`${signal} — shutting down`)
+    clearInterval(tick)
+    server.close(() => process.exit(0))
+  }
+  process.once("SIGINT", () => shutdown("SIGINT"))
+  process.once("SIGTERM", () => shutdown("SIGTERM"))
+
+  await new Promise<void>(() => {
+    /* never resolves */
+  })
+}

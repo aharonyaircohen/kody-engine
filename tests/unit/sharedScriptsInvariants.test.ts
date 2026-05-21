@@ -171,6 +171,16 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
     reason:
       "brain-serve is a long-lived HTTP server wrapping the chat loop for the Kody-Dashboard Brain proxy. Single-purpose; no other executable should share it.",
   },
+  runnerServe: {
+    owner: "runner-serve",
+    reason:
+      "runner-serve is a long-lived HTTP server for a warm-pool one-shot runner: it boots idle and runs one issue per claim over HTTP. Single-purpose; no other executable should share it.",
+  },
+  poolServe: {
+    owner: "pool-serve",
+    reason:
+      "pool-serve is the always-on warm-pool owner: supervises LiteLLM and serves the dashboard's claim API. Single-purpose; no other executable should share it.",
+  },
   stageMergeConflicts: { owner: "resolve", reason: "resolve-only postflight." },
   startFlow: { owner: "spec", reason: "spec-only entry point." },
   verifyReproFails: { owner: "reproduce", reason: "Reproduce-only assertion." },

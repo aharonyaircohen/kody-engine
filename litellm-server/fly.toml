@@ -4,34 +4,46 @@ primary_region = "fra"
 [build]
   dockerfile = "Dockerfile"
 
-# One always-on machine — the whole point of this app is to avoid the
-# ~24s LiteLLM cold-start that the per-session runner pays today.
+# One always-on machine. It runs the LiteLLM proxy (6PN-internal, for Fly
+# runners) AND the warm-pool owner (public, for the dashboard).
 [[vm]]
   size = "shared-cpu-1x"
   memory = "1gb"
 
+# Pool API — PUBLIC, TLS, authed with Bearer $POOL_API_KEY (derived from
+# KODY_MASTER_KEY). The dashboard (Vercel) reaches it at
+# https://kody-litellm.fly.dev to claim a pre-booted, frozen runner.
+# auto_stop_machines="off" + min_machines_running=1 keep the proxy + owner hot.
 [[services]]
-  internal_port = 4000
+  internal_port = 4100
   protocol = "tcp"
-  # auto_stop_machines = false keeps the proxy hot. min_machines_running
-  # guarantees at least one is always up even if Fly's scheduler decides
-  # to migrate the machine for maintenance.
   auto_stop_machines = "off"
   auto_start_machines = true
   min_machines_running = 1
 
   [[services.ports]]
-    port = 4000
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.ports]]
+    port = 80
     handlers = ["http"]
+    force_https = true
 
   [services.concurrency]
     type = "requests"
     soft_limit = 200
     hard_limit = 400
 
+  # /healthz comes up as soon as the owner's HTTP server binds (independent of
+  # the litellm child), so a short grace is fine.
   [[services.http_checks]]
     interval = "30s"
     timeout = "5s"
-    grace_period = "10s"
+    grace_period = "20s"
     method = "get"
-    path = "/health/liveliness"
+    path = "/healthz"
+
+# The LiteLLM proxy listens on :4000 and is reached ONLY over the private 6PN
+# network by Fly runners at kody-litellm.internal:4000 — no public service
+# block needed (6PN exposes any port the process binds).
