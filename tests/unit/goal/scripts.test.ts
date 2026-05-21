@@ -391,11 +391,13 @@ describe("finalizeGoal", () => {
     // Root (intermediate) is closed with a courtesy comment.
     expect(ops.closePr).toHaveBeenCalledTimes(1)
     expect(ops.closePr).toHaveBeenCalledWith(888, expect.any(String), "/tmp")
-    // Both task issues closed (GitHub auto-close only fires on the repo
-    // default branch, which may differ from goal.defaultBranch).
-    expect(ops.closeIssue).toHaveBeenCalledTimes(2)
+    // The root task issue (#11) closes; the leaf's own task issue (#12)
+    // stays OPEN as the review anchor for the deliverable PR — closing it
+    // would drop the open PR off the dashboard review board.
+    expect(ops.closeIssue).toHaveBeenCalledTimes(1)
     expect(ops.closeIssue).toHaveBeenCalledWith(11, expect.objectContaining({ reason: "completed" }), "/tmp")
-    expect(ops.closeIssue).toHaveBeenCalledWith(12, expect.objectContaining({ reason: "completed" }), "/tmp")
+    expect(ops.closeIssue).not.toHaveBeenCalledWith(12, expect.anything(), expect.anything())
+    expect(ops.commentOnIssue).toHaveBeenCalledWith(12, expect.stringContaining("review anchor"), "/tmp")
     expect((ctx.data.goal as GoalCtx).state).toBe("done")
   })
 
@@ -443,10 +445,10 @@ describe("finalizeGoal", () => {
     // Uncarried root PR is NOT closed; it gets a warning comment instead.
     expect(ops.closePr).not.toHaveBeenCalled()
     expect(ops.commentOnIssue).toHaveBeenCalledWith(888, expect.stringContaining("not"), "/tmp")
-    // Its issue (#11) stays open; the carried task (#12) is still closed.
-    expect(ops.closeIssue).toHaveBeenCalledTimes(1)
-    expect(ops.closeIssue).toHaveBeenCalledWith(12, expect.objectContaining({ reason: "completed" }), "/tmp")
-    expect(ops.closeIssue).not.toHaveBeenCalledWith(11, expect.anything(), expect.anything())
+    // #11 stays open (uncarried); #12 is the leaf's own task issue and
+    // stays open as the deliverable review anchor — so nothing is closed.
+    expect(ops.closeIssue).not.toHaveBeenCalled()
+    expect(ops.commentOnIssue).toHaveBeenCalledWith(12, expect.stringContaining("review anchor"), "/tmp")
     expect((ctx.data.goal as GoalCtx).state).toBe("done")
   })
 

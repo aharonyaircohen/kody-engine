@@ -23,10 +23,12 @@
  *   - Close every other open task PR in the stack (their content is
  *     carried by the leaf branch; they're redundant once the leaf is the
  *     single deliverable).
- *   - Close child task issues (the goal's work is complete; it lands when
- *     the human merges the deliverable PR).
- *   - Leave the leaf PR OPEN. Transition state → "done"; the next tick
- *     exits as "terminal".
+ *   - Close every child task issue EXCEPT the leaf's own — leave that one
+ *     open so it anchors the deliverable PR (the dashboard groups a PR
+ *     under its task issue, so closing the issue drops the open deliverable
+ *     PR off the review board).
+ *   - Leave the leaf PR and its task issue OPEN. Transition state →
+ *     "done"; the next tick exits as "terminal".
  *
  * No-op (state still transitions to "done") when there is no leaf —
  * e.g. the goal had only manually-closed task issues with no PRs.
@@ -136,15 +138,29 @@ export const finalizeGoal: PreflightScript = async (ctx) => {
     }
   }
 
-  // Close every still-open child task issue: the goal's work is complete
-  // and consolidated into the deliverable PR. The changes land when a
-  // human merges that PR — we close now so task issues track the goal's
-  // "done" state rather than waiting on a merge the engine never does.
+  // Close every still-open child task issue EXCEPT the leaf's own: the
+  // goal's work is consolidated into the deliverable PR and lands when a
+  // human merges it, so the other task issues close to track the goal's
+  // "done" state. The leaf's task issue is left OPEN to anchor the
+  // deliverable PR — the dashboard groups a PR under its task issue, so
+  // closing it would drop the open deliverable off the review board.
+  const leafIssues = new Set(prIssueNumbers(leaf))
   const openIssues = (goal.childTasks ?? []).filter((t) => t.state === "OPEN")
   for (const t of openIssues) {
     if (uncarriedIssues.has(t.number)) {
       process.stderr.write(
         `[goal-tick] finalizeGoal: NOT closing task issue #${t.number} — its PR's work is not carried by the deliverable (broken stack)\n`,
+      )
+      continue
+    }
+    if (leafIssues.has(t.number)) {
+      process.stdout.write(
+        `[goal-tick] leaving leaf task issue #${t.number} OPEN as the review anchor for deliverable PR #${leaf.number}\n`,
+      )
+      commentOnIssue(
+        t.number,
+        `_Goal \`${goal.id}\` finalized — this task's PR #${leaf.number} (open against \`${goal.defaultBranch}\`) is the goal's single deliverable and carries every task's changes. This issue stays open as the review anchor; merge PR #${leaf.number} to ship._`,
+        ctx.cwd,
       )
       continue
     }
