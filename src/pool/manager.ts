@@ -95,6 +95,20 @@ export class PoolManager {
   }
 
   /**
+   * Resize the warm target at runtime (per-repo, sourced from the repo's vault
+   * POOL_MIN). Raising it warms up immediately via refill; lowering it just
+   * stops topping up — surplus machines drain as they're claimed/auto-destroyed,
+   * never force-killed. No-op when unchanged or given a bad value.
+   */
+  setMin(min: number): void {
+    if (!Number.isInteger(min) || min < 0) return
+    if (min === this.deps.config.min) return
+    this.deps.config.min = min
+    this.log(`min set to ${min}`)
+    void this.refill()
+  }
+
+  /**
    * Adopt existing pooled machines on owner (re)start: suspended ones become
    * free; anything else is left to finish/auto-destroy. Then refill to `min`.
    */
