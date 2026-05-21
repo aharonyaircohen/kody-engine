@@ -153,12 +153,14 @@ export const poolServe: PreflightScript = async (ctx) => {
     log,
   })
 
-  // Initial reconcile + refill, then a periodic top-up tick (a claim also
-  // triggers refill, but the tick recovers from transient Fly errors).
+  // Initial reconcile, then a periodic resync tick. resync prunes machines
+  // that vanished out-of-band (heals drift), adopts orphans, and tops up — so
+  // the pool self-heals from manual ops, post-job auto-destroys, and transient
+  // Fly errors without needing a restart.
   manager.reconcile().catch((err) => log(`reconcile failed: ${err instanceof Error ? err.message : String(err)}`))
   const refillMs = envInt("POOL_REFILL_INTERVAL_MS", 60_000)
   const tick = setInterval(() => {
-    manager.refill().catch((err) => log(`refill tick failed: ${err instanceof Error ? err.message : String(err)}`))
+    manager.resync().catch((err) => log(`resync tick failed: ${err instanceof Error ? err.message : String(err)}`))
   }, refillMs)
 
   const server = createServer(async (req, res) => {

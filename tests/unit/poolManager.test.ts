@@ -119,6 +119,23 @@ describe("PoolManager.claim", () => {
     expect(destroyed.length).toBeGreaterThan(0)
   })
 
+  it("retries the next free machine when the first fails to wake (vanished)", async () => {
+    // First start() throws (machine vanished out-of-band → 412), the next
+    // succeeds. refill() never calls start(), so this counter only sees claims.
+    let startCalls = 0
+    const { fly, destroyed } = makeFly({
+      start: async () => {
+        startCalls++
+        if (startCalls === 1) throw new Error("412: machine destroyed")
+      },
+    })
+    const pm = new PoolManager({ fly, config: CONFIG, postRun: async () => true })
+    await pm.refill()
+    const res = await pm.claim(JOB)
+    expect(res.ok).toBe(true) // recovered on the 2nd free machine
+    expect(destroyed.length).toBe(1) // the bad first machine was destroyed
+  })
+
   it("never hands the same machine to two concurrent claims", async () => {
     // Boot exactly one free machine, then fire two claims at once.
     const { fly } = makeFly()
@@ -131,6 +148,24 @@ describe("PoolManager.claim", () => {
     // (The winner's machineId is unique.)
     const winnerIds = oks.map((r) => r.machineId)
     expect(new Set(winnerIds).size).toBe(winnerIds.length)
+  })
+})
+
+describe("PoolManager.resync", () => {
+  it("prunes free entries whose machine vanished, then refills", async () => {
+    // Boot 2, then have Fly report only one of them still present.
+    const { fly } = makeFly()
+    const pm = new PoolManager({ fly, config: CONFIG, postRun: async () => true })
+    await pm.refill()
+    expect(pm.status().free).toBe(2)
+    const survivorId = "m1"
+    // Now listPooled returns only m1 (m2 vanished out-of-band).
+    ;(fly as unknown as { listPooled: () => Promise<FlyMachine[]> }).listPooled = async () => [
+      { id: survivorId, state: "suspended", private_ip: "fdaa::1" },
+    ]
+    await pm.resync()
+    // m2 pruned, but refill tops back up to min=2.
+    expect(pm.status().free).toBe(2)
   })
 })
 

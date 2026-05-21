@@ -16,6 +16,9 @@
 
 import { FlyClient, type FlyGuest, type FlyMachine } from "./fly.js"
 
+/** Max free machines a single claim will try before falling back to create-fresh. */
+const MAX_CLAIM_ATTEMPTS = 3
+
 export interface PoolConfig {
   min: number
   image: string
@@ -99,43 +102,93 @@ export class PoolManager {
   }
 
   /**
-   * Claim a warm machine for a job. Returns ok:false (caller falls back to
-   * create-fresh) when the pool is empty or the woken machine fails to take
-   * the job. The pick is synchronous — the atomic step.
+   * Claim a warm machine for a job. Tries free machines in turn: if a woken
+   * machine is stale/unhealthy/rejecting (e.g. it vanished out-of-band), it's
+   * destroyed and the next free one is tried, up to MAX_CLAIM_ATTEMPTS. Only
+   * when none work (or the pool is empty) does it return ok:false so the
+   * caller falls back to create-fresh. The pick (shift) is synchronous — the
+   * atomic step that prevents two concurrent claims grabbing the same machine.
    */
   async claim(job: PoolJob): Promise<ClaimResult> {
-    const machine = this.free.shift() // ← atomic: no await before this
-    if (!machine) {
-      this.log("claim: pool empty")
-      void this.refill()
-      return { ok: false, reason: "pool empty" }
+    let lastReason = "pool empty"
+    for (let attempt = 0; attempt < MAX_CLAIM_ATTEMPTS; attempt++) {
+      const machine = this.free.shift() // ← atomic: no await before this
+      if (!machine) break
+      this.claimsInFlight++
+      try {
+        await this.deps.fly.start(machine.id)
+        const healthy = await this.deps.fly.waitHealthy(this.baseUrl(machine), {
+          timeoutMs: this.deps.config.healthTimeoutMs,
+        })
+        if (!healthy) {
+          this.log(`claim: machine ${machine.id} unhealthy after wake — destroying, trying next`)
+          await this.safeDestroy(machine.id)
+          lastReason = "woken machine unhealthy"
+          continue
+        }
+        const accepted = await this.postRun(machine, job, this.deps.config)
+        if (!accepted) {
+          this.log(`claim: machine ${machine.id} rejected job — destroying, trying next`)
+          await this.safeDestroy(machine.id)
+          lastReason = "machine rejected job"
+          continue
+        }
+        this.log(`claim: machine ${machine.id} took job ${job.jobId}`)
+        void this.refill()
+        return { ok: true, machineId: machine.id }
+      } catch (err) {
+        // A start on a vanished/destroyed machine throws here — drop it and
+        // try the next free one instead of failing the whole claim.
+        this.log(`claim: error on ${machine.id}: ${errMsg(err)} — destroying, trying next`)
+        await this.safeDestroy(machine.id)
+        lastReason = errMsg(err)
+      } finally {
+        this.claimsInFlight--
+      }
     }
-    this.claimsInFlight++
+    void this.refill()
+    return { ok: false, reason: lastReason }
+  }
+
+  /**
+   * Periodic self-heal: reconcile the in-memory free list against actual Fly
+   * state. Prunes free entries whose machine vanished out-of-band (auto-destroy
+   * after a job, manual ops) so a later claim never tries a dead machine, and
+   * adopts any suspended machines we lost track of. Then tops up. Unlike
+   * reconcile() this MERGES rather than rebuilds, so it won't drop a machine
+   * that's momentarily not yet reflected as suspended by Fly's eventual
+   * consistency.
+   */
+  async resync(): Promise<void> {
+    let machines: FlyMachine[]
     try {
-      await this.deps.fly.start(machine.id)
-      const base = this.baseUrl(machine)
-      const healthy = await this.deps.fly.waitHealthy(base, { timeoutMs: this.deps.config.healthTimeoutMs })
-      if (!healthy) {
-        this.log(`claim: machine ${machine.id} unhealthy after wake — destroying`)
-        await this.safeDestroy(machine.id)
-        return { ok: false, reason: "woken machine unhealthy" }
-      }
-      const accepted = await this.postRun(machine, job, this.deps.config)
-      if (!accepted) {
-        this.log(`claim: machine ${machine.id} rejected job — destroying`)
-        await this.safeDestroy(machine.id)
-        return { ok: false, reason: "machine rejected job" }
-      }
-      this.log(`claim: machine ${machine.id} took job ${job.jobId}`)
-      return { ok: true, machineId: machine.id }
+      machines = await this.deps.fly.listPooled()
     } catch (err) {
-      this.log(`claim: error on ${machine.id}: ${errMsg(err)} — destroying`)
-      await this.safeDestroy(machine.id)
-      return { ok: false, reason: errMsg(err) }
-    } finally {
-      this.claimsInFlight--
-      void this.refill()
+      this.log(`resync: listPooled failed: ${errMsg(err)}`)
+      return
     }
+    const liveIds = new Set(machines.map((m) => m.id))
+    const before = this.free.length
+    // Prune free entries Fly no longer has (destroyed/gone).
+    this.free = this.free.filter((f) => liveIds.has(f.id))
+    const pruned = before - this.free.length
+    // Adopt suspended machines we aren't already tracking as free.
+    const tracked = new Set(this.free.map((f) => f.id))
+    let adopted = 0
+    for (const m of machines) {
+      if (
+        (m.state === "suspended" || m.state === "suspending") &&
+        m.private_ip &&
+        !tracked.has(m.id)
+      ) {
+        this.free.push({ id: m.id, privateIp: m.private_ip })
+        adopted++
+      }
+    }
+    if (pruned > 0 || adopted > 0) {
+      this.log(`resync: pruned ${pruned} stale, adopted ${adopted} (free=${this.free.length})`)
+    }
+    await this.refill()
   }
 
   /** Top up free machines to `min`. Serialized so it never overshoots. */
