@@ -83,6 +83,15 @@ COMMIT_MSG: plan: <very short title>
 PR_SUMMARY:
 <A deep, detailed implementation plan in markdown with the following sections, in order. Omit a section only if its trigger condition is not met — do not leave placeholders. Depth is expected; brevity for its own sake is not a goal.
 
+## Requirement coverage
+Enumerate EVERY discrete ask in the issue (and any answered clarifications) as a
+checklist, each mapped to where this plan delivers it:
+ - <verbatim ask> → <the section/file in this plan that addresses it>
+ - <verbatim ask> → ⚠ MISSING — <what's needed, or why it can't be planned>
+Do not finalize a plan that still has a ⚠ MISSING row unless that row is also
+listed under "Ambiguities & assumptions" with a concrete blocker. Silently
+dropping an ask the issue made is a planning failure.
+
 ## Existing patterns found
 For each major part of the change, name the sibling module in this repo that
 already solves a similar problem and state how this plan reuses it.
@@ -176,6 +185,8 @@ No filler. No marketing language. Depth over brevity.>
 - Read-only. Do NOT modify any file.
 - Do NOT run git or gh commands.
 - No speculative scope — plan only what the issue asks for, but plan it THOROUGHLY.
+- **Deliver the full ask or split it — never silently shrink it.** Planning a reduced version of what the issue requested is the most damaging failure mode. When any of these phrases (or their intent) describe a *stated requirement* rather than a genuine deferred phase, treat it as a BLOCKER: `"v1"`, `"v2 later"`, `"simplified"`, `"basic version"`, `"minimal"`, `"static for now"`, `"hardcoded for now"`, `"placeholder"`, `"stub"`, `"will be wired later"`, `"future enhancement"`. If the full ask is genuinely too large for one plan, output `FAILED: scope too large — split into <sub-issues>` — do NOT quietly plan less than was asked.
+- **Authority limits on narrowing scope.** You may narrow or split scope ONLY for concrete constraints: output/context-token budget, information you cannot obtain, or a dependency conflict. You may NOT narrow scope because a part looks hard, complex, or time-consuming — difficulty is never a license to reduce the ask.
 - **Plan length ≤ ~1500 lines / ~15k tokens.** Larger plans get truncated by output token caps before the closing `DONE` marker — and a truncated plan is worse than a smaller one. If a feature legitimately needs more, output `FAILED: scope too large for single plan — split into <list of sub-issues>` instead of overrunning.
 - If the issue is ambiguous and you cannot make progress without input, output `FAILED: <what's unclear>` instead of a plan.
 - If the Research floor cannot be met because required files are missing or unreadable, output `FAILED: <what could not be read>` instead of a half-blind plan.
