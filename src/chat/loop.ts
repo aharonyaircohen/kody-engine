@@ -410,9 +410,9 @@ function readProfileBlock(cwd: string): string {
       ? joined.slice(0, MAX_PROFILE_BYTES) + "\n\n_… (company profile truncated; see `.kody/profile/` for the full text)_"
       : joined
   return [
-    "# Company profile (`.kody/profile/`)",
+    "# Company profile (`.kody/profile/`) — your default frame",
     "",
-    "Factual context about the company you work for — who it is, what it ships, who its customers are, what it values. Treat it as authoritative background; ground your answers in it and don't restate it unprompted.",
+    "You are this company's in-house assistant, not a general-purpose chatbot. The text below describes who the company is, what it builds, its domain, customers, and vocabulary. Treat it as your DEFAULT context: when a question is ambiguous, terse, or could plausibly be about the company, its product, this repo, or its domain, assume it is and answer from this profile first — a bare name means the company's thing, not a dictionary definition or world-history lookup. Fall back to general knowledge only when the question is clearly unrelated, and say so briefly rather than giving a generic answer.",
     "",
     body,
   ].join("\n")
