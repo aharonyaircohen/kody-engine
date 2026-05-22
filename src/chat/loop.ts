@@ -193,8 +193,23 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
     taskType: "chat",
     relDir: taskArtifactsPaths.relDir,
   })
+  const profileBlock = readProfileBlock(opts.cwd)
   const memoryBlock = readMemoryIndexBlock(opts.cwd)
-  const systemPrompt = [basePrompt, memoryBlock, catalog, artifactAddendum]
+  const instructionsBlock = readInstructionsBlock(opts.cwd)
+  // Order matters: company profile (who we are) and memory (what we've
+  // learned) are factual background, so they sit right after the base
+  // prompt. User instructions are behavioral overrides — placed last among
+  // the context blocks so they win on tone/style by recency, but still
+  // ahead of the executable catalog + artifact contract, which are hard
+  // operational requirements the agent must not override.
+  const systemPrompt = [
+    basePrompt,
+    profileBlock,
+    memoryBlock,
+    instructionsBlock,
+    catalog,
+    artifactAddendum,
+  ]
     .filter((s): s is string => typeof s === "string" && s.length > 0)
     .join("\n\n")
   const prompt = buildPrompt(turns)
@@ -352,6 +367,86 @@ function readMemoryIndexBlock(cwd: string): string {
     "# Project memory index (`.kody/memory/INDEX.md`)",
     "",
     "These are the lessons, decisions, and preferences already captured for this repo. Skim before acting; read individual files only if a line looks relevant to the current task.",
+    "",
+    body,
+  ].join("\n")
+}
+
+/**
+ * Concatenate every `.kody/profile/*.md` file into one company-profile
+ * block for the chat system prompt, each file under a `### <slug>` heading.
+ * Returns "" when the directory is absent or holds no readable markdown —
+ * profile is advisory background, not required.
+ *
+ * Capped at MAX_PROFILE_BYTES to protect the prompt budget.
+ */
+const PROFILE_DIR_REL = ".kody/profile"
+const MAX_PROFILE_BYTES = 12_000
+
+function readProfileBlock(cwd: string): string {
+  const dir = path.join(cwd, PROFILE_DIR_REL)
+  let files: string[]
+  try {
+    files = fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith(".md"))
+      .sort()
+  } catch {
+    return ""
+  }
+  const sections: string[] = []
+  for (const file of files) {
+    try {
+      const content = fs.readFileSync(path.join(dir, file), "utf-8").trim()
+      if (content) sections.push(`### ${file.replace(/\.md$/, "")}\n\n${content}`)
+    } catch {
+      /* skip unreadable file */
+    }
+  }
+  const joined = sections.join("\n\n").trim()
+  if (!joined) return ""
+  const body =
+    joined.length > MAX_PROFILE_BYTES
+      ? joined.slice(0, MAX_PROFILE_BYTES) + "\n\n_… (company profile truncated; see `.kody/profile/` for the full text)_"
+      : joined
+  return [
+    "# Company profile (`.kody/profile/`)",
+    "",
+    "Factual context about the company you work for — who it is, what it ships, who its customers are, what it values. Treat it as authoritative background; ground your answers in it and don't restate it unprompted.",
+    "",
+    body,
+  ].join("\n")
+}
+
+/**
+ * Read `.kody/instructions.md` (if present) and wrap it for the chat system
+ * prompt. These are the user's behavioral preferences (tone, length,
+ * formatting) and override the base style — but never the hard operational
+ * rules. Returns "" when absent or empty.
+ *
+ * Capped at MAX_INSTRUCTIONS_BYTES to protect the prompt budget.
+ */
+const INSTRUCTIONS_REL = ".kody/instructions.md"
+const MAX_INSTRUCTIONS_BYTES = 8_000
+
+function readInstructionsBlock(cwd: string): string {
+  const instructionsPath = path.join(cwd, INSTRUCTIONS_REL)
+  let raw: string
+  try {
+    raw = fs.readFileSync(instructionsPath, "utf-8")
+  } catch {
+    return ""
+  }
+  const trimmed = raw.trim()
+  if (!trimmed) return ""
+  const body =
+    trimmed.length > MAX_INSTRUCTIONS_BYTES
+      ? trimmed.slice(0, MAX_INSTRUCTIONS_BYTES) + "\n\n_… (instructions truncated)_"
+      : trimmed
+  return [
+    "# User instructions for this repo (`.kody/instructions.md`)",
+    "",
+    "The user's explicit preferences for how you should behave — tone, length, formatting. Apply them automatically; they override the default style. If one conflicts with a hard rule above, the hard rule still wins.",
     "",
     body,
   ].join("\n")
