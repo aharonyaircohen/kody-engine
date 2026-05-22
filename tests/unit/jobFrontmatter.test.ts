@@ -60,6 +60,26 @@ describe("splitFrontmatter", () => {
     const { frontmatter } = splitFrontmatter("---\njust-a-word\nevery: 1d\n---\nx")
     expect(frontmatter.every).toBe("1d")
   })
+
+  it("parses a comma-separated `mentions` list into trimmed logins", () => {
+    const { frontmatter } = splitFrontmatter("---\nmentions: a, b\n---\nx")
+    expect(frontmatter.mentions).toEqual(["a", "b"])
+  })
+
+  it("strips a leading @ from each mention login", () => {
+    const { frontmatter } = splitFrontmatter("---\nmentions: @a, @b\n---\nx")
+    expect(frontmatter.mentions).toEqual(["a", "b"])
+  })
+
+  it("leaves mentions undefined when the key is absent", () => {
+    const { frontmatter } = splitFrontmatter("---\nevery: 1h\n---\nx")
+    expect(frontmatter.mentions).toBeUndefined()
+  })
+
+  it("leaves mentions unset when the value is blank or all-empty", () => {
+    expect(splitFrontmatter("---\nmentions:\n---\nx").frontmatter.mentions).toBeUndefined()
+    expect(splitFrontmatter("---\nmentions: , ,\n---\nx").frontmatter.mentions).toBeUndefined()
+  })
 })
 
 describe("isScheduleEvery", () => {

@@ -67,6 +67,15 @@ export interface JobFrontmatter {
    * member; a duty has exactly one.
    */
   staff?: string
+  /**
+   * GitHub logins (stored WITHOUT a leading `@`) that this duty's output
+   * should `@`-mention. Authored as a comma-separated list on one line —
+   * `mentions: aguyaharonyair, alice`. The engine joins them into a
+   * ready-to-insert `@a @b` string and exposes it to the duty prompt as the
+   * `{{mentions}}` token, replacing ad-hoc `jq .github.operator` reads and
+   * hardcoded handles. Absent or empty → undefined.
+   */
+  mentions?: string[]
 }
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
@@ -137,6 +146,12 @@ function parseFlatYaml(text: string): JobFrontmatter {
       else if (lower === "false") out.disabled = false
     } else if (key === "staff" && value.length > 0) {
       out.staff = value
+    } else if (key === "mentions") {
+      const logins = value
+        .split(",")
+        .map((s) => s.trim().replace(/^@/, ""))
+        .filter(Boolean)
+      if (logins.length > 0) out.mentions = logins
     }
   }
   return out

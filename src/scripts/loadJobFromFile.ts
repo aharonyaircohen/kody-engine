@@ -14,6 +14,7 @@
  *   ctx.data.workerSlug      the assigned worker slug (or "" if none)
  *   ctx.data.workerTitle     worker file H1, or humanized worker slug
  *   ctx.data.workerPersona   worker persona body (post-frontmatter), or ""
+ *   ctx.data.mentions        "@a @b" from the duty's `mentions:` frontmatter, or ""
  *
  * The staff member is *who* the tick runs as: a duty names exactly one
  * staff member via `staff:` frontmatter; its persona is injected ahead of
@@ -47,12 +48,20 @@ export const loadJobFromFile: PreflightScript = async (ctx, _profile, args) => {
   }
   const raw = fs.readFileSync(absPath, "utf-8")
   const { title, body } = parseJobFile(raw, slug)
+  const frontmatter = splitFrontmatter(raw).frontmatter
+
+  // Logins this duty's output should @-mention, declared via `mentions:`
+  // frontmatter (comma-separated, stored without `@`). Emit a ready-to-insert
+  // string here — composePrompt only stringifies ctx.data values, so the
+  // `{{mentions}}` token must already be the finished "@a @b" form. Empty
+  // string when none are declared. Fail-soft: never throws.
+  const mentions = (frontmatter.mentions ?? []).map((login) => `@${login}`).join(" ")
 
   // Resolve the assigned staff member (persona) — *who* this tick runs as.
   // The duty owns scheduling; the staff member is identity/doctrine injected
   // ahead of the duty body. A `staff:` pointing at a missing file is fatal: a
   // duty must never run without the executor identity it declared.
-  const workerSlug = (splitFrontmatter(raw).frontmatter.staff ?? "").trim()
+  const workerSlug = (frontmatter.staff ?? "").trim()
   let workerTitle = ""
   let workerPersona = ""
   if (workerSlug) {
@@ -80,6 +89,7 @@ export const loadJobFromFile: PreflightScript = async (ctx, _profile, args) => {
   ctx.data.workerSlug = workerSlug
   ctx.data.workerTitle = workerTitle
   ctx.data.workerPersona = workerPersona
+  ctx.data.mentions = mentions
 }
 
 interface ParsedJob {
