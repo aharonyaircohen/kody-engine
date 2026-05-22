@@ -2,7 +2,7 @@
  * Live harness for `ui-review`.
  *
  * Bypasses reviewFlow (which needs a real GitHub PR) and postReviewResult
- * (which posts a comment). Everything else — discovery, qa-guide loading,
+ * (which posts a comment). Everything else — discovery, QA-context loading,
  * preview-URL resolution, prompt composition, and the actual agent/Playwright
  * invocation — runs for real against a local static preview.
  *
@@ -24,7 +24,7 @@ import { startLitellmIfNeeded } from "../src/litellm.js"
 import { loadProfile } from "../src/profile.js"
 import { composePrompt } from "../src/scripts/composePrompt.js"
 import { discoverQaContext } from "../src/scripts/discoverQaContext.js"
-import { loadQaGuide } from "../src/scripts/loadQaGuide.js"
+import { loadQaContext } from "../src/scripts/loadQaContext.js"
 import { resolvePreviewUrl } from "../src/scripts/resolvePreviewUrl.js"
 
 async function main(): Promise<void> {
@@ -64,7 +64,7 @@ async function main(): Promise<void> {
 
   console.error("[harness] running preflight scripts…")
   await discoverQaContext(ctx, profile)
-  await loadQaGuide(ctx, profile)
+  await loadQaContext(ctx, profile)
   await resolvePreviewUrl(ctx, profile)
   await composePrompt(ctx, profile)
 

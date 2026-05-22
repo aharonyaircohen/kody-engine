@@ -30,7 +30,7 @@ The 35 solo scripts cluster into recognisable shapes:
 | Reproduce | `parseReproOutput`, `verifyReproFails` | `reproduce` |
 | Run/plan | `requirePlanDeviations`, `resolveArtifacts`, `postPlanComment` | `run`, `plan` |
 | Research | `diagMcp`, `postResearchComment` | `research` |
-| QA | `createQaGoal`, `discoverQaContext`, `loadQaGuide`, `resolveQaUrl`, `warmupMcp` | `qa-engineer`, `ui-review` |
+| QA | `createQaGoal`, `discoverQaContext`, `loadQaContext`, `resolveQaUrl`, `warmupMcp` | `qa-engineer`, `ui-review` |
 | Misc one-offs | `markFlowSuccess`, `requireFeedbackActions`, `resolvePreviewUrl`, `stageMergeConflicts`, `startFlow` | various |
 
 The naming tell is `xxxFlow` — these are per-executable orchestration scripts pretending to be shared utilities.

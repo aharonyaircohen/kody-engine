@@ -8,8 +8,6 @@ import type { PostflightScript, PreflightScript } from "../executables/types.js"
 import { abortUnfinishedGitOps } from "./abortUnfinishedGitOps.js"
 import { advanceFlow } from "./advanceFlow.js"
 import { brainServe } from "./brainServe.js"
-import { runnerServe } from "./runnerServe.js"
-import { poolServe } from "./poolServe.js"
 import { buildSyntheticPlugin } from "./buildSyntheticPlugin.js"
 import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
 import { classifyByLabel } from "./classifyByLabel.js"
@@ -39,12 +37,12 @@ import { loadGoalState } from "./loadGoalState.js"
 import { loadIssueContext } from "./loadIssueContext.js"
 import { loadIssueStateComment } from "./loadIssueStateComment.js"
 import { loadJobFromFile } from "./loadJobFromFile.js"
-import { loadWorkerAdhoc } from "./loadWorkerAdhoc.js"
 import { loadMemoryContext } from "./loadMemoryContext.js"
 import { loadPriorArt } from "./loadPriorArt.js"
-import { loadQaGuide } from "./loadQaGuide.js"
+import { loadQaContext } from "./loadQaContext.js"
 import { loadTaskContext } from "./loadTaskContext.js"
 import { loadTaskState } from "./loadTaskState.js"
+import { loadWorkerAdhoc } from "./loadWorkerAdhoc.js"
 import { markFlowSuccess } from "./markFlowSuccess.js"
 import { mergeReleasePr } from "./mergeReleasePr.js"
 import { mirrorStateToPr } from "./mirrorStateToPr.js"
@@ -56,6 +54,7 @@ import { parseJobStateFromAgentResult } from "./parseJobStateFromAgentResult.js"
 import { parseReproOutput } from "./parseReproOutput.js"
 import { persistArtifacts } from "./persistArtifacts.js"
 import { persistFlowState } from "./persistFlowState.js"
+import { poolServe } from "./poolServe.js"
 import { postIssueComment } from "./postIssueComment.js"
 import { postPlanComment } from "./postPlanComment.js"
 import { postResearchComment } from "./postResearchComment.js"
@@ -71,6 +70,7 @@ import { resolveQaUrl } from "./resolveQaUrl.js"
 import { revertFlow } from "./revertFlow.js"
 import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
+import { runnerServe } from "./runnerServe.js"
 import { runTickScript } from "./runTickScript.js"
 import { saveGoalState } from "./saveGoalState.js"
 import { saveTaskState } from "./saveTaskState.js"
@@ -109,7 +109,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   loadCoverageRules,
   loadMemoryContext,
   loadPriorArt,
-  loadQaGuide,
+  loadQaContext,
   buildSyntheticPlugin,
   resolveArtifacts,
   discoverQaContext,

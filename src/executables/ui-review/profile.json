@@ -72,7 +72,7 @@
       { "script": "loadTaskState" },
       { "script": "loadConventions" },
       { "script": "discoverQaContext" },
-      { "script": "loadQaGuide" },
+      { "script": "loadQaContext" },
       { "script": "resolvePreviewUrl" },
       { "script": "composePrompt" }
     ],

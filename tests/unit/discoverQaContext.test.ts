@@ -3,12 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { Context, Profile } from "../../src/executables/types.js"
-import {
-  discoverQaContext,
-  generateQaGuideTemplate,
-  runQaDiscovery,
-  serializeDiscoveryForLLM,
-} from "../../src/scripts/discoverQaContext.js"
+import { discoverQaContext, runQaDiscovery, serializeDiscoveryForLLM } from "../../src/scripts/discoverQaContext.js"
 
 function mktmp(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-qactx-"))
@@ -114,50 +109,6 @@ describe("serializeDiscoveryForLLM", () => {
     expect(out).toContain("Roles: admin, user")
     expect(out).toContain("DATABASE_URL")
     expect(out).toContain("... and 10 more routes")
-  })
-})
-
-describe("generateQaGuideTemplate", () => {
-  it("uses discovered roles in the test-accounts table", () => {
-    const d = {
-      routes: [],
-      authFiles: [],
-      loginPage: "/sign-in",
-      adminPath: "/admin",
-      roles: ["admin", "instructor"],
-      devCommand: "pnpm dev",
-      devPort: 3000,
-      frameworks: [],
-      collections: [],
-      adminComponents: [],
-      apiRoutes: [],
-      envVars: [],
-    }
-    const md = generateQaGuideTemplate(d)
-    expect(md).toContain("| admin | CHANGE_ME | CHANGE_ME |")
-    expect(md).toContain("| instructor | CHANGE_ME | CHANGE_ME |")
-    expect(md).toContain("`/sign-in`")
-    expect(md).toContain("Admin panel: `/admin`")
-  })
-
-  it("falls back to generic admin/user rows when no roles discovered", () => {
-    const d = {
-      routes: [],
-      authFiles: [],
-      loginPage: null,
-      adminPath: null,
-      roles: [],
-      devCommand: "",
-      devPort: 3000,
-      frameworks: [],
-      collections: [],
-      adminComponents: [],
-      apiRoutes: [],
-      envVars: [],
-    }
-    const md = generateQaGuideTemplate(d)
-    expect(md).toContain("admin@example.com")
-    expect(md).toContain("user@example.com")
   })
 })
 

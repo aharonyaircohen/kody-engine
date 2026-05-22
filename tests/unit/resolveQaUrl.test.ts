@@ -1,42 +1,57 @@
-import { describe, expect, it, beforeEach, afterEach, vi } from "vitest"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Context, Profile } from "../../src/executables/types.js"
 import { resolveQaUrl } from "../../src/scripts/resolveQaUrl.js"
 
-function makeCtx(overrides: Partial<Context["args"]> = {}, qa?: { fallbackUrl?: string }): Context {
+function makeCtx(overrides: Partial<Context["args"]> = {}, cwd = "/tmp"): Context {
   return {
     args: { ...overrides },
-    cwd: "/tmp",
+    cwd,
     config: {
       quality: { typecheck: "", lint: "", format: "", testUnit: "" },
       git: { defaultBranch: "main" },
       github: { owner: "owner", repo: "repo" },
       agent: { model: "anthropic/claude-sonnet-4-5" },
-      qa,
     },
     data: {},
     output: { exitCode: 0 },
   }
 }
 
+/** Write a `.kody/variables.json` with the given variables under `cwd`. */
+function writeVariables(cwd: string, vars: Record<string, string>): void {
+  const variables: Record<string, { value: string }> = {}
+  for (const [k, v] of Object.entries(vars)) variables[k] = { value: v }
+  const dir = path.join(cwd, ".kody")
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, "variables.json"), JSON.stringify({ version: 1, variables }))
+}
+
 const stubProfile = { name: "qa-engineer", dir: "" } as unknown as Profile
 
 describe("resolveQaUrl", () => {
   let originalPreviewUrl: string | undefined
+  let tmp: string
 
   beforeEach(() => {
     originalPreviewUrl = process.env.PREVIEW_URL
     delete process.env.PREVIEW_URL
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-qaurl-"))
   })
 
   afterEach(() => {
     if (originalPreviewUrl === undefined) delete process.env.PREVIEW_URL
     else process.env.PREVIEW_URL = originalPreviewUrl
+    fs.rmSync(tmp, { recursive: true, force: true })
     vi.restoreAllMocks()
   })
 
   it("uses --url when provided, ignoring everything else", async () => {
     process.env.PREVIEW_URL = "https://env.example.com"
-    const ctx = makeCtx({ url: "https://explicit.example.com", goal: "some-goal" }, { fallbackUrl: "https://fallback.example.com" })
+    writeVariables(tmp, { QA_URL: "https://fallback.example.com" })
+    const ctx = makeCtx({ url: "https://explicit.example.com", goal: "some-goal" }, tmp)
     await resolveQaUrl(ctx, stubProfile)
     expect(ctx.data.previewUrl).toBe("https://explicit.example.com")
     expect(ctx.data.previewUrlSource).toBe("--url flag")
@@ -50,11 +65,12 @@ describe("resolveQaUrl", () => {
     expect(ctx.data.previewUrlSource).toBe("$PREVIEW_URL env var")
   })
 
-  it("falls back to qa.fallbackUrl from kody.config.json when env is empty", async () => {
-    const ctx = makeCtx({}, { fallbackUrl: "https://dev.example.com" })
+  it("falls back to the QA_URL variable when env is empty", async () => {
+    writeVariables(tmp, { QA_URL: "https://dev.example.com" })
+    const ctx = makeCtx({}, tmp)
     await resolveQaUrl(ctx, stubProfile)
     expect(ctx.data.previewUrl).toBe("https://dev.example.com")
-    expect(ctx.data.previewUrlSource).toBe("kody.config.json qa.fallbackUrl")
+    expect(ctx.data.previewUrlSource).toBe("QA_URL variable (.kody/variables.json)")
   })
 
   it("trims whitespace on every source", async () => {
@@ -65,7 +81,7 @@ describe("resolveQaUrl", () => {
   })
 
   it("throws when no URL resolves anywhere", async () => {
-    const ctx = makeCtx({})
+    const ctx = makeCtx({}, tmp)
     await expect(resolveQaUrl(ctx, stubProfile)).rejects.toThrow(/no URL resolved/i)
   })
 

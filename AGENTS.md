@@ -166,7 +166,7 @@ Read-only. Fetches the PR and its diff, composes a prompt with the two-pass revi
 Extends the review surface by driving the running preview deployment with the Playwright CLI. Separate executable (not a mode flag on `review`) so the fast read-only `review` stays fast and `ui-review` carries the extra cost (preview URL, browser, optional creds) only when asked.
 
 - **Preview URL** resolves from `--preview-url` → `$PREVIEW_URL` → `http://localhost:3000`. If unreachable, the agent is instructed to skip browsing and fall back to a diff-only review with the gap called out.
-- **Credentials** live in `.kody/qa-guide.md` — a committed file in the consumer repo. `kody init` scaffolds a starter with `CHANGE_ME` placeholders and pre-filled role rows (inferred from discovered enums/select fields); the maintainer fills in real preview creds and commits. No GitHub secrets required.
+- **Credentials** are dashboard-managed and per-repo: the login username comes from the `LOGIN_USER` variable (`.kody/variables.json`), the password from the `LOGIN_PASSWORD` vault secret (`.kody/secrets.enc`, decrypted with `KODY_MASTER_KEY`), and hand-written scenarios/notes from the company profile (`.kody/profile/*.md`). Assembled by the `loadQaContext` preflight. No GitHub secrets required.
 - **QA auto-discovery** ([src/scripts/discoverQaContext.ts](src/scripts/discoverQaContext.ts) + [frameworkDetectors.ts](src/scripts/frameworkDetectors.ts)) scans routes, login/admin paths, roles, Payload CMS collections, API routes, and env templates. Output is serialized into the prompt as `{{qaContext}}`.
 - **Playwright** is declared in the profile's `cliTools` with `installCommand: npx --yes playwright install --with-deps chromium`. Browser binaries are set up by preflight; if the consumer repo doesn't already have `@playwright/test`, the prompt instructs the agent to run `npm install -D @playwright/test` on first test failure. Throwaway specs live under `.kody/ui-review/` (gitignored by convention).
 - **Verdict** is `PASS | CONCERNS | FAIL`. Agent's review comment is posted verbatim via the existing `postReviewResult` postflight (same machinery as `review`).
@@ -181,7 +181,7 @@ Two modes on a single flag:
 
 ### `init` — scaffold a consumer repo
 
-Writes `kody.config.json` (with package-manager-aware `quality.*` commands and owner/repo detected from `git remote`), `.github/workflows/kody.yml` (from the template), per-scheduled-executable workflows (e.g. `kody-job-scheduler.yml`), and when a UI is detected (`src/app/`, `app/`, or `pages/` exists) a `.kody/qa-guide.md` stub for `ui-review`. Idempotent — skips anything already present unless `--force`. No agent.
+Writes `kody.config.json` (with package-manager-aware `quality.*` commands and owner/repo detected from `git remote`), `.github/workflows/kody.yml` (from the template), and per-scheduled-executable workflows (e.g. `kody-job-scheduler.yml`). Idempotent — skips anything already present unless `--force`. No agent.
 
 ### `job-scheduler` + `job-tick` — zero-code coordinator for file-defined jobs
 
@@ -234,7 +234,7 @@ src/
   scripts/
     {runFlow,fixFlow,fixCiFlow,resolveFlow,reviewFlow}.ts
     {loadConventions,loadCoverageRules,composePrompt}.ts
-    {discoverQaContext,frameworkDetectors,loadQaGuide,resolvePreviewUrl}.ts  — ui-review preflights
+    {discoverQaContext,frameworkDetectors,loadQaContext,resolvePreviewUrl}.ts  — ui-review preflights
     {parseAgentResult,verify,checkCoverageWithRetry}.ts
     {commitAndPush,ensurePr,postIssueComment}.ts
     index.ts             — registry that maps name → function
@@ -349,7 +349,7 @@ If a future no-agent PR executable lands, a separate `lifecycle: "pr-mechanical"
 
 Genuinely executable-specific things that should relocate to `src/scripts/executable/<name>/` in phase 5 of the refactor:
 
-`parseReproOutput`, `verifyReproFails` (reproduce); `resolvePreviewUrl`, `resolveQaUrl`, `discoverQaContext`, `loadQaGuide`, `warmupMcp`, `createQaGoal` (qa-engineer/ui-review — but several are already dual-use, watch these); `diagMcp`, `postResearchComment` (research); `postPlanComment` (plan); `loadJobFromFile`, `runTickScript` (job-tick variants).
+`parseReproOutput`, `verifyReproFails` (reproduce); `resolvePreviewUrl`, `resolveQaUrl`, `discoverQaContext`, `loadQaContext`, `warmupMcp`, `createQaGoal` (qa-engineer/ui-review — but several are already dual-use, watch these); `diagMcp`, `postResearchComment` (research); `postPlanComment` (plan); `loadJobFromFile`, `runTickScript` (job-tick variants).
 
 ### How to use this catalog
 

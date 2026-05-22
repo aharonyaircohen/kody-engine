@@ -41,7 +41,7 @@ describe("ui-review profile", () => {
     const idx = (s: string): number => names.indexOf(s)
     expect(idx("reviewFlow")).toBeGreaterThanOrEqual(0)
     expect(idx("discoverQaContext")).toBeGreaterThan(idx("reviewFlow"))
-    expect(idx("loadQaGuide")).toBeGreaterThan(-1)
+    expect(idx("loadQaContext")).toBeGreaterThan(-1)
     expect(idx("resolvePreviewUrl")).toBeGreaterThan(-1)
     // composePrompt must be last so all tokens are populated
     expect(idx("composePrompt")).toBe(names.length - 1)

@@ -7,8 +7,7 @@ You may write throwaway artifacts (screenshots, ad-hoc Playwright specs) under `
 Base URL: `{{previewUrl}}` (resolved from: {{previewUrlSource}})
 {{#args.scope}}Focus: **{{args.scope}}**{{/args.scope}}
 {{^args.scope}}Focus: broad smoke across discovered routes.{{/args.scope}}
-{{#args.authProfile}}Auth: a saved Playwright `storageState.json` is available at `{{args.authProfile}}`. Pass it to `mcp__playwright__browser_navigate` via the `storageState` parameter so the session starts pre-authenticated.{{/args.authProfile}}
-{{^args.authProfile}}Auth: log in fresh using credentials from the QA guide if needed.{{/args.authProfile}}
+{{qaAuthBlock}}
 
 Report destination: {{#args.goal}}existing kody goal `{{args.goal}}` (each finding becomes a `goal:{{args.goal}}` task issue){{/args.goal}}{{^args.goal}}{{#args.issue}}existing issue #{{args.issue}} (postflight will comment on it){{/args.issue}}{{^args.issue}}a new kody goal (postflight will append to the goals manifest and open one task issue per finding){{/args.issue}}{{/args.goal}}.
 
@@ -30,9 +29,9 @@ If that errors (timeout, DNS, connection refused), the app is unreachable. STOP 
 {{qaContext}}
 ```
 
-# QA guide (committed in the repo — authoritative over the auto-discovery above)
+# QA scenarios & notes (hand-written, authoritative over auto-discovery above)
 
-{{qaGuide}}
+{{qaProfile}}
 
 {{conventionsBlock}}
 
@@ -40,9 +39,9 @@ If that errors (timeout, DNS, connection refused), the app is unreachable. STOP 
 
 # What to do
 
-1. **Plan the session.** From the QA context, the QA guide, and the focus, build a short test matrix. For each candidate UI surface, list the user-visible behaviors worth verifying. Skip surfaces unrelated to the focus.
+1. **Plan the session.** From the QA context, the QA scenarios & notes, and the focus, build a short test matrix. For each candidate UI surface, list the user-visible behaviors worth verifying. Skip surfaces unrelated to the focus.
 
-2. **Authenticate if required.** If a route under test needs a role and you have credentials (in the QA guide or via `--auth-profile`), log in once. If credentials for a needed role are missing, note it as a gap and browse only what you can.
+2. **Authenticate if required.** Follow the Auth instruction in the Target section above. If a route under test needs a role and you have credentials, log in once. If credentials for a needed role are missing, note it as a gap and browse only what you can.
 
 3. **Exercise each surface.** For every UI surface in your matrix, run through the relevant states. Don't pad — apply the checklist where it actually matters:
    - **Happy path.** The user-visible behavior the surface exists to support, end to end.

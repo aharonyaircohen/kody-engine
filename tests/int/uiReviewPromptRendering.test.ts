@@ -1,7 +1,8 @@
 /**
  * Integration: run the ui-review preflight chain (minus the real PR-fetching
  * reviewFlow) against a temp repo and verify composePrompt renders a prompt
- * that contains the qa-context, qa-guide, and preview-url tokens.
+ * that contains the qa-context, QA scenarios/notes, auth block, and
+ * preview-url tokens.
  *
  * This proves the wiring: that the three new preflights populate ctx.data
  * with the keys the prompt template expects.
@@ -15,7 +16,7 @@ import type { Context } from "../../src/executables/types.js"
 import { loadProfile } from "../../src/profile.js"
 import { composePrompt } from "../../src/scripts/composePrompt.js"
 import { discoverQaContext } from "../../src/scripts/discoverQaContext.js"
-import { loadQaGuide } from "../../src/scripts/loadQaGuide.js"
+import { loadQaContext } from "../../src/scripts/loadQaContext.js"
 import { resolvePreviewUrl } from "../../src/scripts/resolvePreviewUrl.js"
 
 const PROFILE_PATH = path.resolve(__dirname, "../../src/executables/ui-review/profile.json")
@@ -71,31 +72,27 @@ describe("ui-review: preflight + composePrompt end-to-end", () => {
     else process.env.PREVIEW_URL = prevEnv
   })
 
-  it("renders a prompt containing discovered QA context, loaded QA guide, and the preview URL", async () => {
+  it("renders a prompt containing discovered QA context, scenarios/notes, login, and the preview URL", async () => {
     // Set up a Next.js-like repo
     writeFile(tmp, "package.json", JSON.stringify({ dependencies: { next: "16.0.0" }, scripts: { dev: "next dev" } }))
     writeFile(tmp, "src/app/page.tsx", "export default () => null")
     writeFile(tmp, "src/app/login/page.tsx", "export default () => null")
     writeFile(tmp, "src/app/lessons/page.tsx", "export default () => null")
 
-    // Commit a qa-guide with real creds the agent will see
+    // Login username from the dashboard-managed variables store.
     writeFile(
       tmp,
-      ".kody/qa-guide.md",
-      `# QA guide
-
-## Test accounts
-| Role | Email | Password |
-|------|-------|----------|
-| admin | admin@learnhub.test | Admin123! |
-`,
+      ".kody/variables.json",
+      JSON.stringify({ version: 1, variables: { LOGIN_USER: { value: "admin@learnhub.test" } } }),
     )
+    // Hand-written scenarios/notes from the company profile.
+    writeFile(tmp, ".kody/profile/scenarios.md", "Always verify the lessons list paginates.")
 
     const profile = loadProfile(PROFILE_PATH)
     const ctx = makeCtx(tmp, { pr: 42, previewUrl: "https://preview-42.example" })
 
     await discoverQaContext(ctx, profile)
-    await loadQaGuide(ctx, profile)
+    await loadQaContext(ctx, profile)
     await resolvePreviewUrl(ctx, profile)
     await composePrompt(ctx, profile)
 
@@ -111,9 +108,9 @@ describe("ui-review: preflight + composePrompt end-to-end", () => {
     expect(prompt).toContain("Login page: /login")
     expect(prompt).toContain("[frontend] /lessons")
 
-    // QA guide credentials made it in
+    // Scenarios/notes + login from the dashboard stores made it in
+    expect(prompt).toContain("Always verify the lessons list paginates.")
     expect(prompt).toContain("admin@learnhub.test")
-    expect(prompt).toContain("Admin123!")
 
     // PR metadata from reviewFlow survived into the prompt
     expect(prompt).toContain("Add greeting banner")
@@ -128,7 +125,7 @@ describe("ui-review: preflight + composePrompt end-to-end", () => {
     expect(prompt).toContain("UI review by kody")
   })
 
-  it("falls back to default preview URL and reports an empty QA guide when absent", async () => {
+  it("falls back to default preview URL and reports empty QA scenarios when absent", async () => {
     writeFile(tmp, "package.json", JSON.stringify({ dependencies: { next: "16.0.0" } }))
     writeFile(tmp, "src/app/page.tsx", "export default () => null")
 
@@ -136,14 +133,16 @@ describe("ui-review: preflight + composePrompt end-to-end", () => {
     const ctx = makeCtx(tmp, { pr: 42 })
 
     await discoverQaContext(ctx, profile)
-    await loadQaGuide(ctx, profile)
+    await loadQaContext(ctx, profile)
     await resolvePreviewUrl(ctx, profile)
     await composePrompt(ctx, profile)
 
     expect(ctx.data.previewUrl).toBe("http://localhost:3000")
     expect(ctx.data.previewUrlSource).toBe("default")
-    expect(ctx.data.qaGuide).toBe("")
-    // Prompt still renders; empty qaGuide token leaves a clean section
+    expect(ctx.data.qaProfile).toBe("")
+    // With no credentials configured the auth block points the agent at public routes.
+    expect(ctx.data.qaAuthBlock).toContain("no QA credentials configured")
+    // Prompt still renders; empty qaProfile token leaves a clean section
     expect(ctx.data.prompt).toContain("http://localhost:3000")
   })
 })

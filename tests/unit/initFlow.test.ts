@@ -95,7 +95,7 @@ describe("initFlow: performInit", () => {
     expect(stat.isDirectory()).toBe(true)
   })
 
-  it("scaffolds .kody/qa-guide.md when the repo has a UI", () => {
+  it("does NOT scaffold a qa-guide (dashboard-managed QA context now)", () => {
     dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
     fs.mkdirSync(path.join(dir, "src/app/login"), { recursive: true })
     fs.writeFileSync(path.join(dir, "src/app/page.tsx"), "export default () => null")
@@ -103,30 +103,7 @@ describe("initFlow: performInit", () => {
     fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ dependencies: { next: "16.0.0" } }))
 
     const result = performInit(dir, false)
-    expect(result.wrote).toContain(".kody/qa-guide.md")
-    const md = fs.readFileSync(path.join(dir, ".kody/qa-guide.md"), "utf-8")
-    expect(md).toContain("# QA guide")
-    expect(md).toContain("CHANGE_ME")
-    expect(md).toContain("/login")
-  })
-
-  it("does NOT scaffold qa-guide when no UI present", () => {
-    dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
-    const result = performInit(dir, false)
     expect(result.wrote).not.toContain(".kody/qa-guide.md")
     expect(fs.existsSync(path.join(dir, ".kody/qa-guide.md"))).toBe(false)
-  })
-
-  it("preserves an existing qa-guide.md without --force", () => {
-    dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
-    fs.mkdirSync(path.join(dir, "src/app"), { recursive: true })
-    fs.writeFileSync(path.join(dir, "src/app/page.tsx"), "export default () => null")
-    fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ dependencies: { next: "16.0.0" } }))
-    fs.mkdirSync(path.join(dir, ".kody"), { recursive: true })
-    fs.writeFileSync(path.join(dir, ".kody/qa-guide.md"), "# user-edited")
-
-    const result = performInit(dir, false)
-    expect(result.skipped).toContain(".kody/qa-guide.md")
-    expect(fs.readFileSync(path.join(dir, ".kody/qa-guide.md"), "utf-8")).toBe("# user-edited")
   })
 })

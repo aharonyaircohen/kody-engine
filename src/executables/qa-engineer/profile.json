@@ -9,7 +9,7 @@
       "flag": "--url",
       "type": "string",
       "required": false,
-      "describe": "Base URL the agent should browse. Optional — resolveQaUrl preflight falls back to the goal-branch Vercel deployment (when --goal is set), then $PREVIEW_URL, then qa.fallbackUrl from kody.config.json. Errors if none resolve."
+      "describe": "Base URL the agent should browse. Optional — resolveQaUrl preflight falls back to the goal-branch Vercel deployment (when --goal is set), then $PREVIEW_URL, then the `QA_URL` variable in .kody/variables.json. Errors if none resolve."
     },
     {
       "name": "scope",
@@ -87,7 +87,7 @@
     "preflight": [
       { "script": "resolveQaUrl" },
       { "script": "discoverQaContext" },
-      { "script": "loadQaGuide" },
+      { "script": "loadQaContext" },
       { "script": "loadConventions" },
       { "script": "warmupMcp" },
       { "script": "composePrompt" }

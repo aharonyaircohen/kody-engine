@@ -17,8 +17,6 @@ import type { PreflightScript } from "../executables/types.js"
 import { type EnsureLabelsResult, ensureLabels } from "../lifecycleLabels.js"
 import { loadProfile } from "../profile.js"
 import { listBuiltinJobs, listExecutables } from "../registry.js"
-import { generateQaGuideTemplate, runQaDiscovery } from "./discoverQaContext.js"
-import { QA_GUIDE_REL_PATH } from "./loadQaGuide.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -202,27 +200,7 @@ export function performInit(cwd: string, force: boolean): InitResult {
     wrote.push(".github/workflows/kody.yml")
   }
 
-  // 3. .kody/qa-guide.md — starter template for the ui-review executable.
-  //    Only scaffolded when the repo looks like it has a UI (Next.js app dir,
-  //    or an /app folder with page.* files). Writes CHANGE_ME credential
-  //    placeholders; the maintainer fills them in and commits.
-  const hasUi =
-    fs.existsSync(path.join(cwd, "src/app")) ||
-    fs.existsSync(path.join(cwd, "app")) ||
-    fs.existsSync(path.join(cwd, "pages"))
-  if (hasUi) {
-    const qaGuidePath = path.join(cwd, QA_GUIDE_REL_PATH)
-    if (fs.existsSync(qaGuidePath) && !force) {
-      skipped.push(QA_GUIDE_REL_PATH)
-    } else {
-      fs.mkdirSync(path.dirname(qaGuidePath), { recursive: true })
-      const discovery = runQaDiscovery(cwd)
-      fs.writeFileSync(qaGuidePath, generateQaGuideTemplate(discovery))
-      wrote.push(QA_GUIDE_REL_PATH)
-    }
-  }
-
-  // 4. .kody/duties/<slug>.md — copy every built-in duty markdown shipped
+  // 3. .kody/duties/<slug>.md — copy every built-in duty markdown shipped
   //    with the engine. Built-in duties live under `src/jobs/` (dev) /
   //    `dist/jobs/` (built); consumer repos get a starter copy each,
   //    scaffolded once and then human-edited. Cadence is enforced by the
@@ -248,7 +226,7 @@ export function performInit(cwd: string, force: boolean): InitResult {
     }
   }
 
-  // 5. .github/workflows/kody-<name>.yml for every discovered scheduled executable.
+  // 4. .github/workflows/kody-<name>.yml for every discovered scheduled executable.
   for (const exe of listExecutables()) {
     let profile: ReturnType<typeof loadProfile>
     try {
@@ -266,7 +244,7 @@ export function performInit(cwd: string, force: boolean): InitResult {
     wrote.push(`.github/workflows/kody-${exe.name}.yml`)
   }
 
-  // 6. Create/update every kody-owned label declared across the executable
+  // 5. Create/update every kody-owned label declared across the executable
   //    profile set. Best-effort: if `gh` isn't installed/authenticated, this
   //    is skipped silently and setKodyLabel will lazily create the label on
   //    first use during a real flow run.

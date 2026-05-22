@@ -7,8 +7,6 @@
  * Populates:
  *   ctx.data.qaDiscovery — structured record (for tests / other scripts)
  *   ctx.data.qaContext   — serialized string for the prompt template
- *
- * Ported from legacy Kody-Engine-Lite/src/bin/qa-guide.ts.
  */
 
 import * as fs from "node:fs"
@@ -262,83 +260,6 @@ export function serializeDiscoveryForLLM(d: QaDiscovery): string {
     result = result.slice(0, cutoff > 0 ? cutoff : MAX_SERIALIZED_LENGTH - 20) + "\n... (truncated)"
   }
   return result
-}
-
-// ─── QA guide template (for `kody init` scaffolding) ────────────────────
-
-/**
- * Generate a starter `.kody/qa-guide.md` for a repo. Uses discovery to
- * pre-fill routes, login page, roles, admin path, and framework context.
- * Credentials are left as CHANGE_ME placeholders — the repo maintainer
- * fills them in and commits.
- */
-export function generateQaGuideTemplate(d: QaDiscovery): string {
-  const lines: string[] = []
-  lines.push("# QA guide")
-  lines.push("")
-  lines.push("This file is read by `kody ui-review`. Fill in the credential placeholders")
-  lines.push("below and commit — the agent uses them to log in to your preview deployment.")
-  lines.push("")
-
-  lines.push("## Test accounts")
-  lines.push("")
-  lines.push("<!-- Replace CHANGE_ME with real credentials for your preview environment.")
-  lines.push("     Remove any role row you don't have an account for. -->")
-  lines.push("")
-  lines.push("| Role | Email | Password |")
-  lines.push("|------|-------|----------|")
-  if (d.roles.length > 0) {
-    for (const role of d.roles) {
-      lines.push(`| ${role} | CHANGE_ME | CHANGE_ME |`)
-    }
-  } else {
-    lines.push("| admin | admin@example.com | CHANGE_ME |")
-    lines.push("| user | user@example.com | CHANGE_ME |")
-  }
-  lines.push("")
-
-  lines.push("## Login")
-  lines.push("")
-  lines.push(`- Login page: \`${d.loginPage ?? "/login"}\``)
-  if (d.adminPath) lines.push(`- Admin panel: \`${d.adminPath}\``)
-  lines.push("")
-  lines.push("### Steps")
-  lines.push(`1. Navigate to \`${d.loginPage ?? "/login"}\``)
-  lines.push("2. Enter credentials from the table above")
-  lines.push("3. Submit the login form")
-  lines.push("4. Verify the redirect lands on the expected page")
-  lines.push("")
-
-  if (d.roles.length > 0) {
-    lines.push("## Roles")
-    lines.push("")
-    for (const role of d.roles) lines.push(`- \`${role}\``)
-    lines.push("")
-  }
-
-  if (d.routes.length > 0) {
-    lines.push("## Key pages")
-    lines.push("")
-    const groups: Record<string, string[]> = {}
-    for (const r of d.routes) {
-      if (!groups[r.group]) groups[r.group] = []
-      groups[r.group]!.push(r.path)
-    }
-    for (const [group, routes] of Object.entries(groups)) {
-      lines.push(`### ${group[0]!.toUpperCase()}${group.slice(1)}`)
-      for (const r of routes.slice(0, 15).sort()) lines.push(`- \`${r}\``)
-      if (routes.length > 15) lines.push(`- … and ${routes.length - 15} more`)
-      lines.push("")
-    }
-  }
-
-  lines.push("## Notes for the reviewer")
-  lines.push("")
-  lines.push("<!-- Add any repo-specific quirks the UI-review agent should know:")
-  lines.push("     seed data assumptions, feature flags, preview-only behaviors, etc. -->")
-  lines.push("")
-
-  return lines.join("\n")
 }
 
 // ─── Preflight entry ──────────────────────────────────────────────────────

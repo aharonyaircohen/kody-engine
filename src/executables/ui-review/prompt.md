@@ -30,9 +30,11 @@ If `browser_navigate` errors out (timeout, DNS, connection refused, navigation a
 {{qaContext}}
 ```
 
-# QA guide (committed in the repo — authoritative over the auto-discovery above)
+# QA scenarios & notes (hand-written, authoritative over auto-discovery above)
 
-{{qaGuide}}
+{{qaProfile}}
+
+{{qaAuthBlock}}
 
 # Diff
 
@@ -48,7 +50,7 @@ If `browser_navigate` errors out (timeout, DNS, connection refused, navigation a
 
 1. **Identify UI-affecting changes.** Read the diff. Which pages / components / forms / styles did this PR change? Which user-visible behavior should be verified in the browser? If the diff has no UI surface (pure backend, pure config, pure tests), say so and produce a diff-only review — do not spin up Playwright for nothing.
 
-2. **Plan the browse session.** For each UI-affecting change, pick 1–3 routes from the QA context that exercise it. If the change requires an authenticated role, grab credentials from the QA guide above. If no credentials are available for a role the change depends on, note that as a gap and browse only public pages.
+2. **Plan the browse session.** For each UI-affecting change, pick 1–3 routes from the QA context that exercise it. If the change requires an authenticated role, follow the Auth instruction above. If no credentials are available for a role the change depends on, note that as a gap and browse only public pages.
 
 3. **Write a Playwright spec.** Create exactly one file at `.kody/ui-review/browse.spec.ts`. Use `process.env.UI_REVIEW_BASE_URL` as the base URL. For each route you plan to check, write a test that:
    - navigates there,

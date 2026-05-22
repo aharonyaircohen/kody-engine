@@ -30,7 +30,7 @@ Executable directories contain **only** three kinds of files: `profile.json` (de
 npx -y -p @kody-ade/kody-engine@latest kody init
 ```
 
-`kody init` scaffolds [kody.config.json](kody.config.schema.json), [.github/workflows/kody.yml](templates/kody.yml), per-scheduled-executable workflow files, and (if a UI is detected) `.kody/qa-guide.md` for `ui-review`. Idempotent — pass `--force` to overwrite.
+`kody init` scaffolds [kody.config.json](kody.config.schema.json), [.github/workflows/kody.yml](templates/kody.yml), and per-scheduled-executable workflow files. Idempotent — pass `--force` to overwrite.
 
 Required repo secrets: at least one model provider key (e.g. `MINIMAX_API_KEY`, `ANTHROPIC_API_KEY`). Recommended: `KODY_TOKEN` PAT so kody's commits trigger downstream CI and can modify `.github/workflows/*`.
 
@@ -92,7 +92,7 @@ A **job** is a stateful, bounded goal expressed as a labeled GitHub issue (`kody
 PR-bound UI review. Drives the running preview deployment via the Playwright MCP server alongside the usual diff review, posts one structured review comment.
 
 - Preview URL: `--preview-url` → `$PREVIEW_URL` → `http://localhost:3000`. Unreachable → falls back to diff-only.
-- Credentials: `.kody/qa-guide.md` (committed, scaffolded by `kody init` with `CHANGE_ME` placeholders).
+- Credentials: dashboard-managed, per-repo — login username from the `LOGIN_USER` variable (`.kody/variables.json`), password from the `LOGIN_PASSWORD` vault secret (`.kody/secrets.enc`). Hand-written scenarios/notes come from the company profile (`.kody/profile/*.md`).
 - Auto-discovery: routes, roles, login/admin paths, Payload CMS collections, API routes, env vars — fed to the agent as context.
 
 For free-form QA passes (no diff, no PR), see [`qa-engineer`](#qa-engineer) below.
@@ -102,7 +102,7 @@ For free-form QA passes (no diff, no PR), see [`qa-engineer`](#qa-engineer) belo
 Free-form QA pass. Browses a running site with Playwright MCP, exercises UI states (happy / empty / error / loading / mobile / a11y), and turns findings into a kody goal whose tasks are individually triageable, severity-labelled bug issues. Read-only on the repo (no commits except the goal's own `state.json`).
 
 ```bash
-# broad smoke against the project's qa.fallbackUrl
+# broad smoke against the project's QA_URL variable
 kody qa-engineer
 
 # focused pass; opens a new qa-<scope>-<date> goal + N task issues
@@ -126,16 +126,10 @@ kody qa-engineer --scope "smoke" --issue 1234
 1. `--url <URL>` — explicit
 2. `--goal <id>` → latest successful Vercel deployment for the `goal-<id>` branch (via `repos/.../deployments?ref=goal-<id>` + statuses)
 3. `$PREVIEW_URL` env var
-4. `kody.config.json` → `qa.fallbackUrl` (per-project)
+4. `QA_URL` variable in `.kody/variables.json` (per-repo, dashboard-managed)
 5. error — no localhost defaults; CI has no localhost to fall back to.
 
-Configure the project default in `kody.config.json`:
-
-```json
-{
-  "qa": { "fallbackUrl": "https://dev.example.com" }
-}
-```
+Configure the per-repo default via the dashboard's variables store (`.kody/variables.json`), key `QA_URL` — e.g. `https://dev.example.com`.
 
 **Output modes.**
 
@@ -183,7 +177,7 @@ gh workflow run kody.yml -F executable=qa-engineer \
   -F args="--goal admin-chat-memory-recall-ui --scope 'admin chat'"
 ```
 
-**Auto-discovery & credentials.** Same as `ui-review`: `discoverQaContext` scans the repo for routes/roles/admin path/Payload collections/env vars; `loadQaGuide` reads committed credentials from `.kody/qa-guide.md`. The agent only logs in if a route under test requires it.
+**Auto-discovery & credentials.** Same as `ui-review`: `discoverQaContext` scans the repo for routes/roles/admin path/Payload collections/env vars; `loadQaContext` reads the dashboard-managed login username (`LOGIN_USER` variable), password (`LOGIN_PASSWORD` vault secret), and hand-written scenarios/notes (`.kody/profile/*.md`). The agent only logs in if a route under test requires it.
 
 **Artifacts.** Screenshots and DOM snapshots go to `.kody/qa-reports/<scope-slug>/`; the Playwright MCP also writes to `.playwright-mcp/`. Both should be in `.gitignore` and `.prettierignore` — `kody init` doesn't yet scaffold these, add them manually:
 

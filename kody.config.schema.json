@@ -420,17 +420,6 @@
       },
       "additionalProperties": false
     },
-    "qa": {
-      "type": "object",
-      "description": "qa-engineer defaults. Used by the resolveQaUrl preflight when no explicit --url is passed and no $PREVIEW_URL env var is set.",
-      "properties": {
-        "fallbackUrl": {
-          "type": "string",
-          "description": "Fallback URL the qa-engineer should target. Typically the project's stable dev environment (e.g. 'https://dev.example.com'). No localhost defaults — CI has no localhost to fall back to."
-        }
-      },
-      "additionalProperties": false
-    },
     "devServer": {
       "type": "object",
       "description": "Dev server configuration for browser tool verification. Works with any provider (MCP or CLI-based).",

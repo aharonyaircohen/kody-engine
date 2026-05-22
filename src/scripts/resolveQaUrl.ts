@@ -9,7 +9,9 @@
  *                                tolerate in-progress deploys with no URL
  *                                yet.
  *   3. process.env.PREVIEW_URL — env-injected URL (CI secret pattern)
- *   4. ctx.config.qa?.fallbackUrl — per-project stable dev URL
+ *   4. QA_URL variable         — `.kody/variables.json` key QA_URL,
+ *                                a per-repo stable dev URL managed via the
+ *                                dashboard.
  *   5. error                   — fail fast; the alternative is browsing a
  *                                non-existent host and emitting a useless
  *                                "page unreachable" report.
@@ -20,6 +22,7 @@
  */
 import { execFileSync } from "node:child_process"
 import type { PreflightScript } from "../executables/types.js"
+import { readKodyVariables } from "./kodyVariables.js"
 
 interface DeploymentRow {
   id: number
@@ -55,12 +58,7 @@ function ghQuery<T>(args: string[], cwd: string): T | null {
  * the gh CLI errored. Best-effort — a missing URL just falls through to the
  * next resolution step.
  */
-function lookupGoalDeploymentUrl(
-  goalId: string,
-  owner: string,
-  repo: string,
-  cwd: string,
-): string | null {
+function lookupGoalDeploymentUrl(goalId: string, owner: string, repo: string, cwd: string): string | null {
   const ref = `goal-${goalId}`
   // List up to 5 latest deployments for this ref (Vercel preview branch).
   // We want the most recent one whose status reached `success`. Older
@@ -115,16 +113,16 @@ export const resolveQaUrl: PreflightScript = async (ctx) => {
     return
   }
 
-  const fallback = ctx.config.qa?.fallbackUrl?.trim()
+  const fallback = readKodyVariables(ctx.cwd).QA_URL?.trim()
   if (fallback && fallback.length > 0) {
     ctx.data.previewUrl = fallback
-    ctx.data.previewUrlSource = "kody.config.json qa.fallbackUrl"
+    ctx.data.previewUrlSource = "QA_URL variable (.kody/variables.json)"
     return
   }
 
   throw new Error(
     "qa-engineer: no URL resolved. Pass --url, set --goal <id> on a goal that has a Vercel preview, " +
-      "set $PREVIEW_URL, or configure qa.fallbackUrl in kody.config.json.",
+      "set $PREVIEW_URL, or set the QA_URL variable in .kody/variables.json.",
   )
 }
 

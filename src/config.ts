@@ -125,21 +125,6 @@ export interface KodyConfig {
   access?: {
     allowedAssociations?: string[]
   }
-  /**
-   * `qa-engineer` defaults. Used by the resolveQaUrl preflight when no
-   * explicit `--url` is passed and no `$PREVIEW_URL` env var is set.
-   */
-  qa?: {
-    /**
-     * Fallback URL the qa-engineer should target when goal-branch deployment
-     * lookup yields nothing (or no `--goal` was passed) and `$PREVIEW_URL`
-     * isn't set. Typically the project's stable dev environment, e.g.
-     * `https://dev.example.com`. No localhost defaults — qa-engineer in CI
-     * has no localhost to fall back to, so misconfiguration should fail
-     * fast rather than browse a non-existent host.
-     */
-    fallbackUrl?: string
-  }
 }
 
 export interface ProviderModel {
@@ -225,7 +210,6 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     release: parseReleaseConfig(raw.release),
     jobs: parseJobsConfig(raw.jobs),
     access: parseAccessConfig(raw.access),
-    qa: parseQaConfig(raw.qa),
   }
 }
 
@@ -287,18 +271,6 @@ function parseAccessConfig(raw: unknown): KodyConfig["access"] {
   // "unset", which defaults to team-only above. dispatch treats a
   // zero-length allowlist as "no gate".
   return { allowedAssociations: out }
-}
-
-function parseQaConfig(raw: unknown): KodyConfig["qa"] {
-  if (!raw || typeof raw !== "object") return undefined
-  const r = raw as Record<string, unknown>
-  const out: NonNullable<KodyConfig["qa"]> = {}
-  if (typeof r.fallbackUrl === "string" && r.fallbackUrl.trim().length > 0) {
-    out.fallbackUrl = r.fallbackUrl.trim()
-  } else if (r.fallbackUrl !== undefined) {
-    throw new Error(`kody.config.json: qa.fallbackUrl must be a non-empty string`)
-  }
-  return Object.keys(out).length > 0 ? out : undefined
 }
 
 function parseJobsConfig(raw: unknown): KodyConfig["jobs"] {
