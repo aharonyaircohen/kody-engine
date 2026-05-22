@@ -128,6 +128,7 @@ If you don't include this block, the postflight falls back to opening a single r
 
 # Rules
 
+- **Never write credentials anywhere.** The QA login is provided only so you can sign in — you MUST NOT put the password (or any token/secret) into the report, findings, steps, evidence captions, or any text posted to GitHub. Issues are often public. When describing an authenticated step, write "log in as the QA account" — never quote the username or the password.
 - No commits. No `git` / `gh`. No edits outside `.kody/qa-reports/`.
 - Verdict **PASS** only when every UI surface you exercised behaved as the user would expect.
 - Be specific in every finding: route + concrete steps + screenshot path (or DOM snapshot reference). No "consider improving X" advice.

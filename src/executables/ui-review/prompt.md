@@ -111,6 +111,7 @@ _UI review by kody — browsed {{previewUrl}}_
 
 # Rules
 
+- **Never write credentials anywhere.** The QA login is provided only so you can sign in — you MUST NOT put the password (or any token/secret) into the review, findings, steps, or any text posted to GitHub. PRs and issues are often public. When describing an authenticated step, write "log in as the QA account" — never quote the username or the password.
 - No commits. No `git` / `gh` invocations. No edits to files outside `.kody/ui-review/`.
 - Verdict **FAIL** only for clear visual regressions, broken flows, or correctness/accessibility issues that block merge.
 - Verdict **CONCERNS** for clarity/polish/edge-case gaps that shouldn't block.
