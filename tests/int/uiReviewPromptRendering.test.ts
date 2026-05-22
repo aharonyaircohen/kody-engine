@@ -85,8 +85,12 @@ describe("ui-review: preflight + composePrompt end-to-end", () => {
       ".kody/variables.json",
       JSON.stringify({ version: 1, variables: { LOGIN_USER: { value: "admin@learnhub.test" } } }),
     )
-    // Hand-written scenarios/notes from the company profile.
-    writeFile(tmp, ".kody/profile/scenarios.md", "Always verify the lessons list paginates.")
+    // Hand-written scenarios/notes from the company profile (qa-scoped).
+    writeFile(
+      tmp,
+      ".kody/profile/scenarios.md",
+      "---\naudience: [qa]\n---\n\nAlways verify the lessons list paginates.",
+    )
 
     const profile = loadProfile(PROFILE_PATH)
     const ctx = makeCtx(tmp, { pr: 42, previewUrl: "https://preview-42.example" })
