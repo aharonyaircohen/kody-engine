@@ -22,7 +22,7 @@
  *         (or ctx.data.nextStateParseError on failure)
  *
  * Script args (via `with:`):
- *   jobsDir     optional — default ".kody/jobs"
+ *   jobsDir     optional — default ".kody/duties"
  *   slugArg     optional — default "job"
  *   fenceLabel  optional — default "kody-job-next-state"
  */
@@ -38,7 +38,7 @@ import { extractNextStateFromText } from "./parseJobStateFromAgentResult.js"
 export const runTickScript: PreflightScript = async (ctx, _profile, args) => {
   ctx.skipAgent = true
 
-  const jobsDir = String(args?.jobsDir ?? ".kody/jobs")
+  const jobsDir = String(args?.jobsDir ?? ".kody/duties")
   const slugArg = String(args?.slugArg ?? "job")
   const fenceLabel = String(args?.fenceLabel ?? "kody-job-next-state")
   const slug = String(ctx.args[slugArg] ?? "").trim()

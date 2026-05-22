@@ -1,14 +1,13 @@
 /**
- * Tiny YAML-frontmatter parser/serializer for job files.
+ * Tiny YAML-frontmatter parser/serializer for duty files.
  *
- * Job markdown at `.kody/jobs/<slug>.md` may begin with a `---\n…\n---\n`
+ * Duty markdown at `.kody/duties/<slug>.md` may begin with a `---\n…\n---\n`
  * block carrying flat scalar key/value pairs (no nesting, no flow style).
- * Today the only recognized field is `every: 15m|30m|1h|6h|1d`, which
- * gates per-slug cadence in `dispatchJobFileTicks`. The parser silently
- * ignores unknown keys so the dashboard and engine can evolve the
- * frontmatter independently.
+ * Recognized fields are `every:` (cadence), `disabled:`, `tickScript:`, and
+ * `staff:` (the executor persona). The parser silently ignores unknown keys
+ * so the dashboard and engine can evolve the frontmatter independently.
  *
- * Mirror of `src/dashboard/lib/jobs-frontmatter.ts` in Kody-Dashboard —
+ * Mirror of the dashboard's ticked-frontmatter parser in Kody-Dashboard —
  * keep the two in sync if the format grows.
  */
 
@@ -60,14 +59,14 @@ export interface JobFrontmatter {
    */
   disabled?: boolean
   /**
-   * Slug of the worker (persona) under `.kody/workers/<worker>.md` that
-   * executes this job. The job owns the schedule; the worker is *who* the
-   * tick runs as — its persona body is injected ahead of the job body in
-   * `job-tick`. A job with no `worker:` is skipped by the scheduler
-   * (every job must name an executor). Many jobs may share one worker; a
-   * job has exactly one.
+   * Slug of the staff member (persona) under `.kody/staff/<staff>.md` that
+   * executes this duty. The duty owns the schedule; the staff member is
+   * *who* the tick runs as — its persona body is injected ahead of the duty
+   * body in `job-tick`. A duty with no `staff:` is skipped by the scheduler
+   * (every duty must name an executor). Many duties may share one staff
+   * member; a duty has exactly one.
    */
-  worker?: string
+  staff?: string
 }
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
@@ -136,8 +135,8 @@ function parseFlatYaml(text: string): JobFrontmatter {
       const lower = value.toLowerCase()
       if (lower === "true") out.disabled = true
       else if (lower === "false") out.disabled = false
-    } else if (key === "worker" && value.length > 0) {
-      out.worker = value
+    } else if (key === "staff" && value.length > 0) {
+      out.staff = value
     }
   }
   return out

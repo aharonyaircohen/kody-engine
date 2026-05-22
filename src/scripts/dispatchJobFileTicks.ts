@@ -1,6 +1,6 @@
 /**
- * Preflight: enumerate `.kody/jobs/<slug>.md` files in the cwd, then
- * invoke a target executable once per job slug (in-process, sequentially).
+ * Preflight: enumerate `.kody/duties/<slug>.md` files in the cwd, then
+ * invoke a target executable once per duty slug (in-process, sequentially).
  *
  * Replaces the issue-label discovery in `dispatchJobTicks` with file
  * discovery — jobs live as authored markdown in the repo, not as issues.
@@ -12,7 +12,7 @@
  * job directory (local-file + Actions cache) implement them.
  *
  * Script args (via `with:`):
- *   jobsDir        optional — relative path under cwd (default ".kody/jobs")
+ *   jobsDir        optional — relative path under cwd (default ".kody/duties")
  *   targetExecutable   required — e.g. "job-tick"
  *   scriptedExecutable optional — target for slugs with `tickScript:`
  *                      frontmatter (default "job-tick-scripted")
@@ -33,7 +33,7 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
   if (!targetExecutable) {
     throw new Error("dispatchJobFileTicks: `with.targetExecutable` is required")
   }
-  const jobsDir = String(args?.jobsDir ?? ".kody/jobs")
+  const jobsDir = String(args?.jobsDir ?? ".kody/duties")
   const scriptedExecutable = String(args?.scriptedExecutable ?? "job-tick-scripted")
   const slugArg = String(args?.slugArg ?? "job")
 
@@ -81,16 +81,16 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
         continue
       }
 
-      // Every job must name an executor. The worker is the persona the
-      // tick runs as; with none declared there's no identity to run, so
+      // Every duty must name an executor. The staff member is the persona
+      // the tick runs as; with none declared there's no identity to run, so
       // skip (loudly) rather than fall back to an implicit default. Manual
       // `workflow_dispatch` "Run now" bypasses this dispatcher, but
-      // job-tick's loader rejects a missing/dangling worker there too.
-      if (!frontmatter.worker || frontmatter.worker.trim().length === 0) {
+      // job-tick's loader rejects a missing/dangling staff member there too.
+      if (!frontmatter.staff || frontmatter.staff.trim().length === 0) {
         process.stderr.write(
-          `[jobs] ⏭  skip ${slug}: no worker assigned (add 'worker: <slug>' frontmatter)\n`,
+          `[jobs] ⏭  skip ${slug}: no staff assigned (add 'staff: <slug>' frontmatter)\n`,
         )
-        results.push({ slug, exitCode: 0, skipped: true, reason: "no worker assigned" })
+        results.push({ slug, exitCode: 0, skipped: true, reason: "no staff assigned" })
         continue
       }
 

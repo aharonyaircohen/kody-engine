@@ -222,22 +222,22 @@ export function performInit(cwd: string, force: boolean): InitResult {
     }
   }
 
-  // 4. .kody/jobs/<slug>.md — copy every built-in job markdown shipped with
-  //    the engine. Built-in jobs live under `src/jobs/` (dev) / `dist/jobs/`
-  //    (built); consumer repos get a starter copy each, scaffolded once and
-  //    then human-edited. Cadence is enforced by the file's `every:`
-  //    frontmatter, read by `dispatchJobFileTicks`.
+  // 4. .kody/duties/<slug>.md — copy every built-in duty markdown shipped
+  //    with the engine. Built-in duties live under `src/jobs/` (dev) /
+  //    `dist/jobs/` (built); consumer repos get a starter copy each,
+  //    scaffolded once and then human-edited. Cadence is enforced by the
+  //    file's `every:` frontmatter, read by `dispatchJobFileTicks`.
   //
   //    `--force` will overwrite consumer edits to these files — same
-  //    contract as `kody.yml` and `kody.config.json` above. Job files
+  //    contract as `kody.yml` and `kody.config.json` above. Duty files
   //    are *intended* to be edited (cadence, thresholds, prompt prose),
   //    so use `--force` only when you accept losing those edits.
   const builtinJobs = listBuiltinJobs()
   if (builtinJobs.length > 0) {
-    const jobsDir = path.join(cwd, ".kody", "jobs")
+    const jobsDir = path.join(cwd, ".kody", "duties")
     fs.mkdirSync(jobsDir, { recursive: true })
     for (const job of builtinJobs) {
-      const rel = path.join(".kody", "jobs", `${job.slug}.md`)
+      const rel = path.join(".kody", "duties", `${job.slug}.md`)
       const target = path.join(cwd, rel)
       if (fs.existsSync(target) && !force) {
         skipped.push(rel)

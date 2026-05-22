@@ -2,10 +2,10 @@
  * Preflight for `worker-ask`: load a worker persona and an inline message
  * for a stateless, ad-hoc tick. No job file, no job state, no commit.
  *
- * This is the engine half of the dashboard's "@mention a worker in a
- * message" feature: a worker is a stateless persona, so an ad-hoc request
- * is just that persona answering one inline prompt — there is no
- * `.kody/jobs/<slug>.md`, no cadence, and nothing to persist.
+ * This is the engine half of the dashboard's "@mention a staff member in a
+ * message" feature: a staff member is a stateless persona, so an ad-hoc
+ * request is just that persona answering one inline prompt — there is no
+ * `.kody/duties/<slug>.md`, no cadence, and nothing to persist.
  *
  * Message resolution (production vs. CLI):
  *   1. The dispatching `issue_comment` body (GITHUB_EVENT_PATH), with the
@@ -23,7 +23,7 @@
  *   ctx.data.thread         discussion number to reply into, or ""
  *
  * Script args (via `with:`):
- *   workersDir    optional — default ".kody/workers"
+ *   workersDir    optional — default ".kody/staff"
  */
 
 import * as fs from "node:fs"
@@ -32,7 +32,7 @@ import type { PreflightScript } from "../executables/types.js"
 import { splitFrontmatter } from "./jobFrontmatter.js"
 
 export const loadWorkerAdhoc: PreflightScript = async (ctx, _profile, args) => {
-  const workersDir = String(args?.workersDir ?? ".kody/workers")
+  const workersDir = String(args?.workersDir ?? ".kody/staff")
   const workerSlug = String(ctx.args.worker ?? "").trim()
   if (!workerSlug) {
     throw new Error("loadWorkerAdhoc: ctx.args.worker must be a non-empty slug")

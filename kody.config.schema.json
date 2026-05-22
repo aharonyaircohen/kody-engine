@@ -393,7 +393,7 @@
     },
     "jobs": {
       "type": "object",
-      "description": "File-based job configuration. Jobs are long-running scheduled executables defined under .kody/jobs/<slug>.md.",
+      "description": "File-based job configuration. Jobs are long-running scheduled executables defined under .kody/duties/<slug>.md.",
       "properties": {
         "stateBackend": {
           "type": "string",

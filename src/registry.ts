@@ -7,9 +7,9 @@
  *     dispatcher invokes by name. `listExecutables()` powers `entry.ts` so
  *     dropping a new directory makes `kody <name>` work without router edits.
  *   - **Built-in jobs** (`src/jobs/<slug>.md`) — markdown templates that
- *     `kody init` scaffolds into consumer repos under `.kody/jobs/`. Once
+ *     `kody init` scaffolds into consumer repos under `.kody/duties/`. Once
  *     scaffolded, the consumer owns the file; `job-scheduler` /
- *     `job-tick` discover it from the consumer's `.kody/jobs/` directly,
+ *     `job-tick` discover it from the consumer's `.kody/duties/` directly,
  *     not via this registry.
  *
  * Both follow the same dev/built path-resolution pattern so `src/` and
@@ -80,7 +80,7 @@ export interface BuiltinJob {
  * List every built-in job markdown file shipped with the engine. Returns
  * `{ slug, filePath }` for each `.md` file under the built-in jobs root,
  * sorted by slug. Used by `kody init` to scaffold default jobs into
- * `.kody/jobs/<slug>.md` in consumer repos.
+ * `.kody/duties/<slug>.md` in consumer repos.
  */
 export function listBuiltinJobs(root: string = getBuiltinJobsRoot()): BuiltinJob[] {
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []

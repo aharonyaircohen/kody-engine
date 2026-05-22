@@ -51,7 +51,7 @@ export const writeJobStateFile: PostflightScript = async (ctx, _profile, _agentR
   // than pass through ctx.data because the backend is cheap to construct
   // and stateless per-tick (lifecycle state lives on the dispatcher's
   // single instance — see dispatchJobFileTicks).
-  const jobsDir = String(args?.jobsDir ?? ".kody/jobs")
+  const jobsDir = String(args?.jobsDir ?? ".kody/duties")
   const backend = resolveBackend({ config: ctx.config, cwd: ctx.cwd, jobsDir })
   await backend.save(loaded, stamped)
 }

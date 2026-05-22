@@ -30,7 +30,7 @@ beforeEach(() => {
   runExecutableMock.mockReset()
   runExecutableMock.mockResolvedValue({ exitCode: 0 })
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dispatch-routing-"))
-  fs.mkdirSync(path.join(tmp, ".kody", "jobs"), { recursive: true })
+  fs.mkdirSync(path.join(tmp, ".kody", "duties"), { recursive: true })
 })
 
 afterEach(() => {
@@ -40,7 +40,7 @@ afterEach(() => {
 
 function writeJob(slug: string, frontmatter: string, body = "# job\n"): void {
   const fm = frontmatter ? `---\n${frontmatter}\n---\n` : ""
-  fs.writeFileSync(path.join(tmp, ".kody", "jobs", `${slug}.md`), fm + body)
+  fs.writeFileSync(path.join(tmp, ".kody", "duties", `${slug}.md`), fm + body)
 }
 
 function ctxFor(): Context {
@@ -63,12 +63,12 @@ function ctxFor(): Context {
 const PROFILE = {} as unknown as Profile
 
 describe("dispatchJobFileTicks routing", () => {
-  it("routes a job with `tickScript:` to job-tick-scripted", async () => {
-    writeJob("auto-resolve", "tickScript: .kody/scripts/auto-resolve-tick.sh\nworker: kody")
+  it("routes a duty with `tickScript:` to job-tick-scripted", async () => {
+    writeJob("auto-resolve", "tickScript: .kody/scripts/auto-resolve-tick.sh\nstaff: kody")
 
     const ctx = ctxFor()
     await dispatchJobFileTicks(ctx, PROFILE, {
-      jobsDir: ".kody/jobs",
+      jobsDir: ".kody/duties",
       targetExecutable: "job-tick",
       slugArg: "job",
     })
@@ -77,12 +77,12 @@ describe("dispatchJobFileTicks routing", () => {
     expect(runExecutableMock.mock.calls[0]![0]).toBe("job-tick-scripted")
   })
 
-  it("routes a job without `tickScript:` to the configured (default) target", async () => {
-    writeJob("watch-stale-prs", "every: 6h\nworker: kody")
+  it("routes a duty without `tickScript:` to the configured (default) target", async () => {
+    writeJob("watch-stale-prs", "every: 6h\nstaff: kody")
 
     const ctx = ctxFor()
     await dispatchJobFileTicks(ctx, PROFILE, {
-      jobsDir: ".kody/jobs",
+      jobsDir: ".kody/duties",
       targetExecutable: "job-tick",
       slugArg: "job",
     })
@@ -91,12 +91,12 @@ describe("dispatchJobFileTicks routing", () => {
     expect(runExecutableMock.mock.calls[0]![0]).toBe("job-tick")
   })
 
-  it("skips a job with no `worker:` (every job must name an executor)", async () => {
+  it("skips a duty with no `staff:` (every job must name an executor)", async () => {
     writeJob("orphan-job", "every: 1h")
 
     const ctx = ctxFor()
     await dispatchJobFileTicks(ctx, PROFILE, {
-      jobsDir: ".kody/jobs",
+      jobsDir: ".kody/duties",
       targetExecutable: "job-tick",
       slugArg: "job",
     })
@@ -105,12 +105,12 @@ describe("dispatchJobFileTicks routing", () => {
   })
 
   it("mixes routing across slugs in one tick", async () => {
-    writeJob("scripted-job", "tickScript: .kody/scripts/x.sh\nworker: kody")
-    writeJob("agent-job", "every: 1h\nworker: kody")
+    writeJob("scripted-job", "tickScript: .kody/scripts/x.sh\nstaff: kody")
+    writeJob("agent-job", "every: 1h\nstaff: kody")
 
     const ctx = ctxFor()
     await dispatchJobFileTicks(ctx, PROFILE, {
-      jobsDir: ".kody/jobs",
+      jobsDir: ".kody/duties",
       targetExecutable: "job-tick",
       slugArg: "job",
     })

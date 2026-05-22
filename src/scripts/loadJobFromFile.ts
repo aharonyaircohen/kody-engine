@@ -15,14 +15,14 @@
  *   ctx.data.workerTitle     worker file H1, or humanized worker slug
  *   ctx.data.workerPersona   worker persona body (post-frontmatter), or ""
  *
- * The worker is *who* the tick runs as: a job names exactly one worker via
- * `worker:` frontmatter; its persona is injected ahead of the job body by
- * `job-tick`. A `worker:` that points at a missing file is a hard error —
- * a job must not silently run with no executor identity.
+ * The staff member is *who* the tick runs as: a duty names exactly one
+ * staff member via `staff:` frontmatter; its persona is injected ahead of
+ * the duty body by `job-tick`. A `staff:` that points at a missing file is a
+ * hard error — a duty must not silently run with no executor identity.
  *
  * Script args (via `with:`):
- *   jobsDir       optional — default ".kody/jobs"
- *   workersDir    optional — default ".kody/workers"
+ *   jobsDir       optional — default ".kody/duties"
+ *   workersDir    optional — default ".kody/staff"
  *   slugArg       optional — name of the CLI input holding the slug (default "job")
  */
 
@@ -33,8 +33,8 @@ import { resolveBackend } from "./jobState/index.js"
 import { splitFrontmatter } from "./jobFrontmatter.js"
 
 export const loadJobFromFile: PreflightScript = async (ctx, _profile, args) => {
-  const jobsDir = String(args?.jobsDir ?? ".kody/jobs")
-  const workersDir = String(args?.workersDir ?? ".kody/workers")
+  const jobsDir = String(args?.jobsDir ?? ".kody/duties")
+  const workersDir = String(args?.workersDir ?? ".kody/staff")
   const slugArg = String(args?.slugArg ?? "job")
   const slug = String(ctx.args[slugArg] ?? "").trim()
   if (!slug) {
@@ -48,18 +48,18 @@ export const loadJobFromFile: PreflightScript = async (ctx, _profile, args) => {
   const raw = fs.readFileSync(absPath, "utf-8")
   const { title, body } = parseJobFile(raw, slug)
 
-  // Resolve the assigned worker (persona) — *who* this tick runs as. The
-  // job owns scheduling; the worker is identity/doctrine injected ahead
-  // of the job body. A `worker:` pointing at a missing file is fatal: a
-  // job must never run without the executor identity it declared.
-  const workerSlug = (splitFrontmatter(raw).frontmatter.worker ?? "").trim()
+  // Resolve the assigned staff member (persona) — *who* this tick runs as.
+  // The duty owns scheduling; the staff member is identity/doctrine injected
+  // ahead of the duty body. A `staff:` pointing at a missing file is fatal: a
+  // duty must never run without the executor identity it declared.
+  const workerSlug = (splitFrontmatter(raw).frontmatter.staff ?? "").trim()
   let workerTitle = ""
   let workerPersona = ""
   if (workerSlug) {
     const workerPath = path.join(ctx.cwd, workersDir, `${workerSlug}.md`)
     if (!fs.existsSync(workerPath)) {
       throw new Error(
-        `loadJobFromFile: job '${slug}' declares worker '${workerSlug}' but ${workerPath} does not exist`,
+        `loadJobFromFile: duty '${slug}' declares staff '${workerSlug}' but ${workerPath} does not exist`,
       )
     }
     const workerRaw = fs.readFileSync(workerPath, "utf-8")

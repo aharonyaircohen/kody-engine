@@ -9,7 +9,7 @@
       "flag": "--job",
       "type": "string",
       "required": true,
-      "describe": "Job slug — basename (without .md) of the file under .kody/jobs/."
+      "describe": "Duty slug — basename (without .md) of the file under .kody/duties/."
     },
     {
       "name": "force",
@@ -51,7 +51,7 @@
       {
         "script": "runTickScript",
         "with": {
-          "jobsDir": ".kody/jobs",
+          "jobsDir": ".kody/duties",
           "slugArg": "job",
           "fenceLabel": "kody-job-next-state"
         }
@@ -61,7 +61,7 @@
       {
         "script": "writeJobStateFile",
         "with": {
-          "jobsDir": ".kody/jobs"
+          "jobsDir": ".kody/duties"
         }
       }
     ]

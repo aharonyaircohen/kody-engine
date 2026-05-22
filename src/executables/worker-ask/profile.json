@@ -1,7 +1,7 @@
 {
   "name": "worker-ask",
   "role": "primitive",
-  "describe": "Ad-hoc one-shot: run a worker persona against an inline message + context (from a dashboard @worker mention). Stateless — no job file, no state, no commit. Replies into the originating thread.",
+  "describe": "Ad-hoc one-shot: run a staff persona against an inline message + context (from a dashboard @staff mention). Stateless — no duty file, no state, no commit. Replies into the originating thread.",
   "kind": "oneshot",
   "inputs": [
     {
@@ -9,7 +9,7 @@
       "flag": "--worker",
       "type": "string",
       "required": true,
-      "describe": "Worker slug — basename (without .md) of the persona file under .kody/workers/."
+      "describe": "Staff slug — basename (without .md) of the persona file under .kody/staff/."
     },
     {
       "name": "thread",
@@ -58,7 +58,7 @@
       {
         "script": "loadWorkerAdhoc",
         "with": {
-          "workersDir": ".kody/workers"
+          "workersDir": ".kody/staff"
         }
       },
       {
