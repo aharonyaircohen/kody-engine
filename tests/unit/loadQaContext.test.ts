@@ -79,38 +79,39 @@ describe("loadQaContext", () => {
     expect(ctx.data.qaAuthBlock).toContain("no `LOGIN_PASSWORD` secret was found")
   })
 
-  it("includes only `for: qa`/`all` profile sections, excluding chat-scoped and legacy", async () => {
+  it("includes only profile sections whose audience contains qa, excluding chat-only and legacy", async () => {
     const profileDir = path.join(tmp, ".kody", "profile")
     fs.mkdirSync(profileDir, { recursive: true })
     fs.writeFileSync(
       path.join(profileDir, "scenarios.md"),
-      "---\nfor: qa\n---\n\nCheck the checkout flow.",
+      "---\naudience: [qa]\n---\n\nCheck the checkout flow.",
     )
+    // Multi-audience section — included in QA because the list contains qa.
     fs.writeFileSync(
       path.join(profileDir, "shared.md"),
-      "---\nfor: all\n---\n\nSeed data lives in fixtures.",
+      "---\naudience: [chat, qa]\n---\n\nSeed data lives in fixtures.",
     )
     fs.writeFileSync(
       path.join(profileDir, "mission.md"),
-      "---\nfor: chat\n---\n\nWe sell widgets.",
+      "---\naudience: [chat]\n---\n\nWe sell widgets.",
     )
-    // Legacy frontmatter-less file → defaults to chat → excluded from QA.
+    // Legacy frontmatter-less file → defaults to [chat] → excluded from QA.
     fs.writeFileSync(path.join(profileDir, "about.md"), "about")
 
     const ctx = makeCtx(tmp)
     await loadQaContext(ctx, dummyProfile)
     const qaProfile = ctx.data.qaProfile as string
-    // qa + all are included, with filename headings and frontmatter stripped.
+    // qa-audience sections are included, with filename headings, frontmatter stripped.
     expect(qaProfile).toContain("## scenarios.md")
     expect(qaProfile).toContain("Check the checkout flow.")
     expect(qaProfile).toContain("## shared.md")
     expect(qaProfile).toContain("Seed data lives in fixtures.")
-    // chat-scoped and legacy files are excluded.
+    // chat-only and legacy files are excluded.
     expect(qaProfile).not.toContain("We sell widgets.")
     expect(qaProfile).not.toContain("## mission.md")
     expect(qaProfile).not.toContain("## about.md")
     // frontmatter must not leak into the prompt.
-    expect(qaProfile).not.toContain("for: qa")
+    expect(qaProfile).not.toContain("audience:")
   })
 
   it("emits the no-creds auth block and empty qaProfile when nothing is configured", async () => {

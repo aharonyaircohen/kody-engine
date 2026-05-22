@@ -4,7 +4,7 @@
  * committed `.kody/qa-guide.md` mechanism.
  *
  *   - scenarios / notes → the company profile, `.kody/profile/*.md`
- *     (only sections whose `for:` frontmatter is `qa` or `all`)
+ *     (only sections whose `audience` list includes `qa`)
  *   - login username     → variables file `.kody/variables.json`, key LOGIN_USER
  *   - password           → secret LOGIN_PASSWORD, read from process.env
  *
@@ -35,37 +35,40 @@ const PROFILE_DIR_REL_PATH = ".kody/profile"
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
 
 /**
- * Read the `for:` scope and the post-frontmatter body from a profile file.
+ * Read the `audience` list and the post-frontmatter body from a profile file.
  * Profile frontmatter is NOT job frontmatter (jobFrontmatter's parser
- * whitelists job keys and would silently drop `for:`), so we read it here. A
- * file with no frontmatter — or no `for:` line — defaults to `chat`.
+ * whitelists job keys and would silently drop `audience`), so we read it here.
+ * The canonical format is an inline list — `audience: [chat, qa]` — but a bare
+ * scalar (`audience: qa`) is tolerated. A file with no frontmatter, or no
+ * `audience` line, defaults to `["chat"]` (legacy = chat-only).
  */
-function readProfileScope(raw: string): { scope: string; body: string } {
+function readProfileAudience(raw: string): { audience: string[]; body: string } {
   const m = FRONTMATTER_RE.exec(raw)
-  if (!m) return { scope: "chat", body: raw }
+  if (!m) return { audience: ["chat"], body: raw }
   const body = raw.slice(m[0].length)
   for (const line of (m[1] ?? "").split(/\r?\n/)) {
     const t = line.trim()
     const c = t.indexOf(":")
     if (c < 0) continue
-    if (t.slice(0, c).trim() === "for") {
-      const scope = t
-        .slice(c + 1)
-        .trim()
-        .replace(/^["']|["']$/g, "")
-        .toLowerCase()
-      return { scope, body }
+    if (t.slice(0, c).trim() === "audience") {
+      const v = t.slice(c + 1).trim()
+      const inner = v.startsWith("[") && v.endsWith("]") ? v.slice(1, -1) : v
+      const audience = inner
+        .split(",")
+        .map((s) => s.trim().replace(/^["']|["']$/g, "").toLowerCase())
+        .filter(Boolean)
+      return { audience: audience.length > 0 ? audience : ["chat"], body }
     }
   }
-  return { scope: "chat", body }
+  return { audience: ["chat"], body }
 }
 
 /**
  * Concatenate the QA-scoped `.kody/profile/*.md` sections into one markdown
  * block, each prefixed with a `## <filename>` heading. Only sections whose
- * `for:` frontmatter is `qa` or `all` are included — `chat` (and frontmatter-
- * less legacy files, which default to `chat`) belong to the chat prompt, not
- * QA. Returns "" if the directory is absent or has no QA-scoped sections.
+ * `audience` list includes `qa` are included — chat-only sections (and
+ * frontmatter-less legacy files, which default to `["chat"]`) belong to the
+ * chat prompt, not QA. Returns "" if the dir is absent or has no QA sections.
  */
 function readProfile(cwd: string): string {
   const dir = path.join(cwd, PROFILE_DIR_REL_PATH)
@@ -83,8 +86,8 @@ function readProfile(cwd: string): string {
   for (const file of entries) {
     try {
       const raw = fs.readFileSync(path.join(dir, file), "utf-8")
-      const { scope, body } = readProfileScope(raw)
-      if (scope !== "qa" && scope !== "all") continue
+      const { audience, body } = readProfileAudience(raw)
+      if (!audience.includes("qa")) continue
       blocks.push(`## ${file}\n\n${body.trim()}`)
     } catch {
       /* skip unreadable file */
