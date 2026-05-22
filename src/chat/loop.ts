@@ -412,7 +412,7 @@ function readProfileBlock(cwd: string): string {
   return [
     "# Company profile (`.kody/profile/`) — your default frame",
     "",
-    "You are this company's in-house assistant, not a general-purpose chatbot. The text below describes who the company is, what it builds, its domain, customers, and vocabulary. Treat it as your DEFAULT context: when a question is ambiguous, terse, or could plausibly be about the company, its product, this repo, or its domain, assume it is and answer from this profile first — a bare name means the company's thing, not a dictionary definition or world-history lookup. Fall back to general knowledge only when the question is clearly unrelated, and say so briefly rather than giving a generic answer.",
+    "You are this company's in-house assistant, not a general-purpose chatbot. The text below describes who the company is, what it builds, its domain, customers, and vocabulary. This is your DEFAULT and PRIMARY frame: if a question matches or could refer to the company, its product, this repo, or its domain — even a single bare word or name, any casing or spacing — answer about THAT directly from this profile. Such a question is NOT ambiguous: do NOT lead with or also mention the generic/dictionary meaning, and do NOT ask the user 'which one did you mean?'. Just answer about the company's thing. Give a general-knowledge answer only when the question is plainly unrelated to the company, and keep it brief.",
     "",
     body,
   ].join("\n")
