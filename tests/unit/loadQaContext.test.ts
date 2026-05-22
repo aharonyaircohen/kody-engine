@@ -79,19 +79,38 @@ describe("loadQaContext", () => {
     expect(ctx.data.qaAuthBlock).toContain("no `LOGIN_PASSWORD` secret was found")
   })
 
-  it("concatenates .kody/profile/*.md into qaProfile with filename headings", async () => {
+  it("includes only `for: qa`/`all` profile sections, excluding chat-scoped and legacy", async () => {
     const profileDir = path.join(tmp, ".kody", "profile")
     fs.mkdirSync(profileDir, { recursive: true })
-    fs.writeFileSync(path.join(profileDir, "scenarios.md"), "Check the checkout flow.")
-    fs.writeFileSync(path.join(profileDir, "notes.md"), "Seed data lives in fixtures.")
+    fs.writeFileSync(
+      path.join(profileDir, "scenarios.md"),
+      "---\nfor: qa\n---\n\nCheck the checkout flow.",
+    )
+    fs.writeFileSync(
+      path.join(profileDir, "shared.md"),
+      "---\nfor: all\n---\n\nSeed data lives in fixtures.",
+    )
+    fs.writeFileSync(
+      path.join(profileDir, "mission.md"),
+      "---\nfor: chat\n---\n\nWe sell widgets.",
+    )
+    // Legacy frontmatter-less file → defaults to chat → excluded from QA.
+    fs.writeFileSync(path.join(profileDir, "about.md"), "about")
 
     const ctx = makeCtx(tmp)
     await loadQaContext(ctx, dummyProfile)
     const qaProfile = ctx.data.qaProfile as string
-    expect(qaProfile).toContain("## notes.md")
-    expect(qaProfile).toContain("Seed data lives in fixtures.")
+    // qa + all are included, with filename headings and frontmatter stripped.
     expect(qaProfile).toContain("## scenarios.md")
     expect(qaProfile).toContain("Check the checkout flow.")
+    expect(qaProfile).toContain("## shared.md")
+    expect(qaProfile).toContain("Seed data lives in fixtures.")
+    // chat-scoped and legacy files are excluded.
+    expect(qaProfile).not.toContain("We sell widgets.")
+    expect(qaProfile).not.toContain("## mission.md")
+    expect(qaProfile).not.toContain("## about.md")
+    // frontmatter must not leak into the prompt.
+    expect(qaProfile).not.toContain("for: qa")
   })
 
   it("emits the no-creds auth block and empty qaProfile when nothing is configured", async () => {

@@ -4,6 +4,7 @@
  * committed `.kody/qa-guide.md` mechanism.
  *
  *   - scenarios / notes → the company profile, `.kody/profile/*.md`
+ *     (only sections whose `for:` frontmatter is `qa` or `all`)
  *   - login username     → variables file `.kody/variables.json`, key LOGIN_USER
  *   - password           → secret LOGIN_PASSWORD, read from process.env
  *
@@ -30,10 +31,41 @@ import { readKodyVariables } from "./kodyVariables.js"
 
 const PROFILE_DIR_REL_PATH = ".kody/profile"
 
+/** Frontmatter fence: a leading `---\n…\n---` block. */
+const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
+
 /**
- * Concatenate every `.kody/profile/*.md` file into one markdown block, each
- * prefixed with a `## <filename>` heading. Returns "" if the directory is
- * absent or contains no readable markdown.
+ * Read the `for:` scope and the post-frontmatter body from a profile file.
+ * Profile frontmatter is NOT job frontmatter (jobFrontmatter's parser
+ * whitelists job keys and would silently drop `for:`), so we read it here. A
+ * file with no frontmatter — or no `for:` line — defaults to `chat`.
+ */
+function readProfileScope(raw: string): { scope: string; body: string } {
+  const m = FRONTMATTER_RE.exec(raw)
+  if (!m) return { scope: "chat", body: raw }
+  const body = raw.slice(m[0].length)
+  for (const line of (m[1] ?? "").split(/\r?\n/)) {
+    const t = line.trim()
+    const c = t.indexOf(":")
+    if (c < 0) continue
+    if (t.slice(0, c).trim() === "for") {
+      const scope = t
+        .slice(c + 1)
+        .trim()
+        .replace(/^["']|["']$/g, "")
+        .toLowerCase()
+      return { scope, body }
+    }
+  }
+  return { scope: "chat", body }
+}
+
+/**
+ * Concatenate the QA-scoped `.kody/profile/*.md` sections into one markdown
+ * block, each prefixed with a `## <filename>` heading. Only sections whose
+ * `for:` frontmatter is `qa` or `all` are included — `chat` (and frontmatter-
+ * less legacy files, which default to `chat`) belong to the chat prompt, not
+ * QA. Returns "" if the directory is absent or has no QA-scoped sections.
  */
 function readProfile(cwd: string): string {
   const dir = path.join(cwd, PROFILE_DIR_REL_PATH)
@@ -50,8 +82,10 @@ function readProfile(cwd: string): string {
   const blocks: string[] = []
   for (const file of entries) {
     try {
-      const content = fs.readFileSync(path.join(dir, file), "utf-8")
-      blocks.push(`## ${file}\n\n${content}`)
+      const raw = fs.readFileSync(path.join(dir, file), "utf-8")
+      const { scope, body } = readProfileScope(raw)
+      if (scope !== "qa" && scope !== "all") continue
+      blocks.push(`## ${file}\n\n${body.trim()}`)
     } catch {
       /* skip unreadable file */
     }
