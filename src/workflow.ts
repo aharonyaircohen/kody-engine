@@ -29,10 +29,18 @@ export interface FailedRun {
 }
 
 /**
- * Fetch recent failed workflow runs for the PR's *current head commit*,
- * most-recent-first. Scoping to the head SHA (not just the branch) means
- * historical noise — especially kody's own dispatch reruns from earlier
- * commits — can never crowd the real CI failure out of the window.
+ * Fetch recent failed workflow runs for the PR's branch, most-recent-first,
+ * with failures on the *current head commit* sorted to the front.
+ *
+ * We prefer the head commit's failure but DON'T hard-filter to it. With rapid
+ * commits (kody pushes faster than CI finishes), the head SHA's run is often
+ * still in-flight — or its logs aren't uploaded yet — while a real, fixable
+ * failure sits on the previous commit. A strict head-SHA filter strands that
+ * failure and fix-ci gives up with "no actionable run" on every tick. Falling
+ * back to the latest branch failure keeps fix-ci moving. (kody's own dispatch
+ * reruns are excluded later by name in `pickFailedRunForFixCi`, regardless of
+ * SHA, so relaxing the SHA scope doesn't reintroduce that noise.)
+ *
  * Returns an empty array if the PR can't be resolved or the listing fails.
  */
 export function getRecentFailedRunsForPr(prNumber: number, limit: number, cwd?: string): FailedRun[] {
@@ -46,7 +54,7 @@ export function getRecentFailedRunsForPr(prNumber: number, limit: number, cwd?: 
   } catch {
     return []
   }
-  if (!headBranch || !headSha) return []
+  if (!headBranch) return []
 
   try {
     const out = gh(
@@ -66,17 +74,18 @@ export function getRecentFailedRunsForPr(prNumber: number, limit: number, cwd?: 
     )
     const parsed = JSON.parse(out)
     if (!Array.isArray(parsed)) return []
-    return parsed
-      .map((r) => ({
-        id: String(r.databaseId ?? ""),
-        workflowName: r.workflowName ?? "",
-        headBranch: r.headBranch ?? headBranch,
-        headSha: r.headSha ?? "",
-        conclusion: r.conclusion ?? "failure",
-        url: r.url ?? "",
-        createdAt: r.createdAt ?? "",
-      }))
-      .filter((r) => r.headSha === headSha)
+    const runs: FailedRun[] = parsed.map((r) => ({
+      id: String(r.databaseId ?? ""),
+      workflowName: r.workflowName ?? "",
+      headBranch: r.headBranch ?? headBranch,
+      headSha: r.headSha ?? "",
+      conclusion: r.conclusion ?? "failure",
+      url: r.url ?? "",
+      createdAt: r.createdAt ?? "",
+    }))
+    // Stable-sort head-SHA matches first (Array.sort is stable, and gh returns
+    // most-recent-first, so recency order is preserved within each group).
+    return runs.sort((a, b) => (a.headSha === headSha ? 0 : 1) - (b.headSha === headSha ? 0 : 1))
   } catch {
     return []
   }

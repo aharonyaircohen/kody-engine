@@ -50,7 +50,7 @@ export const fixCiFlow: PreflightScript = async (ctx) => {
       bail(
         ctx,
         prNumber,
-        `no actionable failed workflow run found for PR #${prNumber}'s current commit (scanned up to ${RUN_LOOKBACK} failed runs on the head SHA — none were actionable CI failures with fetchable logs; pass --run-id to target a specific run)`,
+        `no actionable failed workflow run found for PR #${prNumber} (scanned up to ${RUN_LOOKBACK} recent failed runs on the branch, head commit first — none were actionable CI failures with fetchable logs; pass --run-id to target a specific run)`,
       )
       return
     }
