@@ -80,7 +80,7 @@ describe("loadQaContext", () => {
   })
 
   it("includes only sections whose staff contains qa-engineer; legacy audience is mapped, unassigned/chat/legacy-less excluded", async () => {
-    const profileDir = path.join(tmp, ".kody", "docs")
+    const profileDir = path.join(tmp, ".kody", "context")
     fs.mkdirSync(profileDir, { recursive: true })
     fs.writeFileSync(
       path.join(profileDir, "scenarios.md"),

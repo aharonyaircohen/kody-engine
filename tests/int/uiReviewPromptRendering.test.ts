@@ -88,7 +88,7 @@ describe("ui-review: preflight + composePrompt end-to-end", () => {
     // Hand-written scenarios/notes from the docs (qa-scoped; legacy audience).
     writeFile(
       tmp,
-      ".kody/docs/scenarios.md",
+      ".kody/context/scenarios.md",
       "---\naudience: [qa]\n---\n\nAlways verify the lessons list paginates.",
     )
 
