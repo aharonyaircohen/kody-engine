@@ -37,6 +37,13 @@ export interface AgentResult {
    */
   outcomeKind?: AgentOutcomeKind
   finalText: string
+  /**
+   * State the agent submitted via the in-process `submit_state` tool
+   * (job-tick only, when `enableSubmitTool` is set). Preferred over the
+   * legacy fenced `kody-job-next-state` block when present. Undefined when
+   * the tool wasn't enabled or the agent never called it.
+   */
+  submittedState?: { cursor: string; data: Record<string, unknown>; done: boolean }
   error?: string
   ndjsonPath: string
   /** Wall-clock duration of the agent invocation, in milliseconds. */
@@ -120,6 +127,12 @@ export interface AgentOptions {
    * to be set. Default false.
    */
   enableVerifyTool?: boolean
+  /**
+   * Opt-in: build an in-process MCP server exposing a `submit_state` tool the
+   * agent calls to persist its next state (used by job-tick instead of relying
+   * on a trailing fenced block). Default false.
+   */
+  enableSubmitTool?: boolean
   /** Max number of verify-tool calls per session. Falls back to default. */
   verifyToolMaxAttempts?: number | null
   /** Config passed to the verify tool's underlying `verifyAllWithRetry` call. */
@@ -224,6 +237,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const turnTimeoutMs = resolveTurnTimeoutMs(opts)
   let ndjsonWriteFailed = false
   let ndjsonWriteError: string | undefined
+  let getSubmitted: (() => { cursor: string; data: Record<string, unknown>; done: boolean } | undefined) | undefined
 
   try {
     const queryOptions: Record<string, unknown> = {
@@ -256,6 +270,14 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
             : undefined,
       })
       mcpEntries.push(["kody-verify", verifyServer as unknown as Record<string, unknown>])
+    }
+    if (opts.enableSubmitTool) {
+      // Lazy import — keeps the SDK MCP machinery off the cold path for flows
+      // that don't submit structured state.
+      const { buildSubmitMcpServer } = await import("./submitMcp.js")
+      const submitHandle = buildSubmitMcpServer()
+      getSubmitted = submitHandle.getSubmitted
+      mcpEntries.push(["kody-submit", submitHandle.server as unknown as Record<string, unknown>])
     }
     if (mcpEntries.length > 0) {
       queryOptions.mcpServers = Object.fromEntries(mcpEntries)
@@ -452,10 +474,12 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     process.stderr.write(`[kody agent] NDJSON write failed (post-mortem may be incomplete): ${ndjsonWriteError ?? "unknown error"}\n`)
   }
   const finalText = resultTexts.join("\n\n---\n\n")
+  const submittedState = getSubmitted?.()
   return {
     outcome,
     outcomeKind,
     finalText,
+    ...(submittedState ? { submittedState } : {}),
     error: errorMessage,
     ndjsonPath,
     durationMs: Date.now() - startedAt,

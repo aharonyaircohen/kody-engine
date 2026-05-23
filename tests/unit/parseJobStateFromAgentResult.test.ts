@@ -106,4 +106,31 @@ describe("parseJobStateFromAgentResult", () => {
     expect((ctx.data.nextJobState as StateEnvelope).rev).toBe(4)
     expect((ctx.data.nextJobState as StateEnvelope).done).toBe(true)
   })
+
+  it("prefers the submit_state tool payload over any fenced block", async () => {
+    const ctx = makeCtx({ jobState: { path: "x", token: null, state: { rev: 2 } } })
+    // finalText carries a DIFFERENT (older) block; the tool payload must win.
+    const result: AgentResult = {
+      outcome: "completed",
+      finalText: fenced(FENCE, JSON.stringify({ cursor: "from-block", data: {}, done: false })),
+      submittedState: { cursor: "from-tool", data: { acted: 1 }, done: false },
+      ndjsonPath: "/tmp/x.ndjson",
+    }
+    await parseJobStateFromAgentResult(ctx, profile, result, { fenceLabel: FENCE })
+    const next = ctx.data.nextJobState as StateEnvelope
+    expect(next).toEqual<StateEnvelope>({ version: 1, rev: 3, cursor: "from-tool", data: { acted: 1 }, done: false })
+    expect(ctx.data.nextStateParseError).toBeUndefined()
+  })
+
+  it("falls back to the fenced block when submit_state has an empty cursor", async () => {
+    const ctx = makeCtx()
+    const result: AgentResult = {
+      outcome: "completed",
+      finalText: fenced(FENCE, JSON.stringify({ cursor: "block-cursor", data: { b: 2 }, done: false })),
+      submittedState: { cursor: "", data: {}, done: false },
+      ndjsonPath: "/tmp/x.ndjson",
+    }
+    await parseJobStateFromAgentResult(ctx, profile, result, { fenceLabel: FENCE })
+    expect((ctx.data.nextJobState as StateEnvelope).cursor).toBe("block-cursor")
+  })
 })

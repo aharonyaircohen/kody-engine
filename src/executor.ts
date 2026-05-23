@@ -242,6 +242,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
         .join("\n\n") || undefined,
       cacheable: profile.claudeCode.cacheable,
       enableVerifyTool: profile.claudeCode.enableVerifyTool,
+      enableSubmitTool: profile.claudeCode.enableSubmitTool,
       verifyToolMaxAttempts: profile.claudeCode.verifyAttempts ?? null,
       verifyConfig: profile.claudeCode.enableVerifyTool ? config : undefined,
       executableName: profileName,

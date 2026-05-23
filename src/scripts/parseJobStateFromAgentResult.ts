@@ -93,6 +93,23 @@ export const parseJobStateFromAgentResult: PostflightScript = async (ctx, _profi
   const loaded = ctx.data.jobState as LoadedJobState | null | undefined
   const prevRev = loaded?.state.rev ?? 0
 
+  // Preferred path: the agent called the `submit_state` tool (job-tick with
+  // enableSubmitTool). A structured tool call can't be "forgotten" the way a
+  // trailing fenced block can, so it's far more reliable. Fall through to the
+  // fenced-block parse when the tool wasn't called (tool disabled, or the
+  // model emitted the block the old way) — keeping this purely additive.
+  const submitted = agentResult.submittedState
+  if (submitted && typeof submitted.cursor === "string" && submitted.cursor.length > 0) {
+    ctx.data.nextJobState = {
+      version: 1,
+      rev: prevRev + 1,
+      cursor: submitted.cursor,
+      data: submitted.data ?? {},
+      done: Boolean(submitted.done),
+    }
+    return
+  }
+
   const result = extractNextStateFromText(agentResult.finalText, fenceLabel, prevRev)
   if (result.error) {
     // Preserve the legacy phrasing for the missing-block case so existing

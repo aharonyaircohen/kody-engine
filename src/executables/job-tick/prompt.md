@@ -32,23 +32,25 @@ This is the state you wrote at the end of the previous tick (or `null` if this i
 2. **Re-read the job body.** It may have changed since the last tick.
 3. **Execute exactly the work the body's `## Job` section describes**, subject to its `## Allowed Commands` and `## Restrictions`. Use the `## State` section to interpret and update `data`.
 4. **Optionally post a short narration** wherever the job tells you to (typically a PR comment alongside the action). Keep it terse.
-5. **Emit the new state** at the very end of your response using the fenced block below. Do not include `version` or `rev` — the postflight script manages those.
+5. **Submit the new state** by calling the `submit_state` tool (see contract below). Do not include `version` or `rev` — the postflight script manages those.
 
 ## Output contract (MANDATORY, exactly once, at the end)
 
-End your response with a single fenced block using the `kody-job-next-state` language tag:
+Call the **`submit_state`** tool exactly once, as the final step, with your next state:
 
-````
-```kody-job-next-state
-{
-  "cursor": "<your-next-cursor>",
-  "data": { ... },
-  "done": <true|false>
-}
-```
-````
+- `cursor` — your next cursor (string, e.g. `"idle"`).
+- `data` — your next `data` object. Carry forward prior `data` and mutate only what you acted on this tick.
+- `done` — `true` only if the duty is permanently finished; evergreen duties stay `false`.
 
-If you fail to emit this block, or the JSON is invalid, the tick fails and the gist state is NOT updated. On the next wake you'll see the same prior state and can retry.
+This is the ONLY way your decision is saved. If you don't call it, the tick fails and the state is NOT updated — on the next wake you'll see the same prior state and can retry.
+
+> Backstop (legacy): if the `submit_state` tool is unavailable, end your reply with the same JSON in a single fenced block tagged `kody-job-next-state` instead:
+>
+> ````
+> ```kody-job-next-state
+> { "cursor": "<next>", "data": { ... }, "done": <true|false> }
+> ```
+> ````
 
 ## Rules
 

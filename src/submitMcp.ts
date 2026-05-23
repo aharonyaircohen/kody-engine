@@ -1,0 +1,80 @@
+/**
+ * In-process MCP server exposing a `submit_state` tool to the agent.
+ *
+ * Why this exists: a job-tick agent must persist its decision as a state
+ * envelope. The legacy contract asked the model to END its reply with a
+ * fenced `kody-job-next-state` JSON block — which long/complex duties (e.g.
+ * approval-gate) routinely forgot, so the tick failed "agent did not emit a
+ * fenced block" and the duty never did its work. A structured tool the model
+ * CALLS is far more reliable than a trailing-text convention it must remember.
+ *
+ * The agent calls `submit_state({ cursor, data, done })` once when done; the
+ * handler captures the payload into a per-invocation closure that `runAgent`
+ * reads back as `AgentResult.submittedState`. The fenced-block path is kept as
+ * a fallback (see parseJobStateFromAgentResult) so this is purely additive —
+ * a duty that still emits the block, or a model that ignores the tool, behaves
+ * exactly as before.
+ *
+ * Built per-runAgent invocation (not module-level) so each call binds its own
+ * capture slot. Uses `createSdkMcpServer` (in-process) — no subprocess.
+ */
+
+import { createSdkMcpServer, tool, type McpSdkServerConfigWithInstance } from "@anthropic-ai/claude-agent-sdk"
+import { z } from "zod"
+
+/** The state an agent submits — same shape the fenced block carried. */
+export interface SubmittedState {
+  cursor: string
+  data: Record<string, unknown>
+  done: boolean
+}
+
+export interface SubmitToolHandle {
+  /** Config object to drop into `mcpServers["kody-submit"]`. */
+  server: McpSdkServerConfigWithInstance
+  /** The last submitted state, or undefined if the tool was never called. */
+  getSubmitted: () => SubmittedState | undefined
+}
+
+/**
+ * Build an in-process MCP server with one tool: `submit_state`. The returned
+ * `getSubmitted()` yields whatever the agent last submitted (last call wins).
+ */
+export function buildSubmitMcpServer(): SubmitToolHandle {
+  let submitted: SubmittedState | undefined
+
+  const submitTool = tool(
+    "submit_state",
+    "Persist this tick's next state. Call this EXACTLY ONCE, at the very end, when you've finished your work — it is the ONLY way your decision is saved. Pass your next `cursor` (string), your next `data` (object — carry prior data forward and mutate what you acted on), and `done` (boolean). After calling it you are finished; do not take further actions.",
+    {
+      cursor: z.string().describe("The next cursor value (e.g. \"idle\"). Must be a non-empty string."),
+      data: z
+        .record(z.string(), z.unknown())
+        .describe("The next `data` object. Carry forward prior data and mutate only what you acted on this tick."),
+      done: z.boolean().describe("true only if this duty is permanently finished; evergreen duties stay false."),
+    },
+    async (args) => {
+      submitted = {
+        cursor: String(args.cursor ?? ""),
+        data: (args.data ?? {}) as Record<string, unknown>,
+        done: Boolean(args.done),
+      }
+      return {
+        content: [
+          {
+            type: "text",
+            text: "State recorded. You are done for this tick — no further action needed.",
+          },
+        ],
+      }
+    },
+  )
+
+  const server = createSdkMcpServer({
+    name: "kody-submit",
+    version: "0.1.0",
+    tools: [submitTool],
+  })
+
+  return { server, getSubmitted: () => submitted }
+}

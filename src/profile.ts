@@ -252,6 +252,7 @@ function parseClaudeCode(p: string, raw: unknown): ClaudeCodeSpec {
     systemPromptAppend: typeof r.systemPromptAppend === "string" ? r.systemPromptAppend : null,
     cacheable: r.cacheable === true,
     enableVerifyTool: r.enableVerifyTool === true,
+    enableSubmitTool: r.enableSubmitTool === true,
     verifyAttempts: typeof r.verifyAttempts === "number" && r.verifyAttempts > 0 ? r.verifyAttempts : null,
     tools,
     hooks: Array.isArray(r.hooks) ? (r.hooks as string[]) : [],

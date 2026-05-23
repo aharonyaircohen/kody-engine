@@ -229,6 +229,13 @@ export interface ClaudeCodeSpec {
    */
   enableVerifyTool?: boolean
   /**
+   * Opt-in: expose an in-process `submit_state` tool the agent calls to
+   * persist its next state, instead of relying on a trailing fenced
+   * `kody-job-next-state` block it must remember to emit. Used by job-tick.
+   * The fenced block stays supported as a fallback. Default false.
+   */
+  enableSubmitTool?: boolean
+  /**
    * Hard cap on verify-tool invocations per agent session when
    * `enableVerifyTool` is true. Default 4 (≈3 fix iterations after the
    * first attempt). Set to 0 or omit to use the default.
