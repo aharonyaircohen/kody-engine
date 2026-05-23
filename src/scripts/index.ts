@@ -44,6 +44,7 @@ import { loadTaskContext } from "./loadTaskContext.js"
 import { loadTaskState } from "./loadTaskState.js"
 import { loadWorkerAdhoc } from "./loadWorkerAdhoc.js"
 import { markFlowSuccess } from "./markFlowSuccess.js"
+import { mergeFlow } from "./mergeFlow.js"
 import { mergeReleasePr } from "./mergeReleasePr.js"
 import { mirrorStateToPr } from "./mirrorStateToPr.js"
 import { notifyTerminal } from "./notifyTerminal.js"
@@ -99,6 +100,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   revertFlow,
   reviewFlow,
   syncFlow,
+  mergeFlow,
   initFlow,
   loadTaskState,
   loadTaskContext,

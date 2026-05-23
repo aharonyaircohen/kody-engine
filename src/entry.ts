@@ -25,6 +25,7 @@ Usage:
   kody-engine fix     --pr    <N> [--feedback "..."] [--cwd <path>] [--verbose|--quiet]
   kody-engine fix-ci  --pr    <N> [--run-id <ID>]    [--cwd <path>] [--verbose|--quiet]
   kody-engine resolve --pr    <N>                    [--cwd <path>] [--verbose|--quiet]
+  kody-engine merge   --pr    <N>                    [--cwd <path>] [--verbose|--quiet]
   kody-engine review  --pr    <N>                    [--cwd <path>] [--verbose|--quiet]
   kody-engine <other>                                [--cwd <path>] [--verbose|--quiet]
   kody-engine ci      --issue <N> [preflight flags — see: kody-engine ci --help]

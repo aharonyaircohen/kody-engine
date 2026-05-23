@@ -42,3 +42,4 @@ coverage/
 # Claude Code harness runtime artifacts (per-machine)
 .claude/scheduled_tasks.lock
 .claude/scheduled_tasks.log
+.vercel
