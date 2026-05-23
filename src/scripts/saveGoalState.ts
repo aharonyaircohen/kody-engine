@@ -20,11 +20,20 @@ export const saveGoalState: PreflightScript = async (ctx) => {
     return
   }
 
+  // Only bump `updatedAt` when something the tick actually persists changed.
+  // Bumping it on every tick made each idle no-op tick produce a fresh diff,
+  // and `commitGoalState` then committed a `chore(goals): tick (idle)` to the
+  // default branch every cycle. With the timestamp frozen on no-op ticks the
+  // file is byte-identical, the diff check short-circuits, and nothing commits.
+  const prev = goal.raw
+  const changed =
+    !prev || prev.state !== goal.state || prev.lastDispatchedIssue !== goal.lastDispatchedIssue
+
   const updated: GoalState = {
-    ...(goal.raw ?? { state: goal.state, extra: {} }),
+    ...(prev ?? { state: goal.state, extra: {} }),
     state: goal.state,
     lastDispatchedIssue: goal.lastDispatchedIssue,
-    updatedAt: nowIso(),
+    updatedAt: changed ? nowIso() : prev?.updatedAt,
   }
 
   writeGoalState(ctx.cwd, goal.id, updated)

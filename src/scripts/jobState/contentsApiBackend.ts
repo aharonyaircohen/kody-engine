@@ -5,14 +5,17 @@
  * writes go through the GitHub Contents API, so the default GITHUB_TOKEN
  * (with `contents: write`) is sufficient — no PAT or `gist` scope.
  *
- * Each `save` that produces a real change creates a commit on the default
- * branch. To avoid commit churn on idle ticks, writes are skipped when the
- * next state is structurally identical to the prior state (`isStateUnchanged`).
+ * Each `save` that produces a real change creates a commit on the dedicated
+ * `kody-state` branch (see ../../stateBranch), NOT the default branch — that
+ * keeps this high-churn bookkeeping out of the code history. To further avoid
+ * churn on idle ticks, writes are skipped when the next state is structurally
+ * identical to the prior state (`isStateUnchanged`).
  *
  * No `hydrate`/`persist` lifecycle — state is always live in the repo.
  */
 
 import { gh } from "../../issue.js"
+import { STATE_BRANCH, ensureStateBranch } from "../../stateBranch.js"
 import { initialStateEnvelope, isStateEnvelope, type StateEnvelope } from "../issueStateComment.js"
 import {
   isStateUnchanged,
@@ -59,7 +62,9 @@ export class ContentsApiBackend implements JobStateBackend {
     const filePath = stateFilePath(this.jobsDir, slug)
     let raw = ""
     try {
-      raw = gh(["api", `/repos/${this.owner}/${this.repo}/contents/${filePath}`], { cwd: this.cwd })
+      raw = gh(["api", `/repos/${this.owner}/${this.repo}/contents/${filePath}?ref=${STATE_BRANCH}`], {
+        cwd: this.cwd,
+      })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       // 404 = file doesn't exist yet (first run). Anything else is a real error.
@@ -108,10 +113,16 @@ export class ContentsApiBackend implements JobStateBackend {
     const payload: Record<string, unknown> = {
       message: `chore(jobs): update state for ${slug} (rev ${next.rev})`,
       content: Buffer.from(body, "utf-8").toString("base64"),
+      // Commit to the dedicated state branch instead of the default branch.
+      branch: STATE_BRANCH,
     }
     // `handle` is the prior blob SHA (set by `load` after a real read,
     // null when the file was newly seeded). Required for safe updates.
     if (typeof loaded.handle === "string") payload.sha = loaded.handle
+
+    // The Contents API rejects a write to a branch that doesn't exist yet —
+    // create `kody-state` on first use for this repo.
+    ensureStateBranch(this.owner, this.repo, this.cwd)
 
     gh(["api", "--method", "PUT", `/repos/${this.owner}/${this.repo}/contents/${loaded.path}`, "--input", "-"], {
       cwd: this.cwd,
