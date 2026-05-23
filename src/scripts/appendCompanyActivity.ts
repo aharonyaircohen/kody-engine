@@ -10,13 +10,15 @@
  *     durationMs, runUrl }
  *
  * Appended as one JSON line to `.kody/activity/<YYYY-MM-DD>.jsonl` via the
- * GitHub Contents API (read blob → append → PUT), committed to the repo so
+ * GitHub Contents API (read blob → append → PUT), committed to the dedicated
+ * `kody-state` branch (NOT the default branch — this fires on every tick) so
  * the dashboard can read it with no shared state. Best-effort: any failure is
  * logged and swallowed — activity logging must never fail a duty run.
  */
 import type { PostflightScript } from "../executables/types.js"
 import { gh } from "../issue.js"
 import { getRunUrl } from "../gha.js"
+import { STATE_BRANCH, ensureStateBranch } from "../stateBranch.js"
 
 interface ActivityRecord {
   ts: string
@@ -50,20 +52,25 @@ function appendLine(
   let sha: string | undefined
 
   try {
-    const out = gh(["api", `/repos/${owner}/${repo}/contents/${filePath}`], { cwd })
+    const out = gh(["api", `/repos/${owner}/${repo}/contents/${filePath}?ref=${STATE_BRANCH}`], { cwd })
     const json = JSON.parse(out) as { content?: string; sha?: string }
     if (json.sha) sha = json.sha
     if (json.content) existing = Buffer.from(json.content, "base64").toString("utf-8")
   } catch {
-    /* 404 — file doesn't exist yet; start fresh */
+    /* 404 — file (or state branch) doesn't exist yet; start fresh */
   }
 
   const body = `${existing}${JSON.stringify(record)}\n`
   const payload: Record<string, unknown> = {
     message: `chore(activity): ${record.action}`,
     content: Buffer.from(body, "utf-8").toString("base64"),
+    // Keep this high-frequency feed off the default branch.
+    branch: STATE_BRANCH,
   }
   if (sha) payload.sha = sha
+
+  // The Contents API rejects a write to a branch that doesn't exist yet.
+  ensureStateBranch(owner, repo, cwd)
 
   gh(
     ["api", "--method", "PUT", `/repos/${owner}/${repo}/contents/${filePath}`, "--input", "-"],
