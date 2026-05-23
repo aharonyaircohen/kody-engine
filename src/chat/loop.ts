@@ -193,10 +193,10 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
     taskType: "chat",
     relDir: taskArtifactsPaths.relDir,
   })
-  const profileBlock = readProfileBlock(opts.cwd)
+  const docsBlock = readDocsBlock(opts.cwd)
   const memoryBlock = readMemoryIndexBlock(opts.cwd)
   const instructionsBlock = readInstructionsBlock(opts.cwd)
-  // Order matters: company profile (who we are) and memory (what we've
+  // Order matters: documentation (who we are) and memory (what we've
   // learned) are factual background, so they sit right after the base
   // prompt. User instructions are behavioral overrides — placed last among
   // the context blocks so they win on tone/style by recency, but still
@@ -204,7 +204,7 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   // operational requirements the agent must not override.
   const systemPrompt = [
     basePrompt,
-    profileBlock,
+    docsBlock,
     memoryBlock,
     instructionsBlock,
     catalog,
@@ -373,18 +373,18 @@ function readMemoryIndexBlock(cwd: string): string {
 }
 
 /**
- * Concatenate every `.kody/profile/*.md` file into one company-profile
- * block for the chat system prompt, each file under a `### <slug>` heading.
- * Returns "" when the directory is absent or holds no readable markdown —
- * profile is advisory background, not required.
+ * Concatenate every `.kody/docs/*.md` file into one documentation block for
+ * the chat system prompt, each file under a `### <slug>` heading. Returns ""
+ * when the directory is absent or holds no readable markdown — docs are
+ * advisory background, not required.
  *
- * Capped at MAX_PROFILE_BYTES to protect the prompt budget.
+ * Capped at MAX_DOCS_BYTES to protect the prompt budget.
  */
-const PROFILE_DIR_REL = ".kody/profile"
-const MAX_PROFILE_BYTES = 12_000
+const DOCS_DIR_REL = ".kody/docs"
+const MAX_DOCS_BYTES = 12_000
 
-function readProfileBlock(cwd: string): string {
-  const dir = path.join(cwd, PROFILE_DIR_REL)
+function readDocsBlock(cwd: string): string {
+  const dir = path.join(cwd, DOCS_DIR_REL)
   let files: string[]
   try {
     files = fs
@@ -406,13 +406,13 @@ function readProfileBlock(cwd: string): string {
   const joined = sections.join("\n\n").trim()
   if (!joined) return ""
   const body =
-    joined.length > MAX_PROFILE_BYTES
-      ? joined.slice(0, MAX_PROFILE_BYTES) + "\n\n_… (company profile truncated; see `.kody/profile/` for the full text)_"
+    joined.length > MAX_DOCS_BYTES
+      ? joined.slice(0, MAX_DOCS_BYTES) + "\n\n_… (documentation truncated; see `.kody/docs/` for the full text)_"
       : joined
   return [
-    "# Company profile (`.kody/profile/`) — your default frame",
+    "# Documentation (`.kody/docs/`) — your default frame",
     "",
-    "You are this company's in-house assistant, not a general-purpose chatbot. The text below describes who the company is, what it builds, its domain, customers, and vocabulary. This is your DEFAULT and PRIMARY frame: if a question matches or could refer to the company, its product, this repo, or its domain — even a single bare word or name, any casing or spacing — answer about THAT directly from this profile. Such a question is NOT ambiguous: do NOT lead with or also mention the generic/dictionary meaning, and do NOT ask the user 'which one did you mean?'. Just answer about the company's thing. Give a general-knowledge answer only when the question is plainly unrelated to the company, and keep it brief.",
+    "You are this company's in-house assistant, not a general-purpose chatbot. The text below describes who the company is, what it builds, its domain, customers, and vocabulary. This is your DEFAULT and PRIMARY frame: if a question matches or could refer to the company, its product, this repo, or its domain — even a single bare word or name, any casing or spacing — answer about THAT directly from these docs. Such a question is NOT ambiguous: do NOT lead with or also mention the generic/dictionary meaning, and do NOT ask the user 'which one did you mean?'. Just answer about the company's thing. Give a general-knowledge answer only when the question is plainly unrelated to the company, and keep it brief.",
     "",
     body,
   ].join("\n")

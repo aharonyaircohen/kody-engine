@@ -3,8 +3,8 @@
  * executables from dashboard-managed, per-repo stores. Replaces the legacy
  * committed `.kody/qa-guide.md` mechanism.
  *
- *   - scenarios / notes → the company profile, `.kody/profile/*.md`
- *     (only sections whose `staff` list includes `qa-engineer`)
+ *   - scenarios / notes → the documentation, `.kody/docs/*.md`
+ *     (only docs whose `staff` list includes `qa-engineer`)
  *   - login username     → variables file `.kody/variables.json`, key LOGIN_USER
  *   - password           → secret LOGIN_PASSWORD, read from process.env
  *
@@ -16,7 +16,7 @@
  *
  * Populates:
  *   ctx.data.qaLogin     — the LOGIN_USER variable ("" if unset)
- *   ctx.data.qaProfile   — concatenated `.kody/profile/*.md` markdown ("" if none)
+ *   ctx.data.qaProfile   — concatenated `.kody/docs/*.md` markdown ("" if none)
  *   ctx.data.qaAuthBlock — a complete, ready-to-insert auth instruction string
  *
  * Every step is fail-soft: missing variables, missing password, or a missing
@@ -29,7 +29,7 @@ import * as path from "node:path"
 import type { PreflightScript } from "../executables/types.js"
 import { readKodyVariables } from "./kodyVariables.js"
 
-const PROFILE_DIR_REL_PATH = ".kody/profile"
+const DOCS_DIR_REL_PATH = ".kody/docs"
 
 /** Slug of the QA staff member this preflight runs as. */
 const QA_STAFF = "qa-engineer"
@@ -87,7 +87,7 @@ function readProfileStaff(raw: string): { staff: string[]; body: string } {
 }
 
 /**
- * Concatenate the QA-scoped `.kody/profile/*.md` sections into one markdown
+ * Concatenate the QA-scoped `.kody/docs/*.md` files into one markdown
  * block, each prefixed with a `## <filename>` heading. Only sections whose
  * `staff` list includes `qa-engineer` (or the `*` all-staff wildcard) are
  * included — chat-only sections, unassigned docs, and frontmatter-less
@@ -95,7 +95,7 @@ function readProfileStaff(raw: string): { staff: string[]; body: string } {
  * the dir is absent or has no QA sections.
  */
 function readProfile(cwd: string): string {
-  const dir = path.join(cwd, PROFILE_DIR_REL_PATH)
+  const dir = path.join(cwd, DOCS_DIR_REL_PATH)
   if (!fs.existsSync(dir)) return ""
   let entries: string[]
   try {
