@@ -79,38 +79,60 @@ describe("loadQaContext", () => {
     expect(ctx.data.qaAuthBlock).toContain("no `LOGIN_PASSWORD` secret was found")
   })
 
-  it("includes only profile sections whose audience contains qa, excluding chat-only and legacy", async () => {
+  it("includes only sections whose staff contains qa-engineer; legacy audience is mapped, unassigned/chat/legacy-less excluded", async () => {
     const profileDir = path.join(tmp, ".kody", "profile")
     fs.mkdirSync(profileDir, { recursive: true })
     fs.writeFileSync(
       path.join(profileDir, "scenarios.md"),
-      "---\naudience: [qa]\n---\n\nCheck the checkout flow.",
+      "---\nstaff: [qa-engineer]\n---\n\nCheck the checkout flow.",
     )
-    // Multi-audience section — included in QA because the list contains qa.
+    // Multi-staff section — included in QA because the list contains qa-engineer.
     fs.writeFileSync(
       path.join(profileDir, "shared.md"),
-      "---\naudience: [chat, qa]\n---\n\nSeed data lives in fixtures.",
+      "---\nstaff: [kody, qa-engineer]\n---\n\nSeed data lives in fixtures.",
+    )
+    // Legacy audience list → mapped (qa → qa-engineer) → included.
+    fs.writeFileSync(
+      path.join(profileDir, "legacy.md"),
+      "---\naudience: [qa]\n---\n\nLegacy QA note.",
+    )
+    // All-staff wildcard → belongs to every staff member → included.
+    fs.writeFileSync(
+      path.join(profileDir, "everywhere.md"),
+      "---\nstaff: [*]\n---\n\nApplies to all staff.",
     )
     fs.writeFileSync(
       path.join(profileDir, "mission.md"),
-      "---\naudience: [chat]\n---\n\nWe sell widgets.",
+      "---\nstaff: [kody]\n---\n\nWe sell widgets.",
     )
-    // Legacy frontmatter-less file → defaults to [chat] → excluded from QA.
+    // Explicit empty list → unassigned → excluded from QA.
+    fs.writeFileSync(
+      path.join(profileDir, "draft.md"),
+      "---\nstaff: []\n---\n\nUnassigned draft.",
+    )
+    // Frontmatter-less file → defaults to [kody] → excluded from QA.
     fs.writeFileSync(path.join(profileDir, "about.md"), "about")
 
     const ctx = makeCtx(tmp)
     await loadQaContext(ctx, dummyProfile)
     const qaProfile = ctx.data.qaProfile as string
-    // qa-audience sections are included, with filename headings, frontmatter stripped.
+    // qa-engineer sections are included, with filename headings, frontmatter stripped.
     expect(qaProfile).toContain("## scenarios.md")
     expect(qaProfile).toContain("Check the checkout flow.")
     expect(qaProfile).toContain("## shared.md")
     expect(qaProfile).toContain("Seed data lives in fixtures.")
-    // chat-only and legacy files are excluded.
+    expect(qaProfile).toContain("## legacy.md")
+    expect(qaProfile).toContain("Legacy QA note.")
+    expect(qaProfile).toContain("## everywhere.md")
+    expect(qaProfile).toContain("Applies to all staff.")
+    // chat-only, unassigned, and frontmatter-less files are excluded.
     expect(qaProfile).not.toContain("We sell widgets.")
     expect(qaProfile).not.toContain("## mission.md")
+    expect(qaProfile).not.toContain("Unassigned draft.")
+    expect(qaProfile).not.toContain("## draft.md")
     expect(qaProfile).not.toContain("## about.md")
     // frontmatter must not leak into the prompt.
+    expect(qaProfile).not.toContain("staff:")
     expect(qaProfile).not.toContain("audience:")
   })
 

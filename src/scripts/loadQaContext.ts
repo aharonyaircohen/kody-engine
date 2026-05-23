@@ -4,7 +4,7 @@
  * committed `.kody/qa-guide.md` mechanism.
  *
  *   - scenarios / notes → the company profile, `.kody/profile/*.md`
- *     (only sections whose `audience` list includes `qa`)
+ *     (only sections whose `staff` list includes `qa-engineer`)
  *   - login username     → variables file `.kody/variables.json`, key LOGIN_USER
  *   - password           → secret LOGIN_PASSWORD, read from process.env
  *
@@ -31,44 +31,68 @@ import { readKodyVariables } from "./kodyVariables.js"
 
 const PROFILE_DIR_REL_PATH = ".kody/profile"
 
+/** Slug of the QA staff member this preflight runs as. */
+const QA_STAFF = "qa-engineer"
+
+/** Wildcard token: a doc owned by `*` belongs to every staff member. */
+const ALL_STAFF = "*"
+
+/** Map a legacy `audience:` consumer token onto its staff-member slug. */
+const LEGACY_AUDIENCE_TO_STAFF: Record<string, string> = { chat: "kody", qa: QA_STAFF }
+
 /** Frontmatter fence: a leading `---\n…\n---` block. */
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
 
+/** Parse an inline list (`[a, b]`) or bare scalar (`a`) into lowercased tokens. */
+function parseSlugList(value: string): string[] {
+  const inner = value.startsWith("[") && value.endsWith("]") ? value.slice(1, -1) : value
+  return inner
+    .split(",")
+    .map((s) => s.trim().replace(/^["']|["']$/g, "").toLowerCase())
+    .filter(Boolean)
+}
+
 /**
- * Read the `audience` list and the post-frontmatter body from a profile file.
- * Profile frontmatter is NOT job frontmatter (jobFrontmatter's parser
- * whitelists job keys and would silently drop `audience`), so we read it here.
- * The canonical format is an inline list — `audience: [chat, qa]` — but a bare
- * scalar (`audience: qa`) is tolerated. A file with no frontmatter, or no
- * `audience` line, defaults to `["chat"]` (legacy = chat-only).
+ * Read the owning `staff` list and the post-frontmatter body from a profile
+ * file. Profile frontmatter is NOT job frontmatter (jobFrontmatter's parser
+ * whitelists job keys and would silently drop `staff`), so we read it here.
+ * The canonical format is an inline list — `staff: [kody, qa-engineer]`. A
+ * legacy `audience:` list is mapped onto staff slugs (`chat` → `kody`,
+ * `qa` → `qa-engineer`). An explicit empty `staff: []` is honored (unassigned
+ * → owned by nobody). A file with no frontmatter defaults to `["kody"]`
+ * (legacy = chat-only).
  */
-function readProfileAudience(raw: string): { audience: string[]; body: string } {
+function readProfileStaff(raw: string): { staff: string[]; body: string } {
   const m = FRONTMATTER_RE.exec(raw)
-  if (!m) return { audience: ["chat"], body: raw }
+  if (!m) return { staff: ["kody"], body: raw }
   const body = raw.slice(m[0].length)
+  let staff: string[] | null = null
+  let legacy: string[] | null = null
   for (const line of (m[1] ?? "").split(/\r?\n/)) {
     const t = line.trim()
     const c = t.indexOf(":")
     if (c < 0) continue
-    if (t.slice(0, c).trim() === "audience") {
-      const v = t.slice(c + 1).trim()
-      const inner = v.startsWith("[") && v.endsWith("]") ? v.slice(1, -1) : v
-      const audience = inner
-        .split(",")
-        .map((s) => s.trim().replace(/^["']|["']$/g, "").toLowerCase())
+    const key = t.slice(0, c).trim()
+    const value = t.slice(c + 1).trim()
+    if (key === "staff") {
+      staff = parseSlugList(value) // may be [] → unassigned
+    } else if (key === "audience" || key === "for") {
+      const mapped = parseSlugList(value)
+        .map((tok) => LEGACY_AUDIENCE_TO_STAFF[tok])
         .filter(Boolean)
-      return { audience: audience.length > 0 ? audience : ["chat"], body }
+      if (mapped.length > 0) legacy = mapped
     }
   }
-  return { audience: ["chat"], body }
+  return { staff: staff ?? legacy ?? ["kody"], body }
 }
 
 /**
  * Concatenate the QA-scoped `.kody/profile/*.md` sections into one markdown
  * block, each prefixed with a `## <filename>` heading. Only sections whose
- * `audience` list includes `qa` are included — chat-only sections (and
- * frontmatter-less legacy files, which default to `["chat"]`) belong to the
- * chat prompt, not QA. Returns "" if the dir is absent or has no QA sections.
+ * `staff` list includes `qa-engineer` (or the `*` all-staff wildcard) are
+ * included — chat-only sections, unassigned docs, and frontmatter-less
+ * legacy files (which default to `["kody"]`) are not for QA. Returns "" if
+ * the dir is absent or has no QA sections.
  */
 function readProfile(cwd: string): string {
   const dir = path.join(cwd, PROFILE_DIR_REL_PATH)
@@ -86,8 +110,8 @@ function readProfile(cwd: string): string {
   for (const file of entries) {
     try {
       const raw = fs.readFileSync(path.join(dir, file), "utf-8")
-      const { audience, body } = readProfileAudience(raw)
-      if (!audience.includes("qa")) continue
+      const { staff, body } = readProfileStaff(raw)
+      if (!staff.includes(QA_STAFF) && !staff.includes(ALL_STAFF)) continue
       blocks.push(`## ${file}\n\n${body.trim()}`)
     } catch {
       /* skip unreadable file */
