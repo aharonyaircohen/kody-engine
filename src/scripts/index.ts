@@ -85,6 +85,7 @@ import { verify } from "./verify.js"
 import { verifyReproFails } from "./verifyReproFails.js"
 import { verifyWithRetry } from "./verifyWithRetry.js"
 import { waitForCi } from "./waitForCi.js"
+import { appendCompanyActivity } from "./appendCompanyActivity.js"
 import { warmupMcp } from "./warmupMcp.js"
 import { writeIssueStateComment } from "./writeIssueStateComment.js"
 import { writeJobStateFile } from "./writeJobStateFile.js"
@@ -144,6 +145,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   parseReproOutput,
   writeIssueStateComment,
   writeJobStateFile,
+  appendCompanyActivity,
   requireFeedbackActions,
   requirePlanDeviations,
   verify,

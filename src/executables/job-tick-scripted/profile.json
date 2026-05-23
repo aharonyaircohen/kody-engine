@@ -63,6 +63,9 @@
         "with": {
           "jobsDir": ".kody/duties"
         }
+      },
+      {
+        "script": "appendCompanyActivity"
       }
     ]
   }

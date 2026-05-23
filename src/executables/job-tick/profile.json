@@ -68,6 +68,9 @@
       },
       {
         "script": "writeJobStateFile"
+      },
+      {
+        "script": "appendCompanyActivity"
       }
     ]
   }
