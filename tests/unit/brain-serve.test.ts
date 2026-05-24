@@ -13,7 +13,14 @@ import * as path from "node:path"
 import type { AddressInfo } from "node:net"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { BrainSseSink, authOk, buildServer, type BrainEvent } from "../../src/scripts/brainServe.js"
+import {
+  BrainSseSink,
+  authOk,
+  buildServer,
+  ensureRepoCwd,
+  type BrainEvent,
+  type BuildServerOptions,
+} from "../../src/scripts/brainServe.js"
 import type { ChatEvent } from "../../src/chat/events.js"
 import type { ChatTurnOptions, ChatTurnResult } from "../../src/chat/loop.js"
 
@@ -161,6 +168,7 @@ interface BootedServer {
 async function boot(
   runTurn: (opts: ChatTurnOptions) => Promise<ChatTurnResult>,
   cwd: string,
+  extra: Partial<BuildServerOptions> = {},
 ): Promise<BootedServer> {
   const server = buildServer({
     apiKey: KEY,
@@ -168,6 +176,7 @@ async function boot(
     model: MODEL,
     litellmUrl: null,
     runTurn,
+    ...extra,
   })
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()))
   const addr = server.address() as AddressInfo
@@ -528,5 +537,211 @@ describe("buildServer resume (/chats/:id/stream)", () => {
     booted = await boot(async () => ({ exitCode: 0 }), tmp)
     const res = await fetch(`${booted.url}/chats/c1/stream?since=0`)
     expect(res.status).toBe(401)
+  })
+})
+
+// ────────────────────────────────────────────────────────────────────────────
+// Multi-repo workspace — ensureRepoCwd (pure resolution + clone-on-first-use)
+// ────────────────────────────────────────────────────────────────────────────
+
+describe("ensureRepoCwd", () => {
+  let tmp: string
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-brain-repos-"))
+  })
+  afterEach(() => {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  })
+
+  const noClone = async () => {
+    throw new Error("clone should not run")
+  }
+
+  it("returns baseCwd when no repo is supplied", async () => {
+    const base = path.join(tmp, "boot")
+    const dir = await ensureRepoCwd({
+      baseCwd: base,
+      reposRoot: path.join(tmp, "repos"),
+      cloneRepo: noClone,
+    })
+    expect(dir).toBe(base)
+  })
+
+  it("falls back to baseCwd for a malformed / traversing repo", async () => {
+    const base = path.join(tmp, "boot")
+    const reposRoot = path.join(tmp, "repos")
+    for (const bad of ["noslash", "../escape", "a/../../etc", "/abs/path", "a/b/c"]) {
+      const dir = await ensureRepoCwd({
+        baseCwd: base,
+        reposRoot,
+        repo: bad,
+        cloneRepo: noClone,
+      })
+      expect(dir).toBe(base)
+    }
+  })
+
+  it("clones into reposRoot/<owner>/<name> on first use", async () => {
+    const reposRoot = path.join(tmp, "repos")
+    const calls: Array<{ repo: string; token?: string; dir: string }> = []
+    const cloneRepo = async (
+      repo: string,
+      token: string | undefined,
+      dir: string,
+    ) => {
+      calls.push({ repo, token, dir })
+      fs.mkdirSync(path.join(dir, ".git"), { recursive: true })
+    }
+    const dir = await ensureRepoCwd({
+      baseCwd: path.join(tmp, "boot"),
+      reposRoot,
+      repo: "acme/widgets",
+      repoToken: "tok",
+      cloneRepo,
+    })
+    expect(dir).toBe(path.join(reposRoot, "acme/widgets"))
+    expect(calls).toEqual([
+      { repo: "acme/widgets", token: "tok", dir: path.join(reposRoot, "acme/widgets") },
+    ])
+  })
+
+  it("skips cloning when the repo is already present", async () => {
+    const reposRoot = path.join(tmp, "repos")
+    const dir = path.join(reposRoot, "acme/widgets")
+    fs.mkdirSync(path.join(dir, ".git"), { recursive: true })
+    const out = await ensureRepoCwd({
+      baseCwd: path.join(tmp, "boot"),
+      reposRoot,
+      repo: "acme/widgets",
+      cloneRepo: noClone,
+    })
+    expect(out).toBe(dir)
+  })
+
+  it("dedupes concurrent clones of the same repo (clones once)", async () => {
+    const reposRoot = path.join(tmp, "repos")
+    let calls = 0
+    const cloneRepo = async (
+      _repo: string,
+      _token: string | undefined,
+      dir: string,
+    ) => {
+      calls++
+      await new Promise((r) => setTimeout(r, 20))
+      fs.mkdirSync(path.join(dir, ".git"), { recursive: true })
+    }
+    const [a, b] = await Promise.all([
+      ensureRepoCwd({ baseCwd: tmp, reposRoot, repo: "acme/widgets", cloneRepo }),
+      ensureRepoCwd({ baseCwd: tmp, reposRoot, repo: "acme/widgets", cloneRepo }),
+    ])
+    expect(a).toBe(b)
+    expect(calls).toBe(1)
+  })
+})
+
+// ────────────────────────────────────────────────────────────────────────────
+// Multi-repo workspace — buildServer wiring (repo → agent cwd)
+// ────────────────────────────────────────────────────────────────────────────
+
+describe("buildServer multi-repo", () => {
+  let tmp: string
+  let booted: BootedServer | null = null
+
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-brain-multirepo-"))
+  })
+  afterEach(async () => {
+    if (booted) {
+      await booted.close()
+      booted = null
+    }
+    fs.rmSync(tmp, { recursive: true, force: true })
+  })
+
+  it("runs the turn in the per-repo clone and stores the session under the boot cwd", async () => {
+    const reposRoot = path.join(tmp, "repos")
+    const clones: string[] = []
+    let observedCwd = ""
+    let observedSessionFile = ""
+    booted = await boot(
+      async (opts) => {
+        observedCwd = opts.cwd
+        observedSessionFile = opts.sessionFile
+        await opts.sink.emit(makeEvent("chat.done", {}))
+        return { exitCode: 0 }
+      },
+      tmp,
+      {
+        reposRoot,
+        cloneRepo: async (repo, _token, dir) => {
+          clones.push(repo)
+          fs.mkdirSync(path.join(dir, ".git"), { recursive: true })
+        },
+      },
+    )
+    const res = await fetch(`${booted.url}/chats/c1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": KEY },
+      body: JSON.stringify({ message: "hi", repo: "acme/widgets", repoToken: "tok" }),
+    })
+    expect(res.status).toBe(200)
+    await readSseBody(res)
+    // Agent runs in the per-repo clone…
+    expect(observedCwd).toBe(path.join(reposRoot, "acme/widgets"))
+    expect(clones).toEqual(["acme/widgets"])
+    // …but the session JSONL stays under the boot cwd so resume needs no repo.
+    expect(observedSessionFile).toBe(path.join(tmp, ".kody", "sessions", "c1.jsonl"))
+  })
+
+  it("runs in the boot cwd when no repo is sent (single-repo behavior preserved)", async () => {
+    let observedCwd = ""
+    booted = await boot(
+      async (opts) => {
+        observedCwd = opts.cwd
+        await opts.sink.emit(makeEvent("chat.done", {}))
+        return { exitCode: 0 }
+      },
+      tmp,
+      {
+        cloneRepo: async () => {
+          throw new Error("must not clone when no repo")
+        },
+      },
+    )
+    const res = await fetch(`${booted.url}/chats/c1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": KEY },
+      body: JSON.stringify({ message: "hi" }),
+    })
+    expect(res.status).toBe(200)
+    await readSseBody(res)
+    expect(observedCwd).toBe(tmp)
+  })
+
+  it("emits a chat.error when the clone fails (turn never runs)", async () => {
+    booted = await boot(
+      async () => {
+        throw new Error("runTurn must not be reached")
+      },
+      tmp,
+      {
+        reposRoot: path.join(tmp, "repos"),
+        cloneRepo: async () => {
+          throw new Error("clone boom")
+        },
+      },
+    )
+    const res = await fetch(`${booted.url}/chats/c1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": KEY },
+      body: JSON.stringify({ message: "hi", repo: "acme/widgets" }),
+    })
+    const events = await readSseBody(res)
+    expect(events[0]).toEqual({ type: "chat", chatId: "c1" })
+    expect(events[events.length - 1]).toMatchObject({
+      type: "error",
+      error: "clone boom",
+      chatId: "c1",
+    })
   })
 })

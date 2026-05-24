@@ -29,6 +29,7 @@
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
+import { spawn, spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 
@@ -95,6 +96,15 @@ function readJsonBody(req: IncomingMessage): Promise<unknown> {
     })
     req.on("error", reject)
   })
+}
+
+/** Pull a non-empty trimmed string field from a parsed JSON body, else undefined. */
+function strField(body: unknown, key: string): string | undefined {
+  if (typeof body === "object" && body !== null && key in body) {
+    const v = (body as Record<string, unknown>)[key]
+    if (typeof v === "string" && v.trim()) return v.trim()
+  }
+  return undefined
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -246,11 +256,115 @@ function streamToRes(
   res.on("close", unsubscribe)
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Multi-repo workspace — one Brain serves many of a user's repos.
+//
+// The dashboard forwards the selected `repo` (owner/name) + a clone token on
+// every message (see Kody-Dashboard brain-proxy). A turn's *agent* runs in
+// `<reposRoot>/<owner>/<name>` so its code tools see the right tree; the repo
+// is cloned the first time we see it. Session + event JSONL stay under the
+// boot `cwd` (keyed by chatId) so reconnect/resume — a bodyless GET — never
+// needs to know the repo. Per-repo secrets/model are a later step: turns run
+// in-process here, so per-turn env mutation would race across chats.
+// ────────────────────────────────────────────────────────────────────────────
+
+/** `owner/name` with safe path chars only. Containment is re-checked below. */
+const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
+
+export type CloneRepoFn = (
+  repo: string,
+  token: string | undefined,
+  dir: string,
+) => Promise<void>
+
+// Per-target clone dedupe: concurrent chats on the same repo clone once.
+const repoClones = new Map<string, Promise<void>>()
+
+/**
+ * Resolve the working directory for a turn. Returns `baseCwd` (the boot repo)
+ * when no/invalid repo is supplied; otherwise `<reposRoot>/<repo>`, cloning it
+ * on first use. Exported for tests.
+ */
+export async function ensureRepoCwd(opts: {
+  baseCwd: string
+  reposRoot: string
+  repo?: string
+  repoToken?: string
+  cloneRepo: CloneRepoFn
+}): Promise<string> {
+  const repo = opts.repo?.trim()
+  if (!repo || !REPO_RE.test(repo)) return opts.baseCwd
+
+  // Defense-in-depth: even past the regex, never let the resolved path escape
+  // reposRoot (guards `..` segments the regex would otherwise admit).
+  const root = path.resolve(opts.reposRoot)
+  const dir = path.resolve(root, repo)
+  if (dir !== root && !dir.startsWith(root + path.sep)) return opts.baseCwd
+
+  if (fs.existsSync(path.join(dir, ".git"))) return dir
+
+  const inflight = repoClones.get(dir)
+  if (inflight) {
+    await inflight
+    return dir
+  }
+  const p = opts
+    .cloneRepo(repo, opts.repoToken, dir)
+    .finally(() => {
+      if (repoClones.get(dir) === p) repoClones.delete(dir)
+    })
+  repoClones.set(dir, p)
+  await p
+  return dir
+}
+
+/**
+ * Default clone: shallow-clone the repo's default branch into `dir` (token
+ * embedded in the remote so a later approved push works) and set a committer
+ * identity. The token is never logged. Replaceable in tests.
+ */
+const defaultCloneRepo: CloneRepoFn = (repo, token, dir) => {
+  fs.mkdirSync(path.dirname(dir), { recursive: true })
+  const authUrl = token
+    ? `https://x-access-token:${token}@github.com/${repo}.git`
+    : `https://github.com/${repo}.git`
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn("git", ["clone", "--depth=1", authUrl, dir], {
+      stdio: "inherit",
+    })
+    child.on("exit", (code) => {
+      if (code !== 0) {
+        reject(new Error(`git clone ${repo} failed (exit ${code})`))
+        return
+      }
+      try {
+        const name = process.env.GIT_AUTHOR_NAME ?? "Kody Bot"
+        const email =
+          process.env.GIT_AUTHOR_EMAIL ?? "kody-bot@users.noreply.github.com"
+        spawnSync("git", ["-C", dir, "config", "user.name", name])
+        spawnSync("git", ["-C", dir, "config", "user.email", email])
+      } catch {
+        /* best effort — identity only matters once the agent commits */
+      }
+      resolve()
+    })
+    child.on("error", reject)
+  })
+}
+
 export interface BuildServerOptions {
   apiKey: string
   cwd: string
   model: ReturnType<typeof parseProviderModel>
   litellmUrl: string | null
+  /**
+   * Root under which per-repo clones live (`<reposRoot>/<owner>/<name>`).
+   * Defaults to a `repos` sibling of `cwd` (so a boot `cwd` of
+   * `/workspace/repo` → `/workspace/repos`).
+   */
+  reposRoot?: string
+  /** Seam for tests — defaults to a real shallow `git clone`. */
+  cloneRepo?: CloneRepoFn
   /** Seam for tests — defaults to the real chat-loop runChatTurn. */
   runTurn?: (opts: ChatTurnOptions) => Promise<ChatTurnResult>
 }
@@ -261,6 +375,8 @@ async function handleChatTurn(
   chatId: string,
   opts: {
     cwd: string
+    reposRoot: string
+    cloneRepo: CloneRepoFn
     model: ReturnType<typeof parseProviderModel>
     litellmUrl: string | null
     runTurn: (opts: ChatTurnOptions) => Promise<ChatTurnResult>
@@ -284,6 +400,11 @@ async function handleChatTurn(
     return
   }
 
+  // Which repo this turn runs against (owner/name) + a clone token. Both are
+  // forwarded by the dashboard's brain-proxy; absent for a single-repo Brain.
+  const repo = strField(body, "repo")
+  const repoToken = strField(body, "repoToken")
+
   const sessionFile = sessionFilePath(opts.cwd, chatId)
   fs.mkdirSync(path.dirname(sessionFile), { recursive: true })
 
@@ -301,32 +422,40 @@ async function handleChatTurn(
   const emitToLog = beginTurn(opts.cwd, chatId)
   const sink = new BrokerSink(emitToLog, chatId)
 
-  void enqueue(chatId, () =>
-    opts
-      .runTurn({
+  void enqueue(chatId, async () => {
+    try {
+      // Per-repo working dir for the agent's code tools — clones on first use.
+      // A clone/resolve failure surfaces as a chat.error via the catch below.
+      const agentCwd = await ensureRepoCwd({
+        baseCwd: opts.cwd,
+        reposRoot: opts.reposRoot,
+        repo,
+        repoToken,
+        cloneRepo: opts.cloneRepo,
+      })
+      await opts.runTurn({
         sessionId: chatId,
         sessionFile,
-        cwd: opts.cwd,
+        cwd: agentCwd,
         model: opts.model,
         litellmUrl: opts.litellmUrl,
         sink,
       })
-      .catch((err) => {
-        const errMsg = err instanceof Error ? err.message : String(err)
-        process.stderr.write(`[brain-serve] chat turn failed: ${errMsg}\n`)
-        endTurnIfUnterminated(opts.cwd, chatId, errMsg)
-      })
-      .finally(() => {
-        // runTurn normally emits its own done/error; this only fires if it
-        // returned without a terminal event, so reconnecting clients never
-        // hang waiting for an end that won't come.
-        endTurnIfUnterminated(
-          opts.cwd,
-          chatId,
-          "Brain turn ended without a reply (the machine may have restarted mid-turn) — please resend your message",
-        )
-      }),
-  )
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[brain-serve] chat turn failed: ${errMsg}\n`)
+      endTurnIfUnterminated(opts.cwd, chatId, errMsg)
+    } finally {
+      // runTurn normally emits its own done/error; this only fires if it
+      // returned without a terminal event, so reconnecting clients never
+      // hang waiting for an end that won't come.
+      endTurnIfUnterminated(
+        opts.cwd,
+        chatId,
+        "Brain turn ended without a reply (the machine may have restarted mid-turn) — please resend your message",
+      )
+    }
+  })
 
   streamToRes(res, opts.cwd, chatId, sinceFloor)
 }
@@ -338,6 +467,9 @@ async function handleChatTurn(
  */
 export function buildServer(opts: BuildServerOptions): Server {
   const runTurn = opts.runTurn ?? runChatTurn
+  const cloneRepo = opts.cloneRepo ?? defaultCloneRepo
+  const reposRoot =
+    opts.reposRoot ?? path.join(path.dirname(path.resolve(opts.cwd)), "repos")
   return createServer(async (req, res) => {
     if (!req.method || !req.url) {
       sendJson(res, 400, { error: "bad request" })
@@ -365,6 +497,8 @@ export function buildServer(opts: BuildServerOptions): Server {
       }
       await handleChatTurn(req, res, chatId, {
         cwd: opts.cwd,
+        reposRoot,
+        cloneRepo,
         model: opts.model,
         litellmUrl: opts.litellmUrl,
         runTurn,
@@ -428,6 +562,8 @@ export const brainServe: PreflightScript = async (ctx) => {
   const server = buildServer({
     apiKey,
     cwd: ctx.cwd,
+    // Per-repo clones live here; defaults to a `repos` sibling of cwd.
+    reposRoot: process.env.BRAIN_REPOS_ROOT?.trim() || undefined,
     model,
     litellmUrl,
   })
