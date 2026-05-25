@@ -152,7 +152,12 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   // configless fallback in executor.ts hardcodes "main", which is wrong
   // for repos defaulting to `dev`, `master`, etc. and silently collapsed
   // the stack onto the wrong branch.
-  const configlessCommands = new Set(["init", "goal-scheduler"])
+  //
+  // brain-serve is configless so one Brain can boot WITHOUT a work repo and
+  // serve many repos (cloned per chat message). Its model comes from the
+  // MODEL env var (see executor.ts skipConfig branch), not a repo's
+  // kody.config.json — the boot repo it used to read is gone.
+  const configlessCommands = new Set(["init", "goal-scheduler", "brain-serve"])
   const skipConfig = configlessCommands.has(args.executableName ?? "")
 
   try {

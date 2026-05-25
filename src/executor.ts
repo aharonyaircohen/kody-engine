@@ -127,11 +127,15 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
   if (input.config) {
     config = input.config
   } else if (input.skipConfig) {
+    // No kody.config.json (e.g. init, or brain-serve booting without a work
+    // repo). Honour the MODEL env var so a repo-less Brain still runs the
+    // user's chosen model; fall back to a safe default otherwise.
+    const envModel = process.env.MODEL?.trim()
     config = {
       quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       git: { defaultBranch: "main" },
       github: { owner: "", repo: "" },
-      agent: { model: "claude/claude-haiku-4-5-20251001" },
+      agent: { model: envModel || "claude/claude-haiku-4-5-20251001" },
     }
   } else {
     try {

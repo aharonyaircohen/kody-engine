@@ -15,11 +15,25 @@ set -euo pipefail
 #   ALL_SECRETS       JSON blob of provider keys (mirrors GH Actions toJSON(secrets))
 #   KODY_LITELLM_URL  optional always-on litellm proxy URL (e.g. http://kody-litellm.internal:4000)
 
-: "${REPO:?REPO is required (owner/name)}"
+# REPO is OPTIONAL. A repo-less Brain boots with no work repo and clones
+# each repo on demand per chat message (into $BRAIN_REPOS_ROOT). When REPO
+# is set we still clone it as a convenience boot repo (back-compat).
 : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
 : "${BRAIN_API_KEY:?BRAIN_API_KEY is required}"
 
-WORKDIR="/workspace/repo"
+# Per-message repo clones land here regardless of whether a boot repo exists.
+# Set explicitly so brain-serve's reposRoot is correct even when the server
+# runs from /workspace/brain (whose dirname is /workspace, not the repos root).
+export BRAIN_REPOS_ROOT="${BRAIN_REPOS_ROOT:-/workspace/repos}"
+mkdir -p "$BRAIN_REPOS_ROOT"
+
+if [ -n "${REPO:-}" ]; then
+  WORKDIR="/workspace/repo"
+else
+  # No boot repo — run from a plain, repo-independent dir. Chat sessions and
+  # events live under here (keyed by chatId), not inside any work repo.
+  WORKDIR="/workspace/brain"
+fi
 rm -rf "$WORKDIR"
 mkdir -p "$WORKDIR"
 
@@ -136,20 +150,25 @@ EOF
 
 prewarm_litellm
 
-# ─── Foreground: clone the repo ────────────────────────────────────────────
-AUTH_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git"
-CLONE_DEPTH="${CLONE_DEPTH:-1}"
+# ─── Foreground: clone the boot repo (only when REPO is set) ────────────────
 BRANCH="${REF:-${BRANCH:-main}}"
-if [ "$CLONE_DEPTH" = "0" ] || [ "$CLONE_DEPTH" = "full" ]; then
-  git clone --branch "$BRANCH" "$AUTH_URL" "$WORKDIR"
-else
-  git clone --depth="$CLONE_DEPTH" --single-branch --branch "$BRANCH" "$AUTH_URL" "$WORKDIR"
+if [ -n "${REPO:-}" ]; then
+  AUTH_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git"
+  CLONE_DEPTH="${CLONE_DEPTH:-1}"
+  if [ "$CLONE_DEPTH" = "0" ] || [ "$CLONE_DEPTH" = "full" ]; then
+    git clone --branch "$BRANCH" "$AUTH_URL" "$WORKDIR"
+  else
+    git clone --depth="$CLONE_DEPTH" --single-branch --branch "$BRANCH" "$AUTH_URL" "$WORKDIR"
+  fi
 fi
 
 cd "$WORKDIR"
 
-git config user.name  "${GIT_AUTHOR_NAME:-Kody Brain}"
-git config user.email "${GIT_AUTHOR_EMAIL:-kody-brain@users.noreply.github.com}"
+# Committer identity for commits the agent makes. Use --global so it works
+# even when WORKDIR is not a git repo (the repo-less boot dir); per-message
+# repo clones also set their own identity.
+git config --global user.name  "${GIT_AUTHOR_NAME:-Kody Brain}"
+git config --global user.email "${GIT_AUTHOR_EMAIL:-kody-brain@users.noreply.github.com}"
 
 # ─── Wait for LiteLLM (best-effort) ────────────────────────────────────────
 if [ -n "$LITELLM_PID" ]; then
@@ -179,7 +198,7 @@ export PORT="${PORT:-8080}"
 export MODEL="${MODEL:-}"
 export ALL_SECRETS="${ALL_SECRETS:-{\}}"
 
-echo "→ brain: starting kody brain-serve on :${PORT} (repo=${REPO} ref=${BRANCH})"
+echo "→ brain: starting kody brain-serve on :${PORT} (boot repo=${REPO:-<none, repo-less>} ref=${BRANCH})"
 
 # Use the absolute path to the engine's bin script. The `kody` shim on
 # PATH is a symlink whose target may be lost between Docker layers in
