@@ -254,7 +254,9 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     const queryOptions: Record<string, unknown> = {
       model: opts.model.model,
       cwd: opts.cwd,
-      allowedTools: opts.allowedToolsOverride ?? DEFAULT_ALLOWED_TOOLS,
+      // Fresh array (never mutate the shared DEFAULT_ALLOWED_TOOLS const) so
+      // opt-in tools like fetch_repo can be appended below.
+      allowedTools: [...(opts.allowedToolsOverride ?? DEFAULT_ALLOWED_TOOLS)],
       permissionMode: opts.permissionModeOverride ?? "acceptEdits",
       env,
     }
@@ -299,6 +301,9 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         repoToken: opts.repoToken,
       })
       mcpEntries.push(["kody-fetch-repo", fetchServer as unknown as Record<string, unknown>])
+      // Auto-approve the tool — otherwise the SDK blocks the MCP call for
+      // permission and the agent stalls asking the user (it can't, mid-stream).
+      ;(queryOptions.allowedTools as string[]).push("mcp__kody-fetch-repo__fetch_repo")
       // Grant the agent's file tools read/work access to every fetched repo
       // (they live under reposRoot, outside the turn's cwd).
       queryOptions.additionalDirectories = [opts.reposRoot]
