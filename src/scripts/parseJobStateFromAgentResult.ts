@@ -112,6 +112,29 @@ export const parseJobStateFromAgentResult: PostflightScript = async (ctx, _profi
 
   const result = extractNextStateFromText(agentResult.finalText, fenceLabel, prevRev)
   if (result.error) {
+    // Clean finish, nothing to save → benign no-op, not a failure.
+    // Evergreen duties (approval-gate, qa) routinely check their queue, find
+    // nothing actionable, and stop on their own without proposing new state.
+    // When the agent COMPLETED successfully and simply emitted no block (not a
+    // *malformed* one), carry the prior state forward so the tick succeeds
+    // instead of being flagged "Duty failed". A genuinely cut-off run
+    // (outcome="failed": max_turns, error, stalled) still falls through to the
+    // loud parse-error path below — there, missing state means the agent never
+    // reached its decision, which IS a real failure worth surfacing.
+    const cleanFinishNoBlock =
+      result.error.startsWith("missing `") &&
+      agentResult.outcome === "completed" &&
+      loaded != null
+    if (cleanFinishNoBlock) {
+      ctx.data.nextJobState = {
+        version: 1,
+        rev: prevRev + 1,
+        cursor: loaded.state.cursor,
+        data: loaded.state.data,
+        done: loaded.state.done,
+      }
+      return
+    }
     // Preserve the legacy phrasing for the missing-block case so existing
     // tests / log scrapers keep matching.
     ctx.data.nextStateParseError = result.error.startsWith("missing `")

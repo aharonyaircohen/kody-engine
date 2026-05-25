@@ -133,4 +133,33 @@ describe("parseJobStateFromAgentResult", () => {
     await parseJobStateFromAgentResult(ctx, profile, result, { fenceLabel: FENCE })
     expect((ctx.data.nextJobState as StateEnvelope).cursor).toBe("block-cursor")
   })
+
+  it("carries prior state forward when a clean finish emits no block", async () => {
+    // Evergreen duty (e.g. approval-gate) checks its queue, finds nothing,
+    // and stops without proposing state — a benign no-op, not a failure.
+    const ctx = makeCtx({
+      jobState: { path: "x", token: null, state: { rev: 4, cursor: "idle", data: { seen: 3 }, done: false } },
+    })
+    await parseJobStateFromAgentResult(ctx, profile, makeResult("checked queue, nothing to do"), { fenceLabel: FENCE })
+    expect(ctx.data.nextStateParseError).toBeUndefined()
+    expect(ctx.data.nextJobState).toEqual<StateEnvelope>({
+      version: 1,
+      rev: 5,
+      cursor: "idle",
+      data: { seen: 3 },
+      done: false,
+    })
+  })
+
+  it("still fails loudly when a cut-off run (outcome=failed) emits no block", async () => {
+    // max_turns / error / stalled → the agent never reached its decision, so
+    // missing state IS a real failure and must surface, even with prior state.
+    const ctx = makeCtx({
+      jobState: { path: "x", token: null, state: { rev: 4, cursor: "idle", data: {}, done: false } },
+    })
+    const cutOff: AgentResult = { outcome: "failed", finalText: "ran out of turns", ndjsonPath: "/tmp/x.ndjson" }
+    await parseJobStateFromAgentResult(ctx, profile, cutOff, { fenceLabel: FENCE })
+    expect(ctx.data.nextStateParseError).toBe("agent did not emit a `kody-job-next-state` fenced block")
+    expect(ctx.data.nextJobState).toBeUndefined()
+  })
 })
