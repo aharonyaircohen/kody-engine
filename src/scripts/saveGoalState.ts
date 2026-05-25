@@ -1,16 +1,17 @@
 /**
- * Preflight (run last): persist `ctx.data.goal` mutations back to
- * `.kody/goals/<id>/state.json`. Always sets `ctx.skipAgent = true`
- * because goal-tick is a no-agent flow.
+ * Preflight (run last): compute the persisted form of `ctx.data.goal`
+ * mutations and stash it for `commitGoalState` (postflight) to write to the
+ * `kody-state` branch. Always sets `ctx.skipAgent = true` because goal-tick is
+ * a no-agent flow.
  *
- * This script does NOT git-add/commit — that's `commitGoalState`'s job
- * in postflight, so disk writes happen before the executor's lifecycle
- * label cleanup runs and a single commit captures everything.
+ * This script does NOT persist itself — that's `commitGoalState`'s job — so the
+ * write happens after the executor's lifecycle label cleanup, matching the
+ * original ordering.
  */
 
 import type { PreflightScript } from "../executables/types.js"
 import type { GoalState } from "../goal/state.js"
-import { nowIso, writeGoalState } from "../goal/state.js"
+import { nowIso } from "../goal/state.js"
 import type { GoalCtx } from "./goalCtx.js"
 
 export const saveGoalState: PreflightScript = async (ctx) => {
@@ -21,10 +22,10 @@ export const saveGoalState: PreflightScript = async (ctx) => {
   }
 
   // Only bump `updatedAt` when something the tick actually persists changed.
-  // Bumping it on every tick made each idle no-op tick produce a fresh diff,
-  // and `commitGoalState` then committed a `chore(goals): tick (idle)` to the
-  // default branch every cycle. With the timestamp frozen on no-op ticks the
-  // file is byte-identical, the diff check short-circuits, and nothing commits.
+  // Bumping it on every tick made each idle no-op tick rewrite state.json, and
+  // the persist below would push a `chore(goals): tick (idle)` every cycle.
+  // With the timestamp frozen on no-op ticks the state is byte-identical, so
+  // `commitGoalState` skips the write entirely (`changed === false`).
   const prev = goal.raw
   const changed =
     !prev || prev.state !== goal.state || prev.lastDispatchedIssue !== goal.lastDispatchedIssue
@@ -36,6 +37,8 @@ export const saveGoalState: PreflightScript = async (ctx) => {
     updatedAt: changed ? nowIso() : prev?.updatedAt,
   }
 
-  writeGoalState(ctx.cwd, goal.id, updated)
+  // Stash for the postflight persist (commitGoalState).
+  ctx.data.goalPersistState = updated
+  ctx.data.goalPersistChanged = changed
   ctx.skipAgent = true
 }

@@ -26,12 +26,11 @@
  *   FAIL             → 1
  *   missing report / parse failure / gh failure → 1+
  */
-import { execFileSync } from "node:child_process"
-import * as fs from "node:fs"
-import * as path from "node:path"
 import type { AgentResult } from "../agent.js"
 import type { PostflightScript } from "../executables/types.js"
 import { gh, postIssueComment, truncate } from "../issue.js"
+import { nowIso, type GoalState } from "../goal/state.js"
+import { putGoalState } from "../goal/stateStore.js"
 import type { Action } from "../state.js"
 import { detectVerdict, type ReviewVerdict } from "./postReviewResult.js"
 
@@ -287,118 +286,6 @@ function createOrUpdateManifestIssue(
   return { number: Number(m[1]), created: true }
 }
 
-function writeStateFile(cwd: string, goalId: string, lastDispatchedIssue?: number): string {
-  const dir = path.join(cwd, ".kody", "goals", goalId)
-  fs.mkdirSync(dir, { recursive: true })
-  const state = {
-    version: 1,
-    state: "active",
-    startedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    ...(typeof lastDispatchedIssue === "number" ? { lastDispatchedIssue } : {}),
-  }
-  const filePath = path.join(dir, "state.json")
-  fs.writeFileSync(filePath, `${JSON.stringify(state, null, 2)}\n`)
-  return filePath
-}
-
-/**
- * Run a git command, capturing stderr. Returns { ok, stderr }. Never throws.
- * The host repo's pre-* hooks read SKIP_HOOKS=1 (kody convention) — set both
- * that and HUSKY=0 (Husky 8) on every invocation so we don't trip
- * pre-commit/pre-push verification on auto-generated state.json edits.
- */
-function gitTry(args: string[], cwd: string): { ok: boolean; stderr: string } {
-  const env: NodeJS.ProcessEnv = { ...process.env, SKIP_HOOKS: "1", HUSKY: "0" }
-  try {
-    execFileSync("git", args, { cwd, stdio: ["ignore", "pipe", "pipe"], env })
-    return { ok: true, stderr: "" }
-  } catch (err) {
-    const e = err as { stderr?: Buffer | string; message?: string }
-    const stderr =
-      typeof e?.stderr === "string"
-        ? e.stderr
-        : Buffer.isBuffer(e?.stderr)
-          ? e.stderr.toString("utf8")
-          : (e?.message ?? "")
-    return { ok: false, stderr: stderr.trim() }
-  }
-}
-
-function commitAndPushState(filePath: string, goalId: string, cwd: string): void {
-  const add = gitTry(["add", filePath], cwd)
-  if (!add.ok) {
-    process.stderr.write(`[createQaGoal] git add failed: ${add.stderr.slice(-400) || "(no stderr)"}\n`)
-    return
-  }
-
-  // No diff → nothing to commit. `git diff --cached --quiet` exits 1 when
-  // there IS a diff, 0 when clean — mirror that semantics.
-  const diff = gitTry(["diff", "--cached", "--quiet"], cwd)
-  if (diff.ok) {
-    process.stderr.write(`[createQaGoal] state.json unchanged — nothing to commit\n`)
-    return
-  }
-
-  const commit = gitTry(["commit", "-m", `chore(goals): activate ${goalId}`, "--quiet"], cwd)
-  if (!commit.ok) {
-    process.stderr.write(`[createQaGoal] git commit failed: ${commit.stderr.slice(-400) || "(no stderr)"}\n`)
-    return
-  }
-
-  // Try a normal push first. The most common failure on a busy repo is a
-  // non-fast-forward when origin moved during the agent's session — recover
-  // by rebasing and retrying once. Hook-related failures fall through to a
-  // best-effort --no-verify retry; that's gated on already having SKIP_HOOKS
-  // set and only kicks in when the operator's hook config doesn't honor it.
-  const push = gitTry(["push", "--quiet"], cwd)
-  if (push.ok) return
-
-  const stderr = push.stderr
-  const tail = stderr.slice(-400) || "(no stderr captured)"
-
-  if (/non-fast-forward|rejected|fetch first|behind/i.test(stderr)) {
-    process.stderr.write(`[createQaGoal] push rejected (non-fast-forward) — pulling --rebase and retrying\n`)
-    const rebase = gitTry(["pull", "--rebase", "--autostash", "--quiet"], cwd)
-    if (!rebase.ok) {
-      process.stderr.write(
-        `[createQaGoal] rebase failed (manual recovery required): ${rebase.stderr.slice(-400) || "(no stderr)"}\n`,
-      )
-      return
-    }
-    const retryPush = gitTry(["push", "--quiet"], cwd)
-    if (retryPush.ok) {
-      process.stderr.write(`[createQaGoal] push succeeded after rebase\n`)
-      return
-    }
-    process.stderr.write(
-      `[createQaGoal] push still failed after rebase: ${retryPush.stderr.slice(-400) || "(no stderr)"}\n`,
-    )
-    return
-  }
-
-  if (/pre-push|hook|husky/i.test(stderr)) {
-    process.stderr.write(`[createQaGoal] push rejected by pre-push hook — retrying with --no-verify\n`)
-    process.stderr.write(`[createQaGoal] hook output:\n${tail}\n`)
-    const noVerify = gitTry(["push", "--no-verify", "--quiet"], cwd)
-    if (noVerify.ok) {
-      process.stderr.write(`[createQaGoal] push succeeded with --no-verify (consider adding kody artifacts to ignore configs)\n`)
-      return
-    }
-    process.stderr.write(
-      `[createQaGoal] --no-verify push also failed: ${noVerify.stderr.slice(-400) || "(no stderr)"}\n`,
-    )
-    return
-  }
-
-  // Anything else: surface the real error so the operator can act.
-  process.stderr.write(
-    `[createQaGoal] state.json commit landed but push failed.\n` +
-      `[createQaGoal]   The goal will not be visible to goal-scheduler in CI until you run 'git push' manually.\n` +
-      `[createQaGoal]   git stderr:\n${tail}\n`,
-  )
-}
-
 function createTaskIssue(
   finding: ParsedFinding,
   goalId: string,
@@ -617,9 +504,18 @@ export async function promoteReportToGoal(
     }
   }
 
-  // Write & commit state.json so goal-scheduler picks it up.
-  const stateFile = writeStateFile(ctx.cwd, goalId)
-  commitAndPushState(stateFile, goalId, ctx.cwd)
+  // Persist the activated goal's state to the kody-state branch so
+  // goal-scheduler picks it up — off the default branch, no commit churn.
+  const now = nowIso()
+  const goalState: GoalState = { state: "active", startedAt: now, updatedAt: now, extra: { version: 1 } }
+  try {
+    putGoalState(ctx.config.github.owner, ctx.config.github.repo, goalId, goalState, `chore(goals): activate ${goalId}`, ctx.cwd)
+  } catch (err) {
+    process.stderr.write(
+      `[createQaGoal] failed to persist goal state to kody-state: ${err instanceof Error ? err.message : String(err)}\n` +
+        `[createQaGoal]   goal-scheduler will not see ${goalId} until this succeeds.\n`,
+    )
+  }
 
   const repoUrl = `https://github.com/${ctx.config.github.owner}/${ctx.config.github.repo}`
   if (manifestIssueNumber !== null) {

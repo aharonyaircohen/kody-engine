@@ -9,7 +9,7 @@
  */
 
 import type { PreflightScript } from "../executables/types.js"
-import { readGoalState } from "../goal/state.js"
+import { fetchGoalState } from "../goal/stateStore.js"
 
 export const loadGoalState: PreflightScript = async (ctx) => {
   const goalId = ctx.args.goal
@@ -28,8 +28,25 @@ export const loadGoalState: PreflightScript = async (ctx) => {
     return
   }
 
+  const owner = ctx.config.github?.owner
+  const repo = ctx.config.github?.repo
+  if (!owner || !repo) {
+    ctx.skipAgent = true
+    ctx.output.exitCode = 1
+    ctx.output.reason = "missing github owner/repo in config"
+    return
+  }
+
   try {
-    const state = readGoalState(ctx.cwd, goalId)
+    // Goal state lives on the kody-state branch (not the working tree).
+    const state = fetchGoalState(owner, repo, goalId, ctx.cwd)
+    if (!state) {
+      process.stdout.write(`[goal-tick] no goal state for ${goalId} on ${owner}/${repo} — nothing to tick\n`)
+      ctx.skipAgent = true
+      ctx.output.exitCode = 0
+      ctx.output.reason = "no goal state to tick"
+      return
+    }
     ctx.data.goal = {
       id: goalId,
       state: state.state,

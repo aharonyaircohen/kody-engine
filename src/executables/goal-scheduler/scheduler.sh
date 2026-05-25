@@ -11,6 +11,13 @@ set -euo pipefail
 
 goals_dir=".kody/goals"
 
+# Goal state lives on the dedicated `kody-state` branch, not the default branch
+# (keeps `chore(goals): …` churn out of code history). Materialize it into the
+# working tree so the glob below sees current state. Best-effort: `kody-state`
+# may not exist yet, or carry no goals — both fall through to the checks below.
+git fetch origin kody-state --quiet 2>/dev/null || true
+git checkout origin/kody-state -- "$goals_dir" 2>/dev/null || true
+
 if [ ! -d "$goals_dir" ]; then
   echo "[goal-scheduler] no $goals_dir — nothing to schedule"
   echo "KODY_SKIP_AGENT=true"
