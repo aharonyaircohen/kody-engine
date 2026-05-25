@@ -29,9 +29,10 @@
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
-import { spawn, spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
+
+import { type CloneRepoFn, defaultCloneRepo, ensureRepoCwd } from "../repoWorkspace.js"
 
 import { parseProviderModel, needsLitellmProxy, LITELLM_DEFAULT_URL } from "../config.js"
 import { unpackAllSecrets } from "../kody-cli.js"
@@ -256,101 +257,11 @@ function streamToRes(
   res.on("close", unsubscribe)
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Multi-repo workspace — one Brain serves many of a user's repos.
-//
-// The dashboard forwards the selected `repo` (owner/name) + a clone token on
-// every message (see Kody-Dashboard brain-proxy). A turn's *agent* runs in
-// `<reposRoot>/<owner>/<name>` so its code tools see the right tree; the repo
-// is cloned the first time we see it. Session + event JSONL stay under the
-// boot `cwd` (keyed by chatId) so reconnect/resume — a bodyless GET — never
-// needs to know the repo. Per-repo secrets/model are a later step: turns run
-// in-process here, so per-turn env mutation would race across chats.
-// ────────────────────────────────────────────────────────────────────────────
-
-/** `owner/name` with safe path chars only. Containment is re-checked below. */
-const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
-
-export type CloneRepoFn = (
-  repo: string,
-  token: string | undefined,
-  dir: string,
-) => Promise<void>
-
-// Per-target clone dedupe: concurrent chats on the same repo clone once.
-const repoClones = new Map<string, Promise<void>>()
-
-/**
- * Resolve the working directory for a turn. Returns `baseCwd` (the boot repo)
- * when no/invalid repo is supplied; otherwise `<reposRoot>/<repo>`, cloning it
- * on first use. Exported for tests.
- */
-export async function ensureRepoCwd(opts: {
-  baseCwd: string
-  reposRoot: string
-  repo?: string
-  repoToken?: string
-  cloneRepo: CloneRepoFn
-}): Promise<string> {
-  const repo = opts.repo?.trim()
-  if (!repo || !REPO_RE.test(repo)) return opts.baseCwd
-
-  // Defense-in-depth: even past the regex, never let the resolved path escape
-  // reposRoot (guards `..` segments the regex would otherwise admit).
-  const root = path.resolve(opts.reposRoot)
-  const dir = path.resolve(root, repo)
-  if (dir !== root && !dir.startsWith(root + path.sep)) return opts.baseCwd
-
-  if (fs.existsSync(path.join(dir, ".git"))) return dir
-
-  const inflight = repoClones.get(dir)
-  if (inflight) {
-    await inflight
-    return dir
-  }
-  const p = opts
-    .cloneRepo(repo, opts.repoToken, dir)
-    .finally(() => {
-      if (repoClones.get(dir) === p) repoClones.delete(dir)
-    })
-  repoClones.set(dir, p)
-  await p
-  return dir
-}
-
-/**
- * Default clone: shallow-clone the repo's default branch into `dir` (token
- * embedded in the remote so a later approved push works) and set a committer
- * identity. The token is never logged. Replaceable in tests.
- */
-const defaultCloneRepo: CloneRepoFn = (repo, token, dir) => {
-  fs.mkdirSync(path.dirname(dir), { recursive: true })
-  const authUrl = token
-    ? `https://x-access-token:${token}@github.com/${repo}.git`
-    : `https://github.com/${repo}.git`
-  return new Promise<void>((resolve, reject) => {
-    const child = spawn("git", ["clone", "--depth=1", authUrl, dir], {
-      stdio: "inherit",
-    })
-    child.on("exit", (code) => {
-      if (code !== 0) {
-        reject(new Error(`git clone ${repo} failed (exit ${code})`))
-        return
-      }
-      try {
-        const name = process.env.GIT_AUTHOR_NAME ?? "Kody Bot"
-        const email =
-          process.env.GIT_AUTHOR_EMAIL ?? "kody-bot@users.noreply.github.com"
-        spawnSync("git", ["-C", dir, "config", "user.name", name])
-        spawnSync("git", ["-C", dir, "config", "user.email", email])
-      } catch {
-        /* best effort — identity only matters once the agent commits */
-      }
-      resolve()
-    })
-    child.on("error", reject)
-  })
-}
+// Multi-repo workspace helpers (ensureRepoCwd / defaultCloneRepo / CloneRepoFn)
+// live in ../repoWorkspace.ts, shared with the fetch_repo chat tool. Re-export
+// ensureRepoCwd here so the existing brain-serve test suite keeps importing it
+// from this module.
+export { ensureRepoCwd }
 
 export interface BuildServerOptions {
   apiKey: string
@@ -440,6 +351,9 @@ async function handleChatTurn(
         model: opts.model,
         litellmUrl: opts.litellmUrl,
         sink,
+        // Let the agent clone + work on OTHER repos via the fetch_repo tool.
+        reposRoot: opts.reposRoot,
+        repoToken,
       })
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err)

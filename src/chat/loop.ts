@@ -108,6 +108,22 @@ export const CHAT_SYSTEM_PROMPT = [
 ].join("\n")
 
 /**
+ * Appended to the chat prompt ONLY when the agent has the `fetch_repo` tool
+ * (a repo-less Brain that can serve many repos). Kept out of the base prompt
+ * so single-repo runtimes (e.g. a GitHub Actions chat) don't advertise a tool
+ * they don't have.
+ */
+export const CROSS_REPO_PROMPT = [
+  "# Working across repositories",
+  "You are NOT limited to the repository at your current working directory. You",
+  'have a `fetch_repo` tool: call fetch_repo("owner/name") to clone another repo',
+  "into your workspace; it returns an absolute path. Then use Read/Grep/Glob/Bash",
+  "at that path to inspect or work on it. Already-fetched repos are reused",
+  "instantly. When the user asks about a different repo — or to compare repos —",
+  "fetch it instead of saying you are scoped to a single repo.",
+].join("\n")
+
+/**
  * Discover engine + project executables and render a markdown catalog the
  * chat agent can read. Rebuilt each call so a freshly-added `<name>/profile.json`
  * is picked up without a restart. Failures degrade silently (empty string)
@@ -156,6 +172,14 @@ export interface ChatTurnOptions {
   sink: EventSink
   verbose?: boolean
   quiet?: boolean
+  /**
+   * Root under which other repos are cloned (`<reposRoot>/<owner>/<name>`).
+   * When set, the agent gets the `fetch_repo` tool + read access to this root
+   * so it can work across repos. Omit for a single-repo runtime.
+   */
+  reposRoot?: string
+  /** GitHub token fetch_repo uses to clone private repos (the user's PAT). */
+  repoToken?: string
   /** Override for the system prompt (tests). */
   systemPrompt?: string
   /** Seam for tests — defaults to real runAgent. */
@@ -202,11 +226,14 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   // the context blocks so they win on tone/style by recency, but still
   // ahead of the executable catalog + artifact contract, which are hard
   // operational requirements the agent must not override.
+  // Advertise the fetch_repo tool only when it's actually wired (reposRoot set).
+  const crossRepoBlock = opts.reposRoot ? CROSS_REPO_PROMPT : null
   const systemPrompt = [
     basePrompt,
     contextBlock,
     memoryBlock,
     instructionsBlock,
+    crossRepoBlock,
     catalog,
     artifactAddendum,
   ]
@@ -229,6 +256,16 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
         verbose: opts.verbose,
         quiet: opts.quiet,
         systemPromptAppend: systemPrompt,
+        // Let the agent clone + work on OTHER repos mid-conversation (a
+        // repo-less Brain serves many). Enabled whenever we know where repos
+        // live; grants read access to that root via additionalDirectories.
+        ...(opts.reposRoot
+          ? {
+              enableFetchRepoTool: true,
+              reposRoot: opts.reposRoot,
+              repoToken: opts.repoToken,
+            }
+          : {}),
         onProgress: async (ev) => {
           progressSeq += 1
           if (ev.kind === "thinking") {

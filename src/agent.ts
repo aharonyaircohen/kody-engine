@@ -133,6 +133,17 @@ export interface AgentOptions {
    * on a trailing fenced block). Default false.
    */
   enableSubmitTool?: boolean
+  /**
+   * Opt-in (chat/Brain): build an in-process MCP server exposing a
+   * `fetch_repo` tool so the agent can clone and work on repos other than the
+   * one it was handed. Requires `reposRoot`; grants the agent read access to
+   * `reposRoot` via `additionalDirectories`. Default false.
+   */
+  enableFetchRepoTool?: boolean
+  /** Where fetch_repo clones live (`<reposRoot>/<owner>/<name>`). */
+  reposRoot?: string
+  /** GitHub token fetch_repo uses to clone private repos (the user's PAT). */
+  repoToken?: string
   /** Max number of verify-tool calls per session. Falls back to default. */
   verifyToolMaxAttempts?: number | null
   /** Config passed to the verify tool's underlying `verifyAllWithRetry` call. */
@@ -278,6 +289,19 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       const submitHandle = buildSubmitMcpServer()
       getSubmitted = submitHandle.getSubmitted
       mcpEntries.push(["kody-submit", submitHandle.server as unknown as Record<string, unknown>])
+    }
+    if (opts.enableFetchRepoTool && opts.reposRoot) {
+      // Lazy import — keeps the SDK MCP machinery off the cold path for the
+      // non-chat flows that never fetch other repos.
+      const { buildFetchRepoMcpServer } = await import("./fetchRepoMcp.js")
+      const fetchServer = buildFetchRepoMcpServer({
+        reposRoot: opts.reposRoot,
+        repoToken: opts.repoToken,
+      })
+      mcpEntries.push(["kody-fetch-repo", fetchServer as unknown as Record<string, unknown>])
+      // Grant the agent's file tools read/work access to every fetched repo
+      // (they live under reposRoot, outside the turn's cwd).
+      queryOptions.additionalDirectories = [opts.reposRoot]
     }
     if (mcpEntries.length > 0) {
       queryOptions.mcpServers = Object.fromEntries(mcpEntries)
