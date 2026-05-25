@@ -21,7 +21,7 @@
   "claudeCode": {
     "model": "inherit",
     "permissionMode": "default",
-    "maxTurns": 20,
+    "maxTurns": 100,
     "maxThinkingTokens": null,
     "systemPromptAppend": null,
     "enableSubmitTool": true,
