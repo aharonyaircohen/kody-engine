@@ -1,0 +1,65 @@
+{
+  "name": "qa-goal",
+  "role": "primitive",
+  "kind": "oneshot",
+  "describe": "Operator-gated half of QA: promotes a QA report (already posted on an issue by qa-engineer) into a goal — manifest entry + one fix-ticket per finding + a committed .kody/goals/<id>/state.json. Deterministic, no agent. The qa / qa-sweep duties surface a `@kody qa-goal --issue <n>` inbox rec; this runs when the operator approves it, so QA never auto-creates goals on its own.",
+  "inputs": [
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": true,
+      "describe": "Issue number carrying qa-engineer's QA report (the comment with the <!-- KODY_QA_REPORT_JSON --> block)."
+    },
+    {
+      "name": "scope",
+      "flag": "--scope",
+      "type": "string",
+      "required": false,
+      "describe": "Optional scope label for the goal name (e.g. the changelog entry title). Defaults to 'smoke'."
+    },
+    {
+      "name": "goal",
+      "flag": "--goal",
+      "type": "string",
+      "required": false,
+      "describe": "Optional existing goal id to attach findings to instead of creating a new one."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": null,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [
+    {
+      "name": "gh",
+      "install": {
+        "required": true,
+        "checkCommand": "command -v gh"
+      },
+      "verify": "gh auth status",
+      "usage": "Reads the QA report (`gh issue view --json comments`), appends to the goals manifest, and opens fix-ticket issues.",
+      "allowedUses": ["issue", "api"]
+    }
+  ],
+  "inputArtifacts": [],
+  "outputArtifacts": [],
+  "scripts": {
+    "preflight": [
+      {
+        "script": "promoteQaGoal"
+      }
+    ],
+    "postflight": []
+  }
+}

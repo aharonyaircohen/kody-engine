@@ -441,40 +441,71 @@ export const createQaGoal: PostflightScript = async (ctx, _profile, agentResult:
     return
   }
 
+  const { markdown } = splitReport(finalText)
+  const verdict = detectVerdict(markdown)
+  const existingIssue = ctx.args.issue as number | undefined
+
+  // ── Advisory mode (duty-driven QA) ──────────────────────────────────────
+  // When dispatched at a tracking issue (`--issue <n>`, as qa.md / qa-sweep /
+  // approval-gate do), post the FULL report there (markdown + the
+  // KODY_QA_REPORT_JSON block) and STOP. We do NOT auto-create the goal +
+  // fix-tickets — that would violate "QA never acts on its own". The duty
+  // reads this report and surfaces an inbox rec; goal creation is gated behind
+  // operator approval via `@kody qa-goal --issue <n>` (see promoteQaGoal).
+  if (typeof existingIssue === "number" && existingIssue > 0) {
+    try {
+      postIssueComment(existingIssue, finalText, ctx.cwd)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      ctx.output.exitCode = 4
+      ctx.output.reason = `failed to comment on issue #${existingIssue}: ${msg}`
+      ctx.data.action = failedAction(ctx.output.reason)
+      return
+    }
+    process.stdout.write(
+      `\nQA_REPORT_POSTED=https://github.com/${ctx.config.github.owner}/${ctx.config.github.repo}/issues/${existingIssue} (verdict: ${verdict})\n`,
+    )
+    ctx.data.action = qaAction(verdict, { issueNumber: existingIssue, mode: "comment" })
+    ctx.output.exitCode = verdict === "FAIL" ? 1 : 0
+    return
+  }
+
+  // ── Standalone mode (no tracking issue) ─────────────────────────────────
+  // A direct, operator-initiated `@kody qa-engineer` with no --issue keeps the
+  // original auto-goal behavior — the operator explicitly asked for it.
+  await promoteReportToGoal(
+    ctx,
+    finalText,
+    ctx.args.scope as string | undefined,
+    ctx.args.goal as string | undefined,
+  )
+}
+
+/**
+ * Turn a QA report (markdown + `<!-- KODY_QA_REPORT_JSON ... -->`) into a kody
+ * goal: append to the goals manifest, open one fix-ticket per finding, and
+ * write+commit `.kody/goals/<id>/state.json` so goal-scheduler ticks it. This
+ * is the operator-gated half of QA — invoked by the standalone qa-engineer
+ * path and by the `qa-goal` verb (which approve posts). PASS / no-findings
+ * reports open a single record issue instead.
+ */
+export async function promoteReportToGoal(
+  ctx: { args: Record<string, unknown>; cwd: string; config: { github: { owner: string; repo: string } }; data: Record<string, unknown>; output: { exitCode: number; reason?: string } },
+  finalText: string,
+  scopeArg?: string,
+  explicitGoalArg?: string,
+): Promise<void> {
   const { markdown, data, jsonError } = splitReport(finalText)
   const verdict = detectVerdict(markdown)
-
-  // No findings → nothing to triage. Fall back to commenting the report on
-  // an existing issue (if --issue passed) or opening a single record issue.
-  // This keeps PASS-verdict runs (where there are no defects to track) cheap.
   const findings = data?.findings ?? []
-  const existingIssue = ctx.args.issue as number | undefined
 
   if (findings.length === 0 || jsonError) {
     if (jsonError) {
-      process.stderr.write(`[createQaGoal] JSON parse: ${jsonError} — falling back to single-issue mode\n`)
+      process.stderr.write(`[promoteReportToGoal] JSON parse: ${jsonError} — falling back to single-issue mode\n`)
     }
-    if (typeof existingIssue === "number" && existingIssue > 0) {
-      try {
-        postIssueComment(existingIssue, finalText, ctx.cwd)
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        ctx.output.exitCode = 4
-        ctx.output.reason = `failed to comment on issue #${existingIssue}: ${msg}`
-        ctx.data.action = failedAction(ctx.output.reason)
-        return
-      }
-      process.stdout.write(
-        `\nQA_REPORT_POSTED=https://github.com/${ctx.config.github.owner}/${ctx.config.github.repo}/issues/${existingIssue} (verdict: ${verdict})\n`,
-      )
-      ctx.data.action = qaAction(verdict, { issueNumber: existingIssue, mode: "comment" })
-      ctx.output.exitCode = verdict === "FAIL" ? 1 : 0
-      return
-    }
-
     // Open a record-only issue with the markdown body.
     ensureLabel(FINDING_LABEL, "ededed", "kody: QA finding", ctx.cwd)
-    const scope = ctx.args.scope as string | undefined
+    const scope = scopeArg
     const title = `QA [${verdict}]: ${scope?.trim() || "smoke"} — ${todayIso()}`.slice(0, 240)
     let url = ""
     try {
@@ -508,8 +539,8 @@ export const createQaGoal: PostflightScript = async (ctx, _profile, agentResult:
   //     ticking, in case it had been marked done/abandoned.
   //   - no --goal     → create a new qa-<scope>-<date> goal, append it to
   //     the manifest, write a fresh state.json. Original behavior.
-  const explicitGoal = (ctx.args.goal as string | undefined)?.trim()
-  const scope = ctx.args.scope as string | undefined
+  const explicitGoal = explicitGoalArg?.trim()
+  const scope = scopeArg
 
   let goalId: string
   let manifestIssueNumber: number | null = null
