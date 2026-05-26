@@ -142,6 +142,18 @@ if [[ "$issue_arg" =~ ^[0-9]+$ && "$issue_arg" != "0" ]]; then
 fi
 body=$(build_pr_body "$tracking_line")
 
+# GitHub rejects a PR body over 65536 chars (GraphQL createPullRequest). A
+# large accumulated CHANGELOG section can blow past it, so clamp: drop the
+# changelog to a budget and rebuild, then hard-truncate as a final guard.
+body_max=65000
+if (( ${#body} > body_max )); then
+  echo "[kody release-deploy] PR body ${#body} chars > ${body_max} — truncating changelog" >&2
+  budget=$(( body_max - 2000 ))
+  changelog_section="${changelog_section:0:budget}"$'\n\n_…changelog truncated; see CHANGELOG.md on the branch._'
+  body=$(build_pr_body "$tracking_line")
+  (( ${#body} > body_max )) && body="${body:0:body_max}"
+fi
+
 if [[ -n "$existing" ]]; then
   echo "  reusing existing deploy PR: ${existing}"
   pr_url="$existing"

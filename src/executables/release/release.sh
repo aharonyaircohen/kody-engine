@@ -135,8 +135,22 @@ if [[ "$publish_status" == "failed" ]]; then
 fi
 
 # ── 5. Deploy PR (default → release branch) ───────────────────────────────
+# Distinguish three outcomes: rc!=0 is a real failure (do NOT mask as no-op);
+# rc==0 + empty URL is a genuine single-branch no-op; rc==0 + URL is success.
 current_step="deploy"
-deploy_pr_url=$(open_deploy_pr "$new_version" "$issue" || echo "")
+set +e
+deploy_pr_url=$(open_deploy_pr "$new_version" "$issue")
+deploy_rc=$?
+set -e
+release_branch="${KODY_CFG_RELEASE_RELEASEBRANCH:-}"
+if [[ "$deploy_rc" -ne 0 ]]; then
+  echo "[release] deploy step failed (rc=${deploy_rc}) — published v${new_version} but the ${default_branch}→${release_branch} promotion PR was not opened" >&2
+  echo "KODY_REASON=release v${new_version}: published, but the ${default_branch}→${release_branch} deploy PR failed"
+  echo "RELEASE_TAG=${tag}"
+  [[ -n "$release_url" ]] && echo "RELEASE_URL=${release_url}"
+  echo "RELEASE_FAILED=true"
+  exit 1
+fi
 if [[ -z "$deploy_pr_url" ]]; then
   echo "  (deploy: no-op — single-branch repo)"
 else
