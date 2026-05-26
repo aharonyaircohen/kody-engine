@@ -39,10 +39,11 @@ export function firstRequiredFailure(results: ToolCheckResult[], tools: CliToolS
 function verifyOne(tool: CliToolSpec, cwd?: string): ToolCheckResult {
   const result: ToolCheckResult = { name: tool.name, present: false, verified: false }
 
-  let present = runShell(tool.install.checkCommand, cwd)
+  const checkRes = runShell(tool.install.checkCommand, cwd)
+  let present = checkRes.ok
   if (!present && tool.install.installCommand) {
     runShell(tool.install.installCommand, cwd, 120_000)
-    present = runShell(tool.install.checkCommand, cwd)
+    present = runShell(tool.install.checkCommand, cwd).ok
   }
   result.present = present
   if (!present) {
@@ -50,17 +51,42 @@ function verifyOne(tool: CliToolSpec, cwd?: string): ToolCheckResult {
     return result
   }
 
-  const verified = runShell(tool.verify, cwd)
-  result.verified = verified
-  if (!verified) result.error = `tool "${tool.name}" failed verify: ${tool.verify}`
+  const verifyRes = runShell(tool.verify, cwd)
+  result.verified = verifyRes.ok
+  if (!verifyRes.ok) {
+    const tail = formatStderrTail(verifyRes.stderr, verifyRes.stdout)
+    result.error = `tool "${tool.name}" failed verify: ${tool.verify}${tail ? ` — ${tail}` : ""}`
+  }
   return result
 }
 
-function runShell(cmd: string, cwd?: string, timeoutMs = 30_000): boolean {
+interface ShellResult {
+  ok: boolean
+  stdout: string
+  stderr: string
+}
+
+function runShell(cmd: string, cwd?: string, timeoutMs = 30_000): ShellResult {
   try {
-    execFileSync("sh", ["-c", cmd], { cwd, stdio: "pipe", timeout: timeoutMs })
-    return true
-  } catch {
-    return false
+    const stdout = execFileSync("sh", ["-c", cmd], {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: timeoutMs,
+      encoding: "utf-8",
+    })
+    return { ok: true, stdout: stdout ?? "", stderr: "" }
+  } catch (err) {
+    const e = err as { stdout?: Buffer | string; stderr?: Buffer | string }
+    const stdout = e.stdout ? e.stdout.toString() : ""
+    const stderr = e.stderr ? e.stderr.toString() : ""
+    return { ok: false, stdout, stderr }
   }
+}
+
+function formatStderrTail(stderr: string, stdout: string): string {
+  const source = stderr.trim() || stdout.trim()
+  if (!source) return ""
+  // Keep the last 400 chars on one line so it doesn't bury the log.
+  const flat = source.replace(/\s+/g, " ").trim()
+  return flat.length > 400 ? `…${flat.slice(-400)}` : flat
 }

@@ -103,8 +103,22 @@ export function unpackAllSecrets(env: NodeJS.ProcessEnv = process.env): number {
 }
 
 export function resolveAuthToken(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  const token = env.KODY_TOKEN || env.GH_TOKEN || env.GITHUB_TOKEN || env.GH_PAT
+  const sources: Array<[string, string | undefined]> = [
+    ["KODY_TOKEN", env.KODY_TOKEN],
+    ["GH_TOKEN", env.GH_TOKEN],
+    ["GITHUB_TOKEN", env.GITHUB_TOKEN],
+    ["GH_PAT", env.GH_PAT],
+  ]
+  const picked = sources.find(([, v]) => !!v)
+  const token = picked?.[1]
   if (token && !env.GH_TOKEN) env.GH_TOKEN = token
+  if (token) {
+    // Log only which env var the token came from — no length/prefix/hash
+    // (that was temporary diagnostics for the kodyade throttle hunt).
+    process.stdout.write(`→ kody: GH_TOKEN sourced from env.${picked![0]}\n`)
+  } else {
+    process.stdout.write("→ kody: WARNING no auth token found (KODY_TOKEN/GH_TOKEN/GITHUB_TOKEN/GH_PAT all empty)\n")
+  }
   return token
 }
 
