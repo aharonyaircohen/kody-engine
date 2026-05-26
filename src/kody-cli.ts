@@ -1,12 +1,17 @@
 import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { mintAppInstallationToken, readAppCreds } from "./app-auth.js"
 import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
 import { autoDispatch, autoDispatchTyped, type DispatchResult, dispatchScheduledWatches } from "./dispatch.js"
-import { postIssueComment as ghPostIssueComment, postPrReviewComment as ghPostPrReviewComment } from "./issue.js"
 import { runExecutable } from "./executor.js"
 import { reactToTriggerComment } from "./gha.js"
-import { postIssueComment, truncate } from "./issue.js"
+import {
+  postIssueComment as ghPostIssueComment,
+  postPrReviewComment as ghPostPrReviewComment,
+  postIssueComment,
+  truncate,
+} from "./issue.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -102,7 +107,7 @@ export function unpackAllSecrets(env: NodeJS.ProcessEnv = process.env): number {
   return count
 }
 
-export function resolveAuthToken(env: NodeJS.ProcessEnv = process.env): string | undefined {
+export async function resolveAuthToken(env: NodeJS.ProcessEnv = process.env): Promise<string | undefined> {
   const sources: Array<[string, string | undefined]> = [
     ["KODY_TOKEN", env.KODY_TOKEN],
     ["GH_TOKEN", env.GH_TOKEN],
@@ -116,10 +121,28 @@ export function resolveAuthToken(env: NodeJS.ProcessEnv = process.env): string |
     // Log only which env var the token came from — no length/prefix/hash
     // (that was temporary diagnostics for the kodyade throttle hunt).
     process.stdout.write(`→ kody: GH_TOKEN sourced from env.${picked![0]}\n`)
-  } else {
-    process.stdout.write("→ kody: WARNING no auth token found (KODY_TOKEN/GH_TOKEN/GITHUB_TOKEN/GH_PAT all empty)\n")
+    return token
   }
-  return token
+
+  // No ready-made token — fall back to minting one from GitHub App creds
+  // (KODY_APP_ID + KODY_APP_PRIVATE_KEY). Mints once; the ~1h installation
+  // token is fine for typical runs but does NOT auto-refresh yet.
+  const creds = readAppCreds(env)
+  if (creds) {
+    try {
+      const minted = await mintAppInstallationToken(creds)
+      env.GH_TOKEN = minted
+      process.stdout.write("→ kody: GH_TOKEN minted from GitHub App (KODY_APP_ID/KODY_APP_PRIVATE_KEY)\n")
+      return minted
+    } catch (err) {
+      process.stdout.write(`→ kody: WARNING GitHub App token mint failed: ${(err as Error).message}\n`)
+    }
+  }
+
+  process.stdout.write(
+    "→ kody: WARNING no auth token found (KODY_TOKEN/GH_TOKEN/GITHUB_TOKEN/GH_PAT/GitHub App all empty)\n",
+  )
+  return undefined
 }
 
 export function detectPackageManager(cwd: string): PackageManager {
@@ -314,7 +337,7 @@ export async function runCi(argv: string[]): Promise<number> {
       // otherwise hit the "set GH_TOKEN" error from the gh CLI.
       try {
         unpackAllSecrets()
-        resolveAuthToken()
+        await resolveAuthToken()
       } catch {
         /* best-effort — postIssueComment will surface the failure if auth is unusable */
       }
@@ -332,7 +355,9 @@ export async function runCi(argv: string[]): Promise<number> {
         if (outcome.isPr) ghPostPrReviewComment(outcome.target, body, cwd)
         else ghPostIssueComment(outcome.target, body, cwd)
       } catch (err) {
-        process.stderr.write(`[kody] dispatch: failed to post unrecognized-token feedback: ${err instanceof Error ? err.message : String(err)}\n`)
+        process.stderr.write(
+          `[kody] dispatch: failed to post unrecognized-token feedback: ${err instanceof Error ? err.message : String(err)}\n`,
+        )
       }
       process.stdout.write(
         `→ kody: unrecognized subcommand "${outcome.token}" on #${outcome.target} — feedback comment attempt finished, exiting cleanly\n`,
@@ -367,7 +392,7 @@ export async function runCi(argv: string[]): Promise<number> {
   try {
     const n = unpackAllSecrets()
     if (n > 0) process.stdout.write(`→ kody: unpacked ${n} secret(s) from ALL_SECRETS\n`)
-    resolveAuthToken()
+    await resolveAuthToken()
     // Acknowledge the triggering @kody comment with 👀 so the user sees
     // kody picked up the request before deps/model spin up.
     reactToTriggerComment(cwd)
@@ -449,7 +474,7 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
   try {
     const n = unpackAllSecrets()
     if (n > 0) process.stdout.write(`→ kody: unpacked ${n} secret(s) from ALL_SECRETS\n`)
-    resolveAuthToken()
+    await resolveAuthToken()
 
     const pm = args.packageManager ?? detectPackageManager(cwd)
     process.stdout.write(`→ kody: package manager = ${pm}\n`)

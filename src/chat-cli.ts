@@ -164,7 +164,7 @@ export async function runChat(argv: string[]): Promise<number> {
   if (unpackedSecrets > 0) {
     process.stdout.write(`→ kody: unpacked ${unpackedSecrets} secret(s) from ALL_SECRETS\n`)
   }
-  resolveAuthToken()
+  await resolveAuthToken()
   configureGitIdentity(cwd)
 
   const config = tryLoadConfig(cwd)

@@ -100,33 +100,33 @@ describe("kody-cli: unpackAllSecrets", () => {
 })
 
 describe("kody-cli: resolveAuthToken", () => {
-  it("picks KODY_TOKEN first", () => {
+  it("picks KODY_TOKEN first", async () => {
     const env: NodeJS.ProcessEnv = { KODY_TOKEN: "k", GH_TOKEN: "g", GITHUB_TOKEN: "gh", GH_PAT: "p" }
-    expect(resolveAuthToken(env)).toBe("k")
+    expect(await resolveAuthToken(env)).toBe("k")
     expect(env.GH_TOKEN).toBe("g")
   })
 
-  it("falls back to GH_TOKEN", () => {
+  it("falls back to GH_TOKEN", async () => {
     const env: NodeJS.ProcessEnv = { GH_TOKEN: "g" }
-    expect(resolveAuthToken(env)).toBe("g")
+    expect(await resolveAuthToken(env)).toBe("g")
     expect(env.GH_TOKEN).toBe("g")
   })
 
-  it("falls back to GITHUB_TOKEN and copies into GH_TOKEN", () => {
+  it("falls back to GITHUB_TOKEN and copies into GH_TOKEN", async () => {
     const env: NodeJS.ProcessEnv = { GITHUB_TOKEN: "gh" }
-    expect(resolveAuthToken(env)).toBe("gh")
+    expect(await resolveAuthToken(env)).toBe("gh")
     expect(env.GH_TOKEN).toBe("gh")
   })
 
-  it("falls back to GH_PAT", () => {
+  it("falls back to GH_PAT", async () => {
     const env: NodeJS.ProcessEnv = { GH_PAT: "p" }
-    expect(resolveAuthToken(env)).toBe("p")
+    expect(await resolveAuthToken(env)).toBe("p")
     expect(env.GH_TOKEN).toBe("p")
   })
 
-  it("returns undefined when none set", () => {
+  it("returns undefined when no token and no App creds set", async () => {
     const env: NodeJS.ProcessEnv = {}
-    expect(resolveAuthToken(env)).toBeUndefined()
+    expect(await resolveAuthToken(env)).toBeUndefined()
     expect(env.GH_TOKEN).toBeUndefined()
   })
 })
