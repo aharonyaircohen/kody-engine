@@ -20,13 +20,13 @@ export interface AgentTokenUsage {
  * (parseAgentResult, postReviewResult, openQaIssue, createQaGoal).
  */
 export type AgentOutcomeKind =
-  | "ok"                // result subtype === "success"
-  | "stalled"           // per-turn watchdog fired
-  | "out_of_turns"      // SDK reported max-turns hit
-  | "rate_limit"        // SDK reported rate-limit / 429
-  | "tool_error"        // SDK reported a tool execution failure
-  | "model_error"       // exception thrown inside the SDK call
-  | "generic_failed"    // any other non-success result subtype
+  | "ok" // result subtype === "success"
+  | "stalled" // per-turn watchdog fired
+  | "out_of_turns" // SDK reported max-turns hit
+  | "rate_limit" // SDK reported rate-limit / 429
+  | "tool_error" // SDK reported a tool execution failure
+  | "model_error" // exception thrown inside the SDK call
+  | "generic_failed" // any other non-success result subtype
 
 export interface AgentResult {
   outcome: "completed" | "failed"
@@ -207,11 +207,50 @@ function resolveTurnTimeoutMs(opts: AgentOptions): number {
   return DEFAULT_TURN_TIMEOUT_MS
 }
 
+/** Max times to re-run a session after a transient connection failure. */
+const MAX_CONNECTION_RETRIES = 2
+/** Base backoff before a connection retry; doubles each attempt. */
+const CONNECTION_RETRY_BASE_MS = 2000
+
+/**
+ * A transient connectivity failure reaching the model API (or the local
+ * litellm proxy). Safe to retry verbatim — nothing reached the model, so the
+ * failed turn produced no new side effect.
+ */
+function isTransientConnectionError(msg: string | undefined): boolean {
+  if (!msg) return false
+  return /ConnectionRefused|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EHOSTUNREACH|ENOTFOUND|socket hang up|Unable to connect to API|fetch failed/i.test(
+    msg,
+  )
+}
+
+/** File-editing tools whose replay could duplicate a durable change. */
+const MUTATING_FILE_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"])
+/**
+ * `Bash` commands that write durable state. We only block a retry on a clear
+ * write verb — reads (gh/git list/view, cat, grep, …) stay retryable so a
+ * connection blip mid-run can still recover.
+ */
+const BASH_WRITE_VERB =
+  /\b(git\s+(commit|push|merge|rebase|tag|reset|cherry-pick)|gh\s+(pr|issue|release)\s+(create|comment|edit|close|merge|review|reopen)|gh\s+api\b[^|&]*-X\s*(POST|PUT|PATCH|DELETE)|npm\s+publish)\b/i
+
+/**
+ * True when a tool call could have changed durable state. Gates the connection
+ * retry: once the session has mutated anything we never blind-replay it (could
+ * create a second PR, comment, commit, or edit).
+ */
+function toolMayMutate(name: string | undefined, input: Record<string, unknown> | undefined): boolean {
+  if (!name) return false
+  if (MUTATING_FILE_TOOLS.has(name)) return true
+  if (name.startsWith("mcp__kody-submit__")) return true
+  if (name === "Bash") return BASH_WRITE_VERB.test(String(input?.command ?? ""))
+  return false
+}
+
 export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const ndjsonDir = opts.ndjsonDir ?? path.join(opts.cwd, ".kody")
   fs.mkdirSync(ndjsonDir, { recursive: true })
   const ndjsonPath = path.join(ndjsonDir, "last-run.jsonl")
-  const fullLog = fs.createWriteStream(ndjsonPath, { flags: "w" })
 
   const env: Record<string, string> = {
     ...(process.env as Record<string, string>),
@@ -232,277 +271,332 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     env.ANTHROPIC_API_KEY = getAnthropicApiKeyOrDummy()
   }
 
-  // Collect every `result` message's text. The SDK can emit multiple
-  // `result` events when the session restarts mid-flight (background
-  // checks, continuation turns). Keeping only the last one silently
-  // clobbers earlier terminal output — including a valid DONE marker
-  // from the turn that actually finished the work. Joining all of them
-  // gives the parser the full terminal stream.
-  const resultTexts: string[] = []
+  const startedAt = Date.now()
+  const turnTimeoutMs = resolveTurnTimeoutMs(opts)
+  // Results live across attempts so the connection retry below can overwrite
+  // them; the final loop iteration's values are what we return.
   let outcome: "completed" | "failed" = "failed"
   let outcomeKind: AgentOutcomeKind = "generic_failed"
   let errorMessage: string | undefined
-  const tokens: AgentTokenUsage = { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 }
+  let tokens: AgentTokenUsage = { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 }
   let messageCount = 0
-  const startedAt = Date.now()
-  const turnTimeoutMs = resolveTurnTimeoutMs(opts)
-  let ndjsonWriteFailed = false
-  let ndjsonWriteError: string | undefined
+  let finalText = ""
   let getSubmitted: (() => { cursor: string; data: Record<string, unknown>; done: boolean } | undefined) | undefined
 
-  try {
-    const queryOptions: Record<string, unknown> = {
-      model: opts.model.model,
-      cwd: opts.cwd,
-      // Fresh array (never mutate the shared DEFAULT_ALLOWED_TOOLS const) so
-      // opt-in tools like fetch_repo can be appended below.
-      allowedTools: [...(opts.allowedToolsOverride ?? DEFAULT_ALLOWED_TOOLS)],
-      permissionMode: opts.permissionModeOverride ?? "acceptEdits",
-      env,
-    }
-    const mcpEntries: Array<[string, Record<string, unknown>]> = []
-    if (opts.mcpServers && opts.mcpServers.length > 0) {
-      for (const s of opts.mcpServers) {
-        const cfg: Record<string, unknown> = { command: s.command }
-        if (s.args) cfg.args = s.args
-        if (s.env) cfg.env = s.env
-        mcpEntries.push([s.name, cfg])
-      }
-    }
-    if (opts.enableVerifyTool && opts.verifyConfig) {
-      // Lazy import — keeps the SDK + zod off the cold path when the
-      // tool is not enabled (most short-running flows like classify).
-      const { buildVerifyMcpServer } = await import("./verifyMcp.js")
-      const verifyServer = buildVerifyMcpServer({
-        config: opts.verifyConfig as Parameters<typeof buildVerifyMcpServer>[0]["config"],
+  for (let attempt = 0; ; attempt++) {
+    // The SDK message log reflects the final attempt — truncate on each try.
+    const fullLog = fs.createWriteStream(ndjsonPath, { flags: "w" })
+    // Collect every `result` message's text. The SDK can emit multiple
+    // `result` events when the session restarts mid-flight (background
+    // checks, continuation turns). Keeping only the last one silently
+    // clobbers earlier terminal output — including a valid DONE marker
+    // from the turn that actually finished the work. Joining all of them
+    // gives the parser the full terminal stream.
+    const resultTexts: string[] = []
+    outcome = "failed"
+    outcomeKind = "generic_failed"
+    errorMessage = undefined
+    tokens = { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 }
+    messageCount = 0
+    let ndjsonWriteFailed = false
+    let ndjsonWriteError: string | undefined
+    // Flips once the session runs a tool that could change durable state —
+    // gates the connection retry so we never replay a mutating turn.
+    let sawMutatingTool = false
+
+    try {
+      const queryOptions: Record<string, unknown> = {
+        model: opts.model.model,
         cwd: opts.cwd,
-        executable: opts.executableName ?? "agent",
-        maxAttempts:
-          typeof opts.verifyToolMaxAttempts === "number" && opts.verifyToolMaxAttempts > 0
-            ? opts.verifyToolMaxAttempts
-            : undefined,
-      })
-      mcpEntries.push(["kody-verify", verifyServer as unknown as Record<string, unknown>])
-    }
-    if (opts.enableSubmitTool) {
-      // Lazy import — keeps the SDK MCP machinery off the cold path for flows
-      // that don't submit structured state.
-      const { buildSubmitMcpServer } = await import("./submitMcp.js")
-      const submitHandle = buildSubmitMcpServer()
-      getSubmitted = submitHandle.getSubmitted
-      mcpEntries.push(["kody-submit", submitHandle.server as unknown as Record<string, unknown>])
-    }
-    if (opts.enableFetchRepoTool && opts.reposRoot) {
-      // Lazy import — keeps the SDK MCP machinery off the cold path for the
-      // non-chat flows that never fetch other repos.
-      const { buildFetchRepoMcpServer } = await import("./fetchRepoMcp.js")
-      const fetchServer = buildFetchRepoMcpServer({
-        reposRoot: opts.reposRoot,
-        repoToken: opts.repoToken,
-      })
-      mcpEntries.push(["kody-fetch-repo", fetchServer as unknown as Record<string, unknown>])
-      // Auto-approve the tool — otherwise the SDK blocks the MCP call for
-      // permission and the agent stalls asking the user (it can't, mid-stream).
-      ;(queryOptions.allowedTools as string[]).push("mcp__kody-fetch-repo__fetch_repo")
-      // Grant the agent's file tools read/work access to every fetched repo
-      // (they live under reposRoot, outside the turn's cwd).
-      queryOptions.additionalDirectories = [opts.reposRoot]
-    }
-    if (mcpEntries.length > 0) {
-      queryOptions.mcpServers = Object.fromEntries(mcpEntries)
-    }
-    if (opts.pluginPaths && opts.pluginPaths.length > 0) {
-      queryOptions.plugins = opts.pluginPaths.map((p) => ({ type: "local", path: p }))
-    }
-    if (opts.agents && Object.keys(opts.agents).length > 0) {
-      queryOptions.agents = opts.agents
-    }
-    if (typeof opts.maxTurns === "number" && opts.maxTurns > 0) {
-      queryOptions.maxTurns = opts.maxTurns
-    }
-    if (typeof opts.maxThinkingTokens === "number" && opts.maxThinkingTokens > 0) {
-      queryOptions.maxThinkingTokens = opts.maxThinkingTokens
-    }
-    if (typeof opts.systemPromptAppend === "string" && opts.systemPromptAppend.length > 0) {
-      const systemPrompt: Record<string, unknown> = {
-        type: "preset",
-        preset: "claude_code",
-        append: opts.systemPromptAppend,
+        // Fresh array (never mutate the shared DEFAULT_ALLOWED_TOOLS const) so
+        // opt-in tools like fetch_repo can be appended below.
+        allowedTools: [...(opts.allowedToolsOverride ?? DEFAULT_ALLOWED_TOOLS)],
+        permissionMode: opts.permissionModeOverride ?? "acceptEdits",
+        env,
       }
-      if (opts.cacheable) systemPrompt.excludeDynamicSections = true
-      queryOptions.systemPrompt = systemPrompt
-    } else if (opts.cacheable) {
-      // Cacheable opt-in without an append still wants the preset's
-      // dynamic sections stripped so the prefix is cacheable.
-      queryOptions.systemPrompt = {
-        type: "preset",
-        preset: "claude_code",
-        excludeDynamicSections: true,
+      const mcpEntries: Array<[string, Record<string, unknown>]> = []
+      if (opts.mcpServers && opts.mcpServers.length > 0) {
+        for (const s of opts.mcpServers) {
+          const cfg: Record<string, unknown> = { command: s.command }
+          if (s.args) cfg.args = s.args
+          if (s.env) cfg.env = s.env
+          mcpEntries.push([s.name, cfg])
+        }
       }
-    }
-    queryOptions.settingSources = opts.settingSources ?? ["project", "local"]
-    // Pin the SDK's native binary to a job-stable path so npm pruning the
-    // `_npx` cache mid-job (during a long run phase) can't make a later
-    // phase fail with "native binary not found". Null => SDK default.
-    const stableBinary = ensureStableClaudeBinary()
-    if (stableBinary) {
-      queryOptions.pathToClaudeCodeExecutable = stableBinary
-    }
-    const result = query({
-      prompt: opts.prompt,
-      // biome-ignore lint/suspicious/noExplicitAny: SDK options type is narrow; mcpServers is runtime-passthrough.
-      options: queryOptions as any,
-    })
-
-    // Manual iterator loop so we can race each `next()` against a watchdog
-    // timer. A `for await` hides the underlying promise and offers no way
-    // to bail out when the SDK stalls mid-turn (hung tool call, network
-    // deadlock). Racing makes a hang surface as a structured failure
-    // (outcome=failed, error=stalled) within `turnTimeoutMs` instead of
-    // wedging the executor until the outer shell timeout fires.
-    const iterator =
-      typeof (result as { [Symbol.asyncIterator]?: () => AsyncIterator<unknown> })[Symbol.asyncIterator] === "function"
-        ? (result as unknown as AsyncIterable<unknown>)[Symbol.asyncIterator]()
-        : (result as unknown as AsyncIterator<unknown>)
-
-    while (true) {
-      const nextPromise = iterator.next()
-      let timedOut = false
-      let timer: NodeJS.Timeout | undefined
-      let next: IteratorResult<unknown>
-      if (turnTimeoutMs > 0) {
-        const timeoutPromise = new Promise<IteratorResult<unknown>>((resolve) => {
-          timer = setTimeout(() => {
-            timedOut = true
-            resolve({ done: true, value: undefined })
-          }, turnTimeoutMs)
+      if (opts.enableVerifyTool && opts.verifyConfig) {
+        // Lazy import — keeps the SDK + zod off the cold path when the
+        // tool is not enabled (most short-running flows like classify).
+        const { buildVerifyMcpServer } = await import("./verifyMcp.js")
+        const verifyServer = buildVerifyMcpServer({
+          config: opts.verifyConfig as Parameters<typeof buildVerifyMcpServer>[0]["config"],
+          cwd: opts.cwd,
+          executable: opts.executableName ?? "agent",
+          maxAttempts:
+            typeof opts.verifyToolMaxAttempts === "number" && opts.verifyToolMaxAttempts > 0
+              ? opts.verifyToolMaxAttempts
+              : undefined,
         })
-        next = await Promise.race([nextPromise, timeoutPromise])
-        if (timer) clearTimeout(timer)
-      } else {
-        next = await nextPromise
+        mcpEntries.push(["kody-verify", verifyServer as unknown as Record<string, unknown>])
       }
-      if (timedOut) {
-        outcome = "failed"
-        outcomeKind = "stalled"
-        errorMessage = `agent stalled: no SDK message in ${Math.round(turnTimeoutMs / 1000)}s`
-        // Best-effort iterator cleanup so the SDK can release tool processes.
-        if (typeof iterator.return === "function") {
-          try {
-            await iterator.return(undefined)
-          } catch {
-            /* ignore — we already know we're aborting */
+      if (opts.enableSubmitTool) {
+        // Lazy import — keeps the SDK MCP machinery off the cold path for flows
+        // that don't submit structured state.
+        const { buildSubmitMcpServer } = await import("./submitMcp.js")
+        const submitHandle = buildSubmitMcpServer()
+        getSubmitted = submitHandle.getSubmitted
+        mcpEntries.push(["kody-submit", submitHandle.server as unknown as Record<string, unknown>])
+      }
+      if (opts.enableFetchRepoTool && opts.reposRoot) {
+        // Lazy import — keeps the SDK MCP machinery off the cold path for the
+        // non-chat flows that never fetch other repos.
+        const { buildFetchRepoMcpServer } = await import("./fetchRepoMcp.js")
+        const fetchServer = buildFetchRepoMcpServer({
+          reposRoot: opts.reposRoot,
+          repoToken: opts.repoToken,
+        })
+        mcpEntries.push(["kody-fetch-repo", fetchServer as unknown as Record<string, unknown>])
+        // Auto-approve the tool — otherwise the SDK blocks the MCP call for
+        // permission and the agent stalls asking the user (it can't, mid-stream).
+        ;(queryOptions.allowedTools as string[]).push("mcp__kody-fetch-repo__fetch_repo")
+        // Grant the agent's file tools read/work access to every fetched repo
+        // (they live under reposRoot, outside the turn's cwd).
+        queryOptions.additionalDirectories = [opts.reposRoot]
+      }
+      if (mcpEntries.length > 0) {
+        queryOptions.mcpServers = Object.fromEntries(mcpEntries)
+      }
+      if (opts.pluginPaths && opts.pluginPaths.length > 0) {
+        queryOptions.plugins = opts.pluginPaths.map((p) => ({ type: "local", path: p }))
+      }
+      if (opts.agents && Object.keys(opts.agents).length > 0) {
+        queryOptions.agents = opts.agents
+      }
+      if (typeof opts.maxTurns === "number" && opts.maxTurns > 0) {
+        queryOptions.maxTurns = opts.maxTurns
+      }
+      if (typeof opts.maxThinkingTokens === "number" && opts.maxThinkingTokens > 0) {
+        queryOptions.maxThinkingTokens = opts.maxThinkingTokens
+      }
+      if (typeof opts.systemPromptAppend === "string" && opts.systemPromptAppend.length > 0) {
+        const systemPrompt: Record<string, unknown> = {
+          type: "preset",
+          preset: "claude_code",
+          append: opts.systemPromptAppend,
+        }
+        if (opts.cacheable) systemPrompt.excludeDynamicSections = true
+        queryOptions.systemPrompt = systemPrompt
+      } else if (opts.cacheable) {
+        // Cacheable opt-in without an append still wants the preset's
+        // dynamic sections stripped so the prefix is cacheable.
+        queryOptions.systemPrompt = {
+          type: "preset",
+          preset: "claude_code",
+          excludeDynamicSections: true,
+        }
+      }
+      queryOptions.settingSources = opts.settingSources ?? ["project", "local"]
+      // Pin the SDK's native binary to a job-stable path so npm pruning the
+      // `_npx` cache mid-job (during a long run phase) can't make a later
+      // phase fail with "native binary not found". Null => SDK default.
+      const stableBinary = ensureStableClaudeBinary()
+      if (stableBinary) {
+        queryOptions.pathToClaudeCodeExecutable = stableBinary
+      }
+      const result = query({
+        prompt: opts.prompt,
+        // biome-ignore lint/suspicious/noExplicitAny: SDK options type is narrow; mcpServers is runtime-passthrough.
+        options: queryOptions as any,
+      })
+
+      // Manual iterator loop so we can race each `next()` against a watchdog
+      // timer. A `for await` hides the underlying promise and offers no way
+      // to bail out when the SDK stalls mid-turn (hung tool call, network
+      // deadlock). Racing makes a hang surface as a structured failure
+      // (outcome=failed, error=stalled) within `turnTimeoutMs` instead of
+      // wedging the executor until the outer shell timeout fires.
+      const iterator =
+        typeof (result as { [Symbol.asyncIterator]?: () => AsyncIterator<unknown> })[Symbol.asyncIterator] ===
+        "function"
+          ? (result as unknown as AsyncIterable<unknown>)[Symbol.asyncIterator]()
+          : (result as unknown as AsyncIterator<unknown>)
+
+      while (true) {
+        const nextPromise = iterator.next()
+        let timedOut = false
+        let timer: NodeJS.Timeout | undefined
+        let next: IteratorResult<unknown>
+        if (turnTimeoutMs > 0) {
+          const timeoutPromise = new Promise<IteratorResult<unknown>>((resolve) => {
+            timer = setTimeout(() => {
+              timedOut = true
+              resolve({ done: true, value: undefined })
+            }, turnTimeoutMs)
+          })
+          next = await Promise.race([nextPromise, timeoutPromise])
+          if (timer) clearTimeout(timer)
+        } else {
+          next = await nextPromise
+        }
+        if (timedOut) {
+          outcome = "failed"
+          outcomeKind = "stalled"
+          errorMessage = `agent stalled: no SDK message in ${Math.round(turnTimeoutMs / 1000)}s`
+          // Best-effort iterator cleanup so the SDK can release tool processes.
+          if (typeof iterator.return === "function") {
+            try {
+              await iterator.return(undefined)
+            } catch {
+              /* ignore — we already know we're aborting */
+            }
+          }
+          break
+        }
+        if (next.done) break
+        const msg = next.value
+        messageCount++
+        try {
+          fullLog.write(`${JSON.stringify(msg)}\n`)
+        } catch (e) {
+          ndjsonWriteFailed = true
+          ndjsonWriteError = e instanceof Error ? e.message : String(e)
+        }
+
+        const line = renderEvent(msg as SdkMessageLike, { verbose: opts.verbose, quiet: opts.quiet })
+        if (line) process.stdout.write(`${line}\n`)
+
+        const m = msg as SdkMessageLike
+
+        // Stream progress events (thinking / tool calls / text deltas) to
+        // the consumer. Chat mode hooks this to push live updates to the
+        // dashboard SSE; non-chat callers can leave onProgress unset and
+        // pay zero cost. Errors are swallowed — instrumentation must not
+        // break the actual turn.
+        if (opts.onProgress) {
+          const blocks = m.message?.content ?? []
+          for (const block of blocks) {
+            try {
+              if (block.type === "thinking") {
+                const t = (block as { thinking?: unknown }).thinking
+                if (typeof t === "string" && t.length > 0) {
+                  await opts.onProgress({ kind: "thinking", thinking: t })
+                }
+              } else if (block.type === "tool_use") {
+                const b = block as { name?: string; input?: Record<string, unknown>; id?: string }
+                await opts.onProgress({
+                  kind: "tool_use",
+                  name: b.name ?? "tool",
+                  input: b.input,
+                  id: b.id,
+                })
+              } else if (block.type === "tool_result") {
+                const b = block as { tool_use_id?: string; content?: unknown; is_error?: boolean }
+                const content =
+                  typeof b.content === "string"
+                    ? b.content
+                    : (() => {
+                        try {
+                          return JSON.stringify(b.content)
+                        } catch {
+                          return ""
+                        }
+                      })()
+                await opts.onProgress({
+                  kind: "tool_result",
+                  toolUseId: b.tool_use_id,
+                  content,
+                  isError: b.is_error,
+                })
+              } else if (block.type === "text") {
+                const b = block as { text?: string }
+                if (typeof b.text === "string" && b.text.length > 0) {
+                  await opts.onProgress({ kind: "text", text: b.text })
+                }
+              }
+            } catch {
+              /* progress callback must not break the run */
+            }
           }
         }
-        break
-      }
-      if (next.done) break
-      const msg = next.value
-      messageCount++
-      try {
-        fullLog.write(`${JSON.stringify(msg)}\n`)
-      } catch (e) {
-        ndjsonWriteFailed = true
-        ndjsonWriteError = e instanceof Error ? e.message : String(e)
-      }
-
-      const line = renderEvent(msg as SdkMessageLike, { verbose: opts.verbose, quiet: opts.quiet })
-      if (line) process.stdout.write(`${line}\n`)
-
-      const m = msg as SdkMessageLike
-
-      // Stream progress events (thinking / tool calls / text deltas) to
-      // the consumer. Chat mode hooks this to push live updates to the
-      // dashboard SSE; non-chat callers can leave onProgress unset and
-      // pay zero cost. Errors are swallowed — instrumentation must not
-      // break the actual turn.
-      if (opts.onProgress) {
-        const blocks = m.message?.content ?? []
-        for (const block of blocks) {
-          try {
-            if (block.type === "thinking") {
-              const t = (block as { thinking?: unknown }).thinking
-              if (typeof t === "string" && t.length > 0) {
-                await opts.onProgress({ kind: "thinking", thinking: t })
-              }
-            } else if (block.type === "tool_use") {
-              const b = block as { name?: string; input?: Record<string, unknown>; id?: string }
-              await opts.onProgress({
-                kind: "tool_use",
-                name: b.name ?? "tool",
-                input: b.input,
-                id: b.id,
-              })
-            } else if (block.type === "tool_result") {
-              const b = block as { tool_use_id?: string; content?: unknown; is_error?: boolean }
-              const content = typeof b.content === "string"
-                ? b.content
-                : (() => { try { return JSON.stringify(b.content) } catch { return "" } })()
-              await opts.onProgress({
-                kind: "tool_result",
-                toolUseId: b.tool_use_id,
-                content,
-                isError: b.is_error,
-              })
-            } else if (block.type === "text") {
-              const b = block as { text?: string }
-              if (typeof b.text === "string" && b.text.length > 0) {
-                await opts.onProgress({ kind: "text", text: b.text })
+        // Accumulate token usage. The SDK attaches `usage` to result messages
+        // (and sometimes to assistant messages); we sum whatever surfaces so
+        // that the per-stage event log captures the real cost regardless of
+        // where the SDK chose to put it.
+        const usage = (m as { usage?: Record<string, unknown> }).usage
+        if (usage && typeof usage === "object") {
+          const i = Number(usage.input_tokens ?? 0)
+          const o = Number(usage.output_tokens ?? 0)
+          const cr = Number(usage.cache_read_input_tokens ?? 0)
+          const cc = Number(usage.cache_creation_input_tokens ?? 0)
+          if (Number.isFinite(i)) tokens.input += i
+          if (Number.isFinite(o)) tokens.output += o
+          if (Number.isFinite(cr)) tokens.cacheRead += cr
+          if (Number.isFinite(cc)) tokens.cacheCreate += cc
+        }
+        if (!sawMutatingTool) {
+          const blocks = m.message?.content ?? []
+          for (const block of blocks) {
+            if (block.type === "tool_use") {
+              const b = block as { name?: string; input?: Record<string, unknown> }
+              if (toolMayMutate(b.name, b.input)) {
+                sawMutatingTool = true
+                break
               }
             }
-          } catch {
-            /* progress callback must not break the run */
+          }
+        }
+        if (m.type === "result") {
+          if (m.subtype === "success") {
+            outcome = "completed"
+            outcomeKind = "ok"
+            const text = (typeof m.result === "string" ? m.result : "").trim()
+            if (text) resultTexts.push(text)
+          } else {
+            outcome = "failed"
+            outcomeKind = classifySubtype(m.subtype)
+            errorMessage = `result subtype: ${m.subtype ?? "unknown"}`
           }
         }
       }
-      // Accumulate token usage. The SDK attaches `usage` to result messages
-      // (and sometimes to assistant messages); we sum whatever surfaces so
-      // that the per-stage event log captures the real cost regardless of
-      // where the SDK chose to put it.
-      const usage = (m as { usage?: Record<string, unknown> }).usage
-      if (usage && typeof usage === "object") {
-        const i = Number(usage.input_tokens ?? 0)
-        const o = Number(usage.output_tokens ?? 0)
-        const cr = Number(usage.cache_read_input_tokens ?? 0)
-        const cc = Number(usage.cache_creation_input_tokens ?? 0)
-        if (Number.isFinite(i)) tokens.input += i
-        if (Number.isFinite(o)) tokens.output += o
-        if (Number.isFinite(cr)) tokens.cacheRead += cr
-        if (Number.isFinite(cc)) tokens.cacheCreate += cc
-      }
-      if (m.type === "result") {
-        if (m.subtype === "success") {
-          outcome = "completed"
-          outcomeKind = "ok"
-          const text = (typeof m.result === "string" ? m.result : "").trim()
-          if (text) resultTexts.push(text)
-        } else {
-          outcome = "failed"
-          outcomeKind = classifySubtype(m.subtype)
-          errorMessage = `result subtype: ${m.subtype ?? "unknown"}`
-        }
+    } catch (e) {
+      outcome = "failed"
+      outcomeKind = "model_error"
+      errorMessage = e instanceof Error ? e.message : String(e)
+    } finally {
+      try {
+        fullLog.end()
+      } catch {
+        /* best effort */
       }
     }
-  } catch (e) {
-    outcome = "failed"
-    outcomeKind = "model_error"
-    errorMessage = e instanceof Error ? e.message : String(e)
-  } finally {
-    try {
-      fullLog.end()
-    } catch {
-      /* best effort */
+
+    if (ndjsonWriteFailed) {
+      // Phase 0 made the executor record agent durations + tokens via events.
+      // If the NDJSON message log went silent mid-run the post-mortem is
+      // incomplete — surface that to stderr so the operator knows a "successful"
+      // log file may be truncated. Previously this was swallowed.
+      process.stderr.write(
+        `[kody agent] NDJSON write failed (post-mortem may be incomplete): ${ndjsonWriteError ?? "unknown error"}\n`,
+      )
     }
+    finalText = resultTexts.join("\n\n---\n\n")
+
+    // Retry only a transient connection failure, and only while the session
+    // hasn't mutated anything — replaying a mutating turn could double-apply
+    // a write (second PR, comment, commit, edit).
+    const shouldRetry =
+      outcome === "failed" &&
+      attempt < MAX_CONNECTION_RETRIES &&
+      !sawMutatingTool &&
+      isTransientConnectionError(errorMessage)
+    if (!shouldRetry) break
+
+    const delayMs = CONNECTION_RETRY_BASE_MS * 2 ** attempt
+    process.stderr.write(
+      `[kody agent] transient connection error (attempt ${attempt + 1}/${MAX_CONNECTION_RETRIES + 1}); retrying in ${Math.round(delayMs / 1000)}s: ${errorMessage}\n`,
+    )
+    await new Promise((r) => setTimeout(r, delayMs))
   }
 
-  if (ndjsonWriteFailed) {
-    // Phase 0 made the executor record agent durations + tokens via events.
-    // If the NDJSON message log went silent mid-run the post-mortem is
-    // incomplete — surface that to stderr so the operator knows a "successful"
-    // log file may be truncated. Previously this was swallowed.
-    process.stderr.write(`[kody agent] NDJSON write failed (post-mortem may be incomplete): ${ndjsonWriteError ?? "unknown error"}\n`)
-  }
-  const finalText = resultTexts.join("\n\n---\n\n")
   const submittedState = getSubmitted?.()
   return {
     outcome,
