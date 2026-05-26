@@ -12,6 +12,9 @@ vi.mock("../../src/issue.js", () => ({
 vi.mock("../../src/gha.js", () => ({
   getRunUrl: vi.fn(() => ""),
 }))
+vi.mock("../../src/lifecycleLabels.js", () => ({
+  setKodyLabel: vi.fn(),
+}))
 
 const execFileSyncMock = vi.fn()
 vi.mock("node:child_process", () => ({
@@ -21,6 +24,7 @@ vi.mock("node:child_process", () => ({
 import { mergeBase } from "../../src/branch.js"
 import type { Context, Profile } from "../../src/executables/types.js"
 import { getPr, postPrReviewComment } from "../../src/issue.js"
+import { setKodyLabel } from "../../src/lifecycleLabels.js"
 import { syncFlow } from "../../src/scripts/syncFlow.js"
 
 const profile = {} as Profile
@@ -57,6 +61,9 @@ describe("syncFlow with announceOnSuccess=true (sync executable)", () => {
     // No PR comment on a clean no-op — commenting re-triggers the workflow on
     // every open PR each sync tick. The result lives in output.reason only.
     expect(postPrReviewComment).not.toHaveBeenCalled()
+    // Restore kody:done so the synced PR returns to the "done" column (the
+    // preflight kody:syncing label is cleared by the executor on exit).
+    expect(vi.mocked(setKodyLabel)).toHaveBeenCalledWith(42, expect.objectContaining({ label: "kody:done" }), "/tmp")
   })
 
   it("pushes without commenting when merge advances HEAD", async () => {
@@ -74,6 +81,7 @@ describe("syncFlow with announceOnSuccess=true (sync executable)", () => {
     expect(pushCall).toBeTruthy()
     // Success is silent — only conflicts/errors post a human-actionable comment.
     expect(postPrReviewComment).not.toHaveBeenCalled()
+    expect(vi.mocked(setKodyLabel)).toHaveBeenCalledWith(42, expect.objectContaining({ label: "kody:done" }), "/tmp")
   })
 
   it("bails and tells user to run resolve on conflict", async () => {
@@ -88,6 +96,9 @@ describe("syncFlow with announceOnSuccess=true (sync executable)", () => {
     expect(ctx.output.reason).toMatch(/conflicts/)
     expect(ctx.data.syncResult).toBeUndefined()
     expect(vi.mocked(postPrReviewComment).mock.calls[0]![1]).toMatch(/@kody resolve/)
+    // On failure we do NOT restore kody:done — the PR drops out of "done" and
+    // the comment above tells the user it needs attention.
+    expect(vi.mocked(setKodyLabel)).not.toHaveBeenCalled()
   })
 
   it("bails on merge error", async () => {
@@ -128,6 +139,8 @@ describe("syncFlow without announceOnSuccess (preflight in fix / fix-ci)", () =>
     expect(ctx.output.reason).toBeUndefined()
     expect(ctx.data.syncResult).toBe("noop")
     expect(postPrReviewComment).not.toHaveBeenCalled()
+    // As a preflight (fix/fix-ci), the parent owns the terminal label.
+    expect(vi.mocked(setKodyLabel)).not.toHaveBeenCalled()
   })
 
   it("merged is silent — no comment, no exit code, run continues", async () => {
@@ -144,6 +157,7 @@ describe("syncFlow without announceOnSuccess (preflight in fix / fix-ci)", () =>
     expect(postPrReviewComment).not.toHaveBeenCalled()
     const pushCall = execFileSyncMock.mock.calls.find((c) => (c[1] as string[]).includes("push"))
     expect(pushCall).toBeTruthy()
+    expect(vi.mocked(setKodyLabel)).not.toHaveBeenCalled()
   })
 
   it("conflict still bails the run with sync-voice comment", async () => {

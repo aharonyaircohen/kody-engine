@@ -27,7 +27,14 @@ import { checkoutPrBranch, getCurrentBranch, mergeBase } from "../branch.js"
 import type { PreflightScript, ScriptArgs } from "../executables/types.js"
 import { getRunUrl } from "../gha.js"
 import { getPr, postPrReviewComment } from "../issue.js"
+import { type KodyLabelSpec, setKodyLabel } from "../lifecycleLabels.js"
 import { pushWithRetry } from "../pushWithRetry.js"
+
+const DONE: KodyLabelSpec = {
+  label: "kody:done",
+  color: "0e8a16",
+  description: "kody: PR ready for human review/merge",
+}
 
 export const syncFlow: PreflightScript = async (ctx, _profile, args?: ScriptArgs) => {
   const announceOnSuccess = Boolean(args?.announceOnSuccess)
@@ -77,6 +84,7 @@ export const syncFlow: PreflightScript = async (ctx, _profile, args?: ScriptArgs
       // No PR comment on a clean no-op: each issue_comment re-triggers the
       // kody workflow, so commenting on every open PR every sync tick is a
       // 35x-per-tick amplifier. Only failures/conflicts (bail) comment.
+      restoreDone(prNumber, ctx.cwd)
     }
     return
   }
@@ -98,6 +106,25 @@ export const syncFlow: PreflightScript = async (ctx, _profile, args?: ScriptArgs
     // PR every sync tick is the runaway-Actions leak. The merge result is
     // still in ctx.output.reason (runner log); only failures/conflicts
     // (bail) post a human-actionable comment.
+    restoreDone(prNumber, ctx.cwd)
+  }
+}
+
+/**
+ * Re-stamp kody:done on the PR. The sync executable's preflight stamps
+ * kody:syncing (which evicts kody:done via the lifecycle mutex), and the
+ * executor's finally-clear removes kody:syncing on exit — without this, a
+ * synced PR ends up unlabeled and falls out of the dashboard's "done"
+ * column. Only called when syncFlow IS the run (announceOnSuccess); as a
+ * preflight in fix/fix-ci the parent owns the terminal label.
+ *
+ * Best-effort: never fail a sync over a label write.
+ */
+function restoreDone(prNumber: number, cwd?: string): void {
+  try {
+    setKodyLabel(prNumber, DONE, cwd)
+  } catch {
+    /* best effort */
   }
 }
 
