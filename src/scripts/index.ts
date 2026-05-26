@@ -56,6 +56,7 @@ import { parseReproOutput } from "./parseReproOutput.js"
 import { persistArtifacts } from "./persistArtifacts.js"
 import { persistFlowState } from "./persistFlowState.js"
 import { poolServe } from "./poolServe.js"
+import { postAgentComment } from "./postAgentComment.js"
 import { postIssueComment } from "./postIssueComment.js"
 import { postPlanComment } from "./postPlanComment.js"
 import { postResearchComment } from "./postResearchComment.js"
@@ -160,6 +161,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   stageMergeConflicts,
   commitAndPush,
   ensurePr,
+  postAgentComment,
   postIssueComment,
   postPlanComment,
   postResearchComment,
