@@ -27,6 +27,8 @@ import type { PreflightScript } from "../executables/types.js"
 import type { FlyGuest } from "../pool/fly.js"
 import { PoolRegistry, type ClaimRequest } from "../pool/registry.js"
 import { bearerOk, derivePoolApiKey, deriveRunnerApiKey, masterKeyBytes } from "../pool/keys.js"
+import { runDutyFallbackTick } from "../pool/duty-fallback-tick.js"
+import { gitHubActionsDegraded } from "../github-health.js"
 
 const PERF_GUEST: Record<string, FlyGuest> = {
   low: { cpu_kind: "shared", cpus: 2, memory_mb: 2048 },
@@ -187,6 +189,25 @@ export const poolServe: PreflightScript = async (ctx) => {
     registry.resyncAll().catch((err) => log(`resync tick failed: ${err instanceof Error ? err.message : String(err)}`))
   }, refillMs)
 
+  // GitHub-outage fallback: GitHub Actions' cron normally fires the scheduled
+  // duty/goal fan-out. When Actions is down that cron can't fire, so while this
+  // always-on machine is awake we tick every 15 min and — ONLY if GitHub is
+  // degraded — run the fan-out on a Fly runner per active repo. GitHub stays
+  // the default; the engine's per-duty cadence guard prevents double-runs.
+  // Set POOL_DUTY_TICK=0 to disable.
+  const dutyTickEnabled = (process.env.POOL_DUTY_TICK ?? "1") !== "0"
+  const dutyTickMs = envInt("POOL_DUTY_TICK_MS", 15 * 60_000)
+  const dutyTick = dutyTickEnabled
+    ? setInterval(() => {
+        runDutyFallbackTick({
+          isDegraded: () => gitHubActionsDegraded(),
+          activeRepos: () => registry.activeRepos(),
+          claim: (owner, repo, req) => registry.claim(owner, repo, req),
+          log,
+        }).catch((err) => log(`duty fallback tick failed: ${err instanceof Error ? err.message : String(err)}`))
+      }, dutyTickMs)
+    : null
+
   const server = createServer(async (req, res) => {
     try {
       if (!req.method || !req.url) return sendJson(res, 400, { error: "bad request" })
@@ -257,6 +278,7 @@ export const poolServe: PreflightScript = async (ctx) => {
   const shutdown = (signal: string) => {
     log(`${signal} — shutting down`)
     clearInterval(tick)
+    if (dutyTick) clearInterval(dutyTick)
     server.close(() => process.exit(0))
   }
   process.once("SIGINT", () => shutdown("SIGINT"))

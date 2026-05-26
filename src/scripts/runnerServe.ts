@@ -44,8 +44,11 @@ export interface RunnerJob {
    * "issue" (default): one-shot `kody run --issue N` → branch → PR → exit.
    * "interactive": boot a long-lived `kody` chat session (the Vibe runner) —
    * emits chat.ready, takes turns via the dashboard's append/event path.
+   * "scheduled": run the scheduled fan-out (`GITHUB_EVENT_NAME=schedule`) —
+   * the same duty/goal tick GitHub Actions' cron triggers, used as the Fly
+   * fallback when GitHub Actions is down. No issueNumber/sessionId needed.
    */
-  mode?: "issue" | "interactive"
+  mode?: "issue" | "interactive" | "scheduled"
   /** Required for mode "issue". */
   issueNumber?: number
   /** Required for mode "interactive" — the chat session id. */
@@ -123,7 +126,8 @@ export function parseJob(body: unknown): { job: RunnerJob } | { error: string } 
   const githubToken = typeof b.githubToken === "string" ? b.githubToken.trim() : ""
   if (!githubToken) return { error: "githubToken required" }
 
-  const mode = b.mode === "interactive" ? "interactive" : "issue"
+  const mode =
+    b.mode === "interactive" ? "interactive" : b.mode === "scheduled" ? "scheduled" : "issue"
   const job: RunnerJob = { jobId, repo, githubToken, mode }
 
   if (mode === "issue") {
@@ -132,13 +136,14 @@ export function parseJob(body: unknown): { job: RunnerJob } | { error: string } 
       return { error: "issueNumber (positive integer) required for issue mode" }
     }
     job.issueNumber = issueNumber
-  } else {
+  } else if (mode === "interactive") {
     const sessionId = typeof b.sessionId === "string" ? b.sessionId.trim() : ""
     if (!sessionId) return { error: "sessionId required for interactive mode" }
     job.sessionId = sessionId
     if (Number.isFinite(Number(b.idleExitMs))) job.idleExitMs = Number(b.idleExitMs)
     if (Number.isFinite(Number(b.hardCapMs))) job.hardCapMs = Number(b.hardCapMs)
   }
+  // mode "scheduled" needs no extra fields — it runs the whole fan-out.
 
   if (typeof b.ref === "string" && b.ref.trim()) job.ref = b.ref.trim()
   if (typeof b.model === "string" && b.model.trim()) job.model = b.model.trim()
@@ -169,11 +174,15 @@ async function defaultRunJob(job: RunnerJob): Promise<void> {
       : JSON.stringify(job.allSecrets ?? {})
 
   const interactive = job.mode === "interactive"
+  const scheduled = job.mode === "scheduled"
   const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
     REPO: job.repo,
     REF: branch,
     GITHUB_TOKEN: job.githubToken,
+    // Scheduled mode drives the engine down the same path GitHub Actions' cron
+    // takes (runScheduledFanOut → due duties/goals). Bare `kody` routes on this.
+    ...(scheduled ? { GITHUB_EVENT_NAME: "schedule" } : {}),
     // GITHUB_REPOSITORY + GH_TOKEN are normally injected by GitHub Actions.
     // The engine's interactive mode needs GITHUB_REPOSITORY to persist
     // chat.ready / events to .kody/events via the Contents API (the durable
@@ -183,7 +192,7 @@ async function defaultRunJob(job: RunnerJob): Promise<void> {
     GH_TOKEN: job.githubToken,
     // Issue mode bakes ISSUE_NUMBER → `kody run --issue N`. Interactive mode
     // leaves it empty and sets SESSION_ID so the engine boots a chat session.
-    ISSUE_NUMBER: interactive ? "" : String(job.issueNumber),
+    ISSUE_NUMBER: interactive || scheduled ? "" : String(job.issueNumber),
     ALL_SECRETS: allSecrets,
     SESSION_ID: job.sessionId ?? "",
     DASHBOARD_URL: job.dashboardUrl ?? "",
@@ -227,13 +236,16 @@ async function defaultRunJob(job: RunnerJob): Promise<void> {
   await run("git", ["config", "user.name", authorName], workdir)
   await run("git", ["config", "user.email", authorEmail], workdir)
 
-  // Issue mode: one-shot `kody run --issue N`. Interactive mode: bare `kody`,
-  // which the engine routes to a chat session when SESSION_ID is set (mirrors
-  // entrypoint.sh's chat path) — the long-lived Vibe runner, now pre-warmed.
-  const runArgs = interactive ? [] : ["run", "--issue", String(job.issueNumber)]
-  process.stdout.write(
-    `[runner-serve] job ${job.jobId}: ${interactive ? `interactive session ${job.sessionId}` : `running issue #${job.issueNumber}`}\n`,
-  )
+  // Issue mode: one-shot `kody run --issue N`. Interactive + scheduled modes:
+  // bare `kody`, routed by env — SESSION_ID → chat session (Vibe runner), or
+  // GITHUB_EVENT_NAME=schedule → the scheduled duty/goal fan-out.
+  const runArgs = interactive || scheduled ? [] : ["run", "--issue", String(job.issueNumber)]
+  const jobDesc = interactive
+    ? `interactive session ${job.sessionId}`
+    : scheduled
+      ? "scheduled fan-out"
+      : `running issue #${job.issueNumber}`
+  process.stdout.write(`[runner-serve] job ${job.jobId}: ${jobDesc}\n`)
   const runCode = await run("kody", runArgs, workdir)
   process.stdout.write(`[runner-serve] job ${job.jobId}: finished (exit ${runCode})\n`)
   process.exit(runCode)
