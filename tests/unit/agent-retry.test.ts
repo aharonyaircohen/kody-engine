@@ -97,4 +97,35 @@ describe("runAgent: transient connection retry", () => {
     expect(callIndex).toBe(2)
     expect(res.outcome).toBe("completed")
   })
+
+  it("calls ensureBackend before retrying a connection failure", async () => {
+    attempts = [{ throw: CONNECTION_ERR }, { messages: [SUCCESS] }]
+    const ensureBackend = vi.fn().mockResolvedValue(undefined)
+    const res = await runFlushed({ ...baseOpts, ensureBackend })
+    expect(ensureBackend).toHaveBeenCalledTimes(1)
+    expect(res.outcome).toBe("completed")
+  })
+
+  it("calls ensureBackend once per retry until attempts are exhausted", async () => {
+    attempts = [{ throw: CONNECTION_ERR }]
+    const ensureBackend = vi.fn().mockResolvedValue(undefined)
+    await runFlushed({ ...baseOpts, ensureBackend })
+    // 3 attempts total → recovery runs before retry 2 and retry 3.
+    expect(ensureBackend).toHaveBeenCalledTimes(2)
+  })
+
+  it("does not call ensureBackend for a non-transient error", async () => {
+    attempts = [{ throw: "Invalid API key" }]
+    const ensureBackend = vi.fn().mockResolvedValue(undefined)
+    await runFlushed({ ...baseOpts, ensureBackend })
+    expect(ensureBackend).not.toHaveBeenCalled()
+  })
+
+  it("retries even if ensureBackend itself throws", async () => {
+    attempts = [{ throw: CONNECTION_ERR }, { messages: [SUCCESS] }]
+    const ensureBackend = vi.fn().mockRejectedValue(new Error("restart failed"))
+    const res = await runFlushed({ ...baseOpts, ensureBackend })
+    expect(ensureBackend).toHaveBeenCalledTimes(1)
+    expect(res.outcome).toBe("completed")
+  })
 })

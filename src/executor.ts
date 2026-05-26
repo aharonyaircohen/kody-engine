@@ -24,11 +24,7 @@ import { resolveExecutable } from "./registry.js"
 import { loadSubagents } from "./subagents.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
 import { type Action, readTaskState, type TaskState, type TaskTarget } from "./state.js"
-import {
-  prepareTaskArtifactsDir,
-  taskArtifactsPromptAddendum,
-  verifyTaskArtifacts,
-} from "./task-artifacts.js"
+import { prepareTaskArtifactsDir, taskArtifactsPromptAddendum, verifyTaskArtifacts } from "./task-artifacts.js"
 import { firstRequiredFailure, verifyCliTools } from "./tools.js"
 
 const CONTAINER_MAX_ITERATIONS = 50
@@ -159,7 +155,10 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
   try {
     model = parseProviderModel(modelSpec)
   } catch (err) {
-    return finishAndEnd({ exitCode: 99, reason: `agent.model invalid: ${err instanceof Error ? err.message : String(err)}` })
+    return finishAndEnd({
+      exitCode: 99,
+      reason: `agent.model invalid: ${err instanceof Error ? err.message : String(err)}`,
+    })
   }
 
   // Start LiteLLM for non-anthropic providers.
@@ -220,11 +219,15 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     const pluginPaths = [...externalPlugins, ...(syntheticPath ? [syntheticPath] : [])]
     const agents = loadSubagents(profile)
 
+    const lm = litellm
     return runAgent({
       prompt,
       model,
       cwd: input.cwd,
-      litellmUrl: litellm?.url ?? null,
+      litellmUrl: lm?.url ?? null,
+      // On a connection drop mid-run, restart the (possibly crashed) proxy
+      // before the agent retries. No-op for direct-Anthropic runs (lm null).
+      ensureBackend: lm ? () => lm.ensureHealthy().then(() => undefined) : undefined,
       verbose: input.verbose,
       quiet: input.quiet,
       ndjsonDir,
@@ -241,9 +244,10 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
           : undefined,
       // DISCIPLINE leads so the stable, role-agnostic block sits at the front
       // of the cacheable system-prompt prefix; profile/task appends follow.
-      systemPromptAppend: [DISCIPLINE, profile.claudeCode.systemPromptAppend, taskArtifacts?.promptAddendum]
-        .filter((s): s is string => typeof s === "string" && s.length > 0)
-        .join("\n\n") || undefined,
+      systemPromptAppend:
+        [DISCIPLINE, profile.claudeCode.systemPromptAppend, taskArtifacts?.promptAddendum]
+          .filter((s): s is string => typeof s === "string" && s.length > 0)
+          .join("\n\n") || undefined,
       cacheable: profile.claudeCode.cacheable,
       enableVerifyTool: profile.claudeCode.enableVerifyTool,
       enableSubmitTool: profile.claudeCode.enableSubmitTool,
@@ -315,7 +319,10 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     } else if (!ctx.skipAgent) {
       const prompt = ctx.data.prompt as string | undefined
       if (!prompt) {
-        return finishAndEnd({ exitCode: 99, reason: "composePrompt did not produce a prompt (ctx.data.prompt missing)" })
+        return finishAndEnd({
+          exitCode: 99,
+          reason: "composePrompt did not produce a prompt (ctx.data.prompt missing)",
+        })
       }
       emitEvent(input.cwd, { executable: profileName, kind: "agent_start" })
       agentResult = await invokeAgent(prompt)
@@ -394,10 +401,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
           const runId = resolveRunId()
           const dir = pathMod.join(input.cwd, ".kody", "runs", runId, "crashes")
           fsMod.mkdirSync(dir, { recursive: true })
-          const file = pathMod.join(
-            dir,
-            `${label.replace(/[^a-zA-Z0-9_-]/g, "_")}-${Date.now()}.json`,
-          )
+          const file = pathMod.join(dir, `${label.replace(/[^a-zA-Z0-9_-]/g, "_")}-${Date.now()}.json`)
           fsMod.writeFileSync(
             file,
             JSON.stringify(
@@ -449,9 +453,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       try {
         const missing = verifyTaskArtifacts(taskArtifacts.absDir)
         if (missing.length > 0) {
-          process.stderr.write(
-            `[task-artifacts] task ${taskArtifacts.taskId} missing: ${missing.join(", ")}\n`,
-          )
+          process.stderr.write(`[task-artifacts] task ${taskArtifacts.taskId} missing: ${missing.join(", ")}\n`)
         }
       } catch {
         /* best effort */

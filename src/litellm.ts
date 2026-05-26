@@ -46,6 +46,30 @@ export function generateLitellmConfigYaml(model: ProviderModel): string {
 export interface LitellmHandle {
   url: string
   kill: () => void
+  /**
+   * Ensure the proxy is reachable. If `/health` fails — the proxy crashed or
+   * hung mid-run (the Approval Gate failure mode: a heavy request kills the
+   * single worker, after which every connection is refused) — this dumps the
+   * proxy's log tail so the crash reason is visible in the run log, then
+   * respawns it and waits for health. Returns true when the proxy is healthy
+   * (already, or after a restart).
+   */
+  ensureHealthy: () => Promise<boolean>
+}
+
+/** Locate the litellm entrypoint, or throw a clear install hint. */
+function resolveLitellmCommand(): "litellm" | "python3" {
+  try {
+    execFileSync("which", ["litellm"], { timeout: 3000, stdio: "pipe" })
+    return "litellm"
+  } catch {
+    try {
+      execFileSync("python3", ["-c", "import litellm"], { timeout: 10000, stdio: "pipe" })
+      return "python3"
+    } catch {
+      throw new Error("litellm not installed — run: pip install 'litellm[proxy]'")
+    }
+  }
 }
 
 export async function startLitellmIfNeeded(
@@ -55,74 +79,84 @@ export async function startLitellmIfNeeded(
 ): Promise<LitellmHandle | null> {
   if (!needsLitellmProxy(model)) return null
 
-  if (await checkLitellmHealth(url)) {
-    return { url, kill: () => {} }
-  }
-
-  let cmd = "litellm"
-  try {
-    execFileSync("which", ["litellm"], { timeout: 3000, stdio: "pipe" })
-  } catch {
-    try {
-      execFileSync("python3", ["-c", "import litellm"], { timeout: 10000, stdio: "pipe" })
-      cmd = "python3"
-    } catch {
-      throw new Error("litellm not installed — run: pip install 'litellm[proxy]'")
-    }
-  }
-
-  const configPath = path.join(os.tmpdir(), `kody-litellm-${Date.now()}.yaml`)
-  fs.writeFileSync(configPath, generateLitellmConfigYaml(model))
-
+  const cmd = resolveLitellmCommand()
   const portMatch = url.match(/:(\d+)/)
   const port = portMatch ? portMatch[1] : "4000"
-  const args =
-    cmd === "litellm"
-      ? ["--config", configPath, "--port", port]
-      : ["-m", "litellm", "--config", configPath, "--port", port]
+  const childEnv = stripBlockingEnv({ ...process.env, ...readDotenvApiKeys(projectDir) })
 
-  const dotenvVars = readDotenvApiKeys(projectDir)
-  const logPath = path.join(os.tmpdir(), `kody-litellm-${Date.now()}.log`)
-  const outFd = fs.openSync(logPath, "w")
+  // Mutable handle state. `ensureHealthy` can replace `child` when it respawns
+  // a crashed proxy; `kill` and the log-tail dump always act on whatever is
+  // current. `child` stays undefined when we reuse a proxy someone else
+  // started (nothing of ours to kill) — until we have to respawn it ourselves.
+  let child: ReturnType<typeof spawn> | undefined
+  let logPath: string | undefined
 
-  const child = spawn(cmd, args, {
-    stdio: ["ignore", outFd, outFd],
-    detached: true,
-    env: stripBlockingEnv({ ...process.env, ...dotenvVars }),
-  })
-  fs.closeSync(outFd)
+  const spawnProxy = (): void => {
+    const configPath = path.join(os.tmpdir(), `kody-litellm-${Date.now()}.yaml`)
+    fs.writeFileSync(configPath, generateLitellmConfigYaml(model))
+    const args =
+      cmd === "litellm"
+        ? ["--config", configPath, "--port", port]
+        : ["-m", "litellm", "--config", configPath, "--port", port]
+    const nextLogPath = path.join(os.tmpdir(), `kody-litellm-${Date.now()}.log`)
+    const outFd = fs.openSync(nextLogPath, "w")
+    child = spawn(cmd, args, { stdio: ["ignore", outFd, outFd], detached: true, env: childEnv })
+    fs.closeSync(outFd)
+    logPath = nextLogPath
+  }
 
-  const timeoutMs = resolveLitellmTimeoutMs()
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, LITELLM_HEALTH_POLL_INTERVAL_MS))
-    if (await checkLitellmHealth(url)) {
-      return {
-        url,
-        kill: () => {
-          try {
-            child.kill()
-          } catch {
-            /* best effort */
-          }
-        },
-      }
+  const waitForHealth = async (): Promise<boolean> => {
+    const deadline = Date.now() + resolveLitellmTimeoutMs()
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, LITELLM_HEALTH_POLL_INTERVAL_MS))
+      if (await checkLitellmHealth(url)) return true
+    }
+    return false
+  }
+
+  const readLogTail = (): string => {
+    if (!logPath) return ""
+    try {
+      return fs.readFileSync(logPath, "utf-8").slice(-2000)
+    } catch {
+      return ""
     }
   }
 
-  let logTail = ""
-  try {
-    logTail = fs.readFileSync(logPath, "utf-8").slice(-2000)
-  } catch {
-    /* ignore */
+  const killChild = (): void => {
+    try {
+      child?.kill()
+    } catch {
+      /* best effort */
+    }
   }
-  try {
-    child.kill()
-  } catch {
-    /* ignore */
+
+  const ensureHealthy = async (): Promise<boolean> => {
+    if (await checkLitellmHealth(url)) return true
+    const tail = readLogTail()
+    process.stderr.write(
+      `[kody litellm] proxy unreachable mid-run; restarting.${tail ? ` Last log:\n${tail}\n` : "\n"}`,
+    )
+    killChild()
+    spawnProxy()
+    return waitForHealth()
   }
-  const seconds = Math.round(timeoutMs / 1000)
-  throw new Error(`LiteLLM proxy failed to start within ${seconds}s (KODY_LITELLM_TIMEOUT_SEC overrides). Log tail:\n${logTail}`)
+
+  // Reuse a proxy already serving this url (started by an earlier task).
+  if (await checkLitellmHealth(url)) {
+    return { url, kill: killChild, ensureHealthy }
+  }
+
+  spawnProxy()
+  if (!(await waitForHealth())) {
+    const tail = readLogTail()
+    killChild()
+    const seconds = Math.round(resolveLitellmTimeoutMs() / 1000)
+    throw new Error(
+      `LiteLLM proxy failed to start within ${seconds}s (KODY_LITELLM_TIMEOUT_SEC overrides). Log tail:\n${tail}`,
+    )
+  }
+  return { url, kill: killChild, ensureHealthy }
 }
 
 function readDotenvApiKeys(projectDir: string): Record<string, string> {

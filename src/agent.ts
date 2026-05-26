@@ -167,6 +167,12 @@ export interface AgentOptions {
    * never break the actual agent turn.
    */
   onProgress?: (event: AgentProgressEvent) => void | Promise<void>
+  /**
+   * Backend-recovery hook, invoked before a connection-error retry so the
+   * owner (executor) can restart a crashed model proxy — otherwise the retry
+   * just hits the same dead backend. No-op / unset for direct-Anthropic runs.
+   */
+  ensureBackend?: () => Promise<void>
 }
 
 /**
@@ -594,6 +600,15 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     process.stderr.write(
       `[kody agent] transient connection error (attempt ${attempt + 1}/${MAX_CONNECTION_RETRIES + 1}); retrying in ${Math.round(delayMs / 1000)}s: ${errorMessage}\n`,
     )
+    // Let the owner restart a crashed model proxy before we retry — a bare
+    // retry against the dead backend would just fail the same way.
+    if (opts.ensureBackend) {
+      try {
+        await opts.ensureBackend()
+      } catch (e) {
+        process.stderr.write(`[kody agent] backend recovery failed: ${e instanceof Error ? e.message : String(e)}\n`)
+      }
+    }
     await new Promise((r) => setTimeout(r, delayMs))
   }
 
