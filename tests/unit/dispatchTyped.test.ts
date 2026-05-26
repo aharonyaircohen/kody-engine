@@ -75,15 +75,30 @@ describe("autoDispatchTyped: silent variants (legitimate no-op)", () => {
     if (out.kind === "silent") expect(out.reason).toMatch(/does not mention @kody/)
   })
 
-  it("returns silent when comment author is a bot", () => {
+  it("routes an explicit @kody command even from a bot (self-dispatch)", () => {
+    // Kody runs as a bot when the repo token is a GitHub App; duties and
+    // flows self-dispatch by posting `@kody <command>`. An explicit, resolved
+    // command must be honored, not dropped as "bot chatter".
     process.env.GITHUB_EVENT_NAME = "issue_comment"
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody fix", user: { login: "github-actions[bot]", type: "Bot" } },
+      comment: { body: "@kody fix", user: { login: "kodyade[bot]", type: "Bot" } },
+      issue: { number: 7, pull_request: {} },
+    })
+    const out = autoDispatchTyped()
+    expect(out.kind).toBe("route")
+    if (out.kind === "route") expect(out.executable).toBe("fix")
+  })
+
+  it("returns silent for bot chatter without an explicit command", () => {
+    // A bot comment that doesn't resolve to a command (status/progress text)
+    // is still dropped — that's the loop guard for Kody's own comments.
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody looks good, shipping now", user: { login: "kodyade[bot]", type: "Bot" } },
       issue: { number: 7 },
     })
     const out = autoDispatchTyped()
     expect(out.kind).toBe("silent")
-    if (out.kind === "silent") expect(out.reason).toMatch(/bot-authored/i)
   })
 })
 

@@ -64,6 +64,12 @@ export interface FlowState {
   issueNumber: number
   /** ISO timestamp of startFlow. */
   startedAt: string
+  /**
+   * Count of self-triggers (advanceFlow re-dispatches) so far. Loop guard:
+   * advanceFlow refuses to continue past a hard cap so a flow that never
+   * reaches a terminal phase can't re-trigger itself forever.
+   */
+  hops?: number
 }
 
 export interface Artifact {

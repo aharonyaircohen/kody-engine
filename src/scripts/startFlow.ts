@@ -54,6 +54,7 @@ export const startFlow: PostflightScript = async (ctx, profile, _agentResult, ar
       step: entry,
       issueNumber,
       startedAt: new Date().toISOString(),
+      hops: 0,
     }
   }
 

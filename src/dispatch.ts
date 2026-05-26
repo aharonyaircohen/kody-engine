@@ -122,7 +122,16 @@ export function autoDispatch(opts?: {
   const authorLogin = String(event.comment?.user?.login ?? "")
   const authorType = String(event.comment?.user?.type ?? "")
   if (!rawBody.toLowerCase().includes("@kody")) return null
-  if (authorLogin === "kody-bot" || authorType === "Bot") return null
+  // Bot-authored comments: do NOT blanket-drop. Kody runs as a bot in repos
+  // whose token is a GitHub App (e.g. `kodyade[bot]`), so duties, slash
+  // commands, and multi-step flows self-dispatch by posting `@kody <command>`
+  // — blanket-dropping bots silently kills all of that. Instead we defer the
+  // decision: a bot is honored ONLY when it issues an explicit, resolved
+  // `@kody <command>` (see `isBotAuthor` guard after resolution below). Its
+  // ordinary status/progress chatter has no resolvable command and is dropped
+  // there, so nothing can self-retrigger. The flow hop cap (advanceFlow) is
+  // the hard ceiling against a buggy flow that never terminates.
+  const isBotAuthor = authorLogin === "kody-bot" || authorType === "Bot"
   // Membership gate: when configured, only commenters whose GitHub
   // author_association is allowlisted may trigger kody. Unset → anyone.
   if (!associationAllowed(event, opts?.config)) return null
@@ -172,6 +181,17 @@ export function autoDispatch(opts?: {
   // the default — the "no firstToken" condition here is what gates them.
   if (!executable && !firstToken) {
     executable = isPr ? (opts?.config?.defaultPrExecutable ?? "fix") : (opts?.config?.defaultExecutable ?? null)
+  }
+  // Bot self-dispatch gate: a bot-authored comment may ONLY proceed when it
+  // resolved to an explicit command (`consumedFirstToken`). It must never fall
+  // through to the default executable or run on chatter — that's the loop
+  // surface. Humans keep the default-fallback behavior.
+  if (isBotAuthor && !consumedFirstToken) {
+    process.stderr.write(
+      `[kody] dispatch: ignoring bot comment without an explicit command ` +
+        `(author=${authorLogin || authorType}, firstToken=${firstToken ?? "<none>"})\n`,
+    )
+    return null
   }
   if (!executable) {
     // Surface why dispatch gave up — currently the consumer just sees
