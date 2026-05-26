@@ -29,6 +29,15 @@ interface ActivityRecord {
   staffTitle: string | null
   trigger: "schedule" | "manual" | "event"
   outcome: "completed" | "failed" | "unknown"
+  /**
+   * Structured failure kind from the agent (stalled, out_of_turns,
+   * rate_limit, tool_error, model_error, ...). Null on success or when the
+   * agent didn't run. Lets the dashboard say WHY a run failed instead of a
+   * bare "failed", and distinguish "stopped early" from a real failure.
+   */
+  outcomeKind: string | null
+  /** Short human-readable failure message (the agent's `error`). */
+  reason: string | null
   durationMs: number | null
   runUrl: string | null
 }
@@ -102,6 +111,8 @@ export const appendCompanyActivity: PostflightScript = async (ctx, _profile, age
       staffTitle,
       trigger: resolveTrigger(force),
       outcome: agentResult?.outcome ?? "unknown",
+      outcomeKind: agentResult?.outcomeKind ?? null,
+      reason: agentResult?.error ?? null,
       durationMs: agentResult?.durationMs ?? null,
       runUrl: getRunUrl() || null,
     }
