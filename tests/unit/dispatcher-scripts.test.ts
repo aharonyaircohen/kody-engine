@@ -4,6 +4,7 @@ import type { Context, Profile } from "../../src/executables/types.js"
 import { setKodyLabel } from "../../src/lifecycleLabels.js"
 import { advanceFlow } from "../../src/scripts/advanceFlow.js"
 import { dispatch } from "../../src/scripts/dispatch.js"
+import { finalizeTerminal } from "../../src/scripts/finalizeTerminal.js"
 import { finishFlow } from "../../src/scripts/finishFlow.js"
 import { startFlow } from "../../src/scripts/startFlow.js"
 import { emptyState, type FlowState, STATE_BEGIN, STATE_END, type TaskState } from "../../src/state.js"
@@ -319,5 +320,17 @@ describe("advanceFlow", () => {
     const triggerCall = calls.find((a) => a.join(" ").includes("@kody bug"))
     expect(patchCall).toBeDefined()
     expect(triggerCall).toBeDefined()
+  })
+})
+
+describe("finalizeTerminal", () => {
+  it("defers to the orchestrator (no terminal label) when an active flow is present", async () => {
+    const flow: FlowState = { name: "bug", step: "review", issueNumber: 42, startedAt: "t" }
+    const state: TaskState = { ...emptyState(), flow }
+    const c = ctx({ data: { taskState: state, commentTargetType: "pr", commentTargetNumber: 99 } })
+    await finalizeTerminal(c, profile("fix"), null)
+    // Orchestrator owns the terminal stamp + state write — child must not touch either.
+    expect(setKodyLabelMock).not.toHaveBeenCalled()
+    expect(execFileSync).not.toHaveBeenCalled()
   })
 })

@@ -54,7 +54,8 @@
     "context": "task",
     "contextExtras": ["resolveArtifacts"],
     "sync": false,
-    "mirrorState": true
+    "mirrorState": true,
+    "finalize": true
   },
   "scripts": {
     "preflight": [

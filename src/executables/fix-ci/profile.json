@@ -52,7 +52,8 @@
       "description": "kody: fixing CI failures"
     },
     "context": "ci-fix",
-    "advance": false
+    "advance": false,
+    "finalize": true
   },
   "scripts": {
     "preflight": [

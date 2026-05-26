@@ -70,7 +70,8 @@
       "color": "e99695",
       "description": "kody: applying review feedback"
     },
-    "context": "task"
+    "context": "task",
+    "finalize": true
   },
   "scripts": {
     "preflight": [

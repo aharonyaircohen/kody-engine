@@ -26,7 +26,7 @@
 import type { PostflightScript } from "../executables/types.js"
 import { parsePrNumber } from "../issue.js"
 import { type KodyLabelSpec, setKodyLabel } from "../lifecycleLabels.js"
-import { type Phase, readTaskState, type Status, type TaskTarget, writeTaskState } from "../state.js"
+import { type Phase, readTaskState, type Status, type TaskState, type TaskTarget, writeTaskState } from "../state.js"
 
 const DONE: KodyLabelSpec = {
   label: "kody:done",
@@ -40,6 +40,15 @@ const FAILED: KodyLabelSpec = {
 }
 
 export const finalizeTerminal: PostflightScript = async (ctx) => {
+  // If this run is a child of an in-progress flow, the orchestrator owns the
+  // terminal label (it re-triggers via advanceFlow and stamps kody:done in
+  // finishFlow). Self-finalizing here would mark the PR done before the
+  // flow's later stages run. Standalone runs (no flow) fall through and
+  // finalize themselves — this is what restores kody:done after a lone
+  // `@kody fix` / `run` / `fix-ci` instead of leaving the target unlabeled.
+  const flow = (ctx.data.taskState as TaskState | undefined)?.flow
+  if (flow?.issueNumber) return
+
   const target = (ctx.data.commentTargetType as TaskTarget | undefined) ?? "issue"
   const issueNumber = ctx.args.issue as number | undefined
   const targetNumber = (ctx.data.commentTargetNumber as number | undefined) ?? issueNumber

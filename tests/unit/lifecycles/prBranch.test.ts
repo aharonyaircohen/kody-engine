@@ -318,7 +318,8 @@ describe("live profiles using pr-branch lifecycle", () => {
     expect(pre.indexOf("loadTaskState")).toBe(3)
     expect(pre.indexOf("composePrompt")).toBe(pre.length - 1)
     const post = profile.scripts.postflight.map((e) => e.script)
-    expect(post.at(-1)).toBe("advanceFlow")
+    expect(post.at(-1)).toBe("finalizeTerminal")
+    expect(post.indexOf("advanceFlow")).toBe(post.length - 2)
     expect(post).toContain("verifyWithRetry")
   })
 
@@ -333,7 +334,7 @@ describe("live profiles using pr-branch lifecycle", () => {
     expect(pre).not.toContain("loadMemoryContext")
     const post = profile.scripts.postflight.map((e) => e.script)
     expect(post).not.toContain("advanceFlow")
-    expect(post.at(-1)).toBe("saveTaskState")
+    expect(post.at(-1)).toBe("finalizeTerminal")
   })
 
   it("run expands with sync:false, contextExtras=resolveArtifacts, mirrorState:true", () => {
@@ -352,6 +353,7 @@ describe("live profiles using pr-branch lifecycle", () => {
     const advance = post.indexOf("advanceFlow")
     expect(mirror).toBeGreaterThan(save)
     expect(advance).toBeGreaterThan(mirror)
-    expect(post.at(-1)).toBe("advanceFlow")
+    expect(post.at(-1)).toBe("finalizeTerminal")
+    expect(post.indexOf("advanceFlow")).toBe(post.length - 2)
   })
 })

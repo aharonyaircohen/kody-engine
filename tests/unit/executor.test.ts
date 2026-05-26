@@ -83,10 +83,12 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     expect(preScripts).toContain("runFlow")
     const names = profile.scripts.postflight.map((p) => p.script)
     // saveTaskState writes issue state, mirrorStateToPr propagates it to the
-    // PR, advanceFlow re-triggers the orchestrator if a flow is active.
+    // PR, advanceFlow re-triggers the orchestrator if a flow is active, and
+    // finalizeTerminal stamps kody:done/failed on standalone runs (no flow).
     expect(names).toContain("saveTaskState")
     expect(names).toContain("mirrorStateToPr")
-    expect(names.at(-1)).toBe("advanceFlow")
+    expect(names.indexOf("advanceFlow")).toBe(names.length - 2)
+    expect(names.at(-1)).toBe("finalizeTerminal")
   })
 
   it("fix profile loads cleanly", () => {
