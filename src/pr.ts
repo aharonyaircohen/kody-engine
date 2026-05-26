@@ -1,4 +1,6 @@
+import { execFileSync } from "node:child_process"
 import { gh, truncate } from "./issue.js"
+import { pushWithRetry } from "./pushWithRetry.js"
 
 export interface PrResult {
   url: string
@@ -214,6 +216,106 @@ export function recoverSourceIssueNumber(existingBody: string, branch: string, p
   return null
 }
 
+// Two real phrasings: GraphQL "A pull request already exists for owner:branch"
+// and gh CLI "a pull request for branch 'X' already exists".
+const ALREADY_EXISTS_RE = /pull request .*already exists|already exists for/i
+
+/**
+ * True when `gh pr create` failed because GitHub believes an open PR already
+ * exists for the head branch. Exported for unit testing the matcher.
+ */
+export function isAlreadyExistsError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return ALREADY_EXISTS_RE.test(msg)
+}
+
+function git(args: string[], cwd?: string): string {
+  return execFileSync("git", args, {
+    encoding: "utf-8",
+    timeout: 30_000,
+    cwd,
+    env: { ...process.env, HUSKY: "0", SKIP_HOOKS: "1" },
+    stdio: ["pipe", "pipe", "pipe"],
+  }).trim()
+}
+
+/**
+ * Update an existing PR's body and return an "updated" result.
+ *
+ * Body only — never rewrite the title. Past regenerations stacked "[WIP] #N:"
+ * prefixes on each fix/fix-ci/resolve run until the title was unreadable.
+ *
+ * REST PATCH instead of `gh pr edit`: gh's edit path uses GraphQL which
+ * requires `read:org` scope on KODY_TOKEN. REST PATCH works with plain `repo`
+ * scope (matching what release/deploy.sh already does).
+ */
+function updateExistingPr(existing: { number: number; url: string }, body: string, draft: boolean, cwd?: string): PrResult {
+  const stripped = existing.url.replace(/^https:\/\/github\.com\//, "")
+  const [owner, repo] = stripped.split("/")
+  try {
+    gh(["api", "--method", "PATCH", `repos/${owner}/${repo}/pulls/${existing.number}`, "-f", `body=${body}`], { cwd })
+  } catch (err) {
+    // Surface the failure — the ensurePr script wraps this in try/catch and
+    // reports it via ctx.output.reason. Swallowing it once masked a successful
+    // update over a real downstream failure.
+    throw new Error(`gh api PATCH #${existing.number} failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
+  return { url: existing.url, number: existing.number, draft, action: "updated" }
+}
+
+/** Run `gh pr create` and parse the PR number out of the returned URL. */
+function createPr(branch: string, base: string, title: string, body: string, draft: boolean, cwd?: string): PrResult {
+  const args = ["pr", "create", "--head", branch, "--base", base, "--title", title, "--body-file", "-"]
+  if (draft) args.push("--draft")
+  // Goal-task PRs (base = goal-<id>) are merged into the goal branch by
+  // goal-tick on a subsequent tick — we don't enable GitHub auto-merge here.
+  const url = gh(args, { input: body, cwd }).trim()
+  const match = url.match(/\/pull\/(\d+)$/)
+  const number = match ? parseInt(match[1], 10) : 0
+  return { url, number, draft, action: "created" }
+}
+
+/**
+ * Recover from a "a pull request already exists" failure on `gh pr create`.
+ *
+ * GitHub's create mutation can report an open PR for the head branch even when
+ * `gh pr list --head` — and the REST pulls API in *any* state — surface
+ * nothing: an indexing inconsistency that leaves the branch ref associated
+ * with a PR no read API will return. The work is already committed and pushed,
+ * so nothing on our side is wrong to fix; the run just can't open its PR.
+ *
+ * Two causes, handled in order:
+ *   1. List-vs-create race — a real open PR appeared between findExistingPr and
+ *      the create. Re-check; if found, reuse it (update its body).
+ *   2. True phantom — no listable PR. The remote branch ref is orphaned. Delete
+ *      it (clearing the phantom association), re-push the current HEAD to the
+ *      *same* name (keeps the `<issue>-<slug>` convention so the next run's
+ *      findExistingPr still matches → idempotent), then retry create once.
+ *      A second failure is real and propagates.
+ */
+function recoverFromExistingPr(
+  branch: string,
+  base: string,
+  title: string,
+  body: string,
+  draft: boolean,
+  cwd?: string,
+): PrResult {
+  const raced = findExistingPr(branch, cwd)
+  if (raced) return updateExistingPr(raced, body, draft, cwd)
+
+  try {
+    git(["push", "origin", "--delete", branch], cwd)
+  } catch {
+    // Ref may already be gone — the re-push below recreates it regardless.
+  }
+  const push = pushWithRetry({ cwd, branch, setUpstream: true })
+  if (!push.ok) {
+    throw new Error(`re-push after deleting orphaned branch '${branch}' failed: ${push.reason}`)
+  }
+  return createPr(branch, base, title, body, draft, cwd)
+}
+
 export function ensurePr(opts: EnsurePrOptions): PrResult {
   const existing = findExistingPr(opts.branch, opts.cwd)
 
@@ -230,53 +332,14 @@ export function ensurePr(opts: EnsurePrOptions): PrResult {
   const body = buildPrBody(effectiveOpts)
 
   if (existing) {
-    // Update body only — never rewrite the title on an existing PR. Past
-    // regenerations stacked "[WIP] #N:" prefixes on each fix/fix-ci/resolve run
-    // until the title was unreadable.
-    //
-    // Use REST PATCH instead of `gh pr edit`: gh's edit path uses GraphQL
-    // which requires `read:org` scope on KODY_TOKEN. REST PATCH works with
-    // plain `repo` scope (matching what release/deploy.sh already does).
-    const stripped = existing.url.replace(/^https:\/\/github\.com\//, "")
-    const [owner, repo] = stripped.split("/")
-    try {
-      gh(["api", "--method", "PATCH", `repos/${owner}/${repo}/pulls/${existing.number}`, "-f", `body=${body}`], {
-        cwd: opts.cwd,
-      })
-    } catch (err) {
-      // Let the caller decide how to handle this. The ensurePr script
-      // already wraps doEnsurePr in try/catch and surfaces the error as
-      // ctx.output.reason. Previously this was swallowed to stderr and
-      // masked as a successful update, which buried the real cause of
-      // downstream failures.
-      throw new Error(`gh api PATCH #${existing.number} failed: ${err instanceof Error ? err.message : String(err)}`)
-    }
-    return { url: existing.url, number: existing.number, draft: opts.draft, action: "updated" }
+    return updateExistingPr(existing, body, opts.draft, opts.cwd)
   }
 
   const base = opts.baseBranch && opts.baseBranch.length > 0 ? opts.baseBranch : opts.defaultBranch
-  const args = [
-    "pr",
-    "create",
-    "--head",
-    opts.branch,
-    "--base",
-    base,
-    "--title",
-    title,
-    "--body-file",
-    "-",
-  ]
-  if (opts.draft) args.push("--draft")
-
-  const output = gh(args, { input: body, cwd: opts.cwd })
-  const url = output.trim()
-  const match = url.match(/\/pull\/(\d+)$/)
-  const number = match ? parseInt(match[1], 10) : 0
-
-  // Goal-task PRs (base = goal-<id>) are merged into the goal branch by
-  // goal-tick on a subsequent tick — we don't enable GitHub auto-merge here.
-  // See src/executables/goal-tick/tick.sh.
-
-  return { url, number, draft: opts.draft, action: "created" }
+  try {
+    return createPr(opts.branch, base, title, body, opts.draft, opts.cwd)
+  } catch (err) {
+    if (!isAlreadyExistsError(err)) throw err
+    return recoverFromExistingPr(opts.branch, base, title, body, opts.draft, opts.cwd)
+  }
 }

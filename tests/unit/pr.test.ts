@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   buildPrBody,
   buildPrTitle,
+  isAlreadyExistsError,
   recoverSourceIssueNumber,
   stripTitlePrefixes,
 } from "../../src/pr.js"
@@ -122,6 +123,27 @@ describe("pr: buildPrBody", () => {
     const matches = body.match(/`src\/file\d+\.ts`/g) ?? []
     expect(matches.length).toBe(50)
     expect(body).toMatch(/and 10 more/)
+  })
+})
+
+describe("pr: isAlreadyExistsError", () => {
+  it("matches the GraphQL createPullRequest 'already exists' failure", () => {
+    const msg =
+      "pull request create failed: GraphQL: A pull request already exists for A-Guy-educ:1942-questioncard-rtl. (createPullRequest)"
+    expect(isAlreadyExistsError(new Error(msg))).toBe(true)
+  })
+
+  it("matches the gh CLI phrasing 'a pull request for branch X already exists'", () => {
+    expect(isAlreadyExistsError(new Error("a pull request for branch '1-foo' already exists"))).toBe(true)
+  })
+
+  it("accepts a raw string as well as an Error", () => {
+    expect(isAlreadyExistsError("already exists for owner:branch")).toBe(true)
+  })
+
+  it("does not match unrelated create failures", () => {
+    expect(isAlreadyExistsError(new Error("gh pr create returned empty URL"))).toBe(false)
+    expect(isAlreadyExistsError(new Error("HTTP 422: Validation Failed (base is invalid)"))).toBe(false)
   })
 })
 
