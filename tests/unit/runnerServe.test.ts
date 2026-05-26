@@ -65,6 +65,15 @@ describe("runnerServe: parseJob", () => {
     expect("error" in out).toBe(true)
     if ("error" in out) expect(out.error).toMatch(/sessionId/)
   })
+
+  it("accepts scheduled mode with no issueNumber/sessionId (runs the fan-out)", () => {
+    const out = parseJob({ jobId: "j1", repo: "o/r", githubToken: "ghp_x", mode: "scheduled" })
+    expect("job" in out).toBe(true)
+    if ("job" in out) {
+      expect(out.job.mode).toBe("scheduled")
+      expect(out.job.issueNumber).toBeUndefined()
+    }
+  })
 })
 
 // ── authOk ──────────────────────────────────────────────────────────────────
