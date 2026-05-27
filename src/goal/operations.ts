@@ -199,16 +199,20 @@ export const GOAL_TASK_WORKFLOW = "kody.yml"
  * follow-up run ignores when Kody is a GitHub App. `workflow_dispatch` is
  * not subject to that gate, starts immediately, and keeps each task in its
  * own run (so it never blocks the cron scheduler's tick).
+ *
+ * No `--ref`: `gh` dispatches against the repository's default branch, which
+ * is where `kody.yml` (and its `executable`/`base` inputs) lives. That can
+ * differ from `config.git.defaultBranch` (the integration branch the task PR
+ * stacks onto, passed as `base`) — e.g. a repo whose code merges to `dev` but
+ * whose workflows live on `main`.
  */
-export function dispatchTaskRun(issueNumber: number, base: string, ref: string, cwd?: string): OperationResult {
+export function dispatchTaskRun(issueNumber: number, base: string, cwd?: string): OperationResult {
   try {
     gh(
       [
         "workflow",
         "run",
         GOAL_TASK_WORKFLOW,
-        "--ref",
-        ref,
         "-f",
         `issue_number=${issueNumber}`,
         "-f",

@@ -45,12 +45,9 @@ export const dispatchNextTask: PreflightScript = async (ctx) => {
   }
 
   const base = goal.leafPr?.headRefName ?? goal.defaultBranch
-  // The dispatched run executes on (and checks out) the default branch, where
-  // kody.yml lives; the task's PR stacks on `base`.
-  const ref = goal.defaultBranch
   process.stdout.write(`[goal-tick] dispatching #${next.number} via workflow_dispatch (classify, --base ${base})\n`)
 
-  const res = dispatchTaskRun(next.number, base, ref, ctx.cwd)
+  const res = dispatchTaskRun(next.number, base, ctx.cwd)
   if (!res.ok) {
     process.stderr.write(`[goal-tick] dispatchNextTask: workflow_dispatch on #${next.number} failed: ${res.error}\n`)
     return

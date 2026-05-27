@@ -294,7 +294,7 @@ describe("dispatchNextTask", () => {
     await dispatchNextTask(ctx, fakeProfile())
     // Fresh run via workflow_dispatch — NOT an @kody comment (bot can't
     // self-trigger) and NOT inline (would blow the scheduler tick).
-    expect(ops.dispatchTaskRun).toHaveBeenCalledWith(11, "main", "main", "/tmp")
+    expect(ops.dispatchTaskRun).toHaveBeenCalledWith(11, "main", "/tmp")
     expect((ctx.data.goal as GoalCtx).lastDispatchedIssue).toBe(11)
   })
 
@@ -321,7 +321,7 @@ describe("dispatchNextTask", () => {
       },
     })
     await dispatchNextTask(ctx, fakeProfile())
-    expect(ops.dispatchTaskRun).toHaveBeenCalledWith(12, "11-x", "main", "/tmp")
+    expect(ops.dispatchTaskRun).toHaveBeenCalledWith(12, "11-x", "/tmp")
   })
 
   it("does not record lastDispatchedIssue when the dispatch fails", async () => {
