@@ -36,6 +36,19 @@ If `browser_navigate` errors out (timeout, DNS, connection refused, navigation a
 
 {{qaAuthBlock}}
 
+{{#linkedFinding}}
+# Originally reported bug this PR must resolve
+
+This PR is a fix for the QA finding below. **Judge your verdict against whether this finding's reported symptom is actually gone in the running app — NOT merely whether the diff is internally correct.** Reproduce the finding's Steps on the preview and compare its Expected vs Actual:
+
+- If the reported **Actual** behavior still reproduces in the browser, the verdict is **FAIL** (or CONCERNS if you genuinely could not reach it) — *even if the code change looks correct and the remaining cause is a separate env/config issue*. "Done" means the user no longer sees the bug, not that the author's narrow change landed.
+- Only verdict **PASS** if you confirmed in the browser that the reported symptom is gone.
+
+```
+{{linkedFinding}}
+```
+
+{{/linkedFinding}}
 # Diff
 
 ```diff
