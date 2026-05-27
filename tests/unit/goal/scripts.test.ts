@@ -20,6 +20,7 @@ vi.mock("../../../src/goal/operations.js", async () => {
     listGoalIssues: vi.fn(),
     listOpenPrs: vi.fn(),
     commentOnIssue: vi.fn(() => ({ ok: true })),
+    dispatchTaskRun: vi.fn(() => ({ ok: true })),
     closeIssue: vi.fn(() => ({ ok: true })),
     closePr: vi.fn(() => ({ ok: true })),
     branchContains: vi.fn(() => ({ ok: true, value: true })),
@@ -273,14 +274,10 @@ describe("deriveGoalPhase", () => {
 
 describe("dispatchNextTask", () => {
   beforeEach(() => {
-    vi.mocked(ops.commentOnIssue).mockReset().mockReturnValue({ ok: true })
+    vi.mocked(ops.dispatchTaskRun).mockReset().mockReturnValue({ ok: true })
   })
 
-  const nextDispatchOf = (ctx: unknown) =>
-    (ctx as { output: { nextDispatch?: { executable: string; cliArgs: Record<string, unknown> } } }).output
-      .nextDispatch
-
-  it("hands off classify in-process with --base <defaultBranch> when no leaf exists (first task)", async () => {
+  it("fires a workflow_dispatch run (classify, base=defaultBranch) when no leaf exists (first task)", async () => {
     const ctx = fakeCtx({
       data: {
         goal: {
@@ -295,13 +292,13 @@ describe("dispatchNextTask", () => {
       },
     })
     await dispatchNextTask(ctx, fakeProfile())
-    // In-process hand-off, NOT an @kody comment (a bot can't self-trigger it).
-    expect(nextDispatchOf(ctx)).toEqual({ executable: "classify", cliArgs: { issue: 11, base: "main" } })
-    expect(ops.commentOnIssue).not.toHaveBeenCalled()
+    // Fresh run via workflow_dispatch — NOT an @kody comment (bot can't
+    // self-trigger) and NOT inline (would blow the scheduler tick).
+    expect(ops.dispatchTaskRun).toHaveBeenCalledWith(11, "main", "main", "/tmp")
     expect((ctx.data.goal as GoalCtx).lastDispatchedIssue).toBe(11)
   })
 
-  it("stacks on top of the leaf PR's head ref when one exists", async () => {
+  it("stacks the dispatched run on the leaf PR's head ref when one exists", async () => {
     const ctx = fakeCtx({
       data: {
         goal: {
@@ -324,7 +321,23 @@ describe("dispatchNextTask", () => {
       },
     })
     await dispatchNextTask(ctx, fakeProfile())
-    expect(nextDispatchOf(ctx)).toEqual({ executable: "classify", cliArgs: { issue: 12, base: "11-x" } })
+    expect(ops.dispatchTaskRun).toHaveBeenCalledWith(12, "11-x", "main", "/tmp")
+  })
+
+  it("does not record lastDispatchedIssue when the dispatch fails", async () => {
+    vi.mocked(ops.dispatchTaskRun).mockReturnValueOnce({ ok: false, error: "boom" })
+    const ctx = fakeCtx({
+      data: {
+        goal: {
+          id: "g",
+          state: "active",
+          defaultBranch: "main",
+          childTasks: [{ number: 11, state: "OPEN", prState: "absent" }],
+        } satisfies Partial<GoalCtx>,
+      },
+    })
+    await dispatchNextTask(ctx, fakeProfile())
+    expect((ctx.data.goal as GoalCtx).lastDispatchedIssue).toBeUndefined()
   })
 
   it("no-ops when nothing dispatchable", async () => {
@@ -339,7 +352,7 @@ describe("dispatchNextTask", () => {
       },
     })
     await dispatchNextTask(ctx, fakeProfile())
-    expect(nextDispatchOf(ctx)).toBeUndefined()
+    expect(ops.dispatchTaskRun).not.toHaveBeenCalled()
   })
 })
 

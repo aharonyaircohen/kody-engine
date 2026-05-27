@@ -1,15 +1,21 @@
 /**
  * Preflight (runWhen phase==="ready-to-dispatch"): pick the lowest-
- * numbered open task issue without an open PR and hand it to kody-cli via
- * `ctx.output.nextDispatch` so the task's pipeline (classify → build) runs
- * IN-PROCESS in this goal-tick run, and record it in
- * `ctx.data.goal.lastDispatchedIssue`.
+ * numbered open task issue without an open PR and fire a fresh
+ * `workflow_dispatch` run to process it (`classify` → build, stacked on the
+ * leaf), then record it in `ctx.data.goal.lastDispatchedIssue`.
  *
- * Why in-process instead of an `@kody --base <leaf>` comment: the comment is
- * bot-authored when Kody runs as a GitHub App, and the follow-up run silently
- * ignores it — so the task never starts and the goal stalls. goal-tick fires
- * one dispatchable task per tick, so building it inline keeps the same
- * one-task-at-a-time cadence (it just runs here instead of a separate run).
+ * Why workflow_dispatch (not an `@kody --base` comment, nor an in-process
+ * build):
+ *   - The old `@kody --base <leaf>` comment is bot-authored when Kody runs as
+ *     a GitHub App, and the follow-up run silently ignores it — the goal
+ *     stalls.
+ *   - Building the task in-process here would work, but goal-tick runs inside
+ *     the cron `goal-scheduler` (a fast, short-timeout shell), so a full build
+ *     blows the tick budget.
+ *   - `workflow_dispatch` isn't subject to the bot-comment gate, starts
+ *     immediately, and runs the task in its OWN run — keeping the scheduler
+ *     tick fast. autoDispatch maps the `issue_number`/`executable`/`base`
+ *     inputs back to `classify --issue <n> --base <leaf>`.
  *
  * Stacked-PR base selection:
  *   - First task (no leaf PR yet) → base = default branch (e.g. `main`).
@@ -21,6 +27,7 @@
  */
 
 import type { PreflightScript } from "../executables/types.js"
+import { dispatchTaskRun } from "../goal/operations.js"
 import { pickNextDispatchable } from "../goal/phase.js"
 import type { GoalCtx } from "./goalCtx.js"
 
@@ -38,13 +45,15 @@ export const dispatchNextTask: PreflightScript = async (ctx) => {
   }
 
   const base = goal.leafPr?.headRefName ?? goal.defaultBranch
-  process.stdout.write(`[goal-tick] dispatching #${next.number} in-process via classify (--base ${base})\n`)
+  // The dispatched run executes on (and checks out) the default branch, where
+  // kody.yml lives; the task's PR stacks on `base`.
+  const ref = goal.defaultBranch
+  process.stdout.write(`[goal-tick] dispatching #${next.number} via workflow_dispatch (classify, --base ${base})\n`)
 
-  // Run the task's pipeline entry (classify, which chains to the build
-  // in-process) against the task issue, stacking its PR on `base`.
-  ctx.output.nextDispatch = {
-    executable: "classify",
-    cliArgs: { issue: next.number, base },
+  const res = dispatchTaskRun(next.number, base, ref, ctx.cwd)
+  if (!res.ok) {
+    process.stderr.write(`[goal-tick] dispatchNextTask: workflow_dispatch on #${next.number} failed: ${res.error}\n`)
+    return
   }
   goal.lastDispatchedIssue = next.number
 }

@@ -189,6 +189,41 @@ export function commentOnIssue(issueNumber: number, body: string, cwd?: string):
   }
 }
 
+/** The workflow file goal-tick dispatches a fresh per-task run against. */
+export const GOAL_TASK_WORKFLOW = "kody.yml"
+
+/**
+ * Fire a fresh `workflow_dispatch` run to process one goal task: run
+ * `classify` (→ build) on the task issue with a stacked-PR `base`. This
+ * replaces the old `@kody --base` comment — a bot-authored comment the
+ * follow-up run ignores when Kody is a GitHub App. `workflow_dispatch` is
+ * not subject to that gate, starts immediately, and keeps each task in its
+ * own run (so it never blocks the cron scheduler's tick).
+ */
+export function dispatchTaskRun(issueNumber: number, base: string, ref: string, cwd?: string): OperationResult {
+  try {
+    gh(
+      [
+        "workflow",
+        "run",
+        GOAL_TASK_WORKFLOW,
+        "--ref",
+        ref,
+        "-f",
+        `issue_number=${issueNumber}`,
+        "-f",
+        "executable=classify",
+        "-f",
+        `base=${base}`,
+      ],
+      { cwd },
+    )
+    return { ok: true }
+  } catch (err) {
+    return fail(err)
+  }
+}
+
 /** Close an issue, optionally with a reason and a closing comment. */
 export function closeIssue(
   issueNumber: number,

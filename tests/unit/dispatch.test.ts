@@ -50,6 +50,18 @@ describe("dispatch: workflow_dispatch event", () => {
     })
   })
 
+  it("routes executable + base inputs (goal-tick's per-task dispatch) to that stage with --base", () => {
+    process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      inputs: { issue_number: "42", executable: "classify", base: "11-x" },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "classify",
+      cliArgs: { issue: 42, base: "11-x" },
+      target: 42,
+    })
+  })
+
   it("returns null for workflow_dispatch with no issue_number — caller fans out via dispatchScheduledWatches(force)", () => {
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
     process.env.GITHUB_EVENT_PATH = writeEvent({ inputs: {} })

@@ -92,7 +92,16 @@ export function autoDispatch(opts?: {
   if (eventName === "workflow_dispatch") {
     const n = parseInt(String(event.inputs?.issue_number ?? ""), 10)
     if (!Number.isNaN(n) && n > 0) {
-      return { executable: "run", cliArgs: { issue: n }, target: n }
+      // `executable` + `base` inputs let a dispatched run pick its stage and
+      // stacked-PR base. goal-tick uses this to fire a fresh run per task
+      // (`executable=classify`, `base=<leaf>`) instead of posting an `@kody`
+      // comment a bot can't self-trigger. Default stays `run` for a bare
+      // manual dispatch with just an issue number.
+      const exe = String(event.inputs?.executable ?? "").trim() || "run"
+      const base = String(event.inputs?.base ?? "").trim()
+      const cliArgs: Record<string, unknown> = { issue: n }
+      if (base) cliArgs.base = base
+      return { executable: exe, cliArgs, target: n }
     }
     // No issue_number input → manual force-fire of all watch executables.
     // The CLI handles this the same way as a schedule event but with the
