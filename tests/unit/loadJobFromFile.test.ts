@@ -77,3 +77,31 @@ describe("loadJobFromFile mentions", () => {
     expect(ctx.data.mentions).toBe("")
   })
 })
+
+describe("loadJobFromFile body {{mentions}} substitution", () => {
+  it("replaces {{mentions}} inside the duty body with the resolved handles", async () => {
+    writeStaff("kody")
+    writeDuty(
+      "docs-readme",
+      "staff: kody\nmentions: a, b",
+      "# Duty\n{{mentions}} please review",
+    )
+
+    const ctx = ctxFor("docs-readme")
+    await loadJobFromFile(ctx, PROFILE, {})
+
+    expect(ctx.data.jobIntent).toContain("@a @b please review")
+    expect(ctx.data.jobIntent).not.toContain("{{mentions}}")
+  })
+
+  it("tolerates inner whitespace and renders empty when no mentions are declared", async () => {
+    writeStaff("kody")
+    writeDuty("docs-code", "staff: kody", "line {{ mentions }} end")
+
+    const ctx = ctxFor("docs-code")
+    await loadJobFromFile(ctx, PROFILE, {})
+
+    expect(ctx.data.jobIntent).toBe("line  end")
+    expect(ctx.data.jobIntent).not.toContain("mentions")
+  })
+})

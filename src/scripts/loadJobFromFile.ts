@@ -83,7 +83,13 @@ export const loadJobFromFile: PreflightScript = async (ctx, _profile, args) => {
 
   ctx.data.jobSlug = slug
   ctx.data.jobTitle = title
-  ctx.data.jobIntent = body
+  // Resolve {{mentions}} inside the duty body here. composePrompt only renders
+  // mustache tokens in the executable *template*; the body lands via the
+  // template's {{jobIntent}} token and is never re-scanned, so a `{{mentions}}`
+  // written in a duty body would otherwise reach the agent literal — and the
+  // agent then improvises (and mistypes) the operator handle. Substitute it to
+  // the finished "@a @b" form now (empty string when none declared; fail-soft).
+  ctx.data.jobIntent = body.replace(/\{\{\s*mentions\s*\}\}/g, mentions)
   ctx.data.jobState = loaded
   ctx.data.jobStateJson = JSON.stringify(loaded.state, null, 2)
   ctx.data.workerSlug = workerSlug

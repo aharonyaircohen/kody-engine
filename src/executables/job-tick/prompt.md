@@ -10,6 +10,8 @@ The job below assigns you, worker **`{{workerSlug}}`**, as its executor. This pe
 
 Slug **`{{jobSlug}}`** — *{{jobTitle}}*, assigned to worker **`{{workerSlug}}`**. The job body below is authoritative for *what* to do, *when* (cadence), allowed commands, and state schema. It is human-edited — re-read it every tick. Execute it **as** the persona above.
 
+**Addressing the operator.** When the job body tells you to @-mention the operator (e.g. the first line of an inbox recommendation), the exact handle(s) to use are: {{mentions}}. Copy that string **verbatim** — never invent, abbreviate, guess, or retype a GitHub username. A wrong handle silently fails to route to the operator's inbox, so the recommendation is lost. If the line above is blank, the duty declared no operator; post without a mention.
+
 ### Job body
 
 {{jobIntent}}
