@@ -134,7 +134,11 @@ function composeAuthBlock(authProfile: string | undefined, login: string, passwo
       `NOT a one-shot \`fill()\` or value assignment: pasting a value in a single step often fails to fire the ` +
       `login form's framework onChange handler, so the form submits empty and you get a FALSE "invalid email or ` +
       `password". After typing, confirm the field shows the value before clicking submit; if the first attempt is ` +
-      `rejected, re-type key-by-key before treating the credentials as wrong. Re-use the session afterwards.`
+      `rejected, re-type key-by-key before treating the credentials as wrong. ` +
+      `If a login form's inputs don't respond to typing-by-label/placeholder, inspect the DOM and target them by ` +
+      `their \`id\`/\`name\` attribute instead — e.g. a Payload CMS admin login at \`/admin\` uses \`#field-email\` ` +
+      `and \`#field-password\`. The app may have TWO separate logins (a public/frontend one and a Payload \`/admin\` ` +
+      `one); if a change you must verify lives behind the admin, log into that form too. Re-use the session afterwards.`
     )
   }
   if (login) {

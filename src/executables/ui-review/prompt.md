@@ -113,8 +113,8 @@ _UI review by kody — browsed {{previewUrl}}_
 
 - **Never write credentials anywhere.** The QA login is provided only so you can sign in — you MUST NOT put the password (or any token/secret) into the review, findings, steps, or any text posted to GitHub. PRs and issues are often public. When describing an authenticated step, write "log in as the QA account" — never quote the username or the password.
 - No commits. No `git` / `gh` invocations. No edits to files outside `.kody/ui-review/`.
-- Verdict **FAIL** only for clear visual regressions, broken flows, or correctness/accessibility issues that block merge.
-- Verdict **CONCERNS** for clarity/polish/edge-case gaps that shouldn't block.
-- Verdict **PASS** when the PR's UI changes work as intended and nothing obvious is broken.
-- If the preview URL is unreachable, PASS/FAIL should be based on the diff alone, and the "Gaps" section must call that out.
+- Verdict **FAIL** for clear visual regressions, broken flows, or correctness/accessibility issues that block merge. **Also FAIL when the PR claims to fix a specific user-visible symptom (named in the PR body or linked issue) and that symptom is STILL present in the browser** — report against the user-visible outcome, not just whether the diff is technically correct. A fix whose code path is right but whose reported symptom still reproduces is a FAIL.
+- Verdict **CONCERNS** for clarity/polish/edge-case gaps that shouldn't block — **and whenever you could NOT confirm a UI-affecting change in the browser** (couldn't reach the page, couldn't log in, couldn't trigger the state). Do not upgrade an unverified change to PASS on the strength of reading the diff: a reviewer must not bless what it did not see. List every such gap explicitly.
+- Verdict **PASS** only when you **confirmed in the browser** that the PR's changed behavior works as intended and nothing obvious is broken. PASS is a statement that you *saw it work*, not that the code looks correct.
+- If the preview URL is unreachable, the verdict is **CONCERNS** (not PASS) with the "Gaps" section calling out that nothing could be browser-verified; reserve FAIL for problems you can still prove from the diff alone.
 - Be specific: every finding gets a route + screenshot reference, or a file:line reference. No generic advice.
