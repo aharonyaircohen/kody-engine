@@ -191,7 +191,7 @@ describe("recordClassification", () => {
 })
 
 describe("dispatchClassified", () => {
-  it("posts a single combined comment with @kody <type>, audit line, and state markers", async () => {
+  it("hands the next stage to the orchestrator in-process (no @kody comment) and posts an audit + state comment", async () => {
     const c = ctx({
       data: {
         classification: "bug",
@@ -200,21 +200,26 @@ describe("dispatchClassified", () => {
       },
     })
     await dispatchClassified(c, profile(), null)
+    // In-process hand-off — NOT a comment round-trip. This is what avoids the
+    // bot-author deadlock (a bot-authored `@kody bug` is silently ignored).
+    expect(c.output.nextDispatch).toEqual({ executable: "bug", cliArgs: { issue: 99 } })
+
     const bodies = execFileSync.mock.calls
       .map((call) => (call[1] as string[]) ?? [])
       .filter((a) => a[3] === "--body")
       .map((a) => a[4] as string)
-    // Exactly ONE comment posted — removes the concurrency race.
+    // Exactly ONE comment posted: audit + state trail, with NO `@kody` line so
+    // it can't re-trigger anything.
     expect(bodies.length).toBe(1)
     const body = bodies[0]!
-    expect(body.startsWith("@kody bug")).toBe(true)
+    expect(body.includes("@kody")).toBe(false)
     expect(body).toContain("🔎 kody classified as `bug`")
     expect(body).toContain("<!-- kody:state:v1:begin -->")
     expect(body).toContain("<!-- kody:state:v1:end -->")
     expect(body).toContain("CLASSIFIED_AS_BUG")
   })
 
-  it("forwards --base when goal-tick passes it through", async () => {
+  it("forwards --base into the in-process hand-off when goal-tick passes it through", async () => {
     const c = ctx({
       args: { issue: 99, base: "feat/leaf" },
       data: {
@@ -223,29 +228,28 @@ describe("dispatchClassified", () => {
       },
     })
     await dispatchClassified(c, profile(), null)
-    const bodies = execFileSync.mock.calls
-      .map((call) => (call[1] as string[]) ?? [])
-      .filter((a) => a[3] === "--body")
-      .map((a) => a[4] as string)
-    expect(bodies[0]!.startsWith("@kody chore --base feat/leaf")).toBe(true)
+    expect(c.output.nextDispatch).toEqual({ executable: "chore", cliArgs: { issue: 99, base: "feat/leaf" } })
   })
 
   it("is a no-op when no classification was recorded", async () => {
     const c = ctx({ data: {} })
     await dispatchClassified(c, profile(), null)
     expect(execFileSync.mock.calls.length).toBe(0)
+    expect(c.output.nextDispatch).toBeUndefined()
   })
 
   it("is a no-op for an invalid classification value", async () => {
     const c = ctx({ data: { classification: "not-a-real-class" } })
     await dispatchClassified(c, profile(), null)
     expect(execFileSync.mock.calls.length).toBe(0)
+    expect(c.output.nextDispatch).toBeUndefined()
   })
 
   it("is a no-op when classification is set but action is missing", async () => {
     const c = ctx({ data: { classification: "bug" } })
     await dispatchClassified(c, profile(), null)
     expect(execFileSync.mock.calls.length).toBe(0)
+    expect(c.output.nextDispatch).toBeUndefined()
   })
 })
 

@@ -71,6 +71,15 @@ export interface ExecutorOutput {
   exitCode: number
   prUrl?: string
   reason?: string
+  /**
+   * In-process stage hand-off. When a stage (e.g. `classify`) decides which
+   * stage runs next, it sets `ctx.output.nextDispatch` instead of posting an
+   * `@kody <next>` comment. The orchestration layer (kody-cli) runs it in the
+   * SAME process. This replaces the old comment round-trip, which deadlocked
+   * when Kody ran as a GitHub App: the hand-off comment was bot-authored and
+   * the follow-up run silently ignored it, stalling the pipeline at classify.
+   */
+  nextDispatch?: { executable: string; cliArgs: Record<string, unknown> }
 }
 
 export async function runExecutable(profileName: string, input: ExecutorInput): Promise<ExecutorOutput> {
@@ -440,6 +449,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       exitCode: ctx.output.exitCode ?? 0,
       prUrl: ctx.output.prUrl,
       reason: ctx.output.reason,
+      nextDispatch: ctx.output.nextDispatch,
     })
   } finally {
     // Clear any kody:* lifecycle labels stamped by `setLifecycleLabel`

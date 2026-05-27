@@ -347,6 +347,14 @@ export interface Context {
     exitCode: number
     prUrl?: string
     reason?: string
+    /**
+     * In-process hand-off to the next stage. A stage (e.g. `classify`) sets
+     * this so the orchestrator runs the chosen sub-orchestrator
+     * (feature/bug/spec/chore) in the same process — instead of posting an
+     * `@kody <next>` comment, which is silently ignored when Kody comments as
+     * a GitHub App (bot author), stalling the pipeline at classify.
+     */
+    nextDispatch?: { executable: string; cliArgs: Record<string, unknown> }
   }
   /**
    * If a preflight script sets this to true, the executor skips the agent

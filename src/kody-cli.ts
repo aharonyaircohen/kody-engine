@@ -432,13 +432,39 @@ export async function runCi(argv: string[]): Promise<number> {
 
   try {
     const config = earlyConfig ?? loadConfig(cwd)
-    const result = await runExecutable(dispatch.executable, {
+    let result = await runExecutable(dispatch.executable, {
       cliArgs: dispatch.cliArgs,
       cwd,
       config,
       verbose: args.verbose,
       quiet: args.quiet,
     })
+
+    // In-process stage hand-off. A stage (e.g. classify) hands the next
+    // stage to us via `result.nextDispatch` instead of posting an `@kody`
+    // comment — a bot-authored comment the follow-up run silently ignores,
+    // which deadlocked the pipeline at classify when Kody runs as a GitHub
+    // App. Run the chain here, reusing the preflight that already ran
+    // (deps, litellm, git identity, auth). MAX_CHAIN_HOPS is a hard ceiling
+    // against a buggy stage that hands off forever.
+    const MAX_CHAIN_HOPS = 4
+    for (let hops = 1; result.nextDispatch && hops <= MAX_CHAIN_HOPS; hops++) {
+      const next = result.nextDispatch
+      process.stdout.write(`→ kody: in-process hand-off → ${next.executable} (hop ${hops}/${MAX_CHAIN_HOPS})\n\n`)
+      result = await runExecutable(next.executable, {
+        cliArgs: next.cliArgs,
+        cwd,
+        config,
+        verbose: args.verbose,
+        quiet: args.quiet,
+      })
+    }
+    if (result.nextDispatch) {
+      process.stderr.write(
+        `[kody] in-process hand-off cap (${MAX_CHAIN_HOPS}) reached; not running ${result.nextDispatch.executable}\n`,
+      )
+    }
+
     if (result.exitCode !== 0 && result.exitCode !== 1 && result.exitCode !== 2) {
       // Only post tail on non-draft-PR failures; draft PRs already carry the failure body.
       postFailureTail(issueNumber, cwd, result.reason || `exit ${result.exitCode}`)
