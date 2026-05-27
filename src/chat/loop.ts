@@ -22,6 +22,7 @@ import type { ChatEvent, EventSink } from "./events.js"
 import { makeRunId } from "./events.js"
 import type { ChatTurn } from "./session.js"
 import { appendTurn, readSession } from "./session.js"
+import { prepareAttachments } from "./attachments.js"
 
 export const CHAT_SYSTEM_PROMPT = [
   "You are Kody, an AI assistant for the Kody Operations Dashboard. Reply to the",
@@ -206,6 +207,11 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
     return { exitCode: 64, error }
   }
 
+  // Inlined image attachments arrive as base64 data URLs in the user turn
+  // text. Materialise the current turn's images to files the agent can Read
+  // (the model sees a flat string otherwise, so a data URL is unreadable).
+  const { turns: promptTurns, imagePaths } = prepareAttachments(turns, opts.cwd, opts.sessionId)
+
   const basePrompt = opts.systemPrompt ?? CHAT_SYSTEM_PROMPT
   const catalog = buildExecutableCatalog()
   // Per-task artifacts contract appended to every chat session so the
@@ -228,18 +234,32 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   // operational requirements the agent must not override.
   // Advertise the fetch_repo tool only when it's actually wired (reposRoot set).
   const crossRepoBlock = opts.reposRoot ? CROSS_REPO_PROMPT : null
+  // When the current turn carries images, tell the agent it CAN see them —
+  // they're real files on disk that its Read tool renders into the model view.
+  const imageBlock =
+    imagePaths.length > 0
+      ? [
+          "# Attached images",
+          "The user attached one or more images on this turn. They are saved as",
+          "files in this workspace and referenced inline in the conversation as",
+          "`[Image \"…\" is attached — saved to <path>]`. You CAN view them: call",
+          "the Read tool on each of those exact paths BEFORE answering. Never tell",
+          "the user you cannot see images — Read the file and describe what you see.",
+        ].join("\n")
+      : null
   const systemPrompt = [
     basePrompt,
     contextBlock,
     memoryBlock,
     instructionsBlock,
     crossRepoBlock,
+    imageBlock,
     catalog,
     artifactAddendum,
   ]
     .filter((s): s is string => typeof s === "string" && s.length > 0)
     .join("\n\n")
-  const prompt = buildPrompt(turns)
+  const prompt = buildPrompt(promptTurns)
 
   // Sequence counter for deterministic ordering of progress events on the
   // dashboard. Same sessionId across multiple events, so the existing
