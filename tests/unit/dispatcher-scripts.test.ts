@@ -75,18 +75,16 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks())
 
 describe("startFlow", () => {
-  it("seeds state.flow using the profile name, then posts @kody <entry> on the issue", async () => {
+  it("seeds state.flow using the profile name, then hands the first child to kody-cli in-process", async () => {
     const state: TaskState = { ...emptyState() }
     const c = ctx({ data: { taskState: state }, args: { issue: 42 } })
     await startFlow(c, profile("bug"), null, { entry: "plan", target: "issue" })
     // flow.name must come from the profile (the orchestrator's own name),
     // not from a removed --flow CLI arg.
     expect(state.flow).toMatchObject({ name: "bug", step: "plan", issueNumber: 42 })
-    expect(execFileSync).toHaveBeenCalledWith(
-      "gh",
-      ["issue", "comment", "42", "--body", "@kody plan"],
-      expect.any(Object),
-    )
+    // In-process hand-off, NOT an @kody comment (which a bot can't self-trigger).
+    expect(c.output.nextDispatch).toEqual({ executable: "plan", cliArgs: { issue: 42 } })
+    expect(execFileSync).not.toHaveBeenCalled()
   })
 
   it("different profile name yields a different flow.name", async () => {
@@ -101,7 +99,7 @@ describe("startFlow", () => {
     const state: TaskState = { ...emptyState(), flow }
     const c = ctx({ data: { taskState: state }, args: { issue: 42 } })
     await startFlow(c, profile("bug"), null, { entry: "plan" })
-    expect(execFileSync).not.toHaveBeenCalled()
+    expect(c.output.nextDispatch).toBeUndefined()
     expect(state.flow).toBe(flow)
   })
 
@@ -112,43 +110,32 @@ describe("startFlow", () => {
     }
     const c = ctx({ data: { taskState: state }, args: { issue: 42 } })
     await startFlow(c, profile("bug"), null, { entry: "review", target: "pr" })
-    expect(execFileSync).toHaveBeenCalledWith(
-      "gh",
-      ["pr", "comment", "77", "--body", "@kody review"],
-      expect.any(Object),
-    )
+    expect(c.output.nextDispatch).toEqual({ executable: "review", cliArgs: { pr: 77 } })
   })
 
   it("falls back to issue when target=pr but no prUrl exists", async () => {
     const state: TaskState = { ...emptyState() }
     const c = ctx({ data: { taskState: state }, args: { issue: 42 } })
     await startFlow(c, profile("bug"), null, { entry: "review", target: "pr" })
-    expect(execFileSync).toHaveBeenCalledWith(
-      "gh",
-      ["issue", "comment", "42", "--body", "@kody review"],
-      expect.any(Object),
-    )
+    expect(c.output.nextDispatch).toEqual({ executable: "review", cliArgs: { issue: 42 } })
   })
 
   it("no-ops without crashing when `with.entry` is missing", async () => {
     const c = ctx()
     await startFlow(c, profile(), null, {})
-    expect(execFileSync).not.toHaveBeenCalled()
+    expect(c.output.nextDispatch).toBeUndefined()
   })
 })
 
 describe("dispatch", () => {
-  it("posts @kody <next> on the issue and updates state.flow.step", async () => {
+  it("hands the next stage to kody-cli in-process and updates state.flow.step", async () => {
     const flow: FlowState = { name: "f", step: "plan", issueNumber: 42, startedAt: "t" }
     const state: TaskState = { ...emptyState(), flow }
     const c = ctx({ data: { taskState: state } })
     await dispatch(c, profile(), null, { next: "run", target: "issue" })
     expect(state.flow?.step).toBe("run")
-    expect(execFileSync).toHaveBeenCalledWith(
-      "gh",
-      ["issue", "comment", "42", "--body", "@kody run"],
-      expect.any(Object),
-    )
+    expect(c.output.nextDispatch).toEqual({ executable: "run", cliArgs: { issue: 42 } })
+    expect(execFileSync).not.toHaveBeenCalled()
   })
 
   it("targets the PR when target=pr and prUrl is set", async () => {
@@ -159,27 +146,23 @@ describe("dispatch", () => {
     }
     const c = ctx({ data: { taskState: state } })
     await dispatch(c, profile(), null, { next: "review", target: "pr" })
-    expect(execFileSync).toHaveBeenCalledWith(
-      "gh",
-      ["pr", "comment", "9", "--body", "@kody review"],
-      expect.any(Object),
-    )
+    expect(c.output.nextDispatch).toEqual({ executable: "review", cliArgs: { pr: 9 } })
   })
 
   it("no-ops without crashing when `with.next` is missing", async () => {
     const c = ctx()
     await dispatch(c, profile(), null, {})
-    expect(execFileSync).not.toHaveBeenCalled()
+    expect(c.output.nextDispatch).toBeUndefined()
   })
 
-  it("aborts when target=pr but no prUrl — emits AGENT_NOT_RUN and posts nothing", async () => {
+  it("aborts when target=pr but no prUrl — emits AGENT_NOT_RUN and hands off nothing", async () => {
     const state: TaskState = {
       ...emptyState(),
       flow: { name: "f", step: "run", issueNumber: 42, startedAt: "t" },
     }
     const c = ctx({ data: { taskState: state } })
     await dispatch(c, profile(), null, { next: "review", target: "pr" })
-    expect(execFileSync).not.toHaveBeenCalled()
+    expect(c.output.nextDispatch).toBeUndefined()
     const action = c.data.action as { type: string; payload: { reason: string; next: string } }
     expect(action?.type).toBe("AGENT_NOT_RUN")
     expect(action?.payload?.next).toBe("review")
@@ -268,32 +251,24 @@ describe("advanceFlow", () => {
     expect(execFileSync).not.toHaveBeenCalled()
   })
 
-  it("re-triggers the sub-orchestrator by flow name when a flow is in progress", async () => {
+  it("re-triggers the sub-orchestrator by flow name in-process when a flow is in progress", async () => {
     const state: TaskState = {
       ...emptyState(),
       flow: { name: "bug", step: "plan", issueNumber: 42, startedAt: "t" },
     }
     const c = ctx({ data: { taskState: state, commentTargetType: "issue" } })
     await advanceFlow(c, profile("plan"), null)
-    expect(execFileSync).toHaveBeenCalledWith(
-      "gh",
-      ["issue", "comment", "42", "--body", "@kody bug"],
-      expect.any(Object),
-    )
+    expect(c.output.nextDispatch).toEqual({ executable: "bug", cliArgs: { issue: 42 } })
   })
 
-  it("posts @kody <flow.name> regardless of which child just finished", async () => {
+  it("re-runs <flow.name> in-process regardless of which child just finished", async () => {
     const state: TaskState = {
       ...emptyState(),
       flow: { name: "feature", step: "run", issueNumber: 7, startedAt: "t" },
     }
     const c = ctx({ args: { issue: 7 }, data: { taskState: state, commentTargetType: "issue" } })
     await advanceFlow(c, profile("run"), null)
-    expect(execFileSync).toHaveBeenCalledWith(
-      "gh",
-      ["issue", "comment", "7", "--body", "@kody feature"],
-      expect.any(Object),
-    )
+    expect(c.output.nextDispatch).toEqual({ executable: "feature", cliArgs: { issue: 7 } })
   })
 
   it("for PR-targeted children also mirrors action to the issue state and re-triggers by flow name", async () => {
@@ -317,9 +292,9 @@ describe("advanceFlow", () => {
     await advanceFlow(c, profile("review"), null)
     const calls = execFileSync.mock.calls.map((c) => (c[1] as string[]) ?? [])
     const patchCall = calls.find((a) => a.includes("PATCH"))
-    const triggerCall = calls.find((a) => a.join(" ").includes("@kody bug"))
+    // State mirror still happens via gh api PATCH; the re-trigger is now in-process.
     expect(patchCall).toBeDefined()
-    expect(triggerCall).toBeDefined()
+    expect(c.output.nextDispatch).toEqual({ executable: "bug", cliArgs: { issue: 42 } })
   })
 })
 

@@ -1,8 +1,15 @@
 /**
  * Preflight (runWhen phase==="ready-to-dispatch"): pick the lowest-
- * numbered open task issue without an open PR, comment
- * `@kody --base <leaf>` on it, and record the dispatch in
+ * numbered open task issue without an open PR and hand it to kody-cli via
+ * `ctx.output.nextDispatch` so the task's pipeline (classify → build) runs
+ * IN-PROCESS in this goal-tick run, and record it in
  * `ctx.data.goal.lastDispatchedIssue`.
+ *
+ * Why in-process instead of an `@kody --base <leaf>` comment: the comment is
+ * bot-authored when Kody runs as a GitHub App, and the follow-up run silently
+ * ignores it — so the task never starts and the goal stalls. goal-tick fires
+ * one dispatchable task per tick, so building it inline keeps the same
+ * one-task-at-a-time cadence (it just runs here instead of a separate run).
  *
  * Stacked-PR base selection:
  *   - First task (no leaf PR yet) → base = default branch (e.g. `main`).
@@ -14,7 +21,6 @@
  */
 
 import type { PreflightScript } from "../executables/types.js"
-import { commentOnIssue } from "../goal/operations.js"
 import { pickNextDispatchable } from "../goal/phase.js"
 import type { GoalCtx } from "./goalCtx.js"
 
@@ -32,13 +38,13 @@ export const dispatchNextTask: PreflightScript = async (ctx) => {
   }
 
   const base = goal.leafPr?.headRefName ?? goal.defaultBranch
-  process.stdout.write(`[goal-tick] dispatching @kody on #${next.number} (--base ${base})\n`)
+  process.stdout.write(`[goal-tick] dispatching #${next.number} in-process via classify (--base ${base})\n`)
 
-  const comment = commentOnIssue(next.number, `@kody --base ${base}`, ctx.cwd)
-  if (!comment.ok) {
-    process.stderr.write(`[goal-tick] dispatchNextTask: comment failed on #${next.number}: ${comment.error}\n`)
-    return
+  // Run the task's pipeline entry (classify, which chains to the build
+  // in-process) against the task issue, stacking its PR on `base`.
+  ctx.output.nextDispatch = {
+    executable: "classify",
+    cliArgs: { issue: next.number, base },
   }
-
   goal.lastDispatchedIssue = next.number
 }

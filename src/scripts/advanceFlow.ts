@@ -1,9 +1,13 @@
 /**
  * Postflight (added to every child executable's tail): if a flow is in
- * progress, re-trigger the flow orchestrator by posting `@kody <flow.name>`
- * on the originating issue. `state.flow.name` is the executable name of the
- * orchestrator itself (e.g. "bug", "feature", "spec", "chore") per the
- * semantic-naming convention.
+ * progress, re-trigger the flow orchestrator IN-PROCESS via
+ * `ctx.output.nextDispatch` (kody-cli runs it). `state.flow.name` is the
+ * executable name of the orchestrator itself (e.g. "bug", "feature", "spec",
+ * "chore") per the semantic-naming convention.
+ *
+ * Why in-process instead of an `@kody <flow.name>` comment: when Kody runs as
+ * a GitHub App the comment is bot-authored and the follow-up run silently
+ * ignores it, stalling the flow mid-way.
  *
  * No-op when:
  *   - state.flow is absent (child was triggered standalone), or
@@ -109,7 +113,7 @@ export const advanceFlow: PostflightScript = async (ctx, profile) => {
     )
   }
 
-  // Post `@kody <flow-name>` so dispatch.ts routes the retrigger to the same
-  // sub-orchestrator that started this flow (e.g. "bug", "feature").
-  ghComment(flow.issueNumber, `@kody ${flow.name}`, ctx.cwd, "re-trigger orchestrator")
+  // Re-run the same sub-orchestrator that started this flow (e.g. "bug",
+  // "feature") in-process, so it advances to the next stage.
+  ctx.output.nextDispatch = { executable: flow.name, cliArgs: { issue: flow.issueNumber } }
 }

@@ -276,7 +276,11 @@ describe("dispatchNextTask", () => {
     vi.mocked(ops.commentOnIssue).mockReset().mockReturnValue({ ok: true })
   })
 
-  it("posts @kody --base <defaultBranch> when no leaf exists (first task)", async () => {
+  const nextDispatchOf = (ctx: unknown) =>
+    (ctx as { output: { nextDispatch?: { executable: string; cliArgs: Record<string, unknown> } } }).output
+      .nextDispatch
+
+  it("hands off classify in-process with --base <defaultBranch> when no leaf exists (first task)", async () => {
     const ctx = fakeCtx({
       data: {
         goal: {
@@ -291,7 +295,9 @@ describe("dispatchNextTask", () => {
       },
     })
     await dispatchNextTask(ctx, fakeProfile())
-    expect(ops.commentOnIssue).toHaveBeenCalledWith(11, "@kody --base main", "/tmp")
+    // In-process hand-off, NOT an @kody comment (a bot can't self-trigger it).
+    expect(nextDispatchOf(ctx)).toEqual({ executable: "classify", cliArgs: { issue: 11, base: "main" } })
+    expect(ops.commentOnIssue).not.toHaveBeenCalled()
     expect((ctx.data.goal as GoalCtx).lastDispatchedIssue).toBe(11)
   })
 
@@ -318,7 +324,7 @@ describe("dispatchNextTask", () => {
       },
     })
     await dispatchNextTask(ctx, fakeProfile())
-    expect(ops.commentOnIssue).toHaveBeenCalledWith(12, "@kody --base 11-x", "/tmp")
+    expect(nextDispatchOf(ctx)).toEqual({ executable: "classify", cliArgs: { issue: 12, base: "11-x" } })
   })
 
   it("no-ops when nothing dispatchable", async () => {
@@ -333,7 +339,7 @@ describe("dispatchNextTask", () => {
       },
     })
     await dispatchNextTask(ctx, fakeProfile())
-    expect(ops.commentOnIssue).not.toHaveBeenCalled()
+    expect(nextDispatchOf(ctx)).toBeUndefined()
   })
 })
 

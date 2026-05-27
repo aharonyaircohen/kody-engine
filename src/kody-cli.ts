@@ -440,14 +440,16 @@ export async function runCi(argv: string[]): Promise<number> {
       quiet: args.quiet,
     })
 
-    // In-process stage hand-off. A stage (e.g. classify) hands the next
-    // stage to us via `result.nextDispatch` instead of posting an `@kody`
-    // comment — a bot-authored comment the follow-up run silently ignores,
-    // which deadlocked the pipeline at classify when Kody runs as a GitHub
-    // App. Run the chain here, reusing the preflight that already ran
-    // (deps, litellm, git identity, auth). MAX_CHAIN_HOPS is a hard ceiling
-    // against a buggy stage that hands off forever.
-    const MAX_CHAIN_HOPS = 4
+    // In-process stage hand-off. A stage (classify, a flow orchestrator/child,
+    // or goal-tick) hands the next stage to us via `result.nextDispatch`
+    // instead of posting an `@kody` comment — a bot-authored comment the
+    // follow-up run silently ignores, which deadlocked the pipeline when Kody
+    // runs as a GitHub App. Run the chain here, reusing the preflight that
+    // already ran (deps, litellm, git identity, auth). MAX_CHAIN_HOPS is a
+    // hard ceiling against a buggy stage that hands off forever; it sits above
+    // the flow's own FLOW_HOP_CAP (25 orchestrator↔child ping-pongs ≈ 50 hops),
+    // which is the real limiter for flows.
+    const MAX_CHAIN_HOPS = 60
     for (let hops = 1; result.nextDispatch && hops <= MAX_CHAIN_HOPS; hops++) {
       const next = result.nextDispatch
       process.stdout.write(`→ kody: in-process hand-off → ${next.executable} (hop ${hops}/${MAX_CHAIN_HOPS})\n\n`)

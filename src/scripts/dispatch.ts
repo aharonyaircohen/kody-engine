@@ -1,23 +1,25 @@
 /**
- * Postflight (orchestrator-only): post `@kody <next>` to either the issue
- * or the PR, advancing `state.flow.step`. Pure dispatcher — assumes the
- * triggering `runWhen` already gated this entry.
+ * Postflight (orchestrator-only): hand the next stage to kody-cli via
+ * `ctx.output.nextDispatch` (run in-process), advancing `state.flow.step`.
+ * Pure dispatcher — assumes the triggering `runWhen` already gated this entry.
+ *
+ * Why in-process instead of an `@kody <next>` comment: when Kody runs as a
+ * GitHub App the comment is bot-authored and the follow-up run silently
+ * ignores it (bots can't self-trigger), stalling the flow. Running the next
+ * stage in the same process removes that round-trip.
  *
  * Args (from profile entry's `with` object):
  *   - next:   child executable to invoke (e.g. "run", "review", "fix")
- *   - target: "issue" | "pr" — where to post the comment. When target is "pr"
- *             but `state.core.prUrl` is missing, the dispatch is aborted (the
- *             child profile would reject `--issue` anyway). A synthetic
- *             AGENT_NOT_RUN outcome is written so the orchestrator's existing
- *             `aborted` finishFlow runWhen catches it and clears
+ *   - target: "issue" | "pr" — which target the child runs against. When
+ *             target is "pr" but `state.core.prUrl` is missing, the dispatch
+ *             is aborted (the child profile would reject `--issue` anyway). A
+ *             synthetic AGENT_NOT_RUN outcome is written so the orchestrator's
+ *             existing `aborted` finishFlow runWhen catches it and clears
  *             `kody:orchestrating`.
  */
 
-import { execFileSync } from "node:child_process"
 import type { PostflightScript, ScriptArgs } from "../executables/types.js"
 import type { Action, TaskState } from "../state.js"
-
-const API_TIMEOUT_MS = 30_000
 
 export const dispatch: PostflightScript = async (ctx, _profile, _agentResult, args?: ScriptArgs) => {
   const next = args?.next as string | undefined
@@ -58,19 +60,12 @@ export const dispatch: PostflightScript = async (ctx, _profile, _agentResult, ar
 
   const usePr = target === "pr" && state?.core.prUrl
   const targetNumber = usePr ? (parsePr(state!.core.prUrl!) ?? issueNumber) : issueNumber
-  const sub = usePr ? "pr" : "issue"
-  const body = `@kody ${next}`
 
-  try {
-    execFileSync("gh", [sub, "comment", String(targetNumber), "--body", body], {
-      timeout: API_TIMEOUT_MS,
-      cwd: ctx.cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-    })
-  } catch (err) {
-    process.stderr.write(
-      `[kody dispatch] failed to post @kody ${next} on ${sub} #${targetNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
-    )
+  // In-process hand-off to the next stage (kody-cli runs it, reusing the
+  // preflight). The child runs against the PR or the issue depending on target.
+  ctx.output.nextDispatch = {
+    executable: next,
+    cliArgs: usePr ? { pr: targetNumber } : { issue: targetNumber },
   }
 }
 

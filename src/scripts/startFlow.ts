@@ -15,15 +15,16 @@
  *
  * Writes:
  *   - ctx.data.taskState.flow — initialized
- *   - posts an `@kody <entry>` comment via `gh`
+ *   - ctx.output.nextDispatch — hands the first child to kody-cli (in-process)
+ *
+ * Why in-process instead of an `@kody <entry>` comment: when Kody runs as a
+ * GitHub App the comment is bot-authored and the follow-up run silently
+ * ignores it, stalling the flow before it starts.
  */
 
-import { execFileSync } from "node:child_process"
 import type { PostflightScript, ScriptArgs } from "../executables/types.js"
 import { parsePrNumber } from "../issue.js"
 import type { TaskState } from "../state.js"
-
-const API_TIMEOUT_MS = 30_000
 
 export const startFlow: PostflightScript = async (ctx, profile, _agentResult, args?: ScriptArgs) => {
   const entry = args?.entry as string | undefined
@@ -58,29 +59,11 @@ export const startFlow: PostflightScript = async (ctx, profile, _agentResult, ar
     }
   }
 
-  postKodyComment(target, issueNumber, state, entry, ctx.cwd)
-}
-
-function postKodyComment(
-  target: string,
-  issueNumber: number,
-  state: TaskState | undefined,
-  next: string,
-  cwd: string,
-): void {
-  const targetNumber =
-    target === "pr" && state?.core.prUrl ? (parsePrNumber(state.core.prUrl) ?? issueNumber) : issueNumber
-  const sub = target === "pr" && state?.core.prUrl ? "pr" : "issue"
-  const body = `@kody ${next}`
-  try {
-    execFileSync("gh", [sub, "comment", String(targetNumber), "--body", body], {
-      timeout: API_TIMEOUT_MS,
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-    })
-  } catch (err) {
-    process.stderr.write(
-      `[kody startFlow] failed to post @kody ${next} on ${sub} #${targetNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
-    )
+  // Hand the first child to kody-cli for in-process execution.
+  const usePr = target === "pr" && !!state?.core.prUrl
+  const targetNumber = usePr ? (parsePrNumber(state!.core.prUrl!) ?? issueNumber) : issueNumber
+  ctx.output.nextDispatch = {
+    executable: entry,
+    cliArgs: usePr ? { pr: targetNumber } : { issue: targetNumber },
   }
 }
