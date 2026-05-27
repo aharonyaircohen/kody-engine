@@ -1,21 +1,20 @@
 /**
- * Preflight (ui-review): resolve the QA finding issue this PR is meant to fix
- * and inject its reported symptom into the prompt, so the review verifies the
- * ORIGINAL user-reported bug is gone — not merely that the diff is internally
+ * Preflight (ui-review): resolve the issue this PR is meant to deliver (a bug
+ * fix OR a feature) and inject its description into the prompt, so the review
+ * verifies the ORIGINAL intent — a reported bug is actually gone, or a
+ * requested feature actually works — not merely that the diff is internally
  * correct. Without this, ui-review judges the PR against its own self-described
- * intent and PASSes a fix whose code path is right but whose reported symptom
- * still reproduces (e.g. a "(unknown)" badge that persists for a separate
- * env/config reason).
+ * intent and PASSes a change whose code path is right but whose goal isn't met
+ * (e.g. a "(unknown)" badge that persists for a separate env/config reason).
  *
  * Sets ctx.data.linkedFinding — a formatted "Issue #N: title\n\nbody" string,
- * or "" when no QA finding is linked. Fail-soft: any lookup failure leaves it
- * empty and the prompt section is simply omitted.
+ * or "" when no issue is linked. Fail-soft: any lookup failure leaves it empty
+ * and the prompt section is simply omitted.
  */
 
 import type { PreflightScript } from "../executables/types.js"
 import { getIssue, type PrData, truncate } from "../issue.js"
 
-const QA_FINDING_LABEL = /^(severity:p\d|goal:qa|kody:qa-finding)/i
 const FINDING_BODY_MAX_BYTES = 4000
 
 function resolveFindingNumber(pr: PrData): number | null {
@@ -42,9 +41,6 @@ export const loadLinkedFinding: PreflightScript = async (ctx) => {
   } catch {
     return // fail-soft: the PR may reference a non-existent/closed issue
   }
-
-  const labels = issue.labels ?? []
-  if (!labels.some((l) => QA_FINDING_LABEL.test(l))) return // only QA findings carry repro steps
 
   ctx.data.linkedFinding = `Issue #${issue.number}: ${issue.title}\n\n${truncate(issue.body, FINDING_BODY_MAX_BYTES)}`
 }

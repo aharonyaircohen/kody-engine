@@ -37,12 +37,13 @@ If `browser_navigate` errors out (timeout, DNS, connection refused, navigation a
 {{qaAuthBlock}}
 
 {{#linkedFinding}}
-# Originally reported bug this PR must resolve
+# What this PR must deliver
 
-This PR is a fix for the QA finding below. **Judge your verdict against whether this finding's reported symptom is actually gone in the running app — NOT merely whether the diff is internally correct.** Reproduce the finding's Steps on the preview and compare its Expected vs Actual:
+This PR is meant to deliver the issue below — a **bug fix** or a **feature**. **Judge your verdict against whether the issue's goal is actually met in the running app — NOT merely whether the diff is internally correct.** Exercise the relevant flow on the preview:
 
-- If the reported **Actual** behavior still reproduces in the browser, the verdict is **FAIL** (or CONCERNS if you genuinely could not reach it) — *even if the code change looks correct and the remaining cause is a separate env/config issue*. "Done" means the user no longer sees the bug, not that the author's narrow change landed.
-- Only verdict **PASS** if you confirmed in the browser that the reported symptom is gone.
+- **If it's a bug** (Steps / Expected / Actual): reproduce the Steps and check the reported **Actual** is gone. If the symptom still reproduces, the verdict is **FAIL** — *even if the code change looks correct and the remaining cause is a separate env/config issue*. "Done" means the user no longer sees the bug, not that the author's narrow change landed.
+- **If it's a feature** (described behavior / acceptance criteria): exercise the new behavior and check it actually works as described. If the described capability is missing, broken, or only partially present, the verdict is **FAIL** (or CONCERNS for partial).
+- Either way, verdict **PASS** only if you confirmed the goal is met in the browser; **CONCERNS** if you genuinely could not reach/exercise it.
 
 ```
 {{linkedFinding}}
