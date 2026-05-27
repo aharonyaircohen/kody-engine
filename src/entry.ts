@@ -1,6 +1,6 @@
 import pkg from "../package.json"
 import { runChat } from "./chat-cli.js"
-import { runExecutable } from "./executor.js"
+import { runExecutableChain } from "./executor.js"
 import { runCi } from "./kody-cli.js"
 import { hasExecutable, listExecutables, parseGenericFlags } from "./registry.js"
 import { runStats } from "./stats.js"
@@ -161,7 +161,11 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   const skipConfig = configlessCommands.has(args.executableName ?? "")
 
   try {
-    const result = await runExecutable(args.executableName!, {
+    // runExecutableChain so an explicitly-invoked stage follows its in-process
+    // hand-offs too — notably `goal-scheduler` shells out to
+    // `kody-engine goal-tick`, whose dispatchNextTask hands the task pipeline
+    // off via nextDispatch; without chaining here the goal would never build.
+    const result = await runExecutableChain(args.executableName!, {
       cliArgs: args.cliArgs ?? {},
       cwd,
       skipConfig,

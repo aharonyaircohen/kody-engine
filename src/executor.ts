@@ -477,6 +477,39 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
   }
 }
 
+/**
+ * Hard ceiling on in-process stage hand-offs. Sits above the flow's own
+ * FLOW_HOP_CAP (25 orchestrator↔child ping-pongs ≈ 50 hops, the real limiter
+ * for flows); this only guards against a buggy stage that hands off forever.
+ */
+export const MAX_CHAIN_HOPS = 60
+
+/**
+ * Run an executable and follow any in-process stage hand-offs it requests via
+ * `ctx.output.nextDispatch` (classify → build, a flow orchestrator↔child
+ * ping-pong, goal-tick → the task pipeline). Each stage runs in the SAME
+ * process, inheriting cwd/config/verbosity from `input` and overriding only
+ * the cliArgs. This replaces the old `@kody <next>` comment round-trip, which
+ * deadlocked when Kody comments as a GitHub App (the bot-authored comment is
+ * silently ignored by the follow-up run). Both CLI entry points (the
+ * event-driven `runCi` and the explicit-subcommand path in `entry.ts`) route
+ * through here so hand-offs fire no matter how a stage was invoked.
+ */
+export async function runExecutableChain(profileName: string, input: ExecutorInput): Promise<ExecutorOutput> {
+  let result = await runExecutable(profileName, input)
+  for (let hops = 1; result.nextDispatch && hops <= MAX_CHAIN_HOPS; hops++) {
+    const next = result.nextDispatch
+    process.stdout.write(`→ kody: in-process hand-off → ${next.executable} (hop ${hops}/${MAX_CHAIN_HOPS})\n\n`)
+    result = await runExecutable(next.executable, { ...input, cliArgs: next.cliArgs })
+  }
+  if (result.nextDispatch) {
+    process.stderr.write(
+      `[kody] in-process hand-off cap (${MAX_CHAIN_HOPS}) reached; not running ${result.nextDispatch.executable}\n`,
+    )
+  }
+  return result
+}
+
 function clearStampedLifecycleLabels(profile: Profile, ctx: Context): void {
   const target = (ctx.args.issue ?? ctx.args.pr) as number | undefined
   if (typeof target !== "number" || !Number.isFinite(target)) return
