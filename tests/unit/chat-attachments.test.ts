@@ -37,7 +37,7 @@ describe("chat attachments: prepareAttachments", () => {
     expect(out[0]!.content).toContain("what do you see?")
   })
 
-  it("strips history images to a label without writing files", () => {
+  it("materialises images from earlier turns too, not just the last", () => {
     const turns: ChatTurn[] = [
       {
         role: "user",
@@ -49,9 +49,30 @@ describe("chat attachments: prepareAttachments", () => {
     ]
     const { turns: out, imagePaths } = prepareAttachments(turns, cwd, "s2")
 
-    expect(imagePaths).toHaveLength(0)
+    expect(imagePaths).toHaveLength(1)
+    expect(fs.existsSync(imagePaths[0]!)).toBe(true)
     expect(out[0]!.content).not.toContain("base64,")
-    expect(out[0]!.content).toContain("omitted from history")
+    expect(out[0]!.content).toContain(imagePaths[0]!)
+  })
+
+  it("materialises multiple images in one turn", () => {
+    const turns: ChatTurn[] = [
+      {
+        role: "user",
+        content:
+          `[Image: a.png (1 KB)]\ndata:image/png;base64,${PNG_B64}\n\n` +
+          `[Image: b.png (1 KB)]\ndata:image/png;base64,${PNG_B64}\n\ncompare these`,
+        timestamp: "t0",
+      },
+    ]
+    const { turns: out, imagePaths } = prepareAttachments(turns, cwd, "s4")
+
+    expect(imagePaths).toHaveLength(2)
+    expect(imagePaths.every((p) => fs.existsSync(p))).toBe(true)
+    expect(out[0]!.content).not.toContain("base64,")
+    expect(out[0]!.content).toContain(imagePaths[0]!)
+    expect(out[0]!.content).toContain(imagePaths[1]!)
+    expect(out[0]!.content).toContain("compare these")
   })
 
   it("leaves plain-text turns untouched", () => {

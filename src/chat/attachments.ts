@@ -61,23 +61,20 @@ function attachmentsDir(cwd: string, sessionId: string): string {
 
 /**
  * Rewrite session turns so inlined image attachments are usable by the agent.
- * Only the LAST user turn's images are materialised to disk (that's the turn
- * the user is asking about); earlier turns keep just a short label.
+ * EVERY user turn's images are materialised to disk and referenced by path so
+ * the agent's Read tool can view them — whether the user is asking about the
+ * image they just sent or one from earlier in the conversation. Non-image
+ * files are reduced to a label (the agent can't view them anyway), and all
+ * base64 is removed from the prompt text so it never bloats the budget.
  */
 export function prepareAttachments(turns: ChatTurn[], cwd: string, sessionId: string): PreparedPrompt {
-  const lastUserIdx = (() => {
-    for (let i = turns.length - 1; i >= 0; i--) {
-      if (turns[i]!.role === "user") return i
-    }
-    return -1
-  })()
-
   const imagePaths: string[] = []
   let imageCounter = 0
+  let dirEnsured = false
+  const dir = attachmentsDir(cwd, sessionId)
 
-  const rewritten = turns.map((turn, idx) => {
-    if (!turn.content.includes("base64,")) return turn
-    const isLastUser = idx === lastUserIdx
+  const rewritten = turns.map((turn) => {
+    if (turn.role !== "user" || !turn.content.includes("base64,")) return turn
 
     const newContent = turn.content.replace(
       INLINE_ATTACHMENT_RE,
@@ -85,20 +82,20 @@ export function prepareAttachments(turns: ChatTurn[], cwd: string, sessionId: st
         const name = (label ?? "").trim() || "attachment"
         const isImage = mime.toLowerCase().startsWith("image/")
 
-        if (!isLastUser || !isImage) {
-          // History image, or a non-image file: don't feed base64 as text.
-          return `[${isImage ? "Image" : "File"}: ${name}${isLastUser ? "" : " — omitted from history"}]`
-        }
+        // Non-image file: the agent can't view it — keep a label, drop base64.
+        if (!isImage) return `[File: ${name}]`
 
-        // Current turn's image → write to disk so the Read tool can view it.
+        // Image → write to disk so the Read tool can render it.
         try {
-          const dir = attachmentsDir(cwd, sessionId)
-          fs.mkdirSync(dir, { recursive: true })
+          if (!dirEnsured) {
+            fs.mkdirSync(dir, { recursive: true })
+            dirEnsured = true
+          }
           const filePath = path.join(dir, `${imageCounter}.${extFor(mime)}`)
           fs.writeFileSync(filePath, Buffer.from(data, "base64"))
           imageCounter += 1
           imagePaths.push(filePath)
-          return `[Image "${name}" is attached — saved to ${filePath}. Use the Read tool on that exact path to view it before answering.]`
+          return `[Image "${name}" is attached — saved to ${filePath}. Use the Read tool on that exact path to view it.]`
         } catch {
           // If the write fails, fall back to a label so we at least don't
           // dump base64 into the prompt.
