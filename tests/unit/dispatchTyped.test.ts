@@ -36,13 +36,13 @@ describe("autoDispatchTyped: route variant", () => {
   it("returns kind=route for a recognized @kody <token>", () => {
     process.env.GITHUB_EVENT_NAME = "issue_comment"
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody fix", user: { login: "alice", type: "User" } },
+      comment: { body: "@kody run", user: { login: "alice", type: "User" } },
       issue: { number: 7 },
     })
     const out = autoDispatchTyped()
     expect(out.kind).toBe("route")
     if (out.kind === "route") {
-      expect(out.executable).toBe("fix")
+      expect(out.executable).toBe("run")
       expect(out.target).toBe(7)
     }
   })
@@ -81,12 +81,12 @@ describe("autoDispatchTyped: silent variants (legitimate no-op)", () => {
     // command must be honored, not dropped as "bot chatter".
     process.env.GITHUB_EVENT_NAME = "issue_comment"
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody fix", user: { login: "kodyade[bot]", type: "Bot" } },
+      comment: { body: "@kody run", user: { login: "kodyade[bot]", type: "Bot" } },
       issue: { number: 7, pull_request: {} },
     })
     const out = autoDispatchTyped()
     expect(out.kind).toBe("route")
-    if (out.kind === "route") expect(out.executable).toBe("fix")
+    if (out.kind === "route") expect(out.executable).toBe("run")
   })
 
   it("returns silent for bot chatter without an explicit command", () => {
@@ -108,12 +108,12 @@ describe("autoDispatchTyped: membership gate (access.allowedAssociations)", () =
   it("routes a recognized command from an allowed association (MEMBER)", () => {
     process.env.GITHUB_EVENT_NAME = "issue_comment"
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody fix", user: { login: "alice", type: "User" }, author_association: "MEMBER" },
+      comment: { body: "@kody run", user: { login: "alice", type: "User" }, author_association: "MEMBER" },
       issue: { number: 7 },
     })
     const out = autoDispatchTyped({ config: teamOnly })
     expect(out.kind).toBe("route")
-    if (out.kind === "route") expect(out.executable).toBe("fix")
+    if (out.kind === "route") expect(out.executable).toBe("run")
   })
 
   it("silently ignores a blocked association even when the subcommand is real", () => {
@@ -143,7 +143,7 @@ describe("autoDispatchTyped: membership gate (access.allowedAssociations)", () =
     // legacy paths) therefore route freely — production always loads config.
     process.env.GITHUB_EVENT_NAME = "issue_comment"
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody fix", user: { login: "stranger", type: "User" }, author_association: "NONE" },
+      comment: { body: "@kody run", user: { login: "stranger", type: "User" }, author_association: "NONE" },
       issue: { number: 7 },
     })
     const out = autoDispatchTyped()
@@ -153,7 +153,7 @@ describe("autoDispatchTyped: membership gate (access.allowedAssociations)", () =
   it("reopens to everyone when config sets an explicit empty allowlist", () => {
     process.env.GITHUB_EVENT_NAME = "issue_comment"
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody fix", user: { login: "stranger", type: "User" }, author_association: "NONE" },
+      comment: { body: "@kody run", user: { login: "stranger", type: "User" }, author_association: "NONE" },
       issue: { number: 7 },
     })
     const out = autoDispatchTyped({ config: { access: { allowedAssociations: [] } } as any })
@@ -176,9 +176,9 @@ describe("autoDispatchTyped: unrecognized variant (user-facing feedback needed)"
       expect(out.token).toBe("totally-not-a-real-command")
       expect(out.target).toBe(9)
       expect(out.isPr).toBe(false)
-      expect(out.available).toContain("fix")
-      expect(out.available).toContain("plan")
-      expect(out.available).toContain("review")
+      expect(out.available).toContain("run")
+      expect(out.available).toContain("resolve")
+      expect(out.available).toContain("merge")
       // Watch executables (goal-/job-) are filtered out — they're internal.
       expect(out.available.find((n) => n.startsWith("goal-"))).toBeUndefined()
       expect(out.available.find((n) => n.startsWith("job-"))).toBeUndefined()

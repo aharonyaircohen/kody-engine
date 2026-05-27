@@ -35,38 +35,10 @@ vi.mock("../../src/prompt.js", async () => {
 })
 
 describe("Phase 5 wire-up: preloadContext on container profiles", () => {
-  it("feature is a single-session primitive — no container preloadContext", () => {
-    const dir = path.dirname(new URL(import.meta.url).pathname)
-    const repoRoot = path.resolve(dir, "..", "..")
-    const profile = loadProfile(path.join(repoRoot, "src/executables/feature/profile.json"))
-    // Collapsed: feature loads its own context via the pr-branch task
-    // bundle, so the container-only preloadContext no longer applies.
-    expect(profile.role).toBe("primitive")
-    expect(profile.preloadContext).toBe(false)
-  })
-
-  it("bug is a single-session primitive — no container preloadContext", () => {
-    const dir = path.dirname(new URL(import.meta.url).pathname)
-    const repoRoot = path.resolve(dir, "..", "..")
-    const profile = loadProfile(path.join(repoRoot, "src/executables/bug/profile.json"))
-    // Collapsed: bug loads its own context via the pr-branch task bundle.
-    expect(profile.role).toBe("primitive")
-    expect(profile.preloadContext).toBe(false)
-  })
-
-  it("chore is a single-session primitive — no container preloadContext", () => {
-    const dir = path.dirname(new URL(import.meta.url).pathname)
-    const repoRoot = path.resolve(dir, "..", "..")
-    const profile = loadProfile(path.join(repoRoot, "src/executables/chore/profile.json"))
-    // Collapsed: chore loads its own context via the pr-branch task bundle.
-    expect(profile.role).toBe("primitive")
-    expect(profile.preloadContext).toBe(false)
-  })
-
   it("non-container profiles default to preloadContext: false", () => {
     const dir = path.dirname(new URL(import.meta.url).pathname)
     const repoRoot = path.resolve(dir, "..", "..")
-    const profile = loadProfile(path.join(repoRoot, "src/executables/classify/profile.json"))
+    const profile = loadProfile(path.join(repoRoot, "src/executables/resolve/profile.json"))
     expect(profile.preloadContext).toBe(false)
   })
 })

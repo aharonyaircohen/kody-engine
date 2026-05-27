@@ -91,26 +91,6 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     expect(names.at(-1)).toBe("finalizeTerminal")
   })
 
-  it("fix profile loads cleanly", () => {
-    const profile = loadProfile(path.join(EXE_ROOT, "fix/profile.json"))
-    expect(profile.name).toBe("fix")
-    expect(profile.inputs.map((i) => i.name).sort()).toEqual(["feedback", "pr"])
-    const preScripts = profile.scripts.preflight.map((p) => p.script)
-    expect(preScripts[0]).toBe("syncFlow")
-    expect(preScripts).toContain("setLifecycleLabel")
-    expect(preScripts).toContain("fixFlow")
-  })
-
-  it("fix-ci profile loads cleanly", () => {
-    const profile = loadProfile(path.join(EXE_ROOT, "fix-ci/profile.json"))
-    expect(profile.name).toBe("fix-ci")
-    expect(profile.inputs.map((i) => i.name).sort()).toEqual(["pr", "runId"])
-    const preScripts = profile.scripts.preflight.map((p) => p.script)
-    expect(preScripts[0]).toBe("syncFlow")
-    expect(preScripts).toContain("setLifecycleLabel")
-    expect(preScripts).toContain("fixCiFlow")
-  })
-
   it("resolve profile skips verify + checkCoverageWithRetry (merge op)", () => {
     const profile = loadProfile(path.join(EXE_ROOT, "resolve/profile.json"))
     expect(profile.name).toBe("resolve")
@@ -123,82 +103,4 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     expect(postScripts).not.toContain("checkCoverageWithRetry")
   })
 
-  it("`bug` is a single-session pr-branch primitive (collapsed orchestration)", () => {
-    const profile = loadProfile(path.join(EXE_ROOT, "bug/profile.json"))
-    expect(profile.name).toBe("bug")
-    expect(profile.role).toBe("primitive")
-    expect(profile.children ?? []).toEqual([])
-    // `base` still forwarded by goal-tick's stacked-PR dispatch (optional).
-    expect(profile.inputs.map((i) => i.name)).toEqual(["issue", "base"])
-    // pr-branch lifecycle + verify-loop, same plumbing as `feature`/`run`.
-    expect(profile.lifecycle).toBe("pr-branch")
-    expect(profile.claudeCode.enableVerifyTool).toBe(true)
-    expect(profile.claudeCode.verifyAttempts).toBe(4)
-    // Single-session: no orchestrator to re-trigger, stamps its own terminus.
-    expect(profile.lifecycleConfig?.advance).toBe(false)
-    expect(profile.lifecycleConfig?.finalize).toBe(true)
-    const pre = profile.scripts.preflight.map((p) => p.script)
-    expect(pre).toContain("runFlow")
-    const post = profile.scripts.postflight.map((p) => p.script)
-    expect(post.at(-1)).toBe("finalizeTerminal")
-  })
-
-  it("`spec` sub-orchestrator profile loads cleanly", () => {
-    const profile = loadProfile(path.join(EXE_ROOT, "spec/profile.json"))
-    expect(profile.name).toBe("spec")
-    expect(profile.inputs.map((i) => i.name)).toEqual(["issue"])
-    expect(profile.claudeCode.maxTurns).toBe(0)
-    const pre = profile.scripts.preflight.map((p) => p.script)
-    expect(pre[0]).toBe("setLifecycleLabel")
-    expect(pre.at(-1)).toBe("skipAgent")
-    const post = profile.scripts.postflight
-    expect(post[0]!.script).toBe("startFlow")
-    expect(post.at(-1)!.script).toBe("persistFlowState")
-  })
-
-  it("`feature` is a single-session pr-branch primitive (collapsed orchestration)", () => {
-    const profile = loadProfile(path.join(EXE_ROOT, "feature/profile.json"))
-    expect(profile.name).toBe("feature")
-    expect(profile.role).toBe("primitive")
-    expect(profile.children ?? []).toEqual([])
-    // `base` still forwarded by goal-tick's stacked-PR dispatch (optional).
-    expect(profile.inputs.map((i) => i.name)).toEqual(["issue", "base"])
-    // pr-branch lifecycle + verify-loop, same shape as `run`.
-    expect(profile.lifecycle).toBe("pr-branch")
-    expect(profile.claudeCode.enableVerifyTool).toBe(true)
-    expect(profile.claudeCode.verifyAttempts).toBe(4)
-    // Single-session: no orchestrator to re-trigger, stamps its own terminus.
-    expect(profile.lifecycleConfig?.advance).toBe(false)
-    expect(profile.lifecycleConfig?.finalize).toBe(true)
-    const pre = profile.scripts.preflight.map((p) => p.script)
-    expect(pre).toContain("runFlow")
-    const post = profile.scripts.postflight.map((p) => p.script)
-    expect(post.at(-1)).toBe("finalizeTerminal")
-  })
-
-  it("`chore` is a single-session pr-branch primitive (collapsed orchestration)", () => {
-    const profile = loadProfile(path.join(EXE_ROOT, "chore/profile.json"))
-    expect(profile.name).toBe("chore")
-    expect(profile.role).toBe("primitive")
-    expect(profile.children ?? []).toEqual([])
-    // `base` still forwarded by goal-tick's stacked-PR dispatch (optional).
-    expect(profile.inputs.map((i) => i.name)).toEqual(["issue", "base"])
-    // pr-branch lifecycle + verify-loop, same plumbing as feature/bug/run.
-    expect(profile.lifecycle).toBe("pr-branch")
-    expect(profile.claudeCode.enableVerifyTool).toBe(true)
-    expect(profile.claudeCode.verifyAttempts).toBe(4)
-    // Single-session: no orchestrator to re-trigger, stamps its own terminus.
-    expect(profile.lifecycleConfig?.advance).toBe(false)
-    expect(profile.lifecycleConfig?.finalize).toBe(true)
-    const pre = profile.scripts.preflight.map((p) => p.script)
-    expect(pre).toContain("runFlow")
-    const post = profile.scripts.postflight.map((p) => p.script)
-    expect(post.at(-1)).toBe("finalizeTerminal")
-  })
-
-  it("each sub-orchestrator's startFlow points at the expected entry stage", () => {
-    const profile = loadProfile(path.join(EXE_ROOT, "spec/profile.json"))
-    const startEntry = profile.scripts.postflight.find((p) => p.script === "startFlow")
-    expect(startEntry?.with?.entry).toBe("research")
-  })
 })

@@ -1,9 +1,6 @@
 import * as childProcess from "node:child_process"
-import * as fs from "node:fs"
-import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest"
 import type { Context, Profile } from "../../src/executables/types.js"
-import { loadProfile } from "../../src/profile.js"
 import { classifyByLabel, defaultLabelMap } from "../../src/scripts/classifyByLabel.js"
 import { dispatchClassified } from "../../src/scripts/dispatchClassified.js"
 import { parseClassification, recordClassification } from "../../src/scripts/recordClassification.js"
@@ -219,18 +216,6 @@ describe("dispatchClassified", () => {
     expect(body).toContain("CLASSIFIED_AS_BUG")
   })
 
-  it("forwards --base into the in-process hand-off when goal-tick passes it through", async () => {
-    const c = ctx({
-      args: { issue: 99, base: "feat/leaf" },
-      data: {
-        classification: "chore",
-        action: { type: "CLASSIFIED_AS_CHORE", payload: {}, timestamp: "2026-05-19T00:00:00.000Z" },
-      },
-    })
-    await dispatchClassified(c, profile(), null)
-    expect(c.output.nextDispatch).toEqual({ executable: "chore", cliArgs: { issue: 99, base: "feat/leaf" } })
-  })
-
   it("is a no-op when no classification was recorded", async () => {
     const c = ctx({ data: {} })
     await dispatchClassified(c, profile(), null)
@@ -250,36 +235,5 @@ describe("dispatchClassified", () => {
     await dispatchClassified(c, profile(), null)
     expect(execFileSync.mock.calls.length).toBe(0)
     expect(c.output.nextDispatch).toBeUndefined()
-  })
-})
-
-describe("classify profile loadability", () => {
-  it("loads cleanly with the expected script registry + role", () => {
-    const EXE_ROOT = path.resolve(__dirname, "../../src/executables")
-    const p = loadProfile(path.join(EXE_ROOT, "classify/profile.json"))
-    expect(p.name).toBe("classify")
-    expect(p.role).toBe("primitive")
-    // `base` is forwarded by goal-tick's stacked-PR dispatch (optional).
-    expect(p.inputs.map((i) => i.name)).toEqual(["issue", "base"])
-    const pre = p.scripts.preflight.map((e) => e.script)
-    expect(pre).toContain("classifyByLabel")
-    expect(pre).toContain("loadIssueContext")
-    expect(pre).toContain("composePrompt")
-    const post = p.scripts.postflight.map((e) => e.script)
-    expect(post).toContain("parseAgentResult")
-    expect(post).toContain("recordClassification")
-    expect(post).toContain("dispatchClassified")
-    // saveTaskState is NOT in classify's postflight: dispatchClassified
-    // posts a single combined comment that carries the rendered state
-    // block, so classify emits exactly one issue_comment.created event
-    // (no concurrency race with sibling bookkeeping comments).
-    expect(post).not.toContain("saveTaskState")
-    const idxRecord = post.indexOf("recordClassification")
-    const idxDispatch = post.indexOf("dispatchClassified")
-    expect(idxDispatch).toBeGreaterThan(idxRecord)
-    // Sanity: prompt.md exists and references the label block.
-    const prompt = fs.readFileSync(path.join(p.dir, "prompt.md"), "utf-8")
-    expect(prompt).toContain("{{issue.labelsFormatted}}")
-    expect(prompt).toContain("classification:")
   })
 })

@@ -308,35 +308,6 @@ describe('lifecycle: "pr-branch" — config knobs', () => {
 describe("live profiles using pr-branch lifecycle", () => {
   const repoRoot = path.resolve(__dirname, "../../..")
 
-  it("fix expands with full task context + verify chain + advanceFlow", () => {
-    const profile = loadProfile(path.join(repoRoot, "src/executables/fix/profile.json"))
-    expect(profile.lifecycle).toBe("pr-branch")
-    const pre = profile.scripts.preflight.map((e) => e.script)
-    expect(pre.indexOf("syncFlow")).toBe(0)
-    expect(pre.indexOf("setLifecycleLabel")).toBe(1)
-    expect(pre.indexOf("fixFlow")).toBe(2)
-    expect(pre.indexOf("loadTaskState")).toBe(3)
-    expect(pre.indexOf("composePrompt")).toBe(pre.length - 1)
-    const post = profile.scripts.postflight.map((e) => e.script)
-    expect(post.at(-1)).toBe("finalizeTerminal")
-    expect(post.indexOf("advanceFlow")).toBe(post.length - 2)
-    expect(post).toContain("verifyWithRetry")
-  })
-
-  it("fix-ci expands with ci-fix context + advance:false", () => {
-    const profile = loadProfile(path.join(repoRoot, "src/executables/fix-ci/profile.json"))
-    expect(profile.lifecycle).toBe("pr-branch")
-    const pre = profile.scripts.preflight.map((e) => e.script)
-    expect(pre[0]).toBe("syncFlow")
-    expect(pre).toContain("fixCiFlow")
-    expect(pre).toContain("loadConventions")
-    expect(pre).not.toContain("loadPriorArt")
-    expect(pre).not.toContain("loadMemoryContext")
-    const post = profile.scripts.postflight.map((e) => e.script)
-    expect(post).not.toContain("advanceFlow")
-    expect(post.at(-1)).toBe("finalizeTerminal")
-  })
-
   it("run expands with sync:false, contextExtras=resolveArtifacts, mirrorState:true", () => {
     const profile = loadProfile(path.join(repoRoot, "src/executables/run/profile.json"))
     expect(profile.lifecycle).toBe("pr-branch")

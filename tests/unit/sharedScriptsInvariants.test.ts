@@ -117,12 +117,8 @@ interface SoloEntry {
 }
 
 const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
-  classifyByLabel: { owner: "classify", reason: "Label-driven dispatch is a classify-only concern." },
   commitGoalState: { owner: "goal-tick", reason: "goal-tick is bespoke — see AGENTS.md goal-chain section." },
-  createQaGoal: { owner: "qa-engineer", reason: "QA-only goal scaffolding." },
   deriveGoalPhase: { owner: "goal-tick", reason: "goal-tick state-machine step." },
-  diagMcp: { owner: "research", reason: "MCP diagnostics specific to research mode." },
-  dispatch: { owner: "spec", reason: "spec-only dispatch script." },
   dispatchJobFileTicks: {
     owner: "job-scheduler",
     reason:
@@ -142,27 +138,16 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
     reason:
       "Solo since worker-tick-scripted was deleted (no worker tick-loop in the persona model). job-tick-scripted is the only deterministic ticked-file executable.",
   },
-  dispatchClassified: { owner: "classify", reason: "Post-classification routing — classify-only." },
   dispatchNextTask: { owner: "goal-tick", reason: "goal-tick state-machine step." },
   finalizeGoal: { owner: "goal-tick", reason: "goal-tick terminal step." },
-  fixCiFlow: { owner: "fix-ci", reason: "fix-ci bootstrap. Survives pr-branch migration; pending cross-executable extraction." },
-  fixFlow: { owner: "fix", reason: "fix bootstrap. Survives pr-branch migration; pending cross-executable extraction." },
   handleAbandonedGoal: { owner: "goal-tick", reason: "goal-tick state-machine branch." },
   initFlow: { owner: "init", reason: "init is residual — bootstrap, not a recurring flow." },
   loadGoalState: { owner: "goal-tick", reason: "goal-tick state-machine step." },
   loadWorkerAdhoc: { owner: "worker-ask", reason: "worker-ask-only ad-hoc worker-persona loader." },
   markFlowSuccess: { owner: "revert", reason: "revert is bespoke (no-agent, see AGENTS.md)." },
-  parseReproOutput: { owner: "reproduce", reason: "Reproduce-only output parser." },
-  persistFlowState: { owner: "spec", reason: "Orchestrator-only flow-state persistence. Solo since feature/bug/chore collapsed to single-session primitives — spec is the last multi-stage flow." },
-  postPlanComment: { owner: "plan", reason: "plan-specific posting format." },
-  postResearchComment: { owner: "research", reason: "research-specific posting format." },
-  recordClassification: { owner: "classify", reason: "Classification-only persistence." },
-  requireFeedbackActions: { owner: "fix", reason: "fix-only postflight assertion." },
   requirePlanDeviations: { owner: "run", reason: "run-only plan-deviation check." },
   resolveArtifacts: { owner: "run", reason: "run-only artifact resolver. Slotted via lifecycle contextExtras." },
   resolveFlow: { owner: "resolve", reason: "resolve is bespoke (merge-only, no verify chain — see AGENTS.md)." },
-  resolvePreviewUrl: { owner: "ui-review", reason: "ui-review preview URL resolver." },
-  resolveQaUrl: { owner: "qa-engineer", reason: "qa-engineer URL resolver." },
   revertFlow: { owner: "revert", reason: "revert is bespoke (no-agent)." },
   saveGoalState: { owner: "goal-tick", reason: "goal-tick state-machine step." },
   serveFlow: { owner: "serve", reason: "serve is bespoke (no-agent, long-lived local infra). Same shape as initFlow." },
@@ -182,9 +167,52 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
       "pool-serve is the always-on warm-pool owner: supervises LiteLLM and serves the dashboard's claim API. Single-purpose; no other executable should share it.",
   },
   stageMergeConflicts: { owner: "resolve", reason: "resolve-only postflight." },
-  startFlow: { owner: "spec", reason: "spec-only entry point." },
-  verifyReproFails: { owner: "reproduce", reason: "Reproduce-only assertion." },
-  warmupMcp: { owner: "qa-engineer", reason: "qa-engineer MCP warmup." },
+  // ── Newly solo since the agent task executables (feature/bug/chore/plan/…)
+  //    moved out of the engine to consumer repos. These were previously shared
+  //    with the build-family executables via the lifecycle macro; with those
+  //    gone, the named kept executable is now the only engine user. ──
+  runFlow: { owner: "run", reason: "run bootstrap. Solo since feature/bug/chore collapsed/moved to consumer repos — run is the last engine build primitive." },
+  loadPriorArt: { owner: "run", reason: "run-only prior-art loader. Solo since the build executables moved out of the engine." },
+  verifyWithRetry: { owner: "run", reason: "run-only verify-with-retry gate. Solo since the build executables moved out of the engine." },
+  checkCoverageWithRetry: { owner: "run", reason: "run-only coverage gate. Solo since the build executables moved out of the engine." },
+  abortUnfinishedGitOps: { owner: "run", reason: "run-only git-ops guard. Solo since the build executables moved out of the engine." },
+  finalizeTerminal: { owner: "run", reason: "run-only terminal finalizer. Solo since the build executables moved out of the engine." },
+  mergeFlow: { owner: "merge", reason: "merge is bespoke (no-agent self-gating squash). Solo to merge." },
+  syncFlow: { owner: "sync", reason: "sync is bespoke (no-agent fast-forward). Solo to sync." },
+  finishFlow: { owner: "release", reason: "release finalize step. Solo to release." },
+  promoteQaGoal: { owner: "qa-goal", reason: "qa-goal promotion step. Solo to qa-goal." },
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Consumer-library scripts: the deterministic preflight/postflight logic for
+// the agent task executables that moved OUT of the engine into consumer repos
+// (.kody/executables/<slug>/). The executable's profile.json + prompt.md now
+// live in the consumer repo, but the engine still SHIPS these scripts — the
+// consumer profiles reference them by name and the registry resolves them from
+// the engine's compiled script catalog. So they have zero engine-side profile
+// owner by design, yet must not be deleted.
+//
+// Each maps to the moved executable whose consumer-repo profile calls it.
+// ─────────────────────────────────────────────────────────────────────────────
+const CONSUMER_LIBRARY_SCRIPTS: Record<string, string> = {
+  classifyByLabel: "classify",
+  recordClassification: "classify",
+  dispatchClassified: "classify",
+  parseReproOutput: "reproduce",
+  verifyReproFails: "reproduce",
+  postPlanComment: "plan",
+  postResearchComment: "research",
+  diagMcp: "research",
+  fixFlow: "fix",
+  requireFeedbackActions: "fix",
+  fixCiFlow: "fix-ci",
+  resolvePreviewUrl: "ui-review",
+  resolveQaUrl: "qa-engineer",
+  warmupMcp: "qa-engineer",
+  createQaGoal: "qa-engineer",
+  startFlow: "spec",
+  persistFlowState: "spec",
+  dispatch: "spec",
 }
 
 function buildUsageMap(): Map<string, Set<string>> {
@@ -259,5 +287,38 @@ describe("script catalog: modularity invariant", () => {
       }
     }
     expect(stale).toEqual([])
+  })
+})
+
+describe("consumer-library scripts (kept in engine, owned by moved executables)", () => {
+  it("each consumer-library script still exists in src/scripts/ (moved executables call it by name)", () => {
+    const missing: string[] = []
+    for (const name of Object.keys(CONSUMER_LIBRARY_SCRIPTS)) {
+      if (!fs.existsSync(path.join(SCRIPTS_DIR, `${name}.ts`))) {
+        missing.push(
+          `${name}: listed as consumer-library (for the moved "${CONSUMER_LIBRARY_SCRIPTS[name]}" executable) but src/scripts/${name}.ts is gone — consumer repos that copied that executable will break`,
+        )
+      }
+    }
+    expect(missing).toEqual([])
+  })
+
+  it("no consumer-library script is regained by an engine profile (would no longer be a consumer-only library)", () => {
+    const usage = buildUsageMap()
+    const regained: string[] = []
+    for (const name of Object.keys(CONSUMER_LIBRARY_SCRIPTS)) {
+      const owners = usage.get(name)
+      if (owners && owners.size > 0) {
+        regained.push(
+          `${name}: now referenced by engine profile(s) ${[...owners].sort().join(", ")} — move it to KNOWN_SOLO_SCRIPTS instead of CONSUMER_LIBRARY_SCRIPTS`,
+        )
+      }
+    }
+    expect(regained).toEqual([])
+  })
+
+  it("a script is never in both the solo allowlist and the consumer library", () => {
+    const dupes = Object.keys(CONSUMER_LIBRARY_SCRIPTS).filter((n) => KNOWN_SOLO_SCRIPTS[n])
+    expect(dupes).toEqual([])
   })
 })

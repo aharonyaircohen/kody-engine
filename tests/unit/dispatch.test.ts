@@ -99,18 +99,6 @@ describe("dispatch: issue_comment on issue", () => {
     process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
   })
 
-  it("routes '@kody plan' to plan executable", () => {
-    process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody plan" },
-      issue: { number: 7 },
-    })
-    expect(autoDispatch()).toEqual({
-      executable: "plan",
-      cliArgs: { issue: 7 },
-      target: 7,
-    })
-  })
-
   it("routes '@kody run' to run executable", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody run" },
@@ -132,46 +120,6 @@ describe("dispatch: issue_comment on issue", () => {
       executable: "run",
       cliArgs: { issue: 15 },
       target: 15,
-    })
-  })
-
-  it("routes '@kody bug' to the bug sub-orchestrator", () => {
-    process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody bug" },
-      issue: { number: 9 },
-    })
-    expect(autoDispatch()).toEqual({
-      executable: "bug",
-      cliArgs: { issue: 9 },
-      target: 9,
-    })
-  })
-
-  it("legacy '@kody orchestrate' maps to the `bug` sub-orchestrator", () => {
-    process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody orchestrate" },
-      issue: { number: 10 },
-    })
-    expect(autoDispatch()?.executable).toBe("bug")
-  })
-
-  it("legacy '@kody orchestrator' (alias) also maps to `bug`", () => {
-    process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody orchestrator" },
-      issue: { number: 11 },
-    })
-    expect(autoDispatch()?.executable).toBe("bug")
-  })
-
-  it("routes '@kody feature' via generic pass-through", () => {
-    process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody feature" },
-      issue: { number: 21 },
-    })
-    expect(autoDispatch()).toEqual({
-      executable: "feature",
-      cliArgs: { issue: 21 },
-      target: 21,
     })
   })
 
@@ -207,10 +155,10 @@ describe("dispatch: issue_comment on issue", () => {
     })
     expect(
       autoDispatch({
-        config: { defaultExecutable: "classify" } as any,
+        config: { defaultExecutable: "run" } as any,
       }),
     ).toEqual({
-      executable: "classify",
+      executable: "run",
       cliArgs: { issue: 42, base: "3293-stacked-test-1" },
       target: 42,
     })
@@ -280,12 +228,12 @@ describe("dispatch: issue_comment on issue", () => {
     expect(autoDispatch()).toBeNull()
   })
 
-  it("ignores case in '@KoDy PLAN'", () => {
+  it("ignores case in '@KoDy RUN'", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@KoDy PLAN" },
+      comment: { body: "@KoDy RUN" },
       issue: { number: 14 },
     })
-    expect(autoDispatch()?.executable).toBe("plan")
+    expect(autoDispatch()?.executable).toBe("run")
   })
 })
 
@@ -299,18 +247,6 @@ describe("dispatch: issue_comment on PR", () => {
   afterEach(() => {
     process.env.GITHUB_EVENT_NAME = prev.EVENT_NAME
     process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
-  })
-
-  it("'@kody fix-ci' on PR → fix-ci", () => {
-    process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody fix-ci" },
-      issue: { number: 20, pull_request: {} },
-    })
-    expect(autoDispatch()).toEqual({
-      executable: "fix-ci",
-      cliArgs: { pr: 20 },
-      target: 20,
-    })
   })
 
   it("'@kody resolve' on PR → resolve", () => {
@@ -349,40 +285,6 @@ describe("dispatch: issue_comment on PR", () => {
     })
   })
 
-  it("'@kody review' on PR → review", () => {
-    process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody review" },
-      issue: { number: 24, pull_request: {} },
-    })
-    expect(autoDispatch()).toEqual({
-      executable: "review",
-      cliArgs: { pr: 24 },
-      target: 24,
-    })
-  })
-
-  it("'@kody ui-review' on PR → ui-review (not review)", () => {
-    process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody ui-review" },
-      issue: { number: 77, pull_request: {} },
-    })
-    expect(autoDispatch()).toEqual({
-      executable: "ui-review",
-      cliArgs: { pr: 77 },
-      target: 77,
-    })
-  })
-
-  it("'@kody ui-review please check login' on PR → ui-review (prefix win, feedback ignored)", () => {
-    process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody ui-review please check login" },
-      issue: { number: 78, pull_request: {} },
-    })
-    const r = autoDispatch()
-    expect(r?.executable).toBe("ui-review")
-    expect(r?.cliArgs.pr).toBe(78)
-  })
-
   it("'@kody sync' on PR → sync", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody sync" },
@@ -393,17 +295,6 @@ describe("dispatch: issue_comment on PR", () => {
       cliArgs: { pr: 25 },
       target: 25,
     })
-  })
-
-  it("'@kody please change foo' on PR → fix with feedback", () => {
-    process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody please change foo" },
-      issue: { number: 22, pull_request: {} },
-    })
-    const r = autoDispatch()
-    expect(r?.executable).toBe("fix")
-    expect(r?.cliArgs.pr).toBe(22)
-    expect(r?.cliArgs.feedback).toContain("change foo")
   })
 
   it("bare '@kody' on PR → fix without feedback", () => {
@@ -418,26 +309,6 @@ describe("dispatch: issue_comment on PR", () => {
     })
   })
 
-  it("bare '@kody fix' on PR → fix WITHOUT inline feedback (reads PR review)", () => {
-    process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody fix" },
-      issue: { number: 24, pull_request: {} },
-    })
-    const r = autoDispatch()
-    expect(r?.executable).toBe("fix")
-    expect(r?.cliArgs.pr).toBe(24)
-    expect(r?.cliArgs.feedback).toBeUndefined()
-  })
-
-  it("'@kody fix: address instructor.name' on PR → fix with inline feedback", () => {
-    process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody fix: address the instructor.name concern" },
-      issue: { number: 25, pull_request: {} },
-    })
-    const r = autoDispatch()
-    expect(r?.executable).toBe("fix")
-    expect(r?.cliArgs.feedback).toBe("address the instructor.name concern")
-  })
 })
 
 describe("dispatch: release orchestrator + sibling primitives", () => {

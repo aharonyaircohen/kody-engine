@@ -200,7 +200,7 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     defaultExecutable:
       typeof raw.defaultExecutable === "string" && raw.defaultExecutable.length > 0
         ? raw.defaultExecutable
-        : "classify",
+        : "run",
     defaultPrExecutable:
       typeof raw.defaultPrExecutable === "string" && raw.defaultPrExecutable.length > 0
         ? raw.defaultPrExecutable
