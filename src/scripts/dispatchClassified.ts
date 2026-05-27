@@ -22,7 +22,7 @@
 import { execFileSync } from "node:child_process"
 import type { PostflightScript } from "../executables/types.js"
 import { getProfileInputs } from "../registry.js"
-import { type Action, emptyState, reduce, renderStateComment, type TaskState } from "../state.js"
+import { type Action, emptyState, findStateComment, reduce, renderStateComment, type TaskState } from "../state.js"
 
 const API_TIMEOUT_MS = 30_000
 const VALID_CLASSES = new Set(["feature", "bug", "spec", "chore"])
@@ -53,13 +53,29 @@ export const dispatchClassified: PostflightScript = async (ctx) => {
   // Post the audit + state comment WITHOUT an `@kody` line — it's a trail and
   // a state anchor, not a trigger. Best-effort: if it fails, the next stage
   // still runs in-process and will create its own state comment.
+  //
+  // Upsert, don't blindly create: a re-classify (e.g. a second `@kody` on an
+  // already-running issue) would otherwise post a SECOND state comment. The
+  // canonical one keeps advancing to `shipped` while the duplicate is orphaned
+  // at `running`, and the dashboard would flap the card between done/running.
+  // So if a state comment already exists, edit it in place instead.
   const body = `${auditLine}\n\n${stateBody}`
   try {
-    execFileSync("gh", ["issue", "comment", String(issueNumber), "--body", body], {
-      cwd: ctx.cwd,
-      timeout: API_TIMEOUT_MS,
-      stdio: ["ignore", "pipe", "pipe"],
-    })
+    const existing = findStateComment("issue", issueNumber, ctx.cwd)
+    if (existing) {
+      execFileSync("gh", ["api", `repos/{owner}/{repo}/issues/comments/${existing.id}`, "-X", "PATCH", "-F", "body=@-"], {
+        cwd: ctx.cwd,
+        timeout: API_TIMEOUT_MS,
+        input: body,
+        stdio: ["pipe", "pipe", "pipe"],
+      })
+    } else {
+      execFileSync("gh", ["issue", "comment", String(issueNumber), "--body", body], {
+        cwd: ctx.cwd,
+        timeout: API_TIMEOUT_MS,
+        stdio: ["ignore", "pipe", "pipe"],
+      })
+    }
   } catch (err) {
     process.stderr.write(
       `[kody dispatchClassified] failed to post state comment for #${issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
