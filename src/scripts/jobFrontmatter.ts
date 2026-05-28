@@ -76,6 +76,21 @@ export interface JobFrontmatter {
    * hardcoded handles. Absent or empty → undefined.
    */
   mentions?: string[]
+  /**
+   * Locked-toolbox mode (NEW). When set, the LLM agent receives ONLY these
+   * tool names (plus `submit_state`) — `Bash`, `Read`, and `gh` are revoked.
+   * The duty body becomes pure intent ("if behind, sync_pr"); the engine
+   * exposes typed primitives via the `kody-duty` in-process MCP server.
+   *
+   * Authored as a comma-separated list on one line:
+   *   `tools: list_prs_to_repair, sync_pr, fix_ci_pr, resolve_pr, recommend_to_operator, read_ledger`
+   *
+   * Absent → legacy Bash/gh mode (existing duties keep working). Present and
+   * non-empty → locked mode: the LLM can only call duty-MCP tools by name.
+   *
+   * See `src/dutyMcp.ts` for the registered tool palette.
+   */
+  tools?: string[]
 }
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
@@ -152,6 +167,14 @@ function parseFlatYaml(text: string): JobFrontmatter {
         .map((s) => s.trim().replace(/^@/, ""))
         .filter(Boolean)
       if (logins.length > 0) out.mentions = logins
+    } else if (key === "tools") {
+      // Comma-separated list, same shape as `mentions:`. Names map to
+      // mcp__kody-duty__<name> at agent-config time.
+      const names = value
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+      if (names.length > 0) out.tools = names
     }
   }
   return out

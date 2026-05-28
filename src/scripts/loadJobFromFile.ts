@@ -29,11 +29,14 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { DUTY_MCP_TOOL_NAMES } from "../dutyMcp.js"
 import type { PreflightScript } from "../executables/types.js"
 import { resolveBackend } from "./jobState/index.js"
 import { splitFrontmatter } from "./jobFrontmatter.js"
 
-export const loadJobFromFile: PreflightScript = async (ctx, _profile, args) => {
+const DUTY_TOOL_PALETTE: ReadonlySet<string> = new Set(DUTY_MCP_TOOL_NAMES)
+
+export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
   const jobsDir = String(args?.jobsDir ?? ".kody/duties")
   const workersDir = String(args?.workersDir ?? ".kody/staff")
   const slugArg = String(args?.slugArg ?? "job")
@@ -96,6 +99,37 @@ export const loadJobFromFile: PreflightScript = async (ctx, _profile, args) => {
   ctx.data.workerTitle = workerTitle
   ctx.data.workerPersona = workerPersona
   ctx.data.mentions = mentions
+
+  // Locked-toolbox mode (`tools:` frontmatter). When declared, the duty body
+  // is pure intent — the LLM picks tools by name from the kody-duty palette
+  // and never sees Bash/Read/gh. This closes the long-running bug class where
+  // duty scripts post `@kody <verb>` comments the engine then silently drops.
+  //
+  // Mutate the profile in place so the executor's runAgent invocation picks up
+  // the locked allowedTools + mcpServer flag without needing a side-channel.
+  // Backward-compat: duties without `tools:` keep their legacy Bash/gh palette.
+  const declaredTools = frontmatter.tools ?? []
+  if (declaredTools.length > 0) {
+    const unknown = declaredTools.filter((name) => !DUTY_TOOL_PALETTE.has(name))
+    if (unknown.length > 0) {
+      throw new Error(
+        `loadJobFromFile: duty '${slug}' declared tools not in the kody-duty palette: ${unknown.join(", ")}. ` +
+          `Available: ${[...DUTY_MCP_TOOL_NAMES].join(", ")}`,
+      )
+    }
+    // Revoke shell + Read; keep submit_state (state persistence). The LLM can
+    // now only call mcp__kody-duty__<tool> + mcp__kody-submit__submit_state.
+    const mcpToolNames = declaredTools.map((name) => `mcp__kody-duty__${name}`)
+    profile.claudeCode.tools = [...mcpToolNames, "mcp__kody-submit__submit_state"]
+    ctx.data.dutyTools = declaredTools
+    ctx.data.dutyOperatorMention = mentions
+    // Switch the prompt template: composePrompt picks `prompts/<mode>.md` when
+    // ctx.data.promptTemplate is set. The locked template assumes no shell —
+    // its instructions reference the duty MCP tools by name, not `gh`.
+    ctx.data.promptTemplate = "prompts/locked.md"
+    // Render the tool palette as a tight, bulletable list for the prompt.
+    ctx.data.dutyToolsList = declaredTools.map((name) => `- \`${name}\``).join("\n")
+  }
 }
 
 interface ParsedJob {

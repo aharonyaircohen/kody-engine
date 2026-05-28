@@ -260,6 +260,20 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       cacheable: profile.claudeCode.cacheable,
       enableVerifyTool: profile.claudeCode.enableVerifyTool,
       enableSubmitTool: profile.claudeCode.enableSubmitTool,
+      // Locked-toolbox duty mode: `loadJobFromFile` flips `ctx.data.dutyTools`
+      // when a duty declares `tools:` frontmatter. The executor doesn't need
+      // to know the palette — it just forwards the flag so agent.ts can spin
+      // up the in-process `kody-duty` MCP server with the right context.
+      enableDutyTool: Array.isArray(ctx.data.dutyTools) && ctx.data.dutyTools.length > 0,
+      dutyOperatorMention:
+        typeof ctx.data.dutyOperatorMention === "string" ? (ctx.data.dutyOperatorMention as string) : undefined,
+      // owner/repo from kody.config.json; envelope falls back to GITHUB_REPOSITORY
+      // for tester repos that don't set config.github (the file isn't always
+      // checked in). Either way, dutyMcp needs "owner/name" to hit the compare API.
+      dutyRepoSlug:
+        config.github?.owner && config.github?.repo
+          ? `${config.github.owner}/${config.github.repo}`
+          : process.env.GITHUB_REPOSITORY?.trim() || undefined,
       verifyToolMaxAttempts: profile.claudeCode.verifyAttempts ?? null,
       verifyConfig: profile.claudeCode.enableVerifyTool ? config : undefined,
       executableName: profileName,

@@ -134,6 +134,28 @@ export interface AgentOptions {
    */
   enableSubmitTool?: boolean
   /**
+   * Opt-in (job-tick locked-toolbox mode): build an in-process MCP server
+   * exposing typed duty primitives (list_prs_to_repair, sync_pr, fix_ci_pr,
+   * resolve_pr, recommend_to_operator, read_ledger). Triggered by a duty
+   * declaring `tools:` frontmatter — `loadJobFromFile` then revokes Bash/Read
+   * and locks `allowedTools` to only the duty's declared MCP tools (plus
+   * `submit_state`). Default false.
+   */
+  enableDutyTool?: boolean
+  /**
+   * Operator @-mention prefix the duty MCP uses for `recommend_to_operator`
+   * (e.g. "@aguyaharonyair"). Comes from the duty's `mentions:` frontmatter.
+   * Empty string when the duty declared no operator (comment is still posted,
+   * just without a mention). Ignored when `enableDutyTool` is false.
+   */
+  dutyOperatorMention?: string
+  /**
+   * Repo slug "owner/name" the duty MCP uses for `gh api compare/...` calls.
+   * Falls back from kody.config.json → GITHUB_REPOSITORY. Ignored when
+   * `enableDutyTool` is false.
+   */
+  dutyRepoSlug?: string
+  /**
    * Opt-in (chat/Brain): build an in-process MCP server exposing a
    * `fetch_repo` tool so the agent can clone and work on repos other than the
    * one it was handed. Requires `reposRoot`; grants the agent read access to
@@ -356,6 +378,20 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         const submitHandle = buildSubmitMcpServer()
         getSubmitted = submitHandle.getSubmitted
         mcpEntries.push(["kody-submit", submitHandle.server as unknown as Record<string, unknown>])
+      }
+      if (opts.enableDutyTool) {
+        // Lazy import — only duties in locked-toolbox mode pay for this.
+        const { buildDutyMcpServer } = await import("./dutyMcp.js")
+        if (!opts.dutyRepoSlug) {
+          throw new Error(
+            "enableDutyTool requires dutyRepoSlug (owner/name) — set kody.config.json github.{owner,repo} or GITHUB_REPOSITORY env var",
+          )
+        }
+        const dutyHandle = buildDutyMcpServer({
+          repoSlug: opts.dutyRepoSlug,
+          operatorMention: opts.dutyOperatorMention ?? "",
+        })
+        mcpEntries.push(["kody-duty", dutyHandle.server as unknown as Record<string, unknown>])
       }
       if (opts.enableFetchRepoTool && opts.reposRoot) {
         // Lazy import — keeps the SDK MCP machinery off the cold path for the
