@@ -16,6 +16,7 @@ import { commitGoalState } from "./commitGoalState.js"
 import { composePrompt } from "./composePrompt.js"
 import { createQaGoal } from "./createQaGoal.js"
 import { deriveGoalPhase } from "./deriveGoalPhase.js"
+import { deriveQaScopeFromIssue } from "./deriveQaScopeFromIssue.js"
 import { diagMcp } from "./diagMcp.js"
 import { discoverQaContext } from "./discoverQaContext.js"
 import { dispatch } from "./dispatch.js"
@@ -120,6 +121,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   buildSyntheticPlugin,
   resolveArtifacts,
   discoverQaContext,
+  deriveQaScopeFromIssue,
   resolvePreviewUrl,
   resolveQaUrl,
   promoteQaGoal,

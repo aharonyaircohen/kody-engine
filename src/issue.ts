@@ -73,7 +73,62 @@ export function stripKodyMentions(body: string): string {
   return body.replace(/(@)(kody)/gi, "$1​$2")
 }
 
+/**
+ * Detect a bot self-dispatch attempt: a comment whose body STARTS with
+ * `@kody <slug>` (the dispatch grammar). Returns the slug if matched, null
+ * otherwise.
+ *
+ * Why we look at the start only: chat replies, status pings, and prose can
+ * mention `@kody` mid-sentence — those are fine. The dispatch contract is
+ * "first word is @kody, second word is an executable" — the same shape a
+ * human types to trigger a stage. When the BOT writes that shape, it's
+ * either (a) a relic of the old comment-based self-dispatch (now banned —
+ * use `runExecutableChain` or `dispatchExecutable`) or (b) a future helper
+ * that bypassed the typed dispatch API. Either way, fail loudly so the
+ * regression is visible instead of silently filtered downstream by the
+ * bot-author gate in `dispatch.ts`.
+ */
+export function detectBotDispatchShape(body: string): string | null {
+  const trimmed = body.replace(/^\s+/, "")
+  // Match `@kody <slug>` where slug starts with a letter and is kebab-safe.
+  // Stop at whitespace/end so we don't mis-match prose continuations.
+  const m = trimmed.match(/^@kody\s+([a-z][a-z0-9-]*)\b/i)
+  return m ? m[1]!.toLowerCase() : null
+}
+
+export class BotDispatchCommentError extends Error {
+  constructor(slug: string) {
+    super(
+      `bot self-dispatch via @kody comments is banned. ` +
+        `Refusing to post "@kody ${slug} …" — use runExecutableChain (same-run) ` +
+        `or dispatchExecutable (cross-run) instead. ` +
+        `See docs/duty-dispatch.md for the contract.`,
+    )
+    this.name = "BotDispatchCommentError"
+  }
+}
+
+/**
+ * True iff the current process is running under a bot identity (App
+ * installation token or kody-bot user). Used by `postIssueComment` /
+ * `postPrReviewComment` to scope the dispatch-shape ban: a human (PAT)
+ * driving the dashboard chat is unaffected, only bot writes are blocked.
+ */
+function isRunningAsBot(): boolean {
+  // GitHub Actions sets these when running under the App. The dashboard
+  // server-side does not set GITHUB_ACTIONS, so chat-via-PAT bypasses.
+  if (process.env.GITHUB_ACTIONS !== "true") return false
+  const actor = (process.env.GITHUB_ACTOR ?? "").toLowerCase()
+  if (actor.endsWith("[bot]") || actor === "kody-bot" || actor === "kodyade") return true
+  // KODY_APP_ID is only present when kody.yml minted an App token.
+  return !!process.env.KODY_APP_ID
+}
+
 export function postIssueComment(issueNumber: number, body: string, cwd?: string): void {
+  if (isRunningAsBot()) {
+    const slug = detectBotDispatchShape(body)
+    if (slug) throw new BotDispatchCommentError(slug)
+  }
   try {
     gh(["issue", "comment", String(issueNumber), "--body-file", "-"], { input: stripKodyMentions(body), cwd })
   } catch (err) {
@@ -254,6 +309,10 @@ export function getPrLatestReviewBody(prNumber: number, cwd?: string): string {
 }
 
 export function postPrReviewComment(prNumber: number, body: string, cwd?: string): void {
+  if (isRunningAsBot()) {
+    const slug = detectBotDispatchShape(body)
+    if (slug) throw new BotDispatchCommentError(slug)
+  }
   try {
     gh(["pr", "comment", String(prNumber), "--body-file", "-"], { input: stripKodyMentions(body), cwd })
   } catch (err) {
