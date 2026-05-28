@@ -248,7 +248,12 @@ const BASH_WRITE_VERB =
 function toolMayMutate(name: string | undefined, input: Record<string, unknown> | undefined): boolean {
   if (!name) return false
   if (MUTATING_FILE_TOOLS.has(name)) return true
-  if (name.startsWith("mcp__kody-submit__")) return true
+  // submit_state is an in-process MCP that just captures a closure variable
+  // — no GitHub write, no commit, no external side effect. Replay is safe
+  // (last call wins). Treating it as mutating used to wedge approval-gate:
+  // its first turn submits state, the LiteLLM proxy then crashes on the
+  // heavy CTO request, and the connection-retry path was blocked because
+  // submit_state had "mutated" the run.
   if (name === "Bash") return BASH_WRITE_VERB.test(String(input?.command ?? ""))
   return false
 }
