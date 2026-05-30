@@ -87,6 +87,8 @@ A **job** is a stateful, bounded goal expressed as a labeled GitHub issue (`kody
 
 `job-scheduler` wakes on cron (default `*/5 * * * *`) or empty `workflow_dispatch`, finds every open `kody:job` issue, and calls `job-tick` once per issue. The tick agent reads the issue body (human-owned prose) and a dedicated state comment (bot-owned JSON), decides the next step, and emits a fenced `kody-job-next-state` block the postflight persists. Children are spawned via `gh workflow run kody.yml` (not `@kody` comments — the default `GITHUB_TOKEN` can dispatch workflows but can't post auto-triggering comments).
 
+**Locked-toolbox jobs** (v0.4.175). A job file can add `tools: [...]` to its frontmatter to run the tick in a *locked toolbox*: the agent gets only those named tools (as `mcp__kody-duty__<name>`) plus `submit_state` — `Bash` and `Read` are revoked entirely. This removes the escape hatch where a job posted a raw `@kody <verb>` comment that the webhook silently drops for bot authors, so the job looked done while its verb never ran. The in-process kody-duty MCP server exposes high-level intents instead — `list_prs_to_repair`, `sync_pr` / `fix_ci_pr` / `resolve_pr` (each dispatches the matching `workflow_dispatch`, never a comment), `recommend_to_operator`, and `read_ledger`. Jobs without `tools:` keep the full Bash/gh toolbox unchanged.
+
 ### `ui-review`
 
 PR-bound UI review. Drives the running preview deployment via the Playwright MCP server alongside the usual diff review, posts one structured review comment.
