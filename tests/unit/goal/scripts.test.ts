@@ -30,8 +30,16 @@ vi.mock("../../../src/goal/operations.js", async () => {
   }
 })
 
+import { gh } from "../../../src/issue.js"
 import * as ops from "../../../src/goal/operations.js"
-import { writeGoalState } from "../../../src/goal/state.js"
+import { type GoalState, serializeGoalState } from "../../../src/goal/state.js"
+
+const ghMock = gh as unknown as ReturnType<typeof vi.fn>
+
+/** Encode a GoalState as a GitHub Contents-API GET response (what fetchGoalState parses). */
+function contentsResponse(state: GoalState): string {
+  return JSON.stringify({ content: Buffer.from(serializeGoalState(state), "utf-8").toString("base64") })
+}
 import { deriveGoalPhase } from "../../../src/scripts/deriveGoalPhase.js"
 import { dispatchNextTask } from "../../../src/scripts/dispatchNextTask.js"
 import { finalizeGoal } from "../../../src/scripts/finalizeGoal.js"
@@ -85,8 +93,12 @@ describe("loadGoalState", () => {
     expect(ctx.output.reason).toMatch(/invalid goal id/)
   })
 
-  it("populates ctx.data.goal from a valid state file (extras round-trip)", async () => {
-    writeGoalState(tmp, "g", { state: "active", lastDispatchedIssue: 41, extra: { title: "t" } })
+  it("populates ctx.data.goal from kody-state (extras round-trip)", async () => {
+    // Goal state now lives on the kody-state branch; loadGoalState reads it via
+    // the Contents API (gh), not the working tree.
+    ghMock.mockReturnValueOnce(
+      contentsResponse({ state: "active", lastDispatchedIssue: 41, extra: { title: "t" } }),
+    )
     const ctx = fakeCtx({ args: { goal: "g" }, cwd: tmp })
     await loadGoalState(ctx, fakeProfile())
     const goal = ctx.data.goal as GoalCtx
@@ -128,10 +140,13 @@ describe("saveGoalState", () => {
       },
     })
     await saveGoalState(ctx, fakeProfile())
-    const written = JSON.parse(fs.readFileSync(path.join(tmp, ".kody/goals/g/state.json"), "utf-8"))
+    // saveGoalState no longer writes a file — it stashes the persisted form for
+    // commitGoalState (postflight) to push to kody-state.
+    const written = ctx.data.goalPersistState as GoalState
     expect(written.state).toBe("active")
     expect(written.lastDispatchedIssue).toBe(17)
-    expect(written.goalIssueNumber).toBe(99) // legacy field preserved via extra
+    expect(written.extra.goalIssueNumber).toBe(99) // legacy field preserved via extra
+    expect(ctx.data.goalPersistChanged).toBe(true)
   })
 })
 

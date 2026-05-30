@@ -297,18 +297,29 @@ describe("dispatch: issue_comment on PR", () => {
     })
   })
 
-  it("bare '@kody' on PR → fix without feedback", () => {
+  it("bare '@kody' on PR → null (no bundled PR default ships)", () => {
+    // The engine ships no bare-PR default executable, so an unconfigured PR
+    // comment resolves to no action rather than a phantom `fix` that would
+    // crash the executor at profile-load. A consumer can still configure
+    // `defaultPrExecutable` to route bare PR comments.
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody" },
       issue: { number: 23, pull_request: {} },
     })
-    expect(autoDispatch()).toEqual({
-      executable: "fix",
+    expect(autoDispatch()).toBeNull()
+  })
+
+  it("routes bare '@kody' on PR to a consumer-configured defaultPrExecutable", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody" },
+      issue: { number: 23, pull_request: {} },
+    })
+    expect(autoDispatch({ config: { defaultPrExecutable: "resolve" } as never })).toEqual({
+      executable: "resolve",
       cliArgs: { pr: 23 },
       target: 23,
     })
   })
-
 })
 
 describe("dispatch: release orchestrator + sibling primitives", () => {
@@ -523,6 +534,10 @@ describe("dispatch: alias misconfig surfacing", () => {
       comment: { body: "@kody please change foo", user: { login: "alice", type: "User" } },
     })
     autoDispatch()
-    expect(stderrSpy.mock.calls.length).toBe(0)
+    // Politeness words must never surface the alias/typo misconfig warning.
+    // (A bare PR comment with no configured PR default may still emit the
+    // benign "no executable resolved" breadcrumb — that's expected, not a typo.)
+    const warnings = stderrSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n")
+    expect(warnings).not.toMatch(/has no matching executable/)
   })
 })

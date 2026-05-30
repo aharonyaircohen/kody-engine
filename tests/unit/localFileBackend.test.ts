@@ -142,6 +142,22 @@ describe("LocalFileBackend", () => {
       )
       expect(wrote).toBe(true)
     })
+
+    it("writes atomically and leaves no temp file behind", () => {
+      // Atomic write = temp file + rename. After a successful save the dir holds
+      // only the final state file; no orphaned `.tmp` (a crash mid-write would
+      // otherwise leave a truncated file that wedges the next load).
+      const b = new LocalFileBackend({ cwd, jobsDir: ".kody/jobs", owner: "o", repo: "r" })
+      b.save(
+        { path: ".kody/jobs/auto-sync.state.json", handle: null, state: envelope({ rev: 0 }), created: true },
+        envelope({ rev: 1 }),
+      )
+      const dir = path.join(cwd, ".kody/jobs")
+      const entries = fs.readdirSync(dir)
+      expect(entries).toEqual(["auto-sync.state.json"])
+      // Final file is complete, parseable JSON.
+      expect(() => JSON.parse(fs.readFileSync(path.join(dir, "auto-sync.state.json"), "utf-8"))).not.toThrow()
+    })
   })
 
   describe("hydrate", () => {

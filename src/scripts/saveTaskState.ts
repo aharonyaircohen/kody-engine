@@ -19,9 +19,9 @@ export const saveTaskState: PostflightScript = async (ctx, profile) => {
   const executable = profile.name
   const action: Action = (ctx.data.action as Action | undefined) ?? synthesizeAction(ctx)
 
-  if (ctx.output.prUrl && !state.core.prUrl) state.core.prUrl = ctx.output.prUrl
-  if (typeof ctx.data.runUrl === "string") state.core.runUrl = ctx.data.runUrl as string
-
+  // Don't mutate the loaded prior state — `reduce` treats it as immutable input
+  // and other postflights may hold the same reference. The prUrl/runUrl carry
+  // is applied to `next` below, which is the only thing we persist.
   const next = reduce(state, executable, action, profile.phase)
   if (ctx.output.prUrl) next.core.prUrl = ctx.output.prUrl
   if (typeof ctx.data.runUrl === "string") next.core.runUrl = ctx.data.runUrl as string

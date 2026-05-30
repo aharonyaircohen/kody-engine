@@ -103,4 +103,21 @@ describe("saveTaskState: persistence", () => {
     const next = writeTaskStateSpy.mock.calls[0]![2] as TaskState
     expect(next.core.runUrl).toBe("https://github.com/x/y/actions/runs/1")
   })
+
+  it("does not mutate the loaded prior state when carrying prUrl/runUrl", async () => {
+    // The prUrl/runUrl carry must land on `next` only — never on the loaded
+    // prior state, which `reduce` treats as immutable input and other
+    // postflights may still reference.
+    const prior = emptyState()
+    const ctx = makeCtx({
+      data: { commentTargetType: "issue", commentTargetNumber: 42, taskState: prior, runUrl: "https://run/1" },
+      output: { exitCode: 0, prUrl: "https://pr/1" },
+    })
+    await saveTaskState(ctx, profile, null)
+    expect(prior.core.prUrl).toBeUndefined()
+    expect(prior.core.runUrl).toBeUndefined()
+    const next = writeTaskStateSpy.mock.calls[0]![2] as TaskState
+    expect(next.core.prUrl).toBe("https://pr/1")
+    expect(next.core.runUrl).toBe("https://run/1")
+  })
 })

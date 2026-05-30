@@ -3,7 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { ChatEvent } from "../../src/chat/events.js"
-import { eventsFilePath, FileSink, HttpSink, makeRunId, TeeSink, withSessionParam } from "../../src/chat/events.js"
+import { eventsFilePath, FileSink, HttpSink, makeRunId, redactUrl, TeeSink, withSessionParam } from "../../src/chat/events.js"
 
 const EV: ChatEvent = {
   event: "chat.message",
@@ -61,6 +61,19 @@ describe("chat/events", () => {
     expect(warn).toHaveBeenCalledOnce()
   })
 
+  it("HttpSink redacts the inline token from its warning log", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("boom", { status: 500 })),
+    )
+    const warn = vi.fn()
+    const sink = new HttpSink("https://dash/ingest?token=supersecret", "s1", { warn })
+    await sink.emit(EV)
+    const msg = warn.mock.calls[0]![0] as string
+    expect(msg).not.toContain("supersecret")
+    expect(msg).toContain("token=***")
+  })
+
   it("HttpSink swallows network errors without throwing", async () => {
     vi.stubGlobal(
       "fetch",
@@ -104,5 +117,11 @@ describe("chat/events", () => {
 
   it("eventsFilePath lives under .kody/events", () => {
     expect(eventsFilePath("/repo", "abc")).toBe(path.join("/repo", ".kody", "events", "abc.jsonl"))
+  })
+
+  it("redactUrl masks the token but keeps the rest of the URL", () => {
+    expect(redactUrl("https://d/ingest?token=secret&sessionId=s1")).toBe("https://d/ingest?token=***&sessionId=s1")
+    expect(redactUrl("https://d/ingest?sessionId=s1&token=secret")).toBe("https://d/ingest?sessionId=s1&token=***")
+    expect(redactUrl("https://d/ingest?sessionId=s1")).toBe("https://d/ingest?sessionId=s1")
   })
 })

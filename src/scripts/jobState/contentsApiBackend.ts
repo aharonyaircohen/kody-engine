@@ -124,10 +124,40 @@ export class ContentsApiBackend implements JobStateBackend {
     // create `kody-state` on first use for this repo.
     ensureStateBranch(this.owner, this.repo, this.cwd)
 
-    gh(["api", "--method", "PUT", `/repos/${this.owner}/${this.repo}/contents/${loaded.path}`, "--input", "-"], {
+    try {
+      this.put(loaded.path, payload)
+    } catch (err) {
+      // A concurrent tick (overlapping cron wake, or a chat session writing
+      // the same slug) may have advanced the blob since we loaded it, so the
+      // stale `sha` is rejected with 409/422. Mirror `pushWithRetry`'s race
+      // handling at the layer that owns the SHA: reload the current blob,
+      // re-stamp `payload.sha`, and retry once. If the current remote state is
+      // already structurally what we were about to write, there's nothing to
+      // do — return false. This is last-write-wins on the *data*; a full merge
+      // would need the reducer, which lives a layer up in the tick.
+      if (!isShaConflict(err)) throw err
+      const current = this.load(slug)
+      if (!current.created && isStateUnchanged(current.state, next)) return false
+      if (typeof current.handle === "string") payload.sha = current.handle
+      else delete payload.sha
+      process.stderr.write(
+        `[kody] jobState: concurrent write detected for ${slug}; reloaded SHA and retrying (last-write-wins)\n`,
+      )
+      this.put(loaded.path, payload)
+    }
+    return true
+  }
+
+  private put(filePath: string, payload: Record<string, unknown>): void {
+    gh(["api", "--method", "PUT", `/repos/${this.owner}/${this.repo}/contents/${filePath}`, "--input", "-"], {
       cwd: this.cwd,
       input: JSON.stringify(payload),
     })
-    return true
   }
+}
+
+/** True when a Contents-API PUT failed because the prior blob SHA is stale. */
+function isShaConflict(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return /HTTP 409/i.test(msg) || /HTTP 422/i.test(msg) || /does not match|is at|but expected/i.test(msg)
 }

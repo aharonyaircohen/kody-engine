@@ -11,6 +11,15 @@ set -euo pipefail
 
 goals_dir=".kody/goals"
 
+# python3 parses each goal's state.json below. It is declared as a required
+# cliTool in profile.json, but guard here too: without this check a missing
+# interpreter silently makes EVERY goal read state="" → treated as inactive →
+# nothing ticks, reported as a misleading success. Fail loud instead.
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "[goal-scheduler] FATAL: python3 not found on PATH (required to read goal state)" >&2
+  exit 1
+fi
+
 # Goal state lives on the dedicated `kody-state` branch, not the default branch
 # (keeps `chore(goals): …` churn out of code history). Materialize it into the
 # working tree so the glob below sees current state. Best-effort: `kody-state`

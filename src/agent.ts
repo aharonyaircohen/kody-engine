@@ -336,6 +336,12 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     // Flips once the session runs a tool that could change durable state —
     // gates the connection retry so we never replay a mutating turn.
     let sawMutatingTool = false
+    // Flips once a terminal `result` with subtype "success" arrives. Latches
+    // the win: a transient connection error that throws AFTER the success
+    // result must not downgrade the outcome to "failed" and replay a session
+    // that already finished its work (a real risk for read-only flows where
+    // `sawMutatingTool` stays false and the retry gate would otherwise fire).
+    let sawTerminalSuccess = false
 
     try {
       const queryOptions: Record<string, unknown> = {
@@ -595,6 +601,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
           if (m.subtype === "success") {
             outcome = "completed"
             outcomeKind = "ok"
+            sawTerminalSuccess = true
             const text = (typeof m.result === "string" ? m.result : "").trim()
             if (text) resultTexts.push(text)
           } else {
@@ -605,9 +612,17 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         }
       }
     } catch (e) {
-      outcome = "failed"
-      outcomeKind = "model_error"
-      errorMessage = e instanceof Error ? e.message : String(e)
+      // Don't clobber an already-finished turn: if the success result arrived
+      // before this throw, the work is done — a late connection drop on the
+      // tail of the stream must not flip us back to "failed" and trigger a
+      // replay. Record the error for logs but keep the completed outcome.
+      if (sawTerminalSuccess) {
+        errorMessage = e instanceof Error ? e.message : String(e)
+      } else {
+        outcome = "failed"
+        outcomeKind = "model_error"
+        errorMessage = e instanceof Error ? e.message : String(e)
+      }
     } finally {
       try {
         fullLog.end()

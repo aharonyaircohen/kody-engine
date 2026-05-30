@@ -201,10 +201,14 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
       typeof raw.defaultExecutable === "string" && raw.defaultExecutable.length > 0
         ? raw.defaultExecutable
         : "run",
+    // No bare-PR default ships with the engine (there is no `fix` executable),
+    // so leave this unset unless a consumer configures a real one. Dispatch
+    // treats a missing/unknown default as "unrecognized" rather than routing
+    // to a phantom executable that would crash the executor at load time.
     defaultPrExecutable:
       typeof raw.defaultPrExecutable === "string" && raw.defaultPrExecutable.length > 0
         ? raw.defaultPrExecutable
-        : "fix",
+        : undefined,
     aliases: mergeAliases(raw.aliases),
     classify: parseClassifyConfig(raw.classify),
     release: parseReleaseConfig(raw.release),
@@ -294,8 +298,6 @@ function parseJobsConfig(raw: unknown): KodyConfig["jobs"] {
  */
 export const BUILTIN_ALIASES: Record<string, string> = {
   build: "run",
-  orchestrate: "bug",
-  orchestrator: "bug",
 }
 
 function mergeAliases(raw: unknown): Record<string, string> {

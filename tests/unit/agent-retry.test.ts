@@ -21,7 +21,9 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
 
 import { runAgent } from "../../src/agent.js"
 
-const baseOpts = {
+type RunAgentOpts = Parameters<typeof runAgent>[0]
+
+const baseOpts: RunAgentOpts = {
   prompt: "hi",
   model: { provider: "minimax", model: "m" },
   cwd: process.cwd(),
@@ -39,7 +41,7 @@ const writeToolUse = {
 }
 
 /** Run runAgent while flushing the retry backoff timers instantly. */
-async function runFlushed(opts = baseOpts) {
+async function runFlushed(opts: RunAgentOpts = baseOpts) {
   vi.useFakeTimers()
   try {
     const promise = runAgent(opts)
@@ -77,6 +79,17 @@ describe("runAgent: transient connection retry", () => {
     const res = await runFlushed()
     expect(callIndex).toBe(1)
     expect(res.outcome).toBe("failed")
+  })
+
+  it("latches a terminal success: a transient error after the success result does not replay", async () => {
+    // The success `result` arrives, THEN the stream throws a connection drop on
+    // its tail. The work is done — we must not downgrade to failed and replay
+    // (which would discard the result and, for a read-only flow, re-run it).
+    attempts = [{ messages: [SUCCESS], throw: CONNECTION_ERR }, { messages: [SUCCESS] }]
+    const res = await runFlushed()
+    expect(callIndex).toBe(1)
+    expect(res.outcome).toBe("completed")
+    expect(res.outcomeKind).toBe("ok")
   })
 
   it("does not retry once a mutating tool has run", async () => {

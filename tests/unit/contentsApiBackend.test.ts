@@ -108,16 +108,24 @@ describe("ContentsApiBackend", () => {
     })
   })
 
+  // `save` calls ensureStateBranch first (a `gh` ref read) before the PUT, so
+  // the PUT is not necessarily call[0]. Locate it by the "PUT" arg.
+  function putCall() {
+    const call = gh.mock.calls.find((c: unknown[]) => Array.isArray(c[0]) && (c[0] as string[]).includes("PUT"))
+    if (!call) throw new Error("no PUT gh call recorded")
+    return call as [string[], { input: string }]
+  }
+
   describe("save", () => {
     it("PUTs without sha when seeding (handle null)", () => {
-      gh.mockReturnValueOnce("{}")
+      gh.mockReturnValue("{}")
       const next = envelope({ rev: 1 })
       const wrote = backend().save(
         { path: ".kody/jobs/auto-sync.state.json", handle: null, state: envelope({ rev: 0 }), created: true },
         next,
       )
       expect(wrote).toBe(true)
-      const call = gh.mock.calls[0]!
+      const call = putCall()
       expect(call[0]).toContain("PUT")
       const payload = JSON.parse(call[1].input as string)
       expect(payload.sha).toBeUndefined()
@@ -127,7 +135,7 @@ describe("ContentsApiBackend", () => {
     })
 
     it("PUTs with sha when updating an existing file", () => {
-      gh.mockReturnValueOnce("{}")
+      gh.mockReturnValue("{}")
       const wrote = backend().save(
         {
           path: ".kody/jobs/auto-sync.state.json",
@@ -138,7 +146,7 @@ describe("ContentsApiBackend", () => {
         envelope({ rev: 6, cursor: "after" }),
       )
       expect(wrote).toBe(true)
-      const payload = JSON.parse(gh.mock.calls[0]![1].input as string)
+      const payload = JSON.parse(putCall()[1].input as string)
       expect(payload.sha).toBe("old-sha")
     })
 
@@ -166,7 +174,7 @@ describe("ContentsApiBackend", () => {
     })
 
     it("writes when data differs", () => {
-      gh.mockReturnValueOnce("{}")
+      gh.mockReturnValue("{}")
       const prev = envelope({ data: { x: 1 } })
       const next = envelope({ data: { x: 2 } })
       const wrote = backend().save(
@@ -174,6 +182,74 @@ describe("ContentsApiBackend", () => {
         next,
       )
       expect(wrote).toBe(true)
+    })
+  })
+
+  describe("save: concurrent-write conflict", () => {
+    // Build a base64 Contents-API GET response carrying `state` at blob `sha`.
+    function contentsResponse(state: StateEnvelope, sha: string): string {
+      return JSON.stringify({
+        type: "file",
+        encoding: "base64",
+        content: Buffer.from(JSON.stringify(state), "utf-8").toString("base64"),
+        sha,
+        path: ".kody/jobs/auto-sync.state.json",
+      })
+    }
+
+    // Route gh by args: ref read (ensureStateBranch) → exists; GET contents →
+    // current remote; PUT → scripted sequence (first throws, then succeeds).
+    function routeGh(currentRemote: StateEnvelope, freshSha: string, putResults: Array<"ok" | string>) {
+      let putIdx = 0
+      gh.mockImplementation((args: string[]) => {
+        if (args.includes("git/ref/heads/kody-state") || args.some((a) => a.includes("git/ref"))) return "{}"
+        if (args.includes("PUT")) {
+          const r = putResults[putIdx++] ?? "ok"
+          if (r !== "ok") throw new Error(r)
+          return "{}"
+        }
+        // GET contents (the reload).
+        return contentsResponse(currentRemote, freshSha)
+      })
+    }
+
+    it("reloads the SHA and retries the PUT once on a 409 conflict", () => {
+      const remote = envelope({ rev: 9, cursor: "concurrent" })
+      routeGh(remote, "fresh-sha", ["HTTP 409: Conflict", "ok"])
+      const wrote = backend().save(
+        { path: ".kody/jobs/auto-sync.state.json", handle: "stale-sha", state: envelope({ cursor: "before" }), created: false },
+        envelope({ cursor: "after" }),
+      )
+      expect(wrote).toBe(true)
+      const puts = gh.mock.calls.filter((c: unknown[]) => Array.isArray(c[0]) && (c[0] as string[]).includes("PUT"))
+      expect(puts.length).toBe(2)
+      expect(JSON.parse((puts[0]![1] as { input: string }).input).sha).toBe("stale-sha")
+      expect(JSON.parse((puts[1]![1] as { input: string }).input).sha).toBe("fresh-sha")
+    })
+
+    it("skips the retry PUT when the concurrent write already matches next", () => {
+      const next = envelope({ cursor: "after", data: { k: 1 } })
+      // Remote already holds our exact target → nothing left to write.
+      routeGh(envelope({ cursor: "after", data: { k: 1 } }), "fresh-sha", ["HTTP 422: Unprocessable"])
+      const wrote = backend().save(
+        { path: ".kody/jobs/auto-sync.state.json", handle: "stale-sha", state: envelope({ cursor: "before" }), created: false },
+        next,
+      )
+      expect(wrote).toBe(false)
+      const puts = gh.mock.calls.filter((c: unknown[]) => Array.isArray(c[0]) && (c[0] as string[]).includes("PUT"))
+      expect(puts.length).toBe(1)
+    })
+
+    it("rethrows a non-conflict PUT error without retrying", () => {
+      routeGh(envelope(), "fresh-sha", ["HTTP 500: Internal Server Error"])
+      expect(() =>
+        backend().save(
+          { path: ".kody/jobs/auto-sync.state.json", handle: "stale-sha", state: envelope({ cursor: "before" }), created: false },
+          envelope({ cursor: "after" }),
+        ),
+      ).toThrow(/500/)
+      const puts = gh.mock.calls.filter((c: unknown[]) => Array.isArray(c[0]) && (c[0] as string[]).includes("PUT"))
+      expect(puts.length).toBe(1)
     })
   })
 })

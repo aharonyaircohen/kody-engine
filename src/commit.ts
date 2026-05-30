@@ -21,7 +21,11 @@ const FORBIDDEN_PATH_PREFIXES = [
 //     every issue/agent-mode task per the task-artifacts contract.
 const ALLOWED_PATH_PREFIXES = [".kody/memory/", ".kody/tasks/"]
 
-const FORBIDDEN_PATH_EXACT = new Set([".env", ".kody-pip-requirements.txt"])
+// `kody.config.json` is the engine's trust anchor: it declares the model,
+// allowed associations, and `publishCommand` (which the release path runs via
+// `bash -c`). An agent that could rewrite it could escalate beyond the runner
+// it already controls — so it is never an agent-writable path.
+const FORBIDDEN_PATH_EXACT = new Set([".env", ".kody-pip-requirements.txt", "kody.config.json"])
 const FORBIDDEN_PATH_SUFFIXES = [".log"]
 
 const CONVENTIONAL_PREFIXES = [

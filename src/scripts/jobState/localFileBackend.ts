@@ -158,7 +158,13 @@ export class LocalFileBackend implements JobStateBackend {
     const absPath = path.join(this.cwd, loaded.path)
     fs.mkdirSync(path.dirname(absPath), { recursive: true })
     const body = JSON.stringify(next, null, 2) + "\n"
-    fs.writeFileSync(absPath, body, "utf-8")
+    // Write atomically: a crash mid-write (the 5-min tick timeout, OOM, runner
+    // teardown) would otherwise leave a truncated file that fails JSON.parse on
+    // the next load() and wedges the job until a human deletes it. Write to a
+    // sibling temp file, then rename — rename is atomic on the same filesystem.
+    const tmpPath = `${absPath}.${process.pid}.tmp`
+    fs.writeFileSync(tmpPath, body, "utf-8")
+    fs.renameSync(tmpPath, absPath)
     return true
   }
 

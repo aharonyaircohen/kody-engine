@@ -20,6 +20,12 @@ describe("commit: isForbiddenPath", () => {
     expect(isForbiddenPath("logs/x.log")).toBe(true)
   })
 
+  it("blocks kody.config.json (engine trust anchor)", () => {
+    // The agent must never rewrite the config that declares the model, allowed
+    // associations, and publishCommand (run via `bash -c` on release).
+    expect(isForbiddenPath("kody.config.json")).toBe(true)
+  })
+
   it("allows source files", () => {
     expect(isForbiddenPath("src/foo.ts")).toBe(false)
     expect(isForbiddenPath("README.md")).toBe(false)

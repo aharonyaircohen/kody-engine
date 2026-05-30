@@ -181,6 +181,11 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   syncFlow: { owner: "sync", reason: "sync is bespoke (no-agent fast-forward). Solo to sync." },
   finishFlow: { owner: "release", reason: "release finalize step. Solo to release." },
   promoteQaGoal: { owner: "qa-goal", reason: "qa-goal promotion step. Solo to qa-goal." },
+  runPreviewBuild: {
+    owner: "preview-build",
+    reason:
+      "preview-build is the only executable that builds a deployable preview image (remote builder). Single-purpose; no other executable shares the build step.",
+  },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

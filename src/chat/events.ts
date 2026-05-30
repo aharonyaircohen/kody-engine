@@ -69,10 +69,10 @@ export class HttpSink implements EventSink {
         signal: AbortSignal.timeout(5000),
       })
       if (!res.ok) {
-        this.logger.warn(`HttpSink POST ${url} → ${res.status}`)
+        this.logger.warn(`HttpSink POST ${redactUrl(url)} → ${res.status}`)
       }
     } catch (err) {
-      this.logger.warn(`HttpSink POST ${url} failed: ${err instanceof Error ? err.message : String(err)}`)
+      this.logger.warn(`HttpSink POST ${redactUrl(url)} failed: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 }
@@ -82,6 +82,15 @@ export class TeeSink implements EventSink {
   async emit(event: ChatEvent): Promise<void> {
     await Promise.all(this.sinks.map((s) => s.emit(event)))
   }
+}
+
+/**
+ * Strip the inline `?token=...` HMAC from a dashboard URL before it is logged.
+ * The ingest URL carries the session token as a query param; without this, any
+ * non-OK response or network blip would write the token to CI logs.
+ */
+export function redactUrl(url: string): string {
+  return url.replace(/([?&]token=)[^&]+/gi, "$1***")
 }
 
 export function withSessionParam(baseUrl: string, sessionId: string): string {
