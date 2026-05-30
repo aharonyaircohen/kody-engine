@@ -213,12 +213,7 @@ export function autoDispatch(opts?: {
   // POLITE_WORDS filter above lets natural-language phrasings through to
   // the default — the "no firstToken" condition here is what gates them.
   if (!executable && !firstToken) {
-    // No hardcoded fallback: the engine ships no bare-PR default (there is no
-    // `fix` executable), so an unconfigured PR comment resolves to null (no
-    // action) rather than a phantom that crashes the executor at load. A
-    // consumer that configures `defaultPrExecutable` still routes to it — even
-    // if not bundled — via the event-shape injection path below.
-    executable = isPr ? (opts?.config?.defaultPrExecutable ?? null) : (opts?.config?.defaultExecutable ?? null)
+    executable = isPr ? (opts?.config?.defaultPrExecutable ?? "fix") : (opts?.config?.defaultExecutable ?? null)
   }
   // Bot self-dispatch gate: a bot-authored comment may ONLY proceed when it
   // resolved to an explicit command (`consumedFirstToken`). It must never fall

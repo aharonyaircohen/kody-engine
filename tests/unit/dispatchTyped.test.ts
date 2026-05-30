@@ -260,27 +260,14 @@ describe("autoDispatchTyped: typo'd command does NOT fall through to default exe
     }
   })
 
-  it("bare `@kody` on a PR is silent when no defaultPrExecutable is configured", () => {
-    // No bundled bare-PR default ships, so a tokenless PR comment is a no-op
-    // (silent), not a phantom `fix` route. Not "unrecognized" — there's no
-    // typo to surface back to the user.
+  it("falls through to defaultPrExecutable for `@kody` alone on a PR", () => {
     process.env.GITHUB_EVENT_NAME = "issue_comment"
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody", user: { login: "alice", type: "User" } },
       issue: { number: 99, pull_request: { url: "https://x" } },
     })
     const out = autoDispatchTyped()
-    expect(out.kind).toBe("silent")
-  })
-
-  it("routes bare `@kody` on a PR to a consumer-configured defaultPrExecutable", () => {
-    process.env.GITHUB_EVENT_NAME = "issue_comment"
-    process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody", user: { login: "alice", type: "User" } },
-      issue: { number: 99, pull_request: { url: "https://x" } },
-    })
-    const out = autoDispatchTyped({ config: { defaultPrExecutable: "resolve" } as never })
     expect(out.kind).toBe("route")
-    if (out.kind === "route") expect(out.executable).toBe("resolve")
+    if (out.kind === "route") expect(out.executable).toBe("fix")
   })
 })
