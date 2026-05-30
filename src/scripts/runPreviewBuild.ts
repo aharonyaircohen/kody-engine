@@ -348,7 +348,21 @@ export const runPreviewBuild: PreflightScript = async (
     repo = required("GITHUB_REPOSITORY")
     ref = required("GITHUB_SHA")
     masterKey = required("KODY_MASTER_KEY")
-    ghToken = required("GITHUB_TOKEN")
+    // Engine's resolveAuthToken sets GH_TOKEN; the kody.yml workflow
+    // exposes KODY_TOKEN. Match the same fallback chain the engine
+    // uses everywhere else (KODY_TOKEN | GH_TOKEN | GITHUB_TOKEN | GH_PAT).
+    ghToken = (
+      process.env.KODY_TOKEN ??
+      process.env.GH_TOKEN ??
+      process.env.GITHUB_TOKEN ??
+      process.env.GH_PAT ??
+      ""
+    ).trim()
+    if (!ghToken) {
+      throw new Error(
+        "GitHub auth token missing (KODY_TOKEN / GH_TOKEN / GITHUB_TOKEN / GH_PAT all empty)",
+      )
+    }
   } catch (err) {
     ctx.output.exitCode = 99
     ctx.output.reason = `runPreviewBuild: ${err instanceof Error ? err.message : String(err)}`
