@@ -467,50 +467,12 @@ export const runPreviewBuild: PreflightScript = async (
     }
     await flyAllocateSharedIps(appName, flyToken)
 
-    // 6. Build via Namespace remote builder (parallel + fast), push to
-    //    Fly registry in one step via buildx --push.
-    //
-    //    NSC_TOKEN must be in vault (or repo secret unpacked via
-    //    ALL_SECRETS); the install script + buildx setup are
-    //    idempotent so repeating them per run is cheap.
-    const nscToken = doc.secrets?.NSC_TOKEN?.value?.trim()
-    if (!nscToken) {
-      ctx.output.exitCode = 99
-      ctx.output.reason =
-        "runPreviewBuild: vault has no NSC_TOKEN — add it via the dashboard's /secrets page"
-      return
-    }
-    process.env.NSC_TOKEN = nscToken
-
-    // Download the nsc CLI directly from Namespace's package CDN. The
-    // umbrella `ns` installer ships only a wrapper that calls
-    // `ns install` post-download — too much indirection for CI. The
-    // packages/nsc/latest endpoint 302s to the platform-specific
-    // tarball, which contains exactly one `nsc` binary.
-    await runCmd(
-      "bash",
-      [
-        "-c",
-        `if [ ! -x /usr/local/bin/nsc ]; then
-           ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') &&
-           OS=$(uname -s | tr '[:upper:]' '[:lower:]') &&
-           curl -fsSL "https://get.namespace.so/packages/nsc/latest?arch=$ARCH&os=$OS" -o /tmp/nsc.tar.gz &&
-           tar -xzf /tmp/nsc.tar.gz -C /tmp &&
-           sudo install -m 0755 /tmp/nsc /usr/local/bin/nsc &&
-           rm -f /tmp/nsc /tmp/nsc.tar.gz
-         fi
-         /usr/local/bin/nsc version`,
-      ],
-      { cwd: ctx.cwd },
-    )
-
-    // Register a buildx context backed by a Namespace remote builder.
-    // Idempotent; the second call re-uses the existing context.
-    await runCmd("/usr/local/bin/nsc", ["docker", "buildx", "setup"], {
-      cwd: ctx.cwd,
-    })
-
-    // Auth to Fly's registry so the remote builder can push.
+    // 6. Docker login + build + push. All run on the GHA runner using
+    //    the local docker daemon (BuildKit by default on ubuntu-latest).
+    //    Namespace.so remote builders are a future optimization — their
+    //    non-interactive auth needs proper OIDC federation setup that
+    //    requires a kody.yml workflow change (id-token: write), so this
+    //    path stays on local docker for now.
     await runCmd(
       "docker",
       ["login", "registry.fly.io", "-u", "x", "--password-stdin"],
@@ -518,17 +480,22 @@ export const runPreviewBuild: PreflightScript = async (
     )
 
     const buildArgs: string[] = [
-      "buildx",
       "build",
       "-f",
       "Dockerfile.preview",
       "-t",
       `registry.fly.io/${appName}:${tag}`,
-      "--push",
     ]
     if (baseImage) buildArgs.push("--build-arg", `BASE_IMAGE=${baseImage}`)
     buildArgs.push(".")
-    await runCmd("docker", buildArgs, { cwd: ctx.cwd })
+    await runCmd("docker", buildArgs, {
+      cwd: ctx.cwd,
+      env: { DOCKER_BUILDKIT: "1" },
+    })
+
+    await runCmd("docker", ["push", `registry.fly.io/${appName}:${tag}`], {
+      cwd: ctx.cwd,
+    })
 
     // 7. Destroy stale preview machines (prior sync) then create the new one.
     const stale = await flyListMachines(appName, flyToken)
