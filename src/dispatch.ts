@@ -45,6 +45,24 @@ export interface DispatchResult {
 }
 
 /**
+ * Look up an executable's primary numeric input name from its profile.
+ * Returns the first required `int` input's `name` (e.g. "issue" for `run`,
+ * "pr" for `resolve`/`sync`/`fix-ci`). Returns null when the profile is
+ * missing or declares no required int — caller decides the fallback.
+ *
+ * Why: workflow_dispatch carries a generic `issue_number` numeric input.
+ * Each executable's profile declares which flag it actually accepts; binding
+ * the dispatched number under that declared name keeps the router free of
+ * a per-verb list and works automatically for any future PR/issue primitive.
+ */
+function primaryNumericInputName(executable: string): string | null {
+  const inputs = getProfileInputs(executable)
+  if (!inputs) return null
+  const intInput = inputs.find((i) => i.type === "int" && i.required)
+  return intInput?.name ?? null
+}
+
+/**
  * Typed dispatch outcome. Discriminated union so kody-cli can switch
  * exhaustively on the result instead of treating any null return as
  * "exit cleanly." The previous null-on-failure pattern silently swallowed
@@ -99,7 +117,13 @@ export function autoDispatch(opts?: {
       // manual dispatch with just an issue number.
       const exe = String(event.inputs?.executable ?? "").trim() || "run"
       const base = String(event.inputs?.base ?? "").trim()
-      const cliArgs: Record<string, unknown> = { issue: n }
+      // The `issue_number` input is a generic numeric target, not literally an
+      // issue. Bind `n` under the resolved executable's declared int input name
+      // (`run` → `issue`, `resolve`/`sync`/`fix-ci` → `pr`). Hardcoding `issue`
+      // here used to make PR primitives reject the dispatched run with
+      // "unknown arg: --issue", silently breaking pr-health auto-runs.
+      const targetKey = primaryNumericInputName(exe) ?? "issue"
+      const cliArgs: Record<string, unknown> = { [targetKey]: n }
       if (base) cliArgs.base = base
       return { executable: exe, cliArgs, target: n }
     }
