@@ -1,6 +1,64 @@
-# @kody-ade/kody-engine
+# kody
 
-`kody` — autonomous development engine. A single-session Claude Code agent behind a generic executor and declarative JSON executable profiles.
+[![npm](https://img.shields.io/npm/v/@kody-ade/kody-engine.svg)](https://www.npmjs.com/package/@kody-ade/kody-engine)
+[![CI](https://github.com/aharonyaircohen/kody-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/aharonyaircohen/kody-engine/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/@kody-ade/kody-engine.svg)](LICENSE)
+[![node](https://img.shields.io/node/v/@kody-ade/kody-engine.svg)](package.json)
+
+**An autonomous development engine that runs in your GitHub Actions.**
+
+Comment `@kody` on an issue and it implements the change, commits, and opens a
+PR — all inside CI, no bot server to host. Comment on a PR to apply review
+feedback, fix failing CI, resolve merge conflicts, or run a UI/QA pass. It's a
+single-session Claude Code agent behind a generic executor and declarative JSON
+profiles.
+
+```
+You:   open an issue → comment "@kody run"
+kody:  reads the issue → writes the code → runs your tests → opens a PR
+```
+
+## Why kody
+
+- **No infrastructure.** Runs on the GitHub Actions you already have. One ~20-line
+  workflow file, installed via `npx`. Nothing to deploy or keep online.
+- **Whole PR lifecycle, not just authoring.** `run`, `fix`, `fix-ci`, `resolve`,
+  `review`, `ui-review`, `qa-engineer`, scheduled jobs — one agent, many verbs.
+- **Declarative & extensible.** Every command is a folder of `profile.json` +
+  `prompt.md` + shell. Add a command by dropping a folder — no engine changes.
+- **Bring your own model.** Anthropic native, or any provider via the built-in
+  LiteLLM proxy.
+
+## Quickstart
+
+In the repo you want kody to work on:
+
+```bash
+npx -y -p @kody-ade/kody-engine@latest kody init
+```
+
+Then add **one** repo secret — a model provider key (e.g. `ANTHROPIC_API_KEY`) —
+commit the generated `kody.config.json` + `.github/workflows/kody.yml`, and
+comment `@kody run` on any issue. That's it. See
+[Install in a consumer repo](#install-in-a-consumer-repo) for tokens and
+triggers.
+
+## Permissions & safety
+
+kody runs an autonomous agent in your CI with a GitHub token and your model
+key. It's built to keep that blast radius small:
+
+- **Least-privilege by default.** Needs `contents` / `pull-requests` / `issues`
+  write. A dedicated `KODY_TOKEN` PAT is optional, only for triggering
+  downstream CI.
+- **Write allowlist.** The agent commits through `commitAndPush`, which blocks
+  writes outside an allowlisted set of `.kody/` paths — it can't touch your
+  runtime state.
+- **Locked-toolbox mode.** A job can declare `tools: [...]` to drop `Bash` and
+  shell entirely, running only a fixed set of high-level intents.
+- **Review like any contributor.** kody opens PRs; you merge them.
+
+See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 ## Architecture
 
@@ -215,3 +273,14 @@ To enable in a consumer repo: ensure `.gitignore` un-ignores the vault if `.kody
 A profile is declarative JSON + an adjacent `prompt.md`. See any directory under [src/executables/](src/executables/) for examples. Adding a new command = new directory + profile + prompt + any `.sh` scripts + registering any new shared TS utilities under [src/scripts/](src/scripts/). No executor, entry, or dispatch changes.
 
 See [AGENTS.md](AGENTS.md) for the full architectural contract.
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev
+loop and the invariants to respect, and [AGENTS.md](AGENTS.md) for the deep
+architecture. By participating you agree to the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
+## License
+
+[MIT](LICENSE) © Aharon Yair Cohen
