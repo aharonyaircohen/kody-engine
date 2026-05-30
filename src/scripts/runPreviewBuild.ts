@@ -482,20 +482,38 @@ export const runPreviewBuild: PreflightScript = async (
     }
     process.env.NSC_TOKEN = nscToken
 
-    // Install nsc CLI if absent. The official installer drops it at
-    // /usr/local/bin/nsc; one-line, no apt cache pollution.
+    // Install nsc CLI via the official one-liner. The installer drops
+    // the binary into ~/.local/bin (or /usr/local/bin if run as root);
+    // we prepend both to PATH for any subsequent nsc invocations rather
+    // than guessing at an absolute path.
     await runCmd(
       "bash",
       [
         "-c",
-        "command -v nsc >/dev/null 2>&1 || curl -fsSL https://get.namespace.so/install.sh | sh",
+        `curl -fsSL https://get.namespace.so/install.sh | bash -s -- -y || curl -fsSL https://get.namespace.so/install.sh | bash`,
       ],
       { cwd: ctx.cwd },
     )
+    const nscPath = [
+      `${process.env.HOME ?? ""}/.local/bin`,
+      "/usr/local/bin",
+      process.env.PATH ?? "",
+    ]
+      .filter(Boolean)
+      .join(":")
+    // Probe by running nsc version with the augmented PATH; this also
+    // surfaces install failures loudly before the build step.
+    await runCmd("bash", ["-c", "nsc version"], {
+      cwd: ctx.cwd,
+      env: { PATH: nscPath },
+    })
 
     // Register a buildx context backed by a Namespace remote builder.
     // Idempotent; the second call re-uses the existing context.
-    await runCmd("nsc", ["docker", "buildx", "setup"], { cwd: ctx.cwd })
+    await runCmd("nsc", ["docker", "buildx", "setup"], {
+      cwd: ctx.cwd,
+      env: { PATH: nscPath },
+    })
 
     // Auth to Fly's registry so the remote builder can push.
     await runCmd(
