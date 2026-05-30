@@ -467,7 +467,37 @@ export const runPreviewBuild: PreflightScript = async (
     }
     await flyAllocateSharedIps(appName, flyToken)
 
-    // 6. Docker login + build + push. All run on the GHA runner.
+    // 6. Build via Namespace remote builder (parallel + fast), push to
+    //    Fly registry in one step via buildx --push.
+    //
+    //    NSC_TOKEN must be in vault (or repo secret unpacked via
+    //    ALL_SECRETS); the install script + buildx setup are
+    //    idempotent so repeating them per run is cheap.
+    const nscToken = doc.secrets?.NSC_TOKEN?.value?.trim()
+    if (!nscToken) {
+      ctx.output.exitCode = 99
+      ctx.output.reason =
+        "runPreviewBuild: vault has no NSC_TOKEN — add it via the dashboard's /secrets page"
+      return
+    }
+    process.env.NSC_TOKEN = nscToken
+
+    // Install nsc CLI if absent. The official installer drops it at
+    // /usr/local/bin/nsc; one-line, no apt cache pollution.
+    await runCmd(
+      "bash",
+      [
+        "-c",
+        "command -v nsc >/dev/null 2>&1 || curl -fsSL https://get.namespace.so/install.sh | sh",
+      ],
+      { cwd: ctx.cwd },
+    )
+
+    // Register a buildx context backed by a Namespace remote builder.
+    // Idempotent; the second call re-uses the existing context.
+    await runCmd("nsc", ["docker", "buildx", "setup"], { cwd: ctx.cwd })
+
+    // Auth to Fly's registry so the remote builder can push.
     await runCmd(
       "docker",
       ["login", "registry.fly.io", "-u", "x", "--password-stdin"],
@@ -475,22 +505,17 @@ export const runPreviewBuild: PreflightScript = async (
     )
 
     const buildArgs: string[] = [
+      "buildx",
       "build",
       "-f",
       "Dockerfile.preview",
       "-t",
       `registry.fly.io/${appName}:${tag}`,
+      "--push",
     ]
     if (baseImage) buildArgs.push("--build-arg", `BASE_IMAGE=${baseImage}`)
     buildArgs.push(".")
-    await runCmd("docker", buildArgs, {
-      cwd: ctx.cwd,
-      env: { DOCKER_BUILDKIT: "1" },
-    })
-
-    await runCmd("docker", ["push", `registry.fly.io/${appName}:${tag}`], {
-      cwd: ctx.cwd,
-    })
+    await runCmd("docker", buildArgs, { cwd: ctx.cwd })
 
     // 7. Destroy stale preview machines (prior sync) then create the new one.
     const stale = await flyListMachines(appName, flyToken)
