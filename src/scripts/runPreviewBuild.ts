@@ -42,14 +42,18 @@ const FLY_MACHINES = "https://api.machines.dev/v1"
 const FLY_GRAPHQL = "https://api.fly.io/graphql"
 const REQ_TIMEOUT_MS = 30_000
 
-/** Bundled at engine build time — see package.json `files` array. */
+/** Bundled at engine build time. tsup bundles every TS file in src/
+ *  into dist/bin/kody.js, so import.meta.url resolves into dist/bin/.
+ *  copy-assets.cjs places the templates at dist/bin/preview-build-templates/
+ *  so this relative lookup works in both src (tsx) and dist (npm) runs.
+ *  In tsx-from-src runs the path falls back to src/scripts/. */
 function bundledDockerfilePath(mode: "dev" | "prod"): string {
-  // src/scripts/runPreviewBuild.ts → src/scripts/preview-build-templates/...
   const here = path.dirname(fileURLToPath(import.meta.url))
   const file =
     mode === "dev"
       ? "default-Dockerfile.preview.dev"
       : "default-Dockerfile.preview.prod"
+  // Bundled path (npm install of the published package).
   return path.join(here, "preview-build-templates", file)
 }
 
@@ -410,14 +414,24 @@ export const runPreviewBuild: PreflightScript = async (
 
     // 3. Drop the bundled Dockerfile.preview into the working tree.
     //    Consumer Dockerfile.preview (if shipped) wins over the bundled.
+    //    Fatal if neither exists — the docker build can't proceed.
     const consumerDockerfile = path.join(ctx.cwd, "Dockerfile.preview")
+    const { stat } = await import("node:fs/promises")
+    let hasConsumerDockerfile = false
     try {
-      await copyFile(bundledDockerfilePath(buildMode), consumerDockerfile)
-      console.log(`[preview-build] using bundled Dockerfile.preview.${buildMode}`)
-    } catch (err) {
-      console.warn(
-        `[preview-build] failed to drop bundled Dockerfile: ${err instanceof Error ? err.message : err}`,
+      await stat(consumerDockerfile)
+      hasConsumerDockerfile = true
+    } catch {
+      hasConsumerDockerfile = false
+    }
+    if (!hasConsumerDockerfile) {
+      const bundled = bundledDockerfilePath(buildMode)
+      await copyFile(bundled, consumerDockerfile)
+      console.log(
+        `[preview-build] using bundled Dockerfile.preview.${buildMode} (from ${bundled})`,
       )
+    } else {
+      console.log("[preview-build] using repo Dockerfile.preview")
     }
 
     // 4. Probe GHCR for the per-repo base image. When present, the

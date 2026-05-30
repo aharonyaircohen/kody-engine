@@ -14,12 +14,15 @@ for (const name of ASSET_DIRS) {
 }
 
 // Bundled Dockerfile templates consumed at runtime by the
-// preview-build scripted executable (looked up via import.meta.url
-// → ./preview-build-templates/<file> from dist/scripts/).
+// preview-build scripted executable. tsup bundles every TS file in
+// src/ into the SAME `dist/bin/kody.js`, so import.meta.url lands in
+// dist/bin/. The templates must sit next to that bundle for the
+// runtime path lookup (path.join(__dirname, "preview-build-templates",
+// "<file>")) to resolve.
 const TEMPLATES_SRC = path.join(ROOT, "src", "scripts", "preview-build-templates")
-const TEMPLATES_DST = path.join(ROOT, "dist", "scripts", "preview-build-templates")
+const TEMPLATES_DST = path.join(ROOT, "dist", "bin", "preview-build-templates")
 if (fs.existsSync(TEMPLATES_SRC)) {
   fs.rmSync(TEMPLATES_DST, { recursive: true, force: true })
   fs.cpSync(TEMPLATES_SRC, TEMPLATES_DST, { recursive: true })
-  console.log("copied scripts/preview-build-templates/")
+  console.log("copied bin/preview-build-templates/")
 }
