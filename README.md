@@ -18,6 +18,10 @@ You:   open an issue → comment "@kody run"
 kody:  reads the issue → writes the code → runs your tests → opens a PR
 ```
 
+<p align="center">
+  <img src="docs/assets/kody-demo.gif" alt="kody demo — issue to tested PR" width="800">
+</p>
+
 ## Why kody
 
 - **No infrastructure.** Runs on the GitHub Actions you already have. One ~20-line
