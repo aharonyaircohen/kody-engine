@@ -342,13 +342,11 @@ export const runPreviewBuild: PreflightScript = async (
   }
   let repo: string
   let ref: string
-  let flyToken: string
   let masterKey: string
   let ghToken: string
   try {
     repo = required("GITHUB_REPOSITORY")
     ref = required("GITHUB_SHA")
-    flyToken = required("FLY_API_TOKEN")
     masterKey = required("KODY_MASTER_KEY")
     ghToken = required("GITHUB_TOKEN")
   } catch (err) {
@@ -356,17 +354,30 @@ export const runPreviewBuild: PreflightScript = async (
     ctx.output.reason = `runPreviewBuild: ${err instanceof Error ? err.message : String(err)}`
     return
   }
-  const orgSlug = (process.env.FLY_ORG_SLUG ?? "personal").trim()
-  const region = (process.env.FLY_REGION ?? "fra").trim()
   const ghcrOwner = process.env.KODY_PREVIEW_GHCR_OWNER?.trim() || ""
 
   const appName = previewAppName(repo, pr)
   const tag = defaultImageTag(repo, ref)
 
   try {
-    // 1. Vault → build env.
+    // 1. Vault → build env. Single source of truth for FLY_API_TOKEN
+    //    too — pulled from the doc here so we don't need it as a
+    //    separate repo secret.
     const doc = await fetchVaultDoc(repo, ghToken, masterKey)
     const { buildEnv, buildMode } = buildEnvFromVault(doc)
+    const flyToken = doc.secrets?.FLY_API_TOKEN?.value?.trim()
+    if (!flyToken) {
+      ctx.output.exitCode = 99
+      ctx.output.reason =
+        "runPreviewBuild: vault has no FLY_API_TOKEN — add it via the dashboard's /secrets page"
+      return
+    }
+    const orgSlug =
+      doc.secrets?.FLY_ORG_SLUG?.value?.trim() ||
+      (process.env.FLY_ORG_SLUG ?? "personal").trim()
+    const region =
+      doc.secrets?.FLY_DEFAULT_REGION?.value?.trim() ||
+      (process.env.FLY_REGION ?? "fra").trim()
     console.log(
       `[preview-build] vault: ${Object.keys(buildEnv).length} secrets, mode=${buildMode}`,
     )
