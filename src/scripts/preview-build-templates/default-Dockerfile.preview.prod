@@ -1,0 +1,40 @@
+# syntax=docker/dockerfile:1.7
+#
+# Bundled default Dockerfile.preview — PROD-MODE variant.
+#
+# Runs `next build` + `next start` — same shape as Vercel. Slower
+# first build (~5–10 min webpack) but instant per-page response.
+# Pick this mode for repos where reviewers test production-only
+# behaviour (SSG, static optimization, edge runtime parity).
+
+ARG BASE_IMAGE=node:22-alpine
+
+FROM ${BASE_IMAGE}
+WORKDIR /app
+
+RUN corepack enable 2>/dev/null || true
+
+COPY package.json pnpm-lock.yaml* package-lock.json* yarn.lock* ./
+RUN --mount=type=cache,id=kp-pnpm-store,target=/root/.local/share/pnpm/store \
+    --mount=type=cache,id=kp-npm-cache,target=/root/.npm \
+    if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile --ignore-scripts; \
+    elif [ -f package-lock.json ]; then npm ci --ignore-scripts; \
+    elif [ -f yarn.lock ]; then yarn install --frozen-lockfile --ignore-scripts; \
+    else npm install --ignore-scripts; fi
+
+COPY . ./
+RUN mkdir -p public
+
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
+ENV PORT=8080
+ENV HOSTNAME=0.0.0.0
+ENV NODE_OPTIONS="--max-old-space-size=7168"
+
+RUN --mount=type=cache,id=kp-next-cache,target=/app/.next/cache \
+    if [ -f pnpm-lock.yaml ]; then pnpm exec next build; \
+    else npx next build; \
+    fi
+
+EXPOSE 8080
+CMD ["sh", "-c", "if [ -f pnpm-lock.yaml ]; then pnpm exec next start -H 0.0.0.0 -p 8080; else npx next start -H 0.0.0.0 -p 8080; fi"]

@@ -12,3 +12,14 @@ for (const name of ASSET_DIRS) {
   fs.cpSync(src, dst, { recursive: true })
   console.log(`copied ${name}/`)
 }
+
+// Bundled Dockerfile templates consumed at runtime by the
+// preview-build scripted executable (looked up via import.meta.url
+// → ./preview-build-templates/<file> from dist/scripts/).
+const TEMPLATES_SRC = path.join(ROOT, "src", "scripts", "preview-build-templates")
+const TEMPLATES_DST = path.join(ROOT, "dist", "scripts", "preview-build-templates")
+if (fs.existsSync(TEMPLATES_SRC)) {
+  fs.rmSync(TEMPLATES_DST, { recursive: true, force: true })
+  fs.cpSync(TEMPLATES_SRC, TEMPLATES_DST, { recursive: true })
+  console.log("copied scripts/preview-build-templates/")
+}

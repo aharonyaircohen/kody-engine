@@ -1,0 +1,43 @@
+# syntax=docker/dockerfile:1.7
+#
+# Bundled default Dockerfile.preview — DEV-MODE variant.
+#
+# Previews run `next dev`, NOT `next build` + `next start`. This skips
+# the 5–10 min webpack production compile entirely. Trade-offs:
+#   - First request to each route lags 2–5s (compile-on-demand)
+#   - Subsequent requests are fast
+#   - Memory hungry at runtime (webpack alive)
+# For PR previews this is the right trade — reviewers click a handful
+# of pages, never need prod optimizations. Production stays on Vercel.
+#
+# When BASE_IMAGE is set, deps are inherited from the per-repo base
+# image; the install layer just verifies the lockfile.
+
+ARG BASE_IMAGE=node:22-alpine
+
+FROM ${BASE_IMAGE}
+WORKDIR /app
+
+RUN corepack enable 2>/dev/null || true
+
+COPY package.json pnpm-lock.yaml* package-lock.json* yarn.lock* ./
+RUN --mount=type=cache,id=kp-pnpm-store,target=/root/.local/share/pnpm/store \
+    --mount=type=cache,id=kp-npm-cache,target=/root/.npm \
+    if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile --ignore-scripts; \
+    elif [ -f package-lock.json ]; then npm ci --ignore-scripts; \
+    elif [ -f yarn.lock ]; then yarn install --frozen-lockfile --ignore-scripts; \
+    else npm install --ignore-scripts; fi
+
+# Overwrite source files with the PR's version. node_modules and any
+# prior .next directory from the base image are preserved as warm
+# caches for the dev server's first compile.
+COPY . ./
+RUN mkdir -p public
+
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=development
+ENV PORT=8080
+ENV HOSTNAME=0.0.0.0
+
+EXPOSE 8080
+CMD ["sh", "-c", "if [ -f pnpm-lock.yaml ]; then pnpm exec next dev -H 0.0.0.0 -p 8080; else npx next dev -H 0.0.0.0 -p 8080; fi"]
