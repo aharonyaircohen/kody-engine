@@ -14,6 +14,12 @@ describe("commit: isForbiddenPath", () => {
     expect(isForbiddenPath("build/x")).toBe(true)
   })
 
+  it("blocks codegraph runtime scratch (never commit the repo-map tool's litter)", () => {
+    expect(isForbiddenPath(".codegraph/daemon.pid")).toBe(true)
+    expect(isForbiddenPath(".codegraph/.gitignore")).toBe(true)
+    expect(isForbiddenPath(".codegraph/cache/graph.db")).toBe(true)
+  })
+
   it("blocks .env exact and .log suffix", () => {
     expect(isForbiddenPath(".env")).toBe(true)
     expect(isForbiddenPath("debug.log")).toBe(true)

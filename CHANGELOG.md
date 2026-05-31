@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **No-work runs no longer ship an empty PR.** When the Claude Agent SDK
+  returns a `success` result that never reached the model — the dead-proxy
+  signature: subtype `success`, 1 turn, `$0`, no result text, `ConnectionRefused`
+  on stderr — the agent now demotes it to a *failed* run instead of trusting it.
+  This routes the run through the existing connection-retry path, which calls
+  `ensureBackend()` to **restart a crashed LiteLLM proxy and dump its log tail**,
+  and on exhaustion ends `failed` so commit + `ensurePr` skip it. Previously such
+  a run committed whatever litter was in the working tree and opened a hollow PR.
+- **Never commit `.codegraph/` runtime scratch.** The codegraph repo-map tool's
+  `daemon.pid`, socket, db, and its own `.gitignore` are machine-local and are
+  now in the commit blocklist, so they can't be swept into a commit.
+
 ### Changed
 - `kody init` now derives the generated config's `$schema` URL from this
   package's `repository.url` instead of a hardcoded path, so a fork republished

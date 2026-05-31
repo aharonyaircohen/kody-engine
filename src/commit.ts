@@ -6,6 +6,10 @@ const FORBIDDEN_PATH_PREFIXES = [
   ".kody-engine/",
   ".kody/",
   ".kody-lean/", // back-compat: stale runtime dir from kody-lean v0.5.x
+  ".codegraph/", // codegraph repo-map tool's runtime scratch (daemon.pid, sock,
+  // db, its own .gitignore) — machine-local, must never be committed. Without
+  // this, a run that does no real work still commits codegraph's startup litter
+  // and opens an empty PR.
   "node_modules/",
   "dist/",
   "build/",

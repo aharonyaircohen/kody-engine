@@ -342,6 +342,15 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     // that already finished its work (a real risk for read-only flows where
     // `sawMutatingTool` stays false and the retry gate would otherwise fire).
     let sawTerminalSuccess = false
+    // Flips when the SDK reports a "success" result that produced zero model
+    // output — the session never actually reached the model (the classic
+    // signature: litellm proxy crashed, SDK still emits subtype "success" with
+    // 1 turn / $0). Such a run did no work; trusting it ships an empty commit +
+    // PR. We demote it to a retriable failure (below) so the connection-retry
+    // path fires ensureBackend() — which restarts a dead proxy and dumps its
+    // log tail — and we get a real attempt, or an honest failure that blocks
+    // the empty PR.
+    let noWorkSuccess = false
 
     try {
       const queryOptions: Record<string, unknown> = {
@@ -642,14 +651,32 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     }
     finalText = resultTexts.join("\n\n---\n\n")
 
-    // Retry only a transient connection failure, and only while the session
-    // hasn't mutated anything — replaying a mutating turn could double-apply
-    // a write (second PR, comment, commit, edit).
+    // A "success" that reached the model produces SOMETHING — a DONE/result
+    // marker (non-empty finalText) or at least output tokens. When BOTH are
+    // empty the session never reached the model (the dead-proxy signature:
+    // subtype "success", 1 turn, $0, no result text, ConnectionRefused on
+    // stderr). Demote it so we don't commit + open an empty PR. Both signals
+    // (not just one) are required so a real run with an oddly-empty result
+    // string, or one whose usage the SDK omitted, is never demoted —
+    // `!sawMutatingTool` is a third backstop.
+    if (outcome === "completed" && !sawMutatingTool && tokens.output === 0 && finalText === "") {
+      outcome = "failed"
+      outcomeKind = "model_error"
+      noWorkSuccess = true
+      errorMessage =
+        errorMessage ??
+        "session reported success but produced no model output (0 output tokens) — backend likely unreachable"
+    }
+
+    // Retry only a transient connection failure (or the no-work success above,
+    // which is the same dead-backend symptom under a "success" label), and only
+    // while the session hasn't mutated anything — replaying a mutating turn
+    // could double-apply a write (second PR, comment, commit, edit).
     const shouldRetry =
       outcome === "failed" &&
       attempt < MAX_CONNECTION_RETRIES &&
       !sawMutatingTool &&
-      isTransientConnectionError(errorMessage)
+      (isTransientConnectionError(errorMessage) || noWorkSuccess)
     if (!shouldRetry) break
 
     const delayMs = CONNECTION_RETRY_BASE_MS * 2 ** attempt

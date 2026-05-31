@@ -34,6 +34,17 @@ const baseOpts: RunAgentOpts = {
 }
 
 const SUCCESS = { type: "result", subtype: "success", result: "DONE" }
+// The dead-proxy signature: SDK reports subtype "success" but the session
+// never reached the model — no result text, no usage (0 output tokens), $0.
+const EMPTY_SUCCESS = { type: "result", subtype: "success", result: "" }
+// A success that DID reach the model: empty result string but real output
+// tokens. Must NOT be demoted — it produced work.
+const SUCCESS_WITH_TOKENS = {
+  type: "result",
+  subtype: "success",
+  result: "",
+  usage: { input_tokens: 10, output_tokens: 42 },
+}
 const CONNECTION_ERR = "API Error: Unable to connect to API (ConnectionRefused)"
 const writeToolUse = {
   type: "assistant",
@@ -139,6 +150,45 @@ describe("runAgent: transient connection retry", () => {
     const ensureBackend = vi.fn().mockRejectedValue(new Error("restart failed"))
     const res = await runFlushed({ ...baseOpts, ensureBackend })
     expect(ensureBackend).toHaveBeenCalledTimes(1)
+    expect(res.outcome).toBe("completed")
+  })
+})
+
+describe("runAgent: no-work success demotion", () => {
+  beforeEach(() => {
+    attempts = []
+    callIndex = 0
+  })
+
+  it("demotes a zero-output 'success' to failed (blocks the empty PR)", async () => {
+    // Every attempt yields the dead-proxy success — recovery can't help, so it
+    // exhausts retries and ends FAILED. A failed run skips commit + ensurePr,
+    // so no empty PR is opened.
+    attempts = [{ messages: [EMPTY_SUCCESS] }]
+    const res = await runFlushed()
+    expect(res.outcome).toBe("failed")
+    expect(res.error).toMatch(/no model output/i)
+  })
+
+  it("runs ensureBackend on a no-work success (restarts a crashed proxy)", async () => {
+    attempts = [{ messages: [EMPTY_SUCCESS] }]
+    const ensureBackend = vi.fn().mockResolvedValue(undefined)
+    await runFlushed({ ...baseOpts, ensureBackend })
+    // Same recovery path as a transient connection error: 2 retries.
+    expect(ensureBackend).toHaveBeenCalledTimes(2)
+  })
+
+  it("recovers when a no-work success is followed by a real success", async () => {
+    attempts = [{ messages: [EMPTY_SUCCESS] }, { messages: [SUCCESS] }]
+    const ensureBackend = vi.fn().mockResolvedValue(undefined)
+    const res = await runFlushed({ ...baseOpts, ensureBackend })
+    expect(ensureBackend).toHaveBeenCalledTimes(1)
+    expect(res.outcome).toBe("completed")
+  })
+
+  it("does NOT demote a success that produced output tokens", async () => {
+    attempts = [{ messages: [SUCCESS_WITH_TOKENS] }]
+    const res = await runFlushed()
     expect(res.outcome).toBe("completed")
   })
 })
