@@ -77,6 +77,7 @@ jobs:
       pull-requests: write
       contents: write
       actions: read
+      id-token: write # OIDC: lets preview-build federate into Namespace remote builders
     steps:
       - uses: actions/checkout@v4
         with:

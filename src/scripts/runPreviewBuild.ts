@@ -18,6 +18,11 @@
  *   KODY_MASTER_KEY     vault decryption key
  *   KODY_PREVIEW_GHCR_OWNER (optional) — enables base-image inheritance
  *
+ * Optional vault key:
+ *   NSC_TENANT_ID — when set, builds on a Namespace remote builder
+ *   (OIDC-federated; kody.yml grants id-token: write) instead of the
+ *   local GHA docker daemon. Best-effort: falls back to local on failure.
+ *
  * Failure mode: any unhandled exception sets a non-zero exit and a
  * reason; the dashboard's webhook + Fly fallback path is unaffected.
  */
@@ -36,6 +41,7 @@ import {
   previewAppName,
   type VaultDoc,
 } from "./previewBuildHelpers.js"
+import { setupNamespaceBuilder } from "./previewBuildNamespace.js"
 import { runCmd } from "./previewBuildRun.js"
 
 const FLY_MACHINES = "https://api.machines.dev/v1"
@@ -396,6 +402,10 @@ export const runPreviewBuild: PreflightScript = async (
     const region =
       doc.secrets?.FLY_DEFAULT_REGION?.value?.trim() ||
       (process.env.FLY_REGION ?? "fra").trim()
+    // Opt-in: when the vault carries a Namespace tenant id, build on a
+    // Namespace remote builder (faster, cached) instead of the local
+    // GHA docker daemon. Empty → unchanged local-build behaviour.
+    const nscTenantId = doc.secrets?.NSC_TENANT_ID?.value?.trim() || ""
     console.log(
       `[preview-build] vault: ${Object.keys(buildEnv).length} secrets, mode=${buildMode}`,
     )
@@ -467,35 +477,59 @@ export const runPreviewBuild: PreflightScript = async (
     }
     await flyAllocateSharedIps(appName, flyToken)
 
-    // 6. Docker login + build + push. All run on the GHA runner using
-    //    the local docker daemon (BuildKit by default on ubuntu-latest).
-    //    Namespace.so remote builders are a future optimization — their
-    //    non-interactive auth needs proper OIDC federation setup that
-    //    requires a kody.yml workflow change (id-token: write), so this
-    //    path stays on local docker for now.
+    // 6. Docker login, then build + push the image to Fly's registry.
+    //    Primary path: a Namespace remote builder (when the vault carries
+    //    NSC_TENANT_ID) — faster cold builds + a persistent cache, via
+    //    OIDC federation (kody.yml grants id-token: write). Best-effort:
+    //    setup returns null on any failure and we build on the local GHA
+    //    docker daemon instead, so previews never depend on Namespace.
     await runCmd(
       "docker",
       ["login", "registry.fly.io", "-u", "x", "--password-stdin"],
       { input: flyToken, cwd: ctx.cwd },
     )
 
-    const buildArgs: string[] = [
-      "build",
-      "-f",
-      "Dockerfile.preview",
-      "-t",
-      `registry.fly.io/${appName}:${tag}`,
-    ]
-    if (baseImage) buildArgs.push("--build-arg", `BASE_IMAGE=${baseImage}`)
-    buildArgs.push(".")
-    await runCmd("docker", buildArgs, {
-      cwd: ctx.cwd,
-      env: { DOCKER_BUILDKIT: "1" },
-    })
+    const imageRef = `registry.fly.io/${appName}:${tag}`
+    const nsBuilder = nscTenantId
+      ? await setupNamespaceBuilder({
+          tenantId: nscTenantId,
+          builderName: `kody-preview-${pr}`,
+        })
+      : null
 
-    await runCmd("docker", ["push", `registry.fly.io/${appName}:${tag}`], {
-      cwd: ctx.cwd,
-    })
+    if (nsBuilder) {
+      // Remote build on Namespace, pushed straight to Fly's registry.
+      const a = [
+        "buildx",
+        "build",
+        "--builder",
+        nsBuilder,
+        "-f",
+        "Dockerfile.preview",
+        "-t",
+        imageRef,
+        "--push",
+      ]
+      if (baseImage) a.push("--build-arg", `BASE_IMAGE=${baseImage}`)
+      a.push(".")
+      await runCmd("docker", a, { cwd: ctx.cwd })
+    } else {
+      // Local build on the GHA runner's docker daemon, then push.
+      const buildArgs: string[] = [
+        "build",
+        "-f",
+        "Dockerfile.preview",
+        "-t",
+        imageRef,
+      ]
+      if (baseImage) buildArgs.push("--build-arg", `BASE_IMAGE=${baseImage}`)
+      buildArgs.push(".")
+      await runCmd("docker", buildArgs, {
+        cwd: ctx.cwd,
+        env: { DOCKER_BUILDKIT: "1" },
+      })
+      await runCmd("docker", ["push", imageRef], { cwd: ctx.cwd })
+    }
 
     // 7. Destroy stale preview machines (prior sync) then create the new one.
     const stale = await flyListMachines(appName, flyToken)
