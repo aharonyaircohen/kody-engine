@@ -400,24 +400,34 @@ export async function runCi(argv: string[]): Promise<number> {
     const pm = args.packageManager ?? detectPackageManager(cwd)
     process.stdout.write(`→ kody: package manager = ${pm}\n`)
 
-    if (!args.skipInstall) {
+    // preview-build compiles the consumer app *inside* docker (deps go in
+    // the image) and runs no model — so the runner needs neither the
+    // consumer's node_modules nor the LiteLLM proxy. Skipping both trims
+    // ~1–2 min of otherwise-wasted preflight on the preview path.
+    const buildOnly = dispatch.executable === "preview-build"
+
+    if (args.skipInstall || buildOnly) {
+      process.stdout.write(
+        `→ kody: skipping dep install (${buildOnly ? "build-only executable" : "--skip-install"})\n`,
+      )
+    } else {
       const code = installDeps(pm, cwd)
       if (code !== 0) {
         postFailureTail(issueNumber, cwd, `dependency install failed (${pm}, exit ${code})`)
         return 99
       }
-    } else {
-      process.stdout.write("→ kody: skipping dep install (--skip-install)\n")
     }
 
-    if (!args.skipLitellm) {
+    if (args.skipLitellm || buildOnly) {
+      process.stdout.write(
+        `→ kody: skipping LiteLLM install (${buildOnly ? "build-only executable" : "--skip-litellm"})\n`,
+      )
+    } else {
       const code = installLitellmIfNeeded(cwd)
       if (code !== 0) {
         postFailureTail(issueNumber, cwd, `litellm install failed (exit ${code})`)
         return 99
       }
-    } else {
-      process.stdout.write("→ kody: skipping LiteLLM install (--skip-litellm)\n")
     }
 
     configureGitIdentity(cwd)
