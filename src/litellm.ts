@@ -13,7 +13,13 @@ export async function checkLitellmHealth(url: string): Promise<boolean> {
   }
 }
 
-const DEFAULT_LITELLM_STARTUP_TIMEOUT_SEC = 60
+// LiteLLM 1.86.x cold-boots slowly on a fresh CI runner — `import litellm`
+// drags in boto3/azure/vertex and uvicorn startup, observed at ~60-65s before
+// `/health` first answers. A 60s deadline lost that race by a few seconds and
+// threw "failed to start" even though the proxy came up moments later (the real
+// cause behind the "unreachable proxy" empty-PR runs). 150s gives ample margin
+// for a slow runner without hanging a genuinely dead proxy for too long.
+const DEFAULT_LITELLM_STARTUP_TIMEOUT_SEC = 150
 const LITELLM_HEALTH_POLL_INTERVAL_MS = 2000
 
 /**

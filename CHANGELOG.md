@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **LiteLLM proxy startup timeout raised 60s → 150s.** On a cold CI runner the
+  proxy needs ~60-65s before `/health` first answers (heavy `import litellm`).
+  The old 60s deadline lost that race by a few seconds and threw "failed to
+  start" even though the proxy came up moments later — the actual root cause
+  behind the "unreachable proxy" empty-PR runs. Overridable via
+  `KODY_LITELLM_TIMEOUT_SEC`.
 - **No-work runs no longer ship an empty PR.** When the Claude Agent SDK
   returns a `success` result that never reached the model — the dead-proxy
   signature: subtype `success`, 1 turn, `$0`, no result text, `ConnectionRefused`
