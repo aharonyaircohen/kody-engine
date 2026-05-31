@@ -12,7 +12,12 @@ ARG BASE_IMAGE=node:22-alpine
 FROM ${BASE_IMAGE}
 WORKDIR /app
 
-RUN corepack enable 2>/dev/null || true
+# corepack's default pnpm on the base image can fall outside the app's
+# engines.pnpm range → ERR_PNPM_UNSUPPORTED_ENGINE. Pin a current pnpm
+# for repos that don't set packageManager (corepack still honors one
+# when present, so this only affects the unpinned case).
+RUN corepack enable 2>/dev/null || true; \
+    corepack prepare pnpm@10.17.0 --activate 2>/dev/null || npm i -g pnpm@10 2>/dev/null || true
 
 COPY package.json pnpm-lock.yaml* package-lock.json* yarn.lock* ./
 RUN --mount=type=cache,id=kp-pnpm-store,target=/root/.local/share/pnpm/store \
