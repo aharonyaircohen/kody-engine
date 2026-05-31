@@ -170,15 +170,19 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     })
   }
 
-  // Start LiteLLM for non-anthropic providers.
+  // Start LiteLLM for non-anthropic providers — unless this is a
+  // build-only executable (preview-build) that runs no model. Those skip
+  // the litellm *install* in preflight, so starting it here would fail.
   let litellm: Awaited<ReturnType<typeof startLitellmIfNeeded>> = null
-  try {
-    litellm = await startLitellmIfNeeded(model, input.cwd)
-  } catch (err) {
-    return finishAndEnd({
-      exitCode: 99,
-      reason: `litellm startup failed: ${err instanceof Error ? err.message : String(err)}`,
-    })
+  if (profileName !== "preview-build") {
+    try {
+      litellm = await startLitellmIfNeeded(model, input.cwd)
+    } catch (err) {
+      return finishAndEnd({
+        exitCode: 99,
+        reason: `litellm startup failed: ${err instanceof Error ? err.message : String(err)}`,
+      })
+    }
   }
 
   const ctx: Context = {
