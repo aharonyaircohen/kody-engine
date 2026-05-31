@@ -237,6 +237,9 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       // On a connection drop mid-run, restart the (possibly crashed) proxy
       // before the agent retries. No-op for direct-Anthropic runs (lm null).
       ensureBackend: lm ? () => lm.ensureHealthy().then(() => undefined) : undefined,
+      // Pure liveness probe so the agent can spot a hollow "success" (proxy
+      // crashed mid-request, SDK still reported success). No-op when lm null.
+      isBackendHealthy: lm ? () => lm.isHealthy() : undefined,
       verbose: input.verbose,
       quiet: input.quiet,
       ndjsonDir,

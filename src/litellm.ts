@@ -53,6 +53,15 @@ export interface LitellmHandle {
   url: string
   kill: () => void
   /**
+   * Pure liveness probe — hits `/health` and returns the result with NO side
+   * effect (never restarts). Used to decide whether a session that the SDK
+   * reported as "success" is actually hollow: if the proxy is dead right after
+   * the turn, the model never answered (it crashed mid-request and the SDK
+   * still emitted a 1-turn / $0 "success"). Demotion uses this; recovery uses
+   * `ensureHealthy`.
+   */
+  isHealthy: () => Promise<boolean>
+  /**
    * Ensure the proxy is reachable. If `/health` fails — the proxy crashed or
    * hung mid-run (the Approval Gate failure mode: a heavy request kills the
    * single worker, after which every connection is refused) — this dumps the
@@ -148,9 +157,11 @@ export async function startLitellmIfNeeded(
     return waitForHealth()
   }
 
+  const isHealthy = (): Promise<boolean> => checkLitellmHealth(url)
+
   // Reuse a proxy already serving this url (started by an earlier task).
   if (await checkLitellmHealth(url)) {
-    return { url, kill: killChild, ensureHealthy }
+    return { url, kill: killChild, isHealthy, ensureHealthy }
   }
 
   spawnProxy()
@@ -162,7 +173,7 @@ export async function startLitellmIfNeeded(
       `LiteLLM proxy failed to start within ${seconds}s (KODY_LITELLM_TIMEOUT_SEC overrides). Log tail:\n${tail}`,
     )
   }
-  return { url, kill: killChild, ensureHealthy }
+  return { url, kill: killChild, isHealthy, ensureHealthy }
 }
 
 function readDotenvApiKeys(projectDir: string): Record<string, string> {

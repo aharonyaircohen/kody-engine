@@ -195,6 +195,15 @@ export interface AgentOptions {
    * just hits the same dead backend. No-op / unset for direct-Anthropic runs.
    */
   ensureBackend?: () => Promise<void>
+  /**
+   * Pure liveness probe for the model backend (litellm proxy), no side effect.
+   * After a session the SDK reports as "success", we call this: if the proxy is
+   * dead the model never answered — it crashed mid-request and the SDK emitted
+   * a hollow 1-turn / $0 "success". That definitively demotes the run (below),
+   * which then restarts the proxy via `ensureBackend` and retries. Unset for
+   * direct-Anthropic runs.
+   */
+  isBackendHealthy?: () => Promise<boolean>
 }
 
 /**
@@ -651,21 +660,38 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     }
     finalText = resultTexts.join("\n\n---\n\n")
 
-    // A "success" that reached the model produces SOMETHING — a DONE/result
-    // marker (non-empty finalText) or at least output tokens. When BOTH are
-    // empty the session never reached the model (the dead-proxy signature:
-    // subtype "success", 1 turn, $0, no result text, ConnectionRefused on
-    // stderr). Demote it so we don't commit + open an empty PR. Both signals
-    // (not just one) are required so a real run with an oddly-empty result
-    // string, or one whose usage the SDK omitted, is never demoted —
-    // `!sawMutatingTool` is a third backstop.
-    if (outcome === "completed" && !sawMutatingTool && tokens.output === 0 && finalText === "") {
-      outcome = "failed"
-      outcomeKind = "model_error"
-      noWorkSuccess = true
-      errorMessage =
-        errorMessage ??
-        "session reported success but produced no model output (0 output tokens) — backend likely unreachable"
+    // Detect a hollow "success" — one the SDK reported as subtype "success"
+    // but where the model never actually answered (the dead-proxy signature:
+    // 1 turn, $0, then ConnectionRefused). Two signals, only checked on a
+    // non-mutating "success" so a real run is never touched:
+    //
+    //   1. Backend dead (DEFINITIVE): the litellm proxy is unreachable right
+    //      after the turn. A live model can't have answered through a dead
+    //      proxy, so the "success" is hollow regardless of what text/tokens the
+    //      SDK attached (the crashed session can carry the SDK's own error
+    //      string as finalText, which is why the text heuristic alone misses
+    //      it — see A-Guy #2211).
+    //   2. Zero output (HEURISTIC): no result text AND no output tokens — used
+    //      when there is no proxy to probe (direct-Anthropic) or the proxy was
+    //      already restarted out from under us.
+    //
+    // Demoting routes the run through the retry path below, which restarts the
+    // proxy via ensureBackend() (dumping its log tail — the only place the
+    // crash reason surfaces) and retries; on exhaustion it ends `failed`, so
+    // commit + ensurePr skip it instead of shipping an empty PR.
+    if (outcome === "completed" && !sawMutatingTool) {
+      const backendDead = opts.isBackendHealthy ? !(await opts.isBackendHealthy()) : false
+      const zeroOutput = tokens.output === 0 && finalText === ""
+      if (backendDead || zeroOutput) {
+        outcome = "failed"
+        outcomeKind = "model_error"
+        noWorkSuccess = true
+        errorMessage =
+          errorMessage ??
+          (backendDead
+            ? "model backend unreachable after a reported success — proxy crashed mid-request (hollow success)"
+            : "session reported success but produced no model output (0 output tokens) — backend likely unreachable")
+      }
     }
 
     // Retry only a transient connection failure (or the no-work success above,

@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Hollow "success" detection via a backend health probe.** When the LiteLLM
+  proxy crashes mid-request, the Claude Agent SDK can still emit a `success`
+  result (1 turn, $0) — sometimes carrying its own error string as the result
+  text, which slipped past the zero-output heuristic (A-Guy #2211). After any
+  non-mutating "success" the engine now probes the proxy directly; a dead proxy
+  proves the success is hollow, so the run is demoted and routed through the
+  restart-and-retry path — which **dumps the proxy log tail** (the only place
+  the crash reason surfaces) and gives the task a real second attempt instead
+  of failing silently. New `isBackendHealthy` hook on the agent; pure probe
+  (`isHealthy`) added to the LiteLLM handle.
 - **LiteLLM proxy startup timeout raised 60s → 150s.** On a cold CI runner the
   proxy needs ~60-65s before `/health` first answers (heavy `import litellm`).
   The old 60s deadline lost that race by a few seconds and threw "failed to

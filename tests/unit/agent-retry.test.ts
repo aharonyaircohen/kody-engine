@@ -192,3 +192,42 @@ describe("runAgent: no-work success demotion", () => {
     expect(res.outcome).toBe("completed")
   })
 })
+
+describe("runAgent: hollow-success detection via backend health probe", () => {
+  beforeEach(() => {
+    attempts = []
+    callIndex = 0
+  })
+
+  it("demotes a 'success' when the backend is dead right after the turn", async () => {
+    // SUCCESS has non-empty finalText ("DONE"), so the zero-output heuristic
+    // does NOT catch it — this is the A-Guy #2211 shape (proxy crashed
+    // mid-request, SDK reported a hollow success carrying error text). The
+    // health probe is the definitive signal.
+    attempts = [{ messages: [SUCCESS] }]
+    const isBackendHealthy = vi.fn().mockResolvedValue(false)
+    const ensureBackend = vi.fn().mockResolvedValue(undefined)
+    const res = await runFlushed({ ...baseOpts, isBackendHealthy, ensureBackend })
+    expect(res.outcome).toBe("failed")
+    expect(res.error).toMatch(/proxy crashed mid-request|unreachable/i)
+    // Demotion routed it through recovery: the proxy got a restart attempt.
+    expect(ensureBackend).toHaveBeenCalled()
+  })
+
+  it("does NOT demote a 'success' when the backend is alive", async () => {
+    attempts = [{ messages: [SUCCESS] }]
+    const isBackendHealthy = vi.fn().mockResolvedValue(true)
+    const res = await runFlushed({ ...baseOpts, isBackendHealthy })
+    expect(res.outcome).toBe("completed")
+  })
+
+  it("recovers when the backend comes back on retry", async () => {
+    attempts = [{ messages: [SUCCESS] }, { messages: [SUCCESS] }]
+    // Dead after attempt 1 → demote + restart; alive after attempt 2 → success.
+    const isBackendHealthy = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true)
+    const ensureBackend = vi.fn().mockResolvedValue(undefined)
+    const res = await runFlushed({ ...baseOpts, isBackendHealthy, ensureBackend })
+    expect(res.outcome).toBe("completed")
+    expect(ensureBackend).toHaveBeenCalledTimes(1)
+  })
+})
