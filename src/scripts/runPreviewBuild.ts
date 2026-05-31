@@ -18,8 +18,9 @@
  *   KODY_MASTER_KEY     vault decryption key
  *   KODY_PREVIEW_GHCR_OWNER (optional) — enables base-image inheritance
  *
- * Optional vault key:
- *   NSC_TENANT_ID — when set, builds on a Namespace remote builder
+ * Optional repo secret:
+ *   NSC_TENANT_ID — when set (GitHub Actions secret, reaches us via
+ *   ALL_SECRETS → process.env), builds on a Namespace remote builder
  *   (OIDC-federated; kody.yml grants id-token: write) instead of the
  *   local GHA docker daemon. Best-effort: falls back to local on failure.
  *
@@ -402,10 +403,12 @@ export const runPreviewBuild: PreflightScript = async (
     const region =
       doc.secrets?.FLY_DEFAULT_REGION?.value?.trim() ||
       (process.env.FLY_REGION ?? "fra").trim()
-    // Opt-in: when the vault carries a Namespace tenant id, build on a
+    // Opt-in: when the repo secret NSC_TENANT_ID is set, build on a
     // Namespace remote builder (faster, cached) instead of the local
-    // GHA docker daemon. Empty → unchanged local-build behaviour.
-    const nscTenantId = doc.secrets?.NSC_TENANT_ID?.value?.trim() || ""
+    // GHA docker daemon. Repo secrets are unpacked into process.env by
+    // the preflight (ALL_SECRETS), so this is the canonical source — no
+    // vault entry needed. Empty → unchanged local-build behaviour.
+    const nscTenantId = (process.env.NSC_TENANT_ID || "").trim()
     console.log(
       `[preview-build] vault: ${Object.keys(buildEnv).length} secrets, mode=${buildMode}`,
     )
