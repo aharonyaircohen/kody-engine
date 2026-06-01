@@ -136,20 +136,9 @@ function listRepairCandidates(repoSlug: string): RepairCandidate[] {
 }
 
 function dispatchVerb(workflowFile: string, executable: string, prNumber: number): { ok: true } | { ok: false; error: string } {
-  try {
-    gh([
-      "workflow",
-      "run",
-      workflowFile,
-      "-f",
-      `executable=${executable}`,
-      "-f",
-      `issue_number=${prNumber}`,
-    ])
-    return { ok: true }
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
-  }
+  // PR-repair verbs are just a workflow_dispatch keyed by PR number — same path
+  // as the general dispatchWorkflow tool (defined below; hoisted).
+  return dispatchWorkflow(workflowFile, executable, prNumber)
 }
 
 function postRecommendation(
@@ -211,6 +200,109 @@ function readLedger(label: string): LedgerResult {
     }
   } catch (err) {
     return { found: false, payload: { error: err instanceof Error ? err.message : String(err) } }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// General duty primitives (not PR-repair-specific). These give a locked duty
+// the affordances it needs WITHOUT raw `gh`, and — critically — make the
+// duplication-prone actions (create issue / comment) idempotent IN CODE, keyed
+// by a stable hidden marker. The LLM no longer decides whether a duplicate
+// exists; the tool looks it up deterministically via the issues API (never the
+// laggy search index) and refuses to create a second.
+// ---------------------------------------------------------------------------
+
+/** Check-run conclusions that count as a terminal failure (CANCELLED excluded —
+ * a cancelled run is usually superseded, not a real CI failure). */
+const CHECK_FAIL_CONCLUSIONS = new Set(["FAILURE", "TIMED_OUT", "STARTUP_FAILURE", "ACTION_REQUIRED"])
+/** Kody's own job check-runs — excluded by default so a duty never reacts to
+ * the engine's own activity (which would be self-referential / loop). */
+const DEFAULT_IGNORE_CHECKS = ["run", "kody", "job-tick", "goal-tick", "worker-ask", "chat"]
+
+export interface CheckRunsResult {
+  sha: string
+  state: "RED" | "PENDING" | "GREEN"
+  failing: Array<{ name: string; conclusion: string; detailsUrl: string }>
+  pending: Array<{ name: string; status: string }>
+}
+
+export function readCheckRuns(repoSlug: string, ref: string, ignoreNames: string[]): CheckRunsResult {
+  const sha = gh(["api", `repos/${repoSlug}/commits/${ref}`, "--jq", ".sha"]).trim()
+  // `--jq '.check_runs[] | {…}'` emits newline-delimited JSON objects (one per
+  // line), and `--paginate` concatenates pages — parse line by line.
+  const raw = gh([
+    "api",
+    `repos/${repoSlug}/commits/${sha}/check-runs`,
+    "--paginate",
+    "--jq",
+    ".check_runs[] | {name, status, conclusion, details_url}",
+  ])
+  const ignore = new Set(ignoreNames.map((n) => n.toLowerCase()))
+  const checks = raw
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => JSON.parse(l) as { name: string; status: string; conclusion: string | null; details_url: string })
+    .filter((c) => !ignore.has(String(c.name).toLowerCase()))
+  const failing = checks
+    .filter((c) => CHECK_FAIL_CONCLUSIONS.has(String(c.conclusion ?? "").toUpperCase()))
+    .map((c) => ({ name: c.name, conclusion: String(c.conclusion), detailsUrl: c.details_url }))
+  const pending = checks
+    .filter((c) => String(c.status).toLowerCase() !== "completed")
+    .map((c) => ({ name: c.name, status: c.status }))
+  const state: CheckRunsResult["state"] = failing.length > 0 ? "RED" : pending.length > 0 ? "PENDING" : "GREEN"
+  return { sha, state, failing, pending }
+}
+
+const trackMarker = (key: string): string => `<!-- kody-track:${key} -->`
+const commentMarker = (key: string): string => `<!-- kody-track-comment:${key} -->`
+
+export type EnsureIssueResult = { created: boolean; number: number } | { error: string }
+
+export function ensureIssue(repoSlug: string, key: string, title: string, body: string): EnsureIssueResult {
+  const marker = trackMarker(key)
+  try {
+    const raw = gh(["issue", "list", "-R", repoSlug, "--state", "open", "--limit", "100", "--json", "number,body"])
+    const issues = JSON.parse(raw) as Array<{ number: number; body: string }>
+    const existing = issues.find((i) => (i.body ?? "").includes(marker))
+    if (existing) return { created: false, number: existing.number }
+    const url = gh(["issue", "create", "-R", repoSlug, "--title", title, "--body-file", "-"], {
+      input: `${body}\n\n${marker}`,
+    })
+    const m = url.trim().match(/\/(\d+)\s*$/)
+    if (!m) return { error: `issue created but could not parse its number from: ${url}` }
+    return { created: true, number: Number(m[1]) }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+export type EnsureCommentResult = { posted: boolean } | { error: string }
+
+export function ensureComment(repoSlug: string, issue: number, key: string, body: string): EnsureCommentResult {
+  const marker = commentMarker(key)
+  try {
+    const raw = gh(["issue", "view", String(issue), "-R", repoSlug, "--json", "comments"])
+    const parsed = JSON.parse(raw) as { comments?: Array<{ body?: string }> }
+    const already = (parsed.comments ?? []).some((c) => (c.body ?? "").includes(marker))
+    if (already) return { posted: false }
+    gh(["issue", "comment", String(issue), "-R", repoSlug, "--body-file", "-"], { input: `${body}\n\n${marker}` })
+    return { posted: true }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+export function dispatchWorkflow(
+  workflowFile: string,
+  executable: string,
+  issueNumber: number,
+): { ok: true } | { ok: false; error: string } {
+  try {
+    gh(["workflow", "run", workflowFile, "-f", `executable=${executable}`, "-f", `issue_number=${issueNumber}`])
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
 }
 
@@ -307,10 +399,87 @@ export function buildDutyMcpServer(opts: DutyMcpOptions): DutyMcpHandle {
     },
   )
 
+  const checkRunsTool = tool(
+    "read_check_runs",
+    "Read CI for a branch or commit ref (e.g. 'dev'). Returns {sha, state, failing:[{name,conclusion,detailsUrl}], pending:[{name,status}]}. state is RED (≥1 check has a terminal-failure conclusion: failure/timed_out/startup_failure/action_required), PENDING (none failed but some still running), or GREEN (all completed, none failed). Kody's own job check-runs (run/kody/job-tick/…) are excluded by default. This reads the commit's authoritative check-runs — use it instead of guessing CI health from a run list.",
+    {
+      ref: z.string().min(1).describe("Branch name or commit SHA to read CI for (e.g. 'dev')."),
+      ignoreNames: z
+        .array(z.string())
+        .optional()
+        .describe("Check names to exclude (default: Kody's own job names)."),
+    },
+    async (args) => {
+      const result = readCheckRuns(opts.repoSlug, args.ref, args.ignoreNames ?? DEFAULT_IGNORE_CHECKS)
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] }
+    },
+  )
+
+  const ensureIssueTool = tool(
+    "ensure_issue",
+    "Idempotently ensure ONE open tracking issue exists for `key`. Searches OPEN issues (issues API, not the laggy search index) for `key`'s hidden marker; if found, returns {created:false, number} and creates NOTHING; otherwise creates the issue (title + body, marker appended) and returns {created:true, number}. This is the anti-duplication primitive: use one stable `key` per recurring finding so re-ticks reuse the same issue. Only take follow-up actions (dispatch/comment) when created===true.",
+    {
+      key: z
+        .string()
+        .min(1)
+        .describe("Stable dedup identity for this finding (e.g. 'dev-ci-red', 'docs-drift:<feature>'). Same key across ticks = same issue."),
+      title: z.string().min(1).describe("Issue title (used only on first creation)."),
+      body: z
+        .string()
+        .min(1)
+        .describe("Issue body markdown (used only on first creation). Include the operator mention verbatim if the duty body has one."),
+    },
+    async (args) => {
+      const result = ensureIssue(opts.repoSlug, args.key, args.title, args.body)
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] }
+    },
+  )
+
+  const ensureCommentTool = tool(
+    "ensure_comment",
+    "Idempotently post ONE comment on an issue for `key`. If a comment carrying `key`'s marker already exists on the issue, returns {posted:false}; otherwise posts the comment (marker appended) and returns {posted:true}. Use for a notify/audit comment that must appear exactly once.",
+    {
+      issue: z.number().int().positive().describe("Issue number to comment on."),
+      key: z.string().min(1).describe("Stable dedup identity for this comment (e.g. 'dev-ci-red:dispatched')."),
+      body: z.string().min(1).describe("Comment body markdown."),
+    },
+    async (args) => {
+      const result = ensureComment(opts.repoSlug, args.issue, args.key, args.body)
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] }
+    },
+  )
+
+  const dispatchTool = tool(
+    "dispatch_workflow",
+    "Dispatch a kody.yml workflow_dispatch run for an executable against an issue (the cross-run bot→engine path; a bot `@kody` comment would be dropped). E.g. dispatch_workflow({executable:'run', issueNumber:<n>}) opens a fix PR from a tracking issue. Returns {ok} or {ok:false,error}.",
+    {
+      executable: z.string().min(1).describe("Executable/stage to run (e.g. 'run')."),
+      issueNumber: z.number().int().positive().describe("Issue (or PR) number forwarded as issue_number."),
+    },
+    async (args) => {
+      const result = dispatchWorkflow(workflowFile, args.executable, args.issueNumber)
+      const text = result.ok
+        ? `Dispatched \`${args.executable}\` on #${args.issueNumber} via workflow_dispatch.`
+        : `Dispatch failed for \`${args.executable}\` on #${args.issueNumber}: ${result.error}`
+      return { content: [{ type: "text" as const, text }] }
+    },
+  )
+
   const server = createSdkMcpServer({
     name: "kody-duty",
     version: "0.1.0",
-    tools: [listTool, syncTool, fixCiTool, resolveTool, recommendTool, ledgerTool],
+    tools: [
+      listTool,
+      syncTool,
+      fixCiTool,
+      resolveTool,
+      recommendTool,
+      ledgerTool,
+      checkRunsTool,
+      ensureIssueTool,
+      ensureCommentTool,
+      dispatchTool,
+    ],
   })
 
   return { server }
@@ -324,4 +493,8 @@ export const DUTY_MCP_TOOL_NAMES = [
   "resolve_pr",
   "recommend_to_operator",
   "read_ledger",
+  "read_check_runs",
+  "ensure_issue",
+  "ensure_comment",
+  "dispatch_workflow",
 ] as const

@@ -78,6 +78,42 @@ describe("loadJobFromFile mentions", () => {
   })
 })
 
+describe("loadJobFromFile locked-toolbox (tools:)", () => {
+  function lockedProfile(): Profile {
+    return { claudeCode: { tools: [] as string[] } } as unknown as Profile
+  }
+
+  it("revokes Bash/Read and locks allowedTools to the declared kody-duty tools + submit_state", async () => {
+    writeStaff("cto")
+    writeDuty("dev-ci-health", "staff: cto\ntools: read_check_runs, ensure_issue, dispatch_workflow, ensure_comment")
+
+    const ctx = ctxFor("dev-ci-health")
+    const profile = lockedProfile()
+    await loadJobFromFile(ctx, profile, {})
+
+    expect(ctx.data.dutyTools).toEqual(["read_check_runs", "ensure_issue", "dispatch_workflow", "ensure_comment"])
+    const lockedTools = (profile as unknown as { claudeCode: { tools: string[] } }).claudeCode.tools
+    expect(lockedTools).toEqual([
+      "mcp__kody-duty__read_check_runs",
+      "mcp__kody-duty__ensure_issue",
+      "mcp__kody-duty__dispatch_workflow",
+      "mcp__kody-duty__ensure_comment",
+      "mcp__kody-submit__submit_state",
+    ])
+    // The raw escape hatches are gone.
+    expect(lockedTools).not.toContain("Bash")
+    expect(lockedTools).not.toContain("Read")
+    expect(ctx.data.promptTemplate).toBe("prompts/locked.md")
+  })
+
+  it("throws if a duty declares a tool not in the kody-duty palette", async () => {
+    writeStaff("cto")
+    writeDuty("bad", "staff: cto\ntools: read_check_runs, make_coffee")
+
+    await expect(loadJobFromFile(ctxFor("bad"), lockedProfile(), {})).rejects.toThrow(/make_coffee/)
+  })
+})
+
 describe("loadJobFromFile body {{mentions}} substitution", () => {
   it("replaces {{mentions}} inside the duty body with the resolved handles", async () => {
     writeStaff("kody")
