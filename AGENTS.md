@@ -383,6 +383,14 @@ The check counts **lifecycle-expanded references** (a profile that opts into `li
 - Its `kody.config.json` declares `agent.model`, quality commands, and `testRequirements` (route.ts files require a sibling `route.test.ts`).
 - To live-test a change: publish the new kody version, comment `@kody` on a fresh issue there (or PR comment for fix/fix-ci/resolve).
 
+## Working discipline (non-negotiable)
+
+Every change to this engine has been held to three bars — keep them:
+
+1. **Deep analysis first.** No change ships without understanding *why* the current code is shaped the way it is and what it touches. Read the code, trace the invariants, then act.
+2. **Strong test coverage.** Each change is backed by unit/int/e2e tests that actually exercise the new behavior. `pnpm typecheck && pnpm test && pnpm test:e2e` stays green.
+3. **Live testing after publishing.** A release is not "done" until it has been exercised end-to-end on the tester repo (`aharonyaircohen/Kody-Engine-Tester`) — publishing is the start of verification, not the end.
+
 ## How to proceed on a new session
 
 1. Read the relevant code in `src/` — start with `executor.ts` and the profile directories under `src/executables/`.
