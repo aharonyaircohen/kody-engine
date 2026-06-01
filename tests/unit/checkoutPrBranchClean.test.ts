@@ -29,18 +29,22 @@ describe("checkoutPrBranch: clears working-tree state before checkout", () => {
     calls.length = 0
   })
 
-  it("runs `git reset --hard HEAD` and `git clean -fd` before `gh pr checkout`", async () => {
+  it("runs `git reset --hard HEAD` and `git clean -fd -e .kody` before `gh pr checkout`", async () => {
     const { checkoutPrBranch } = await import("../../src/branch.js")
     checkoutPrBranch(1556, "/tmp/fake-repo")
     const order = calls.map((c) => `${c.cmd} ${c.args.join(" ")}`)
     const resetIdx = order.findIndex((s) => s === "git reset --hard HEAD")
-    const cleanIdx = order.findIndex((s) => s === "git clean -fd")
+    // `.kody` MUST be excluded so the clean doesn't wipe the tracked-but-
+    // ignore-negated consumer executables under .kody/executables/.
+    const cleanIdx = order.findIndex((s) => s === "git clean -fd -e .kody")
     const checkoutIdx = order.findIndex((s) => s === "gh pr checkout 1556")
     expect(resetIdx).toBeGreaterThanOrEqual(0)
     expect(cleanIdx).toBeGreaterThanOrEqual(0)
     expect(checkoutIdx).toBeGreaterThanOrEqual(0)
     expect(resetIdx).toBeLessThan(checkoutIdx)
     expect(cleanIdx).toBeLessThan(checkoutIdx)
+    // Guard against regression to a bare `git clean -fd` (no .kody exclusion).
+    expect(order).not.toContain("git clean -fd")
   })
 
   it("still attempts gh pr checkout when the cleanup commands fail (best-effort)", async () => {

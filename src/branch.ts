@@ -52,7 +52,16 @@ function resetWorkingTree(cwd?: string): void {
     /* best effort */
   }
   try {
-    execFileSync("git", ["clean", "-fd"], { cwd, stdio: ["ignore", "pipe", "pipe"], timeout: 30_000 })
+    // `-e .kody` excludes kody's own directory from the clean. Consumer
+    // executables live at `.kody/executables/<name>/` and are TRACKED, but the
+    // consumer repo's `.gitignore` ignores `.kody/*` and re-includes them via a
+    // negation (`!.kody/executables/**`). On the CI runner, `git clean -fd`'s
+    // directory walk over that negated-ignore pattern removes the whole
+    // `.kody/executables/<name>` directory — so the next preflight (composePrompt)
+    // crashes with "no prompt template found" (readdir ENOENT). Excluding `.kody`
+    // keeps the engine's tracked assets intact; the ephemeral runtime state under
+    // `.kody/` is gitignored bookkeeping that's safe to leave on an ephemeral runner.
+    execFileSync("git", ["clean", "-fd", "-e", ".kody"], { cwd, stdio: ["ignore", "pipe", "pipe"], timeout: 30_000 })
   } catch {
     /* best effort */
   }
@@ -89,7 +98,10 @@ export function checkoutPrBranch(prNumber: number, cwd?: string): string {
     /* best effort */
   }
   try {
-    execFileSync("git", ["clean", "-fd"], { cwd, env, stdio: ["ignore", "pipe", "pipe"], timeout: 30_000 })
+    // Exclude `.kody` for the same reason as resetWorkingTree: `git clean -fd`
+    // otherwise removes the tracked-but-ignore-negated `.kody/executables/<name>`
+    // dirs on the CI runner, breaking PR-driven executables (fix/fix-ci/resolve).
+    execFileSync("git", ["clean", "-fd", "-e", ".kody"], { cwd, env, stdio: ["ignore", "pipe", "pipe"], timeout: 30_000 })
   } catch {
     /* best effort */
   }
