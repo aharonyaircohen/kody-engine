@@ -274,6 +274,10 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       enableDutyTool: Array.isArray(ctx.data.dutyTools) && ctx.data.dutyTools.length > 0,
       dutyOperatorMention:
         typeof ctx.data.dutyOperatorMention === "string" ? (ctx.data.dutyOperatorMention as string) : undefined,
+      // Stamp the running duty's slug onto recommendations so the dashboard
+      // keys trust per duty (not per persona). `jobSlug` is set by loadJobFromFile.
+      dutyDutySlug:
+        typeof ctx.data.jobSlug === "string" ? (ctx.data.jobSlug as string) : undefined,
       // owner/repo from kody.config.json; envelope falls back to GITHUB_REPOSITORY
       // for tester repos that don't set config.github (the file isn't always
       // checked in). Either way, dutyMcp needs "owner/name" to hit the compare API.

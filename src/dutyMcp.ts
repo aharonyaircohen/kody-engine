@@ -46,6 +46,13 @@ interface DutyMcpOptions {
   operatorMention: string
   /** Workflow file to dispatch (default "kody.yml"). */
   workflowFile?: string
+  /**
+   * Slug of the duty currently running (`ctx.data.jobSlug`). Stamped onto every
+   * `recommend_to_operator` comment as `<!-- kody-duty: <slug> -->` so the
+   * dashboard keys trust per DUTY, not per persona. Omitted → no stamp (the
+   * dashboard then falls back to the persona slug).
+   */
+  dutySlug?: string
 }
 
 interface RepairCandidate {
@@ -145,8 +152,11 @@ function postRecommendation(
   prNumber: number,
   mention: string,
   message: string,
+  dutySlug?: string,
 ): { ok: true } | { ok: false; error: string } {
-  const body = mention ? `${mention} ${message}` : message
+  const mentioned = mention ? `${mention} ${message}` : message
+  // Stamp the emitting duty so the dashboard keys trust per duty (code, not LLM).
+  const body = dutySlug ? `${mentioned}\n\n<!-- kody-duty: ${dutySlug} -->` : mentioned
   try {
     // gh CLI strips `@kody …` self-dispatch via stripKodyMentions in the
     // postIssueComment path — but recommend_to_operator never starts with
@@ -370,7 +380,7 @@ export function buildDutyMcpServer(opts: DutyMcpOptions): DutyMcpHandle {
       body: z.string().min(1).describe("Comment body (markdown). Do not include the operator mention — the engine prepends it."),
     },
     async (args) => {
-      const result = postRecommendation(args.pr, opts.operatorMention, args.body)
+      const result = postRecommendation(args.pr, opts.operatorMention, args.body, opts.dutySlug)
       const text = result.ok
         ? `Recommendation posted on PR #${args.pr}.`
         : `Recommendation failed on PR #${args.pr}: ${result.error}`

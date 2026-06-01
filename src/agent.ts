@@ -156,6 +156,12 @@ export interface AgentOptions {
    */
   dutyRepoSlug?: string
   /**
+   * Slug of the running duty (`ctx.data.jobSlug`), stamped onto
+   * `recommend_to_operator` comments so the dashboard keys trust per duty.
+   * Ignored when `enableDutyTool` is false.
+   */
+  dutyDutySlug?: string
+  /**
    * Opt-in (chat/Brain): build an in-process MCP server exposing a
    * `fetch_repo` tool so the agent can clone and work on repos other than the
    * one it was handed. Requires `reposRoot`; grants the agent read access to
@@ -414,6 +420,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         const dutyHandle = buildDutyMcpServer({
           repoSlug: opts.dutyRepoSlug,
           operatorMention: opts.dutyOperatorMention ?? "",
+          ...(opts.dutyDutySlug ? { dutySlug: opts.dutyDutySlug } : {}),
         })
         mcpEntries.push(["kody-duty", dutyHandle.server as unknown as Record<string, unknown>])
       }
