@@ -28,6 +28,7 @@
     "lint": "biome check",
     "lint:fix": "biome check --write",
     "format": "biome format --write",
+    "brain:publish": "docker buildx build --platform linux/amd64 -f runner/Dockerfile.brain -t ghcr.io/${KODY_BRAIN_GHCR_OWNER:-aharonyaircohen}/kody-brain:latest --push runner",
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
