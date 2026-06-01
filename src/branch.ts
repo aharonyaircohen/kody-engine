@@ -111,6 +111,10 @@ export function checkoutPrBranch(prNumber: number, cwd?: string): string {
     stdio: ["ignore", "pipe", "pipe"],
     timeout: 60_000,
   })
+  // The checkout can drop kody's tracked-but-ignore-negated `.kody/` assets;
+  // restore them from the checked-out branch's HEAD tree (no-op if that branch
+  // predates the executables — those PRs would need a rebase regardless).
+  restoreKodyAssets(cwd)
   return getCurrentBranch(cwd)
 }
 
@@ -144,7 +148,40 @@ export function mergeBase(baseBranch: string, cwd?: string): "clean" | "conflict
   }
 }
 
+/**
+ * Force-restore kody's own tracked assets (`.kody/executables`, `.kody/missions`,
+ * …) into the working tree from the current HEAD tree. A branch checkout on the
+ * CI runner can drop these: they're tracked, but the consumer repo's `.gitignore`
+ * ignores `.kody/*` and re-includes them via a negation, and git's working-tree
+ * update over that pattern removes the `.kody/executables/<name>` directory —
+ * which makes the next preflight (composePrompt) crash with readdir ENOENT.
+ * `git checkout HEAD -- .kody` rematerialises whatever the branch dance dropped.
+ * Best-effort: repos that don't track `.kody` just no-op (the checkout errors).
+ */
+function restoreKodyAssets(cwd?: string): void {
+  try {
+    execFileSync("git", ["checkout", "HEAD", "--", ".kody"], { cwd, stdio: ["ignore", "pipe", "pipe"], timeout: 30_000 })
+  } catch {
+    /* .kody not tracked here, or nothing to restore — fine */
+  }
+}
+
 export function ensureFeatureBranch(
+  issueNumber: number,
+  title: string,
+  defaultBranch: string,
+  cwd?: string,
+  baseBranch?: string,
+): BranchResult {
+  // The branch setup (reset/clean/checkout) can drop kody's tracked-but-
+  // ignore-negated `.kody/` assets on the CI runner; restore them once the
+  // branch is in place, before any downstream script reads them.
+  const result = ensureFeatureBranchInner(issueNumber, title, defaultBranch, cwd, baseBranch)
+  restoreKodyAssets(cwd)
+  return result
+}
+
+function ensureFeatureBranchInner(
   issueNumber: number,
   title: string,
   defaultBranch: string,

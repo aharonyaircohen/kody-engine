@@ -45,6 +45,10 @@ describe("checkoutPrBranch: clears working-tree state before checkout", () => {
     expect(cleanIdx).toBeLessThan(checkoutIdx)
     // Guard against regression to a bare `git clean -fd` (no .kody exclusion).
     expect(order).not.toContain("git clean -fd")
+    // After the checkout, kody's tracked assets are force-restored — a branch
+    // checkout can drop the ignore-negated .kody/executables/ dirs on CI.
+    const restoreIdx = order.findIndex((s) => s === "git checkout HEAD -- .kody")
+    expect(restoreIdx).toBeGreaterThan(checkoutIdx)
   })
 
   it("still attempts gh pr checkout when the cleanup commands fail (best-effort)", async () => {
