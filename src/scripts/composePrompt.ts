@@ -31,17 +31,34 @@ export const composePrompt: PreflightScript = async (ctx, profile) => {
     path.join(profile.dir, "prompt.md"),
   ].filter(Boolean) as string[]
 
+  // Read-or-fail instead of existsSync-then-read: one syscall, no
+  // stat/read TOCTOU, and the catch captures the REAL errno per candidate
+  // (ENOENT vs EACCES vs ELOOP) so a confusing "not found" on a file that's
+  // actually present becomes self-diagnosing.
   let templatePath = ""
+  let template = ""
+  const attempts: string[] = []
   for (const c of candidates) {
-    if (fs.existsSync(c)) {
+    try {
+      template = fs.readFileSync(c, "utf-8")
       templatePath = c
       break
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException)?.code ?? (err instanceof Error ? err.message : String(err))
+      attempts.push(`${c} → ${code}`)
     }
   }
   if (!templatePath) {
-    throw new Error(`profile at ${profile.dir}: no prompt template found (tried ${candidates.join(", ")})`)
+    let dirState: string
+    try {
+      dirState = `dir contents: [${fs.readdirSync(profile.dir).join(", ")}]`
+    } catch (err) {
+      dirState = `readdir(${profile.dir}) failed: ${(err as NodeJS.ErrnoException)?.code ?? String(err)}`
+    }
+    throw new Error(
+      `profile at ${profile.dir}: no prompt template found (cwd=${process.cwd()}; tried — ${attempts.join("; ")}; ${dirState})`,
+    )
   }
-  const template = fs.readFileSync(templatePath, "utf-8")
 
   const tokens: Record<string, string> = {
     ...stringifyAll(ctx.args, "args."),
