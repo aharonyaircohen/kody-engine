@@ -59,4 +59,17 @@ describe("composePrompt", () => {
     const ctx = makeCtx(dir)
     await expect(composePrompt(ctx, makeProfile(missing))).rejects.toThrow(/readdir\(.*gone\) failed: ENOENT/)
   })
+
+  it("uses the load-time cached template even when the working-tree file is gone", async () => {
+    // Simulates the CI bug: runFlow's branch setup drops .kody/executables/<name>/
+    // after load. No prompt.md on disk, but it was captured at profile-load time.
+    const f = path.join(dir, "prompt.md")
+    const profile = makeProfile(dir)
+    profile.promptTemplates = { [f]: "Cached {{repoOwner}}/{{repoName}}." }
+    const ctx = makeCtx(dir)
+    await composePrompt(ctx, profile)
+    expect(ctx.data.prompt).toBe("Cached o/r.")
+    // And the disk file genuinely doesn't exist.
+    expect(fs.existsSync(f)).toBe(false)
+  })
 })

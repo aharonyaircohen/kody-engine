@@ -118,6 +118,15 @@ export interface Profile {
   preloadContext?: boolean
   /** Absolute directory the profile was loaded from. Used to resolve prompt.md. */
   dir: string
+  /**
+   * Prompt template files captured (by absolute path) at load time, BEFORE any
+   * preflight runs. composePrompt prefers these over a fresh disk read so the
+   * template survives working-tree churn from runFlow's branch setup — on the CI
+   * runner a branch checkout can drop the tracked-but-ignore-negated
+   * `.kody/executables/<name>/` dir, and reading prompt.md afterwards fails with
+   * ENOENT even though profile.json (read here, earlier) loaded fine.
+   */
+  promptTemplates?: Record<string, string>
 }
 
 /**

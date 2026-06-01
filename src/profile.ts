@@ -156,6 +156,7 @@ export function loadProfile(profilePath: string): Profile {
     // flip to true after end-to-end verification.
     preloadContext: r.preloadContext === true,
     dir: path.dirname(profilePath),
+    promptTemplates: readPromptTemplates(path.dirname(profilePath)),
   }
 
   if (lifecycle) {
@@ -163,6 +164,34 @@ export function loadProfile(profilePath: string): Profile {
   }
 
   return profile
+}
+
+/**
+ * Capture a profile's prompt template files at load time — `prompt.md` and any
+ * `prompts/*.md` — keyed by absolute path. Done here (alongside reading
+ * profile.json, before any preflight) so the templates are safe from
+ * working-tree churn later in the run (see Profile.promptTemplates). Best-effort:
+ * missing files are simply absent from the map.
+ */
+function readPromptTemplates(dir: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  const read = (p: string): void => {
+    try {
+      out[p] = fs.readFileSync(p, "utf-8")
+    } catch {
+      /* not present — fine */
+    }
+  }
+  read(path.join(dir, "prompt.md"))
+  try {
+    const promptsDir = path.join(dir, "prompts")
+    for (const ent of fs.readdirSync(promptsDir)) {
+      if (ent.endsWith(".md")) read(path.join(promptsDir, ent))
+    }
+  } catch {
+    /* no prompts/ dir — fine */
+  }
+  return out
 }
 
 /**
