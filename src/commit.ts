@@ -205,6 +205,23 @@ export function commitAndPush(branch: string, agentMessage: string, cwd?: string
     return { committed: false, pushed: false, sha: "", message: "" }
   }
 
+  // Unstage any forbidden paths an earlier postflight may have staged. In
+  // resolve mode `stageMergeConflicts` runs `git add -A`, which stages
+  // EVERYTHING — including `.env`, `kody.config.json` (the trust anchor), and
+  // runtime `.kody/` state. The per-file `git add` of allowedFiles below only
+  // ADDS; it never un-stages, so without this reset the forbidden-path filter
+  // is silently bypassed and those files land in the commit. Reset is per-file
+  // (leaves MERGE_HEAD and resolved-file staging intact) and a harmless no-op
+  // in non-resolve modes where nothing pre-staged them.
+  const forbiddenFiles = allChanged.filter((f) => isForbiddenPath(f))
+  for (const f of forbiddenFiles) {
+    try {
+      git(["reset", "-q", "--", f], cwd)
+    } catch {
+      /* not staged — fine */
+    }
+  }
+
   for (const f of allowedFiles) {
     try {
       git(["add", "--", f], cwd)

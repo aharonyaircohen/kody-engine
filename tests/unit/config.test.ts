@@ -87,6 +87,29 @@ describe("config: loadConfig", () => {
     expect(() => loadConfig(dir)).toThrow(/github\.owner/)
   })
 
+  it("preserves agent.perExecutable model overrides", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: {
+        model: "claude/base",
+        perExecutable: { classify: "claude/haiku", plan: "claude/opus", bogus: "", nope: 5 },
+      },
+    })
+    const cfg = loadConfig(dir)
+    // Valid string entries survive; empty-string and non-string entries drop.
+    expect(cfg.agent.perExecutable).toEqual({ classify: "claude/haiku", plan: "claude/opus" })
+  })
+
+  it("omits perExecutable entirely when absent or all-invalid", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "claude/base", perExecutable: { x: "" } },
+    })
+    expect(loadConfig(dir).agent.perExecutable).toBeUndefined()
+  })
+
   it("preserves quality commands", () => {
     const dir = tmpDir()
     writeConfig(dir, {

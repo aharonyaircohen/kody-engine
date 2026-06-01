@@ -194,6 +194,7 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     },
     agent: {
       model: String(agent.model),
+      ...(parsePerExecutable(agent.perExecutable)),
     },
     issueContext: parseIssueContext(raw.issueContext),
     testRequirements: parseTestRequirements(raw.testRequirements),
@@ -306,6 +307,22 @@ function mergeAliases(raw: unknown): Record<string, string> {
     }
   }
   return out
+}
+
+/**
+ * Parse `agent.perExecutable` into a validated string→string map, spread into
+ * the returned `agent` object. Returns `{}` (not `{ perExecutable: undefined }`)
+ * when absent so the spread is a clean no-op and the key stays off the object.
+ * Without this, the executor's `config.agent.perExecutable?.[name]` lookup is
+ * always undefined and every stage silently runs the base model.
+ */
+function parsePerExecutable(raw: unknown): { perExecutable?: Record<string, string> } {
+  if (!raw || typeof raw !== "object") return {}
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === "string" && v.length > 0) out[k] = v
+  }
+  return Object.keys(out).length > 0 ? { perExecutable: out } : {}
 }
 
 function parseClassifyConfig(raw: unknown): KodyConfig["classify"] {

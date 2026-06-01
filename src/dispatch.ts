@@ -154,7 +154,7 @@ export function autoDispatch(opts?: {
   const rawBody = String(event.comment?.body ?? "")
   const authorLogin = String(event.comment?.user?.login ?? "")
   const authorType = String(event.comment?.user?.type ?? "")
-  if (!rawBody.toLowerCase().includes("@kody")) return null
+  if (!hasKodyMention(rawBody)) return null
   // Bot-authored comments: do NOT blanket-drop. Kody runs as a bot in repos
   // whose token is a GitHub App (e.g. `kodyade[bot]`), so duties, slash
   // commands, and multi-step flows self-dispatch by posting `@kody <command>`
@@ -411,10 +411,26 @@ function associationAllowed(event: Record<string, any>, config?: KodyConfig): bo
   return allowed.includes(assoc)
 }
 
+/**
+ * A *real* @kody mention: at line start or after whitespace, and NOT part of a
+ * longer token. The lookahead requires the next char to be whitespace, end, or
+ * punctuation that is neither a word char nor a hyphen — so `@kody`, `@kody fix`
+ * and `@kody:` match, while `me@kody.dev` (an email), `@kodyfix`, `@kodyade[bot]`
+ * (the App's own username) and `@kody-engine` (a repo reference) do NOT. Before
+ * this, a bare `.includes("@kody")` launched the default agent run on any of
+ * those. Non-global so `.test()`/`.match()` carry no lastIndex state.
+ */
+export const KODY_MENTION_RE = /(?:^|\s)@kody(?=\s|$|[^\w-])/i
+
+export function hasKodyMention(body: string): boolean {
+  return KODY_MENTION_RE.test(body)
+}
+
 function extractAfterTag(body: string): string {
-  const idx = body.indexOf("@kody")
-  if (idx === -1) return body
-  return body.slice(idx + "@kody".length).trim()
+  const m = body.match(KODY_MENTION_RE)
+  if (!m || m.index === undefined) return body
+  const at = body.indexOf("@kody", m.index)
+  return body.slice(at + "@kody".length).trim()
 }
 
 function extractSubcommand(afterTag: string): string | null {

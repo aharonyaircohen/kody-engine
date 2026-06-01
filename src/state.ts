@@ -157,14 +157,41 @@ export function findStateComment(
   return null
 }
 
+/**
+ * Thrown when a state comment is PRESENT (STATE_BEGIN found) but its payload
+ * can't be parsed — a truncated comment (GitHub's 64KB body cap), a clobbered
+ * write, or a corrupted fence. Distinct from "no comment at all," which is a
+ * legitimately empty state. Callers MUST treat this differently from
+ * emptyState(): silently substituting empty state here makes the engine think
+ * an in-progress task is brand new and re-do already-committed work (re-open
+ * PRs, re-run completed children). See loadTaskState for the heal-then-bail
+ * recovery.
+ */
+export class CorruptStateError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "CorruptStateError"
+  }
+}
+
 export function parseStateComment(body: string): TaskState {
   const beginIdx = body.indexOf(STATE_BEGIN)
+  // No marker at all → legitimately empty (no kody state written yet).
+  if (beginIdx < 0) return emptyState()
+
+  // From here the marker is present, so any parse failure is CORRUPTION — a
+  // truncated or clobbered comment — not an empty task. Throw rather than
+  // returning emptyState so the caller can fail loud instead of silently
+  // redoing committed work.
+  //
   // Use lastIndexOf for END: artifact content embedded in the JSON (e.g. a
   // plan markdown that discusses kody state) can contain literal STATE_END
   // markers. The real END marker is rendered after the closing ``` fence,
   // so it's always the last occurrence.
   const endIdx = body.lastIndexOf(STATE_END)
-  if (beginIdx < 0 || endIdx < 0 || endIdx <= beginIdx) return emptyState()
+  if (endIdx < 0 || endIdx <= beginIdx) {
+    throw new CorruptStateError("STATE_BEGIN present but STATE_END missing or misordered (truncated comment?)")
+  }
 
   // The span between STATE_BEGIN and STATE_END is always the ```json fence
   // (see renderStateComment). Slice by position rather than regex-matching,
@@ -173,22 +200,27 @@ export function parseStateComment(body: string): TaskState {
   const between = body.slice(beginIdx + STATE_BEGIN.length, endIdx).trim()
   const OPEN = "```json"
   const CLOSE = "```"
-  if (!between.startsWith(OPEN) || !between.endsWith(CLOSE)) return emptyState()
+  if (!between.startsWith(OPEN) || !between.endsWith(CLOSE)) {
+    throw new CorruptStateError("state fence malformed (expected ```json…``` between markers)")
+  }
   const jsonStr = between.slice(OPEN.length, between.length - CLOSE.length).trim()
 
+  let parsed: TaskState
   try {
-    const parsed = JSON.parse(jsonStr) as TaskState
-    if (parsed?.schemaVersion !== 1) return emptyState()
-    return {
-      schemaVersion: 1,
-      core: { ...emptyState().core, ...parsed.core },
-      executables: parsed.executables ?? {},
-      artifacts: parsed.artifacts && typeof parsed.artifacts === "object" ? parsed.artifacts : {},
-      history: Array.isArray(parsed.history) ? parsed.history : [],
-      flow: parsed.flow,
-    }
-  } catch {
-    return emptyState()
+    parsed = JSON.parse(jsonStr) as TaskState
+  } catch (err) {
+    throw new CorruptStateError(`state JSON unparseable (truncated comment?): ${err instanceof Error ? err.message : String(err)}`)
+  }
+  if (parsed?.schemaVersion !== 1) {
+    throw new CorruptStateError(`unexpected schemaVersion: ${JSON.stringify(parsed?.schemaVersion)}`)
+  }
+  return {
+    schemaVersion: 1,
+    core: { ...emptyState().core, ...parsed.core },
+    executables: parsed.executables ?? {},
+    artifacts: parsed.artifacts && typeof parsed.artifacts === "object" ? parsed.artifacts : {},
+    history: Array.isArray(parsed.history) ? parsed.history : [],
+    flow: parsed.flow,
   }
 }
 

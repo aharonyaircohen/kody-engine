@@ -353,6 +353,24 @@ describe("buildServer routes", () => {
     expect(observed).toBe("user/alice/chat-1")
   })
 
+  it("rejects a path-traversal chatId with 400 and never invokes the turn", async () => {
+    let invoked = false
+    booted = await boot(async (opts) => {
+      invoked = true
+      await opts.sink.emit(makeEvent("chat.done", {}))
+      return { exitCode: 0 }
+    }, tmp)
+    // `..%2F..%2F..%2Ftmp%2Fevil` decodes to `../../../tmp/evil` — would escape
+    // the sessions root into an arbitrary write/read if not validated.
+    const res = await fetch(`${booted.url}/chats/..%2F..%2F..%2Ftmp%2Fevil/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": KEY },
+      body: JSON.stringify({ message: "x" }),
+    })
+    expect(res.status).toBe(400)
+    expect(invoked).toBe(false)
+  })
+
   it("preserves multi-turn session history across two requests", async () => {
     let firstSessionFile = ""
     let secondSessionFile = ""

@@ -69,6 +69,24 @@ function getApiKey(): string {
   return key
 }
 
+/**
+ * Validate a URL-supplied `chatId` before it reaches the filesystem. It flows
+ * into `sessionFilePath`/`eventsPath` as `.kody/sessions/<chatId>.jsonl`; a
+ * value like `../../../../tmp/evil` (URL-encoded `..%2F…`) would otherwise
+ * create/append/read files outside the repo.
+ *
+ * chatIds are legitimately multi-segment (e.g. `user/alice/chat-1`, arriving
+ * URL-encoded), so `/` is allowed and maps to nested dirs under the sessions
+ * root. The only escape vector is `..`, so reject any `.`/`..`/empty path
+ * segment, a leading slash (absolute), backslashes, and out-of-charset chars.
+ */
+export function isSafeChatId(id: string): boolean {
+  if (!id || id.length > 200) return false
+  if (id.startsWith("/") || id.includes("\\")) return false
+  if (/[^a-zA-Z0-9._/-]/.test(id)) return false
+  return id.split("/").every((seg) => seg !== "" && seg !== "." && seg !== "..")
+}
+
 export function authOk(req: IncomingMessage, expected: string): boolean {
   const xApiKey = (req.headers["x-api-key"] as string | undefined)?.trim()
   if (xApiKey && xApiKey === expected) return true
@@ -405,8 +423,8 @@ export function buildServer(opts: BuildServerOptions): Server {
     const m = url.pathname.match(/^\/chats\/([^/]+)\/messages\/?$/)
     if (req.method === "POST" && m) {
       const chatId = decodeURIComponent(m[1] ?? "")
-      if (!chatId) {
-        sendJson(res, 400, { error: "chatId required" })
+      if (!chatId || !isSafeChatId(chatId)) {
+        sendJson(res, 400, { error: "invalid chatId" })
         return
       }
       await handleChatTurn(req, res, chatId, {
@@ -427,8 +445,8 @@ export function buildServer(opts: BuildServerOptions): Server {
     const sm = url.pathname.match(/^\/chats\/([^/]+)\/stream\/?$/)
     if (req.method === "GET" && sm) {
       const chatId = decodeURIComponent(sm[1] ?? "")
-      if (!chatId) {
-        sendJson(res, 400, { error: "chatId required" })
+      if (!chatId || !isSafeChatId(chatId)) {
+        sendJson(res, 400, { error: "invalid chatId" })
         return
       }
       const sinceRaw = url.searchParams.get("since")

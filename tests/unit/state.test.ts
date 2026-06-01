@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   type Action,
+  CorruptStateError,
   emptyState,
   parseStateComment,
   reduce,
@@ -85,9 +86,18 @@ describe("state: parseStateComment / renderStateComment", () => {
     expect(s).toEqual(emptyState())
   })
 
-  it("returns empty state when JSON is malformed", () => {
+  it("throws CorruptStateError when the marker is present but JSON is malformed", () => {
+    // Marker present + unparseable payload = corruption (truncated/clobbered
+    // comment), NOT an empty task. Throwing lets the caller fail loud instead
+    // of silently redoing committed work. (No-marker bodies still return
+    // emptyState — see the test above.)
     const body = `${STATE_BEGIN}\n\n\`\`\`json\n{not valid\n\`\`\`\n${STATE_END}`
-    expect(parseStateComment(body)).toEqual(emptyState())
+    expect(() => parseStateComment(body)).toThrow(CorruptStateError)
+  })
+
+  it("throws CorruptStateError when STATE_END is missing", () => {
+    const body = `${STATE_BEGIN}\n\n\`\`\`json\n{"schemaVersion":1}\n\`\`\`\n`
+    expect(() => parseStateComment(body)).toThrow(CorruptStateError)
   })
 
   it("preserves artifacts whose content contains triple-backtick code fences", () => {

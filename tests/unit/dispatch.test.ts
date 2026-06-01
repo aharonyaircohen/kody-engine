@@ -111,6 +111,40 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
+  it("ignores a bare @kody substring inside an email (no real mention) → null", () => {
+    // Regression (#5): the gate was `.includes("@kody")`, so an email like
+    // `me@kody.dev` launched the default executable on an unrelated comment.
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "ping me@kody.dev when this is ready" },
+      issue: { number: 8 },
+    })
+    expect(autoDispatch()).toBeNull()
+  })
+
+  it("ignores '@kodyfix' (no boundary after @kody) → null", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kodyfix please" },
+      issue: { number: 8 },
+    })
+    expect(autoDispatch()).toBeNull()
+  })
+
+  it("ignores the App's own '@kodyade[bot]' username mention → null", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "cc @kodyade[bot] fix this" },
+      issue: { number: 8 },
+    })
+    expect(autoDispatch()).toBeNull()
+  })
+
+  it("matches a real @kody mention mid-sentence (after whitespace)", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "please @kody run this now" },
+      issue: { number: 9 },
+    })
+    expect(autoDispatch()).toEqual({ executable: "run", cliArgs: { issue: 9 }, target: 9 })
+  })
+
   it("routes legacy '@kody build' → run (backward-compat)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody build" },

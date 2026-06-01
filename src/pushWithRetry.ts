@@ -120,7 +120,11 @@ export function pushWithRetry(opts: PushWithRetryOptions = {}): PushWithRetryRes
       }
     }
 
-    const rebase = runGit(["rebase", `origin/${branch}`], cwd)
+    // `--rebase-merges` preserves merge commits (e.g. the two-parent commit a
+    // resolve flow creates from MERGE_HEAD). A plain `git rebase` flattens
+    // merges by replaying only first-parent commits, silently dropping the
+    // recorded conflict resolution when origin moved during the agent's run.
+    const rebase = runGit(["rebase", "--rebase-merges", `origin/${branch}`], cwd)
     if (!rebase.ok) {
       // Abort the rebase so the working tree is clean for the caller.
       runGit(["rebase", "--abort"], cwd)

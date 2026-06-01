@@ -139,11 +139,29 @@ export async function startLitellmIfNeeded(
   }
 
   const killChild = (): void => {
+    const pid = child?.pid
+    if (typeof pid !== "number") return
+    // The proxy is spawned `detached: true`, so it leads its own process group
+    // and forks a worker (uvicorn) that actually holds the port. `child.kill()`
+    // signals only the immediate PID, leaving the worker alive to squat port
+    // 4000 and get "reused" by a later run. Signal the whole group (negative
+    // pid), SIGTERM then SIGKILL after a short grace.
     try {
-      child?.kill()
+      process.kill(-pid, "SIGTERM")
     } catch {
-      /* best effort */
+      try {
+        child?.kill()
+      } catch {
+        /* best effort */
+      }
     }
+    setTimeout(() => {
+      try {
+        process.kill(-pid, "SIGKILL")
+      } catch {
+        /* group already gone — fine */
+      }
+    }, 2_000).unref?.()
   }
 
   const ensureHealthy = async (): Promise<boolean> => {
