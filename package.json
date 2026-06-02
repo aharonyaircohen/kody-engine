@@ -20,7 +20,7 @@
     "build": "tsup && node scripts/copy-assets.cjs",
     "check:modularity": "tsx scripts/check-script-modularity.ts",
     "pretest": "pnpm check:modularity",
-    "test": "vitest run tests/unit tests/int --coverage --no-file-parallelism --reporter=verbose",
+    "test": "vitest run tests/unit tests/int --coverage",
     "test:smoke": "vitest run tests/smoke --no-coverage",
     "test:e2e": "vitest run tests/e2e --no-coverage",
     "test:all": "vitest run tests --no-coverage",
