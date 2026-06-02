@@ -9,7 +9,7 @@
  *   ctx.data.issueStateComment    { commentId, commentNodeId, state } | null on first run
  *
  * Script args (via `with:`):
- *   marker      required — the state-comment HTML-comment marker (e.g. "kody-manager-state")
+ *   marker      required — the state-comment HTML-comment marker (e.g. "kody-issue-state")
  *   issueArg    optional — name of the CLI input holding the issue number (default "issue")
  */
 

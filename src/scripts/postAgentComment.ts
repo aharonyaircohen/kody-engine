@@ -15,16 +15,10 @@
  */
 
 import type { PostflightScript } from "../executables/types.js"
-import { postIssueComment as ghPostIssueComment } from "../issue.js"
+import { postAgentSummaryComment } from "./postAgentSummaryComment.js"
 
 export const postAgentComment: PostflightScript = async (ctx) => {
-  if (!ctx.data.agentDone) return
-  const targetNumber = Number(ctx.data.commentTargetNumber ?? 0)
-  const answer = (ctx.data.prSummary as string | undefined)?.trim()
-  if (!targetNumber || !answer) return
-  try {
-    ghPostIssueComment(targetNumber, answer, ctx.cwd)
-  } catch {
-    /* best effort — the run summary still captures the answer */
-  }
+  // Generic comment-only landing: post the answer verbatim on the target
+  // issue/PR. No header, no issue-only restriction.
+  postAgentSummaryComment(ctx)
 }

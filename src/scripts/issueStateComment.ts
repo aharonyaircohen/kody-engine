@@ -4,7 +4,7 @@
  * Convention: one "state comment" per marker per issue. Body starts with a
  * marker HTML comment, followed by a fenced JSON block:
  *
- *     <!-- kody-manager-state -->
+ *     <!-- kody-issue-state -->
  *
  *     ```json
  *     { "version": 1, "rev": 3, "cursor": "...", "data": {...}, "done": false }
@@ -14,7 +14,7 @@
  * untouched — humans own it. Bot state lives in this one comment, minimized
  * (collapsed) via GraphQL so it stays out of the way in the GitHub UI.
  *
- * Intended to be used by any stateful kody executable, not just managers.
+ * Intended to be used by any stateful kody executable.
  */
 
 import { gh } from "../issue.js"

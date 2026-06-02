@@ -13,23 +13,15 @@
  */
 
 import type { PostflightScript } from "../executables/types.js"
-import { postIssueComment as ghPostIssueComment } from "../issue.js"
 import type { TaskState } from "../state.js"
+import { postAgentSummaryComment } from "./postAgentSummaryComment.js"
 
 export const postPlanComment: PostflightScript = async (ctx) => {
-  if (!ctx.data.agentDone) return
-  const targetType = ctx.data.commentTargetType as "issue" | "pr" | undefined
-  const targetNumber = Number(ctx.data.commentTargetNumber ?? 0)
-  const plan = (ctx.data.prSummary as string | undefined)?.trim()
-  if (targetType !== "issue" || !targetNumber || !plan) return
-
   const flowActive = Boolean((ctx.data.taskState as TaskState | undefined)?.flow)
-  const body = renderPlanComment(targetNumber, plan, { flowActive })
-  try {
-    ghPostIssueComment(targetNumber, body, ctx.cwd)
-  } catch {
-    /* best effort — state block still captures the plan */
-  }
+  postAgentSummaryComment(ctx, {
+    issueOnly: true,
+    render: (n, plan) => renderPlanComment(n, plan, { flowActive }),
+  })
 }
 
 export function renderPlanComment(issueNumber: number, plan: string, opts?: { flowActive?: boolean }): string {

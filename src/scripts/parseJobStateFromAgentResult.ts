@@ -14,70 +14,13 @@
  */
 
 import type { PostflightScript } from "../executables/types.js"
-import type { StateEnvelope } from "./issueStateComment.js"
 import type { LoadedJobState } from "./jobState/index.js"
+import { extractNextStateFromText } from "./stateEnvelope.js"
 
-interface PartialEnvelope {
-  cursor: string
-  data: Record<string, unknown>
-  done: boolean
-}
-
-function isPartialEnvelope(x: unknown): x is PartialEnvelope {
-  if (x === null || typeof x !== "object") return false
-  const o = x as Record<string, unknown>
-  return (
-    typeof o.cursor === "string" &&
-    o.cursor.length > 0 &&
-    typeof o.done === "boolean" &&
-    o.data !== null &&
-    typeof o.data === "object" &&
-    !Array.isArray(o.data)
-  )
-}
-
-/**
- * Extract a `kody-job-next-state` (or other-labeled) fenced JSON block
- * from arbitrary text and validate it as a partial state envelope.
- * Shared by `parseJobStateFromAgentResult` (LLM final text) and
- * `runTickScript` (deterministic script stdout) so both paths produce
- * identical envelope shapes.
- *
- * Returns `{ envelope }` on success or `{ error }` with a human-readable
- * reason. Callers decide whether to set `ctx.data.nextStateParseError`
- * vs. throwing.
- */
-export function extractNextStateFromText(
-  text: string,
-  fenceLabel: string,
-  prevRev: number,
-): { envelope: StateEnvelope; error?: undefined } | { error: string; envelope?: undefined } {
-  const fenceRegex = new RegExp(`\`\`\`${escapeRegex(fenceLabel)}\\s*\\n([\\s\\S]*?)\\n\`\`\``, "m")
-  const match = fenceRegex.exec(text)
-  if (!match) {
-    return { error: `missing \`${fenceLabel}\` fenced block` }
-  }
-
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(match[1]!.trim())
-  } catch (err) {
-    return { error: `state JSON parse error: ${err instanceof Error ? err.message : String(err)}` }
-  }
-
-  if (!isPartialEnvelope(parsed)) {
-    return { error: "state must be an object with string `cursor`, object `data`, and boolean `done`" }
-  }
-
-  const envelope: StateEnvelope = {
-    version: 1,
-    rev: prevRev + 1,
-    cursor: parsed.cursor,
-    data: parsed.data,
-    done: parsed.done,
-  }
-  return { envelope }
-}
+// Re-exported so existing callers (`runTickScript`) and tests keep importing
+// the envelope parser from this module. The implementation lives in
+// `stateEnvelope.ts`, shared with `parseIssueStateFromAgentResult`.
+export { extractNextStateFromText } from "./stateEnvelope.js"
 
 export const parseJobStateFromAgentResult: PostflightScript = async (ctx, _profile, agentResult, args) => {
   const fenceLabel = String(args?.fenceLabel ?? "")
@@ -122,9 +65,7 @@ export const parseJobStateFromAgentResult: PostflightScript = async (ctx, _profi
     // loud parse-error path below — there, missing state means the agent never
     // reached its decision, which IS a real failure worth surfacing.
     const cleanFinishNoBlock =
-      result.error.startsWith("missing `") &&
-      agentResult.outcome === "completed" &&
-      loaded != null
+      result.error.startsWith("missing `") && agentResult.outcome === "completed" && loaded != null
     if (cleanFinishNoBlock) {
       ctx.data.nextJobState = {
         version: 1,
@@ -143,8 +84,4 @@ export const parseJobStateFromAgentResult: PostflightScript = async (ctx, _profi
     return
   }
   ctx.data.nextJobState = result.envelope
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")
 }

@@ -13,7 +13,7 @@ import {
   type StateEnvelope,
 } from "../../src/scripts/issueStateComment.js"
 
-const MARKER = "kody-manager-state"
+const MARKER = "kody-issue-state"
 
 describe("issueStateComment", () => {
   describe("initialStateEnvelope", () => {

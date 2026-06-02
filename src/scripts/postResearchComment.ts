@@ -8,20 +8,10 @@
  */
 
 import type { PostflightScript } from "../executables/types.js"
-import { postIssueComment as ghPostIssueComment } from "../issue.js"
+import { postAgentSummaryComment } from "./postAgentSummaryComment.js"
 
 export const postResearchComment: PostflightScript = async (ctx) => {
-  if (!ctx.data.agentDone) return
-  const targetType = ctx.data.commentTargetType as "issue" | "pr" | undefined
-  const targetNumber = Number(ctx.data.commentTargetNumber ?? 0)
-  const body = (ctx.data.prSummary as string | undefined)?.trim()
-  if (targetType !== "issue" || !targetNumber || !body) return
-
-  try {
-    ghPostIssueComment(targetNumber, renderResearchComment(targetNumber, body), ctx.cwd)
-  } catch {
-    /* best effort — state block still captures the findings */
-  }
+  postAgentSummaryComment(ctx, { issueOnly: true, render: renderResearchComment })
 }
 
 export function renderResearchComment(issueNumber: number, body: string): string {

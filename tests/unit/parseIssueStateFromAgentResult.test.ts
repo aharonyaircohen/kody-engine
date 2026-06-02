@@ -4,8 +4,8 @@ import type { Context, Profile } from "../../src/executables/types.js"
 import { parseIssueStateFromAgentResult } from "../../src/scripts/parseIssueStateFromAgentResult.js"
 import type { LoadedStateComment, StateEnvelope } from "../../src/scripts/issueStateComment.js"
 
-const profile = { name: "kody-manager" } as Profile
-const FENCE = "kody-manager-next-state"
+const profile = { name: "issue-state" } as Profile
+const FENCE = "kody-issue-next-state"
 
 function makeCtx(data: Record<string, unknown> = {}): Context {
   return {
