@@ -63,6 +63,21 @@ export interface KodyConfig {
    */
   defaultPrExecutable?: string
   /**
+   * Executable to run on a `pull_request` event whose action is `opened`,
+   * `synchronize`, or `reopened` — e.g. "preview-build" to rebuild a per-PR
+   * preview on every push to the PR branch.
+   *
+   * Opt-in: unset → `pull_request` events do nothing (current default).
+   * `closed`/`merged` actions are ALWAYS ignored here regardless of this
+   * setting — the release orchestrator self-manages its own merge.
+   *
+   * The dispatched PR number is bound under the target executable's first
+   * required int input (e.g. preview-build's `pr`). This only takes effect
+   * when the consumer's kody.yml actually subscribes to `pull_request`
+   * (opened/synchronize) — the trigger can only live in YAML, not here.
+   */
+  onPullRequest?: string
+  /**
    * Comment-subcommand aliases: map typed word → executable name. Merged
    * with built-in legacy aliases ({ build: "run", orchestrate: "bug",
    * orchestrator: "bug" }). User entries override built-ins. Dispatch
@@ -204,6 +219,8 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
       typeof raw.defaultPrExecutable === "string" && raw.defaultPrExecutable.length > 0
         ? raw.defaultPrExecutable
         : "fix",
+    onPullRequest:
+      typeof raw.onPullRequest === "string" && raw.onPullRequest.length > 0 ? raw.onPullRequest : undefined,
     aliases: mergeAliases(raw.aliases),
     classify: parseClassifyConfig(raw.classify),
     release: parseReleaseConfig(raw.release),

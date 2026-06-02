@@ -87,6 +87,51 @@ describe("dispatch: schedule event", () => {
   })
 })
 
+describe("dispatch: pull_request event", () => {
+  const prev: Record<string, string | undefined> = {}
+  beforeEach(() => {
+    prev.EVENT_NAME = process.env.GITHUB_EVENT_NAME
+    prev.EVENT_PATH = process.env.GITHUB_EVENT_PATH
+    process.env.GITHUB_EVENT_NAME = "pull_request"
+  })
+  afterEach(() => {
+    process.env.GITHUB_EVENT_NAME = prev.EVENT_NAME
+    process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
+  })
+
+  it("returns null when onPullRequest is unset (default — PR events do nothing)", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({ action: "opened", number: 7, pull_request: { number: 7 } })
+    expect(autoDispatch()).toBeNull()
+  })
+
+  it("routes an opened PR to onPullRequest, binding the number under the target's int input", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({ action: "opened", number: 7, pull_request: { number: 7 } })
+    expect(autoDispatch({ config: { onPullRequest: "preview-build" } as any })).toEqual({
+      executable: "preview-build",
+      cliArgs: { pr: 7 },
+      target: 7,
+    })
+  })
+
+  it("routes a synchronize (new commit) PR to onPullRequest", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({ action: "synchronize", number: 9, pull_request: { number: 9 } })
+    expect(autoDispatch({ config: { onPullRequest: "preview-build" } as any })).toEqual({
+      executable: "preview-build",
+      cliArgs: { pr: 9 },
+      target: 9,
+    })
+  })
+
+  it("ignores closed/merged PRs even when onPullRequest is set (release self-manages its merge)", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      action: "closed",
+      number: 11,
+      pull_request: { number: 11, merged: true },
+    })
+    expect(autoDispatch({ config: { onPullRequest: "preview-build" } as any })).toBeNull()
+  })
+})
+
 describe("dispatch: issue_comment on issue", () => {
   const prev: Record<string, string | undefined> = {}
   beforeEach(() => {

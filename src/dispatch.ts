@@ -128,12 +128,31 @@ export function autoDispatch(opts?: {
   // CLI calls dispatchScheduledWatches() instead and iterates the result.
   if (eventName === "schedule") return null
 
-  // PR-merge events are no longer routed here for release: the `release`
+  // PR-merge events are not routed here for release: the `release`
   // orchestrator merges its own PR via `mergeReleasePr` and then dispatches
   // release-publish + release-deploy. A human merging a release PR manually
   // doesn't auto-finalize; they'd run `kody release-publish` directly or
   // re-trigger `@kody release` on the originating issue.
-  if (eventName === "pull_request") return null
+  //
+  // Opt-in routing: when `config.onPullRequest` names an executable and the
+  // action is opened/synchronize/reopened, route the PR there (e.g.
+  // "preview-build" rebuilds a per-PR preview on every push). The executable
+  // name lives in config, never here. closed/merged stay null (see above).
+  if (eventName === "pull_request") {
+    const exe = opts?.config?.onPullRequest?.trim()
+    const action = String(event.action ?? "")
+    if (exe && (action === "opened" || action === "synchronize" || action === "reopened")) {
+      const prNum = Number(event.pull_request?.number ?? event.number ?? 0)
+      if (prNum > 0) {
+        // Bind the PR number under the target's first required int input
+        // (preview-build → `pr`); falls back to `pr` if the profile is
+        // missing, mirroring the workflow_dispatch numeric-input binding.
+        const targetKey = primaryNumericInputName(exe) ?? "pr"
+        return { executable: exe, cliArgs: { [targetKey]: prNum }, target: prNum }
+      }
+    }
+    return null
+  }
 
   if (eventName !== "issue_comment") return null
 
