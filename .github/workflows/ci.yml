@@ -22,5 +22,25 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test:smoke
-      - run: pnpm test
+      # TEMP DIAGNOSTIC: run single-threaded so any leaked handle lives in the
+      # main process, with Node's --report-on-signal. If the suite hangs >300s,
+      # SIGUSR2 makes Node dump a diagnostic report; we print the active libuv
+      # handles (open socket / child process / timer + origin) to name the
+      # offending test, then fail the step. Revert to `pnpm test` once fixed.
+      - name: Run tests (dump active handles on hang)
+        timeout-minutes: 8
+        run: |
+          node --report-on-signal node_modules/vitest/vitest.mjs run tests/unit tests/int \
+            --coverage --pool=threads --poolOptions.threads.singleThread --reporter=verbose &
+          TPID=$!
+          ( sleep 300; echo "::warning::test suite hung >300s — dumping active handles"; kill -USR2 "$TPID" 2>/dev/null; sleep 8; kill -9 "$TPID" 2>/dev/null ) &
+          WPID=$!
+          wait "$TPID"; RC=$?
+          kill "$WPID" 2>/dev/null || true
+          echo "=== node diagnostic report: active libuv handles ==="
+          for f in report.*.json; do
+            [ -f "$f" ] || continue
+            node -e "const r=require('./$f');const h=(r.libuvHandles||r.libuv||[]).filter(x=>x.is_active);console.log(JSON.stringify(h,null,2))"
+          done || echo "(no report — suite did not hang)"
+          exit "$RC"
       - run: pnpm test:e2e
