@@ -23,5 +23,33 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test:smoke
-      - run: pnpm test
+      # TEMP DIAGNOSTIC: forks pool (so process.chdir works), one sequential
+      # child, with Node --report-on-signal. On a >360s hang we SIGUSR2 every
+      # node process; the stuck fork writes a diagnostic report to /tmp/nrep,
+      # and we print its cwd + active libuv handles (open socket/child/timer)
+      # to name the offending test. Revert to `pnpm test` once fixed.
+      - name: Run tests (dump handles on hang)
+        run: |
+          mkdir -p /tmp/nrep
+          export NODE_OPTIONS="--report-on-signal --report-directory=/tmp/nrep"
+          node node_modules/vitest/vitest.mjs run tests/unit tests/int \
+            --coverage --no-file-parallelism --reporter=verbose &
+          TPID=$!
+          ( sleep 360
+            echo "::warning::test suite hung >360s — signalling node for diagnostic report"
+            pkill -USR2 -x node 2>/dev/null || kill -USR2 "$TPID" 2>/dev/null
+            sleep 10
+            pkill -9 -x node 2>/dev/null; kill -9 "$TPID" 2>/dev/null
+          ) &
+          WPID=$!
+          wait "$TPID"; RC=$?
+          kill "$WPID" 2>/dev/null || true
+          echo "=== diagnostic reports ==="
+          for f in /tmp/nrep/report.*.json; do
+            [ -f "$f" ] || continue
+            echo "--- $f ---"
+            node -e "const r=require('$f');console.log('cwd:',r.header&&r.header.cwd);const h=(r.libuvHandles||r.libuv||[]).filter(x=>x.is_active);console.log(JSON.stringify(h,null,2))"
+          done
+          [ -n "$(ls -A /tmp/nrep 2>/dev/null)" ] || echo "(no report — suite did not hang)"
+          exit "$RC"
       - run: pnpm test:e2e
