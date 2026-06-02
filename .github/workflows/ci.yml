@@ -28,30 +28,23 @@ jobs:
       # node process; the stuck fork writes a diagnostic report to /tmp/nrep,
       # and we print its cwd + active libuv handles (open socket/child/timer)
       # to name the offending test. Revert to `pnpm test` once fixed.
-      - name: Run tests (dump handles on hang)
+      - name: Run tests (dump process tree on hang)
         run: |
-          set +e   # do NOT let `wait` returning 137 (post-kill) abort before we print the report
-          export NODE_OPTIONS="--report-on-signal"
+          set +e   # don't let post-kill non-zero exits abort before we print diagnostics
           node node_modules/vitest/vitest.mjs run tests/unit tests/int \
             --coverage --no-file-parallelism --reporter=verbose &
           TPID=$!
           ( sleep 300
-            echo "::warning::test suite hung >300s — signalling node for diagnostic report"
-            pkill -USR2 -x node 2>/dev/null || kill -USR2 "$TPID" 2>/dev/null
-            sleep 12
-            pkill -9 -x node 2>/dev/null; kill -9 "$TPID" 2>/dev/null
+            echo "::warning::test suite hung >300s — dumping process tree (the stuck leaf is the blocking command)"
+            echo "=== FULL PROCESS TREE ==="
+            ps -e -o pid,ppid,stat,etime,args 2>/dev/null || ps auxww
+            echo "=== NON-NODE / NON-PS LEAVES (likely culprit: gh/git/bash/curl/npx) ==="
+            ps -e -o pid,ppid,stat,etime,args 2>/dev/null | grep -ivE "\b(node|ps|sleep|bash /home/runner/work/_temp|/usr/bin/bash -e)\b" | tail -30
+            sleep 8
+            pkill -9 node 2>/dev/null; kill -9 "$TPID" 2>/dev/null
           ) &
           WPID=$!
           wait "$TPID"; RC=$?
           kill "$WPID" 2>/dev/null
-          echo "=== diagnostic reports (cwd + active libuv handles) ==="
-          shopt -s nullglob
-          found=0
-          for f in report.*.json; do
-            found=1
-            echo "--- $f ---"
-            cat "$f" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const r=JSON.parse(s);console.log('cwd:',r.header&&r.header.cwd);const h=(r.libuvHandles||r.libuv||[]).filter(x=>x.is_active);console.log(JSON.stringify(h,null,2))})"
-          done
-          [ "$found" = 1 ] || echo "(no report.*.json — suite did not hang)"
           exit "$RC"
       - run: pnpm test:e2e
