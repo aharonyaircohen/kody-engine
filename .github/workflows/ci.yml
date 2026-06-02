@@ -28,21 +28,28 @@ jobs:
       # node process; the stuck fork writes a diagnostic report to /tmp/nrep,
       # and we print its cwd + active libuv handles (open socket/child/timer)
       # to name the offending test. Revert to `pnpm test` once fixed.
-      - name: Run tests (probe — NO coverage)
+      - name: Run tests (JS stack on hang)
         run: |
-          set +e   # post-kill non-zero must not abort before we print the verdict
+          set +e
+          export NODE_OPTIONS="--report-on-signal"
           node node_modules/vitest/vitest.mjs run tests/unit tests/int \
             --no-file-parallelism --reporter=dot &
           TPID=$!
           ( sleep 240
-            echo "::warning::STILL HANGS without coverage — so coverage is NOT the cause"
-            ps -e -o pid,ppid,stat,etime,args 2>/dev/null | grep -E "forks\.js" | grep -v grep
-            sleep 2
+            echo "::warning::hung — requesting diagnostic report (JS stack) from the spinning worker"
+            WPIDS=$(ps -e -o pid,args 2>/dev/null | grep -E "forks\.js" | grep -v grep | awk '{print $1}')
+            echo "worker pids: $WPIDS ; main: $TPID"
+            for p in $WPIDS "$TPID"; do kill -USR2 "$p" 2>/dev/null; done
+            sleep 12
             pkill -9 node 2>/dev/null; kill -9 "$TPID" 2>/dev/null
           ) &
           WPID=$!
           wait "$TPID"; RC=$?
           kill "$WPID" 2>/dev/null
-          echo "PROBE RESULT: exit=$RC  (0 = completed → COVERAGE was the cause; 137 = still hung → not coverage)"
+          echo "=== diagnostic reports: JS STACK = the infinite loop ==="
+          for f in $(find / -name 'report.*.json' 2>/dev/null); do
+            echo "--- $f ---"
+            cat "$f" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const r=JSON.parse(s);console.log('cwd:',r.header&&r.header.cwd);console.log('JS STACK:');console.log((r.javascriptStack&&r.javascriptStack.stack)||'(none)')}catch(e){console.log('parse err',e.message)}})"
+          done
           exit "$RC"
       - run: pnpm test:e2e
