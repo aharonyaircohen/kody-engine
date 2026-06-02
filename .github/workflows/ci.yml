@@ -28,27 +28,25 @@ jobs:
       # node process; the stuck fork writes a diagnostic report to /tmp/nrep,
       # and we print its cwd + active libuv handles (open socket/child/timer)
       # to name the offending test. Revert to `pnpm test` once fixed.
-      - name: Run tests (worker tick profile on hang)
+      - name: Run tests (native backtrace on hang)
         run: |
           set +e
           node node_modules/vitest/vitest.mjs run tests/unit tests/int \
-            --no-file-parallelism --reporter=dot &
+            --no-file-parallelism --reporter=verbose &
           TPID=$!
           ( sleep 240
-            echo "::warning::hung — worker argv (must contain --prof) then kill"
-            ps -e -o pid,args 2>/dev/null | grep -E "forks\.js" | grep -v grep
-            sleep 3
+            echo "::warning::hung — capturing native backtrace of the CPU-bound worker"
+            W=$(ps -e -o pid,args 2>/dev/null | grep -E "forks\.js" | grep -v grep | awk '{print $1}' | head -1)
+            echo "worker pid: $W"
+            command -v gdb >/dev/null 2>&1 || sudo apt-get install -y gdb >/dev/null 2>&1
+            echo "=== NATIVE BACKTRACE (look for RegExp/Irregexp or a src frame) ==="
+            sudo gdb -p "$W" -batch -ex "set pagination off" -ex "bt" 2>&1 | grep -vE "^\[|warning:|Missing sep|No such file|Reading symbols|^0x.*in \?\?" | head -40
+            sleep 2
             pkill -9 node 2>/dev/null; kill -9 "$TPID" 2>/dev/null
           ) &
           WPID=$!
           wait "$TPID"; RC=$?
           kill "$WPID" 2>/dev/null
-          echo "=== isolate tick logs ==="
-          ls -la isolate-*.log 2>/dev/null || echo "(none)"
-          echo "=== prof-process (largest log = spinning worker; look for RegExp / a src .ts) ==="
-          for log in $(ls -S isolate-*.log 2>/dev/null); do
-            echo "--- $log ---"
-            node --prof-process "$log" 2>/dev/null | sed -n '1,70p'
-          done
+          echo "last verbose lines (file running when it hung):"
           exit "$RC"
       - run: pnpm test:e2e
