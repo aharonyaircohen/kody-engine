@@ -3,6 +3,12 @@ import { defineConfig } from "vitest/config"
 export default defineConfig({
   test: {
     testTimeout: 30_000,
+    // TEMP DIAGNOSTIC: run all tests in the main thread so a leaked handle
+    // (open socket / child process / timer) lives in the process that Node's
+    // --report-on-signal dumps in CI. Revert (delete pool/poolOptions) once
+    // the real-runner-only test hang is root-caused.
+    pool: "threads",
+    poolOptions: { threads: { singleThread: true } },
     coverage: {
       provider: "v8",
       reporter: ["text", "text-summary", "html"],
