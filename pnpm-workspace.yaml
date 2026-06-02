@@ -1,2 +1,8 @@
 packages:
   - '**'
+
+# pnpm 10+ reads onlyBuiltDependencies from here, NOT from .npmrc. Without this,
+# CI (`pnpm/action-setup` pins pnpm 11) blocks esbuild's build script and
+# `pnpm install` fails with ERR_PNPM_IGNORED_BUILDS before any test runs.
+onlyBuiltDependencies:
+  - esbuild
