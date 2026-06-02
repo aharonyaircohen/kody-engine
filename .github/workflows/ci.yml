@@ -28,28 +28,27 @@ jobs:
       # node process; the stuck fork writes a diagnostic report to /tmp/nrep,
       # and we print its cwd + active libuv handles (open socket/child/timer)
       # to name the offending test. Revert to `pnpm test` once fixed.
-      - name: Run tests (JS stack on hang)
+      - name: Run tests (worker tick profile on hang)
         run: |
           set +e
-          export NODE_OPTIONS="--report-on-signal"
           node node_modules/vitest/vitest.mjs run tests/unit tests/int \
             --no-file-parallelism --reporter=dot &
           TPID=$!
           ( sleep 240
-            echo "::warning::hung — requesting diagnostic report (JS stack) from the spinning worker"
-            WPIDS=$(ps -e -o pid,args 2>/dev/null | grep -E "forks\.js" | grep -v grep | awk '{print $1}')
-            echo "worker pids: $WPIDS ; main: $TPID"
-            for p in $WPIDS "$TPID"; do kill -USR2 "$p" 2>/dev/null; done
-            sleep 12
+            echo "::warning::hung — worker argv (must contain --prof) then kill"
+            ps -e -o pid,args 2>/dev/null | grep -E "forks\.js" | grep -v grep
+            sleep 3
             pkill -9 node 2>/dev/null; kill -9 "$TPID" 2>/dev/null
           ) &
           WPID=$!
           wait "$TPID"; RC=$?
           kill "$WPID" 2>/dev/null
-          echo "=== diagnostic reports: JS STACK = the infinite loop ==="
-          for f in $(find / -name 'report.*.json' 2>/dev/null); do
-            echo "--- $f ---"
-            cat "$f" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const r=JSON.parse(s);console.log('cwd:',r.header&&r.header.cwd);console.log('JS STACK:');console.log((r.javascriptStack&&r.javascriptStack.stack)||'(none)')}catch(e){console.log('parse err',e.message)}})"
+          echo "=== isolate tick logs ==="
+          ls -la isolate-*.log 2>/dev/null || echo "(none)"
+          echo "=== prof-process (largest log = spinning worker; look for RegExp / a src .ts) ==="
+          for log in $(ls -S isolate-*.log 2>/dev/null); do
+            echo "--- $log ---"
+            node --prof-process "$log" 2>/dev/null | sed -n '1,70p'
           done
           exit "$RC"
       - run: pnpm test:e2e
