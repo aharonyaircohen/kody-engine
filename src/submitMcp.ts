@@ -19,7 +19,7 @@
  * capture slot. Uses `createSdkMcpServer` (in-process) — no subprocess.
  */
 
-import { createSdkMcpServer, tool, type McpSdkServerConfigWithInstance } from "@anthropic-ai/claude-agent-sdk"
+import { createSdkMcpServer, type McpSdkServerConfigWithInstance, tool } from "@anthropic-ai/claude-agent-sdk"
 import { z } from "zod"
 
 /** The state an agent submits — same shape the fenced block carried. */
@@ -47,7 +47,7 @@ export function buildSubmitMcpServer(): SubmitToolHandle {
     "submit_state",
     "Persist this tick's next state. Call this EXACTLY ONCE, at the very end, when you've finished your work — it is the ONLY way your decision is saved. Pass your next `cursor` (string), your next `data` (object — carry prior data forward and mutate what you acted on), and `done` (boolean). After calling it you are finished; do not take further actions.",
     {
-      cursor: z.string().describe("The next cursor value (e.g. \"idle\"). Must be a non-empty string."),
+      cursor: z.string().describe('The next cursor value (e.g. "idle"). Must be a non-empty string.'),
       data: z
         .record(z.string(), z.unknown())
         .describe("The next `data` object. Carry forward prior data and mutate only what you acted on this tick."),

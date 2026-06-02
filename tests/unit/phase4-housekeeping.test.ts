@@ -93,9 +93,7 @@ describe("Phase 4g: profile unknown-key warning", () => {
   it("is silent for an all-valid profile", () => {
     const file = writeProfile(tmp, validProfile)
     loadProfile(file)
-    const warnings = stderrSpy.mock.calls.filter((c: unknown[]) =>
-      String(c[0]).includes("unknown top-level keys"),
-    )
+    const warnings = stderrSpy.mock.calls.filter((c: unknown[]) => String(c[0]).includes("unknown top-level keys"))
     expect(warnings).toEqual([])
   })
 

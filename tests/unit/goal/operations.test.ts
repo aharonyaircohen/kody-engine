@@ -70,16 +70,7 @@ describe("listOpenPrs", () => {
     ghMock.mockReturnValue(JSON.stringify([]))
     listOpenPrs("/repo")
     expect(ghMock).toHaveBeenCalledWith(
-      [
-        "pr",
-        "list",
-        "--state",
-        "open",
-        "--limit",
-        "200",
-        "--json",
-        "number,url,isDraft,headRefName,baseRefName,body",
-      ],
+      ["pr", "list", "--state", "open", "--limit", "200", "--json", "number,url,isDraft,headRefName,baseRefName,body"],
       { cwd: "/repo" },
     )
   })

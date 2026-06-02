@@ -43,9 +43,7 @@ function resolveAgentFile(profileDir: string, name: string): string {
   if (fs.existsSync(local)) return local
   const central = path.join(getPluginsCatalogRoot(), "agents", `${name}.md`)
   if (fs.existsSync(central)) return central
-  throw new Error(
-    `loadSubagents: agent '${name}' not found in ${profileDir}/agents/ or shared catalog`,
-  )
+  throw new Error(`loadSubagents: agent '${name}' not found in ${profileDir}/agents/ or shared catalog`)
 }
 
 /**

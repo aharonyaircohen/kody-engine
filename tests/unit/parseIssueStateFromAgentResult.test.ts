@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
 import type { AgentResult } from "../../src/agent.js"
 import type { Context, Profile } from "../../src/executables/types.js"
-import { parseIssueStateFromAgentResult } from "../../src/scripts/parseIssueStateFromAgentResult.js"
 import type { LoadedStateComment, StateEnvelope } from "../../src/scripts/issueStateComment.js"
+import { parseIssueStateFromAgentResult } from "../../src/scripts/parseIssueStateFromAgentResult.js"
 
 const profile = { name: "issue-state" } as Profile
 const FENCE = "kody-issue-next-state"
@@ -23,7 +23,7 @@ function makeResult(finalText: string): AgentResult {
 }
 
 function fenced(label: string, body: string): string {
-  return ["```" + label, body, "```"].join("\n")
+  return [`\`\`\`${label}`, body, "```"].join("\n")
 }
 
 describe("parseIssueStateFromAgentResult", () => {

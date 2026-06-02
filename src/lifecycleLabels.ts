@@ -87,7 +87,7 @@ function extractLabelSpec(entry: ScriptEntry): KodyLabelSpec | null {
   const w = entry.with
   if (!w) return null
   const label = typeof w.label === "string" ? w.label : null
-  if (!label || !label.startsWith(KODY_NAMESPACE)) return null
+  if (!label?.startsWith(KODY_NAMESPACE)) return null
   return {
     label,
     color: typeof w.color === "string" ? w.color : undefined,

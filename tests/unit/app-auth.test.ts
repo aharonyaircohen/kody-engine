@@ -73,7 +73,10 @@ describe("app-auth: mintAppInstallationToken", () => {
   })
 
   it("skips installation lookup when an explicit installation id is given", async () => {
-    const fetchMock = vi.fn(async (_url: string | URL, _init?: RequestInit) => new Response(JSON.stringify({ token: "ghs_x" }), { status: 200 }))
+    const fetchMock = vi.fn(
+      async (_url: string | URL, _init?: RequestInit) =>
+        new Response(JSON.stringify({ token: "ghs_x" }), { status: 200 }),
+    )
     vi.stubGlobal("fetch", fetchMock)
 
     const token = await mintAppInstallationToken({ appId: "1", privateKey, installationId: "777" })

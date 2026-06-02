@@ -9,8 +9,8 @@ vi.mock("node:child_process", async (importOriginal) => {
   }
 })
 
-import { finishFlow } from "../../src/scripts/finishFlow.js"
 import type { Context, Profile } from "../../src/executables/types.js"
+import { finishFlow } from "../../src/scripts/finishFlow.js"
 
 function makeCtx(taskState: unknown): Context {
   return {

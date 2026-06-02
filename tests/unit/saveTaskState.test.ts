@@ -16,10 +16,7 @@ import { type Action, emptyState, type TaskState } from "../../src/state.js"
 
 const profile = { name: "run" } as Profile
 
-function makeCtx(overrides: {
-  data?: Record<string, unknown>
-  output?: Partial<Context["output"]>
-}): Context {
+function makeCtx(overrides: { data?: Record<string, unknown>; output?: Partial<Context["output"]> }): Context {
   return {
     args: {},
     cwd: "/repo",

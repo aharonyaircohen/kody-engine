@@ -94,16 +94,7 @@ export interface OpenTaskPr {
 export function listOpenPrs(cwd?: string): OperationResult<OpenTaskPr[]> {
   try {
     const out = gh(
-      [
-        "pr",
-        "list",
-        "--state",
-        "open",
-        "--limit",
-        "200",
-        "--json",
-        "number,url,isDraft,headRefName,baseRefName,body",
-      ],
+      ["pr", "list", "--state", "open", "--limit", "200", "--json", "number,url,isDraft,headRefName,baseRefName,body"],
       { cwd },
     )
     return { ok: true, value: JSON.parse(out) as OpenTaskPr[] }
@@ -279,10 +270,7 @@ export function mergePrSquash(prNumber: number, cwd?: string): OperationResult {
  */
 export function editPrBase(prNumber: number, baseBranch: string, cwd?: string): OperationResult {
   try {
-    gh(
-      ["api", "--method", "PATCH", `repos/{owner}/{repo}/pulls/${prNumber}`, "-f", `base=${baseBranch}`],
-      { cwd },
-    )
+    gh(["api", "--method", "PATCH", `repos/{owner}/{repo}/pulls/${prNumber}`, "-f", `base=${baseBranch}`], { cwd })
     return { ok: true }
   } catch (err) {
     return fail(err)
@@ -303,11 +291,7 @@ export function editPrBase(prNumber: number, baseBranch: string, cwd?: string): 
  * already deleted) or any API error returns ok:false so the caller can
  * fail safe (keep the PR open) rather than assume containment.
  */
-export function branchContains(
-  leafHead: string,
-  candidateHead: string,
-  cwd?: string,
-): OperationResult<boolean> {
+export function branchContains(leafHead: string, candidateHead: string, cwd?: string): OperationResult<boolean> {
   if (leafHead === candidateHead) return { ok: true, value: true }
   try {
     const out = gh(

@@ -78,11 +78,11 @@ vi.mock("../../src/commit.js", async (orig) => {
   }
 })
 
+import type { AgentResult } from "../../src/agent.js"
+import type { Context } from "../../src/executables/types.js"
 import { loadProfile } from "../../src/profile.js"
 import { listExecutables } from "../../src/registry.js"
 import { postflightScripts } from "../../src/scripts/index.js"
-import type { Context } from "../../src/executables/types.js"
-import type { AgentResult } from "../../src/agent.js"
 
 function makeAgentResult(finalText: string, outcome: "completed" | "failed" = "completed"): AgentResult {
   return { outcome, finalText, ndjsonPath: "/tmp/fake.jsonl" }

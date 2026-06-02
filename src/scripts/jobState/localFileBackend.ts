@@ -15,7 +15,7 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { initialStateEnvelope, isStateEnvelope, type StateEnvelope } from "../issueStateComment.js"
-import { isStateUnchanged, type LoadedJobState, type JobStateBackend, stateFilePath } from "./backend.js"
+import { isStateUnchanged, type JobStateBackend, type LoadedJobState, stateFilePath } from "./backend.js"
 
 export interface LocalFileBackendOptions {
   /** Absolute path to the consumer repo working tree. */
@@ -157,7 +157,7 @@ export class LocalFileBackend implements JobStateBackend {
     }
     const absPath = path.join(this.cwd, loaded.path)
     fs.mkdirSync(path.dirname(absPath), { recursive: true })
-    const body = JSON.stringify(next, null, 2) + "\n"
+    const body = `${JSON.stringify(next, null, 2)}\n`
     // Write atomically: a crash mid-write (the 5-min tick timeout, OOM, runner
     // teardown) would otherwise leave a truncated file that fails JSON.parse on
     // the next load() and wedges the job until a human deletes it. Write to a

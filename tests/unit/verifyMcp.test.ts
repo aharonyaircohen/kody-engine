@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest"
 import type { KodyConfig } from "../../src/config.js"
+import type { VerifyResult } from "../../src/verify.js"
 import {
   buildVerifyMcpServer,
   DEFAULT_MAX_VERIFY_ATTEMPTS,
   truncateVerifyResult,
   type VerifyToolState,
 } from "../../src/verifyMcp.js"
-import type { VerifyResult } from "../../src/verify.js"
 
 const baseConfig: KodyConfig = {
   quality: { typecheck: "echo ok", lint: "echo ok", testUnit: "echo ok", format: "echo ok" },

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest"
 import { createCipheriv, randomBytes } from "node:crypto"
+import { describe, expect, it } from "vitest"
 
 import { decryptVault, readRepoSecret } from "../../src/pool/vault.js"
 
@@ -33,7 +33,7 @@ describe("pool vault: decryptVault", () => {
 
 describe("pool vault: readRepoSecret", () => {
   function mockFetch(blob: string | null): typeof fetch {
-    return (async (url: string) => {
+    return (async (_url: string) => {
       if (blob === null) return new Response("not found", { status: 404 })
       const content = Buffer.from(blob, "utf8").toString("base64")
       return new Response(JSON.stringify({ content, encoding: "base64" }), { status: 200 })

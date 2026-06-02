@@ -11,7 +11,7 @@
  *   kody stats --run <id>   # detail one run
  */
 
-import { listRuns, readEvents, type RunEvent } from "./events.js"
+import { listRuns, type RunEvent, readEvents } from "./events.js"
 
 interface StatsOptions {
   cwd: string
@@ -218,13 +218,15 @@ function printReport(runs: RunSummary[], rollups: ExecutableRollup[]): void {
   const totalIn = runs.reduce((s, r) => s + r.totalInputTokens, 0)
   const totalOut = runs.reduce((s, r) => s + r.totalOutputTokens, 0)
   const totalCacheR = runs.reduce((s, r) => s + r.totalCacheReadTokens, 0)
-  process.stdout.write(`  total tokens     : ${totalIn.toLocaleString()} in / ${totalOut.toLocaleString()} out / ${totalCacheR.toLocaleString()} cache-read\n`)
+  process.stdout.write(
+    `  total tokens     : ${totalIn.toLocaleString()} in / ${totalOut.toLocaleString()} out / ${totalCacheR.toLocaleString()} cache-read\n`,
+  )
 
   process.stdout.write(`\nPer-executable (stage_end events)\n`)
   const headers = ["executable", "runs", "ok", "failed", "p50", "p95", "mean", "tok-in", "tok-out", "cache-r"]
   const widths = [22, 6, 6, 7, 9, 9, 9, 10, 10, 10]
-  process.stdout.write(headers.map((h, i) => h.padEnd(widths[i]!)).join("") + "\n")
-  process.stdout.write(widths.map((w) => "-".repeat(w - 1) + " ").join("") + "\n")
+  process.stdout.write(`${headers.map((h, i) => h.padEnd(widths[i]!)).join("")}\n`)
+  process.stdout.write(`${widths.map((w) => `${"-".repeat(w - 1)} `).join("")}\n`)
   for (const r of rollups) {
     const row = [
       r.executable,
@@ -238,7 +240,7 @@ function printReport(runs: RunSummary[], rollups: ExecutableRollup[]): void {
       r.totalOutputTokens.toLocaleString(),
       r.totalCacheReadTokens.toLocaleString(),
     ]
-    process.stdout.write(row.map((c, i) => c.padEnd(widths[i]!)).join("") + "\n")
+    process.stdout.write(`${row.map((c, i) => c.padEnd(widths[i]!)).join("")}\n`)
   }
   process.stdout.write("\n")
 }

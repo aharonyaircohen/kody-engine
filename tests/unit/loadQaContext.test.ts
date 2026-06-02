@@ -92,24 +92,12 @@ describe("loadQaContext", () => {
       "---\nstaff: [kody, qa-engineer]\n---\n\nSeed data lives in fixtures.",
     )
     // Legacy audience list → mapped (qa → qa-engineer) → included.
-    fs.writeFileSync(
-      path.join(profileDir, "legacy.md"),
-      "---\naudience: [qa]\n---\n\nLegacy QA note.",
-    )
+    fs.writeFileSync(path.join(profileDir, "legacy.md"), "---\naudience: [qa]\n---\n\nLegacy QA note.")
     // All-staff wildcard → belongs to every staff member → included.
-    fs.writeFileSync(
-      path.join(profileDir, "everywhere.md"),
-      "---\nstaff: [*]\n---\n\nApplies to all staff.",
-    )
-    fs.writeFileSync(
-      path.join(profileDir, "mission.md"),
-      "---\nstaff: [kody]\n---\n\nWe sell widgets.",
-    )
+    fs.writeFileSync(path.join(profileDir, "everywhere.md"), "---\nstaff: [*]\n---\n\nApplies to all staff.")
+    fs.writeFileSync(path.join(profileDir, "mission.md"), "---\nstaff: [kody]\n---\n\nWe sell widgets.")
     // Explicit empty list → unassigned → excluded from QA.
-    fs.writeFileSync(
-      path.join(profileDir, "draft.md"),
-      "---\nstaff: []\n---\n\nUnassigned draft.",
-    )
+    fs.writeFileSync(path.join(profileDir, "draft.md"), "---\nstaff: []\n---\n\nUnassigned draft.")
     // Frontmatter-less file → defaults to [kody] → excluded from QA.
     fs.writeFileSync(path.join(profileDir, "about.md"), "about")
 

@@ -176,4 +176,3 @@ describe("pr: recoverSourceIssueNumber", () => {
     expect(recoverSourceIssueNumber("", "1326-slug", 1326)).toBeNull()
   })
 })
-

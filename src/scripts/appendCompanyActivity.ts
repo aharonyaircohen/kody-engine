@@ -16,9 +16,9 @@
  * logged and swallowed — activity logging must never fail a duty run.
  */
 import type { PostflightScript } from "../executables/types.js"
-import { gh } from "../issue.js"
 import { getRunUrl } from "../gha.js"
-import { STATE_BRANCH, ensureStateBranch } from "../stateBranch.js"
+import { gh } from "../issue.js"
+import { ensureStateBranch, STATE_BRANCH } from "../stateBranch.js"
 
 interface ActivityRecord {
   ts: string
@@ -45,17 +45,11 @@ interface ActivityRecord {
 function resolveTrigger(force: boolean): ActivityRecord["trigger"] {
   const event = process.env.GITHUB_EVENT_NAME ?? ""
   if (event === "schedule") return "schedule"
-  if (force || event === "issue_comment" || event === "workflow_dispatch")
-    return "manual"
+  if (force || event === "issue_comment" || event === "workflow_dispatch") return "manual"
   return "event"
 }
 
-function appendLine(
-  owner: string,
-  repo: string,
-  cwd: string,
-  record: ActivityRecord,
-): void {
+function appendLine(owner: string, repo: string, cwd: string, record: ActivityRecord): void {
   const filePath = `.kody/activity/${record.ts.slice(0, 10)}.jsonl`
   let existing = ""
   let sha: string | undefined
@@ -81,10 +75,10 @@ function appendLine(
   // The Contents API rejects a write to a branch that doesn't exist yet.
   ensureStateBranch(owner, repo, cwd)
 
-  gh(
-    ["api", "--method", "PUT", `/repos/${owner}/${repo}/contents/${filePath}`, "--input", "-"],
-    { cwd, input: JSON.stringify(payload) },
-  )
+  gh(["api", "--method", "PUT", `/repos/${owner}/${repo}/contents/${filePath}`, "--input", "-"], {
+    cwd,
+    input: JSON.stringify(payload),
+  })
 }
 
 export const appendCompanyActivity: PostflightScript = async (ctx, _profile, agentResult) => {

@@ -8,21 +8,20 @@
  */
 
 import * as fs from "node:fs"
+import type { AddressInfo } from "node:net"
 import * as os from "node:os"
 import * as path from "node:path"
-import type { AddressInfo } from "node:net"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-
-import {
-  BrainSseSink,
-  authOk,
-  buildServer,
-  ensureRepoCwd,
-  type BrainEvent,
-  type BuildServerOptions,
-} from "../../src/scripts/brainServe.js"
 import type { ChatEvent } from "../../src/chat/events.js"
 import type { ChatTurnOptions, ChatTurnResult } from "../../src/chat/loop.js"
+import {
+  authOk,
+  type BrainEvent,
+  BrainSseSink,
+  type BuildServerOptions,
+  buildServer,
+  ensureRepoCwd,
+} from "../../src/scripts/brainServe.js"
 
 const MODEL = { provider: "anthropic" as const, model: "claude-haiku-4-5-20251001" }
 const KEY = "test-key-do-not-leak"
@@ -32,8 +31,7 @@ const KEY = "test-key-do-not-leak"
 // ────────────────────────────────────────────────────────────────────────────
 
 describe("authOk", () => {
-  const make = (headers: Record<string, string>) =>
-    ({ headers } as unknown as import("node:http").IncomingMessage)
+  const make = (headers: Record<string, string>) => ({ headers }) as unknown as import("node:http").IncomingMessage
 
   it("accepts a correct X-Api-Key header", () => {
     expect(authOk(make({ "x-api-key": KEY }), KEY)).toBe(true)
@@ -602,11 +600,7 @@ describe("ensureRepoCwd", () => {
   it("clones into reposRoot/<owner>/<name> on first use", async () => {
     const reposRoot = path.join(tmp, "repos")
     const calls: Array<{ repo: string; token?: string; dir: string }> = []
-    const cloneRepo = async (
-      repo: string,
-      token: string | undefined,
-      dir: string,
-    ) => {
+    const cloneRepo = async (repo: string, token: string | undefined, dir: string) => {
       calls.push({ repo, token, dir })
       fs.mkdirSync(path.join(dir, ".git"), { recursive: true })
     }
@@ -618,9 +612,7 @@ describe("ensureRepoCwd", () => {
       cloneRepo,
     })
     expect(dir).toBe(path.join(reposRoot, "acme/widgets"))
-    expect(calls).toEqual([
-      { repo: "acme/widgets", token: "tok", dir: path.join(reposRoot, "acme/widgets") },
-    ])
+    expect(calls).toEqual([{ repo: "acme/widgets", token: "tok", dir: path.join(reposRoot, "acme/widgets") }])
   })
 
   it("skips cloning when the repo is already present", async () => {
@@ -639,11 +631,7 @@ describe("ensureRepoCwd", () => {
   it("dedupes concurrent clones of the same repo (clones once)", async () => {
     const reposRoot = path.join(tmp, "repos")
     let calls = 0
-    const cloneRepo = async (
-      _repo: string,
-      _token: string | undefined,
-      dir: string,
-    ) => {
+    const cloneRepo = async (_repo: string, _token: string | undefined, dir: string) => {
       calls++
       await new Promise((r) => setTimeout(r, 20))
       fs.mkdirSync(path.join(dir, ".git"), { recursive: true })

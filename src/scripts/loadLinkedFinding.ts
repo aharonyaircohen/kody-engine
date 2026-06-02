@@ -35,7 +35,7 @@ export const loadLinkedFinding: PreflightScript = async (ctx) => {
   const findingNumber = resolveFindingNumber(pr)
   if (!findingNumber) return
 
-  let issue
+  let issue: ReturnType<typeof getIssue>
   try {
     issue = getIssue(findingNumber, ctx.cwd)
   } catch {

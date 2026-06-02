@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it } from "vitest"
-import type { AddressInfo } from "node:net"
 import type { Server } from "node:http"
+import type { AddressInfo } from "node:net"
+import { afterEach, describe, expect, it } from "vitest"
 
 import { authOk, buildServer, parseJob, type RunnerJob } from "../../src/scripts/runnerServe.js"
 
@@ -24,7 +24,14 @@ describe("runnerServe: parseJob", () => {
   })
 
   it("carries optional fields through", () => {
-    const out = parseJob({ ...valid, ref: "dev", model: "gemini/x", sessionId: "s1", dashboardUrl: "https://d?token=t", allSecrets: { ANTHROPIC_API_KEY: "k" } })
+    const out = parseJob({
+      ...valid,
+      ref: "dev",
+      model: "gemini/x",
+      sessionId: "s1",
+      dashboardUrl: "https://d?token=t",
+      allSecrets: { ANTHROPIC_API_KEY: "k" },
+    })
     expect("job" in out).toBe(true)
     if ("job" in out) {
       expect(out.job.ref).toBe("dev")
@@ -51,7 +58,14 @@ describe("runnerServe: parseJob", () => {
   })
 
   it("accepts interactive mode with a sessionId (no issueNumber needed)", () => {
-    const out = parseJob({ jobId: "j1", repo: "o/r", githubToken: "ghp_x", mode: "interactive", sessionId: "sess-1", idleExitMs: 600000 })
+    const out = parseJob({
+      jobId: "j1",
+      repo: "o/r",
+      githubToken: "ghp_x",
+      mode: "interactive",
+      sessionId: "sess-1",
+      idleExitMs: 600000,
+    })
     expect("job" in out).toBe(true)
     if ("job" in out) {
       expect(out.job.mode).toBe("interactive")

@@ -30,10 +30,7 @@ export const requireFeedbackActions: PostflightScript = async (ctx) => {
   ctx.data.feedbackAgentItemCount = items
 
   if (items < MIN_ITEMS) {
-    const reason =
-      actions.length === 0
-        ? "FEEDBACK_ACTIONS block missing"
-        : "FEEDBACK_ACTIONS block listed no items"
+    const reason = actions.length === 0 ? "FEEDBACK_ACTIONS block missing" : "FEEDBACK_ACTIONS block listed no items"
     process.stderr.write(
       `[kody requireFeedbackActions] warning: ${reason} — proceeding anyway (verifyFixAlignment + tests are the real gate)\n`,
     )

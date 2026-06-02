@@ -28,9 +28,9 @@
  */
 import type { AgentResult } from "../agent.js"
 import type { PostflightScript } from "../executables/types.js"
-import { gh, postIssueComment, truncate } from "../issue.js"
-import { nowIso, type GoalState } from "../goal/state.js"
+import { type GoalState, nowIso } from "../goal/state.js"
 import { putGoalState } from "../goal/stateStore.js"
+import { gh, postIssueComment, truncate } from "../issue.js"
 import type { Action } from "../state.js"
 import { detectVerdict, type ReviewVerdict } from "./postReviewResult.js"
 
@@ -280,7 +280,12 @@ function createOrUpdateManifestIssue(
     input: body,
     cwd,
   })
-  const url = out.split("\n").map((l) => l.trim()).filter(Boolean).pop() ?? ""
+  const url =
+    out
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .pop() ?? ""
   const m = url.match(/\/issues\/(\d+)\b/)
   if (!m) throw new Error(`gh issue create returned unexpected output: ${out}`)
   return { number: Number(m[1]), created: true }
@@ -303,7 +308,12 @@ function createTaskIssue(
     args.push("--label", l)
   }
   const out = gh(args, { input: body, cwd })
-  const url = out.split("\n").map((l) => l.trim()).filter(Boolean).pop() ?? ""
+  const url =
+    out
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .pop() ?? ""
   const m = url.match(/\/issues\/(\d+)\b/)
   if (!m) throw new Error(`gh issue create returned unexpected output: ${out}`)
   return { number: Number(m[1]), url }
@@ -360,12 +370,7 @@ export const createQaGoal: PostflightScript = async (ctx, _profile, agentResult:
   // ── Standalone mode (no tracking issue) ─────────────────────────────────
   // A direct, operator-initiated `@kody qa-engineer` with no --issue keeps the
   // original auto-goal behavior — the operator explicitly asked for it.
-  await promoteReportToGoal(
-    ctx,
-    finalText,
-    ctx.args.scope as string | undefined,
-    ctx.args.goal as string | undefined,
-  )
+  await promoteReportToGoal(ctx, finalText, ctx.args.scope as string | undefined, ctx.args.goal as string | undefined)
 }
 
 /**
@@ -377,7 +382,13 @@ export const createQaGoal: PostflightScript = async (ctx, _profile, agentResult:
  * reports open a single record issue instead.
  */
 export async function promoteReportToGoal(
-  ctx: { args: Record<string, unknown>; cwd: string; config: { github: { owner: string; repo: string } }; data: Record<string, unknown>; output: { exitCode: number; reason?: string } },
+  ctx: {
+    args: Record<string, unknown>
+    cwd: string
+    config: { github: { owner: string; repo: string } }
+    data: Record<string, unknown>
+    output: { exitCode: number; reason?: string }
+  },
   finalText: string,
   scopeArg?: string,
   explicitGoalArg?: string,
@@ -396,11 +407,16 @@ export async function promoteReportToGoal(
     const title = `QA [${verdict}]: ${scope?.trim() || "smoke"} — ${todayIso()}`.slice(0, 240)
     let url = ""
     try {
-      const out = gh(
-        ["issue", "create", "--title", title, "--label", FINDING_LABEL, "--body-file", "-"],
-        { input: finalText, cwd: ctx.cwd },
-      )
-      url = out.split("\n").map((l) => l.trim()).filter(Boolean).pop() ?? ""
+      const out = gh(["issue", "create", "--title", title, "--label", FINDING_LABEL, "--body-file", "-"], {
+        input: finalText,
+        cwd: ctx.cwd,
+      })
+      url =
+        out
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean)
+          .pop() ?? ""
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       ctx.output.exitCode = 4
@@ -444,11 +460,7 @@ export async function promoteReportToGoal(
     if (manifestRead.number !== null) {
       manifestIssueNumber = manifestRead.number
       try {
-        postIssueComment(
-          manifestRead.number,
-          `## QA — ${verdict} · goal \`${goalId}\`\n\n${markdown}`,
-          ctx.cwd,
-        )
+        postIssueComment(manifestRead.number, `## QA — ${verdict} · goal \`${goalId}\`\n\n${markdown}`, ctx.cwd)
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err)
         process.stderr.write(`[createQaGoal] could not comment on manifest issue: ${reason.slice(0, 300)}\n`)
@@ -509,7 +521,14 @@ export async function promoteReportToGoal(
   const now = nowIso()
   const goalState: GoalState = { state: "active", startedAt: now, updatedAt: now, extra: { version: 1 } }
   try {
-    putGoalState(ctx.config.github.owner, ctx.config.github.repo, goalId, goalState, `chore(goals): activate ${goalId}`, ctx.cwd)
+    putGoalState(
+      ctx.config.github.owner,
+      ctx.config.github.repo,
+      goalId,
+      goalState,
+      `chore(goals): activate ${goalId}`,
+      ctx.cwd,
+    )
   } catch (err) {
     process.stderr.write(
       `[createQaGoal] failed to persist goal state to kody-state: ${err instanceof Error ? err.message : String(err)}\n` +

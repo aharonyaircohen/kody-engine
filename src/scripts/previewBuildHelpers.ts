@@ -71,9 +71,7 @@ export function decryptVaultPayload(payload: string, keyRaw: string): string {
     throw new Error("invalid vault payload format")
   }
   const [, ivB64, ctB64, tagB64] = parts
-  const key = /^[0-9a-fA-F]{64}$/.test(keyRaw)
-    ? Buffer.from(keyRaw, "hex")
-    : Buffer.from(keyRaw, "base64")
+  const key = /^[0-9a-fA-F]{64}$/.test(keyRaw) ? Buffer.from(keyRaw, "hex") : Buffer.from(keyRaw, "base64")
   if (key.length !== 32) {
     throw new Error("KODY_MASTER_KEY must decode to 32 bytes")
   }
@@ -125,11 +123,7 @@ export function buildEnvFromVault(doc: VaultDoc): {
  * Matches the body shape posted by Kody-Dashboard/builder/src/builder.ts
  * so a build run by either path appears identically on the PR.
  */
-export function formatPreviewComment(args: {
-  appName: string
-  ref: string
-  nowIso: string
-}): string {
+export function formatPreviewComment(args: { appName: string; ref: string; nowIso: string }): string {
   const url = `https://${args.appName}.fly.dev`
   return [
     "<!-- kody-fly-preview -->",
@@ -145,8 +139,5 @@ export function formatPreviewComment(args: {
  * Kody-Dashboard/src/dashboard/lib/previews/builder-client.ts.
  */
 export function defaultImageTag(repo: string, ref: string): string {
-  return createHash("sha256")
-    .update(`${repo}@${ref}`)
-    .digest("hex")
-    .slice(0, 12)
+  return createHash("sha256").update(`${repo}@${ref}`).digest("hex").slice(0, 12)
 }

@@ -213,7 +213,14 @@ describe("pickFailedRunForFixCi", () => {
       () => JSON.stringify({ headRefName: "feature", headRefOid: "sha-head" }),
       () =>
         JSON.stringify([
-          { databaseId: 1, workflowName: "kody", headSha: "sha-head", conclusion: "failure", url: "u1", createdAt: "t1" },
+          {
+            databaseId: 1,
+            workflowName: "kody",
+            headSha: "sha-head",
+            conclusion: "failure",
+            url: "u1",
+            createdAt: "t1",
+          },
         ]),
     ])
     expect(pickFailedRunForFixCi(42, 1_000, 10)).toBeNull()

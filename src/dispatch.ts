@@ -25,18 +25,7 @@ import { getProfileInputs, listExecutables } from "./registry.js"
  * the comment as an unrecognized-command error. Keep this small and
  * conservative — every entry weakens the "typo'd command" detection.
  */
-const POLITE_WORDS = new Set<string>([
-  "please",
-  "kindly",
-  "hi",
-  "hey",
-  "hello",
-  "thanks",
-  "thank",
-  "plz",
-  "pls",
-  "yo",
-])
+const POLITE_WORDS = new Set<string>(["please", "kindly", "hi", "hey", "hello", "thanks", "thank", "plz", "pls", "yo"])
 
 export interface DispatchResult {
   executable: string
@@ -327,7 +316,12 @@ export function autoDispatchTyped(opts?: {
   // classify as silent so we don't post a misleading "I don't recognize
   // `please`" comment.
   if (!tokenRaw || POLITE_WORDS.has(tokenRaw)) {
-    return { kind: "silent", reason: tokenRaw ? `polite-word lead-in '${tokenRaw}', no default executable configured` : "no subcommand token, no default executable configured" }
+    return {
+      kind: "silent",
+      reason: tokenRaw
+        ? `polite-word lead-in '${tokenRaw}', no default executable configured`
+        : "no subcommand token, no default executable configured",
+    }
   }
 
   const available = listExecutables()

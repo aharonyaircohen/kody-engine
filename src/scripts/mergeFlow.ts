@@ -15,8 +15,8 @@
  */
 
 import type { PreflightScript } from "../executables/types.js"
-import { gh } from "../issue.js"
 import { commentOnIssue, mergePrSquash } from "../goal/operations.js"
+import { gh } from "../issue.js"
 
 interface PrMergeView {
   state: string
@@ -28,16 +28,9 @@ interface PrMergeView {
 }
 
 function readPr(prNumber: number, cwd: string): PrMergeView {
-  const out = gh(
-    [
-      "pr",
-      "view",
-      String(prNumber),
-      "--json",
-      "state,isDraft,mergeable,mergeStateStatus,title,url",
-    ],
-    { cwd },
-  )
+  const out = gh(["pr", "view", String(prNumber), "--json", "state,isDraft,mergeable,mergeStateStatus,title,url"], {
+    cwd,
+  })
   const p = JSON.parse(out) as Partial<PrMergeView>
   return {
     state: p.state ?? "UNKNOWN",
@@ -54,9 +47,9 @@ function readPr(prNumber: number, cwd: string): PrMergeView {
  * `{ ok: false, action, reason }` to refuse. Pure over the view so it is
  * unit-testable without GitHub.
  */
-export function evaluateMergeGate(pr: PrMergeView):
-  | { ok: true }
-  | { ok: false; action: "MERGE_SKIPPED" | "MERGE_BLOCKED"; reason: string } {
+export function evaluateMergeGate(
+  pr: PrMergeView,
+): { ok: true } | { ok: false; action: "MERGE_SKIPPED" | "MERGE_BLOCKED"; reason: string } {
   if (pr.state !== "OPEN") {
     return {
       ok: false,
@@ -126,11 +119,7 @@ export const mergeFlow: PreflightScript = async (ctx) => {
     ctx.data.mergeAction = verdict.action
     // Only comment on a real block; a skip (already merged/closed) is silent.
     if (verdict.action === "MERGE_BLOCKED") {
-      commentOnIssue(
-        prNumber,
-        `🚦 _Auto-merge held: ${verdict.reason} Kody will retry once the PR is CLEAN._`,
-        ctx.cwd,
-      )
+      commentOnIssue(prNumber, `🚦 _Auto-merge held: ${verdict.reason} Kody will retry once the PR is CLEAN._`, ctx.cwd)
     }
     return
   }

@@ -8,21 +8,16 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import {
-  prepareTaskArtifactsDir,
-  taskArtifactsPromptAddendum,
-  verifyTaskArtifacts,
-} from "../task-artifacts.js"
-
 import type { AgentResult } from "../agent.js"
 import { runAgent } from "../agent.js"
 import type { ProviderModel } from "../config.js"
 import { listExecutables } from "../registry.js"
+import { prepareTaskArtifactsDir, taskArtifactsPromptAddendum, verifyTaskArtifacts } from "../task-artifacts.js"
+import { prepareAttachments } from "./attachments.js"
 import type { ChatEvent, EventSink } from "./events.js"
 import { makeRunId } from "./events.js"
 import type { ChatTurn } from "./session.js"
 import { appendTurn, readSession } from "./session.js"
-import { prepareAttachments } from "./attachments.js"
 
 export const CHAT_SYSTEM_PROMPT = [
   "You are Kody, an AI assistant for the Kody Operations Dashboard. Reply to the",
@@ -242,7 +237,7 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
           "# Attached images",
           "The user attached one or more images on this turn. They are saved as",
           "files in this workspace and referenced inline in the conversation as",
-          "`[Image \"…\" is attached — saved to <path>]`. You CAN view them: call",
+          '`[Image "…" is attached — saved to <path>]`. You CAN view them: call',
           "the Read tool on each of those exact paths BEFORE answering. Never tell",
           "the user you cannot see images — Read the file and describe what you see.",
         ].join("\n")
@@ -418,7 +413,8 @@ function readMemoryIndexBlock(cwd: string): string {
   if (!trimmed) return ""
   const body =
     trimmed.length > MAX_INDEX_BYTES
-      ? trimmed.slice(0, MAX_INDEX_BYTES) + "\n\n_… (memory index truncated; open individual files under `.kody/memory/` to read more)_"
+      ? trimmed.slice(0, MAX_INDEX_BYTES) +
+        "\n\n_… (memory index truncated; open individual files under `.kody/memory/` to read more)_"
       : trimmed
   return [
     "# Project memory index (`.kody/memory/INDEX.md`)",
@@ -464,7 +460,7 @@ function readContextBlock(cwd: string): string {
   if (!joined) return ""
   const body =
     joined.length > MAX_CONTEXT_BYTES
-      ? joined.slice(0, MAX_CONTEXT_BYTES) + "\n\n_… (context truncated; see `.kody/context/` for the full text)_"
+      ? `${joined.slice(0, MAX_CONTEXT_BYTES)}\n\n_… (context truncated; see \`.kody/context/\` for the full text)_`
       : joined
   return [
     "# Context (`.kody/context/`) — your default frame",
@@ -498,7 +494,7 @@ function readInstructionsBlock(cwd: string): string {
   if (!trimmed) return ""
   const body =
     trimmed.length > MAX_INSTRUCTIONS_BYTES
-      ? trimmed.slice(0, MAX_INSTRUCTIONS_BYTES) + "\n\n_… (instructions truncated)_"
+      ? `${trimmed.slice(0, MAX_INSTRUCTIONS_BYTES)}\n\n_… (instructions truncated)_`
       : trimmed
   return [
     "# User instructions for this repo (`.kody/instructions.md`)",

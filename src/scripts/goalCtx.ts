@@ -9,8 +9,8 @@
  * use `leafPr.headRefName` as the base.
  */
 
-import type { GoalIssueSnapshot, GoalPhase } from "../goal/phase.js"
 import type { OpenTaskPr } from "../goal/operations.js"
+import type { GoalIssueSnapshot, GoalPhase } from "../goal/phase.js"
 import type { GoalLifecycleState, GoalState } from "../goal/state.js"
 
 export interface GoalCtx {

@@ -48,7 +48,12 @@ function parseSlugList(value: string): string[] {
   const inner = value.startsWith("[") && value.endsWith("]") ? value.slice(1, -1) : value
   return inner
     .split(",")
-    .map((s) => s.trim().replace(/^["']|["']$/g, "").toLowerCase())
+    .map((s) =>
+      s
+        .trim()
+        .replace(/^["']|["']$/g, "")
+        .toLowerCase(),
+    )
     .filter(Boolean)
 }
 

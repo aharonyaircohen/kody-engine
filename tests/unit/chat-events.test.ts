@@ -3,7 +3,15 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { ChatEvent } from "../../src/chat/events.js"
-import { eventsFilePath, FileSink, HttpSink, makeRunId, redactUrl, TeeSink, withSessionParam } from "../../src/chat/events.js"
+import {
+  eventsFilePath,
+  FileSink,
+  HttpSink,
+  makeRunId,
+  redactUrl,
+  TeeSink,
+  withSessionParam,
+} from "../../src/chat/events.js"
 
 const EV: ChatEvent = {
   event: "chat.message",

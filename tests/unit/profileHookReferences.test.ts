@@ -23,7 +23,7 @@ function listExecutables(): { name: string; dir: string; profile: ProfileShape }
 }
 
 function partExists(execDir: string, bucket: string, entry: string): boolean {
-  const ext = bucket === "skills" ? "" : ".json".replace(".json", bucket === "hooks" ? ".json" : ".md")
+  const _ext = bucket === "skills" ? "" : ".json".replace(".json", bucket === "hooks" ? ".json" : ".md")
   // hooks: <name>.json; skills: <name>/ (dir); commands: <name>.md; agents: <name>.md
   const localPath =
     bucket === "skills"

@@ -22,9 +22,9 @@ import { KODY_NAMESPACE, removeLabel } from "./lifecycleLabels.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
 import { resolveExecutable } from "./registry.js"
-import { loadSubagents } from "./subagents.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
 import type { TaskState, TaskTarget } from "./state.js"
+import { loadSubagents } from "./subagents.js"
 import { prepareTaskArtifactsDir, taskArtifactsPromptAddendum, verifyTaskArtifacts } from "./task-artifacts.js"
 import { firstRequiredFailure, verifyCliTools } from "./tools.js"
 
@@ -300,8 +300,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
         typeof ctx.data.dutyOperatorMention === "string" ? (ctx.data.dutyOperatorMention as string) : undefined,
       // Stamp the running duty's slug onto recommendations so the dashboard
       // keys trust per duty (not per persona). `jobSlug` is set by loadJobFromFile.
-      dutyDutySlug:
-        typeof ctx.data.jobSlug === "string" ? (ctx.data.jobSlug as string) : undefined,
+      dutyDutySlug: typeof ctx.data.jobSlug === "string" ? (ctx.data.jobSlug as string) : undefined,
       // owner/repo from kody.config.json; envelope falls back to GITHUB_REPOSITORY
       // for tester repos that don't set config.github (the file isn't always
       // checked in). Either way, dutyMcp needs "owner/name" to hit the compare API.
@@ -591,7 +590,7 @@ function clearStampedLifecycleLabels(profile: Profile, ctx: Context): void {
   for (const entry of profile.scripts.preflight) {
     if (entry.script !== "setLifecycleLabel") continue
     const label = typeof entry.with?.label === "string" ? entry.with.label : undefined
-    if (!label || !label.startsWith(KODY_NAMESPACE)) continue
+    if (!label?.startsWith(KODY_NAMESPACE)) continue
     try {
       removeLabel(target, label, ctx.cwd)
     } catch {

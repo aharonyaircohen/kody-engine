@@ -85,7 +85,7 @@ describe('lifecycle: "pr-branch"', () => {
     ])
   })
 
-  it("context: \"minimal\" skips the task-context bundle", () => {
+  it('context: "minimal" skips the task-context bundle', () => {
     const p = writeProfile(
       baseProfile({
         lifecycle: "pr-branch",

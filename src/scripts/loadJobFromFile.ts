@@ -31,8 +31,8 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { DUTY_MCP_TOOL_NAMES } from "../dutyMcp.js"
 import type { PreflightScript } from "../executables/types.js"
-import { resolveBackend } from "./jobState/index.js"
 import { splitFrontmatter } from "./jobFrontmatter.js"
+import { resolveBackend } from "./jobState/index.js"
 
 const DUTY_TOOL_PALETTE: ReadonlySet<string> = new Set(DUTY_MCP_TOOL_NAMES)
 
@@ -70,9 +70,7 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
   if (workerSlug) {
     const workerPath = path.join(ctx.cwd, workersDir, `${workerSlug}.md`)
     if (!fs.existsSync(workerPath)) {
-      throw new Error(
-        `loadJobFromFile: duty '${slug}' declares staff '${workerSlug}' but ${workerPath} does not exist`,
-      )
+      throw new Error(`loadJobFromFile: duty '${slug}' declares staff '${workerSlug}' but ${workerPath} does not exist`)
     }
     const workerRaw = fs.readFileSync(workerPath, "utf-8")
     const parsed = parseJobFile(workerRaw, workerSlug)
@@ -97,9 +95,7 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
   // as plain comments (e.g. the QA duties) need this — the engine only
   // auto-stamps recs sent via the `recommend_to_operator` tool. The dashboard
   // reads the stamp to key trust per duty instead of per persona.
-  ctx.data.jobIntent = body
-    .replace(/\{\{\s*mentions\s*\}\}/g, mentions)
-    .replace(/\{\{\s*duty\s*\}\}/g, slug)
+  ctx.data.jobIntent = body.replace(/\{\{\s*mentions\s*\}\}/g, mentions).replace(/\{\{\s*duty\s*\}\}/g, slug)
   ctx.data.jobState = loaded
   ctx.data.jobStateJson = JSON.stringify(loaded.state, null, 2)
   ctx.data.workerSlug = workerSlug

@@ -200,11 +200,7 @@ export class PoolManager {
     const tracked = new Set(this.free.map((f) => f.id))
     let adopted = 0
     for (const m of machines) {
-      if (
-        (m.state === "suspended" || m.state === "suspending") &&
-        m.private_ip &&
-        !tracked.has(m.id)
-      ) {
+      if ((m.state === "suspended" || m.state === "suspending") && m.private_ip && !tracked.has(m.id)) {
         this.free.push({ id: m.id, privateIp: m.private_ip })
         adopted++
       }

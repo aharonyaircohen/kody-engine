@@ -16,11 +16,7 @@ import * as path from "node:path"
 /** `owner/name` with safe path chars only. Containment is re-checked below. */
 export const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
 
-export type CloneRepoFn = (
-  repo: string,
-  token: string | undefined,
-  dir: string,
-) => Promise<void>
+export type CloneRepoFn = (repo: string, token: string | undefined, dir: string) => Promise<void>
 
 // Per-target clone dedupe: concurrent callers for the same repo clone once.
 const repoClones = new Map<string, Promise<void>>()
@@ -72,12 +68,7 @@ export async function ensureRepoCwd(opts: {
   repoToken?: string
   cloneRepo: CloneRepoFn
 }): Promise<string> {
-  const dir = await resolveAndClone(
-    opts.reposRoot,
-    opts.repo,
-    opts.repoToken,
-    opts.cloneRepo,
-  )
+  const dir = await resolveAndClone(opts.reposRoot, opts.repo, opts.repoToken, opts.cloneRepo)
   return dir ?? opts.baseCwd
 }
 
@@ -92,16 +83,9 @@ export async function fetchRepo(opts: {
   repoToken?: string
   cloneRepo?: CloneRepoFn
 }): Promise<string> {
-  const dir = await resolveAndClone(
-    opts.reposRoot,
-    opts.repo,
-    opts.repoToken,
-    opts.cloneRepo ?? defaultCloneRepo,
-  )
+  const dir = await resolveAndClone(opts.reposRoot, opts.repo, opts.repoToken, opts.cloneRepo ?? defaultCloneRepo)
   if (!dir) {
-    throw new Error(
-      `invalid repo "${opts.repo}" — expected "owner/name" with no path escapes`,
-    )
+    throw new Error(`invalid repo "${opts.repo}" — expected "owner/name" with no path escapes`)
   }
   return dir
 }
@@ -113,9 +97,7 @@ export async function fetchRepo(opts: {
  */
 export const defaultCloneRepo: CloneRepoFn = (repo, token, dir) => {
   fs.mkdirSync(path.dirname(dir), { recursive: true })
-  const authUrl = token
-    ? `https://x-access-token:${token}@github.com/${repo}.git`
-    : `https://github.com/${repo}.git`
+  const authUrl = token ? `https://x-access-token:${token}@github.com/${repo}.git` : `https://github.com/${repo}.git`
   return new Promise<void>((resolve, reject) => {
     const child = spawn("git", ["clone", "--depth=1", authUrl, dir], {
       stdio: "inherit",
@@ -127,8 +109,7 @@ export const defaultCloneRepo: CloneRepoFn = (repo, token, dir) => {
       }
       try {
         const name = process.env.GIT_AUTHOR_NAME ?? "Kody Bot"
-        const email =
-          process.env.GIT_AUTHOR_EMAIL ?? "kody-bot@users.noreply.github.com"
+        const email = process.env.GIT_AUTHOR_EMAIL ?? "kody-bot@users.noreply.github.com"
         spawnSync("git", ["-C", dir, "config", "user.name", name])
         spawnSync("git", ["-C", dir, "config", "user.email", email])
       } catch {

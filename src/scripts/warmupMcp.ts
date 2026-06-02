@@ -74,12 +74,12 @@ async function warmupOne(
   let nextId = 1
   const send = (method: string, params?: unknown): number => {
     const id = nextId++
-    const payload = JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n"
+    const payload = `${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`
     child.stdin.write(payload)
     return id
   }
   const notify = (method: string, params?: unknown): void => {
-    const payload = JSON.stringify({ jsonrpc: "2.0", method, params }) + "\n"
+    const payload = `${JSON.stringify({ jsonrpc: "2.0", method, params })}\n`
     child.stdin.write(payload)
   }
   const awaitResponse = async (id: number): Promise<JsonRpcResponse> => {
@@ -158,11 +158,12 @@ function lineStream(stream: NodeJS.ReadableStream): { next: (timeoutMs: number) 
 
   stream.on("data", (chunk: Buffer | string) => {
     buf += typeof chunk === "string" ? chunk : chunk.toString("utf8")
-    let idx: number
-    while ((idx = buf.indexOf("\n")) >= 0) {
+    let idx = buf.indexOf("\n")
+    while (idx >= 0) {
       const line = buf.slice(0, idx).replace(/\r$/, "")
       buf = buf.slice(idx + 1)
       if (line.length > 0) queue.push(line)
+      idx = buf.indexOf("\n")
     }
     tryDeliver()
   })
@@ -187,12 +188,15 @@ function lineStream(stream: NodeJS.ReadableStream): { next: (timeoutMs: number) 
           return
         }
         waiter = resolve
-        const t = setTimeout(() => {
-          if (waiter === resolve) {
-            waiter = null
-            resolve(null)
-          }
-        }, Math.max(0, timeoutMs))
+        const t = setTimeout(
+          () => {
+            if (waiter === resolve) {
+              waiter = null
+              resolve(null)
+            }
+          },
+          Math.max(0, timeoutMs),
+        )
         t.unref?.()
       }),
   }

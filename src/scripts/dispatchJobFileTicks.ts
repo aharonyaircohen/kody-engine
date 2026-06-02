@@ -87,9 +87,7 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
       // `workflow_dispatch` "Run now" bypasses this dispatcher, but
       // job-tick's loader rejects a missing/dangling staff member there too.
       if (!frontmatter.staff || frontmatter.staff.trim().length === 0) {
-        process.stderr.write(
-          `[jobs] ⏭  skip ${slug}: no staff assigned (add 'staff: <slug>' frontmatter)\n`,
-        )
+        process.stderr.write(`[jobs] ⏭  skip ${slug}: no staff assigned (add 'staff: <slug>' frontmatter)\n`)
         results.push({ slug, exitCode: 0, skipped: true, reason: "no staff assigned" })
         continue
       }

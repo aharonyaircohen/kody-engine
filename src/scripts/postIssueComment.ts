@@ -88,8 +88,7 @@ export const postIssueComment: PostflightScript = async (ctx, profile) => {
     prResult,
     isFailure,
     failureReason,
-    justPushedToExistingPr:
-      prResult?.kind === "updated" && commitResult?.committed === true,
+    justPushedToExistingPr: prResult?.kind === "updated" && commitResult?.committed === true,
     branch,
     branchPushed: commitResult?.committed === true,
     githubOwner: ctx.config.github?.owner,

@@ -267,7 +267,7 @@ function putJsonlViaContents(
       const localLines = jsonlLines(localText)
       const localSet = new Set(localLines)
       const extra = remote.lines.filter((l) => !localSet.has(l))
-      if (extra.length > 0) body = [...localLines, ...extra].join("\n") + "\n"
+      if (extra.length > 0) body = `${[...localLines, ...extra].join("\n")}\n`
     }
 
     const payload: Record<string, unknown> = {

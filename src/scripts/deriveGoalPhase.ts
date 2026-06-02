@@ -19,9 +19,9 @@ import {
   extractClosesIssues,
   listGoalIssues,
   listOpenPrs,
+  type OpenTaskPr,
   pairIssuesWithPrs,
   pickLeafPr,
-  type OpenTaskPr,
 } from "../goal/operations.js"
 import { derivePhase } from "../goal/phase.js"
 import type { GoalCtx } from "./goalCtx.js"
@@ -55,7 +55,10 @@ export const deriveGoalPhase: PreflightScript = async (ctx) => {
     return
   }
 
-  const taskPrs = filterGoalTaskPrs(allPrs.value ?? [], rawIssues.map((i) => i.number))
+  const taskPrs = filterGoalTaskPrs(
+    allPrs.value ?? [],
+    rawIssues.map((i) => i.number),
+  )
   goal.openTaskPrs = taskPrs
   goal.leafPr = pickLeafPr(taskPrs)
 

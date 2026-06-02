@@ -40,10 +40,7 @@ export interface PrMergeInfo {
 
 export function prMergeStatus(prNumber: number, cwd?: string): PrMergeInfo {
   try {
-    const out = gh(
-      ["pr", "view", String(prNumber), "--json", "mergeable,mergeStateStatus"],
-      { cwd },
-    )
+    const out = gh(["pr", "view", String(prNumber), "--json", "mergeable,mergeStateStatus"], { cwd })
     const parsed = JSON.parse(out) as { mergeable?: string; mergeStateStatus?: string }
     const mergeable = parsed.mergeable ?? "UNKNOWN"
     const mergeStateStatus = parsed.mergeStateStatus ?? "UNKNOWN"
@@ -249,7 +246,12 @@ function git(args: string[], cwd?: string): string {
  * requires `read:org` scope on KODY_TOKEN. REST PATCH works with plain `repo`
  * scope (matching what release/deploy.sh already does).
  */
-function updateExistingPr(existing: { number: number; url: string }, body: string, draft: boolean, cwd?: string): PrResult {
+function updateExistingPr(
+  existing: { number: number; url: string },
+  body: string,
+  draft: boolean,
+  cwd?: string,
+): PrResult {
   const stripped = existing.url.replace(/^https:\/\/github\.com\//, "")
   const [owner, repo] = stripped.split("/")
   try {

@@ -27,8 +27,7 @@ export const saveGoalState: PreflightScript = async (ctx) => {
   // With the timestamp frozen on no-op ticks the state is byte-identical, so
   // `commitGoalState` skips the write entirely (`changed === false`).
   const prev = goal.raw
-  const changed =
-    !prev || prev.state !== goal.state || prev.lastDispatchedIssue !== goal.lastDispatchedIssue
+  const changed = !prev || prev.state !== goal.state || prev.lastDispatchedIssue !== goal.lastDispatchedIssue
 
   const updated: GoalState = {
     ...(prev ?? { state: goal.state, extra: {} }),

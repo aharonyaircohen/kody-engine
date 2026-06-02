@@ -6,7 +6,7 @@ import type { TaskState } from "../../src/state.js"
 function makeCtx(taskState?: Partial<TaskState>): Context {
   return {
     args: { issue: 1 },
-    cwd: "/tmp/nonexistent-" + Date.now(),
+    cwd: `/tmp/nonexistent-${Date.now()}`,
     config: {
       quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       git: { defaultBranch: "main" },

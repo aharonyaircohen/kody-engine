@@ -171,12 +171,31 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   //    moved out of the engine to consumer repos. These were previously shared
   //    with the build-family executables via the lifecycle macro; with those
   //    gone, the named kept executable is now the only engine user. ──
-  runFlow: { owner: "run", reason: "run bootstrap. Solo since feature/bug/chore collapsed/moved to consumer repos — run is the last engine build primitive." },
-  loadPriorArt: { owner: "run", reason: "run-only prior-art loader. Solo since the build executables moved out of the engine." },
-  verifyWithRetry: { owner: "run", reason: "run-only verify-with-retry gate. Solo since the build executables moved out of the engine." },
-  checkCoverageWithRetry: { owner: "run", reason: "run-only coverage gate. Solo since the build executables moved out of the engine." },
-  abortUnfinishedGitOps: { owner: "run", reason: "run-only git-ops guard. Solo since the build executables moved out of the engine." },
-  finalizeTerminal: { owner: "run", reason: "run-only terminal finalizer. Solo since the build executables moved out of the engine." },
+  runFlow: {
+    owner: "run",
+    reason:
+      "run bootstrap. Solo since feature/bug/chore collapsed/moved to consumer repos — run is the last engine build primitive.",
+  },
+  loadPriorArt: {
+    owner: "run",
+    reason: "run-only prior-art loader. Solo since the build executables moved out of the engine.",
+  },
+  verifyWithRetry: {
+    owner: "run",
+    reason: "run-only verify-with-retry gate. Solo since the build executables moved out of the engine.",
+  },
+  checkCoverageWithRetry: {
+    owner: "run",
+    reason: "run-only coverage gate. Solo since the build executables moved out of the engine.",
+  },
+  abortUnfinishedGitOps: {
+    owner: "run",
+    reason: "run-only git-ops guard. Solo since the build executables moved out of the engine.",
+  },
+  finalizeTerminal: {
+    owner: "run",
+    reason: "run-only terminal finalizer. Solo since the build executables moved out of the engine.",
+  },
   mergeFlow: { owner: "merge", reason: "merge is bespoke (no-agent self-gating squash). Solo to merge." },
   syncFlow: { owner: "sync", reason: "sync is bespoke (no-agent fast-forward). Solo to sync." },
   finishFlow: { owner: "release", reason: "release finalize step. Solo to release." },
@@ -233,7 +252,7 @@ function buildUsageMap(): Map<string, Set<string>> {
   for (const name of listExecutableNames()) {
     const profilePath = path.join(EXECUTABLES_DIR, name, "profile.json")
     if (!fs.existsSync(profilePath)) continue
-    let profile
+    let profile: ReturnType<typeof loadProfile>
     try {
       profile = loadProfile(profilePath)
     } catch {

@@ -22,6 +22,7 @@ vi.mock("../../src/executor.js", async () => {
 })
 
 import { runExecutable } from "../../src/executor.js"
+
 const runExecutableMock = runExecutable as unknown as Mock
 
 let tmp: string

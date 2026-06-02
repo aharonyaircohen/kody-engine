@@ -110,9 +110,7 @@ describe("postIssueComment.renderMessage", () => {
   })
 
   it("emits ✅ pushed to <url> when prResult is updated AND new commits landed", () => {
-    expect(
-      renderMessage({ ...base, prResult: updated, justPushedToExistingPr: true }),
-    ).toBe(`✅ kody pushed to ${URL}`)
+    expect(renderMessage({ ...base, prResult: updated, justPushedToExistingPr: true })).toBe(`✅ kody pushed to ${URL}`)
   })
 
   it("emits ℹ️ no changes when prResult is updated but nothing was pushed", () => {

@@ -10,8 +10,8 @@
  */
 
 import { gh } from "../issue.js"
-import { STATE_BRANCH, ensureStateBranch } from "../stateBranch.js"
-import { parseGoalState, serializeGoalState, type GoalState } from "./state.js"
+import { ensureStateBranch, STATE_BRANCH } from "../stateBranch.js"
+import { type GoalState, parseGoalState, serializeGoalState } from "./state.js"
 
 function statePath(goalId: string): string {
   return `.kody/goals/${goalId}/state.json`

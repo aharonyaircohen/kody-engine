@@ -13,11 +13,7 @@
  * second fetch of the same repo returns instantly.
  */
 
-import {
-  createSdkMcpServer,
-  tool,
-  type McpSdkServerConfigWithInstance,
-} from "@anthropic-ai/claude-agent-sdk"
+import { createSdkMcpServer, type McpSdkServerConfigWithInstance, tool } from "@anthropic-ai/claude-agent-sdk"
 import { z } from "zod"
 
 import { fetchRepo } from "./repoWorkspace.js"
@@ -34,16 +30,12 @@ export interface FetchRepoToolOptions {
  * into `mcpServers["kody-fetch-repo"]` and grant the agent read access to
  * `reposRoot` via `additionalDirectories`.
  */
-export function buildFetchRepoMcpServer(
-  opts: FetchRepoToolOptions,
-): McpSdkServerConfigWithInstance {
+export function buildFetchRepoMcpServer(opts: FetchRepoToolOptions): McpSdkServerConfigWithInstance {
   const fetchTool = tool(
     "fetch_repo",
     'Clone another GitHub repository into your workspace so you can read and work on it. Pass `repo` as "owner/name" (e.g. "A-Guy-educ/A-Guy"). Returns the absolute path of the clone — then use your Read/Grep/Glob/Bash tools at that path to inspect it. Already-fetched repos are reused instantly. Use this whenever the user asks about a repository other than your current one — you are NOT limited to a single repo.',
     {
-      repo: z
-        .string()
-        .describe('GitHub repository as "owner/name", e.g. "A-Guy-educ/A-Guy".'),
+      repo: z.string().describe('GitHub repository as "owner/name", e.g. "A-Guy-educ/A-Guy".'),
     },
     async (args) => {
       const repo = String(args.repo ?? "").trim()

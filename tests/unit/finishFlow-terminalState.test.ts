@@ -19,8 +19,8 @@ vi.mock("../../src/state.js", async (importOriginal) => {
   }
 })
 
-import { finishFlow } from "../../src/scripts/finishFlow.js"
 import type { Context, Profile } from "../../src/executables/types.js"
+import { finishFlow } from "../../src/scripts/finishFlow.js"
 
 function makeState() {
   return {
@@ -49,7 +49,6 @@ function makeCtx(taskState: unknown): Context {
   }
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: only `name` is consulted
 const profile = { name: "bug" } as Profile
 
 describe("finishFlow: terminal state-mirror update", () => {

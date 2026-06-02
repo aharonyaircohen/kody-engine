@@ -93,9 +93,10 @@ export function prBranchLifecycle(profile: Profile, profilePath: string): void {
   })
 
   const contextBundle: ScriptEntry[] = buildContextBundle(cfg.context, cfg.contextExtras)
-  const afterPreflight: ScriptEntry[] = cfg.context === "minimal" && cfg.contextExtras.length === 0
-    ? [{ script: "composePrompt" }]
-    : [...contextBundle, { script: "composePrompt" }]
+  const afterPreflight: ScriptEntry[] =
+    cfg.context === "minimal" && cfg.contextExtras.length === 0
+      ? [{ script: "composePrompt" }]
+      : [...contextBundle, { script: "composePrompt" }]
 
   profile.scripts.preflight = [...before, ...profile.scripts.preflight, ...afterPreflight]
 
@@ -157,7 +158,10 @@ function validateConfig(raw: Record<string, unknown> | undefined, profilePath: s
   const lbl = label as Record<string, unknown>
   for (const k of ["name", "color", "description"]) {
     if (typeof lbl[k] !== "string" || (lbl[k] as string).length === 0) {
-      throw new ProfileError(profilePath, `lifecycle "pr-branch": lifecycleConfig.label.${k} must be a non-empty string`)
+      throw new ProfileError(
+        profilePath,
+        `lifecycle "pr-branch": lifecycleConfig.label.${k} must be a non-empty string`,
+      )
     }
   }
 

@@ -102,5 +102,4 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     expect(postScripts).not.toContain("verify")
     expect(postScripts).not.toContain("checkCoverageWithRetry")
   })
-
 })

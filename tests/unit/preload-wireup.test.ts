@@ -1,10 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { loadProfile } from "../../src/profile.js"
-import { runExecutable } from "../../src/executor.js"
-import type { ExecutorInput } from "../../src/executor.js"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import type { ExecutorInput } from "../../src/executor.js"
+import { loadProfile } from "../../src/profile.js"
 
 // Mock context-loading dependencies so the container's preload step
 // produces a deterministic snapshot without hitting GitHub or the FS.

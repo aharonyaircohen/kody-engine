@@ -11,8 +11,8 @@
 
 import { describe, expect, it } from "vitest"
 import { loadProfile, validateScriptReferences } from "../../src/profile.js"
-import { allScriptNames, postflightScripts, preflightScripts } from "../../src/scripts/index.js"
 import { getExecutablesRoot, listExecutables } from "../../src/registry.js"
+import { allScriptNames, postflightScripts, preflightScripts } from "../../src/scripts/index.js"
 
 // Engine root only — independent of cwd, so a stray .kody/executables can't
 // pollute the set.

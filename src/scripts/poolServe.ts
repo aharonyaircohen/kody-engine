@@ -20,15 +20,15 @@
  * are both derived from KODY_MASTER_KEY via HKDF — never transmitted.
  */
 
-import { spawn, type ChildProcess } from "node:child_process"
+import { type ChildProcess, spawn } from "node:child_process"
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 
 import type { PreflightScript } from "../executables/types.js"
-import type { FlyGuest } from "../pool/fly.js"
-import { PoolRegistry, type ClaimRequest } from "../pool/registry.js"
-import { bearerOk, derivePoolApiKey, deriveRunnerApiKey, masterKeyBytes } from "../pool/keys.js"
-import { runDutyFallbackTick } from "../pool/duty-fallback-tick.js"
 import { gitHubActionsDegraded } from "../github-health.js"
+import { runDutyFallbackTick } from "../pool/duty-fallback-tick.js"
+import type { FlyGuest } from "../pool/fly.js"
+import { bearerOk, derivePoolApiKey, deriveRunnerApiKey, masterKeyBytes } from "../pool/keys.js"
+import { type ClaimRequest, PoolRegistry } from "../pool/registry.js"
 
 const PERF_GUEST: Record<string, FlyGuest> = {
   low: { cpu_kind: "shared", cpus: 2, memory_mb: 2048 },
@@ -80,8 +80,7 @@ export function parseClaimRequest(body: unknown): { req: ClaimRequest } | { erro
   const repo = typeof b.repo === "string" ? b.repo.trim() : ""
   if (!/^[^/\s]+\/[^/\s]+$/.test(repo)) return { error: "repo must be 'owner/name'" }
 
-  const mode =
-    b.mode === "interactive" ? "interactive" : b.mode === "scheduled" ? "scheduled" : "issue"
+  const mode = b.mode === "interactive" ? "interactive" : b.mode === "scheduled" ? "scheduled" : "issue"
   const req: ClaimRequest = { jobId, repo, mode }
   if (mode === "issue") {
     const issueNumber = Number(b.issueNumber)
@@ -224,7 +223,7 @@ export const poolServe: PreflightScript = async (ctx) => {
       }
 
       const authed = bearerOk(
-        req.headers["authorization"] as string | undefined,
+        req.headers.authorization as string | undefined,
         req.headers["x-api-key"] as string | undefined,
         poolApiKey,
       )

@@ -23,12 +23,7 @@
 import fs from "node:fs"
 import path from "node:path"
 
-export const TASK_ARTIFACT_FILES = [
-  "context.json",
-  "memory-recs.json",
-  "followups.json",
-  "handoff-notes.md",
-] as const
+export const TASK_ARTIFACT_FILES = ["context.json", "memory-recs.json", "followups.json", "handoff-notes.md"] as const
 
 export type TaskArtifactFile = (typeof TASK_ARTIFACT_FILES)[number]
 

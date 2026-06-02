@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import type { FlyClient, FlyMachine } from "../../src/pool/fly.js"
-import { PoolManager, type PoolConfig, type PoolJob } from "../../src/pool/manager.js"
+import { type PoolConfig, type PoolJob, PoolManager } from "../../src/pool/manager.js"
 
 const CONFIG: PoolConfig = {
   min: 2,
@@ -104,7 +104,11 @@ describe("PoolManager.claim", () => {
   })
 
   it("returns ok:false when the pool is empty (caller falls back)", async () => {
-    const { fly } = makeFly({ createPooled: async () => { throw new Error("fly down") } })
+    const { fly } = makeFly({
+      createPooled: async () => {
+        throw new Error("fly down")
+      },
+    })
     const pm = new PoolManager({ fly, config: CONFIG, postRun: async () => true })
     const res = await pm.claim(JOB)
     expect(res.ok).toBe(false)

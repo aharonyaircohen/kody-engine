@@ -17,11 +17,7 @@ export interface RunCmdOpts {
   input?: string
 }
 
-export async function runCmd(
-  cmd: string,
-  args: string[],
-  opts: RunCmdOpts = {},
-): Promise<void> {
+export async function runCmd(cmd: string, args: string[], opts: RunCmdOpts = {}): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(cmd, args, {
       cwd: opts.cwd,

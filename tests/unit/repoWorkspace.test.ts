@@ -24,11 +24,7 @@ describe("fetchRepo (strict, for the fetch_repo tool)", () => {
   it("clones into reposRoot/<owner>/<name> and returns the path", async () => {
     const reposRoot = path.join(tmp, "repos")
     const calls: Array<{ repo: string; token?: string; dir: string }> = []
-    const cloneRepo = async (
-      repo: string,
-      token: string | undefined,
-      dir: string,
-    ) => {
+    const cloneRepo = async (repo: string, token: string | undefined, dir: string) => {
       calls.push({ repo, token, dir })
       fs.mkdirSync(path.join(dir, ".git"), { recursive: true })
     }
@@ -39,9 +35,7 @@ describe("fetchRepo (strict, for the fetch_repo tool)", () => {
       cloneRepo,
     })
     expect(dir).toBe(path.join(reposRoot, "octocat/Hello-World"))
-    expect(calls).toEqual([
-      { repo: "octocat/Hello-World", token: "tok", dir },
-    ])
+    expect(calls).toEqual([{ repo: "octocat/Hello-World", token: "tok", dir }])
   })
 
   it("reuses an already-cloned repo without cloning again", async () => {
@@ -64,9 +58,7 @@ describe("fetchRepo (strict, for the fetch_repo tool)", () => {
       throw new Error("should not clone")
     }
     for (const bad of ["noslash", "../escape", "a/../../etc", "/abs/x", "a/b/c"]) {
-      await expect(
-        fetchRepo({ reposRoot, repo: bad, cloneRepo: noClone }),
-      ).rejects.toThrow(/invalid repo/)
+      await expect(fetchRepo({ reposRoot, repo: bad, cloneRepo: noClone })).rejects.toThrow(/invalid repo/)
     }
   })
 

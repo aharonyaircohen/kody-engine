@@ -38,9 +38,7 @@ export interface PushWithRetryOptions {
   setUpstream?: boolean
 }
 
-export type PushWithRetryResult =
-  | { ok: true; attempts: number }
-  | { ok: false; reason: string; attempts: number }
+export type PushWithRetryResult = { ok: true; attempts: number } | { ok: false; reason: string; attempts: number }
 
 const DEFAULT_MAX_RETRIES = 3
 const DEFAULT_BACKOFF_MS = 1_000
@@ -77,7 +75,7 @@ function runGit(args: string[], cwd: string): GitResult {
 }
 
 function resolveBranch(cwd: string, explicit?: string): string {
-  if (explicit && explicit.trim()) return explicit.trim()
+  if (explicit?.trim()) return explicit.trim()
   const r = runGit(["symbolic-ref", "--short", "HEAD"], cwd)
   return r.ok ? r.stdout.trim() : ""
 }
@@ -92,9 +90,7 @@ export function pushWithRetry(opts: PushWithRetryOptions = {}): PushWithRetryRes
     return { ok: false, reason: "could not determine current branch (detached HEAD?)", attempts: 0 }
   }
 
-  const pushArgs = opts.setUpstream
-    ? ["push", "-u", "origin", `HEAD:${branch}`]
-    : ["push", "origin", "HEAD"]
+  const pushArgs = opts.setUpstream ? ["push", "-u", "origin", `HEAD:${branch}`] : ["push", "origin", "HEAD"]
 
   let lastError = ""
   for (let attempt = 1; attempt <= maxRetries; attempt++) {

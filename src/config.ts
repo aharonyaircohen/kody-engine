@@ -194,14 +194,12 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     },
     agent: {
       model: String(agent.model),
-      ...(parsePerExecutable(agent.perExecutable)),
+      ...parsePerExecutable(agent.perExecutable),
     },
     issueContext: parseIssueContext(raw.issueContext),
     testRequirements: parseTestRequirements(raw.testRequirements),
     defaultExecutable:
-      typeof raw.defaultExecutable === "string" && raw.defaultExecutable.length > 0
-        ? raw.defaultExecutable
-        : "run",
+      typeof raw.defaultExecutable === "string" && raw.defaultExecutable.length > 0 ? raw.defaultExecutable : "run",
     defaultPrExecutable:
       typeof raw.defaultPrExecutable === "string" && raw.defaultPrExecutable.length > 0
         ? raw.defaultPrExecutable

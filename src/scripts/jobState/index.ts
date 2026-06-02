@@ -46,5 +46,5 @@ export function resolveBackend(opts: ResolveBackendOptions): JobStateBackend {
   }
 }
 
-export type { LoadedJobState, JobStateBackend } from "./backend.js"
+export type { JobStateBackend, LoadedJobState } from "./backend.js"
 export { isStateUnchanged, slugFromStateFilePath, stateFilePath } from "./backend.js"

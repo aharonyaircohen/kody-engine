@@ -17,9 +17,7 @@ import {
  *  Kody-Dashboard/src/dashboard/lib/vault/crypto.ts so the
  *  round-trip test exercises the EXACT format the dashboard emits. */
 function encryptForTest(plaintext: string, keyRaw: string): string {
-  const key = /^[0-9a-fA-F]{64}$/.test(keyRaw)
-    ? Buffer.from(keyRaw, "hex")
-    : Buffer.from(keyRaw, "base64")
+  const key = /^[0-9a-fA-F]{64}$/.test(keyRaw) ? Buffer.from(keyRaw, "hex") : Buffer.from(keyRaw, "base64")
   const iv = randomBytes(12)
   const c = createCipheriv("aes-256-gcm", key, iv)
   const ct = Buffer.concat([c.update(plaintext, "utf8"), c.final()])
@@ -27,22 +25,17 @@ function encryptForTest(plaintext: string, keyRaw: string): string {
   return `v1:${iv.toString("base64")}:${ct.toString("base64")}:${tag.toString("base64")}`
 }
 
-const TEST_KEY_HEX =
-  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+const TEST_KEY_HEX = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 describe("previewAppName", () => {
   it("derives deterministic per-PR app name", () => {
-    expect(previewAppName("A-Guy-educ/A-Guy", 2180)).toBe(
-      "kp-866cab-8111e4-pr-2180",
-    )
+    expect(previewAppName("A-Guy-educ/A-Guy", 2180)).toBe("kp-866cab-8111e4-pr-2180")
   })
 
   it("matches the dashboard's hash scheme byte-for-byte", () => {
     // Pin against a known live preview URL the dashboard already serves.
     // If this changes, per-PR URLs become unreachable for already-built PRs.
-    expect(previewAppName("A-Guy-educ/A-Guy", 1)).toMatch(
-      /^kp-866cab-8111e4-pr-1$/,
-    )
+    expect(previewAppName("A-Guy-educ/A-Guy", 1)).toMatch(/^kp-866cab-8111e4-pr-1$/)
   })
 
   it("rejects malformed repo", () => {
@@ -52,9 +45,7 @@ describe("previewAppName", () => {
 
 describe("basePreviewAppName", () => {
   it("derives deterministic base app name", () => {
-    expect(basePreviewAppName("A-Guy-educ/A-Guy")).toBe(
-      "kp-866cab-8111e4-base",
-    )
+    expect(basePreviewAppName("A-Guy-educ/A-Guy")).toBe("kp-866cab-8111e4-base")
   })
 
   it("rejects malformed repo", () => {
@@ -75,28 +66,21 @@ describe("decryptVaultPayload", () => {
   })
 
   it("rejects malformed payload", () => {
-    expect(() => decryptVaultPayload("not-the-format", TEST_KEY_HEX)).toThrow(
-      /invalid vault payload format/,
-    )
+    expect(() => decryptVaultPayload("not-the-format", TEST_KEY_HEX)).toThrow(/invalid vault payload format/)
   })
 
   it("rejects wrong-version payload", () => {
-    expect(() =>
-      decryptVaultPayload("v2:a:b:c", TEST_KEY_HEX),
-    ).toThrow(/invalid vault payload format/)
+    expect(() => decryptVaultPayload("v2:a:b:c", TEST_KEY_HEX)).toThrow(/invalid vault payload format/)
   })
 
   it("rejects wrong-length keys", () => {
     const payload = encryptForTest("x", TEST_KEY_HEX)
-    expect(() => decryptVaultPayload(payload, "abcd")).toThrow(
-      /32 bytes/,
-    )
+    expect(() => decryptVaultPayload(payload, "abcd")).toThrow(/32 bytes/)
   })
 
   it("auth-tag failure surfaces as an error (wrong key)", () => {
     const payload = encryptForTest("payload", TEST_KEY_HEX)
-    const wrongKey =
-      "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+    const wrongKey = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
     expect(() => decryptVaultPayload(payload, wrongKey)).toThrow()
   })
 })
@@ -190,14 +174,10 @@ describe("defaultImageTag", () => {
   })
 
   it("changes when ref changes", () => {
-    expect(defaultImageTag("o/r", "abc")).not.toBe(
-      defaultImageTag("o/r", "def"),
-    )
+    expect(defaultImageTag("o/r", "abc")).not.toBe(defaultImageTag("o/r", "def"))
   })
 
   it("changes when repo changes", () => {
-    expect(defaultImageTag("a/b", "ref")).not.toBe(
-      defaultImageTag("c/d", "ref"),
-    )
+    expect(defaultImageTag("a/b", "ref")).not.toBe(defaultImageTag("c/d", "ref"))
   })
 })

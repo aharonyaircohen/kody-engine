@@ -32,9 +32,7 @@ export const promoteQaGoal: PreflightScript = async (ctx) => {
   try {
     const issue = getIssue(issueNum, ctx.cwd)
     // Most recent comment carrying the structured QA report wins.
-    const reportComment = [...issue.comments]
-      .reverse()
-      .find((c) => c.body.includes(REPORT_JSON_OPEN))
+    const reportComment = [...issue.comments].reverse().find((c) => c.body.includes(REPORT_JSON_OPEN))
     if (!reportComment) {
       ctx.output.exitCode = 3
       ctx.output.reason = `no QA report (${REPORT_JSON_OPEN} …) found on issue #${issueNum}`
@@ -50,10 +48,5 @@ export const promoteQaGoal: PreflightScript = async (ctx) => {
     return
   }
 
-  await promoteReportToGoal(
-    ctx,
-    report,
-    ctx.args.scope as string | undefined,
-    ctx.args.goal as string | undefined,
-  )
+  await promoteReportToGoal(ctx, report, ctx.args.scope as string | undefined, ctx.args.goal as string | undefined)
 }

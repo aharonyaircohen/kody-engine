@@ -67,43 +67,23 @@ async function fetchGithubOidcToken(audience: string): Promise<string | null> {
  * `docker buildx build --builder <name> --push`), or null to fall back to
  * the local docker build.
  */
-export async function setupNamespaceBuilder(opts: {
-  tenantId: string
-  builderName: string
-}): Promise<string | null> {
+export async function setupNamespaceBuilder(opts: { tenantId: string; builderName: string }): Promise<string | null> {
   try {
     await runCmd("bash", ["-c", NSC_INSTALL])
 
     const jwt = await fetchGithubOidcToken(NSC_OIDC_AUDIENCE)
     if (!jwt) {
-      console.warn(
-        "[preview-build] no GitHub OIDC token (id-token: write missing?) — local docker build",
-      )
+      console.warn("[preview-build] no GitHub OIDC token (id-token: write missing?) — local docker build")
       return null
     }
 
     // Exchange the OIDC JWT for a tenant token; nsc stores it in the
     // keychain so the subsequent buildx command picks it up.
-    await runCmd("nsc", [
-      "auth",
-      "exchange-oidc-token",
-      "--tenant_id",
-      opts.tenantId,
-      "--token",
-      jwt,
-    ])
+    await runCmd("nsc", ["auth", "exchange-oidc-token", "--tenant_id", opts.tenantId, "--token", jwt])
 
-    await runCmd("nsc", [
-      "docker",
-      "buildx",
-      "setup",
-      "--name",
-      opts.builderName,
-    ])
+    await runCmd("nsc", ["docker", "buildx", "setup", "--name", opts.builderName])
 
-    console.log(
-      `[preview-build] Namespace remote builder ready (${opts.builderName})`,
-    )
+    console.log(`[preview-build] Namespace remote builder ready (${opts.builderName})`)
     return opts.builderName
   } catch (err) {
     console.warn(

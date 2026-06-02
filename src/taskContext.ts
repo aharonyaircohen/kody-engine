@@ -28,9 +28,9 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
+import type { TestRequirement } from "./config.js"
 import type { IssueData } from "./issue.js"
 import type { LoadedConvention } from "./prompt.js"
-import type { TestRequirement } from "./config.js"
 
 /** Bump when the schema changes incompatibly. Readers reject mismatched versions. */
 export const TASK_CONTEXT_SCHEMA_VERSION = 1 as const

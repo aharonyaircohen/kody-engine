@@ -28,8 +28,8 @@
  */
 
 import { spawn } from "node:child_process"
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 import * as fs from "node:fs"
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 
 import type { PreflightScript } from "../executables/types.js"
 
@@ -67,9 +67,7 @@ export interface RunnerJob {
 function getApiKey(): string {
   const key = (process.env.RUNNER_API_KEY ?? "").trim()
   if (!key) {
-    throw new Error(
-      "RUNNER_API_KEY env var is required — set it on the pooled machine before boot.",
-    )
+    throw new Error("RUNNER_API_KEY env var is required — set it on the pooled machine before boot.")
   }
   return key
 }
@@ -77,8 +75,8 @@ function getApiKey(): string {
 export function authOk(req: IncomingMessage, expected: string): boolean {
   const xApiKey = (req.headers["x-api-key"] as string | undefined)?.trim()
   if (xApiKey && xApiKey === expected) return true
-  const auth = (req.headers["authorization"] as string | undefined)?.trim()
-  if (auth && auth.toLowerCase().startsWith("bearer ")) {
+  const auth = (req.headers.authorization as string | undefined)?.trim()
+  if (auth?.toLowerCase().startsWith("bearer ")) {
     return auth.slice(7).trim() === expected
   }
   return false
@@ -126,8 +124,7 @@ export function parseJob(body: unknown): { job: RunnerJob } | { error: string } 
   const githubToken = typeof b.githubToken === "string" ? b.githubToken.trim() : ""
   if (!githubToken) return { error: "githubToken required" }
 
-  const mode =
-    b.mode === "interactive" ? "interactive" : b.mode === "scheduled" ? "scheduled" : "issue"
+  const mode = b.mode === "interactive" ? "interactive" : b.mode === "scheduled" ? "scheduled" : "issue"
   const job: RunnerJob = { jobId, repo, githubToken, mode }
 
   if (mode === "issue") {
@@ -168,10 +165,7 @@ async function defaultRunJob(job: RunnerJob): Promise<void> {
   fs.rmSync(workdir, { recursive: true, force: true })
   fs.mkdirSync(workdir, { recursive: true })
 
-  const allSecrets =
-    typeof job.allSecrets === "string"
-      ? job.allSecrets
-      : JSON.stringify(job.allSecrets ?? {})
+  const allSecrets = typeof job.allSecrets === "string" ? job.allSecrets : JSON.stringify(job.allSecrets ?? {})
 
   const interactive = job.mode === "interactive"
   const scheduled = job.mode === "scheduled"
@@ -212,15 +206,7 @@ async function defaultRunJob(job: RunnerJob): Promise<void> {
     })
 
   process.stdout.write(`[runner-serve] job ${job.jobId}: cloning ${job.repo}@${branch}\n`)
-  const cloneCode = await run("git", [
-    "clone",
-    "--depth=1",
-    "--single-branch",
-    "--branch",
-    branch,
-    authUrl,
-    workdir,
-  ])
+  const cloneCode = await run("git", ["clone", "--depth=1", "--single-branch", "--branch", branch, authUrl, workdir])
   if (cloneCode !== 0) {
     process.stderr.write(`[runner-serve] job ${job.jobId}: clone failed (${cloneCode})\n`)
     process.exit(cloneCode)

@@ -117,11 +117,7 @@ describe("loadJobFromFile locked-toolbox (tools:)", () => {
 describe("loadJobFromFile body {{mentions}} substitution", () => {
   it("replaces {{mentions}} inside the duty body with the resolved handles", async () => {
     writeStaff("kody")
-    writeDuty(
-      "docs-readme",
-      "staff: kody\nmentions: a, b",
-      "# Duty\n{{mentions}} please review",
-    )
+    writeDuty("docs-readme", "staff: kody\nmentions: a, b", "# Duty\n{{mentions}} please review")
 
     const ctx = ctxFor("docs-readme")
     await loadJobFromFile(ctx, PROFILE, {})

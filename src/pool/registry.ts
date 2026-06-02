@@ -13,7 +13,7 @@
  */
 
 import { FlyClient } from "./fly.js"
-import { PoolManager, type PoolJob, type ClaimResult } from "./manager.js"
+import { type ClaimResult, type PoolJob, PoolManager } from "./manager.js"
 import { readRepoSecret, readRepoSecrets } from "./vault.js"
 
 /** Vault key the dashboard writes to size a repo's warm pool. */
@@ -139,7 +139,9 @@ export class PoolRegistry {
     try {
       min = await this.resolvePoolMin(owner, repo)
     } catch (err) {
-      this.log(`registry: pool-min read failed for ${repoTag}, using default ${min}: ${err instanceof Error ? err.message : String(err)}`)
+      this.log(
+        `registry: pool-min read failed for ${repoTag}, using default ${min}: ${err instanceof Error ? err.message : String(err)}`,
+      )
     }
 
     const fly = new FlyClient({ token: flyToken, app: this.cfg.base.app })
@@ -150,7 +152,9 @@ export class PoolRegistry {
     })
     this.pools.set(repoTag, pm)
     // Adopt any existing frozen machines for this repo + top up.
-    void pm.reconcile().catch((err) => this.log(`[${repoTag}] reconcile: ${err instanceof Error ? err.message : String(err)}`))
+    void pm
+      .reconcile()
+      .catch((err) => this.log(`[${repoTag}] reconcile: ${err instanceof Error ? err.message : String(err)}`))
     return pm
   }
 
@@ -177,7 +181,9 @@ export class PoolRegistry {
         Object.entries(vault).filter(([k]) => k !== "FLY_API_TOKEN" && k !== POOL_MIN_VAULT_KEY),
       )
     } catch (err) {
-      this.log(`[${this.key(owner, repo)}] vault secrets read failed: ${err instanceof Error ? err.message : String(err)}`)
+      this.log(
+        `[${this.key(owner, repo)}] vault secrets read failed: ${err instanceof Error ? err.message : String(err)}`,
+      )
     }
 
     const job: PoolJob = {
@@ -213,7 +219,9 @@ export class PoolRegistry {
       } catch (err) {
         this.log(`[${repoTag}] pool-min refresh: ${err instanceof Error ? err.message : String(err)}`)
       }
-      await pm.resync().catch((err) => this.log(`[${repoTag}] resync: ${err instanceof Error ? err.message : String(err)}`))
+      await pm
+        .resync()
+        .catch((err) => this.log(`[${repoTag}] resync: ${err instanceof Error ? err.message : String(err)}`))
     }
   }
 

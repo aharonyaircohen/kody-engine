@@ -217,7 +217,12 @@ describe("ContentsApiBackend", () => {
       const remote = envelope({ rev: 9, cursor: "concurrent" })
       routeGh(remote, "fresh-sha", ["HTTP 409: Conflict", "ok"])
       const wrote = backend().save(
-        { path: ".kody/jobs/auto-sync.state.json", handle: "stale-sha", state: envelope({ cursor: "before" }), created: false },
+        {
+          path: ".kody/jobs/auto-sync.state.json",
+          handle: "stale-sha",
+          state: envelope({ cursor: "before" }),
+          created: false,
+        },
         envelope({ cursor: "after" }),
       )
       expect(wrote).toBe(true)
@@ -232,7 +237,12 @@ describe("ContentsApiBackend", () => {
       // Remote already holds our exact target → nothing left to write.
       routeGh(envelope({ cursor: "after", data: { k: 1 } }), "fresh-sha", ["HTTP 422: Unprocessable"])
       const wrote = backend().save(
-        { path: ".kody/jobs/auto-sync.state.json", handle: "stale-sha", state: envelope({ cursor: "before" }), created: false },
+        {
+          path: ".kody/jobs/auto-sync.state.json",
+          handle: "stale-sha",
+          state: envelope({ cursor: "before" }),
+          created: false,
+        },
         next,
       )
       expect(wrote).toBe(false)
@@ -244,7 +254,12 @@ describe("ContentsApiBackend", () => {
       routeGh(envelope(), "fresh-sha", ["HTTP 500: Internal Server Error"])
       expect(() =>
         backend().save(
-          { path: ".kody/jobs/auto-sync.state.json", handle: "stale-sha", state: envelope({ cursor: "before" }), created: false },
+          {
+            path: ".kody/jobs/auto-sync.state.json",
+            handle: "stale-sha",
+            state: envelope({ cursor: "before" }),
+            created: false,
+          },
           envelope({ cursor: "after" }),
         ),
       ).toThrow(/500/)

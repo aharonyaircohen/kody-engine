@@ -77,7 +77,7 @@ export const runTickScript: PreflightScript = async (ctx, _profile, args) => {
   // can throw on a network blip / 403 — we'd rather surface a clean
   // exitCode than dump a raw stack into the run log.
   const backend = resolveBackend({ config: ctx.config, cwd: ctx.cwd, jobsDir })
-  let loaded
+  let loaded: Awaited<ReturnType<typeof backend.load>>
   try {
     loaded = await backend.load(slug)
   } catch (err) {

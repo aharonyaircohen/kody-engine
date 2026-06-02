@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest"
 import type { AgentResult } from "../../src/agent.js"
 import type { KodyConfig } from "../../src/config.js"
 import type { Context, Profile } from "../../src/executables/types.js"
-import type { Action } from "../../src/state.js"
 import { verifyWithRetry } from "../../src/scripts/verifyWithRetry.js"
+import type { Action } from "../../src/state.js"
 
 const baseConfig: KodyConfig = {
   quality: { typecheck: "", testUnit: "", lint: "", format: "" },
@@ -81,7 +81,12 @@ describe("verifyWithRetry", () => {
     let typecheckCmd = "false"
     const cfg: KodyConfig = {
       ...baseConfig,
-      quality: { ...baseConfig.quality, get typecheck() { return typecheckCmd } } as KodyConfig["quality"],
+      quality: {
+        ...baseConfig.quality,
+        get typecheck() {
+          return typecheckCmd
+        },
+      } as KodyConfig["quality"],
     }
     const invoker = vi.fn<(p: string) => Promise<AgentResult>>(async () => {
       typecheckCmd = "true"

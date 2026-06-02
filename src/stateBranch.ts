@@ -44,9 +44,9 @@ export function ensureStateBranch(owner: string, repo: string, cwd?: string): vo
   if (!defaultBranch) {
     throw new Error(`ensureStateBranch: could not resolve default branch for ${owner}/${repo}`)
   }
-  const headRef = JSON.parse(
-    gh(["api", `/repos/${owner}/${repo}/git/ref/heads/${defaultBranch}`], { cwd }),
-  ) as { object?: { sha?: string } }
+  const headRef = JSON.parse(gh(["api", `/repos/${owner}/${repo}/git/ref/heads/${defaultBranch}`], { cwd })) as {
+    object?: { sha?: string }
+  }
   const sha = headRef.object?.sha
   if (!sha) {
     throw new Error(`ensureStateBranch: could not resolve head sha for ${owner}/${repo}@${defaultBranch}`)

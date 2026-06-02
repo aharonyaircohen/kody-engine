@@ -70,10 +70,7 @@ export const parseReproOutput: PostflightScript = async (ctx, _profile, agentRes
   }
 
   if (!signature) {
-    downgrade(
-      ctx,
-      "reproduce missing or malformed FAILURE_SIGNATURE JSON (must contain errorType + messageContains)",
-    )
+    downgrade(ctx, "reproduce missing or malformed FAILURE_SIGNATURE JSON (must contain errorType + messageContains)")
     return
   }
 
@@ -116,7 +113,7 @@ function stripMarkdownEmphasis(s: string): string {
 
 function downgrade(ctx: { data: Record<string, unknown> }, reason: string): void {
   const action = ctx.data.action as Action | undefined
-  if (action && action.type.endsWith("_COMPLETED")) {
+  if (action?.type.endsWith("_COMPLETED")) {
     ctx.data.action = {
       type: action.type.replace(/_COMPLETED$/, "_FAILED"),
       payload: { reason, downgradedFrom: action.type },

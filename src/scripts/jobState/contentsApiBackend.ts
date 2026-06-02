@@ -15,12 +15,12 @@
  */
 
 import { gh } from "../../issue.js"
-import { STATE_BRANCH, ensureStateBranch } from "../../stateBranch.js"
+import { ensureStateBranch, STATE_BRANCH } from "../../stateBranch.js"
 import { initialStateEnvelope, isStateEnvelope, type StateEnvelope } from "../issueStateComment.js"
 import {
   isStateUnchanged,
-  type LoadedJobState,
   type JobStateBackend,
+  type LoadedJobState,
   slugFromStateFilePath,
   stateFilePath,
 } from "./backend.js"
@@ -109,7 +109,7 @@ export class ContentsApiBackend implements JobStateBackend {
     }
 
     const slug = slugFromStateFilePath(loaded.path)
-    const body = JSON.stringify(next, null, 2) + "\n"
+    const body = `${JSON.stringify(next, null, 2)}\n`
     const payload: Record<string, unknown> = {
       message: `chore(jobs): update state for ${slug} (rev ${next.rev})`,
       content: Buffer.from(body, "utf-8").toString("base64"),

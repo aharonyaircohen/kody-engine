@@ -257,7 +257,7 @@ export function serializeDiscoveryForLLM(d: QaDiscovery): string {
   let result = sections.join("\n")
   if (result.length > MAX_SERIALIZED_LENGTH) {
     const cutoff = result.lastIndexOf("\n", MAX_SERIALIZED_LENGTH - 20)
-    result = result.slice(0, cutoff > 0 ? cutoff : MAX_SERIALIZED_LENGTH - 20) + "\n... (truncated)"
+    result = `${result.slice(0, cutoff > 0 ? cutoff : MAX_SERIALIZED_LENGTH - 20)}\n... (truncated)`
   }
   return result
 }

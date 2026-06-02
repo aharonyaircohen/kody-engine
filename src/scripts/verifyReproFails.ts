@@ -29,6 +29,7 @@ import type { ReproFailureSignature } from "./parseReproOutput.js"
 
 const TEST_TIMEOUT_MS = 10 * 60 * 1000
 const TAIL_CHARS = 8000
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the ESC (\x1B) control char is intentional — this strips ANSI terminal color codes from captured output
 const ANSI_RE = /\x1B\[[0-?]*[ -/]*[@-~]/g
 
 interface RunResult {
@@ -158,7 +159,7 @@ function runCommand(command: string, cwd?: string): Promise<RunResult> {
 
 function downgrade(ctx: { data: Record<string, unknown> }, reason: string): void {
   const action = ctx.data.action as Action | undefined
-  if (action && action.type.endsWith("_COMPLETED")) {
+  if (action?.type.endsWith("_COMPLETED")) {
     ctx.data.action = {
       type: action.type.replace(/_COMPLETED$/, "_FAILED"),
       payload: { reason, downgradedFrom: action.type },

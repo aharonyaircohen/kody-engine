@@ -63,12 +63,16 @@ export const dispatchClassified: PostflightScript = async (ctx) => {
   try {
     const existing = findStateComment("issue", issueNumber, ctx.cwd)
     if (existing) {
-      execFileSync("gh", ["api", `repos/{owner}/{repo}/issues/comments/${existing.id}`, "-X", "PATCH", "-F", "body=@-"], {
-        cwd: ctx.cwd,
-        timeout: API_TIMEOUT_MS,
-        input: body,
-        stdio: ["pipe", "pipe", "pipe"],
-      })
+      execFileSync(
+        "gh",
+        ["api", `repos/{owner}/{repo}/issues/comments/${existing.id}`, "-X", "PATCH", "-F", "body=@-"],
+        {
+          cwd: ctx.cwd,
+          timeout: API_TIMEOUT_MS,
+          input: body,
+          stdio: ["pipe", "pipe", "pipe"],
+        },
+      )
     } else {
       execFileSync("gh", ["issue", "comment", String(issueNumber), "--body", body], {
         cwd: ctx.cwd,

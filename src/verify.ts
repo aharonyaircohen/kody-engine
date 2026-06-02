@@ -166,7 +166,9 @@ export function summarizeFailure(result: VerifyResult): string {
     for (let attempt = 1; ; attempt++) {
       const retry = result.details[`${name} (retry ${attempt})`]
       if (!retry) break
-      lines.push(`\n--- ${name} (retry ${attempt}: exit ${retry.exitCode}, ${(retry.durationMs / 1000).toFixed(1)}s) ---`)
+      lines.push(
+        `\n--- ${name} (retry ${attempt}: exit ${retry.exitCode}, ${(retry.durationMs / 1000).toFixed(1)}s) ---`,
+      )
       lines.push(stripAnsi(retry.tail))
     }
   }

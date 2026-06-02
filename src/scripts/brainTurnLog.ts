@@ -61,11 +61,7 @@ function lastPersistedSeq(dir: string, chatId: string): number {
   }
 }
 
-export function readSince(
-  dir: string,
-  chatId: string,
-  since: number,
-): TurnRecord[] {
+export function readSince(dir: string, chatId: string, since: number): TurnRecord[] {
   const p = eventsPath(dir, chatId)
   if (!fs.existsSync(p)) return []
   const out: TurnRecord[] = []
@@ -89,10 +85,7 @@ function isTerminal(event: BrainEvent): boolean {
  * Begin a new turn. Returns an `emit(event)` sink the runner feeds; every
  * emitted event is sequenced, persisted, and fanned out to subscribers.
  */
-export function beginTurn(
-  dir: string,
-  chatId: string,
-): (event: BrainEvent) => void {
+export function beginTurn(dir: string, chatId: string): (event: BrainEvent) => void {
   const existing = live.get(chatId)
   const seqFloor = existing ? existing.seq : lastPersistedSeq(dir, chatId)
   const turn = (existing?.turn ?? 0) + 1
@@ -113,12 +106,10 @@ export function beginTurn(
     state.seq += 1
     const rec: TurnRecord = { seq: state.seq, turn, ts: Date.now(), event }
     try {
-      fs.appendFileSync(p, JSON.stringify(rec) + "\n")
+      fs.appendFileSync(p, `${JSON.stringify(rec)}\n`)
     } catch (err) {
       process.stderr.write(
-        `[brain-turn-log] append failed for ${chatId}: ${
-          err instanceof Error ? err.message : String(err)
-        }\n`,
+        `[brain-turn-log] append failed for ${chatId}: ${err instanceof Error ? err.message : String(err)}\n`,
       )
     }
     for (const fn of state.subscribers) {
@@ -145,11 +136,7 @@ export function beginTurn(
 }
 
 /** Mark a turn ended if the runner threw before emitting a terminal event. */
-export function endTurnIfUnterminated(
-  dir: string,
-  chatId: string,
-  errMessage: string,
-): void {
+export function endTurnIfUnterminated(dir: string, chatId: string, errMessage: string): void {
   const state = live.get(chatId)
   if (!state || state.status === "ended") return
   state.seq += 1
@@ -160,7 +147,7 @@ export function endTurnIfUnterminated(
     event: { type: "error", error: errMessage || "turn ended unexpectedly", chatId },
   }
   try {
-    fs.appendFileSync(eventsPath(dir, chatId), JSON.stringify(rec) + "\n")
+    fs.appendFileSync(eventsPath(dir, chatId), `${JSON.stringify(rec)}\n`)
   } catch {
     /* best effort */
   }
@@ -233,8 +220,7 @@ export function subscribe(
       ts: Date.now(),
       event: {
         type: "error",
-        error:
-          "stream interrupted (server restarted mid-reply) — resend your message",
+        error: "stream interrupted (server restarted mid-reply) — resend your message",
         chatId,
       },
     })

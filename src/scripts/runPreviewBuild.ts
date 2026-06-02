@@ -27,7 +27,7 @@
  * reason; the dashboard's webhook + Fly fallback path is unaffected.
  */
 
-import { copyFile, mkdir, writeFile } from "node:fs/promises"
+import { copyFile, writeFile } from "node:fs/promises"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -55,10 +55,7 @@ const REQ_TIMEOUT_MS = 30_000
  *  In tsx-from-src runs the path falls back to src/scripts/. */
 function bundledDockerfilePath(mode: "dev" | "prod"): string {
   const here = path.dirname(fileURLToPath(import.meta.url))
-  const file =
-    mode === "dev"
-      ? "default-Dockerfile.preview.dev"
-      : "default-Dockerfile.preview.prod"
+  const file = mode === "dev" ? "default-Dockerfile.preview.dev" : "default-Dockerfile.preview.prod"
   // Bundled path (npm install of the published package).
   return path.join(here, "preview-build-templates", file)
 }
@@ -91,11 +88,7 @@ async function ghJSON<T>(url: string, token: string): Promise<T> {
   return (await res.json()) as T
 }
 
-async function fetchVaultDoc(
-  repo: string,
-  ghToken: string,
-  masterKey: string,
-): Promise<VaultDoc> {
+async function fetchVaultDoc(repo: string, ghToken: string, masterKey: string): Promise<VaultDoc> {
   const meta = await ghJSON<{ content: string }>(
     `https://api.github.com/repos/${repo}/contents/.kody/secrets.enc`,
     ghToken,
@@ -117,11 +110,7 @@ async function flyAppExists(name: string, token: string): Promise<boolean> {
   return true
 }
 
-async function flyCreateApp(
-  name: string,
-  orgSlug: string,
-  token: string,
-): Promise<void> {
+async function flyCreateApp(name: string, orgSlug: string, token: string): Promise<void> {
   const res = await fetch(`${FLY_MACHINES}/apps`, {
     method: "POST",
     headers: flyHeaders(token),
@@ -136,10 +125,7 @@ async function flyCreateApp(
   }
 }
 
-async function flyAllocateSharedIps(
-  appName: string,
-  token: string,
-): Promise<void> {
+async function flyAllocateSharedIps(appName: string, token: string): Promise<void> {
   const mutation = `
     mutation AllocateIps($appId: ID!) {
       v4: allocateIpAddress(input: { appId: $appId, type: shared_v4 }) { ipAddress { address } }
@@ -166,17 +152,11 @@ async function flyAllocateSharedIps(
   }
 }
 
-async function flyListMachines(
-  appName: string,
-  token: string,
-): Promise<Array<{ id: string; state: string }>> {
-  const res = await fetch(
-    `${FLY_MACHINES}/apps/${encodeURIComponent(appName)}/machines`,
-    {
-      headers: flyHeaders(token),
-      signal: AbortSignal.timeout(REQ_TIMEOUT_MS),
-    },
-  )
+async function flyListMachines(appName: string, token: string): Promise<Array<{ id: string; state: string }>> {
+  const res = await fetch(`${FLY_MACHINES}/apps/${encodeURIComponent(appName)}/machines`, {
+    headers: flyHeaders(token),
+    signal: AbortSignal.timeout(REQ_TIMEOUT_MS),
+  })
   if (res.status === 404) return []
   if (!res.ok) {
     throw new Error(`listMachines ${appName}: ${res.status}`)
@@ -185,19 +165,12 @@ async function flyListMachines(
   return data.map((m) => ({ id: m.id, state: m.state }))
 }
 
-async function flyDestroyMachine(
-  appName: string,
-  machineId: string,
-  token: string,
-): Promise<void> {
-  await fetch(
-    `${FLY_MACHINES}/apps/${encodeURIComponent(appName)}/machines/${encodeURIComponent(machineId)}/stop`,
-    {
-      method: "POST",
-      headers: flyHeaders(token),
-      signal: AbortSignal.timeout(REQ_TIMEOUT_MS),
-    },
-  ).catch(() => undefined)
+async function flyDestroyMachine(appName: string, machineId: string, token: string): Promise<void> {
+  await fetch(`${FLY_MACHINES}/apps/${encodeURIComponent(appName)}/machines/${encodeURIComponent(machineId)}/stop`, {
+    method: "POST",
+    headers: flyHeaders(token),
+    signal: AbortSignal.timeout(REQ_TIMEOUT_MS),
+  }).catch(() => undefined)
   const res = await fetch(
     `${FLY_MACHINES}/apps/${encodeURIComponent(appName)}/machines/${encodeURIComponent(machineId)}?force=true`,
     {
@@ -261,23 +234,18 @@ async function flyCreatePreviewMachine(
   // consistent for ~5s after `docker push`.
   let lastErr: Error | null = null
   for (let attempt = 0; attempt < 6; attempt++) {
-    const res = await fetch(
-      `${FLY_MACHINES}/apps/${encodeURIComponent(args.appName)}/machines`,
-      {
-        method: "POST",
-        headers: flyHeaders(token),
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(REQ_TIMEOUT_MS),
-      },
-    )
+    const res = await fetch(`${FLY_MACHINES}/apps/${encodeURIComponent(args.appName)}/machines`, {
+      method: "POST",
+      headers: flyHeaders(token),
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(REQ_TIMEOUT_MS),
+    })
     if (res.ok) {
       const { id } = (await res.json()) as { id: string }
       return id
     }
     const text = await res.text().catch(() => "")
-    lastErr = new Error(
-      `createPreviewMachine ${res.status}: ${text.slice(0, 300)}`,
-    )
+    lastErr = new Error(`createPreviewMachine ${res.status}: ${text.slice(0, 300)}`)
     if (!/MANIFEST_UNKNOWN|manifest unknown/i.test(text)) break
     await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)))
   }
@@ -308,7 +276,7 @@ async function postOrUpdatePreviewComment(args: {
     signal: AbortSignal.timeout(REQ_TIMEOUT_MS),
   }).catch(() => null)
   let existingId: number | null = null
-  if (listRes && listRes.ok) {
+  if (listRes?.ok) {
     const comments = (await listRes.json().catch(() => [])) as Array<{
       id: number
       body?: string
@@ -317,15 +285,12 @@ async function postOrUpdatePreviewComment(args: {
     if (hit) existingId = hit.id
   }
   if (existingId) {
-    await fetch(
-      `https://api.github.com/repos/${args.repo}/issues/comments/${existingId}`,
-      {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify({ body: args.body }),
-        signal: AbortSignal.timeout(REQ_TIMEOUT_MS),
-      },
-    )
+    await fetch(`https://api.github.com/repos/${args.repo}/issues/comments/${existingId}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ body: args.body }),
+      signal: AbortSignal.timeout(REQ_TIMEOUT_MS),
+    })
     return
   }
   await fetch(base, {
@@ -336,11 +301,7 @@ async function postOrUpdatePreviewComment(args: {
   })
 }
 
-export const runPreviewBuild: PreflightScript = async (
-  ctx,
-  _profile,
-  _args,
-) => {
+export const runPreviewBuild: PreflightScript = async (ctx, _profile, _args) => {
   ctx.skipAgent = true
 
   // Inputs from env + ctx.
@@ -369,9 +330,7 @@ export const runPreviewBuild: PreflightScript = async (
       ""
     ).trim()
     if (!ghToken) {
-      throw new Error(
-        "GitHub auth token missing (KODY_TOKEN / GH_TOKEN / GITHUB_TOKEN / GH_PAT all empty)",
-      )
+      throw new Error("GitHub auth token missing (KODY_TOKEN / GH_TOKEN / GITHUB_TOKEN / GH_PAT all empty)")
     }
   } catch (err) {
     ctx.output.exitCode = 99
@@ -392,34 +351,21 @@ export const runPreviewBuild: PreflightScript = async (
     const flyToken = doc.secrets?.FLY_API_TOKEN?.value?.trim()
     if (!flyToken) {
       ctx.output.exitCode = 99
-      ctx.output.reason =
-        "runPreviewBuild: vault has no FLY_API_TOKEN — add it via the dashboard's /secrets page"
+      ctx.output.reason = "runPreviewBuild: vault has no FLY_API_TOKEN — add it via the dashboard's /secrets page"
       return
     }
-    const orgSlug =
-      doc.secrets?.FLY_ORG_SLUG?.value?.trim() ||
-      (process.env.FLY_ORG_SLUG ?? "personal").trim()
-    const region =
-      doc.secrets?.FLY_DEFAULT_REGION?.value?.trim() ||
-      (process.env.FLY_REGION ?? "fra").trim()
+    const orgSlug = doc.secrets?.FLY_ORG_SLUG?.value?.trim() || (process.env.FLY_ORG_SLUG ?? "personal").trim()
+    const region = doc.secrets?.FLY_DEFAULT_REGION?.value?.trim() || (process.env.FLY_REGION ?? "fra").trim()
     // Opt-in: when the vault carries a Namespace tenant id, build on a
     // Namespace remote builder (faster, cached) instead of the local
     // GHA docker daemon. Empty → unchanged local-build behaviour.
     const nscTenantId = doc.secrets?.NSC_TENANT_ID?.value?.trim() || ""
-    console.log(
-      `[preview-build] vault: ${Object.keys(buildEnv).length} secrets, mode=${buildMode}`,
-    )
+    console.log(`[preview-build] vault: ${Object.keys(buildEnv).length} secrets, mode=${buildMode}`)
 
     // 2. Write .env.production.local for Next.js build-time read.
     if (Object.keys(buildEnv).length > 0) {
-      const lines = Object.entries(buildEnv).map(
-        ([k, v]) => `${k}=${JSON.stringify(v)}`,
-      )
-      await writeFile(
-        path.join(ctx.cwd, ".env.production.local"),
-        lines.join("\n") + "\n",
-        "utf8",
-      )
+      const lines = Object.entries(buildEnv).map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+      await writeFile(path.join(ctx.cwd, ".env.production.local"), `${lines.join("\n")}\n`, "utf8")
     }
 
     // 3. Drop the bundled Dockerfile.preview into the working tree.
@@ -437,9 +383,7 @@ export const runPreviewBuild: PreflightScript = async (
     if (!hasConsumerDockerfile) {
       const bundled = bundledDockerfilePath(buildMode)
       await copyFile(bundled, consumerDockerfile)
-      console.log(
-        `[preview-build] using bundled Dockerfile.preview.${buildMode} (from ${bundled})`,
-      )
+      console.log(`[preview-build] using bundled Dockerfile.preview.${buildMode} (from ${bundled})`)
     } else {
       console.log("[preview-build] using repo Dockerfile.preview")
     }
@@ -449,18 +393,16 @@ export const runPreviewBuild: PreflightScript = async (
     let baseImage: string | null = null
     if (ghcrOwner) {
       const baseRef = `${ghcrOwner.toLowerCase()}/${basePreviewAppName(repo)}`
-      const tok = await fetch(
-        `https://ghcr.io/token?scope=repository:${baseRef}:pull&service=ghcr.io`,
-        { signal: AbortSignal.timeout(15_000) },
-      ).catch(() => null)
+      const tok = await fetch(`https://ghcr.io/token?scope=repository:${baseRef}:pull&service=ghcr.io`, {
+        signal: AbortSignal.timeout(15_000),
+      }).catch(() => null)
       if (tok?.ok) {
         const { token: bearer } = (await tok.json()) as { token: string }
         const probe = await fetch(`https://ghcr.io/v2/${baseRef}/manifests/latest`, {
           method: "HEAD",
           headers: {
             Authorization: `Bearer ${bearer}`,
-            Accept:
-              "application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json",
+            Accept: "application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json",
           },
           signal: AbortSignal.timeout(15_000),
         }).catch(() => null)
@@ -483,11 +425,10 @@ export const runPreviewBuild: PreflightScript = async (
     //    OIDC federation (kody.yml grants id-token: write). Best-effort:
     //    setup returns null on any failure and we build on the local GHA
     //    docker daemon instead, so previews never depend on Namespace.
-    await runCmd(
-      "docker",
-      ["login", "registry.fly.io", "-u", "x", "--password-stdin"],
-      { input: flyToken, cwd: ctx.cwd },
-    )
+    await runCmd("docker", ["login", "registry.fly.io", "-u", "x", "--password-stdin"], {
+      input: flyToken,
+      cwd: ctx.cwd,
+    })
 
     const imageRef = `registry.fly.io/${appName}:${tag}`
     const nsBuilder = nscTenantId
@@ -499,29 +440,13 @@ export const runPreviewBuild: PreflightScript = async (
 
     if (nsBuilder) {
       // Remote build on Namespace, pushed straight to Fly's registry.
-      const a = [
-        "buildx",
-        "build",
-        "--builder",
-        nsBuilder,
-        "-f",
-        "Dockerfile.preview",
-        "-t",
-        imageRef,
-        "--push",
-      ]
+      const a = ["buildx", "build", "--builder", nsBuilder, "-f", "Dockerfile.preview", "-t", imageRef, "--push"]
       if (baseImage) a.push("--build-arg", `BASE_IMAGE=${baseImage}`)
       a.push(".")
       await runCmd("docker", a, { cwd: ctx.cwd })
     } else {
       // Local build on the GHA runner's docker daemon, then push.
-      const buildArgs: string[] = [
-        "build",
-        "-f",
-        "Dockerfile.preview",
-        "-t",
-        imageRef,
-      ]
+      const buildArgs: string[] = ["build", "-f", "Dockerfile.preview", "-t", imageRef]
       if (baseImage) buildArgs.push("--build-arg", `BASE_IMAGE=${baseImage}`)
       buildArgs.push(".")
       await runCmd("docker", buildArgs, {
@@ -546,9 +471,7 @@ export const runPreviewBuild: PreflightScript = async (
       },
       flyToken,
     )
-    console.log(
-      `[preview-build] done — machine ${machineId} at https://${appName}.fly.dev`,
-    )
+    console.log(`[preview-build] done — machine ${machineId} at https://${appName}.fly.dev`)
 
     // 8. Post (or update) the preview-ready comment.
     await postOrUpdatePreviewComment({

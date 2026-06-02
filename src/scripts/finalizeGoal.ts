@@ -39,6 +39,7 @@
  */
 
 import type { PreflightScript } from "../executables/types.js"
+import type { OpenTaskPr } from "../goal/operations.js"
 import {
   branchContains,
   closeIssue,
@@ -48,7 +49,6 @@ import {
   extractClosesIssues,
   markPrReady,
 } from "../goal/operations.js"
-import type { OpenTaskPr } from "../goal/operations.js"
 import type { GoalCtx } from "./goalCtx.js"
 
 /** Issue numbers a PR speaks for: `Closes #N` refs ∪ the `<n>-slug` head convention. */
@@ -164,7 +164,9 @@ export const finalizeGoal: PreflightScript = async (ctx) => {
       )
       continue
     }
-    process.stdout.write(`[goal-tick] closing task issue #${t.number} (goal finalized — carried by PR #${leaf.number})\n`)
+    process.stdout.write(
+      `[goal-tick] closing task issue #${t.number} (goal finalized — carried by PR #${leaf.number})\n`,
+    )
     const closed = closeIssue(
       t.number,
       {

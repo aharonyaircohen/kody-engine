@@ -18,9 +18,7 @@ export const verify: PostflightScript = async (ctx) => {
     ctx.data.verifyReason = result.ok ? "" : summarizeFailure(result)
     ctx.data.verifyRecovered = result.recovered ?? []
     if (result.recovered && result.recovered.length > 0) {
-      process.stderr.write(
-        `[kody verify] caught flake on: ${result.recovered.join(", ")} (passed on retry)\n`,
-      )
+      process.stderr.write(`[kody verify] caught flake on: ${result.recovered.join(", ")} (passed on retry)\n`)
     }
   } catch (err) {
     ctx.data.verifyOk = false
@@ -29,7 +27,7 @@ export const verify: PostflightScript = async (ctx) => {
 
   if (ctx.data.verifyOk === false) {
     const action = ctx.data.action as Action | undefined
-    if (action && action.type.endsWith("_COMPLETED")) {
+    if (action?.type.endsWith("_COMPLETED")) {
       const reason = (ctx.data.verifyReason as string | undefined) || "verify failed"
       ctx.data.action = {
         type: action.type.replace(/_COMPLETED$/, "_FAILED"),

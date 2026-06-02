@@ -196,7 +196,11 @@ export function parseGenericFlags(argv: string[]): Record<string, unknown> {
     }
     const key = arg.slice(2)
     const next = argv[i + 1]
-    const value: unknown = next !== undefined && !next.startsWith("--") ? (i++, next) : true
+    let value: unknown = true
+    if (next !== undefined && !next.startsWith("--")) {
+      value = next
+      i++
+    }
     args[key] = value
     if (key.includes("-")) {
       const camel = key.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase())

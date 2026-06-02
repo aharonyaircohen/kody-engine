@@ -49,9 +49,13 @@ export function decryptVault(payload: string, masterKey: Buffer): string {
  * the repo has no vault (404) or it's empty. Cached per repo for 60s. Never
  * throws on a missing vault; throws only on decrypt/parse corruption.
  */
-async function readVaultSecrets(
-  opts: { githubToken: string; masterKey: Buffer; owner: string; repo: string; fetchImpl?: typeof fetch },
-): Promise<Record<string, string>> {
+async function readVaultSecrets(opts: {
+  githubToken: string
+  masterKey: Buffer
+  owner: string
+  repo: string
+  fetchImpl?: typeof fetch
+}): Promise<Record<string, string>> {
   const key = `${opts.owner}/${opts.repo}`.toLowerCase()
   const hit = cache.get(key)
   if (hit && hit.expiresAt > Date.now()) return hit.secrets
@@ -79,7 +83,9 @@ async function readVaultSecrets(
     cache.set(key, { secrets: {}, expiresAt: Date.now() + CACHE_TTL_MS })
     return {}
   }
-  const ciphertext = Buffer.from(body.content, (body.encoding ?? "base64") as BufferEncoding).toString("utf8").trim()
+  const ciphertext = Buffer.from(body.content, (body.encoding ?? "base64") as BufferEncoding)
+    .toString("utf8")
+    .trim()
   const doc = JSON.parse(decryptVault(ciphertext, opts.masterKey)) as VaultDocument
   const flat: Record<string, string> = {}
   for (const [name, entry] of Object.entries(doc.secrets ?? {})) {
@@ -90,17 +96,26 @@ async function readVaultSecrets(
 }
 
 /** Read a single secret from a repo's vault. null if absent. */
-export async function readRepoSecret(
-  opts: { githubToken: string; masterKey: Buffer; owner: string; repo: string; name: string; fetchImpl?: typeof fetch },
-): Promise<string | null> {
+export async function readRepoSecret(opts: {
+  githubToken: string
+  masterKey: Buffer
+  owner: string
+  repo: string
+  name: string
+  fetchImpl?: typeof fetch
+}): Promise<string | null> {
   const secrets = await readVaultSecrets(opts)
   const v = secrets[opts.name]
-  return v && v.trim() ? v : null
+  return v?.trim() ? v : null
 }
 
 /** Read all of a repo's vault secrets (for forwarding ALL_SECRETS to a job). */
-export async function readRepoSecrets(
-  opts: { githubToken: string; masterKey: Buffer; owner: string; repo: string; fetchImpl?: typeof fetch },
-): Promise<Record<string, string>> {
+export async function readRepoSecrets(opts: {
+  githubToken: string
+  masterKey: Buffer
+  owner: string
+  repo: string
+  fetchImpl?: typeof fetch
+}): Promise<Record<string, string>> {
   return readVaultSecrets(opts)
 }

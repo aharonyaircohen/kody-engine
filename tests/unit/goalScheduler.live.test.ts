@@ -23,10 +23,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-const SCHEDULER_SH = path.join(
-  __dirname,
-  "../../src/executables/goal-scheduler/scheduler.sh",
-)
+const SCHEDULER_SH = path.join(__dirname, "../../src/executables/goal-scheduler/scheduler.sh")
 
 let tmp: string
 let logFile: string
@@ -35,10 +32,7 @@ function writeGoal(id: string, state: string | null): void {
   const dir = path.join(tmp, ".kody", "goals", id)
   fs.mkdirSync(dir, { recursive: true })
   if (state !== null) {
-    fs.writeFileSync(
-      path.join(dir, "state.json"),
-      JSON.stringify({ version: 1, state }, null, 2),
-    )
+    fs.writeFileSync(path.join(dir, "state.json"), JSON.stringify({ version: 1, state }, null, 2))
   }
 }
 
@@ -79,9 +73,7 @@ function runScheduler(): { status: number; stdout: string; calls: string[] } {
     },
     encoding: "utf-8",
   })
-  const calls = fs.existsSync(logFile)
-    ? fs.readFileSync(logFile, "utf-8").trim().split("\n").filter(Boolean)
-    : []
+  const calls = fs.existsSync(logFile) ? fs.readFileSync(logFile, "utf-8").trim().split("\n").filter(Boolean) : []
   return { status: res.status ?? -1, stdout: res.stdout ?? "", calls }
 }
 

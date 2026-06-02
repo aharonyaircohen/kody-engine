@@ -14,7 +14,7 @@
 
 import type { PostflightScript } from "../executables/types.js"
 
-export const requirePlanDeviations: PostflightScript = async (ctx, profile) => {
+export const requirePlanDeviations: PostflightScript = async (ctx, _profile) => {
   if (!ctx.data.agentDone) return
 
   const artifacts = (ctx.data.artifacts as Record<string, string> | undefined) ?? {}
@@ -65,4 +65,3 @@ export function isNoneSentinel(block: string): boolean {
   if (stripped.length !== 1) return false
   return stripped[0] === "none"
 }
-

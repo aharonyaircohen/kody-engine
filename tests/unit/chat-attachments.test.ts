@@ -5,8 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { prepareAttachments } from "../../src/chat/attachments.js"
 import type { ChatTurn } from "../../src/chat/session.js"
 
-const PNG_B64 =
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+const PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
 describe("chat attachments: prepareAttachments", () => {
   let cwd: string

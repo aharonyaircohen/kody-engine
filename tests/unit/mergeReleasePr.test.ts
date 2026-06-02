@@ -103,7 +103,7 @@ describe("mergeReleasePr: merge outcomes", () => {
   it("parses the PR number even with a trailing path segment", async () => {
     const ctx = ctxWithPr("https://github.com/o/r/pull/77/files")
     await mergeReleasePr(ctx, profile, null)
-    expect((execFileSyncSpy.mock.calls[0]![1] as string[])).toContain("77")
+    expect(execFileSyncSpy.mock.calls[0]![1] as string[]).toContain("77")
     expect(action(ctx).type).toBe("RELEASE_MERGE_COMPLETED")
   })
 

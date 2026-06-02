@@ -49,7 +49,13 @@ export const runFlow: PreflightScript = async (ctx) => {
     process.stderr.write(`[kody runFlow] resolved base branch: ${base} (from --base)\n`)
   }
 
-  const branchInfo = ensureFeatureBranch(issueNumber, issue.title, ctx.config.git.defaultBranch, ctx.cwd, base ?? undefined)
+  const branchInfo = ensureFeatureBranch(
+    issueNumber,
+    issue.title,
+    ctx.config.git.defaultBranch,
+    ctx.cwd,
+    base ?? undefined,
+  )
   ctx.data.branch = branchInfo.branch
 
   const runUrl = getRunUrl()

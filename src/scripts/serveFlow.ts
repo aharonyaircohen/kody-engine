@@ -52,7 +52,9 @@ export const serveFlow: PreflightScript = async (ctx) => {
     handle = await startLitellmIfNeeded(model, ctx.cwd)
     process.stdout.write(`[kody serve] LiteLLM ready at ${handle?.url ?? LITELLM_DEFAULT_URL}\n`)
   } else {
-    process.stdout.write(`[kody serve] model ${model.provider}/${model.model} routes to Anthropic directly — no proxy needed\n`)
+    process.stdout.write(
+      `[kody serve] model ${model.provider}/${model.model} routes to Anthropic directly — no proxy needed\n`,
+    )
   }
 
   const url = handle?.url ?? LITELLM_DEFAULT_URL
@@ -96,7 +98,9 @@ export const serveFlow: PreflightScript = async (ctx) => {
       const code = spawn("code", [ctx.cwd], { stdio: "inherit", env: editorEnv, detached: true })
       code.on("error", (err) => {
         process.stderr.write(`[kody serve] failed to launch VS Code: ${err.message}\n`)
-        process.stderr.write(`  Install the 'code' CLI: VS Code → Command Palette → "Shell Command: Install 'code' command in PATH"\n`)
+        process.stderr.write(
+          `  Install the 'code' CLI: VS Code → Command Palette → "Shell Command: Install 'code' command in PATH"\n`,
+        )
       })
       code.unref()
     } catch (err) {

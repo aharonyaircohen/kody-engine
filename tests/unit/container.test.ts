@@ -136,9 +136,9 @@ describe("container: smoke fixture", () => {
     expect(profile.role).toBe("container")
     expect(profile.children).toHaveLength(2)
     expect(profile.children?.[0]?.exec).toBe("echo-a")
-    expect(profile.children?.[0]?.next["ECHO_A_COMPLETED"]).toBe("echo-b")
+    expect(profile.children?.[0]?.next.ECHO_A_COMPLETED).toBe("echo-b")
     expect(profile.children?.[1]?.exec).toBe("echo-b")
-    expect(profile.children?.[1]?.next["ECHO_B_COMPLETED"]).toBe("done")
+    expect(profile.children?.[1]?.next.ECHO_B_COMPLETED).toBe("done")
   })
 })
 
@@ -546,9 +546,7 @@ describe("container: failure-shape regression suite", () => {
     // container should synthesize <EXEC>_COMPLETED so routing keys match.
     const root = makeContainerFixture({
       containerName: "noop-ok",
-      children: [
-        { exec: "noop", target: "issue", next: { NOOP_COMPLETED: "done", "*": "abort" } },
-      ],
+      children: [{ exec: "noop", target: "issue", next: { NOOP_COMPLETED: "done", "*": "abort" } }],
     })
 
     const env = makeMockEnvironment([{ exec: "noop", onInvoke: () => null, exitCode: 0 }])

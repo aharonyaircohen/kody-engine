@@ -14,7 +14,7 @@
  * don't spawn a subprocess.
  */
 
-import { createSdkMcpServer, tool, type McpSdkServerConfigWithInstance } from "@anthropic-ai/claude-agent-sdk"
+import { createSdkMcpServer, type McpSdkServerConfigWithInstance, tool } from "@anthropic-ai/claude-agent-sdk"
 import { z } from "zod"
 import type { KodyConfig } from "./config.js"
 import { emitEvent } from "./events.js"
@@ -157,6 +157,7 @@ export function truncateVerifyResult(
 
 /** Re-exported for tests that need to instantiate state without the SDK. */
 export type { VerifyToolState }
+
 // Suppress unused-import lint in environments where z is required only by the
 // SDK type narrowing (the `tool()` helper threads zod schemas internally).
 void z

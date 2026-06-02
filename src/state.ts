@@ -209,7 +209,9 @@ export function parseStateComment(body: string): TaskState {
   try {
     parsed = JSON.parse(jsonStr) as TaskState
   } catch (err) {
-    throw new CorruptStateError(`state JSON unparseable (truncated comment?): ${err instanceof Error ? err.message : String(err)}`)
+    throw new CorruptStateError(
+      `state JSON unparseable (truncated comment?): ${err instanceof Error ? err.message : String(err)}`,
+    )
   }
   if (parsed?.schemaVersion !== 1) {
     throw new CorruptStateError(`unexpected schemaVersion: ${JSON.stringify(parsed?.schemaVersion)}`)

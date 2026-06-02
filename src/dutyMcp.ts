@@ -26,7 +26,7 @@
  * whole structured world the duty needs to make its decision.
  */
 
-import { createSdkMcpServer, tool, type McpSdkServerConfigWithInstance } from "@anthropic-ai/claude-agent-sdk"
+import { createSdkMcpServer, type McpSdkServerConfigWithInstance, tool } from "@anthropic-ai/claude-agent-sdk"
 import { z } from "zod"
 import { gh } from "./issue.js"
 
@@ -142,7 +142,11 @@ function listRepairCandidates(repoSlug: string): RepairCandidate[] {
     })
 }
 
-function dispatchVerb(workflowFile: string, executable: string, prNumber: number): { ok: true } | { ok: false; error: string } {
+function dispatchVerb(
+  workflowFile: string,
+  executable: string,
+  prNumber: number,
+): { ok: true } | { ok: false; error: string } {
   // PR-repair verbs are just a workflow_dispatch keyed by PR number — same path
   // as the general dispatchWorkflow tool (defined below; hoisted).
   return dispatchWorkflow(workflowFile, executable, prNumber)
@@ -179,18 +183,7 @@ function readLedger(label: string): LedgerResult {
   const startTag = `<!-- ${label}:start -->`
   const endTag = `<!-- ${label}:end -->`
   try {
-    const raw = gh([
-      "issue",
-      "list",
-      "--state",
-      "open",
-      "--label",
-      label,
-      "--limit",
-      "5",
-      "--json",
-      "number,body",
-    ])
+    const raw = gh(["issue", "list", "--state", "open", "--label", label, "--limit", "5", "--json", "number,body"])
     const issues = JSON.parse(raw) as Array<{ number: number; body: string }>
     if (issues.length === 0) return { found: false, payload: null }
     const issue = issues.sort((a, b) => a.number - b.number)[0]
@@ -377,7 +370,10 @@ export function buildDutyMcpServer(opts: DutyMcpOptions): DutyMcpHandle {
     "Post ONE comment on a PR with the operator @-mention prepended. Use this when a verb is NOT graduated in the trust ledger and you want the operator to confirm via the dashboard inbox. The mention handle is substituted from kody.config.json `github.operators` — do not type it yourself.",
     {
       pr: z.number().int().positive().describe("PR number to comment on."),
-      body: z.string().min(1).describe("Comment body (markdown). Do not include the operator mention — the engine prepends it."),
+      body: z
+        .string()
+        .min(1)
+        .describe("Comment body (markdown). Do not include the operator mention — the engine prepends it."),
     },
     async (args) => {
       const result = postRecommendation(args.pr, opts.operatorMention, args.body, opts.dutySlug)
@@ -394,7 +390,10 @@ export function buildDutyMcpServer(opts: DutyMcpOptions): DutyMcpHandle {
     "read_ledger",
     "Read the trust ledger (or any sentinel-fenced JSON manifest stored on a labeled issue). Returns `{found, issueNumber, payload}` where payload is the parsed JSON between `<!-- <label>:start -->` and `<!-- <label>:end -->` sentinels. Use `read_ledger({label: 'kody:cto-decisions'})` to look up per-verb graduation modes for the trust gate.",
     {
-      label: z.string().min(1).describe("GitHub issue label that identifies the manifest issue (e.g. 'kody:cto-decisions')."),
+      label: z
+        .string()
+        .min(1)
+        .describe("GitHub issue label that identifies the manifest issue (e.g. 'kody:cto-decisions')."),
     },
     async (args) => {
       const result = readLedger(args.label)
@@ -414,10 +413,7 @@ export function buildDutyMcpServer(opts: DutyMcpOptions): DutyMcpHandle {
     "Read CI for a branch or commit ref (e.g. 'dev'). Returns {sha, state, failing:[{name,conclusion,detailsUrl}], pending:[{name,status}]}. state is RED (≥1 check has a terminal-failure conclusion: failure/timed_out/startup_failure/action_required), PENDING (none failed but some still running), or GREEN (all completed, none failed). Kody's own job check-runs (run/kody/job-tick/…) are excluded by default. This reads the commit's authoritative check-runs — use it instead of guessing CI health from a run list.",
     {
       ref: z.string().min(1).describe("Branch name or commit SHA to read CI for (e.g. 'dev')."),
-      ignoreNames: z
-        .array(z.string())
-        .optional()
-        .describe("Check names to exclude (default: Kody's own job names)."),
+      ignoreNames: z.array(z.string()).optional().describe("Check names to exclude (default: Kody's own job names)."),
     },
     async (args) => {
       const result = readCheckRuns(opts.repoSlug, args.ref, args.ignoreNames ?? DEFAULT_IGNORE_CHECKS)
@@ -432,12 +428,16 @@ export function buildDutyMcpServer(opts: DutyMcpOptions): DutyMcpHandle {
       key: z
         .string()
         .min(1)
-        .describe("Stable dedup identity for this finding (e.g. 'dev-ci-red', 'docs-drift:<feature>'). Same key across ticks = same issue."),
+        .describe(
+          "Stable dedup identity for this finding (e.g. 'dev-ci-red', 'docs-drift:<feature>'). Same key across ticks = same issue.",
+        ),
       title: z.string().min(1).describe("Issue title (used only on first creation)."),
       body: z
         .string()
         .min(1)
-        .describe("Issue body markdown (used only on first creation). Include the operator mention verbatim if the duty body has one."),
+        .describe(
+          "Issue body markdown (used only on first creation). Include the operator mention verbatim if the duty body has one.",
+        ),
     },
     async (args) => {
       const result = ensureIssue(opts.repoSlug, args.key, args.title, args.body)

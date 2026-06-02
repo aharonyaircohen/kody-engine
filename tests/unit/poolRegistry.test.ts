@@ -118,7 +118,11 @@ describe("PoolRegistry.claim — happy path with injected resolvers", () => {
     // setMin applied from latest vault POOL_MIN (5).
     expect(pm.setMin).toHaveBeenCalledWith(5)
     // Job's allSecrets excludes FLY_API_TOKEN and POOL_MIN.
-    const job = pm.claim.mock.calls[0]?.[0] as { allSecrets: Record<string, string>; repo: string; mode: string }
+    const job = (pm.claim.mock.calls[0] as unknown[])?.[0] as {
+      allSecrets: Record<string, string>
+      repo: string
+      mode: string
+    }
     expect(job.allSecrets).toEqual({ ANTHROPIC_API_KEY: "sk-1", OPENAI_API_KEY: "sk-2" })
     expect(job.repo).toBe("Owner/Repo")
     expect(job.mode).toBe("issue")
@@ -142,7 +146,7 @@ describe("PoolRegistry.claim — happy path with injected resolvers", () => {
       dashboardUrl: "https://dash",
     })
 
-    const job = pm.claim.mock.calls[0]?.[0] as Record<string, unknown>
+    const job = (pm.claim.mock.calls[0] as unknown[])?.[0] as Record<string, unknown>
     expect(job).toMatchObject({
       jobId: "j2",
       mode: "interactive",
@@ -230,7 +234,7 @@ describe("PoolRegistry.claim — no-pool / error branches", () => {
     const res = await reg.claim("o", "r", makeReq())
 
     expect(res.ok).toBe(true)
-    const job = pm.claim.mock.calls[0]?.[0] as { allSecrets: Record<string, string> }
+    const job = (pm.claim.mock.calls[0] as unknown[])?.[0] as { allSecrets: Record<string, string> }
     expect(job.allSecrets).toEqual({})
     expect(logs.some((l) => l.includes("vault secrets read failed"))).toBe(true)
   })

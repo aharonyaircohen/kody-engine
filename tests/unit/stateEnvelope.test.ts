@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { extractFencedBlock, extractNextStateFromText, isPartialEnvelope } from "../../src/scripts/stateEnvelope.js"
 
 function fenced(label: string, body: string): string {
-  return ["```" + label, body, "```"].join("\n")
+  return [`\`\`\`${label}`, body, "```"].join("\n")
 }
 
 describe("extractFencedBlock", () => {

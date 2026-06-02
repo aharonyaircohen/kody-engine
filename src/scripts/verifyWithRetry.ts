@@ -35,9 +35,7 @@ async function runVerify(ctx: Context): Promise<void> {
     ctx.data.verifyReason = result.ok ? "" : summarizeFailure(result)
     ctx.data.verifyRecovered = result.recovered ?? []
     if (result.recovered && result.recovered.length > 0) {
-      process.stderr.write(
-        `[kody verify] caught flake on: ${result.recovered.join(", ")} (passed on retry)\n`,
-      )
+      process.stderr.write(`[kody verify] caught flake on: ${result.recovered.join(", ")} (passed on retry)\n`)
     }
   } catch (err) {
     ctx.data.verifyOk = false
@@ -48,7 +46,7 @@ async function runVerify(ctx: Context): Promise<void> {
 function downgradeActionOnFailure(ctx: Context): void {
   if (ctx.data.verifyOk !== false) return
   const action = ctx.data.action as Action | undefined
-  if (!action || !action.type.endsWith("_COMPLETED")) return
+  if (!action?.type.endsWith("_COMPLETED")) return
   const reason = (ctx.data.verifyReason as string | undefined) || "verify failed"
   ctx.data.action = {
     type: action.type.replace(/_COMPLETED$/, "_FAILED"),
@@ -60,9 +58,9 @@ function downgradeActionOnFailure(ctx: Context): void {
 function upgradeActionOnPass(ctx: Context): void {
   if (ctx.data.verifyOk !== true) return
   const action = ctx.data.action as Action | undefined
-  if (!action || !action.type.endsWith("_FAILED")) return
+  if (!action?.type.endsWith("_FAILED")) return
   const downgradedFrom = (action.payload as { downgradedFrom?: string } | undefined)?.downgradedFrom
-  if (!downgradedFrom || !downgradedFrom.endsWith("_COMPLETED")) return
+  if (!downgradedFrom?.endsWith("_COMPLETED")) return
   ctx.data.action = {
     type: downgradedFrom,
     payload: {},

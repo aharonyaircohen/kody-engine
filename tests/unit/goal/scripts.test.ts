@@ -30,9 +30,9 @@ vi.mock("../../../src/goal/operations.js", async () => {
   }
 })
 
-import { gh } from "../../../src/issue.js"
 import * as ops from "../../../src/goal/operations.js"
 import { type GoalState, serializeGoalState } from "../../../src/goal/state.js"
+import { gh } from "../../../src/issue.js"
 
 const ghMock = gh as unknown as ReturnType<typeof vi.fn>
 
@@ -40,6 +40,7 @@ const ghMock = gh as unknown as ReturnType<typeof vi.fn>
 function contentsResponse(state: GoalState): string {
   return JSON.stringify({ content: Buffer.from(serializeGoalState(state), "utf-8").toString("base64") })
 }
+
 import { deriveGoalPhase } from "../../../src/scripts/deriveGoalPhase.js"
 import { dispatchNextTask } from "../../../src/scripts/dispatchNextTask.js"
 import { finalizeGoal } from "../../../src/scripts/finalizeGoal.js"
@@ -96,9 +97,7 @@ describe("loadGoalState", () => {
   it("populates ctx.data.goal from kody-state (extras round-trip)", async () => {
     // Goal state now lives on the kody-state branch; loadGoalState reads it via
     // the Contents API (gh), not the working tree.
-    ghMock.mockReturnValueOnce(
-      contentsResponse({ state: "active", lastDispatchedIssue: 41, extra: { title: "t" } }),
-    )
+    ghMock.mockReturnValueOnce(contentsResponse({ state: "active", lastDispatchedIssue: 41, extra: { title: "t" } }))
     const ctx = fakeCtx({ args: { goal: "g" }, cwd: tmp })
     await loadGoalState(ctx, fakeProfile())
     const goal = ctx.data.goal as GoalCtx

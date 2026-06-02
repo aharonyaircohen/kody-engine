@@ -68,7 +68,12 @@ function createQaIssue(title: string, body: string, hasLabel: boolean, cwd: stri
   if (hasLabel) args.push("--label", QA_LABEL)
   // gh issue create returns the new issue URL on its last stdout line.
   const out = gh(args, { input: body, cwd })
-  const url = out.split("\n").map((l) => l.trim()).filter(Boolean).pop() ?? ""
+  const url =
+    out
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .pop() ?? ""
   const m = url.match(/\/issues\/(\d+)\b/)
   if (!m) throw new Error(`gh issue create returned unexpected output: ${out}`)
   return { number: Number(m[1]), url }

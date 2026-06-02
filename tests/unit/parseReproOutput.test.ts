@@ -27,9 +27,15 @@ const SIGNATURE = {
 }
 
 function reproMessage(testPath: string, sigJson: string): string {
-  return ["DONE", `TEST_PATH: ${testPath}`, "FAILURE_SIGNATURE:", "```json", sigJson, "```", "COMMIT_MSG: test: x"].join(
-    "\n",
-  )
+  return [
+    "DONE",
+    `TEST_PATH: ${testPath}`,
+    "FAILURE_SIGNATURE:",
+    "```json",
+    sigJson,
+    "```",
+    "COMMIT_MSG: test: x",
+  ].join("\n")
 }
 
 describe("parseReproOutput", () => {
@@ -76,7 +82,7 @@ describe("parseReproOutput", () => {
       agentDone: true,
       action: { type: "REPRODUCE_COMPLETED", payload: {}, timestamp: "" },
     })
-    await parseReproOutput(ctx, profile, makeResult("DONE\nFAILURE_SIGNATURE:\n" + JSON.stringify(SIGNATURE)))
+    await parseReproOutput(ctx, profile, makeResult(`DONE\nFAILURE_SIGNATURE:\n${JSON.stringify(SIGNATURE)}`))
     expect((ctx.data.action as { type: string }).type).toBe("REPRODUCE_FAILED")
     expect((ctx.data.action as { payload: { reason: string } }).payload.reason).toMatch(/TEST_PATH/)
     expect(ctx.data.agentDone).toBe(false)
@@ -97,7 +103,11 @@ describe("parseReproOutput", () => {
       agentDone: true,
       action: { type: "REPRODUCE_COMPLETED", payload: {}, timestamp: "" },
     })
-    await parseReproOutput(ctx, profile, makeResult(reproMessage("tests/x.test.ts", JSON.stringify({ errorType: "X" }))))
+    await parseReproOutput(
+      ctx,
+      profile,
+      makeResult(reproMessage("tests/x.test.ts", JSON.stringify({ errorType: "X" }))),
+    )
     expect((ctx.data.action as { type: string }).type).toBe("REPRODUCE_FAILED")
     expect(ctx.data.reproFailureSignature).toBeUndefined()
   })

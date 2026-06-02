@@ -48,13 +48,9 @@ describe("LocalFileBackend", () => {
 
   describe("constructor", () => {
     it("requires cwd, jobsDir, owner, repo", () => {
-      expect(() => new LocalFileBackend({ cwd: "", jobsDir: ".kody/jobs", owner: "o", repo: "r" })).toThrow(
-        /cwd/i,
-      )
+      expect(() => new LocalFileBackend({ cwd: "", jobsDir: ".kody/jobs", owner: "o", repo: "r" })).toThrow(/cwd/i)
       expect(() => new LocalFileBackend({ cwd, jobsDir: "", owner: "o", repo: "r" })).toThrow(/jobsDir/i)
-      expect(() => new LocalFileBackend({ cwd, jobsDir: ".kody/jobs", owner: "", repo: "r" })).toThrow(
-        /owner.*repo/i,
-      )
+      expect(() => new LocalFileBackend({ cwd, jobsDir: ".kody/jobs", owner: "", repo: "r" })).toThrow(/owner.*repo/i)
     })
   })
 
@@ -122,10 +118,7 @@ describe("LocalFileBackend", () => {
 
       const b = new LocalFileBackend({ cwd, jobsDir: ".kody/jobs", owner: "o", repo: "r" })
       const next = envelope({ rev: 6, cursor: "same", data: { x: 1 } })
-      const wrote = b.save(
-        { path: ".kody/jobs/auto-sync.state.json", handle: null, state: prev, created: false },
-        next,
-      )
+      const wrote = b.save({ path: ".kody/jobs/auto-sync.state.json", handle: null, state: prev, created: false }, next)
       expect(wrote).toBe(false)
       // Original file untouched.
       expect(JSON.parse(fs.readFileSync(path.join(dir, "auto-sync.state.json"), "utf-8"))).toEqual(prev)
@@ -136,10 +129,7 @@ describe("LocalFileBackend", () => {
       const prev = envelope({ rev: 5, cursor: "a" })
       b.save({ path: ".kody/jobs/auto-sync.state.json", handle: null, state: prev, created: true }, prev)
       const next = envelope({ rev: 6, cursor: "b" })
-      const wrote = b.save(
-        { path: ".kody/jobs/auto-sync.state.json", handle: null, state: prev, created: false },
-        next,
-      )
+      const wrote = b.save({ path: ".kody/jobs/auto-sync.state.json", handle: null, state: prev, created: false }, next)
       expect(wrote).toBe(true)
     })
 

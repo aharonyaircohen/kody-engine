@@ -7,17 +7,9 @@ import type { KodyConfig } from "../../src/config.js"
  * directly so the rule is locked in by tests even though it's not yet
  * extracted into a standalone function.
  */
-function resolveModel(
-  config: KodyConfig,
-  profileName: string,
-  profileModel: string,
-): string {
+function resolveModel(config: KodyConfig, profileName: string, profileModel: string): string {
   const perExecutableModel = config.agent.perExecutable?.[profileName]
-  return perExecutableModel
-    ? perExecutableModel
-    : profileModel === "inherit"
-      ? config.agent.model
-      : profileModel
+  return perExecutableModel ? perExecutableModel : profileModel === "inherit" ? config.agent.model : profileModel
 }
 
 const baseConfig: KodyConfig = {

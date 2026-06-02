@@ -59,9 +59,7 @@ describe("derivePhase (stacked-PR)", () => {
 
   it("active, an open task with no PR → ready-to-dispatch", () => {
     expect(derivePhase(snap("active", task(1, "OPEN", "absent")))).toBe("ready-to-dispatch")
-    expect(derivePhase(snap("active", task(1, "OPEN", "ready"), task(2, "OPEN", "absent")))).toBe(
-      "ready-to-dispatch",
-    )
+    expect(derivePhase(snap("active", task(1, "OPEN", "ready"), task(2, "OPEN", "absent")))).toBe("ready-to-dispatch")
   })
 
   it("draft PR beats every other condition (no race with all-done)", () => {

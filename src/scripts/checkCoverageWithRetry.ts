@@ -52,7 +52,9 @@ export const checkCoverageWithRetry: PostflightScript = async (ctx) => {
     // this, coverageMisses would stay unset and the gate would read "no
     // misses". Best-effort: the agent crash is logged, the draft signal kept.
     const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[kody] coverage retry agent failed (${msg}); keeping ${misses.length} miss(es) — PR will draft\n`)
+    process.stderr.write(
+      `[kody] coverage retry agent failed (${msg}); keeping ${misses.length} miss(es) — PR will draft\n`,
+    )
     ctx.data.coverageMisses = misses
     return
   }

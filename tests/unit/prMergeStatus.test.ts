@@ -62,9 +62,6 @@ describe("prMergeStatus", () => {
   it("invokes gh with the correct args", () => {
     ghMock.mockReturnValue(JSON.stringify({ mergeable: "MERGEABLE", mergeStateStatus: "CLEAN" }))
     prMergeStatus(123, "/repo")
-    expect(ghMock).toHaveBeenCalledWith(
-      ["pr", "view", "123", "--json", "mergeable,mergeStateStatus"],
-      { cwd: "/repo" },
-    )
+    expect(ghMock).toHaveBeenCalledWith(["pr", "view", "123", "--json", "mergeable,mergeStateStatus"], { cwd: "/repo" })
   })
 })

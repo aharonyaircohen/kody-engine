@@ -33,11 +33,11 @@ describe("checkoutPrBranch: clears working-tree state before checkout", () => {
     const { checkoutPrBranch } = await import("../../src/branch.js")
     checkoutPrBranch(1556, "/tmp/fake-repo")
     const order = calls.map((c) => `${c.cmd} ${c.args.join(" ")}`)
-    const resetIdx = order.findIndex((s) => s === "git reset --hard HEAD")
+    const resetIdx = order.indexOf("git reset --hard HEAD")
     // `.kody` MUST be excluded so the clean doesn't wipe the tracked-but-
     // ignore-negated consumer executables under .kody/executables/.
-    const cleanIdx = order.findIndex((s) => s === "git clean -fd -e .kody")
-    const checkoutIdx = order.findIndex((s) => s === "gh pr checkout 1556")
+    const cleanIdx = order.indexOf("git clean -fd -e .kody")
+    const checkoutIdx = order.indexOf("gh pr checkout 1556")
     expect(resetIdx).toBeGreaterThanOrEqual(0)
     expect(cleanIdx).toBeGreaterThanOrEqual(0)
     expect(checkoutIdx).toBeGreaterThanOrEqual(0)
@@ -47,7 +47,7 @@ describe("checkoutPrBranch: clears working-tree state before checkout", () => {
     expect(order).not.toContain("git clean -fd")
     // After the checkout, kody's tracked assets are force-restored — a branch
     // checkout can drop the ignore-negated .kody/executables/ dirs on CI.
-    const restoreIdx = order.findIndex((s) => s === "git checkout HEAD -- .kody")
+    const restoreIdx = order.indexOf("git checkout HEAD -- .kody")
     expect(restoreIdx).toBeGreaterThan(checkoutIdx)
   })
 

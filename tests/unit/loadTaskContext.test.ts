@@ -3,7 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { __resetRunIdCache } from "../../src/events.js"
-import type { Profile, Context } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/executables/types.js"
 import { loadTaskContext } from "../../src/scripts/loadTaskContext.js"
 import { TASK_CONTEXT_SCHEMA_VERSION } from "../../src/taskContext.js"
 

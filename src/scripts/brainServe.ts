@@ -28,25 +28,18 @@
  * The agent runs once per chat turn inside the HTTP handler.
  */
 
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 import * as fs from "node:fs"
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 import * as path from "node:path"
-
-import { type CloneRepoFn, defaultCloneRepo, ensureRepoCwd } from "../repoWorkspace.js"
-
-import { parseProviderModel, needsLitellmProxy, LITELLM_DEFAULT_URL } from "../config.js"
-import { unpackAllSecrets } from "../kody-cli.js"
-import type { PreflightScript } from "../executables/types.js"
-import { type LitellmHandle, startLitellmIfNeeded } from "../litellm.js"
-import { runChatTurn, type ChatTurnOptions, type ChatTurnResult } from "../chat/loop.js"
 import type { ChatEvent, EventSink } from "../chat/events.js"
+import { type ChatTurnOptions, type ChatTurnResult, runChatTurn } from "../chat/loop.js"
 import { appendTurn, sessionFilePath } from "../chat/session.js"
-import {
-  beginTurn,
-  endTurnIfUnterminated,
-  getLastSeq,
-  subscribe,
-} from "./brainTurnLog.js"
+import { LITELLM_DEFAULT_URL, needsLitellmProxy, parseProviderModel } from "../config.js"
+import type { PreflightScript } from "../executables/types.js"
+import { unpackAllSecrets } from "../kody-cli.js"
+import { type LitellmHandle, startLitellmIfNeeded } from "../litellm.js"
+import { type CloneRepoFn, defaultCloneRepo, ensureRepoCwd } from "../repoWorkspace.js"
+import { beginTurn, endTurnIfUnterminated, getLastSeq, subscribe } from "./brainTurnLog.js"
 
 export interface BrainEvent {
   type: "chat" | "text" | "tool_use" | "done" | "error"
@@ -62,9 +55,7 @@ export const DEFAULT_PORT = 8080
 function getApiKey(): string {
   const key = (process.env.BRAIN_API_KEY ?? "").trim()
   if (!key) {
-    throw new Error(
-      "BRAIN_API_KEY env var is required — set it on the Fly machine before boot.",
-    )
+    throw new Error("BRAIN_API_KEY env var is required — set it on the Fly machine before boot.")
   }
   return key
 }
@@ -90,8 +81,8 @@ export function isSafeChatId(id: string): boolean {
 export function authOk(req: IncomingMessage, expected: string): boolean {
   const xApiKey = (req.headers["x-api-key"] as string | undefined)?.trim()
   if (xApiKey && xApiKey === expected) return true
-  const auth = (req.headers["authorization"] as string | undefined)?.trim()
-  if (auth && auth.toLowerCase().startsWith("bearer ")) {
+  const auth = (req.headers.authorization as string | undefined)?.trim()
+  if (auth?.toLowerCase().startsWith("bearer ")) {
     return auth.slice(7).trim() === expected
   }
   return false
@@ -149,10 +140,7 @@ function emitSse(res: ServerResponse, event: BrainEvent): void {
  * has no Brain-protocol equivalent (chat.thinking / chat.ready / chat.exit,
  * empty chat.message, chat.tool result phase).
  */
-export function translateChatEvent(
-  event: ChatEvent,
-  chatId: string,
-): BrainEvent | null {
+export function translateChatEvent(event: ChatEvent, chatId: string): BrainEvent | null {
   switch (event.event) {
     case "chat.message": {
       const content = String(event.payload.content ?? "")
@@ -173,10 +161,7 @@ export function translateChatEvent(
     case "chat.error":
       return {
         type: "error",
-        error:
-          typeof event.payload.error === "string"
-            ? event.payload.error
-            : "agent error",
+        error: typeof event.payload.error === "string" ? event.payload.error : "agent error",
         chatId,
       }
     default:
@@ -241,12 +226,7 @@ function enqueue(chatId: string, fn: () => Promise<unknown>): Promise<unknown> {
  * turn keeps running even if this response disconnects. Every event after the
  * handshake carries its `seq` so the client can reconnect from it.
  */
-function streamToRes(
-  res: ServerResponse,
-  dir: string,
-  chatId: string,
-  since: number,
-): void {
+function streamToRes(res: ServerResponse, dir: string, chatId: string, since: number): void {
   writeSseHeaders(res)
   // Unsequenced handshake — confirms the chat id, ignored by cursor tracking.
   emitSse(res, { type: "chat", chatId })
@@ -320,9 +300,7 @@ async function handleChatTurn(
   }
 
   const message =
-    typeof body === "object" && body !== null && "message" in body
-      ? (body as { message?: unknown }).message
-      : undefined
+    typeof body === "object" && body !== null && "message" in body ? (body as { message?: unknown }).message : undefined
 
   if (typeof message !== "string" || !message.trim()) {
     sendJson(res, 400, { error: "message required" })
@@ -400,8 +378,7 @@ async function handleChatTurn(
 export function buildServer(opts: BuildServerOptions): Server {
   const runTurn = opts.runTurn ?? runChatTurn
   const cloneRepo = opts.cloneRepo ?? defaultCloneRepo
-  const reposRoot =
-    opts.reposRoot ?? path.join(path.dirname(path.resolve(opts.cwd)), "repos")
+  const reposRoot = opts.reposRoot ?? path.join(path.dirname(path.resolve(opts.cwd)), "repos")
   return createServer(async (req, res) => {
     if (!req.method || !req.url) {
       sendJson(res, 400, { error: "bad request" })
@@ -469,9 +446,7 @@ export const brainServe: PreflightScript = async (ctx) => {
   // any machine-level env already set win (unpack skips existing keys).
   const unpacked = unpackAllSecrets()
   if (unpacked > 0) {
-    process.stdout.write(
-      `[brain-serve] unpacked ${unpacked} secret(s) from ALL_SECRETS\n`,
-    )
+    process.stdout.write(`[brain-serve] unpacked ${unpacked} secret(s) from ALL_SECRETS\n`)
   }
 
   const apiKey = getApiKey()
@@ -481,15 +456,11 @@ export const brainServe: PreflightScript = async (ctx) => {
 
   let handle: LitellmHandle | null = null
   if (usesProxy) {
-    process.stdout.write(
-      `[brain-serve] starting LiteLLM proxy for ${model.provider}/${model.model}...\n`,
-    )
+    process.stdout.write(`[brain-serve] starting LiteLLM proxy for ${model.provider}/${model.model}...\n`)
     handle = await startLitellmIfNeeded(model, ctx.cwd)
-    process.stdout.write(
-      `[brain-serve] LiteLLM ready at ${handle?.url ?? LITELLM_DEFAULT_URL}\n`,
-    )
+    process.stdout.write(`[brain-serve] LiteLLM ready at ${handle?.url ?? LITELLM_DEFAULT_URL}\n`)
   }
-  const litellmUrl = usesProxy ? handle?.url ?? LITELLM_DEFAULT_URL : null
+  const litellmUrl = usesProxy ? (handle?.url ?? LITELLM_DEFAULT_URL) : null
 
   const server = buildServer({
     apiKey,
@@ -502,9 +473,7 @@ export const brainServe: PreflightScript = async (ctx) => {
 
   await new Promise<void>((resolve) => {
     server.listen(port, "0.0.0.0", () => {
-      process.stdout.write(
-        `[brain-serve] listening on 0.0.0.0:${port} (cwd=${ctx.cwd})\n`,
-      )
+      process.stdout.write(`[brain-serve] listening on 0.0.0.0:${port} (cwd=${ctx.cwd})\n`)
       resolve()
     })
   })

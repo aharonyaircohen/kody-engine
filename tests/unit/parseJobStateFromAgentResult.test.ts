@@ -26,7 +26,7 @@ function makeResult(finalText: string): AgentResult {
 }
 
 function fenced(label: string, body: string): string {
-  return ["```" + label, body, "```"].join("\n")
+  return [`\`\`\`${label}`, body, "```"].join("\n")
 }
 
 describe("extractNextStateFromText", () => {

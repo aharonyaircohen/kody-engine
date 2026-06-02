@@ -58,7 +58,7 @@ export const finishFlow: PostflightScript = async (ctx, profile, _agentResult, a
   // Apply to the issue AND the PR (when one exists) so neither is left
   // stamped with a mid-flow label like `kody:reviewing`.
   const label = typeof args?.label === "string" ? args.label : undefined
-  if (label && label.startsWith(KODY_NAMESPACE)) {
+  if (label?.startsWith(KODY_NAMESPACE)) {
     const spec = {
       label,
       color: typeof args?.color === "string" ? args.color : undefined,

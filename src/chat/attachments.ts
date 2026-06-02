@@ -27,8 +27,7 @@ import type { ChatTurn } from "./session.js"
  * emits. The base64 run ends at the first non-base64 char (newline), which is
  * exactly how the dashboard joins attachments + message text.
  */
-const INLINE_ATTACHMENT_RE =
-  /(?:\[(?:Image|File): ([^\]]*)\]\n)?data:([\w.+-]+\/[\w.+-]+);base64,([A-Za-z0-9+/=]+)/g
+const INLINE_ATTACHMENT_RE = /(?:\[(?:Image|File): ([^\]]*)\]\n)?data:([\w.+-]+\/[\w.+-]+);base64,([A-Za-z0-9+/=]+)/g
 
 const EXT_BY_MIME: Record<string, string> = {
   "image/png": "png",

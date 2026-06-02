@@ -59,7 +59,6 @@ const KNOWN_PROFILE_KEYS = new Set([
   "preloadContext",
 ])
 
-
 export function loadProfile(profilePath: string): Profile {
   if (!fs.existsSync(profilePath)) {
     throw new ProfileError(profilePath, "file not found")

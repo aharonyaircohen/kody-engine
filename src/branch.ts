@@ -101,7 +101,12 @@ export function checkoutPrBranch(prNumber: number, cwd?: string): string {
     // Exclude `.kody` for the same reason as resetWorkingTree: `git clean -fd`
     // otherwise removes the tracked-but-ignore-negated `.kody/executables/<name>`
     // dirs on the CI runner, breaking PR-driven executables (fix/fix-ci/resolve).
-    execFileSync("git", ["clean", "-fd", "-e", ".kody"], { cwd, env, stdio: ["ignore", "pipe", "pipe"], timeout: 30_000 })
+    execFileSync("git", ["clean", "-fd", "-e", ".kody"], {
+      cwd,
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 30_000,
+    })
   } catch {
     /* best effort */
   }
@@ -160,7 +165,11 @@ export function mergeBase(baseBranch: string, cwd?: string): "clean" | "conflict
  */
 function restoreKodyAssets(cwd?: string): void {
   try {
-    execFileSync("git", ["checkout", "HEAD", "--", ".kody"], { cwd, stdio: ["ignore", "pipe", "pipe"], timeout: 30_000 })
+    execFileSync("git", ["checkout", "HEAD", "--", ".kody"], {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 30_000,
+    })
   } catch {
     /* .kody not tracked here, or nothing to restore — fine */
   }
