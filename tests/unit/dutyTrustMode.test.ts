@@ -6,7 +6,7 @@ vi.mock("../../src/issue.js", () => ({
   gh: vi.fn(),
 }))
 
-import { parseDutyTrustMode, readDutyTrustMode } from "../../src/dutyMcp.js"
+import { isDispatchGated, parseDutyTrustMode, readDutyTrustMode } from "../../src/dutyMcp.js"
 import { gh } from "../../src/issue.js"
 
 const b64 = (s: string) => Buffer.from(s, "utf-8").toString("base64")
@@ -48,5 +48,19 @@ describe("readDutyTrustMode (gh-backed)", () => {
       throw new Error("HTTP 404: Not Found")
     })
     expect(readDutyTrustMode("o/r", "qa")).toBe("ask")
+  })
+})
+
+describe("isDispatchGated", () => {
+  it("auto duty: nothing gated", () => {
+    expect(isDispatchGated("run", "auto")).toBe(false)
+    expect(isDispatchGated("qa-goal", "auto")).toBe(false)
+  })
+  it("ask duty: actions gated, read-only reviews exempt", () => {
+    expect(isDispatchGated("run", "ask")).toBe(true)
+    expect(isDispatchGated("qa-goal", "ask")).toBe(true)
+    expect(isDispatchGated("merge", "ask")).toBe(true)
+    expect(isDispatchGated("qa-engineer", "ask")).toBe(false) // read-only check
+    expect(isDispatchGated("ui-review", "ask")).toBe(false) // read-only check
   })
 })

@@ -394,6 +394,24 @@ export function dispatchWorkflow(
  * intentionally favors high-level intents (sync_pr, fix_ci_pr) over low-level
  * primitives (gh, http) so the LLM can't compose its way out of the lockdown.
  */
+/**
+ * Read-only review executables a duty may dispatch even in ASK mode — they
+ * gather information (browse / review) and never commit, so dispatching one is
+ * part of "asking", not "acting". Everything else (run / fix / qa-goal / merge /
+ * sync / fix-ci / resolve) is gated on trust.
+ */
+const GATE_EXEMPT_EXECUTABLES: ReadonlySet<string> = new Set(["qa-engineer", "ui-review"])
+
+/**
+ * Pure gate decision: block this dispatch? Yes unless the duty is trusted
+ * ("auto") OR the executable is a read-only exempt review. Exported for tests.
+ */
+export function isDispatchGated(executable: string | null | undefined, mode: DutyTrustMode): boolean {
+  if (mode === "auto") return false
+  if (executable && GATE_EXEMPT_EXECUTABLES.has(executable)) return false
+  return true
+}
+
 /** Message returned by a dispatch tool when the duty isn't trusted (ASK mode). */
 function trustRefusal(dutySlug?: string): string {
   return (
@@ -434,8 +452,9 @@ export function buildDutyMcpServer(opts: DutyMcpOptions): DutyMcpHandle {
       async (args) => {
         // Trust gate: only a duty graduated to "auto" may self-dispatch. An
         // "ask" duty is refused HERE (in code) and told to recommend instead —
-        // the autonomy decision can't be skipped by the LLM.
-        if (readDutyTrustMode(opts.repoSlug, opts.dutySlug) !== "auto") {
+        // the autonomy decision can't be skipped by the LLM. (PR-repair verbs
+        // are always actions, never exempt.)
+        if (isDispatchGated(verb, readDutyTrustMode(opts.repoSlug, opts.dutySlug))) {
           return { content: [{ type: "text" as const, text: trustRefusal(opts.dutySlug) }] }
         }
         const result = dispatchVerb(workflowFile, verb, args.pr)
@@ -576,8 +595,12 @@ export function buildDutyMcpServer(opts: DutyMcpOptions): DutyMcpHandle {
       issueNumber: z.number().int().positive().describe("Issue (or PR) number forwarded as issue_number."),
     },
     async (args) => {
-      // Trust gate — see makeDispatch. "ask" duties cannot self-dispatch.
-      if (readDutyTrustMode(opts.repoSlug, opts.dutySlug) !== "auto") {
+      // Trust gate — see makeDispatch. "ask" duties cannot self-dispatch an
+      // ACTION. Read-only review executables (qa-engineer, ui-review) are
+      // EXEMPT: dispatching them is information-gathering (they never commit),
+      // which a duty must do even while it only has permission to ask. Only the
+      // consequential executables (the fix/goal/run) are gated.
+      if (isDispatchGated(args.executable, readDutyTrustMode(opts.repoSlug, opts.dutySlug))) {
         return { content: [{ type: "text" as const, text: trustRefusal(opts.dutySlug) }] }
       }
       const result = dispatchWorkflow(workflowFile, args.executable, args.issueNumber)
