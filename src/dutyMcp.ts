@@ -353,6 +353,16 @@ export function dispatchWorkflow(
  * intentionally favors high-level intents (sync_pr, fix_ci_pr) over low-level
  * primitives (gh, http) so the LLM can't compose its way out of the lockdown.
  */
+/** Message returned by a dispatch tool when the duty isn't trusted (ASK mode). */
+function trustRefusal(dutySlug?: string): string {
+  return (
+    `Not dispatched: duty \`${dutySlug ?? "?"}\` is in ASK mode (not trusted for autonomy). ` +
+    `Do NOT retry the dispatch. Instead notify the operator (use recommend_to_operator, or rely on the ` +
+    `tracking issue that already @-mentions them), then submit_state. To let this duty act on its own, ` +
+    `grant it Auto on the dashboard Trust page.`
+  )
+}
+
 export function buildDutyMcpServer(opts: DutyMcpOptions): DutyMcpHandle {
   const workflowFile = opts.workflowFile ?? "kody.yml"
 
@@ -381,6 +391,12 @@ export function buildDutyMcpServer(opts: DutyMcpOptions): DutyMcpHandle {
         pr: z.number().int().positive().describe("PR number to repair."),
       },
       async (args) => {
+        // Trust gate: only a duty graduated to "auto" may self-dispatch. An
+        // "ask" duty is refused HERE (in code) and told to recommend instead —
+        // the autonomy decision can't be skipped by the LLM.
+        if (readDutyTrustMode(opts.repoSlug, opts.dutySlug) !== "auto") {
+          return { content: [{ type: "text" as const, text: trustRefusal(opts.dutySlug) }] }
+        }
         const result = dispatchVerb(workflowFile, verb, args.pr)
         const text = result.ok
           ? `Dispatched \`${verb}\` on PR #${args.pr}. The repair runs in its own workflow_dispatch — wait for the next tick to see the new headSha.`
@@ -506,6 +522,10 @@ export function buildDutyMcpServer(opts: DutyMcpOptions): DutyMcpHandle {
       issueNumber: z.number().int().positive().describe("Issue (or PR) number forwarded as issue_number."),
     },
     async (args) => {
+      // Trust gate — see makeDispatch. "ask" duties cannot self-dispatch.
+      if (readDutyTrustMode(opts.repoSlug, opts.dutySlug) !== "auto") {
+        return { content: [{ type: "text" as const, text: trustRefusal(opts.dutySlug) }] }
+      }
       const result = dispatchWorkflow(workflowFile, args.executable, args.issueNumber)
       const text = result.ok
         ? `Dispatched \`${args.executable}\` on #${args.issueNumber} via workflow_dispatch.`
