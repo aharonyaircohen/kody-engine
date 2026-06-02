@@ -207,6 +207,45 @@ function readLedger(label: string): LedgerResult {
 }
 
 // ---------------------------------------------------------------------------
+// Duty trust gate. The dashboard writes per-duty trust to a JSON file on the
+// `kody-state` branch (`.kody/state/trust.json`, shape `{ duties: { <slug>:
+// { mode: "ask" | "auto", ... } } }`). The engine reads it to decide whether a
+// trusted duty may self-dispatch (mode "auto") or must recommend (mode "ask").
+// Fail-safe by construction: ANY uncertainty (no file, no entry, parse/API
+// error, missing slug) resolves to "ask" — the engine never auto-acts on a
+// duty it can't positively confirm is trusted.
+// ---------------------------------------------------------------------------
+
+export type DutyTrustMode = "ask" | "auto"
+const TRUST_FILE_PATH = ".kody/state/trust.json"
+const TRUST_STATE_BRANCH = "kody-state"
+
+/** Pure: a duty's trust mode from the raw trust.json text. Fail-safe → "ask". */
+export function parseDutyTrustMode(rawJson: string, dutySlug: string): DutyTrustMode {
+  try {
+    const parsed = JSON.parse(rawJson) as { duties?: Record<string, { mode?: string }> }
+    return parsed?.duties?.[dutySlug]?.mode === "auto" ? "auto" : "ask"
+  } catch {
+    return "ask"
+  }
+}
+
+/**
+ * Read a duty's trust mode from `.kody/state/trust.json` on `kody-state`.
+ * Fail-safe: any miss → "ask". Not wired into dispatch yet — pure read.
+ */
+export function readDutyTrustMode(repoSlug: string, dutySlug?: string): DutyTrustMode {
+  if (!dutySlug) return "ask"
+  try {
+    const b64 = gh(["api", `repos/${repoSlug}/contents/${TRUST_FILE_PATH}?ref=${TRUST_STATE_BRANCH}`, "--jq", ".content"])
+    const json = Buffer.from(b64.trim(), "base64").toString("utf-8")
+    return parseDutyTrustMode(json, dutySlug)
+  } catch {
+    return "ask"
+  }
+}
+
+// ---------------------------------------------------------------------------
 // General duty primitives (not PR-repair-specific). These give a locked duty
 // the affordances it needs WITHOUT raw `gh`, and — critically — make the
 // duplication-prone actions (create issue / comment) idempotent IN CODE, keyed
