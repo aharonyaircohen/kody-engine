@@ -92,7 +92,7 @@ Executable directories contain **only** three kinds of files: `profile.json` (de
 npx -y -p @kody-ade/kody-engine@latest kody init
 ```
 
-`kody init` scaffolds [kody.config.json](kody.config.schema.json), [.github/workflows/kody.yml](templates/kody.yml), and per-scheduled-executable workflow files. Idempotent — pass `--force` to overwrite.
+`kody init` scaffolds [kody.config.json](kody.config.schema.json), `.github/workflows/kody.yml` (generated from `WORKFLOW_TEMPLATE` in [src/scripts/initFlow.ts](src/scripts/initFlow.ts)), and per-scheduled-executable workflow files. Idempotent — pass `--force` to overwrite.
 
 Required repo secrets: at least one model provider key (e.g. `MINIMAX_API_KEY`, `ANTHROPIC_API_KEY`). Recommended: `KODY_TOKEN` PAT so kody's commits trigger downstream CI and can modify `.github/workflows/*`.
 
