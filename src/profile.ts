@@ -38,6 +38,7 @@ const VALID_PHASES = new Set(["research", "planning", "implementing", "reviewing
  */
 const KNOWN_PROFILE_KEYS = new Set([
   "name",
+  "staff",
   "describe",
   "role",
   "kind",
