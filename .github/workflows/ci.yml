@@ -28,29 +28,21 @@ jobs:
       # node process; the stuck fork writes a diagnostic report to /tmp/nrep,
       # and we print its cwd + active libuv handles (open socket/child/timer)
       # to name the offending test. Revert to `pnpm test` once fixed.
-      - name: Run tests (CPU profile on hang)
+      - name: Run tests (probe — NO coverage)
         run: |
-          set +e   # don't let post-kill non-zero exits abort before we print diagnostics
-          export NODE_OPTIONS="--prof"   # writes isolate-*.log tick samples continuously (survives SIGKILL)
+          set +e   # post-kill non-zero must not abort before we print the verdict
           node node_modules/vitest/vitest.mjs run tests/unit tests/int \
-            --coverage --no-file-parallelism --reporter=verbose &
+            --no-file-parallelism --reporter=dot &
           TPID=$!
-          ( sleep 300
-            echo "::warning::test suite hung >300s — capturing CPU profile of the spinning worker"
-            ps -e -o pid,ppid,stat,etime,args 2>/dev/null | grep -E "forks\.js|vitest" | grep -v grep
-            sleep 3
+          ( sleep 240
+            echo "::warning::STILL HANGS without coverage — so coverage is NOT the cause"
+            ps -e -o pid,ppid,stat,etime,args 2>/dev/null | grep -E "forks\.js" | grep -v grep
+            sleep 2
             pkill -9 node 2>/dev/null; kill -9 "$TPID" 2>/dev/null
           ) &
           WPID=$!
           wait "$TPID"; RC=$?
           kill "$WPID" 2>/dev/null
-          echo "=== CPU PROFILES (hottest functions = the infinite loop) ==="
-          shopt -s nullglob
-          # Largest isolate log first — that's the spinning worker.
-          for log in $(ls -S isolate-*.log 2>/dev/null); do
-            echo "--- $log ($(wc -l < "$log") tick lines) ---"
-            node --prof-process "$log" 2>/dev/null | sed -n '1,60p'
-            echo "..."
-          done
+          echo "PROBE RESULT: exit=$RC  (0 = completed → COVERAGE was the cause; 137 = still hung → not coverage)"
           exit "$RC"
       - run: pnpm test:e2e
