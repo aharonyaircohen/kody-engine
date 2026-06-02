@@ -53,10 +53,12 @@ The repo has carried several near-synonyms over time; these are the current, aut
 
 - **executable** — one `src/executables/<name>/` directory; the atomic unit the executor runs. Every command below is one.
 - **watch** — an executable with `role: "watch"`, `kind: "scheduled"`, and a `schedule` cron, fanned out by `dispatchScheduledWatches` on each wake. The *scheduler* itself runs no agent. Two exist: `job-scheduler`, `goal-scheduler`.
-- **job** — a unit of intent expressed as a markdown file at `.kody/jobs/<slug>.md` (human-owned prose + frontmatter). `job-scheduler` ticks each file; `job-tick` (agent classifier) or `job-tick-scripted` (deterministic `tickScript:`) advances it. Per-slug state is persisted to a sidecar state file by the engine, not to a GitHub issue.
+- **duty** — a unit of intent expressed as a markdown file at `.kody/jobs/<slug>.md` (human-owned prose + frontmatter: `every:` cadence, `staff:` executor, optional `tools:` / `tickScript:`). The `job-scheduler` watch ticks each due duty; `job-tick` (agent) or `job-tick-scripted` (deterministic `tickScript:`) advances it. Per-duty state is persisted to a sidecar state file by the engine, not to a GitHub issue. *(Formerly "job" — that term is stale in prose; the code is still literally named `job-*`, see the naming note.)*
+- **staff** — a reusable persona at `.kody/staff/<slug>.md` that executes a duty. Stateless: a duty names its executor via `staff:` frontmatter, and many duties may share one staff member. Surfaced to the agent as `{{workerTitle}}` / `{{workerSlug}}`; the dashboard can also `@mention` a staff member ad-hoc (`worker-ask`).
 - **goal** — a stacked-PR state machine rooted at `.kody/goals/<id>/state.json`. `goal-scheduler` ticks each goal; `goal-tick` dispatches `@kody` on the next ready task stacked on the leaf PR, then finalizes the leaf into one review-ready PR. `qa-engineer` opens goals from QA findings. The engine never auto-merges.
-- **manager** — *not an executable.* Prose for a job whose intent happens to be overseeing other jobs.
+- **manager** — *not an executable.* Prose for a duty whose intent happens to be overseeing other duties.
 - **mission** — *dead term.* Renamed away; no `mission-*` executable exists. Do not use it.
+- **Naming note** — the *concept* is **duty** + **staff**, but the engine's code still carries the older **`job`** spelling: the `job-scheduler` / `job-tick` / `job-tick-scripted` executables, the `.kody/jobs/<slug>.md` path, the `kody-job-next-state` state envelope, and scripts like `jobFrontmatter` / `loadJobFromFile` / `writeJobStateFile`. So in code, "job" = "duty". Renaming these to `duty-*` is pending; that's why the `deadVocabulary` guard bans `kody-manager` / `mission-*` but **not** `job` (it's still a live identifier).
 
 ### Commands (grouped by function)
 
@@ -183,9 +185,11 @@ Two modes on a single flag:
 
 Writes `kody.config.json` (with package-manager-aware `quality.*` commands and owner/repo detected from `git remote`), `.github/workflows/kody.yml` (from the template), and per-scheduled-executable workflows (e.g. `kody-job-scheduler.yml`). Idempotent — skips anything already present unless `--force`. No agent.
 
-### `job-scheduler` + `job-tick` — zero-code coordinator for file-defined jobs
+### `job-scheduler` + `job-tick` — zero-code coordinator for file-defined duties
 
-A two-executable pair that lets a consumer define a stateful, recurring job *as a markdown file* — no per-job code, no PR to kody, no deploy. Used for digests, release pipelines, test-suite orchestration, pr-fleet supervision, or any multi-step flow that spans GitHub events. For what *job* / *goal* / *watch* / *manager* mean, see the **Vocabulary** glossary above — this section does not redefine them.
+> **Terminology:** this section's *concept* is **duty** + **staff** (see the Vocabulary glossary). The executables/paths are still spelled `job-*` / `.kody/jobs/` in code, so the prose below uses both — read "job" as "duty" throughout. The rename to `duty-*` is pending.
+
+A two-executable pair that lets a consumer define a stateful, recurring duty *as a markdown file* — no per-duty code, no PR to kody, no deploy — executed by a `staff:` persona. Used for digests, release pipelines, test-suite orchestration, pr-fleet supervision, or any multi-step flow that spans GitHub events. For what *duty* / *staff* / *goal* / *watch* / *manager* mean, see the **Vocabulary** glossary above — this section does not redefine them.
 
 **The model.** Drop a file at `.kody/jobs/<slug>.md`: frontmatter on top (`every:` cadence, optional `tickScript:`, optional `mentions:`), human-owned prose below (the `## Job` intent). On every cron wake `job-scheduler` enumerates the job files, reads each one's frontmatter once, and ticks only the slugs whose `every:` interval is due. `done: true` in the slug's persisted state OR deleting the file stops future work. `kody init` copies the engine's built-in job files (e.g. [src/jobs/watch-stale-prs.md](src/jobs/watch-stale-prs.md)) into the consumer repo as starters.
 

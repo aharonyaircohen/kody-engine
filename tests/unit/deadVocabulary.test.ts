@@ -11,7 +11,16 @@
  *   - "mission-tick" / "mission-scheduler" — the dead `mission-*` executable
  *                       family (renamed; no such executable exists).
  *
- * Scope is src/ only. Tests may use these strings as arbitrary fixtures.
+ * NOT banned — "job": although the current *prose* vocabulary is "duty" (see
+ * the AGENTS.md naming note), `job` is still a LIVE code identifier — the
+ * `job-scheduler` / `job-tick` executables, `.kody/jobs/`, `kody-job-next-state`,
+ * `jobFrontmatter`, etc. Banning it would break the build, not catch drift.
+ * It only becomes bannable after those are renamed `duty-*`. Do not add it here
+ * before that rename lands.
+ *
+ * Scope is src/ only (AGENTS.md is excluded because its naming note names the
+ * banned terms on purpose to explain the ban). Tests may use these strings as
+ * arbitrary fixtures.
  */
 
 import * as fs from "node:fs"
