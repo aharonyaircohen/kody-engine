@@ -92,7 +92,14 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
   // written in a duty body would otherwise reach the agent literal — and the
   // agent then improvises (and mistypes) the operator handle. Substitute it to
   // the finished "@a @b" form now (empty string when none declared; fail-soft).
-  ctx.data.jobIntent = body.replace(/\{\{\s*mentions\s*\}\}/g, mentions)
+  // Also resolve {{duty}} → this duty's slug, so a duty body can stamp its own
+  // recommendations with `<!-- kody-duty: {{duty}} -->`. Duties that post recs
+  // as plain comments (e.g. the QA duties) need this — the engine only
+  // auto-stamps recs sent via the `recommend_to_operator` tool. The dashboard
+  // reads the stamp to key trust per duty instead of per persona.
+  ctx.data.jobIntent = body
+    .replace(/\{\{\s*mentions\s*\}\}/g, mentions)
+    .replace(/\{\{\s*duty\s*\}\}/g, slug)
   ctx.data.jobState = loaded
   ctx.data.jobStateJson = JSON.stringify(loaded.state, null, 2)
   ctx.data.workerSlug = workerSlug
