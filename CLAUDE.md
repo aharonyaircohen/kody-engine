@@ -58,6 +58,14 @@ Version lives in `package.json` only ([src/entry.ts](src/entry.ts) reads it from
 
 Default to patch bumps unless the user requests otherwise. Consumers run `@latest` (the workflow `kody init` writes), so a republish reaches everyone — there is no per-consumer pin to resync.
 
+**Rollback.** Because consumers track `@latest`, a bad publish hits everyone at once with no pin to fall back to. To revert instantly, re-point `latest` at the last good version (no republish needed):
+
+```bash
+npm dist-tag add @kody-ade/kody-engine@<last-good-version> latest
+```
+
+Then fix forward and publish a new patch. `prepublishOnly` runs `typecheck + test + build`, so a red build can't publish in the first place.
+
 ## Live testing
 
 End-to-end behavior is exercised against `aharonyaircohen/Kody-Engine-Tester` (Next.js + Payload CMS). That repo triggers `@kody` comments on issues/PRs.
