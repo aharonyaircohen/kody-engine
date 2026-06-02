@@ -1,8 +1,13 @@
 packages:
   - '**'
 
-# pnpm 10+ reads onlyBuiltDependencies from here, NOT from .npmrc. Without this,
-# CI (`pnpm/action-setup` pins pnpm 11) blocks esbuild's build script and
-# `pnpm install` fails with ERR_PNPM_IGNORED_BUILDS before any test runs.
+# esbuild ships a postinstall build script. pnpm blocks unapproved build scripts
+# and (in CI / pnpm 11) FAILS install with ERR_PNPM_IGNORED_BUILDS. The approval
+# key differs by pnpm major: pnpm 11 reads `allowBuilds` (a map), pnpm 10 reads
+# `onlyBuiltDependencies` (a list). We declare BOTH so a local pnpm 10 and CI's
+# pnpm 11 both let esbuild build. (.npmrc's onlyBuiltDependencies is ignored by
+# pnpm 11 — it must live here.)
+allowBuilds:
+  esbuild: true
 onlyBuiltDependencies:
   - esbuild
