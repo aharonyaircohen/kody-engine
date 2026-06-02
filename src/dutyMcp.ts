@@ -246,6 +246,47 @@ export function readDutyTrustMode(repoSlug: string, dutySlug?: string): DutyTrus
 }
 
 // ---------------------------------------------------------------------------
+// Read-back primitive. QA duties work in two ticks: dispatch a check (qa-engineer
+// / ui-review), then on a LATER tick read the verdict it posted and act. The
+// locked toolbox had no way to read a thread's comments/labels — so QA couldn't
+// run on it. `read_thread` fills that gap (read-only). Works for issues AND PRs
+// (the issues API exposes PR conversation comments + labels).
+// ---------------------------------------------------------------------------
+
+export interface ThreadResult {
+  number: number
+  title: string
+  state: string
+  labels: string[]
+  comments: Array<{ author: string; createdAt: string; body: string }>
+}
+
+const THREAD_BODY_MAX = 4000
+
+export function readThread(repoSlug: string, number: number, limit = 10): ThreadResult {
+  const meta = JSON.parse(gh(["api", `repos/${repoSlug}/issues/${number}`])) as {
+    title?: string
+    state?: string
+    labels?: Array<{ name?: string }>
+  }
+  const rawComments = JSON.parse(
+    gh(["api", `repos/${repoSlug}/issues/${number}/comments?per_page=100`]),
+  ) as Array<{ user?: { login?: string }; created_at?: string; body?: string }>
+  const comments = rawComments.slice(-Math.max(1, limit)).map((c) => ({
+    author: c.user?.login ?? "?",
+    createdAt: c.created_at ?? "",
+    body: (c.body ?? "").slice(0, THREAD_BODY_MAX),
+  }))
+  return {
+    number,
+    title: meta.title ?? "",
+    state: meta.state ?? "",
+    labels: (meta.labels ?? []).map((l) => l.name ?? "").filter(Boolean),
+    comments,
+  }
+}
+
+// ---------------------------------------------------------------------------
 // General duty primitives (not PR-repair-specific). These give a locked duty
 // the affordances it needs WITHOUT raw `gh`, and — critically — make the
 // duplication-prone actions (create issue / comment) idempotent IN CODE, keyed
@@ -476,6 +517,19 @@ export function buildDutyMcpServer(opts: DutyMcpOptions): DutyMcpHandle {
     },
   )
 
+  const readThreadTool = tool(
+    "read_thread",
+    "Read an issue or PR's recent comments + labels + title/state. Returns {number, title, state, labels:[...], comments:[{author, createdAt, body}]} (newest last, body truncated). Use this to read a verdict a dispatched check posted back — e.g. qa-engineer's report or ui-review's PASS/CONCERNS/FAIL — on a later tick. Read-only; works for both issues and PRs.",
+    {
+      number: z.number().int().positive().describe("Issue or PR number to read."),
+      limit: z.number().int().positive().optional().describe("Max recent comments to return (default 10)."),
+    },
+    async (args) => {
+      const result = readThread(opts.repoSlug, args.number, args.limit ?? 10)
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] }
+    },
+  )
+
   const ensureIssueTool = tool(
     "ensure_issue",
     "Idempotently ensure ONE open tracking issue exists for `key`. Searches OPEN issues (issues API, not the laggy search index) for `key`'s hidden marker; if found, returns {created:false, number} and creates NOTHING; otherwise creates the issue (title + body, marker appended) and returns {created:true, number}. This is the anti-duplication primitive: use one stable `key` per recurring finding so re-ticks reuse the same issue. Only take follow-up actions (dispatch/comment) when created===true.",
@@ -545,6 +599,7 @@ export function buildDutyMcpServer(opts: DutyMcpOptions): DutyMcpHandle {
       recommendTool,
       ledgerTool,
       checkRunsTool,
+      readThreadTool,
       ensureIssueTool,
       ensureCommentTool,
       dispatchTool,
@@ -563,6 +618,7 @@ export const DUTY_MCP_TOOL_NAMES = [
   "recommend_to_operator",
   "read_ledger",
   "read_check_runs",
+  "read_thread",
   "ensure_issue",
   "ensure_comment",
   "dispatch_workflow",
