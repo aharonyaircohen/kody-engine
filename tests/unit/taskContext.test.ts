@@ -98,9 +98,14 @@ describe("taskContext: persist + read round-trip", () => {
   })
 
   it("persistTaskContext does not throw on unwritable cwd", () => {
-    // Use a path the runtime cannot write to (a non-existent parent under /).
+    // Point cwd at a path whose parent is a regular FILE → recursive mkdir
+    // fails fast with ENOTDIR on every OS. (Do NOT use /proc/...: on Linux CI
+    // Node's recursive mkdir spins forever stat-ing procfs, which hung the
+    // entire test suite — caught via a gdb backtrace showing MKDirpSync on /proc.)
     const ctx = buildTaskContext({ runId: "x" })
-    const result = persistTaskContext("/proc/0/no/such/path", ctx)
+    const fileAsParent = path.join(tmpDir, "not-a-dir")
+    fs.writeFileSync(fileAsParent, "x")
+    const result = persistTaskContext(path.join(fileAsParent, "no", "such", "path"), ctx)
     expect(result).toBeNull()
   })
 })
