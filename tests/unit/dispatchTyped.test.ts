@@ -75,6 +75,30 @@ describe("autoDispatchTyped: silent variants (legitimate no-op)", () => {
     if (out.kind === "silent") expect(out.reason).toMatch(/does not mention @kody/)
   })
 
+  it("returns silent for a @kody substring that is NOT a real mention (e.g. an email)", () => {
+    // Live-test regression (v0.4.199): `me@kody.dev` contains the substring
+    // "@kody" but is not a mention. autoDispatchTyped used `.includes("@kody")`
+    // and then extracted the comment's first word ("ping") as a subcommand,
+    // posting a stray "I don't recognize `ping`" reply. Must be silent.
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "ping me@kody.dev when ready", user: { login: "alice", type: "User" } },
+      issue: { number: 7 },
+    })
+    const out = autoDispatchTyped()
+    expect(out.kind).toBe("silent")
+    if (out.kind === "silent") expect(out.reason).toMatch(/does not mention @kody/)
+  })
+
+  it("returns silent for '@kodyfix' (no boundary after @kody)", () => {
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kodyfix please", user: { login: "alice", type: "User" } },
+      issue: { number: 7 },
+    })
+    expect(autoDispatchTyped().kind).toBe("silent")
+  })
+
   it("routes an explicit @kody command even from a bot (self-dispatch)", () => {
     // Kody runs as a bot when the repo token is a GitHub App; duties and
     // flows self-dispatch by posting `@kody <command>`. An explicit, resolved

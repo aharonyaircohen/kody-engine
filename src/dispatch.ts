@@ -301,7 +301,7 @@ export function autoDispatchTyped(opts?: {
   const rawBody = String(event.comment?.body ?? "")
   const authorLogin = String(event.comment?.user?.login ?? "")
   const authorType = String(event.comment?.user?.type ?? "")
-  if (!rawBody.toLowerCase().includes("@kody")) {
+  if (!hasKodyMention(rawBody)) {
     return { kind: "silent", reason: "comment does not mention @kody" }
   }
   if (authorLogin === "kody-bot" || authorType === "Bot") {
@@ -428,7 +428,11 @@ export function hasKodyMention(body: string): boolean {
 
 function extractAfterTag(body: string): string {
   const m = body.match(KODY_MENTION_RE)
-  if (!m || m.index === undefined) return body
+  // No real mention → empty, NOT the whole body. Returning the body here let
+  // a non-mention comment like "ping me@kody.dev" leak its first word ("ping")
+  // to extractSubcommand and trigger a stray "unrecognized command" reply.
+  // Callers gate on hasKodyMention first, so this is belt-and-suspenders.
+  if (!m || m.index === undefined) return ""
   const at = body.indexOf("@kody", m.index)
   return body.slice(at + "@kody".length).trim()
 }
