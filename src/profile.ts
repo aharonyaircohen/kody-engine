@@ -133,6 +133,8 @@ export function loadProfile(profilePath: string): Profile {
   const profile: Profile = {
     name: requireString(profilePath, r, "name"),
     describe: typeof r.describe === "string" ? r.describe : "",
+    // Optional persona to run as. Empty/blank string → undefined (no persona).
+    staff: typeof r.staff === "string" && r.staff.trim() ? r.staff.trim() : undefined,
     role,
     kind,
     schedule: typeof r.schedule === "string" ? r.schedule : undefined,

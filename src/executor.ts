@@ -23,6 +23,7 @@ import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
 import { resolveExecutable } from "./registry.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
+import { framePersona, loadStaffPersona } from "./staff.js"
 import type { TaskState, TaskTarget } from "./state.js"
 import { loadSubagents } from "./subagents.js"
 import { prepareTaskArtifactsDir, taskArtifactsPromptAddendum, verifyTaskArtifacts } from "./task-artifacts.js"
@@ -247,6 +248,14 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       : null
 
   const ndjsonDir = path.join(input.cwd, ".kody")
+  // Staff binding: when the profile names a staff member, run *as* that persona.
+  // Loaded once and injected into the system-prompt append (after DISCIPLINE,
+  // before the profile's own append) so identity leads task instructions. This
+  // is the executable+staff unification — absent `staff` → unchanged behaviour.
+  const staffPersona =
+    typeof profile.staff === "string" && profile.staff.length > 0
+      ? framePersona(profile.staff, loadStaffPersona(input.cwd, profile.staff))
+      : null
   const invokeAgent = async (prompt: string): Promise<AgentResult> => {
     // Resolve at call time — ctx.data.syntheticPluginPath is set during preflight.
     const externalPlugins = (profile.claudeCode.plugins ?? [])
@@ -285,7 +294,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       // DISCIPLINE leads so the stable, role-agnostic block sits at the front
       // of the cacheable system-prompt prefix; profile/task appends follow.
       systemPromptAppend:
-        [DISCIPLINE, profile.claudeCode.systemPromptAppend, taskArtifacts?.promptAddendum]
+        [DISCIPLINE, staffPersona, profile.claudeCode.systemPromptAppend, taskArtifacts?.promptAddendum]
           .filter((s): s is string => typeof s === "string" && s.length > 0)
           .join("\n\n") || undefined,
       cacheable: profile.claudeCode.cacheable,

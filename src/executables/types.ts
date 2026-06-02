@@ -17,6 +17,15 @@ import type { Phase } from "../state.js"
 
 export interface Profile {
   name: string
+  /**
+   * Optional staff member this executable runs *as*. When set, the executor
+   * loads `.kody/staff/<staff>.md` and injects that persona (authoritative
+   * identity) ahead of the executable's own system-prompt append. This is the
+   * unification hook: a "duty" is just an executable + a staff member. Absent →
+   * runs with no persona (unchanged legacy behaviour). A declared-but-missing
+   * staff file is fatal at run time (see src/staff.ts).
+   */
+  staff?: string
   describe: string
   /**
    * Semantic role — what this executable IS, not when it runs.
