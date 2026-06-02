@@ -14,11 +14,18 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 import type { ExecutorInput, ExecutorOutput } from "../../src/executor.js"
 import { runExecutable } from "../../src/executor.js"
 import { loadProfile } from "../../src/profile.js"
 import { type Action, emptyState, type TaskState, type TaskTarget } from "../../src/state.js"
+
+// Each test below `process.chdir()`s into a throwaway temp root and never
+// restored it — leaving the worker fork's cwd in a stray /tmp dir that later
+// test files inherit (and that breaks git/gh spawns relying on cwd, which only
+// surfaces on Linux CI, not macOS). Restore the real cwd after every test.
+const ORIGINAL_CWD = process.cwd()
+afterEach(() => process.chdir(ORIGINAL_CWD))
 
 function tmpDir(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), `${prefix}-`))
