@@ -57,6 +57,20 @@ export interface Profile {
    * This is what makes "scheduled" just a field on the one duty shape.
    */
   every?: string
+  /**
+   * Locked-toolbox palette (unified successor to a markdown duty's `tools:`
+   * frontmatter). When non-empty, loadDutyState sets ctx.data.dutyTools so the
+   * executor spins up the in-process kody-duty MCP server and the agent runs
+   * MCP-only (Bash/Read revoked unless also in claudeCode.tools). Absent →
+   * normal SDK tools.
+   */
+  dutyTools?: string[]
+  /**
+   * GitHub logins (no leading `@`) this duty's output should mention. Rendered
+   * to `@a @b` and exposed to the prompt as {{mentions}} (and as the duty-MCP
+   * operator mention), mirroring a markdown duty's `mentions:` frontmatter.
+   */
+  mentions?: string[]
   /** Cron expression for scheduled profiles (e.g. "0 8 * * MON"). */
   schedule?: string
   /**

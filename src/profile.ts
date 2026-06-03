@@ -41,6 +41,8 @@ const KNOWN_PROFILE_KEYS = new Set([
   "name",
   "staff",
   "every",
+  "dutyTools",
+  "mentions",
   "describe",
   "role",
   "kind",
@@ -140,6 +142,9 @@ export function loadProfile(profilePath: string): Profile {
     staff: typeof r.staff === "string" && r.staff.trim() ? r.staff.trim() : undefined,
     // Optional recurrence cadence (scheduled duty). Blank → undefined (on-demand).
     every: typeof r.every === "string" && r.every.trim() ? r.every.trim() : undefined,
+    // Locked-toolbox palette + mentions (folder-duty successors to frontmatter).
+    dutyTools: Array.isArray(r.dutyTools) ? (r.dutyTools as string[]).map((t) => String(t).trim()).filter(Boolean) : undefined,
+    mentions: Array.isArray(r.mentions) ? (r.mentions as string[]).map((m) => String(m).trim()).filter(Boolean) : undefined,
     role,
     kind,
     schedule: typeof r.schedule === "string" ? r.schedule : undefined,

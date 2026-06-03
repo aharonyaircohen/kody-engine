@@ -29,4 +29,20 @@ export const loadDutyState: PreflightScript = async (ctx, profile, args) => {
   ctx.data.jobSlug = slug
   ctx.data.jobState = loaded
   ctx.data.jobStateJson = JSON.stringify(loaded.state, null, 2)
+
+  // Mentions → "@a @b" for the {{mentions}} prompt token + the duty-MCP
+  // operator mention (mirrors loadJobFromFile).
+  const mentions = (profile.mentions ?? []).map((l) => `@${l}`).join(" ")
+  ctx.data.mentions = mentions
+
+  // Locked-toolbox: a non-empty dutyTools palette flips the executor's
+  // enableDutyTool, so the agent runs against the in-process kody-duty MCP
+  // server. dutyToolsList feeds a prompt token; dutyOperatorMention feeds the
+  // MCP server's operator handle.
+  const declaredTools = profile.dutyTools ?? []
+  if (declaredTools.length > 0) {
+    ctx.data.dutyTools = declaredTools
+    ctx.data.dutyToolsList = declaredTools.map((name) => `- \`${name}\``).join("\n")
+    ctx.data.dutyOperatorMention = mentions
+  }
 }
