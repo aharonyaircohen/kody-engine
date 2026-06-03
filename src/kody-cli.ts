@@ -302,6 +302,7 @@ export async function runCi(argv: string[]): Promise<number> {
   const eventName = process.env.GITHUB_EVENT_NAME
   const dispatchEventPath = process.env.GITHUB_EVENT_PATH
   let manualWorkflowDispatch = false
+  let forceRunDuty: string | null = null
   if (
     !args.issueNumber &&
     !autoFallback &&
@@ -313,10 +314,36 @@ export async function runCi(argv: string[]): Promise<number> {
       const evt = JSON.parse(fs.readFileSync(dispatchEventPath, "utf-8"))
       const issueInput = parseInt(String(evt?.inputs?.issue_number ?? ""), 10)
       const sessionInput = String(evt?.inputs?.sessionId ?? "")
-      manualWorkflowDispatch = !sessionInput && !(Number.isFinite(issueInput) && issueInput > 0)
+      const exeInput = String(evt?.inputs?.executable ?? "").trim()
+      const noTarget = !sessionInput && !(Number.isFinite(issueInput) && issueInput > 0)
+      // Explicit `executable` + no target → manual one-shot "Run now" of that
+      // single duty (a scheduled / no-target folder-duty), bypassing the
+      // cadence guard. A bare dispatch (no executable) still fans out to every
+      // watch executable (job-scheduler et al.).
+      if (noTarget && exeInput) forceRunDuty = exeInput
+      else manualWorkflowDispatch = noTarget
     } catch {
       manualWorkflowDispatch = false
     }
+  }
+  if (forceRunDuty) {
+    const config = earlyConfig ?? loadConfig(cwd)
+    process.stdout.write(`→ kody: manual one-shot run of duty ${forceRunDuty}\n\n`)
+    try {
+      unpackAllSecrets()
+      await resolveAuthToken()
+    } catch {
+      /* best-effort — the executable pipeline surfaces auth failures */
+    }
+    const result = await runExecutableChain(forceRunDuty, {
+      cliArgs: {},
+      cwd,
+      config,
+      verbose: args.verbose,
+      quiet: args.quiet,
+    })
+    const ec = result.exitCode
+    return ec === 0 || ec === 1 || ec === 2 ? ec : 99
   }
   if (!args.issueNumber && !autoFallback && (eventName === "schedule" || manualWorkflowDispatch)) {
     return runScheduledFanOut(cwd, args, { force: manualWorkflowDispatch })
