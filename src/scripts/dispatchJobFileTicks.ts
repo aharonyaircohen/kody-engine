@@ -64,6 +64,63 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
       skipped?: boolean
     }> = []
     const now = Date.now()
+
+    // ── Unified path: scheduled folder-duties — FIRST, on the clean checkout ──
+    // A folder-duty (`.kody/duties/<slug>/profile.json`) that declares an
+    // `every` cadence is the unified successor to a markdown scheduled duty: it
+    // fires as a ONE-SHOT run of itself (no job-tick, no target), as its staff.
+    // We enumerate + read profiles HERE, before the `.md` ticks below churn the
+    // working tree (a branch switch / clean would drop `.kody/duties/<slug>/`),
+    // then fire the due ones. On-demand folder-duties (no `every`) are skipped —
+    // they only run against an issue/PR. Cadence reuses decideShouldFire + the
+    // same backend; lastFiredAt is stamped before running so a crashing duty
+    // can't re-fire every wake.
+    type ScheduledDuty = { slug: string; every?: string; staff?: string }
+    const scheduledDuties = listFolderDutySlugs(path.join(ctx.cwd, jobsDir))
+      .map((slug): ScheduledDuty | null => {
+        try {
+          const p = loadProfile(path.join(ctx.cwd, jobsDir, slug, "profile.json"))
+          return { slug, every: p.every, staff: p.staff }
+        } catch (err) {
+          process.stderr.write(`[jobs] ⏭  skip folder-duty ${slug}: profile load failed: ${String(err)}\n`)
+          return null
+        }
+      })
+      .filter((d): d is ScheduledDuty => d !== null && Boolean(d.every))
+    process.stdout.write(`[jobs] ${scheduledDuties.length} scheduled folder-dut(y/ies) to consider\n`)
+    for (const { slug, every, staff } of scheduledDuties) {
+      if (!staff || staff.trim().length === 0) {
+        process.stderr.write(`[jobs] ⏭  skip ${slug}: scheduled duty has no staff\n`)
+        results.push({ slug, exitCode: 0, skipped: true, reason: "no staff assigned" })
+        continue
+      }
+      const decision = await decideShouldFire(every as ScheduleEvery, slug, backend, now)
+      if (decision.skip) {
+        process.stdout.write(`[jobs] ⏭  skip ${slug}: ${decision.reason}\n`)
+        results.push({ slug, exitCode: 0, skipped: true, reason: decision.reason })
+        continue
+      }
+      await stampFired(backend, slug, now)
+      process.stdout.write(`[jobs] → run scheduled duty ${slug} (one-shot, as ${staff})\n`)
+      try {
+        const out = await runExecutable(slug, {
+          cliArgs: {},
+          cwd: ctx.cwd,
+          config: ctx.config,
+          verbose: ctx.verbose,
+          quiet: ctx.quiet,
+        })
+        results.push({ slug, exitCode: out.exitCode, reason: out.reason })
+        if (out.exitCode !== 0) {
+          process.stderr.write(`[jobs] scheduled duty ${slug} failed (exit ${out.exitCode}): ${out.reason ?? ""}\n`)
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        process.stderr.write(`[jobs] scheduled duty ${slug} crashed: ${msg}\n`)
+        results.push({ slug, exitCode: 99, reason: msg })
+      }
+    }
+
     for (const slug of slugs) {
       // Read the slug's frontmatter exactly once per tick — both the
       // cadence guard (`every:`) and the routing rule (`tickScript:`)
@@ -128,61 +185,6 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         process.stderr.write(`[jobs] tick ${slug} crashed: ${msg}\n`)
-        results.push({ slug, exitCode: 99, reason: msg })
-      }
-    }
-
-    // ── Unified path: scheduled folder-duties ──────────────────────────────
-    // A folder-duty (`.kody/duties/<slug>/profile.json`) that declares an
-    // `every` cadence is the unified successor to a markdown scheduled duty:
-    // it fires as a ONE-SHOT run of itself (no job-tick, no target), as its
-    // staff. On-demand folder-duties (no `every`) are skipped here — they only
-    // run against an issue/PR. Cadence reuses decideShouldFire + the same
-    // backend; lastFiredAt is stamped here (the one-shot run has no
-    // writeJobStateFile postflight), before running, so a crashing duty can't
-    // re-fire every wake.
-    const folderSlugs = listFolderDutySlugs(path.join(ctx.cwd, jobsDir))
-    for (const slug of folderSlugs) {
-      let every: string | undefined
-      let staff: string | undefined
-      try {
-        const profile = loadProfile(path.join(ctx.cwd, jobsDir, slug, "profile.json"))
-        every = profile.every
-        staff = profile.staff
-      } catch (err) {
-        process.stderr.write(`[jobs] ⏭  skip folder-duty ${slug}: profile load failed: ${String(err)}\n`)
-        continue
-      }
-      if (!every) continue // on-demand duty — not scheduled
-      if (!staff || staff.trim().length === 0) {
-        process.stderr.write(`[jobs] ⏭  skip ${slug}: scheduled duty has no staff\n`)
-        results.push({ slug, exitCode: 0, skipped: true, reason: "no staff assigned" })
-        continue
-      }
-      const decision = await decideShouldFire(every as ScheduleEvery, slug, backend, now)
-      if (decision.skip) {
-        process.stdout.write(`[jobs] ⏭  skip ${slug}: ${decision.reason}\n`)
-        results.push({ slug, exitCode: 0, skipped: true, reason: decision.reason })
-        continue
-      }
-      // Stamp lastFiredAt up front so a crash can't spin the duty every wake.
-      await stampFired(backend, slug, now)
-      process.stdout.write(`[jobs] → run scheduled duty ${slug} (one-shot, as ${staff})\n`)
-      try {
-        const out = await runExecutable(slug, {
-          cliArgs: {},
-          cwd: ctx.cwd,
-          config: ctx.config,
-          verbose: ctx.verbose,
-          quiet: ctx.quiet,
-        })
-        results.push({ slug, exitCode: out.exitCode, reason: out.reason })
-        if (out.exitCode !== 0) {
-          process.stderr.write(`[jobs] scheduled duty ${slug} failed (exit ${out.exitCode}): ${out.reason ?? ""}\n`)
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        process.stderr.write(`[jobs] scheduled duty ${slug} crashed: ${msg}\n`)
         results.push({ slug, exitCode: 99, reason: msg })
       }
     }
