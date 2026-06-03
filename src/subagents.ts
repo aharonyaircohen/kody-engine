@@ -47,6 +47,30 @@ function resolveAgentFile(profileDir: string, name: string): string {
 }
 
 /**
+ * Snapshot every declared subagent's raw markdown at profile-load time, keyed
+ * by the declared name. Mirrors `readPromptTemplates` (see profile.ts): the
+ * profile dir is read on the default checkout BEFORE any task branch switch,
+ * so the captured content survives a later checkout that drops the duty's
+ * `agents/` (e.g. a PR-branch review where `.kody/duties/<slug>/` doesn't
+ * exist). Best-effort — a name that can't be resolved here is simply absent
+ * from the snapshot, and `loadSubagents` falls back to a disk read (which then
+ * surfaces the real "not found" error at use time).
+ */
+export function captureSubagentTemplates(profile: Profile): Record<string, string> {
+  const names = profile.claudeCode.subagents
+  if (!names || names.length === 0) return {}
+  const out: Record<string, string> = {}
+  for (const name of names) {
+    try {
+      out[name] = fs.readFileSync(resolveAgentFile(profile.dir, name), "utf-8")
+    } catch {
+      /* unresolved at load — loadSubagents will retry from disk and report */
+    }
+  }
+  return out
+}
+
+/**
  * Build the SDK `agents` record from `profile.claudeCode.subagents`.
  * Returns undefined when the profile declares none, so callers can skip the
  * query option entirely.
@@ -56,7 +80,10 @@ export function loadSubagents(profile: Profile): Record<string, LoadedAgent> | u
   if (!names || names.length === 0) return undefined
   const agents: Record<string, LoadedAgent> = {}
   for (const name of names) {
-    const { fm, body } = splitFrontmatter(fs.readFileSync(resolveAgentFile(profile.dir, name), "utf-8"))
+    // Prefer the load-time snapshot (survives task-branch checkout that may have
+    // dropped the duty's agents/ dir); fall back to a fresh disk read.
+    const raw = profile.subagentTemplates?.[name] ?? fs.readFileSync(resolveAgentFile(profile.dir, name), "utf-8")
+    const { fm, body } = splitFrontmatter(raw)
     if (!body) throw new Error(`loadSubagents: agent '${name}' has an empty prompt body`)
     const def: LoadedAgent = {
       description: fm.description ?? `Subagent ${name}`,

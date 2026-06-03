@@ -136,6 +136,14 @@ export interface Profile {
    * ENOENT even though profile.json (read here, earlier) loaded fine.
    */
   promptTemplates?: Record<string, string>
+  /**
+   * Subagent markdown captured (by declared name) at load time, BEFORE any
+   * task branch switch — same rationale as promptTemplates. loadSubagents
+   * prefers this snapshot so a duty's `agents/` surviving only on the default
+   * checkout (e.g. `.kody/duties/<slug>/agents/` absent on a PR branch) doesn't
+   * crash a PR-targeted duty. Populated by captureSubagentTemplates.
+   */
+  subagentTemplates?: Record<string, string>
 }
 
 /**

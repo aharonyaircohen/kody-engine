@@ -4,7 +4,7 @@ import * as path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import type { Profile } from "../../src/executables/types.js"
 import { getPluginsCatalogRoot } from "../../src/scripts/buildSyntheticPlugin.js"
-import { loadSubagents } from "../../src/subagents.js"
+import { captureSubagentTemplates, loadSubagents } from "../../src/subagents.js"
 
 function makeProfile(subagents: string[], dir: string): Profile {
   return {
@@ -108,6 +108,24 @@ describe("loadSubagents", () => {
     const tmp = withLocalAgent("hollow", "---\nname: hollow\ndescription: x\n---\n")
     cleanups.push(tmp)
     expect(() => loadSubagents(makeProfile(["hollow"], tmp))).toThrow(/empty prompt body/)
+  })
+
+  it("prefers the load-time snapshot, surviving a dir that no longer exists (branch churn)", () => {
+    // Capture from a real dir, then delete it to simulate a task-branch checkout
+    // that dropped the duty's agents/. loadSubagents must still succeed.
+    const tmp = withLocalAgent("scout", "---\nname: scout\ndescription: snap\n---\nsnapshot body\n")
+    const profile = makeProfile(["scout"], tmp)
+    profile.subagentTemplates = captureSubagentTemplates(profile)
+    fs.rmSync(tmp, { recursive: true, force: true }) // dir gone, like a PR-branch checkout
+    const agents = loadSubagents(profile)!
+    expect(agents.scout).toEqual({ description: "snap", prompt: "snapshot body" })
+  })
+
+  it("captureSubagentTemplates skips unresolved names (best-effort)", () => {
+    const tmp = withLocalAgent("present", "---\nname: present\ndescription: x\n---\nbody\n")
+    cleanups.push(tmp)
+    const snap = captureSubagentTemplates(makeProfile(["present", "absent"], tmp))
+    expect(Object.keys(snap)).toEqual(["present"])
   })
 
   it("falls back to the shared catalog when the executable dir has no match", () => {

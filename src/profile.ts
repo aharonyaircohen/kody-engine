@@ -21,6 +21,7 @@ import type {
 } from "./executables/types.js"
 import { applyLifecycle } from "./lifecycles/index.js"
 import { ProfileError } from "./profile-error.js"
+import { captureSubagentTemplates } from "./subagents.js"
 
 export { ProfileError } from "./profile-error.js"
 
@@ -164,6 +165,10 @@ export function loadProfile(profilePath: string): Profile {
   if (lifecycle) {
     applyLifecycle(profile, profilePath)
   }
+
+  // Snapshot declared subagents now, on the default checkout, so they survive a
+  // later task-branch switch that may drop the duty's agents/ dir.
+  profile.subagentTemplates = captureSubagentTemplates(profile)
 
   return profile
 }
