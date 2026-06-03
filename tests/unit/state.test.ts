@@ -45,6 +45,21 @@ describe("state: reduce", () => {
     expect(reduce(emptyState(), "build", ok).core.status).toBe("succeeded")
   })
 
+  it("records the staff that ran (durable proof) in core + history + comment", () => {
+    const s = reduce(emptyState(), "feature", ok, "shipped", "kody")
+    expect(s.core.ranAsStaff).toBe("kody")
+    expect(s.history.at(-1)?.staff).toBe("kody")
+    expect(renderStateComment(s)).toContain("**Ran as:** `kody`")
+    // round-trips through the comment wire format
+    expect(parseStateComment(renderStateComment(s)).core.ranAsStaff).toBe("kody")
+  })
+
+  it("leaves ranAsStaff null when no staff (legacy, no persona)", () => {
+    const s = reduce(emptyState(), "build", ok)
+    expect(s.core.ranAsStaff ?? null).toBeNull()
+    expect(renderStateComment(s)).not.toContain("Ran as:")
+  })
+
   it("derives status=failed from *_FAILED", () => {
     expect(reduce(emptyState(), "build", fail).core.status).toBe("failed")
   })

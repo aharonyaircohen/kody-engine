@@ -36,6 +36,13 @@ export interface TaskState {
     attempts: Record<string, number>
     prUrl?: string
     runUrl?: string
+    /**
+     * Staff member the most recent run executed as (the duty's `staff`),
+     * recorded by the executor when it loads + injects that persona. Durable
+     * proof of *who* ran — surfaced in the rendered comment. Null/absent when
+     * the run had no staff (legacy executable with no persona).
+     */
+    ranAsStaff?: string | null
   }
   executables: Record<string, ExecutableState>
   /**
@@ -93,6 +100,8 @@ export interface HistoryEntry {
   executable: string
   action: string
   note?: string
+  /** Staff member this run executed as, when the duty declares one. */
+  staff?: string
 }
 
 export type TaskTarget = "issue" | "pr"
@@ -234,16 +243,23 @@ export function parseStateComment(body: string): TaskState {
  * Keeping phase a caller-supplied parameter (rather than deriving from the
  * executable name) lets this module stay generic — no executable names here.
  */
-export function reduce(state: TaskState, executable: string, action: Action | null, phase?: Phase): TaskState {
+export function reduce(
+  state: TaskState,
+  executable: string,
+  action: Action | null,
+  phase?: Phase,
+  staff?: string | null,
+): TaskState {
   if (!action) return state
   const newAttempts = { ...state.core.attempts, [executable]: (state.core.attempts[executable] ?? 0) + 1 }
   const newExecutables: Record<string, ExecutableState> = {
     ...state.executables,
     [executable]: { ...(state.executables[executable] ?? { lastAction: null }), lastAction: action },
   }
+  const ranAsStaff = typeof staff === "string" && staff.length > 0 ? staff : undefined
   const newHistory = [
     ...state.history,
-    { timestamp: action.timestamp, executable, action: action.type, note: noteFromAction(action) },
+    { timestamp: action.timestamp, executable, action: action.type, note: noteFromAction(action), staff: ranAsStaff },
   ].slice(-HISTORY_MAX_ENTRIES)
   return {
     schemaVersion: 1,
@@ -252,6 +268,7 @@ export function reduce(state: TaskState, executable: string, action: Action | nu
       attempts: newAttempts,
       lastOutcome: action,
       currentExecutable: executable,
+      ranAsStaff: ranAsStaff ?? null,
       status: statusFromAction(action),
       phase: phaseFromAction(action, phase),
     },
@@ -304,6 +321,9 @@ export function renderStateComment(state: TaskState): string {
   lines.push(`- **Phase:** \`${state.core.phase}\`  **Status:** \`${state.core.status}\``)
   if (state.core.currentExecutable) {
     lines.push(`- **Last executable:** \`${state.core.currentExecutable}\``)
+  }
+  if (state.core.ranAsStaff) {
+    lines.push(`- **Ran as:** \`${state.core.ranAsStaff}\``)
   }
   if (state.core.lastOutcome) {
     lines.push(`- **Last action:** \`${state.core.lastOutcome.type}\``)

@@ -22,7 +22,7 @@ export const saveTaskState: PostflightScript = async (ctx, profile) => {
   // Don't mutate the loaded prior state — `reduce` treats it as immutable input
   // and other postflights may hold the same reference. The prUrl/runUrl carry
   // is applied to `next` below, which is the only thing we persist.
-  const next = reduce(state, executable, action, profile.phase)
+  const next = reduce(state, executable, action, profile.phase, profile.staff)
   if (ctx.output.prUrl) next.core.prUrl = ctx.output.prUrl
   if (typeof ctx.data.runUrl === "string") next.core.runUrl = ctx.data.runUrl as string
 
