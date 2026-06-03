@@ -330,10 +330,31 @@ export async function runCi(argv: string[]): Promise<number> {
     const config = earlyConfig ?? loadConfig(cwd)
     process.stdout.write(`→ kody: manual one-shot run of duty ${forceRunDuty}\n\n`)
     try {
-      unpackAllSecrets()
+      // Same preflight as the routed path: secrets, auth, deps, LiteLLM, git.
+      // Without this the duty's agent has no LiteLLM proxy (non-Anthropic
+      // models) and no installed consumer deps.
+      const n = unpackAllSecrets()
+      if (n > 0) process.stdout.write(`→ kody: unpacked ${n} secret(s)\n`)
       await resolveAuthToken()
-    } catch {
-      /* best-effort — the executable pipeline surfaces auth failures */
+      const pm = args.packageManager ?? detectPackageManager(cwd)
+      if (!args.skipInstall) {
+        const code = installDeps(pm, cwd)
+        if (code !== 0) {
+          process.stderr.write(`[kody] dependency install failed (exit ${code})\n`)
+          return 99
+        }
+      }
+      if (!args.skipLitellm) {
+        const code = installLitellmIfNeeded(cwd)
+        if (code !== 0) {
+          process.stderr.write(`[kody] litellm install failed (exit ${code})\n`)
+          return 99
+        }
+      }
+      configureGitIdentity(cwd)
+    } catch (err) {
+      process.stderr.write(`[kody] manual duty preflight crashed: ${String(err)}\n`)
+      return 99
     }
     const result = await runExecutableChain(forceRunDuty, {
       cliArgs: {},
