@@ -75,6 +75,20 @@ export const postIssueComment: PostflightScript = async (ctx, profile) => {
     return
   }
 
+  // Commit landed locally but the push failed: commitAndPush set exit 4 +
+  // `commitCrash`, and the executor then BLOCKS the mutating `ensurePr`
+  // postflight (shouldBlockMutatingPostflight), so `prCrashReason` is never
+  // set and the guard above misses it. Without this branch we'd fall through
+  // and recompute a 0 exit below — reporting success while the work never
+  // reached the remote and the ephemeral runner is torn down. Mirror the
+  // prCrashReason terminal path.
+  if (ctx.output.exitCode === 4 && ctx.data.commitCrash) {
+    postWith(targetType, targetNumber, `⚠️ kody FAILED: ${truncate(ctx.data.commitCrash as string, 1500)}`, ctx.cwd)
+    markRunFailed(ctx)
+    ctx.output.reason = ctx.data.commitCrash as string
+    return
+  }
+
   const failureReason = computeFailureReason(ctx)
   const isFailure = failureReason.length > 0
   const branch = ctx.data.branch as string | undefined
@@ -102,6 +116,10 @@ export const postIssueComment: PostflightScript = async (ctx, profile) => {
   const misses = (ctx.data.coverageMisses as unknown[] | undefined) ?? []
   if (!agentDone || misses.length > 0) exitCode = 1
   else if (!verifyOk) exitCode = 2
+  // Never LOWER a non-zero exit a prior postflight already recorded (e.g. a
+  // commit/push crash that the guards above didn't terminate on). Keeping the
+  // terminal code monotonic stops a green "success" from masking lost work.
+  exitCode = Math.max(ctx.output.exitCode ?? 0, exitCode)
   if (exitCode !== 0) markRunFailed(ctx)
   ctx.output.exitCode = exitCode
   ctx.output.reason = failureReason || undefined

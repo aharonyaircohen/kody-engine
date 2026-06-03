@@ -35,6 +35,7 @@ function makeCtx(overrides: {
   issue?: number
   exitCode?: number
   prCrashReason?: string
+  commitCrash?: string
 }): Context {
   const {
     commitResult = { committed: true },
@@ -50,6 +51,7 @@ function makeCtx(overrides: {
     issue,
     exitCode = 0,
     prCrashReason,
+    commitCrash,
   } = overrides
 
   return {
@@ -71,6 +73,7 @@ function makeCtx(overrides: {
       ...(agentFailureReason ? { agentFailureReason } : {}),
       ...(verifyReason ? { verifyReason } : {}),
       ...(prCrashReason ? { prCrashReason } : {}),
+      ...(commitCrash ? { commitCrash } : {}),
     },
     output: { exitCode, prUrl },
   }
@@ -239,6 +242,26 @@ describe("postIssueComment lifecycle label cleanup on failure", () => {
       verifyReason: "typecheck failed",
     })
     await postIssueComment(ctx, profile, null)
+    const calls = vi.mocked(setKodyLabel).mock.calls
+    expect(calls.some((c) => c[0] === 1155 && (c[1] as { label: string }).label === "kody:failed")).toBe(true)
+  })
+
+  // Regression: a commit that landed locally but failed to push set exit 4 +
+  // `commitCrash`, but the executor blocks the mutating `ensurePr` postflight
+  // on a non-zero exit, so `prCrashReason` was never set. The terminal exit
+  // recompute then clobbered the 4 back to 0 — CI went green and the commit
+  // was lost when the ephemeral runner was torn down.
+  it("commitCrash (exit 4, no prCrashReason) → preserves exit 4 and surfaces the reason", async () => {
+    const ctx = makeCtx({
+      issue: 1155,
+      target: "pr",
+      targetNumber: 1200,
+      exitCode: 4,
+      commitCrash: "push rejected: remote contains work you do not have locally",
+    })
+    await postIssueComment(ctx, profile, null)
+    expect(ctx.output.exitCode).toBe(4)
+    expect(String(ctx.output.reason)).toContain("push rejected")
     const calls = vi.mocked(setKodyLabel).mock.calls
     expect(calls.some((c) => c[0] === 1155 && (c[1] as { label: string }).label === "kody:failed")).toBe(true)
   })

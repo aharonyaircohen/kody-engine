@@ -295,12 +295,51 @@ function toolMayMutate(name: string | undefined, input: Record<string, unknown> 
   return false
 }
 
+/**
+ * Credentials the agent legitimately needs (Anthropic proxy + the GitHub token
+ * git/gh and the repo-fetch MCP use). Everything else unpacked from the
+ * consumer's `ALL_SECRETS` blob is stripped before the child env is built.
+ */
+const AGENT_KEEP_SECRETS: ReadonlySet<string> = new Set([
+  "ANTHROPIC_API_KEY",
+  "ANTHROPIC_AUTH_TOKEN",
+  "ANTHROPIC_BASE_URL",
+  "GH_TOKEN",
+  "GITHUB_TOKEN",
+])
+
+/**
+ * Remove repo secrets the agent must never see from its child env. The engine
+ * unpacks the consumer's `ALL_SECRETS` JSON into `process.env` (kody-cli.ts),
+ * so a naive `...process.env` would hand every secret (npm/Fly tokens, the
+ * vault master key, custom PATs) to a Bash-running agent — one `printenv` away
+ * from exfiltration. Strip every key that came from `ALL_SECRETS` (except the
+ * few the agent needs) plus the raw blob itself. Returns a new object.
+ */
+export function stripAgentSecrets(env: Record<string, string>): Record<string, string> {
+  const out = { ...env }
+  const raw = out.ALL_SECRETS
+  delete out.ALL_SECRETS
+  if (!raw) return out
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    for (const key of Object.keys(parsed)) {
+      if (!AGENT_KEEP_SECRETS.has(key)) delete out[key]
+    }
+  } catch {
+    // Unparseable ALL_SECRETS: the blob itself is already deleted above; we
+    // can't enumerate individual keys, so leave the rest of env intact rather
+    // than guess. (CI always sets a well-formed JSON blob.)
+  }
+  return out
+}
+
 export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const ndjsonDir = opts.ndjsonDir ?? path.join(opts.cwd, ".kody")
   fs.mkdirSync(ndjsonDir, { recursive: true })
   const ndjsonPath = path.join(ndjsonDir, "last-run.jsonl")
 
-  const env: Record<string, string> = {
+  const env: Record<string, string> = stripAgentSecrets({
     ...(process.env as Record<string, string>),
     SKIP_HOOKS: "1",
     HUSKY: "0",
@@ -313,7 +352,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     // turn.
     MCP_CONNECTION_NONBLOCKING: process.env.MCP_CONNECTION_NONBLOCKING ?? "false",
     MCP_TIMEOUT: process.env.MCP_TIMEOUT ?? "60000",
-  }
+  })
   if (opts.litellmUrl) {
     env.ANTHROPIC_BASE_URL = opts.litellmUrl
     env.ANTHROPIC_API_KEY = getAnthropicApiKeyOrDummy()

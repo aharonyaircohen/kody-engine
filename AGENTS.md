@@ -13,7 +13,7 @@ Under the hood it is one **generic executor** running one of several **declarati
 │ Consumer repo .github/workflows/kody.yml                   │
 │   (≈20 lines of YAML — minimal, stays dumb)                 │
 │   trigger: @kody comment or workflow_dispatch              │
-│   runs: npx @kody-ade/kody-engine@latest kody ci           │
+│   runs: npx @kody-ade/kody-engine@latest kody-engine ci    │
 └─────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -223,7 +223,7 @@ src/
   dispatch.ts            — auto-detects mode from GHA event
   agent.ts               — Claude Code SDK invocation
   litellm.ts             — proxy lifecycle (for non-Anthropic providers)
-  kody-cli.ts           — `kody ci` preflight (install, secrets, git identity)
+  kody-cli.ts           — `kody-engine ci` preflight (install, secrets, git identity)
   entry.ts               — CLI dispatcher (run/fix/fix-ci/resolve/ci/help)
   gha.ts                 — GHA helpers (run URL, 👀 reaction on trigger)
   {branch,commit,pr,verify,issue,coverage,prompt,format,config}.ts

@@ -21,6 +21,7 @@
     "check:modularity": "tsx scripts/check-script-modularity.ts",
     "pretest": "pnpm check:modularity",
     "test": "vitest run tests/unit tests/int --coverage",
+    "posttest": "tsx scripts/check-coverage-floor.ts",
     "test:smoke": "vitest run tests/smoke --no-coverage",
     "test:e2e": "vitest run tests/e2e --no-coverage",
     "test:all": "vitest run tests --no-coverage",

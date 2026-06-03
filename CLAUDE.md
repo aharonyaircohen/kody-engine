@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Package
 
-`@kody-ade/kody-engine` — an autonomous development engine that runs Claude Code in CI against GitHub issues/PRs. ESM, Node ≥22, published to npm as a CLI (`kody` binary). Only runtime dep is `@anthropic-ai/claude-agent-sdk`. Read [AGENTS.md](AGENTS.md) for full project context, invariants, and release history — it is the source of truth.
+`@kody-ade/kody-engine` — an autonomous development engine that runs Claude Code in CI against GitHub issues/PRs. ESM, Node ≥22, published to npm as a CLI (`kody-engine` binary). Only runtime dep is `@anthropic-ai/claude-agent-sdk`. Read [AGENTS.md](AGENTS.md) for full project context, invariants, and release history — it is the source of truth.
 
 ## Commands
 
@@ -47,7 +47,7 @@ Adding a new command = new `src/executables/<name>/` + `profile.json` + `prompt.
 
 ## Exit codes
 
-0 success · 1 agent FAILED · 2 verify failed · 3 no commits · 4 PR creation failed · 5 uncommitted changes · 64 invalid args · 99 crash.
+0 success · 1 agent FAILED · 2 verify failed · 3 no commits · 4 PR creation failed · 64 invalid args · 99 crash · 124 shell timed out.
 
 ## Release
 
