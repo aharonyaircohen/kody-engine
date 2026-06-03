@@ -120,4 +120,51 @@ describe("dispatchJobFileTicks routing", () => {
     expect(targets).toContain("job-tick-scripted")
     expect(targets).toContain("job-tick")
   })
+
+  it("deduplicates a slug present as both a folder-duty and a .md (folder wins, no double-fire)", async () => {
+    // Folder-duty: scheduled, fires one-shot as itself.
+    const folder = path.join(tmp, ".kody", "duties", "hybrid")
+    fs.mkdirSync(folder, { recursive: true })
+    fs.writeFileSync(
+      path.join(folder, "profile.json"),
+      JSON.stringify({
+        name: "hybrid",
+        role: "primitive",
+        describe: "hybrid",
+        staff: "kody",
+        every: "1h",
+        inputs: [],
+        claudeCode: {
+          model: "inherit",
+          permissionMode: "acceptEdits",
+          maxTurns: null,
+          systemPromptAppend: null,
+          tools: ["Read"],
+          hooks: [],
+          skills: [],
+          commands: [],
+          subagents: [],
+          plugins: [],
+          mcpServers: [],
+        },
+        cliTools: [],
+        scripts: { preflight: [{ script: "composePrompt" }], postflight: [] },
+      }),
+    )
+    // Same slug also present as a legacy .md — must NOT also tick.
+    writeJob("hybrid", "every: 1h\nstaff: kody")
+
+    const ctx = ctxFor()
+    await dispatchJobFileTicks(ctx, PROFILE, {
+      jobsDir: ".kody/duties",
+      targetExecutable: "job-tick",
+      slugArg: "job",
+    })
+
+    const calls = runExecutableMock.mock.calls
+    // Folder-duty fired one-shot as itself…
+    expect(calls.some((c) => c[0] === "hybrid")).toBe(true)
+    // …and the .md tick was skipped (no job-tick run for the same slug).
+    expect(calls.some((c) => c[0] === "job-tick")).toBe(false)
+  })
 })

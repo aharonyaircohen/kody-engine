@@ -2,7 +2,14 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { hasExecutable, isSafeName, listExecutables, parseGenericFlags } from "../../src/registry.js"
+import {
+  builtinExecutableNames,
+  hasExecutable,
+  isBuiltinExecutable,
+  isSafeName,
+  listExecutables,
+  parseGenericFlags,
+} from "../../src/registry.js"
 
 function mkFixture(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-registry-"))
@@ -13,6 +20,22 @@ function writeProfile(root: string, name: string, body: object = {}): void {
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify(body))
 }
+
+describe("registry: builtin executables (folder-duty shadow protection)", () => {
+  it("detects the engine-bundled executables by name", () => {
+    const names = builtinExecutableNames()
+    // a sample of known engine builtins
+    expect(names.has("run")).toBe(true)
+    expect(names.has("merge")).toBe(true)
+    expect(names.has("job-scheduler")).toBe(true)
+  })
+
+  it("isBuiltinExecutable is true for builtins, false for custom names", () => {
+    expect(isBuiltinExecutable("run")).toBe(true)
+    expect(isBuiltinExecutable("merge")).toBe(true)
+    expect(isBuiltinExecutable("a-custom-consumer-duty-xyz")).toBe(false)
+  })
+})
 
 describe("registry: isSafeName", () => {
   it("allows lowercase-with-dashes", () => {

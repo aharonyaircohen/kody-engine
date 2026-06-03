@@ -76,7 +76,13 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
     // same backend; lastFiredAt is stamped before running so a crashing duty
     // can't re-fire every wake.
     type ScheduledDuty = { slug: string; every?: string; staff?: string }
-    const scheduledDuties = listFolderDutySlugs(path.join(ctx.cwd, jobsDir))
+    // Every folder-duty slug present this wake. A migrated duty lives as a
+    // folder (`.kody/duties/<slug>/`); if a stale `.kody/duties/<slug>.md`
+    // still exists for the same slug, the folder wins and the .md tick is
+    // skipped below — otherwise the slug would fire twice in one wake.
+    const folderSlugList = listFolderDutySlugs(path.join(ctx.cwd, jobsDir))
+    const folderDutySlugs = new Set(folderSlugList)
+    const scheduledDuties = folderSlugList
       .map((slug): ScheduledDuty | null => {
         try {
           const p = loadProfile(path.join(ctx.cwd, jobsDir, slug, "profile.json"))
@@ -122,6 +128,13 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
     }
 
     for (const slug of slugs) {
+      // Dedup: a slug that already exists as a folder-duty is handled above —
+      // never also tick its legacy `.md` (would double-fire / duplicate output).
+      if (folderDutySlugs.has(slug)) {
+        process.stdout.write(`[jobs] ⏭  skip ${slug}: handled as folder-duty (folder wins over .md)\n`)
+        results.push({ slug, exitCode: 0, skipped: true, reason: "handled as folder-duty" })
+        continue
+      }
       // Read the slug's frontmatter exactly once per tick — both the
       // cadence guard (`every:`) and the routing rule (`tickScript:`)
       // consume it. A previous version parsed the file twice; folded

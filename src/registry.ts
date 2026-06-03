@@ -119,13 +119,46 @@ export function getExecutableRoots(): string[] {
 }
 
 /**
+ * Names of the engine-bundled executables (the dir names under the engine root
+ * that contain a profile.json). Cached — the engine root never changes within a
+ * process. Used to stop a consumer `.kody/duties/<name>/` folder from silently
+ * shadowing an engine builtin (run/merge/serve/job-scheduler/…).
+ */
+let _builtinNames: Set<string> | null = null
+export function builtinExecutableNames(): Set<string> {
+  if (_builtinNames) return _builtinNames
+  const out = new Set<string>()
+  const root = getExecutablesRoot()
+  try {
+    for (const ent of fs.readdirSync(root, { withFileTypes: true })) {
+      if (ent.isDirectory() && fs.existsSync(path.join(root, ent.name, "profile.json"))) out.add(ent.name)
+    }
+  } catch {
+    /* engine root unreadable — leave empty (no shadow protection, fail-open) */
+  }
+  _builtinNames = out
+  return out
+}
+
+/** True iff `name` is an engine-bundled executable that duties must not shadow. */
+export function isBuiltinExecutable(name: string): boolean {
+  return builtinExecutableNames().has(name)
+}
+
+/**
  * List every discovered executable across all roots. On name conflict the
  * first root wins, so a `.kody/executables/chat/` in the consumer repo
  * shadows the engine's `chat`. Each needs a directory containing a readable
  * `profile.json`. Directories without one are silently skipped.
+ *
+ * Exception: a `.kody/duties/<name>/` folder is NOT allowed to shadow an engine
+ * builtin (run/merge/…) — that's a reserved-name collision, never intended. The
+ * legacy `.kody/executables/<name>/` override is still honoured (existing
+ * design) and only the duties home is restricted.
  */
 export function listExecutables(roots: string | string[] = getExecutableRoots()): DiscoveredExecutable[] {
   const rootList = typeof roots === "string" ? [roots] : roots
+  const dutiesRoot = getProjectDutiesRoot()
   const seen = new Set<string>()
   const out: DiscoveredExecutable[] = []
   for (const root of rootList) {
@@ -134,6 +167,7 @@ export function listExecutables(roots: string | string[] = getExecutableRoots())
     for (const ent of entries) {
       if (!ent.isDirectory()) continue
       if (seen.has(ent.name)) continue // earlier root wins
+      if (root === dutiesRoot && isBuiltinExecutable(ent.name)) continue // duties can't shadow a builtin
       const profilePath = path.join(root, ent.name, "profile.json")
       if (fs.existsSync(profilePath) && fs.statSync(profilePath).isFile()) {
         out.push({ name: ent.name, profilePath })
@@ -151,7 +185,11 @@ export function listExecutables(roots: string | string[] = getExecutableRoots())
 export function resolveExecutable(name: string, roots: string | string[] = getExecutableRoots()): string | null {
   if (!isSafeName(name)) return null
   const rootList = typeof roots === "string" ? [roots] : roots
+  const dutiesRoot = getProjectDutiesRoot()
   for (const root of rootList) {
+    // A `.kody/duties/<builtin>/` folder must not shadow an engine builtin —
+    // skip it so resolution falls through to the engine root.
+    if (root === dutiesRoot && isBuiltinExecutable(name)) continue
     const profilePath = path.join(root, name, "profile.json")
     if (fs.existsSync(profilePath) && fs.statSync(profilePath).isFile()) {
       return profilePath

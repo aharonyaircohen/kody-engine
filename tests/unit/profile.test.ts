@@ -58,6 +58,39 @@ describe("profile: loadProfile", () => {
     expect(blanks.every).toBeUndefined()
   })
 
+  it("rejects dutyTools not in the kody-duty palette (fail-fast at load)", () => {
+    const dir = tmpDir()
+    const p = writeProfile(dir, { ...VALID_MIN, dutyTools: ["read_check_runs", "not_a_real_tool"] })
+    expect(() => loadProfile(p)).toThrow(/dutyTools not in the kody-duty palette/)
+  })
+
+  it("accepts dutyTools that are all in the palette", () => {
+    const dir = tmpDir()
+    const p = writeProfile(dir, { ...VALID_MIN, dutyTools: ["read_check_runs", "ensure_issue"] })
+    expect(loadProfile(p).dutyTools).toEqual(["read_check_runs", "ensure_issue"])
+  })
+
+  it("rejects writeJobStateFile postflight without a state loader preflight", () => {
+    const dir = tmpDir()
+    const p = writeProfile(dir, {
+      ...VALID_MIN,
+      scripts: { preflight: [{ script: "composePrompt" }], postflight: [{ script: "writeJobStateFile" }] },
+    })
+    expect(() => loadProfile(p)).toThrow(/no state loader/)
+  })
+
+  it("accepts the state postflights when loadDutyState is in preflight", () => {
+    const dir = tmpDir()
+    const p = writeProfile(dir, {
+      ...VALID_MIN,
+      scripts: {
+        preflight: [{ script: "loadDutyState" }, { script: "composePrompt" }],
+        postflight: [{ script: "parseJobStateFromAgentResult" }, { script: "writeJobStateFile" }],
+      },
+    })
+    expect(() => loadProfile(p)).not.toThrow()
+  })
+
   it("throws on missing file", () => {
     expect(() => loadProfile(`/tmp/nope-${Math.random()}/profile.json`)).toThrow(ProfileError)
   })

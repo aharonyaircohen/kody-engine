@@ -59,5 +59,10 @@ export const loadDutyState: PreflightScript = async (ctx, profile, args) => {
     // the mcp__kody-duty__* calls for permission and the agent stalls.
     const mcpToolNames = declaredTools.map((name) => `mcp__kody-duty__${name}`)
     profile.claudeCode.tools = [...mcpToolNames, "mcp__kody-submit__submit_state"]
+    // The submit tool is in the allowed list, so its MCP server MUST exist —
+    // the executor only spins it up when enableSubmitTool is true. Force it on
+    // (a locked duty persists state via submit_state). Without this the model is
+    // offered a tool that doesn't exist and stalls.
+    profile.claudeCode.enableSubmitTool = true
   }
 }

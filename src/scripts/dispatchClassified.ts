@@ -27,7 +27,7 @@ import { type Action, emptyState, findStateComment, reduce, renderStateComment, 
 const API_TIMEOUT_MS = 30_000
 const VALID_CLASSES = new Set(["feature", "bug", "spec", "chore"])
 
-export const dispatchClassified: PostflightScript = async (ctx) => {
+export const dispatchClassified: PostflightScript = async (ctx, profile) => {
   const issueNumber = ctx.args.issue as number | undefined
   if (!issueNumber) return
 
@@ -45,7 +45,7 @@ export const dispatchClassified: PostflightScript = async (ctx) => {
   // The next stage finds this block via the `kody:state:v1` markers and
   // PATCHes the comment in place.
   const state = (ctx.data.taskState as TaskState | undefined) ?? emptyState()
-  const nextState = reduce(state, "classify", action, undefined)
+  const nextState = reduce(state, "classify", action, undefined, profile.staff)
   const stateBody = renderStateComment(nextState)
   ctx.data.taskState = nextState
   ctx.data.taskStateRendered = stateBody

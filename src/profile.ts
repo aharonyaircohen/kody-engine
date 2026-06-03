@@ -19,6 +19,7 @@ import type {
   Profile,
   ScriptEntry,
 } from "./executables/types.js"
+import { DUTY_MCP_TOOL_NAMES } from "./dutyMcp.js"
 import { applyLifecycle } from "./lifecycles/index.js"
 import { ProfileError } from "./profile-error.js"
 import { captureSubagentTemplates } from "./subagents.js"
@@ -172,6 +173,37 @@ export function loadProfile(profilePath: string): Profile {
 
   if (lifecycle) {
     applyLifecycle(profile, profilePath)
+  }
+
+  // Fail-fast at load (profile.json is static, unlike .md frontmatter):
+  // a dutyTools typo should be caught here, not at the duty's first run.
+  if (profile.dutyTools && profile.dutyTools.length > 0) {
+    const palette = new Set<string>(DUTY_MCP_TOOL_NAMES)
+    const unknown = profile.dutyTools.filter((t) => !palette.has(t))
+    if (unknown.length > 0) {
+      throw new ProfileError(
+        profilePath,
+        `dutyTools not in the kody-duty palette: ${unknown.join(", ")}. Available: ${[...DUTY_MCP_TOOL_NAMES].join(", ")}`,
+      )
+    }
+  }
+
+  // State-script pairing: writeJobStateFile/parseJobStateFromAgentResult read
+  // ctx.data.jobState, which only a state loader (loadDutyState or
+  // loadJobFromFile) sets. Declaring the save half without the load half throws
+  // at run time — catch the misconfig at load instead.
+  const preNames = new Set(profile.scripts.preflight.map((e) => e.script).filter(Boolean))
+  const postNames = profile.scripts.postflight.map((e) => e.script).filter(Boolean)
+  const needsState = postNames.includes("writeJobStateFile") || postNames.includes("parseJobStateFromAgentResult")
+  // Any of these preflights populate ctx.data.jobState: loadDutyState (folder
+  // duty), loadJobFromFile (markdown duty via job-tick), runTickScript (scripted
+  // duty via job-tick-scripted).
+  const STATE_LOADERS = ["loadDutyState", "loadJobFromFile", "runTickScript"]
+  if (needsState && !STATE_LOADERS.some((s) => preNames.has(s))) {
+    throw new ProfileError(
+      profilePath,
+      `postflight uses writeJobStateFile/parseJobStateFromAgentResult but no state loader (${STATE_LOADERS.join(" | ")}) is declared in preflight`,
+    )
   }
 
   // Snapshot declared subagents now, on the default checkout, so they survive a
