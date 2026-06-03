@@ -49,6 +49,14 @@ export interface Profile {
    * `schedule:`). Scheduled profiles must declare a `schedule` cron string.
    */
   kind: "oneshot" | "scheduled"
+  /**
+   * Recurrence cadence for a duty that runs on a timer (unified successor to a
+   * markdown duty's `every:` frontmatter). One of the ScheduleEvery values
+   * ("15m".."7d" | "manual"). Present → the duty-scheduler fires a one-shot run
+   * when due (no target). Absent → on-demand only (runs against an issue/PR).
+   * This is what makes "scheduled" just a field on the one duty shape.
+   */
+  every?: string
   /** Cron expression for scheduled profiles (e.g. "0 8 * * MON"). */
   schedule?: string
   /**

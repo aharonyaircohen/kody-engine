@@ -47,6 +47,17 @@ describe("profile: loadProfile", () => {
     expect(profile.scripts.preflight[0]!.script).toBe("composePrompt")
   })
 
+  it("parses staff and every (duty fields); blanks → undefined", () => {
+    const dir = tmpDir()
+    const profile = loadProfile(writeProfile(dir, { ...VALID_MIN, staff: "kody", every: "1h" }))
+    expect(profile.staff).toBe("kody")
+    expect(profile.every).toBe("1h")
+    const dir2 = tmpDir()
+    const blanks = loadProfile(writeProfile(dir2, { ...VALID_MIN, staff: "  ", every: "" }))
+    expect(blanks.staff).toBeUndefined()
+    expect(blanks.every).toBeUndefined()
+  })
+
   it("throws on missing file", () => {
     expect(() => loadProfile(`/tmp/nope-${Math.random()}/profile.json`)).toThrow(ProfileError)
   })

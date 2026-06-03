@@ -23,6 +23,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { PreflightScript } from "../executables/types.js"
 import { runExecutable } from "../executor.js"
+import { loadProfile } from "../profile.js"
 import { type ScheduleEvery, scheduleEveryToMs, splitFrontmatter } from "./jobFrontmatter.js"
 import { resolveBackend } from "./jobState/index.js"
 
@@ -127,6 +128,61 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         process.stderr.write(`[jobs] tick ${slug} crashed: ${msg}\n`)
+        results.push({ slug, exitCode: 99, reason: msg })
+      }
+    }
+
+    // ── Unified path: scheduled folder-duties ──────────────────────────────
+    // A folder-duty (`.kody/duties/<slug>/profile.json`) that declares an
+    // `every` cadence is the unified successor to a markdown scheduled duty:
+    // it fires as a ONE-SHOT run of itself (no job-tick, no target), as its
+    // staff. On-demand folder-duties (no `every`) are skipped here — they only
+    // run against an issue/PR. Cadence reuses decideShouldFire + the same
+    // backend; lastFiredAt is stamped here (the one-shot run has no
+    // writeJobStateFile postflight), before running, so a crashing duty can't
+    // re-fire every wake.
+    const folderSlugs = listFolderDutySlugs(path.join(ctx.cwd, jobsDir))
+    for (const slug of folderSlugs) {
+      let every: string | undefined
+      let staff: string | undefined
+      try {
+        const profile = loadProfile(path.join(ctx.cwd, jobsDir, slug, "profile.json"))
+        every = profile.every
+        staff = profile.staff
+      } catch (err) {
+        process.stderr.write(`[jobs] ⏭  skip folder-duty ${slug}: profile load failed: ${String(err)}\n`)
+        continue
+      }
+      if (!every) continue // on-demand duty — not scheduled
+      if (!staff || staff.trim().length === 0) {
+        process.stderr.write(`[jobs] ⏭  skip ${slug}: scheduled duty has no staff\n`)
+        results.push({ slug, exitCode: 0, skipped: true, reason: "no staff assigned" })
+        continue
+      }
+      const decision = await decideShouldFire(every as ScheduleEvery, slug, backend, now)
+      if (decision.skip) {
+        process.stdout.write(`[jobs] ⏭  skip ${slug}: ${decision.reason}\n`)
+        results.push({ slug, exitCode: 0, skipped: true, reason: decision.reason })
+        continue
+      }
+      // Stamp lastFiredAt up front so a crash can't spin the duty every wake.
+      await stampFired(backend, slug, now)
+      process.stdout.write(`[jobs] → run scheduled duty ${slug} (one-shot, as ${staff})\n`)
+      try {
+        const out = await runExecutable(slug, {
+          cliArgs: {},
+          cwd: ctx.cwd,
+          config: ctx.config,
+          verbose: ctx.verbose,
+          quiet: ctx.quiet,
+        })
+        results.push({ slug, exitCode: out.exitCode, reason: out.reason })
+        if (out.exitCode !== 0) {
+          process.stderr.write(`[jobs] scheduled duty ${slug} failed (exit ${out.exitCode}): ${out.reason ?? ""}\n`)
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        process.stderr.write(`[jobs] scheduled duty ${slug} crashed: ${msg}\n`)
         results.push({ slug, exitCode: 99, reason: msg })
       }
     }
@@ -246,4 +302,31 @@ function listJobSlugs(absDir: string): string[] {
     .map((e) => e.name.replace(/\.md$/, ""))
     .filter((slug) => slug.length > 0 && !slug.startsWith("_") && !slug.startsWith("."))
     .sort()
+}
+
+/** List folder-duty slugs (sub-directories containing a `profile.json`). */
+function listFolderDutySlugs(absDir: string): string[] {
+  if (!fs.existsSync(absDir)) return []
+  let entries: fs.Dirent[]
+  try {
+    entries = fs.readdirSync(absDir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+  return entries
+    .filter((e) => e.isDirectory() && !e.name.startsWith("_") && !e.name.startsWith("."))
+    .filter((e) => fs.existsSync(path.join(absDir, e.name, "profile.json")))
+    .map((e) => e.name)
+    .sort()
+}
+
+/** Persist `lastFiredAt = now` for a scheduled folder-duty (no job-tick to do it). */
+async function stampFired(backend: ReturnType<typeof resolveBackend>, slug: string, now: number): Promise<void> {
+  try {
+    const loaded = await backend.load(slug)
+    const nextData = { ...(loaded.state.data ?? {}), lastFiredAt: new Date(now).toISOString() }
+    await backend.save(loaded, { ...loaded.state, data: nextData })
+  } catch (err) {
+    process.stderr.write(`[jobs] failed to stamp lastFiredAt for ${slug}: ${String(err)}\n`)
+  }
 }

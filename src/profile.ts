@@ -40,6 +40,7 @@ const VALID_PHASES = new Set(["research", "planning", "implementing", "reviewing
 const KNOWN_PROFILE_KEYS = new Set([
   "name",
   "staff",
+  "every",
   "describe",
   "role",
   "kind",
@@ -137,6 +138,8 @@ export function loadProfile(profilePath: string): Profile {
     describe: typeof r.describe === "string" ? r.describe : "",
     // Optional persona to run as. Empty/blank string → undefined (no persona).
     staff: typeof r.staff === "string" && r.staff.trim() ? r.staff.trim() : undefined,
+    // Optional recurrence cadence (scheduled duty). Blank → undefined (on-demand).
+    every: typeof r.every === "string" && r.every.trim() ? r.every.trim() : undefined,
     role,
     kind,
     schedule: typeof r.schedule === "string" ? r.schedule : undefined,
