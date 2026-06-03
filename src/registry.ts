@@ -53,6 +53,18 @@ export function getProjectExecutablesRoot(): string {
 }
 
 /**
+ * Resolve the consumer-repo duties root (`.kody/duties/`). A duty is the
+ * unified successor to an executable: a `<slug>/profile.json` folder that
+ * additionally carries a `staff` member. Scheduled markdown duties
+ * (`.kody/duties/<slug>.md`) live in the same directory but are plain files,
+ * so the directory-only discovery skips them harmlessly. Returns the path
+ * even if it doesn't exist; callers must check.
+ */
+export function getProjectDutiesRoot(): string {
+  return path.join(process.cwd(), ".kody", "duties")
+}
+
+/**
  * Resolve the engine's built-in jobs root. Mirrors `getExecutablesRoot()` so
  * dev (`src/jobs`) and built (`dist/jobs`) layouts both work. Built-in jobs
  * are markdown files scaffolded into consumer repos by `kody init` — drop a
@@ -101,7 +113,9 @@ export function listBuiltinJobs(root: string = getBuiltinJobsRoot()): BuiltinJob
  * override or add new executables under `.kody/executables/<name>/`.
  */
 export function getExecutableRoots(): string[] {
-  return [getProjectExecutablesRoot(), getExecutablesRoot()]
+  // Duties first: a `.kody/duties/<slug>/` folder is the unified successor and
+  // wins over a same-named `.kody/executables/<slug>/` during the migration.
+  return [getProjectDutiesRoot(), getProjectExecutablesRoot(), getExecutablesRoot()]
 }
 
 /**
