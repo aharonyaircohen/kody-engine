@@ -39,6 +39,7 @@ import { loadGoalState } from "./loadGoalState.js"
 import { loadIssueContext } from "./loadIssueContext.js"
 import { loadIssueStateComment } from "./loadIssueStateComment.js"
 import { loadJobFromFile } from "./loadJobFromFile.js"
+import { loadDutyState } from "./loadDutyState.js"
 import { loadLinkedFinding } from "./loadLinkedFinding.js"
 import { loadMemoryContext } from "./loadMemoryContext.js"
 import { loadPriorArt } from "./loadPriorArt.js"
@@ -112,6 +113,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   loadIssueContext,
   loadIssueStateComment,
   loadJobFromFile,
+  loadDutyState,
   loadWorkerAdhoc,
   loadConventions,
   loadCoverageRules,
