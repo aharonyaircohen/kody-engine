@@ -72,18 +72,44 @@ export interface LitellmHandle {
   ensureHealthy: () => Promise<boolean>
 }
 
-/** Locate the litellm entrypoint, or throw a clear install hint. */
+/** True when `import litellm` succeeds under python3. */
+function litellmImportable(): boolean {
+  try {
+    execFileSync("python3", ["-c", "import litellm"], { timeout: 10000, stdio: "pipe" })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Locate the litellm entrypoint, installing it on demand if missing.
+ *
+ * Historically only the `ci` preflight pip-installed litellm, so any path that
+ * starts the proxy *without* going through that preflight — a scheduled duty
+ * invoked as `kody-engine <executable>` directly — failed with "litellm not
+ * installed" on non-Anthropic models. Installing here covers every entry path
+ * uniformly (the proxy is only ever started when a non-Anthropic model needs it).
+ */
 function resolveLitellmCommand(): "litellm" | "python3" {
   try {
     execFileSync("which", ["litellm"], { timeout: 3000, stdio: "pipe" })
     return "litellm"
   } catch {
-    try {
-      execFileSync("python3", ["-c", "import litellm"], { timeout: 10000, stdio: "pipe" })
-      return "python3"
-    } catch {
-      throw new Error("litellm not installed — run: pip install 'litellm[proxy]'")
+    if (litellmImportable()) return "python3"
+    process.stderr.write("→ kody: litellm not found — installing (pip install 'litellm[proxy]')\n")
+    let installed = false
+    for (const pip of ["pip", "pip3"]) {
+      try {
+        execFileSync(pip, ["install", "litellm[proxy]"], { timeout: 300_000, stdio: "inherit" })
+        installed = true
+        break
+      } catch {
+        /* try next */
+      }
     }
+    if (installed && litellmImportable()) return "python3"
+    throw new Error("litellm not installed and auto-install failed — run: pip install 'litellm[proxy]'")
   }
 }
 
