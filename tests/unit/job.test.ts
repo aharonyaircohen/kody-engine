@@ -5,7 +5,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const { runExecutableChain } = vi.hoisted(() => ({ runExecutableChain: vi.fn() }))
 vi.mock("../../src/executor.js", () => ({ runExecutableChain }))
 
-import { InvalidJobError, runJob, validateJob } from "../../src/job.js"
+import {
+  DEFAULT_INSTANT_PERSONA,
+  InvalidJobError,
+  mintInstantJob,
+  mintScheduledJob,
+  runJob,
+  validateJob,
+} from "../../src/job.js"
 
 describe("runJob (Phase 1 seam)", () => {
   beforeEach(() => {
@@ -59,5 +66,58 @@ describe("runJob (Phase 1 seam)", () => {
   it("defaults cliArgs to an empty object when omitted", () => {
     const j = validateJob({ executable: "run", flavor: "instant" })
     expect(j.cliArgs).toEqual({})
+  })
+})
+
+describe("mintInstantJob (Phase 2)", () => {
+  const dispatch = { executable: "fix", cliArgs: { pr: 7 }, target: 7 }
+
+  it("maps a DispatchResult to an instant job", () => {
+    const job = mintInstantJob(dispatch, { why: "fix the typo" })
+    expect(job).toMatchObject({
+      executable: "fix",
+      target: 7,
+      cliArgs: { pr: 7 },
+      why: "fix the typo",
+      flavor: "instant",
+    })
+  })
+
+  it("defaults persona to the standard staff member", () => {
+    expect(mintInstantJob(dispatch).persona).toBe(DEFAULT_INSTANT_PERSONA)
+  })
+
+  it("lets the caller override the persona", () => {
+    expect(mintInstantJob(dispatch, { persona: "reviewer" }).persona).toBe("reviewer")
+  })
+
+  it("produces a job that runJob can run", async () => {
+    runExecutableChain.mockResolvedValue({ exitCode: 0 })
+    await runJob(mintInstantJob(dispatch, { why: "x" }), { cwd: "/x" })
+    expect(runExecutableChain.mock.calls.at(-1)![0]).toBe("fix")
+  })
+})
+
+describe("mintScheduledJob (Phase 2)", () => {
+  it("maps a due duty slug to a scheduled job", () => {
+    const job = mintScheduledJob({
+      duty: "stale-prs",
+      executable: "job-tick",
+      schedule: "*/5 * * * *",
+      persona: "kody",
+      cliArgs: { job: "stale-prs" },
+    })
+    expect(job).toMatchObject({
+      duty: "stale-prs",
+      executable: "job-tick",
+      schedule: "*/5 * * * *",
+      persona: "kody",
+      cliArgs: { job: "stale-prs" },
+      flavor: "scheduled",
+    })
+  })
+
+  it("defaults cliArgs to empty", () => {
+    expect(mintScheduledJob({ duty: "d", executable: "job-tick" }).cliArgs).toEqual({})
   })
 })

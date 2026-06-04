@@ -11,9 +11,13 @@
  */
 
 import type { KodyConfig } from "./config.js"
+import type { DispatchResult } from "./dispatch.js"
 import type { Job } from "./executables/types.js"
 import { runExecutableChain } from "./executor.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
+
+/** Default staff persona for instant `@kody` jobs (the agreed starting point). */
+export const DEFAULT_INSTANT_PERSONA = "kody"
 
 /** Thrown when a minted Job fails boundary validation. */
 export class InvalidJobError extends Error {
@@ -99,4 +103,58 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   }
 
   return runExecutableChain(profileName, input)
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Minters (phase 2): event → Job. Pure mappers, no caller yet — the comment
+// and cron paths funnel through these in a later phase, then `runJob` runs the
+// result.
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Mint an INSTANT job from a comment / manual-dispatch route. The trigger
+ * resolves to a DispatchResult (executable + cliArgs + target); this turns it
+ * into a Job. `why` is the raw comment body (the agent's intent); `persona`
+ * defaults to "kody" — instant verbs ran persona-less before, and the default
+ * is the agreed starting point (overridable per call).
+ */
+export function mintInstantJob(dispatch: DispatchResult, opts?: { why?: string; persona?: string }): Job {
+  return {
+    executable: dispatch.executable,
+    why: opts?.why,
+    persona: opts?.persona ?? DEFAULT_INSTANT_PERSONA,
+    target: dispatch.target,
+    cliArgs: dispatch.cliArgs,
+    flavor: "instant",
+  }
+}
+
+/** Inputs the cron tick path resolves per due duty slug. */
+export interface ScheduledJobInput {
+  /** The duty slug (its "why" lives in `.kody/duties/<slug>.md`). */
+  duty: string
+  /** The executable that ticks it (job-tick / job-tick-scripted, or a folder-duty slug). */
+  executable: string
+  /** Cron cadence the duty fired on. */
+  schedule?: string
+  /** Staff persona that runs it (from the duty's `staff:` frontmatter). */
+  persona?: string
+  /** Args handed to the tick executable (e.g. `{ job: slug }` for `.md` duties). */
+  cliArgs?: Record<string, unknown>
+}
+
+/**
+ * Mint a SCHEDULED job from a due duty slug. The cron path enumerates due
+ * duties; each becomes a scheduled Job whose `executable` is the ticker and
+ * whose `duty` carries the intent. No caller yet — wired in a later phase.
+ */
+export function mintScheduledJob(input: ScheduledJobInput): Job {
+  return {
+    duty: input.duty,
+    executable: input.executable,
+    schedule: input.schedule,
+    persona: input.persona,
+    cliArgs: input.cliArgs ?? {},
+    flavor: "scheduled",
+  }
 }
