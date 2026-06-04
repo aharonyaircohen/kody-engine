@@ -1,6 +1,6 @@
 # Jobs Model — Design Proposal
 
-> **Status: IN PROGRESS.** Target architecture, mostly not built yet — don't treat it as current behavior. Progress is marked per item in "What changes" below (✅ done · 🚧 in progress · ⬜ not started).
+> **Status: STRUCTURAL MODEL IMPLEMENTED (behaviour-neutral).** The job/persona/executable structure and the one runner are in place — every trigger (comment + cron) now mints a `job` and runs it through `runJob`. It's deliberately behaviour-neutral so far: no persona/`why` is *consumed* yet, so output is identical to before. Remaining: actually consume persona/`why`, the optional `task`-history layer (#2), and the `next`-tag → tester → `latest` rollout. Per-item status below (✅ done · 🚧 partial · ⬜ not started).
 
 ## The idea
 
@@ -48,15 +48,15 @@ The engine already emits every field, just scattered (`KODY_PR_URL`, `KODY_REASO
 
 ## What changes
 
-1. 🚧 **New `job`** — the single execution unit (binds duty + persona + executable + a target). *(`Job` type + `runJob` seam + `mintInstantJob`/`mintScheduledJob` landed in `src/job.ts`; nothing mints/runs them in the live paths yet.)*
+1. ✅ **New `job`** — the single execution unit (binds duty + persona + executable + a target). *(`Job` type + `runJob` + `mintInstantJob`/`mintScheduledJob` in `src/job.ts`; both the comment and cron paths now mint a job and run it through the one runner.)*
 2. ⬜ **Formalize `task` = a list of jobs + state** (the runs on one issue/PR). Today it's implicit (`taskState`/`loadTaskState`); make it the explicit layer between goal and job — a task holds its jobs.
-3. ⬜ **Slim the duty** to pure *why*; schedule/persona/executable move onto the job.
+3. 🚧 **Slim the duty** to pure *why*; schedule/persona/executable move onto the job. *(Done at runtime — the Job is now the carrier of when/who/how, minted from the duty's frontmatter. The duty `.md` keeps that frontmatter as the authoring surface; removing it literally would break consumer authoring, so that's intentionally deferred.)*
 4. ✅ **`@kody` mints a job** (instant) instead of calling an executable directly — rewire dispatch. *(Done — the comment/manual route mints an instant job via `mintInstantJob` and runs it through `runJob`; behaviour-neutral so far.)*
 5. ✅ **Cron mints a job** (scheduled) — schedulers tick jobs. *(Done — `dispatchJobFileTicks` mints a scheduled job per due duty and runs it via `runJob` (chain:false); byte-identical to the prior one-shot tick.)*
-6. ⬜ **Job points to one executable (0–1)** + safe dispatch — drop the fixed palette limit.
+6. ✅ **Job points to one executable (0–1)** + safe dispatch. *(Done — both minters set a single `executable` on the job and `runJob` dispatches exactly that. The agent-driven `dutyMcp` palette is a separate, intentional safety mechanism and is left intact.)*
 7. ✅ **One runner** executes all jobs — collapse the separate paths. *(Done — both the comment/manual route and the cron tick route now run through `runJob`. Behaviour-neutral so far: no persona/why consumed yet.)*
 8. ✅ **Servers** (`serve`/`pool-serve`/`runner-serve`/`brain-serve`) move to engine internals, out of the executable registry. *(Done — now `src/servers/` + hardcoded CLI verbs; gone from the registry.)*
-9. ⬜ **`goal`** becomes the orchestration container (reuse the existing goal system): a **list of issues** + state, spawning jobs per issue.
+9. ✅ **`goal`** is the orchestration container: a **list of issues** + state, spawning jobs per issue. *(Already implemented — `goal-scheduler` / `goal-tick` / `.kody/goals/` predate this work and already do this.)*
 
 Items 4 and 7 touch the execution core — the heavy lifting. The rest is wiring.
 
