@@ -10,7 +10,7 @@ For engine contributors: see [AGENTS.md](AGENTS.md) for the full architecture re
 
 Kody is a **command bot**, not a chat partner. It acts only on a comment that literally contains `@kody <command>`.
 
-A bare `@kody` on an issue starts a `run` session. A bare `@kody` on a PR starts a `fix` session. Everything else requires an explicit subcommand word.
+A bare `@kody` on an issue starts a `run` session. A bare `@kody` on a PR does **nothing** — the configured default (`defaultPrExecutable`) points to `fix`, but the engine does not ship a `fix` executable. Only an explicit subcommand word triggers a PR command.
 
 ---
 
@@ -27,10 +27,12 @@ The first word after `@kody` is the command. Free text after the command is pass
 Examples:
 - `@kody run` — start a full implementation session on an issue (default when on an issue with no command)
 - `@kody run fix the failing test on line 40` — run with a specific directive
-- `@kody plan` — write an implementation plan, no code
-- `@kody fix the type error` — apply feedback to a PR (default when on a PR with no command)
 - `@kody build` — alias for `run`
-- `@kody fix-ci --run-id 123` — fix a specific failing CI run
+- `@kody release --bump minor` — run a release from the triggering issue
+- `@kody resolve` — resolve merge conflicts on a PR
+- `@kody sync` — merge default branch into a PR (no agent)
+- `@kody revert abc123 def456` — revert specific commits on a PR (no agent)
+- `@kody merge` — squash-merge a PR when CI is green (no agent)
 
 **Manual trigger via GitHub Actions:**
 
@@ -39,22 +41,30 @@ Use `workflow_dispatch` in the GitHub Actions UI and supply an issue number. No 
 **Manual CLI:**
 
 ```bash
-npx @kody-ade/kody-engine@latest kody-engine ci --issue <number>
+kody-engine run --issue <number>
 ```
 
 ---
 
-## 3. Where each command runs
+## 3. Engine-shipped commands
 
-| Command(s) | Runs on | Input |
-|---|---|---|
-| `run`, `plan`, `research`, `classify`, `feature`, `bug`, `chore`, `reproduce` | Issue | Issue number |
-| `fix`, `fix-ci`, `resolve`, `sync`, `revert`, `review`, `ui-review`, `qa-engineer` | PR | PR number |
-| `release`, `release-prepare`, `release-publish`, `release-deploy` | Issue | Issue number |
-| `job-scheduler`, `goal-scheduler` | — | Cron schedule (not comment-driven) |
-| `init` | — | CLI only |
+The table below lists every command the engine ships. Individual consumer repos may define additional executables under `.kody/executables/` — those are not listed here.
 
-**Watch executables** (`job-scheduler`, `goal-scheduler`) fire on a cron schedule. They are not triggered by comments — they run unattended on every wake.
+| Command | Runs on | Input | Notes |
+|---|---|---|---|
+| `run` | Issue | Issue number | Default when bare `@kody` on an issue. `build` is an alias. |
+| `release` | Issue | Issue number | Deterministic release flow: prepare → merge → publish → deploy. |
+| `resolve` | PR | PR number | Rebase/merge base branch; agent resolves conflicts if any. |
+| `sync` | PR | PR number | Merge base branch into PR branch, push. No agent. |
+| `revert` | PR | PR number + shas | `git revert` one or more commits. No agent. |
+| `merge` | PR | PR number | Squash-merge when CI is green. No agent. |
+| `preview-build` | PR | PR number | Build per-PR preview; also auto-runs on `pull_request` events when `onPullRequest` is configured. |
+| `job-scheduler` | — | Cron | Not comment-driven. Ticks `.kody/duties/` on a schedule. |
+| `goal-scheduler` | — | Cron | Not comment-driven. Ticks `.kody/goals/` on a schedule. |
+
+**Internal / not user commands** (engine-shipped but not comment-triggerable):
+
+`init` · `plan-verify` · `probe-skill` · `qa-goal` · `worker-ask` · `job-tick` · `goal-tick` · `release-prepare` · `release-publish` · `release-deploy` · `serve` · `pool-serve` · `runner-serve` · `brain-serve`
 
 ---
 
@@ -72,7 +82,7 @@ Or re-run via GitHub Actions `workflow_dispatch`.
 Without `@kody`, the workflow's `if:` gate never starts the job. Kody has no "inbox" — it only acts when explicitly mentioned.
 
 **Do not expect another bot's or agent's prose to wake Kody.**
-Even with `@kody`, Kody acts on bot-authored comments only when they include an explicit resolved command (`@kody <verb>`). Plain status chatter from a bot is dropped on purpose (loop protection). A duty that posts a bare `@kody sync` with no command word will be ignored.
+Even with `@kody`, Kody acts on bot-authored comments only when they include an explicit resolved command (`@kody <verb>`). Plain status chatter from a bot is dropped on purpose (loop protection). A duty that posts a bare `@kody sync` will work, but plain prose with no command word will be ignored.
 
 **Do not write `@kodyade[bot]`, `@kody-engine`, or `@kody-foo`.**
 The mention regex matches only a **standalone** `@kody`. Variants like `@kodyade[bot]` or `@kody-engine` are silently ignored — Kody will not respond.
@@ -86,3 +96,5 @@ When this config is present, only commenters with the listed GitHub author assoc
 
 - Dispatch trigger logic: `src/dispatch.ts` (`hasKodyMention`, `KODY_MENTION_RE`, bot self-dispatch gate, default-executable fallback)
 - Workflow template & `if:` gate: `src/scripts/initFlow.ts` (`WORKFLOW_TEMPLATE`)
+- Executable catalog (source of truth for the command table): `src/executables/*/profile.json`
+- Config defaults (`defaultExecutable`, `defaultPrExecutable`): `src/config.ts`
