@@ -198,4 +198,26 @@ describe("config: loadConfig", () => {
     })
     expect(loadConfig(dir).defaultExecutable).toBe("run")
   })
+
+  it("loads defaultPrExecutable when set", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "m/x" },
+      defaultPrExecutable: "sync",
+    })
+    expect(loadConfig(dir).defaultPrExecutable).toBe("sync")
+  })
+
+  it("omits defaultPrExecutable when absent, empty, or non-string", () => {
+    for (const value of [undefined, "", 42]) {
+      const dir = tmpDir()
+      writeConfig(dir, {
+        github: { owner: "o", repo: "r" },
+        agent: { model: "m/x" },
+        ...(value === undefined ? {} : { defaultPrExecutable: value }),
+      })
+      expect(loadConfig(dir).defaultPrExecutable).toBeUndefined()
+    }
+  })
 })

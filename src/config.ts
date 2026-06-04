@@ -48,18 +48,15 @@ export interface KodyConfig {
   }
   testRequirements?: TestRequirement[]
   /**
-   * Executable name to invoke when a user triggers bare `@kody` with no
-   * subcommand. Defaults to "classify" (auto-triages into one of {feature,
-   * bug, spec, chore} before dispatching). Set to "run" to skip classification
-   * and directly implement, or "bug"/"feature" to force a specific
-   * sub-orchestrator. The default is baked in by `loadConfig` so dispatch
-   * has a single source of truth — never hardcoded in dispatch logic.
+   * Executable name to invoke when a user triggers bare `@kody` on an issue
+   * with no subcommand. Defaults to "run" so a plain issue comment implements
+   * the issue directly.
    */
   defaultExecutable?: string
   /**
-   * Executable to run when a bare/unrecognized `@kody <rest>` lands on a PR.
-   * Defaults to "fix" — legacy behavior: any PR comment without a known
-   * subcommand becomes a fix with the comment body as feedback.
+   * Executable to run when a bare `@kody` lands on a PR. Opt-in: absent means
+   * PR comments must name an explicit command such as `resolve`, `sync`, or a
+   * repo-provided profile.
    */
   defaultPrExecutable?: string
   /**
@@ -78,11 +75,10 @@ export interface KodyConfig {
    */
   onPullRequest?: string
   /**
-   * Comment-subcommand aliases: map typed word → executable name. Merged
-   * with built-in legacy aliases ({ build: "run", orchestrate: "bug",
-   * orchestrator: "bug" }). User entries override built-ins. Dispatch
-   * resolves the first token against this map before the registry, so
-   * every name dispatch knows lives here, not in code.
+   * Comment-subcommand aliases: map typed word → executable name. Merged with
+   * built-in compatibility aliases ({ build: "run" }). User entries override
+   * built-ins. Dispatch resolves the first token against this map before the
+   * registry.
    */
   aliases?: Record<string, string>
   /**
@@ -173,7 +169,7 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     throw new Error(`kody.config.json not found at ${configPath}`)
   }
 
-  let raw: Record<string, any>
+  let raw: Record<string, unknown>
   try {
     raw = JSON.parse(fs.readFileSync(configPath, "utf-8"))
   } catch (err) {
@@ -181,10 +177,10 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     throw new Error(`kody.config.json is invalid JSON: ${msg}`)
   }
 
-  const quality = raw.quality ?? {}
-  const git = raw.git ?? {}
-  const github = raw.github ?? {}
-  const agent = raw.agent ?? {}
+  const quality = recordValue(raw.quality) ?? {}
+  const git = recordValue(raw.git) ?? {}
+  const github = recordValue(raw.github) ?? {}
+  const agent = recordValue(raw.agent) ?? {}
 
   if (!agent.model || typeof agent.model !== "string") {
     throw new Error(`kody.config.json: agent.model is required (e.g. "minimax/MiniMax-M2.7-highspeed")`)
@@ -218,7 +214,7 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     defaultPrExecutable:
       typeof raw.defaultPrExecutable === "string" && raw.defaultPrExecutable.length > 0
         ? raw.defaultPrExecutable
-        : "fix",
+        : undefined,
     onPullRequest:
       typeof raw.onPullRequest === "string" && raw.onPullRequest.length > 0 ? raw.onPullRequest : undefined,
     aliases: mergeAliases(raw.aliases),
@@ -303,6 +299,10 @@ function parseJobsConfig(raw: unknown): KodyConfig["jobs"] {
   return Object.keys(out).length > 0 ? out : undefined
 }
 
+function recordValue(raw: unknown): Record<string, unknown> | undefined {
+  return raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : undefined
+}
+
 /**
  * Legacy comment-subcommand aliases, always merged into config.aliases.
  * Exported so dispatch can use them as a fallback when called without a
@@ -310,8 +310,6 @@ function parseJobsConfig(raw: unknown): KodyConfig["jobs"] {
  */
 export const BUILTIN_ALIASES: Record<string, string> = {
   build: "run",
-  orchestrate: "bug",
-  orchestrator: "bug",
 }
 
 function mergeAliases(raw: unknown): Record<string, string> {

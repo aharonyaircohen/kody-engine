@@ -89,7 +89,7 @@ export function autoDispatch(opts?: {
   const eventPath = process.env.GITHUB_EVENT_PATH
   if (!eventName || !eventPath || !fs.existsSync(eventPath)) return null
 
-  let event: Record<string, any> = {}
+  let event: Record<string, unknown> = {}
   try {
     event = JSON.parse(fs.readFileSync(eventPath, "utf-8"))
   } catch {
@@ -97,15 +97,16 @@ export function autoDispatch(opts?: {
   }
 
   if (eventName === "workflow_dispatch") {
-    const n = parseInt(String(event.inputs?.issue_number ?? ""), 10)
+    const inputs = objectValue(event.inputs)
+    const n = parseInt(String(inputs?.issue_number ?? ""), 10)
     if (!Number.isNaN(n) && n > 0) {
       // `executable` + `base` inputs let a dispatched run pick its stage and
       // stacked-PR base. goal-tick uses this to fire a fresh run per task
       // (`executable=classify`, `base=<leaf>`) instead of posting an `@kody`
       // comment a bot can't self-trigger. Default stays `run` for a bare
       // manual dispatch with just an issue number.
-      const exe = String(event.inputs?.executable ?? "").trim() || "run"
-      const base = String(event.inputs?.base ?? "").trim()
+      const exe = String(inputs?.executable ?? "").trim() || "run"
+      const base = String(inputs?.base ?? "").trim()
       // The `issue_number` input is a generic numeric target, not literally an
       // issue. Bind `n` under the resolved executable's declared int input name
       // (`run` → `issue`, `resolve`/`sync`/`fix-ci` → `pr`). Hardcoding `issue`
@@ -142,7 +143,8 @@ export function autoDispatch(opts?: {
     const exe = opts?.config?.onPullRequest?.trim()
     const action = String(event.action ?? "")
     if (exe && (action === "opened" || action === "synchronize" || action === "reopened")) {
-      const prNum = Number(event.pull_request?.number ?? event.number ?? 0)
+      const pullRequest = objectValue(event.pull_request)
+      const prNum = Number(pullRequest?.number ?? event.number ?? 0)
       if (prNum > 0) {
         // Bind the PR number under the target's first required int input
         // (preview-build → `pr`); falls back to `pr` if the profile is
@@ -159,9 +161,12 @@ export function autoDispatch(opts?: {
   // Gate on @kody mention + non-bot author here so the consumer workflow
   // YAML stays trigger-only (no routing logic leaks). Returning null lets
   // kody-cli exit 0 cleanly instead of running the agent on unrelated chatter.
-  const rawBody = String(event.comment?.body ?? "")
-  const authorLogin = String(event.comment?.user?.login ?? "")
-  const authorType = String(event.comment?.user?.type ?? "")
+  const comment = objectValue(event.comment)
+  const issue = objectValue(event.issue)
+  const user = objectValue(comment?.user)
+  const rawBody = String(comment?.body ?? "")
+  const authorLogin = String(user?.login ?? "")
+  const authorType = String(user?.type ?? "")
   if (!hasKodyMention(rawBody)) return null
   // Bot-authored comments: do NOT blanket-drop. Kody runs as a bot in repos
   // whose token is a GitHub App (e.g. `kodyade[bot]`), so duties, slash
@@ -178,8 +183,8 @@ export function autoDispatch(opts?: {
   if (!associationAllowed(event, opts?.config)) return null
 
   const body = rawBody.toLowerCase()
-  const targetNum = Number(event.issue?.number ?? 0)
-  const isPr = !!event.issue?.pull_request
+  const targetNum = Number(issue?.number ?? 0)
+  const isPr = !!issue?.pull_request
   if (!targetNum) return null
 
   const afterTag = extractAfterTag(body)
@@ -221,7 +226,7 @@ export function autoDispatch(opts?: {
   // POLITE_WORDS filter above lets natural-language phrasings through to
   // the default — the "no firstToken" condition here is what gates them.
   if (!executable && !firstToken) {
-    executable = isPr ? (opts?.config?.defaultPrExecutable ?? "fix") : (opts?.config?.defaultExecutable ?? null)
+    executable = isPr ? (opts?.config?.defaultPrExecutable ?? null) : (opts?.config?.defaultExecutable ?? null)
   }
   // Bot self-dispatch gate: a bot-authored comment may ONLY proceed when it
   // resolved to an explicit command (`consumedFirstToken`). It must never fall
@@ -235,6 +240,7 @@ export function autoDispatch(opts?: {
     return null
   }
   if (!executable) {
+    if (!firstToken) return null
     // Surface why dispatch gave up — currently the consumer just sees
     // "no action for event issue_comment" and has no way to tell whether
     // the executable wasn't found, the alias was missing, or there's no
@@ -244,7 +250,8 @@ export function autoDispatch(opts?: {
     process.stderr.write(
       `[kody] dispatch: no executable resolved for issue_comment ` +
         `(firstToken=${firstToken ?? "<none>"}, aliased=${aliased ?? "<none>"}, ` +
-        `profileFound=${!profileMissing}, defaultExecutable=${opts?.config?.defaultExecutable ?? "<unset>"})\n`,
+        `profileFound=${!profileMissing}, defaultExecutable=${opts?.config?.defaultExecutable ?? "<unset>"}, ` +
+        `defaultPrExecutable=${opts?.config?.defaultPrExecutable ?? "<unset>"})\n`,
     )
     return null
   }
@@ -300,15 +307,18 @@ export function autoDispatchTyped(opts?: {
   if (eventName !== "issue_comment") {
     return { kind: "silent", reason: `event ${eventName} has no comment to inspect` }
   }
-  let event: Record<string, any> = {}
+  let event: Record<string, unknown> = {}
   try {
     event = JSON.parse(fs.readFileSync(eventPath, "utf-8"))
   } catch {
     return { kind: "silent", reason: "GHA event payload unreadable" }
   }
-  const rawBody = String(event.comment?.body ?? "")
-  const authorLogin = String(event.comment?.user?.login ?? "")
-  const authorType = String(event.comment?.user?.type ?? "")
+  const comment = objectValue(event.comment)
+  const issue = objectValue(event.issue)
+  const user = objectValue(comment?.user)
+  const rawBody = String(comment?.body ?? "")
+  const authorLogin = String(user?.login ?? "")
+  const authorType = String(user?.type ?? "")
   if (!hasKodyMention(rawBody)) {
     return { kind: "silent", reason: "comment does not mention @kody" }
   }
@@ -319,11 +329,11 @@ export function autoDispatchTyped(opts?: {
   // silent — not unrecognized — so a non-member typing a real subcommand
   // (e.g. "@kody fix") gets no "I don't know that command" feedback.
   if (!associationAllowed(event, opts?.config)) {
-    const assoc = String(event.comment?.author_association ?? "").toUpperCase() || "<none>"
+    const assoc = String(comment?.author_association ?? "").toUpperCase() || "<none>"
     return { kind: "silent", reason: `commenter association '${assoc}' not in access.allowedAssociations` }
   }
-  const targetNum = Number(event.issue?.number ?? 0)
-  const isPr = !!event.issue?.pull_request
+  const targetNum = Number(issue?.number ?? 0)
+  const isPr = !!issue?.pull_request
   if (!targetNum) {
     return { kind: "silent", reason: "comment has no associated issue/PR number" }
   }
@@ -417,11 +427,16 @@ export function dispatchScheduledWatches(opts?: { now?: Date; windowSec?: number
  * association comes straight off the issue_comment event payload, so this
  * needs no API call and no read:org token.
  */
-function associationAllowed(event: Record<string, any>, config?: KodyConfig): boolean {
+function associationAllowed(event: Record<string, unknown>, config?: KodyConfig): boolean {
   const allowed = config?.access?.allowedAssociations
   if (!allowed || allowed.length === 0) return true
-  const assoc = String(event.comment?.author_association ?? "").toUpperCase()
+  const comment = objectValue(event.comment)
+  const assoc = String(comment?.author_association ?? "").toUpperCase()
   return allowed.includes(assoc)
+}
+
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : undefined
 }
 
 /**

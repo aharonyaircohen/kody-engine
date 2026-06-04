@@ -1,5 +1,6 @@
 ---
 every: 7d
+staff: kody
 ---
 
 # watch-stale-prs

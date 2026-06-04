@@ -1,12 +1,29 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { describe, expect, it } from "vitest"
-import { detectPackageManager, parseCiArgs, resolveAuthToken, unpackAllSecrets } from "../../src/kody-cli.js"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { detectPackageManager, parseCiArgs, resolveAuthToken, runCi, unpackAllSecrets } from "../../src/kody-cli.js"
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-cli-test-"))
 }
+
+function writeEvent(body: unknown): string {
+  const dir = tmpDir()
+  const p = path.join(dir, "event.json")
+  fs.writeFileSync(p, JSON.stringify(body))
+  return p
+}
+
+const prevEnv: Record<string, string | undefined> = {}
+
+afterEach(() => {
+  for (const [key, value] of Object.entries(prevEnv)) {
+    if (value === undefined) delete process.env[key]
+    else process.env[key] = value
+  }
+  vi.restoreAllMocks()
+})
 
 describe("kody-cli: parseCiArgs", () => {
   it("parses --issue", () => {
@@ -160,5 +177,23 @@ describe("kody-cli: detectPackageManager", () => {
     fs.writeFileSync(path.join(d, "pnpm-lock.yaml"), "")
     fs.writeFileSync(path.join(d, "yarn.lock"), "")
     expect(detectPackageManager(d)).toBe("pnpm")
+  })
+})
+
+describe("kody-cli: runCi event dispatch", () => {
+  it("fails loudly when bare @kody needs config defaults but config is invalid", async () => {
+    const dir = tmpDir()
+    fs.writeFileSync(path.join(dir, "kody.config.json"), "{not-json")
+    prevEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
+    prevEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody", user: { login: "alice", type: "User" }, author_association: "OWNER" },
+      issue: { number: 42 },
+    })
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true)
+
+    await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(64)
+    expect(stderr.mock.calls.map((c) => String(c[0])).join("\n")).toMatch(/config error: kody\.config\.json/)
   })
 })

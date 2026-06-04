@@ -376,13 +376,21 @@ describe("dispatch: issue_comment on PR", () => {
     })
   })
 
-  it("bare '@kody' on PR → fix without feedback", () => {
+  it("bare '@kody' on PR returns null when no PR default is configured", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody" },
       issue: { number: 23, pull_request: {} },
     })
-    expect(autoDispatch()).toEqual({
-      executable: "fix",
+    expect(autoDispatch()).toBeNull()
+  })
+
+  it("bare '@kody' on PR falls back to configured defaultPrExecutable", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody" },
+      issue: { number: 23, pull_request: {} },
+    })
+    expect(autoDispatch({ config: { defaultPrExecutable: "sync" } as any })).toEqual({
+      executable: "sync",
       cliArgs: { pr: 23 },
       target: 23,
     })

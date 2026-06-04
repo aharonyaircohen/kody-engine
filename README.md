@@ -8,8 +8,8 @@
 **An autonomous development engine that runs in your GitHub Actions.**
 
 Comment `@kody` on an issue and it implements the change, commits, and opens a
-PR — all inside CI, no bot server to host. Comment on a PR to apply review
-feedback, fix failing CI, resolve merge conflicts, or run a UI/QA pass. It's a
+PR — all inside CI, no bot server to host. Comment on a PR with explicit
+commands such as `@kody resolve` or `@kody sync` for PR maintenance. It's a
 single-session Claude Code agent behind a generic executor and declarative JSON
 profiles.
 
@@ -26,8 +26,8 @@ kody:  reads the issue → writes the code → runs your tests → opens a PR
 
 - **No infrastructure.** Runs on the GitHub Actions you already have. One ~20-line
   workflow file, installed via `npx`. Nothing to deploy or keep online.
-- **Whole PR lifecycle, not just authoring.** `run`, `fix`, `fix-ci`, `resolve`,
-  `review`, `ui-review`, `qa-engineer`, scheduled jobs — one agent, many verbs.
+- **Whole PR lifecycle, not just authoring.** `run`, `resolve`, `sync`, `merge`,
+  `revert`, previews, releases, and scheduled duties — one executor, many verbs.
 - **Declarative & extensible.** Every command is a folder of `profile.json` +
   `prompt.md` + shell. Add a command by dropping a folder — no engine changes.
 - **Bring your own model.** Anthropic native, or any provider via the built-in
@@ -68,7 +68,7 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 ```
 ┌─────────────────────────────────────────────┐
-│ Consumer repo workflow (.github/kody.yml)  │  @kody comments · schedule · release PR merge
+│ Consumer repo workflow (.github/kody.yml)  │  @kody comments · schedule · manual dispatch
 └─────────────────────────────────────────────┘
                     ↓
 ┌─────────────────────────────────────────────┐
@@ -96,181 +96,58 @@ npx -y -p @kody-ade/kody-engine@latest kody init
 
 Required repo secrets: at least one model provider key (e.g. `MINIMAX_API_KEY`, `ANTHROPIC_API_KEY`). Recommended: `KODY_TOKEN` PAT so kody's commits trigger downstream CI and can modify `.github/workflows/*`.
 
-The consumer workflow listens on three triggers: `issue_comment` (for `@kody …` dispatch), `workflow_dispatch` (manual runs, chat mode, job wake), and `pull_request: [closed]` (auto-finalizes a merged `release/vX.Y.Z` PR).
+The consumer workflow listens on `issue_comment` for `@kody ...` dispatch and `workflow_dispatch` for manual runs, chat mode, and scheduled wakeups.
 
 ## Commands
 
 ```
-# agent, writes code
-kody run       --issue <N>                             # implement an issue end-to-end
-kody fix       --pr    <N> [--feedback ...]            # apply PR review feedback
-kody fix-ci    --pr    <N> [--run-id <ID>]             # fix failing CI
-kody resolve   --pr    <N> [--prefer ours|theirs]      # merge default branch, resolve conflicts
+# The published bin is `kody-engine` (renamed from `kody` in v0.4.77 to avoid
+# shadowing a consumer repo's own `kody` bin). Install globally or via `npx`.
 
-# agent, read-only
-kody plan      --issue <N>                             # research + implementation plan
-kody research  --issue <N>                             # map repo context, surface gaps
-kody review    --pr    <N>                             # structured diff review
-kody ui-review --pr    <N> [--preview-url <URL>]       # UI review — browses preview via Playwright MCP
-kody qa-engineer [--url <URL>] [--scope ...]           # free-form QA — browses, opens findings as goal task issues
-               [--goal <id>] [--issue <N>]
-               [--auth-profile <storageState.json>]
-kody classify  --issue <N>                             # pick a flow type (feature/bug/spec/chore)
+# issue authoring
+kody-engine run               --issue <N>                     # implement an issue end-to-end
 
-# flow orchestrators (no agent of their own — transition tables)
-kody feature   --issue <N>                             # research → plan → run → review (→ fix)
-kody bug       --issue <N>                             # plan → run → review (→ fix)
-kody spec      --issue <N>                             # research → plan (no code, terminates at plan)
-kody chore     --issue <N>                             # run → review (→ fix)
+# PR operations
+kody-engine resolve           --pr <N> [--prefer ours|theirs] # merge default branch, resolve conflicts
+kody-engine sync              --pr <N>                         # merge default into a PR branch
+kody-engine merge             --pr <N>                         # merge a green PR
+kody-engine revert            --pr <N> --shas <sha...>         # mechanically revert PR commits
+kody-engine preview-build     --pr <N>                         # build and publish a PR preview
 
-# jobs & watches (scheduled, coordinate work via issue state)
-kody job-scheduler                                 # fans out to per-issue job-tick
-kody job-tick      --issue <N>                     # one tick of a kody:job issue
-kody watch-stale-prs                                   # weekly stale-PR report
-kody memorize                                          # daily vault wiki update from recent PRs
+# release operations
+kody-engine release           --issue <N> [--bump patch|minor|major] [--dry-run]
+kody-engine release-prepare   --issue <N> [--bump patch|minor|major] [--dry-run]
+kody-engine release-publish   --issue <N> [--dry-run]
+kody-engine release-deploy    --issue <N> [--dry-run]
 
-# deterministic (no agent)
-kody sync      --pr    <N>                             # merge default into PR branch
-kody release   --mode  prepare|finalize [--bump patch|minor|major] [--dry-run]
-kody init      [--force]                               # scaffold consumer repo
+# scheduled duties and goals
+kody-engine job-scheduler                                     # fan out due .kody/duties/*.md files
+kody-engine job-tick          --job <slug> [--force]          # one agent tick for one duty
+kody-engine job-tick-scripted --job <slug> [--force]          # one deterministic tickScript duty tick
+kody-engine goal-scheduler                                    # fan out active .kody/goals/* state files
+kody-engine goal-tick         --goal <id>                     # advance one stacked-PR goal
 
-# engine entrypoints
-kody ci                                                # auto-dispatches from the GHA event
-kody chat      [--session <id>]                        # dashboard-driven chat session
+# setup, servers, and utilities
+kody-engine init              [--force]                       # scaffold consumer repo
+kody-engine ci                                                # auto-dispatch from the GitHub Actions event
+kody-engine chat              [--session <id>]                # dashboard-driven chat session
+kody-engine serve                                             # LiteLLM/editor helper
+kody-engine brain-serve                                       # Brain SSE server
+kody-engine pool-serve                                        # warm-pool owner
+kody-engine runner-serve                                      # warm-pool one-shot runner
+kody-engine worker-ask        --worker <slug> --message "..." # ad-hoc staff persona run
+kody-engine stats                                             # inspect run/event history
 ```
 
-### Flow orchestrators
+### Duties
 
-Each flow (`feature`, `bug`, `spec`, `chore`) is a declarative transition table: postflight entries dispatch the next executable based on `data.taskState.core.lastOutcome.type` via `runWhen`. No engine changes to add a new flow — drop a new `src/executables/<flow-name>/` with a different table. `classify` picks the flow for an unlabeled issue.
+A **duty** is a markdown file at `.kody/duties/<slug>.md` with frontmatter such as `every:` and `staff:` plus human-owned prose. `job-scheduler` wakes on cron, finds due duties, and dispatches either `job-tick` for an agent tick or `job-tick-scripted` for a deterministic `tickScript:` duty. `kody init` copies built-in starter duties and scaffolds `.kody/staff/kody.md`.
 
-### Jobs
-
-A **job** is a stateful, bounded goal expressed as a labeled GitHub issue (`kody:job`). A **watch** is a stateless repeating loop. A **manager** is a job whose job happens to be overseeing other jobs. All three run on the same scheduled-executable substrate.
-
-`job-scheduler` wakes on cron (default `*/5 * * * *`) or empty `workflow_dispatch`, finds every open `kody:job` issue, and calls `job-tick` once per issue. The tick agent reads the issue body (human-owned prose) and a dedicated state comment (bot-owned JSON), decides the next step, and emits a fenced `kody-job-next-state` block the postflight persists. Children are spawned via `gh workflow run kody.yml` (not `@kody` comments — the default `GITHUB_TOKEN` can dispatch workflows but can't post auto-triggering comments).
-
-**Locked-toolbox jobs** (v0.4.175). A job file can add `tools: [...]` to its frontmatter to run the tick in a *locked toolbox*: the agent gets only those named tools (as `mcp__kody-duty__<name>`) plus `submit_state` — `Bash` and `Read` are revoked entirely. This removes the escape hatch where a job posted a raw `@kody <verb>` comment that the webhook silently drops for bot authors, so the job looked done while its verb never ran. The in-process kody-duty MCP server exposes high-level intents instead — `list_prs_to_repair`, `sync_pr` / `fix_ci_pr` / `resolve_pr` (each dispatches the matching `workflow_dispatch`, never a comment), `recommend_to_operator`, and `read_ledger`. Jobs without `tools:` keep the full Bash/gh toolbox unchanged.
-
-### `ui-review`
-
-PR-bound UI review. Drives the running preview deployment via the Playwright MCP server alongside the usual diff review, posts one structured review comment.
-
-- Preview URL: `--preview-url` → `$PREVIEW_URL` → `http://localhost:3000`. Unreachable → falls back to diff-only.
-- Credentials: dashboard-managed, per-repo — login username from the `LOGIN_USER` variable (`.kody/variables.json`), password from the `LOGIN_PASSWORD` vault secret (`.kody/secrets.enc`). Hand-written scenarios/notes come from the company profile (`.kody/profile/*.md`).
-- Auto-discovery: routes, roles, login/admin paths, Payload CMS collections, API routes, env vars — fed to the agent as context.
-
-For free-form QA passes (no diff, no PR), see [`qa-engineer`](#qa-engineer) below.
-
-### `qa-engineer`
-
-Free-form QA pass. Browses a running site with Playwright MCP, exercises UI states (happy / empty / error / loading / mobile / a11y), and turns findings into a kody goal whose tasks are individually triageable, severity-labelled bug issues. Read-only on the repo (no commits except the goal's own `state.json`).
-
-```bash
-# broad smoke against the project's QA_URL variable
-kody qa-engineer
-
-# focused pass; opens a new qa-<scope>-<date> goal + N task issues
-kody qa-engineer --scope "checkout flow"
-
-# attach findings to an existing goal (resolves URL from goal-<id>'s Vercel deployment)
-kody qa-engineer --goal admin-chat-memory-recall-ui
-
-# explicit URL overrides everything; useful for testing a deployed PR preview
-kody qa-engineer --url https://my-feature-branch.vercel.app --scope "search UX"
-
-# pre-authenticated session via committed Playwright storageState
-kody qa-engineer --scope "admin" --auth-profile .kody/qa-storage-state.json
-
-# PASS verdicts (no findings) skip goal creation; --issue routes the report to a comment
-kody qa-engineer --scope "smoke" --issue 1234
-```
-
-**URL resolution chain.** `resolveQaUrl` walks the chain in order; first non-empty source wins:
-
-1. `--url <URL>` — explicit
-2. `--goal <id>` → latest successful Vercel deployment for the `goal-<id>` branch (via `repos/.../deployments?ref=goal-<id>` + statuses)
-3. `$PREVIEW_URL` env var
-4. `QA_URL` variable in `.kody/variables.json` (per-repo, dashboard-managed)
-5. error — no localhost defaults; CI has no localhost to fall back to.
-
-Configure the per-repo default via the dashboard's variables store (`.kody/variables.json`), key `QA_URL` — e.g. `https://dev.example.com`.
-
-**Output modes.**
-
-| Trigger | What happens |
-|---|---|
-| Findings + no `--goal` | Appends a new `qa-<scope>-<date>` entry to the `kody:goals-manifest` issue (description = full report markdown). Opens N task issues, each labelled `goal:<id>` + `severity:Px` + `kody:qa-finding`. Writes `.kody/goals/<id>/state.json` (state: `active`) and pushes — `goal-scheduler` picks it up next tick. |
-| Findings + `--goal <id>` | Skips manifest body mutation (the existing goal owns its description). Posts the report markdown as a comment on the manifest issue. Opens N task issues with `goal:<id>` labels. |
-| Zero findings + `--issue <N>` | Posts the report as a comment on issue N. No goal touched. |
-| Zero findings + no `--issue` | Opens a single `kody:qa-finding`-labelled record issue with the full report body. |
-
-**Agent-emitted JSON contract.** The prompt requires the agent's final message to end with a machine-readable block:
-
-```
-<!-- KODY_QA_REPORT_JSON
-```json
-{
-  "findings": [
-    {
-      "severity": "P0|P1|P2|P3",
-      "title": "Short imperative — becomes the issue title",
-      "route": "/admin/...",
-      "steps": "1. ...\n2. ...",
-      "expected": "...",
-      "actual": "...",
-      "evidence": ".kody/qa-reports/<scope>/<finding>.png"
-    }
-  ]
-}
-```
--->
-```
-
-If the block is missing or malformed, the postflight falls back to single-issue mode and logs a warning. Severity rubric: P0 blocks core flow / data loss / security → verdict FAIL; P1 broken non-critical feature → typically FAIL; P2 degraded UX → typically CONCERNS; P3 polish → doesn't affect verdict.
-
-**GHA usage.** Trigger from any issue comment (auto-dispatched by the existing kody.yml workflow):
-
-```
-@kody qa-engineer --goal add-per-user-chat-memory-recall-ui --scope "memory recall UI"
-```
-
-…or via `workflow_dispatch`:
-
-```bash
-gh workflow run kody.yml -F executable=qa-engineer \
-  -F args="--goal admin-chat-memory-recall-ui --scope 'admin chat'"
-```
-
-**Auto-discovery & credentials.** Same as `ui-review`: `discoverQaContext` scans the repo for routes/roles/admin path/Payload collections/env vars; `loadQaContext` reads the dashboard-managed login username (`LOGIN_USER` variable), password (`LOGIN_PASSWORD` vault secret), and hand-written scenarios/notes (`.kody/profile/*.md`). The agent only logs in if a route under test requires it.
-
-**Artifacts.** Screenshots and DOM snapshots go to `.kody/qa-reports/<scope-slug>/`; the Playwright MCP also writes to `.playwright-mcp/`. Both should be in `.gitignore` and `.prettierignore` — `kody init` doesn't yet scaffold these, add them manually:
-
-```gitignore
-.kody/qa-reports/
-.playwright-mcp/
-```
-
-```
-.kody/**
-.playwright-mcp/**
-```
-
-### `memorize` — vault wiki
-
-A scheduled watch (cron `0 3 * * *`) that synthesizes recently merged PRs into a markdown knowledge base at `.kody/vault/` and opens a PR with the changes. Pages are entity-centric (`architecture/`, `conventions/`, `decisions/`, `components/`), not per-PR logs. Future kody runs see the relevant pages via the `loadVaultContext` preflight, which is wired into `run` / `fix` / `resolve` and exposes them as `{{vaultContext}}` in the prompt.
-
-To enable in a consumer repo: ensure `.gitignore` un-ignores the vault if `.kody/*` is otherwise ignored:
-
-```gitignore
-.kody/*
-!.kody/vault/
-!.kody/vault/**
-```
+Locked-toolbox duties can declare `tools: [...]` to run with only the named high-level MCP intents plus `submit_state`; duties without `tools:` keep the legacy Bash/gh toolbox.
 
 ### `release`
 
-- `--mode prepare` — bumps `package.json`, updates `CHANGELOG.md`, opens a `release/vX.Y.Z` PR. `--bump patch|minor|major` (default `patch`).
-- `--mode finalize` — tags, pushes, runs `prepublishOnly` + `npm publish`, creates a GH release. Runs **automatically** when a `release/vX.Y.Z` PR is merged (via `pull_request: [closed]` in the consumer workflow); manual trigger still works.
+`release` is a single deterministic flow: bump version files, update `CHANGELOG.md`, open or reuse a release PR, wait for CI, merge, publish, deploy, and notify. `release-prepare`, `release-publish`, and `release-deploy` remain available as explicit stage commands.
 
 ## Profiles
 

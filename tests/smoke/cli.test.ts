@@ -19,7 +19,7 @@ describe("smoke: CLI boots and validates args", () => {
     expect(r.status).toBe(0)
     expect(r.stdout).toContain("single-session autonomous engineer")
     expect(r.stdout).toContain("Usage:")
-    for (const verb of ["run", "fix", "review", "help", "version"]) {
+    for (const verb of ["run", "resolve", "sync", "help", "version"]) {
       expect(r.stdout).toContain(verb)
     }
   })

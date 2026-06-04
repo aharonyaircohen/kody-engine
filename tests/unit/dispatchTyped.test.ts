@@ -209,10 +209,20 @@ describe("autoDispatchTyped: unrecognized variant (user-facing feedback needed)"
     }
   })
 
-  // Note: PR comments unconditionally fall back to the "fix" executable in
-  // legacy autoDispatch — so unrecognized-on-PR currently doesn't trigger
-  // user feedback. This is a known follow-up: PRs should also surface
-  // unrecognized tokens instead of silently rerouting to fix.
+  it("returns unrecognized for typo'd commands on a PR when no PR default is configured", () => {
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody totally-not-a-real-command", user: { login: "alice", type: "User" } },
+      issue: { number: 9, pull_request: {} },
+    })
+    const out = autoDispatchTyped({ config: { defaultPrExecutable: undefined } as never })
+    expect(out.kind).toBe("unrecognized")
+    if (out.kind === "unrecognized") {
+      expect(out.token).toBe("totally-not-a-real-command")
+      expect(out.target).toBe(9)
+      expect(out.isPr).toBe(true)
+    }
+  })
 })
 
 describe("autoDispatchTyped: typo'd command does NOT fall through to default executable", () => {
@@ -273,9 +283,8 @@ describe("autoDispatchTyped: typo'd command does NOT fall through to default exe
       comment: { body: "@kody fxi", user: { login: "alice", type: "User" } },
       issue: { number: 99, pull_request: { url: "https://x" } },
     })
-    // Even with the hardcoded "fix" PR fallback, a non-null firstToken
-    // that doesn't resolve should bail (not silently route to fix). The
-    // user typed something specific; we tell them we don't know it.
+    // A non-null firstToken that doesn't resolve should bail. The user typed
+    // something specific; we tell them we don't know it.
     const out = autoDispatchTyped()
     expect(out.kind).toBe("unrecognized")
     if (out.kind === "unrecognized") {
@@ -290,8 +299,8 @@ describe("autoDispatchTyped: typo'd command does NOT fall through to default exe
       comment: { body: "@kody", user: { login: "alice", type: "User" } },
       issue: { number: 99, pull_request: { url: "https://x" } },
     })
-    const out = autoDispatchTyped()
+    const out = autoDispatchTyped({ config: { defaultPrExecutable: "sync" } as never })
     expect(out.kind).toBe("route")
-    if (out.kind === "route") expect(out.executable).toBe("fix")
+    if (out.kind === "route") expect(out.executable).toBe("sync")
   })
 })
