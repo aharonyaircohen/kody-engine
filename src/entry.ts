@@ -1,13 +1,20 @@
 import pkg from "../package.json"
 import { runChat } from "./chat-cli.js"
+import { loadConfig } from "./config.js"
 import { runExecutableChain } from "./executor.js"
 import { runCi } from "./kody-cli.js"
 import { hasExecutable, listExecutables, parseGenericFlags } from "./registry.js"
+import { brainServe } from "./servers/brain-serve.js"
+import { poolServe } from "./servers/pool-serve.js"
+import { runnerServe } from "./servers/runner-serve.js"
+import { serve } from "./servers/serve.js"
 import { runStats } from "./stats.js"
 
 interface ParsedArgs {
-  command: "ci" | "chat" | "help" | "version" | "stats" | "__executable__"
+  command: "ci" | "chat" | "help" | "version" | "stats" | "server" | "__executable__"
   executableName?: string
+  serverName?: "serve" | "pool-serve" | "runner-serve" | "brain-serve"
+  serverArgs?: string[]
   cliArgs?: Record<string, unknown>
   cwd?: string
   verbose?: boolean
@@ -22,21 +29,23 @@ const HELP_TEXT = `kody-engine — single-session autonomous engineer
 
 Usage:
   kody-engine run     --issue <N> [--cwd <path>] [--verbose|--quiet]
-  kody-engine fix     --pr    <N> [--feedback "..."] [--cwd <path>] [--verbose|--quiet]
-  kody-engine fix-ci  --pr    <N> [--run-id <ID>]    [--cwd <path>] [--verbose|--quiet]
   kody-engine resolve --pr    <N>                    [--cwd <path>] [--verbose|--quiet]
+  kody-engine sync    --pr    <N>                    [--cwd <path>] [--verbose|--quiet]
   kody-engine merge   --pr    <N>                    [--cwd <path>] [--verbose|--quiet]
-  kody-engine review  --pr    <N>                    [--cwd <path>] [--verbose|--quiet]
-  kody-engine <other>                                [--cwd <path>] [--verbose|--quiet]
-  kody-engine ci      --issue <N> [preflight flags — see: kody-engine ci --help]
+  kody-engine revert  --pr    <N> --shas <sha...>    [--cwd <path>] [--verbose|--quiet]
+  kody-engine preview-build --pr <N>                 [--cwd <path>] [--verbose|--quiet]
+  kody-engine release --issue <N>                    [--cwd <path>] [--verbose|--quiet]
+  kody-engine init                                   [--cwd <path>] [--verbose|--quiet]
+  kody-engine <executable>                           [--cwd <path>] [--verbose|--quiet]
+  kody-engine ci      [preflight flags — see: kody-engine ci --help]
   kody-engine chat    [chat flags — see: kody-engine chat --help]
   kody-engine stats   [--since 7d|--run <id>|--json|--cwd <path>]
   kody-engine help
   kody-engine version
 
-Each top-level command (run, fix, fix-ci, resolve, review, …) is a discovered
-executable under \`src/executables/<name>/profile.json\`. Drop in a new
-directory to add a new command.
+Each top-level command is a discovered executable under
+\`src/executables/<name>/profile.json\`. Drop in a new directory to add a new
+command; consumer repos can also provide their own executable profiles.
 
 Exit codes:
   0   success (PR opened, verify passed — or resolve produced a merge commit)
@@ -46,6 +55,7 @@ Exit codes:
   4   PR creation failed
   64  invalid CLI args
   99  wrapper crashed
+  124 a preflight/postflight shell script exceeded its timeout
 `
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -74,8 +84,23 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return { ...result, command: "stats", statsArgv: argv.slice(1) }
   }
 
-  // Every other top-level command is a discovered executable (run, fix, fix-ci,
-  // resolve, review, plan, orchestrator, init, release, watch-*, …).
+  // Long-running servers are engine plumbing, not user work-verbs. They route
+  // to src/servers/ as hardcoded CLI verbs (like ci/help/version), so the
+  // executable registry never lists them and dispatch never treats them as verbs.
+  const SERVER_VERBS = new Set(["serve", "pool-serve", "runner-serve", "brain-serve"])
+  if (SERVER_VERBS.has(cmd)) {
+    result.command = "server"
+    result.serverName = cmd as ParsedArgs["serverName"]
+    const flags = parseGenericFlags(argv.slice(1))
+    if (typeof flags.cwd === "string") result.cwd = flags.cwd
+    if (flags.verbose === true) result.verbose = true
+    // Positional tokens (e.g. `kody serve vscode|claude`) — flags are handled above.
+    result.serverArgs = argv.slice(1).filter((a) => !a.startsWith("-"))
+    return result
+  }
+
+  // Every other top-level command is a discovered executable (run, resolve,
+  // sync, merge, init, release, scheduled watches, consumer profiles, ...).
   if (hasExecutable(cmd)) {
     result.command = "__executable__"
     result.executableName = cmd
@@ -139,6 +164,30 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     }
   }
 
+  if (args.command === "server") {
+    const cwd = args.cwd ?? process.cwd()
+    try {
+      switch (args.serverName) {
+        case "serve":
+          return await serve({ cwd, config: loadConfig(cwd), args: args.serverArgs ?? [] })
+        case "pool-serve":
+          return await poolServe()
+        case "runner-serve":
+          return await runnerServe()
+        case "brain-serve":
+          return await brainServe({ cwd })
+        default:
+          process.stderr.write(`error: unknown server '${args.serverName}'\n`)
+          return 64
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[kody] ${args.serverName} crashed: ${msg}\n`)
+      if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`)
+      return 99
+    }
+  }
+
   const cwd = args.cwd ?? process.cwd()
 
   // Configless executables: skip config load.
@@ -152,12 +201,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   // configless fallback in executor.ts hardcodes "main", which is wrong
   // for repos defaulting to `dev`, `master`, etc. and silently collapsed
   // the stack onto the wrong branch.
-  //
-  // brain-serve is configless so one Brain can boot WITHOUT a work repo and
-  // serve many repos (cloned per chat message). Its model comes from the
-  // MODEL env var (see executor.ts skipConfig branch), not a repo's
-  // kody.config.json — the boot repo it used to read is gone.
-  const configlessCommands = new Set(["init", "goal-scheduler", "brain-serve"])
+  const configlessCommands = new Set(["init", "goal-scheduler"])
   const skipConfig = configlessCommands.has(args.executableName ?? "")
 
   try {

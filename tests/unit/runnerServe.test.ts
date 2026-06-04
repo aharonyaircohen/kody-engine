@@ -2,7 +2,7 @@ import type { Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { afterEach, describe, expect, it } from "vitest"
 
-import { authOk, buildServer, parseJob, type RunnerJob } from "../../src/scripts/runnerServe.js"
+import { authOk, buildServer, parseJob, type RunnerJob } from "../../src/servers/runner-serve.js"
 
 // ── parseJob: pure validation ───────────────────────────────────────────────
 

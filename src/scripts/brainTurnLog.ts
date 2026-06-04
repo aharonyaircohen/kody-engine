@@ -25,7 +25,7 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 
-import type { BrainEvent } from "./brainServe.js"
+import type { BrainEvent } from "../servers/brain-serve.js"
 
 export interface TurnRecord {
   seq: number

@@ -17,9 +17,21 @@
  */
 
 import { spawn } from "node:child_process"
-import { getAnthropicApiKeyOrDummy, LITELLM_DEFAULT_URL, needsLitellmProxy, parseProviderModel } from "../config.js"
-import type { PreflightScript } from "../executables/types.js"
+import {
+  getAnthropicApiKeyOrDummy,
+  type KodyConfig,
+  LITELLM_DEFAULT_URL,
+  needsLitellmProxy,
+  parseProviderModel,
+} from "../config.js"
 import { type LitellmHandle, startLitellmIfNeeded } from "../litellm.js"
+
+/** Inputs the `serve` CLI verb passes in (loaded by entry.ts, not the executor). */
+export interface ServeOptions {
+  cwd: string
+  config: KodyConfig
+  args: string[]
+}
 
 type EditorTarget = "none" | "vscode" | "claude"
 
@@ -39,17 +51,15 @@ function buildProxyEnv(url: string): NodeJS.ProcessEnv {
   }
 }
 
-export const serveFlow: PreflightScript = async (ctx) => {
-  ctx.skipAgent = true
-
-  const target = parseTarget(ctx.args._)
-  const model = parseProviderModel(ctx.config.agent.model)
+export async function serve(opts: ServeOptions): Promise<number> {
+  const target = parseTarget(opts.args)
+  const model = parseProviderModel(opts.config.agent.model)
   const usesProxy = needsLitellmProxy(model)
 
   let handle: LitellmHandle | null = null
   if (usesProxy) {
     process.stdout.write(`[kody serve] starting LiteLLM proxy for ${model.provider}/${model.model}...\n`)
-    handle = await startLitellmIfNeeded(model, ctx.cwd)
+    handle = await startLitellmIfNeeded(model, opts.cwd)
     process.stdout.write(`[kody serve] LiteLLM ready at ${handle?.url ?? LITELLM_DEFAULT_URL}\n`)
   } else {
     process.stdout.write(
@@ -73,10 +83,10 @@ export const serveFlow: PreflightScript = async (ctx) => {
 
   // ─── claude: synchronous foreground — exits with the editor ──────────────
   if (target === "claude") {
-    process.stdout.write(`[kody serve] launching Claude Code at ${ctx.cwd}\n`)
+    process.stdout.write(`[kody serve] launching Claude Code at ${opts.cwd}\n`)
     if (usesProxy) process.stdout.write(`  ANTHROPIC_BASE_URL=${url}\n`)
     const args = ["--dangerously-skip-permissions", "--model", model.model]
-    const child = spawn("claude", args, { stdio: "inherit", env: editorEnv, cwd: ctx.cwd })
+    const child = spawn("claude", args, { stdio: "inherit", env: editorEnv, cwd: opts.cwd })
     const exitCode = await new Promise<number>((resolve) => {
       child.on("exit", (code) => resolve(code ?? 0))
       child.on("error", (err) => {
@@ -86,16 +96,15 @@ export const serveFlow: PreflightScript = async (ctx) => {
       })
     })
     killProxy()
-    ctx.output.exitCode = exitCode
-    return
+    return exitCode
   }
 
   // ─── vscode | none: launch editor (if any), then block until SIGINT ──────
   if (target === "vscode") {
-    process.stdout.write(`[kody serve] launching VS Code at ${ctx.cwd}\n`)
+    process.stdout.write(`[kody serve] launching VS Code at ${opts.cwd}\n`)
     if (usesProxy) process.stdout.write(`  ANTHROPIC_BASE_URL=${url}\n`)
     try {
-      const code = spawn("code", [ctx.cwd], { stdio: "inherit", env: editorEnv, detached: true })
+      const code = spawn("code", [opts.cwd], { stdio: "inherit", env: editorEnv, detached: true })
       code.on("error", (err) => {
         process.stderr.write(`[kody serve] failed to launch VS Code: ${err.message}\n`)
         process.stderr.write(
@@ -126,4 +135,5 @@ export const serveFlow: PreflightScript = async (ctx) => {
   process.on("SIGTERM", () => shutdown("SIGTERM", 143))
 
   await new Promise<void>(() => {})
+  return 0 // unreachable (the promise above never resolves); satisfies the return type
 }

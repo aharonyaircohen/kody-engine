@@ -150,22 +150,10 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   resolveFlow: { owner: "resolve", reason: "resolve is bespoke (merge-only, no verify chain — see AGENTS.md)." },
   revertFlow: { owner: "revert", reason: "revert is bespoke (no-agent)." },
   saveGoalState: { owner: "goal-tick", reason: "goal-tick state-machine step." },
-  serveFlow: { owner: "serve", reason: "serve is bespoke (no-agent, long-lived local infra). Same shape as initFlow." },
-  brainServe: {
-    owner: "brain-serve",
-    reason:
-      "brain-serve is a long-lived HTTP server wrapping the chat loop for the Kody-Dashboard Brain proxy. Single-purpose; no other executable should share it.",
-  },
-  runnerServe: {
-    owner: "runner-serve",
-    reason:
-      "runner-serve is a long-lived HTTP server for a warm-pool one-shot runner: it boots idle and runs one issue per claim over HTTP. Single-purpose; no other executable should share it.",
-  },
-  poolServe: {
-    owner: "pool-serve",
-    reason:
-      "pool-serve is the always-on warm-pool owner: supervises LiteLLM and serves the dashboard's claim API. Single-purpose; no other executable should share it.",
-  },
+  // serveFlow / brainServe / runnerServe / poolServe were here until the four
+  // long-lived servers moved out of src/executables/ into src/servers/ as
+  // hardcoded CLI verbs — they are no longer registered scripts, so they no
+  // longer belong in this solo-script allowlist.
   stageMergeConflicts: { owner: "resolve", reason: "resolve-only postflight." },
   // ── Newly solo since the agent task executables (feature/bug/chore/plan/…)
   //    moved out of the engine to consumer repos. These were previously shared

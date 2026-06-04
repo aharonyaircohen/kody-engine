@@ -8,7 +8,6 @@ import type { PostflightScript, PreflightScript } from "../executables/types.js"
 import { abortUnfinishedGitOps } from "./abortUnfinishedGitOps.js"
 import { advanceFlow } from "./advanceFlow.js"
 import { appendCompanyActivity } from "./appendCompanyActivity.js"
-import { brainServe } from "./brainServe.js"
 import { buildSyntheticPlugin } from "./buildSyntheticPlugin.js"
 import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
 import { classifyByLabel } from "./classifyByLabel.js"
@@ -59,7 +58,6 @@ import { parseJobStateFromAgentResult } from "./parseJobStateFromAgentResult.js"
 import { parseReproOutput } from "./parseReproOutput.js"
 import { persistArtifacts } from "./persistArtifacts.js"
 import { persistFlowState } from "./persistFlowState.js"
-import { poolServe } from "./poolServe.js"
 import { postAgentComment } from "./postAgentComment.js"
 import { postIssueComment } from "./postIssueComment.js"
 import { postPlanComment } from "./postPlanComment.js"
@@ -77,12 +75,10 @@ import { resolveQaUrl } from "./resolveQaUrl.js"
 import { revertFlow } from "./revertFlow.js"
 import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
-import { runnerServe } from "./runnerServe.js"
 import { runPreviewBuild } from "./runPreviewBuild.js"
 import { runTickScript } from "./runTickScript.js"
 import { saveGoalState } from "./saveGoalState.js"
 import { saveTaskState } from "./saveTaskState.js"
-import { serveFlow } from "./serveFlow.js"
 import { setCommentTarget } from "./setCommentTarget.js"
 import { setLifecycleLabel } from "./setLifecycleLabel.js"
 import { skipAgent } from "./skipAgent.js"
@@ -139,10 +135,6 @@ export const preflightScripts: Record<string, PreflightScript> = {
   dispatchJobFileTicks,
   runTickScript,
   runPreviewBuild,
-  serveFlow,
-  brainServe,
-  runnerServe,
-  poolServe,
   loadGoalState,
   handleAbandonedGoal,
   deriveGoalPhase,

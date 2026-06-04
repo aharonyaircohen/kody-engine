@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { parseClaimRequest } from "../../src/scripts/poolServe.js"
+import { parseClaimRequest } from "../../src/servers/pool-serve.js"
 
 describe("poolServe: parseClaimRequest", () => {
   it("accepts scheduled mode with no issueNumber/sessionId", () => {

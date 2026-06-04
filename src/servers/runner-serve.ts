@@ -31,8 +31,6 @@ import { spawn } from "node:child_process"
 import * as fs from "node:fs"
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 
-import type { PreflightScript } from "../executables/types.js"
-
 export const DEFAULT_PORT = 8080
 const DEFAULT_WORKDIR = "/workspace/repo"
 
@@ -298,8 +296,7 @@ export function buildServer(opts: BuildRunnerServerOptions): Server {
   })
 }
 
-export const runnerServe: PreflightScript = async (ctx) => {
-  ctx.skipAgent = true
+export async function runnerServe(): Promise<number> {
 
   const apiKey = getApiKey()
   const port = Number(process.env.PORT ?? DEFAULT_PORT)
@@ -329,4 +326,5 @@ export const runnerServe: PreflightScript = async (ctx) => {
   await new Promise<void>(() => {
     /* never resolves */
   })
+  return 0 // unreachable; satisfies the Promise<number> return type
 }

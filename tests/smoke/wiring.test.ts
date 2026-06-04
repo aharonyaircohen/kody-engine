@@ -23,7 +23,9 @@ const INPUT_TYPES = new Set(["string", "int", "bool", "enum"])
 
 describe("smoke: system wiring", () => {
   it("every shipped executable profile loads and validates with well-formed inputs", () => {
-    expect(executables.length).toBeGreaterThan(20)
+    // Sanity floor, not a tight count — the four servers (serve/pool-serve/
+    // runner-serve/brain-serve) moved out of the registry into src/servers/.
+    expect(executables.length).toBeGreaterThan(15)
     const failures: string[] = []
     for (const exe of executables) {
       try {

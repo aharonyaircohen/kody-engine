@@ -21,7 +21,7 @@ import {
   type BuildServerOptions,
   buildServer,
   ensureRepoCwd,
-} from "../../src/scripts/brainServe.js"
+} from "../../src/servers/brain-serve.js"
 
 const MODEL = { provider: "anthropic" as const, model: "claude-haiku-4-5-20251001" }
 const KEY = "test-key-do-not-leak"

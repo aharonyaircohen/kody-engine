@@ -23,7 +23,6 @@
 import { type ChildProcess, spawn } from "node:child_process"
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 
-import type { PreflightScript } from "../executables/types.js"
 import { gitHubActionsDegraded } from "../github-health.js"
 import { runDutyFallbackTick } from "../pool/duty-fallback-tick.js"
 import type { FlyGuest } from "../pool/fly.js"
@@ -134,8 +133,7 @@ function superviseLitellm(): ChildProcess | null {
   return start()
 }
 
-export const poolServe: PreflightScript = async (ctx) => {
-  ctx.skipAgent = true
+export async function poolServe(): Promise<number> {
 
   const masterRaw = process.env.KODY_MASTER_KEY?.trim()
   if (!masterRaw) throw new Error("KODY_MASTER_KEY required for pool-serve")
@@ -288,4 +286,5 @@ export const poolServe: PreflightScript = async (ctx) => {
   await new Promise<void>(() => {
     /* never resolves */
   })
+  return 0 // unreachable; satisfies the Promise<number> return type
 }

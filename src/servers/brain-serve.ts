@@ -35,11 +35,10 @@ import type { ChatEvent, EventSink } from "../chat/events.js"
 import { type ChatTurnOptions, type ChatTurnResult, runChatTurn } from "../chat/loop.js"
 import { appendTurn, sessionFilePath } from "../chat/session.js"
 import { LITELLM_DEFAULT_URL, needsLitellmProxy, parseProviderModel } from "../config.js"
-import type { PreflightScript } from "../executables/types.js"
 import { unpackAllSecrets } from "../kody-cli.js"
 import { type LitellmHandle, startLitellmIfNeeded } from "../litellm.js"
 import { type CloneRepoFn, defaultCloneRepo, ensureRepoCwd } from "../repoWorkspace.js"
-import { beginTurn, endTurnIfUnterminated, getLastSeq, subscribe } from "./brainTurnLog.js"
+import { beginTurn, endTurnIfUnterminated, getLastSeq, subscribe } from "../scripts/brainTurnLog.js"
 
 export interface BrainEvent {
   type: "chat" | "text" | "tool_use" | "done" | "error"
@@ -436,8 +435,7 @@ export function buildServer(opts: BuildServerOptions): Server {
   })
 }
 
-export const brainServe: PreflightScript = async (ctx) => {
-  ctx.skipAgent = true
+export async function brainServe(opts: { cwd: string }): Promise<number> {
 
   // The dashboard ships the per-repo secrets vault to this machine as a
   // JSON ALL_SECRETS env var (see Kody-Dashboard fly-context/brain-fly).
@@ -451,20 +449,23 @@ export const brainServe: PreflightScript = async (ctx) => {
 
   const apiKey = getApiKey()
   const port = Number(process.env.PORT ?? DEFAULT_PORT)
-  const model = parseProviderModel(ctx.config.agent.model)
+  // brain-serve runs config-free (it serves many repos cloned per message), so
+  // its model comes from the MODEL env var — same fallback the executor used
+  // for this formerly-configless executable.
+  const model = parseProviderModel(process.env.MODEL?.trim() || "claude/claude-haiku-4-5-20251001")
   const usesProxy = needsLitellmProxy(model)
 
   let handle: LitellmHandle | null = null
   if (usesProxy) {
     process.stdout.write(`[brain-serve] starting LiteLLM proxy for ${model.provider}/${model.model}...\n`)
-    handle = await startLitellmIfNeeded(model, ctx.cwd)
+    handle = await startLitellmIfNeeded(model, opts.cwd)
     process.stdout.write(`[brain-serve] LiteLLM ready at ${handle?.url ?? LITELLM_DEFAULT_URL}\n`)
   }
   const litellmUrl = usesProxy ? (handle?.url ?? LITELLM_DEFAULT_URL) : null
 
   const server = buildServer({
     apiKey,
-    cwd: ctx.cwd,
+    cwd: opts.cwd,
     // Per-repo clones live here; defaults to a `repos` sibling of cwd.
     reposRoot: process.env.BRAIN_REPOS_ROOT?.trim() || undefined,
     model,
@@ -473,7 +474,7 @@ export const brainServe: PreflightScript = async (ctx) => {
 
   await new Promise<void>((resolve) => {
     server.listen(port, "0.0.0.0", () => {
-      process.stdout.write(`[brain-serve] listening on 0.0.0.0:${port} (cwd=${ctx.cwd})\n`)
+      process.stdout.write(`[brain-serve] listening on 0.0.0.0:${port} (cwd=${opts.cwd})\n`)
       resolve()
     })
   })
@@ -498,4 +499,5 @@ export const brainServe: PreflightScript = async (ctx) => {
   await new Promise<void>(() => {
     /* never resolves */
   })
+  return 0 // unreachable; satisfies the Promise<number> return type
 }
