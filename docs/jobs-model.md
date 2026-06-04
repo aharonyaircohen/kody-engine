@@ -13,12 +13,12 @@ Everything the engine runs funnels into **one execution unit (the job)**, driven
 | **persona** | who | reusable executor (`.kody/staff/<slug>.md`) |
 | **duty** | why | reusable intent (pure prose) |
 | **executable** | how | reusable unit of work (`run`, `fix`, …) |
-| **issue** | what | a GitHub **issue or PR** — the work-item |
-| **task** | execution | a **list of jobs** + state (the runs that do one issue) |
+| **issue** | what | a GitHub **issue or PR** — the work-item a task is about |
+| **task** | execution | a **list of jobs** + state (the runs on one issue) |
 | **job** | the run | one execution (a retry = a new job) |
-| **goal** | orchestration | a **list of issues** + state |
+| **goal** | orchestration | a **list of tasks** + state (related work) |
 
-Nesting: **goal → issues → task → jobs.** A goal is a list of issues + state; each issue is done by a task (its list of jobs) + state; a job is a single execution.
+Nesting: **goal → tasks → jobs.** A goal is a list of tasks + state; a task is a list of jobs (about one issue) + state; a job is a single execution.
 
 ## Trigger vs engine (two vocabularies)
 
@@ -51,22 +51,28 @@ The engine already emits every field, just scattered (`KODY_PR_URL`, `KODY_REASO
 1. ✅ **New `job`** — the single execution unit (binds duty + persona + executable + a target). *(`Job` type + `runJob` + `mintInstantJob`/`mintScheduledJob` in `src/job.ts`; both the comment and cron paths now mint a job and run it through the one runner.)*
 2. ⬜ **Formalize `task` = a list of jobs + state** (the runs on one issue/PR). Today it's implicit (`taskState`/`loadTaskState`); make it the explicit layer between goal and job — a task holds its jobs.
 3. 🚧 **Slim the duty** to pure *why*; schedule/persona/executable move onto the job. *(Done at runtime — the Job is now the carrier of when/who/how, minted from the duty's frontmatter. The duty `.md` keeps that frontmatter as the authoring surface; removing it literally would break consumer authoring, so that's intentionally deferred.)*
-4. ✅ **`@kody` mints a job** (instant) instead of calling an executable directly — rewire dispatch. *(Done — the comment/manual route mints an instant job via `mintInstantJob` and runs it through `runJob`; behaviour-neutral so far.)*
+4. ✅ **`@kody` mints a job** (instant) instead of calling an executable directly — rewire dispatch. *(Done — the comment/manual route mints an instant job via `mintInstantJob` and runs it through `runJob`. The minted persona (`kody`) is now consumed: the run executes as the built-in `kody` identity unless the executable declares its own `staff`.)*
 5. ✅ **Cron mints a job** (scheduled) — schedulers tick jobs. *(Done — `dispatchJobFileTicks` mints a scheduled job per due duty and runs it via `runJob` (chain:false); byte-identical to the prior one-shot tick.)*
 6. ✅ **Job points to one executable (0–1)** + safe dispatch. *(Done — both minters set a single `executable` on the job and `runJob` dispatches exactly that. The agent-driven `dutyMcp` palette is a separate, intentional safety mechanism and is left intact.)*
-7. ✅ **One runner** executes all jobs — collapse the separate paths. *(Done — both the comment/manual route and the cron tick route now run through `runJob`. Behaviour-neutral so far: no persona/why consumed yet.)*
+7. ✅ **One runner** executes all jobs — collapse the separate paths. *(Done — both the comment/manual route and the cron tick route now run through `runJob`. Persona is consumed (instant jobs run as `kody`); inline `why` is still not consumed yet.)*
 8. ✅ **Servers** (`serve`/`pool-serve`/`runner-serve`/`brain-serve`) move to engine internals, out of the executable registry. *(Done — now `src/servers/` + hardcoded CLI verbs; gone from the registry.)*
-9. ✅ **`goal`** is the orchestration container: a **list of issues** + state, spawning jobs per issue. *(Already implemented — `goal-scheduler` / `goal-tick` / `.kody/goals/` predate this work and already do this.)*
+9. ✅ **`goal`** is the orchestration container: a **list of tasks** + state, spawning a job per task. *(Already implemented — `goal-scheduler` / `goal-tick` / `.kody/goals/` predate this work and already do this.)*
 
 Items 4 and 7 touch the execution core — the heavy lifting. The rest is wiring.
 
-## Open question
+## Decisions
+
+- **Failure halts the goal.** A goal's tasks are *related*, so if any task fails the goal **stops** — it does not proceed to other tasks. It resumes only after the failed task is fixed/retried. (Failures are not isolated.)
+
+## Open questions
 
 **Does a re-run create a new job?**
 - Yes → `task = [job]` earns its place (run history); keep both layers.
 - No → task and job collapse; drop one layer.
 
 This decides whether the task layer is real or ceremony.
+
+**Still to close:** paused/`blocked` job status (approval gates), same-issue serialization (lock + supersede vs queue), goal lifecycle (who adds tasks, when "done", is the goal itself scheduled).
 
 ## Rollout
 
