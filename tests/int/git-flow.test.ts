@@ -127,6 +127,33 @@ describe("integration: git flow", () => {
     expect(result.message.startsWith("chore: ")).toBe(true)
   })
 
+  it("commits when no git identity is configured (fresh CI runner)", () => {
+    const branch = ensureFeatureBranch(12, "No identity", "main", repo.workdir).branch
+    fs.writeFileSync(path.join(repo.workdir, "doc.md"), "hello")
+
+    // Reproduce a containerized runner where git has NO identity and refuses to
+    // invent one: a global config with user.useConfigOnly=true and no name/email
+    // (a Mac/dev box would otherwise auto-derive user@hostname and hide the bug).
+    // The temp repo has no local identity either, so without a fallback
+    // `git commit` aborts with "user.useConfigOnly … no name was given" — the
+    // exact failure that broke dogfooding @kody on the engine repo.
+    const globalCfg = path.join(repo.workdir, "..", "fake-global.gitconfig")
+    fs.writeFileSync(globalCfg, "[user]\n\tuseConfigOnly = true\n")
+    const saved = { ...process.env }
+    process.env.GIT_CONFIG_NOSYSTEM = "1"
+    process.env.GIT_CONFIG_GLOBAL = globalCfg
+    delete process.env.GIT_AUTHOR_NAME
+    delete process.env.GIT_AUTHOR_EMAIL
+    delete process.env.GIT_COMMITTER_NAME
+    delete process.env.GIT_COMMITTER_EMAIL
+    try {
+      const result = commitAndPush(branch, "docs: add doc", repo.workdir)
+      expect(result.committed).toBe(true)
+    } finally {
+      process.env = saved
+    }
+  })
+
   it("returns committed=false when only forbidden files changed", () => {
     const branch = ensureFeatureBranch(11, "Only excluded", "main", repo.workdir).branch
     fs.mkdirSync(path.join(repo.workdir, ".kody"), { recursive: true })

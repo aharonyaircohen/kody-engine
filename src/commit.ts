@@ -89,6 +89,26 @@ function tryGit(args: string[], cwd?: string): boolean {
   }
 }
 
+/**
+ * Guarantee a committer identity before we commit. Production runs get one from
+ * the CLI bootstrap (see kody-cli.ts), but a direct caller (tests, future
+ * scripts) — or any runner with no global git config — would otherwise hit
+ * `git commit` failing with "empty ident name … not allowed". We own the
+ * fallback here so committing never depends on who invoked us.
+ *
+ * Only fills in what's missing — an existing name/email (local, global, or
+ * system) is never clobbered. Mirrors the GIT_AUTHOR_* convention used by
+ * repoWorkspace.ts / runnerServe.ts.
+ */
+function ensureGitIdentity(cwd?: string): void {
+  if (!tryGit(["config", "user.name"], cwd)) {
+    tryGit(["config", "user.name", process.env.GIT_AUTHOR_NAME ?? "Kody Bot"], cwd)
+  }
+  if (!tryGit(["config", "user.email"], cwd)) {
+    tryGit(["config", "user.email", process.env.GIT_AUTHOR_EMAIL ?? "kody@users.noreply.github.com"], cwd)
+  }
+}
+
 import * as fs from "node:fs"
 import * as path from "node:path"
 
@@ -231,6 +251,7 @@ export function commitAndPush(branch: string, agentMessage: string, cwd?: string
   }
 
   const message = normalizeCommitMessage(agentMessage)
+  ensureGitIdentity(cwd)
   try {
     git(["commit", "--no-gpg-sign", "-m", message], cwd)
   } catch (err) {
