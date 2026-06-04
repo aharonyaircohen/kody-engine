@@ -29,10 +29,25 @@ describe("runJob (Phase 1 seam)", () => {
     expect(input.cwd).toBe("/x")
   })
 
-  it("seeds inline why into preloadedData.jobIntent", async () => {
+  it("seeds inline why into preloadedData.jobWhy", async () => {
     await runJob({ executable: "fix", why: "fix the flaky test", cliArgs: {}, flavor: "instant" }, { cwd: "/x" })
     const [, input] = runExecutableChain.mock.calls[0]!
-    expect(input.preloadedData?.jobIntent).toBe("fix the flaky test")
+    expect(input.preloadedData?.jobWhy).toBe("fix the flaky test")
+    expect(input.preloadedData?.jobIntent).toBeUndefined()
+  })
+
+  it("does not seed jobWhy for an empty why string", async () => {
+    await runJob({ executable: "run", why: "", cliArgs: {}, flavor: "instant" }, { cwd: "/x" })
+    const [, input] = runExecutableChain.mock.calls[0]!
+    expect(input.preloadedData).toBeUndefined()
+  })
+
+  it("carries the DispatchResult's why through mintInstantJob into jobWhy", async () => {
+    await runJob(mintInstantJob({ executable: "run", cliArgs: { issue: 5 }, target: 5, why: "also add tests" }), {
+      cwd: "/x",
+    })
+    const [, input] = runExecutableChain.mock.calls[0]!
+    expect(input.preloadedData?.jobWhy).toBe("also add tests")
   })
 
   it("seeds persona into preloadedData.jobPersona", async () => {

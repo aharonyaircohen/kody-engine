@@ -187,7 +187,8 @@ describe("dispatch: issue_comment on issue", () => {
       comment: { body: "please @kody run this now" },
       issue: { number: 9 },
     })
-    expect(autoDispatch()).toEqual({ executable: "run", cliArgs: { issue: 9 }, target: 9 })
+    // "this now" is free text no input captured → carried as the job's `why`.
+    expect(autoDispatch()).toEqual({ executable: "run", cliArgs: { issue: 9 }, target: 9, why: "this now" })
   })
 
   it("routes legacy '@kody build' → run (backward-compat)", () => {
@@ -272,6 +273,8 @@ describe("dispatch: issue_comment on issue", () => {
       executable: "classify",
       cliArgs: { issue: 11 },
       target: 11,
+      // The natural-language remainder (politeness stripped) becomes `why`.
+      why: "fix the failing test",
     })
   })
 

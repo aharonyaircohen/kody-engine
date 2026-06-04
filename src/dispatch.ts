@@ -31,6 +31,15 @@ export interface DispatchResult {
   executable: string
   cliArgs: Record<string, unknown>
   target: number
+  /**
+   * The operator's free-text request after `@kody <command>` that no declared
+   * input captured (the job's inline *why*) — the leftover after flag/enum
+   * parsing. Surfaced to the agent as fenced context so the comment's wording
+   * shapes the run. Undefined when the comment is empty, fully parsed into args
+   * (e.g. `resolve --prefer ours`), bound to a `bindsCommentRest` input, or for
+   * non-comment dispatch (explicit `--issue`, label/event routing).
+   */
+  why?: string
 }
 
 /**
@@ -272,11 +281,21 @@ export function autoDispatch(opts?: {
   }
 
   const restInput = effectiveInputs.find((s) => s.bindsCommentRest === true)
+  let why: string | undefined
   if (restInput && leftover.length > 0 && args[restInput.name] === undefined) {
+    // A declared input captures the free text — the executable owns it; don't
+    // also surface it as `why` (that would double the same words).
     args[restInput.name] = leftover
+  } else if (leftover.length > 0) {
+    // Free-text intent that no input captured. Instead of dropping it, carry it
+    // as the job's inline `why` so the operator's words still reach the agent
+    // (the executor fences + injects it). Flags/enums fully parsed into args
+    // leave no leftover, so a structured comment like `resolve --prefer ours`
+    // sets no `why` — only genuine prose does.
+    why = leftover
   }
 
-  return { executable, cliArgs: args, target: targetNum }
+  return { executable, cliArgs: args, target: targetNum, why }
 }
 
 /**

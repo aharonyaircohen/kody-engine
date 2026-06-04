@@ -499,10 +499,9 @@ export async function runCi(argv: string[]): Promise<number> {
     // to post a bot-authored `@kody` comment the follow-up run would ignore.
     // One-runner: the comment / manual route mints an INSTANT job and runs it.
     // runJob wraps runExecutableChain, so in-process stage hand-offs and exit
-    // codes are preserved. We don't seed `why` yet (it would feed the
-    // {{jobIntent}} prompt token); the job carries only the default persona,
-    // which nothing consumes until a later phase — so this flip is behaviour-
-    // neutral.
+    // codes are preserved. The minted job carries the default `kody` persona
+    // (executor injects it) and the operator's verbatim request as `why`
+    // (carried on the DispatchResult → surfaced as a fenced system block).
     const result = await runJob(mintInstantJob(dispatch), {
       cwd,
       config,

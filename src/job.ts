@@ -81,9 +81,10 @@ export interface RunJobBase {
  * Mapping:
  *   - profile = job.executable ?? job.duty   (the runner / "how")
  *   - cliArgs = job.cliArgs                   (target already bound by the minter)
- *   - inline why → preloadedData.jobIntent    (seeded into ctx.data before
- *                                              preflights; the prompt layer
- *                                              consumes it in a later phase)
+ *   - inline why → preloadedData.jobWhy        (seeded into ctx.data before
+ *                                              preflights; the executor injects
+ *                                              it as a fenced operator-request
+ *                                              block in the system prompt)
  *   - persona  → preloadedData.jobPersona
  *
  * No caller mints Jobs yet — this is the seam later phases wire the comment and
@@ -97,7 +98,11 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   }
 
   const preloadedData: Record<string, unknown> = {}
-  if (valid.why !== undefined) preloadedData.jobIntent = valid.why
+  // Inline why → ctx.data.jobWhy (NOT jobIntent — that token is the scheduled
+  // duty BODY, consumed via {{jobIntent}} by job-tick; reusing it would
+  // double-inject). The executor surfaces jobWhy to the agent as a fenced
+  // "operator request" block, so the comment's wording shapes any instant run.
+  if (valid.why !== undefined && valid.why.length > 0) preloadedData.jobWhy = valid.why
   if (valid.persona !== undefined) preloadedData.jobPersona = valid.persona
 
   const input: ExecutorInput = {
@@ -122,14 +127,15 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
 /**
  * Mint an INSTANT job from a comment / manual-dispatch route. The trigger
  * resolves to a DispatchResult (executable + cliArgs + target); this turns it
- * into a Job. `why` is the raw comment body (the agent's intent); `persona`
- * defaults to "kody" — instant verbs ran persona-less before, and the default
- * is the agreed starting point (overridable per call).
+ * into a Job. `why` is the operator's free-text request after `@kody <command>`
+ * (carried on the DispatchResult); `persona` defaults to "kody" — instant verbs
+ * ran persona-less before, and the default is the agreed starting point.
+ * Both are overridable per call via `opts`.
  */
 export function mintInstantJob(dispatch: DispatchResult, opts?: { why?: string; persona?: string }): Job {
   return {
     executable: dispatch.executable,
-    why: opts?.why,
+    why: opts?.why ?? dispatch.why,
     persona: opts?.persona ?? DEFAULT_INSTANT_PERSONA,
     target: dispatch.target,
     cliArgs: dispatch.cliArgs,
