@@ -3,7 +3,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import { performInit } from "../../src/scripts/initFlow.js"
+import { performInit, renderScheduledWorkflow } from "../../src/scripts/initFlow.js"
 
 function mkRepo(opts: { lockFile?: "pnpm-lock.yaml" | "yarn.lock" | "bun.lockb"; gitInit?: boolean } = {}): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-init-"))
@@ -28,12 +28,17 @@ describe("initFlow: performInit", () => {
     const result = performInit(dir, false)
     expect(result.wrote).toContain("kody.config.json")
     expect(result.wrote).toContain(".github/workflows/kody.yml")
+    expect(result.wrote).toContain(".kody/staff/kody.md")
     // Every discovered scheduled executable also gets its own workflow file.
     const scheduledWorkflows = result.wrote.filter((f) => /\.github\/workflows\/kody-.+\.yml$/.test(f))
     expect(scheduledWorkflows.length).toBeGreaterThanOrEqual(1)
     expect(result.skipped).toEqual([])
     expect(fs.existsSync(path.join(dir, "kody.config.json"))).toBe(true)
     expect(fs.existsSync(path.join(dir, ".github/workflows/kody.yml"))).toBe(true)
+    expect(fs.existsSync(path.join(dir, ".kody/staff/kody.md"))).toBe(true)
+
+    const duty = fs.readFileSync(path.join(dir, ".kody/duties/watch-stale-prs.md"), "utf-8")
+    expect(duty).toMatch(/^staff: kody$/m)
   })
 
   it("detects package manager from lockfile", () => {
@@ -75,8 +80,20 @@ describe("initFlow: performInit", () => {
     expect(second.wrote).toEqual([])
     expect(second.skipped).toContain("kody.config.json")
     expect(second.skipped).toContain(".github/workflows/kody.yml")
+    expect(second.skipped).toContain(".kody/staff/kody.md")
     const after = fs.readFileSync(path.join(dir, "kody.config.json"), "utf-8")
     expect(after).toMatch(/user-edit/)
+  })
+
+  it("preserves an existing default staff persona unless force is true", () => {
+    dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
+    const staffPath = path.join(dir, ".kody/staff/kody.md")
+    fs.mkdirSync(path.dirname(staffPath), { recursive: true })
+    fs.writeFileSync(staffPath, "# Custom Kody\n")
+
+    const result = performInit(dir, false)
+    expect(result.skipped).toContain(".kody/staff/kody.md")
+    expect(fs.readFileSync(staffPath, "utf-8")).toBe("# Custom Kody\n")
   })
 
   it("overwrites existing files when force is true", () => {
@@ -105,5 +122,15 @@ describe("initFlow: performInit", () => {
     const result = performInit(dir, false)
     expect(result.wrote).not.toContain(".kody/qa-guide.md")
     expect(fs.existsSync(path.join(dir, ".kody/qa-guide.md"))).toBe(false)
+  })
+})
+
+describe("renderScheduledWorkflow", () => {
+  it("sets up Python so non-Anthropic models (litellm) work on the scheduled path", () => {
+    // Regression: scheduled workflows omitted Python, so litellm couldn't
+    // install and scheduled duties failed on MiniMax/other non-Anthropic models.
+    const yml = renderScheduledWorkflow("job-scheduler", "*/5 * * * *")
+    expect(yml).toMatch(/uses: actions\/setup-python/)
+    expect(yml).toMatch(/python-version:/)
   })
 })

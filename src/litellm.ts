@@ -91,7 +91,7 @@ function litellmImportable(): boolean {
  * installed" on non-Anthropic models. Installing here covers every entry path
  * uniformly (the proxy is only ever started when a non-Anthropic model needs it).
  */
-function resolveLitellmCommand(): "litellm" | "python3" {
+export function resolveLitellmCommand(): "litellm" | "python3" {
   try {
     execFileSync("which", ["litellm"], { timeout: 3000, stdio: "pipe" })
     return "litellm"

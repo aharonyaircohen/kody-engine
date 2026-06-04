@@ -1,7 +1,42 @@
-import { describe, expect, it } from "vitest"
-import { generateLitellmConfigYaml } from "../../src/litellm.js"
+import { execFileSync } from "node:child_process"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+import { generateLitellmConfigYaml, resolveLitellmCommand } from "../../src/litellm.js"
+
+vi.mock("node:child_process", () => ({ execFileSync: vi.fn(), spawn: vi.fn() }))
+
+const mockExec = vi.mocked(execFileSync)
+
+/**
+ * Route the mocked execFileSync by command:
+ *   - `which litellm`      → whichOk
+ *   - `python3 -c import…` → next value of importOkSeq (so we can fail-then-succeed)
+ *   - `pip|pip3 install`   → pipOk
+ */
+function routeExec(opts: { whichOk: boolean; importOkSeq: boolean[]; pipOk: boolean }) {
+  let importCall = 0
+  mockExec.mockImplementation(((file: string, args?: readonly string[]) => {
+    const a = args ?? []
+    if (file === "which") {
+      if (opts.whichOk) return Buffer.from("")
+      throw new Error("not on PATH")
+    }
+    if (file === "python3" && a[0] === "-c") {
+      const ok = opts.importOkSeq[Math.min(importCall, opts.importOkSeq.length - 1)]
+      importCall++
+      if (ok) return Buffer.from("")
+      throw new Error("ImportError")
+    }
+    if (file === "pip" || file === "pip3") {
+      if (opts.pipOk) return Buffer.from("")
+      throw new Error("pip failed")
+    }
+    return Buffer.from("")
+  }) as never)
+}
 
 describe("litellm: generateLitellmConfigYaml", () => {
+  beforeEach(() => mockExec.mockReset())
+
   it("emits a model_list with provider/model and api_key env var", () => {
     const yaml = generateLitellmConfigYaml({ provider: "minimax", model: "MiniMax-M2.7-highspeed" })
     expect(yaml).toMatch(/model_list:/)
@@ -18,5 +53,35 @@ describe("litellm: generateLitellmConfigYaml", () => {
   it("derives api_key env var from provider name", () => {
     const yaml = generateLitellmConfigYaml({ provider: "openai", model: "gpt-4o" })
     expect(yaml).toMatch(/api_key: os\.environ\/OPENAI_API_KEY/)
+  })
+})
+
+describe("litellm: resolveLitellmCommand (auto-install)", () => {
+  beforeEach(() => mockExec.mockReset())
+
+  it("returns 'litellm' when the binary is on PATH", () => {
+    routeExec({ whichOk: true, importOkSeq: [false], pipOk: false })
+    expect(resolveLitellmCommand()).toBe("litellm")
+  })
+
+  it("returns 'python3' when importable, without installing", () => {
+    routeExec({ whichOk: false, importOkSeq: [true], pipOk: false })
+    expect(resolveLitellmCommand()).toBe("python3")
+    expect(mockExec).not.toHaveBeenCalledWith("pip", expect.arrayContaining(["install"]), expect.anything())
+  })
+
+  it("installs on demand when missing, then succeeds", () => {
+    routeExec({ whichOk: false, importOkSeq: [false, true], pipOk: true })
+    expect(resolveLitellmCommand()).toBe("python3")
+    // pip install was attempted (this is the gap that broke scheduled duties)
+    const installed = mockExec.mock.calls.some(
+      (c) => (c[0] === "pip" || c[0] === "pip3") && Array.isArray(c[1]) && c[1].includes("install"),
+    )
+    expect(installed).toBe(true)
+  })
+
+  it("throws a clear error when install fails", () => {
+    routeExec({ whichOk: false, importOkSeq: [false], pipOk: false })
+    expect(() => resolveLitellmCommand()).toThrow(/auto-install failed/)
   })
 })
