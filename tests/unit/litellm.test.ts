@@ -12,7 +12,7 @@ const mockExec = vi.mocked(execFileSync)
  *   - `python3 -c import…` → next value of importOkSeq (so we can fail-then-succeed)
  *   - `pip|pip3 install`   → pipOk
  */
-function routeExec(opts: { whichOk: boolean; importOkSeq: boolean[]; pipOk: boolean }) {
+function routeExec(opts: { whichOk: boolean; importOkSeq: boolean[]; pipOk: boolean; scriptPath?: string }) {
   let importCall = 0
   mockExec.mockImplementation(((file: string, args?: readonly string[]) => {
     const a = args ?? []
@@ -21,10 +21,15 @@ function routeExec(opts: { whichOk: boolean; importOkSeq: boolean[]; pipOk: bool
       throw new Error("not on PATH")
     }
     if (file === "python3" && a[0] === "-c") {
-      const ok = opts.importOkSeq[Math.min(importCall, opts.importOkSeq.length - 1)]
-      importCall++
-      if (ok) return Buffer.from("")
-      throw new Error("ImportError")
+      // `import litellm` is the importability probe; any other -c snippet is the
+      // console-script locator (returns the path string, or "" when missing).
+      if (a[1] === "import litellm") {
+        const ok = opts.importOkSeq[Math.min(importCall, opts.importOkSeq.length - 1)]
+        importCall++
+        if (ok) return Buffer.from("")
+        throw new Error("ImportError")
+      }
+      return opts.scriptPath ?? "/py/bin/litellm"
     }
     if (file === "pip" || file === "pip3") {
       if (opts.pipOk) return Buffer.from("")
@@ -64,15 +69,16 @@ describe("litellm: resolveLitellmCommand (auto-install)", () => {
     expect(resolveLitellmCommand()).toBe("litellm")
   })
 
-  it("returns 'python3' when importable, without installing", () => {
-    routeExec({ whichOk: false, importOkSeq: [true], pipOk: false })
-    expect(resolveLitellmCommand()).toBe("python3")
+  it("returns the console-script path when importable but not on PATH, without installing", () => {
+    routeExec({ whichOk: false, importOkSeq: [true], pipOk: false, scriptPath: "/py/bin/litellm" })
+    // NOT "python3" — `python3 -m litellm` is invalid (no __main__); must use the script.
+    expect(resolveLitellmCommand()).toBe("/py/bin/litellm")
     expect(mockExec).not.toHaveBeenCalledWith("pip", expect.arrayContaining(["install"]), expect.anything())
   })
 
-  it("installs on demand when missing, then succeeds", () => {
-    routeExec({ whichOk: false, importOkSeq: [false, true], pipOk: true })
-    expect(resolveLitellmCommand()).toBe("python3")
+  it("installs on demand when missing, then returns the script path", () => {
+    routeExec({ whichOk: false, importOkSeq: [false, true], pipOk: true, scriptPath: "/py/bin/litellm" })
+    expect(resolveLitellmCommand()).toBe("/py/bin/litellm")
     // pip install was attempted (this is the gap that broke scheduled duties)
     const installed = mockExec.mock.calls.some(
       (c) => (c[0] === "pip" || c[0] === "pip3") && Array.isArray(c[1]) && c[1].includes("install"),

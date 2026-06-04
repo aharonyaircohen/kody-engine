@@ -82,34 +82,59 @@ function litellmImportable(): boolean {
   }
 }
 
+/** Absolute path to the `litellm` console script next to the active python3, or null. */
+function locateLitellmScript(): string | null {
+  try {
+    const out = execFileSync(
+      "python3",
+      [
+        "-c",
+        "import os,sys; p=os.path.join(os.path.dirname(sys.executable),'litellm'); print(p if os.path.exists(p) else '')",
+      ],
+      { encoding: "utf-8", timeout: 10_000 },
+    ).trim()
+    return out.length > 0 ? out : null
+  } catch {
+    return null
+  }
+}
+
 /**
- * Locate the litellm entrypoint, installing it on demand if missing.
+ * Resolve a runnable litellm proxy launcher, installing on demand if missing.
  *
- * Historically only the `ci` preflight pip-installed litellm, so any path that
- * starts the proxy *without* going through that preflight — a scheduled duty
- * invoked as `kody-engine <executable>` directly — failed with "litellm not
- * installed" on non-Anthropic models. Installing here covers every entry path
- * uniformly (the proxy is only ever started when a non-Anthropic model needs it).
+ * Returns the bare `litellm` (when on PATH) or an absolute path to the installed
+ * `litellm` console script. `python3 -m litellm` is NOT valid — litellm has no
+ * `__main__` — so when the CLI isn't on PATH we must locate the console script.
+ *
+ * Installing here covers every entry path uniformly (the proxy only starts when
+ * a non-Anthropic model needs it). Historically only the `ci` preflight
+ * pip-installed litellm, so a scheduled duty invoked as `kody-engine
+ * <executable>` directly failed with "litellm not installed".
  */
-export function resolveLitellmCommand(): "litellm" | "python3" {
+export function resolveLitellmCommand(): string {
   try {
     execFileSync("which", ["litellm"], { timeout: 3000, stdio: "pipe" })
     return "litellm"
   } catch {
-    if (litellmImportable()) return "python3"
-    process.stderr.write("→ kody: litellm not found — installing (pip install 'litellm[proxy]')\n")
-    let installed = false
-    for (const pip of ["pip", "pip3"]) {
-      try {
-        execFileSync(pip, ["install", "litellm[proxy]"], { timeout: 300_000, stdio: "inherit" })
-        installed = true
-        break
-      } catch {
-        /* try next */
+    if (!litellmImportable()) {
+      process.stderr.write("→ kody: litellm not found — installing (pip install 'litellm[proxy]')\n")
+      let installed = false
+      for (const pip of ["pip", "pip3"]) {
+        try {
+          execFileSync(pip, ["install", "litellm[proxy]"], { timeout: 300_000, stdio: "inherit" })
+          installed = true
+          break
+        } catch {
+          /* try next */
+        }
+      }
+      if (!installed || !litellmImportable()) {
+        throw new Error("litellm not installed and auto-install failed — run: pip install 'litellm[proxy]'")
       }
     }
-    if (installed && litellmImportable()) return "python3"
-    throw new Error("litellm not installed and auto-install failed — run: pip install 'litellm[proxy]'")
+    const script = locateLitellmScript()
+    if (script) return script
+    throw new Error("litellm is importable but its console script was not found next to python3")
   }
 }
 
@@ -135,10 +160,9 @@ export async function startLitellmIfNeeded(
   const spawnProxy = (): void => {
     const configPath = path.join(os.tmpdir(), `kody-litellm-${Date.now()}.yaml`)
     fs.writeFileSync(configPath, generateLitellmConfigYaml(model))
-    const args =
-      cmd === "litellm"
-        ? ["--config", configPath, "--port", port]
-        : ["-m", "litellm", "--config", configPath, "--port", port]
+    // `cmd` is always a runnable litellm CLI (the bare command or an absolute
+    // path to the console script), so the proxy args are uniform.
+    const args = ["--config", configPath, "--port", port]
     const nextLogPath = path.join(os.tmpdir(), `kody-litellm-${Date.now()}.log`)
     const outFd = fs.openSync(nextLogPath, "w")
     child = spawn(cmd, args, { stdio: ["ignore", outFd, outFd], detached: true, env: childEnv })
