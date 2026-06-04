@@ -5,6 +5,7 @@ import { mintAppInstallationToken, readAppCreds } from "./app-auth.js"
 import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
 import { autoDispatch, autoDispatchTyped, type DispatchResult, dispatchScheduledWatches } from "./dispatch.js"
 import { runExecutable, runExecutableChain } from "./executor.js"
+import { mintInstantJob, runJob } from "./job.js"
 import { reactToTriggerComment } from "./gha.js"
 import {
   postIssueComment as ghPostIssueComment,
@@ -30,11 +31,11 @@ export interface CiArgs {
 export const CI_HELP = `kody ci — minimal-YAML autonomous engineer (CI preflight + run)
 
 Usage:
-  kody ci --issue <N> [--cwd <path>] [--verbose|--quiet]
+  kody ci [--issue <N>] [--cwd <path>] [--verbose|--quiet]
            [--skip-install] [--skip-litellm] [--package-manager pnpm|yarn|bun|npm]
 
 Options:
-  --issue <N>          GitHub issue number to work on (required)
+  --issue <N>          GitHub issue number to work on (legacy explicit route; optional in CI)
   --cwd <path>         Project directory (default: cwd)
   --verbose            Print full tool output
   --quiet              Print only errors and final PR_URL
@@ -284,10 +285,11 @@ export async function runCi(argv: string[]): Promise<number> {
   const cwd = args.cwd ? path.resolve(args.cwd) : process.cwd()
   // Load config early so autoDispatch can consult defaultExecutable.
   let earlyConfig: ReturnType<typeof loadConfig> | undefined
+  let earlyConfigError: Error | undefined
   try {
     earlyConfig = loadConfig(cwd)
-  } catch {
-    /* will surface later with a clearer message if needed */
+  } catch (err) {
+    earlyConfigError = err instanceof Error ? err : new Error(String(err))
   }
 
   // --issue is only required when autoDispatch can't infer from GHA env.
@@ -397,7 +399,7 @@ export async function runCi(argv: string[]): Promise<number> {
         "",
         `Available subcommands: ${top}${more}`,
         "",
-        "Examples: `@kody`, `@kody fix`, `@kody plan`, `@kody review`.",
+        "Examples: `@kody`, `@kody run`, `@kody resolve`, `@kody sync`.",
       ].join("\n")
       try {
         if (outcome.isPr) ghPostPrReviewComment(outcome.target, body, cwd)
@@ -411,6 +413,10 @@ export async function runCi(argv: string[]): Promise<number> {
         `→ kody: unrecognized subcommand "${outcome.token}" on #${outcome.target} — feedback comment attempt finished, exiting cleanly\n`,
       )
       return 0
+    }
+    if (outcome.kind === "silent" && earlyConfigError && outcome.reason.includes("no default executable configured")) {
+      process.stderr.write(`[kody] config error: ${earlyConfigError.message}\n`)
+      return 64
     }
     process.stdout.write(`→ kody: no action for event ${process.env.GITHUB_EVENT_NAME} — exiting cleanly\n`)
     return 0
@@ -491,8 +497,13 @@ export async function runCi(argv: string[]): Promise<number> {
     // runExecutableChain follows any in-process stage hand-offs (classify →
     // build, flow ping-pong, goal-tick → task pipeline) so a stage never has
     // to post a bot-authored `@kody` comment the follow-up run would ignore.
-    const result = await runExecutableChain(dispatch.executable, {
-      cliArgs: dispatch.cliArgs,
+    // One-runner: the comment / manual route mints an INSTANT job and runs it.
+    // runJob wraps runExecutableChain, so in-process stage hand-offs and exit
+    // codes are preserved. We don't seed `why` yet (it would feed the
+    // {{jobIntent}} prompt token); the job carries only the default persona,
+    // which nothing consumes until a later phase — so this flip is behaviour-
+    // neutral.
+    const result = await runJob(mintInstantJob(dispatch), {
       cwd,
       config,
       verbose: args.verbose,
@@ -562,7 +573,7 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
 
   const config = loadConfig(cwd)
   // Parallel watch fanout — typical wake fires 2–3 independent watches
-  // (job-scheduler, goal-scheduler, watch-stale-prs) that operate on
+  // (job-scheduler, goal-scheduler, and future watches) that operate on
   // disjoint targets and don't share working-tree state. Running them
   // sequentially makes the second one wait through MCP boot + agent
   // turns of the first for no reason. Aggregate via allSettled so one
