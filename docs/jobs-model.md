@@ -1,79 +1,139 @@
-# Jobs Model — Design Proposal
+# Jobs Model — Reference
 
-> **Status: STRUCTURAL MODEL IMPLEMENTED — persona now has teeth.** The job/persona/executable structure and the one runner are in place: every trigger (comment + cron) mints a `job` and runs it through `runJob`. **Persona is now consumed** — an instant `@kody` job runs *as* the `kody` persona (a built-in engine identity shipped in `src/staff.ts`; a consumer's `.kody/staff/kody.md` overrides it). An executable's own declared `staff` still wins when present. Remaining: consume inline `why`, the optional `task`-history layer (#2), and the `next`-tag → tester → `latest` rollout. Per-item status below (✅ done · 🚧 partial · ⬜ not started).
+> **Status: IMPLEMENTED.** Everything the engine runs is a **job**. Every trigger
+> — an `@kody` comment, a cron wake, an orchestrator hand-off — mints a job and
+> runs it through one runner (`runJob` in [`src/job.ts`](../src/job.ts)). The job
+> carries *who* (persona), *why* (the request/duty), *when* (schedule), and *how*
+> (executable); each run is recorded in the task's job ledger. This document is
+> the reference for that model, not a proposal.
 
 ## The idea
 
-Everything the engine runs funnels into **one execution unit (the job)**, driven by a small set of clean structures. The fuzziness between "duty" and "executable" goes away because each concept answers a different question.
+The fuzziness between "duty" and "executable" is gone because each concept
+answers a different question, and they all compose into one execution unit — the
+**job**. You never run an executable directly; you mint a job that references
+one.
 
 ## The structures
 
 | Concept | Answers | What it is |
 |---|---|---|
-| **persona** | who | reusable executor (`.kody/staff/<slug>.md`) |
-| **duty** | why | reusable intent (pure prose) |
-| **executable** | how | reusable unit of work (`run`, `fix`, …) |
+| **persona** | who | reusable executor identity (`.kody/staff/<slug>.md`; engine ships a built-in `kody`) |
+| **duty** | why | reusable intent — the prose body of `.kody/duties/<slug>.md` |
+| **executable** | how | reusable unit of work (`run`, `fix`, a duty's `profile.json`, …) |
 | **issue** | what | a GitHub **issue or PR** — the work-item a task is about |
-| **task** | execution | a **list of jobs** + state (the runs on one issue) |
-| **job** | the run | one execution (a retry = a new job) |
+| **task** | run-history | the **ordered list of jobs** on one issue/PR + rolled-up state |
+| **job** | the run | one execution (**a re-run is a new job**) |
 | **goal** | orchestration | a **list of tasks** + state (related work) |
 
-Nesting: **goal → tasks → jobs.** A goal is a list of tasks + state; a task is a list of jobs (about one issue) + state; a job is a single execution.
+Nesting: **goal → tasks → jobs.** A goal is a list of tasks + state; a task is
+the list of jobs (about one issue/PR) + state; a job is a single execution.
 
 ## Trigger vs engine (two vocabularies)
 
-- **Trigger side points at an issue:** `@kody [executable]` on an issue/PR says *what* to do and *on what*.
-- **Engine side runs jobs:** it spawns a job for that issue; the issue's **task** is the list of jobs that result.
+- **Trigger side points at an issue:** `@kody [command] [free text]` on an
+  issue/PR says *what* to do, *on what*, and (optionally) *why* in the operator's
+  own words.
+- **Engine side runs jobs:** it mints a job for that issue and runs it; the
+  issue's **task** is the list of jobs that result.
 
-So you trigger on an **issue**; the **job** is the run; the **task** is the issue's run-history. A comment, a cron wake, and an orchestrator all funnel into **one runner** that executes jobs.
+A comment, a cron wake, and an orchestrator hand-off all funnel into **one
+runner** that executes jobs.
 
-## Job I/O contract (the foundation)
+## The job
 
-Orchestration = wiring one job's output into the next job's input. So a job behaves like a near-pure function: **typed input → run → typed output.**
+A `Job` ([`src/executables/types.ts`](../src/executables/types.ts)) binds the
+four nouns plus its target and args:
 
-**Input**
-- `target` — the issue **or** PR it acts on (not just "issue" — PR-ops exist)
-- `executable` + `persona` — how + who
-- `params` — args (base, feedback, complexity…)
-- `upstream` — the previous job's output (the pipe; empty on a fresh trigger)
+- **who** — `persona` (a staff slug; instant jobs default to `kody`)
+- **why** — `duty` (a reusable intent slug) **or** `why` (the operator's inline
+  free-text request)
+- **when** — `schedule` (a scheduled job's cadence; absent for instant)
+- **how** — `executable` (the profile to run; 0–1)
+- plus `target` (issue/PR number), `cliArgs`, and `flavor` (`instant` | `scheduled`).
 
-**Output**
-- `status` — `ok | failed | skipped`
-- `data` — typed result (`prUrl`, `sha`, `branch`…)
-- `artifacts` — links produced (PR, comment, report)
-- `next` — `{ cursor, data, done }` for stateful jobs, else `null`
-- `reason` — one-line summary
+`runJob(job, base)` lowers a job onto the generic executor. It seeds the job's
+identity and metadata into `ctx.data` (`jobId`, `jobFlavor`, `jobSchedule`,
+`jobPersona`, `jobWhy`) so downstream scripts and the executor can consume them
+without the executor knowing anything about jobs.
 
-The engine already emits every field, just scattered (`KODY_PR_URL`, `KODY_REASON`, exit codes `0/1/2/3`, the `kody-job-next-state {cursor,data,done}` fence). The change is to **return one typed object** instead of stdout signals + state files + GitHub labels.
+### How each field is consumed
 
-## What changes
+- **persona →** the executor loads `.kody/staff/<persona>.md` (or the built-in)
+  and injects it as an authoritative-identity block. An executable's own
+  declared `staff` wins when present; otherwise the job's persona applies. A
+  missing built-in slug never crashes a consumer.
+- **why (inline) →** the executor injects the operator's verbatim request as a
+  **fenced, untrusted** "operator request" block in the system prompt, so the
+  comment's wording shapes any executable's run — no per-prompt token needed.
+  Structured comments (`resolve --prefer ours`) leave no free text → no `why`.
+- **why (duty) →** the duty's prose body is the intent; the scheduled tick path
+  surfaces it via the `{{jobIntent}}` prompt token.
+- **when →** recorded on the job's ledger entry so a scheduled job's cadence is
+  visible in the task state.
+- **how →** `runJob` dispatches exactly that one executable.
 
-1. ✅ **New `job`** — the single execution unit (binds duty + persona + executable + a target). *(`Job` type + `runJob` + `mintInstantJob`/`mintScheduledJob` in `src/job.ts`; both the comment and cron paths now mint a job and run it through the one runner.)*
-2. ⬜ **Formalize `task` = a list of jobs + state** (the runs on one issue/PR). Today it's implicit (`taskState`/`loadTaskState`); make it the explicit layer between goal and job — a task holds its jobs.
-3. 🚧 **Slim the duty** to pure *why*; schedule/persona/executable move onto the job. *(Done at runtime — the Job is now the carrier of when/who/how, minted from the duty's frontmatter. The duty `.md` keeps that frontmatter as the authoring surface; removing it literally would break consumer authoring, so that's intentionally deferred.)*
-4. ✅ **`@kody` mints a job** (instant) instead of calling an executable directly — rewire dispatch. *(Done — the comment/manual route mints an instant job via `mintInstantJob` and runs it through `runJob`. The minted persona (`kody`) is now consumed: the run executes as the built-in `kody` identity unless the executable declares its own `staff`.)*
-5. ✅ **Cron mints a job** (scheduled) — schedulers tick jobs. *(Done — `dispatchJobFileTicks` mints a scheduled job per due duty and runs it via `runJob` (chain:false); byte-identical to the prior one-shot tick.)*
-6. ✅ **Job points to one executable (0–1)** + safe dispatch. *(Done — both minters set a single `executable` on the job and `runJob` dispatches exactly that. The agent-driven `dutyMcp` palette is a separate, intentional safety mechanism and is left intact.)*
-7. ✅ **One runner** executes all jobs — collapse the separate paths. *(Done — both the comment/manual route and the cron tick route now run through `runJob`. Persona is consumed (instant jobs run as `kody`); inline `why` is still not consumed yet.)*
-8. ✅ **Servers** (`serve`/`pool-serve`/`runner-serve`/`brain-serve`) move to engine internals, out of the executable registry. *(Done — now `src/servers/` + hardcoded CLI verbs; gone from the registry.)*
-9. ✅ **`goal`** is the orchestration container: a **list of tasks** + state, spawning a job per task. *(Already implemented — `goal-scheduler` / `goal-tick` / `.kody/goals/` predate this work and already do this.)*
+## The task = a job ledger
 
-Items 4 and 7 touch the execution core — the heavy lifting. The rest is wiring.
+A task is the `TaskState` ([`src/state.ts`](../src/state.ts)) for one issue/PR.
+Its `history` is the **ordered list of job records** — each run appends one entry
+carrying `jobId`, `flavor`, `schedule`, per-job `status`, `runUrl`, the
+executable, and the staff it ran as. Because **a re-run is a new job**, a retry
+appends a new entry rather than mutating the prior one — so the task is a true
+run-history, not a single mutable slot. The rolled-up `core` (phase, status,
+attempts, last outcome, PR/run URLs) is the task's summary state.
 
-## Decisions
+## The goal = a task list
 
-- **Failure halts the goal.** A goal's tasks are *related*, so if any task fails the goal **stops** — it does not proceed to other tasks. It resumes only after the failed task is fixed/retried. (Failures are not isolated.)
+A goal (`.kody/goals/`, driven by `goal-scheduler` / `goal-tick`) is a list of
+tasks + state, spawning a job per task. **Failure halts the goal:** a goal's
+tasks are related, so if a task fails the goal stops and resumes only once that
+task is fixed/retried — failures are not isolated.
 
-## Open questions
+## Status of the model
 
-**Does a re-run create a new job?**
-- Yes → `task = [job]` earns its place (run history); keep both layers.
-- No → task and job collapse; drop one layer.
+All structural items are implemented:
 
-This decides whether the task layer is real or ceremony.
+1. ✅ **Job** — the single execution unit (`Job` + `runJob` + `mintInstantJob` /
+   `mintScheduledJob`). Every trigger mints one.
+2. ✅ **Task = list of jobs + state** — `TaskState.history` is the job ledger;
+   each run appends a job record (`jobId`/`flavor`/`schedule`/`status`/`runUrl`).
+3. ✅ **Duty = pure why** — the duty's prose body is the intent; the job carries
+   when/who/how, sourced from the duty's frontmatter at mint time. The
+   frontmatter remains the authoring surface (removing it would break consumer
+   authoring); the model treats it as job-config, not duty-essence.
+4. ✅ **`@kody` mints an instant job** — the comment/manual route mints via
+   `mintInstantJob` and runs through `runJob`. Persona (`kody`) and inline `why`
+   are both consumed.
+5. ✅ **Cron mints a scheduled job** — `dispatchJobFileTicks` mints one per due
+   duty (`chain:false`), carrying its cadence.
+6. ✅ **Job points to one executable (0–1)** + safe dispatch. The agent-driven
+   `dutyMcp` palette is a separate, intentional safety mechanism, left intact.
+7. ✅ **One runner** — comment, manual, and cron paths all run through `runJob`.
+8. ✅ **Servers** (`serve` / `pool-serve` / `runner-serve` / `brain-serve`) are
+   engine internals (`src/servers/` + hardcoded CLI verbs), out of the registry.
+9. ✅ **Goal** — the orchestration container: a list of tasks + state, a job per
+   task (`goal-scheduler` / `goal-tick` / `.kody/goals/`).
 
-**Still to close:** paused/`blocked` job status (approval gates), same-issue serialization (lock + supersede vs queue), goal lifecycle (who adds tasks, when "done", is the goal itself scheduled).
+## Decided
+
+- **A re-run is a new job.** The task layer is real run-history, not ceremony:
+  each run is a distinct job appended to the task's ledger.
+- **Failure halts the goal** (related tasks; failures are not isolated).
+
+## Still open (future work)
+
+These are genuinely unresolved and intentionally out of scope here:
+
+- **Paused / `blocked` job status** for approval gates (a job that waits on a
+  human before proceeding).
+- **Same-issue serialization** — lock + supersede vs queue when a new trigger
+  arrives mid-run.
+- **Goal lifecycle** — who adds tasks, when a goal is "done", whether the goal
+  itself is scheduled.
 
 ## Rollout
 
-Build on the **`next`** npm tag, prove it on one consumer (pin that repo's workflow to `@next`), promote to `latest` only when stable. Rollback = re-point the tag.
+Build on the **`next`** npm tag, prove it on a consumer (pin that repo's
+workflow to `@next`), promote to `latest` only when stable. Rollback = re-point
+the tag.
