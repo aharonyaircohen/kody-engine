@@ -39,7 +39,14 @@ describe("runJob (Phase 1 seam)", () => {
   it("does not seed jobWhy for an empty why string", async () => {
     await runJob({ executable: "run", why: "", cliArgs: {}, flavor: "instant" }, { cwd: "/x" })
     const [, input] = runExecutableChain.mock.calls[0]!
-    expect(input.preloadedData).toBeUndefined()
+    expect(input.preloadedData?.jobWhy).toBeUndefined()
+  })
+
+  it("always seeds a jobId + flavor so the run can be recorded in the task ledger", async () => {
+    await runJob({ executable: "run", cliArgs: {}, flavor: "instant" }, { cwd: "/x" })
+    const [, input] = runExecutableChain.mock.calls[0]!
+    expect(typeof input.preloadedData?.jobId).toBe("string")
+    expect(input.preloadedData?.jobFlavor).toBe("instant")
   })
 
   it("carries the DispatchResult's why through mintInstantJob into jobWhy", async () => {
@@ -64,10 +71,12 @@ describe("runJob (Phase 1 seam)", () => {
     expect(runExecutableChain.mock.calls[0]![0]).toBe("watch-stale-prs")
   })
 
-  it("does not seed preloadedData when there is no why/persona", async () => {
-    await runJob({ executable: "run", cliArgs: {}, flavor: "instant" }, { cwd: "/x" })
+  it("seeds only job identity (no why/persona) for a bare scheduled job", async () => {
+    await runJob({ duty: "stale-prs", cliArgs: {}, flavor: "scheduled" }, { cwd: "/x" })
     const [, input] = runExecutableChain.mock.calls[0]!
-    expect(input.preloadedData).toBeUndefined()
+    expect(input.preloadedData?.jobFlavor).toBe("scheduled")
+    expect(input.preloadedData?.jobWhy).toBeUndefined()
+    expect(input.preloadedData?.jobPersona).toBeUndefined()
   })
 
   it("rejects a job with neither executable nor duty", () => {

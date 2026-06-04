@@ -10,6 +10,7 @@
  */
 
 import { execFileSync } from "node:child_process"
+import type { JobFlavor } from "./executables/types.js"
 
 export const STATE_BEGIN = "<!-- kody:state:v1:begin -->"
 export const STATE_END = "<!-- kody:state:v1:end -->"
@@ -95,6 +96,12 @@ export interface ExecutableState {
   [key: string]: unknown
 }
 
+/**
+ * One job in the task's ledger. A task (this TaskState) IS the ordered list of
+ * these `history` entries plus the rolled-up `core` state. Each engine run
+ * appends exactly one entry, so — per the model's decision — a re-run is a NEW
+ * job (a new entry), and `history` is the run-history of jobs on this issue/PR.
+ */
 export interface HistoryEntry {
   timestamp: string
   executable: string
@@ -102,6 +109,14 @@ export interface HistoryEntry {
   note?: string
   /** Staff member this run executed as, when the duty declares one. */
   staff?: string
+  /** Stable id for this job run (CI run id when in Actions, else a stamp). */
+  jobId?: string
+  /** Whether this run was an instant (`@kody`) or scheduled (cron) job. */
+  flavor?: JobFlavor
+  /** This job's outcome (mirrors core.status at the time it ran). */
+  status?: Status
+  /** CI run URL that executed this job, when known. */
+  runUrl?: string
 }
 
 export type TaskTarget = "issue" | "pr"
@@ -243,12 +258,20 @@ export function parseStateComment(body: string): TaskState {
  * Keeping phase a caller-supplied parameter (rather than deriving from the
  * executable name) lets this module stay generic — no executable names here.
  */
+/** Identity + provenance of the job being recorded (see HistoryEntry). */
+export interface JobMeta {
+  jobId?: string
+  flavor?: JobFlavor
+  runUrl?: string
+}
+
 export function reduce(
   state: TaskState,
   executable: string,
   action: Action | null,
   phase?: Phase,
   staff?: string | null,
+  job?: JobMeta,
 ): TaskState {
   if (!action) return state
   const newAttempts = { ...state.core.attempts, [executable]: (state.core.attempts[executable] ?? 0) + 1 }
@@ -257,10 +280,21 @@ export function reduce(
     [executable]: { ...(state.executables[executable] ?? { lastAction: null }), lastAction: action },
   }
   const ranAsStaff = typeof staff === "string" && staff.length > 0 ? staff : undefined
-  const newHistory = [
-    ...state.history,
-    { timestamp: action.timestamp, executable, action: action.type, note: noteFromAction(action), staff: ranAsStaff },
-  ].slice(-HISTORY_MAX_ENTRIES)
+  // Each run appends one job record — the task IS this ordered list. Stamp the
+  // job's identity (id/flavor/runUrl) when the caller knows it, plus the
+  // per-job outcome so a reader can see which jobs on this task failed.
+  const entry: HistoryEntry = {
+    timestamp: action.timestamp,
+    executable,
+    action: action.type,
+    note: noteFromAction(action),
+    staff: ranAsStaff,
+    status: statusFromAction(action),
+    ...(job?.jobId ? { jobId: job.jobId } : {}),
+    ...(job?.flavor ? { flavor: job.flavor } : {}),
+    ...(job?.runUrl ? { runUrl: job.runUrl } : {}),
+  }
+  const newHistory = [...state.history, entry].slice(-HISTORY_MAX_ENTRIES)
   return {
     schemaVersion: 1,
     core: {

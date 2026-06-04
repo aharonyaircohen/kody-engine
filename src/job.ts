@@ -12,12 +12,23 @@
 
 import type { KodyConfig } from "./config.js"
 import type { DispatchResult } from "./dispatch.js"
-import type { Job } from "./executables/types.js"
+import type { Job, JobFlavor } from "./executables/types.js"
 import { runExecutable, runExecutableChain } from "./executor.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
 
 /** Default staff persona for instant `@kody` jobs (the agreed starting point). */
 export const DEFAULT_INSTANT_PERSONA = "kody"
+
+/**
+ * Stable id for a job run, recorded in the task ledger. In GitHub Actions the
+ * workflow run (id + attempt) IS the job, so reuse it — re-running a run keeps
+ * a distinct id per attempt. Off-CI, fall back to a flavor + timestamp stamp.
+ */
+export function newJobId(flavor: JobFlavor): string {
+  const runId = process.env.GITHUB_RUN_ID
+  if (runId) return `gh-${runId}-${process.env.GITHUB_RUN_ATTEMPT ?? "1"}`
+  return `${flavor}-${Date.now()}`
+}
 
 /** Thrown when a minted Job fails boundary validation. */
 export class InvalidJobError extends Error {
@@ -98,6 +109,11 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   }
 
   const preloadedData: Record<string, unknown> = {}
+  // Every job is recorded in the task ledger (state.ts history) — stamp its
+  // identity so the reducer can attribute the run. The CI run is the natural
+  // job id in Actions; fall back to a flavor-stamped id locally.
+  preloadedData.jobId = newJobId(valid.flavor)
+  preloadedData.jobFlavor = valid.flavor
   // Inline why → ctx.data.jobWhy (NOT jobIntent — that token is the scheduled
   // duty BODY, consumed via {{jobIntent}} by job-tick; reusing it would
   // double-inject). The executor surfaces jobWhy to the agent as a fenced

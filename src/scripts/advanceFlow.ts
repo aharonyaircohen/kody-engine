@@ -29,6 +29,7 @@
 import { execFileSync } from "node:child_process"
 import type { PostflightScript } from "../executables/types.js"
 import { type Action, readTaskState, reduce, type TaskState, writeTaskState } from "../state.js"
+import { jobMetaFromData } from "./saveTaskState.js"
 
 const API_TIMEOUT_MS = 30_000
 const FLOW_HOP_CAP = 25
@@ -71,7 +72,7 @@ export const advanceFlow: PostflightScript = async (ctx, profile) => {
   const action = ctx.data.action as Action | undefined
   let nextIssueState: TaskState = issueState
   if (targetType === "pr" && action) {
-    nextIssueState = reduce(issueState, profile.name, action, profile.phase, profile.staff)
+    nextIssueState = reduce(issueState, profile.name, action, profile.phase, profile.staff, jobMetaFromData(ctx.data))
     // Preserve PR URL on the issue's state too.
     if (state?.core.prUrl && !nextIssueState.core.prUrl) nextIssueState.core.prUrl = state.core.prUrl
   }

@@ -54,6 +54,38 @@ describe("state: reduce", () => {
     expect(parseStateComment(renderStateComment(s)).core.ranAsStaff).toBe("kody")
   })
 
+  it("stamps job identity (id/flavor/runUrl) + per-job status onto the ledger entry", () => {
+    const s = reduce(emptyState(), "run", ok, "shipped", null, {
+      jobId: "gh-77-1",
+      flavor: "instant",
+      runUrl: "https://ci/run/77",
+    })
+    const entry = s.history.at(-1)!
+    expect(entry.jobId).toBe("gh-77-1")
+    expect(entry.flavor).toBe("instant")
+    expect(entry.runUrl).toBe("https://ci/run/77")
+    expect(entry.status).toBe("succeeded")
+  })
+
+  it("treats each run as a NEW job: re-running appends another ledger entry", () => {
+    let s = reduce(emptyState(), "run", fail, undefined, null, { jobId: "gh-1-1", flavor: "instant" })
+    s = reduce(s, "run", ok, "shipped", null, { jobId: "gh-1-2", flavor: "instant" })
+    expect(s.history.length).toBe(2)
+    expect(s.history.map((h) => h.jobId)).toEqual(["gh-1-1", "gh-1-2"])
+    expect(s.history.map((h) => h.status)).toEqual(["failed", "succeeded"])
+  })
+
+  it("omits job fields when no JobMeta is supplied (backward-compatible)", () => {
+    const entry = reduce(emptyState(), "build", ok).history.at(-1)!
+    expect(entry.jobId).toBeUndefined()
+    expect(entry.flavor).toBeUndefined()
+    expect(entry.runUrl).toBeUndefined()
+    // round-trips through the wire format
+    const back = parseStateComment(renderStateComment(reduce(emptyState(), "build", ok, undefined, null, { jobId: "j1", flavor: "scheduled" })))
+    expect(back.history.at(-1)?.jobId).toBe("j1")
+    expect(back.history.at(-1)?.flavor).toBe("scheduled")
+  })
+
   it("leaves ranAsStaff null when no staff (legacy, no persona)", () => {
     const s = reduce(emptyState(), "build", ok)
     expect(s.core.ranAsStaff ?? null).toBeNull()

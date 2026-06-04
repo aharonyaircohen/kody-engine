@@ -7,8 +7,25 @@
  * reflects the run's outcome.
  */
 
-import type { PostflightScript } from "../executables/types.js"
-import { type Action, reduce, renderStateComment, type TaskState, type TaskTarget, writeTaskState } from "../state.js"
+import type { JobFlavor, PostflightScript } from "../executables/types.js"
+import {
+  type Action,
+  type JobMeta,
+  reduce,
+  renderStateComment,
+  type TaskState,
+  type TaskTarget,
+  writeTaskState,
+} from "../state.js"
+
+/** Read the current run's job identity (seeded by runJob) from ctx.data. */
+export function jobMetaFromData(data: Record<string, unknown>): JobMeta {
+  return {
+    jobId: typeof data.jobId === "string" ? data.jobId : undefined,
+    flavor: typeof data.jobFlavor === "string" ? (data.jobFlavor as JobFlavor) : undefined,
+    runUrl: typeof data.runUrl === "string" ? data.runUrl : undefined,
+  }
+}
 
 export const saveTaskState: PostflightScript = async (ctx, profile) => {
   const target = ctx.data.commentTargetType as TaskTarget | undefined
@@ -22,7 +39,7 @@ export const saveTaskState: PostflightScript = async (ctx, profile) => {
   // Don't mutate the loaded prior state — `reduce` treats it as immutable input
   // and other postflights may hold the same reference. The prUrl/runUrl carry
   // is applied to `next` below, which is the only thing we persist.
-  const next = reduce(state, executable, action, profile.phase, profile.staff)
+  const next = reduce(state, executable, action, profile.phase, profile.staff, jobMetaFromData(ctx.data))
   if (ctx.output.prUrl) next.core.prUrl = ctx.output.prUrl
   if (typeof ctx.data.runUrl === "string") next.core.runUrl = ctx.data.runUrl as string
 

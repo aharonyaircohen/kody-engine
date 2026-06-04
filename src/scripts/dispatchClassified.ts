@@ -23,6 +23,7 @@ import { execFileSync } from "node:child_process"
 import type { PostflightScript } from "../executables/types.js"
 import { getProfileInputs } from "../registry.js"
 import { type Action, emptyState, findStateComment, reduce, renderStateComment, type TaskState } from "../state.js"
+import { jobMetaFromData } from "./saveTaskState.js"
 
 const API_TIMEOUT_MS = 30_000
 const VALID_CLASSES = new Set(["feature", "bug", "spec", "chore"])
@@ -45,7 +46,7 @@ export const dispatchClassified: PostflightScript = async (ctx, profile) => {
   // The next stage finds this block via the `kody:state:v1` markers and
   // PATCHes the comment in place.
   const state = (ctx.data.taskState as TaskState | undefined) ?? emptyState()
-  const nextState = reduce(state, "classify", action, undefined, profile.staff)
+  const nextState = reduce(state, "classify", action, undefined, profile.staff, jobMetaFromData(ctx.data))
   const stateBody = renderStateComment(nextState)
   ctx.data.taskState = nextState
   ctx.data.taskStateRendered = stateBody
