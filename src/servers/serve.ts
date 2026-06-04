@@ -35,7 +35,7 @@ export interface ServeOptions {
 
 type EditorTarget = "none" | "vscode" | "claude"
 
-function parseTarget(positional: unknown): EditorTarget {
+export function parseTarget(positional: unknown): EditorTarget {
   if (!Array.isArray(positional) || positional.length === 0) return "none"
   const first = String(positional[0]).toLowerCase()
   if (first === "vscode" || first === "code") return "vscode"
@@ -43,7 +43,7 @@ function parseTarget(positional: unknown): EditorTarget {
   throw new Error(`unknown serve subcommand: "${positional[0]}" (expected: vscode, claude, or omit)`)
 }
 
-function buildProxyEnv(url: string): NodeJS.ProcessEnv {
+export function buildProxyEnv(url: string): NodeJS.ProcessEnv {
   return {
     ...process.env,
     ANTHROPIC_BASE_URL: url,
