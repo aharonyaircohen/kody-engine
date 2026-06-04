@@ -437,3 +437,43 @@ export type PostflightScript = (
 
 /** A registered script may be either phase; registry looks it up by name. */
 export type AnyScript = PreflightScript | PostflightScript
+
+// ────────────────────────────────────────────────────────────────────────────
+// Job — the unified execution unit (Phase 1 of the job-model migration).
+//
+// A Job is the single thing the engine executes, regardless of how it was
+// triggered. It REFERENCES the reusable nouns — `executable` (how), `persona`
+// (who), `duty` (why, by slug) — and OWNS its `schedule` (when). Two flavors:
+//   - "instant"   — run once now (an `@kody <verb>` comment or a manual dispatch)
+//   - "scheduled" — fired on `schedule` (cron) by the tick path
+//
+// Fields are optional-heavy on purpose: a comment-minted instant job carries
+// `executable` + inline `why`; a cron-minted scheduled job carries `duty` +
+// `schedule` + `persona`. `runJob` (src/job.ts) lowers a Job onto the existing
+// executor; nothing mints Jobs yet — this is an additive seam.
+// ────────────────────────────────────────────────────────────────────────────
+
+export type JobFlavor = "instant" | "scheduled"
+
+export interface Job {
+  /** How: executable (profile) name to run. 0–1; omitted when intent is
+   *  agent-only with no specific verb. */
+  executable?: string
+  /** Why (referenced): a duty slug whose intent drives the run. */
+  duty?: string
+  /** Why (inline): free-text intent, e.g. an `@kody` comment body. Untrusted —
+   *  fenced where it enters a prompt, not here. */
+  why?: string
+  /** Who: a staff persona slug. */
+  persona?: string
+  /** When: cron expression. Set for scheduled jobs, absent for instant. */
+  schedule?: string
+  /** The issue/PR number this job acts on, when applicable. */
+  target?: number
+  /** Args passed through to the executable (mirrors DispatchResult.cliArgs). */
+  cliArgs: Record<string, unknown>
+  /** Run once now ("instant") or on the schedule ("scheduled"). */
+  flavor: JobFlavor
+  /** Manual force-run (bypass cadence) for a scheduled job. */
+  force?: boolean
+}
