@@ -22,7 +22,7 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type { PreflightScript } from "../executables/types.js"
-import { runExecutable } from "../executor.js"
+import { mintScheduledJob, runJob } from "../job.js"
 import { loadProfile } from "../profile.js"
 import { type ScheduleEvery, scheduleEveryToMs, splitFrontmatter } from "./jobFrontmatter.js"
 import { resolveBackend } from "./jobState/index.js"
@@ -109,12 +109,15 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
       await stampFired(backend, slug, now)
       process.stdout.write(`[jobs] → run scheduled duty ${slug} (one-shot, as ${staff})\n`)
       try {
-        const out = await runExecutable(slug, {
-          cliArgs: {},
+        // One-runner: a due folder-duty becomes a scheduled Job, run via runJob
+        // with chain:false → the same one-shot runExecutable call as before
+        // (no persona/why seeded, so the ExecutorInput is byte-identical).
+        const out = await runJob(mintScheduledJob({ duty: slug, executable: slug }), {
           cwd: ctx.cwd,
           config: ctx.config,
           verbose: ctx.verbose,
           quiet: ctx.quiet,
+          chain: false,
         })
         results.push({ slug, exitCode: out.exitCode, reason: out.reason })
         if (out.exitCode !== 0) {
@@ -184,13 +187,12 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
 
       process.stdout.write(`[jobs] → tick ${slug} (${slugTarget})\n`)
       try {
-        const out = await runExecutable(slugTarget, {
-          cliArgs: { [slugArg]: slug },
-          cwd: ctx.cwd,
-          config: ctx.config,
-          verbose: ctx.verbose,
-          quiet: ctx.quiet,
-        })
+        // One-runner: a due .md duty becomes a scheduled Job, run via runJob
+        // with chain:false → byte-identical to the prior one-shot runExecutable.
+        const out = await runJob(
+          mintScheduledJob({ duty: slug, executable: slugTarget, cliArgs: { [slugArg]: slug } }),
+          { cwd: ctx.cwd, config: ctx.config, verbose: ctx.verbose, quiet: ctx.quiet, chain: false },
+        )
         results.push({ slug, exitCode: out.exitCode, reason: out.reason })
         if (out.exitCode !== 0) {
           process.stderr.write(`[jobs] tick ${slug} failed (exit ${out.exitCode}): ${out.reason ?? ""}\n`)

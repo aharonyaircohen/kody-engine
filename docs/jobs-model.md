@@ -52,9 +52,9 @@ The engine already emits every field, just scattered (`KODY_PR_URL`, `KODY_REASO
 2. ⬜ **Formalize `task` = a list of jobs + state** (the runs on one issue/PR). Today it's implicit (`taskState`/`loadTaskState`); make it the explicit layer between goal and job — a task holds its jobs.
 3. ⬜ **Slim the duty** to pure *why*; schedule/persona/executable move onto the job.
 4. ✅ **`@kody` mints a job** (instant) instead of calling an executable directly — rewire dispatch. *(Done — the comment/manual route mints an instant job via `mintInstantJob` and runs it through `runJob`; behaviour-neutral so far.)*
-5. ⬜ **Cron mints a job** (scheduled) — schedulers tick jobs.
+5. ✅ **Cron mints a job** (scheduled) — schedulers tick jobs. *(Done — `dispatchJobFileTicks` mints a scheduled job per due duty and runs it via `runJob` (chain:false); byte-identical to the prior one-shot tick.)*
 6. ⬜ **Job points to one executable (0–1)** + safe dispatch — drop the fixed palette limit.
-7. 🚧 **One runner** executes all jobs — collapse the separate paths. *(Comment/manual path runs through `runJob`; the cron path still uses `runExecutable` directly — flipping it is behaviour-changing and ships on `next` with live testing.)*
+7. ✅ **One runner** executes all jobs — collapse the separate paths. *(Done — both the comment/manual route and the cron tick route now run through `runJob`. Behaviour-neutral so far: no persona/why consumed yet.)*
 8. ✅ **Servers** (`serve`/`pool-serve`/`runner-serve`/`brain-serve`) move to engine internals, out of the executable registry. *(Done — now `src/servers/` + hardcoded CLI verbs; gone from the registry.)*
 9. ⬜ **`goal`** becomes the orchestration container (reuse the existing goal system): a **list of issues** + state, spawning jobs per issue.
 

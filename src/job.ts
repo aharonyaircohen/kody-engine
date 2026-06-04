@@ -13,7 +13,7 @@
 import type { KodyConfig } from "./config.js"
 import type { DispatchResult } from "./dispatch.js"
 import type { Job } from "./executables/types.js"
-import { runExecutableChain } from "./executor.js"
+import { runExecutable, runExecutableChain } from "./executor.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
 
 /** Default staff persona for instant `@kody` jobs (the agreed starting point). */
@@ -66,6 +66,13 @@ export interface RunJobBase {
   config?: KodyConfig
   verbose?: boolean
   quiet?: boolean
+  /**
+   * Follow in-process stage hand-offs (`runExecutableChain`) — the default,
+   * matching the comment/manual route. Set `false` for the cron tick path,
+   * which fans out one-shot ticks via `runExecutable` (no chaining), so the
+   * scheduler's per-duty invocation stays byte-identical to its prior call.
+   */
+  chain?: boolean
 }
 
 /**
@@ -102,7 +109,8 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     preloadedData: Object.keys(preloadedData).length > 0 ? preloadedData : undefined,
   }
 
-  return runExecutableChain(profileName, input)
+  const run = base.chain === false ? runExecutable : runExecutableChain
+  return run(profileName, input)
 }
 
 // ────────────────────────────────────────────────────────────────────────────
