@@ -33,9 +33,10 @@ export interface ServeOptions {
   args: string[]
 }
 
-type EditorTarget = "none" | "vscode" | "claude"
+export type EditorTarget = "none" | "vscode" | "claude"
 
-function parseTarget(positional: unknown): EditorTarget {
+/** Resolve the `serve` subcommand into an editor target. Exported for testing. */
+export function parseTarget(positional: unknown): EditorTarget {
   if (!Array.isArray(positional) || positional.length === 0) return "none"
   const first = String(positional[0]).toLowerCase()
   if (first === "vscode" || first === "code") return "vscode"
