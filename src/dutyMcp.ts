@@ -237,7 +237,12 @@ export function parseDutyTrustMode(rawJson: string, dutySlug: string): DutyTrust
 export function readDutyTrustMode(repoSlug: string, dutySlug?: string): DutyTrustMode {
   if (!dutySlug) return "ask"
   try {
-    const b64 = gh(["api", `repos/${repoSlug}/contents/${TRUST_FILE_PATH}?ref=${TRUST_STATE_BRANCH}`, "--jq", ".content"])
+    const b64 = gh([
+      "api",
+      `repos/${repoSlug}/contents/${TRUST_FILE_PATH}?ref=${TRUST_STATE_BRANCH}`,
+      "--jq",
+      ".content",
+    ])
     const json = Buffer.from(b64.trim(), "base64").toString("utf-8")
     return parseDutyTrustMode(json, dutySlug)
   } catch {
@@ -269,9 +274,11 @@ export function readThread(repoSlug: string, number: number, limit = 10): Thread
     state?: string
     labels?: Array<{ name?: string }>
   }
-  const rawComments = JSON.parse(
-    gh(["api", `repos/${repoSlug}/issues/${number}/comments?per_page=100`]),
-  ) as Array<{ user?: { login?: string }; created_at?: string; body?: string }>
+  const rawComments = JSON.parse(gh(["api", `repos/${repoSlug}/issues/${number}/comments?per_page=100`])) as Array<{
+    user?: { login?: string }
+    created_at?: string
+    body?: string
+  }>
   const comments = rawComments.slice(-Math.max(1, limit)).map((c) => ({
     author: c.user?.login ?? "?",
     createdAt: c.created_at ?? "",

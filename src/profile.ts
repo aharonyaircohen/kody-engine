@@ -9,6 +9,7 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { DUTY_MCP_TOOL_NAMES } from "./dutyMcp.js"
 import type {
   ClaudeCodeSpec,
   CliToolSpec,
@@ -19,7 +20,6 @@ import type {
   Profile,
   ScriptEntry,
 } from "./executables/types.js"
-import { DUTY_MCP_TOOL_NAMES } from "./dutyMcp.js"
 import { applyLifecycle } from "./lifecycles/index.js"
 import { ProfileError } from "./profile-error.js"
 import { captureSubagentTemplates } from "./subagents.js"
@@ -144,8 +144,12 @@ export function loadProfile(profilePath: string): Profile {
     // Optional recurrence cadence (scheduled duty). Blank → undefined (on-demand).
     every: typeof r.every === "string" && r.every.trim() ? r.every.trim() : undefined,
     // Locked-toolbox palette + mentions (folder-duty successors to frontmatter).
-    dutyTools: Array.isArray(r.dutyTools) ? (r.dutyTools as string[]).map((t) => String(t).trim()).filter(Boolean) : undefined,
-    mentions: Array.isArray(r.mentions) ? (r.mentions as string[]).map((m) => String(m).trim()).filter(Boolean) : undefined,
+    dutyTools: Array.isArray(r.dutyTools)
+      ? (r.dutyTools as string[]).map((t) => String(t).trim()).filter(Boolean)
+      : undefined,
+    mentions: Array.isArray(r.mentions)
+      ? (r.mentions as string[]).map((m) => String(m).trim()).filter(Boolean)
+      : undefined,
     role,
     kind,
     schedule: typeof r.schedule === "string" ? r.schedule : undefined,
