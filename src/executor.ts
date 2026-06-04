@@ -248,14 +248,23 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       : null
 
   const ndjsonDir = path.join(input.cwd, ".kody")
-  // Staff binding: when the profile names a staff member, run *as* that persona.
-  // Loaded once and injected into the system-prompt append (after DISCIPLINE,
-  // before the profile's own append) so identity leads task instructions. This
-  // is the executable+staff unification — absent `staff` → unchanged behaviour.
-  const staffPersona =
+  // Staff binding: run *as* a persona, injected into the system-prompt append
+  // (after DISCIPLINE, before the profile's own append) so identity leads task
+  // instructions. Two sources, in priority order:
+  //   1. profile.staff — the executable's own declared identity (intentional;
+  //      wins when present).
+  //   2. ctx.data.jobPersona — the Job's persona, seeded by runJob from the
+  //      Job's `persona` (an instant `@kody` job defaults this to `kody`).
+  // Absent both → unchanged legacy behaviour (no persona). loadStaffPersona
+  // resolves a built-in for engine-default slugs like `kody`, so the fallback
+  // never crashes a consumer that hasn't authored a staff file.
+  const personaSlug =
     typeof profile.staff === "string" && profile.staff.length > 0
-      ? framePersona(profile.staff, loadStaffPersona(input.cwd, profile.staff))
-      : null
+      ? profile.staff
+      : typeof ctx.data.jobPersona === "string" && (ctx.data.jobPersona as string).length > 0
+        ? (ctx.data.jobPersona as string)
+        : null
+  const staffPersona = personaSlug ? framePersona(personaSlug, loadStaffPersona(input.cwd, personaSlug)) : null
   const invokeAgent = async (prompt: string): Promise<AgentResult> => {
     // Resolve at call time — ctx.data.syntheticPluginPath is set during preflight.
     const externalPlugins = (profile.claudeCode.plugins ?? [])

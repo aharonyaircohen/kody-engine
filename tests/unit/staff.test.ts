@@ -3,7 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { framePersona, loadStaffPersona } from "../../src/staff.js"
+import { BUILTIN_PERSONAS, framePersona, loadStaffPersona } from "../../src/staff.js"
 
 let cwd: string
 
@@ -47,6 +47,26 @@ describe("loadStaffPersona", () => {
 
   it("throws on an empty slug", () => {
     expect(() => loadStaffPersona(cwd, "   ")).toThrow(/empty staff slug/)
+  })
+
+  it("resolves a built-in persona when no consumer file exists", () => {
+    // `kody` is the engine default for instant jobs — must not crash a repo
+    // that never authored `.kody/staff/kody.md`.
+    expect(loadStaffPersona(cwd, "kody")).toBe(BUILTIN_PERSONAS.kody)
+  })
+
+  it("lets a consumer file override a built-in persona", () => {
+    writeStaff("kody", "My own kody identity.")
+    expect(loadStaffPersona(cwd, "kody")).toBe("My own kody identity.")
+  })
+
+  it("falls back to the built-in when a built-in slug's consumer file is empty", () => {
+    writeStaff("kody", "---\ntitle: x\n---\n")
+    expect(loadStaffPersona(cwd, "kody")).toBe(BUILTIN_PERSONAS.kody)
+  })
+
+  it("still throws for a non-built-in slug with no file (no silent default)", () => {
+    expect(() => loadStaffPersona(cwd, "reviewer")).toThrow(/declared but .* does not exist/)
   })
 })
 

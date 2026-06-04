@@ -1,6 +1,6 @@
 # Jobs Model — Design Proposal
 
-> **Status: STRUCTURAL MODEL IMPLEMENTED (behaviour-neutral).** The job/persona/executable structure and the one runner are in place — every trigger (comment + cron) now mints a `job` and runs it through `runJob`. It's deliberately behaviour-neutral so far: no persona/`why` is *consumed* yet, so output is identical to before. Remaining: actually consume persona/`why`, the optional `task`-history layer (#2), and the `next`-tag → tester → `latest` rollout. Per-item status below (✅ done · 🚧 partial · ⬜ not started).
+> **Status: STRUCTURAL MODEL IMPLEMENTED — persona now has teeth.** The job/persona/executable structure and the one runner are in place: every trigger (comment + cron) mints a `job` and runs it through `runJob`. **Persona is now consumed** — an instant `@kody` job runs *as* the `kody` persona (a built-in engine identity shipped in `src/staff.ts`; a consumer's `.kody/staff/kody.md` overrides it). An executable's own declared `staff` still wins when present. Remaining: consume inline `why`, the optional `task`-history layer (#2), and the `next`-tag → tester → `latest` rollout. Per-item status below (✅ done · 🚧 partial · ⬜ not started).
 
 ## The idea
 
