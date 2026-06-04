@@ -91,6 +91,26 @@ describe("profile: loadProfile", () => {
     expect(() => loadProfile(p)).not.toThrow()
   })
 
+  it("resolves a duty that references an executable (how) + overlays who/when", () => {
+    // A thin duty: references the engine's `merge` executable (the HOW), adds
+    // its own name + staff (WHO) + every (WHEN). No claudeCode of its own.
+    const dir = tmpDir()
+    const p = writeProfile(dir, { name: "merge-daily", executable: "merge", staff: "cto", every: "1d" })
+    const profile = loadProfile(p)
+    expect(profile.name).toBe("merge-daily") // duty identity
+    expect(profile.staff).toBe("cto") // who (overlaid)
+    expect(profile.every).toBe("1d") // when (overlaid)
+    // how came from the referenced executable: dir + claudeCode are merge's.
+    expect(profile.dir.endsWith(path.join("executables", "merge"))).toBe(true)
+    expect(profile.claudeCode).toBeTruthy()
+  })
+
+  it("throws when a duty references an unknown executable", () => {
+    const dir = tmpDir()
+    const p = writeProfile(dir, { name: "x", executable: "no-such-executable-xyz" })
+    expect(() => loadProfile(p)).toThrow(/references unknown executable/)
+  })
+
   it("throws on missing file", () => {
     expect(() => loadProfile(`/tmp/nope-${Math.random()}/profile.json`)).toThrow(ProfileError)
   })

@@ -22,6 +22,7 @@ import type {
 } from "./executables/types.js"
 import { applyLifecycle } from "./lifecycles/index.js"
 import { ProfileError } from "./profile-error.js"
+import { resolveExecutable } from "./registry.js"
 import { captureSubagentTemplates } from "./subagents.js"
 
 export { ProfileError } from "./profile-error.js"
@@ -40,6 +41,7 @@ const VALID_PHASES = new Set(["research", "planning", "implementing", "reviewing
  */
 const KNOWN_PROFILE_KEYS = new Set([
   "name",
+  "executable",
   "staff",
   "every",
   "dutyTools",
@@ -94,6 +96,30 @@ export function loadProfile(profilePath: string): Profile {
     process.stderr.write(
       `[kody profile] ${path.basename(path.dirname(profilePath))}: unknown top-level keys ignored: ${unknownKeys.join(", ")}\n`,
     )
+  }
+
+  // Duty-as-reference: a duty names an executable (the HOW) instead of embedding
+  // it. Resolve that executable's full profile and overlay this duty's identity
+  // (name) + staff (WHO) + every (WHEN) + mentions. The duty folder is then a
+  // thin binding — no claudeCode/prompt/scripts of its own.
+  // executable = how, staff = who, duty = why/when.
+  const execRef = typeof r.executable === "string" ? r.executable.trim() : ""
+  if (execRef) {
+    const refPath = resolveExecutable(execRef)
+    if (!refPath) {
+      throw new ProfileError(profilePath, `duty references unknown executable '${execRef}'`)
+    }
+    const base = loadProfile(refPath)
+    return {
+      ...base,
+      name: requireString(profilePath, r, "name"),
+      describe: typeof r.describe === "string" ? r.describe : base.describe,
+      staff: typeof r.staff === "string" && r.staff.trim() ? r.staff.trim() : base.staff,
+      every: typeof r.every === "string" && r.every.trim() ? r.every.trim() : undefined,
+      mentions: Array.isArray(r.mentions)
+        ? (r.mentions as string[]).map((m) => String(m).trim()).filter(Boolean)
+        : base.mentions,
+    }
   }
 
   const kind = r.kind === "scheduled" ? "scheduled" : "oneshot"

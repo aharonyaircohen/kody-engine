@@ -43,6 +43,14 @@ export interface Profile {
    */
   role: "primitive" | "orchestrator" | "container" | "watch" | "utility"
   /**
+   * A duty is the WHY/WHEN layer: it references an executable (the HOW) by name
+   * rather than embedding it. When set, the loader resolves that executable's
+   * full profile (claudeCode/scripts/prompt/agents) and overlays this duty's
+   * name + staff (WHO) + every (WHEN) + mentions. Absent → this profile IS an
+   * executable (defines its own how). executable = how, staff = who, duty = why.
+   */
+  executable?: string
+  /**
    * Execution model — orthogonal to `role`.
    * `oneshot` (default): single invocation on demand.
    * `scheduled`: fires periodically via an external cron (typically GHA
