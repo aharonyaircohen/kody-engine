@@ -67,6 +67,16 @@ describe("state: reduce", () => {
     expect(entry.status).toBe("succeeded")
   })
 
+  it("records a scheduled job's cadence on its ledger entry", () => {
+    const s = reduce(emptyState(), "watch-stale-prs", ok, "idle", "kody", {
+      jobId: "gh-9-1",
+      flavor: "scheduled",
+      schedule: "7d",
+    })
+    expect(s.history.at(-1)?.flavor).toBe("scheduled")
+    expect(s.history.at(-1)?.schedule).toBe("7d")
+  })
+
   it("treats each run as a NEW job: re-running appends another ledger entry", () => {
     let s = reduce(emptyState(), "run", fail, undefined, null, { jobId: "gh-1-1", flavor: "instant" })
     s = reduce(s, "run", ok, "shipped", null, { jobId: "gh-1-2", flavor: "instant" })

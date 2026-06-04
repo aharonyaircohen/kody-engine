@@ -113,6 +113,8 @@ export interface HistoryEntry {
   jobId?: string
   /** Whether this run was an instant (`@kody`) or scheduled (cron) job. */
   flavor?: JobFlavor
+  /** Cadence this scheduled job fired on (the duty's `every`/cron). */
+  schedule?: string
   /** This job's outcome (mirrors core.status at the time it ran). */
   status?: Status
   /** CI run URL that executed this job, when known. */
@@ -262,6 +264,7 @@ export function parseStateComment(body: string): TaskState {
 export interface JobMeta {
   jobId?: string
   flavor?: JobFlavor
+  schedule?: string
   runUrl?: string
 }
 
@@ -292,6 +295,7 @@ export function reduce(
     status: statusFromAction(action),
     ...(job?.jobId ? { jobId: job.jobId } : {}),
     ...(job?.flavor ? { flavor: job.flavor } : {}),
+    ...(job?.schedule ? { schedule: job.schedule } : {}),
     ...(job?.runUrl ? { runUrl: job.runUrl } : {}),
   }
   const newHistory = [...state.history, entry].slice(-HISTORY_MAX_ENTRIES)

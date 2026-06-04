@@ -23,6 +23,7 @@ export function jobMetaFromData(data: Record<string, unknown>): JobMeta {
   return {
     jobId: typeof data.jobId === "string" ? data.jobId : undefined,
     flavor: typeof data.jobFlavor === "string" ? (data.jobFlavor as JobFlavor) : undefined,
+    schedule: typeof data.jobSchedule === "string" ? data.jobSchedule : undefined,
     runUrl: typeof data.runUrl === "string" ? data.runUrl : undefined,
   }
 }

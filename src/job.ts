@@ -114,6 +114,8 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   // job id in Actions; fall back to a flavor-stamped id locally.
   preloadedData.jobId = newJobId(valid.flavor)
   preloadedData.jobFlavor = valid.flavor
+  // The job carries *when*: a scheduled job's cadence, recorded in the ledger.
+  if (valid.schedule !== undefined && valid.schedule.length > 0) preloadedData.jobSchedule = valid.schedule
   // Inline why → ctx.data.jobWhy (NOT jobIntent — that token is the scheduled
   // duty BODY, consumed via {{jobIntent}} by job-tick; reusing it would
   // double-inject). The executor surfaces jobWhy to the agent as a fenced

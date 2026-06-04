@@ -112,7 +112,7 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
         // One-runner: a due folder-duty becomes a scheduled Job, run via runJob
         // with chain:false → the same one-shot runExecutable call as before
         // (no persona/why seeded, so the ExecutorInput is byte-identical).
-        const out = await runJob(mintScheduledJob({ duty: slug, executable: slug }), {
+        const out = await runJob(mintScheduledJob({ duty: slug, executable: slug, schedule: every }), {
           cwd: ctx.cwd,
           config: ctx.config,
           verbose: ctx.verbose,
@@ -190,7 +190,12 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
         // One-runner: a due .md duty becomes a scheduled Job, run via runJob
         // with chain:false → byte-identical to the prior one-shot runExecutable.
         const out = await runJob(
-          mintScheduledJob({ duty: slug, executable: slugTarget, cliArgs: { [slugArg]: slug } }),
+          mintScheduledJob({
+            duty: slug,
+            executable: slugTarget,
+            schedule: frontmatter.every,
+            cliArgs: { [slugArg]: slug },
+          }),
           { cwd: ctx.cwd, config: ctx.config, verbose: ctx.verbose, quiet: ctx.quiet, chain: false },
         )
         results.push({ slug, exitCode: out.exitCode, reason: out.reason })

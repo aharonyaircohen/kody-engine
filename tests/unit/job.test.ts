@@ -144,4 +144,11 @@ describe("mintScheduledJob (Phase 2)", () => {
   it("defaults cliArgs to empty", () => {
     expect(mintScheduledJob({ duty: "d", executable: "job-tick" }).cliArgs).toEqual({})
   })
+
+  it("carries the cadence onto ctx.data.jobSchedule so the ledger records when it fired", async () => {
+    await runJob(mintScheduledJob({ duty: "stale-prs", executable: "job-tick", schedule: "7d" }), { cwd: "/x" })
+    const [, input] = runExecutableChain.mock.calls.at(-1)!
+    expect(input.preloadedData?.jobSchedule).toBe("7d")
+    expect(input.preloadedData?.jobFlavor).toBe("scheduled")
+  })
 })
