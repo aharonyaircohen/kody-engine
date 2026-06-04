@@ -43,6 +43,10 @@ Under the hood it is one **generic executor** running one of several **declarati
         commitAndPush / ensurePr / postIssueComment
 ```
 
+## Operating Kody
+
+For how to trigger and operate Kody day-to-day from GitHub, see [OPERATING-KODY.md](OPERATING-KODY.md).
+
 ## Top-level commands
 
 Each is its own auto-discovered executable. [src/dispatch.ts](src/dispatch.ts) picks one from the GHA event. CLI users can invoke any of them directly (`kody <command> …`).
