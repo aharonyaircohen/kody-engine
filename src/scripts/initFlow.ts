@@ -114,7 +114,6 @@ jobs:
     if: >-
       \${{ github.event_name == 'workflow_dispatch' ||
           (github.event_name == 'issue_comment' &&
-            !github.event.issue.pull_request &&
             contains(github.event.comment.body, '@kody')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -139,7 +138,15 @@ jobs:
 
       - env:
           ALL_SECRETS: \${{ toJSON(secrets) }}
-        run: npx -y -p @kody-ade/kody-engine@latest kody-engine ci --issue \${{ github.event.inputs.issue_number || github.event.issue.number }}
+        run: npx -y -p @kody-ade/kody-engine@latest kody-engine ci
+`
+
+const DEFAULT_STAFF_PERSONA = `# Kody
+
+You are Kody, the default maintenance staff member for scheduled duties.
+
+Keep actions narrow, prefer read-only inspection, and only use the tools or commands named by the duty.
+When a duty writes a report or dispatches work, keep the output factual and concise.
 `
 
 function defaultBranchFromGit(cwd: string): string {
@@ -226,7 +233,18 @@ export function performInit(cwd: string, force: boolean): InitResult {
     }
   }
 
-  // 4. .github/workflows/kody-<name>.yml for every discovered scheduled executable.
+  // 4. .kody/staff/kody.md — default persona referenced by bundled duties.
+  const staffDir = path.join(cwd, ".kody", "staff")
+  const staffPath = path.join(staffDir, "kody.md")
+  if (fs.existsSync(staffPath) && !force) {
+    skipped.push(".kody/staff/kody.md")
+  } else {
+    fs.mkdirSync(staffDir, { recursive: true })
+    fs.writeFileSync(staffPath, DEFAULT_STAFF_PERSONA)
+    wrote.push(".kody/staff/kody.md")
+  }
+
+  // 5. .github/workflows/kody-<name>.yml for every discovered scheduled executable.
   for (const exe of listExecutables()) {
     let profile: ReturnType<typeof loadProfile>
     try {
@@ -244,7 +262,7 @@ export function performInit(cwd: string, force: boolean): InitResult {
     wrote.push(`.github/workflows/kody-${exe.name}.yml`)
   }
 
-  // 5. Create/update every kody-owned label declared across the executable
+  // 6. Create/update every kody-owned label declared across the executable
   //    profile set. Best-effort: if `gh` isn't installed/authenticated, this
   //    is skipped silently and setKodyLabel will lazily create the label on
   //    first use during a real flow run.
@@ -285,6 +303,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - env:
           GH_TOKEN: \${{ secrets.KODY_TOKEN || github.token }}
         run: npx -y -p @kody-ade/kody-engine@latest kody-engine ${name}
