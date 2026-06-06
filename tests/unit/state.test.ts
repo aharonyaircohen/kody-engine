@@ -91,7 +91,9 @@ describe("state: reduce", () => {
     expect(entry.flavor).toBeUndefined()
     expect(entry.runUrl).toBeUndefined()
     // round-trips through the wire format
-    const back = parseStateComment(renderStateComment(reduce(emptyState(), "build", ok, undefined, null, { jobId: "j1", flavor: "scheduled" })))
+    const back = parseStateComment(
+      renderStateComment(reduce(emptyState(), "build", ok, undefined, null, { jobId: "j1", flavor: "scheduled" })),
+    )
     expect(back.history.at(-1)?.jobId).toBe("j1")
     expect(back.history.at(-1)?.flavor).toBe("scheduled")
   })

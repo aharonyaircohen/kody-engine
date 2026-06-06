@@ -5,7 +5,6 @@ import { mintAppInstallationToken, readAppCreds } from "./app-auth.js"
 import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
 import { autoDispatch, autoDispatchTyped, type DispatchResult, dispatchScheduledWatches } from "./dispatch.js"
 import { runExecutable, runExecutableChain } from "./executor.js"
-import { mintInstantJob, runJob } from "./job.js"
 import { reactToTriggerComment } from "./gha.js"
 import {
   postIssueComment as ghPostIssueComment,
@@ -13,6 +12,7 @@ import {
   postIssueComment,
   truncate,
 } from "./issue.js"
+import { mintInstantJob, runJob } from "./job.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 

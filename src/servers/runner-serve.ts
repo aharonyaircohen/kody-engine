@@ -297,7 +297,6 @@ export function buildServer(opts: BuildRunnerServerOptions): Server {
 }
 
 export async function runnerServe(): Promise<number> {
-
   const apiKey = getApiKey()
   const port = Number(process.env.PORT ?? DEFAULT_PORT)
 

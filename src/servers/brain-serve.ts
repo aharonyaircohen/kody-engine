@@ -436,7 +436,6 @@ export function buildServer(opts: BuildServerOptions): Server {
 }
 
 export async function brainServe(opts: { cwd: string }): Promise<number> {
-
   // The dashboard ships the per-repo secrets vault to this machine as a
   // JSON ALL_SECRETS env var (see Kody-Dashboard fly-context/brain-fly).
   // Spread it into process.env so the chat agent's tools and the LiteLLM

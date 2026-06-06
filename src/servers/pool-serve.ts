@@ -134,7 +134,6 @@ function superviseLitellm(): ChildProcess | null {
 }
 
 export async function poolServe(): Promise<number> {
-
   const masterRaw = process.env.KODY_MASTER_KEY?.trim()
   if (!masterRaw) throw new Error("KODY_MASTER_KEY required for pool-serve")
   // The owner reads each repo's vault to get THAT repo's FLY_API_TOKEN (so its

@@ -13,8 +13,8 @@
 import type { KodyConfig } from "./config.js"
 import type { DispatchResult } from "./dispatch.js"
 import type { Job, JobFlavor } from "./executables/types.js"
-import { runExecutable, runExecutableChain } from "./executor.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
+import { runExecutable, runExecutableChain } from "./executor.js"
 
 /** Default staff persona for instant `@kody` jobs (the agreed starting point). */
 export const DEFAULT_INSTANT_PERSONA = "kody"
