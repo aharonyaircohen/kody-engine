@@ -1,7 +1,7 @@
 {
   "$schema": "./kody.config.schema.json",
   "agent": {
-    "model": "minimax/MiniMax-M2.7-highspeed"
+    "model": "minimax/MiniMax-M3"
   },
   "github": {
     "owner": "aharonyaircohen",
