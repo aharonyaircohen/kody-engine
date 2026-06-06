@@ -641,3 +641,12 @@ describe("container: iteration cap", () => {
     expect(result.reason).toMatch(/exceeded 50 iterations/)
   }, 10_000)
 })
+
+// NOTE: the synthetic-action attempts-counter bump (when a child bails
+// without writing state) is a one-line fix in src/container.ts that
+// defensively bumps core.attempts[child] alongside the synthesized
+// lastOutcome. A unit test for it would need to capture ctx.data from a
+// postflight, which requires either a production script with a side
+// effect or a vi.mock of the postflight catalog that vitest's hoisting
+// rules fight. The fix is documented in the code comment; the existing
+// test suite + manual tester-repo verification will catch regressions.

@@ -5,12 +5,22 @@ set -euo pipefail
 # that wraps the kody chat loop and speaks the Brain SSE protocol so the
 # Kody-Dashboard /api/kody/chat/brain proxy can talk to it unchanged.
 #
+# Two modes (BRAIN_BACKEND):
+#   brain-serve (default) — kody-engine's Node.js brain-serve runs on :8080
+#   hermes                 — Hermes Agent (Python) runs on :3000, the kody
+#                            brain-proxy runs on :8080 and translates
+#                            Brain SSE → OpenAI SSE. The kody HTTP MCP server
+#                            runs on :8643 and exposes kody's MCP tools to
+#                            Hermes as MCP client.
+#
 # Expected env (set on the Fly machine config by the dashboard provisioner):
 #   REPO              owner/name of the repo the brain operates inside (required)
 #   REF               branch to clone (default: main)
 #   GITHUB_TOKEN      PAT with repo + workflow scope (required)
 #   BRAIN_API_KEY     bearer key the dashboard sends as x-api-key (required)
-#   PORT              HTTP port to listen on (default: 8080)
+#   BRAIN_BACKEND      "brain-serve" (default) | "hermes" — env override of
+#                      kody.config.json brain.mode
+#   PORT              HTTP port for brain-serve (default: 8080)
 #   MODEL             model override, e.g. "anthropic/claude-sonnet-4-6" (optional)
 #   ALL_SECRETS       JSON blob of provider keys (mirrors GH Actions toJSON(secrets))
 #   KODY_LITELLM_URL  optional always-on litellm proxy URL (e.g. http://kody-litellm.internal:4000)
@@ -196,9 +206,37 @@ fi
 
 export PORT="${PORT:-8080}"
 export MODEL="${MODEL:-}"
-export ALL_SECRETS="${ALL_SECRETS:-{\}}"
+export ALL_SECRETS="${ALL_SECRETS:-\{\}}"
 
-echo "→ brain: starting kody brain-serve on :${PORT} (boot repo=${REPO:-<none, repo-less>} ref=${BRANCH})"
+# ─── Resolve brain backend (BRAIN_BACKEND env overrides kody.config.json) ────
+# Precedence: BRAIN_BACKEND env > kody.config.json brain.mode > "brain-serve"
+# The config file is written by the dashboard provisioner when the Fly Machine
+# is created. One machine = one backend (no per-request routing). The env
+# override is the dev/CI escape hatch — useful for flipping a machine to
+# Hermes without rewriting the config (and redeploying the dashboard side).
+BRAIN_BACKEND_FROM_CONFIG=""
+if [ -f "$WORKDIR/kody.config.json" ] && command -v jq >/dev/null 2>&1; then
+  CONFIG_MODE="$(jq -r '.brain.mode // empty' "$WORKDIR/kody.config.json" 2>/dev/null || true)"
+  if [ -n "$CONFIG_MODE" ]; then
+    BRAIN_BACKEND_FROM_CONFIG="$CONFIG_MODE"
+  fi
+fi
+# Apply precedence: env wins, then config, then default.
+export BRAIN_BACKEND="${BRAIN_BACKEND:-$BRAIN_BACKEND_FROM_CONFIG}"
+export BRAIN_BACKEND="${BRAIN_BACKEND:-brain-serve}"
+
+if [ -n "$BRAIN_BACKEND_FROM_CONFIG" ] && [ "$BRAIN_BACKEND" != "$BRAIN_BACKEND_FROM_CONFIG" ]; then
+  echo "→ brain: BRAIN_BACKEND='$BRAIN_BACKEND' (env override of kody.config.json brain.mode='$BRAIN_BACKEND_FROM_CONFIG')"
+elif [ -n "$BRAIN_BACKEND_FROM_CONFIG" ]; then
+  echo "→ brain: BRAIN_BACKEND='$BRAIN_BACKEND' (from kody.config.json brain.mode)"
+else
+  echo "→ brain: BRAIN_BACKEND='$BRAIN_BACKEND' (default — no kody.config.json brain.mode)"
+fi
+
+if [ "$BRAIN_BACKEND" != "brain-serve" ] && [ "$BRAIN_BACKEND" != "hermes" ]; then
+  echo "→ brain: ERROR: brain.mode must be 'brain-serve' or 'hermes', got '$BRAIN_BACKEND'"
+  exit 2
+fi
 
 # Use the absolute path to the engine's bin script. The `kody` shim on
 # PATH is a symlink whose target may be lost between Docker layers in
@@ -210,4 +248,105 @@ if [ ! -f "$KODY_BIN" ]; then
   ls -la /usr/local/lib/node_modules/@kody-ade/kody-engine/ 2>&1 || true
   exit 127
 fi
+
+if [ "$BRAIN_BACKEND" = "hermes" ]; then
+  # ─── Hermes mode ──────────────────────────────────────────────────────
+  # Three processes: Hermes on :3000, the kody brain-proxy on :8080 (the
+  # public port the dashboard connects to), and the kody HTTP MCP server on
+  # :8643 (Hermes connects to it as an MCP client).
+
+  HERMES_PORT="${HERMES_PORT:-3000}"
+  MCP_PORT="${KODY_MCP_HTTP_PORT:-8643}"
+
+  # Start the HTTP MCP server (kody's MCP tools as HTTP endpoints).
+  echo "→ brain: starting kody MCP HTTP server on :${MCP_PORT}"
+  export KODY_MCP_HTTP_PORT="$MCP_PORT"
+  export KODY_MCP_HTTP_HOST="127.0.0.1"
+  export KODY_MCP_REPOS_ROOT="$BRAIN_REPOS_ROOT"
+  node "$KODY_BIN" mcp-http-server &
+  MCP_PID=$!
+
+  # Start Hermes Agent (Python). Configured via ~/.hermes/config.yaml with
+  # the API server enabled and the kody MCP server as an external MCP client.
+  # NOTE: Hermes reads `mcp_servers` (snake_case), NOT `mcpServers`. The
+  # mcpServers key is silently ignored — MCP tools will not load. Always
+  # use the snake_case form in this config.
+  HERMES_HOME="${HERMES_HOME:-/root/.hermes}"
+  mkdir -p "$HERMES_HOME"
+  cat >"$HERMES_HOME/config.yaml" <<EOF
+platforms:
+  api_server:
+    enabled: true
+    port: ${HERMES_PORT}
+    key: ${BRAIN_API_KEY}
+mcp_servers:
+  kody-fetch-repo:
+    url: http://127.0.0.1:${MCP_PORT}/mcp/fetch-repo
+    transport: streamable-http
+    enabled: true
+    headers:
+      Authorization: "Bearer ${BRAIN_API_KEY}"
+  kody-verify:
+    url: http://127.0.0.1:${MCP_PORT}/mcp/verify
+    transport: streamable-http
+    enabled: true
+    headers:
+      Authorization: "Bearer ${BRAIN_API_KEY}"
+  kody-submit-state:
+    url: http://127.0.0.1:${MCP_PORT}/mcp/submit-state
+    transport: streamable-http
+    enabled: true
+    headers:
+      Authorization: "Bearer ${BRAIN_API_KEY}"
+  kody-duty:
+    url: http://127.0.0.1:${MCP_PORT}/mcp/duty
+    transport: streamable-http
+    enabled: true
+    headers:
+      Authorization: "Bearer ${BRAIN_API_KEY}"
+model:
+  provider: anthropic
+  name: ${MODEL:-anthropic/claude-sonnet-4}
+EOF
+
+  echo "→ brain: starting Hermes Agent on :${HERMES_PORT}"
+  export HERMES_HOME
+  hermes gateway --platform api_server &
+  HERMES_PID=$!
+
+  # Wait for BOTH the kody MCP server AND Hermes to be ready before
+  # starting the proxy. Hermes's MCP client connects to the kody MCP
+  # server at boot — if Hermes comes up before the kody MCP server has
+  # bound its port, the first chat message in a fresh machine loses its
+  # MCP tools. Polling only Hermes's /health let the proxy start while
+  # the kody MCP server was still warming up.
+  echo "→ brain: waiting for kody MCP server + Hermes to be ready…"
+  for _ in $(seq 1 30); do
+    if ! kill -0 "$MCP_PID" 2>/dev/null; then
+      echo "→ brain: ERROR: kody MCP HTTP server exited before becoming ready"
+      exit 1
+    fi
+    if ! kill -0 "$HERMES_PID" 2>/dev/null; then
+      echo "→ brain: ERROR: Hermes exited before becoming ready"
+      exit 1
+    fi
+    if curl -sf "http://127.0.0.1:${MCP_PORT}/healthz" >/dev/null 2>&1 \
+      && curl -sf "http://localhost:${HERMES_PORT}/health" >/dev/null 2>&1; then
+      echo "→ brain: kody MCP server and Hermes are ready"
+      break
+    fi
+    sleep 1
+  done
+
+  # Start the brain proxy (the public port the dashboard connects to).
+  # BRAIN_BACKEND was resolved above (env > config > default); we know it
+  # is "hermes" because we passed the if-check. No need to re-export.
+  echo "→ brain: starting kody brain-proxy on :${PORT} (backend=hermes)"
+  export HERMES_URL="http://127.0.0.1:${HERMES_PORT}"
+  exec node "$KODY_BIN" brain-proxy
+fi
+
+# ─── brain-serve mode (default) ──────────────────────────────────────────
+
+echo "→ brain: starting kody brain-serve on :${PORT} (boot repo=${REPO:-<none, repo-less>} ref=${BRANCH})"
 exec node "$KODY_BIN" brain-serve

@@ -241,6 +241,14 @@ export function autoDispatch(opts?: {
   // resolved to an explicit command (`consumedFirstToken`). It must never fall
   // through to the default executable or run on chatter — that's the loop
   // surface. Humans keep the default-fallback behavior.
+  //
+  // Scope of this gate: the @-mention comment path only. The duty MCP tool
+  // `dispatch_workflow` bypasses this entirely (it uses workflow_dispatch,
+  // not a bot-authored @kody comment), so a duty in ASK mode can still
+  // invoke qa-engineer / ui-review via that tool — see GATE_EXEMPT_EXECUTABLES
+  // in dutyMcp.ts. A future maintainer reading this gate should not
+  // "fix" it by also gating the tool path; the two surfaces are
+  // independent and the tool path is the one the duty contract relies on.
   if (isBotAuthor && !consumedFirstToken) {
     process.stderr.write(
       `[kody] dispatch: ignoring bot comment without an explicit command ` +

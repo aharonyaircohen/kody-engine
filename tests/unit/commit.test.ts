@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { isForbiddenPath, normalizeCommitMessage } from "../../src/commit.js"
+import { FORBIDDEN_PATH_PREFIXES, isForbiddenPath, normalizeCommitMessage } from "../../src/commit.js"
 
 describe("commit: isForbiddenPath", () => {
   it("blocks .kody/ artifacts", () => {
@@ -60,6 +60,21 @@ describe("commit: isForbiddenPath", () => {
     // .kody/memory/ or .kody/tasks/ stay blocked.
     expect(isForbiddenPath(".kody/memory.md")).toBe(true)
     expect(isForbiddenPath(".kody/tasksfoo.json")).toBe(true)
+  })
+})
+
+describe("commit: FORBIDDEN_PATH_PREFIXES shape", () => {
+  it("has no duplicate entries (a duplicated prefix hides intent and risks drift on edit)", () => {
+    // Catches the recurring bug where a path prefix gets added to the list
+    // without removing an existing one (e.g. .kody/ listed at index 0 and
+    // again at index 2 from a half-applied refactor).
+    const seen = new Set<string>()
+    const dups: string[] = []
+    for (const p of FORBIDDEN_PATH_PREFIXES) {
+      if (seen.has(p)) dups.push(p)
+      seen.add(p)
+    }
+    expect(dups).toEqual([])
   })
 })
 

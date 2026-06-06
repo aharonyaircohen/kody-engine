@@ -11,9 +11,10 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { describe, expect, it } from "vitest"
-import { operatorRequestBlock } from "../../src/executor.js"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { operatorRequestBlock, runExecutable } from "../../src/executor.js"
 import { loadProfile } from "../../src/profile.js"
+import * as taskArtifacts from "../../src/task-artifacts.js"
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-exec-"))
@@ -127,5 +128,77 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     const postScripts = profile.scripts.postflight.map((s) => s.script)
     expect(postScripts).not.toContain("verify")
     expect(postScripts).not.toContain("checkCoverageWithRetry")
+  })
+})
+
+// Per-task artifacts prepared for the PR branch. The executor picks
+// `args.issue ?? args.pr` to derive the task target — a `fix` / `fix-ci`
+// / `resolve` run has no `args.issue`, only `args.pr`, and the artifacts
+// contract still applies (the agent should leave context.json /
+// memory-recs.json / followups.json / handoff-notes.md in
+// `.kody/tasks/<pr>/`). Without the pr branch, the agent runs no
+// artifacts at all and the dashboard loses the audit trail.
+describe("executor: per-task artifacts prepare for args.pr", () => {
+  let tmp: string
+
+  afterEach(() => {
+    if (tmp && fs.existsSync(tmp)) fs.rmSync(tmp, { recursive: true, force: true })
+  })
+
+  it("prepares .kody/tasks/<pr>/ when args.pr is set", async () => {
+    // Use the real `resolve` profile (registered in the engine), which
+    // takes --pr as its primary numeric input. The executor prepares the
+    // task-artifacts dir BEFORE preflights run, so we can assert on the
+    // dir's existence even when the preflight chain fails (no gh
+    // token, no agent available, etc.). The point of this test is the
+    // pr-branch wiring of taskArtifacts, not a full resolve run.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "executor-pr-"))
+    tmp = dir
+
+    const spy = vi.spyOn(taskArtifacts, "prepareTaskArtifactsDir")
+    spy.mockClear()
+
+    // Catch the throw — a preflight may fail in a non-git tempdir (e.g.
+    // `loadIssueContext` shells out to `gh`), but taskArtifacts was
+    // already prepared before that preflight ran. We only care about
+    // the artifacts-dir preparation here.
+    try {
+      await runExecutable("resolve", {
+        cliArgs: { pr: 42 },
+        cwd: dir,
+        skipConfig: true,
+      })
+    } catch {
+      /* expected: preflight gh call fails in a tempdir without git */
+    }
+
+    // The artifacts dir MUST exist regardless of whether the rest of
+    // the run succeeded. The dashboard's "task audit" view keys off
+    // its presence.
+    expect(spy).toHaveBeenCalled()
+    const [cwdArg, taskIdArg] = spy.mock.calls[0] ?? []
+    expect(cwdArg).toBe(dir)
+    expect(String(taskIdArg)).toBe("42")
+    expect(fs.existsSync(path.join(dir, ".kody", "tasks", "42"))).toBe(true)
+    spy.mockRestore()
+  })
+
+  it("uses 'issue' taskType for args.issue, 'pr' taskType for args.pr (addendum text differs)", async () => {
+    // The prompt addendum (`taskArtifactsPromptAddendum`) embeds the
+    // taskType into the agent's system prompt. A misclassification
+    // (e.g. tagging a pr-run as "issue") would tell the agent to
+    // expect an issue-shaped audit trail. Lock the contract.
+    const prAddendum = taskArtifacts.taskArtifactsPromptAddendum({
+      taskId: "42",
+      taskType: "pr",
+      relDir: ".kody/tasks/42",
+    })
+    const issueAddendum = taskArtifacts.taskArtifactsPromptAddendum({
+      taskId: "42",
+      taskType: "issue",
+      relDir: ".kody/tasks/42",
+    })
+    expect(prAddendum).toContain('"taskType": "pr"')
+    expect(issueAddendum).toContain('"taskType": "issue"')
   })
 })

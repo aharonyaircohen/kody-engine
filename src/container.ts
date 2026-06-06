@@ -289,10 +289,18 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
             status: "pending",
             currentExecutable: null,
             lastOutcome: synthetic,
-            attempts: {},
+            // Bump attempts here too — a synthesized action is, semantically,
+            // a saveTaskState write that just didn't happen mechanically.
+            // Without this, the dashboard's `attempts[child]` view shows
+            // "never run" forever whenever a flaky preflight always bails.
+            attempts: { [child.exec]: priorAttempts + 1 },
           }
         } else {
           next.core.lastOutcome = synthetic
+          next.core.attempts = {
+            ...next.core.attempts,
+            [child.exec]: priorAttempts + 1,
+          }
         }
       }
       ctx.data.taskState = next

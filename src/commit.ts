@@ -1,10 +1,9 @@
 import { execFileSync } from "node:child_process"
 import { pushWithRetry } from "./pushWithRetry.js"
 
-const FORBIDDEN_PATH_PREFIXES = [
+export const FORBIDDEN_PATH_PREFIXES = [
   ".kody/",
   ".kody-engine/",
-  ".kody/",
   ".kody-lean/", // back-compat: stale runtime dir from kody-lean v0.5.x
   ".codegraph/", // codegraph repo-map tool's runtime scratch (daemon.pid, sock,
   // db, its own .gitignore) — machine-local, must never be committed. Without
