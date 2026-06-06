@@ -24,9 +24,14 @@
  * The behind_by computation is done HERE — the LLM never sees `gh`, never
  * crafts a compare URL, never measures drift incorrectly. One call returns the
  * whole structured world the duty needs to make its decision.
+ *
+ * Transport: tool definitions are extracted into `dutyToolDefinitions` so the
+ * same handlers power both the in-process MCP server (via claude-agent-sdk)
+ * and the HTTP MCP server (via @modelcontextprotocol/sdk).
  */
 
 import { createSdkMcpServer, type McpSdkServerConfigWithInstance, tool } from "@anthropic-ai/claude-agent-sdk"
+import type { ZodRawShape } from "zod"
 import { z } from "zod"
 import { gh } from "./issue.js"
 
@@ -54,6 +59,26 @@ interface DutyMcpOptions {
    */
   dutySlug?: string
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Tool definition shape (transport-agnostic).
+// ────────────────────────────────────────────────────────────────────────────
+
+export type ToolHandler = (args: Record<string, unknown>) => Promise<{
+  content: Array<{ type: "text"; text: string }>
+  isError?: boolean
+}>
+
+export interface DutyToolDefinition {
+  name: string
+  description: string
+  inputSchema: ZodRawShape
+  handler: ToolHandler
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Repair candidate / CI summarization (unchanged from previous impl).
+// ────────────────────────────────────────────────────────────────────────────
 
 interface RepairCandidate {
   number: number
@@ -121,8 +146,6 @@ function listRepairCandidates(repoSlug: string): RepairCandidate[] {
     .filter((p) => !p.isDraft)
     .map((p) => {
       const ciStatus = summarizeCiStatus(p.statusCheckRollup)
-      // Only spend a compare API call when the PR is not conflicting and CI is
-      // not failing — those are the only paths that route to `sync` anyway.
       const mergeable = String(p.mergeable ?? "UNKNOWN").toUpperCase()
       const behindBy =
         mergeable === "CONFLICTING" || ciStatus === "FAILING"
@@ -147,8 +170,6 @@ function dispatchVerb(
   executable: string,
   prNumber: number,
 ): { ok: true } | { ok: false; error: string } {
-  // PR-repair verbs are just a workflow_dispatch keyed by PR number — same path
-  // as the general dispatchWorkflow tool (defined below; hoisted).
   return dispatchWorkflow(workflowFile, executable, prNumber)
 }
 
@@ -159,12 +180,8 @@ function postRecommendation(
   dutySlug?: string,
 ): { ok: true } | { ok: false; error: string } {
   const mentioned = mention ? `${mention} ${message}` : message
-  // Stamp the emitting duty so the dashboard keys trust per duty (code, not LLM).
   const body = dutySlug ? `${mentioned}\n\n<!-- kody-duty: ${dutySlug} -->` : mentioned
   try {
-    // gh CLI strips `@kody …` self-dispatch via stripKodyMentions in the
-    // postIssueComment path — but recommend_to_operator never starts with
-    // `@kody <slug>`, so the BotDispatchCommentError check is a non-issue.
     gh(["pr", "comment", String(prNumber), "--body", body])
     return { ok: true }
   } catch (err) {
@@ -207,20 +224,13 @@ function readLedger(label: string): LedgerResult {
 }
 
 // ---------------------------------------------------------------------------
-// Duty trust gate. The dashboard writes per-duty trust to a JSON file on the
-// `kody-state` branch (`.kody/state/trust.json`, shape `{ duties: { <slug>:
-// { mode: "ask" | "auto", ... } } }`). The engine reads it to decide whether a
-// trusted duty may self-dispatch (mode "auto") or must recommend (mode "ask").
-// Fail-safe by construction: ANY uncertainty (no file, no entry, parse/API
-// error, missing slug) resolves to "ask" — the engine never auto-acts on a
-// duty it can't positively confirm is trusted.
+// Duty trust gate. (unchanged)
 // ---------------------------------------------------------------------------
 
 export type DutyTrustMode = "ask" | "auto"
 const TRUST_FILE_PATH = ".kody/state/trust.json"
 const TRUST_STATE_BRANCH = "kody-state"
 
-/** Pure: a duty's trust mode from the raw trust.json text. Fail-safe → "ask". */
 export function parseDutyTrustMode(rawJson: string, dutySlug: string): DutyTrustMode {
   try {
     const parsed = JSON.parse(rawJson) as { duties?: Record<string, { mode?: string }> }
@@ -230,10 +240,6 @@ export function parseDutyTrustMode(rawJson: string, dutySlug: string): DutyTrust
   }
 }
 
-/**
- * Read a duty's trust mode from `.kody/state/trust.json` on `kody-state`.
- * Fail-safe: any miss → "ask". Not wired into dispatch yet — pure read.
- */
 export function readDutyTrustMode(repoSlug: string, dutySlug?: string): DutyTrustMode {
   if (!dutySlug) return "ask"
   try {
@@ -251,11 +257,7 @@ export function readDutyTrustMode(repoSlug: string, dutySlug?: string): DutyTrus
 }
 
 // ---------------------------------------------------------------------------
-// Read-back primitive. QA duties work in two ticks: dispatch a check (qa-engineer
-// / ui-review), then on a LATER tick read the verdict it posted and act. The
-// locked toolbox had no way to read a thread's comments/labels — so QA couldn't
-// run on it. `read_thread` fills that gap (read-only). Works for issues AND PRs
-// (the issues API exposes PR conversation comments + labels).
+// Read-back primitive.
 // ---------------------------------------------------------------------------
 
 export interface ThreadResult {
@@ -294,19 +296,10 @@ export function readThread(repoSlug: string, number: number, limit = 10): Thread
 }
 
 // ---------------------------------------------------------------------------
-// General duty primitives (not PR-repair-specific). These give a locked duty
-// the affordances it needs WITHOUT raw `gh`, and — critically — make the
-// duplication-prone actions (create issue / comment) idempotent IN CODE, keyed
-// by a stable hidden marker. The LLM no longer decides whether a duplicate
-// exists; the tool looks it up deterministically via the issues API (never the
-// laggy search index) and refuses to create a second.
+// Idempotency primitives.
 // ---------------------------------------------------------------------------
 
-/** Check-run conclusions that count as a terminal failure (CANCELLED excluded —
- * a cancelled run is usually superseded, not a real CI failure). */
 const CHECK_FAIL_CONCLUSIONS = new Set(["FAILURE", "TIMED_OUT", "STARTUP_FAILURE", "ACTION_REQUIRED"])
-/** Kody's own job check-runs — excluded by default so a duty never reacts to
- * the engine's own activity (which would be self-referential / loop). */
 const DEFAULT_IGNORE_CHECKS = ["run", "kody", "job-tick", "goal-tick", "worker-ask", "chat"]
 
 export interface CheckRunsResult {
@@ -318,8 +311,6 @@ export interface CheckRunsResult {
 
 export function readCheckRuns(repoSlug: string, ref: string, ignoreNames: string[]): CheckRunsResult {
   const sha = gh(["api", `repos/${repoSlug}/commits/${ref}`, "--jq", ".sha"]).trim()
-  // `--jq '.check_runs[] | {…}'` emits newline-delimited JSON objects (one per
-  // line), and `--paginate` concatenates pages — parse line by line.
   const raw = gh([
     "api",
     `repos/${repoSlug}/commits/${sha}/check-runs`,
@@ -396,30 +387,18 @@ export function dispatchWorkflow(
   }
 }
 
-/**
- * Build the in-process MCP server exposing duty primitives. The tool palette
- * intentionally favors high-level intents (sync_pr, fix_ci_pr) over low-level
- * primitives (gh, http) so the LLM can't compose its way out of the lockdown.
- */
-/**
- * Read-only review executables a duty may dispatch even in ASK mode — they
- * gather information (browse / review) and never commit, so dispatching one is
- * part of "asking", not "acting". Everything else (run / fix / qa-goal / merge /
- * sync / fix-ci / resolve) is gated on trust.
- */
+// ---------------------------------------------------------------------------
+// Trust gate for dispatch tools (unchanged).
+// ---------------------------------------------------------------------------
+
 const GATE_EXEMPT_EXECUTABLES: ReadonlySet<string> = new Set(["qa-engineer", "ui-review"])
 
-/**
- * Pure gate decision: block this dispatch? Yes unless the duty is trusted
- * ("auto") OR the executable is a read-only exempt review. Exported for tests.
- */
 export function isDispatchGated(executable: string | null | undefined, mode: DutyTrustMode): boolean {
   if (mode === "auto") return false
   if (executable && GATE_EXEMPT_EXECUTABLES.has(executable)) return false
   return true
 }
 
-/** Message returned by a dispatch tool when the duty isn't trusted (ASK mode). */
 function trustRefusal(dutySlug?: string): string {
   return (
     `Not dispatched: duty \`${dutySlug ?? "?"}\` is in ASK mode (not trusted for autonomy). ` +
@@ -429,50 +408,52 @@ function trustRefusal(dutySlug?: string): string {
   )
 }
 
-export function buildDutyMcpServer(opts: DutyMcpOptions): DutyMcpHandle {
+// ────────────────────────────────────────────────────────────────────────────
+// Tool definitions (transport-agnostic).
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Build all duty tool definitions. Used by both adapters.
+ */
+export function dutyToolDefinitions(opts: DutyMcpOptions): DutyToolDefinition[] {
   const workflowFile = opts.workflowFile ?? "kody.yml"
 
-  const listTool = tool(
-    "list_prs_to_repair",
-    "Return open non-draft PRs with the signals you need to pick a repair: number, title, headSha, baseRef, mergeable (CONFLICTING/MERGEABLE/UNKNOWN), ciStatus (PASSING/FAILING/RUNNING/UNKNOWN), behindBy (commits behind base; 0 for PRs that already match conflicts or CI-failure rules), updatedAt. Drafts are excluded. One call returns everything — do not iterate or paginate.",
-    {},
-    async () => {
+  const listTool: DutyToolDefinition = {
+    name: "list_prs_to_repair",
+    description:
+      "Return open non-draft PRs with the signals you need to pick a repair: number, title, headSha, baseRef, mergeable (CONFLICTING/MERGEABLE/UNKNOWN), ciStatus (PASSING/FAILING/RUNNING/UNKNOWN), behindBy (commits behind base; 0 for PRs that already match conflicts or CI-failure rules), updatedAt. Drafts are excluded. One call returns everything — do not iterate or paginate.",
+    inputSchema: {},
+    handler: async () => {
       const candidates = listRepairCandidates(opts.repoSlug)
       return {
         content: [
           {
-            type: "text" as const,
+            type: "text",
             text: JSON.stringify({ prs: candidates }, null, 2),
           },
         ],
       }
     },
-  )
+  }
 
-  const makeDispatch = (verb: "sync" | "fix-ci" | "resolve", describe: string) =>
-    tool(
-      `${verb.replace("-", "_")}_pr`,
-      describe,
-      {
-        pr: z.number().int().positive().describe("PR number to repair."),
-      },
-      async (args) => {
-        // Trust gate: only a duty graduated to "auto" may self-dispatch. An
-        // "ask" duty is refused HERE (in code) and told to recommend instead —
-        // the autonomy decision can't be skipped by the LLM. (PR-repair verbs
-        // are always actions, never exempt.)
-        if (isDispatchGated(verb, readDutyTrustMode(opts.repoSlug, opts.dutySlug))) {
-          return { content: [{ type: "text" as const, text: trustRefusal(opts.dutySlug) }] }
-        }
-        const result = dispatchVerb(workflowFile, verb, args.pr)
-        const text = result.ok
-          ? `Dispatched \`${verb}\` on PR #${args.pr}. The repair runs in its own workflow_dispatch — wait for the next tick to see the new headSha.`
-          : `Dispatch failed for \`${verb}\` on PR #${args.pr}: ${result.error}`
-        return {
-          content: [{ type: "text" as const, text }],
-        }
-      },
-    )
+  const makeDispatch = (verb: "sync" | "fix-ci" | "resolve", describe: string): DutyToolDefinition => ({
+    name: `${verb.replace("-", "_")}_pr`,
+    description: describe,
+    inputSchema: {
+      pr: z.number().int().positive().describe("PR number to repair."),
+    },
+    handler: async (args) => {
+      const pr = Number(args.pr)
+      if (isDispatchGated(verb, readDutyTrustMode(opts.repoSlug, opts.dutySlug))) {
+        return { content: [{ type: "text", text: trustRefusal(opts.dutySlug) }] }
+      }
+      const result = dispatchVerb(workflowFile, verb, pr)
+      const text = result.ok
+        ? `Dispatched \`${verb}\` on PR #${pr}. The repair runs in its own workflow_dispatch — wait for the next tick to see the new headSha.`
+        : `Dispatch failed for \`${verb}\` on PR #${pr}: ${result.error}`
+      return { content: [{ type: "text", text }] }
+    },
+  })
 
   const syncTool = makeDispatch(
     "sync",
@@ -487,79 +468,82 @@ export function buildDutyMcpServer(opts: DutyMcpOptions): DutyMcpHandle {
     "Resolve merge conflicts on a PR. Use when mergeable === CONFLICTING. The repair runs in a separate workflow.",
   )
 
-  const recommendTool = tool(
-    "recommend_to_operator",
-    "Post ONE comment on a PR with the operator @-mention prepended. Use this when a verb is NOT graduated in the trust ledger and you want the operator to confirm via the dashboard inbox. The mention handle is substituted from kody.config.json `github.operators` — do not type it yourself.",
-    {
+  const recommendTool: DutyToolDefinition = {
+    name: "recommend_to_operator",
+    description:
+      "Post ONE comment on a PR with the operator @-mention prepended. Use this when a verb is NOT graduated in the trust ledger and you want the operator to confirm via the dashboard inbox. The mention handle is substituted from kody.config.json `github.operators` — do not type it yourself.",
+    inputSchema: {
       pr: z.number().int().positive().describe("PR number to comment on."),
       body: z
         .string()
         .min(1)
         .describe("Comment body (markdown). Do not include the operator mention — the engine prepends it."),
     },
-    async (args) => {
-      const result = postRecommendation(args.pr, opts.operatorMention, args.body, opts.dutySlug)
+    handler: async (args) => {
+      const pr = Number(args.pr)
+      const body = String(args.body ?? "")
+      const result = postRecommendation(pr, opts.operatorMention, body, opts.dutySlug)
       const text = result.ok
-        ? `Recommendation posted on PR #${args.pr}.`
-        : `Recommendation failed on PR #${args.pr}: ${result.error}`
-      return {
-        content: [{ type: "text" as const, text }],
-      }
+        ? `Recommendation posted on PR #${pr}.`
+        : `Recommendation failed on PR #${pr}: ${result.error}`
+      return { content: [{ type: "text", text }] }
     },
-  )
+  }
 
-  const ledgerTool = tool(
-    "read_ledger",
-    "Read the trust ledger (or any sentinel-fenced JSON manifest stored on a labeled issue). Returns `{found, issueNumber, payload}` where payload is the parsed JSON between `<!-- <label>:start -->` and `<!-- <label>:end -->` sentinels. Use `read_ledger({label: 'kody:cto-decisions'})` to look up per-verb graduation modes for the trust gate.",
-    {
+  const ledgerTool: DutyToolDefinition = {
+    name: "read_ledger",
+    description:
+      "Read the trust ledger (or any sentinel-fenced JSON manifest stored on a labeled issue). Returns `{found, issueNumber, payload}` where payload is the parsed JSON between `<!-- <label>:start -->` and `<!-- <label>:end -->` sentinels. Use `read_ledger({label: 'kody:cto-decisions'})` to look up per-verb graduation modes for the trust gate.",
+    inputSchema: {
       label: z
         .string()
         .min(1)
         .describe("GitHub issue label that identifies the manifest issue (e.g. 'kody:cto-decisions')."),
     },
-    async (args) => {
-      const result = readLedger(args.label)
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      }
+    handler: async (args) => {
+      const label = String(args.label ?? "")
+      const result = readLedger(label)
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }
     },
-  )
+  }
 
-  const checkRunsTool = tool(
-    "read_check_runs",
-    "Read CI for a branch or commit ref (e.g. 'dev'). Returns {sha, state, failing:[{name,conclusion,detailsUrl}], pending:[{name,status}]}. state is RED (≥1 check has a terminal-failure conclusion: failure/timed_out/startup_failure/action_required), PENDING (none failed but some still running), or GREEN (all completed, none failed). Kody's own job check-runs (run/kody/job-tick/…) are excluded by default. This reads the commit's authoritative check-runs — use it instead of guessing CI health from a run list.",
-    {
+  const checkRunsTool: DutyToolDefinition = {
+    name: "read_check_runs",
+    description:
+      "Read CI for a branch or commit ref (e.g. 'dev'). Returns {sha, state, failing:[{name,conclusion,detailsUrl}], pending:[{name,status}]}. state is RED (≥1 check has a terminal-failure conclusion: failure/timed_out/startup_failure/action_required), PENDING (none failed but some still running), or GREEN (all completed, none failed). Kody's own job check-runs (run/kody/job-tick/…) are excluded by default. This reads the commit's authoritative check-runs — use it instead of guessing CI health from a run list.",
+    inputSchema: {
       ref: z.string().min(1).describe("Branch name or commit SHA to read CI for (e.g. 'dev')."),
       ignoreNames: z.array(z.string()).optional().describe("Check names to exclude (default: Kody's own job names)."),
     },
-    async (args) => {
-      const result = readCheckRuns(opts.repoSlug, args.ref, args.ignoreNames ?? DEFAULT_IGNORE_CHECKS)
-      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] }
+    handler: async (args) => {
+      const ref = String(args.ref ?? "")
+      const ignoreNames = Array.isArray(args.ignoreNames) ? (args.ignoreNames as string[]) : DEFAULT_IGNORE_CHECKS
+      const result = readCheckRuns(opts.repoSlug, ref, ignoreNames)
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }
     },
-  )
+  }
 
-  const readThreadTool = tool(
-    "read_thread",
-    "Read an issue or PR's recent comments + labels + title/state. Returns {number, title, state, labels:[...], comments:[{author, createdAt, body}]} (newest last, body truncated). Use this to read a verdict a dispatched check posted back — e.g. qa-engineer's report or ui-review's PASS/CONCERNS/FAIL — on a later tick. Read-only; works for both issues and PRs.",
-    {
+  const readThreadTool: DutyToolDefinition = {
+    name: "read_thread",
+    description:
+      "Read an issue or PR's recent comments + labels + title/state. Returns {number, title, state, labels:[...], comments:[{author, createdAt, body}]} (newest last, body truncated). Use this to read a verdict a dispatched check posted back — e.g. qa-engineer's report or ui-review's PASS/CONCERNS/FAIL — on a later tick. Read-only; works for both issues AND PRs.",
+    inputSchema: {
       number: z.number().int().positive().describe("Issue or PR number to read."),
       limit: z.number().int().positive().optional().describe("Max recent comments to return (default 10)."),
     },
-    async (args) => {
-      const result = readThread(opts.repoSlug, args.number, args.limit ?? 10)
-      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] }
+    handler: async (args) => {
+      const number = Number(args.number)
+      const limit = args.limit ? Number(args.limit) : 10
+      const result = readThread(opts.repoSlug, number, limit)
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }
     },
-  )
+  }
 
-  const ensureIssueTool = tool(
-    "ensure_issue",
-    "Idempotently ensure ONE open tracking issue exists for `key`. Searches OPEN issues (issues API, not the laggy search index) for `key`'s hidden marker; if found, returns {created:false, number} and creates NOTHING; otherwise creates the issue (title + body, marker appended) and returns {created:true, number}. This is the anti-duplication primitive: use one stable `key` per recurring finding so re-ticks reuse the same issue. Only take follow-up actions (dispatch/comment) when created===true.",
-    {
+  const ensureIssueTool: DutyToolDefinition = {
+    name: "ensure_issue",
+    description:
+      "Idempotently ensure ONE open tracking issue exists for `key`. Searches OPEN issues (issues API, not the laggy search index) for `key`'s hidden marker; if found, returns {created:false, number} and creates NOTHING; otherwise creates the issue (title + body, marker appended) and returns {created:true, number}. This is the anti-duplication primitive: use one stable `key` per recurring finding so re-ticks reuse the same issue. Only take follow-up actions (dispatch/comment) when created===true.",
+    inputSchema: {
       key: z
         .string()
         .min(1)
@@ -574,66 +558,88 @@ export function buildDutyMcpServer(opts: DutyMcpOptions): DutyMcpHandle {
           "Issue body markdown (used only on first creation). Include the operator mention verbatim if the duty body has one.",
         ),
     },
-    async (args) => {
-      const result = ensureIssue(opts.repoSlug, args.key, args.title, args.body)
-      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] }
+    handler: async (args) => {
+      const key = String(args.key ?? "")
+      const title = String(args.title ?? "")
+      const body = String(args.body ?? "")
+      const result = ensureIssue(opts.repoSlug, key, title, body)
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }
     },
-  )
+  }
 
-  const ensureCommentTool = tool(
-    "ensure_comment",
-    "Idempotently post ONE comment on an issue for `key`. If a comment carrying `key`'s marker already exists on the issue, returns {posted:false}; otherwise posts the comment (marker appended) and returns {posted:true}. Use for a notify/audit comment that must appear exactly once.",
-    {
+  const ensureCommentTool: DutyToolDefinition = {
+    name: "ensure_comment",
+    description:
+      "Idempotently post ONE comment on an issue for `key`. If a comment carrying `key`'s marker already exists on the issue, returns {posted:false}; otherwise posts the comment (marker appended) and returns {posted:true}. Use for a notify/audit comment that must appear exactly once.",
+    inputSchema: {
       issue: z.number().int().positive().describe("Issue number to comment on."),
       key: z.string().min(1).describe("Stable dedup identity for this comment (e.g. 'dev-ci-red:dispatched')."),
       body: z.string().min(1).describe("Comment body markdown."),
     },
-    async (args) => {
-      const result = ensureComment(opts.repoSlug, args.issue, args.key, args.body)
-      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] }
+    handler: async (args) => {
+      const issue = Number(args.issue)
+      const key = String(args.key ?? "")
+      const body = String(args.body ?? "")
+      const result = ensureComment(opts.repoSlug, issue, key, body)
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }
     },
-  )
+  }
 
-  const dispatchTool = tool(
-    "dispatch_workflow",
-    "Dispatch a kody.yml workflow_dispatch run for an executable against an issue (the cross-run bot→engine path; a bot `@kody` comment would be dropped). E.g. dispatch_workflow({executable:'run', issueNumber:<n>}) opens a fix PR from a tracking issue. Returns {ok} or {ok:false,error}.",
-    {
+  const dispatchTool: DutyToolDefinition = {
+    name: "dispatch_workflow",
+    description:
+      "Dispatch a kody.yml workflow_dispatch run for an executable against an issue (the cross-run bot→engine path; a bot `@kody` comment would be dropped). E.g. dispatch_workflow({executable:'run', issueNumber:<n>}) opens a fix PR from a tracking issue. Returns {ok} or {ok:false,error}.",
+    inputSchema: {
       executable: z.string().min(1).describe("Executable/stage to run (e.g. 'run')."),
       issueNumber: z.number().int().positive().describe("Issue (or PR) number forwarded as issue_number."),
     },
-    async (args) => {
-      // Trust gate — see makeDispatch. "ask" duties cannot self-dispatch an
-      // ACTION. Read-only review executables (qa-engineer, ui-review) are
-      // EXEMPT: dispatching them is information-gathering (they never commit),
-      // which a duty must do even while it only has permission to ask. Only the
-      // consequential executables (the fix/goal/run) are gated.
-      if (isDispatchGated(args.executable, readDutyTrustMode(opts.repoSlug, opts.dutySlug))) {
-        return { content: [{ type: "text" as const, text: trustRefusal(opts.dutySlug) }] }
+    handler: async (args) => {
+      const executable = String(args.executable ?? "")
+      const issueNumber = Number(args.issueNumber)
+      if (isDispatchGated(executable, readDutyTrustMode(opts.repoSlug, opts.dutySlug))) {
+        return { content: [{ type: "text", text: trustRefusal(opts.dutySlug) }] }
       }
-      const result = dispatchWorkflow(workflowFile, args.executable, args.issueNumber)
+      const result = dispatchWorkflow(workflowFile, executable, issueNumber)
       const text = result.ok
-        ? `Dispatched \`${args.executable}\` on #${args.issueNumber} via workflow_dispatch.`
-        : `Dispatch failed for \`${args.executable}\` on #${args.issueNumber}: ${result.error}`
-      return { content: [{ type: "text" as const, text }] }
+        ? `Dispatched \`${executable}\` on #${issueNumber} via workflow_dispatch.`
+        : `Dispatch failed for \`${executable}\` on #${issueNumber}: ${result.error}`
+      return { content: [{ type: "text", text }] }
     },
+  }
+
+  return [
+    listTool,
+    syncTool,
+    fixCiTool,
+    resolveTool,
+    recommendTool,
+    ledgerTool,
+    checkRunsTool,
+    readThreadTool,
+    ensureIssueTool,
+    ensureCommentTool,
+    dispatchTool,
+  ]
+}
+
+/**
+ * Build the in-process MCP server exposing duty primitives. The tool palette
+ * intentionally favors high-level intents (sync_pr, fix_ci_pr) over low-level
+ * primitives (gh, http) so the LLM can't compose its way out of the lockdown.
+ */
+export function buildDutyMcpServer(opts: DutyMcpOptions): DutyMcpHandle {
+  const definitions = dutyToolDefinitions(opts)
+
+  const tools = definitions.map((def) =>
+    tool(def.name, def.description, def.inputSchema as Parameters<typeof tool>[2], async (args) =>
+      def.handler(args as Record<string, unknown>),
+    ),
   )
 
   const server = createSdkMcpServer({
     name: "kody-duty",
     version: "0.1.0",
-    tools: [
-      listTool,
-      syncTool,
-      fixCiTool,
-      resolveTool,
-      recommendTool,
-      ledgerTool,
-      checkRunsTool,
-      readThreadTool,
-      ensureIssueTool,
-      ensureCommentTool,
-      dispatchTool,
-    ],
+    tools,
   })
 
   return { server }

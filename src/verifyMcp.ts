@@ -12,10 +12,15 @@
  * because each call binds the live KodyConfig + cwd + a per-call
  * attempt counter. It uses `createSdkMcpServer` (in-process) so we
  * don't spawn a subprocess.
+ *
+ * Transport: tool definitions are extracted into `verifyToolDefinition` so
+ * the same handler powers both the in-process MCP server (via claude-agent-sdk)
+ * and the HTTP MCP server (via @modelcontextprotocol/sdk).
  */
 
 import { createSdkMcpServer, type McpSdkServerConfigWithInstance, tool } from "@anthropic-ai/claude-agent-sdk"
-import { z } from "zod"
+import type { ZodRawShape } from "zod"
+
 import type { KodyConfig } from "./config.js"
 import { emitEvent } from "./events.js"
 import { type VerifyResult, verifyAllWithRetry } from "./verify.js"
@@ -41,22 +46,36 @@ interface VerifyToolState {
   maxAttempts: number
 }
 
+export interface VerifyToolDefinition {
+  name: "verify"
+  description: string
+  inputSchema: ZodRawShape
+  handler: (args: Record<string, never>) => Promise<{
+    content: Array<{ type: "text"; text: string }>
+    isError?: boolean
+  }>
+}
+
+const DESCRIPTION =
+  "Run the project's quality gates (typecheck, lint, tests). Returns ok=true with empty failures when everything passes. Call this before declaring DONE. If ok=false, read the truncated failures, fix the code, commit, and call verify() again. You have a bounded number of attempts; after that the tool stops accepting calls and you must wrap up with whatever state is current."
+
+const INPUT_SCHEMA: ZodRawShape = {}
+
 /**
- * Build an in-process MCP server with one tool: `verify`. Returns
- * the config object the SDK accepts in `mcpServers["kody-verify"]`.
+ * Build the tool definition (transport-agnostic). Used by both adapters.
  */
-export function buildVerifyMcpServer(opts: VerifyToolOptions): McpSdkServerConfigWithInstance {
+export function verifyToolDefinition(opts: VerifyToolOptions): VerifyToolDefinition {
   const state: VerifyToolState = {
     attempts: 0,
     maxAttempts: opts.maxAttempts ?? DEFAULT_MAX_VERIFY_ATTEMPTS,
   }
   const runVerify = opts.__runVerify ?? verifyAllWithRetry
 
-  const verifyTool = tool(
-    "verify",
-    "Run the project's quality gates (typecheck, lint, tests). Returns ok=true with empty failures when everything passes. Call this before declaring DONE. If ok=false, read the truncated failures, fix the code, commit, and call verify() again. You have a bounded number of attempts; after that the tool stops accepting calls and you must wrap up with whatever state is current.",
-    {},
-    async (_args, _extra) => {
+  return {
+    name: "verify",
+    description: DESCRIPTION,
+    inputSchema: INPUT_SCHEMA,
+    handler: async () => {
       state.attempts++
       const attempt = state.attempts
       if (attempt > state.maxAttempts) {
@@ -65,7 +84,7 @@ export function buildVerifyMcpServer(opts: VerifyToolOptions): McpSdkServerConfi
           kind: "error",
           name: "verify_tool",
           outcome: "failed",
-          meta: { reason: "budget exhausted", attempts: attempt, maxAttempts: state.maxAttempts },
+          meta: { reason: "budget exhausted", attempts: attempt, maxAttempts: opts.maxAttempts },
         })
         return {
           content: [
@@ -74,7 +93,7 @@ export function buildVerifyMcpServer(opts: VerifyToolOptions): McpSdkServerConfi
               text: JSON.stringify({
                 ok: false,
                 locked: true,
-                reason: `verify budget exhausted (${state.maxAttempts} attempts used)`,
+                reason: `verify budget exhausted (${opts.maxAttempts ?? DEFAULT_MAX_VERIFY_ATTEMPTS} attempts used)`,
               }),
             },
           ],
@@ -105,7 +124,18 @@ export function buildVerifyMcpServer(opts: VerifyToolOptions): McpSdkServerConfi
         ],
       }
     },
-  )
+  }
+}
+
+/**
+ * Build an in-process MCP server with one tool: `verify`. Returns
+ * the config object the SDK accepts in `mcpServers["kody-verify"]`.
+ */
+export function buildVerifyMcpServer(opts: VerifyToolOptions): McpSdkServerConfigWithInstance {
+  const def = verifyToolDefinition(opts)
+  const verifyTool = tool(def.name, def.description, def.inputSchema, async (args) => {
+    return def.handler(args as Record<string, never>)
+  })
 
   return createSdkMcpServer({
     name: "kody-verify",
@@ -157,7 +187,3 @@ export function truncateVerifyResult(
 
 /** Re-exported for tests that need to instantiate state without the SDK. */
 export type { VerifyToolState }
-
-// Suppress unused-import lint in environments where z is required only by the
-// SDK type narrowing (the `tool()` helper threads zod schemas internally).
-void z

@@ -31,6 +31,19 @@
         }
       }
     },
+    "brain": {
+      "type": "object",
+      "description": "Brain backend selection. 'brain-serve' is the engine's built-in Node.js brain; 'hermes' is the Hermes Agent API server. The entrypoint reads brain.mode on boot and exports it as BRAIN_BACKEND for the brain-proxy. BRAIN_BACKEND env var on the Fly Machine overrides this config (dev/CI escape hatch).",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["brain-serve", "hermes"],
+          "default": "brain-serve",
+          "description": "Which brain backend the proxy routes to. Overridden by BRAIN_BACKEND env var."
+        }
+      }
+    },
     "github": {
       "type": "object",
       "required": ["owner", "repo"],
@@ -48,7 +61,7 @@
         "model": {
           "type": "string",
           "pattern": "^[^/]+/.+$",
-          "description": "Base provider/model string, for example minimax/MiniMax-M2.7-highspeed or claude/claude-sonnet-4-6."
+          "description": "Base provider/model string, for example minimax/MiniMax-M3 or claude/claude-sonnet-4-6."
         },
         "perExecutable": {
           "type": "object",
