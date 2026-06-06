@@ -77,6 +77,58 @@ export function operatorRequestBlock(why: string): string | null {
   ].join("\n")
 }
 
+/**
+ * Render the job metadata that every minted Job carries. This is deliberately
+ * generic: the model should know the execution point, duty, executable, staff,
+ * and description without each executable inventing its own prompt tokens.
+ */
+export function jobReferenceBlock(
+  profileName: string,
+  profile: Pick<Profile, "name" | "describe" | "staff" | "executable">,
+  data: Record<string, unknown>,
+): string | null {
+  const jobId = typeof data.jobId === "string" && data.jobId.length > 0 ? data.jobId : null
+  const flavor = typeof data.jobFlavor === "string" && data.jobFlavor.length > 0 ? data.jobFlavor : null
+  const schedule = typeof data.jobSchedule === "string" && data.jobSchedule.length > 0 ? data.jobSchedule : null
+  const isJob = Boolean(jobId || flavor || schedule || data.jobDuty || data.jobExecutable || data.jobWhy)
+  if (!isJob) return null
+
+  const duty =
+    typeof data.jobDuty === "string" && data.jobDuty.length > 0
+      ? data.jobDuty
+      : profile.executable
+        ? profile.name
+        : null
+  const executable =
+    typeof profile.executable === "string" && profile.executable.length > 0
+      ? profile.executable
+      : typeof data.jobExecutable === "string" && data.jobExecutable.length > 0
+        ? data.jobExecutable
+        : profileName
+  const staff =
+    typeof profile.staff === "string" && profile.staff.length > 0
+      ? profile.staff
+      : typeof data.jobPersona === "string" && data.jobPersona.length > 0
+        ? data.jobPersona
+        : null
+  const description = profile.describe.trim()
+
+  const lines = [
+    "## Job reference",
+    "",
+    "This execution point is a job.",
+    "",
+    `- Job id: ${jobId ?? "(unavailable)"}`,
+    `- Flavor: ${flavor ?? "(unavailable)"}`,
+    ...(schedule ? [`- Schedule: ${schedule}`] : []),
+    `- Duty: ${duty ?? "(none)"}`,
+    `- Executable: ${executable}`,
+    `- Staff: ${staff ?? "(none)"}`,
+    `- Description: ${description || "(none)"}`,
+  ]
+  return lines.join("\n")
+}
+
 export interface ExecutorInput {
   cliArgs: Record<string, unknown>
   cwd: string
@@ -292,6 +344,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
   // ctx.data.jobWhy via runJob). Surfaced generically so the comment's wording
   // shapes any executable's run — no per-prompt token needed. Fenced untrusted.
   const jobWhyBlock = typeof ctx.data.jobWhy === "string" ? operatorRequestBlock(ctx.data.jobWhy) : null
+  const jobRefBlock = jobReferenceBlock(profileName, profile, ctx.data)
   const invokeAgent = async (prompt: string): Promise<AgentResult> => {
     // Resolve at call time — ctx.data.syntheticPluginPath is set during preflight.
     const externalPlugins = (profile.claudeCode.plugins ?? [])
@@ -330,7 +383,14 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       // DISCIPLINE leads so the stable, role-agnostic block sits at the front
       // of the cacheable system-prompt prefix; profile/task appends follow.
       systemPromptAppend:
-        [DISCIPLINE, staffPersona, jobWhyBlock, profile.claudeCode.systemPromptAppend, taskArtifacts?.promptAddendum]
+        [
+          DISCIPLINE,
+          staffPersona,
+          jobRefBlock,
+          jobWhyBlock,
+          profile.claudeCode.systemPromptAppend,
+          taskArtifacts?.promptAddendum,
+        ]
           .filter((s): s is string => typeof s === "string" && s.length > 0)
           .join("\n\n") || undefined,
       cacheable: profile.claudeCode.cacheable,

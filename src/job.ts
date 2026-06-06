@@ -92,6 +92,9 @@ export interface RunJobBase {
  * Mapping:
  *   - profile = job.executable ?? job.duty   (the runner / "how")
  *   - cliArgs = job.cliArgs                   (target already bound by the minter)
+ *   - duty/executable → preloadedData          (seeded so the executor can
+ *                                              expose the job references to
+ *                                              the model generically)
  *   - inline why → preloadedData.jobWhy        (seeded into ctx.data before
  *                                              preflights; the executor injects
  *                                              it as a fenced operator-request
@@ -114,6 +117,8 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   // job id in Actions; fall back to a flavor-stamped id locally.
   preloadedData.jobId = newJobId(valid.flavor)
   preloadedData.jobFlavor = valid.flavor
+  if (valid.duty !== undefined && valid.duty.length > 0) preloadedData.jobDuty = valid.duty
+  if (valid.executable !== undefined && valid.executable.length > 0) preloadedData.jobExecutable = valid.executable
   // The job carries *when*: a scheduled job's cadence, recorded in the ledger.
   if (valid.schedule !== undefined && valid.schedule.length > 0) preloadedData.jobSchedule = valid.schedule
   // Inline why → ctx.data.jobWhy (NOT jobIntent — that token is the scheduled

@@ -47,6 +47,7 @@ describe("runJob (Phase 1 seam)", () => {
     const [, input] = runExecutableChain.mock.calls[0]!
     expect(typeof input.preloadedData?.jobId).toBe("string")
     expect(input.preloadedData?.jobFlavor).toBe("instant")
+    expect(input.preloadedData?.jobExecutable).toBe("run")
   })
 
   it("carries the DispatchResult's why through mintInstantJob into jobWhy", async () => {
@@ -150,5 +151,7 @@ describe("mintScheduledJob (Phase 2)", () => {
     const [, input] = runExecutableChain.mock.calls.at(-1)!
     expect(input.preloadedData?.jobSchedule).toBe("7d")
     expect(input.preloadedData?.jobFlavor).toBe("scheduled")
+    expect(input.preloadedData?.jobDuty).toBe("stale-prs")
+    expect(input.preloadedData?.jobExecutable).toBe("job-tick")
   })
 })

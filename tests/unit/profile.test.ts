@@ -91,15 +91,23 @@ describe("profile: loadProfile", () => {
     expect(() => loadProfile(p)).not.toThrow()
   })
 
-  it("resolves a duty that references an executable (how) + overlays who/when", () => {
+  it("resolves a duty that references an executable (how) + overlays who/when/tools", () => {
     // A thin duty: references the engine's `merge` executable (the HOW), adds
     // its own name + staff (WHO) + every (WHEN). No claudeCode of its own.
     const dir = tmpDir()
-    const p = writeProfile(dir, { name: "merge-daily", executable: "merge", staff: "cto", every: "1d" })
+    const p = writeProfile(dir, {
+      name: "merge-daily",
+      executable: "merge",
+      staff: "cto",
+      every: "1d",
+      dutyTools: ["ensure_issue"],
+    })
     const profile = loadProfile(p)
     expect(profile.name).toBe("merge-daily") // duty identity
+    expect(profile.executable).toBe("merge") // how (preserved for prompt/job reference)
     expect(profile.staff).toBe("cto") // who (overlaid)
     expect(profile.every).toBe("1d") // when (overlaid)
+    expect(profile.dutyTools).toEqual(["ensure_issue"]) // toolbox (overlaid)
     // how came from the referenced executable: dir + claudeCode are merge's.
     expect(profile.dir.endsWith(path.join("executables", "merge"))).toBe(true)
     expect(profile.claudeCode).toBeTruthy()

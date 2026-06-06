@@ -1,0 +1,36 @@
+{
+  "name": "job-live-verify",
+  "role": "primitive",
+  "describe": "Live-test executable that verifies job reference injection, staff persona injection, synthetic skill loading, locked duty tools, and state postflight.",
+  "kind": "oneshot",
+  "dutyTools": ["ensure_issue", "ensure_comment"],
+  "inputs": [],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": 20,
+    "maxThinkingTokens": null,
+    "maxTurnTimeoutSec": 180,
+    "systemPromptAppend": "You are running Kody's job-wiring live verification. Use the requested tools, then submit state exactly once.",
+    "enableSubmitTool": true,
+    "tools": ["Read"],
+    "hooks": [],
+    "skills": ["kody-live-marker"],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "scripts": {
+    "preflight": [
+      { "script": "loadDutyState" },
+      { "script": "buildSyntheticPlugin" },
+      { "script": "composePrompt" }
+    ],
+    "postflight": [
+      { "script": "parseJobStateFromAgentResult", "with": { "fenceLabel": "kody-job-next-state" } },
+      { "script": "writeJobStateFile" }
+    ]
+  }
+}

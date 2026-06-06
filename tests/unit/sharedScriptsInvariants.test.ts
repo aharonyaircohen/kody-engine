@@ -129,9 +129,10 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
     reason:
       "Solo since worker-tick was deleted (workers are personas, not ticked files). job-tick is the only executable that loads a job body + its assigned worker persona.",
   },
-  parseJobStateFromAgentResult: {
-    owner: "job-tick",
-    reason: "Solo since worker-tick was deleted. job-tick is the only LLM-driven ticked-file executable.",
+  loadDutyState: {
+    owner: "job-live-verify",
+    reason:
+      "Folder-duty state loader used by the live job-wiring verifier. Kept as a shared script because folder duties in consumer repos use the same stateful-duty shape.",
   },
   runTickScript: {
     owner: "job-tick-scripted",

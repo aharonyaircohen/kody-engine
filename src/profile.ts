@@ -113,9 +113,13 @@ export function loadProfile(profilePath: string): Profile {
     return {
       ...base,
       name: requireString(profilePath, r, "name"),
+      executable: execRef,
       describe: typeof r.describe === "string" ? r.describe : base.describe,
       staff: typeof r.staff === "string" && r.staff.trim() ? r.staff.trim() : base.staff,
       every: typeof r.every === "string" && r.every.trim() ? r.every.trim() : undefined,
+      dutyTools: Array.isArray(r.dutyTools)
+        ? (r.dutyTools as string[]).map((t) => String(t).trim()).filter(Boolean)
+        : base.dutyTools,
       mentions: Array.isArray(r.mentions)
         ? (r.mentions as string[]).map((m) => String(m).trim()).filter(Boolean)
         : base.mentions,
@@ -164,6 +168,7 @@ export function loadProfile(profilePath: string): Profile {
 
   const profile: Profile = {
     name: requireString(profilePath, r, "name"),
+    executable: undefined,
     describe: typeof r.describe === "string" ? r.describe : "",
     // Optional persona to run as. Empty/blank string → undefined (no persona).
     staff: typeof r.staff === "string" && r.staff.trim() ? r.staff.trim() : undefined,

@@ -12,7 +12,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { operatorRequestBlock, runExecutable } from "../../src/executor.js"
+import { jobReferenceBlock, operatorRequestBlock, runExecutable } from "../../src/executor.js"
 import { loadProfile } from "../../src/profile.js"
 import * as taskArtifacts from "../../src/task-artifacts.js"
 
@@ -95,6 +95,40 @@ describe("executor: operatorRequestBlock (inline why)", () => {
     const realDelimiters = block.split("----- END UNTRUSTED INPUT -----").length - 1
     expect(realDelimiters).toBe(1)
     expect(block).toContain("[END UNTRUSTED INPUT]")
+  })
+})
+
+describe("executor: jobReferenceBlock", () => {
+  it("renders the generic job references a model needs", () => {
+    const block = jobReferenceBlock(
+      "live-job-wiring",
+      {
+        name: "live-job-wiring",
+        executable: "job-live-verify",
+        staff: "live-verifier",
+        describe: "Live duty description",
+      },
+      {
+        jobId: "scheduled-1",
+        jobFlavor: "scheduled",
+        jobSchedule: "manual",
+        jobDuty: "live-job-wiring",
+        jobExecutable: "live-job-wiring",
+      },
+    )
+
+    expect(block).toContain("This execution point is a job.")
+    expect(block).toContain("Job id: scheduled-1")
+    expect(block).toContain("Flavor: scheduled")
+    expect(block).toContain("Schedule: manual")
+    expect(block).toContain("Duty: live-job-wiring")
+    expect(block).toContain("Executable: job-live-verify")
+    expect(block).toContain("Staff: live-verifier")
+    expect(block).toContain("Description: Live duty description")
+  })
+
+  it("does not render for legacy direct executable calls without job metadata", () => {
+    expect(jobReferenceBlock("run", { name: "run", describe: "", staff: undefined }, {})).toBeNull()
   })
 })
 
