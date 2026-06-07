@@ -207,29 +207,55 @@ export function performInit(cwd: string, force: boolean): InitResult {
     wrote.push(".github/workflows/kody.yml")
   }
 
-  // 3. .kody/duties/<slug>.md — copy every built-in duty markdown shipped
-  //    with the engine. Built-in duties live under `src/jobs/` (dev) /
-  //    `dist/jobs/` (built); consumer repos get a starter copy each,
-  //    scaffolded once and then human-edited. Cadence is enforced by the
-  //    file's `every:` frontmatter, read by `dispatchDutyFileTicks`.
+  // 3. .kody/duties/<slug>/{profile.json,prompt.md} — copy every built-in
+  //    duty folder shipped with the engine. Built-in duties live under
+  //    `src/jobs/<slug>/` (dev) / `dist/jobs/<slug>/` (built); consumer
+  //    repos get a starter copy of each, scaffolded once and then
+  //    human-edited. Cadence is enforced by the profile's `every` field,
+  //    read by `dispatchDutyFileTicks`.
+  //
+  //    Folder shape is the unified successor to the legacy `<slug>.md`
+  //    file: dispatching the same slug from both a folder and a `.md` is
+  //    a dedup'd fire (folder wins, `.md` skipped). Markdown-only
+  //    built-ins are still discovered and copied as a single `.md` so
+  //    a half-migrated engine doesn't drop duties — the deprecation
+  //    log + removal land in #46-B.
   //
   //    `--force` will overwrite consumer edits to these files — same
-  //    contract as `kody.yml` and `kody.config.json` above. Duty files
-  //    are *intended* to be edited (cadence, thresholds, prompt prose),
-  //    so use `--force` only when you accept losing those edits.
+  //    contract as `kody.yml` and `kody.config.json` above. Duty
+  //    profiles + bodies are *intended* to be edited (cadence,
+  //    thresholds, prompt prose), so use `--force` only when you accept
+  //    losing those edits.
   const builtinJobs = listBuiltinJobs()
   if (builtinJobs.length > 0) {
     const jobsDir = path.join(cwd, ".kody", "duties")
     fs.mkdirSync(jobsDir, { recursive: true })
     for (const job of builtinJobs) {
-      const rel = path.join(".kody", "duties", `${job.slug}.md`)
-      const target = path.join(cwd, rel)
-      if (fs.existsSync(target) && !force) {
-        skipped.push(rel)
+      if (job.filePath && !job.profilePath) {
+        // Legacy `.md` built-in: copy as-is. Removed once #46-B lands.
+        const rel = path.join(".kody", "duties", `${job.slug}.md`)
+        const target = path.join(cwd, rel)
+        if (fs.existsSync(target) && !force) {
+          skipped.push(rel)
+          continue
+        }
+        fs.writeFileSync(target, fs.readFileSync(job.filePath, "utf-8"))
+        wrote.push(rel)
         continue
       }
-      fs.writeFileSync(target, fs.readFileSync(job.filePath, "utf-8"))
-      wrote.push(rel)
+      const targetDir = path.join(jobsDir, job.slug)
+      const relProfile = path.join(".kody", "duties", job.slug, "profile.json")
+      const relPrompt = path.join(".kody", "duties", job.slug, "prompt.md")
+      if (fs.existsSync(targetDir) && fs.existsSync(path.join(targetDir, "profile.json")) && !force) {
+        skipped.push(relProfile)
+        skipped.push(relPrompt)
+        continue
+      }
+      fs.mkdirSync(targetDir, { recursive: true })
+      fs.writeFileSync(path.join(targetDir, "profile.json"), fs.readFileSync(job.profilePath, "utf-8"))
+      fs.writeFileSync(path.join(targetDir, "prompt.md"), fs.readFileSync(job.promptPath, "utf-8"))
+      wrote.push(relProfile)
+      wrote.push(relPrompt)
     }
   }
 

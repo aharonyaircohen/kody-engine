@@ -37,8 +37,19 @@ describe("initFlow: performInit", () => {
     expect(fs.existsSync(path.join(dir, ".github/workflows/kody.yml"))).toBe(true)
     expect(fs.existsSync(path.join(dir, ".kody/staff/kody.md"))).toBe(true)
 
-    const duty = fs.readFileSync(path.join(dir, ".kody/duties/watch-stale-prs.md"), "utf-8")
-    expect(duty).toMatch(/^staff: kody$/m)
+    // Built-in duties are scaffolded as folder shapes (profile.json + prompt.md).
+    expect(result.wrote).toContain(".kody/duties/watch-stale-prs/profile.json")
+    expect(result.wrote).toContain(".kody/duties/watch-stale-prs/prompt.md")
+    expect(fs.existsSync(path.join(dir, ".kody/duties/watch-stale-prs/profile.json"))).toBe(true)
+    expect(fs.existsSync(path.join(dir, ".kody/duties/watch-stale-prs/prompt.md"))).toBe(true)
+    // A folder duty takes precedence over a same-named .md: the markdown
+    // file is not scaffolded when the folder wins.
+    expect(fs.existsSync(path.join(dir, ".kody/duties/watch-stale-prs.md"))).toBe(false)
+
+    const profile = JSON.parse(fs.readFileSync(path.join(dir, ".kody/duties/watch-stale-prs/profile.json"), "utf-8"))
+    expect(profile.staff).toBe("kody")
+    expect(profile.every).toBe("7d")
+    expect(profile.name).toBe("watch-stale-prs")
   })
 
   it("detects package manager from lockfile", () => {
@@ -81,8 +92,42 @@ describe("initFlow: performInit", () => {
     expect(second.skipped).toContain("kody.config.json")
     expect(second.skipped).toContain(".github/workflows/kody.yml")
     expect(second.skipped).toContain(".kody/staff/kody.md")
+    expect(second.skipped).toContain(".kody/duties/watch-stale-prs/profile.json")
+    expect(second.skipped).toContain(".kody/duties/watch-stale-prs/prompt.md")
     const after = fs.readFileSync(path.join(dir, "kody.config.json"), "utf-8")
     expect(after).toMatch(/user-edit/)
+  })
+
+  it("preserves an existing duty folder unless --force is set", () => {
+    dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
+    performInit(dir, false)
+    const profilePath = path.join(dir, ".kody/duties/watch-stale-prs/profile.json")
+    const promptPath = path.join(dir, ".kody/duties/watch-stale-prs/prompt.md")
+    fs.writeFileSync(profilePath, `{"user-edit":"keep me on profile"}`)
+    fs.writeFileSync(promptPath, `# user-edited prompt — do not clobber\n`)
+
+    const second = performInit(dir, false)
+    expect(second.skipped).toContain(".kody/duties/watch-stale-prs/profile.json")
+    expect(second.skipped).toContain(".kody/duties/watch-stale-prs/prompt.md")
+    expect(fs.readFileSync(profilePath, "utf-8")).toMatch(/user-edit/)
+    expect(fs.readFileSync(promptPath, "utf-8")).toMatch(/user-edited prompt/)
+  })
+
+  it("--force rewrites the duty folder's profile.json and prompt.md", () => {
+    dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
+    performInit(dir, false)
+    const profilePath = path.join(dir, ".kody/duties/watch-stale-prs/profile.json")
+    const promptPath = path.join(dir, ".kody/duties/watch-stale-prs/prompt.md")
+    fs.writeFileSync(profilePath, `{"user-edit":"stale profile"}`)
+    fs.writeFileSync(promptPath, `# stale prompt — should be overwritten\n`)
+
+    const result = performInit(dir, true)
+    expect(result.wrote).toContain(".kody/duties/watch-stale-prs/profile.json")
+    expect(result.wrote).toContain(".kody/duties/watch-stale-prs/prompt.md")
+    const profile = JSON.parse(fs.readFileSync(profilePath, "utf-8"))
+    expect(profile.staff).toBe("kody")
+    expect(profile.every).toBe("7d")
+    expect(fs.readFileSync(promptPath, "utf-8")).not.toMatch(/stale prompt/)
   })
 
   it("preserves an existing default staff persona unless force is true", () => {
