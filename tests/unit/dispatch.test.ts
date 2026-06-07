@@ -331,6 +331,30 @@ describe("dispatch: issue_comment on PR", () => {
     process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
   })
 
+  it("'@kody fix-ci' on PR → fix-ci", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody fix-ci" },
+      issue: { number: 20, pull_request: {} },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "fix-ci",
+      cliArgs: { pr: 20 },
+      target: 20,
+    })
+  })
+
+  it("'@kody fix-ci --run-id 123456' parses run-id", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody fix-ci --run-id 123456" },
+      issue: { number: 21, pull_request: {} },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "fix-ci",
+      cliArgs: { pr: 21, runId: "123456" },
+      target: 21,
+    })
+  })
+
   it("'@kody resolve' on PR → resolve", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody resolve" },

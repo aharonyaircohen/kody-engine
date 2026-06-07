@@ -175,6 +175,7 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   },
   fixFlow: { owner: "fix", reason: "fix bootstrap: open PR branch and derive reviewer feedback." },
   requireFeedbackActions: { owner: "fix", reason: "fix-only contract check for FEEDBACK_ACTIONS." },
+  fixCiFlow: { owner: "fix-ci", reason: "fix-ci bootstrap: open PR branch and attach failing CI logs." },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -197,7 +198,6 @@ const CONSUMER_LIBRARY_SCRIPTS: Record<string, string> = {
   postPlanComment: "plan",
   postResearchComment: "research",
   diagMcp: "research",
-  fixCiFlow: "fix-ci",
   resolvePreviewUrl: "ui-review",
   resolveQaUrl: "qa-engineer",
   warmupMcp: "qa-engineer",
