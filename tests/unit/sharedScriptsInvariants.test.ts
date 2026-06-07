@@ -165,28 +165,7 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
     reason:
       "run bootstrap. Solo since feature/bug/chore collapsed/moved to consumer repos — run is the last engine build primitive.",
   },
-  loadPriorArt: {
-    owner: "run",
-    reason: "run-only prior-art loader. Solo since the build executables moved out of the engine.",
-  },
-  verifyWithRetry: {
-    owner: "run",
-    reason: "run-only verify-with-retry gate. Solo since the build executables moved out of the engine.",
-  },
-  checkCoverageWithRetry: {
-    owner: "run",
-    reason: "run-only coverage gate. Solo since the build executables moved out of the engine.",
-  },
-  abortUnfinishedGitOps: {
-    owner: "run",
-    reason: "run-only git-ops guard. Solo since the build executables moved out of the engine.",
-  },
-  finalizeTerminal: {
-    owner: "run",
-    reason: "run-only terminal finalizer. Solo since the build executables moved out of the engine.",
-  },
   mergeFlow: { owner: "merge", reason: "merge is bespoke (no-agent self-gating squash). Solo to merge." },
-  syncFlow: { owner: "sync", reason: "sync is bespoke (no-agent fast-forward). Solo to sync." },
   finishFlow: { owner: "release", reason: "release finalize step. Solo to release." },
   promoteQaGoal: { owner: "qa-goal", reason: "qa-goal promotion step. Solo to qa-goal." },
   runPreviewBuild: {
@@ -194,6 +173,8 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
     reason:
       "preview-build is the only executable that builds a deployable preview image (remote builder). Single-purpose; no other executable shares the build step.",
   },
+  fixFlow: { owner: "fix", reason: "fix bootstrap: open PR branch and derive reviewer feedback." },
+  requireFeedbackActions: { owner: "fix", reason: "fix-only contract check for FEEDBACK_ACTIONS." },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -216,8 +197,6 @@ const CONSUMER_LIBRARY_SCRIPTS: Record<string, string> = {
   postPlanComment: "plan",
   postResearchComment: "research",
   diagMcp: "research",
-  fixFlow: "fix",
-  requireFeedbackActions: "fix",
   fixCiFlow: "fix-ci",
   resolvePreviewUrl: "ui-review",
   resolveQaUrl: "qa-engineer",

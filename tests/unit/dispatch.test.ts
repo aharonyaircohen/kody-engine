@@ -379,6 +379,30 @@ describe("dispatch: issue_comment on PR", () => {
     })
   })
 
+  it("bare '@kody fix' on PR → fix without inline feedback", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody fix" },
+      issue: { number: 24, pull_request: {} },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "fix",
+      cliArgs: { pr: 24 },
+      target: 24,
+    })
+  })
+
+  it("'@kody fix: address reviewer feedback' on PR → fix with inline feedback", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody fix: address reviewer feedback" },
+      issue: { number: 25, pull_request: {} },
+    })
+    expect(autoDispatch()).toEqual({
+      executable: "fix",
+      cliArgs: { pr: 25, feedback: "address reviewer feedback" },
+      target: 25,
+    })
+  })
+
   it("bare '@kody' on PR returns null when no PR default is configured", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody" },
