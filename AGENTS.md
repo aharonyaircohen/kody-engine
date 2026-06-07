@@ -32,8 +32,12 @@ Under the hood it is one **generic executor** running one of several **declarati
 │    cliTools with install/verify/usage contracts, preflight  │
 │    and postflight script lists with optional runWhen rules. │
 │    Adjacent prompt file at prompt.md. One directory per     │
-│    command: run, fix, fix-ci, resolve, review, plan,        │
-│    orchestrator, release, watch-*, init.                    │
+│    command: duty-scheduler, duty-tick, duty-tick-scripted,  │
+│    fix, fix-ci, goal-scheduler, goal-tick, init,            │
+│    job-live-verify, merge, plan-verify, preview-build,      │
+│    probe-skill, qa-goal, release, release-deploy,           │
+│    release-prepare, release-publish, resolve, revert, run,  │
+│    sync, worker-ask.                                        │
 └─────────────────────────────────────────────────────────────┘
                               ↓
         Fixed script catalog (src/scripts/*.ts)
@@ -60,93 +64,46 @@ The repo has carried several near-synonyms over time; these are the current, aut
 - **watch** — an executable with `role: "watch"`, `kind: "scheduled"`, and a `schedule` cron, fanned out by `dispatchScheduledWatches` on each wake. The *scheduler* itself runs no agent. Two exist: `duty-scheduler`, `goal-scheduler`.
 - **duty** — a unit of intent expressed as a markdown file at `.kody/duties/<slug>.md` (human-owned prose + frontmatter: `every:` cadence, `staff:` executor, optional `tools:` / `tickScript:`). The `duty-scheduler` watch ticks each due duty; `duty-tick` (agent) or `duty-tick-scripted` (deterministic `tickScript:`) advances it. Per-duty state is persisted to a sidecar state file by the engine, not to a GitHub issue. The `Job` runtime envelope in `src/job.ts` and the `kody-job-next-state` fence label are separate concerns (see the naming note).
 - **staff** — a reusable persona at `.kody/staff/<slug>.md` that executes a duty. Stateless: a duty names its executor via `staff:` frontmatter, and many duties may share one staff member. Surfaced to the agent as `{{workerTitle}}` / `{{workerSlug}}`; the dashboard can also `@mention` a staff member ad-hoc (`worker-ask`).
-- **goal** — a stacked-PR state machine rooted at `.kody/goals/<id>/state.json`. `goal-scheduler` ticks each goal; `goal-tick` dispatches `@kody` on the next ready task stacked on the leaf PR, then finalizes the leaf into one review-ready PR. `qa-engineer` opens goals from QA findings. The engine never auto-merges.
+- **goal** — a stacked-PR state machine rooted at `.kody/goals/<id>/state.json`. `goal-scheduler` ticks each goal; `goal-tick` dispatches `@kody` on the next ready task stacked on the leaf PR, then finalizes the leaf into one review-ready PR. `qa-goal` opens goals from approved QA reports. The engine never auto-merges.
 - **manager** — *not an executable.* Prose for a duty whose intent happens to be overseeing other duties.
 - **mission** — *dead term.* Renamed away; no `mission-*` executable exists. Do not use it.
 - **Naming note** — the *concept* is **duty** + **staff**, and the consumer-facing paths, the executable dirs, and the new prompt tokens all use the **duty** spelling (`.kody/duties/<slug>.md`, `duty-scheduler` / `duty-tick` / `duty-tick-scripted`, `{{dutyReference}}` / `{{dutySlug}}` / `{{staffSlug}}` / `{{executableSlug}}` / `{{dutySchedule}}`). A handful of identifiers deliberately keep the older `job` spelling because renaming them would either break existing consumer repos or churn a structural type: the `Job` runtime envelope in `src/job.ts` (the one execution model, defined above), the `kody-job-next-state` fence label (the per-run tag the agent emits — kept canonical, with `kody-duty-next-state` accepted as an alias by the postflight parser), the `jobFrontmatter` / `loadJobFromFile` / `writeJobStateFile` script names (public API of the script catalog; renaming would invalidate consumer-repo references), and the `{{jobSlug}}` / `{{workerSlug}}` / `{{jobStateJson}}` / `{{jobSchedule}}` prompt tokens (kept working as legacy aliases). Phase 1 of the rename is now landed — see issue #38 — and the `deadVocabulary` guard bans the specific old identifiers (`job-scheduler` / `job-tick` / `dispatchJobFileTicks` / `dispatchJobTicks`) but **not** the broader `job` token (still a live identifier).
 
-### Commands (grouped by function)
+### Engine-shipped commands
 
-**Issue → code (agent, end-to-end in one session)**
+Every directory under `src/executables/` is an executable. The list below is generated from those directories and each one's `profile.json` — adding a new command = dropping a new `src/executables/<name>/` dir with its profile + prompt + any `.sh` scripts. A repo may also ship its **own** executables under `.kody/executables/<name>/`; those are **consumer-shipped** and are not part of the engine — to see what a given repo accepts, look in its `.kody/executables/`.
 
-| Command | Input | Agent? | Triggered by |
-|---|---|---|---|
-| `run` | `--issue` | yes | `@kody` on an issue, or `workflow_dispatch` |
-| `feature` | `--issue` | yes | `classify` routes here (feature/refactor) |
-| `bug` | `--issue` | yes | `classify` routes here (reproduce → fix) |
-| `chore` | `--issue` | yes | `classify` routes here (docs/dep-bump/chore) |
-| `reproduce` | `--issue` | yes | write a failing test only — leaves it failing |
+| Command | Required int input | Agent? | Trigger |
+| --- | --- | --- | --- |
+| `run` | `--issue` | yes | `@kody` on an issue (the default), or `workflow_dispatch` |
+| `fix` | `--pr` | yes | `@kody` (or `@kody fix …`) on a PR comment |
+| `fix-ci` | `--pr` | yes | `@kody fix-ci` on a PR (failing CI) |
+| `resolve` | `--pr` | yes | `@kody resolve` on a PR — resolves merge conflicts |
+| `sync` | `--pr` | no | `@kody sync` on a PR — merge base in, push |
+| `revert` | `--pr` | no | `@kody revert <shas…>` on a PR — mechanical `git revert` |
+| `merge` | `--pr` | no | `gh workflow run kody.yml -f executable=merge -f issue_number=<N>`; self-gating squash-merge (refuses if PR not CLEAN) |
+| `preview-build` | `--pr` | no | `onPullRequest: preview-build` in repo config, or `workflow_dispatch` |
+| `release` | `--issue` | no | `@kody release` on the engine's own release issue — single-job release flow |
+| `release-prepare` | none (defaults to `--bump patch`) | no | called by `release --mode prepare`, or `gh workflow run … -f executable=release-prepare` |
+| `release-publish` | none | no | called by `release` after the release PR merges, or `kody release-publish` directly |
+| `release-deploy` | none | no | called by `release` after publish, or `kody release-deploy` directly |
+| `init` | none | no | `kody init` — scaffold a consumer repo (no agent) |
+| `worker-ask` | none (`--worker <slug>` is a string) | yes | dashboard `@<staff>` mention — ad-hoc persona one-shot |
+| `qa-goal` | `--issue` | no | in-process from an operator-approved `qa-*` duty inbox rec |
+| `duty-scheduler` | none | no | scheduled, cron `*/5 * * * *` — fans out to `duty-tick` / `duty-tick-scripted` per due `.kody/duties/<slug>.md` |
+| `duty-tick` | none (`--duty <slug>` is a string) | yes | in-process from `duty-scheduler` per due duty file (the one classifier tick) |
+| `duty-tick-scripted` | none (`--duty <slug>` is a string) | no | in-process from `duty-scheduler` for slugs whose frontmatter declares `tickScript:` |
+| `goal-scheduler` | none | no | scheduled, cron `*/5 * * * *` — fans out to `goal-tick` per active `.kody/goals/<id>/state.json` |
+| `goal-tick` | none (`--goal <id>` is a string) | no | in-process from `goal-scheduler` per active goal — one stacked-PR tick |
+| `plan-verify` | `--issue` | yes | live-test harness: validates plugin/skill/hook wiring end-to-end |
+| `probe-skill` | `--issue` | yes | live-test harness: validates executable-local skill resolution |
+| `job-live-verify` | none | yes | live-test harness: validates job reference / staff / locked-duty-tool wiring |
 
-**Issue triage & planning**
-
-| Command | Input | Agent? | Triggered by |
-|---|---|---|---|
-| `classify` | `--issue` | yes | `@kody` on an issue → dispatches the matching sub-orchestrator |
-| `plan` | `--issue` | yes | `@kody plan` — read-only, posts a plan comment |
-| `research` | `--issue` | yes | `@kody research` — read-only, maps context + gaps |
-| `spec` | `--issue` | no (orchestrator) | sub-orchestrator for spec/RFC issues: research → plan (stop) |
-
-**PR operations**
-
-| Command | Input | Agent? | Triggered by |
-|---|---|---|---|
-| `fix` | `--pr`, `--feedback` | yes | `@kody` (or `@kody fix …`) on a PR comment (fallback) |
-| `fix-ci` | `--pr`, `--run-id` | yes | `@kody fix-ci` on a PR |
-| `resolve` | `--pr` | yes | `@kody resolve` — resolves merge conflicts |
-| `review` | `--pr` | yes | `@kody review` — read-only, one comment |
-| `ui-review` | `--pr`, `--preview-url` | yes | `@kody ui-review` — browses preview via Playwright |
-| `qa-engineer` | `--url`, `--scope`, … | yes | free-form QA; opens findings as goals |
-| `sync` | `--pr` | no | `@kody sync` — merge base into PR branch, push |
-| `revert` | `--pr` | no | `git revert` one or more commits, fully mechanical |
-
-**Scheduled watch substrate (scheduler runs no agent)**
-
-| Command | Role / kind | Schedule | Notes |
-|---|---|---|---|
-| `duty-scheduler` | watch / scheduled | `*/5 * * * *` | ticks every `.kody/duties/<slug>.md` via `duty-tick` |
-| `duty-tick` | primitive / oneshot | — | one classifier tick for one duty file (agent) |
-| `duty-tick-scripted` | utility / oneshot | — | deterministic tick: runs the slug's `tickScript:` |
-| `goal-scheduler` | watch / scheduled | `*/5 * * * *` | ticks every `.kody/goals/<id>/state.json` via `goal-tick` |
-| `goal-tick` | primitive / oneshot | — | one stacked-PR tick (no agent) |
-
-**Release stages (no agent, deterministic)**
-
-| Command | Purpose |
-|---|---|
-| `release` | single-job release flow: prepare → wait CI → merge → publish → deploy → notify |
-| `release-prepare` | bump version files, generate `CHANGELOG.md`, open the release PR |
-| `release-publish` | tag the merged commit, run `publishCommand`, create the GH release |
-| `release-deploy` | run `deployCommand` + `notifyCommand` after publish |
-
-**Infra daemons (long-lived servers)**
-
-| Command | Purpose |
-|---|---|
-| `serve` | start a LiteLLM proxy and optionally launch an editor pointed at it |
-| `brain-serve` | HTTP server wrapping the chat loop, speaks the Brain SSE protocol |
-| `pool-serve` | always-on warm-pool owner co-located on the litellm machine |
-| `runner-serve` | idle HTTP server for a warm-pool one-shot runner |
-
-**Bootstrap & live-test**
-
-| Command | Purpose |
-|---|---|
-| `init` | scaffold a consumer repo (`kody.config.json` + workflow). No agent |
-| `worker-ask` | ad-hoc one-shot: run a worker persona against an inline message |
-| `plan-verify` | live-test: validates plugin/skill/hook wiring end-to-end |
-| `probe-skill` | live-test: validates executable-local skill resolution |
+**Long-running servers (CLI only, not `@kody` targets).** `serve`, `pool-serve`, `runner-serve`, `brain-serve`, `brain-proxy`, `mcp-http-server` live in [src/servers/](src/servers/) and are hardcoded CLI verbs in [src/entry.ts](src/entry.ts) — they are **not** part of the executable registry, so they do not appear in [src/dispatch.ts](src/dispatch.ts) and are not reachable via `@kody <verb>` comments. Invoke them directly as `kody-engine <server>`.
 
 ### `run` — implement an issue end-to-end
 
 The primary authoring path. Reads the issue, branches, writes code, commits, opens or updates a PR. Preflight: `runFlow` → `loadTaskState` → `resolveArtifacts` (pulls in a prior plan if present) → `loadConventions` → `loadCoverageRules` → `composePrompt`. Postflight: `parseAgentResult` → `requirePlanDeviations` → `verify` → `checkCoverageWithRetry` → `commitAndPush` → `ensurePr` → `postIssueComment` → `writeRunSummary` → `saveTaskState` → `mirrorStateToPr` → `advanceFlow`. Exit codes 0/1/2/3/4 communicate verify/commit/PR outcomes to the orchestrator.
-
-### `plan` — research + implementation plan, no code
-
-Read-only. Loads the issue, composes a planning prompt, lets the agent explore the repo, then persists the plan as an artifact on the task-state comment and posts it on the issue. No branches, no commits. Output feeds `run` via `resolveArtifacts` when both are chained.
-
-### `research` — understand an issue, no plan prescribed
-
-Sibling of `plan` for cases where the ask isn't yet clear. Agent maps repo context, surfaces clarifying questions and gaps, posts a research comment. Exists so you can ask "what's here?" without forcing the agent to leap to a plan. Supports delta mode: if a prior research comment exists on the issue, the agent outputs only the diff.
 
 ### `fix` — apply review feedback to a PR
 
@@ -163,20 +120,6 @@ Merges the default branch into the PR branch. If the merge is clean, `skipAgent`
 ### `sync` — merge default into PR, no agent
 
 The no-conflict happy path of `resolve`, exposed as its own command. Never invokes the agent — `skipAgent` in preflight, just merge + push. Useful as a quick "pull in base" without spending agent turns.
-
-### `review` — structured diff review
-
-Read-only. Fetches the PR and its diff, composes a prompt with the two-pass reviewer checklist, agent writes a markdown review body, `postReviewResult` posts it verbatim. Verdict parsed from the agent output (`## Verdict: PASS | CONCERNS | FAIL`) drives the exit code and the `Action` recorded in task-state so `fix` can respond to it in an orchestrator flow.
-
-### `ui-review` — UI/UX review via Playwright CLI
-
-Extends the review surface by driving the running preview deployment with the Playwright CLI. Separate executable (not a mode flag on `review`) so the fast read-only `review` stays fast and `ui-review` carries the extra cost (preview URL, browser, optional creds) only when asked.
-
-- **Preview URL** resolves from `--preview-url` → `$PREVIEW_URL` → `http://localhost:3000`. If unreachable, the agent is instructed to skip browsing and fall back to a diff-only review with the gap called out.
-- **Credentials** are dashboard-managed and per-repo: the login username comes from the `LOGIN_USER` variable (`.kody/variables.json`), the password from the `LOGIN_PASSWORD` vault secret — which the dashboard mirrors into the repo's GitHub Actions secrets, so the engine reads it from `process.env` via `ALL_SECRETS` (the same path as every other secret; no vault decryption in CI). Hand-written scenarios/notes come from the company profile (`.kody/profile/*.md`). Assembled by the `loadQaContext` preflight.
-- **QA auto-discovery** ([src/scripts/discoverQaContext.ts](src/scripts/discoverQaContext.ts) + [frameworkDetectors.ts](src/scripts/frameworkDetectors.ts)) scans routes, login/admin paths, roles, Payload CMS collections, API routes, and env templates. Output is serialized into the prompt as `{{qaContext}}`.
-- **Playwright** is declared in the profile's `cliTools` with `installCommand: npx --yes playwright install --with-deps chromium`. Browser binaries are set up by preflight; if the consumer repo doesn't already have `@playwright/test`, the prompt instructs the agent to run `npm install -D @playwright/test` on first test failure. Throwaway specs live under `.kody/ui-review/` (gitignored by convention).
-- **Verdict** is `PASS | CONCERNS | FAIL`. Agent's review comment is posted verbatim via the existing `postReviewResult` postflight (same machinery as `review`).
 
 ### `release` — version bump + publish, no agent
 
@@ -234,14 +177,29 @@ src/
   {branch,commit,pr,verify,issue,coverage,prompt,format,config}.ts
   executables/
     types.ts
-    run/        { profile.json, prompt.md }
-    fix/        { profile.json, prompt.md }
-    fix-ci/     { profile.json, prompt.md }
-    resolve/    { profile.json, prompt.md }
-    review/     { profile.json, prompt.md }
-    ui-review/  { profile.json, prompt.md }
-    plan/       { profile.json, prompt.md }
-    release/ … duty-scheduler/ … goal-scheduler/ … init/
+    duty-scheduler/  { profile.json, prompt.md }
+    duty-tick/       { profile.json, prompt.md }
+    duty-tick-scripted/  { profile.json, prompt.md }
+    fix/             { profile.json, prompt.md }
+    fix-ci/          { profile.json, prompt.md }
+    goal-scheduler/  { profile.json, prompt.md }
+    goal-tick/       { profile.json, prompt.md }
+    init/            { profile.json, prompt.md }
+    job-live-verify/ { profile.json, prompt.md }
+    merge/           { profile.json, prompt.md }
+    plan-verify/     { profile.json, prompt.md }
+    preview-build/   { profile.json, prompt.md }
+    probe-skill/     { profile.json, prompt.md }
+    qa-goal/         { profile.json, prompt.md }
+    release/         { profile.json, prompt.md }
+    release-deploy/  { profile.json, prompt.md }
+    release-prepare/ { profile.json, prompt.md }
+    release-publish/ { profile.json, prompt.md }
+    resolve/         { profile.json, prompt.md }
+    revert/          { profile.json, prompt.md }
+    run/             { profile.json, prompt.md }
+    sync/            { profile.json, prompt.md }
+    worker-ask/      { profile.json, prompt.md }
   scripts/
     {runFlow,fixFlow,fixCiFlow,resolveFlow,reviewFlow}.ts
     {loadConventions,loadCoverageRules,composePrompt}.ts
