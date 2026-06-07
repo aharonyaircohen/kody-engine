@@ -68,10 +68,7 @@ describe("bin/mcp-http-server: env validation", () => {
 
   it("uses default port 8643 and host 127.0.0.1 when env unset", async () => {
     process.env.GITHUB_TOKEN = "gh-test"
-    await Promise.race([
-      mcpHttpServer(),
-      new Promise((resolve) => setTimeout(resolve, 50)),
-    ])
+    await Promise.race([mcpHttpServer(), new Promise((resolve) => setTimeout(resolve, 50))])
     const opts = buildMcpHttpServer.mock.calls[0]?.[0] as { port: number; host: string }
     expect(opts.port).toBe(8643)
     expect(opts.host).toBe("127.0.0.1")
@@ -81,10 +78,7 @@ describe("bin/mcp-http-server: env validation", () => {
     process.env.GITHUB_TOKEN = "gh-test"
     process.env.KODY_MCP_HTTP_PORT = "9999"
     process.env.KODY_MCP_HTTP_HOST = "0.0.0.0"
-    await Promise.race([
-      mcpHttpServer(),
-      new Promise((resolve) => setTimeout(resolve, 50)),
-    ])
+    await Promise.race([mcpHttpServer(), new Promise((resolve) => setTimeout(resolve, 50))])
     const opts = buildMcpHttpServer.mock.calls[0]?.[0] as { port: number; host: string }
     expect(opts.port).toBe(9999)
     expect(opts.host).toBe("0.0.0.0")
@@ -93,20 +87,14 @@ describe("bin/mcp-http-server: env validation", () => {
   it("forwards apiKey from getApiKey when set", async () => {
     process.env.GITHUB_TOKEN = "gh-test"
     getApiKeyMock.mockReturnValue("secret-key")
-    await Promise.race([
-      mcpHttpServer(),
-      new Promise((resolve) => setTimeout(resolve, 50)),
-    ])
+    await Promise.race([mcpHttpServer(), new Promise((resolve) => setTimeout(resolve, 50))])
     const opts = buildMcpHttpServer.mock.calls[0]?.[0] as { apiKey: string }
     expect(opts.apiKey).toBe("secret-key")
   })
 
   it("registers all 4 expected MCP routes (single-tool routes vs. duty palette)", async () => {
     process.env.GITHUB_TOKEN = "gh-test"
-    await Promise.race([
-      mcpHttpServer(),
-      new Promise((resolve) => setTimeout(resolve, 50)),
-    ])
+    await Promise.race([mcpHttpServer(), new Promise((resolve) => setTimeout(resolve, 50))])
     const opts = buildMcpHttpServer.mock.calls[0]?.[0] as {
       routes: Array<{ path: string; name: string; tools: Array<{ name: string }> }>
     }
@@ -130,10 +118,7 @@ describe("bin/mcp-http-server: env validation", () => {
     process.env.GITHUB_TOKEN = "gh-test"
     process.env.GITHUB_REPOSITORY = "owner/repo"
     process.env.OPERATOR_MENTION = "@alice"
-    await Promise.race([
-      mcpHttpServer(),
-      new Promise((resolve) => setTimeout(resolve, 50)),
-    ])
+    await Promise.race([mcpHttpServer(), new Promise((resolve) => setTimeout(resolve, 50))])
     const opts = buildMcpHttpServer.mock.calls[0]?.[0] as {
       routes: Array<{ path: string; tools: Array<{ name: string }> }>
     }

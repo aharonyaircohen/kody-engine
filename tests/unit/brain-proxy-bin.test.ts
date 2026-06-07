@@ -105,10 +105,7 @@ describe("bin/brain-proxy: env validation", () => {
     process.env.BRAIN_API_KEY = "k"
     // The function blocks on `new Promise(() => {})` after wiring the
     // proxy. We race it against a short timer so the test exits.
-    await Promise.race([
-      brainProxy(),
-      new Promise((resolve) => setTimeout(resolve, 50)),
-    ])
+    await Promise.race([brainProxy(), new Promise((resolve) => setTimeout(resolve, 50))])
     expect(startBrainProxy).toHaveBeenCalledOnce()
     const opts = startBrainProxy.mock.calls[0]?.[0] as { backend: string; apiKey: string }
     expect(opts.backend).toBe("brain-serve")
@@ -122,10 +119,7 @@ describe("bin/brain-proxy: env validation", () => {
     process.env.MODEL = "anthropic/claude-sonnet-4-6"
     process.env.BRAIN_PROXY_PORT = "9090"
     process.env.BRAIN_PROXY_HOST = "0.0.0.0"
-    await Promise.race([
-      brainProxy(),
-      new Promise((resolve) => setTimeout(resolve, 50)),
-    ])
+    await Promise.race([brainProxy(), new Promise((resolve) => setTimeout(resolve, 50))])
     expect(startBrainProxy).toHaveBeenCalledOnce()
     const opts = startBrainProxy.mock.calls[0]?.[0] as {
       backend: string
@@ -145,10 +139,7 @@ describe("bin/brain-proxy: env validation", () => {
     process.env.BRAIN_API_KEY = "k"
     process.env.BRAIN_BACKEND = "brain-serve"
     process.env.BRAIN_SERVE_URL = "http://brain:7000"
-    await Promise.race([
-      brainProxy(),
-      new Promise((resolve) => setTimeout(resolve, 50)),
-    ])
+    await Promise.race([brainProxy(), new Promise((resolve) => setTimeout(resolve, 50))])
     const opts = startBrainProxy.mock.calls[0]?.[0] as {
       backend: string
       brainServeUrl: string
@@ -161,10 +152,7 @@ describe("bin/brain-proxy: env validation", () => {
     process.env.BRAIN_API_KEY = "k"
     delete process.env.BRAIN_PROXY_PORT
     delete process.env.BRAIN_PROXY_HOST
-    await Promise.race([
-      brainProxy(),
-      new Promise((resolve) => setTimeout(resolve, 50)),
-    ])
+    await Promise.race([brainProxy(), new Promise((resolve) => setTimeout(resolve, 50))])
     const opts = startBrainProxy.mock.calls[0]?.[0] as { port: number; host: string }
     expect(opts.port).toBe(8080)
     expect(opts.host).toBe("0.0.0.0")
