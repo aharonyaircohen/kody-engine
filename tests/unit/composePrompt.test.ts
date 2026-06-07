@@ -107,3 +107,143 @@ describe("composePrompt", () => {
     expect(fs.existsSync(f)).toBe(false)
   })
 })
+
+describe("composePrompt: duty-pipeline tokens (Phase 1 duty-tick rename)", () => {
+  let dir: string
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-composeprompt-duty-"))
+  })
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }))
+
+  function ctxFor(data: Record<string, unknown> = {}): Context {
+    return makeCtx(dir, data)
+  }
+
+  it("renders {{dutyReference}} as a single Duty reference block", async () => {
+    fs.writeFileSync(path.join(dir, "prompt.md"), "{{dutyReference}}\n--\nbody")
+    const ctx = ctxFor({
+      dutySlug: "stale-prs",
+      dutyTitle: "Stale PR Watcher",
+      executableSlug: "duty-tick",
+      staffSlug: "kody",
+      staffTitle: "Kody",
+      dutySchedule: "*/5 * * * *",
+    })
+    await composePrompt(ctx, makeProfile(dir))
+    const out = ctx.data.prompt as string
+    expect(out).toContain("# Duty reference")
+    expect(out).toContain("- Duty: `stale-prs` — *Stale PR Watcher*")
+    expect(out).toContain("- Executable: `duty-tick`")
+    expect(out).toContain("- Staff: `kody` — *Kody*")
+    expect(out).toContain("- Cadence: `*/5 * * * *`")
+  })
+
+  it("renders the {{dutySlug}}, {{dutyTitle}}, {{executableSlug}}, {{staffSlug}}, {{dutySchedule}} aliases individually", async () => {
+    fs.writeFileSync(
+      path.join(dir, "prompt.md"),
+      "{{dutySlug}}|{{dutyTitle}}|{{executableSlug}}|{{staffSlug}}|{{dutySchedule}}",
+    )
+    const ctx = ctxFor({
+      dutySlug: "stale-prs",
+      dutyTitle: "Stale PR Watcher",
+      executableSlug: "duty-tick",
+      staffSlug: "kody",
+      dutySchedule: "15m",
+    })
+    await composePrompt(ctx, makeProfile(dir))
+    expect(ctx.data.prompt).toBe("stale-prs|Stale PR Watcher|duty-tick|kody|15m")
+  })
+
+  it("falls back to legacy ctx.data.jobSlug/jobTitle/workerSlug/jobSchedule when duty-* are absent", async () => {
+    // Backwards compat: a prompt template written before the rename still
+    // gets a coherent {{dutyReference}} block from the legacy ctx.data.*.
+    fs.writeFileSync(path.join(dir, "prompt.md"), "{{dutyReference}}")
+    const ctx = ctxFor({
+      jobSlug: "stale-prs",
+      jobTitle: "Stale PR Watcher",
+      workerSlug: "kody",
+      jobSchedule: "*/5 * * * *",
+    })
+    const profile = makeProfile(dir)
+    profile.name = "duty-tick"
+    await composePrompt(ctx, profile)
+    const out = ctx.data.prompt as string
+    expect(out).toContain("- Duty: `stale-prs` — *Stale PR Watcher*")
+    expect(out).toContain("- Staff: `kody`")
+    expect(out).toContain("- Cadence: `*/5 * * * *`")
+  })
+
+  it("prefers duty-* aliases over legacy job* when both are present", async () => {
+    fs.writeFileSync(path.join(dir, "prompt.md"), "{{dutyReference}}")
+    const ctx = ctxFor({
+      // Legacy fields (older loader)
+      jobSlug: "legacy-slug",
+      jobTitle: "Legacy Title",
+      workerSlug: "legacy-worker",
+      // New duty-* aliases (newer loader)
+      dutySlug: "new-slug",
+      dutyTitle: "New Title",
+      staffSlug: "new-worker",
+    })
+    const profile = makeProfile(dir)
+    profile.name = "duty-tick"
+    await composePrompt(ctx, profile)
+    const out = ctx.data.prompt as string
+    expect(out).toContain("- Duty: `new-slug` — *New Title*")
+    expect(out).toContain("- Staff: `new-worker`")
+    expect(out).not.toContain("legacy-slug")
+    expect(out).not.toContain("Legacy Title")
+  })
+
+  it("keeps {{jobSlug}}/{{workerSlug}}/{{jobSchedule}} working for legacy prompt templates", async () => {
+    // Backwards compat: prompts that still use the old tokens continue to
+    // render from ctx.data.jobSlug / jobSchedule / workerSlug.
+    fs.writeFileSync(path.join(dir, "prompt.md"), "job={{jobSlug}} worker={{workerSlug}} sched={{jobSchedule}}")
+    const ctx = ctxFor({
+      jobSlug: "stale-prs",
+      workerSlug: "kody",
+      jobSchedule: "15m",
+    })
+    await composePrompt(ctx, makeProfile(dir))
+    expect(ctx.data.prompt).toBe("job=stale-prs worker=kody sched=15m")
+  })
+
+  it("omits optional lines in {{dutyReference}} (no staff, no cadence)", async () => {
+    fs.writeFileSync(path.join(dir, "prompt.md"), "{{dutyReference}}")
+    const ctx = ctxFor({
+      dutySlug: "ad-hoc",
+      dutyTitle: "Ad Hoc Duty",
+      executableSlug: "duty-tick",
+      // No staffSlug, no dutySchedule — on-demand run.
+    })
+    await composePrompt(ctx, makeProfile(dir))
+    const out = ctx.data.prompt as string
+    expect(out).toContain("- Duty: `ad-hoc` — *Ad Hoc Duty*")
+    expect(out).toContain("- Executable: `duty-tick`")
+    expect(out).not.toContain("- Staff:")
+    expect(out).not.toContain("- Cadence:")
+  })
+
+  it("renders an empty {{dutyReference}} when no duty fields are present (no bare heading)", async () => {
+    // A non-duty-tick profile that nonetheless references the token (e.g.
+    // a future shared prompt) shouldn't render a misleading heading.
+    fs.writeFileSync(path.join(dir, "prompt.md"), "before{{dutyReference}}after")
+    const ctx = ctxFor({}) // no duty fields
+    const profile = makeProfile(dir)
+    profile.name = "" // suppress the executableSlug fallback
+    await composePrompt(ctx, profile)
+    expect(ctx.data.prompt).toBe("beforeafter")
+  })
+
+  it("falls back to the profile name for {{executableSlug}} when ctx.data is silent", async () => {
+    // The loader (loadJobFromFile) sets ctx.data.executableSlug from
+    // profile.name. composePrompt's fallback uses the profile's own name so
+    // a bare profile still renders something coherent.
+    fs.writeFileSync(path.join(dir, "prompt.md"), "exe={{executableSlug}}")
+    const profile = makeProfile(dir)
+    profile.name = "duty-tick"
+    const ctx = ctxFor({})
+    await composePrompt(ctx, profile)
+    expect(ctx.data.prompt).toBe("exe=duty-tick")
+  })
+})

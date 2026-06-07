@@ -1,5 +1,5 @@
 /**
- * Unit tests for the `runTickScript` preflight (deterministic job-tick).
+ * Unit tests for the `runTickScript` preflight (deterministic duty-tick).
  *
  * These exercise the contract that motivated the code's existence: when a
  * job declares `tickScript:` in frontmatter, the script's stdout is the

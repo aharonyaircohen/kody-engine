@@ -298,7 +298,7 @@ export async function runCi(argv: string[]): Promise<number> {
   // Schedule wakes and parameterless workflow_dispatch fan out to every
   // watch executable whose `schedule` cron matches the wake window
   // (workflow_dispatch ignores the cron — it's an explicit "fire all").
-  // job-scheduler is itself a watch and continues to fire from this
+  // duty-scheduler is itself a watch and continues to fire from this
   // path; nightly suites and any future watch executables join naturally,
   // no kody.yml or config edits.
   const eventName = process.env.GITHUB_EVENT_NAME
@@ -321,7 +321,7 @@ export async function runCi(argv: string[]): Promise<number> {
       // Explicit `executable` + no target → manual one-shot "Run now" of that
       // single duty (a scheduled / no-target folder-duty), bypassing the
       // cadence guard. A bare dispatch (no executable) still fans out to every
-      // watch executable (job-scheduler et al.).
+      // watch executable (duty-scheduler et al.).
       if (noTarget && exeInput) forceRunDuty = exeInput
       else manualWorkflowDispatch = noTarget
     } catch {
@@ -572,7 +572,7 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
 
   const config = loadConfig(cwd)
   // Parallel watch fanout — typical wake fires 2–3 independent watches
-  // (job-scheduler, goal-scheduler, and future watches) that operate on
+  // (duty-scheduler, goal-scheduler, and future watches) that operate on
   // disjoint targets and don't share working-tree state. Running them
   // sequentially makes the second one wait through MCP boot + agent
   // turns of the first for no reason. Aggregate via allSettled so one

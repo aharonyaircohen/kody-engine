@@ -10,7 +10,7 @@ staff: kody
 > dashboard's `/reports` page).
 >
 > Cadence is enforced by the engine via the `every: 7d` frontmatter — this
-> file only fires once per 7 days regardless of how often `job-scheduler`
+> file only fires once per 7 days regardless of how often `duty-scheduler`
 > wakes. No prose cadence guard needed.
 
 ## Job

@@ -21,8 +21,8 @@ import { diagMcp } from "./diagMcp.js"
 import { discoverQaContext } from "./discoverQaContext.js"
 import { dispatch } from "./dispatch.js"
 import { dispatchClassified } from "./dispatchClassified.js"
-import { dispatchJobFileTicks } from "./dispatchJobFileTicks.js"
-import { dispatchJobTicks } from "./dispatchJobTicks.js"
+import { dispatchDutyFileTicks } from "./dispatchDutyFileTicks.js"
+import { dispatchDutyTicks } from "./dispatchDutyTicks.js"
 import { dispatchNextTask } from "./dispatchNextTask.js"
 import { ensurePr } from "./ensurePr.js"
 import { finalizeGoal } from "./finalizeGoal.js"
@@ -131,8 +131,8 @@ export const preflightScripts: Record<string, PreflightScript> = {
   classifyByLabel,
   diagMcp,
   warmupMcp,
-  dispatchJobTicks,
-  dispatchJobFileTicks,
+  dispatchDutyTicks,
+  dispatchDutyFileTicks,
   runTickScript,
   runPreviewBuild,
   loadGoalState,

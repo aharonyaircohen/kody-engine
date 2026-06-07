@@ -80,3 +80,53 @@ describe("loadDutyState", () => {
     expect(ctx.data.mentions).toBe("")
   })
 })
+
+describe("loadDutyState duty-noun aliases (Phase 1 rename)", () => {
+  it("populates dutySlug from profile.name, mirroring jobSlug", async () => {
+    const ctx = ctxFor()
+    await loadDutyState(ctx, profileFor(), {})
+    expect(ctx.data.dutySlug).toBe("locked-duty")
+    expect(ctx.data.jobSlug).toBe("locked-duty")
+  })
+
+  it("populates dutyTitle from profile.describe", async () => {
+    const ctx = ctxFor()
+    const profile = profileFor({}, { describe: "Folder Duty Title" })
+    await loadDutyState(ctx, profile, {})
+    expect(ctx.data.dutyTitle).toBe("Folder Duty Title")
+  })
+
+  it("populates executableSlug from profile.executable when set, else profile.name", async () => {
+    const ctx = ctxFor()
+    const profile = profileFor({}, { executable: "duty-tick-scripted" })
+    await loadDutyState(ctx, profile, {})
+    expect(ctx.data.executableSlug).toBe("duty-tick-scripted")
+  })
+
+  it("populates staffSlug from profile.staff when set", async () => {
+    const ctx = ctxFor()
+    const profile = profileFor({}, { staff: "kody" })
+    await loadDutyState(ctx, profile, {})
+    expect(ctx.data.staffSlug).toBe("kody")
+  })
+
+  it("populates dutySchedule from profile.every (new cadence string), or profile.schedule fallback", async () => {
+    const ctx = ctxFor()
+    const profile = profileFor({}, { every: "15m" })
+    await loadDutyState(ctx, profile, {})
+    expect(ctx.data.dutySchedule).toBe("15m")
+  })
+
+  it("falls back to profile.schedule when profile.every is absent (cron-style)", async () => {
+    const ctx = ctxFor()
+    const profile = profileFor({}, { schedule: "*/5 * * * *" })
+    await loadDutyState(ctx, profile, {})
+    expect(ctx.data.dutySchedule).toBe("*/5 * * * *")
+  })
+
+  it("renders empty dutySchedule for an on-demand duty (no every/schedule)", async () => {
+    const ctx = ctxFor()
+    await loadDutyState(ctx, profileFor(), {})
+    expect(ctx.data.dutySchedule).toBe("")
+  })
+})

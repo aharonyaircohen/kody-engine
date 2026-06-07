@@ -8,8 +8,8 @@
  *     dropping a new directory makes `kody <name>` work without router edits.
  *   - **Built-in jobs** (`src/jobs/<slug>.md`) — markdown templates that
  *     `kody init` scaffolds into consumer repos under `.kody/duties/`. Once
- *     scaffolded, the consumer owns the file; `job-scheduler` /
- *     `job-tick` discover it from the consumer's `.kody/duties/` directly,
+ *     scaffolded, the consumer owns the file; `duty-scheduler` /
+ *     `duty-tick` discover it from the consumer's `.kody/duties/` directly,
  *     not via this registry.
  *
  * Both follow the same dev/built path-resolution pattern so `src/` and
@@ -122,7 +122,7 @@ export function getExecutableRoots(): string[] {
  * Names of the engine-bundled executables (the dir names under the engine root
  * that contain a profile.json). Cached — the engine root never changes within a
  * process. Used to stop a consumer `.kody/duties/<name>/` folder from silently
- * shadowing an engine builtin (run/merge/serve/job-scheduler/…).
+ * shadowing an engine builtin (run/merge/serve/duty-scheduler/…).
  */
 let _builtinNames: Set<string> | null = null
 export function builtinExecutableNames(): Set<string> {

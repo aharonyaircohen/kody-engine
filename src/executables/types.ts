@@ -287,7 +287,7 @@ export interface ClaudeCodeSpec {
   /**
    * Opt-in: expose an in-process `submit_state` tool the agent calls to
    * persist its next state, instead of relying on a trailing fenced
-   * `kody-job-next-state` block it must remember to emit. Used by job-tick.
+   * `kody-job-next-state` block it must remember to emit. Used by duty-tick.
    * The fenced block stays supported as a fallback. Default false.
    */
   enableSubmitTool?: boolean

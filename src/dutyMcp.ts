@@ -1,5 +1,5 @@
 /**
- * In-process MCP server exposing typed "duty primitives" to the job-tick agent.
+ * In-process MCP server exposing typed "duty primitives" to the duty-tick agent.
  *
  * Why this exists: duties used to be markdown bodies with `Bash` + `gh` access.
  * That escape hatch let any duty post `@kody <verb>` comments that the engine's
@@ -300,7 +300,7 @@ export function readThread(repoSlug: string, number: number, limit = 10): Thread
 // ---------------------------------------------------------------------------
 
 const CHECK_FAIL_CONCLUSIONS = new Set(["FAILURE", "TIMED_OUT", "STARTUP_FAILURE", "ACTION_REQUIRED"])
-const DEFAULT_IGNORE_CHECKS = ["run", "kody", "job-tick", "goal-tick", "worker-ask", "chat"]
+const DEFAULT_IGNORE_CHECKS = ["run", "kody", "duty-tick", "goal-tick", "worker-ask", "chat"]
 
 export interface CheckRunsResult {
   sha: string
@@ -510,7 +510,7 @@ export function dutyToolDefinitions(opts: DutyMcpOptions): DutyToolDefinition[] 
   const checkRunsTool: DutyToolDefinition = {
     name: "read_check_runs",
     description:
-      "Read CI for a branch or commit ref (e.g. 'dev'). Returns {sha, state, failing:[{name,conclusion,detailsUrl}], pending:[{name,status}]}. state is RED (≥1 check has a terminal-failure conclusion: failure/timed_out/startup_failure/action_required), PENDING (none failed but some still running), or GREEN (all completed, none failed). Kody's own job check-runs (run/kody/job-tick/…) are excluded by default. This reads the commit's authoritative check-runs — use it instead of guessing CI health from a run list.",
+      "Read CI for a branch or commit ref (e.g. 'dev'). Returns {sha, state, failing:[{name,conclusion,detailsUrl}], pending:[{name,status}]}. state is RED (≥1 check has a terminal-failure conclusion: failure/timed_out/startup_failure/action_required), PENDING (none failed but some still running), or GREEN (all completed, none failed). Kody's own job check-runs (run/kody/duty-tick/…) are excluded by default. This reads the commit's authoritative check-runs — use it instead of guessing CI health from a run list.",
     inputSchema: {
       ref: z.string().min(1).describe("Branch name or commit SHA to read CI for (e.g. 'dev')."),
       ignoreNames: z.array(z.string()).optional().describe("Check names to exclude (default: Kody's own job names)."),

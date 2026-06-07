@@ -39,7 +39,7 @@ export interface AgentResult {
   finalText: string
   /**
    * State the agent submitted via the in-process `submit_state` tool
-   * (job-tick only, when `enableSubmitTool` is set). Preferred over the
+   * (duty-tick only, when `enableSubmitTool` is set). Preferred over the
    * legacy fenced `kody-job-next-state` block when present. Undefined when
    * the tool wasn't enabled or the agent never called it.
    */
@@ -129,12 +129,12 @@ export interface AgentOptions {
   enableVerifyTool?: boolean
   /**
    * Opt-in: build an in-process MCP server exposing a `submit_state` tool the
-   * agent calls to persist its next state (used by job-tick instead of relying
+   * agent calls to persist its next state (used by duty-tick instead of relying
    * on a trailing fenced block). Default false.
    */
   enableSubmitTool?: boolean
   /**
-   * Opt-in (job-tick locked-toolbox mode): build an in-process MCP server
+   * Opt-in (duty-tick locked-toolbox mode): build an in-process MCP server
    * exposing typed duty primitives (list_prs_to_repair, sync_pr, fix_ci_pr,
    * resolve_pr, recommend_to_operator, read_ledger). Triggered by a duty
    * declaring `tools:` frontmatter — `loadJobFromFile` then revokes Bash/Read

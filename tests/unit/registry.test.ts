@@ -27,7 +27,7 @@ describe("registry: builtin executables (folder-duty shadow protection)", () => 
     // a sample of known engine builtins
     expect(names.has("run")).toBe(true)
     expect(names.has("merge")).toBe(true)
-    expect(names.has("job-scheduler")).toBe(true)
+    expect(names.has("duty-scheduler")).toBe(true)
   })
 
   it("isBuiltinExecutable is true for builtins, false for custom names", () => {

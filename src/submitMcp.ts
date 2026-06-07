@@ -1,7 +1,7 @@
 /**
  * In-process MCP server exposing a `submit_state` tool to the agent.
  *
- * Why this exists: a job-tick agent must persist its decision as a state
+ * Why this exists: a duty-tick agent must persist its decision as a state
  * envelope. The legacy contract asked the model to END its reply with a
  * fenced `kody-job-next-state` JSON block — which long/complex duties (e.g.
  * approval-gate) routinely forgot, so the tick failed "agent did not emit a

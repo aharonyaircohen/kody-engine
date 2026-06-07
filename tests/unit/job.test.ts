@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 // Hoist-safe mock of the executor so runJob is tested in isolation (no real
-// executable spins up). Mirrors tests/unit/dispatchJobFileTicks.routing.test.ts.
+// executable spins up). Mirrors tests/unit/dispatchDutyFileTicks.routing.test.ts.
 const { runExecutableChain } = vi.hoisted(() => ({ runExecutableChain: vi.fn() }))
 vi.mock("../../src/executor.js", () => ({ runExecutableChain }))
 
@@ -127,31 +127,31 @@ describe("mintScheduledJob (Phase 2)", () => {
   it("maps a due duty slug to a scheduled job", () => {
     const job = mintScheduledJob({
       duty: "stale-prs",
-      executable: "job-tick",
+      executable: "duty-tick",
       schedule: "*/5 * * * *",
       persona: "kody",
-      cliArgs: { job: "stale-prs" },
+      cliArgs: { duty: "stale-prs" },
     })
     expect(job).toMatchObject({
       duty: "stale-prs",
-      executable: "job-tick",
+      executable: "duty-tick",
       schedule: "*/5 * * * *",
       persona: "kody",
-      cliArgs: { job: "stale-prs" },
+      cliArgs: { duty: "stale-prs" },
       flavor: "scheduled",
     })
   })
 
   it("defaults cliArgs to empty", () => {
-    expect(mintScheduledJob({ duty: "d", executable: "job-tick" }).cliArgs).toEqual({})
+    expect(mintScheduledJob({ duty: "d", executable: "duty-tick" }).cliArgs).toEqual({})
   })
 
   it("carries the cadence onto ctx.data.jobSchedule so the ledger records when it fired", async () => {
-    await runJob(mintScheduledJob({ duty: "stale-prs", executable: "job-tick", schedule: "7d" }), { cwd: "/x" })
+    await runJob(mintScheduledJob({ duty: "stale-prs", executable: "duty-tick", schedule: "7d" }), { cwd: "/x" })
     const [, input] = runExecutableChain.mock.calls.at(-1)!
     expect(input.preloadedData?.jobSchedule).toBe("7d")
     expect(input.preloadedData?.jobFlavor).toBe("scheduled")
     expect(input.preloadedData?.jobDuty).toBe("stale-prs")
-    expect(input.preloadedData?.jobExecutable).toBe("job-tick")
+    expect(input.preloadedData?.jobExecutable).toBe("duty-tick")
   })
 })
