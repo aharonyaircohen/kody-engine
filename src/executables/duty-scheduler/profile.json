@@ -1,7 +1,7 @@
 {
-  "name": "job-scheduler",
+  "name": "duty-scheduler",
   "role": "watch",
-  "describe": "Scheduled: for every duty file under .kody/duties/, invoke job-tick once. No agent on the scheduler itself.",
+  "describe": "Scheduled: for every duty file under .kody/duties/, invoke duty-tick once. No agent on the scheduler itself.",
   "kind": "scheduled",
   "schedule": "*/5 * * * *",
   "inputs": [],
@@ -36,11 +36,11 @@
   "scripts": {
     "preflight": [
       {
-        "script": "dispatchJobFileTicks",
+        "script": "dispatchDutyFileTicks",
         "with": {
           "jobsDir": ".kody/duties",
-          "targetExecutable": "job-tick",
-          "slugArg": "job"
+          "targetExecutable": "duty-tick",
+          "slugArg": "duty"
         }
       }
     ],

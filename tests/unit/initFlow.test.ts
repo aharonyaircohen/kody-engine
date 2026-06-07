@@ -129,7 +129,7 @@ describe("renderScheduledWorkflow", () => {
   it("sets up Python so non-Anthropic models (litellm) work on the scheduled path", () => {
     // Regression: scheduled workflows omitted Python, so litellm couldn't
     // install and scheduled duties failed on MiniMax/other non-Anthropic models.
-    const yml = renderScheduledWorkflow("job-scheduler", "*/5 * * * *")
+    const yml = renderScheduledWorkflow("duty-scheduler", "*/5 * * * *")
     expect(yml).toMatch(/uses: actions\/setup-python/)
     expect(yml).toMatch(/python-version:/)
   })

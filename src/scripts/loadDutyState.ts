@@ -6,12 +6,18 @@
  * stateful duty needs loaded here is its cross-run state. It makes "scheduled ⇒
  * stateful" real: a scheduled folder-duty that declares this preflight (plus
  * `parseJobStateFromAgentResult` + `writeJobStateFile` postflights) carries
- * memory between runs, exactly like a markdown duty did under `job-tick`.
+ * memory between runs, exactly like a markdown duty did under `duty-tick`.
  *
  * Sets:
- *   ctx.data.jobSlug       the slug (profile.name)
+ *   ctx.data.jobSlug       the slug (profile.name) — legacy token
  *   ctx.data.jobState      LoadedJobState (path/handle/state) — writeJobStateFile reads this
  *   ctx.data.jobStateJson  rendered prior state, for the prompt's {{jobStateJson}} token
+ *
+ *   ctx.data.dutySlug       alias of jobSlug
+ *   ctx.data.dutyTitle      profile.describe
+ *   ctx.data.executableSlug profile.executable ?? profile.name
+ *   ctx.data.staffSlug      profile.staff ?? ""
+ *   ctx.data.dutySchedule   profile.every (or profile.schedule as fallback) — empty for on-demand
  *
  * Stateless duties simply omit this preflight (and the state postflights) and
  * run with no memory — the same one duty shape, statefulness opted in by config.
@@ -32,6 +38,23 @@ export const loadDutyState: PreflightScript = async (ctx, profile, args) => {
   ctx.data.jobSlug = slug
   ctx.data.jobState = loaded
   ctx.data.jobStateJson = JSON.stringify(loaded.state, null, 2)
+
+  // Duty-noun aliases. A folder-duty's body is the profile's own `prompt.md`
+  // (rendered by composePrompt via the `{{jobIntent}}` / new `{{dutyIntent}}`
+  // token path is not relevant here — the folder duty's body comes from the
+  // resolved executable, not the duty). It still has a slug, a title (the
+  // profile.describe), and a (resolved) executable slug — all required for the
+  // `{{dutyReference}}` block.
+  ctx.data.dutySlug = slug
+  ctx.data.dutyTitle = profile.describe
+  ctx.data.executableSlug = profile.executable ?? profile.name
+  ctx.data.staffSlug = profile.staff ?? ""
+  ctx.data.staffTitle = ""
+  // `every:` is the new "15m".."7d" cadence string introduced alongside the
+  // rename; legacy `schedule:` (cron) profiles still work. Empty for on-demand
+  // duties — composePrompt renders the empty string and the prompt omits the
+  // cadence line.
+  ctx.data.dutySchedule = profile.every ?? profile.schedule ?? ""
 
   // Mentions → "@a @b" for the {{mentions}} prompt token + the duty-MCP
   // operator mention (mirrors loadJobFromFile).

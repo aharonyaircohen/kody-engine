@@ -2,21 +2,21 @@
  * Preflight: enumerate `.kody/duties/<slug>.md` files in the cwd, then
  * invoke a target executable once per duty slug (in-process, sequentially).
  *
- * Replaces the issue-label discovery in `dispatchJobTicks` with file
- * discovery — jobs live as authored markdown in the repo, not as issues.
+ * Replaces the issue-label discovery in `dispatchDutyTicks` with file
+ * discovery — duties live as authored markdown in the repo, not as issues.
  *
  * Wraps the fan-out in the configured `JobStateBackend` lifecycle:
  * `hydrate` runs once before any tick, `persist` runs once after every
  * tick (even on failure, in a finally block). Backends that are always
  * live (contents-API) leave both as no-ops; backends that snapshot the
- * job directory (local-file + Actions cache) implement them.
+ * duty directory (local-file + Actions cache) implement them.
  *
  * Script args (via `with:`):
  *   jobsDir        optional — relative path under cwd (default ".kody/duties")
- *   targetExecutable   required — e.g. "job-tick"
+ *   targetExecutable   required — e.g. "duty-tick"
  *   scriptedExecutable optional — target for slugs with `tickScript:`
- *                      frontmatter (default "job-tick-scripted")
- *   slugArg            optional — CLI input name on the target (default "job")
+ *                      frontmatter (default "duty-tick-scripted")
+ *   slugArg            optional — CLI input name on the target (default "duty")
  */
 
 import * as fs from "node:fs"
@@ -27,16 +27,16 @@ import { loadProfile } from "../profile.js"
 import { type ScheduleEvery, scheduleEveryToMs, splitFrontmatter } from "./jobFrontmatter.js"
 import { resolveBackend } from "./jobState/index.js"
 
-export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args) => {
+export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args) => {
   ctx.skipAgent = true
 
   const targetExecutable = String(args?.targetExecutable ?? "")
   if (!targetExecutable) {
-    throw new Error("dispatchJobFileTicks: `with.targetExecutable` is required")
+    throw new Error("dispatchDutyFileTicks: `with.targetExecutable` is required")
   }
   const jobsDir = String(args?.jobsDir ?? ".kody/duties")
-  const scriptedExecutable = String(args?.scriptedExecutable ?? "job-tick-scripted")
-  const slugArg = String(args?.slugArg ?? "job")
+  const scriptedExecutable = String(args?.scriptedExecutable ?? "duty-tick-scripted")
+  const slugArg = String(args?.slugArg ?? "duty")
 
   // Resolve once, hydrate once, persist once. Per-tick scripts re-resolve
   // for their own load/save calls — backends are cheap to construct, but
@@ -68,7 +68,7 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
     // ── Unified path: scheduled folder-duties — FIRST, on the clean checkout ──
     // A folder-duty (`.kody/duties/<slug>/profile.json`) that declares an
     // `every` cadence is the unified successor to a markdown scheduled duty: it
-    // fires as a ONE-SHOT run of itself (no job-tick, no target), as its staff.
+    // fires as a ONE-SHOT run of itself (no duty-tick, no target), as its staff.
     // We enumerate + read profiles HERE, before the `.md` ticks below churn the
     // working tree (a branch switch / clean would drop `.kody/duties/<slug>/`),
     // then fire the due ones. On-demand folder-duties (no `every`) are skipped —
@@ -159,7 +159,7 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
       // the tick runs as; with none declared there's no identity to run, so
       // skip (loudly) rather than fall back to an implicit default. Manual
       // `workflow_dispatch` "Run now" bypasses this dispatcher, but
-      // job-tick's loader rejects a missing/dangling staff member there too.
+      // duty-tick's loader rejects a missing/dangling staff member there too.
       if (!frontmatter.staff || frontmatter.staff.trim().length === 0) {
         process.stderr.write(`[jobs] ⏭  skip ${slug}: no staff assigned (add 'staff: <slug>' frontmatter)\n`)
         results.push({ slug, exitCode: 0, skipped: true, reason: "no staff assigned" })
@@ -178,7 +178,7 @@ export const dispatchJobFileTicks: PreflightScript = async (ctx, _profile, args)
       }
 
       // Per-slug routing: jobs that declare a deterministic `tickScript:`
-      // in frontmatter run via `job-tick-scripted` (no agent), so their
+      // in frontmatter run via `duty-tick-scripted` (no agent), so their
       // next-state block is parsed from script stdout — not from an LLM
       // that may summarize it away. Everything else uses the configured
       // (LLM-driven) target. Decided here, not in the executable, so the
@@ -342,7 +342,7 @@ function listFolderDutySlugs(absDir: string): string[] {
     .sort()
 }
 
-/** Persist `lastFiredAt = now` for a scheduled folder-duty (no job-tick to do it). */
+/** Persist `lastFiredAt = now` for a scheduled folder-duty (no duty-tick to do it). */
 async function stampFired(backend: ReturnType<typeof resolveBackend>, slug: string, now: number): Promise<void> {
   try {
     const loaded = await backend.load(slug)

@@ -106,7 +106,7 @@ describe("readCheckRuns — branch CI classification", () => {
       ].join("\n"),
     )
 
-    const r = readCheckRuns(REPO, "dev", ["run", "kody", "job-tick"])
+    const r = readCheckRuns(REPO, "dev", ["run", "kody", "duty-tick"])
 
     expect(r.state).toBe("RED")
     expect(r.sha).toBe(sha)

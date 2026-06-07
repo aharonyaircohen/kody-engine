@@ -57,13 +57,13 @@ The repo has carried several near-synonyms over time; these are the current, aut
 - **job** — *the run*: one execution. A comment, a cron tick, and an orchestrator all mint a job and funnel it through one runner. (Not to be confused with the legacy `job-*` code identifiers — see the naming note.)
 - **task** — *run-history*: the ordered list of jobs on one issue/PR, plus rolled-up state.
 - **executable** — one `src/executables/<name>/` directory; the atomic unit the executor runs. Every command below is one. This is the *how*.
-- **watch** — an executable with `role: "watch"`, `kind: "scheduled"`, and a `schedule` cron, fanned out by `dispatchScheduledWatches` on each wake. The *scheduler* itself runs no agent. Two exist: `job-scheduler`, `goal-scheduler`.
-- **duty** — a unit of intent expressed as a markdown file at `.kody/duties/<slug>.md` (human-owned prose + frontmatter: `every:` cadence, `staff:` executor, optional `tools:` / `tickScript:`). The `job-scheduler` watch ticks each due duty; `job-tick` (agent) or `job-tick-scripted` (deterministic `tickScript:`) advances it. Per-duty state is persisted to a sidecar state file by the engine, not to a GitHub issue. *(Formerly "job" — that term is stale in prose; the code is still literally named `job-*`, see the naming note.)*
+- **watch** — an executable with `role: "watch"`, `kind: "scheduled"`, and a `schedule` cron, fanned out by `dispatchScheduledWatches` on each wake. The *scheduler* itself runs no agent. Two exist: `duty-scheduler`, `goal-scheduler`.
+- **duty** — a unit of intent expressed as a markdown file at `.kody/duties/<slug>.md` (human-owned prose + frontmatter: `every:` cadence, `staff:` executor, optional `tools:` / `tickScript:`). The `duty-scheduler` watch ticks each due duty; `duty-tick` (agent) or `duty-tick-scripted` (deterministic `tickScript:`) advances it. Per-duty state is persisted to a sidecar state file by the engine, not to a GitHub issue. The `Job` runtime envelope in `src/job.ts` and the `kody-job-next-state` fence label are separate concerns (see the naming note).
 - **staff** — a reusable persona at `.kody/staff/<slug>.md` that executes a duty. Stateless: a duty names its executor via `staff:` frontmatter, and many duties may share one staff member. Surfaced to the agent as `{{workerTitle}}` / `{{workerSlug}}`; the dashboard can also `@mention` a staff member ad-hoc (`worker-ask`).
 - **goal** — a stacked-PR state machine rooted at `.kody/goals/<id>/state.json`. `goal-scheduler` ticks each goal; `goal-tick` dispatches `@kody` on the next ready task stacked on the leaf PR, then finalizes the leaf into one review-ready PR. `qa-engineer` opens goals from QA findings. The engine never auto-merges.
 - **manager** — *not an executable.* Prose for a duty whose intent happens to be overseeing other duties.
 - **mission** — *dead term.* Renamed away; no `mission-*` executable exists. Do not use it.
-- **Naming note** — the *concept* is **duty** + **staff**, and the **consumer-facing paths already match**: `.kody/duties/<slug>.md` (intent), `.kody/duties/<slug>.state.json` (state), `.kody/staff/<slug>.md` (personas). Only the **engine's internal code** still carries the older **`job`** spelling: the `job-scheduler` / `job-tick` / `job-tick-scripted` executables, the `kody-job-next-state` fence label (a per-run tag the agent emits and the engine parses, never written to a consumer repo), and scripts like `jobFrontmatter` / `loadJobFromFile` / `writeJobStateFile`. So in code, the `job-*` identifiers mean **duty**, *not* the structural model's **job** (one execution, defined above). The word is overloaded: in the model a `job` is a run; in the code `job-*` is the duty machinery. Because nothing in a consumer repo says "job", renaming these to `duty-*` would be an **internal-only** change (no consumer breakage) that also ends the overload — it's just pending. That's also why the `deadVocabulary` guard bans `kody-manager` / `mission-*` but **not** `job` (still a live identifier).
+- **Naming note** — the *concept* is **duty** + **staff**, and the consumer-facing paths, the executable dirs, and the new prompt tokens all use the **duty** spelling (`.kody/duties/<slug>.md`, `duty-scheduler` / `duty-tick` / `duty-tick-scripted`, `{{dutyReference}}` / `{{dutySlug}}` / `{{staffSlug}}` / `{{executableSlug}}` / `{{dutySchedule}}`). A handful of identifiers deliberately keep the older `job` spelling because renaming them would either break existing consumer repos or churn a structural type: the `Job` runtime envelope in `src/job.ts` (the one execution model, defined above), the `kody-job-next-state` fence label (the per-run tag the agent emits — kept canonical, with `kody-duty-next-state` accepted as an alias by the postflight parser), the `jobFrontmatter` / `loadJobFromFile` / `writeJobStateFile` script names (public API of the script catalog; renaming would invalidate consumer-repo references), and the `{{jobSlug}}` / `{{workerSlug}}` / `{{jobStateJson}}` / `{{jobSchedule}}` prompt tokens (kept working as legacy aliases). Phase 1 of the rename is now landed — see issue #38 — and the `deadVocabulary` guard bans the specific old identifiers (`job-scheduler` / `job-tick` / `dispatchJobFileTicks` / `dispatchJobTicks`) but **not** the broader `job` token (still a live identifier).
 
 ### Commands (grouped by function)
 
@@ -103,9 +103,9 @@ The repo has carried several near-synonyms over time; these are the current, aut
 
 | Command | Role / kind | Schedule | Notes |
 |---|---|---|---|
-| `job-scheduler` | watch / scheduled | `*/5 * * * *` | ticks every `.kody/duties/<slug>.md` via `job-tick` |
-| `job-tick` | primitive / oneshot | — | one classifier tick for one job file (agent) |
-| `job-tick-scripted` | utility / oneshot | — | deterministic tick: runs the slug's `tickScript:` |
+| `duty-scheduler` | watch / scheduled | `*/5 * * * *` | ticks every `.kody/duties/<slug>.md` via `duty-tick` |
+| `duty-tick` | primitive / oneshot | — | one classifier tick for one duty file (agent) |
+| `duty-tick-scripted` | utility / oneshot | — | deterministic tick: runs the slug's `tickScript:` |
 | `goal-scheduler` | watch / scheduled | `*/5 * * * *` | ticks every `.kody/goals/<id>/state.json` via `goal-tick` |
 | `goal-tick` | primitive / oneshot | — | one stacked-PR tick (no agent) |
 
@@ -188,21 +188,21 @@ Two modes on a single flag:
 
 ### `init` — scaffold a consumer repo
 
-Writes `kody.config.json` (with package-manager-aware `quality.*` commands and owner/repo detected from `git remote`), `.github/workflows/kody.yml` (from the template), and per-scheduled-executable workflows (e.g. `kody-job-scheduler.yml`). Idempotent — skips anything already present unless `--force`. No agent.
+Writes `kody.config.json` (with package-manager-aware `quality.*` commands and owner/repo detected from `git remote`), `.github/workflows/kody.yml` (from the template), and per-scheduled-executable workflows (e.g. `kody-duty-scheduler.yml`). Idempotent — skips anything already present unless `--force`. No agent.
 
-### `job-scheduler` + `job-tick` — zero-code coordinator for file-defined duties
+### `duty-scheduler` + `duty-tick` — zero-code coordinator for file-defined duties
 
 > **Terminology:** this section's *concept* is **duty** + **staff** (see the Vocabulary glossary). The consumer paths are already `.kody/duties/` / `.kody/staff/`; only the engine's executables/scripts are still spelled `job-*`, so the prose below uses both — read "job" as "duty" throughout. The rename to `duty-*` is pending.
 
 A two-executable pair that lets a consumer define a stateful, recurring duty *as a markdown file* — no per-duty code, no PR to kody, no deploy — executed by a `staff:` persona. Used for digests, release pipelines, test-suite orchestration, pr-fleet supervision, or any multi-step flow that spans GitHub events. For what *duty* / *staff* / *goal* / *watch* / *manager* mean, see the **Vocabulary** glossary above — this section does not redefine them.
 
-**The model.** Drop a file at `.kody/duties/<slug>.md`: frontmatter on top (`every:` cadence, optional `tickScript:`, optional `mentions:`), human-owned prose below (the `## Job` intent). On every cron wake `job-scheduler` enumerates the job files, reads each one's frontmatter once, and ticks only the slugs whose `every:` interval is due. `done: true` in the slug's persisted state OR deleting the file stops future work. `kody init` copies the engine's built-in job files (e.g. [src/jobs/watch-stale-prs.md](src/jobs/watch-stale-prs.md)) into the consumer repo as starters.
+**The model.** Drop a file at `.kody/duties/<slug>.md`: frontmatter on top (`every:` cadence, optional `tickScript:`, optional `mentions:`), human-owned prose below (the `## Duty` intent). On every cron wake `duty-scheduler` enumerates the duty files, reads each one's frontmatter once, and ticks only the slugs whose `every:` interval is due. `done: true` in the slug's persisted state OR deleting the file stops future work. `kody init` copies the engine's built-in duty files (e.g. [src/jobs/watch-stale-prs.md](src/jobs/watch-stale-prs.md)) into the consumer repo as starters.
 
-- **`job-scheduler`** — `role: "watch"`, `kind: "scheduled"` (default cron `*/5 * * * *`). No agent. Preflight is `dispatchJobFileTicks`, which lists `.kody/duties/<slug>.md`, gates each on its `every:` cadence, routes slugs carrying `tickScript:` frontmatter to `job-tick-scripted` and the rest to `job-tick`, and invokes the target once per due slug in-process.
-- **`job-tick`** — `kind: oneshot`, required input `--job <slug>` (basename without `.md`), optional `--force` (bypass the cadence/prose guard — the dashboard's "Run now" button). Preflight `loadJobFromFile` → `composePrompt`. The agent decides the next step using only `gh` + `Read`; it never edits the working tree.
+- **`duty-scheduler`** — `role: "watch"`, `kind: "scheduled"` (default cron `*/5 * * * *`). No agent. Preflight is `dispatchDutyFileTicks`, which lists `.kody/duties/<slug>.md`, gates each on its `every:` cadence, routes slugs carrying `tickScript:` frontmatter to `duty-tick-scripted` and the rest to `duty-tick`, and invokes the target once per due slug in-process.
+- **`duty-tick`** — `kind: oneshot`, required input `--duty <slug>` (basename without `.md`), optional `--force` (bypass the cadence/prose guard — the dashboard's "Run now" button). Preflight `loadJobFromFile` → `composePrompt`. The agent decides the next step using only `gh` + `Read`; it never edits the working tree.
   - **`mentions:` frontmatter** — a comma-separated list of GitHub logins (stored without `@`) that this duty's output should `@`-mention, e.g. `mentions: aguyaharonyair, alice`. `loadJobFromFile` joins them into a ready-to-insert `@a @b` string and exposes it to the prompt as the `{{mentions}}` token (empty string when absent). This is the dashboard-managed replacement for ad-hoc `jq .github.operator` reads and hardcoded handles inside duty prompts — declare the recipients once in frontmatter and reference `{{mentions}}` in the prose. It emits a fenced `kody-job-next-state` block with `{ cursor, data, done }`, which postflight `parseJobStateFromAgentResult` → `writeJobStateFile` persists.
-  - **`tools:` frontmatter — locked-toolbox mode** (v0.4.175). A duty that declares `tools: [...]` runs in a *locked toolbox*: the agent gets ONLY those tools (surfaced as `mcp__kody-duty__<name>`) plus `submit_state` — `Bash`, `Read`, and all shell access are revoked. This closes the bug class where a duty posted a raw `@kody <verb>` comment that the webhook receiver silently drops for bot authors, so the duty "succeeded" while its verb never ran. `jobFrontmatter` parses `tools:` as comma-separated names; `loadJobFromFile` validates them against the kody-duty palette, rewrites `profile.claudeCode.tools` to the locked allowlist, and swaps the prompt template to [src/executables/job-tick/prompts/locked.md](src/executables/job-tick/prompts/locked.md) (legacy `prompt.md` still serves Bash/gh duties unchanged). The in-process **kody-duty MCP server** ([src/dutyMcp.ts](src/dutyMcp.ts)) exposes six high-level intents — `list_prs_to_repair`, `sync_pr` / `fix_ci_pr` / `resolve_pr` (each dispatches via `gh workflow run kody.yml -f executable=<verb>`, never an `@kody` comment), `recommend_to_operator` (one comment with the operator mention substituted), and `read_ledger` (trust-ledger / sentinel-fenced manifest reader). `executor` forwards `enableDutyTool` / `dutyOperatorMention` / `dutyRepoSlug` to `runAgent`, which builds the server when the flag fires.
-- **`job-tick-scripted`** — same `--job <slug>` input, no agent. Preflight `runTickScript` runs the slug's frontmatter `tickScript:` and parses next-state from its stdout; postflight `writeJobStateFile` persists. For fully deterministic jobs that don't need an LLM tick.
+  - **`tools:` frontmatter — locked-toolbox mode** (v0.4.175). A duty that declares `tools: [...]` runs in a *locked toolbox*: the agent gets ONLY those tools (surfaced as `mcp__kody-duty__<name>`) plus `submit_state` — `Bash`, `Read`, and all shell access are revoked. This closes the bug class where a duty posted a raw `@kody <verb>` comment that the webhook receiver silently drops for bot authors, so the duty "succeeded" while its verb never ran. `jobFrontmatter` parses `tools:` as comma-separated names; `loadJobFromFile` validates them against the kody-duty palette, rewrites `profile.claudeCode.tools` to the locked allowlist, and swaps the prompt template to [src/executables/duty-tick/prompts/locked.md](src/executables/duty-tick/prompts/locked.md) (legacy `prompt.md` still serves Bash/gh duties unchanged). The in-process **kody-duty MCP server** ([src/dutyMcp.ts](src/dutyMcp.ts)) exposes six high-level intents — `list_prs_to_repair`, `sync_pr` / `fix_ci_pr` / `resolve_pr` (each dispatches via `gh workflow run kody.yml -f executable=<verb>`, never an `@kody` comment), `recommend_to_operator` (one comment with the operator mention substituted), and `read_ledger` (trust-ledger / sentinel-fenced manifest reader). `executor` forwards `enableDutyTool` / `dutyOperatorMention` / `dutyRepoSlug` to `runAgent`, which builds the server when the flag fires.
+- **`duty-tick-scripted`** — same `--duty <slug>` input, no agent. Preflight `runTickScript` runs the slug's frontmatter `tickScript:` and parses next-state from its stdout; postflight `writeJobStateFile` persists. For fully deterministic duties that don't need an LLM tick.
 
 **State.** Per-slug job state is persisted by `writeJobStateFile` through a resolved backend (a state file — *not* a GitHub issue comment), and a write is skipped when the next state is structurally unchanged. Job *output* is whatever the prose asks for — e.g. `watch-stale-prs` writes a report at `.kody/reports/<slug>.md`.
 
@@ -210,7 +210,7 @@ A two-executable pair that lets a consumer define a stateful, recurring duty *as
 
 **Spawning children.** An agent tick spawns other kody runs via `gh workflow run kody.yml -f issue_number=<N>`. Works without a PAT because `workflow_dispatch` isn't subject to GitHub's anti-recursion safety on the default `GITHUB_TOKEN` — that's why we prefer it over posting `@kody` comments (which would silently not trigger a child run).
 
-**Trigger routing.** `src/dispatch.ts` routes `schedule` events and empty `workflow_dispatch` through `dispatchScheduledWatches`, which fans out to every `role: "watch"`, `kind: "scheduled"` profile whose cron matches the wake window (today: `job-scheduler`, `goal-scheduler`). Consumers add exactly one line (`schedule: - cron:`) to their existing single `kody.yml` — no per-capability workflow files.
+**Trigger routing.** `src/dispatch.ts` routes `schedule` events and empty `workflow_dispatch` through `dispatchScheduledWatches`, which fans out to every `role: "watch"`, `kind: "scheduled"` profile whose cron matches the wake window (today: `duty-scheduler`, `goal-scheduler`). Consumers add exactly one line (`schedule: - cron:`) to their existing single `kody.yml` — no per-capability workflow files.
 
 **Scale.** Fan-out is sequential in-process (one `runExecutable` call per due slug). Fine for small N; the scheduler itself always exits 0 — individual tick failures surface on the owning job, not as a cron failure.
 
@@ -241,7 +241,7 @@ src/
     review/     { profile.json, prompt.md }
     ui-review/  { profile.json, prompt.md }
     plan/       { profile.json, prompt.md }
-    release/ … job-scheduler/ … goal-scheduler/ … init/
+    release/ … duty-scheduler/ … goal-scheduler/ … init/
   scripts/
     {runFlow,fixFlow,fixCiFlow,resolveFlow,reviewFlow}.ts
     {loadConventions,loadCoverageRules,composePrompt}.ts
@@ -351,9 +351,9 @@ If a future no-agent PR executable lands, a separate `lifecycle: "pr-mechanical"
 
 ### Shape 6 — `dispatch` (small, 3 executables)
 
-**Members:** `classify`, `job-scheduler`, partly `spec`.
+**Members:** `classify`, `duty-scheduler`, partly `spec`.
 
-**Per-executable solo scripts:** `classifyByLabel`, `dispatchClassified`, `recordClassification` (classify); `dispatchJobFileTicks` (job-scheduler).
+**Per-executable solo scripts:** `classifyByLabel`, `dispatchClassified`, `recordClassification` (classify); `dispatchDutyFileTicks` (duty-scheduler).
 
 **Lifecycle:** probably **not worth abstracting** — these are too few and too divergent. Treat as residual.
 
@@ -361,7 +361,7 @@ If a future no-agent PR executable lands, a separate `lifecycle: "pr-mechanical"
 
 Genuinely executable-specific things that should relocate to `src/scripts/executable/<name>/` in phase 5 of the refactor:
 
-`parseReproOutput`, `verifyReproFails` (reproduce); `resolvePreviewUrl`, `resolveQaUrl`, `discoverQaContext`, `loadQaContext`, `warmupMcp`, `createQaGoal` (qa-engineer/ui-review — but several are already dual-use, watch these); `diagMcp`, `postResearchComment` (research); `postPlanComment` (plan); `loadJobFromFile`, `runTickScript` (job-tick variants).
+`parseReproOutput`, `verifyReproFails` (reproduce); `resolvePreviewUrl`, `resolveQaUrl`, `discoverQaContext`, `loadQaContext`, `warmupMcp`, `createQaGoal` (qa-engineer/ui-review — but several are already dual-use, watch these); `diagMcp`, `postResearchComment` (research); `postPlanComment` (plan); `loadJobFromFile`, `runTickScript` (duty-tick variants).
 
 ### How to use this catalog
 

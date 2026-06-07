@@ -1,5 +1,5 @@
 /**
- * Preflight: deterministic alternative to the LLM-driven job-tick.
+ * Preflight: deterministic alternative to the LLM-driven duty-tick.
  *
  * Reads a job's frontmatter, executes the declared `tickScript:`,
  * captures its stdout, and parses the `kody-job-next-state` fenced
@@ -60,7 +60,7 @@ export const runTickScript: PreflightScript = async (ctx, _profile, args) => {
   const tickScript = frontmatter.tickScript
   if (!tickScript) {
     ctx.output.exitCode = 99
-    ctx.output.reason = `runTickScript: job ${slug} has no \`tickScript:\` frontmatter — route via job-tick instead`
+    ctx.output.reason = `runTickScript: duty ${slug} has no \`tickScript:\` frontmatter — route via duty-tick instead`
     return
   }
 

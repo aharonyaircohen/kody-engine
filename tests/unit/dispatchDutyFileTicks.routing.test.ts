@@ -1,10 +1,10 @@
 /**
- * Routing test for `dispatchJobFileTicks`.
+ * Routing test for `dispatchDutyFileTicks`.
  *
- * Pins the rule that motivated the deterministic-tick path: jobs that
- * declare `tickScript:` in frontmatter run via `job-tick-scripted`
+ * Pins the rule that motivated the deterministic-tick path: duties that
+ * declare `tickScript:` in frontmatter run via `duty-tick-scripted`
  * (no agent), everything else uses the configured target. Earlier the
- * dispatcher always invoked the LLM-driven `job-tick`, which silently
+ * dispatcher always invoked the LLM-driven `duty-tick`, which silently
  * dropped state when the model didn't echo the script's stdout.
  */
 
@@ -14,7 +14,7 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest"
 import type { KodyConfig } from "../../src/config.js"
 import type { Context, Profile } from "../../src/executables/types.js"
-import { dispatchJobFileTicks } from "../../src/scripts/dispatchJobFileTicks.js"
+import { dispatchDutyFileTicks } from "../../src/scripts/dispatchDutyFileTicks.js"
 
 vi.mock("../../src/executor.js", async () => {
   const actual = await vi.importActual<typeof import("../../src/executor.js")>("../../src/executor.js")
@@ -63,62 +63,62 @@ function ctxFor(): Context {
 
 const PROFILE = {} as unknown as Profile
 
-describe("dispatchJobFileTicks routing", () => {
-  it("routes a duty with `tickScript:` to job-tick-scripted", async () => {
+describe("dispatchDutyFileTicks routing", () => {
+  it("routes a duty with `tickScript:` to duty-tick-scripted", async () => {
     writeJob("auto-resolve", "tickScript: .kody/scripts/auto-resolve-tick.sh\nstaff: kody")
 
     const ctx = ctxFor()
-    await dispatchJobFileTicks(ctx, PROFILE, {
+    await dispatchDutyFileTicks(ctx, PROFILE, {
       jobsDir: ".kody/duties",
-      targetExecutable: "job-tick",
-      slugArg: "job",
+      targetExecutable: "duty-tick",
+      slugArg: "duty",
     })
 
     expect(runExecutableMock).toHaveBeenCalledTimes(1)
-    expect(runExecutableMock.mock.calls[0]![0]).toBe("job-tick-scripted")
+    expect(runExecutableMock.mock.calls[0]![0]).toBe("duty-tick-scripted")
   })
 
   it("routes a duty without `tickScript:` to the configured (default) target", async () => {
     writeJob("watch-stale-prs", "every: 6h\nstaff: kody")
 
     const ctx = ctxFor()
-    await dispatchJobFileTicks(ctx, PROFILE, {
+    await dispatchDutyFileTicks(ctx, PROFILE, {
       jobsDir: ".kody/duties",
-      targetExecutable: "job-tick",
-      slugArg: "job",
+      targetExecutable: "duty-tick",
+      slugArg: "duty",
     })
 
     expect(runExecutableMock).toHaveBeenCalledTimes(1)
-    expect(runExecutableMock.mock.calls[0]![0]).toBe("job-tick")
+    expect(runExecutableMock.mock.calls[0]![0]).toBe("duty-tick")
   })
 
-  it("skips a duty with no `staff:` (every job must name an executor)", async () => {
-    writeJob("orphan-job", "every: 1h")
+  it("skips a duty with no `staff:` (every duty must name an executor)", async () => {
+    writeJob("orphan-duty", "every: 1h")
 
     const ctx = ctxFor()
-    await dispatchJobFileTicks(ctx, PROFILE, {
+    await dispatchDutyFileTicks(ctx, PROFILE, {
       jobsDir: ".kody/duties",
-      targetExecutable: "job-tick",
-      slugArg: "job",
+      targetExecutable: "duty-tick",
+      slugArg: "duty",
     })
 
     expect(runExecutableMock).not.toHaveBeenCalled()
   })
 
   it("mixes routing across slugs in one tick", async () => {
-    writeJob("scripted-job", "tickScript: .kody/scripts/x.sh\nstaff: kody")
-    writeJob("agent-job", "every: 1h\nstaff: kody")
+    writeJob("scripted-duty", "tickScript: .kody/scripts/x.sh\nstaff: kody")
+    writeJob("agent-duty", "every: 1h\nstaff: kody")
 
     const ctx = ctxFor()
-    await dispatchJobFileTicks(ctx, PROFILE, {
+    await dispatchDutyFileTicks(ctx, PROFILE, {
       jobsDir: ".kody/duties",
-      targetExecutable: "job-tick",
-      slugArg: "job",
+      targetExecutable: "duty-tick",
+      slugArg: "duty",
     })
 
     const targets = runExecutableMock.mock.calls.map((call) => call[0])
-    expect(targets).toContain("job-tick-scripted")
-    expect(targets).toContain("job-tick")
+    expect(targets).toContain("duty-tick-scripted")
+    expect(targets).toContain("duty-tick")
   })
 
   it("deduplicates a slug present as both a folder-duty and a .md (folder wins, no double-fire)", async () => {
@@ -155,16 +155,16 @@ describe("dispatchJobFileTicks routing", () => {
     writeJob("hybrid", "every: 1h\nstaff: kody")
 
     const ctx = ctxFor()
-    await dispatchJobFileTicks(ctx, PROFILE, {
+    await dispatchDutyFileTicks(ctx, PROFILE, {
       jobsDir: ".kody/duties",
-      targetExecutable: "job-tick",
-      slugArg: "job",
+      targetExecutable: "duty-tick",
+      slugArg: "duty",
     })
 
     const calls = runExecutableMock.mock.calls
     // Folder-duty fired one-shot as itself…
     expect(calls.some((c) => c[0] === "hybrid")).toBe(true)
-    // …and the .md tick was skipped (no job-tick run for the same slug).
-    expect(calls.some((c) => c[0] === "job-tick")).toBe(false)
+    // …and the .md tick was skipped (no duty-tick run for the same slug).
+    expect(calls.some((c) => c[0] === "duty-tick")).toBe(false)
   })
 })
