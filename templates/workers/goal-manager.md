@@ -1,4 +1,4 @@
-# Goal Manager
+# Goal Manager .
 
 Autonomous manager for **manager-driven goals**. One worker, every goal:
 each tick it picks up every goal flagged `managed`, breaks it into tasks,
