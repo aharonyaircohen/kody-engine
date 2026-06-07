@@ -140,9 +140,7 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
         // collision so the user can migrate or remove the orphan. One log per
         // shadowed slug per tick — the loop visits each shadowed slug at most
         // once, so the nudge fires at most once per slug per tick.
-        process.stdout.write(
-          `[duties] markdown duty '${slug}' is shadowed by folder duty; migrate or remove\n`,
-        )
+        process.stdout.write(`[duties] markdown duty '${slug}' is shadowed by folder duty; migrate or remove\n`)
         results.push({ slug, exitCode: 0, skipped: true, reason: "handled as folder-duty" })
         continue
       }

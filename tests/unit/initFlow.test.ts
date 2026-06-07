@@ -196,9 +196,7 @@ describe("initFlow: folder vs .md duty collision (deprecation nudge)", () => {
     const result = performInit(dir, false)
     expect(result.collisions).toContain("watch-stale-prs")
     const out = stdoutSpy.mock.calls.map((c) => String(c[0])).join("")
-    expect(out).toMatch(
-      /\[duties\] markdown duty 'watch-stale-prs' is shadowed by folder duty; migrate or remove/,
-    )
+    expect(out).toMatch(/\[duties\] markdown duty 'watch-stale-prs' is shadowed by folder duty; migrate or remove/)
   })
 
   it("reports each colliding slug exactly once", () => {

@@ -228,12 +228,8 @@ describe("dispatchDutyFileTicks: markdown shadowed by folder-duty (deprecation n
     })
 
     const all = stdoutSpy.mock.calls.map((c) => String(c[0])).join("")
-    expect(all).toMatch(
-      /\[duties\] markdown duty 'hybrid' is shadowed by folder duty; migrate or remove/,
-    )
-    expect(all).toMatch(
-      /\[duties\] markdown duty 'dual' is shadowed by folder duty; migrate or remove/,
-    )
+    expect(all).toMatch(/\[duties\] markdown duty 'hybrid' is shadowed by folder duty; migrate or remove/)
+    expect(all).toMatch(/\[duties\] markdown duty 'dual' is shadowed by folder duty; migrate or remove/)
     // Each shadowed slug is visited once per tick → one nudge per slug.
     const hybridHits = all.match(/markdown duty 'hybrid' is shadowed/g) ?? []
     const dualHits = all.match(/markdown duty 'dual' is shadowed/g) ?? []
