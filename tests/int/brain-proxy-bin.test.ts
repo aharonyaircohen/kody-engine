@@ -11,10 +11,12 @@
  */
 
 import { spawn } from "node:child_process"
+import * as fs from "node:fs"
+import * as path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 
 const KEY = "test-bin-key-do-not-leak"
-const KODY_BIN = "/Users/aguy/projects/kody2/dist/bin/kody.js"
+const KODY_BIN = path.resolve(import.meta.dirname, "../../dist/bin/kody.js")
 
 interface SpawnResult {
   status: number
@@ -69,6 +71,10 @@ afterEach(() => {
 
 describe("brain-proxy bin: BRAIN_BACKEND env handling", () => {
   it("rejects with exit 2 when BRAIN_API_KEY is missing", async () => {
+    if (!fs.existsSync(KODY_BIN)) {
+      console.warn(`Skipping: ${KODY_BIN} does not exist (run pnpm build first)`)
+      return
+    }
     const child2 = spawn("node", [KODY_BIN, "brain-proxy"], {
       env: { ...process.env, BRAIN_API_KEY: "" },
       stdio: ["pipe", "pipe", "pipe"],
@@ -83,6 +89,10 @@ describe("brain-proxy bin: BRAIN_BACKEND env handling", () => {
   }, 10_000)
 
   it("rejects with exit 2 when BRAIN_BACKEND has an invalid value", async () => {
+    if (!fs.existsSync(KODY_BIN)) {
+      console.warn(`Skipping: ${KODY_BIN} does not exist (run pnpm build first)`)
+      return
+    }
     const child2 = spawn("node", [KODY_BIN, "brain-proxy"], {
       env: { ...process.env, BRAIN_API_KEY: KEY, BRAIN_BACKEND: "openai" },
       stdio: ["pipe", "pipe", "pipe"],
@@ -99,7 +109,6 @@ describe("brain-proxy bin: BRAIN_BACKEND env handling", () => {
 
   it("defaults to brain-serve when BRAIN_BACKEND is unset", async () => {
     // We need the engine to be built for this test to work. Skip if not.
-    const fs = await import("node:fs")
     if (!fs.existsSync(KODY_BIN)) {
       console.warn(`Skipping: ${KODY_BIN} does not exist (run pnpm build first)`)
       return
@@ -109,7 +118,6 @@ describe("brain-proxy bin: BRAIN_BACKEND env handling", () => {
   }, 10_000)
 
   it("honors BRAIN_BACKEND=hermes", async () => {
-    const fs = await import("node:fs")
     if (!fs.existsSync(KODY_BIN)) {
       console.warn(`Skipping: ${KODY_BIN} does not exist (run pnpm build first)`)
       return
