@@ -84,7 +84,9 @@ describe("writeJobStateFile: parse-error path", () => {
     })
     await writeJobStateFile(ctx, PROFILE, null, { jobsDir: ".kody/duties" })
 
-    const after = JSON.parse(fs.readFileSync(path.join(tmp, ".kody", "duties", `${slug}.state.json`), "utf-8")) as StateEnvelope
+    const after = JSON.parse(
+      fs.readFileSync(path.join(tmp, ".kody", "duties", `${slug}.state.json`), "utf-8"),
+    ) as StateEnvelope
     // rev was bumped so the next tick sees a fresh state.
     expect(after.rev).toBe(4)
     // cursor + ledger carry forward — the duty is still at step-2 next time.

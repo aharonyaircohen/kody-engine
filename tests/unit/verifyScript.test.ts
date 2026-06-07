@@ -21,8 +21,8 @@ vi.mock("../../src/verify.js", () => ({
   summarizeFailure: (...args: unknown[]) => summarizeFailure(...(args as [Parameters<typeof summarizeFailure>[0]])),
 }))
 
-import { verify } from "../../src/scripts/verify.js"
 import type { Context, Profile } from "../../src/executables/types.js"
+import { verify } from "../../src/scripts/verify.js"
 import type { Action } from "../../src/state.js"
 
 const profile = {} as unknown as Profile

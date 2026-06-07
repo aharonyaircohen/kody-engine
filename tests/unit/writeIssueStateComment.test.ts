@@ -16,10 +16,10 @@ vi.mock("../../src/scripts/issueStateComment.js", () => ({
   updateStateComment: vi.fn(),
 }))
 
-import { createStateComment, updateStateComment } from "../../src/scripts/issueStateComment.js"
-import { writeIssueStateComment } from "../../src/scripts/writeIssueStateComment.js"
 import type { Context, Profile } from "../../src/executables/types.js"
 import type { StateEnvelope } from "../../src/scripts/issueStateComment.js"
+import { createStateComment, updateStateComment } from "../../src/scripts/issueStateComment.js"
+import { writeIssueStateComment } from "../../src/scripts/writeIssueStateComment.js"
 
 const profile = {} as unknown as Profile
 
@@ -49,23 +49,21 @@ describe("writeIssueStateComment: validation gates", () => {
 
   it("throws when `with.marker` is missing", async () => {
     const ctx = makeCtx({ issue: 1 }, { nextIssueState: NEXT })
-    await expect(writeIssueStateComment(ctx, profile, null, {})).rejects.toThrow(
-      /`with\.marker` is required/,
-    )
+    await expect(writeIssueStateComment(ctx, profile, null, {})).rejects.toThrow(/`with\.marker` is required/)
   })
 
   it("throws when the issue arg is not a positive integer", async () => {
     const ctx = makeCtx({ issue: 0 }, { nextIssueState: NEXT })
-    await expect(
-      writeIssueStateComment(ctx, profile, null, { marker: "kody-issue-state" }),
-    ).rejects.toThrow(/must be a positive integer/)
+    await expect(writeIssueStateComment(ctx, profile, null, { marker: "kody-issue-state" })).rejects.toThrow(
+      /must be a positive integer/,
+    )
   })
 
   it("throws when the named issue arg is absent", async () => {
     const ctx = makeCtx({}, { nextIssueState: NEXT })
-    await expect(
-      writeIssueStateComment(ctx, profile, null, { marker: "kody-issue-state" }),
-    ).rejects.toThrow(/must be a positive integer/)
+    await expect(writeIssueStateComment(ctx, profile, null, { marker: "kody-issue-state" })).rejects.toThrow(
+      /must be a positive integer/,
+    )
   })
 
   it("honors a custom `issueArg` (e.g. for `pr` flows)", async () => {
@@ -87,10 +85,7 @@ describe("writeIssueStateComment: parse-error early-exit", () => {
   })
 
   it("sets exit 1 + reason and does not touch the state comment", async () => {
-    const ctx = makeCtx(
-      { issue: 1 },
-      { nextStateParseError: "missing `kody-issue-state` block in agent output" },
-    )
+    const ctx = makeCtx({ issue: 1 }, { nextStateParseError: "missing `kody-issue-state` block in agent output" })
     await writeIssueStateComment(ctx, profile, null, { marker: "kody-issue-state" })
     expect(ctx.output.exitCode).toBe(1)
     expect(ctx.output.reason).toMatch(/next-state parse failed/)
@@ -101,10 +96,7 @@ describe("writeIssueStateComment: parse-error early-exit", () => {
   it("never lowers a pre-existing non-zero exit code", async () => {
     // If a prior postflight (e.g. verify) already set exit=2, the parse-error
     // path must not silently downgrade it back to 1.
-    const ctx = makeCtx(
-      { issue: 1 },
-      { nextStateParseError: "missing `kody-issue-state` block in agent output" },
-    )
+    const ctx = makeCtx({ issue: 1 }, { nextStateParseError: "missing `kody-issue-state` block in agent output" })
     ctx.output.exitCode = 2
     await writeIssueStateComment(ctx, profile, null, { marker: "kody-issue-state" })
     expect(ctx.output.exitCode).toBe(2)
@@ -127,9 +119,9 @@ describe("writeIssueStateComment: write paths", () => {
   it("throws when github.owner/repo is missing", async () => {
     const ctx = makeCtx({ issue: 1 }, { nextIssueState: NEXT })
     ctx.config = { github: { owner: "", repo: "" } } as never
-    await expect(
-      writeIssueStateComment(ctx, profile, null, { marker: "kody-issue-state" }),
-    ).rejects.toThrow(/github\.owner\/repo must be set/)
+    await expect(writeIssueStateComment(ctx, profile, null, { marker: "kody-issue-state" })).rejects.toThrow(
+      /github\.owner\/repo must be set/,
+    )
   })
 
   it("creates a new state comment when none is loaded", async () => {

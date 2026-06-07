@@ -11,9 +11,10 @@
  */
 
 import { readFileSync } from "node:fs"
+import * as path from "node:path"
 import { describe, expect, it } from "vitest"
 
-const ENTRYPOINT_PATH = "/Users/aguy/projects/kody2/runner/entrypoint-brain.sh"
+const ENTRYPOINT_PATH = path.resolve(import.meta.dirname, "../../runner/entrypoint-brain.sh")
 
 describe("entrypoint-brain.sh: Hermes config sanity", () => {
   const entrypoint = readFileSync(ENTRYPOINT_PATH, "utf-8")
