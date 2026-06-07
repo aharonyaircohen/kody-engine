@@ -187,8 +187,10 @@ describe("dispatch: issue_comment on issue", () => {
       comment: { body: "please @kody run this now" },
       issue: { number: 9 },
     })
-    // "this now" is free text no input captured → carried as the job's `why`.
-    expect(autoDispatch()).toEqual({ executable: "run", cliArgs: { issue: 9 }, target: 9, why: "this now" })
+    // issue #39: `run` declares `feedback` with `bindsCommentRest: true`, so
+    // the leftover text lands in `cliArgs.feedback` (the run's plan-context
+    // feedback) instead of being carried as the job's free-text `why`.
+    expect(autoDispatch()).toEqual({ executable: "run", cliArgs: { issue: 9, feedback: "this now" }, target: 9 })
   })
 
   it("routes legacy '@kody build' → run (backward-compat)", () => {

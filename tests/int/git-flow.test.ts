@@ -73,11 +73,23 @@ describe("integration: git flow", () => {
     expect(getCurrentBranch(repo.workdir)).toBe(result.branch)
   })
 
-  it("re-enters existing feature branch idempotently", () => {
+  it("re-enters an existing feature branch as a fresh rerun (closes prior state)", () => {
+    // Issue #39: a second `run` on the same issue used to merge
+    // origin/<default> into the reused branch, contaminating the new PR
+    // with drift commits. The new contract is that any run that finds an
+    // existing remote branch is treated as a rerun: the prior branch is
+    // removed and a fresh one is forked from default. The
+    // `created: true` flag here is the load-bearing assertion — the
+    // test was historically `created: false` for the buggy resume path.
+    //
+    // Push the branch to origin between the two calls so the rerun
+    // detection (which keys off `refs/remotes/origin/<name>`) actually
+    // fires — in real usage, the agent's commitAndPush always pushes.
     ensureFeatureBranch(7, "X", "main", repo.workdir)
+    git(repo.workdir, ["push", "-u", "origin", "7-x"])
     git(repo.workdir, ["checkout", "main"])
     const second = ensureFeatureBranch(7, "X", "main", repo.workdir)
-    expect(second.created).toBe(false)
+    expect(second.created).toBe(true)
     expect(getCurrentBranch(repo.workdir)).toBe(second.branch)
   })
 
