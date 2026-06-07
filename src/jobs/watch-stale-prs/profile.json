@@ -1,0 +1,46 @@
+{
+  "name": "watch-stale-prs",
+  "role": "primitive",
+  "describe": "Weekly digest of open PRs that haven't been touched in a while. Writes a markdown report at .kody/reports/watch-stale-prs.md (surfaced by the dashboard's /reports page).",
+  "kind": "oneshot",
+  "staff": "kody",
+  "every": "7d",
+  "inputs": [],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": 100,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "enableSubmitTool": true,
+    "tools": ["Bash", "Read", "mcp__kody-submit"],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [
+    {
+      "name": "gh",
+      "install": {
+        "required": true,
+        "checkCommand": "command -v gh"
+      },
+      "verify": "gh auth status",
+      "usage": "Use `gh` for all GitHub actions: `gh pr list --state open --limit 100 --json number,title,url,updatedAt,author` to enumerate candidate PRs, `gh api -X GET /repos/{owner}/{repo}/contents/.kody/reports/watch-stale-prs.md` to fetch the existing file's `sha` for an update, `gh api -X PUT /repos/{owner}/{repo}/contents/.kody/reports/watch-stale-prs.md` to write the report (base64-encoded `content`, `message`, and `sha` when updating). NEVER edit files in the working tree.",
+      "allowedUses": ["pr", "api"]
+    }
+  ],
+  "scripts": {
+    "preflight": [
+      { "script": "loadDutyState" },
+      { "script": "composePrompt" }
+    ],
+    "postflight": [
+      { "script": "parseJobStateFromAgentResult", "with": { "fenceLabel": "kody-job-next-state" } },
+      { "script": "writeJobStateFile" }
+    ]
+  }
+}

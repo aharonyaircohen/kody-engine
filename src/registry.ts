@@ -6,11 +6,13 @@
  *   - **Executables** (`src/executables/<name>/profile.json`) — units the
  *     dispatcher invokes by name. `listExecutables()` powers `entry.ts` so
  *     dropping a new directory makes `kody <name>` work without router edits.
- *   - **Built-in jobs** (`src/jobs/<slug>.md`) — markdown templates that
- *     `kody init` scaffolds into consumer repos under `.kody/duties/`. Once
- *     scaffolded, the consumer owns the file; `duty-scheduler` /
- *     `duty-tick` discover it from the consumer's `.kody/duties/` directly,
- *     not via this registry.
+ *   - **Built-in duties** (`src/jobs/<slug>/profile.json` + `prompt.md`) —
+ *     folder-duty templates that `kody init` scaffolds into consumer repos
+ *     under `.kody/duties/<slug>/`. Once scaffolded, the consumer owns the
+ *     folder; `duty-scheduler` / `dispatchDutyFileTicks` discover it from
+ *     the consumer's `.kody/duties/` directly, not via this registry. The
+ *     folder shape is the unified successor to the legacy `<slug>.md` file
+ *     (still discovered for back-compat; the deprecation log is #46-B's job).
  *
  * Both follow the same dev/built path-resolution pattern so `src/` and
  * `dist/` layouts work identically.
@@ -67,8 +69,10 @@ export function getProjectDutiesRoot(): string {
 /**
  * Resolve the engine's built-in jobs root. Mirrors `getExecutablesRoot()` so
  * dev (`src/jobs`) and built (`dist/jobs`) layouts both work. Built-in jobs
- * are markdown files scaffolded into consumer repos by `kody init` — drop a
- * new `src/jobs/<slug>.md` to ship a default job; no code changes required.
+ * are folder shapes (`<slug>/profile.json` + `prompt.md`) scaffolded into
+ * consumer repos by `kody init`; drop a new folder under `src/jobs/<slug>/`
+ * to ship a default. Legacy `<slug>.md` files are still discovered for
+ * back-compat — the deprecation log + removal land in #46-B.
  */
 export function getBuiltinJobsRoot(): string {
   const here = path.dirname(new URL(import.meta.url).pathname)
@@ -85,22 +89,56 @@ export function getBuiltinJobsRoot(): string {
 
 export interface BuiltinJob {
   slug: string
-  filePath: string
+  /** Directory containing the built-in duty (the folder shape's root). */
+  dir: string
+  /** Absolute path to the folder's `profile.json`. */
+  profilePath: string
+  /** Absolute path to the folder's `prompt.md`. */
+  promptPath: string
+  /**
+   * Absolute path to the legacy `.md` file, when present. Folder duties
+   * leave this undefined; legacy markdown duties carry both a dir (the
+   * containing folder) and a filePath, so the scaffolder can choose which
+   * shape to copy.
+   */
+  filePath?: string
 }
 
 /**
- * List every built-in job markdown file shipped with the engine. Returns
- * `{ slug, filePath }` for each `.md` file under the built-in jobs root,
- * sorted by slug. Used by `kody init` to scaffold default jobs into
- * `.kody/duties/<slug>.md` in consumer repos.
+ * List every built-in duty shipped with the engine. Returns
+ * `{ slug, dir, profilePath, promptPath, filePath? }` for each duty under
+ * the built-in jobs root. Folder shapes (preferred) require both
+ * `profile.json` and `prompt.md`; legacy `.md` files are also discovered
+ * with `filePath` set so callers can bridge the two shapes during the
+ * migration.
+ *
+ * Sorted by slug. Used by `kody init` to scaffold default duties into
+ * `.kody/duties/<slug>/` (folder shape) in consumer repos.
  */
 export function listBuiltinJobs(root: string = getBuiltinJobsRoot()): BuiltinJob[] {
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
   const out: BuiltinJob[] = []
   for (const ent of fs.readdirSync(root, { withFileTypes: true })) {
-    if (!ent.isFile() || !ent.name.endsWith(".md")) continue
-    const slug = ent.name.slice(0, -3)
-    out.push({ slug, filePath: path.join(root, ent.name) })
+    if (ent.name.startsWith("_") || ent.name.startsWith(".")) continue
+    const full = path.join(root, ent.name)
+    if (ent.isDirectory()) {
+      const profilePath = path.join(full, "profile.json")
+      const promptPath = path.join(full, "prompt.md")
+      if (!fs.existsSync(profilePath) || !fs.statSync(profilePath).isFile()) continue
+      if (!fs.existsSync(promptPath) || !fs.statSync(promptPath).isFile()) continue
+      out.push({ slug: ent.name, dir: full, profilePath, promptPath })
+      continue
+    }
+    if (ent.isFile() && ent.name.endsWith(".md")) {
+      const slug = ent.name.slice(0, -3)
+      out.push({
+        slug,
+        dir: full,
+        profilePath: "",
+        promptPath: "",
+        filePath: full,
+      })
+    }
   }
   out.sort((a, b) => a.slug.localeCompare(b.slug))
   return out
