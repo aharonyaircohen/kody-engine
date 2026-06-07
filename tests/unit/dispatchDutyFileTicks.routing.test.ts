@@ -11,7 +11,7 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, type Mock, type MockInstance, vi } from "vitest"
 import type { KodyConfig } from "../../src/config.js"
 import type { Context, Profile } from "../../src/executables/types.js"
 import { dispatchDutyFileTicks } from "../../src/scripts/dispatchDutyFileTicks.js"
@@ -166,5 +166,108 @@ describe("dispatchDutyFileTicks routing", () => {
     expect(calls.some((c) => c[0] === "hybrid")).toBe(true)
     // …and the .md tick was skipped (no duty-tick run for the same slug).
     expect(calls.some((c) => c[0] === "duty-tick")).toBe(false)
+  })
+})
+
+describe("dispatchDutyFileTicks: markdown shadowed by folder-duty (deprecation nudge)", () => {
+  let stdoutSpy: MockInstance<(chunk: string | Uint8Array) => boolean>
+
+  beforeEach(() => {
+    stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
+  })
+
+  afterEach(() => {
+    stdoutSpy.mockRestore()
+  })
+
+  function writeFolderDuty(slug: string, profile: Record<string, unknown>): void {
+    const folder = path.join(tmp, ".kody", "duties", slug)
+    fs.mkdirSync(folder, { recursive: true })
+    fs.writeFileSync(path.join(folder, "profile.json"), JSON.stringify(profile))
+    fs.writeFileSync(path.join(folder, "prompt.md"), "# stub\n")
+  }
+
+  function folderProfile(slug: string, every = "1h"): Record<string, unknown> {
+    return {
+      name: slug,
+      role: "primitive",
+      describe: slug,
+      staff: "kody",
+      every,
+      inputs: [],
+      claudeCode: {
+        model: "inherit",
+        permissionMode: "acceptEdits",
+        maxTurns: null,
+        systemPromptAppend: null,
+        tools: ["Read"],
+        hooks: [],
+        skills: [],
+        commands: [],
+        subagents: [],
+        plugins: [],
+        mcpServers: [],
+      },
+      cliTools: [],
+      scripts: { preflight: [{ script: "composePrompt" }], postflight: [] },
+    }
+  }
+
+  it("emits a one-time deprecation nudge per shadowed slug per tick", async () => {
+    writeFolderDuty("hybrid", folderProfile("hybrid", "24h"))
+    writeJob("hybrid", "every: 1h\nstaff: kody")
+    // second collision: also a shadowed slug, in the same tick
+    writeFolderDuty("dual", folderProfile("dual", "24h"))
+    writeJob("dual", "every: 1h\nstaff: kody")
+
+    const ctx = ctxFor()
+    await dispatchDutyFileTicks(ctx, PROFILE, {
+      jobsDir: ".kody/duties",
+      targetExecutable: "duty-tick",
+      slugArg: "duty",
+    })
+
+    const all = stdoutSpy.mock.calls.map((c) => String(c[0])).join("")
+    expect(all).toMatch(
+      /\[duties\] markdown duty 'hybrid' is shadowed by folder duty; migrate or remove/,
+    )
+    expect(all).toMatch(
+      /\[duties\] markdown duty 'dual' is shadowed by folder duty; migrate or remove/,
+    )
+    // Each shadowed slug is visited once per tick → one nudge per slug.
+    const hybridHits = all.match(/markdown duty 'hybrid' is shadowed/g) ?? []
+    const dualHits = all.match(/markdown duty 'dual' is shadowed/g) ?? []
+    expect(hybridHits).toHaveLength(1)
+    expect(dualHits).toHaveLength(1)
+  })
+
+  it("does NOT nudge when a slug exists only as a .md (no shadow)", async () => {
+    writeJob("solo-md", "every: 1h\nstaff: kody")
+
+    const ctx = ctxFor()
+    await dispatchDutyFileTicks(ctx, PROFILE, {
+      jobsDir: ".kody/duties",
+      targetExecutable: "duty-tick",
+      slugArg: "duty",
+    })
+
+    const all = stdoutSpy.mock.calls.map((c) => String(c[0])).join("")
+    expect(all).not.toMatch(/is shadowed by folder duty/)
+  })
+
+  it("logs under [duties] (not [jobs]) for the deprecation nudge", async () => {
+    writeFolderDuty("hybrid", folderProfile("hybrid", "24h"))
+    writeJob("hybrid", "every: 1h\nstaff: kody")
+
+    const ctx = ctxFor()
+    await dispatchDutyFileTicks(ctx, PROFILE, {
+      jobsDir: ".kody/duties",
+      targetExecutable: "duty-tick",
+      slugArg: "duty",
+    })
+
+    const all = stdoutSpy.mock.calls.map((c) => String(c[0])).join("")
+    expect(all).toMatch(/\[duties\]/)
+    expect(all).not.toMatch(/\[jobs\]/)
   })
 })

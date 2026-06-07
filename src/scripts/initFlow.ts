@@ -175,12 +175,20 @@ function defaultBranchFromGit(cwd: string): string {
 export interface InitResult {
   wrote: string[]
   skipped: string[]
+  /**
+   * Slugs where a folder duty and a `.md` duty collide on disk. The folder
+   * wins at runtime (dedup'd in `dispatchDutyFileTicks`); `kody init` surfaces
+   * the collision as a one-time deprecation nudge so the user can migrate or
+   * remove the orphan markdown. See issue #50.
+   */
+  collisions?: string[]
   labels?: EnsureLabelsResult
 }
 
 export function performInit(cwd: string, force: boolean): InitResult {
   const wrote: string[] = []
   const skipped: string[] = []
+  const collisions: string[] = []
 
   const pm = detectPackageManager(cwd)
   const ownerRepo = detectOwnerRepo(cwd)
@@ -257,6 +265,23 @@ export function performInit(cwd: string, force: boolean): InitResult {
       wrote.push(relProfile)
       wrote.push(relPrompt)
     }
+
+    // Collision nudge: a folder duty and a `.md` duty with the same slug
+    // are dedup'd at runtime (folder wins, .md is skipped — see
+    // `dispatchDutyFileTicks`), but the markdown sibling is a legacy shape
+    // the user almost certainly wants to migrate or remove. Surface the
+    // collision here so `kody init` is the one place that tells the user
+    // "you have a stale markdown next to a folder duty" — the runtime
+    // nudge fires only on the cron wake, which may be infrequent.
+    for (const slug of findShadowCollisions(jobsDir)) {
+      collisions.push(slug)
+      // One nudge per colliding slug per init run. Points at the consumer
+      // migration subsection in duty-dispatch.md (the closest thing to a
+      // "legacy markdown" subsection in the docs as of #50).
+      process.stdout.write(
+        `[duties] markdown duty '${slug}' is shadowed by folder duty; migrate or remove (see docs/duty-dispatch.md#consumer-migration)\n`,
+      )
+    }
   }
 
   // 4. .kody/staff/kody.md — default persona referenced by bundled duties.
@@ -299,7 +324,34 @@ export function performInit(cwd: string, force: boolean): InitResult {
     labels = undefined
   }
 
-  return { wrote, skipped, labels }
+  const result: InitResult = { wrote, skipped, labels }
+  if (collisions.length > 0) result.collisions = collisions
+  return result
+}
+
+/**
+ * Find every slug in `jobsDir` that exists as BOTH a `.md` file and a
+ * folder shape — a runtime-shadow collision that `dispatchDutyFileTicks`
+ * dedups at tick time. Sorted by slug for stable output. Returns an
+ * empty array if the directory doesn't exist (e.g. on a brand-new repo
+ * before any duties are scaffolded).
+ */
+function findShadowCollisions(jobsDir: string): string[] {
+  if (!fs.existsSync(jobsDir)) return []
+  let entries: fs.Dirent[]
+  try {
+    entries = fs.readdirSync(jobsDir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+  const mdSlugs = new Set<string>()
+  const folderSlugs = new Set<string>()
+  for (const e of entries) {
+    if (e.name.startsWith("_") || e.name.startsWith(".")) continue
+    if (e.isFile() && e.name.endsWith(".md")) mdSlugs.add(e.name.slice(0, -3))
+    else if (e.isDirectory()) folderSlugs.add(e.name)
+  }
+  return [...mdSlugs].filter((s) => folderSlugs.has(s)).sort()
 }
 
 export function renderScheduledWorkflow(name: string, cron: string): string {

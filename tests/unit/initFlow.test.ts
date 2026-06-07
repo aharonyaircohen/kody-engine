@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest"
 import { performInit, renderScheduledWorkflow } from "../../src/scripts/initFlow.js"
 
 function mkRepo(opts: { lockFile?: "pnpm-lock.yaml" | "yarn.lock" | "bun.lockb"; gitInit?: boolean } = {}): string {
@@ -167,6 +167,81 @@ describe("initFlow: performInit", () => {
     const result = performInit(dir, false)
     expect(result.wrote).not.toContain(".kody/qa-guide.md")
     expect(fs.existsSync(path.join(dir, ".kody/qa-guide.md"))).toBe(false)
+  })
+})
+
+describe("initFlow: folder vs .md duty collision (deprecation nudge)", () => {
+  let dir: string
+  let stdoutSpy: MockInstance<(chunk: string | Uint8Array) => boolean>
+
+  beforeEach(() => {
+    stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
+  })
+
+  afterEach(() => {
+    stdoutSpy.mockRestore()
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it("flags a slug where a .md sits next to a folder duty", () => {
+    dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
+    // Create the folder duty (as init would).
+    const folder = path.join(dir, ".kody", "duties", "watch-stale-prs")
+    fs.mkdirSync(folder, { recursive: true })
+    fs.writeFileSync(path.join(folder, "profile.json"), `{"name":"watch-stale-prs"}`)
+    fs.writeFileSync(path.join(folder, "prompt.md"), "# stub\n")
+    // Drop a stale .md next to the folder.
+    fs.writeFileSync(path.join(dir, ".kody", "duties", "watch-stale-prs.md"), "# legacy\n")
+
+    const result = performInit(dir, false)
+    expect(result.collisions).toContain("watch-stale-prs")
+    const out = stdoutSpy.mock.calls.map((c) => String(c[0])).join("")
+    expect(out).toMatch(
+      /\[duties\] markdown duty 'watch-stale-prs' is shadowed by folder duty; migrate or remove/,
+    )
+  })
+
+  it("reports each colliding slug exactly once", () => {
+    dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
+    for (const slug of ["alpha", "beta"]) {
+      const folder = path.join(dir, ".kody", "duties", slug)
+      fs.mkdirSync(folder, { recursive: true })
+      fs.writeFileSync(path.join(folder, "profile.json"), `{"name":"${slug}"}`)
+      fs.writeFileSync(path.join(folder, "prompt.md"), "# stub\n")
+      fs.writeFileSync(path.join(dir, ".kody", "duties", `${slug}.md`), "# legacy\n")
+    }
+
+    const result = performInit(dir, false)
+    expect(result.collisions).toEqual(["alpha", "beta"])
+    const out = stdoutSpy.mock.calls.map((c) => String(c[0])).join("")
+    const alphaHits = out.match(/markdown duty 'alpha' is shadowed/g) ?? []
+    const betaHits = out.match(/markdown duty 'beta' is shadowed/g) ?? []
+    expect(alphaHits).toHaveLength(1)
+    expect(betaHits).toHaveLength(1)
+  })
+
+  it("does NOT nudge when only a .md is present (no shadow)", () => {
+    dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
+    fs.mkdirSync(path.join(dir, ".kody", "duties"), { recursive: true })
+    fs.writeFileSync(path.join(dir, ".kody", "duties", "legacy-only.md"), "# legacy\n")
+
+    const result = performInit(dir, false)
+    expect(result.collisions ?? []).not.toContain("legacy-only")
+    const out = stdoutSpy.mock.calls.map((c) => String(c[0])).join("")
+    expect(out).not.toMatch(/is shadowed by folder duty/)
+  })
+
+  it("does NOT nudge when only a folder duty is present", () => {
+    dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
+    const folder = path.join(dir, ".kody", "duties", "folder-only")
+    fs.mkdirSync(folder, { recursive: true })
+    fs.writeFileSync(path.join(folder, "profile.json"), `{"name":"folder-only"}`)
+    fs.writeFileSync(path.join(folder, "prompt.md"), "# stub\n")
+
+    const result = performInit(dir, false)
+    expect(result.collisions ?? []).not.toContain("folder-only")
+    const out = stdoutSpy.mock.calls.map((c) => String(c[0])).join("")
+    expect(out).not.toMatch(/is shadowed by folder duty/)
   })
 })
 

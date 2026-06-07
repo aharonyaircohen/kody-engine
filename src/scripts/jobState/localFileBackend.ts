@@ -83,7 +83,7 @@ export class LocalFileBackend implements JobStateBackend {
    */
   async hydrate(): Promise<void> {
     if (!this.cache.isAvailable()) {
-      process.stdout.write(`[jobs/state] hydrate skipped: actions cache unavailable\n`)
+      process.stdout.write(`[duties/state] hydrate skipped: actions cache unavailable\n`)
       return
     }
     fs.mkdirSync(this.absDir, { recursive: true })
@@ -94,14 +94,14 @@ export class LocalFileBackend implements JobStateBackend {
     try {
       const matched = await this.cache.restore([this.absDir], probeKey, [prefix])
       if (matched) {
-        process.stdout.write(`[jobs/state] hydrate hit: ${matched}\n`)
+        process.stdout.write(`[duties/state] hydrate hit: ${matched}\n`)
       } else {
-        process.stdout.write(`[jobs/state] hydrate miss (cold start)\n`)
+        process.stdout.write(`[duties/state] hydrate miss (cold start)\n`)
       }
     } catch (err) {
       // Don't fail the run if cache restore is flaky — jobs can reseed.
       const msg = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`[jobs/state] hydrate failed (continuing): ${msg}\n`)
+      process.stderr.write(`[duties/state] hydrate failed (continuing): ${msg}\n`)
     }
   }
 
@@ -112,7 +112,7 @@ export class LocalFileBackend implements JobStateBackend {
    */
   async persist(): Promise<void> {
     if (!this.cache.isAvailable()) {
-      process.stdout.write(`[jobs/state] persist skipped: actions cache unavailable\n`)
+      process.stdout.write(`[duties/state] persist skipped: actions cache unavailable\n`)
       return
     }
     if (!fs.existsSync(this.absDir)) {
@@ -122,10 +122,10 @@ export class LocalFileBackend implements JobStateBackend {
     const key = `${this.cacheKeyPrefix()}${process.env.GITHUB_RUN_ID ?? "norunid"}-${Date.now()}`
     try {
       await this.cache.save([this.absDir], key)
-      process.stdout.write(`[jobs/state] persist saved: ${key}\n`)
+      process.stdout.write(`[duties/state] persist saved: ${key}\n`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`[jobs/state] persist failed (continuing): ${msg}\n`)
+      process.stderr.write(`[duties/state] persist failed (continuing): ${msg}\n`)
     }
   }
 

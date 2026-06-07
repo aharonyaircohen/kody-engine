@@ -51,11 +51,11 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
     ctx.data.jobSlugCount = slugs.length
 
     if (slugs.length === 0) {
-      process.stdout.write(`[jobs] no job files in ${jobsDir}\n`)
+      process.stdout.write(`[duties] no duty files in ${jobsDir}\n`)
       return
     }
 
-    process.stdout.write(`[jobs] ticking ${slugs.length} job(s) via ${targetExecutable}\n`)
+    process.stdout.write(`[duties] ticking ${slugs.length} dut(y/ies) via ${targetExecutable}\n`)
 
     const results: Array<{
       slug: string
@@ -88,26 +88,26 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
           const p = loadProfile(path.join(ctx.cwd, jobsDir, slug, "profile.json"))
           return { slug, every: p.every, staff: p.staff }
         } catch (err) {
-          process.stderr.write(`[jobs] ⏭  skip folder-duty ${slug}: profile load failed: ${String(err)}\n`)
+          process.stderr.write(`[duties] ⏭  skip folder-duty ${slug}: profile load failed: ${String(err)}\n`)
           return null
         }
       })
       .filter((d): d is ScheduledDuty => d !== null && Boolean(d.every))
-    process.stdout.write(`[jobs] ${scheduledDuties.length} scheduled folder-dut(y/ies) to consider\n`)
+    process.stdout.write(`[duties] ${scheduledDuties.length} scheduled folder-dut(y/ies) to consider\n`)
     for (const { slug, every, staff } of scheduledDuties) {
       if (!staff || staff.trim().length === 0) {
-        process.stderr.write(`[jobs] ⏭  skip ${slug}: scheduled duty has no staff\n`)
+        process.stderr.write(`[duties] ⏭  skip ${slug}: scheduled duty has no staff\n`)
         results.push({ slug, exitCode: 0, skipped: true, reason: "no staff assigned" })
         continue
       }
       const decision = await decideShouldFire(every as ScheduleEvery, slug, backend, now)
       if (decision.skip) {
-        process.stdout.write(`[jobs] ⏭  skip ${slug}: ${decision.reason}\n`)
+        process.stdout.write(`[duties] ⏭  skip ${slug}: ${decision.reason}\n`)
         results.push({ slug, exitCode: 0, skipped: true, reason: decision.reason })
         continue
       }
       await stampFired(backend, slug, now)
-      process.stdout.write(`[jobs] → run scheduled duty ${slug} (one-shot, as ${staff})\n`)
+      process.stdout.write(`[duties] → run scheduled duty ${slug} (one-shot, as ${staff})\n`)
       try {
         // One-runner: a due folder-duty becomes a scheduled Job, run via runJob
         // with chain:false → the same one-shot runExecutable call as before
@@ -121,11 +121,11 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
         })
         results.push({ slug, exitCode: out.exitCode, reason: out.reason })
         if (out.exitCode !== 0) {
-          process.stderr.write(`[jobs] scheduled duty ${slug} failed (exit ${out.exitCode}): ${out.reason ?? ""}\n`)
+          process.stderr.write(`[duties] scheduled duty ${slug} failed (exit ${out.exitCode}): ${out.reason ?? ""}\n`)
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        process.stderr.write(`[jobs] scheduled duty ${slug} crashed: ${msg}\n`)
+        process.stderr.write(`[duties] scheduled duty ${slug} crashed: ${msg}\n`)
         results.push({ slug, exitCode: 99, reason: msg })
       }
     }
@@ -134,7 +134,15 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
       // Dedup: a slug that already exists as a folder-duty is handled above —
       // never also tick its legacy `.md` (would double-fire / duplicate output).
       if (folderDutySlugs.has(slug)) {
-        process.stdout.write(`[jobs] ⏭  skip ${slug}: handled as folder-duty (folder wins over .md)\n`)
+        // Deprecation nudge: the markdown sibling is shadowed by the folder
+        // duty. The folder wins by design (one tick per slug per wake), but
+        // the user-visible `duty / .md` shape is the legacy form. Surface the
+        // collision so the user can migrate or remove the orphan. One log per
+        // shadowed slug per tick — the loop visits each shadowed slug at most
+        // once, so the nudge fires at most once per slug per tick.
+        process.stdout.write(
+          `[duties] markdown duty '${slug}' is shadowed by folder duty; migrate or remove\n`,
+        )
         results.push({ slug, exitCode: 0, skipped: true, reason: "handled as folder-duty" })
         continue
       }
@@ -150,7 +158,7 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
       // lastFiredAt or churns state. Manual `workflow_dispatch` runs
       // (the dashboard "Run now" button) bypass this dispatcher entirely.
       if (frontmatter.disabled === true) {
-        process.stdout.write(`[jobs] ⏭  skip ${slug}: disabled in frontmatter\n`)
+        process.stdout.write(`[duties] ⏭  skip ${slug}: disabled in frontmatter\n`)
         results.push({ slug, exitCode: 0, skipped: true, reason: "disabled" })
         continue
       }
@@ -161,7 +169,7 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
       // `workflow_dispatch` "Run now" bypasses this dispatcher, but
       // duty-tick's loader rejects a missing/dangling staff member there too.
       if (!frontmatter.staff || frontmatter.staff.trim().length === 0) {
-        process.stderr.write(`[jobs] ⏭  skip ${slug}: no staff assigned (add 'staff: <slug>' frontmatter)\n`)
+        process.stderr.write(`[duties] ⏭  skip ${slug}: no staff assigned (add 'staff: <slug>' frontmatter)\n`)
         results.push({ slug, exitCode: 0, skipped: true, reason: "no staff assigned" })
         continue
       }
@@ -172,7 +180,7 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
       // legacy behavior.
       const decision = await decideShouldFire(frontmatter.every, slug, backend, now)
       if (decision.skip) {
-        process.stdout.write(`[jobs] ⏭  skip ${slug}: ${decision.reason}\n`)
+        process.stdout.write(`[duties] ⏭  skip ${slug}: ${decision.reason}\n`)
         results.push({ slug, exitCode: 0, skipped: true, reason: decision.reason })
         continue
       }
@@ -185,7 +193,7 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
       // routing rule lives in one place and the executables stay simple.
       const slugTarget = frontmatter.tickScript ? scriptedExecutable : targetExecutable
 
-      process.stdout.write(`[jobs] → tick ${slug} (${slugTarget})\n`)
+      process.stdout.write(`[duties] → tick ${slug} (${slugTarget})\n`)
       try {
         // One-runner: a due .md duty becomes a scheduled Job, run via runJob
         // with chain:false → byte-identical to the prior one-shot runExecutable.
@@ -200,11 +208,11 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
         )
         results.push({ slug, exitCode: out.exitCode, reason: out.reason })
         if (out.exitCode !== 0) {
-          process.stderr.write(`[jobs] tick ${slug} failed (exit ${out.exitCode}): ${out.reason ?? ""}\n`)
+          process.stderr.write(`[duties] tick ${slug} failed (exit ${out.exitCode}): ${out.reason ?? ""}\n`)
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        process.stderr.write(`[jobs] tick ${slug} crashed: ${msg}\n`)
+        process.stderr.write(`[duties] tick ${slug} crashed: ${msg}\n`)
         results.push({ slug, exitCode: 99, reason: msg })
       }
     }
@@ -222,7 +230,7 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
         await backend.persist()
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        process.stderr.write(`[jobs] backend persist failed: ${msg}\n`)
+        process.stderr.write(`[duties] backend persist failed: ${msg}\n`)
       }
     }
   }
@@ -349,6 +357,6 @@ async function stampFired(backend: ReturnType<typeof resolveBackend>, slug: stri
     const nextData = { ...(loaded.state.data ?? {}), lastFiredAt: new Date(now).toISOString() }
     await backend.save(loaded, { ...loaded.state, data: nextData })
   } catch (err) {
-    process.stderr.write(`[jobs] failed to stamp lastFiredAt for ${slug}: ${String(err)}\n`)
+    process.stderr.write(`[duties] failed to stamp lastFiredAt for ${slug}: ${String(err)}\n`)
   }
 }
