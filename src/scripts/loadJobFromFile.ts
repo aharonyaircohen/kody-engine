@@ -1,24 +1,33 @@
 /**
- * Preflight: load a file-based job (body from disk, state via the
+ * Preflight: load a file-based duty (body from disk, state via the
  * configured `JobStateBackend`) into ctx.data. Mirror of
- * `loadIssueStateComment` for the file-based job model.
+ * `loadIssueStateComment` for the file-based duty model.
  *
- * Reads the markdown body at `<jobsDir>/<slug>.md` and the job's
+ * Reads the markdown body at `<jobsDir>/<slug>.md` and the duty's
  * state via `resolveBackend(config, cwd, jobsDir).load(slug)`. Sets:
  *
- *   ctx.data.jobSlug         the slug
+ *   ctx.data.jobSlug         the slug (legacy token; remains canonical for
+ *                            the kody-job-next-state fence label and existing
+ *                            prompt templates)
  *   ctx.data.jobTitle        first H1 of the body, or slug formatted
  *   ctx.data.jobIntent       the body (post-frontmatter, if any)
  *   ctx.data.jobStateJson    rendered prior state, or seed on first run
  *   ctx.data.jobState        LoadedJobState (path, handle, state, created)
- *   ctx.data.workerSlug      the assigned worker slug (or "" if none)
- *   ctx.data.workerTitle     worker file H1, or humanized worker slug
- *   ctx.data.workerPersona   worker persona body (post-frontmatter), or ""
+ *   ctx.data.workerSlug      the assigned staff slug (or "" if none)
+ *   ctx.data.workerTitle     staff file H1, or humanized staff slug
+ *   ctx.data.workerPersona   staff persona body (post-frontmatter), or ""
  *   ctx.data.mentions        "@a @b" from the duty's `mentions:` frontmatter, or ""
+ *
+ *   ctx.data.dutySlug        alias of jobSlug — the "Duty" noun introduced
+ *                            by Phase 1 of the duty-pipeline rename
+ *   ctx.data.dutyTitle       alias of jobTitle
+ *   ctx.data.staffSlug       alias of workerSlug — the staff member (who)
+ *   ctx.data.staffTitle      alias of workerTitle
+ *   ctx.data.executableSlug  profile.name — the executable doing the tick (how)
  *
  * The staff member is *who* the tick runs as: a duty names exactly one
  * staff member via `staff:` frontmatter; its persona is injected ahead of
- * the duty body by `job-tick`. A `staff:` that points at a missing file is a
+ * the duty body by `duty-tick`. A `staff:` that points at a missing file is a
  * hard error — a duty must not silently run with no executor identity.
  *
  * Script args (via `with:`):
@@ -102,6 +111,25 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
   ctx.data.workerTitle = workerTitle
   ctx.data.workerPersona = workerPersona
   ctx.data.mentions = mentions
+
+  // Duty-noun aliases. The domain noun for one tick of a markdown duty is
+  // "Duty", not "Job" — the engine's `Job` runtime envelope (src/job.ts) and
+  // the scheduled-watch executable shape are a separate concern, see AGENTS.md.
+  // The legacy `jobSlug` / `jobTitle` / `workerSlug` / `workerTitle` fields
+  // stay populated above for backwards compat with the kody-job-next-state
+  // fence label, existing prompt templates, and any operator-written duty
+  // bodies that still reference the old tokens.
+  ctx.data.dutySlug = slug
+  ctx.data.dutyTitle = title
+  ctx.data.staffSlug = workerSlug
+  ctx.data.staffTitle = workerTitle
+  ctx.data.executableSlug = profile.name
+  // markdown duties declare cadence in the body, not frontmatter, so a schedule
+  // is not available at this load site. Default to ""; composePrompt renders
+  // it as the empty string. The legacy `{{jobSchedule}}` token (seeded by
+  // mintScheduledJob for duty-tick-scripted runs) still works for prompts that
+  // need a non-empty cadence string.
+  ctx.data.dutySchedule = ""
 
   // Locked-toolbox mode (`tools:` frontmatter). When declared, the duty body
   // is pure intent — the LLM picks tools by name from the kody-duty palette

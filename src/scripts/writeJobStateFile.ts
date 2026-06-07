@@ -67,7 +67,7 @@ export const writeJobStateFile: PostflightScript = async (ctx, _profile, agentRe
     throw new Error("writeJobStateFile: ctx.data.jobState missing — preflight must run first")
   }
 
-  // Stamp `lastFiredAt` so dispatchJobFileTicks can gate per-job
+  // Stamp `lastFiredAt` so dispatchDutyFileTicks can gate per-duty
   // cadence on the next cron wake. Done unconditionally on every save
   // (i.e. every actual tick) — skipped ticks never reach this script.
   //
@@ -91,7 +91,7 @@ export const writeJobStateFile: PostflightScript = async (ctx, _profile, agentRe
   // Backend selection mirrors the preflight load. We re-resolve here rather
   // than pass through ctx.data because the backend is cheap to construct
   // and stateless per-tick (lifecycle state lives on the dispatcher's
-  // single instance — see dispatchJobFileTicks).
+  // single instance — see dispatchDutyFileTicks).
   const jobsDir = String(args?.jobsDir ?? ".kody/duties")
   const backend = resolveBackend({ config: ctx.config, cwd: ctx.cwd, jobsDir })
   await backend.save(loaded, stamped)

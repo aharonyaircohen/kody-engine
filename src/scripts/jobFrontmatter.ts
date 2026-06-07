@@ -45,8 +45,8 @@ export interface JobFrontmatter {
   /**
    * Path (relative to cwd) to a deterministic shell script that produces
    * the next-state fenced block on stdout. When present, the dispatcher
-   * routes this slug to `job-tick-scripted` (no agent) instead of the
-   * default LLM-driven `job-tick`. The script's stdout is the single
+   * routes this slug to `duty-tick-scripted` (no agent) instead of the
+   * default LLM-driven `duty-tick`. The script's stdout is the single
    * source of truth for the tick — must end with a `kody-job-next-state`
    * fenced JSON block.
    */
@@ -62,7 +62,7 @@ export interface JobFrontmatter {
    * Slug of the staff member (persona) under `.kody/staff/<staff>.md` that
    * executes this duty. The duty owns the schedule; the staff member is
    * *who* the tick runs as — its persona body is injected ahead of the duty
-   * body in `job-tick`. A duty with no `staff:` is skipped by the scheduler
+   * body in `duty-tick`. A duty with no `staff:` is skipped by the scheduler
    * (every duty must name an executor). Many duties may share one staff
    * member; a duty has exactly one.
    */

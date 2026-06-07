@@ -3,12 +3,12 @@
  * executable once per matching issue (in-process, sequentially). Each child
  * run is isolated — failures on one issue don't stop later issues.
  *
- * This is the fan-out primitive for job-style scheduled executables:
- * one cron wake → N classifier ticks, one per live job issue.
+ * This is the fan-out primitive for duty-style scheduled executables:
+ * one cron wake → N classifier ticks, one per live duty issue.
  *
  * Script args (via `with:`):
  *   label             required — e.g. "kody:job"
- *   targetExecutable  required — e.g. "job-tick"
+ *   targetExecutable  required — e.g. "duty-tick"
  *   issueArg          optional — CLI input name the target expects (default "issue")
  *
  * Sets ctx.skipAgent so the outer scheduler itself never invokes the SDK.
@@ -23,13 +23,13 @@ interface IssueRef {
   title: string
 }
 
-export const dispatchJobTicks: PreflightScript = async (ctx, _profile, args) => {
+export const dispatchDutyTicks: PreflightScript = async (ctx, _profile, args) => {
   ctx.skipAgent = true
 
   const label = String(args?.label ?? "")
   const targetExecutable = String(args?.targetExecutable ?? "")
-  if (!label) throw new Error("dispatchJobTicks: `with.label` is required")
-  if (!targetExecutable) throw new Error("dispatchJobTicks: `with.targetExecutable` is required")
+  if (!label) throw new Error("dispatchDutyTicks: `with.label` is required")
+  if (!targetExecutable) throw new Error("dispatchDutyTicks: `with.targetExecutable` is required")
   const issueArg = String(args?.issueArg ?? "issue")
 
   const issues = listIssuesByLabel(label, ctx.cwd)

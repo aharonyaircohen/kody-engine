@@ -122,7 +122,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   // The job carries *when*: a scheduled job's cadence, recorded in the ledger.
   if (valid.schedule !== undefined && valid.schedule.length > 0) preloadedData.jobSchedule = valid.schedule
   // Inline why → ctx.data.jobWhy (NOT jobIntent — that token is the scheduled
-  // duty BODY, consumed via {{jobIntent}} by job-tick; reusing it would
+  // duty BODY, consumed via {{jobIntent}} by duty-tick; reusing it would
   // double-inject). The executor surfaces jobWhy to the agent as a fenced
   // "operator request" block, so the comment's wording shapes any instant run.
   if (valid.why !== undefined && valid.why.length > 0) preloadedData.jobWhy = valid.why
@@ -170,7 +170,7 @@ export function mintInstantJob(dispatch: DispatchResult, opts?: { why?: string; 
 export interface ScheduledJobInput {
   /** The duty slug (its "why" lives in `.kody/duties/<slug>.md`). */
   duty: string
-  /** The executable that ticks it (job-tick / job-tick-scripted, or a folder-duty slug). */
+  /** The executable that ticks it (duty-tick / duty-tick-scripted, or a folder-duty slug). */
   executable: string
   /** Cron cadence the duty fired on. */
   schedule?: string

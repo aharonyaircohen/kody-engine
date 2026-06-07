@@ -10,13 +10,24 @@
  *                       comment is generic, not manager-specific.
  *   - "mission-tick" / "mission-scheduler" — the dead `mission-*` executable
  *                       family (renamed; no such executable exists).
+ *   - "job-scheduler" / "job-tick" — the retired `job-*` executable family,
+ *                       renamed to `duty-scheduler` / `duty-tick`. The
+ *                       `kody-job-next-state` fence label is a separate
+ *                       concern (see parseJobStateFromAgentResult's alias
+ *                       handling) and stays canonical, so it is NOT banned.
+ *   - "dispatchJobFileTicks" / "dispatchJobTicks" — the retired dispatcher
+ *                       script names, renamed to `dispatchDutyFileTicks` /
+ *                       `dispatchDutyTicks`. The `Job` runtime envelope
+ *                       (src/job.ts) is unaffected.
  *
- * NOT banned — "job": although the current *prose* vocabulary is "duty" (see
- * the AGENTS.md naming note), `job` is still a LIVE code identifier — the
- * `job-scheduler` / `job-tick` executables, `.kody/jobs/`, `kody-job-next-state`,
- * `jobFrontmatter`, etc. Banning it would break the build, not catch drift.
- * It only becomes bannable after those are renamed `duty-*`. Do not add it here
- * before that rename lands.
+ * NOT banned — "job" in general: the runtime envelope (`Job`, `JobFlavor`,
+ * `Job` typed records), the `jobFrontmatter` parser, the `.kody/jobs/`
+ * engine scaffold path, the `jobState`/`jobSlug`/`jobSchedule` ctx.data
+ * fields (which the spec says MUST keep working alongside the new `duty*`
+ * aliases), and the `kody-job-next-state` fence label all keep their `job`
+ * names by Phase-1 design. The deadVocabulary test targets the specific
+ * identifiers that have been renamed (`job-scheduler`, `job-tick`,
+ * `dispatchJobFileTicks`, `dispatchJobTicks`), not the broader `job` token.
  *
  * Scope is src/ only (AGENTS.md is excluded because its naming note names the
  * banned terms on purpose to explain the ban). Tests may use these strings as
@@ -28,7 +39,15 @@ import * as path from "node:path"
 import { describe, expect, it } from "vitest"
 
 const SRC_DIR = path.resolve(__dirname, "../../src")
-const BANNED = ["kody-manager", "mission-tick", "mission-scheduler"]
+const BANNED = [
+  "kody-manager",
+  "mission-tick",
+  "mission-scheduler",
+  "job-scheduler",
+  "job-tick",
+  "dispatchJobFileTicks",
+  "dispatchJobTicks",
+]
 
 function walk(dir: string): string[] {
   const out: string[] = []

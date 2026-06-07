@@ -211,7 +211,7 @@ export function performInit(cwd: string, force: boolean): InitResult {
   //    with the engine. Built-in duties live under `src/jobs/` (dev) /
   //    `dist/jobs/` (built); consumer repos get a starter copy each,
   //    scaffolded once and then human-edited. Cadence is enforced by the
-  //    file's `every:` frontmatter, read by `dispatchJobFileTicks`.
+  //    file's `every:` frontmatter, read by `dispatchDutyFileTicks`.
   //
   //    `--force` will overwrite consumer edits to these files — same
   //    contract as `kody.yml` and `kody.config.json` above. Duty files

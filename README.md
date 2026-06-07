@@ -121,9 +121,9 @@ kody-engine release-publish   --issue <N> [--dry-run]
 kody-engine release-deploy    --issue <N> [--dry-run]
 
 # scheduled duties and goals
-kody-engine job-scheduler                                     # fan out due .kody/duties/*.md files
-kody-engine job-tick          --job <slug> [--force]          # one agent tick for one duty
-kody-engine job-tick-scripted --job <slug> [--force]          # one deterministic tickScript duty tick
+kody-engine duty-scheduler                                    # fan out due .kody/duties/*.md files
+kody-engine duty-tick          --duty <slug> [--force]        # one agent tick for one duty
+kody-engine duty-tick-scripted --duty <slug> [--force]        # one deterministic tickScript duty tick
 kody-engine goal-scheduler                                    # fan out active .kody/goals/* state files
 kody-engine goal-tick         --goal <id>                     # advance one stacked-PR goal
 
@@ -141,7 +141,7 @@ kody-engine stats                                             # inspect run/even
 
 ### Duties
 
-A **duty** is a markdown file at `.kody/duties/<slug>.md` with frontmatter such as `every:` and `staff:` plus human-owned prose. `job-scheduler` wakes on cron, finds due duties, and dispatches either `job-tick` for an agent tick or `job-tick-scripted` for a deterministic `tickScript:` duty. `kody init` copies built-in starter duties and scaffolds `.kody/staff/kody.md`.
+A **duty** is a markdown file at `.kody/duties/<slug>.md` with frontmatter such as `every:` and `staff:` plus human-owned prose. `duty-scheduler` wakes on cron, finds due duties, and dispatches either `duty-tick` for an agent tick or `duty-tick-scripted` for a deterministic `tickScript:` duty. `kody init` copies built-in starter duties and scaffolds `.kody/staff/kody.md`.
 
 Locked-toolbox duties can declare `tools: [...]` to run with only the named high-level MCP intents plus `submit_state`; duties without `tools:` keep the legacy Bash/gh toolbox.
 

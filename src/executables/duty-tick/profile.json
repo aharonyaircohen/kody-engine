@@ -1,12 +1,12 @@
 {
-  "name": "job-tick",
+  "name": "duty-tick",
   "role": "primitive",
   "describe": "One classifier tick for one duty file: read intent + state, decide and execute via gh, emit next state.",
   "kind": "oneshot",
   "inputs": [
     {
-      "name": "job",
-      "flag": "--job",
+      "name": "duty",
+      "flag": "--duty",
       "type": "string",
       "required": true,
       "describe": "Duty slug — basename (without .md) of the file under .kody/duties/."
@@ -15,7 +15,7 @@
       "name": "force",
       "flag": "--force",
       "type": "bool",
-      "describe": "When true, the agent ignores the job body's cadence guard and executes the work this tick. All other body rules (allowed commands, restrictions, state schema) still apply. Used for manual triggers from the dashboard's 'Run now' button."
+      "describe": "When true, the agent ignores the duty body's cadence guard and executes the work this tick. All other body rules (allowed commands, restrictions, state schema) still apply. Used for manual triggers from the dashboard's 'Run now' button."
     }
   ],
   "claudeCode": {
@@ -53,7 +53,7 @@
         "script": "loadJobFromFile",
         "with": {
           "jobsDir": ".kody/duties",
-          "slugArg": "job"
+          "slugArg": "duty"
         }
       },
       {

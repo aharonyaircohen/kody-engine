@@ -7,7 +7,7 @@ import {
   parseJobStateFromAgentResult,
 } from "../../src/scripts/parseJobStateFromAgentResult.js"
 
-const profile = { name: "job-tick" } as Profile
+const profile = { name: "duty-tick" } as Profile
 const FENCE = "kody-job-next-state"
 
 function makeCtx(data: Record<string, unknown> = {}): Context {
@@ -160,6 +160,65 @@ describe("parseJobStateFromAgentResult", () => {
     const cutOff: AgentResult = { outcome: "failed", finalText: "ran out of turns", ndjsonPath: "/tmp/x.ndjson" }
     await parseJobStateFromAgentResult(ctx, profile, cutOff, { fenceLabel: FENCE })
     expect(ctx.data.nextStateParseError).toBe("agent did not emit a `kody-job-next-state` fenced block")
+    expect(ctx.data.nextJobState).toBeUndefined()
+  })
+})
+
+describe("parseJobStateFromAgentResult: kody-duty-next-state alias (Phase 1 rename)", () => {
+  const NEW = "kody-duty-next-state"
+
+  it("accepts a kody-duty-next-state block when the configured label is kody-job-next-state (newly-authored duty)", async () => {
+    const ctx = makeCtx()
+    const body = JSON.stringify({ cursor: "next", data: { fresh: true }, done: false })
+    await parseJobStateFromAgentResult(ctx, profile, makeResult(fenced(NEW, body)), { fenceLabel: FENCE })
+    expect(ctx.data.nextStateParseError).toBeUndefined()
+    const next = ctx.data.nextJobState as StateEnvelope
+    expect(next.cursor).toBe("next")
+    expect(next.data).toEqual({ fresh: true })
+    expect(next.rev).toBe(1)
+  })
+
+  it("accepts a kody-job-next-state block when the configured label is kody-duty-next-state (legacy agent, new profile)", async () => {
+    // Symmetry: a profile that opts into the new label still recognises the
+    // old one — prevents the same alias from being a one-way migration.
+    const ctx = makeCtx()
+    const body = JSON.stringify({ cursor: "sym", data: {}, done: false })
+    await parseJobStateFromAgentResult(ctx, profile, makeResult(fenced(FENCE, body)), { fenceLabel: NEW })
+    expect(ctx.data.nextStateParseError).toBeUndefined()
+    expect((ctx.data.nextJobState as StateEnvelope).cursor).toBe("sym")
+  })
+
+  it("the error message still names the configured label, not the alias", async () => {
+    // The error must name the label the agent was told to emit (the profile's
+    // own fenceLabel), even when the alias is the one that would have parsed.
+    // Otherwise operators chasing the log wouldn't know which label the
+    // profile's prompt actually uses.
+    const ctx = makeCtx()
+    await parseJobStateFromAgentResult(ctx, profile, makeResult("nothing"), { fenceLabel: FENCE })
+    expect(ctx.data.nextStateParseError).toBe("agent did not emit a `kody-job-next-state` fenced block")
+  })
+
+  it("alias block is rejected on malformed JSON (same as canonical)", async () => {
+    // Aliases are recognised for *which* label to look at; the JSON-validity
+    // check inside the block is unchanged.
+    const ctx = makeCtx()
+    await parseJobStateFromAgentResult(ctx, profile, makeResult(fenced(NEW, "{not-json")), {
+      fenceLabel: FENCE,
+    })
+    expect(ctx.data.nextStateParseError).toMatch(/JSON parse error/)
+  })
+
+  it("alias does NOT trigger for a fence label that has no alias (only the two duty labels are aliased)", async () => {
+    // Generic labels like "kody-issue-next-state" are NOT aliased — the alias
+    // is a Phase 1 duty-pipeline concern, not a generic parser behaviour.
+    // A profile that declares fenceLabel="kody-issue-next-state" should NOT
+    // pick up a stray kody-duty-next-state block.
+    const ctx = makeCtx()
+    const body = JSON.stringify({ cursor: "x", data: {}, done: false })
+    await parseJobStateFromAgentResult(ctx, profile, makeResult(fenced("kody-duty-next-state", body)), {
+      fenceLabel: "kody-issue-next-state",
+    })
+    expect(ctx.data.nextStateParseError).toMatch(/kody-issue-next-state/)
     expect(ctx.data.nextJobState).toBeUndefined()
   })
 })

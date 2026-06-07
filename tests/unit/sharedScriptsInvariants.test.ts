@@ -119,15 +119,15 @@ interface SoloEntry {
 const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   commitGoalState: { owner: "goal-tick", reason: "goal-tick is bespoke — see AGENTS.md goal-chain section." },
   deriveGoalPhase: { owner: "goal-tick", reason: "goal-tick state-machine step." },
-  dispatchJobFileTicks: {
-    owner: "job-scheduler",
+  dispatchDutyFileTicks: {
+    owner: "duty-scheduler",
     reason:
-      "Solo since the worker model changed: a worker is now a stateless persona, not a ticked file, so worker-scheduler/worker-tick were deleted. job-scheduler is the only fan-out over .kody/jobs.",
+      "Solo since the worker model changed: a worker is now a stateless persona, not a ticked file, so worker-scheduler/worker-tick were deleted. duty-scheduler is the only fan-out over .kody/duties/.",
   },
   loadJobFromFile: {
-    owner: "job-tick",
+    owner: "duty-tick",
     reason:
-      "Solo since worker-tick was deleted (workers are personas, not ticked files). job-tick is the only executable that loads a job body + its assigned worker persona.",
+      "Solo since worker-tick was deleted (workers are personas, not ticked files). duty-tick is the only executable that loads a duty body + its assigned worker persona.",
   },
   loadDutyState: {
     owner: "job-live-verify",
@@ -135,9 +135,9 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
       "Folder-duty state loader used by the live job-wiring verifier. Kept as a shared script because folder duties in consumer repos use the same stateful-duty shape.",
   },
   runTickScript: {
-    owner: "job-tick-scripted",
+    owner: "duty-tick-scripted",
     reason:
-      "Solo since worker-tick-scripted was deleted (no worker tick-loop in the persona model). job-tick-scripted is the only deterministic ticked-file executable.",
+      "Solo since worker-tick-scripted was deleted (no worker tick-loop in the persona model). duty-tick-scripted is the only deterministic ticked-file executable.",
   },
   dispatchNextTask: { owner: "goal-tick", reason: "goal-tick state-machine step." },
   finalizeGoal: { owner: "goal-tick", reason: "goal-tick terminal step." },

@@ -9,6 +9,20 @@
  * No role-specific branching — every token the template references is
  * looked up in ctx.data or ctx.args. Missing tokens render as an empty
  * string (fail-soft).
+ *
+ * Tokens specific to the duty pipeline (set by loadJobFromFile /
+ * loadDutyState; see also the legacy `{{jobSlug}}` / `{{workerSlug}}` /
+ * `{{jobSchedule}}` aliases which remain populated for back-compat):
+ *   - {{dutyReference}}    full "Duty reference" block: slug + title +
+ *                           executable + staff + cadence (one block)
+ *   - {{dutySlug}}         the duty slug (alias of {{jobSlug}})
+ *   - {{dutyTitle}}        the duty title (alias of {{jobTitle}})
+ *   - {{executableSlug}}   the executable doing the tick (profile.name)
+ *   - {{staffSlug}}        the staff member (alias of {{workerSlug}})
+ *   - {{staffTitle}}       the staff file H1 (alias of {{workerTitle}})
+ *   - {{dutySchedule}}     cadence string ("15m".."7d" or cron), or "" for
+ *                           on-demand (alias of {{jobSchedule}} for the
+ *                           duty-tick-scripted path)
  */
 
 import * as fs from "node:fs"
@@ -113,6 +127,18 @@ export const composePrompt: PreflightScript = async (ctx, profile) => {
     repoName: ctx.config.github.repo,
     defaultBranch: ctx.config.git.defaultBranch,
     branch: (ctx.data.branch as string) ?? "",
+    // The `{{dutyReference}}` block is built from ctx.data.* (with legacy
+    // jobSlug/jobTitle/workerSlug/jobSchedule fallbacks) so a duty prompt can
+    // place a labeled summary at the top. The five underlying tokens are
+    // also exposed individually so a template can compose them differently
+    // (e.g. put the executable slug inline in a header).
+    dutyReference: formatDutyReference(ctx.data, profile.name),
+    dutySlug: pickToken(ctx.data, "dutySlug", "jobSlug"),
+    dutyTitle: pickToken(ctx.data, "dutyTitle", "jobTitle"),
+    executableSlug: pickToken(ctx.data, "executableSlug") || profile.name,
+    staffSlug: pickToken(ctx.data, "staffSlug", "workerSlug"),
+    staffTitle: pickToken(ctx.data, "staffTitle", "workerTitle"),
+    dutySchedule: pickToken(ctx.data, "dutySchedule", "jobSchedule"),
   }
 
   ctx.data.prompt = template.replace(MUSTACHE, (_, key) => {
@@ -181,4 +207,68 @@ function formatToolsUsage(profile: Profile): string {
     lines.push("")
   }
   return lines.join("\n")
+}
+
+/**
+ * Render the `{{dutyReference}}` token — a single labeled block at the top of
+ * a duty tick's prompt that names the duty, the executable doing the tick,
+ * the assigned staff member, and the cadence. The five underlying tokens
+ * (`{{dutySlug}}`, `{{dutyTitle}}`, `{{executableSlug}}`, `{{staffSlug}}`,
+ * `{{dutySchedule}}`) are also exposed individually so templates can place
+ * them in different spots.
+ *
+ * Fields fall back to legacy ctx.data.* (jobSlug / jobTitle / workerSlug /
+ * jobSchedule) so a duty prompt that hasn't been re-mapped still produces a
+ * coherent block. Each field renders as a bulleted line; missing/empty
+ * fields are omitted rather than rendered as blank "Foo: ".
+ */
+function formatDutyReference(data: Record<string, unknown>, profileName: string): string {
+  const dutySlug = pickToken(data, "dutySlug", "jobSlug")
+  const dutyTitle = pickToken(data, "dutyTitle", "jobTitle")
+  // The executable doing the tick — `ctx.data.executableSlug` is set by
+  // loadJobFromFile/loadDutyState; fall back to the profile name resolved at
+  // compose-time so a bare profile that never ran the loader still renders
+  // something coherent.
+  const executableSlug = pickToken(data, "executableSlug") || profileName
+  const staffSlug = pickToken(data, "staffSlug", "workerSlug")
+  const staffTitle = pickToken(data, "staffTitle", "workerTitle")
+  const dutySchedule = pickToken(data, "dutySchedule", "jobSchedule")
+
+  const lines = ["# Duty reference", ""]
+  if (dutySlug) {
+    lines.push(`- Duty: \`${dutySlug}\`${dutyTitle ? ` — *${dutyTitle}*` : ""}`)
+  }
+  if (executableSlug) {
+    lines.push(`- Executable: \`${executableSlug}\``)
+  }
+  const staffLine = staffSlug
+    ? `\`${staffSlug}\`${staffTitle && staffTitle !== staffSlug ? ` — *${staffTitle}*` : ""}`
+    : ""
+  if (staffLine) {
+    lines.push(`- Staff: ${staffLine}`)
+  }
+  if (dutySchedule) {
+    lines.push(`- Cadence: \`${dutySchedule}\``)
+  }
+  if (lines.length === 2) {
+    // No fields present (e.g. a non-duty-tick run that still references
+    // {{dutyReference}}). Render an empty block rather than a bare heading.
+    return ""
+  }
+  return lines.join("\n")
+}
+
+/**
+ * Resolve a token by trying a list of ctx.data keys in order — the first
+ * non-empty string wins. Used to keep the duty-noun aliases (`{{dutySlug}}`)
+ * and the legacy `{{jobSlug}}` token reading the same ctx.data when only one
+ * loader has run (e.g. a profile that runs through both loaders, or a test
+ * that populates the new field but not the old).
+ */
+function pickToken(data: Record<string, unknown>, ...keys: string[]): string {
+  for (const k of keys) {
+    const v = data[k]
+    if (typeof v === "string" && v.length > 0) return v
+  }
+  return ""
 }

@@ -3,7 +3,7 @@
  *
  * This is the engine-authored "what the company did" feed the dashboard
  * surfaces — a named, attributed action rather than a raw commit/PR. Every
- * `job-tick` (scheduled OR manual "Run now") passes through here, so each one
+ * `duty-tick` (scheduled OR manual "Run now") passes through here, so each one
  * records WHO ran WHAT, WHY, and the RESULT:
  *
  *   { ts, action, duty, dutyTitle, staff, staffTitle, trigger, outcome,

@@ -137,3 +137,66 @@ describe("loadJobFromFile body {{mentions}} substitution", () => {
     expect(ctx.data.jobIntent).not.toContain("mentions")
   })
 })
+
+describe("loadJobFromFile duty-noun aliases (Phase 1 rename)", () => {
+  it("populates dutySlug/dutyTitle from the duty file, mirroring jobSlug/jobTitle", async () => {
+    writeStaff("kody")
+    writeDuty("stale-prs", "staff: kody", "# Stale PR Watcher\nbody text")
+
+    const ctx = ctxFor("stale-prs")
+    await loadJobFromFile(ctx, { ...PROFILE, name: "duty-tick" }, {})
+
+    expect(ctx.data.dutySlug).toBe("stale-prs")
+    expect(ctx.data.dutyTitle).toBe("Stale PR Watcher")
+    // Backwards compat: legacy fields still populated for the kody-job-next-state
+    // fence label and existing prompt templates.
+    expect(ctx.data.jobSlug).toBe("stale-prs")
+    expect(ctx.data.jobTitle).toBe("Stale PR Watcher")
+  })
+
+  it("populates staffSlug/staffTitle from the staff file, mirroring workerSlug/workerTitle", async () => {
+    writeStaff("kody", "# Kody — root persona")
+    writeDuty("stale-prs", "staff: kody", "# Stale PR Watcher")
+
+    const ctx = ctxFor("stale-prs")
+    await loadJobFromFile(ctx, { ...PROFILE, name: "duty-tick" }, {})
+
+    expect(ctx.data.staffSlug).toBe("kody")
+    expect(ctx.data.staffTitle).toBe("Kody — root persona")
+    // Legacy fields still populated.
+    expect(ctx.data.workerSlug).toBe("kody")
+    expect(ctx.data.workerTitle).toBe("Kody — root persona")
+  })
+
+  it("populates executableSlug from profile.name", async () => {
+    writeStaff("kody")
+    writeDuty("stale-prs", "staff: kody", "# Stale PR Watcher")
+
+    const ctx = ctxFor("stale-prs")
+    await loadJobFromFile(ctx, { ...PROFILE, name: "duty-tick" }, {})
+
+    expect(ctx.data.executableSlug).toBe("duty-tick")
+  })
+
+  it("populates dutySchedule as '' for a markdown duty (no schedule in frontmatter)", async () => {
+    writeStaff("kody")
+    writeDuty("stale-prs", "staff: kody", "# Stale PR Watcher")
+
+    const ctx = ctxFor("stale-prs")
+    await loadJobFromFile(ctx, { ...PROFILE, name: "duty-tick" }, {})
+
+    expect(ctx.data.dutySchedule).toBe("")
+  })
+
+  it("leaves staffSlug empty when the duty has no staff declared", async () => {
+    writeDuty("orphan", "", "# Orphan Duty\nno staff")
+
+    const ctx = ctxFor("orphan")
+    await loadJobFromFile(ctx, { ...PROFILE, name: "duty-tick" }, {})
+
+    expect(ctx.data.staffSlug).toBe("")
+    expect(ctx.data.staffTitle).toBe("")
+    expect(ctx.data.workerSlug).toBe("")
+    expect(ctx.data.workerTitle).toBe("")
+  })
+})

@@ -1,12 +1,12 @@
 {
-  "name": "job-tick-scripted",
+  "name": "duty-tick-scripted",
   "role": "utility",
-  "describe": "Deterministic job tick: runs the slug's `tickScript:` (declared in job frontmatter), parses next-state from its stdout, persists. No agent.",
+  "describe": "Deterministic duty tick: runs the slug's `tickScript:` (declared in duty frontmatter), parses next-state from its stdout, persists. No agent.",
   "kind": "oneshot",
   "inputs": [
     {
-      "name": "job",
-      "flag": "--job",
+      "name": "duty",
+      "flag": "--duty",
       "type": "string",
       "required": true,
       "describe": "Duty slug — basename (without .md) of the file under .kody/duties/."
@@ -15,7 +15,7 @@
       "name": "force",
       "flag": "--force",
       "type": "bool",
-      "describe": "Accepted for parity with `job-tick`. Scripted ticks have no agent cadence guard to bypass — the dispatcher already gated on frontmatter `every:`. Forwarded to the script via env if it cares."
+      "describe": "Accepted for parity with `duty-tick`. Scripted ticks have no agent cadence guard to bypass — the dispatcher already gated on frontmatter `every:`. Forwarded to the script via env if it cares."
     }
   ],
   "claudeCode": {
@@ -52,7 +52,7 @@
         "script": "runTickScript",
         "with": {
           "jobsDir": ".kody/duties",
-          "slugArg": "job",
+          "slugArg": "duty",
           "fenceLabel": "kody-job-next-state"
         }
       }
