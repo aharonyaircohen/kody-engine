@@ -14,7 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.210] — restore fix command
+
 ### Fixed
+- Restored the shipped `fix` executable so `kody-engine fix --pr <N>` and
+  `@kody fix` on PR comments resolve again.
 - **Hollow "success" detection via a backend health probe.** When the LiteLLM
   proxy crashes mid-request, the Claude Agent SDK can still emit a `success`
   result (1 turn, $0) — sometimes carrying its own error string as the result

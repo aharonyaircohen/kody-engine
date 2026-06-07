@@ -1,0 +1,91 @@
+{
+  "name": "fix",
+  "role": "primitive",
+  "describe": "Apply review feedback to an existing PR branch.",
+  "inputs": [
+    {
+      "name": "pr",
+      "flag": "--pr",
+      "type": "int",
+      "required": true,
+      "describe": "GitHub PR number to apply feedback to."
+    },
+    {
+      "name": "feedback",
+      "flag": "--feedback",
+      "type": "string",
+      "required": false,
+      "bindsCommentRest": true,
+      "describe": "Inline override. If absent, the flow reads the latest PR review comment."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "acceptEdits",
+    "maxTurns": null,
+    "maxTurnTimeoutSec": 1200,
+    "systemPromptAppend": null,
+    "cacheable": true,
+    "enableVerifyTool": true,
+    "verifyAttempts": 4,
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Bash",
+      "Grep",
+      "Glob",
+      "mcp__playwright",
+      "mcp__kody-verify"
+    ],
+    "hooks": ["block-git"],
+    "skills": ["systematic-debugging"],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": [
+      {
+        "name": "playwright",
+        "command": "npx",
+        "args": ["-y", "--package=@playwright/mcp@latest", "--", "playwright-mcp"]
+      }
+    ]
+  },
+  "cliTools": [
+    {
+      "name": "playwright",
+      "install": {
+        "required": false,
+        "checkCommand": "ls \"$HOME/.cache/ms-playwright\" 2>/dev/null | grep -q '^chromium'",
+        "installCommand": "npx --yes playwright install --with-deps chromium"
+      },
+      "verify": "ls \"$HOME/.cache/ms-playwright\" 2>/dev/null | grep -q '^chromium'",
+      "usage": ""
+    }
+  ],
+  "lifecycle": "pr-branch",
+  "lifecycleConfig": {
+    "label": {
+      "name": "kody:fixing",
+      "color": "e99695",
+      "description": "kody: applying review feedback"
+    },
+    "context": "task",
+    "finalize": true
+  },
+  "scripts": {
+    "preflight": [
+      { "script": "fixFlow" }
+    ],
+    "postflight": [
+      { "script": "requireFeedbackActions" }
+    ]
+  },
+  "output": {
+    "actionTypes": [
+      "FIX_COMPLETED",
+      "FIX_FAILED",
+      "AGENT_NOT_RUN"
+    ]
+  }
+}
