@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.211] — restore fix-ci command
+
+### Fixed
+- Restored the shipped `fix-ci` executable so `kody-engine fix-ci --pr <N>`
+  and `@kody fix-ci` on PR comments resolve again.
+
 ## [0.4.210] — restore fix command
 
 ### Fixed
