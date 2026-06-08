@@ -1,0 +1,44 @@
+{
+  "name": "task-job-fail-once",
+  "role": "utility",
+  "describe": "Live-test executable that fails the first planned job attempt and succeeds on rerun.",
+  "kind": "oneshot",
+  "inputs": [
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": true,
+      "describe": "GitHub issue number that owns the task state."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": 0,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "inputArtifacts": [],
+  "outputArtifacts": [],
+  "scripts": {
+    "preflight": [
+      { "script": "loadIssueContext" },
+      { "script": "loadTaskState" },
+      { "script": "skipAgent" }
+    ],
+    "postflight": [
+      { "script": "failOnceTaskJob" },
+      { "script": "recordOutcome" },
+      { "script": "saveTaskState" }
+    ]
+  }
+}

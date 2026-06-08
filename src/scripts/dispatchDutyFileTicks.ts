@@ -22,10 +22,12 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type { PreflightScript } from "../executables/types.js"
+import { gh } from "../issue.js"
 import { mintScheduledJob, runJob } from "../job.js"
 import { loadProfile } from "../profile.js"
-import { type ScheduleEvery, scheduleEveryToMs, splitFrontmatter } from "./jobFrontmatter.js"
+import { type JobFrontmatter, type ScheduleEvery, scheduleEveryToMs, splitFrontmatter } from "./jobFrontmatter.js"
 import { resolveBackend } from "./jobState/index.js"
+import { TASK_JOBS_MARKER } from "./planTaskJobs.js"
 
 export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args) => {
   ctx.skipAgent = true
@@ -47,15 +49,22 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
   }
 
   try {
-    const slugs = listJobSlugs(path.join(ctx.cwd, jobsDir))
-    ctx.data.jobSlugCount = slugs.length
+    const onlyDuty = parseDutyFilter(ctx.args.duty)
+    const jobsPath = path.join(ctx.cwd, jobsDir)
+    const slugs = filterSlugs(listJobSlugs(jobsPath), onlyDuty)
+    const folderSlugList = filterSlugs(listFolderDutySlugs(jobsPath), onlyDuty)
+    ctx.data.jobSlugCount = slugs.length + folderSlugList.length
 
-    if (slugs.length === 0) {
-      process.stdout.write(`[jobs] no job files in ${jobsDir}\n`)
+    if (slugs.length === 0 && folderSlugList.length === 0) {
+      const filter = onlyDuty ? ` matching ${onlyDuty}` : ""
+      process.stdout.write(`[jobs] no job files${filter} in ${jobsDir}\n`)
       return
     }
 
-    process.stdout.write(`[jobs] ticking ${slugs.length} job(s) via ${targetExecutable}\n`)
+    const filtered = onlyDuty ? ` matching ${onlyDuty}` : ""
+    process.stdout.write(
+      `[jobs] ticking ${slugs.length + folderSlugList.length} job(s)${filtered} via ${targetExecutable}\n`,
+    )
 
     const results: Array<{
       slug: string
@@ -80,7 +89,6 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
     // folder (`.kody/duties/<slug>/`); if a stale `.kody/duties/<slug>.md`
     // still exists for the same slug, the folder wins and the .md tick is
     // skipped below — otherwise the slug would fire twice in one wake.
-    const folderSlugList = listFolderDutySlugs(path.join(ctx.cwd, jobsDir))
     const folderDutySlugs = new Set(folderSlugList)
     const scheduledDuties = folderSlugList
       .map((slug): ScheduledDuty | null => {
@@ -142,7 +150,8 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
       // cadence guard (`every:`) and the routing rule (`tickScript:`)
       // consume it. A previous version parsed the file twice; folded
       // here to keep the dispatcher cheap on repos with many jobs.
-      const frontmatter = readJobFrontmatter(ctx.cwd, jobsDir, slug)
+      const dutyFile = readJobFile(ctx.cwd, jobsDir, slug)
+      const frontmatter = dutyFile.frontmatter
 
       // Hard kill-switch — when the dashboard's enable/disable toggle
       // flips a job off, the frontmatter carries `disabled: true`. Skip
@@ -174,6 +183,38 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
       if (decision.skip) {
         process.stdout.write(`[jobs] ⏭  skip ${slug}: ${decision.reason}\n`)
         results.push({ slug, exitCode: 0, skipped: true, reason: decision.reason })
+        continue
+      }
+
+      if (frontmatter.executables && frontmatter.executables.length > 0) {
+        try {
+          const task = createDutyTaskIssue({
+            slug,
+            body: dutyFile.body,
+            frontmatter,
+            cwd: ctx.cwd,
+          })
+          await stampFired(backend, slug, now, task)
+          process.stdout.write(`[jobs] → run ${slug} multi-executable task #${task.number} (task-jobs)\n`)
+          const out = await runJob(
+            mintScheduledJob({
+              duty: slug,
+              executable: "task-jobs",
+              schedule: frontmatter.every,
+              persona: frontmatter.staff,
+              cliArgs: { issue: task.number },
+            }),
+            { cwd: ctx.cwd, config: ctx.config, verbose: ctx.verbose, quiet: ctx.quiet },
+          )
+          results.push({ slug, exitCode: out.exitCode, reason: out.reason })
+          if (out.exitCode !== 0) {
+            process.stderr.write(`[jobs] task ${slug} failed (exit ${out.exitCode}): ${out.reason ?? ""}\n`)
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          process.stderr.write(`[jobs] task ${slug} crashed: ${msg}\n`)
+          results.push({ slug, exitCode: 99, reason: msg })
+        }
         continue
       }
 
@@ -298,17 +339,67 @@ function formatAgo(ms: number): string {
  * callers can apply their own defaults (cadence falls through to "fire",
  * routing falls back to the LLM-driven target).
  */
-function readJobFrontmatter(
-  cwd: string,
-  jobsDir: string,
-  slug: string,
-): ReturnType<typeof splitFrontmatter>["frontmatter"] {
+function readJobFile(cwd: string, jobsDir: string, slug: string): { frontmatter: JobFrontmatter; body: string } {
   try {
     const raw = fs.readFileSync(path.join(cwd, jobsDir, `${slug}.md`), "utf-8")
-    return splitFrontmatter(raw).frontmatter
+    return splitFrontmatter(raw)
   } catch {
-    return {}
+    return { frontmatter: {}, body: "" }
   }
+}
+
+function parseDutyFilter(raw: unknown): string | undefined {
+  return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : undefined
+}
+
+function filterSlugs(slugs: string[], onlyDuty: string | undefined): string[] {
+  return onlyDuty ? slugs.filter((slug) => slug === onlyDuty) : slugs
+}
+
+interface DutyTaskIssue {
+  number: number
+  url: string
+}
+
+function createDutyTaskIssue(opts: {
+  slug: string
+  body: string
+  frontmatter: JobFrontmatter
+  cwd: string
+}): DutyTaskIssue {
+  const title = `Duty ${opts.slug} - multi-executable task`
+  const body = buildDutyTaskIssueBody(opts.slug, opts.body, opts.frontmatter)
+  const out = gh(["issue", "create", "--title", title, "--body-file", "-"], { input: body, cwd: opts.cwd })
+  const url =
+    out
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .pop() ?? ""
+  const match = url.match(/\/issues\/(\d+)\b/)
+  if (!match) throw new Error(`gh issue create returned unexpected output: ${out}`)
+  return { number: Number(match[1]), url }
+}
+
+function buildDutyTaskIssueBody(slug: string, dutyBody: string, frontmatter: JobFrontmatter): string {
+  const specs = (frontmatter.executables ?? []).map((executable) => ({
+    executable,
+    duty: slug,
+    ...(frontmatter.staff ? { staff: frontmatter.staff } : {}),
+    reason: `Duty \`${slug}\` slice for \`${executable}\`.`,
+    flavor: "scheduled",
+    ...(frontmatter.every ? { schedule: frontmatter.every } : {}),
+  }))
+  return [
+    `# Duty task: ${slug}`,
+    "",
+    dutyBody.trim() || "(no duty body)",
+    "",
+    `<!-- ${TASK_JOBS_MARKER}`,
+    JSON.stringify(specs, null, 2),
+    "-->",
+    "",
+  ].join("\n")
 }
 
 function listJobSlugs(absDir: string): string[] {
@@ -343,10 +434,19 @@ function listFolderDutySlugs(absDir: string): string[] {
 }
 
 /** Persist `lastFiredAt = now` for a scheduled folder-duty (no duty-tick to do it). */
-async function stampFired(backend: ReturnType<typeof resolveBackend>, slug: string, now: number): Promise<void> {
+async function stampFired(
+  backend: ReturnType<typeof resolveBackend>,
+  slug: string,
+  now: number,
+  task?: DutyTaskIssue,
+): Promise<void> {
   try {
     const loaded = await backend.load(slug)
-    const nextData = { ...(loaded.state.data ?? {}), lastFiredAt: new Date(now).toISOString() }
+    const nextData = {
+      ...(loaded.state.data ?? {}),
+      lastFiredAt: new Date(now).toISOString(),
+      ...(task ? { lastTaskIssue: task.number, lastTaskUrl: task.url } : {}),
+    }
     await backend.save(loaded, { ...loaded.state, data: nextData })
   } catch (err) {
     process.stderr.write(`[jobs] failed to stamp lastFiredAt for ${slug}: ${String(err)}\n`)

@@ -17,7 +17,7 @@ import { loadConfig, parseProviderModel } from "./config.js"
 import { runContainerLoop } from "./container.js"
 import { DISCIPLINE } from "./discipline.js"
 import { emitEvent } from "./events.js"
-import type { Context, InputSpec, Profile, ScriptEntry } from "./executables/types.js"
+import type { Context, InputSpec, Job, Profile, ScriptEntry } from "./executables/types.js"
 import { KODY_NAMESPACE, removeLabel } from "./lifecycleLabels.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
@@ -180,6 +180,12 @@ export interface ExecutorOutput {
    * the follow-up run silently ignored it, stalling the pipeline at classify.
    */
   nextDispatch?: { executable: string; cliArgs: Record<string, unknown> }
+  /** In-process hand-off to a full Job, preserving job identity in task state. */
+  nextJob?: Job
+  /** Where to return after nextJob succeeds. */
+  afterNextJob?: { executable: string; cliArgs: Record<string, unknown> }
+  /** Internal state snapshot for in-process continuations. */
+  taskState?: TaskState
 }
 
 export async function runExecutable(profileName: string, input: ExecutorInput): Promise<ExecutorOutput> {
@@ -629,6 +635,9 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       prUrl: ctx.output.prUrl,
       reason: ctx.output.reason,
       nextDispatch: ctx.output.nextDispatch,
+      nextJob: ctx.output.nextJob,
+      afterNextJob: ctx.output.afterNextJob,
+      taskState: ctx.data.taskState as TaskState | undefined,
     })
   } finally {
     // Clear any kody:* lifecycle labels stamped by `setLifecycleLabel`
@@ -676,15 +685,65 @@ export const MAX_CHAIN_HOPS = 60
  */
 export async function runExecutableChain(profileName: string, input: ExecutorInput): Promise<ExecutorOutput> {
   let result = await runExecutable(profileName, input)
-  for (let hops = 1; result.nextDispatch && hops <= MAX_CHAIN_HOPS; hops++) {
-    const next = result.nextDispatch
-    process.stdout.write(`→ kody: in-process hand-off → ${next.executable} (hop ${hops}/${MAX_CHAIN_HOPS})\n\n`)
-    result = await runExecutable(next.executable, { ...input, cliArgs: next.cliArgs })
+  let chainData: Record<string, unknown> = {
+    ...(input.preloadedData ?? {}),
+    ...(result.taskState ? { taskState: result.taskState } : {}),
   }
-  if (result.nextDispatch) {
-    process.stderr.write(
-      `[kody] in-process hand-off cap (${MAX_CHAIN_HOPS}) reached; not running ${result.nextDispatch.executable}\n`,
-    )
+  for (let hops = 1; (result.nextDispatch || result.nextJob) && hops <= MAX_CHAIN_HOPS; hops++) {
+    if (result.nextJob) {
+      const next = result.nextJob
+      const after = result.afterNextJob
+      const label = next.executable ?? next.duty ?? "unknown"
+      process.stdout.write(`→ kody: in-process job hand-off → ${label} (hop ${hops}/${MAX_CHAIN_HOPS})\n\n`)
+      const { runJob } = await import("./job.js")
+      const childResult = await runJob(next, {
+        cwd: input.cwd,
+        config: input.config,
+        verbose: input.verbose,
+        quiet: input.quiet,
+        preloadedData: chainData,
+      })
+      if (
+        after &&
+        childResult.exitCode === 0 &&
+        !childResult.nextDispatch &&
+        !childResult.nextJob &&
+        !childResult.afterNextJob
+      ) {
+        chainData = {
+          ...chainData,
+          ...(childResult.taskState ? { taskState: childResult.taskState } : {}),
+        }
+        process.stdout.write(`→ kody: in-process return → ${after.executable} (hop ${hops}/${MAX_CHAIN_HOPS})\n\n`)
+        result = await runExecutable(after.executable, {
+          ...input,
+          cliArgs: after.cliArgs,
+          preloadedData: chainData,
+        })
+        chainData = {
+          ...chainData,
+          ...(result.taskState ? { taskState: result.taskState } : {}),
+        }
+      } else {
+        result = childResult
+        chainData = {
+          ...chainData,
+          ...(result.taskState ? { taskState: result.taskState } : {}),
+        }
+      }
+      continue
+    }
+    const next = result.nextDispatch!
+    process.stdout.write(`→ kody: in-process hand-off → ${next.executable} (hop ${hops}/${MAX_CHAIN_HOPS})\n\n`)
+    result = await runExecutable(next.executable, { ...input, cliArgs: next.cliArgs, preloadedData: chainData })
+    chainData = {
+      ...chainData,
+      ...(result.taskState ? { taskState: result.taskState } : {}),
+    }
+  }
+  if (result.nextDispatch || result.nextJob) {
+    const pending = result.nextDispatch?.executable ?? result.nextJob?.executable ?? result.nextJob?.duty ?? "unknown"
+    process.stderr.write(`[kody] in-process hand-off cap (${MAX_CHAIN_HOPS}) reached; not running ${pending}\n`)
   }
   return result
 }

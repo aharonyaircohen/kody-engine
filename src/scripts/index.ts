@@ -24,7 +24,9 @@ import { dispatchClassified } from "./dispatchClassified.js"
 import { dispatchDutyFileTicks } from "./dispatchDutyFileTicks.js"
 import { dispatchDutyTicks } from "./dispatchDutyTicks.js"
 import { dispatchNextTask } from "./dispatchNextTask.js"
+import { dispatchNextTaskJob } from "./dispatchNextTaskJob.js"
 import { ensurePr } from "./ensurePr.js"
+import { failOnceTaskJob } from "./failOnceTaskJob.js"
 import { finalizeGoal } from "./finalizeGoal.js"
 import { finalizeTerminal } from "./finalizeTerminal.js"
 import { finishFlow } from "./finishFlow.js"
@@ -58,6 +60,7 @@ import { parseJobStateFromAgentResult } from "./parseJobStateFromAgentResult.js"
 import { parseReproOutput } from "./parseReproOutput.js"
 import { persistArtifacts } from "./persistArtifacts.js"
 import { persistFlowState } from "./persistFlowState.js"
+import { planTaskJobs } from "./planTaskJobs.js"
 import { postAgentComment } from "./postAgentComment.js"
 import { postIssueComment } from "./postIssueComment.js"
 import { postPlanComment } from "./postPlanComment.js"
@@ -133,6 +136,8 @@ export const preflightScripts: Record<string, PreflightScript> = {
   warmupMcp,
   dispatchDutyTicks,
   dispatchDutyFileTicks,
+  planTaskJobs,
+  dispatchNextTaskJob,
   runTickScript,
   runPreviewBuild,
   loadGoalState,
@@ -181,6 +186,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   notifyTerminal,
   openQaIssue,
   createQaGoal,
+  failOnceTaskJob,
   recordOutcome,
   mergeReleasePr,
   waitForCi,

@@ -80,6 +80,16 @@ describe("splitFrontmatter", () => {
     expect(splitFrontmatter("---\nmentions:\n---\nx").frontmatter.mentions).toBeUndefined()
     expect(splitFrontmatter("---\nmentions: , ,\n---\nx").frontmatter.mentions).toBeUndefined()
   })
+
+  it("parses a comma-separated `executables` list into trimmed executable names", () => {
+    const { frontmatter } = splitFrontmatter("---\nexecutables: plan-verify, probe-skill\n---\nx")
+    expect(frontmatter.executables).toEqual(["plan-verify", "probe-skill"])
+  })
+
+  it("leaves executables unset when the value is blank or all-empty", () => {
+    expect(splitFrontmatter("---\nexecutables:\n---\nx").frontmatter.executables).toBeUndefined()
+    expect(splitFrontmatter("---\nexecutables: , ,\n---\nx").frontmatter.executables).toBeUndefined()
+  })
 })
 
 describe("isScheduleEvery", () => {

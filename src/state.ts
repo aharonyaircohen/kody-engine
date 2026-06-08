@@ -52,6 +52,17 @@ export interface TaskJob {
   runs: TaskJobRun[]
 }
 
+export interface PlannedTaskJob {
+  id: string
+  executable: string
+  duty?: string
+  staff?: string
+  flavor?: JobFlavor
+  schedule?: string
+  target?: number
+  reason?: string
+}
+
 export interface Action {
   type: string
   payload: Record<string, unknown>
@@ -361,6 +372,46 @@ export function reduce(
     history: newHistory,
     flow: state.flow,
   }
+}
+
+export function upsertTaskJobs(state: TaskState, planned: PlannedTaskJob[], timestamp: string): TaskState {
+  if (planned.length === 0) return state
+  const jobs: Record<string, TaskJob> = { ...(state.jobs ?? {}) }
+  for (const plan of planned) {
+    const prior = jobs[plan.id]
+    jobs[plan.id] = {
+      id: plan.id,
+      executable: plan.executable,
+      ...((plan.duty ?? prior?.duty) ? { duty: plan.duty ?? prior?.duty } : {}),
+      ...((plan.staff ?? prior?.staff) ? { staff: plan.staff ?? prior?.staff } : {}),
+      ...((plan.flavor ?? prior?.flavor) ? { flavor: plan.flavor ?? prior?.flavor } : {}),
+      ...((plan.schedule ?? prior?.schedule) ? { schedule: plan.schedule ?? prior?.schedule } : {}),
+      ...(typeof plan.target === "number"
+        ? { target: plan.target }
+        : prior?.target !== undefined
+          ? { target: prior.target }
+          : {}),
+      ...((plan.reason ?? prior?.reason) ? { reason: plan.reason ?? prior?.reason } : {}),
+      status: prior?.status ?? "pending",
+      createdAt: prior?.createdAt ?? timestamp,
+      updatedAt: prior?.updatedAt ?? timestamp,
+      ...(prior?.completedAt ? { completedAt: prior.completedAt } : {}),
+      ...(prior?.runUrl ? { runUrl: prior.runUrl } : {}),
+      ...(prior?.prUrl ? { prUrl: prior.prUrl } : {}),
+      runs: prior?.runs ?? [],
+    }
+  }
+  return { ...state, jobs }
+}
+
+export function nextPendingTaskJob(state: TaskState, ids?: string[]): TaskJob | null {
+  const jobs = state.jobs ?? {}
+  const keys = ids && ids.length > 0 ? ids : Object.keys(jobs)
+  for (const key of keys) {
+    const job = jobs[key]
+    if (job && job.status !== "succeeded") return job
+  }
+  return null
 }
 
 function reduceJobs(

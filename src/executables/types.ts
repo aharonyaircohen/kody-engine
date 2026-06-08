@@ -411,6 +411,10 @@ export interface Context {
      * a GitHub App (bot author), stalling the pipeline at classify.
      */
     nextDispatch?: { executable: string; cliArgs: Record<string, unknown> }
+    /** In-process hand-off to a full Job, preserving job identity in task state. */
+    nextJob?: Job
+    /** Where to return after nextJob succeeds. Used by task-jobs to keep draining pending work. */
+    afterNextJob?: { executable: string; cliArgs: Record<string, unknown> }
   }
   /**
    * If a preflight script sets this to true, the executor skips the agent

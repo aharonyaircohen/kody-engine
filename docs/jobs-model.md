@@ -86,6 +86,69 @@ humans, but it is not the source of truth for whether the task's required work
 is complete. The rolled-up `core` (phase, status, attempts, last outcome,
 PR/run URLs) is the task's summary state.
 
+## Plan-and-split tasks
+
+A task can explicitly carry a small hidden plan that says "run these
+executables as slices of this one task." The UI does not need to expose the word
+**job**: a dashboard can present this as a duty with multiple executors, then
+write the task data onto the issue:
+
+```md
+<!-- kody:task-jobs:v1
+[
+  { "executable": "db-migration", "reason": "schema slice" },
+  { "executable": "api-worker", "reason": "API slice" },
+  { "executable": "ui-builder", "reason": "UI slice" }
+]
+-->
+```
+
+For scheduled duties, the authoring surface is even simpler: the duty file can
+declare the executable list directly:
+
+```md
+---
+every: 1h
+staff: kody
+executables: db-migration, api-worker, ui-builder
+---
+
+# Duty
+
+Keep this feature moving across the database, API, and UI slices.
+```
+
+When that duty is due, `duty-scheduler` creates one GitHub issue with the hidden
+task data above, records the issue number in the duty state, and runs
+`task-jobs` against that issue.
+
+`task-jobs` reads that block, seeds `TaskState.jobs`, and dispatches one child
+job per executable. Each child still has exactly one executable. After a child
+succeeds, the engine returns to `task-jobs` in-process and dispatches the next
+unfinished child. When all planned jobs are succeeded, the task state renders
+`Jobs: N/N complete` and the recent history shows the slices that ran.
+
+Failure is intentionally conservative: a failed child stops the current
+workflow run. A manual rerun retries the first non-succeeded planned job before
+moving to later pending jobs, so failed work is not skipped.
+
+### Decisions and rejected alternatives
+
+- **Engine splits, executables do not.** An executable remains a leaf expert and
+  receives an already-scoped slice. Rejected: putting split logic in the
+  executable, because that turns the expert into a coordinator.
+- **Duty declares, engine splits.** A duty may carry `executables: a, b, c`;
+  `duty-scheduler` creates the task issue and `task-jobs` waits on the children.
+  Rejected: making the duty itself poll child state, because duties are cron
+  triggers.
+- **No separate job storage.** The planned jobs live in the task state comment on
+  the issue, beside the task summary and run history. Rejected:
+  `.kody/jobs/`, because that splits one task's source of truth across two
+  locations.
+- **No new orchestration layer.** `task-jobs` is a small script-only executable
+  on top of the existing `runJob` / `runExecutableChain` path. Rejected: a new
+  orchestrator primitive or an "orchestrate" executable kind.
+
 ## The goal = a task list
 
 A goal (`.kody/goals/`, driven by `goal-scheduler` / `goal-tick`) is a list of
@@ -109,8 +172,8 @@ All structural items are implemented:
 4. ✅ **`@kody` mints an instant job** — the comment/manual route mints via
    `mintInstantJob` and runs through `runJob`. Persona (`kody`) and inline `why`
    are both consumed.
-5. ✅ **Cron mints a scheduled job** — `dispatchJobFileTicks` mints one per due
-   duty (`chain:false`), carrying its cadence.
+5. ✅ **Cron mints a scheduled job** — `dispatchDutyFileTicks` mints one per due
+   duty, carrying its cadence.
 6. ✅ **Job points to one executable (0–1)** + safe dispatch. The agent-driven
    `dutyMcp` palette is a separate, intentional safety mechanism, left intact.
 7. ✅ **One runner** — comment, manual, and cron paths all run through `runJob`.
@@ -118,12 +181,20 @@ All structural items are implemented:
    engine internals (`src/servers/` + hardcoded CLI verbs), out of the registry.
 9. ✅ **Goal** — the orchestration container: a list of tasks + state, a job per
    task (`goal-scheduler` / `goal-tick` / `.kody/goals/`).
+10. ✅ **Plan-and-split task execution** — `task-jobs` reads hidden issue task
+    data, runs one child job per executable, waits in-process, summarizes the
+    task, and retries failed children before later pending ones.
+11. ✅ **Duty-level multi-executable execution** — a due duty with
+    `executables:` creates one task issue, records that issue on duty state, and
+    runs `task-jobs` for the listed executables.
 
 ## Decided
 
 - **A re-run is a new run, not a new job.** Retries append attempts under the
   same durable job when `jobKey` is stable.
 - **Failure halts the goal** (related tasks; failures are not isolated).
+- **Failure halts a split task run.** Rerun retries the failed planned job
+  before dispatching later slices.
 
 ## Still open (future work)
 

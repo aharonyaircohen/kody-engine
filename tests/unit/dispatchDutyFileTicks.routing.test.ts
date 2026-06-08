@@ -121,6 +121,23 @@ describe("dispatchDutyFileTicks routing", () => {
     expect(targets).toContain("duty-tick")
   })
 
+  it("can target one duty slug without ticking the other due duties", async () => {
+    writeJob("scripted-duty", "tickScript: .kody/scripts/x.sh\nstaff: kody")
+    writeJob("agent-duty", "every: 1h\nstaff: kody")
+
+    const ctx = ctxFor()
+    ctx.args = { duty: "agent-duty" }
+    await dispatchDutyFileTicks(ctx, PROFILE, {
+      jobsDir: ".kody/duties",
+      targetExecutable: "duty-tick",
+      slugArg: "duty",
+    })
+
+    expect(runExecutableMock).toHaveBeenCalledTimes(1)
+    expect(runExecutableMock.mock.calls[0]![0]).toBe("duty-tick")
+    expect(runExecutableMock.mock.calls[0]![1].cliArgs).toEqual({ duty: "agent-duty" })
+  })
+
   it("deduplicates a slug present as both a folder-duty and a .md (folder wins, no double-fire)", async () => {
     // Folder-duty: scheduled, fires one-shot as itself.
     const folder = path.join(tmp, ".kody", "duties", "hybrid")
