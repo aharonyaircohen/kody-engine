@@ -16,37 +16,25 @@ import type { Job, JobFlavor } from "./executables/types.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
 import { runExecutable, runExecutableChain } from "./executor.js"
 
+export { stableJobKey } from "./jobIdentity.js"
+
+import { stableJobKey } from "./jobIdentity.js"
+
 /** Default staff persona for instant `@kody` jobs (the agreed starting point). */
 export const DEFAULT_INSTANT_PERSONA = "kody"
 let localJobSeq = 0
 
 /**
  * Stable id for one run attempt, recorded under the task job. In GitHub Actions
- * the workflow run (id + attempt) is the natural attempt id. Off-CI, fall back
- * to a flavor + timestamp stamp plus a counter.
+ * the workflow run (id + attempt) is the natural attempt id; a local sequence
+ * keeps multiple in-process child jobs distinct inside the same workflow run.
+ * Off-CI, fall back to a flavor + timestamp stamp plus the same counter.
  */
 export function newJobId(flavor: JobFlavor): string {
-  const runId = process.env.GITHUB_RUN_ID
-  if (runId) return `gh-${runId}-${process.env.GITHUB_RUN_ATTEMPT ?? "1"}`
   localJobSeq += 1
+  const runId = process.env.GITHUB_RUN_ID
+  if (runId) return `gh-${runId}-${process.env.GITHUB_RUN_ATTEMPT ?? "1"}-${localJobSeq}`
   return `${flavor}-${Date.now()}-${localJobSeq}`
-}
-
-/** Stable key for the required work on a task; retries keep this value. */
-export function stableJobKey(job: Job): string {
-  const executable = job.executable ?? job.duty ?? "unknown"
-  if (job.flavor === "scheduled" && job.duty) return `scheduled:${job.duty}:${executable}`
-  const target = typeof job.target === "number" ? job.target : targetFromCliArgs(job.cliArgs)
-  return target === undefined ? `${job.flavor}:${executable}` : `${job.flavor}:${executable}:${target}`
-}
-
-function targetFromCliArgs(cliArgs: Record<string, unknown> | undefined): number | undefined {
-  if (!cliArgs) return undefined
-  for (const key of ["issue", "pr", "target", "issue_number"]) {
-    const value = cliArgs[key]
-    if (typeof value === "number" && Number.isFinite(value)) return value
-  }
-  return undefined
 }
 
 /** Thrown when a minted Job fails boundary validation. */
@@ -96,6 +84,7 @@ export interface RunJobBase {
   config?: KodyConfig
   verbose?: boolean
   quiet?: boolean
+  preloadedData?: Record<string, unknown>
   /**
    * Follow in-process stage hand-offs (`runExecutableChain`) — the default,
    * matching the comment/manual route. Set `false` for the cron tick path,
@@ -130,7 +119,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     throw new InvalidJobError("job resolves to no executable or duty")
   }
 
-  const preloadedData: Record<string, unknown> = {}
+  const preloadedData: Record<string, unknown> = { ...(base.preloadedData ?? {}) }
   // Stamp both identities: jobKey is stable required work on the task; jobId is
   // this execution attempt.
   preloadedData.jobId = newJobId(valid.flavor)

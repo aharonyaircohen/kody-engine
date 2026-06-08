@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // Hoist-safe mock of the executor so runJob is tested in isolation (no real
 // executable spins up). Mirrors tests/unit/dispatchDutyFileTicks.routing.test.ts.
@@ -10,6 +10,7 @@ import {
   InvalidJobError,
   mintInstantJob,
   mintScheduledJob,
+  newJobId,
   runJob,
   validateJob,
 } from "../../src/job.js"
@@ -18,6 +19,10 @@ describe("runJob (Phase 1 seam)", () => {
   beforeEach(() => {
     runExecutableChain.mockReset()
     runExecutableChain.mockResolvedValue({ exitCode: 0 })
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   it("lowers an instant job onto runExecutableChain with its executable + cliArgs", async () => {
@@ -61,6 +66,18 @@ describe("runJob (Phase 1 seam)", () => {
     expect(first?.jobKey).toBe("instant:run:42")
     expect(second?.jobKey).toBe("instant:run:42")
     expect(first?.jobId).not.toBe(second?.jobId)
+  })
+
+  it("keeps GitHub attempt ids unique when multiple jobs run in one workflow", () => {
+    vi.stubEnv("GITHUB_RUN_ID", "77")
+    vi.stubEnv("GITHUB_RUN_ATTEMPT", "3")
+
+    const first = newJobId("instant")
+    const second = newJobId("instant")
+
+    expect(first).toMatch(/^gh-77-3-\d+$/)
+    expect(second).toMatch(/^gh-77-3-\d+$/)
+    expect(first).not.toBe(second)
   })
 
   it("carries the DispatchResult's why through mintInstantJob into jobWhy", async () => {

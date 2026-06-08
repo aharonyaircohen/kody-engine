@@ -173,6 +173,21 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
     reason:
       "preview-build is the only executable that builds a deployable preview image (remote builder). Single-purpose; no other executable shares the build step.",
   },
+  planTaskJobs: {
+    owner: "task-jobs",
+    reason:
+      "task-jobs-only task-data planner. Kept in scripts so dashboard-written issue metadata can seed task state before dispatch.",
+  },
+  dispatchNextTaskJob: {
+    owner: "task-jobs",
+    reason:
+      "task-jobs-only handoff step. It selects the next pending planned job and returns a nextJob for the generic runner.",
+  },
+  failOnceTaskJob: {
+    owner: "task-job-fail-once",
+    reason:
+      "live-test-only deterministic failure/retry probe for task-jobs; it proves failed planned slices block and rerun.",
+  },
   fixFlow: { owner: "fix", reason: "fix bootstrap: open PR branch and derive reviewer feedback." },
   requireFeedbackActions: { owner: "fix", reason: "fix-only contract check for FEEDBACK_ACTIONS." },
   fixCiFlow: { owner: "fix-ci", reason: "fix-ci bootstrap: open PR branch and attach failing CI logs." },

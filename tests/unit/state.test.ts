@@ -3,11 +3,13 @@ import {
   type Action,
   CorruptStateError,
   emptyState,
+  nextPendingTaskJob,
   parseStateComment,
   reduce,
   renderStateComment,
   STATE_BEGIN,
   STATE_END,
+  upsertTaskJobs,
 } from "../../src/state.js"
 
 describe("state: emptyState", () => {
@@ -229,6 +231,97 @@ describe("state: reduce", () => {
   it("is a no-op when action is null", () => {
     const s = emptyState()
     expect(reduce(s, "build", null)).toBe(s)
+  })
+})
+
+describe("state: explicit task jobs", () => {
+  it("seeds planned jobs as pending durable work", () => {
+    const s = upsertTaskJobs(
+      emptyState(),
+      [
+        { id: "instant:plan-verify:42", executable: "plan-verify", flavor: "instant", target: 42, reason: "api" },
+        { id: "instant:probe-skill:42", executable: "probe-skill", flavor: "instant", target: 42, reason: "ui" },
+      ],
+      "2026-06-08T08:00:00Z",
+    )
+
+    expect(Object.keys(s.jobs)).toEqual(["instant:plan-verify:42", "instant:probe-skill:42"])
+    expect(s.jobs["instant:plan-verify:42"]).toMatchObject({
+      executable: "plan-verify",
+      status: "pending",
+      target: 42,
+      reason: "api",
+      runs: [],
+    })
+    expect(renderStateComment(s)).toContain("**Jobs:** 0/2 complete")
+  })
+
+  it("preserves completed runs when the plan is seen again", () => {
+    const planned = { id: "instant:plan-verify:42", executable: "plan-verify", flavor: "instant" as const, target: 42 }
+    let s = upsertTaskJobs(emptyState(), [planned], "2026-06-08T08:00:00Z")
+    s = reduce(
+      s,
+      "plan-verify",
+      { type: "VERIFY_COMPLETED", payload: {}, timestamp: "2026-06-08T08:05:00Z" },
+      "idle",
+      null,
+      {
+        jobKey: "instant:plan-verify:42",
+        jobId: "gh-1-1",
+        flavor: "instant",
+        target: 42,
+      },
+    )
+
+    const replanned = upsertTaskJobs(s, [{ ...planned, reason: "updated plan text" }], "2026-06-08T08:10:00Z")
+
+    expect(replanned.jobs["instant:plan-verify:42"]?.status).toBe("succeeded")
+    expect(replanned.jobs["instant:plan-verify:42"]?.reason).toBe("updated plan text")
+    expect(replanned.jobs["instant:plan-verify:42"]?.runs.map((r) => r.id)).toEqual(["gh-1-1"])
+  })
+
+  it("selects the next pending planned job in plan order", () => {
+    let s = upsertTaskJobs(
+      emptyState(),
+      [
+        { id: "instant:plan-verify:42", executable: "plan-verify", flavor: "instant", target: 42 },
+        { id: "instant:probe-skill:42", executable: "probe-skill", flavor: "instant", target: 42 },
+      ],
+      "2026-06-08T08:00:00Z",
+    )
+    s = reduce(
+      s,
+      "plan-verify",
+      { type: "VERIFY_COMPLETED", payload: {}, timestamp: "2026-06-08T08:05:00Z" },
+      "idle",
+      null,
+      { jobKey: "instant:plan-verify:42", jobId: "gh-1-1", flavor: "instant", target: 42 },
+    )
+
+    const next = nextPendingTaskJob(s, ["instant:plan-verify:42", "instant:probe-skill:42"])
+    expect(next?.id).toBe("instant:probe-skill:42")
+  })
+
+  it("selects a failed planned job before later pending jobs so reruns retry the failed slice", () => {
+    let s = upsertTaskJobs(
+      emptyState(),
+      [
+        { id: "instant:plan-verify:42", executable: "plan-verify", flavor: "instant", target: 42 },
+        { id: "instant:probe-skill:42", executable: "probe-skill", flavor: "instant", target: 42 },
+      ],
+      "2026-06-08T08:00:00Z",
+    )
+    s = reduce(
+      s,
+      "plan-verify",
+      { type: "PLAN_VERIFY_FAILED", payload: { reason: "boom" }, timestamp: "2026-06-08T08:05:00Z" },
+      "idle",
+      null,
+      { jobKey: "instant:plan-verify:42", jobId: "gh-1-1", flavor: "instant", target: 42 },
+    )
+
+    const next = nextPendingTaskJob(s, ["instant:plan-verify:42", "instant:probe-skill:42"])
+    expect(next?.id).toBe("instant:plan-verify:42")
   })
 })
 

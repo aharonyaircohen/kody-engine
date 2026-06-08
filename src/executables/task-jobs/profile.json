@@ -1,0 +1,41 @@
+{
+  "name": "task-jobs",
+  "role": "utility",
+  "describe": "Runs the next pending executable from a hidden task job plan on an issue.",
+  "inputs": [
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": true,
+      "describe": "GitHub issue number that carries the task job plan."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": 0,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "inputArtifacts": [],
+  "outputArtifacts": [],
+  "scripts": {
+    "preflight": [
+      { "script": "loadIssueContext" },
+      { "script": "loadTaskState" },
+      { "script": "planTaskJobs" },
+      { "script": "dispatchNextTaskJob" },
+      { "script": "skipAgent" }
+    ],
+    "postflight": []
+  }
+}
