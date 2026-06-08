@@ -90,4 +90,28 @@ export const finalizeTerminal: PostflightScript = async (ctx) => {
       `[kody finalizeTerminal] failed to write terminal state on ${target} #${targetNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
     )
   }
+
+  // Mirror the terminal state to the issue when the run targeted a PR
+  // (e.g. `@kody fix` retry on a PR) and the issue is a separate number.
+  // Without this, a successful retry leaves the issue's state comment
+  // frozen at the previous `status: "failed"`, so the dashboard keeps
+  // the card in the Failed column even though the work succeeded. The
+  // label mirror (issue + PR both get kody:done) already does this; the
+  // state comment write was asymmetric and is being aligned here.
+  // Self-skip: an issue-only run with no PR reports targetNumber ===
+  // issueNumber (the same number), and the write above already covered
+  // it — the mirror would just re-PATCH the same comment.
+  if (target === "pr" && issueNumber && issueNumber !== targetNumber) {
+    try {
+      const issueState = readTaskState("issue", issueNumber, ctx.cwd)
+      issueState.core.phase = phase
+      issueState.core.status = status
+      issueState.core.currentExecutable = null
+      writeTaskState("issue", issueNumber, issueState, ctx.cwd)
+    } catch (err) {
+      process.stderr.write(
+        `[kody finalizeTerminal] failed to mirror terminal state to issue #${issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
+      )
+    }
+  }
 }

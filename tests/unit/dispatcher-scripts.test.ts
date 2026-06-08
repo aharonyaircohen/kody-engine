@@ -308,4 +308,132 @@ describe("finalizeTerminal", () => {
     expect(setKodyLabelMock).not.toHaveBeenCalled()
     expect(execFileSync).not.toHaveBeenCalled()
   })
+
+  it("mirrors the terminal state to the issue when target=pr and issue differs from PR", async () => {
+    // The PR's state comment carries the freshly-saved prUrl. The issue has
+    // its own state comment (id=888) that still shows the previous failed
+    // run — that's the bug we are fixing: it should be flipped to terminal.
+    const prStateWithUrl: TaskState = {
+      ...emptyState(),
+      core: { ...emptyState().core, prUrl: "https://github.com/o/r/pull/99" },
+    }
+    const prStateBody = `${STATE_BEGIN}\n\n\`\`\`json\n${JSON.stringify(prStateWithUrl)}\n\`\`\`\n\n${STATE_END}`
+    const issueStateBody = `${STATE_BEGIN}\n\n\`\`\`json\n${JSON.stringify({ ...emptyState(), core: { ...emptyState().core, status: "failed", phase: "failed" } })}\n\`\`\`\n\n${STATE_END}`
+    execFileSync.mockImplementation((_cmd, args: unknown) => {
+      const a = (args as string[]) ?? []
+      // PR-side state read: paginate on PR 99's comments (PRs use the same
+      // issues API path as issues, distinguished by the embedded number).
+      if (a[0] === "api" && a[1] === "--paginate" && a[2]?.includes("/issues/99/")) {
+        return JSON.stringify([{ id: 7, body: prStateBody }])
+      }
+      // Issue-side state read: paginate on issue 42's comments.
+      if (a[0] === "api" && a[1] === "--paginate" && a[2]?.includes("/issues/42/")) {
+        return JSON.stringify([{ id: 888, body: issueStateBody }])
+      }
+      return ""
+    })
+    const state: TaskState = { ...emptyState() }
+    const c = ctx({
+      args: { issue: 42 },
+      data: { taskState: state, commentTargetType: "pr", commentTargetNumber: 99 },
+      output: { exitCode: 0 },
+    })
+    await finalizeTerminal(c, profile("fix"), null)
+    // Find the PATCH issued against the issue's existing state comment (id=888).
+    const call = execFileSync.mock.calls.find(
+      (x) =>
+        (x[1] as string[])?.[0] === "api" &&
+        (x[1] as string[])?.[1]?.includes("/issues/comments/888") &&
+        (x[1] as string[])?.includes("PATCH"),
+    )
+    expect(call).toBeDefined()
+    // The body passed to the PATCH (via stdin, not args) must be the rendered
+    // state comment, with the terminal phase+status flipped and
+    // currentExecutable cleared.
+    const stdinBody = (call?.[2] as { input?: string } | undefined)?.input ?? ""
+    expect(stdinBody).toContain('"phase": "shipped"')
+    expect(stdinBody).toContain('"status": "succeeded"')
+    expect(stdinBody).toContain('"currentExecutable": null')
+  })
+
+  it("does not mirror when target=issue (the existing write already targets the issue)", async () => {
+    const issueStateBody = `${STATE_BEGIN}\n\n\`\`\`json\n${JSON.stringify({ ...emptyState(), core: { ...emptyState().core, prUrl: "https://github.com/o/r/pull/50" } })}\n\`\`\`\n\n${STATE_END}`
+    execFileSync.mockImplementation((_cmd, args: unknown) => {
+      const a = (args as string[]) ?? []
+      if (a[0] === "api" && a[1] === "--paginate") {
+        return JSON.stringify([{ id: 1, body: issueStateBody }])
+      }
+      return ""
+    })
+    const state: TaskState = { ...emptyState() }
+    const c = ctx({
+      args: { issue: 42 },
+      data: { taskState: state, commentTargetType: "issue", commentTargetNumber: 42 },
+      output: { exitCode: 0 },
+    })
+    await finalizeTerminal(c, profile("run"), null)
+    // The original write is one PATCH to id=1; the mirror must NOT add a
+    // second write targeting the same comment.
+    const calls = execFileSync.mock.calls.map((x) => (x[1] as string[]) ?? [])
+    const patchCalls = calls.filter((a) => a[0] === "api" && a.includes("PATCH"))
+    expect(patchCalls).toHaveLength(1)
+    expect(patchCalls[0]?.[1]).toContain("/issues/comments/1")
+  })
+
+  it("does not mirror when issueNumber === targetNumber (same number, would be a no-op re-PATCH)", async () => {
+    const sameStateBody = `${STATE_BEGIN}\n\n\`\`\`json\n${JSON.stringify({ ...emptyState(), core: { ...emptyState().core, prUrl: "https://github.com/o/r/pull/42" } })}\n\`\`\`\n\n${STATE_END}`
+    execFileSync.mockImplementation((_cmd, args: unknown) => {
+      const a = (args as string[]) ?? []
+      if (a[0] === "api" && a[1] === "--paginate") {
+        return JSON.stringify([{ id: 5, body: sameStateBody }])
+      }
+      return ""
+    })
+    const state: TaskState = { ...emptyState() }
+    // commentTargetType=pr with targetNumber === issueNumber is a
+    // degenerate case (the PR URL happens to use the same number) — the
+    // mirror self-skip guarantees we don't double-PATCH the same comment.
+    const c = ctx({
+      args: { issue: 42 },
+      data: { taskState: state, commentTargetType: "pr", commentTargetNumber: 42 },
+      output: { exitCode: 0 },
+    })
+    await finalizeTerminal(c, profile("fix"), null)
+    const calls = execFileSync.mock.calls.map((x) => (x[1] as string[]) ?? [])
+    const patchCalls = calls.filter((a) => a[0] === "api" && a.includes("PATCH"))
+    expect(patchCalls).toHaveLength(1)
+  })
+
+  it("logs and does not throw when the issue state mirror read fails", async () => {
+    // PR-side read succeeds (with prUrl → delivered=true). The issue's
+    // state body is present but malformed (STATE_BEGIN with no STATE_END),
+    // which makes parseStateComment throw CorruptStateError — that bubbles
+    // out of readTaskState because readTaskState does not catch parse
+    // errors. The mirror path's try/catch must swallow it and log to
+    // stderr; the parent call must still resolve to undefined.
+    const prStateBody = `${STATE_BEGIN}\n\n\`\`\`json\n${JSON.stringify({ ...emptyState(), core: { ...emptyState().core, prUrl: "https://github.com/o/r/pull/77" } })}\n\`\`\`\n\n${STATE_END}`
+    // Malformed: STATE_BEGIN present but no STATE_END → parseStateComment throws.
+    const malformedIssueBody = `${STATE_BEGIN}\n\n\`\`\`json\n{ this is not valid JSON\n\`\`\`\n`
+    execFileSync.mockImplementation((_cmd, args: unknown) => {
+      const a = (args as string[]) ?? []
+      if (a[0] === "api" && a[1] === "--paginate" && a[2]?.includes("/issues/77/")) {
+        return JSON.stringify([{ id: 9, body: prStateBody }])
+      }
+      if (a[0] === "api" && a[1] === "--paginate" && a[2]?.includes("/issues/42/")) {
+        return JSON.stringify([{ id: 12, body: malformedIssueBody }])
+      }
+      return ""
+    })
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true)
+    const state: TaskState = { ...emptyState() }
+    const c = ctx({
+      args: { issue: 42 },
+      data: { taskState: state, commentTargetType: "pr", commentTargetNumber: 77 },
+      output: { exitCode: 0 },
+    })
+    await expect(finalizeTerminal(c, profile("fix"), null)).resolves.toBeUndefined()
+    const stderrText = stderrSpy.mock.calls.map((x) => String(x[0])).join("")
+    expect(stderrText).toMatch(/failed to mirror terminal state to issue #42/)
+    stderrSpy.mockRestore()
+  })
 })
