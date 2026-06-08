@@ -1,18 +1,17 @@
 # Jobs Model — Reference
 
-> **Status: IMPLEMENTED.** Everything the engine runs is a **job**. Every trigger
-> — an `@kody` comment, a cron wake, an orchestrator hand-off — mints a job and
-> runs it through one runner (`runJob` in [`src/job.ts`](../src/job.ts)). The job
-> carries *who* (persona), *why* (the request/duty), *when* (schedule), and *how*
-> (executable); each run is recorded in the task's job ledger. This document is
-> the reference for that model, not a proposal.
+> **Status: IMPLEMENTED.** A task stores durable **jobs**: the required work for
+> that issue/PR. Each job points to one executable and accumulates **runs**:
+> execution attempts. Every trigger — an `@kody` comment, a cron wake, an
+> orchestrator hand-off — still enters through `runJob` in
+> [`src/job.ts`](../src/job.ts), but the stable task key is `jobKey`; the
+> per-attempt id is `jobId`.
 
 ## The idea
 
-The fuzziness between "duty" and "executable" is gone because each concept
-answers a different question, and they all compose into one execution unit — the
-**job**. You never run an executable directly; you mint a job that references
-one.
+The fuzziness between "what must be done" and "what happened this time" is gone:
+a **job** is required work, and a **run** is one attempt to execute that work.
+Retries stay under the same job instead of becoming new work.
 
 ## The structures
 
@@ -22,28 +21,30 @@ one.
 | **duty** | why | reusable intent — the prose body of `.kody/duties/<slug>.md` |
 | **executable** | how | reusable unit of work (`run`, `fix`, a duty's `profile.json`, …) |
 | **issue** | what | a GitHub **issue or PR** — the work-item a task is about |
-| **task** | run-history | the **ordered list of jobs** on one issue/PR + rolled-up state |
-| **job** | the run | one execution (**a re-run is a new job**) |
+| **task** | task state | one issue/PR, its required jobs, outputs, and rolled-up state |
+| **job** | required work | one planned unit of work on the task; points to exactly one executable |
+| **run** | attempt | one execution attempt for a job; retries create more runs |
 | **goal** | orchestration | a **list of tasks** + state (related work) |
 
-Nesting: **goal → tasks → jobs.** A goal is a list of tasks + state; a task is
-the list of jobs (about one issue/PR) + state; a job is a single execution.
+Nesting: **goal → tasks → jobs → runs.** A goal is related tasks; a task is one
+issue/PR; a job is required work inside that task; a run is one attempt.
 
 ## Trigger vs engine (two vocabularies)
 
 - **Trigger side points at an issue:** `@kody [command] [free text]` on an
   issue/PR says *what* to do, *on what*, and (optionally) *why* in the operator's
   own words.
-- **Engine side runs jobs:** it mints a job for that issue and runs it; the
-  issue's **task** is the list of jobs that result.
+- **Engine side runs jobs:** it resolves the task job to execute, then records
+  the attempt as a run under that job.
 
 A comment, a cron wake, and an orchestrator hand-off all funnel into **one
-runner** that executes jobs.
+runner** that executes a job attempt.
 
 ## The job
 
 A `Job` ([`src/executables/types.ts`](../src/executables/types.ts)) binds the
-four nouns plus its target and args:
+four nouns plus its target and args. In task state, the durable job is stored in
+`TaskState.jobs`; its runs are stored on `TaskJob.runs`.
 
 - **who** — `persona` (a staff slug; instant jobs default to `kody`)
 - **why** — `duty` (a reusable intent slug) **or** `why` (the operator's inline
@@ -52,10 +53,10 @@ four nouns plus its target and args:
 - **how** — `executable` (the profile to run; 0–1)
 - plus `target` (issue/PR number), `cliArgs`, and `flavor` (`instant` | `scheduled`).
 
-`runJob(job, base)` lowers a job onto the generic executor. It seeds the job's
-identity and metadata into `ctx.data` (`jobId`, `jobFlavor`, `jobSchedule`,
-`jobPersona`, `jobWhy`) so downstream scripts and the executor can consume them
-without the executor knowing anything about jobs.
+`runJob(job, base)` lowers a job onto the generic executor. It seeds a stable
+task job key (`jobKey`) plus per-run metadata (`jobId`, `jobFlavor`,
+`jobSchedule`, `jobPersona`, `jobWhy`) into `ctx.data` so downstream scripts can
+persist the run without the executor knowing task-state details.
 
 ### How each field is consumed
 
@@ -69,24 +70,26 @@ without the executor knowing anything about jobs.
   Structured comments (`resolve --prefer ours`) leave no free text → no `why`.
 - **why (duty) →** the duty's prose body is the intent; the scheduled tick path
   surfaces it via the `{{jobIntent}}` prompt token.
-- **when →** recorded on the job's ledger entry so a scheduled job's cadence is
-  visible in the task state.
+- **when →** recorded on the task job and its run attempt so a scheduled job's
+  cadence is visible in the task state.
 - **how →** `runJob` dispatches exactly that one executable.
 
-## The task = a job ledger
+## The task = jobs + run history
 
 A task is the `TaskState` ([`src/state.ts`](../src/state.ts)) for one issue/PR.
-Its `history` is the **ordered list of job records** — each run appends one entry
-carrying `jobId`, `flavor`, `schedule`, per-job `status`, `runUrl`, the
-executable, and the staff it ran as. Because **a re-run is a new job**, a retry
-appends a new entry rather than mutating the prior one — so the task is a true
-run-history, not a single mutable slot. The rolled-up `core` (phase, status,
-attempts, last outcome, PR/run URLs) is the task's summary state.
+Its `jobs` map is the durable source of truth for required work. Each job has a
+stable id, executable, optional duty/staff references, status, links, and a
+capped `runs` list.
+
+Its `history` remains a capped audit log of recent attempts. It is useful for
+humans, but it is not the source of truth for whether the task's required work
+is complete. The rolled-up `core` (phase, status, attempts, last outcome,
+PR/run URLs) is the task's summary state.
 
 ## The goal = a task list
 
 A goal (`.kody/goals/`, driven by `goal-scheduler` / `goal-tick`) is a list of
-tasks + state, spawning a job per task. **Failure halts the goal:** a goal's
+tasks + state, spawning work per task. **Failure halts the goal:** a goal's
 tasks are related, so if a task fails the goal stops and resumes only once that
 task is fixed/retried — failures are not isolated.
 
@@ -94,10 +97,11 @@ task is fixed/retried — failures are not isolated.
 
 All structural items are implemented:
 
-1. ✅ **Job** — the single execution unit (`Job` + `runJob` + `mintInstantJob` /
-   `mintScheduledJob`). Every trigger mints one.
-2. ✅ **Task = list of jobs + state** — `TaskState.history` is the job ledger;
-   each run appends a job record (`jobId`/`flavor`/`schedule`/`status`/`runUrl`).
+1. ✅ **Job** — durable required work on a task (`TaskState.jobs`) with one
+   executable and a list of runs.
+2. ✅ **Run** — one execution attempt. `runJob` seeds stable `jobKey` plus
+   per-run `jobId`; `saveTaskState` appends the attempt under the task job and
+   to `history`.
 3. ✅ **Duty = pure why** — the duty's prose body is the intent; the job carries
    when/who/how, sourced from the duty's frontmatter at mint time. The
    frontmatter remains the authoring surface (removing it would break consumer
@@ -117,8 +121,8 @@ All structural items are implemented:
 
 ## Decided
 
-- **A re-run is a new job.** The task layer is real run-history, not ceremony:
-  each run is a distinct job appended to the task's ledger.
+- **A re-run is a new run, not a new job.** Retries append attempts under the
+  same durable job when `jobKey` is stable.
 - **Failure halts the goal** (related tasks; failures are not isolated).
 
 ## Still open (future work)

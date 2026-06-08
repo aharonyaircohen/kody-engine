@@ -439,18 +439,20 @@ export type PostflightScript = (
 export type AnyScript = PreflightScript | PostflightScript
 
 // ────────────────────────────────────────────────────────────────────────────
-// Job — the unified execution unit (Phase 1 of the job-model migration).
+// Job — the unified work request (task-state jobs collect run attempts).
 //
-// A Job is the single thing the engine executes, regardless of how it was
-// triggered. It REFERENCES the reusable nouns — `executable` (how), `persona`
-// (who), `duty` (why, by slug) — and OWNS its `schedule` (when). Two flavors:
+// A Job is the required work the engine tries to execute, regardless of how it
+// was triggered. It REFERENCES the reusable nouns — `executable` (how),
+// `persona` (who), `duty` (why, by slug) — and OWNS its `schedule` (when).
+// Task state stores this durable job separately from individual run attempts.
+// Two flavors:
 //   - "instant"   — run once now (an `@kody <verb>` comment or a manual dispatch)
 //   - "scheduled" — fired on `schedule` (cron) by the tick path
 //
 // Fields are optional-heavy on purpose: a comment-minted instant job carries
 // `executable` + inline `why`; a cron-minted scheduled job carries `duty` +
 // `schedule` + `persona`. `runJob` (src/job.ts) lowers a Job onto the existing
-// executor; nothing mints Jobs yet — this is an additive seam.
+// executor and seeds both stable job metadata and per-run metadata.
 // ────────────────────────────────────────────────────────────────────────────
 
 export type JobFlavor = "instant" | "scheduled"

@@ -15,11 +15,42 @@ import type { JobFlavor } from "./executables/types.js"
 export const STATE_BEGIN = "<!-- kody:state:v1:begin -->"
 export const STATE_END = "<!-- kody:state:v1:end -->"
 const HISTORY_MAX_ENTRIES = 20
+const JOB_RUNS_MAX_ENTRIES = 20
 const API_TIMEOUT_MS = 30_000
 
 export type Phase = "research" | "planning" | "implementing" | "reviewing" | "shipped" | "failed" | "idle"
 
 export type Status = "pending" | "running" | "succeeded" | "failed"
+
+export interface TaskJobRun {
+  /** One execution attempt for this job. Usually the GitHub Actions run id. */
+  id: string
+  timestamp: string
+  action: string
+  status: Status
+  note?: string
+  runUrl?: string
+  prUrl?: string
+}
+
+export interface TaskJob {
+  /** Stable id for the required work, not the per-attempt run id. */
+  id: string
+  executable: string
+  duty?: string
+  staff?: string
+  flavor?: JobFlavor
+  schedule?: string
+  target?: number
+  reason?: string
+  status: Status
+  createdAt: string
+  updatedAt: string
+  completedAt?: string
+  runUrl?: string
+  prUrl?: string
+  runs: TaskJobRun[]
+}
 
 export interface Action {
   type: string
@@ -53,6 +84,11 @@ export interface TaskState {
    * input via profile.input.artifacts.
    */
   artifacts: Record<string, Artifact>
+  /**
+   * Durable required work for this task. This is the source of truth for
+   * "what still has to complete"; history below remains a capped audit log.
+   */
+  jobs: Record<string, TaskJob>
   history: HistoryEntry[]
   /**
    * Optional multi-executable flow context. Set by `startFlow`, cleared by
@@ -97,10 +133,8 @@ export interface ExecutableState {
 }
 
 /**
- * One job in the task's ledger. A task (this TaskState) IS the ordered list of
- * these `history` entries plus the rolled-up `core` state. Each engine run
- * appends exactly one entry, so — per the model's decision — a re-run is a NEW
- * job (a new entry), and `history` is the run-history of jobs on this issue/PR.
+ * One recent run attempt in the task's audit log. Durable required work lives
+ * in `jobs`; `history` stays capped and human-readable.
  */
 export interface HistoryEntry {
   timestamp: string
@@ -135,6 +169,7 @@ export function emptyState(): TaskState {
     },
     executables: {},
     artifacts: {},
+    jobs: {},
     history: [],
   }
 }
@@ -247,6 +282,7 @@ export function parseStateComment(body: string): TaskState {
     core: { ...emptyState().core, ...parsed.core },
     executables: parsed.executables ?? {},
     artifacts: parsed.artifacts && typeof parsed.artifacts === "object" ? parsed.artifacts : {},
+    jobs: normalizeJobs((parsed as { jobs?: unknown }).jobs),
     history: Array.isArray(parsed.history) ? parsed.history : [],
     flow: parsed.flow,
   }
@@ -260,12 +296,21 @@ export function parseStateComment(body: string): TaskState {
  * Keeping phase a caller-supplied parameter (rather than deriving from the
  * executable name) lets this module stay generic — no executable names here.
  */
-/** Identity + provenance of the job being recorded (see HistoryEntry). */
+/** Identity + provenance of the task job and the run being recorded. */
 export interface JobMeta {
+  /** Stable job key for required work on the task. */
+  jobKey?: string
+  /** Per-run id for this execution attempt. */
   jobId?: string
   flavor?: JobFlavor
   schedule?: string
   runUrl?: string
+  prUrl?: string
+  duty?: string
+  executable?: string
+  target?: number
+  persona?: string
+  why?: string
 }
 
 export function reduce(
@@ -283,9 +328,8 @@ export function reduce(
     [executable]: { ...(state.executables[executable] ?? { lastAction: null }), lastAction: action },
   }
   const ranAsStaff = typeof staff === "string" && staff.length > 0 ? staff : undefined
-  // Each run appends one job record — the task IS this ordered list. Stamp the
-  // job's identity (id/flavor/runUrl) when the caller knows it, plus the
-  // per-job outcome so a reader can see which jobs on this task failed.
+  // Each run appends one audit entry. The durable job state is updated below
+  // via `reduceJobs`, keyed by the stable jobKey when the caller knows it.
   const entry: HistoryEntry = {
     timestamp: action.timestamp,
     executable,
@@ -299,6 +343,7 @@ export function reduce(
     ...(job?.runUrl ? { runUrl: job.runUrl } : {}),
   }
   const newHistory = [...state.history, entry].slice(-HISTORY_MAX_ENTRIES)
+  const newJobs = reduceJobs(state.jobs ?? {}, executable, action, staff, job)
   return {
     schemaVersion: 1,
     core: {
@@ -312,9 +357,57 @@ export function reduce(
     },
     executables: newExecutables,
     artifacts: { ...(state.artifacts ?? {}) },
+    jobs: newJobs,
     history: newHistory,
     flow: state.flow,
   }
+}
+
+function reduceJobs(
+  jobs: Record<string, TaskJob>,
+  executable: string,
+  action: Action,
+  staff?: string | null,
+  job?: JobMeta,
+): Record<string, TaskJob> {
+  const status = statusFromAction(action)
+  const id = job?.jobKey || job?.jobId || `legacy:${executable}`
+  const prior = jobs[id]
+  const note = noteFromAction(action)
+  const prUrl = job?.prUrl ?? prUrlFromAction(action)
+  const run: TaskJobRun = {
+    id: job?.jobId || `${id}:${action.timestamp}`,
+    timestamp: action.timestamp,
+    action: action.type,
+    status,
+    ...(note ? { note } : {}),
+    ...(job?.runUrl ? { runUrl: job.runUrl } : {}),
+    ...(prUrl ? { prUrl } : {}),
+  }
+  const runs = [...(prior?.runs ?? []), run].slice(-JOB_RUNS_MAX_ENTRIES)
+  const ranAsStaff = typeof staff === "string" && staff.length > 0 ? staff : job?.persona
+  const next: TaskJob = {
+    id,
+    executable: job?.executable ?? prior?.executable ?? executable,
+    ...((job?.duty ?? prior?.duty) ? { duty: job?.duty ?? prior?.duty } : {}),
+    ...((ranAsStaff ?? prior?.staff) ? { staff: ranAsStaff ?? prior?.staff } : {}),
+    ...((job?.flavor ?? prior?.flavor) ? { flavor: job?.flavor ?? prior?.flavor } : {}),
+    ...((job?.schedule ?? prior?.schedule) ? { schedule: job?.schedule ?? prior?.schedule } : {}),
+    ...(typeof job?.target === "number"
+      ? { target: job.target }
+      : prior?.target !== undefined
+        ? { target: prior.target }
+        : {}),
+    ...((job?.why ?? prior?.reason) ? { reason: job?.why ?? prior?.reason } : {}),
+    status,
+    createdAt: prior?.createdAt ?? action.timestamp,
+    updatedAt: action.timestamp,
+    ...(status === "succeeded" ? { completedAt: action.timestamp } : {}),
+    ...((job?.runUrl ?? prior?.runUrl) ? { runUrl: job?.runUrl ?? prior?.runUrl } : {}),
+    ...((prUrl ?? prior?.prUrl) ? { prUrl: prUrl ?? prior?.prUrl } : {}),
+    runs,
+  }
+  return { ...jobs, [id]: next }
 }
 
 function statusFromAction(action: Action): Status {
@@ -334,6 +427,55 @@ function noteFromAction(action: Action): string | undefined {
   if (typeof p?.reason === "string") return (p.reason as string).slice(0, 120)
   if (typeof p?.commitMessage === "string") return (p.commitMessage as string).slice(0, 120)
   return undefined
+}
+
+function prUrlFromAction(action: Action): string | undefined {
+  const p = action.payload
+  return typeof p?.prUrl === "string" ? (p.prUrl as string) : undefined
+}
+
+function normalizeJobs(input: unknown): Record<string, TaskJob> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {}
+  const out: Record<string, TaskJob> = {}
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue
+    const raw = value as Partial<TaskJob>
+    if (typeof raw.id !== "string" || typeof raw.executable !== "string") continue
+    if (!isStatus(raw.status)) continue
+    out[key] = {
+      id: raw.id,
+      executable: raw.executable,
+      ...(typeof raw.duty === "string" ? { duty: raw.duty } : {}),
+      ...(typeof raw.staff === "string" ? { staff: raw.staff } : {}),
+      ...(raw.flavor === "instant" || raw.flavor === "scheduled" ? { flavor: raw.flavor } : {}),
+      ...(typeof raw.schedule === "string" ? { schedule: raw.schedule } : {}),
+      ...(typeof raw.target === "number" ? { target: raw.target } : {}),
+      ...(typeof raw.reason === "string" ? { reason: raw.reason } : {}),
+      status: raw.status,
+      createdAt: typeof raw.createdAt === "string" ? raw.createdAt : "",
+      updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : "",
+      ...(typeof raw.completedAt === "string" ? { completedAt: raw.completedAt } : {}),
+      ...(typeof raw.runUrl === "string" ? { runUrl: raw.runUrl } : {}),
+      ...(typeof raw.prUrl === "string" ? { prUrl: raw.prUrl } : {}),
+      runs: Array.isArray(raw.runs) ? raw.runs.filter(isTaskJobRun).slice(-JOB_RUNS_MAX_ENTRIES) : [],
+    }
+  }
+  return out
+}
+
+function isTaskJobRun(input: unknown): input is TaskJobRun {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return false
+  const run = input as Partial<TaskJobRun>
+  return (
+    typeof run.id === "string" &&
+    typeof run.timestamp === "string" &&
+    typeof run.action === "string" &&
+    isStatus(run.status)
+  )
+}
+
+function isStatus(input: unknown): input is Status {
+  return input === "pending" || input === "running" || input === "succeeded" || input === "failed"
 }
 
 /**
@@ -372,6 +514,11 @@ export function renderStateComment(state: TaskState): string {
   if (attempts) lines.push(`- **Attempts:** ${attempts}`)
   if (state.core.prUrl) lines.push(`- **PR:** ${state.core.prUrl}`)
   if (state.core.runUrl) lines.push(`- **Run:** ${state.core.runUrl}`)
+  const jobEntries = Object.values(state.jobs ?? {})
+  if (jobEntries.length > 0) {
+    const completed = jobEntries.filter((j) => j.status === "succeeded").length
+    lines.push(`- **Jobs:** ${completed}/${jobEntries.length} complete`)
+  }
   const artifactNames = Object.keys(state.artifacts ?? {})
   if (artifactNames.length > 0) {
     lines.push(`- **Artifacts:** ${artifactNames.map((n) => `\`${n}\``).join(", ")}`)
@@ -390,6 +537,16 @@ export function renderStateComment(state: TaskState): string {
     lines.push("")
   }
 
+  // ── Jobs ───────────────────────────────────────────────────────────────
+  if (jobEntries.length > 0) {
+    lines.push("### Jobs")
+    lines.push("")
+    for (const job of jobEntries) {
+      lines.push(`- \`${job.id}\` **${job.executable}** → \`${job.status}\` (${job.runs.length} runs)`)
+    }
+    lines.push("")
+  }
+
   // ── Machine state (collapsed) ──────────────────────────────────────────
   lines.push("<details>")
   lines.push("<summary>Raw state (JSON)</summary>")
@@ -403,6 +560,7 @@ export function renderStateComment(state: TaskState): string {
         schemaVersion: state.schemaVersion,
         core: state.core,
         artifacts: state.artifacts ?? {},
+        jobs: state.jobs ?? {},
         executables: state.executables,
         history: state.history,
         ...(state.flow ? { flow: state.flow } : {}),

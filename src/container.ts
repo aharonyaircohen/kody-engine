@@ -17,7 +17,7 @@ import { emitEvent } from "./events.js"
 import type { ContainerChild, Context, InputSpec, Profile } from "./executables/types.js"
 import { type ExecutorInput, type ExecutorOutput, resolveProfilePath, runExecutable } from "./executor.js"
 import { loadProfile } from "./profile.js"
-import { type Action, readTaskState, type TaskState, type TaskTarget } from "./state.js"
+import { type Action, emptyState, readTaskState, type TaskState, type TaskTarget } from "./state.js"
 
 const CONTAINER_MAX_ITERATIONS = 50
 
@@ -401,19 +401,7 @@ function readContainerState(
   if (cached && typeof cached === "object") {
     return cached
   }
-  return {
-    schemaVersion: 1,
-    core: {
-      phase: "idle",
-      status: "pending",
-      currentExecutable: null,
-      lastOutcome: null,
-      attempts: {},
-    },
-    executables: {},
-    artifacts: {},
-    history: [],
-  }
+  return emptyState()
 }
 
 function parsePrNumber(url: string): number | null {

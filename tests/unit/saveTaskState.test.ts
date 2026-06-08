@@ -101,6 +101,35 @@ describe("saveTaskState: persistence", () => {
     expect(next.core.runUrl).toBe("https://github.com/x/y/actions/runs/1")
   })
 
+  it("persists the current run under a durable task job", async () => {
+    const action: Action = { type: "RUN_COMPLETED", payload: {}, timestamp: "2026-01-01T00:00:00Z" }
+    const ctx = makeCtx({
+      data: targetedData({
+        action,
+        jobKey: "instant:run:42",
+        jobId: "gh-42-1",
+        jobFlavor: "instant",
+        jobTarget: 42,
+        jobPersona: "kody",
+        runUrl: "https://github.com/x/y/actions/runs/42",
+      }),
+    })
+
+    await saveTaskState(ctx, profile, null)
+
+    const next = writeTaskStateSpy.mock.calls[0]![2] as TaskState
+    expect(next.jobs["instant:run:42"]).toMatchObject({
+      id: "instant:run:42",
+      executable: "run",
+      staff: "kody",
+      flavor: "instant",
+      target: 42,
+      status: "succeeded",
+      runUrl: "https://github.com/x/y/actions/runs/42",
+    })
+    expect(next.jobs["instant:run:42"]?.runs.at(-1)?.id).toBe("gh-42-1")
+  })
+
   it("does not mutate the loaded prior state when carrying prUrl/runUrl", async () => {
     // The prUrl/runUrl carry must land on `next` only — never on the loaded
     // prior state, which `reduce` treats as immutable input and other

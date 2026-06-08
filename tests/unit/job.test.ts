@@ -43,11 +43,24 @@ describe("runJob (Phase 1 seam)", () => {
   })
 
   it("always seeds a jobId + flavor so the run can be recorded in the task ledger", async () => {
-    await runJob({ executable: "run", cliArgs: {}, flavor: "instant" }, { cwd: "/x" })
+    await runJob({ executable: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" }, { cwd: "/x" })
     const [, input] = runExecutableChain.mock.calls[0]!
     expect(typeof input.preloadedData?.jobId).toBe("string")
+    expect(input.preloadedData?.jobKey).toBe("instant:run:42")
     expect(input.preloadedData?.jobFlavor).toBe("instant")
     expect(input.preloadedData?.jobExecutable).toBe("run")
+    expect(input.preloadedData?.jobTarget).toBe(42)
+  })
+
+  it("keeps the same stable job key for retries of the same target + executable", async () => {
+    await runJob({ executable: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" }, { cwd: "/x" })
+    await runJob({ executable: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" }, { cwd: "/x" })
+
+    const first = runExecutableChain.mock.calls[0]![1].preloadedData
+    const second = runExecutableChain.mock.calls[1]![1].preloadedData
+    expect(first?.jobKey).toBe("instant:run:42")
+    expect(second?.jobKey).toBe("instant:run:42")
+    expect(first?.jobId).not.toBe(second?.jobId)
   })
 
   it("carries the DispatchResult's why through mintInstantJob into jobWhy", async () => {
@@ -65,6 +78,15 @@ describe("runJob (Phase 1 seam)", () => {
     )
     const [, input] = runExecutableChain.mock.calls[0]!
     expect(input.preloadedData?.jobPersona).toBe("kody")
+  })
+
+  it("uses the duty reference in the stable key for scheduled jobs", async () => {
+    await runJob(
+      { duty: "stale-prs", executable: "duty-tick", schedule: "*/5 * * * *", cliArgs: {}, flavor: "scheduled" },
+      { cwd: "/x" },
+    )
+    const [, input] = runExecutableChain.mock.calls[0]!
+    expect(input.preloadedData?.jobKey).toBe("scheduled:stale-prs:duty-tick")
   })
 
   it("falls back to the duty slug as the profile when no executable", async () => {

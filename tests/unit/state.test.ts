@@ -20,6 +20,7 @@ describe("state: emptyState", () => {
     expect(s.core.lastOutcome).toBeNull()
     expect(s.core.attempts).toEqual({})
     expect(s.executables).toEqual({})
+    expect(s.jobs).toEqual({})
     expect(s.history).toEqual([])
   })
 })
@@ -56,6 +57,7 @@ describe("state: reduce", () => {
 
   it("stamps job identity (id/flavor/runUrl) + per-job status onto the ledger entry", () => {
     const s = reduce(emptyState(), "run", ok, "shipped", null, {
+      jobKey: "instant:run:42",
       jobId: "gh-77-1",
       flavor: "instant",
       runUrl: "https://ci/run/77",
@@ -67,8 +69,114 @@ describe("state: reduce", () => {
     expect(entry.status).toBe("succeeded")
   })
 
+  it("creates durable task job data separate from the history log", () => {
+    const s = reduce(emptyState(), "run", ok, "shipped", "kody", {
+      jobKey: "instant:run:42",
+      jobId: "gh-77-1",
+      flavor: "instant",
+      target: 42,
+      persona: "kody",
+      runUrl: "https://ci/run/77",
+    })
+
+    expect(Object.keys(s.jobs)).toEqual(["instant:run:42"])
+    expect(s.jobs["instant:run:42"]).toMatchObject({
+      id: "instant:run:42",
+      executable: "run",
+      staff: "kody",
+      flavor: "instant",
+      target: 42,
+      status: "succeeded",
+      runUrl: "https://ci/run/77",
+    })
+    expect(s.jobs["instant:run:42"]?.runs).toEqual([
+      {
+        id: "gh-77-1",
+        timestamp: "2026-04-20T09:00:00Z",
+        action: "RUN_COMPLETED",
+        status: "succeeded",
+        note: "u",
+        runUrl: "https://ci/run/77",
+        prUrl: "u",
+      },
+    ])
+    expect(s.history.at(-1)?.jobId).toBe("gh-77-1")
+  })
+
+  it("keeps one durable job while appending retry runs underneath it", () => {
+    let s = reduce(emptyState(), "run", fail, undefined, null, {
+      jobKey: "instant:run:42",
+      jobId: "gh-1-1",
+      flavor: "instant",
+    })
+    s = reduce(s, "run", ok, "shipped", null, {
+      jobKey: "instant:run:42",
+      jobId: "gh-1-2",
+      flavor: "instant",
+    })
+
+    expect(Object.keys(s.jobs)).toEqual(["instant:run:42"])
+    expect(s.jobs["instant:run:42"]?.status).toBe("succeeded")
+    expect(s.jobs["instant:run:42"]?.runs.map((r) => r.id)).toEqual(["gh-1-1", "gh-1-2"])
+    expect(s.jobs["instant:run:42"]?.runs.map((r) => r.status)).toEqual(["failed", "succeeded"])
+    expect(s.history.map((h) => h.jobId)).toEqual(["gh-1-1", "gh-1-2"])
+  })
+
+  it("tracks separate jobs by stable key", () => {
+    let s = reduce(emptyState(), "run", ok, "shipped", null, {
+      jobKey: "instant:run:42",
+      jobId: "gh-run-1",
+      flavor: "instant",
+    })
+    s = reduce(s, "review", ok, "reviewing", null, {
+      jobKey: "instant:review:42",
+      jobId: "gh-review-1",
+      flavor: "instant",
+    })
+
+    expect(Object.keys(s.jobs).sort()).toEqual(["instant:review:42", "instant:run:42"])
+    expect(s.jobs["instant:run:42"]?.executable).toBe("run")
+    expect(s.jobs["instant:review:42"]?.executable).toBe("review")
+  })
+
+  it("caps run attempts per job while keeping the durable job", () => {
+    let s = emptyState()
+    for (let i = 0; i < 25; i++) {
+      s = reduce(s, "run", { type: "RUN_COMPLETED", payload: {}, timestamp: `t${i}` }, "shipped", null, {
+        jobKey: "instant:run:42",
+        jobId: `gh-${i}`,
+        flavor: "instant",
+      })
+    }
+
+    expect(s.jobs["instant:run:42"]?.runs.length).toBe(20)
+    expect(s.jobs["instant:run:42"]?.runs[0]?.id).toBe("gh-5")
+    expect(s.jobs["instant:run:42"]?.runs.at(-1)?.id).toBe("gh-24")
+  })
+
+  it("stores duty, executable, and staff as references instead of reshaping them", () => {
+    const s = reduce(emptyState(), "duty-tick", ok, "idle", "triager", {
+      jobKey: "scheduled:triage:duty-tick",
+      jobId: "gh-9-1",
+      flavor: "scheduled",
+      schedule: "*/5 * * * *",
+      duty: "triage",
+      executable: "duty-tick",
+      persona: "triager",
+    })
+
+    expect(s.jobs["scheduled:triage:duty-tick"]).toMatchObject({
+      duty: "triage",
+      executable: "duty-tick",
+      staff: "triager",
+      flavor: "scheduled",
+      schedule: "*/5 * * * *",
+    })
+  })
+
   it("records a scheduled job's cadence on its ledger entry", () => {
     const s = reduce(emptyState(), "watch-stale-prs", ok, "idle", "kody", {
+      jobKey: "scheduled:watch-stale-prs",
       jobId: "gh-9-1",
       flavor: "scheduled",
       schedule: "7d",
@@ -220,6 +328,34 @@ describe("state: parseStateComment / renderStateComment", () => {
     expect(reloaded.artifacts.plan?.content).toBe(planContentWithMarkers)
   })
 
+  it("round-trips durable jobs through the hidden state block", () => {
+    const action: Action = { type: "RUN_COMPLETED", payload: { prUrl: "u" }, timestamp: "2026-04-20T09:00:00Z" }
+    const s1 = reduce(emptyState(), "run", action, "shipped", "kody", {
+      jobKey: "instant:run:42",
+      jobId: "gh-77-1",
+      flavor: "instant",
+      target: 42,
+      persona: "kody",
+      runUrl: "https://ci/run/77",
+    })
+    const s2 = parseStateComment(renderStateComment(s1))
+
+    expect(s2.jobs["instant:run:42"]?.status).toBe("succeeded")
+    expect(s2.jobs["instant:run:42"]?.runs.at(-1)?.id).toBe("gh-77-1")
+  })
+
+  it("parses older state comments that do not have jobs", () => {
+    const body = `${STATE_BEGIN}\n\n\`\`\`json\n${JSON.stringify({
+      schemaVersion: 1,
+      core: emptyState().core,
+      artifacts: {},
+      executables: {},
+      history: [],
+    })}\n\`\`\`\n\n${STATE_END}`
+
+    expect(parseStateComment(body).jobs).toEqual({})
+  })
+
   it("renders a human section with attempts + PR URL", () => {
     const s = reduce(emptyState(), "build", {
       type: "RUN_COMPLETED",
@@ -231,6 +367,29 @@ describe("state: parseStateComment / renderStateComment", () => {
     expect(body).toMatch(/## .*kody task state/)
     expect(body).toMatch(/\*\*Attempts:\*\* build:1/)
     expect(body).toMatch(/\*\*PR:\*\* https:\/\/ex\/pull\/42/)
+  })
+
+  it("renders a human jobs summary and jobs section", () => {
+    const s = reduce(
+      emptyState(),
+      "run",
+      {
+        type: "RUN_COMPLETED",
+        payload: {},
+        timestamp: "t",
+      },
+      "shipped",
+      null,
+      {
+        jobKey: "instant:run:42",
+        jobId: "gh-1",
+        flavor: "instant",
+      },
+    )
+    const body = renderStateComment(s)
+    expect(body).toContain("**Jobs:** 1/1 complete")
+    expect(body).toContain("### Jobs")
+    expect(body).toContain("`instant:run:42` **run** → `succeeded` (1 runs)")
   })
 
   it("puts the title at the top and collapses the JSON in <details>", () => {

@@ -18,16 +18,35 @@ import { runExecutable, runExecutableChain } from "./executor.js"
 
 /** Default staff persona for instant `@kody` jobs (the agreed starting point). */
 export const DEFAULT_INSTANT_PERSONA = "kody"
+let localJobSeq = 0
 
 /**
- * Stable id for a job run, recorded in the task ledger. In GitHub Actions the
- * workflow run (id + attempt) IS the job, so reuse it — re-running a run keeps
- * a distinct id per attempt. Off-CI, fall back to a flavor + timestamp stamp.
+ * Stable id for one run attempt, recorded under the task job. In GitHub Actions
+ * the workflow run (id + attempt) is the natural attempt id. Off-CI, fall back
+ * to a flavor + timestamp stamp plus a counter.
  */
 export function newJobId(flavor: JobFlavor): string {
   const runId = process.env.GITHUB_RUN_ID
   if (runId) return `gh-${runId}-${process.env.GITHUB_RUN_ATTEMPT ?? "1"}`
-  return `${flavor}-${Date.now()}`
+  localJobSeq += 1
+  return `${flavor}-${Date.now()}-${localJobSeq}`
+}
+
+/** Stable key for the required work on a task; retries keep this value. */
+export function stableJobKey(job: Job): string {
+  const executable = job.executable ?? job.duty ?? "unknown"
+  if (job.flavor === "scheduled" && job.duty) return `scheduled:${job.duty}:${executable}`
+  const target = typeof job.target === "number" ? job.target : targetFromCliArgs(job.cliArgs)
+  return target === undefined ? `${job.flavor}:${executable}` : `${job.flavor}:${executable}:${target}`
+}
+
+function targetFromCliArgs(cliArgs: Record<string, unknown> | undefined): number | undefined {
+  if (!cliArgs) return undefined
+  for (const key of ["issue", "pr", "target", "issue_number"]) {
+    const value = cliArgs[key]
+    if (typeof value === "number" && Number.isFinite(value)) return value
+  }
+  return undefined
 }
 
 /** Thrown when a minted Job fails boundary validation. */
@@ -112,11 +131,12 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   }
 
   const preloadedData: Record<string, unknown> = {}
-  // Every job is recorded in the task ledger (state.ts history) — stamp its
-  // identity so the reducer can attribute the run. The CI run is the natural
-  // job id in Actions; fall back to a flavor-stamped id locally.
+  // Stamp both identities: jobKey is stable required work on the task; jobId is
+  // this execution attempt.
   preloadedData.jobId = newJobId(valid.flavor)
+  preloadedData.jobKey = stableJobKey(valid)
   preloadedData.jobFlavor = valid.flavor
+  if (valid.target !== undefined) preloadedData.jobTarget = valid.target
   if (valid.duty !== undefined && valid.duty.length > 0) preloadedData.jobDuty = valid.duty
   if (valid.executable !== undefined && valid.executable.length > 0) preloadedData.jobExecutable = valid.executable
   // The job carries *when*: a scheduled job's cadence, recorded in the ledger.
