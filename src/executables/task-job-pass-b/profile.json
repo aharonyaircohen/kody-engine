@@ -1,0 +1,43 @@
+{
+  "name": "task-job-pass-b",
+  "role": "utility",
+  "describe": "Live-test executable that deterministically succeeds as planned task slice B.",
+  "kind": "oneshot",
+  "inputs": [
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": true,
+      "describe": "GitHub issue number that owns the task state."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": 0,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "inputArtifacts": [],
+  "outputArtifacts": [],
+  "scripts": {
+    "preflight": [
+      { "script": "loadIssueContext" },
+      { "script": "loadTaskState" },
+      { "script": "skipAgent" }
+    ],
+    "postflight": [
+      { "script": "recordOutcome" },
+      { "script": "saveTaskState" }
+    ]
+  }
+}

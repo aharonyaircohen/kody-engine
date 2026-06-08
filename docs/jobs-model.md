@@ -103,6 +103,25 @@ write the task data onto the issue:
 -->
 ```
 
+For scheduled duties, the authoring surface is even simpler: the duty file can
+declare the executable list directly:
+
+```md
+---
+every: 1h
+staff: kody
+executables: db-migration, api-worker, ui-builder
+---
+
+# Duty
+
+Keep this feature moving across the database, API, and UI slices.
+```
+
+When that duty is due, `duty-scheduler` creates one GitHub issue with the hidden
+task data above, records the issue number in the duty state, and runs
+`task-jobs` against that issue.
+
 `task-jobs` reads that block, seeds `TaskState.jobs`, and dispatches one child
 job per executable. Each child still has exactly one executable. After a child
 succeeds, the engine returns to `task-jobs` in-process and dispatches the next
@@ -118,9 +137,9 @@ moving to later pending jobs, so failed work is not skipped.
 - **Engine splits, executables do not.** An executable remains a leaf expert and
   receives an already-scoped slice. Rejected: putting split logic in the
   executable, because that turns the expert into a coordinator.
-- **Duty triggers, task state carries the plan.** A duty or dashboard may create
-  the issue and hidden task data, but the duty does not wait on children.
-  Rejected: adding waits/state to the duty loop, because duties are cron
+- **Duty declares, engine splits.** A duty may carry `executables: a, b, c`;
+  `duty-scheduler` creates the task issue and `task-jobs` waits on the children.
+  Rejected: making the duty itself poll child state, because duties are cron
   triggers.
 - **No separate job storage.** The planned jobs live in the task state comment on
   the issue, beside the task summary and run history. Rejected:
@@ -153,8 +172,8 @@ All structural items are implemented:
 4. ✅ **`@kody` mints an instant job** — the comment/manual route mints via
    `mintInstantJob` and runs through `runJob`. Persona (`kody`) and inline `why`
    are both consumed.
-5. ✅ **Cron mints a scheduled job** — `dispatchJobFileTicks` mints one per due
-   duty (`chain:false`), carrying its cadence.
+5. ✅ **Cron mints a scheduled job** — `dispatchDutyFileTicks` mints one per due
+   duty, carrying its cadence.
 6. ✅ **Job points to one executable (0–1)** + safe dispatch. The agent-driven
    `dutyMcp` palette is a separate, intentional safety mechanism, left intact.
 7. ✅ **One runner** — comment, manual, and cron paths all run through `runJob`.
@@ -165,6 +184,9 @@ All structural items are implemented:
 10. ✅ **Plan-and-split task execution** — `task-jobs` reads hidden issue task
     data, runs one child job per executable, waits in-process, summarizes the
     task, and retries failed children before later pending ones.
+11. ✅ **Duty-level multi-executable execution** — a due duty with
+    `executables:` creates one task issue, records that issue on duty state, and
+    runs `task-jobs` for the listed executables.
 
 ## Decided
 

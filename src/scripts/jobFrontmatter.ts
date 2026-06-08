@@ -4,8 +4,9 @@
  * Duty markdown at `.kody/duties/<slug>.md` may begin with a `---\n…\n---\n`
  * block carrying flat scalar key/value pairs (no nesting, no flow style).
  * Recognized fields are `every:` (cadence), `disabled:`, `tickScript:`, and
- * `staff:` (the executor persona). The parser silently ignores unknown keys
- * so the dashboard and engine can evolve the frontmatter independently.
+ * `staff:` (the executor persona), and `executables:` (multi-part duty
+ * slices). The parser silently ignores unknown keys so the dashboard and
+ * engine can evolve the frontmatter independently.
  *
  * Mirror of the dashboard's ticked-frontmatter parser in Kody-Dashboard —
  * keep the two in sync if the format grows.
@@ -91,6 +92,15 @@ export interface JobFrontmatter {
    * See `src/dutyMcp.ts` for the registered tool palette.
    */
   tools?: string[]
+  /**
+   * Multi-executable duty mode. When present, the scheduler creates one task
+   * issue and runs `task-jobs` instead of ticking the duty once. Each listed
+   * executable becomes one child job on that task.
+   *
+   * Authored as a comma-separated list on one line:
+   *   `executables: db-worker, api-worker, ui-worker`
+   */
+  executables?: string[]
 }
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
@@ -175,6 +185,12 @@ function parseFlatYaml(text: string): JobFrontmatter {
         .map((s) => s.trim())
         .filter(Boolean)
       if (names.length > 0) out.tools = names
+    } else if (key === "executables") {
+      const names = value
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+      if (names.length > 0) out.executables = names
     }
   }
   return out

@@ -4,7 +4,15 @@
   "describe": "Scheduled: for every duty file under .kody/duties/, invoke duty-tick once. No agent on the scheduler itself.",
   "kind": "scheduled",
   "schedule": "*/5 * * * *",
-  "inputs": [],
+  "inputs": [
+    {
+      "name": "duty",
+      "flag": "--duty",
+      "type": "string",
+      "required": false,
+      "describe": "Optional duty slug to run instead of scanning every due duty."
+    }
+  ],
   "claudeCode": {
     "model": "inherit",
     "permissionMode": "default",

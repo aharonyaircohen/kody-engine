@@ -37,6 +37,32 @@ describe("task job plan parsing", () => {
     expect(stableJobKey(job)).toBe("instant:plan-verify:42")
   })
 
+  it("turns a duty-planned entry into one scheduled child job", () => {
+    const job = taskJobSpecToJob(
+      {
+        executable: "probe-skill",
+        duty: "daily-check",
+        reason: "UI slice",
+        staff: "qa",
+        flavor: "scheduled",
+        schedule: "1h",
+      },
+      42,
+    )
+
+    expect(job).toMatchObject({
+      duty: "daily-check",
+      executable: "probe-skill",
+      cliArgs: { issue: 42 },
+      target: 42,
+      flavor: "scheduled",
+      persona: "qa",
+      schedule: "1h",
+      why: "UI slice",
+    })
+    expect(stableJobKey(job)).toBe("scheduled:daily-check:probe-skill")
+  })
+
   it("keeps explicit cliArgs when the task data needs a non-default target", () => {
     const job = taskJobSpecToJob({ executable: "review", cliArgs: { pr: 77 }, reason: "review slice" }, 42)
 

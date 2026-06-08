@@ -13,6 +13,7 @@ export const TASK_JOBS_MARKER = "kody:task-jobs:v1"
 
 export interface TaskJobSpec {
   executable: string
+  duty?: string
   reason?: string
   staff?: string
   persona?: string
@@ -41,6 +42,7 @@ export function taskJobSpecToJob(spec: TaskJobSpec, issueNumber: number): Job {
   const cliArgs = spec.cliArgs ?? { issue: issueNumber }
   const target = typeof spec.target === "number" ? spec.target : (targetFromCliArgs(cliArgs) ?? issueNumber)
   return {
+    duty: spec.duty,
     executable: spec.executable,
     why: spec.reason,
     persona: spec.persona ?? spec.staff,
@@ -103,6 +105,7 @@ function normalizeSpec(input: unknown, index: number): TaskJobSpec {
   }
   return {
     executable,
+    ...(typeof raw.duty === "string" && raw.duty.trim() ? { duty: raw.duty.trim() } : {}),
     ...(typeof raw.reason === "string" && raw.reason.trim() ? { reason: raw.reason.trim() } : {}),
     ...(typeof raw.staff === "string" && raw.staff.trim() ? { staff: raw.staff.trim() } : {}),
     ...(typeof raw.persona === "string" && raw.persona.trim() ? { persona: raw.persona.trim() } : {}),
