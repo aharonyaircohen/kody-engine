@@ -203,9 +203,19 @@ export class PoolRegistry {
     return pm.claim(job)
   }
 
-  /** Status for a single repo's pool, or null if none exists yet. */
+  /** Status for a single repo's pool already known to this owner. */
   status(owner: string, repo: string): ReturnType<PoolManager["status"]> | null {
     return this.pools.get(this.key(owner, repo))?.status() ?? null
+  }
+
+  /**
+   * Status for a repo, creating/adopting its pool on first read when the repo
+   * has pool credentials. This lets a restarted owner recover from existing
+   * pooled machines without waiting for the next claim.
+   */
+  async statusFor(owner: string, repo: string): Promise<ReturnType<PoolManager["status"]> | null> {
+    const pm = await this.getPool(owner, repo)
+    return pm?.status() ?? null
   }
 
   /** Resync every active repo pool (periodic self-heal). Also re-reads each

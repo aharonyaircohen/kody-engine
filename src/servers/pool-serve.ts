@@ -233,7 +233,7 @@ export async function poolServe(): Promise<number> {
         const repoParam = (url.searchParams.get("repo") ?? "").trim()
         const [owner, repo] = repoParam.split("/")
         if (!owner || !repo) return sendJson(res, 400, { error: "repo query (owner/name) required" })
-        return sendJson(res, 200, { status: registry.status(owner, repo) })
+        return sendJson(res, 200, { status: await registry.statusFor(owner, repo) })
       }
 
       if (req.method === "POST" && url.pathname === "/pool/claim") {

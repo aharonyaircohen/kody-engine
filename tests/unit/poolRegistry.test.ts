@@ -332,6 +332,24 @@ describe("PoolRegistry.status", () => {
     expect(reg.status("O", "R")).toEqual({ min: 1, free: 1, booting: 0, claimsInFlight: 0, total: 2 })
     expect(pm.status).toHaveBeenCalled()
   })
+
+  it("statusFor lazily creates the repo pool and returns its status", async () => {
+    const pm = makeFakePm()
+    mocks.PoolManagerCtor.mockImplementationOnce(() => pm)
+    mocks.readRepoSecret.mockResolvedValueOnce("fly-token")
+    mocks.readRepoSecret.mockResolvedValueOnce("2")
+    const reg = new PoolRegistry(baseConfig())
+
+    await expect(reg.statusFor("o", "r")).resolves.toEqual({
+      min: 1,
+      free: 1,
+      booting: 0,
+      claimsInFlight: 0,
+      total: 2,
+    })
+    expect(mocks.PoolManagerCtor).toHaveBeenCalledTimes(1)
+    expect(pm.reconcile).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe("PoolRegistry.resyncAll", () => {
