@@ -1,6 +1,8 @@
 app = "kody-pool"
 primary_region = "fra"
 
+# IMPORTANT: this app must run as a single owner. Pool claims are in-memory,
+# so deploy with: fly deploy . -c pool-server/fly.toml --ha=false
 [build]
   dockerfile = "../pool-server/Dockerfile"
 
