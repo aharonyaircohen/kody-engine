@@ -6,13 +6,13 @@ set -euo pipefail
 # Unlike entrypoint.sh, no REPO/ISSUE_NUMBER is known at boot — the machine
 # is generic, gets frozen, and receives its job over HTTP after wake. This
 # entrypoint only:
-#   1. Establishes the always-on LiteLLM forward (localhost:4000 → the shared
-#      kody-litellm proxy) once, so per-job runs skip the ~24s spawn.
+#   1. If KODY_LITELLM_URL is explicitly set, establishes the always-on LiteLLM
+#      forward once. Otherwise each job starts/prewarms its own local LiteLLM.
 #   2. Execs `kody runner-serve`, which listens until it gets a job.
 #
 # Expected env (set by the pool owner at create time):
 #   RUNNER_API_KEY   bearer key the pool owner uses to POST /run (required)
-#   KODY_LITELLM_URL always-on LiteLLM proxy (e.g. http://kody-litellm.internal:4000)
+#   KODY_LITELLM_URL optional always-on LiteLLM proxy URL
 #   PORT             listen port (default 8080)
 
 : "${RUNNER_API_KEY:?RUNNER_API_KEY is required}"

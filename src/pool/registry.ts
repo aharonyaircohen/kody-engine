@@ -66,7 +66,7 @@ export interface RegistryConfig {
     region: string
     guest: import("./fly.js").FlyGuest
     runnerApiKey: string
-    litellmUrl: string
+    litellmUrl?: string
     port: number
     healthTimeoutMs: number
     /** Fly app name (in each repo's own account). */

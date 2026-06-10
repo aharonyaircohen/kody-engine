@@ -25,7 +25,7 @@ export interface PoolConfig {
   region: string
   guest: FlyGuest
   runnerApiKey: string
-  litellmUrl: string
+  litellmUrl?: string
   port: number
   healthTimeoutMs: number
   /** owner/repo tag — pooled machines are tagged with it so each repo's pool

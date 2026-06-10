@@ -1,9 +1,11 @@
 /**
  * poolServe — preflight for the `pool-serve` executable.
  *
- * The warm-pool OWNER. Runs always-on, co-located on the kody-litellm Fly
- * machine: it supervises the LiteLLM proxy child AND serves the pool API the
- * dashboard calls to claim a pre-booted, frozen runner.
+ * The warm-pool OWNER. Runs always-on and serves the pool API the dashboard
+ * calls to claim a pre-booted, frozen runner. It can still supervise an
+ * explicitly configured LiteLLM child for legacy deployments, but by default
+ * pooled runners do not receive a shared LiteLLM URL and start their own local
+ * proxy from their repo secrets.
  *
  * Single process = single owner = the claim is a synchronous in-memory pick,
  * which is why this sidesteps the distributed-lock problem (see PoolManager).
@@ -153,7 +155,7 @@ export async function poolServe(): Promise<number> {
   const region = process.env.POOL_REGION ?? "fra"
   const perf = (process.env.POOL_PERF ?? "medium") as keyof typeof PERF_GUEST
   const guest = PERF_GUEST[perf] ?? PERF_GUEST.medium
-  const litellmUrl = process.env.KODY_LITELLM_URL ?? "http://kody-litellm.internal:4000"
+  const litellmUrl = process.env.KODY_LITELLM_URL?.trim() || undefined
   const min = envInt("POOL_MIN", 2)
   const runnerPort = envInt("RUNNER_PORT", 8080)
   const apiPort = envInt("POOL_API_PORT", 4100)
