@@ -2,16 +2,14 @@
  * poolServe — preflight for the `pool-serve` executable.
  *
  * The warm-pool OWNER. Runs always-on and serves the pool API the dashboard
- * calls to claim a pre-booted, frozen runner. It can still supervise an
- * explicitly configured LiteLLM child for legacy deployments, but by default
- * pooled runners do not receive a shared LiteLLM URL and start their own local
- * proxy from their repo secrets.
+ * calls to claim a pre-booted, frozen runner. It owns runner capacity only;
+ * every runner is responsible for its own local LiteLLM lifecycle.
  *
  * Single process = single owner = the claim is a synchronous in-memory pick,
  * which is why this sidesteps the distributed-lock problem (see PoolManager).
  *
  * Endpoints (POOL_API_PORT, default 4100 — exposed publicly + authed):
- *   GET  /healthz       — 200 { ok, litellm, pool } (no auth)
+ *   GET  /healthz       — 200 { ok, repos } (no auth)
  *   GET  /pool/status   — auth: Bearer/X-Api-Key $POOL_API_KEY → counts
  *   POST /pool/claim    — auth: $POOL_API_KEY; body = the runner job.
  *                         200 { ok:true, machineId } on success,
@@ -22,7 +20,6 @@
  * are both derived from KODY_MASTER_KEY via HKDF — never transmitted.
  */
 
-import { type ChildProcess, spawn } from "node:child_process"
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 
 import { gitHubActionsDegraded } from "../github-health.js"
@@ -102,39 +99,6 @@ export function parseClaimRequest(body: unknown): { req: ClaimRequest } | { erro
   return { req }
 }
 
-/** Supervise the LiteLLM proxy child — restart it if it dies, so a pool-owner
- * crash never leaves the always-on proxy down. Best-effort, isolated from the
- * pool logic. */
-function superviseLitellm(): ChildProcess | null {
-  if (process.env.POOL_DISABLE_LITELLM === "1") return null
-  const port = String(envInt("LITELLM_PORT", 4000))
-  const config = process.env.LITELLM_CONFIG ?? "/app/config.yaml"
-  // Bind IPv6 dual-stack ("::"), NOT 0.0.0.0. Fly's private 6PN network is
-  // IPv6-only, so runners reaching kody-litellm.internal:4000 need the proxy
-  // listening on IPv6 — 0.0.0.0 (IPv4) is unreachable over 6PN. On Linux ::
-  // accepts IPv4-mapped connections too, so localhost health checks still work.
-  const host = process.env.LITELLM_HOST ?? "::"
-  let restarts = 0
-  const start = (): ChildProcess => {
-    log(`starting litellm child (port ${port}, host ${host})`)
-    const child = spawn("litellm", ["--config", config, "--port", port, "--host", host], {
-      stdio: "inherit",
-    })
-    child.on("exit", (code) => {
-      restarts++
-      if (restarts > 50) {
-        process.stderr.write("[pool-serve] litellm restarted too many times — giving up\n")
-        return
-      }
-      log(`litellm exited (${code}) — restarting in 2s`)
-      setTimeout(start, 2_000)
-    })
-    child.on("error", (err) => process.stderr.write(`[pool-serve] litellm spawn error: ${err.message}\n`))
-    return child
-  }
-  return start()
-}
-
 export async function poolServe(): Promise<number> {
   const masterRaw = process.env.KODY_MASTER_KEY?.trim()
   if (!masterRaw) throw new Error("KODY_MASTER_KEY required for pool-serve")
@@ -148,21 +112,17 @@ export async function poolServe(): Promise<number> {
   const poolApiKey = derivePoolApiKey(master)
   const runnerApiKey = deriveRunnerApiKey(master)
 
-  // NOTE: do NOT read FLY_APP_NAME here — Fly auto-injects it as the OWNER's
-  // own app (kody-litellm). POOL_RUNNER_APP is the canonical runner-app name
-  // (it must exist in each repo-owner's Fly account).
+  // NOTE: do NOT read FLY_APP_NAME here — Fly auto-injects the pool owner's
+  // app name. POOL_RUNNER_APP is the canonical runner-app name (it must exist
+  // in each repo-owner's Fly account).
   const app = process.env.POOL_RUNNER_APP ?? "kody-runner"
   const region = process.env.POOL_REGION ?? "fra"
   const perf = (process.env.POOL_PERF ?? "medium") as keyof typeof PERF_GUEST
   const guest = PERF_GUEST[perf] ?? PERF_GUEST.medium
-  const litellmUrl = process.env.KODY_LITELLM_URL?.trim() || undefined
   const min = envInt("POOL_MIN", 2)
   const runnerPort = envInt("RUNNER_PORT", 8080)
   const apiPort = envInt("POOL_API_PORT", 4100)
   const healthTimeoutMs = envInt("POOL_HEALTH_TIMEOUT_MS", 120_000)
-
-  // Keep the always-on proxy hot regardless of pool health.
-  const litellm = superviseLitellm()
 
   // One pool per repo, each created with that repo's own vault Fly token.
   const registry = new PoolRegistry({
@@ -174,7 +134,6 @@ export async function poolServe(): Promise<number> {
       region,
       guest,
       runnerApiKey,
-      litellmUrl,
       port: runnerPort,
       healthTimeoutMs,
       app,
@@ -216,7 +175,6 @@ export async function poolServe(): Promise<number> {
       if (req.method === "GET" && url.pathname === "/healthz") {
         return sendJson(res, 200, {
           ok: true,
-          litellm: litellm ? "supervised" : "off",
           repos: registry.activeRepos(),
         })
       }
@@ -254,7 +212,7 @@ export async function poolServe(): Promise<number> {
 
       return sendJson(res, 404, { error: "not found" })
     } catch (err) {
-      // Never let a handler bug crash the process (and take litellm with it).
+      // Never let a handler bug crash the process.
       process.stderr.write(`[pool-serve] handler error: ${err instanceof Error ? err.message : String(err)}\n`)
       try {
         sendJson(res, 500, { error: "internal error" })

@@ -65,7 +65,6 @@ function baseConfig(overrides: Partial<RegistryConfig> = {}): RegistryConfig {
       region: "iad",
       guest: { cpu_kind: "shared", cpus: 1, memory_mb: 256 },
       runnerApiKey: "rk",
-      litellmUrl: "http://litellm",
       port: 8080,
       healthTimeoutMs: 1000,
       app: "kody-app",

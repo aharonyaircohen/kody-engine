@@ -23,8 +23,8 @@
  *                          process exits on completion. 409 if already busy
  *                          (a pooled runner handles exactly one job).
  *
- * LiteLLM: the always-on proxy forward (localhost:4000 → KODY_LITELLM_URL) is
- * set up once at boot by entrypoint-serve.sh, so per-job spawn is skipped.
+ * LiteLLM: each accepted job uses the normal runner path, which prewarms or
+ * starts a local proxy from that repo's secrets.
  */
 
 import { spawn } from "node:child_process"

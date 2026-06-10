@@ -8,7 +8,6 @@ primary_region = "fra"
 
 [env]
   NODE_ENV = "production"
-  POOL_DISABLE_LITELLM = "1"
   POOL_API_PORT = "4100"
   POOL_API_HOST = "::"
   POOL_RUNNER_APP = "kody-runner"

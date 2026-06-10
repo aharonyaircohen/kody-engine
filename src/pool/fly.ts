@@ -6,7 +6,7 @@
  * Pooled machines:
  *   - image      = the kody-runner image (entrypoint overridden to serve mode)
  *   - entrypoint = /usr/local/bin/entrypoint-serve.sh (boots `kody runner-serve`)
- *   - env        = RUNNER_API_KEY, PORT (+ KODY_LITELLM_URL only when explicit)
+ *   - env        = RUNNER_API_KEY, PORT
  *   - auto_destroy=true, restart=no  (one-shot: dies after its single job)
  *   - metadata.kody_pool = "1"        (so the owner can reconcile on restart)
  */
@@ -81,7 +81,6 @@ export class FlyClient {
     region: string
     guest: FlyGuest
     runnerApiKey: string
-    litellmUrl?: string
     repoTag: string
     port?: number
   }): Promise<FlyMachine> {
@@ -89,7 +88,6 @@ export class FlyClient {
       RUNNER_API_KEY: input.runnerApiKey,
       PORT: String(input.port ?? 8080),
     }
-    if (input.litellmUrl?.trim()) env.KODY_LITELLM_URL = input.litellmUrl.trim()
 
     const body = {
       region: input.region,

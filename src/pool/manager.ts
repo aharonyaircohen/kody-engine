@@ -25,7 +25,6 @@ export interface PoolConfig {
   region: string
   guest: FlyGuest
   runnerApiKey: string
-  litellmUrl?: string
   port: number
   healthTimeoutMs: number
   /** owner/repo tag — pooled machines are tagged with it so each repo's pool
@@ -240,7 +239,6 @@ export class PoolManager {
       region: cfg.region,
       guest: cfg.guest,
       runnerApiKey: cfg.runnerApiKey,
-      litellmUrl: cfg.litellmUrl,
       repoTag: cfg.repoTag,
       port: cfg.port,
     })

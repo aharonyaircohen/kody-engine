@@ -158,12 +158,12 @@ export async function startLitellmIfNeeded(
   let logPath: string | undefined
 
   const spawnProxy = (): void => {
-    const configPath = path.join(os.tmpdir(), `kody-litellm-${Date.now()}.yaml`)
+    const configPath = path.join(os.tmpdir(), `kody-local-litellm-${Date.now()}.yaml`)
     fs.writeFileSync(configPath, generateLitellmConfigYaml(model))
     // `cmd` is always a runnable litellm CLI (the bare command or an absolute
     // path to the console script), so the proxy args are uniform.
     const args = ["--config", configPath, "--port", port]
-    const nextLogPath = path.join(os.tmpdir(), `kody-litellm-${Date.now()}.log`)
+    const nextLogPath = path.join(os.tmpdir(), `kody-local-litellm-${Date.now()}.log`)
     const outFd = fs.openSync(nextLogPath, "w")
     child = spawn(cmd, args, { stdio: ["ignore", outFd, outFd], detached: true, env: childEnv })
     fs.closeSync(outFd)

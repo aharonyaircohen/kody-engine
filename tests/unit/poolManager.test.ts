@@ -9,7 +9,6 @@ const CONFIG: PoolConfig = {
   region: "fra",
   guest: { cpu_kind: "performance", cpus: 1, memory_mb: 2048 },
   runnerApiKey: "runner-key",
-  litellmUrl: "http://kody-litellm.internal:4000",
   port: 8080,
   healthTimeoutMs: 5_000,
   repoTag: "o/r",
