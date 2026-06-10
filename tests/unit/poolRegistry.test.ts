@@ -169,6 +169,29 @@ describe("PoolRegistry.claim — happy path with injected resolvers", () => {
     expect(mocks.PoolManagerCtor).toHaveBeenCalledTimes(1)
     expect(reg.activeRepos()).toEqual(["o/r"])
   })
+
+  it("serializes concurrent first access so status/claim cannot double-warm a repo", async () => {
+    mocks.readRepoSecrets.mockResolvedValue({})
+    let releaseFlyToken!: (token: string) => void
+    const resolveFlyToken = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          releaseFlyToken = resolve
+        }),
+    )
+    const reg = new PoolRegistry(baseConfig({ resolveFlyToken }))
+
+    const status = reg.statusFor("o", "r")
+    const claim = reg.claim("O", "R", makeReq())
+    await Promise.resolve()
+    releaseFlyToken("fly-token")
+
+    await expect(status).resolves.toEqual({ min: 1, free: 1, booting: 0, claimsInFlight: 0, total: 2 })
+    await expect(claim).resolves.toEqual({ ok: true, machineId: "m-1" })
+    expect(resolveFlyToken).toHaveBeenCalledTimes(1)
+    expect(mocks.FlyClientCtor).toHaveBeenCalledTimes(1)
+    expect(mocks.PoolManagerCtor).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe("PoolRegistry.claim — no-pool / error branches", () => {

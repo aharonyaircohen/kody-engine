@@ -81,6 +81,7 @@ export interface RegistryConfig {
 
 export class PoolRegistry {
   private pools = new Map<string, PoolManager>()
+  private poolCreates = new Map<string, Promise<PoolManager | null>>()
   private readonly resolveFlyToken: (owner: string, repo: string) => Promise<string | null>
   private readonly resolvePoolMin: (owner: string, repo: string) => Promise<number>
   private readonly log: (msg: string) => void
@@ -122,6 +123,17 @@ export class PoolRegistry {
     const existing = this.pools.get(repoTag)
     if (existing) return existing
 
+    const pending = this.poolCreates.get(repoTag)
+    if (pending) return pending
+
+    const creating = this.createPool(owner, repo, repoTag).finally(() => {
+      this.poolCreates.delete(repoTag)
+    })
+    this.poolCreates.set(repoTag, creating)
+    return creating
+  }
+
+  private async createPool(owner: string, repo: string, repoTag: string): Promise<PoolManager | null> {
     let flyToken: string | null
     try {
       flyToken = await this.resolveFlyToken(owner, repo)
