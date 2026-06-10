@@ -2,7 +2,7 @@ app = "kody-pool"
 primary_region = "fra"
 
 [build]
-  dockerfile = "pool-server/Dockerfile"
+  dockerfile = "../pool-server/Dockerfile"
 
 [env]
   NODE_ENV = "production"
