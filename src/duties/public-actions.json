@@ -1,0 +1,86 @@
+[
+  {
+    "name": "run",
+    "action": "run",
+    "executable": "run",
+    "describe": "Implement a GitHub issue end-to-end."
+  },
+  {
+    "name": "fix",
+    "action": "fix",
+    "executable": "fix",
+    "describe": "Apply review feedback to an existing PR."
+  },
+  {
+    "name": "fix-ci",
+    "action": "fix-ci",
+    "executable": "fix-ci",
+    "describe": "Fix a failing CI workflow on an existing PR."
+  },
+  {
+    "name": "resolve",
+    "action": "resolve",
+    "executable": "resolve",
+    "describe": "Resolve merge conflicts on an existing PR."
+  },
+  {
+    "name": "sync",
+    "action": "sync",
+    "executable": "sync",
+    "describe": "Merge the base branch into a PR branch."
+  },
+  {
+    "name": "merge",
+    "action": "merge",
+    "executable": "merge",
+    "describe": "Self-gating squash merge of a PR."
+  },
+  {
+    "name": "revert",
+    "action": "revert",
+    "executable": "revert",
+    "describe": "Revert one or more commits on a PR branch."
+  },
+  {
+    "name": "preview-build",
+    "action": "preview-build",
+    "executable": "preview-build",
+    "describe": "Build and publish a per-PR preview."
+  },
+  {
+    "name": "release",
+    "action": "release",
+    "executable": "release",
+    "describe": "Run the release flow."
+  },
+  {
+    "name": "release-prepare",
+    "action": "release-prepare",
+    "executable": "release-prepare",
+    "describe": "Prepare a release PR."
+  },
+  {
+    "name": "release-publish",
+    "action": "release-publish",
+    "executable": "release-publish",
+    "describe": "Publish a prepared release."
+  },
+  {
+    "name": "release-deploy",
+    "action": "release-deploy",
+    "executable": "release-deploy",
+    "describe": "Deploy or promote a release."
+  },
+  {
+    "name": "init",
+    "action": "init",
+    "executable": "init",
+    "describe": "Install Kody engine files in a repo."
+  },
+  {
+    "name": "worker-ask",
+    "action": "worker-ask",
+    "executable": "worker-ask",
+    "describe": "Run a staff member once against an inline request."
+  }
+]

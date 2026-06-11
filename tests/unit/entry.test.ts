@@ -30,10 +30,10 @@ describe("entry: parseArgs", () => {
     expect(parseArgs(["-v"]).command).toBe("version")
   })
 
-  it("routes a discovered executable to __executable__", () => {
+  it("routes a discovered public action to __duty__", () => {
     const a = parseArgs(["run", "--issue", "42"])
-    expect(a.command).toBe("__executable__")
-    expect(a.executableName).toBe("run")
+    expect(a.command).toBe("__duty__")
+    expect(a.actionName).toBe("run")
     expect(a.cliArgs).toEqual({ issue: "42" })
     expect(a.errors).toEqual([])
   })

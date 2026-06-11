@@ -42,6 +42,18 @@ const SCHEDULE_EVERY_VALUES: readonly ScheduleEvery[] = [
 ] as const
 
 export interface JobFrontmatter {
+  /**
+   * Public action name. This is what a user types after `@kody`, e.g.
+   * `@kody remember`. The duty owns this public surface; the executable is
+   * only the implementation selected by the duty.
+   */
+  action?: string
+  /**
+   * Singular implementation executable selected by this duty action. Kept
+   * separate from `executables:` because that field means "split this duty
+   * into multiple task slices" for scheduled work.
+   */
+  executable?: string
   every?: ScheduleEvery
   /**
    * Path (relative to cwd) to a deterministic shell script that produces
@@ -161,7 +173,11 @@ function parseFlatYaml(text: string): JobFrontmatter {
     if (colon < 0) continue
     const key = line.slice(0, colon).trim()
     const value = stripQuotes(line.slice(colon + 1).trim())
-    if (key === "every" && isScheduleEvery(value)) {
+    if (key === "action" && value.length > 0) {
+      out.action = value
+    } else if (key === "executable" && value.length > 0) {
+      out.executable = value
+    } else if (key === "every" && isScheduleEvery(value)) {
       out.every = value
     } else if (key === "tickScript" && value.length > 0) {
       out.tickScript = value

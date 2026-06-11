@@ -4,7 +4,7 @@ import * as path from "node:path"
 import { mintAppInstallationToken, readAppCreds } from "./app-auth.js"
 import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
 import { autoDispatch, autoDispatchTyped, type DispatchResult, dispatchScheduledWatches } from "./dispatch.js"
-import { runExecutable, runExecutableChain } from "./executor.js"
+import { runExecutable } from "./executor.js"
 import { reactToTriggerComment } from "./gha.js"
 import {
   postIssueComment as ghPostIssueComment,
@@ -13,6 +13,7 @@ import {
   truncate,
 } from "./issue.js"
 import { mintInstantJob, runJob } from "./job.js"
+import { resolveDutyAction } from "./registry.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -304,7 +305,7 @@ export async function runCi(argv: string[]): Promise<number> {
   const eventName = process.env.GITHUB_EVENT_NAME
   const dispatchEventPath = process.env.GITHUB_EVENT_PATH
   let manualWorkflowDispatch = false
-  let forceRunDuty: string | null = null
+  let forceRunAction: string | null = null
   if (
     !args.issueNumber &&
     !autoFallback &&
@@ -322,15 +323,20 @@ export async function runCi(argv: string[]): Promise<number> {
       // single duty (a scheduled / no-target folder-duty), bypassing the
       // cadence guard. A bare dispatch (no executable) still fans out to every
       // watch executable (duty-scheduler et al.).
-      if (noTarget && exeInput) forceRunDuty = exeInput
+      if (noTarget && exeInput) forceRunAction = exeInput
       else manualWorkflowDispatch = noTarget
     } catch {
       manualWorkflowDispatch = false
     }
   }
-  if (forceRunDuty) {
+  if (forceRunAction) {
     const config = earlyConfig ?? loadConfig(cwd)
-    process.stdout.write(`→ kody: manual one-shot run of duty ${forceRunDuty}\n\n`)
+    const route = resolveDutyAction(forceRunAction)
+    if (!route) {
+      process.stderr.write(`[kody] manual one-shot action '${forceRunAction}' has no duty action\n`)
+      return 64
+    }
+    process.stdout.write(`→ kody: manual one-shot run of duty action ${route.action} (${route.duty})\n\n`)
     try {
       // Same preflight as the routed path: secrets, auth, deps, LiteLLM, git.
       // Without this the duty's agent has no LiteLLM proxy (non-Anthropic
@@ -358,13 +364,22 @@ export async function runCi(argv: string[]): Promise<number> {
       process.stderr.write(`[kody] manual duty preflight crashed: ${String(err)}\n`)
       return 99
     }
-    const result = await runExecutableChain(forceRunDuty, {
-      cliArgs: {},
-      cwd,
-      config,
-      verbose: args.verbose,
-      quiet: args.quiet,
-    })
+    const result = await runJob(
+      {
+        action: route.action,
+        duty: route.duty,
+        executable: route.executable,
+        cliArgs: route.cliArgs,
+        flavor: "instant",
+        force: true,
+      },
+      {
+        cwd,
+        config,
+        verbose: args.verbose,
+        quiet: args.quiet,
+      },
+    )
     const ec = result.exitCode
     return ec === 0 || ec === 1 || ec === 2 ? ec : 99
   }
@@ -435,13 +450,17 @@ export async function runCi(argv: string[]): Promise<number> {
   }
 
   const dispatch = autoFallback ?? {
+    action: "run" as const,
+    duty: "run" as const,
     executable: "run" as const,
     cliArgs: { issue: args.issueNumber! } as Record<string, unknown>,
     target: args.issueNumber!,
   }
   const issueNumber = dispatch.target
 
-  process.stdout.write(`→ kody preflight (cwd=${cwd}, executable=${dispatch.executable}, target=${issueNumber})\n`)
+  process.stdout.write(
+    `→ kody preflight (cwd=${cwd}, action=${dispatch.action}, duty=${dispatch.duty}, executable=${dispatch.executable}, target=${issueNumber})\n`,
+  )
 
   try {
     const n = unpackAllSecrets()

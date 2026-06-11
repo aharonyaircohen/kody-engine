@@ -1,22 +1,29 @@
 /**
- * Route a GitHub event / CLI invocation to an executable.
+ * Route a GitHub event / CLI invocation to a duty action.
  *
- * Dispatch contains ZERO executable names. What to route where comes from:
+ * Dispatch contains ZERO hardcoded implementation executable names. What to
+ * route where comes from:
  *   - the comment body (first token after `@kody`),
- *   - the matched profile's declared `inputs[]` (what args it accepts),
- *   - `config.aliases` (typed word → executable name),
- *   - `config.defaultExecutable` / `config.defaultPrExecutable` (bare fallback).
+ *   - the matched duty action's implementation profile `inputs[]`,
+ *   - `config.aliases` (typed word → action name),
+ *   - legacy `config.defaultExecutable` / `config.defaultPrExecutable`
+ *     fields, now interpreted as default action names.
  *
- * Adding a new executable = drop a `src/executables/<name>/profile.json`.
- * No edits here. Utilities that take no `issue`/`pr` work because we only
- * inject those args when the profile declares them.
+ * Adding a public command = add a duty action. The executable remains the
+ * implementation detail selected by that duty.
  */
 
 import * as fs from "node:fs"
 import { BUILTIN_ALIASES, type KodyConfig } from "./config.js"
 import { cronMatchesInWindow } from "./cron-match.js"
 import type { InputSpec } from "./executables/types.js"
-import { getProfileInputs, listExecutables } from "./registry.js"
+import {
+  getProfileInputs,
+  listDutyActions,
+  listExecutables,
+  resolveDutyAction,
+  type DiscoveredDutyAction,
+} from "./registry.js"
 
 /**
  * Lowercased natural-language lead-ins that should NOT be treated as a
@@ -28,6 +35,11 @@ import { getProfileInputs, listExecutables } from "./registry.js"
 const POLITE_WORDS = new Set<string>(["please", "kindly", "hi", "hey", "hello", "thanks", "thank", "plz", "pls", "yo"])
 
 export interface DispatchResult {
+  /** Public action resolved from the duty layer. */
+  action: string
+  /** Duty slug that owns the action. */
+  duty: string
+  /** Implementation executable selected by the duty. */
   executable: string
   cliArgs: Record<string, unknown>
   target: number
@@ -58,6 +70,56 @@ function primaryNumericInputName(executable: string): string | null {
   if (!inputs) return null
   const intInput = inputs.find((i) => i.type === "int" && i.required)
   return intInput?.name ?? null
+}
+
+function resolveOperatorAction(action: string): DiscoveredDutyAction | null {
+  return resolveDutyAction(action)
+}
+
+function resolveConfiguredAction(action: string): DiscoveredDutyAction | null {
+  const resolved = resolveDutyAction(action)
+  if (resolved) return resolved
+  return compatibilityDutyAction(action)
+}
+
+function requiredRoute(action: string): DiscoveredDutyAction {
+  return (
+    resolveConfiguredAction(action) ?? {
+      action,
+      duty: action,
+      executable: action,
+      cliArgs: {},
+      source: "builtin",
+    }
+  )
+}
+
+function compatibilityDutyAction(action: string): DiscoveredDutyAction | null {
+  if (!/^[a-z][a-z0-9-]*$/.test(action)) return null
+  return {
+    action,
+    duty: action,
+    executable: action,
+    cliArgs: {},
+    source: "builtin",
+  }
+}
+
+function routeResult(
+  route: DiscoveredDutyAction,
+  cliArgs: Record<string, unknown>,
+  target: number,
+  why?: string,
+): DispatchResult {
+  const result: DispatchResult = {
+    action: route.action,
+    duty: route.duty,
+    executable: route.executable,
+    cliArgs: { ...route.cliArgs, ...cliArgs },
+    target,
+  }
+  if (why !== undefined && why.length > 0) result.why = why
+  return result
 }
 
 /**
@@ -91,7 +153,7 @@ export function autoDispatch(opts?: {
 }): DispatchResult | null {
   const explicit = opts?.explicit
   if (explicit?.issueNumber && explicit.issueNumber > 0) {
-    return { executable: "run", cliArgs: { issue: explicit.issueNumber }, target: explicit.issueNumber }
+    return routeResult(requiredRoute("run"), { issue: explicit.issueNumber }, explicit.issueNumber)
   }
 
   const eventName = process.env.GITHUB_EVENT_NAME
@@ -114,17 +176,19 @@ export function autoDispatch(opts?: {
       // (`executable=classify`, `base=<leaf>`) instead of posting an `@kody`
       // comment a bot can't self-trigger. Default stays `run` for a bare
       // manual dispatch with just an issue number.
-      const exe = String(inputs?.executable ?? "").trim() || "run"
+      const actionName = String(inputs?.executable ?? "").trim() || "run"
+      const route = resolveConfiguredAction(actionName)
+      if (!route) return null
       const base = String(inputs?.base ?? "").trim()
       // The `issue_number` input is a generic numeric target, not literally an
       // issue. Bind `n` under the resolved executable's declared int input name
       // (`run` → `issue`, `resolve`/`sync`/`fix-ci` → `pr`). Hardcoding `issue`
       // here used to make PR primitives reject the dispatched run with
       // "unknown arg: --issue", silently breaking pr-health auto-runs.
-      const targetKey = primaryNumericInputName(exe) ?? "issue"
+      const targetKey = primaryNumericInputName(route.executable) ?? "issue"
       const cliArgs: Record<string, unknown> = { [targetKey]: n }
       if (base) cliArgs.base = base
-      return { executable: exe, cliArgs, target: n }
+      return routeResult(route, cliArgs, n)
     }
     // No issue_number input → manual force-fire of all watch executables.
     // The CLI handles this the same way as a schedule event but with the
@@ -149,17 +213,19 @@ export function autoDispatch(opts?: {
   // "preview-build" rebuilds a per-PR preview on every push). The executable
   // name lives in config, never here. closed/merged stay null (see above).
   if (eventName === "pull_request") {
-    const exe = opts?.config?.onPullRequest?.trim()
+    const actionName = opts?.config?.onPullRequest?.trim()
     const action = String(event.action ?? "")
-    if (exe && (action === "opened" || action === "synchronize" || action === "reopened")) {
+    if (actionName && (action === "opened" || action === "synchronize" || action === "reopened")) {
+      const route = resolveConfiguredAction(actionName)
+      if (!route) return null
       const pullRequest = objectValue(event.pull_request)
       const prNum = Number(pullRequest?.number ?? event.number ?? 0)
       if (prNum > 0) {
         // Bind the PR number under the target's first required int input
         // (preview-build → `pr`); falls back to `pr` if the profile is
         // missing, mirroring the workflow_dispatch numeric-input binding.
-        const targetKey = primaryNumericInputName(exe) ?? "pr"
-        return { executable: exe, cliArgs: { [targetKey]: prNum }, target: prNum }
+        const targetKey = primaryNumericInputName(route.executable) ?? "pr"
+        return routeResult(route, { [targetKey]: prNum }, prNum)
       }
     }
     return null
@@ -210,11 +276,11 @@ export function autoDispatch(opts?: {
   const aliases = opts?.config?.aliases ?? BUILTIN_ALIASES
   const aliased = firstToken ? (aliases[firstToken] ?? firstToken) : null
 
-  let executable: string | null = null
+  let route: DiscoveredDutyAction | null = null
   let consumedFirstToken = false
   if (aliased) {
-    if (getProfileInputs(aliased) !== null) {
-      executable = aliased
+    route = resolveOperatorAction(aliased)
+    if (route) {
       consumedFirstToken = true
     } else if (firstToken && aliases[firstToken] && aliases[firstToken] === aliased) {
       // The user (or BUILTIN_ALIASES) configured an alias whose target
@@ -224,7 +290,7 @@ export function autoDispatch(opts?: {
       // typed tokens, so natural language like "@kody please fix X" stays
       // silent (the politeness words get stripped downstream into feedback).
       process.stderr.write(
-        `[kody] dispatch: alias '${firstToken}' → '${aliased}' has no matching executable; falling back to default\n`,
+        `[kody] dispatch: alias '${firstToken}' → '${aliased}' has no matching duty action; falling back to default\n`,
       )
     }
   }
@@ -234,8 +300,9 @@ export function autoDispatch(opts?: {
   // wrapper can surface the unrecognized comment back to the user. The
   // POLITE_WORDS filter above lets natural-language phrasings through to
   // the default — the "no firstToken" condition here is what gates them.
-  if (!executable && !firstToken) {
-    executable = isPr ? (opts?.config?.defaultPrExecutable ?? null) : (opts?.config?.defaultExecutable ?? null)
+  if (!route && !firstToken) {
+    const defaultAction = isPr ? (opts?.config?.defaultPrExecutable ?? null) : (opts?.config?.defaultExecutable ?? null)
+    route = defaultAction ? resolveConfiguredAction(defaultAction) : null
   }
   // Bot self-dispatch gate: a bot-authored comment may ONLY proceed when it
   // resolved to an explicit command (`consumedFirstToken`). It must never fall
@@ -256,18 +323,18 @@ export function autoDispatch(opts?: {
     )
     return null
   }
-  if (!executable) {
+  if (!route) {
     if (!firstToken) return null
     // Surface why dispatch gave up — currently the consumer just sees
     // "no action for event issue_comment" and has no way to tell whether
     // the executable wasn't found, the alias was missing, or there's no
     // default. This breadcrumb makes the gate observable without changing
     // behavior.
-    const profileMissing = aliased ? getProfileInputs(aliased) === null : true
+    const profileMissing = aliased ? resolveOperatorAction(aliased) === null : true
     process.stderr.write(
-      `[kody] dispatch: no executable resolved for issue_comment ` +
+      `[kody] dispatch: no duty action resolved for issue_comment ` +
         `(firstToken=${firstToken ?? "<none>"}, aliased=${aliased ?? "<none>"}, ` +
-        `profileFound=${!profileMissing}, defaultExecutable=${opts?.config?.defaultExecutable ?? "<unset>"}, ` +
+        `actionFound=${!profileMissing}, defaultExecutable=${opts?.config?.defaultExecutable ?? "<unset>"}, ` +
         `defaultPrExecutable=${opts?.config?.defaultPrExecutable ?? "<unset>"})\n`,
     )
     return null
@@ -276,7 +343,7 @@ export function autoDispatch(opts?: {
   // Inputs drive arg parsing and injection. If the profile isn't registered
   // (e.g. a consumer-configured default pointing at something not bundled),
   // fall back to event-shape injection so context isn't silently dropped.
-  const inputs = getProfileInputs(executable)
+  const inputs = getProfileInputs(route.executable)
   const effectiveInputs = inputs ?? []
   const unknownProfile = inputs === null
   const rest = extractCommentRest(afterTag, consumedFirstToken ? firstToken : null)
@@ -303,7 +370,7 @@ export function autoDispatch(opts?: {
     why = leftover
   }
 
-  return { executable, cliArgs: args, target: targetNum, why }
+  return routeResult(route, args, targetNum, why)
 }
 
 /**
@@ -380,8 +447,8 @@ export function autoDispatchTyped(opts?: {
     }
   }
 
-  const available = listExecutables()
-    .map((e) => e.name)
+  const available = listDutyActions()
+    .map((e) => e.action)
     .filter((n) => !n.startsWith("goal-") && !n.startsWith("job-"))
     .sort()
 
@@ -438,7 +505,7 @@ export function dispatchScheduledWatches(opts?: { now?: Date; windowSec?: number
         continue
       }
     }
-    out.push({ executable: exe.name, cliArgs: {}, target: 0 })
+    out.push({ action: exe.name, duty: exe.name, executable: exe.name, cliArgs: {}, target: 0 })
   }
   return out
 }

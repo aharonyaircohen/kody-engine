@@ -15,6 +15,8 @@ describe("dispatch: explicit override", () => {
   it("routes to run when issueNumber provided", () => {
     const r = autoDispatch({ explicit: { issueNumber: 42 } })
     expect(r).toEqual({
+      action: "run",
+      duty: "run",
       executable: "run",
       cliArgs: { issue: 42 },
       target: 42,
@@ -44,6 +46,8 @@ describe("dispatch: workflow_dispatch event", () => {
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
     process.env.GITHUB_EVENT_PATH = writeEvent({ inputs: { issue_number: "17" } })
     expect(autoDispatch()).toEqual({
+      action: "run",
+      duty: "run",
       executable: "run",
       cliArgs: { issue: 17 },
       target: 17,
@@ -56,6 +60,8 @@ describe("dispatch: workflow_dispatch event", () => {
       inputs: { issue_number: "42", executable: "classify", base: "11-x" },
     })
     expect(autoDispatch()).toEqual({
+      action: "classify",
+      duty: "classify",
       executable: "classify",
       cliArgs: { issue: 42, base: "11-x" },
       target: 42,
@@ -107,6 +113,8 @@ describe("dispatch: pull_request event", () => {
   it("routes an opened PR to onPullRequest, binding the number under the target's int input", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({ action: "opened", number: 7, pull_request: { number: 7 } })
     expect(autoDispatch({ config: { onPullRequest: "preview-build" } as any })).toEqual({
+      action: "preview-build",
+      duty: "preview-build",
       executable: "preview-build",
       cliArgs: { pr: 7 },
       target: 7,
@@ -116,6 +124,8 @@ describe("dispatch: pull_request event", () => {
   it("routes a synchronize (new commit) PR to onPullRequest", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({ action: "synchronize", number: 9, pull_request: { number: 9 } })
     expect(autoDispatch({ config: { onPullRequest: "preview-build" } as any })).toEqual({
+      action: "preview-build",
+      duty: "preview-build",
       executable: "preview-build",
       cliArgs: { pr: 9 },
       target: 9,
@@ -150,6 +160,8 @@ describe("dispatch: issue_comment on issue", () => {
       issue: { number: 8 },
     })
     expect(autoDispatch()).toEqual({
+      action: "run",
+      duty: "run",
       executable: "run",
       cliArgs: { issue: 8 },
       target: 8,
@@ -188,7 +200,50 @@ describe("dispatch: issue_comment on issue", () => {
       issue: { number: 9 },
     })
     // "this now" is free text no input captured → carried as the job's `why`.
-    expect(autoDispatch()).toEqual({ executable: "run", cliArgs: { issue: 9 }, target: 9, why: "this now" })
+    expect(autoDispatch()).toEqual({
+      action: "run",
+      duty: "run",
+      executable: "run",
+      cliArgs: { issue: 9 },
+      target: 9,
+      why: "this now",
+    })
+  })
+
+  it("routes '@kody <action>' through a duty action, not a bare executable", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-duty-action-dispatch-"))
+    const prevCwd = process.cwd()
+    try {
+      process.chdir(tmp)
+      fs.mkdirSync(path.join(tmp, ".kody", "duties"), { recursive: true })
+      fs.mkdirSync(path.join(tmp, ".kody", "executables", "custom-impl"), { recursive: true })
+      fs.writeFileSync(
+        path.join(tmp, ".kody", "duties", "remember.md"),
+        "---\naction: remember\nexecutable: custom-impl\nstaff: kody\n---\n# Remember\n",
+      )
+      fs.writeFileSync(
+        path.join(tmp, ".kody", "executables", "custom-impl", "profile.json"),
+        JSON.stringify({
+          name: "custom-impl",
+          inputs: [{ name: "issue", flag: "--issue", type: "int", required: true }],
+        }),
+      )
+      process.env.GITHUB_EVENT_PATH = writeEvent({
+        comment: { body: "@kody remember" },
+        issue: { number: 12 },
+      })
+
+      expect(autoDispatch()).toEqual({
+        action: "remember",
+        duty: "remember",
+        executable: "custom-impl",
+        cliArgs: { issue: 12 },
+        target: 12,
+      })
+    } finally {
+      process.chdir(prevCwd)
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
   })
 
   it("routes legacy '@kody build' → run (backward-compat)", () => {
@@ -197,6 +252,8 @@ describe("dispatch: issue_comment on issue", () => {
       issue: { number: 15 },
     })
     expect(autoDispatch()).toEqual({
+      action: "run",
+      duty: "run",
       executable: "run",
       cliArgs: { issue: 15 },
       target: 15,
@@ -238,6 +295,8 @@ describe("dispatch: issue_comment on issue", () => {
         config: { defaultExecutable: "run" } as any,
       }),
     ).toEqual({
+      action: "run",
+      duty: "run",
       executable: "run",
       cliArgs: { issue: 42, base: "3293-stacked-test-1" },
       target: 42,
@@ -254,6 +313,8 @@ describe("dispatch: issue_comment on issue", () => {
         config: { defaultExecutable: "classify" } as any,
       }),
     ).toEqual({
+      action: "classify",
+      duty: "classify",
       executable: "classify",
       cliArgs: { issue: 11 },
       target: 11,
@@ -270,6 +331,8 @@ describe("dispatch: issue_comment on issue", () => {
         config: { defaultExecutable: "classify" } as any,
       }),
     ).toEqual({
+      action: "classify",
+      duty: "classify",
       executable: "classify",
       cliArgs: { issue: 11 },
       target: 11,
@@ -296,6 +359,8 @@ describe("dispatch: issue_comment on issue", () => {
         config: { defaultExecutable: "orchestrator" } as any,
       }),
     ).toEqual({
+      action: "orchestrator",
+      duty: "orchestrator",
       executable: "orchestrator",
       cliArgs: { issue: 12 },
       target: 12,
@@ -337,6 +402,8 @@ describe("dispatch: issue_comment on PR", () => {
       issue: { number: 20, pull_request: {} },
     })
     expect(autoDispatch()).toEqual({
+      action: "fix-ci",
+      duty: "fix-ci",
       executable: "fix-ci",
       cliArgs: { pr: 20 },
       target: 20,
@@ -349,6 +416,8 @@ describe("dispatch: issue_comment on PR", () => {
       issue: { number: 21, pull_request: {} },
     })
     expect(autoDispatch()).toEqual({
+      action: "fix-ci",
+      duty: "fix-ci",
       executable: "fix-ci",
       cliArgs: { pr: 21, runId: "123456" },
       target: 21,
@@ -361,6 +430,8 @@ describe("dispatch: issue_comment on PR", () => {
       issue: { number: 21, pull_request: {} },
     })
     expect(autoDispatch()).toEqual({
+      action: "resolve",
+      duty: "resolve",
       executable: "resolve",
       cliArgs: { pr: 21 },
       target: 21,
@@ -373,6 +444,8 @@ describe("dispatch: issue_comment on PR", () => {
       issue: { number: 22, pull_request: {} },
     })
     expect(autoDispatch()).toEqual({
+      action: "resolve",
+      duty: "resolve",
       executable: "resolve",
       cliArgs: { pr: 22, prefer: "ours" },
       target: 22,
@@ -385,6 +458,8 @@ describe("dispatch: issue_comment on PR", () => {
       issue: { number: 23, pull_request: {} },
     })
     expect(autoDispatch()).toEqual({
+      action: "resolve",
+      duty: "resolve",
       executable: "resolve",
       cliArgs: { pr: 23, prefer: "theirs" },
       target: 23,
@@ -397,6 +472,8 @@ describe("dispatch: issue_comment on PR", () => {
       issue: { number: 25, pull_request: {} },
     })
     expect(autoDispatch()).toEqual({
+      action: "sync",
+      duty: "sync",
       executable: "sync",
       cliArgs: { pr: 25 },
       target: 25,
@@ -409,6 +486,8 @@ describe("dispatch: issue_comment on PR", () => {
       issue: { number: 24, pull_request: {} },
     })
     expect(autoDispatch()).toEqual({
+      action: "fix",
+      duty: "fix",
       executable: "fix",
       cliArgs: { pr: 24 },
       target: 24,
@@ -421,6 +500,8 @@ describe("dispatch: issue_comment on PR", () => {
       issue: { number: 25, pull_request: {} },
     })
     expect(autoDispatch()).toEqual({
+      action: "fix",
+      duty: "fix",
       executable: "fix",
       cliArgs: { pr: 25, feedback: "address reviewer feedback" },
       target: 25,
@@ -441,6 +522,8 @@ describe("dispatch: issue_comment on PR", () => {
       issue: { number: 23, pull_request: {} },
     })
     expect(autoDispatch({ config: { defaultPrExecutable: "sync" } as any })).toEqual({
+      action: "sync",
+      duty: "sync",
       executable: "sync",
       cliArgs: { pr: 23 },
       target: 23,
@@ -466,6 +549,8 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
       issue: { number: 30 },
     })
     expect(autoDispatch()).toEqual({
+      action: "release",
+      duty: "release",
       executable: "release",
       cliArgs: { issue: 30 },
       target: 30,
@@ -478,6 +563,8 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
       issue: { number: 31 },
     })
     expect(autoDispatch()).toEqual({
+      action: "release-prepare",
+      duty: "release-prepare",
       executable: "release-prepare",
       cliArgs: { issue: 31 },
       target: 31,
@@ -490,6 +577,8 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
       issue: { number: 32 },
     })
     expect(autoDispatch()).toEqual({
+      action: "release-prepare",
+      duty: "release-prepare",
       executable: "release-prepare",
       cliArgs: { issue: 32, bump: "minor" },
       target: 32,
@@ -502,6 +591,8 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
       issue: { number: 40 },
     })
     expect(autoDispatch()).toEqual({
+      action: "release-prepare",
+      duty: "release-prepare",
       executable: "release-prepare",
       cliArgs: { issue: 40, prefer: "ours" },
       target: 40,
@@ -515,6 +606,8 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     })
     const r = autoDispatch()
     expect(r?.executable).toBe("release-prepare")
+    expect(r?.action).toBe("release-prepare")
+    expect(r?.duty).toBe("release-prepare")
     expect(r?.cliArgs.prefer).toBe("theirs")
     expect(r?.cliArgs.issue).toBe(41)
   })
@@ -525,6 +618,8 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
       issue: { number: 42 },
     })
     expect(autoDispatch()).toEqual({
+      action: "release-prepare",
+      duty: "release-prepare",
       executable: "release-prepare",
       cliArgs: { issue: 42, bump: "patch", "dry-run": true },
       target: 42,
@@ -537,6 +632,8 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
       issue: { number: 50 },
     })
     expect(autoDispatch()).toEqual({
+      action: "release-publish",
+      duty: "release-publish",
       executable: "release-publish",
       cliArgs: { issue: 50 },
       target: 50,
@@ -549,6 +646,8 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
       issue: { number: 51 },
     })
     expect(autoDispatch()).toEqual({
+      action: "release-deploy",
+      duty: "release-deploy",
       executable: "release-deploy",
       cliArgs: { issue: 51 },
       target: 51,
@@ -561,6 +660,8 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
       issue: { number: 33 },
     })
     expect(autoDispatch()).toEqual({
+      action: "release",
+      duty: "release",
       executable: "release",
       cliArgs: { issue: 33, bump: "minor" },
       target: 33,
@@ -631,12 +732,12 @@ describe("dispatch: alias misconfig surfacing", () => {
     expect(result).toBeNull()
     const warnings = stderrSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n")
     expect(warnings).toMatch(/alias 'phantom-cmd' → 'no-such-executable'/)
-    expect(warnings).toMatch(/has no matching executable/)
+    expect(warnings).toMatch(/has no matching duty action/)
   })
 
-  it("logs the no-executable-resolved breadcrumb for any unrecognized token", () => {
+  it("logs the no-duty-action-resolved breadcrumb for any unrecognized token", () => {
     // Behavior changed in 0.4.36: the breadcrumb fires whenever firstToken
-    // is set but no executable resolves, so consumers (kody-cli) can
+    // is set but no duty action resolves, so consumers (kody-cli) can
     // distinguish "user typed a typo" from "no @kody mention." The
     // breadcrumb itself is the diagnostic; the typed wrapper turns it
     // into user-facing feedback.
@@ -649,7 +750,7 @@ describe("dispatch: alias misconfig surfacing", () => {
       config: { defaultExecutable: "classify", aliases: {} } as never,
     })
     const warnings = stderrSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n")
-    expect(warnings).toMatch(/no executable resolved/)
+    expect(warnings).toMatch(/no duty action resolved/)
     expect(warnings).toMatch(/firstToken=totally-unknown-thing/)
   })
 

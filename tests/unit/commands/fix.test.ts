@@ -4,8 +4,8 @@ import { parseArgs } from "../../../src/entry.js"
 describe("entry: fix args", () => {
   it("parses --pr into cliArgs", () => {
     const a = parseArgs(["fix", "--pr", "42"])
-    expect(a.command).toBe("__executable__")
-    expect(a.executableName).toBe("fix")
+    expect(a.command).toBe("__duty__")
+    expect(a.actionName).toBe("fix")
     expect(a.cliArgs).toEqual({ pr: "42" })
     expect(a.errors).toEqual([])
   })

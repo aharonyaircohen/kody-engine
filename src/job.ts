@@ -15,6 +15,7 @@ import type { DispatchResult } from "./dispatch.js"
 import type { Job, JobFlavor } from "./executables/types.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
 import { runExecutable, runExecutableChain } from "./executor.js"
+import { resolveDutyAction } from "./registry.js"
 
 export { stableJobKey } from "./jobIdentity.js"
 
@@ -56,8 +57,8 @@ export function validateJob(input: unknown): Job {
     throw new InvalidJobError("job must be an object")
   }
   const j = input as Record<string, unknown>
-  if (typeof j.executable !== "string" && typeof j.duty !== "string") {
-    throw new InvalidJobError("job must reference an executable or a duty")
+  if (typeof j.executable !== "string" && typeof j.duty !== "string" && typeof j.action !== "string") {
+    throw new InvalidJobError("job must reference a duty action, duty, or executable")
   }
   if (j.flavor !== "instant" && j.flavor !== "scheduled") {
     throw new InvalidJobError(`job.flavor must be "instant" or "scheduled" (got ${String(j.flavor)})`)
@@ -66,6 +67,7 @@ export function validateJob(input: unknown): Job {
     throw new InvalidJobError("job.cliArgs must be an object when present")
   }
   return {
+    action: typeof j.action === "string" ? j.action : undefined,
     executable: typeof j.executable === "string" ? j.executable : undefined,
     duty: typeof j.duty === "string" ? j.duty : undefined,
     why: typeof j.why === "string" ? j.why : undefined,
@@ -82,6 +84,7 @@ export function validateJob(input: unknown): Job {
 export interface RunJobBase {
   cwd: string
   config?: KodyConfig
+  skipConfig?: boolean
   verbose?: boolean
   quiet?: boolean
   preloadedData?: Record<string, unknown>
@@ -114,7 +117,9 @@ export interface RunJobBase {
  */
 export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput> {
   const valid = validateJob(job)
-  const profileName = valid.executable ?? valid.duty
+  const action = valid.action ?? valid.duty
+  const resolvedDuty = action ? resolveDutyAction(action) : null
+  const profileName = valid.executable ?? resolvedDuty?.executable ?? valid.duty
   if (!profileName) {
     throw new InvalidJobError("job resolves to no executable or duty")
   }
@@ -126,8 +131,12 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   preloadedData.jobKey = stableJobKey(valid)
   preloadedData.jobFlavor = valid.flavor
   if (valid.target !== undefined) preloadedData.jobTarget = valid.target
-  if (valid.duty !== undefined && valid.duty.length > 0) preloadedData.jobDuty = valid.duty
-  if (valid.executable !== undefined && valid.executable.length > 0) preloadedData.jobExecutable = valid.executable
+  if (valid.action !== undefined && valid.action.length > 0) preloadedData.jobAction = valid.action
+  const dutyIdentity = valid.duty ?? resolvedDuty?.duty
+  if (dutyIdentity !== undefined && dutyIdentity.length > 0) preloadedData.jobDuty = dutyIdentity
+  const executableIdentity = valid.executable ?? resolvedDuty?.executable
+  if (executableIdentity !== undefined && executableIdentity.length > 0)
+    preloadedData.jobExecutable = executableIdentity
   // The job carries *when*: a scheduled job's cadence, recorded in the ledger.
   if (valid.schedule !== undefined && valid.schedule.length > 0) preloadedData.jobSchedule = valid.schedule
   // Inline why → ctx.data.jobWhy (NOT jobIntent — that token is the scheduled
@@ -141,10 +150,12 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     cliArgs: { ...valid.cliArgs },
     cwd: base.cwd,
     config: base.config,
+    skipConfig: base.skipConfig,
     verbose: base.verbose,
     quiet: base.quiet,
     preloadedData: Object.keys(preloadedData).length > 0 ? preloadedData : undefined,
   }
+  input.cliArgs = resolvedDuty ? { ...resolvedDuty.cliArgs, ...input.cliArgs } : input.cliArgs
 
   const run = base.chain === false ? runExecutable : runExecutableChain
   return run(profileName, input)
@@ -166,7 +177,9 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
  */
 export function mintInstantJob(dispatch: DispatchResult, opts?: { why?: string; persona?: string }): Job {
   return {
+    action: dispatch.action,
     executable: dispatch.executable,
+    duty: dispatch.duty,
     why: opts?.why ?? dispatch.why,
     persona: opts?.persona ?? DEFAULT_INSTANT_PERSONA,
     target: dispatch.target,

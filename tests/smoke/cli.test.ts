@@ -5,6 +5,9 @@
  */
 
 import { describe, expect, it } from "vitest"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
 import { packageVersion, runCli } from "./helpers.js"
 
 describe("smoke: CLI boots and validates args", () => {
@@ -40,5 +43,53 @@ describe("smoke: CLI boots and validates args", () => {
     const r = runCli(["run", "--issue", "1", "--bogus"])
     expect(r.status).toBe(64)
     expect(r.stderr).toMatch(/--bogus/)
+  })
+
+  it("runs a project duty action through its implementation executable", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-duty-cli-smoke-"))
+    fs.mkdirSync(path.join(root, ".kody", "duties"), { recursive: true })
+    fs.mkdirSync(path.join(root, ".kody", "executables", "smoke-impl"), { recursive: true })
+    fs.writeFileSync(
+      path.join(root, "kody.config.json"),
+      JSON.stringify({
+        quality: { typecheck: "", lint: "", format: "", testUnit: "" },
+        git: { defaultBranch: "main" },
+        github: { owner: "o", repo: "r" },
+        agent: { model: "anthropic/test" },
+      }),
+    )
+    fs.writeFileSync(
+      path.join(root, ".kody", "duties", "smoke-duty.md"),
+      "---\naction: smoke-action\nexecutable: smoke-impl\nstaff: kody\n---\n# Smoke\n",
+    )
+    fs.writeFileSync(
+      path.join(root, ".kody", "executables", "smoke-impl", "profile.json"),
+      JSON.stringify({
+        name: "smoke-impl",
+        role: "utility",
+        describe: "smoke impl",
+        kind: "oneshot",
+        inputs: [],
+        claudeCode: {
+          model: "inherit",
+          permissionMode: "default",
+          maxTurns: 0,
+          maxThinkingTokens: null,
+          systemPromptAppend: null,
+          tools: [],
+          hooks: [],
+          skills: [],
+          commands: [],
+          subagents: [],
+          plugins: [],
+          mcpServers: [],
+        },
+        cliTools: [],
+        scripts: { preflight: [{ script: "skipAgent" }], postflight: [] },
+      }),
+    )
+
+    const r = runCli(["smoke-action"], { cwd: root })
+    expect(r.status).toBe(0)
   })
 })

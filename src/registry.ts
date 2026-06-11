@@ -21,10 +21,26 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type { InputSpec } from "./executables/types.js"
+import { splitFrontmatter } from "./scripts/jobFrontmatter.js"
 
 export interface DiscoveredExecutable {
   name: string
   profilePath: string
+}
+
+export interface DiscoveredDutyAction {
+  /** Public action typed by a user, e.g. `@kody run`. */
+  action: string
+  /** Duty slug that owns the public action. */
+  duty: string
+  /** Implementation executable selected by the duty. */
+  executable: string
+  /** Extra args required to lower the duty to its implementation. */
+  cliArgs: Record<string, unknown>
+  source: "project-folder" | "project-markdown" | "builtin"
+  describe?: string
+  profilePath?: string
+  filePath?: string
 }
 
 /**
@@ -80,6 +96,20 @@ export function getBuiltinJobsRoot(): string {
     path.join(here, "jobs"), // dev: src/
     path.join(here, "..", "jobs"), // built: dist/bin → dist/jobs
     path.join(here, "..", "src", "jobs"), // fallback
+  ]
+  for (const c of candidates) {
+    if (fs.existsSync(c) && fs.statSync(c).isDirectory()) return c
+  }
+  return candidates[0]!
+}
+
+/** Built-in public duty-action definitions shipped with the engine. */
+export function getBuiltinDutiesRoot(): string {
+  const here = path.dirname(new URL(import.meta.url).pathname)
+  const candidates = [
+    path.join(here, "duties"), // dev: src/
+    path.join(here, "..", "duties"), // built: dist/bin → dist/duties
+    path.join(here, "..", "src", "duties"), // fallback
   ]
   for (const c of candidates) {
     if (fs.existsSync(c) && fs.statSync(c).isDirectory()) return c
@@ -241,9 +271,160 @@ export function hasExecutable(name: string, roots: string | string[] = getExecut
   return resolveExecutable(name, roots) !== null
 }
 
+/**
+ * List public duty actions. Duties own the operator-facing action name; an
+ * executable is only the selected implementation. Ordering is intentional:
+ * project folder duties override project markdown duties, and project duties
+ * override engine built-ins.
+ */
+export function listDutyActions(projectDutiesRoot: string = getProjectDutiesRoot()): DiscoveredDutyAction[] {
+  const seen = new Set<string>()
+  const out: DiscoveredDutyAction[] = []
+  const add = (action: DiscoveredDutyAction) => {
+    if (!isSafeName(action.action) || !isSafeName(action.duty) || !isSafeName(action.executable)) return
+    if (seen.has(action.action)) return
+    seen.add(action.action)
+    out.push(action)
+  }
+
+  for (const action of listProjectFolderDutyActions(projectDutiesRoot)) add(action)
+  for (const action of listProjectMarkdownDutyActions(projectDutiesRoot)) add(action)
+  for (const action of listBuiltinDutyActions()) add(action)
+  return out.sort((a, b) => a.action.localeCompare(b.action))
+}
+
+/** Resolve one public action to the duty that owns it. */
+export function resolveDutyAction(
+  action: string,
+  projectDutiesRoot: string = getProjectDutiesRoot(),
+): DiscoveredDutyAction | null {
+  if (!isSafeName(action)) return null
+  return listDutyActions(projectDutiesRoot).find((d) => d.action === action) ?? null
+}
+
+export function hasDutyAction(action: string, projectDutiesRoot: string = getProjectDutiesRoot()): boolean {
+  return resolveDutyAction(action, projectDutiesRoot) !== null
+}
+
+/** Read the implementation profile inputs for a public duty action. */
+export function getDutyActionInputs(action: string): InputSpec[] | null {
+  const resolved = resolveDutyAction(action)
+  if (!resolved) return null
+  return getProfileInputs(resolved.executable)
+}
+
 /** Executable names: lowercase letters, digits, and dashes. Rejects traversal. */
 export function isSafeName(name: string): boolean {
   return /^[a-z][a-z0-9-]*$/.test(name) && !name.includes("..")
+}
+
+function listProjectFolderDutyActions(root: string): DiscoveredDutyAction[] {
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
+  const out: DiscoveredDutyAction[] = []
+  for (const ent of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!ent.isDirectory() || ent.name.startsWith(".") || ent.name.startsWith("_")) continue
+    if (!isSafeName(ent.name)) continue
+    const profilePath = path.join(root, ent.name, "profile.json")
+    if (!fs.existsSync(profilePath) || !fs.statSync(profilePath).isFile()) continue
+    try {
+      const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as Record<string, unknown>
+      const action = stringOr(raw.action, ent.name)
+      const executable = stringOr(raw.executable, ent.name)
+      out.push({
+        action,
+        duty: ent.name,
+        executable,
+        cliArgs: {},
+        source: "project-folder",
+        describe: typeof raw.describe === "string" ? raw.describe : undefined,
+        profilePath,
+      })
+    } catch {
+      continue
+    }
+  }
+  return out.sort((a, b) => a.action.localeCompare(b.action))
+}
+
+function listProjectMarkdownDutyActions(root: string): DiscoveredDutyAction[] {
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
+  const out: DiscoveredDutyAction[] = []
+  for (const ent of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!ent.isFile() || !ent.name.endsWith(".md")) continue
+    const duty = ent.name.slice(0, -3)
+    if (!isSafeName(duty)) continue
+    const filePath = path.join(root, ent.name)
+    try {
+      const raw = fs.readFileSync(filePath, "utf-8")
+      const { frontmatter } = splitFrontmatter(raw)
+      const action = frontmatter.action?.trim() || duty
+      const implementation = markdownDutyImplementation(duty, frontmatter)
+      out.push({
+        action,
+        duty,
+        executable: implementation.executable,
+        cliArgs: implementation.cliArgs,
+        source: "project-markdown",
+        filePath,
+      })
+    } catch {
+      continue
+    }
+  }
+  return out.sort((a, b) => a.action.localeCompare(b.action))
+}
+
+function markdownDutyImplementation(
+  duty: string,
+  frontmatter: ReturnType<typeof splitFrontmatter>["frontmatter"],
+): {
+  executable: string
+  cliArgs: Record<string, unknown>
+} {
+  if (frontmatter.executable?.trim()) {
+    return { executable: frontmatter.executable.trim(), cliArgs: {} }
+  }
+  if (frontmatter.executables?.length === 1 && frontmatter.executables[0]?.trim()) {
+    return { executable: frontmatter.executables[0].trim(), cliArgs: {} }
+  }
+  if (frontmatter.tickScript?.trim()) {
+    return { executable: "duty-tick-scripted", cliArgs: { duty } }
+  }
+  return { executable: "duty-tick", cliArgs: { duty } }
+}
+
+function listBuiltinDutyActions(root: string = getBuiltinDutiesRoot()): DiscoveredDutyAction[] {
+  const filePath = path.join(root, "public-actions.json")
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return []
+  try {
+    const raw = JSON.parse(fs.readFileSync(filePath, "utf-8"))
+    if (!Array.isArray(raw)) return []
+    const out: DiscoveredDutyAction[] = []
+    for (const item of raw) {
+      if (!item || typeof item !== "object") continue
+      const r = item as Record<string, unknown>
+      const duty = stringOr(r.duty, stringOr(r.name, ""))
+      const action = stringOr(r.action, duty)
+      const executable = stringOr(r.executable, duty)
+      if (!duty || !action || !executable) continue
+      out.push({
+        action,
+        duty,
+        executable,
+        cliArgs: {},
+        source: "builtin",
+        describe: typeof r.describe === "string" ? r.describe : undefined,
+        filePath,
+      })
+    }
+    return out.sort((a, b) => a.action.localeCompare(b.action))
+  } catch {
+    return []
+  }
+}
+
+function stringOr(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback
 }
 
 /**

@@ -41,6 +41,7 @@ const VALID_PHASES = new Set(["research", "planning", "implementing", "reviewing
  */
 const KNOWN_PROFILE_KEYS = new Set([
   "name",
+  "action",
   "executable",
   "staff",
   "every",
@@ -113,6 +114,7 @@ export function loadProfile(profilePath: string): Profile {
     return {
       ...base,
       name: requireString(profilePath, r, "name"),
+      action: typeof r.action === "string" && r.action.trim() ? r.action.trim() : undefined,
       executable: execRef,
       describe: typeof r.describe === "string" ? r.describe : base.describe,
       staff: typeof r.staff === "string" && r.staff.trim() ? r.staff.trim() : base.staff,
@@ -168,6 +170,7 @@ export function loadProfile(profilePath: string): Profile {
 
   const profile: Profile = {
     name: requireString(profilePath, r, "name"),
+    action: typeof r.action === "string" && r.action.trim() ? r.action.trim() : undefined,
     executable: undefined,
     describe: typeof r.describe === "string" ? r.describe : "",
     // Optional persona to run as. Empty/blank string → undefined (no persona).

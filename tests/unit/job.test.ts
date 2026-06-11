@@ -26,12 +26,26 @@ describe("runJob (Phase 1 seam)", () => {
   })
 
   it("lowers an instant job onto runExecutableChain with its executable + cliArgs", async () => {
-    await runJob({ executable: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" }, { cwd: "/x" })
+    await runJob(
+      { duty: "run", executable: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" },
+      { cwd: "/x" },
+    )
     expect(runExecutableChain).toHaveBeenCalledTimes(1)
     const [profile, input] = runExecutableChain.mock.calls[0]!
     expect(profile).toBe("run")
     expect(input.cliArgs).toEqual({ issue: 42 })
     expect(input.cwd).toBe("/x")
+    expect(input.preloadedData?.jobDuty).toBe("run")
+  })
+
+  it("lowers an action-only instant job through the duty action registry", async () => {
+    await runJob({ action: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" }, { cwd: "/x" })
+    const [profile, input] = runExecutableChain.mock.calls[0]!
+    expect(profile).toBe("run")
+    expect(input.cliArgs).toEqual({ issue: 42 })
+    expect(input.preloadedData?.jobAction).toBe("run")
+    expect(input.preloadedData?.jobDuty).toBe("run")
+    expect(input.preloadedData?.jobExecutable).toBe("run")
   })
 
   it("seeds inline why into preloadedData.jobWhy", async () => {
@@ -81,9 +95,17 @@ describe("runJob (Phase 1 seam)", () => {
   })
 
   it("carries the DispatchResult's why through mintInstantJob into jobWhy", async () => {
-    await runJob(mintInstantJob({ executable: "run", cliArgs: { issue: 5 }, target: 5, why: "also add tests" }), {
-      cwd: "/x",
-    })
+    await runJob(
+      mintInstantJob({
+        action: "run",
+        duty: "run",
+        executable: "run",
+        cliArgs: { issue: 5 },
+        target: 5,
+        why: "also add tests",
+      }),
+      { cwd: "/x" },
+    )
     const [, input] = runExecutableChain.mock.calls[0]!
     expect(input.preloadedData?.jobWhy).toBe("also add tests")
   })
@@ -119,7 +141,7 @@ describe("runJob (Phase 1 seam)", () => {
     expect(input.preloadedData?.jobPersona).toBeUndefined()
   })
 
-  it("rejects a job with neither executable nor duty", () => {
+  it("rejects a job with no duty action, duty, or executable", () => {
     expect(() => validateJob({ cliArgs: {}, flavor: "instant" })).toThrow(InvalidJobError)
   })
 
@@ -134,12 +156,13 @@ describe("runJob (Phase 1 seam)", () => {
 })
 
 describe("mintInstantJob (Phase 2)", () => {
-  const dispatch = { executable: "fix", cliArgs: { pr: 7 }, target: 7 }
+  const dispatch = { action: "fix", duty: "fix", executable: "fix", cliArgs: { pr: 7 }, target: 7 }
 
   it("maps a DispatchResult to an instant job", () => {
     const job = mintInstantJob(dispatch, { why: "fix the typo" })
     expect(job).toMatchObject({
       executable: "fix",
+      duty: "fix",
       target: 7,
       cliArgs: { pr: 7 },
       why: "fix the typo",

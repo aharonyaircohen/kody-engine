@@ -18,6 +18,12 @@ import type { Phase } from "../state.js"
 export interface Profile {
   name: string
   /**
+   * Public action name owned by a duty. A user may type `@kody <action>`;
+   * dispatch resolves that action to the duty, then the duty selects the
+   * implementation executable. Absent → the duty slug/name is the action.
+   */
+  action?: string
+  /**
    * Optional staff member this executable runs *as*. When set, the executor
    * loads `.kody/staff/<staff>.md` and injects that persona (authoritative
    * identity) ahead of the executable's own system-prompt append. This is the
@@ -462,6 +468,8 @@ export type AnyScript = PreflightScript | PostflightScript
 export type JobFlavor = "instant" | "scheduled"
 
 export interface Job {
+  /** Public action the user/operator invoked. Mirrors the duty action. */
+  action?: string
   /** How: executable (profile) name to run. 0–1; omitted when intent is
    *  agent-only with no specific verb. */
   executable?: string

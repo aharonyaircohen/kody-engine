@@ -2,7 +2,7 @@ const fs = require("node:fs")
 const path = require("node:path")
 
 const ROOT = path.resolve(__dirname, "..")
-const ASSET_DIRS = ["executables", "jobs", "plugins"]
+const ASSET_DIRS = ["executables", "jobs", "duties", "plugins"]
 
 for (const name of ASSET_DIRS) {
   const src = path.join(ROOT, "src", name)

@@ -15,9 +15,23 @@ describe("splitFrontmatter", () => {
   })
 
   it("parses recognized scalar keys and strips the block from the body", () => {
-    const raw = ["---", "every: 30m", "staff: triage-bot", "---", "# Body", "line two"].join("\n")
+    const raw = [
+      "---",
+      "action: triage",
+      "executable: duty-tick",
+      "every: 30m",
+      "staff: triage-bot",
+      "---",
+      "# Body",
+      "line two",
+    ].join("\n")
     const { frontmatter, body } = splitFrontmatter(raw)
-    expect(frontmatter).toEqual<JobFrontmatter>({ every: "30m", staff: "triage-bot" })
+    expect(frontmatter).toEqual<JobFrontmatter>({
+      action: "triage",
+      executable: "duty-tick",
+      every: "30m",
+      staff: "triage-bot",
+    })
     expect(body).toBe("# Body\nline two")
   })
 
