@@ -3,14 +3,11 @@
  *
  * Two asset families live alongside each other:
  *
- *   - **Executables** (`src/executables/<name>/profile.json`) — units the
- *     dispatcher invokes by name. `listExecutables()` powers `entry.ts` so
- *     dropping a new directory makes `kody <name>` work without router edits.
- *   - **Built-in duties** (`src/jobs/<slug>/profile.json` + `duty.md`) —
- *     folder-duty templates that `kody init` scaffolds into consumer repos
- *     under `.kody/duties/<slug>/`. Once scaffolded, the consumer owns the
- *     folder; `duty-scheduler` / `dispatchDutyFileTicks` discover it from
- *     the consumer's `.kody/duties/` directly, not via this registry.
+ *   - **Executables** (`src/executables/<name>/profile.json`) — private
+ *     implementation units selected by duties or by `exec <name>`.
+ *   - **Duties** (`.kody/duties/<slug>/profile.json` + `duty.md`) — public
+ *     work units and operator-facing actions. Duty discovery is handled by
+ *     `listDutyActions()`, not by executable resolution.
  *
  * Both follow the same dev/built path-resolution pattern so `src/` and
  * `dist/` layouts work identically.
@@ -69,10 +66,9 @@ export function getProjectExecutablesRoot(): string {
 }
 
 /**
- * Resolve the consumer-repo duties root (`.kody/duties/`). A duty is the
- * unified successor to an executable: a `<slug>/profile.json` + `duty.md`
- * folder that additionally carries a `staff` member and body. Returns the
- * path even if it doesn't exist; callers must check.
+ * Resolve the consumer-repo duties root (`.kody/duties/`). A duty is a public
+ * work unit: it owns action/purpose and selects an implementation executable.
+ * Returns the path even if it doesn't exist; callers must check.
  */
 export function getProjectDutiesRoot(): string {
   return path.join(process.cwd(), ".kody", "duties")
@@ -151,13 +147,11 @@ export function listBuiltinJobs(root: string = getBuiltinJobsRoot()): BuiltinJob
 /**
  * Ordered list of executable roots, project first, engine second. Project
  * roots override engine roots on name conflict — the consumer repo always
- * wins. Engine ships a stdlib (chat, run, plan, …); project repos can
- * override or add new executables under `.kody/executables/<name>/`.
+ * wins. Engine ships a stdlib; project repos can override or add private
+ * implementation units under `.kody/executables/<name>/`.
  */
 export function getExecutableRoots(): string[] {
-  // Duties first: a `.kody/duties/<slug>/` folder is the unified successor and
-  // wins over a same-named `.kody/executables/<slug>/` during the migration.
-  return [getProjectDutiesRoot(), getProjectExecutablesRoot(), getExecutablesRoot()]
+  return [getProjectExecutablesRoot(), getExecutablesRoot()]
 }
 
 /**
@@ -188,19 +182,13 @@ export function isBuiltinExecutable(name: string): boolean {
 }
 
 /**
- * List every discovered executable across all roots. On name conflict the
- * first root wins, so a `.kody/executables/chat/` in the consumer repo
+ * List every discovered executable across executable roots. On name conflict
+ * the first root wins, so a `.kody/executables/chat/` in the consumer repo
  * shadows the engine's `chat`. Each needs a directory containing a readable
  * `profile.json`. Directories without one are silently skipped.
- *
- * Exception: a `.kody/duties/<name>/` folder is NOT allowed to shadow an engine
- * builtin (run/merge/…) — that's a reserved-name collision, never intended. The
- * legacy `.kody/executables/<name>/` override is still honoured (existing
- * design) and only the duties home is restricted.
  */
 export function listExecutables(roots: string | string[] = getExecutableRoots()): DiscoveredExecutable[] {
   const rootList = typeof roots === "string" ? [roots] : roots
-  const dutiesRoot = getProjectDutiesRoot()
   const seen = new Set<string>()
   const out: DiscoveredExecutable[] = []
   for (const root of rootList) {
@@ -209,9 +197,7 @@ export function listExecutables(roots: string | string[] = getExecutableRoots())
     for (const ent of entries) {
       if (!ent.isDirectory()) continue
       if (seen.has(ent.name)) continue // earlier root wins
-      if (root === dutiesRoot && isBuiltinExecutable(ent.name)) continue // duties can't shadow a builtin
       const profilePath = path.join(root, ent.name, DUTY_PROFILE_FILE)
-      if (root === dutiesRoot && !fs.existsSync(path.join(root, ent.name, DUTY_BODY_FILE))) continue
       if (fs.existsSync(profilePath) && fs.statSync(profilePath).isFile()) {
         out.push({ name: ent.name, profilePath })
         seen.add(ent.name)
@@ -228,12 +214,7 @@ export function listExecutables(roots: string | string[] = getExecutableRoots())
 export function resolveExecutable(name: string, roots: string | string[] = getExecutableRoots()): string | null {
   if (!isSafeName(name)) return null
   const rootList = typeof roots === "string" ? [roots] : roots
-  const dutiesRoot = getProjectDutiesRoot()
   for (const root of rootList) {
-    // A `.kody/duties/<builtin>/` folder must not shadow an engine builtin —
-    // skip it so resolution falls through to the engine root.
-    if (root === dutiesRoot && isBuiltinExecutable(name)) continue
-    if (root === dutiesRoot && !fs.existsSync(path.join(root, name, DUTY_BODY_FILE))) continue
     const profilePath = path.join(root, name, "profile.json")
     if (fs.existsSync(profilePath) && fs.statSync(profilePath).isFile()) {
       return profilePath

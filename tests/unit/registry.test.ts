@@ -10,6 +10,7 @@ import {
   listBuiltinJobs,
   listExecutables,
   parseGenericFlags,
+  resolveExecutable,
 } from "../../src/registry.js"
 
 function mkFixture(): string {
@@ -22,7 +23,7 @@ function writeProfile(root: string, name: string, body: object = {}): void {
   fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify(body))
 }
 
-describe("registry: builtin executables (folder-duty shadow protection)", () => {
+describe("registry: builtin executables", () => {
   it("detects the engine-bundled executables by name", () => {
     const names = builtinExecutableNames()
     // a sample of known engine builtins
@@ -97,6 +98,38 @@ describe("registry: listExecutables", () => {
     const [exe] = listExecutables(root)
     expect(exe?.profilePath).toBe(path.join(root, "init", "profile.json"))
     expect(fs.existsSync(exe!.profilePath)).toBe(true)
+  })
+})
+
+describe("registry: duty/executable separation", () => {
+  let root: string
+  const prevCwd = process.cwd()
+
+  beforeEach(() => {
+    root = mkFixture()
+    process.chdir(root)
+  })
+
+  afterEach(() => {
+    process.chdir(prevCwd)
+    fs.rmSync(root, { recursive: true, force: true })
+  })
+
+  it("resolves a duty's same-name executable from .kody/executables, not .kody/duties", () => {
+    const dutyDir = path.join(root, ".kody", "duties", "feature")
+    const exeDir = path.join(root, ".kody", "executables", "feature")
+    fs.mkdirSync(dutyDir, { recursive: true })
+    fs.mkdirSync(exeDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(dutyDir, "profile.json"),
+      JSON.stringify({ name: "feature", action: "feature", executable: "feature" }),
+    )
+    fs.writeFileSync(path.join(dutyDir, "duty.md"), "# Feature\n")
+    fs.writeFileSync(path.join(exeDir, "profile.json"), JSON.stringify({ name: "feature" }))
+
+    const expected = fs.realpathSync(path.join(exeDir, "profile.json"))
+    expect(fs.realpathSync(resolveExecutable("feature")!)).toBe(expected)
+    expect(fs.realpathSync(listExecutables().find((exe) => exe.name === "feature")!.profilePath)).toBe(expected)
   })
 })
 

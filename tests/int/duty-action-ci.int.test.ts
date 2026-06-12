@@ -2,7 +2,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import { runCi } from "../../src/kody-cli.js"
+import { main } from "../../src/entry.js"
 
 let prevCwd = process.cwd()
 const prevEnv = { ...process.env }
@@ -12,10 +12,12 @@ afterEach(() => {
   process.env = { ...prevEnv }
 })
 
-function makeRepo(): { root: string; eventPath: string } {
+function makeRepo(opts: { sameName?: boolean } = {}): { root: string; eventPath: string } {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-duty-action-ci-"))
+  const dutyName = opts.sameName ? "noop" : "noop-duty"
+  const exeName = opts.sameName ? "noop" : "noop-impl"
   fs.mkdirSync(path.join(root, ".kody", "duties"), { recursive: true })
-  fs.mkdirSync(path.join(root, ".kody", "executables", "noop-impl"), { recursive: true })
+  fs.mkdirSync(path.join(root, ".kody", "executables", exeName), { recursive: true })
   fs.writeFileSync(
     path.join(root, "kody.config.json"),
     JSON.stringify(
@@ -29,17 +31,17 @@ function makeRepo(): { root: string; eventPath: string } {
       2,
     ),
   )
-  fs.mkdirSync(path.join(root, ".kody", "duties", "noop-duty"), { recursive: true })
+  fs.mkdirSync(path.join(root, ".kody", "duties", dutyName), { recursive: true })
   fs.writeFileSync(
-    path.join(root, ".kody", "duties", "noop-duty", "profile.json"),
-    JSON.stringify({ name: "noop-duty", action: "noop", executable: "noop-impl", staff: "kody" }),
+    path.join(root, ".kody", "duties", dutyName, "profile.json"),
+    JSON.stringify({ name: dutyName, action: "noop", executable: exeName, staff: "kody" }),
   )
-  fs.writeFileSync(path.join(root, ".kody", "duties", "noop-duty", "duty.md"), "# Noop\n")
+  fs.writeFileSync(path.join(root, ".kody", "duties", dutyName, "duty.md"), "# Noop\n")
   fs.writeFileSync(
-    path.join(root, ".kody", "executables", "noop-impl", "profile.json"),
+    path.join(root, ".kody", "executables", exeName, "profile.json"),
     JSON.stringify(
       {
-        name: "noop-impl",
+        name: exeName,
         role: "utility",
         describe: "offline duty-action integration fixture",
         kind: "oneshot",
@@ -85,7 +87,20 @@ describe("ci duty action route", () => {
     process.env.GITHUB_EVENT_PATH = eventPath
     delete process.env.GITHUB_REPOSITORY
 
-    const code = await runCi(["--cwd", root, "--skip-install", "--skip-litellm"])
+    const code = await main(["noop", "--cwd", root, "--issue", "123", "--quiet"])
+
+    expect(code).toBe(0)
+  })
+
+  it("supports a duty and implementation executable with the same slug", async () => {
+    prevCwd = process.cwd()
+    const { root, eventPath } = makeRepo({ sameName: true })
+    process.chdir(root)
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = eventPath
+    delete process.env.GITHUB_REPOSITORY
+
+    const code = await main(["noop", "--cwd", root, "--issue", "123", "--quiet"])
 
     expect(code).toBe(0)
   })
