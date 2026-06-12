@@ -27,6 +27,8 @@ The consumer workflow stays small: `.github/workflows/kody.yml` triggers on
 
 - `CLAUDE.md` / `AGENTS.md`: hard constraints and conventions: architecture
   invariants, naming, dispatch safety, tests, release rules, forbidden actions.
+- [docs/engine-company.md](docs/engine-company.md): operating model for the
+  repo-local company layer that maintains this engine.
 - `.kody/context/*.md`: background only: company mission, vocabulary, strategy,
   product notes, decisions. Do not rely on it for hard rules unless an
   executable explicitly loads it.

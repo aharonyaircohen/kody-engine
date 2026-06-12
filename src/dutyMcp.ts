@@ -19,7 +19,7 @@
  *   - recommend_to_operator: post a single comment with the operator @-mention
  *     substituted server-side from config.github.operators
  *   - read_ledger: read the first open issue with a label, returning JSON
- *     between sentinel markers (e.g. kody:cto-decisions trust ledger)
+ *     between sentinel markers
  *
  * The behind_by computation is done HERE — the LLM never sees `gh`, never
  * crafts a compare URL, never measures drift incorrectly. One call returns the
@@ -224,7 +224,7 @@ function readLedger(label: string): LedgerResult {
 }
 
 // ---------------------------------------------------------------------------
-// Duty trust gate. (unchanged)
+// Duty trust gate.
 // ---------------------------------------------------------------------------
 
 export type DutyTrustMode = "ask" | "auto"
@@ -388,7 +388,7 @@ export function dispatchWorkflow(
 }
 
 // ---------------------------------------------------------------------------
-// Trust gate for dispatch tools (unchanged).
+// Trust gate for dispatch tools.
 // ---------------------------------------------------------------------------
 
 const GATE_EXEMPT_EXECUTABLES: ReadonlySet<string> = new Set(["qa-engineer", "ui-review"])
@@ -471,7 +471,7 @@ export function dutyToolDefinitions(opts: DutyMcpOptions): DutyToolDefinition[] 
   const recommendTool: DutyToolDefinition = {
     name: "recommend_to_operator",
     description:
-      "Post ONE comment on a PR with the operator @-mention prepended. Use this when a verb is NOT graduated in the trust ledger and you want the operator to confirm via the dashboard inbox. The mention handle is substituted from kody.config.json `github.operators` — do not type it yourself.",
+      "Post ONE comment on a PR with the operator @-mention prepended. Use this when a duty is in ASK mode and you want the operator to confirm via the dashboard inbox. The mention handle is substituted from kody.config.json `github.operators` — do not type it yourself.",
     inputSchema: {
       pr: z.number().int().positive().describe("PR number to comment on."),
       body: z
@@ -493,12 +493,12 @@ export function dutyToolDefinitions(opts: DutyMcpOptions): DutyToolDefinition[] 
   const ledgerTool: DutyToolDefinition = {
     name: "read_ledger",
     description:
-      "Read the trust ledger (or any sentinel-fenced JSON manifest stored on a labeled issue). Returns `{found, issueNumber, payload}` where payload is the parsed JSON between `<!-- <label>:start -->` and `<!-- <label>:end -->` sentinels. Use `read_ledger({label: 'kody:cto-decisions'})` to look up per-verb graduation modes for the trust gate.",
+      "Read any sentinel-fenced JSON manifest stored on a labeled issue. Returns `{found, issueNumber, payload}` where payload is the parsed JSON between `<!-- <label>:start -->` and `<!-- <label>:end -->` sentinels.",
     inputSchema: {
       label: z
         .string()
         .min(1)
-        .describe("GitHub issue label that identifies the manifest issue (e.g. 'kody:cto-decisions')."),
+        .describe("GitHub issue label that identifies the manifest issue."),
     },
     handler: async (args) => {
       const label = String(args.label ?? "")
