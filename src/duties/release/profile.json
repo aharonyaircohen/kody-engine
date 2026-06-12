@@ -1,0 +1,6 @@
+{
+  "name": "release",
+  "action": "release",
+  "executable": "release",
+  "describe": "Run the release flow."
+}

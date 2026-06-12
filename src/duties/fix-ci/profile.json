@@ -1,0 +1,6 @@
+{
+  "name": "fix-ci",
+  "action": "fix-ci",
+  "executable": "fix-ci",
+  "describe": "Fix a failing CI workflow on an existing PR."
+}

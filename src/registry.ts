@@ -6,13 +6,11 @@
  *   - **Executables** (`src/executables/<name>/profile.json`) — units the
  *     dispatcher invokes by name. `listExecutables()` powers `entry.ts` so
  *     dropping a new directory makes `kody <name>` work without router edits.
- *   - **Built-in duties** (`src/jobs/<slug>/profile.json` + `prompt.md`) —
+ *   - **Built-in duties** (`src/jobs/<slug>/profile.json` + `duty.md`) —
  *     folder-duty templates that `kody init` scaffolds into consumer repos
  *     under `.kody/duties/<slug>/`. Once scaffolded, the consumer owns the
  *     folder; `duty-scheduler` / `dispatchDutyFileTicks` discover it from
- *     the consumer's `.kody/duties/` directly, not via this registry. The
- *     folder shape is the unified successor to the legacy `<slug>.md` file
- *     (still discovered for back-compat; the deprecation log is #46-B's job).
+ *     the consumer's `.kody/duties/` directly, not via this registry.
  *
  * Both follow the same dev/built path-resolution pattern so `src/` and
  * `dist/` layouts work identically.
@@ -20,8 +18,8 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { DUTY_BODY_FILE, DUTY_PROFILE_FILE, listDutyFolderSlugs, readDutyFolder } from "./dutyFolders.js"
 import type { InputSpec } from "./executables/types.js"
-import { splitFrontmatter } from "./scripts/jobFrontmatter.js"
 
 export interface DiscoveredExecutable {
   name: string
@@ -37,10 +35,10 @@ export interface DiscoveredDutyAction {
   executable: string
   /** Extra args required to lower the duty to its implementation. */
   cliArgs: Record<string, unknown>
-  source: "project-folder" | "project-markdown" | "builtin"
+  source: "project-folder" | "builtin"
   describe?: string
   profilePath?: string
-  filePath?: string
+  bodyPath?: string
 }
 
 /**
@@ -72,11 +70,9 @@ export function getProjectExecutablesRoot(): string {
 
 /**
  * Resolve the consumer-repo duties root (`.kody/duties/`). A duty is the
- * unified successor to an executable: a `<slug>/profile.json` folder that
- * additionally carries a `staff` member. Scheduled markdown duties
- * (`.kody/duties/<slug>.md`) live in the same directory but are plain files,
- * so the directory-only discovery skips them harmlessly. Returns the path
- * even if it doesn't exist; callers must check.
+ * unified successor to an executable: a `<slug>/profile.json` + `duty.md`
+ * folder that additionally carries a `staff` member and body. Returns the
+ * path even if it doesn't exist; callers must check.
  */
 export function getProjectDutiesRoot(): string {
   return path.join(process.cwd(), ".kody", "duties")
@@ -85,10 +81,9 @@ export function getProjectDutiesRoot(): string {
 /**
  * Resolve the engine's built-in jobs root. Mirrors `getExecutablesRoot()` so
  * dev (`src/jobs`) and built (`dist/jobs`) layouts both work. Built-in jobs
- * are folder shapes (`<slug>/profile.json` + `prompt.md`) scaffolded into
+ * are folder shapes (`<slug>/profile.json` + `duty.md`) scaffolded into
  * consumer repos by `kody init`; drop a new folder under `src/jobs/<slug>/`
- * to ship a default. Legacy `<slug>.md` files are still discovered for
- * back-compat — the deprecation log + removal land in #46-B.
+ * to ship a default.
  */
 export function getBuiltinJobsRoot(): string {
   const here = path.dirname(new URL(import.meta.url).pathname)
@@ -123,24 +118,14 @@ export interface BuiltinJob {
   dir: string
   /** Absolute path to the folder's `profile.json`. */
   profilePath: string
-  /** Absolute path to the folder's `prompt.md`. */
-  promptPath: string
-  /**
-   * Absolute path to the legacy `.md` file, when present. Folder duties
-   * leave this undefined; legacy markdown duties carry both a dir (the
-   * containing folder) and a filePath, so the scaffolder can choose which
-   * shape to copy.
-   */
-  filePath?: string
+  /** Absolute path to the folder's `duty.md`. */
+  bodyPath: string
 }
 
 /**
  * List every built-in duty shipped with the engine. Returns
- * `{ slug, dir, profilePath, promptPath, filePath? }` for each duty under
- * the built-in jobs root. Folder shapes (preferred) require both
- * `profile.json` and `prompt.md`; legacy `.md` files are also discovered
- * with `filePath` set so callers can bridge the two shapes during the
- * migration.
+ * `{ slug, dir, profilePath, bodyPath }` for each duty under the built-in
+ * jobs root. Folder shapes require both `profile.json` and `duty.md`.
  *
  * Sorted by slug. Used by `kody init` to scaffold default duties into
  * `.kody/duties/<slug>/` (folder shape) in consumer repos.
@@ -152,22 +137,11 @@ export function listBuiltinJobs(root: string = getBuiltinJobsRoot()): BuiltinJob
     if (ent.name.startsWith("_") || ent.name.startsWith(".")) continue
     const full = path.join(root, ent.name)
     if (ent.isDirectory()) {
-      const profilePath = path.join(full, "profile.json")
-      const promptPath = path.join(full, "prompt.md")
+      const profilePath = path.join(full, DUTY_PROFILE_FILE)
+      const bodyPath = path.join(full, DUTY_BODY_FILE)
       if (!fs.existsSync(profilePath) || !fs.statSync(profilePath).isFile()) continue
-      if (!fs.existsSync(promptPath) || !fs.statSync(promptPath).isFile()) continue
-      out.push({ slug: ent.name, dir: full, profilePath, promptPath })
-      continue
-    }
-    if (ent.isFile() && ent.name.endsWith(".md")) {
-      const slug = ent.name.slice(0, -3)
-      out.push({
-        slug,
-        dir: full,
-        profilePath: "",
-        promptPath: "",
-        filePath: full,
-      })
+      if (!fs.existsSync(bodyPath) || !fs.statSync(bodyPath).isFile()) continue
+      out.push({ slug: ent.name, dir: full, profilePath, bodyPath })
     }
   }
   out.sort((a, b) => a.slug.localeCompare(b.slug))
@@ -236,7 +210,8 @@ export function listExecutables(roots: string | string[] = getExecutableRoots())
       if (!ent.isDirectory()) continue
       if (seen.has(ent.name)) continue // earlier root wins
       if (root === dutiesRoot && isBuiltinExecutable(ent.name)) continue // duties can't shadow a builtin
-      const profilePath = path.join(root, ent.name, "profile.json")
+      const profilePath = path.join(root, ent.name, DUTY_PROFILE_FILE)
+      if (root === dutiesRoot && !fs.existsSync(path.join(root, ent.name, DUTY_BODY_FILE))) continue
       if (fs.existsSync(profilePath) && fs.statSync(profilePath).isFile()) {
         out.push({ name: ent.name, profilePath })
         seen.add(ent.name)
@@ -258,6 +233,7 @@ export function resolveExecutable(name: string, roots: string | string[] = getEx
     // A `.kody/duties/<builtin>/` folder must not shadow an engine builtin —
     // skip it so resolution falls through to the engine root.
     if (root === dutiesRoot && isBuiltinExecutable(name)) continue
+    if (root === dutiesRoot && !fs.existsSync(path.join(root, name, DUTY_BODY_FILE))) continue
     const profilePath = path.join(root, name, "profile.json")
     if (fs.existsSync(profilePath) && fs.statSync(profilePath).isFile()) {
       return profilePath
@@ -274,8 +250,7 @@ export function hasExecutable(name: string, roots: string | string[] = getExecut
 /**
  * List public duty actions. Duties own the operator-facing action name; an
  * executable is only the selected implementation. Ordering is intentional:
- * project folder duties override project markdown duties, and project duties
- * override engine built-ins.
+ * project folder duties override engine built-ins.
  */
 export function listDutyActions(projectDutiesRoot: string = getProjectDutiesRoot()): DiscoveredDutyAction[] {
   const seen = new Set<string>()
@@ -288,7 +263,6 @@ export function listDutyActions(projectDutiesRoot: string = getProjectDutiesRoot
   }
 
   for (const action of listProjectFolderDutyActions(projectDutiesRoot)) add(action)
-  for (const action of listProjectMarkdownDutyActions(projectDutiesRoot)) add(action)
   for (const action of listBuiltinDutyActions()) add(action)
   return out.sort((a, b) => a.action.localeCompare(b.action))
 }
@@ -321,110 +295,47 @@ export function isSafeName(name: string): boolean {
 function listProjectFolderDutyActions(root: string): DiscoveredDutyAction[] {
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
   const out: DiscoveredDutyAction[] = []
-  for (const ent of fs.readdirSync(root, { withFileTypes: true })) {
-    if (!ent.isDirectory() || ent.name.startsWith(".") || ent.name.startsWith("_")) continue
-    if (!isSafeName(ent.name)) continue
-    const profilePath = path.join(root, ent.name, "profile.json")
-    if (!fs.existsSync(profilePath) || !fs.statSync(profilePath).isFile()) continue
-    try {
-      const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as Record<string, unknown>
-      const action = stringOr(raw.action, ent.name)
-      const executable = stringOr(raw.executable, ent.name)
-      out.push({
-        action,
-        duty: ent.name,
-        executable,
-        cliArgs: {},
-        source: "project-folder",
-        describe: typeof raw.describe === "string" ? raw.describe : undefined,
-        profilePath,
-      })
-    } catch {
-      continue
-    }
+  for (const slug of listDutyFolderSlugs(root)) {
+    if (!isSafeName(slug)) continue
+    const duty = readDutyFolder(root, slug)
+    if (!duty) continue
+    const action = duty.config.action ?? slug
+    const executable = duty.config.executable ?? duty.config.executables?.[0] ?? (duty.config.tickScript ? "duty-tick-scripted" : "duty-tick")
+    out.push({
+      action,
+      duty: slug,
+      executable,
+      cliArgs: duty.config.executable ? {} : { duty: slug },
+      source: "project-folder",
+      describe: duty.config.describe ?? duty.title,
+      profilePath: duty.profilePath,
+      bodyPath: duty.bodyPath,
+    })
   }
   return out.sort((a, b) => a.action.localeCompare(b.action))
-}
-
-function listProjectMarkdownDutyActions(root: string): DiscoveredDutyAction[] {
-  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
-  const out: DiscoveredDutyAction[] = []
-  for (const ent of fs.readdirSync(root, { withFileTypes: true })) {
-    if (!ent.isFile() || !ent.name.endsWith(".md")) continue
-    const duty = ent.name.slice(0, -3)
-    if (!isSafeName(duty)) continue
-    const filePath = path.join(root, ent.name)
-    try {
-      const raw = fs.readFileSync(filePath, "utf-8")
-      const { frontmatter } = splitFrontmatter(raw)
-      const action = frontmatter.action?.trim() || duty
-      const implementation = markdownDutyImplementation(duty, frontmatter)
-      out.push({
-        action,
-        duty,
-        executable: implementation.executable,
-        cliArgs: implementation.cliArgs,
-        source: "project-markdown",
-        filePath,
-      })
-    } catch {
-      continue
-    }
-  }
-  return out.sort((a, b) => a.action.localeCompare(b.action))
-}
-
-function markdownDutyImplementation(
-  duty: string,
-  frontmatter: ReturnType<typeof splitFrontmatter>["frontmatter"],
-): {
-  executable: string
-  cliArgs: Record<string, unknown>
-} {
-  if (frontmatter.executable?.trim()) {
-    return { executable: frontmatter.executable.trim(), cliArgs: {} }
-  }
-  if (frontmatter.executables?.length === 1 && frontmatter.executables[0]?.trim()) {
-    return { executable: frontmatter.executables[0].trim(), cliArgs: {} }
-  }
-  if (frontmatter.tickScript?.trim()) {
-    return { executable: "duty-tick-scripted", cliArgs: { duty } }
-  }
-  return { executable: "duty-tick", cliArgs: { duty } }
 }
 
 function listBuiltinDutyActions(root: string = getBuiltinDutiesRoot()): DiscoveredDutyAction[] {
-  const filePath = path.join(root, "public-actions.json")
-  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return []
-  try {
-    const raw = JSON.parse(fs.readFileSync(filePath, "utf-8"))
-    if (!Array.isArray(raw)) return []
-    const out: DiscoveredDutyAction[] = []
-    for (const item of raw) {
-      if (!item || typeof item !== "object") continue
-      const r = item as Record<string, unknown>
-      const duty = stringOr(r.duty, stringOr(r.name, ""))
-      const action = stringOr(r.action, duty)
-      const executable = stringOr(r.executable, duty)
-      if (!duty || !action || !executable) continue
-      out.push({
-        action,
-        duty,
-        executable,
-        cliArgs: {},
-        source: "builtin",
-        describe: typeof r.describe === "string" ? r.describe : undefined,
-        filePath,
-      })
-    }
-    return out.sort((a, b) => a.action.localeCompare(b.action))
-  } catch {
-    return []
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
+  const out: DiscoveredDutyAction[] = []
+  for (const slug of listDutyFolderSlugs(root)) {
+    if (!isSafeName(slug)) continue
+    const duty = readDutyFolder(root, slug)
+    if (!duty) continue
+    const action = duty.config.action ?? slug
+    const executable = duty.config.executable ?? slug
+    out.push({
+      action,
+      duty: slug,
+      executable,
+      cliArgs: {},
+      source: "builtin",
+      describe: duty.config.describe ?? duty.title,
+      profilePath: duty.profilePath,
+      bodyPath: duty.bodyPath,
+    })
   }
-}
-
-function stringOr(value: unknown, fallback: string): string {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback
+  return out.sort((a, b) => a.action.localeCompare(b.action))
 }
 
 /**

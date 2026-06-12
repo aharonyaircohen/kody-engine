@@ -1,0 +1,6 @@
+{
+  "name": "preview-build",
+  "action": "preview-build",
+  "executable": "preview-build",
+  "describe": "Build and publish a per-PR preview."
+}

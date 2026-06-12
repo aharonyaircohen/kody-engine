@@ -37,8 +37,11 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-function writeDuty(slug: string, frontmatter: string, body = "# Duty\n\nDo the work."): void {
-  fs.writeFileSync(path.join(tmp, ".kody", "duties", `${slug}.md`), `---\n${frontmatter}\n---\n${body}`)
+function writeDuty(slug: string, profile: Record<string, unknown>, body = "# Duty\n\nDo the work."): void {
+  const dir = path.join(tmp, ".kody", "duties", slug)
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
+  fs.writeFileSync(path.join(dir, "duty.md"), body)
 }
 
 function ctxFor(): Context {
@@ -62,7 +65,7 @@ const PROFILE = {} as unknown as Profile
 
 describe("dispatchDutyFileTicks multi-executable duties", () => {
   it("creates a task issue and runs task-jobs for a duty with executables", async () => {
-    writeDuty("daily-check", "every: 1h\nstaff: kody\nexecutables: plan-verify, probe-skill")
+    writeDuty("daily-check", { every: "1h", staff: "kody", executables: ["plan-verify", "probe-skill"] })
 
     const ctx = ctxFor()
     await dispatchDutyFileTicks(ctx, PROFILE, {
@@ -110,7 +113,7 @@ describe("dispatchDutyFileTicks multi-executable duties", () => {
   })
 
   it("records the created task issue on the duty state file", async () => {
-    writeDuty("daily-check", "every: 1h\nstaff: kody\nexecutables: plan-verify")
+    writeDuty("daily-check", { every: "1h", staff: "kody", executables: ["plan-verify"] })
 
     await dispatchDutyFileTicks(ctxFor(), PROFILE, {
       jobsDir: ".kody/duties",

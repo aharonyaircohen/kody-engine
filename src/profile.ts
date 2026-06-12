@@ -46,7 +46,11 @@ const KNOWN_PROFILE_KEYS = new Set([
   "staff",
   "every",
   "dutyTools",
+  "tools",
   "mentions",
+  "stage",
+  "readsFrom",
+  "writesTo",
   "describe",
   "role",
   "kind",
@@ -119,9 +123,7 @@ export function loadProfile(profilePath: string): Profile {
       describe: typeof r.describe === "string" ? r.describe : base.describe,
       staff: typeof r.staff === "string" && r.staff.trim() ? r.staff.trim() : base.staff,
       every: typeof r.every === "string" && r.every.trim() ? r.every.trim() : undefined,
-      dutyTools: Array.isArray(r.dutyTools)
-        ? (r.dutyTools as string[]).map((t) => String(t).trim()).filter(Boolean)
-        : base.dutyTools,
+      dutyTools: parseStringArray(r.dutyTools ?? r.tools) ?? base.dutyTools,
       mentions: Array.isArray(r.mentions)
         ? (r.mentions as string[]).map((m) => String(m).trim()).filter(Boolean)
         : base.mentions,
@@ -177,10 +179,8 @@ export function loadProfile(profilePath: string): Profile {
     staff: typeof r.staff === "string" && r.staff.trim() ? r.staff.trim() : undefined,
     // Optional recurrence cadence (scheduled duty). Blank → undefined (on-demand).
     every: typeof r.every === "string" && r.every.trim() ? r.every.trim() : undefined,
-    // Locked-toolbox palette + mentions (folder-duty successors to frontmatter).
-    dutyTools: Array.isArray(r.dutyTools)
-      ? (r.dutyTools as string[]).map((t) => String(t).trim()).filter(Boolean)
-      : undefined,
+    // Locked-toolbox palette + mentions from folder-duty profile metadata.
+    dutyTools: parseStringArray(r.dutyTools ?? r.tools),
     mentions: Array.isArray(r.mentions)
       ? (r.mentions as string[]).map((m) => String(m).trim()).filter(Boolean)
       : undefined,
@@ -213,7 +213,7 @@ export function loadProfile(profilePath: string): Profile {
     applyLifecycle(profile, profilePath)
   }
 
-  // Fail-fast at load (profile.json is static, unlike .md frontmatter):
+  // Fail-fast at load (profile.json is static):
   // a dutyTools typo should be caught here, not at the duty's first run.
   if (profile.dutyTools && profile.dutyTools.length > 0) {
     const palette = new Set<string>(DUTY_MCP_TOOL_NAMES)
@@ -252,11 +252,11 @@ export function loadProfile(profilePath: string): Profile {
 }
 
 /**
- * Capture a profile's prompt template files at load time — `prompt.md` and any
- * `prompts/*.md` — keyed by absolute path. Done here (alongside reading
- * profile.json, before any preflight) so the templates are safe from
- * working-tree churn later in the run (see Profile.promptTemplates). Best-effort:
- * missing files are simply absent from the map.
+ * Capture a profile's prompt template files at load time — `prompt.md`,
+ * folder-duty `duty.md`, and any `prompts/*.md` — keyed by absolute path.
+ * Done here (alongside reading profile.json, before any preflight) so the
+ * templates are safe from working-tree churn later in the run
+ * (see Profile.promptTemplates). Best-effort: missing files are simply absent.
  */
 function readPromptTemplates(dir: string): Record<string, string> {
   const out: Record<string, string> = {}
@@ -268,6 +268,7 @@ function readPromptTemplates(dir: string): Record<string, string> {
     }
   }
   read(path.join(dir, "prompt.md"))
+  read(path.join(dir, "duty.md"))
   try {
     const promptsDir = path.join(dir, "prompts")
     for (const ent of fs.readdirSync(promptsDir)) {
@@ -300,6 +301,12 @@ function requireString(p: string, r: Record<string, unknown>, key: string): stri
     throw new ProfileError(p, `"${key}" must be a non-empty string`)
   }
   return v
+}
+
+function parseStringArray(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const values = raw.map((t) => String(t).trim()).filter(Boolean)
+  return values.length > 0 ? values : undefined
 }
 
 function parseInputs(p: string, raw: unknown): InputSpec[] {

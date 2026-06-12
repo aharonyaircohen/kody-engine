@@ -82,7 +82,7 @@ tick.
 ## Lint / CI
 
 Recommended CI gate on consumer repos: fail the build if any
-`.kody/duties/**/*.md` or `.kody/executables/**/*.md` body contains
+`.kody/duties/*/duty.md` or `.kody/executables/**/*.md` body contains
 `gh issue comment.*@kody` or `gh pr comment.*@kody`. Cheap grep on the
 regression surface. The engine's runtime throw catches helpers that
 bypass the grep; the grep catches duty markdown the LLM follows verbatim.

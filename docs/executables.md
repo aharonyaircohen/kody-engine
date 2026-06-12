@@ -49,7 +49,7 @@ run a profile and how to route from it.
 | `primitive` | yes | Single-step agent executor: flow → agent → verify → commit → PR. Most commands (`run`, `fix`, `fix-ci`, `resolve`, `revert`, `review`, `ui-review`, `plan`, `spec`, `research`, `classify`, `reproduce`, `feature`, `bug`, `chore`, `sync`, `merge`, `qa-engineer`, `worker-ask`) |
 | `orchestrator` | no | Drives primitives via a postflight transition table (comment-based; one GHA run per step). e.g. `classify` |
 | `container` | no | Runs declared `children` sequentially in-process (one GHA run for the whole flow). Routing is per-child `next` maps over action types — no `@kody` comments dispatched |
-| `watch` | no | Scheduled observer that inspects repo state and may trigger other executables. `kind: "scheduled"` is the typical pairing. `job-scheduler`, `goal-scheduler` |
+| `watch` | no | Scheduled observer that inspects repo state and may trigger other executables. `kind: "scheduled"` is the typical pairing. `duty-scheduler`, `goal-scheduler` |
 | `utility` | no | One-off administrative work. `init`, `release`, `release-prepare`, `release-publish`, `release-deploy`, `plan-verify`, `probe-skill`, `job-live-verify` |
 
 ### `kind`
@@ -136,7 +136,7 @@ One line each, grouped by function. The full surface is
 
 | Name | Role | What it does |
 | --- | --- | --- |
-| `job-scheduler` | `watch` / `scheduled` (`*/5 * * * *`) | Ticks every `.kody/duties/<slug>.md` via `job-tick` |
+| `duty-scheduler` | `watch` / `scheduled` (`*/5 * * * *`) | Ticks every `.kody/duties/<slug>/` folder via `duty-tick` |
 | `goal-scheduler` | `watch` / `scheduled` (`*/5 * * * *`) | Ticks every `.kody/goals/<id>/state.json` via `goal-tick` |
 
 **Release stages (no agent, deterministic)**

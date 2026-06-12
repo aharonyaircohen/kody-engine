@@ -7,7 +7,7 @@
  * therefore "succeeded" while their dispatched verbs never ran. The fix isn't
  * another guard or per-duty rewrite; it's removing the escape hatch entirely.
  *
- * A duty declares the tools it needs (`tools: [...]` frontmatter); the engine
+ * A duty declares the tools it needs (`tools: [...]` metadata); the engine
  * loads ONLY those (plus `submit_state`) and revokes `Bash`/`Read`. The duty
  * author can no longer post raw comments, shell out, or invent a new dispatch
  * path — the toolbox simply doesn't contain those affordances.
@@ -46,7 +46,7 @@ interface DutyMcpOptions {
   /**
    * The operator @-mention prefix (e.g. "@aguyaharonyair") substituted into
    * recommend_to_operator comments. Empty string when the duty's `mentions:`
-   * frontmatter is blank — the comment is then unmentioned (still posted).
+   * metadata is blank — the comment is then unmentioned (still posted).
    */
   operatorMention: string
   /** Workflow file to dispatch (default "kody.yml"). */

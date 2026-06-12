@@ -1,11 +1,11 @@
 /**
  * Preflight for `worker-ask`: load a worker persona and an inline message
- * for a stateless, ad-hoc tick. No job file, no job state, no commit.
+ * for a stateless, ad-hoc tick. No duty folder, no job state, no commit.
  *
  * This is the engine half of the dashboard's "@mention a staff member in a
  * message" feature: a staff member is a stateless persona, so an ad-hoc
  * request is just that persona answering one inline prompt — there is no
- * `.kody/duties/<slug>.md`, no cadence, and nothing to persist.
+ * `.kody/duties/<slug>/`, no cadence, and nothing to persist.
  *
  * Message resolution (production vs. CLI):
  *   1. The dispatching `issue_comment` body (GITHUB_EVENT_PATH), with the
@@ -29,7 +29,6 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type { PreflightScript } from "../executables/types.js"
-import { splitFrontmatter } from "./jobFrontmatter.js"
 
 export const loadWorkerAdhoc: PreflightScript = async (ctx, _profile, args) => {
   const workersDir = String(args?.workersDir ?? ".kody/staff")
@@ -106,7 +105,7 @@ function stripDirective(body: string): string {
 }
 
 function parsePersona(raw: string, slug: string): { title: string; body: string } {
-  const stripped = splitFrontmatter(raw).body
+  const stripped = stripLeadingFrontmatter(raw)
   const trimmed = stripped.trim()
   const firstLine = trimmed.split("\n", 1)[0] ?? ""
   const h1 = /^#\s+(.+?)\s*$/.exec(firstLine)
@@ -115,6 +114,11 @@ function parsePersona(raw: string, slug: string): { title: string; body: string 
     return { title: h1[1]!.trim(), body: rest }
   }
   return { title: humanizeSlug(slug), body: trimmed }
+}
+
+function stripLeadingFrontmatter(raw: string): string {
+  const match = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/.exec(raw)
+  return match ? raw.slice(match[0].length) : raw
 }
 
 function humanizeSlug(slug: string): string {

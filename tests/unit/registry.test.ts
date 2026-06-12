@@ -170,22 +170,21 @@ describe("registry: listBuiltinJobs (folder shape)", () => {
     fs.rmSync(root, { recursive: true, force: true })
   })
 
-  function writeFolder(slug: string, opts: { withPrompt?: boolean; withProfile?: boolean } = {}): void {
+  function writeFolder(slug: string, opts: { withBody?: boolean; withProfile?: boolean } = {}): void {
     const dir = path.join(root, slug)
     fs.mkdirSync(dir, { recursive: true })
     if (opts.withProfile !== false) fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug }))
-    if (opts.withPrompt !== false) fs.writeFileSync(path.join(dir, "prompt.md"), `# ${slug}\n`)
+    if (opts.withBody !== false) fs.writeFileSync(path.join(dir, "duty.md"), `# ${slug}\n`)
   }
 
-  it("discovers a folder with both profile.json and prompt.md", () => {
+  it("discovers a folder with both profile.json and duty.md", () => {
     writeFolder("watch-stale-prs")
     const jobs = listBuiltinJobs(root)
     expect(jobs).toHaveLength(1)
     expect(jobs[0]!.slug).toBe("watch-stale-prs")
     expect(jobs[0]!.dir).toBe(path.join(root, "watch-stale-prs"))
     expect(jobs[0]!.profilePath).toBe(path.join(root, "watch-stale-prs", "profile.json"))
-    expect(jobs[0]!.promptPath).toBe(path.join(root, "watch-stale-prs", "prompt.md"))
-    expect(jobs[0]!.filePath).toBeUndefined()
+    expect(jobs[0]!.bodyPath).toBe(path.join(root, "watch-stale-prs", "duty.md"))
   })
 
   it("skips a folder missing profile.json", () => {
@@ -193,19 +192,14 @@ describe("registry: listBuiltinJobs (folder shape)", () => {
     expect(listBuiltinJobs(root)).toEqual([])
   })
 
-  it("skips a folder missing prompt.md", () => {
-    writeFolder("incomplete", { withPrompt: false })
+  it("skips a folder missing duty.md", () => {
+    writeFolder("incomplete", { withBody: false })
     expect(listBuiltinJobs(root)).toEqual([])
   })
 
-  it("discovers a legacy .md file (back-compat) and exposes it via filePath", () => {
+  it("ignores a legacy .md file", () => {
     fs.writeFileSync(path.join(root, "legacy-duty.md"), "# legacy\n")
-    const jobs = listBuiltinJobs(root)
-    expect(jobs).toHaveLength(1)
-    expect(jobs[0]!.slug).toBe("legacy-duty")
-    expect(jobs[0]!.filePath).toBe(path.join(root, "legacy-duty.md"))
-    expect(jobs[0]!.profilePath).toBe("")
-    expect(jobs[0]!.promptPath).toBe("")
+    expect(listBuiltinJobs(root)).toEqual([])
   })
 
   it("returns an empty list when the root is absent", () => {
@@ -218,7 +212,7 @@ describe("registry: listBuiltinJobs (folder shape)", () => {
     writeFolder("_draft")
     fs.mkdirSync(path.join(root, ".hidden"), { recursive: true })
     fs.writeFileSync(path.join(root, ".hidden", "profile.json"), "{}")
-    fs.writeFileSync(path.join(root, ".hidden", "prompt.md"), "# hidden\n")
+    fs.writeFileSync(path.join(root, ".hidden", "duty.md"), "# hidden\n")
     expect(listBuiltinJobs(root).map((j) => j.slug)).toEqual(["real"])
   })
 })

@@ -1,0 +1,6 @@
+{
+  "name": "release-deploy",
+  "action": "release-deploy",
+  "executable": "release-deploy",
+  "describe": "Deploy or promote a release."
+}

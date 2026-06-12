@@ -1,9 +1,9 @@
 /**
- * Preflight: enumerate `.kody/duties/<slug>.md` files in the cwd, then
+ * Preflight: enumerate `.kody/duties/<slug>/` folders in the cwd, then
  * invoke a target executable once per duty slug (in-process, sequentially).
  *
- * Replaces the issue-label discovery in `dispatchDutyTicks` with file
- * discovery — duties live as authored markdown in the repo, not as issues.
+ * Replaces the issue-label discovery in `dispatchDutyTicks` with folder
+ * discovery — duties live as structured repo folders, not as issues.
  *
  * Wraps the fan-out in the configured `JobStateBackend` lifecycle:
  * `hydrate` runs once before any tick, `persist` runs once after every
@@ -14,18 +14,17 @@
  * Script args (via `with:`):
  *   jobsDir        optional — relative path under cwd (default ".kody/duties")
  *   targetExecutable   required — e.g. "duty-tick"
- *   scriptedExecutable optional — target for slugs with `tickScript:`
- *                      frontmatter (default "duty-tick-scripted")
+ *   scriptedExecutable optional — target for slugs with `tickScript`
+ *                      in profile.json (default "duty-tick-scripted")
  *   slugArg            optional — CLI input name on the target (default "duty")
  */
 
-import * as fs from "node:fs"
 import * as path from "node:path"
+import { type DutyFolder, listDutyFolderSlugs, readDutyFolder } from "../dutyFolders.js"
 import type { PreflightScript } from "../executables/types.js"
 import { gh } from "../issue.js"
 import { mintScheduledJob, runJob } from "../job.js"
-import { loadProfile } from "../profile.js"
-import { type JobFrontmatter, type ScheduleEvery, scheduleEveryToMs, splitFrontmatter } from "./jobFrontmatter.js"
+import { type ScheduleEvery, scheduleEveryToMs } from "./scheduleEvery.js"
 import { resolveBackend } from "./jobState/index.js"
 import { TASK_JOBS_MARKER } from "./planTaskJobs.js"
 
@@ -51,20 +50,17 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
   try {
     const onlyDuty = parseDutyFilter(ctx.args.duty)
     const jobsPath = path.join(ctx.cwd, jobsDir)
-    const slugs = filterSlugs(listJobSlugs(jobsPath), onlyDuty)
-    const folderSlugList = filterSlugs(listFolderDutySlugs(jobsPath), onlyDuty)
-    ctx.data.jobSlugCount = slugs.length + folderSlugList.length
+    const slugs = filterSlugs(listDutyFolderSlugs(jobsPath), onlyDuty)
+    ctx.data.jobSlugCount = slugs.length
 
-    if (slugs.length === 0 && folderSlugList.length === 0) {
+    if (slugs.length === 0) {
       const filter = onlyDuty ? ` matching ${onlyDuty}` : ""
-      process.stdout.write(`[jobs] no job files${filter} in ${jobsDir}\n`)
+      process.stdout.write(`[jobs] no duty folders${filter} in ${jobsDir}\n`)
       return
     }
 
     const filtered = onlyDuty ? ` matching ${onlyDuty}` : ""
-    process.stdout.write(
-      `[jobs] ticking ${slugs.length + folderSlugList.length} job(s)${filtered} via ${targetExecutable}\n`,
-    )
+    process.stdout.write(`[jobs] ticking ${slugs.length} dut(y/ies)${filtered} via ${targetExecutable}\n`)
 
     const results: Array<{
       slug: string
@@ -74,92 +70,22 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
     }> = []
     const now = Date.now()
 
-    // ── Unified path: scheduled folder-duties — FIRST, on the clean checkout ──
-    // A folder-duty (`.kody/duties/<slug>/profile.json`) that declares an
-    // `every` cadence is the unified successor to a markdown scheduled duty: it
-    // fires as a ONE-SHOT run of itself (no duty-tick, no target), as its staff.
-    // We enumerate + read profiles HERE, before the `.md` ticks below churn the
-    // working tree (a branch switch / clean would drop `.kody/duties/<slug>/`),
-    // then fire the due ones. On-demand folder-duties (no `every`) are skipped —
-    // they only run against an issue/PR. Cadence reuses decideShouldFire + the
-    // same backend; lastFiredAt is stamped before running so a crashing duty
-    // can't re-fire every wake.
-    type ScheduledDuty = { slug: string; every?: string; staff?: string }
-    // Every folder-duty slug present this wake. A migrated duty lives as a
-    // folder (`.kody/duties/<slug>/`); if a stale `.kody/duties/<slug>.md`
-    // still exists for the same slug, the folder wins and the .md tick is
-    // skipped below — otherwise the slug would fire twice in one wake.
-    const folderDutySlugs = new Set(folderSlugList)
-    const scheduledDuties = folderSlugList
-      .map((slug): ScheduledDuty | null => {
-        try {
-          const p = loadProfile(path.join(ctx.cwd, jobsDir, slug, "profile.json"))
-          return { slug, every: p.every, staff: p.staff }
-        } catch (err) {
-          process.stderr.write(`[jobs] ⏭  skip folder-duty ${slug}: profile load failed: ${String(err)}\n`)
-          return null
-        }
-      })
-      .filter((d): d is ScheduledDuty => d !== null && Boolean(d.every))
-    process.stdout.write(`[jobs] ${scheduledDuties.length} scheduled folder-dut(y/ies) to consider\n`)
-    for (const { slug, every, staff } of scheduledDuties) {
-      if (!staff || staff.trim().length === 0) {
-        process.stderr.write(`[jobs] ⏭  skip ${slug}: scheduled duty has no staff\n`)
-        results.push({ slug, exitCode: 0, skipped: true, reason: "no staff assigned" })
-        continue
-      }
-      const decision = await decideShouldFire(every as ScheduleEvery, slug, backend, now)
-      if (decision.skip) {
-        process.stdout.write(`[jobs] ⏭  skip ${slug}: ${decision.reason}\n`)
-        results.push({ slug, exitCode: 0, skipped: true, reason: decision.reason })
-        continue
-      }
-      await stampFired(backend, slug, now)
-      process.stdout.write(`[jobs] → run scheduled duty ${slug} (one-shot, as ${staff})\n`)
-      try {
-        // One-runner: a due folder-duty becomes a scheduled Job, run via runJob
-        // with chain:false → the same one-shot runExecutable call as before
-        // (no persona/why seeded, so the ExecutorInput is byte-identical).
-        const out = await runJob(mintScheduledJob({ duty: slug, executable: slug, schedule: every }), {
-          cwd: ctx.cwd,
-          config: ctx.config,
-          verbose: ctx.verbose,
-          quiet: ctx.quiet,
-          chain: false,
-        })
-        results.push({ slug, exitCode: out.exitCode, reason: out.reason })
-        if (out.exitCode !== 0) {
-          process.stderr.write(`[jobs] scheduled duty ${slug} failed (exit ${out.exitCode}): ${out.reason ?? ""}\n`)
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        process.stderr.write(`[jobs] scheduled duty ${slug} crashed: ${msg}\n`)
-        results.push({ slug, exitCode: 99, reason: msg })
-      }
-    }
-
     for (const slug of slugs) {
-      // Dedup: a slug that already exists as a folder-duty is handled above —
-      // never also tick its legacy `.md` (would double-fire / duplicate output).
-      if (folderDutySlugs.has(slug)) {
-        process.stdout.write(`[jobs] ⏭  skip ${slug}: handled as folder-duty (folder wins over .md)\n`)
-        results.push({ slug, exitCode: 0, skipped: true, reason: "handled as folder-duty" })
+      const duty = readDutyFolder(jobsPath, slug)
+      if (!duty) {
+        process.stderr.write(`[jobs] ⏭  skip ${slug}: duty folder is missing profile.json or duty.md\n`)
+        results.push({ slug, exitCode: 0, skipped: true, reason: "incomplete duty folder" })
         continue
       }
-      // Read the slug's frontmatter exactly once per tick — both the
-      // cadence guard (`every:`) and the routing rule (`tickScript:`)
-      // consume it. A previous version parsed the file twice; folded
-      // here to keep the dispatcher cheap on repos with many jobs.
-      const dutyFile = readJobFile(ctx.cwd, jobsDir, slug)
-      const frontmatter = dutyFile.frontmatter
+      const config = duty.config
 
       // Hard kill-switch — when the dashboard's enable/disable toggle
-      // flips a job off, the frontmatter carries `disabled: true`. Skip
+      // flips a job off, the profile carries `disabled: true`. Skip
       // before cadence math so a disabled job never re-arms its
       // lastFiredAt or churns state. Manual `workflow_dispatch` runs
       // (the dashboard "Run now" button) bypass this dispatcher entirely.
-      if (frontmatter.disabled === true) {
-        process.stdout.write(`[jobs] ⏭  skip ${slug}: disabled in frontmatter\n`)
+      if (config.disabled === true) {
+        process.stdout.write(`[jobs] ⏭  skip ${slug}: disabled in profile.json\n`)
         results.push({ slug, exitCode: 0, skipped: true, reason: "disabled" })
         continue
       }
@@ -169,29 +95,29 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
       // skip (loudly) rather than fall back to an implicit default. Manual
       // `workflow_dispatch` "Run now" bypasses this dispatcher, but
       // duty-tick's loader rejects a missing/dangling staff member there too.
-      if (!frontmatter.staff || frontmatter.staff.trim().length === 0) {
-        process.stderr.write(`[jobs] ⏭  skip ${slug}: no staff assigned (add 'staff: <slug>' frontmatter)\n`)
+      if (!config.staff || config.staff.trim().length === 0) {
+        process.stderr.write(`[jobs] ⏭  skip ${slug}: no staff assigned (add \"staff\" to profile.json)\n`)
         results.push({ slug, exitCode: 0, skipped: true, reason: "no staff assigned" })
         continue
       }
 
-      // Decide whether this slug is due, given its frontmatter `every` and
+      // Decide whether this slug is due, given its profile `every` and
       // the previously persisted `data.lastFiredAt`. Jobs without a
       // schedule (or with a malformed one) tick every wake — preserves
       // legacy behavior.
-      const decision = await decideShouldFire(frontmatter.every, slug, backend, now)
+      const decision = await decideShouldFire(config.every, slug, backend, now)
       if (decision.skip) {
         process.stdout.write(`[jobs] ⏭  skip ${slug}: ${decision.reason}\n`)
         results.push({ slug, exitCode: 0, skipped: true, reason: decision.reason })
         continue
       }
 
-      if (frontmatter.executables && frontmatter.executables.length > 0) {
+      if (config.executables && config.executables.length > 0) {
         try {
           const task = createDutyTaskIssue({
             slug,
-            body: dutyFile.body,
-            frontmatter,
+            body: duty.body,
+            config,
             cwd: ctx.cwd,
           })
           await stampFired(backend, slug, now, task)
@@ -200,8 +126,8 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
             mintScheduledJob({
               duty: slug,
               executable: "task-jobs",
-              schedule: frontmatter.every,
-              persona: frontmatter.staff,
+              schedule: config.every,
+              persona: config.staff,
               cliArgs: { issue: task.number },
             }),
             { cwd: ctx.cwd, config: ctx.config, verbose: ctx.verbose, quiet: ctx.quiet },
@@ -218,24 +144,26 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
         continue
       }
 
-      // Per-slug routing: jobs that declare a deterministic `tickScript:`
-      // in frontmatter run via `duty-tick-scripted` (no agent), so their
+      // Per-slug routing: duties that declare a deterministic `tickScript`
+      // in profile.json run via `duty-tick-scripted` (no agent), so their
       // next-state block is parsed from script stdout — not from an LLM
       // that may summarize it away. Everything else uses the configured
       // (LLM-driven) target. Decided here, not in the executable, so the
       // routing rule lives in one place and the executables stay simple.
-      const slugTarget = frontmatter.tickScript ? scriptedExecutable : targetExecutable
+      const slugTarget = config.tickScript ? scriptedExecutable : (config.executable ?? targetExecutable)
+      const cliArgs = config.executable ? {} : { [slugArg]: slug }
 
       process.stdout.write(`[jobs] → tick ${slug} (${slugTarget})\n`)
       try {
-        // One-runner: a due .md duty becomes a scheduled Job, run via runJob
+        // One-runner: a due duty folder becomes a scheduled Job, run via runJob
         // with chain:false → byte-identical to the prior one-shot runExecutable.
         const out = await runJob(
           mintScheduledJob({
             duty: slug,
             executable: slugTarget,
-            schedule: frontmatter.every,
-            cliArgs: { [slugArg]: slug },
+            schedule: config.every,
+            persona: config.staff,
+            cliArgs,
           }),
           { cwd: ctx.cwd, config: ctx.config, verbose: ctx.verbose, quiet: ctx.quiet, chain: false },
         )
@@ -270,13 +198,13 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
 }
 
 /**
- * Decide whether a slug is due to tick on this cron wake. Jobs with no
- * `every:` frontmatter always tick (legacy default). Jobs with one are
+ * Decide whether a slug is due to tick on this cron wake. Duties with no
+ * `every` profile field always tick. Duties with one are
  * skipped when their last `lastFiredAt` is more recent than the
  * cadence allows.
  *
- * Frontmatter is read once per slug by the caller (see `readJobFrontmatter`)
- * and the pre-parsed `every` is passed in. State load failures fall
+ * The profile is read once per slug by the caller and the pre-parsed `every`
+ * is passed in. State load failures fall
  * through to "fire" — we'd rather double-tick once than silently swallow
  * a job whose state file is malformed.
  */
@@ -332,22 +260,6 @@ function formatAgo(ms: number): string {
   return `${day}d`
 }
 
-/**
- * Cheap-and-tolerant frontmatter peek used per-tick by the dispatcher
- * loop. Single source of truth for both cadence (`every:`) and routing
- * (`tickScript:`). Returns an empty object on any read/parse failure so
- * callers can apply their own defaults (cadence falls through to "fire",
- * routing falls back to the LLM-driven target).
- */
-function readJobFile(cwd: string, jobsDir: string, slug: string): { frontmatter: JobFrontmatter; body: string } {
-  try {
-    const raw = fs.readFileSync(path.join(cwd, jobsDir, `${slug}.md`), "utf-8")
-    return splitFrontmatter(raw)
-  } catch {
-    return { frontmatter: {}, body: "" }
-  }
-}
-
 function parseDutyFilter(raw: unknown): string | undefined {
   return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : undefined
 }
@@ -364,11 +276,11 @@ interface DutyTaskIssue {
 function createDutyTaskIssue(opts: {
   slug: string
   body: string
-  frontmatter: JobFrontmatter
+  config: DutyFolder["config"]
   cwd: string
 }): DutyTaskIssue {
   const title = `Duty ${opts.slug} - multi-executable task`
-  const body = buildDutyTaskIssueBody(opts.slug, opts.body, opts.frontmatter)
+  const body = buildDutyTaskIssueBody(opts.slug, opts.body, opts.config)
   const out = gh(["issue", "create", "--title", title, "--body-file", "-"], { input: body, cwd: opts.cwd })
   const url =
     out
@@ -381,14 +293,14 @@ function createDutyTaskIssue(opts: {
   return { number: Number(match[1]), url }
 }
 
-function buildDutyTaskIssueBody(slug: string, dutyBody: string, frontmatter: JobFrontmatter): string {
-  const specs = (frontmatter.executables ?? []).map((executable) => ({
+function buildDutyTaskIssueBody(slug: string, dutyBody: string, config: DutyFolder["config"]): string {
+  const specs = (config.executables ?? []).map((executable) => ({
     executable,
     duty: slug,
-    ...(frontmatter.staff ? { staff: frontmatter.staff } : {}),
+    ...(config.staff ? { staff: config.staff } : {}),
     reason: `Duty \`${slug}\` slice for \`${executable}\`.`,
     flavor: "scheduled",
-    ...(frontmatter.every ? { schedule: frontmatter.every } : {}),
+    ...(config.every ? { schedule: config.every } : {}),
   }))
   return [
     `# Duty task: ${slug}`,
@@ -400,37 +312,6 @@ function buildDutyTaskIssueBody(slug: string, dutyBody: string, frontmatter: Job
     "-->",
     "",
   ].join("\n")
-}
-
-function listJobSlugs(absDir: string): string[] {
-  if (!fs.existsSync(absDir)) return []
-  let entries: fs.Dirent[]
-  try {
-    entries = fs.readdirSync(absDir, { withFileTypes: true })
-  } catch {
-    return []
-  }
-  return entries
-    .filter((e) => e.isFile() && e.name.endsWith(".md"))
-    .map((e) => e.name.replace(/\.md$/, ""))
-    .filter((slug) => slug.length > 0 && !slug.startsWith("_") && !slug.startsWith("."))
-    .sort()
-}
-
-/** List folder-duty slugs (sub-directories containing a `profile.json`). */
-function listFolderDutySlugs(absDir: string): string[] {
-  if (!fs.existsSync(absDir)) return []
-  let entries: fs.Dirent[]
-  try {
-    entries = fs.readdirSync(absDir, { withFileTypes: true })
-  } catch {
-    return []
-  }
-  return entries
-    .filter((e) => e.isDirectory() && !e.name.startsWith("_") && !e.name.startsWith("."))
-    .filter((e) => fs.existsSync(path.join(absDir, e.name, "profile.json")))
-    .map((e) => e.name)
-    .sort()
 }
 
 /** Persist `lastFiredAt = now` for a scheduled folder-duty (no duty-tick to do it). */

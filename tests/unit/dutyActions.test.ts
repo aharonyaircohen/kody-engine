@@ -21,32 +21,29 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true })
 })
 
-function writeMarkdownDuty(slug: string, frontmatter: string): void {
-  fs.writeFileSync(path.join(root, ".kody", "duties", `${slug}.md`), `---\n${frontmatter}\n---\n# ${slug}\n`)
-}
-
 function writeFolderDuty(slug: string, profile: Record<string, unknown>): void {
   const dir = path.join(root, ".kody", "duties", slug)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
+  fs.writeFileSync(path.join(dir, "duty.md"), `# ${slug}\n`)
 }
 
 describe("duty actions", () => {
-  it("resolves a markdown duty action to its declared executable", () => {
+  it("resolves a folder duty action to its declared executable", () => {
     process.chdir(root)
-    writeMarkdownDuty("memorize", "action: remember\nexecutable: impl\nstaff: kody")
+    writeFolderDuty("memorize", { action: "remember", executable: "impl", staff: "kody" })
 
     expect(resolveDutyAction("remember")).toMatchObject({
       action: "remember",
       duty: "memorize",
       executable: "impl",
-      source: "project-markdown",
+      source: "project-folder",
     })
   })
 
-  it("defaults a markdown duty action to the duty slug and single executable", () => {
+  it("defaults a folder duty action to the duty slug and single executable", () => {
     process.chdir(root)
-    writeMarkdownDuty("memorize", "executables: impl\nstaff: kody")
+    writeFolderDuty("memorize", { executables: ["impl"], staff: "kody" })
 
     expect(resolveDutyAction("memorize")).toMatchObject({
       action: "memorize",
@@ -55,9 +52,9 @@ describe("duty actions", () => {
     })
   })
 
-  it("uses duty-tick plus --duty for a markdown duty with no implementation executable", () => {
+  it("uses duty-tick plus --duty for a folder duty with no implementation executable", () => {
     process.chdir(root)
-    writeMarkdownDuty("triage", "action: triage\nstaff: kody")
+    writeFolderDuty("triage", { action: "triage", staff: "kody" })
 
     expect(resolveDutyAction("triage")).toMatchObject({
       action: "triage",
@@ -65,6 +62,16 @@ describe("duty actions", () => {
       executable: "duty-tick",
       cliArgs: { duty: "triage" },
     })
+  })
+
+  it("ignores legacy single-file markdown duties", () => {
+    process.chdir(root)
+    fs.writeFileSync(
+      path.join(root, ".kody", "duties", "legacy.md"),
+      "---\naction: legacy\nexecutable: impl\nstaff: kody\n---\n# Legacy\n",
+    )
+
+    expect(resolveDutyAction("legacy")).toBeNull()
   })
 
   it("resolves a folder duty action before a same-named executable", () => {

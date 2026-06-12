@@ -65,7 +65,7 @@ export interface Profile {
   kind: "oneshot" | "scheduled"
   /**
    * Recurrence cadence for a duty that runs on a timer (unified successor to a
-   * markdown duty's `every:` frontmatter). One of the ScheduleEvery values
+   * markdown duty's `every:` metadata). One of the ScheduleEvery values
    * ("15m".."7d" | "manual"). Present → the duty-scheduler fires a one-shot run
    * when due (no target). Absent → on-demand only (runs against an issue/PR).
    * This is what makes "scheduled" just a field on the one duty shape.
@@ -73,7 +73,7 @@ export interface Profile {
   every?: string
   /**
    * Locked-toolbox palette (unified successor to a markdown duty's `tools:`
-   * frontmatter). When non-empty, loadDutyState sets ctx.data.dutyTools so the
+   * metadata). When non-empty, loadDutyState sets ctx.data.dutyTools so the
    * executor spins up the in-process kody-duty MCP server and the agent runs
    * MCP-only (Bash/Read revoked unless also in claudeCode.tools). Absent →
    * normal SDK tools.
@@ -82,7 +82,7 @@ export interface Profile {
   /**
    * GitHub logins (no leading `@`) this duty's output should mention. Rendered
    * to `@a @b` and exposed to the prompt as {{mentions}} (and as the duty-MCP
-   * operator mention), mirroring a markdown duty's `mentions:` frontmatter.
+   * operator mention), mirroring a markdown duty's `mentions:` metadata.
    */
   mentions?: string[]
   /** Cron expression for scheduled profiles (e.g. "0 8 * * MON"). */

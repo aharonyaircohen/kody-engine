@@ -18,7 +18,7 @@ Retries stay under the same job instead of becoming new work.
 | Concept | Answers | What it is |
 |---|---|---|
 | **persona** | who | reusable executor identity (`.kody/staff/<slug>.md`; engine ships a built-in `kody`) |
-| **duty** | why | reusable intent — the prose body of `.kody/duties/<slug>.md` |
+| **duty** | why | reusable intent - `profile.json` metadata plus the prose body of `.kody/duties/<slug>/duty.md` |
 | **executable** | how | reusable unit of work (`run`, `fix`, a duty's `profile.json`, …) |
 | **issue** | what | a GitHub **issue or PR** — the work-item a task is about |
 | **task** | task state | one issue/PR, its required jobs, outputs, and rolled-up state |
@@ -103,20 +103,20 @@ write the task data onto the issue:
 -->
 ```
 
-For scheduled duties, the authoring surface is even simpler: the duty file can
-declare the executable list directly:
+For scheduled duties, the authoring surface is even simpler: the duty profile
+can declare the executable list directly:
 
-```md
----
-every: 1h
-staff: kody
-executables: db-migration, api-worker, ui-builder
----
-
-# Duty
-
-Keep this feature moving across the database, API, and UI slices.
+```json
+{
+  "name": "feature-progress",
+  "every": "1h",
+  "staff": "kody",
+  "executables": ["db-migration", "api-worker", "ui-builder"]
+}
 ```
+
+The matching `duty.md` body explains why the duty exists and what outcome it
+should maintain.
 
 When that duty is due, `duty-scheduler` creates one GitHub issue with the hidden
 task data above, records the issue number in the duty state, and runs
@@ -166,9 +166,8 @@ All structural items are implemented:
    per-run `jobId`; `saveTaskState` appends the attempt under the task job and
    to `history`.
 3. ✅ **Duty = pure why** — the duty's prose body is the intent; the job carries
-   when/who/how, sourced from the duty's frontmatter at mint time. The
-   frontmatter remains the authoring surface (removing it would break consumer
-   authoring); the model treats it as job-config, not duty-essence.
+   when/who/how, sourced from the duty folder's `profile.json` at mint time.
+   `duty.md` stays prose-only; metadata belongs in `profile.json`.
 4. ✅ **`@kody` mints an instant job** — the comment/manual route mints via
    `mintInstantJob` and runs through `runJob`. Persona (`kody`) and inline `why`
    are both consumed.

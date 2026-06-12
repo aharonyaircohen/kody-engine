@@ -58,10 +58,12 @@ describe("smoke: CLI boots and validates args", () => {
         agent: { model: "anthropic/test" },
       }),
     )
+    fs.mkdirSync(path.join(root, ".kody", "duties", "smoke-duty"), { recursive: true })
     fs.writeFileSync(
-      path.join(root, ".kody", "duties", "smoke-duty.md"),
-      "---\naction: smoke-action\nexecutable: smoke-impl\nstaff: kody\n---\n# Smoke\n",
+      path.join(root, ".kody", "duties", "smoke-duty", "profile.json"),
+      JSON.stringify({ name: "smoke-duty", action: "smoke-action", executable: "smoke-impl", staff: "kody" }),
     )
+    fs.writeFileSync(path.join(root, ".kody", "duties", "smoke-duty", "duty.md"), "# Smoke\n")
     fs.writeFileSync(
       path.join(root, ".kody", "executables", "smoke-impl", "profile.json"),
       JSON.stringify({

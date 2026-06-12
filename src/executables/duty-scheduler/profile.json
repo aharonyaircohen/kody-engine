@@ -1,7 +1,7 @@
 {
   "name": "duty-scheduler",
   "role": "watch",
-  "describe": "Scheduled: for every duty file under .kody/duties/, invoke duty-tick once. No agent on the scheduler itself.",
+  "describe": "Scheduled: for every duty folder under .kody/duties/, invoke duty-tick once. No agent on the scheduler itself.",
   "kind": "scheduled",
   "schedule": "*/5 * * * *",
   "inputs": [

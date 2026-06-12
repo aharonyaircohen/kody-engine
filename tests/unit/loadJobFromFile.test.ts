@@ -2,7 +2,7 @@
  * Unit tests for `loadJobFromFile` — the preflight that loads a file-based
  * duty (body, state, staff persona) into `ctx.data`.
  *
- * Focus here: the `mentions:` frontmatter field is read alongside `staff:`
+ * Focus here: the `mentions` profile field is read alongside `staff`
  * and exposed to the duty prompt as a ready-to-insert `ctx.data.mentions`
  * string ("@a @b"), or "" when absent. Uses the local-file state backend so
  * the test never touches GitHub.
@@ -28,9 +28,11 @@ afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true })
 })
 
-function writeDuty(slug: string, frontmatter: string, body = "# Duty\nbody"): void {
-  const fm = frontmatter ? `---\n${frontmatter}\n---\n` : ""
-  fs.writeFileSync(path.join(tmp, ".kody", "duties", `${slug}.md`), fm + body)
+function writeDuty(slug: string, profile: Record<string, unknown>, body = "# Duty\nbody"): void {
+  const dir = path.join(tmp, ".kody", "duties", slug)
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
+  fs.writeFileSync(path.join(dir, "duty.md"), body)
 }
 
 function writeStaff(slug: string, body = "# Persona\nidentity"): void {
@@ -59,7 +61,7 @@ const PROFILE = {} as unknown as Profile
 describe("loadJobFromFile mentions", () => {
   it("formats a `mentions: a, b` list into a ready-to-insert '@a @b' string", async () => {
     writeStaff("kody")
-    writeDuty("changelog-verify", "staff: kody\nmentions: a, b")
+    writeDuty("changelog-verify", { staff: "kody", mentions: ["a", "b"] })
 
     const ctx = ctxFor("changelog-verify")
     await loadJobFromFile(ctx, PROFILE, {})
@@ -69,7 +71,7 @@ describe("loadJobFromFile mentions", () => {
 
   it("sets ctx.data.mentions to '' when the duty declares no mentions", async () => {
     writeStaff("kody")
-    writeDuty("broad-sweep", "staff: kody")
+    writeDuty("broad-sweep", { staff: "kody" })
 
     const ctx = ctxFor("broad-sweep")
     await loadJobFromFile(ctx, PROFILE, {})
@@ -85,7 +87,10 @@ describe("loadJobFromFile locked-toolbox (tools:)", () => {
 
   it("revokes Bash/Read and locks allowedTools to the declared kody-duty tools + submit_state", async () => {
     writeStaff("cto")
-    writeDuty("dev-ci-health", "staff: cto\ntools: read_check_runs, ensure_issue, dispatch_workflow, ensure_comment")
+    writeDuty("dev-ci-health", {
+      staff: "cto",
+      tools: ["read_check_runs", "ensure_issue", "dispatch_workflow", "ensure_comment"],
+    })
 
     const ctx = ctxFor("dev-ci-health")
     const profile = lockedProfile()
@@ -108,7 +113,7 @@ describe("loadJobFromFile locked-toolbox (tools:)", () => {
 
   it("throws if a duty declares a tool not in the kody-duty palette", async () => {
     writeStaff("cto")
-    writeDuty("bad", "staff: cto\ntools: read_check_runs, make_coffee")
+    writeDuty("bad", { staff: "cto", tools: ["read_check_runs", "make_coffee"] })
 
     await expect(loadJobFromFile(ctxFor("bad"), lockedProfile(), {})).rejects.toThrow(/make_coffee/)
   })
@@ -117,7 +122,7 @@ describe("loadJobFromFile locked-toolbox (tools:)", () => {
 describe("loadJobFromFile body {{mentions}} substitution", () => {
   it("replaces {{mentions}} inside the duty body with the resolved handles", async () => {
     writeStaff("kody")
-    writeDuty("docs-readme", "staff: kody\nmentions: a, b", "# Duty\n{{mentions}} please review")
+    writeDuty("docs-readme", { staff: "kody", mentions: ["a", "b"] }, "# Duty\n{{mentions}} please review")
 
     const ctx = ctxFor("docs-readme")
     await loadJobFromFile(ctx, PROFILE, {})
@@ -128,7 +133,7 @@ describe("loadJobFromFile body {{mentions}} substitution", () => {
 
   it("tolerates inner whitespace and renders empty when no mentions are declared", async () => {
     writeStaff("kody")
-    writeDuty("docs-code", "staff: kody", "line {{ mentions }} end")
+    writeDuty("docs-code", { staff: "kody" }, "line {{ mentions }} end")
 
     const ctx = ctxFor("docs-code")
     await loadJobFromFile(ctx, PROFILE, {})
@@ -139,9 +144,9 @@ describe("loadJobFromFile body {{mentions}} substitution", () => {
 })
 
 describe("loadJobFromFile duty-noun aliases (Phase 1 rename)", () => {
-  it("populates dutySlug/dutyTitle from the duty file, mirroring jobSlug/jobTitle", async () => {
+  it("populates dutySlug/dutyTitle from the duty folder, mirroring jobSlug/jobTitle", async () => {
     writeStaff("kody")
-    writeDuty("stale-prs", "staff: kody", "# Stale PR Watcher\nbody text")
+    writeDuty("stale-prs", { staff: "kody" }, "# Stale PR Watcher\nbody text")
 
     const ctx = ctxFor("stale-prs")
     await loadJobFromFile(ctx, { ...PROFILE, name: "duty-tick" }, {})
@@ -156,7 +161,7 @@ describe("loadJobFromFile duty-noun aliases (Phase 1 rename)", () => {
 
   it("populates staffSlug/staffTitle from the staff file, mirroring workerSlug/workerTitle", async () => {
     writeStaff("kody", "# Kody — root persona")
-    writeDuty("stale-prs", "staff: kody", "# Stale PR Watcher")
+    writeDuty("stale-prs", { staff: "kody" }, "# Stale PR Watcher")
 
     const ctx = ctxFor("stale-prs")
     await loadJobFromFile(ctx, { ...PROFILE, name: "duty-tick" }, {})
@@ -170,7 +175,7 @@ describe("loadJobFromFile duty-noun aliases (Phase 1 rename)", () => {
 
   it("populates executableSlug from profile.name", async () => {
     writeStaff("kody")
-    writeDuty("stale-prs", "staff: kody", "# Stale PR Watcher")
+    writeDuty("stale-prs", { staff: "kody" }, "# Stale PR Watcher")
 
     const ctx = ctxFor("stale-prs")
     await loadJobFromFile(ctx, { ...PROFILE, name: "duty-tick" }, {})
@@ -178,18 +183,18 @@ describe("loadJobFromFile duty-noun aliases (Phase 1 rename)", () => {
     expect(ctx.data.executableSlug).toBe("duty-tick")
   })
 
-  it("populates dutySchedule as '' for a markdown duty (no schedule in frontmatter)", async () => {
+  it("populates dutySchedule from the duty profile", async () => {
     writeStaff("kody")
-    writeDuty("stale-prs", "staff: kody", "# Stale PR Watcher")
+    writeDuty("stale-prs", { staff: "kody", every: "1h" }, "# Stale PR Watcher")
 
     const ctx = ctxFor("stale-prs")
     await loadJobFromFile(ctx, { ...PROFILE, name: "duty-tick" }, {})
 
-    expect(ctx.data.dutySchedule).toBe("")
+    expect(ctx.data.dutySchedule).toBe("1h")
   })
 
   it("leaves staffSlug empty when the duty has no staff declared", async () => {
-    writeDuty("orphan", "", "# Orphan Duty\nno staff")
+    writeDuty("orphan", {}, "# Orphan Duty\nno staff")
 
     const ctx = ctxFor("orphan")
     await loadJobFromFile(ctx, { ...PROFILE, name: "duty-tick" }, {})

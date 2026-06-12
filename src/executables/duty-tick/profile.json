@@ -1,7 +1,7 @@
 {
   "name": "duty-tick",
   "role": "primitive",
-  "describe": "One classifier tick for one duty file: read intent + state, decide and execute via gh, emit next state.",
+  "describe": "One classifier tick for one duty folder: read intent + state, decide and execute via gh, emit next state.",
   "kind": "oneshot",
   "inputs": [
     {
@@ -9,7 +9,7 @@
       "flag": "--duty",
       "type": "string",
       "required": true,
-      "describe": "Duty slug — basename (without .md) of the file under .kody/duties/."
+      "describe": "Duty slug — folder name under .kody/duties/."
     },
     {
       "name": "force",

@@ -2,10 +2,9 @@
  * Load a staff member's persona for an executable that declares `staff:`.
  *
  * This is the generic, executor-level version of what the duty/tick path does
- * per-executable via the `{{workerPersona}}` prompt token (see
- * loadJobFromFile.ts / loadWorkerAdhoc.ts). A `staff` field on any profile lets
- * the executor run that executable *as* a named staff member — the unification
- * step: a "duty" is just an executable + a staff member.
+ * via the `{{workerPersona}}` prompt token (see loadJobFromFile.ts /
+ * loadWorkerAdhoc.ts). A `staff` field on a profile lets the executor run that
+ * executable *as* a named staff member.
  *
  * Resolution mirrors the duty path: `.kody/staff/<slug>.md`, frontmatter
  * stripped, body returned. A declared-but-missing staff file is fatal — an

@@ -403,7 +403,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       enableVerifyTool: profile.claudeCode.enableVerifyTool,
       enableSubmitTool: profile.claudeCode.enableSubmitTool,
       // Locked-toolbox duty mode: `loadJobFromFile` flips `ctx.data.dutyTools`
-      // when a duty declares `tools:` frontmatter. The executor doesn't need
+      // when a duty declares `tools` in profile.json. The executor doesn't need
       // to know the palette — it just forwards the flag so agent.ts can spin
       // up the in-process `kody-duty` MCP server with the right context.
       enableDutyTool: Array.isArray(ctx.data.dutyTools) && ctx.data.dutyTools.length > 0,

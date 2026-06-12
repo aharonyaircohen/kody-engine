@@ -1,0 +1,6 @@
+{
+  "name": "revert",
+  "action": "revert",
+  "executable": "revert",
+  "describe": "Revert one or more commits on a PR branch."
+}

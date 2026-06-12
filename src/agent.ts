@@ -137,14 +137,14 @@ export interface AgentOptions {
    * Opt-in (duty-tick locked-toolbox mode): build an in-process MCP server
    * exposing typed duty primitives (list_prs_to_repair, sync_pr, fix_ci_pr,
    * resolve_pr, recommend_to_operator, read_ledger). Triggered by a duty
-   * declaring `tools:` frontmatter — `loadJobFromFile` then revokes Bash/Read
+   * declaring `tools:` metadata — `loadJobFromFile` then revokes Bash/Read
    * and locks `allowedTools` to only the duty's declared MCP tools (plus
    * `submit_state`). Default false.
    */
   enableDutyTool?: boolean
   /**
    * Operator @-mention prefix the duty MCP uses for `recommend_to_operator`
-   * (e.g. "@aguyaharonyair"). Comes from the duty's `mentions:` frontmatter.
+   * (e.g. "@aguyaharonyair"). Comes from the duty's `mentions:` metadata.
    * Empty string when the duty declared no operator (comment is still posted,
    * just without a mention). Ignored when `enableDutyTool` is false.
    */

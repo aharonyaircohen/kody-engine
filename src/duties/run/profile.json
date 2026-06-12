@@ -1,0 +1,6 @@
+{
+  "name": "run",
+  "action": "run",
+  "executable": "run",
+  "describe": "Implement a GitHub issue end-to-end."
+}

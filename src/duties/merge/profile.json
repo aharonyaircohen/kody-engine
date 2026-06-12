@@ -1,0 +1,6 @@
+{
+  "name": "merge",
+  "action": "merge",
+  "executable": "merge",
+  "describe": "Self-gating squash merge of a PR."
+}

@@ -15,7 +15,8 @@ import type { DispatchResult } from "./dispatch.js"
 import type { Job, JobFlavor } from "./executables/types.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
 import { runExecutable, runExecutableChain } from "./executor.js"
-import { resolveDutyAction } from "./registry.js"
+import { readDutyFolder } from "./dutyFolders.js"
+import { getBuiltinDutiesRoot, getProjectDutiesRoot, resolveDutyAction } from "./registry.js"
 
 export { stableJobKey } from "./jobIdentity.js"
 
@@ -139,6 +140,23 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     preloadedData.jobExecutable = executableIdentity
   // The job carries *when*: a scheduled job's cadence, recorded in the ledger.
   if (valid.schedule !== undefined && valid.schedule.length > 0) preloadedData.jobSchedule = valid.schedule
+  const dutyContext = loadDutyContext(dutyIdentity ?? valid.duty)
+  if (dutyContext) {
+    preloadedData.dutySlug = dutyContext.slug
+    preloadedData.dutyTitle = dutyContext.title
+    preloadedData.dutyIntent = dutyContext.body
+    preloadedData.jobIntent = dutyContext.body
+    if (preloadedData.jobDuty === undefined) preloadedData.jobDuty = dutyContext.slug
+    if (dutyContext.config.staff && preloadedData.jobPersona === undefined) {
+      preloadedData.jobPersona = dutyContext.config.staff
+    }
+    if (dutyContext.config.every && preloadedData.jobSchedule === undefined) {
+      preloadedData.jobSchedule = dutyContext.config.every
+    }
+    if (dutyContext.config.mentions && dutyContext.config.mentions.length > 0) {
+      preloadedData.mentions = dutyContext.config.mentions.map((login) => `@${login}`).join(" ")
+    }
+  }
   // Inline why → ctx.data.jobWhy (NOT jobIntent — that token is the scheduled
   // duty BODY, consumed via {{jobIntent}} by duty-tick; reusing it would
   // double-inject). The executor surfaces jobWhy to the agent as a fenced
@@ -159,6 +177,11 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
 
   const run = base.chain === false ? runExecutable : runExecutableChain
   return run(profileName, input)
+}
+
+function loadDutyContext(slug: string | undefined): ReturnType<typeof readDutyFolder> {
+  if (!slug) return null
+  return readDutyFolder(getProjectDutiesRoot(), slug) ?? readDutyFolder(getBuiltinDutiesRoot(), slug)
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -190,13 +213,13 @@ export function mintInstantJob(dispatch: DispatchResult, opts?: { why?: string; 
 
 /** Inputs the cron tick path resolves per due duty slug. */
 export interface ScheduledJobInput {
-  /** The duty slug (its "why" lives in `.kody/duties/<slug>.md`). */
+  /** The duty slug (its "why" lives in `.kody/duties/<slug>/duty.md`). */
   duty: string
   /** The executable that ticks it (duty-tick / duty-tick-scripted, or a folder-duty slug). */
   executable: string
   /** Cron cadence the duty fired on. */
   schedule?: string
-  /** Staff persona that runs it (from the duty's `staff:` frontmatter). */
+  /** Staff persona that runs it (from the duty's profile.json). */
   persona?: string
   /** Args handed to the tick executable (e.g. `{ job: slug }` for `.md` duties). */
   cliArgs?: Record<string, unknown>

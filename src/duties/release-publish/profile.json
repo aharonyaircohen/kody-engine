@@ -1,0 +1,6 @@
+{
+  "name": "release-publish",
+  "action": "release-publish",
+  "executable": "release-publish",
+  "describe": "Publish a prepared release."
+}

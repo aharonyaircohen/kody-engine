@@ -21,8 +21,8 @@
  *                       (src/job.ts) is unaffected.
  *
  * NOT banned — "job" in general: the runtime envelope (`Job`, `JobFlavor`,
- * `Job` typed records), the `jobFrontmatter` parser, the `.kody/jobs/`
- * engine scaffold path, the `jobState`/`jobSlug`/`jobSchedule` ctx.data
+ * `Job` typed records), the `.kody/jobs/` engine scaffold path, the
+ * `jobState`/`jobSlug`/`jobSchedule` ctx.data
  * fields (which the spec says MUST keep working alongside the new `duty*`
  * aliases), and the `kody-job-next-state` fence label all keep their `job`
  * names by Phase-1 design. The deadVocabulary test targets the specific

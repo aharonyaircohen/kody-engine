@@ -25,8 +25,8 @@ The 35 solo scripts cluster into recognisable shapes:
 | --- | --- | --- |
 | PR-branch lifecycle | `fixFlow`, `revertFlow`, `resolveFlow`, `fixCiFlow`, `initFlow` | `fix`, `revert`, `resolve`, `fix-ci`, `init` |
 | Goal chain | `loadGoalState`, `saveGoalState`, `commitGoalState`, `deriveGoalPhase`, `dispatchNextTask`, `finalizeGoal`, `handleAbandonedGoal`, `parseJobStateFromAgentResult` | `goal-tick` |
-| Dispatch/classify | `classifyByLabel`, `dispatchClassified`, `recordClassification`, `dispatch`, `dispatchJobFileTicks` | `classify`, `spec`, `job-scheduler` |
-| Job tick | `loadJobFromFile`, `parseJobStateFromAgentResult`, `runTickScript` | `job-tick`, `job-tick-scripted` |
+| Dispatch/classify | `classifyByLabel`, `dispatchClassified`, `recordClassification`, `dispatch`, `dispatchDutyFileTicks` | `classify`, `spec`, `duty-scheduler` |
+| Duty tick | `loadJobFromFile`, `parseJobStateFromAgentResult`, `runTickScript` | `duty-tick`, `duty-tick-scripted` |
 | Reproduce | `parseReproOutput`, `verifyReproFails` | `reproduce` |
 | Run/plan | `requirePlanDeviations`, `resolveArtifacts`, `postPlanComment` | `run`, `plan` |
 | Research | `diagMcp`, `postResearchComment` | `research` |
@@ -223,7 +223,7 @@ Note: `goal-tick` is the highest-density solo cluster — 8 scripts for one exec
 1. New `src/lifecycles/goalChain.ts` expanding to a canonical sequence (load → derive-phase → dispatch-next → save → commit).
 2. Profile update: `src/executables/goal-tick/profile.json` gains `lifecycle: "goal-chain"` and `lifecycleConfig` for phase-specific behaviour.
 3. Delete: `loadGoalState`, `saveGoalState`, `commitGoalState`, `deriveGoalPhase`, `dispatchNextTask`, `finalizeGoal`, `handleAbandonedGoal`. Some may collapse into `src/lifecycles/goalChain.ts` internals (not new shared scripts — implementation detail of the lifecycle module).
-4. If `parseJobStateFromAgentResult` is genuinely shared with `job-tick`, leave it. If not, demote it in phase 5.
+4. If `parseJobStateFromAgentResult` is genuinely shared with `duty-tick`, leave it. If not, demote it in phase 5.
 
 **Acceptance**
 - Solo-use script count drops from ~30 to ~22.

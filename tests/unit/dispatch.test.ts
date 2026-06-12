@@ -217,10 +217,12 @@ describe("dispatch: issue_comment on issue", () => {
       process.chdir(tmp)
       fs.mkdirSync(path.join(tmp, ".kody", "duties"), { recursive: true })
       fs.mkdirSync(path.join(tmp, ".kody", "executables", "custom-impl"), { recursive: true })
+      fs.mkdirSync(path.join(tmp, ".kody", "duties", "remember"), { recursive: true })
       fs.writeFileSync(
-        path.join(tmp, ".kody", "duties", "remember.md"),
-        "---\naction: remember\nexecutable: custom-impl\nstaff: kody\n---\n# Remember\n",
+        path.join(tmp, ".kody", "duties", "remember", "profile.json"),
+        JSON.stringify({ name: "remember", action: "remember", executable: "custom-impl", staff: "kody" }),
       )
+      fs.writeFileSync(path.join(tmp, ".kody", "duties", "remember", "duty.md"), "# Remember\n")
       fs.writeFileSync(
         path.join(tmp, ".kody", "executables", "custom-impl", "profile.json"),
         JSON.stringify({

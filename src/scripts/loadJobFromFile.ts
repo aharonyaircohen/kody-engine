@@ -3,20 +3,20 @@
  * configured `JobStateBackend`) into ctx.data. Mirror of
  * `loadIssueStateComment` for the file-based duty model.
  *
- * Reads the markdown body at `<jobsDir>/<slug>.md` and the duty's
+ * Reads the folder body at `<jobsDir>/<slug>/duty.md` and the duty's
  * state via `resolveBackend(config, cwd, jobsDir).load(slug)`. Sets:
  *
  *   ctx.data.jobSlug         the slug (legacy token; remains canonical for
  *                            the kody-job-next-state fence label and existing
  *                            prompt templates)
  *   ctx.data.jobTitle        first H1 of the body, or slug formatted
- *   ctx.data.jobIntent       the body (post-frontmatter, if any)
+ *   ctx.data.jobIntent       the duty body
  *   ctx.data.jobStateJson    rendered prior state, or seed on first run
  *   ctx.data.jobState        LoadedJobState (path, handle, state, created)
  *   ctx.data.workerSlug      the assigned staff slug (or "" if none)
  *   ctx.data.workerTitle     staff file H1, or humanized staff slug
  *   ctx.data.workerPersona   staff persona body (post-frontmatter), or ""
- *   ctx.data.mentions        "@a @b" from the duty's `mentions:` frontmatter, or ""
+ *   ctx.data.mentions        "@a @b" from the duty profile's `mentions`, or ""
  *
  *   ctx.data.dutySlug        alias of jobSlug — the "Duty" noun introduced
  *                            by Phase 1 of the duty-pipeline rename
@@ -26,9 +26,9 @@
  *   ctx.data.executableSlug  profile.name — the executable doing the tick (how)
  *
  * The staff member is *who* the tick runs as: a duty names exactly one
- * staff member via `staff:` frontmatter; its persona is injected ahead of
- * the duty body by `duty-tick`. A `staff:` that points at a missing file is a
- * hard error — a duty must not silently run with no executor identity.
+ * staff member via `profile.json`; its persona is injected ahead of the duty
+ * body by `duty-tick`. A staff slug that points at a missing file is a hard
+ * error — a duty must not silently run with no executor identity.
  *
  * Script args (via `with:`):
  *   jobsDir       optional — default ".kody/duties"
@@ -38,9 +38,9 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { readDutyFolder } from "../dutyFolders.js"
 import { DUTY_MCP_TOOL_NAMES } from "../dutyMcp.js"
 import type { PreflightScript } from "../executables/types.js"
-import { splitFrontmatter } from "./jobFrontmatter.js"
 import { resolveBackend } from "./jobState/index.js"
 
 const DUTY_TOOL_PALETTE: ReadonlySet<string> = new Set(DUTY_MCP_TOOL_NAMES)
@@ -54,26 +54,24 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
     throw new Error(`loadJobFromFile: ctx.args.${slugArg} must be a non-empty slug`)
   }
 
-  const absPath = path.join(ctx.cwd, jobsDir, `${slug}.md`)
-  if (!fs.existsSync(absPath)) {
-    throw new Error(`loadJobFromFile: job file not found: ${absPath}`)
+  const duty = readDutyFolder(path.join(ctx.cwd, jobsDir), slug)
+  if (!duty) {
+    throw new Error(`loadJobFromFile: duty folder not found or incomplete: ${path.join(ctx.cwd, jobsDir, slug)}`)
   }
-  const raw = fs.readFileSync(absPath, "utf-8")
-  const { title, body } = parseJobFile(raw, slug)
-  const frontmatter = splitFrontmatter(raw).frontmatter
+  const { title, body, config } = duty
 
-  // Logins this duty's output should @-mention, declared via `mentions:`
-  // frontmatter (comma-separated, stored without `@`). Emit a ready-to-insert
+  // Logins this duty's output should @-mention, declared via `mentions`
+  // in profile.json (stored without `@`). Emit a ready-to-insert
   // string here — composePrompt only stringifies ctx.data values, so the
   // `{{mentions}}` token must already be the finished "@a @b" form. Empty
   // string when none are declared. Fail-soft: never throws.
-  const mentions = (frontmatter.mentions ?? []).map((login) => `@${login}`).join(" ")
+  const mentions = (config.mentions ?? []).map((login) => `@${login}`).join(" ")
 
   // Resolve the assigned staff member (persona) — *who* this tick runs as.
   // The duty owns scheduling; the staff member is identity/doctrine injected
-  // ahead of the duty body. A `staff:` pointing at a missing file is fatal: a
+  // ahead of the duty body. A `staff` value pointing at a missing file is fatal: a
   // duty must never run without the executor identity it declared.
-  const workerSlug = (frontmatter.staff ?? "").trim()
+  const workerSlug = (config.staff ?? "").trim()
   let workerTitle = ""
   let workerPersona = ""
   if (workerSlug) {
@@ -124,22 +122,16 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
   ctx.data.staffSlug = workerSlug
   ctx.data.staffTitle = workerTitle
   ctx.data.executableSlug = profile.name
-  // markdown duties declare cadence in the body, not frontmatter, so a schedule
-  // is not available at this load site. Default to ""; composePrompt renders
-  // it as the empty string. The legacy `{{jobSchedule}}` token (seeded by
-  // mintScheduledJob for duty-tick-scripted runs) still works for prompts that
-  // need a non-empty cadence string.
-  ctx.data.dutySchedule = ""
+  ctx.data.dutySchedule = config.every ?? ""
 
-  // Locked-toolbox mode (`tools:` frontmatter). When declared, the duty body
+  // Locked-toolbox mode (`tools` in profile.json). When declared, the duty body
   // is pure intent — the LLM picks tools by name from the kody-duty palette
   // and never sees Bash/Read/gh. This closes the long-running bug class where
   // duty scripts post `@kody <verb>` comments the engine then silently drops.
   //
   // Mutate the profile in place so the executor's runAgent invocation picks up
   // the locked allowedTools + mcpServer flag without needing a side-channel.
-  // Backward-compat: duties without `tools:` keep their legacy Bash/gh palette.
-  const declaredTools = frontmatter.tools ?? []
+  const declaredTools = config.tools ?? []
   if (declaredTools.length > 0) {
     const unknown = declaredTools.filter((name) => !DUTY_TOOL_PALETTE.has(name))
     if (unknown.length > 0) {
@@ -169,8 +161,8 @@ interface ParsedJob {
 }
 
 function parseJobFile(raw: string, slug: string): ParsedJob {
-  // Strip optional YAML frontmatter (`---\n...\n---\n`) — reserved for future
-  // use (e.g. cadence overrides); ignored at load time.
+  // Staff personas may carry their own small metadata block. Duty metadata is
+  // not read here; folder duties use profile.json via readDutyFolder().
   let stripped = raw
   if (stripped.startsWith("---\n")) {
     const end = stripped.indexOf("\n---\n", 4)

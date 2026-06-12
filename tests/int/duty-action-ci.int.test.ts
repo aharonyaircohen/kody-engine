@@ -29,10 +29,12 @@ function makeRepo(): { root: string; eventPath: string } {
       2,
     ),
   )
+  fs.mkdirSync(path.join(root, ".kody", "duties", "noop-duty"), { recursive: true })
   fs.writeFileSync(
-    path.join(root, ".kody", "duties", "noop-duty.md"),
-    "---\naction: noop\nexecutable: noop-impl\nstaff: kody\n---\n# Noop\n",
+    path.join(root, ".kody", "duties", "noop-duty", "profile.json"),
+    JSON.stringify({ name: "noop-duty", action: "noop", executable: "noop-impl", staff: "kody" }),
   )
+  fs.writeFileSync(path.join(root, ".kody", "duties", "noop-duty", "duty.md"), "# Noop\n")
   fs.writeFileSync(
     path.join(root, ".kody", "executables", "noop-impl", "profile.json"),
     JSON.stringify(

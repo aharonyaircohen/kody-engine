@@ -1,7 +1,7 @@
 /**
  * Preflight: load a folder-duty's persistent memory store by slug
  * (= `profile.name`). This is the state-only half of `loadJobFromFile`: a
- * folder-duty's body lives in `prompt.md` (rendered by `composePrompt`) and its
+ * folder-duty's body lives in `duty.md` (rendered by `composePrompt`) and its
  * identity in `profile.staff` (injected by the executor), so the only thing a
  * stateful duty needs loaded here is its cross-run state. It makes "scheduled ⇒
  * stateful" real: a scheduled folder-duty that declares this preflight (plus
@@ -39,7 +39,7 @@ export const loadDutyState: PreflightScript = async (ctx, profile, args) => {
   ctx.data.jobState = loaded
   ctx.data.jobStateJson = JSON.stringify(loaded.state, null, 2)
 
-  // Duty-noun aliases. A folder-duty's body is the profile's own `prompt.md`
+  // Duty-noun aliases. A folder-duty's body is the profile's own `duty.md`
   // (rendered by composePrompt via the `{{jobIntent}}` / new `{{dutyIntent}}`
   // token path is not relevant here — the folder duty's body comes from the
   // resolved executable, not the duty). It still has a slug, a title (the

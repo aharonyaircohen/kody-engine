@@ -58,9 +58,8 @@ function parseSlugList(value: string): string[] {
 }
 
 /**
- * Read the owning `staff` list and the post-frontmatter body from a profile
- * file. Profile frontmatter is NOT job frontmatter (jobFrontmatter's parser
- * whitelists job keys and would silently drop `staff`), so we read it here.
+ * Read the owning `staff` list and the post-frontmatter body from a context
+ * file. Context frontmatter is its own tiny format, so we parse it here.
  * The canonical format is an inline list — `staff: [kody, qa-engineer]`. A
  * legacy `audience:` list is mapped onto staff slugs (`chat` → `kody`,
  * `qa` → `qa-engineer`). An explicit empty `staff: []` is honored (unassigned

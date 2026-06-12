@@ -1,7 +1,7 @@
 /**
  * Preflight: deterministic alternative to the LLM-driven duty-tick.
  *
- * Reads a job's frontmatter, executes the declared `tickScript:`,
+ * Reads a duty folder's `profile.json`, executes the declared `tickScript`,
  * captures its stdout, and parses the `kody-job-next-state` fenced
  * block directly into `ctx.data.nextJobState`. No agent runs.
  *
@@ -11,8 +11,8 @@
  * jobs spammed `@kody resolve` indefinitely.
  *
  * Contract:
- *   - Job markdown at `<jobsDir>/<slug>.md` MUST declare `tickScript:`
- *     in frontmatter (relative path under cwd).
+ *   - Duty folder at `<jobsDir>/<slug>/` MUST declare `tickScript` in
+ *     `profile.json` (relative path under cwd).
  *   - Script MUST emit a `kody-job-next-state` JSON fenced block on
  *     stdout. Anything else on stdout is preserved as run-log noise.
  *   - Non-zero script exit propagates to the executable's exitCode.
@@ -30,8 +30,8 @@
 import { spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { readDutyFolder } from "../dutyFolders.js"
 import type { PreflightScript } from "../executables/types.js"
-import { splitFrontmatter } from "./jobFrontmatter.js"
 import { resolveBackend } from "./jobState/index.js"
 import { extractNextStateFromText } from "./parseJobStateFromAgentResult.js"
 
@@ -48,19 +48,17 @@ export const runTickScript: PreflightScript = async (ctx, _profile, args) => {
     return
   }
 
-  const jobPath = path.join(ctx.cwd, jobsDir, `${slug}.md`)
-  if (!fs.existsSync(jobPath)) {
+  const duty = readDutyFolder(path.join(ctx.cwd, jobsDir), slug)
+  if (!duty) {
     ctx.output.exitCode = 99
-    ctx.output.reason = `runTickScript: job file not found: ${jobPath}`
+    ctx.output.reason = `runTickScript: duty folder not found or incomplete: ${path.join(ctx.cwd, jobsDir, slug)}`
     return
   }
 
-  const raw = fs.readFileSync(jobPath, "utf-8")
-  const { frontmatter } = splitFrontmatter(raw)
-  const tickScript = frontmatter.tickScript
+  const tickScript = duty.config.tickScript
   if (!tickScript) {
     ctx.output.exitCode = 99
-    ctx.output.reason = `runTickScript: duty ${slug} has no \`tickScript:\` frontmatter — route via duty-tick instead`
+    ctx.output.reason = `runTickScript: duty ${slug} has no \`tickScript\` in profile.json — route via duty-tick instead`
     return
   }
 

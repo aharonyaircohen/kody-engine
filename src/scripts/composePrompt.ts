@@ -1,6 +1,7 @@
 /**
  * Shared preflight: assemble the final prompt string from:
- *   - profile.dir/prompt.md (template with {{mustache}} tokens)
+ *   - profile.dir/prompt.md, or profile.dir/duty.md for folder duties
+ *     (template with {{mustache}} tokens)
  *   - context data populated by the flow script (issue, pr, feedback, diff, …)
  *   - conventions
  *   - coverage rules
@@ -64,13 +65,15 @@ export const composePrompt: PreflightScript = async (ctx, profile) => {
   // Resolution order:
   //   1. ctx.data.promptTemplate (flow script override)
   //   2. profile.dir/prompts/<mode>.md  (per-mode file)
-  //   3. profile.dir/prompt.md          (legacy single template)
+  //   3. profile.dir/prompt.md          (standard executable template)
+  //   4. profile.dir/duty.md            (folder-duty body/template)
   const explicit = ctx.data.promptTemplate as string | undefined
   const mode = ctx.args.mode as string | undefined
   const candidates = [
     explicit ? path.join(profile.dir, explicit) : null,
     mode ? path.join(profile.dir, "prompts", `${mode}.md`) : null,
     path.join(profile.dir, "prompt.md"),
+    path.join(profile.dir, "duty.md"),
   ].filter(Boolean) as string[]
 
   // Read-or-fail instead of existsSync-then-read: one syscall, no
@@ -249,6 +252,10 @@ function formatDutyReference(data: Record<string, unknown>, profileName: string)
   }
   if (dutySchedule) {
     lines.push(`- Cadence: \`${dutySchedule}\``)
+  }
+  const dutyBody = pickToken(data, "dutyIntent", "jobIntent")
+  if (dutyBody) {
+    lines.push("", "## Duty body", "", dutyBody)
   }
   if (lines.length === 2) {
     // No fields present (e.g. a non-duty-tick run that still references
