@@ -18,17 +18,17 @@ import { BUILTIN_ALIASES, type KodyConfig } from "./config.js"
 import { cronMatchesInWindow } from "./cron-match.js"
 import type { InputSpec } from "./executables/types.js"
 import {
+  type DiscoveredDutyAction,
   getProfileInputs,
   listDutyActions,
   listExecutables,
   resolveDutyAction,
-  type DiscoveredDutyAction,
 } from "./registry.js"
 
 /**
  * Lowercased natural-language lead-ins that should NOT be treated as a
  * subcommand attempt. With the firstToken set to one of these words,
- * dispatch falls through to the default executable instead of surfacing
+ * dispatch falls through to the default duty action instead of surfacing
  * the comment as an unrecognized-command error. Keep this small and
  * conservative — every entry weakens the "typo'd command" detection.
  */
@@ -77,32 +77,13 @@ function resolveOperatorAction(action: string): DiscoveredDutyAction | null {
 }
 
 function resolveConfiguredAction(action: string): DiscoveredDutyAction | null {
-  const resolved = resolveDutyAction(action)
-  if (resolved) return resolved
-  return compatibilityDutyAction(action)
+  return resolveDutyAction(action)
 }
 
 function requiredRoute(action: string): DiscoveredDutyAction {
-  return (
-    resolveConfiguredAction(action) ?? {
-      action,
-      duty: action,
-      executable: action,
-      cliArgs: {},
-      source: "builtin",
-    }
-  )
-}
-
-function compatibilityDutyAction(action: string): DiscoveredDutyAction | null {
-  if (!/^[a-z][a-z0-9-]*$/.test(action)) return null
-  return {
-    action,
-    duty: action,
-    executable: action,
-    cliArgs: {},
-    source: "builtin",
-  }
+  const route = resolveConfiguredAction(action)
+  if (!route) throw new Error(`required duty action not found: ${action}`)
+  return route
 }
 
 function routeResult(
@@ -131,7 +112,7 @@ function routeResult(
  *
  * Variants:
  *   - route: dispatch resolved an executable; run it.
- *   - unrecognized: comment had `@kody <token>` but no executable was
+ *   - unrecognized: comment had `@kody <token>` but no duty action was
  *     found. The user should be told. Carries the token + the available
  *     options so the comment can suggest alternatives.
  *   - silent: comment was not addressed to kody (no @kody, bot author,
@@ -171,12 +152,12 @@ export function autoDispatch(opts?: {
     const inputs = objectValue(event.inputs)
     const n = parseInt(String(inputs?.issue_number ?? ""), 10)
     if (!Number.isNaN(n) && n > 0) {
-      // `executable` + `base` inputs let a dispatched run pick its stage and
+      // `duty` + `base` inputs let a dispatched run pick its duty action and
       // stacked-PR base. goal-tick uses this to fire a fresh run per task
-      // (`executable=classify`, `base=<leaf>`) instead of posting an `@kody`
+      // (`duty=classify`, `base=<leaf>`) instead of posting an `@kody`
       // comment a bot can't self-trigger. Default stays `run` for a bare
       // manual dispatch with just an issue number.
-      const actionName = String(inputs?.executable ?? "").trim() || "run"
+      const actionName = String(inputs?.duty ?? inputs?.executable ?? "").trim() || "run"
       const route = resolveConfiguredAction(actionName)
       if (!route) return null
       const base = String(inputs?.base ?? "").trim()
@@ -265,13 +246,13 @@ export function autoDispatch(opts?: {
   const afterTag = extractAfterTag(body)
   const firstTokenRaw = extractSubcommand(afterTag)
   // Politeness/natural-language words: skip them so "@kody please fix X"
-  // routes to the default executable instead of surfacing as unrecognized.
+  // routes to the default duty action instead of surfacing as unrecognized.
   // Anything not in this small set is assumed to be a command attempt —
   // typo'd or otherwise — and will surface for user feedback.
   const firstToken = firstTokenRaw && POLITE_WORDS.has(firstTokenRaw) ? null : firstTokenRaw
 
   // Resolve first token via aliases → registry. No match → fall back to the
-  // default executable for this event shape (issue vs PR). Alias map comes
+  // default duty action for this event shape (issue vs PR). Alias map comes
   // from config; BUILTIN_ALIASES covers callers that don't pass a config.
   const aliases = opts?.config?.aliases ?? BUILTIN_ALIASES
   const aliased = firstToken ? (aliases[firstToken] ?? firstToken) : null
@@ -284,7 +265,7 @@ export function autoDispatch(opts?: {
       consumedFirstToken = true
     } else if (firstToken && aliases[firstToken] && aliases[firstToken] === aliased) {
       // The user (or BUILTIN_ALIASES) configured an alias whose target
-      // doesn't exist — likely a deleted/renamed executable. Surface this
+      // doesn't exist — likely a deleted/renamed duty action. Surface this
       // loudly so operators can spot the misconfig in GHA logs.
       // We deliberately only warn for *aliased* targets, not arbitrary
       // typed tokens, so natural language like "@kody please fix X" stays
@@ -296,7 +277,7 @@ export function autoDispatch(opts?: {
   }
   // Fall through to default ONLY when the user did not type a specific
   // subcommand token. If they typed something that didn't resolve (e.g.
-  // a typo, a renamed executable), bail with no executable so the typed
+  // a typo, a renamed duty action), bail with no route so the typed
   // wrapper can surface the unrecognized comment back to the user. The
   // POLITE_WORDS filter above lets natural-language phrasings through to
   // the default — the "no firstToken" condition here is what gates them.
@@ -306,13 +287,13 @@ export function autoDispatch(opts?: {
   }
   // Bot self-dispatch gate: a bot-authored comment may ONLY proceed when it
   // resolved to an explicit command (`consumedFirstToken`). It must never fall
-  // through to the default executable or run on chatter — that's the loop
+  // through to the default duty action or run on chatter — that's the loop
   // surface. Humans keep the default-fallback behavior.
   //
   // Scope of this gate: the @-mention comment path only. The duty MCP tool
   // `dispatch_workflow` bypasses this entirely (it uses workflow_dispatch,
   // not a bot-authored @kody comment), so a duty in ASK mode can still
-  // invoke qa-engineer / ui-review via that tool — see GATE_EXEMPT_EXECUTABLES
+  // invoke qa-engineer / ui-review via that tool — see GATE_EXEMPT_DUTIES
   // in dutyMcp.ts. A future maintainer reading this gate should not
   // "fix" it by also gating the tool path; the two surfaces are
   // independent and the tool path is the one the duty contract relies on.
@@ -327,7 +308,7 @@ export function autoDispatch(opts?: {
     if (!firstToken) return null
     // Surface why dispatch gave up — currently the consumer just sees
     // "no action for event issue_comment" and has no way to tell whether
-    // the executable wasn't found, the alias was missing, or there's no
+    // the duty action wasn't found, the alias was missing, or there's no
     // default. This breadcrumb makes the gate observable without changing
     // behavior.
     const profileMissing = aliased ? resolveOperatorAction(aliased) === null : true
@@ -377,7 +358,7 @@ export function autoDispatch(opts?: {
  * Typed-outcome variant of autoDispatch. Instead of "null = anything that
  * didn't route," returns a discriminated union the caller MUST handle
  * exhaustively. The `unrecognized` variant carries the token the user
- * typed and the list of available executables — kody-cli posts a feedback
+ * typed and the list of available duty actions — kody-cli posts a feedback
  * comment in that case so the user gets a clear "I don't know `<token>`"
  * message instead of silent no-op.
  */
@@ -392,7 +373,7 @@ export function autoDispatchTyped(opts?: {
   if (legacy) return { kind: "route", ...legacy }
 
   // Re-derive comment context to distinguish "no @kody mention" (silent)
-  // from "@kody <token> but no executable" (unrecognized → user feedback).
+  // from "@kody <token> but no duty action" (unrecognized → user feedback).
   const eventName = process.env.GITHUB_EVENT_NAME
   const eventPath = process.env.GITHUB_EVENT_PATH
   if (!eventName || !eventPath || !fs.existsSync(eventPath)) {
@@ -442,8 +423,8 @@ export function autoDispatchTyped(opts?: {
     return {
       kind: "silent",
       reason: tokenRaw
-        ? `polite-word lead-in '${tokenRaw}', no default executable configured`
-        : "no subcommand token, no default executable configured",
+        ? `polite-word lead-in '${tokenRaw}', no default duty action configured`
+        : "no subcommand token, no default duty action configured",
     }
   }
 
@@ -456,7 +437,7 @@ export function autoDispatchTyped(opts?: {
 }
 
 /**
- * Fan-out for scheduled wakes. Returns a DispatchResult per watch executable
+ * Fan-out for scheduled wakes. Returns a DispatchResult per watch duty action
  * (`role: "watch"`, `kind: "scheduled"`) whose `schedule` cron matched any
  * minute in the wake window `(now - windowSec, now]`. With `force: true`
  * the cron filter is skipped — used when a human runs workflow_dispatch
@@ -505,7 +486,14 @@ export function dispatchScheduledWatches(opts?: { now?: Date; windowSec?: number
         continue
       }
     }
-    out.push({ action: exe.name, duty: exe.name, executable: exe.name, cliArgs: {}, target: 0 })
+    const route = resolveConfiguredAction(exe.name)
+    if (!route) {
+      process.stderr.write(
+        `[kody] dispatchScheduledWatches: '${exe.name}' is scheduled but has no duty action; skipping\n`,
+      )
+      continue
+    }
+    out.push({ ...route, cliArgs: route.cliArgs, target: 0 })
   }
   return out
 }

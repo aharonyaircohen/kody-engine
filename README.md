@@ -74,17 +74,19 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 ┌─────────────────────────────────────────────┐
 │ kody CLI (@kody-ade/kody-engine)           │
 │   bin/kody.ts — entrypoint                  │
-│   src/dispatch.ts — profile-driven routing  │
-│   src/executor.ts — runs one profile        │
+│   src/dispatch.ts — duty-driven routing     │
+│   src/executor.ts — runs duty implementations│
+│   .kody/duties/<slug>/                      │
+│     profile.json · duty.md                  │
 │   src/executables/<name>/                   │
 │     profile.json · prompt.md · *.sh         │
 │   src/scripts/*.ts — cross-cutting catalog  │
 └─────────────────────────────────────────────┘
 ```
 
-Every top-level command is its own auto-discovered executable. The router has **zero executable names hardcoded** — comment dispatch resolves the first token after `@kody` through `config.aliases`, then falls back to `config.defaultExecutable` / `config.defaultPrExecutable`. Drop a new `src/executables/<name>/` directory with a `profile.json` + `prompt.md` (+ any colocated `.sh`) and `kody <name>` starts working.
+Every top-level command is an auto-discovered duty action. The router has **zero executable names hardcoded** — comment dispatch resolves the first token after `@kody` through `config.aliases`, then falls back to the legacy-named `config.defaultExecutable` / `config.defaultPrExecutable` fields as default duty actions. Drop a new `.kody/duties/<slug>/` directory with `profile.json` + `duty.md`; that duty chooses its implementation executable.
 
-Executable directories contain **only** three kinds of files: `profile.json` (declaration), `prompt.md` (agent instructions), and `.sh` scripts (mechanical side-effect work). Cross-cutting TypeScript lives in [src/scripts/](src/scripts/); it can't import from `src/executables/` and can't branch on `profile.name`.
+Executable directories are private implementation units and contain **only** three kinds of files: `profile.json` (declaration), `prompt.md` (agent instructions), and `.sh` scripts (mechanical side-effect work). Cross-cutting TypeScript lives in [src/scripts/](src/scripts/); it can't import from `src/executables/` and can't branch on `profile.name`.
 
 ## Install in a consumer repo
 
@@ -92,7 +94,7 @@ Executable directories contain **only** three kinds of files: `profile.json` (de
 npx -y -p @kody-ade/kody-engine@latest kody init
 ```
 
-`kody init` scaffolds [kody.config.json](kody.config.schema.json), `.github/workflows/kody.yml` (generated from `WORKFLOW_TEMPLATE` in [src/scripts/initFlow.ts](src/scripts/initFlow.ts)), and per-scheduled-executable workflow files. Idempotent — pass `--force` to overwrite.
+`kody init` scaffolds [kody.config.json](kody.config.schema.json), `.github/workflows/kody.yml` (generated from `WORKFLOW_TEMPLATE` in [src/scripts/initFlow.ts](src/scripts/initFlow.ts)), and per-scheduled-duty workflow files. Idempotent — pass `--force` to overwrite.
 
 Required repo secrets: at least one model provider key (e.g. `MINIMAX_API_KEY`, `ANTHROPIC_API_KEY`). Recommended: `KODY_TOKEN` PAT so kody's commits trigger downstream CI and can modify `.github/workflows/*`.
 

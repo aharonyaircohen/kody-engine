@@ -3,17 +3,9 @@ import { brainProxy } from "./bin/brain-proxy.js"
 import { mcpHttpServer } from "./bin/mcp-http-server.js"
 import { runChat } from "./chat-cli.js"
 import { loadConfig } from "./config.js"
-import { runExecutableChain } from "./executor.js"
-import { runCi } from "./kody-cli.js"
 import { runJob } from "./job.js"
-import {
-  hasDutyAction,
-  hasExecutable,
-  listDutyActions,
-  listExecutables,
-  parseGenericFlags,
-  resolveDutyAction,
-} from "./registry.js"
+import { runCi } from "./kody-cli.js"
+import { hasDutyAction, listDutyActions, parseGenericFlags, resolveDutyAction } from "./registry.js"
 import { brainServe } from "./servers/brain-serve.js"
 import { poolServe } from "./servers/pool-serve.js"
 import { runnerServe } from "./servers/runner-serve.js"
@@ -21,9 +13,8 @@ import { serve } from "./servers/serve.js"
 import { runStats } from "./stats.js"
 
 interface ParsedArgs {
-  command: "ci" | "chat" | "help" | "version" | "stats" | "server" | "__duty__" | "__executable__"
+  command: "ci" | "chat" | "help" | "version" | "stats" | "server" | "__duty__"
   actionName?: string
-  executableName?: string
   serverName?: "serve" | "pool-serve" | "runner-serve" | "brain-serve" | "brain-proxy" | "mcp-http-server"
   serverArgs?: string[]
   cliArgs?: Record<string, unknown>
@@ -48,7 +39,6 @@ Usage:
   kody-engine release --issue <N>                    [--cwd <path>] [--verbose|--quiet]
   kody-engine init                                   [--cwd <path>] [--verbose|--quiet]
   kody-engine <action>                               [--cwd <path>] [--verbose|--quiet]
-  kody-engine exec <executable>                      [--cwd <path>] [--verbose|--quiet]
   kody-engine ci      [preflight flags — see: kody-engine ci --help]
   kody-engine chat    [chat flags — see: kody-engine chat --help]
   kody-engine stats   [--since 7d|--run <id>|--json|--cwd <path>]
@@ -56,8 +46,7 @@ Usage:
   kody-engine version
 
 Top-level work commands are duty actions. A duty owns the public action name
-and selects an implementation executable. \`exec <executable>\` is the low-level
-debug path for engine internals and migration compatibility.
+and selects an implementation executable.
 
 Exit codes:
   0   success (PR opened, verify passed — or resolve produced a merge commit)
@@ -111,27 +100,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return result
   }
 
-  if (cmd === "exec") {
-    const executableName = argv[1]
-    if (!executableName) {
-      result.errors.push("exec requires an executable name")
-      return result
-    }
-    if (!hasExecutable(executableName)) {
-      result.errors.push(`unknown executable: ${executableName}`)
-      return result
-    }
-    result.command = "__executable__"
-    result.executableName = executableName
-    result.cliArgs = parseGenericFlags(argv.slice(2))
-    if (typeof result.cliArgs.cwd === "string") result.cwd = result.cliArgs.cwd
-    if (result.cliArgs.verbose === true) result.verbose = true
-    if (result.cliArgs.quiet === true) result.quiet = true
-    return result
-  }
-
-  // Public top-level work commands are duty actions. Keep the older direct
-  // executable path after this for internal tools such as goal-tick.
+  // Public top-level work commands are duty actions.
   if (hasDutyAction(cmd)) {
     result.command = "__duty__"
     result.actionName = cmd
@@ -142,20 +111,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return result
   }
 
-  // Internal/back-compat direct executable path (goal-tick, schedulers, tests).
-  if (hasExecutable(cmd)) {
-    result.command = "__executable__"
-    result.executableName = cmd
-    result.cliArgs = parseGenericFlags(argv.slice(1))
-    if (typeof result.cliArgs.cwd === "string") result.cwd = result.cliArgs.cwd
-    if (result.cliArgs.verbose === true) result.verbose = true
-    if (result.cliArgs.quiet === true) result.quiet = true
-    return result
-  }
-
   const discoveredActions = listDutyActions().map((e) => e.action)
-  const discoveredExecutables = listExecutables().map((e) => `exec ${e.name}`)
-  const available = ["ci", "chat", "stats", "help", "version", ...discoveredActions, ...discoveredExecutables]
+  const available = ["ci", "chat", "stats", "help", "version", ...discoveredActions]
   result.errors.push(`unknown command: ${cmd} (available: ${available.join(", ")})`)
   return result
 }
@@ -288,31 +245,8 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     }
   }
 
-  const skipConfig = configlessCommands.has(args.executableName ?? "")
-
-  try {
-    // runExecutableChain so an explicitly-invoked stage follows its in-process
-    // hand-offs too — notably `goal-scheduler` shells out to
-    // `kody-engine goal-tick`, whose dispatchNextTask hands the task pipeline
-    // off via nextDispatch; without chaining here the goal would never build.
-    const result = await runExecutableChain(args.executableName!, {
-      cliArgs: args.cliArgs ?? {},
-      cwd,
-      skipConfig,
-      verbose: args.verbose,
-      quiet: args.quiet,
-    })
-    if (result.exitCode !== 0 && result.reason) {
-      process.stderr.write(`error: ${result.reason}\n`)
-    }
-    return result.exitCode
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[kody] ${args.executableName} crashed: ${msg}\n`)
-    if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`)
-    process.stdout.write(`PR_URL=FAILED: ${args.executableName} crashed: ${msg}\n`)
-    return 99
-  }
+  process.stderr.write("error: command did not resolve to a duty\n")
+  return 64
 }
 
 function numericTarget(cliArgs: Record<string, unknown>): number | undefined {

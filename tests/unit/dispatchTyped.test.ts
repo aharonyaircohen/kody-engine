@@ -225,7 +225,7 @@ describe("autoDispatchTyped: unrecognized variant (user-facing feedback needed)"
   })
 })
 
-describe("autoDispatchTyped: typo'd command does NOT fall through to default executable", () => {
+describe("autoDispatchTyped: typo'd command does NOT fall through to default duty action", () => {
   it("returns unrecognized even when a default is configured (typo guard)", () => {
     process.env.GITHUB_EVENT_NAME = "issue_comment"
     process.env.GITHUB_EVENT_PATH = writeEvent({
@@ -248,9 +248,9 @@ describe("autoDispatchTyped: typo'd command does NOT fall through to default exe
       comment: { body: "@kody", user: { login: "alice", type: "User" } },
       issue: { number: 12 },
     })
-    const out = autoDispatchTyped({ config: { defaultExecutable: "classify" } as never })
+    const out = autoDispatchTyped({ config: { defaultExecutable: "run" } as never })
     expect(out.kind).toBe("route")
-    if (out.kind === "route") expect(out.executable).toBe("classify")
+    if (out.kind === "route") expect(out.executable).toBe("run")
   })
 
   it("falls through to the default for natural-language lead-ins (please/kindly/etc)", () => {
@@ -260,9 +260,9 @@ describe("autoDispatchTyped: typo'd command does NOT fall through to default exe
         comment: { body: `@kody ${polite} fix the test failure`, user: { login: "alice", type: "User" } },
         issue: { number: 13 },
       })
-      const out = autoDispatchTyped({ config: { defaultExecutable: "classify" } as never })
+      const out = autoDispatchTyped({ config: { defaultExecutable: "run" } as never })
       expect(out.kind, `polite word "${polite}"`).toBe("route")
-      if (out.kind === "route") expect(out.executable).toBe("classify")
+      if (out.kind === "route") expect(out.executable).toBe("run")
     }
   })
 

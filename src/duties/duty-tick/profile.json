@@ -1,0 +1,6 @@
+{
+  "name": "duty-tick",
+  "action": "duty-tick",
+  "executable": "duty-tick",
+  "describe": "Run one folder duty tick."
+}

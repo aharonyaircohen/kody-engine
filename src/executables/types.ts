@@ -416,11 +416,11 @@ export interface Context {
      * `@kody <next>` comment, which is silently ignored when Kody comments as
      * a GitHub App (bot author), stalling the pipeline at classify.
      */
-    nextDispatch?: { executable: string; cliArgs: Record<string, unknown> }
+    nextDispatch?: { action?: string; duty?: string; executable?: string; cliArgs: Record<string, unknown> }
     /** In-process hand-off to a full Job, preserving job identity in task state. */
     nextJob?: Job
     /** Where to return after nextJob succeeds. Used by task-jobs to keep draining pending work. */
-    afterNextJob?: { executable: string; cliArgs: Record<string, unknown> }
+    afterNextJob?: { action?: string; duty?: string; executable?: string; cliArgs: Record<string, unknown> }
   }
   /**
    * If a preflight script sets this to true, the executor skips the agent
@@ -452,17 +452,15 @@ export type AnyScript = PreflightScript | PostflightScript
 // Job — the unified work request (task-state jobs collect run attempts).
 //
 // A Job is the required work the engine tries to execute, regardless of how it
-// was triggered. It REFERENCES the reusable nouns — `executable` (how),
-// `persona` (who), `duty` (why, by slug) — and OWNS its `schedule` (when).
+// was triggered. It must reference a duty/action (why). The executable is only
+// the duty-selected implementation detail (how), never a standalone request.
 // Task state stores this durable job separately from individual run attempts.
 // Two flavors:
 //   - "instant"   — run once now (an `@kody <verb>` comment or a manual dispatch)
 //   - "scheduled" — fired on `schedule` (cron) by the tick path
 //
-// Fields are optional-heavy on purpose: a comment-minted instant job carries
-// `executable` + inline `why`; a cron-minted scheduled job carries `duty` +
-// `schedule` + `persona`. `runJob` (src/job.ts) lowers a Job onto the existing
-// executor and seeds both stable job metadata and per-run metadata.
+// `runJob` (src/job.ts) lowers a Job onto the private executor after resolving
+// the duty, and seeds both stable job metadata and per-run metadata.
 // ────────────────────────────────────────────────────────────────────────────
 
 export type JobFlavor = "instant" | "scheduled"
@@ -470,8 +468,7 @@ export type JobFlavor = "instant" | "scheduled"
 export interface Job {
   /** Public action the user/operator invoked. Mirrors the duty action. */
   action?: string
-  /** How: executable (profile) name to run. 0–1; omitted when intent is
-   *  agent-only with no specific verb. */
+  /** How: implementation profile selected by the duty. Not valid by itself. */
   executable?: string
   /** Why (referenced): a duty slug whose intent drives the run. */
   duty?: string

@@ -1,0 +1,6 @@
+{
+  "name": "qa-goal",
+  "action": "qa-goal",
+  "executable": "qa-goal",
+  "describe": "Run a QA goal."
+}

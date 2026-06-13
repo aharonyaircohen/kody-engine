@@ -179,11 +179,11 @@ export interface ExecutorOutput {
    * when Kody ran as a GitHub App: the hand-off comment was bot-authored and
    * the follow-up run silently ignored it, stalling the pipeline at classify.
    */
-  nextDispatch?: { executable: string; cliArgs: Record<string, unknown> }
+  nextDispatch?: { action?: string; duty?: string; executable?: string; cliArgs: Record<string, unknown> }
   /** In-process hand-off to a full Job, preserving job identity in task state. */
   nextJob?: Job
   /** Where to return after nextJob succeeds. */
-  afterNextJob?: { executable: string; cliArgs: Record<string, unknown> }
+  afterNextJob?: { action?: string; duty?: string; executable?: string; cliArgs: Record<string, unknown> }
   /** Internal state snapshot for in-process continuations. */
   taskState?: TaskState
 }
@@ -714,10 +714,22 @@ export async function runExecutableChain(profileName: string, input: ExecutorInp
           ...chainData,
           ...(childResult.taskState ? { taskState: childResult.taskState } : {}),
         }
-        process.stdout.write(`→ kody: in-process return → ${after.executable} (hop ${hops}/${MAX_CHAIN_HOPS})\n\n`)
-        result = await runExecutable(after.executable, {
-          ...input,
-          cliArgs: after.cliArgs,
+        const afterJob = handoffToJob(after)
+        if (!afterJob) {
+          return {
+            exitCode: 99,
+            reason: `in-process return missing duty/action for ${after.executable ?? "unknown"}`,
+          }
+        }
+        process.stdout.write(
+          `→ kody: in-process return → ${afterJob.action ?? afterJob.duty} (hop ${hops}/${MAX_CHAIN_HOPS})\n\n`,
+        )
+        const { runJob } = await import("./job.js")
+        result = await runJob(afterJob, {
+          cwd: input.cwd,
+          config: input.config,
+          verbose: input.verbose,
+          quiet: input.quiet,
           preloadedData: chainData,
         })
         chainData = {
@@ -734,8 +746,24 @@ export async function runExecutableChain(profileName: string, input: ExecutorInp
       continue
     }
     const next = result.nextDispatch!
-    process.stdout.write(`→ kody: in-process hand-off → ${next.executable} (hop ${hops}/${MAX_CHAIN_HOPS})\n\n`)
-    result = await runExecutable(next.executable, { ...input, cliArgs: next.cliArgs, preloadedData: chainData })
+    const nextJob = handoffToJob(next)
+    if (!nextJob) {
+      return {
+        exitCode: 99,
+        reason: `in-process hand-off missing duty/action for ${next.executable ?? "unknown"}`,
+      }
+    }
+    process.stdout.write(
+      `→ kody: in-process hand-off → ${nextJob.action ?? nextJob.duty} (hop ${hops}/${MAX_CHAIN_HOPS})\n\n`,
+    )
+    const { runJob } = await import("./job.js")
+    result = await runJob(nextJob, {
+      cwd: input.cwd,
+      config: input.config,
+      verbose: input.verbose,
+      quiet: input.quiet,
+      preloadedData: chainData,
+    })
     chainData = {
       ...chainData,
       ...(result.taskState ? { taskState: result.taskState } : {}),
@@ -746,6 +774,23 @@ export async function runExecutableChain(profileName: string, input: ExecutorInp
     process.stderr.write(`[kody] in-process hand-off cap (${MAX_CHAIN_HOPS}) reached; not running ${pending}\n`)
   }
   return result
+}
+
+function handoffToJob(handoff: {
+  action?: string
+  duty?: string
+  executable?: string
+  cliArgs: Record<string, unknown>
+}): Job | null {
+  const dutyOrAction = handoff.action ?? handoff.duty
+  if (!dutyOrAction) return null
+  return {
+    action: handoff.action ?? handoff.duty,
+    duty: handoff.duty,
+    executable: handoff.executable,
+    cliArgs: handoff.cliArgs,
+    flavor: "instant",
+  }
 }
 
 function clearStampedLifecycleLabels(profile: Profile, ctx: Context): void {

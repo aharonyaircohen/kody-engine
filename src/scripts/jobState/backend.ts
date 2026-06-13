@@ -79,17 +79,22 @@ export function isStateUnchanged(prev: StateEnvelope, next: StateEnvelope): bool
 }
 
 /**
- * Compute the canonical state-file path for a given job slug. Backends
- * that map slugs to files use this so all backends agree on layout.
+ * Compute the canonical state-file path for a given duty slug. Backends
+ * that map slugs to files use this so all backends agree on the folder
+ * layout: `.kody/duties/<slug>/state.json`.
  */
 export function stateFilePath(jobsDir: string, slug: string): string {
-  return `${jobsDir.replace(/\/+$/, "")}/${slug}.state.json`
+  return `${jobsDir.replace(/\/+$/, "")}/${slug}/state.json`
 }
 
 /**
  * Extract the slug from a state-file path. Inverse of `stateFilePath`.
  */
 export function slugFromStateFilePath(filePath: string): string {
+  if (/\/state\.json$/i.test(filePath)) {
+    const parts = filePath.split("/")
+    return parts.at(-2) ?? filePath
+  }
   const last = filePath.split("/").pop() ?? filePath
   return last.replace(/\.state\.json$/i, "")
 }

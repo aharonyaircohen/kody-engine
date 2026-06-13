@@ -48,19 +48,19 @@ export interface KodyConfig {
   }
   testRequirements?: TestRequirement[]
   /**
-   * Executable name to invoke when a user triggers bare `@kody` on an issue
-   * with no subcommand. Defaults to "run" so a plain issue comment implements
-   * the issue directly.
+   * Legacy key name: duty action to invoke when a user triggers bare `@kody`
+   * on an issue with no subcommand. Defaults to "run" so a plain issue
+   * comment implements the issue directly.
    */
   defaultExecutable?: string
   /**
-   * Executable to run when a bare `@kody` lands on a PR. Opt-in: absent means
-   * PR comments must name an explicit command such as `resolve`, `sync`, or a
-   * repo-provided profile.
+   * Legacy key name: duty action to invoke when a bare `@kody` lands on a PR.
+   * Opt-in: absent means PR comments must name an explicit duty action such as
+   * `resolve`, `sync`, or a repo-provided action.
    */
   defaultPrExecutable?: string
   /**
-   * Executable to run on a `pull_request` event whose action is `opened`,
+   * Duty action to run on a `pull_request` event whose action is `opened`,
    * `synchronize`, or `reopened` — e.g. "preview-build" to rebuild a per-PR
    * preview on every push to the PR branch.
    *
@@ -68,7 +68,7 @@ export interface KodyConfig {
    * `closed`/`merged` actions are ALWAYS ignored here regardless of this
    * setting — the release orchestrator self-manages its own merge.
    *
-   * The dispatched PR number is bound under the target executable's first
+   * The dispatched PR number is bound under the target duty executable's first
    * required int input (e.g. preview-build's `pr`). This only takes effect
    * when the consumer's kody.yml actually subscribes to `pull_request`
    * (opened/synchronize) — the trigger can only live in YAML, not here.

@@ -1,0 +1,6 @@
+{
+  "name": "goal-tick",
+  "action": "goal-tick",
+  "executable": "goal-tick",
+  "describe": "Advance one goal."
+}

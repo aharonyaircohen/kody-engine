@@ -1,0 +1,6 @@
+{
+  "name": "task-job-fail-once",
+  "action": "task-job-fail-once",
+  "executable": "task-job-fail-once",
+  "describe": "Fail once for task job retry verification."
+}

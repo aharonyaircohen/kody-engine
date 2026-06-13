@@ -4,7 +4,6 @@ import * as path from "node:path"
 import { mintAppInstallationToken, readAppCreds } from "./app-auth.js"
 import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
 import { autoDispatch, autoDispatchTyped, type DispatchResult, dispatchScheduledWatches } from "./dispatch.js"
-import { runExecutable } from "./executor.js"
 import { reactToTriggerComment } from "./gha.js"
 import {
   postIssueComment as ghPostIssueComment,
@@ -12,7 +11,7 @@ import {
   postIssueComment,
   truncate,
 } from "./issue.js"
-import { mintInstantJob, runJob } from "./job.js"
+import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
 import { resolveDutyAction } from "./registry.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
@@ -284,7 +283,7 @@ export async function runCi(argv: string[]): Promise<number> {
 
   const args = parseCiArgs(argv)
   const cwd = args.cwd ? path.resolve(args.cwd) : process.cwd()
-  // Load config early so autoDispatch can consult defaultExecutable.
+  // Load config early so autoDispatch can consult legacy default duty action keys.
   let earlyConfig: ReturnType<typeof loadConfig> | undefined
   let earlyConfigError: Error | undefined
   try {
@@ -317,13 +316,13 @@ export async function runCi(argv: string[]): Promise<number> {
       const evt = JSON.parse(fs.readFileSync(dispatchEventPath, "utf-8"))
       const issueInput = parseInt(String(evt?.inputs?.issue_number ?? ""), 10)
       const sessionInput = String(evt?.inputs?.sessionId ?? "")
-      const exeInput = String(evt?.inputs?.executable ?? "").trim()
+      const dutyInput = String(evt?.inputs?.duty ?? evt?.inputs?.executable ?? "").trim()
       const noTarget = !sessionInput && !(Number.isFinite(issueInput) && issueInput > 0)
-      // Explicit `executable` + no target → manual one-shot "Run now" of that
+      // Explicit `duty` + no target → manual one-shot "Run now" of that
       // single duty (a scheduled / no-target folder-duty), bypassing the
-      // cadence guard. A bare dispatch (no executable) still fans out to every
-      // watch executable (duty-scheduler et al.).
-      if (noTarget && exeInput) forceRunAction = exeInput
+      // cadence guard. A bare dispatch (no duty) still fans out to every
+      // watch duty (duty-scheduler et al.).
+      if (noTarget && dutyInput) forceRunAction = dutyInput
       else manualWorkflowDispatch = noTarget
     } catch {
       manualWorkflowDispatch = false
@@ -429,7 +428,7 @@ export async function runCi(argv: string[]): Promise<number> {
       )
       return 0
     }
-    if (outcome.kind === "silent" && earlyConfigError && outcome.reason.includes("no default executable configured")) {
+    if (outcome.kind === "silent" && earlyConfigError && outcome.reason.includes("no default duty action configured")) {
       process.stderr.write(`[kody] config error: ${earlyConfigError.message}\n`)
       return 64
     }
@@ -449,11 +448,14 @@ export async function runCi(argv: string[]): Promise<number> {
     return 64
   }
 
+  const runRoute = args.issueNumber ? resolveDutyAction("run") : null
+  if (!autoFallback && args.issueNumber && !runRoute) {
+    process.stderr.write("[kody] required duty action 'run' not found\n")
+    return 64
+  }
   const dispatch = autoFallback ?? {
-    action: "run" as const,
-    duty: "run" as const,
-    executable: "run" as const,
-    cliArgs: { issue: args.issueNumber! } as Record<string, unknown>,
+    ...runRoute!,
+    cliArgs: { ...runRoute!.cliArgs, issue: args.issueNumber! } as Record<string, unknown>,
     target: args.issueNumber!,
   }
   const issueNumber = dispatch.target
@@ -543,7 +545,7 @@ export async function runCi(argv: string[]): Promise<number> {
 }
 
 /**
- * Run every watch executable whose `schedule` matches the wake window.
+ * Run every watch duty whose executable's `schedule` matches the wake window.
  * Shares the same preflight (secret unpack, dep install, litellm, git
  * identity) as the single-target path; runs each match sequentially.
  * Aggregate exit code: 0 iff every watch returned 0.
@@ -557,8 +559,8 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
     return 0
   }
 
-  const names = matches.map((m) => m.executable).join(", ")
-  process.stdout.write(`→ kody: scheduled wake — firing ${matches.length} watch(es): ${names}\n`)
+  const names = matches.map((m) => `${m.duty}→${m.executable}`).join(", ")
+  process.stdout.write(`→ kody: scheduled wake — firing ${matches.length} watch dut(y/ies): ${names}\n`)
 
   try {
     const n = unpackAllSecrets()
@@ -599,25 +601,27 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
   // restore the legacy behaviour while the new mode bakes in.
   const serial = process.env.KODY_SERIAL_WATCHES === "1"
   const runWatch = async (match: DispatchResult): Promise<number> => {
-    process.stdout.write(`\n→ kody: running watch \`${match.executable}\`\n`)
+    process.stdout.write(`\n→ kody: running watch duty \`${match.duty}\` (${match.executable})\n`)
     try {
-      const result = await runExecutable(match.executable, {
-        cliArgs: match.cliArgs,
-        cwd,
-        config,
-        verbose: args.verbose,
-        quiet: args.quiet,
-      })
+      const result = await runJob(
+        mintScheduledJob({
+          action: match.action,
+          duty: match.duty,
+          executable: match.executable,
+          cliArgs: match.cliArgs,
+        }),
+        { cwd, config, verbose: args.verbose, quiet: args.quiet, chain: false },
+      )
       if (result.exitCode !== 0) {
         process.stderr.write(
-          `[kody] watch \`${match.executable}\` exited ${result.exitCode}: ${result.reason ?? "(no reason)"}\n`,
+          `[kody] watch duty \`${match.duty}\` exited ${result.exitCode}: ${result.reason ?? "(no reason)"}\n`,
         )
         return result.exitCode
       }
       return 0
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`[kody] watch \`${match.executable}\` crashed: ${msg}\n`)
+      process.stderr.write(`[kody] watch duty \`${match.duty}\` crashed: ${msg}\n`)
       return 99
     }
   }

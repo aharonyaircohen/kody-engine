@@ -116,5 +116,5 @@ export const advanceFlow: PostflightScript = async (ctx, profile) => {
 
   // Re-run the same sub-orchestrator that started this flow (e.g. "bug",
   // "feature") in-process, so it advances to the next stage.
-  ctx.output.nextDispatch = { executable: flow.name, cliArgs: { issue: flow.issueNumber } }
+  ctx.output.nextDispatch = { action: flow.name, cliArgs: { issue: flow.issueNumber } }
 }

@@ -93,5 +93,5 @@ export const dispatchClassified: PostflightScript = async (ctx, profile) => {
   if (base && getProfileInputs(classification)?.some((i) => i.name === "base")) {
     cliArgs.base = base
   }
-  ctx.output.nextDispatch = { executable: classification, cliArgs }
+  ctx.output.nextDispatch = { action: classification, cliArgs }
 }

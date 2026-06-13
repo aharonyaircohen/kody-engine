@@ -7,6 +7,7 @@ export const failOnceTaskJob: PostflightScript = async (ctx, profile) => {
 
   const issue = typeof ctx.args.issue === "number" ? ctx.args.issue : undefined
   const fallbackJob: Job = {
+    duty: profile.action ?? profile.name,
     executable: profile.name,
     flavor: "instant",
     ...(typeof issue === "number" ? { target: issue, cliArgs: { issue } } : { cliArgs: {} }),

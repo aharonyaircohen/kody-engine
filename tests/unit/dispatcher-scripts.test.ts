@@ -83,7 +83,7 @@ describe("startFlow", () => {
     // not from a removed --flow CLI arg.
     expect(state.flow).toMatchObject({ name: "bug", step: "plan", issueNumber: 42 })
     // In-process hand-off, NOT an @kody comment (which a bot can't self-trigger).
-    expect(c.output.nextDispatch).toEqual({ executable: "plan", cliArgs: { issue: 42 } })
+    expect(c.output.nextDispatch).toEqual({ action: "plan", cliArgs: { issue: 42 } })
     expect(execFileSync).not.toHaveBeenCalled()
   })
 
@@ -110,14 +110,14 @@ describe("startFlow", () => {
     }
     const c = ctx({ data: { taskState: state }, args: { issue: 42 } })
     await startFlow(c, profile("bug"), null, { entry: "review", target: "pr" })
-    expect(c.output.nextDispatch).toEqual({ executable: "review", cliArgs: { pr: 77 } })
+    expect(c.output.nextDispatch).toEqual({ action: "review", cliArgs: { pr: 77 } })
   })
 
   it("falls back to issue when target=pr but no prUrl exists", async () => {
     const state: TaskState = { ...emptyState() }
     const c = ctx({ data: { taskState: state }, args: { issue: 42 } })
     await startFlow(c, profile("bug"), null, { entry: "review", target: "pr" })
-    expect(c.output.nextDispatch).toEqual({ executable: "review", cliArgs: { issue: 42 } })
+    expect(c.output.nextDispatch).toEqual({ action: "review", cliArgs: { issue: 42 } })
   })
 
   it("no-ops without crashing when `with.entry` is missing", async () => {
@@ -134,7 +134,7 @@ describe("dispatch", () => {
     const c = ctx({ data: { taskState: state } })
     await dispatch(c, profile(), null, { next: "run", target: "issue" })
     expect(state.flow?.step).toBe("run")
-    expect(c.output.nextDispatch).toEqual({ executable: "run", cliArgs: { issue: 42 } })
+    expect(c.output.nextDispatch).toEqual({ action: "run", cliArgs: { issue: 42 } })
     expect(execFileSync).not.toHaveBeenCalled()
   })
 
@@ -146,7 +146,7 @@ describe("dispatch", () => {
     }
     const c = ctx({ data: { taskState: state } })
     await dispatch(c, profile(), null, { next: "review", target: "pr" })
-    expect(c.output.nextDispatch).toEqual({ executable: "review", cliArgs: { pr: 9 } })
+    expect(c.output.nextDispatch).toEqual({ action: "review", cliArgs: { pr: 9 } })
   })
 
   it("no-ops without crashing when `with.next` is missing", async () => {
@@ -258,7 +258,7 @@ describe("advanceFlow", () => {
     }
     const c = ctx({ data: { taskState: state, commentTargetType: "issue" } })
     await advanceFlow(c, profile("plan"), null)
-    expect(c.output.nextDispatch).toEqual({ executable: "bug", cliArgs: { issue: 42 } })
+    expect(c.output.nextDispatch).toEqual({ action: "bug", cliArgs: { issue: 42 } })
   })
 
   it("re-runs <flow.name> in-process regardless of which child just finished", async () => {
@@ -268,7 +268,7 @@ describe("advanceFlow", () => {
     }
     const c = ctx({ args: { issue: 7 }, data: { taskState: state, commentTargetType: "issue" } })
     await advanceFlow(c, profile("run"), null)
-    expect(c.output.nextDispatch).toEqual({ executable: "feature", cliArgs: { issue: 7 } })
+    expect(c.output.nextDispatch).toEqual({ action: "feature", cliArgs: { issue: 7 } })
   })
 
   it("for PR-targeted children also mirrors action to the issue state and re-triggers by flow name", async () => {
@@ -294,7 +294,7 @@ describe("advanceFlow", () => {
     const patchCall = calls.find((a) => a.includes("PATCH"))
     // State mirror still happens via gh api PATCH; the re-trigger is now in-process.
     expect(patchCall).toBeDefined()
-    expect(c.output.nextDispatch).toEqual({ executable: "bug", cliArgs: { issue: 42 } })
+    expect(c.output.nextDispatch).toEqual({ action: "bug", cliArgs: { issue: 42 } })
   })
 })
 

@@ -121,7 +121,7 @@ describe("dispatchDutyFileTicks multi-executable duties", () => {
       slugArg: "duty",
     })
 
-    const state = JSON.parse(fs.readFileSync(path.join(tmp, ".kody", "duties", "daily-check.state.json"), "utf-8"))
+    const state = JSON.parse(fs.readFileSync(path.join(tmp, ".kody", "duties", "daily-check/state.json"), "utf-8"))
     expect(state.data.lastTaskIssue).toBe(777)
     expect(state.data.lastTaskUrl).toBe("https://github.com/o/r/issues/777")
     expect(typeof state.data.lastFiredAt).toBe("string")

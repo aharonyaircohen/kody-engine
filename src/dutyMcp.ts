@@ -167,10 +167,10 @@ function listRepairCandidates(repoSlug: string): RepairCandidate[] {
 
 function dispatchVerb(
   workflowFile: string,
-  executable: string,
+  duty: string,
   prNumber: number,
 ): { ok: true } | { ok: false; error: string } {
-  return dispatchWorkflow(workflowFile, executable, prNumber)
+  return dispatchWorkflow(workflowFile, duty, prNumber)
 }
 
 function postRecommendation(
@@ -376,11 +376,11 @@ export function ensureComment(repoSlug: string, issue: number, key: string, body
 
 export function dispatchWorkflow(
   workflowFile: string,
-  executable: string,
+  duty: string,
   issueNumber: number,
 ): { ok: true } | { ok: false; error: string } {
   try {
-    gh(["workflow", "run", workflowFile, "-f", `executable=${executable}`, "-f", `issue_number=${issueNumber}`])
+    gh(["workflow", "run", workflowFile, "-f", `duty=${duty}`, "-f", `issue_number=${issueNumber}`])
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -391,11 +391,11 @@ export function dispatchWorkflow(
 // Trust gate for dispatch tools.
 // ---------------------------------------------------------------------------
 
-const GATE_EXEMPT_EXECUTABLES: ReadonlySet<string> = new Set(["qa-engineer", "ui-review"])
+const GATE_EXEMPT_DUTIES: ReadonlySet<string> = new Set(["qa-engineer", "ui-review"])
 
-export function isDispatchGated(executable: string | null | undefined, mode: DutyTrustMode): boolean {
+export function isDispatchGated(duty: string | null | undefined, mode: DutyTrustMode): boolean {
   if (mode === "auto") return false
-  if (executable && GATE_EXEMPT_EXECUTABLES.has(executable)) return false
+  if (duty && GATE_EXEMPT_DUTIES.has(duty)) return false
   return true
 }
 
@@ -495,10 +495,7 @@ export function dutyToolDefinitions(opts: DutyMcpOptions): DutyToolDefinition[] 
     description:
       "Read any sentinel-fenced JSON manifest stored on a labeled issue. Returns `{found, issueNumber, payload}` where payload is the parsed JSON between `<!-- <label>:start -->` and `<!-- <label>:end -->` sentinels.",
     inputSchema: {
-      label: z
-        .string()
-        .min(1)
-        .describe("GitHub issue label that identifies the manifest issue."),
+      label: z.string().min(1).describe("GitHub issue label that identifies the manifest issue."),
     },
     handler: async (args) => {
       const label = String(args.label ?? "")
@@ -588,21 +585,22 @@ export function dutyToolDefinitions(opts: DutyMcpOptions): DutyToolDefinition[] 
   const dispatchTool: DutyToolDefinition = {
     name: "dispatch_workflow",
     description:
-      "Dispatch a kody.yml workflow_dispatch run for an executable against an issue (the cross-run bot→engine path; a bot `@kody` comment would be dropped). E.g. dispatch_workflow({executable:'run', issueNumber:<n>}) opens a fix PR from a tracking issue. Returns {ok} or {ok:false,error}.",
+      "Dispatch a kody.yml workflow_dispatch run for a duty action against an issue (the cross-run bot→engine path; a bot `@kody` comment would be dropped). E.g. dispatch_workflow({duty:'run', issueNumber:<n>}) opens a fix PR from a tracking issue. Returns {ok} or {ok:false,error}.",
     inputSchema: {
-      executable: z.string().min(1).describe("Executable/stage to run (e.g. 'run')."),
+      duty: z.string().min(1).optional().describe("Duty action to run (e.g. 'run')."),
+      executable: z.string().min(1).optional().describe("Deprecated alias for duty."),
       issueNumber: z.number().int().positive().describe("Issue (or PR) number forwarded as issue_number."),
     },
     handler: async (args) => {
-      const executable = String(args.executable ?? "")
+      const duty = String(args.duty ?? args.executable ?? "")
       const issueNumber = Number(args.issueNumber)
-      if (isDispatchGated(executable, readDutyTrustMode(opts.repoSlug, opts.dutySlug))) {
+      if (isDispatchGated(duty, readDutyTrustMode(opts.repoSlug, opts.dutySlug))) {
         return { content: [{ type: "text", text: trustRefusal(opts.dutySlug) }] }
       }
-      const result = dispatchWorkflow(workflowFile, executable, issueNumber)
+      const result = dispatchWorkflow(workflowFile, duty, issueNumber)
       const text = result.ok
-        ? `Dispatched \`${executable}\` on #${issueNumber} via workflow_dispatch.`
-        : `Dispatch failed for \`${executable}\` on #${issueNumber}: ${result.error}`
+        ? `Dispatched duty \`${duty}\` on #${issueNumber} via workflow_dispatch.`
+        : `Dispatch failed for duty \`${duty}\` on #${issueNumber}: ${result.error}`
       return { content: [{ type: "text", text }] }
     },
   }

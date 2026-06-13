@@ -21,15 +21,15 @@ export const dispatchNextTaskJob: PreflightScript = async (ctx, profile) => {
     : []
   ctx.output.nextJob = plannedJobs.find((job) => stableJobKey(job) === next.id) ?? taskJobToJob(next, ctx.args.issue)
   if (typeof ctx.args.issue === "number") {
-    ctx.output.afterNextJob = { executable: profile.name, cliArgs: { issue: ctx.args.issue } }
+    ctx.output.afterNextJob = { action: profile.action ?? profile.name, cliArgs: { issue: ctx.args.issue } }
   }
 }
 
 function taskJobToJob(job: TaskJob, issueArg: unknown): Job {
   const target = typeof job.target === "number" ? job.target : typeof issueArg === "number" ? issueArg : undefined
   return {
+    duty: job.duty ?? job.executable,
     executable: job.executable,
-    ...(job.duty ? { duty: job.duty } : {}),
     ...(job.reason ? { why: job.reason } : {}),
     ...(job.staff ? { persona: job.staff } : {}),
     ...(job.schedule ? { schedule: job.schedule } : {}),
@@ -42,7 +42,7 @@ function isJob(input: unknown): input is Job {
   if (!input || typeof input !== "object" || Array.isArray(input)) return false
   const job = input as Partial<Job>
   return (
-    typeof job.executable === "string" &&
+    (typeof job.duty === "string" || typeof job.action === "string") &&
     (job.flavor === "instant" || job.flavor === "scheduled") &&
     (!job.cliArgs || (typeof job.cliArgs === "object" && !Array.isArray(job.cliArgs)))
   )

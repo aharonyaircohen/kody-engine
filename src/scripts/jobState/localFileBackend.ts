@@ -1,6 +1,6 @@
 /**
  * Local-file backend: job state lives as plain files on disk under
- * `<cwd>/<jobsDir>/<slug>.state.json`. No git involvement at all.
+ * `<cwd>/<jobsDir>/<slug>/state.json`. No git involvement at all.
  *
  * Durability between workflow runs is provided by the `hydrate`/`persist`
  * lifecycle, which restores from / saves to the GitHub Actions cache when

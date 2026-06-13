@@ -1,6 +1,6 @@
 /**
  * Preflight: when qa-engineer is dispatched via workflow_dispatch with
- * `executable=qa-engineer` + `issue_number=<tracking>` (no `--scope` flag),
+ * `duty=qa-engineer` + `issue_number=<tracking>` (no `--scope` flag),
  * derive the scope from the tracking issue's title.
  *
  * The qa duty creates the tracking issue with a fixed shape:
@@ -12,7 +12,7 @@
  * no `@kody` self-dispatch comment — the duty just fires:
  *
  *     gh workflow run kody.yml \
- *       -f executable=qa-engineer \
+ *       -f duty=qa-engineer \
  *       -f issue_number=<tracking>
  *
  * Pre-existing `ctx.args.scope` is respected — a human running

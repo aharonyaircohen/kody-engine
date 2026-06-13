@@ -1,0 +1,6 @@
+{
+  "name": "plan-verify",
+  "action": "plan-verify",
+  "executable": "plan-verify",
+  "describe": "Verify a planned task slice."
+}

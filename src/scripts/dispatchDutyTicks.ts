@@ -15,8 +15,8 @@
  */
 
 import type { PreflightScript } from "../executables/types.js"
-import { runExecutable } from "../executor.js"
 import { gh } from "../issue.js"
+import { mintScheduledJob, runJob } from "../job.js"
 
 interface IssueRef {
   number: number
@@ -46,13 +46,14 @@ export const dispatchDutyTicks: PreflightScript = async (ctx, _profile, args) =>
   for (const issue of issues) {
     process.stdout.write(`[jobs] → tick #${issue.number}: ${issue.title}\n`)
     try {
-      const out = await runExecutable(targetExecutable, {
-        cliArgs: { [issueArg]: issue.number },
-        cwd: ctx.cwd,
-        config: ctx.config,
-        verbose: ctx.verbose,
-        quiet: ctx.quiet,
-      })
+      const out = await runJob(
+        mintScheduledJob({
+          duty: targetExecutable,
+          executable: targetExecutable,
+          cliArgs: { [issueArg]: issue.number },
+        }),
+        { cwd: ctx.cwd, config: ctx.config, verbose: ctx.verbose, quiet: ctx.quiet, chain: false },
+      )
       results.push({ issue: issue.number, exitCode: out.exitCode, reason: out.reason })
       if (out.exitCode !== 0) {
         process.stderr.write(`[jobs] tick #${issue.number} failed (exit ${out.exitCode}): ${out.reason ?? ""}\n`)

@@ -1,7 +1,7 @@
 /**
  * Contents-API backend: durable job state in tracked repo files.
  *
- * One file per job at `<jobsDir>/<slug>.state.json`. Reads and
+ * One file per job at `<jobsDir>/<slug>/state.json`. Reads and
  * writes go through the GitHub Contents API, so the default GITHUB_TOKEN
  * (with `contents: write`) is sufficient — no PAT or `gist` scope.
  *

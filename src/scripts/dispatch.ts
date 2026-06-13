@@ -64,7 +64,7 @@ export const dispatch: PostflightScript = async (ctx, _profile, _agentResult, ar
   // In-process hand-off to the next stage (kody-cli runs it, reusing the
   // preflight). The child runs against the PR or the issue depending on target.
   ctx.output.nextDispatch = {
-    executable: next,
+    action: next,
     cliArgs: usePr ? { pr: targetNumber } : { issue: targetNumber },
   }
 }

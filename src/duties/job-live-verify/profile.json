@@ -1,0 +1,6 @@
+{
+  "name": "job-live-verify",
+  "action": "job-live-verify",
+  "executable": "job-live-verify",
+  "describe": "Verify live job wiring."
+}

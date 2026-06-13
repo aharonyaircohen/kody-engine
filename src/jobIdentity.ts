@@ -6,7 +6,7 @@ export function stableJobKey(job: Job): string {
   const executable = job.executable ?? duty ?? "unknown"
   if (job.flavor === "scheduled" && job.duty) return `scheduled:${job.duty}:${executable}`
   const target = typeof job.target === "number" ? job.target : targetFromCliArgs(job.cliArgs)
-  const work = duty ?? executable
+  const work = duty && executable && executable !== duty ? `${duty}:${executable}` : (duty ?? executable)
   return target === undefined ? `${job.flavor}:${work}` : `${job.flavor}:${work}:${target}`
 }
 

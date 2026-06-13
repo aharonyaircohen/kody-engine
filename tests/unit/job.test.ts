@@ -49,20 +49,26 @@ describe("runJob (Phase 1 seam)", () => {
   })
 
   it("seeds inline why into preloadedData.jobWhy", async () => {
-    await runJob({ executable: "fix", why: "fix the flaky test", cliArgs: {}, flavor: "instant" }, { cwd: "/x" })
+    await runJob(
+      { duty: "fix", executable: "fix", why: "fix the flaky test", cliArgs: {}, flavor: "instant" },
+      { cwd: "/x" },
+    )
     const [, input] = runExecutableChain.mock.calls[0]!
     expect(input.preloadedData?.jobWhy).toBe("fix the flaky test")
-    expect(input.preloadedData?.jobIntent).toBeUndefined()
+    expect(input.preloadedData?.jobIntent).toContain("Apply review feedback")
   })
 
   it("does not seed jobWhy for an empty why string", async () => {
-    await runJob({ executable: "run", why: "", cliArgs: {}, flavor: "instant" }, { cwd: "/x" })
+    await runJob({ duty: "run", executable: "run", why: "", cliArgs: {}, flavor: "instant" }, { cwd: "/x" })
     const [, input] = runExecutableChain.mock.calls[0]!
     expect(input.preloadedData?.jobWhy).toBeUndefined()
   })
 
   it("always seeds a jobId + flavor so the run can be recorded in the task ledger", async () => {
-    await runJob({ executable: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" }, { cwd: "/x" })
+    await runJob(
+      { duty: "run", executable: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" },
+      { cwd: "/x" },
+    )
     const [, input] = runExecutableChain.mock.calls[0]!
     expect(typeof input.preloadedData?.jobId).toBe("string")
     expect(input.preloadedData?.jobKey).toBe("instant:run:42")
@@ -72,8 +78,14 @@ describe("runJob (Phase 1 seam)", () => {
   })
 
   it("keeps the same stable job key for retries of the same target + executable", async () => {
-    await runJob({ executable: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" }, { cwd: "/x" })
-    await runJob({ executable: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" }, { cwd: "/x" })
+    await runJob(
+      { duty: "run", executable: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" },
+      { cwd: "/x" },
+    )
+    await runJob(
+      { duty: "run", executable: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" },
+      { cwd: "/x" },
+    )
 
     const first = runExecutableChain.mock.calls[0]![1].preloadedData
     const second = runExecutableChain.mock.calls[1]![1].preloadedData
@@ -112,7 +124,7 @@ describe("runJob (Phase 1 seam)", () => {
 
   it("seeds persona into preloadedData.jobPersona", async () => {
     await runJob(
-      { duty: "stale-prs", persona: "kody", schedule: "*/5 * * * *", cliArgs: {}, flavor: "scheduled" },
+      { duty: "run", persona: "kody", schedule: "*/5 * * * *", cliArgs: {}, flavor: "scheduled" },
       { cwd: "/x" },
     )
     const [, input] = runExecutableChain.mock.calls[0]!
@@ -121,36 +133,40 @@ describe("runJob (Phase 1 seam)", () => {
 
   it("uses the duty reference in the stable key for scheduled jobs", async () => {
     await runJob(
-      { duty: "stale-prs", executable: "duty-tick", schedule: "*/5 * * * *", cliArgs: {}, flavor: "scheduled" },
+      { duty: "duty-tick", executable: "duty-tick", schedule: "*/5 * * * *", cliArgs: {}, flavor: "scheduled" },
       { cwd: "/x" },
     )
     const [, input] = runExecutableChain.mock.calls[0]!
-    expect(input.preloadedData?.jobKey).toBe("scheduled:stale-prs:duty-tick")
+    expect(input.preloadedData?.jobKey).toBe("scheduled:duty-tick:duty-tick")
   })
 
   it("falls back to the duty slug as the profile when no executable", async () => {
-    await runJob({ duty: "watch-stale-prs", schedule: "*/5 * * * *", cliArgs: {}, flavor: "scheduled" }, { cwd: "/x" })
-    expect(runExecutableChain.mock.calls[0]![0]).toBe("watch-stale-prs")
+    await runJob({ duty: "run", schedule: "*/5 * * * *", cliArgs: {}, flavor: "scheduled" }, { cwd: "/x" })
+    expect(runExecutableChain.mock.calls[0]![0]).toBe("run")
   })
 
   it("seeds only job identity (no why/persona) for a bare scheduled job", async () => {
-    await runJob({ duty: "stale-prs", cliArgs: {}, flavor: "scheduled" }, { cwd: "/x" })
+    await runJob({ duty: "run", cliArgs: {}, flavor: "scheduled" }, { cwd: "/x" })
     const [, input] = runExecutableChain.mock.calls[0]!
     expect(input.preloadedData?.jobFlavor).toBe("scheduled")
     expect(input.preloadedData?.jobWhy).toBeUndefined()
     expect(input.preloadedData?.jobPersona).toBeUndefined()
   })
 
-  it("rejects a job with no duty action, duty, or executable", () => {
+  it("rejects a job with no duty action or duty", () => {
     expect(() => validateJob({ cliArgs: {}, flavor: "instant" })).toThrow(InvalidJobError)
   })
 
+  it("rejects an executable-only job", () => {
+    expect(() => validateJob({ executable: "run", cliArgs: {}, flavor: "instant" })).toThrow(/duty action or duty/)
+  })
+
   it("rejects an unknown flavor", () => {
-    expect(() => validateJob({ executable: "run", cliArgs: {}, flavor: "bogus" })).toThrow(InvalidJobError)
+    expect(() => validateJob({ duty: "run", executable: "run", cliArgs: {}, flavor: "bogus" })).toThrow(InvalidJobError)
   })
 
   it("defaults cliArgs to an empty object when omitted", () => {
-    const j = validateJob({ executable: "run", flavor: "instant" })
+    const j = validateJob({ duty: "run", executable: "run", flavor: "instant" })
     expect(j.cliArgs).toEqual({})
   })
 })
@@ -209,11 +225,11 @@ describe("mintScheduledJob (Phase 2)", () => {
   })
 
   it("carries the cadence onto ctx.data.jobSchedule so the ledger records when it fired", async () => {
-    await runJob(mintScheduledJob({ duty: "stale-prs", executable: "duty-tick", schedule: "7d" }), { cwd: "/x" })
+    await runJob(mintScheduledJob({ duty: "duty-tick", executable: "duty-tick", schedule: "7d" }), { cwd: "/x" })
     const [, input] = runExecutableChain.mock.calls.at(-1)!
     expect(input.preloadedData?.jobSchedule).toBe("7d")
     expect(input.preloadedData?.jobFlavor).toBe("scheduled")
-    expect(input.preloadedData?.jobDuty).toBe("stale-prs")
+    expect(input.preloadedData?.jobDuty).toBe("duty-tick")
     expect(input.preloadedData?.jobExecutable).toBe("duty-tick")
   })
 })

@@ -54,15 +54,15 @@ describe("dispatch: workflow_dispatch event", () => {
     })
   })
 
-  it("routes executable + base inputs (goal-tick's per-task dispatch) to that stage with --base", () => {
+  it("routes duty + base inputs (goal-tick's per-task dispatch) to that duty action with --base", () => {
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      inputs: { issue_number: "42", executable: "classify", base: "11-x" },
+      inputs: { issue_number: "42", duty: "run", base: "11-x" },
     })
     expect(autoDispatch()).toEqual({
-      action: "classify",
-      duty: "classify",
-      executable: "classify",
+      action: "run",
+      duty: "run",
+      executable: "run",
       cliArgs: { issue: 42, base: "11-x" },
       target: 42,
     })
@@ -154,7 +154,7 @@ describe("dispatch: issue_comment on issue", () => {
     process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
   })
 
-  it("routes '@kody run' to run executable", () => {
+  it("routes '@kody run' to the run duty", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody run" },
       issue: { number: 8 },
@@ -170,7 +170,7 @@ describe("dispatch: issue_comment on issue", () => {
 
   it("ignores a bare @kody substring inside an email (no real mention) → null", () => {
     // Regression (#5): the gate was `.includes("@kody")`, so an email like
-    // `me@kody.dev` launched the default executable on an unrelated comment.
+    // `me@kody.dev` launched the default duty action on an unrelated comment.
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "ping me@kody.dev when this is ready" },
       issue: { number: 8 },
@@ -264,7 +264,7 @@ describe("dispatch: issue_comment on issue", () => {
 
   it("unknown subcommand returns null even when defaultExecutable is set (typo guard)", () => {
     // Behavior changed in 0.4.36: a typed-but-unrecognized subcommand no
-    // longer silently routes to the default executable. The kody-cli typed
+    // longer silently routes to the default duty action. The kody-cli typed
     // wrapper (autoDispatchTyped) now classifies these as `unrecognized`
     // and posts a feedback comment back to the user. This was the bug
     // behind A-Guy-educ/A-Guy issue #1545: `@kody feature` ended up at
@@ -312,12 +312,12 @@ describe("dispatch: issue_comment on issue", () => {
     })
     expect(
       autoDispatch({
-        config: { defaultExecutable: "classify" } as any,
+        config: { defaultExecutable: "run" } as any,
       }),
     ).toEqual({
-      action: "classify",
-      duty: "classify",
-      executable: "classify",
+      action: "run",
+      duty: "run",
+      executable: "run",
       cliArgs: { issue: 11 },
       target: 11,
     })
@@ -330,12 +330,12 @@ describe("dispatch: issue_comment on issue", () => {
     })
     expect(
       autoDispatch({
-        config: { defaultExecutable: "classify" } as any,
+        config: { defaultExecutable: "run" } as any,
       }),
     ).toEqual({
-      action: "classify",
-      duty: "classify",
-      executable: "classify",
+      action: "run",
+      duty: "run",
+      executable: "run",
       cliArgs: { issue: 11 },
       target: 11,
       // The natural-language remainder (politeness stripped) becomes `why`.
@@ -343,7 +343,7 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("unknown subcommand with no defaultExecutable returns null", () => {
+  it("unknown subcommand with no default duty action returns null", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody custom-exec" },
       issue: { number: 11 },
@@ -351,19 +351,19 @@ describe("dispatch: issue_comment on issue", () => {
     expect(autoDispatch()).toBeNull()
   })
 
-  it("bare '@kody' falls back to config.defaultExecutable", () => {
+  it("bare '@kody' falls back to the legacy defaultExecutable action", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody" },
       issue: { number: 12 },
     })
     expect(
       autoDispatch({
-        config: { defaultExecutable: "orchestrator" } as any,
+        config: { defaultExecutable: "run" } as any,
       }),
     ).toEqual({
-      action: "orchestrator",
-      duty: "orchestrator",
-      executable: "orchestrator",
+      action: "run",
+      duty: "run",
+      executable: "run",
       cliArgs: { issue: 12 },
       target: 12,
     })
@@ -518,7 +518,7 @@ describe("dispatch: issue_comment on PR", () => {
     expect(autoDispatch()).toBeNull()
   })
 
-  it("bare '@kody' on PR falls back to configured defaultPrExecutable", () => {
+  it("bare '@kody' on PR falls back to the legacy defaultPrExecutable action", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody" },
       issue: { number: 23, pull_request: {} },

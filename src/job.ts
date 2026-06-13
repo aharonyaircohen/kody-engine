@@ -10,12 +10,13 @@
  * and validates at boundaries the same way config.ts does.
  */
 
+import * as path from "node:path"
 import type { KodyConfig } from "./config.js"
 import type { DispatchResult } from "./dispatch.js"
+import { readDutyFolder } from "./dutyFolders.js"
 import type { Job, JobFlavor } from "./executables/types.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
 import { runExecutable, runExecutableChain } from "./executor.js"
-import { readDutyFolder } from "./dutyFolders.js"
 import { getBuiltinDutiesRoot, getProjectDutiesRoot, resolveDutyAction } from "./registry.js"
 
 export { stableJobKey } from "./jobIdentity.js"
@@ -48,18 +49,19 @@ export class InvalidJobError extends Error {
 }
 
 /**
- * Validate a minted Job at the boundary. A Job must name at least one of
- * `executable` or `duty` (something to run), a known `flavor`, and (if present)
- * an object `cliArgs`. `why` is untrusted free text and is NOT content-checked
- * here — fencing happens where it enters a prompt.
+ * Validate a minted Job at the boundary. A Job must name a duty/action, a
+ * known `flavor`, and (if present) an object `cliArgs`. `executable` is only
+ * an implementation selected under that duty; it is never valid by itself.
+ * `why` is untrusted free text and is NOT content-checked here — fencing
+ * happens where it enters a prompt.
  */
 export function validateJob(input: unknown): Job {
   if (!input || typeof input !== "object") {
     throw new InvalidJobError("job must be an object")
   }
   const j = input as Record<string, unknown>
-  if (typeof j.executable !== "string" && typeof j.duty !== "string" && typeof j.action !== "string") {
-    throw new InvalidJobError("job must reference a duty action, duty, or executable")
+  if (typeof j.duty !== "string" && typeof j.action !== "string") {
+    throw new InvalidJobError("job must reference a duty action or duty")
   }
   if (j.flavor !== "instant" && j.flavor !== "scheduled") {
     throw new InvalidJobError(`job.flavor must be "instant" or "scheduled" (got ${String(j.flavor)})`)
@@ -102,7 +104,8 @@ export interface RunJobBase {
  * Execute a Job by lowering it onto the existing executor.
  *
  * Mapping:
- *   - profile = job.executable ?? job.duty   (the runner / "how")
+ *   - duty/action resolves first             (the public work unit / "why")
+ *   - profile = job.executable ?? duty.executable (the implementation / "how")
  *   - cliArgs = job.cliArgs                   (target already bound by the minter)
  *   - duty/executable → preloadedData          (seeded so the executor can
  *                                              expose the job references to
@@ -119,10 +122,21 @@ export interface RunJobBase {
 export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput> {
   const valid = validateJob(job)
   const action = valid.action ?? valid.duty
-  const resolvedDuty = action ? resolveDutyAction(action) : null
-  const profileName = valid.executable ?? resolvedDuty?.executable ?? valid.duty
+  const projectDutiesRoot = path.join(base.cwd, ".kody", "duties")
+  const resolvedDuty = action ? resolveDutyAction(action, projectDutiesRoot) : null
+  const dutyIdentity = valid.duty ?? resolvedDuty?.duty
+  const dutyContext = loadDutyContext(dutyIdentity, base.cwd)
+  if (!resolvedDuty && !dutyContext) {
+    throw new InvalidJobError(`job duty not found: ${action ?? valid.duty ?? "<none>"}`)
+  }
+  const dutySelectedExecutable =
+    resolvedDuty?.executable ??
+    dutyContext?.config.executable ??
+    dutyContext?.config.executables?.[0] ??
+    (dutyContext?.config.tickScript ? "duty-tick-scripted" : undefined)
+  const profileName = valid.executable ?? dutySelectedExecutable
   if (!profileName) {
-    throw new InvalidJobError("job resolves to no executable or duty")
+    throw new InvalidJobError(`job duty resolves to no executable: ${dutyIdentity ?? action}`)
   }
 
   const preloadedData: Record<string, unknown> = { ...(base.preloadedData ?? {}) }
@@ -133,14 +147,12 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   preloadedData.jobFlavor = valid.flavor
   if (valid.target !== undefined) preloadedData.jobTarget = valid.target
   if (valid.action !== undefined && valid.action.length > 0) preloadedData.jobAction = valid.action
-  const dutyIdentity = valid.duty ?? resolvedDuty?.duty
   if (dutyIdentity !== undefined && dutyIdentity.length > 0) preloadedData.jobDuty = dutyIdentity
-  const executableIdentity = valid.executable ?? resolvedDuty?.executable
+  const executableIdentity = profileName
   if (executableIdentity !== undefined && executableIdentity.length > 0)
     preloadedData.jobExecutable = executableIdentity
   // The job carries *when*: a scheduled job's cadence, recorded in the ledger.
   if (valid.schedule !== undefined && valid.schedule.length > 0) preloadedData.jobSchedule = valid.schedule
-  const dutyContext = loadDutyContext(dutyIdentity ?? valid.duty)
   if (dutyContext) {
     preloadedData.dutySlug = dutyContext.slug
     preloadedData.dutyTitle = dutyContext.title
@@ -173,15 +185,22 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     quiet: base.quiet,
     preloadedData: Object.keys(preloadedData).length > 0 ? preloadedData : undefined,
   }
-  input.cliArgs = resolvedDuty ? { ...resolvedDuty.cliArgs, ...input.cliArgs } : input.cliArgs
+  input.cliArgs =
+    resolvedDuty && profileName === resolvedDuty.executable
+      ? { ...resolvedDuty.cliArgs, ...input.cliArgs }
+      : input.cliArgs
 
   const run = base.chain === false ? runExecutable : runExecutableChain
   return run(profileName, input)
 }
 
-function loadDutyContext(slug: string | undefined): ReturnType<typeof readDutyFolder> {
+function loadDutyContext(slug: string | undefined, cwd: string): ReturnType<typeof readDutyFolder> {
   if (!slug) return null
-  return readDutyFolder(getProjectDutiesRoot(), slug) ?? readDutyFolder(getBuiltinDutiesRoot(), slug)
+  return (
+    readDutyFolder(path.join(cwd, ".kody", "duties"), slug) ??
+    readDutyFolder(getProjectDutiesRoot(), slug) ??
+    readDutyFolder(getBuiltinDutiesRoot(), slug)
+  )
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -213,6 +232,8 @@ export function mintInstantJob(dispatch: DispatchResult, opts?: { why?: string; 
 
 /** Inputs the cron tick path resolves per due duty slug. */
 export interface ScheduledJobInput {
+  /** Public action for this scheduled duty, when distinct from the slug. */
+  action?: string
   /** The duty slug (its "why" lives in `.kody/duties/<slug>/duty.md`). */
   duty: string
   /** The executable that ticks it (duty-tick / duty-tick-scripted, or a folder-duty slug). */
@@ -232,6 +253,7 @@ export interface ScheduledJobInput {
  */
 export function mintScheduledJob(input: ScheduledJobInput): Job {
   return {
+    action: input.action,
     duty: input.duty,
     executable: input.executable,
     schedule: input.schedule,

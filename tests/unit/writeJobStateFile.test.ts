@@ -54,7 +54,7 @@ function ctxFor(slug: string, data: Record<string, unknown>): Context {
 
 function loadedFor(slug: string, state: StateEnvelope): LoadedJobState {
   return {
-    path: `.kody/duties/${slug}.state.json`,
+    path: `.kody/duties/${slug}/state.json`,
     handle: null,
     state,
     created: false,
@@ -77,7 +77,9 @@ describe("writeJobStateFile: parse-error path", () => {
       data: { ledger: { "PR-1": "open", "PR-2": "merged" }, lastFiredAt: "2026-05-01T00:00:00Z" },
       done: false,
     }
-    fs.writeFileSync(path.join(tmp, ".kody", "duties", `${slug}.state.json`), JSON.stringify(prior, null, 2))
+    const stateDir = path.join(tmp, ".kody", "duties", slug)
+    fs.mkdirSync(stateDir, { recursive: true })
+    fs.writeFileSync(path.join(stateDir, "state.json"), JSON.stringify(prior, null, 2))
     const ctx = ctxFor(slug, {
       nextStateParseError: "missing `kody-job-next-state` block in agent output",
       jobState: loadedFor(slug, prior),
@@ -85,7 +87,7 @@ describe("writeJobStateFile: parse-error path", () => {
     await writeJobStateFile(ctx, PROFILE, null, { jobsDir: ".kody/duties" })
 
     const after = JSON.parse(
-      fs.readFileSync(path.join(tmp, ".kody", "duties", `${slug}.state.json`), "utf-8"),
+      fs.readFileSync(path.join(tmp, ".kody", "duties", slug, "state.json"), "utf-8"),
     ) as StateEnvelope
     // rev was bumped so the next tick sees a fresh state.
     expect(after.rev).toBe(4)
@@ -117,6 +119,6 @@ describe("writeJobStateFile: parse-error path", () => {
     expect(ctx.output.exitCode).toBe(1)
     expect(ctx.output.reason).toMatch(/next-state parse failed/)
     // No state file was written (nothing to carry).
-    expect(fs.existsSync(path.join(tmp, ".kody", "duties", `${slug}.state.json`))).toBe(false)
+    expect(fs.existsSync(path.join(tmp, ".kody", "duties", slug, "state.json"))).toBe(false)
   })
 })

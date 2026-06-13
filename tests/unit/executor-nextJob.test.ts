@@ -15,7 +15,14 @@ const config: KodyConfig = {
 
 function writeProfile(root: string, name: string, preflight: unknown[], postflight: unknown[] = []): void {
   const dir = path.join(root, ".kody", "executables", name)
+  const dutyDir = path.join(root, ".kody", "duties", name)
   fs.mkdirSync(dir, { recursive: true })
+  fs.mkdirSync(dutyDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(dutyDir, "profile.json"),
+    JSON.stringify({ name, action: name, executable: name, describe: `${name} duty` }, null, 2),
+  )
+  fs.writeFileSync(path.join(dutyDir, "duty.md"), `# ${name}\n\nRun ${name}.\n`)
   fs.writeFileSync(
     path.join(dir, "profile.json"),
     JSON.stringify(
@@ -65,6 +72,7 @@ describe("executor: nextJob chain", () => {
     writeProfile(tmp, "child", [{ script: "skipAgent" }], [{ script: "saveTaskState" }])
 
     const plannedJob = {
+      duty: "child",
       executable: "child",
       cliArgs: { issue: 42 },
       target: 42,
@@ -73,7 +81,16 @@ describe("executor: nextJob chain", () => {
     }
     const taskState = upsertTaskJobs(
       emptyState(),
-      [{ id: "instant:child:42", executable: "child", flavor: "instant", target: 42, reason: "child slice" }],
+      [
+        {
+          id: "instant:child:42",
+          duty: "child",
+          executable: "child",
+          flavor: "instant",
+          target: 42,
+          reason: "child slice",
+        },
+      ],
       "2026-06-08T08:00:00Z",
     )
 
@@ -109,6 +126,7 @@ describe("executor: nextJob chain", () => {
     writeProfile(tmp, "child", [{ script: "skipAgent" }], [{ script: "recordOutcome" }, { script: "saveTaskState" }])
 
     const failerJob = {
+      duty: "failer",
       executable: "failer",
       cliArgs: { issue: 42 },
       target: 42,
@@ -116,6 +134,7 @@ describe("executor: nextJob chain", () => {
       why: "first slice",
     }
     const childJob = {
+      duty: "child",
       executable: "child",
       cliArgs: { issue: 42 },
       target: 42,
@@ -126,8 +145,22 @@ describe("executor: nextJob chain", () => {
     const taskState = upsertTaskJobs(
       emptyState(),
       [
-        { id: "instant:failer:42", executable: "failer", flavor: "instant", target: 42, reason: "first slice" },
-        { id: "instant:child:42", executable: "child", flavor: "instant", target: 42, reason: "second slice" },
+        {
+          id: "instant:failer:42",
+          duty: "failer",
+          executable: "failer",
+          flavor: "instant",
+          target: 42,
+          reason: "first slice",
+        },
+        {
+          id: "instant:child:42",
+          duty: "child",
+          executable: "child",
+          flavor: "instant",
+          target: 42,
+          reason: "second slice",
+        },
       ],
       "2026-06-08T08:00:00Z",
     )

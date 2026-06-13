@@ -1,0 +1,6 @@
+{
+  "name": "task-jobs",
+  "action": "task-jobs",
+  "executable": "task-jobs",
+  "describe": "Run planned task jobs."
+}

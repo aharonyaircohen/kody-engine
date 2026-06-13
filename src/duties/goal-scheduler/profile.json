@@ -1,0 +1,6 @@
+{
+  "name": "goal-scheduler",
+  "action": "goal-scheduler",
+  "executable": "goal-scheduler",
+  "describe": "Schedule active goals."
+}

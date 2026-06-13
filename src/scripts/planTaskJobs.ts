@@ -42,7 +42,7 @@ export function taskJobSpecToJob(spec: TaskJobSpec, issueNumber: number): Job {
   const cliArgs = spec.cliArgs ?? { issue: issueNumber }
   const target = typeof spec.target === "number" ? spec.target : (targetFromCliArgs(cliArgs) ?? issueNumber)
   return {
-    duty: spec.duty,
+    duty: spec.duty ?? spec.executable,
     executable: spec.executable,
     why: spec.reason,
     persona: spec.persona ?? spec.staff,
@@ -120,7 +120,7 @@ function jobToPlannedTaskJob(job: Job): PlannedTaskJob {
   return {
     id: stableJobKey(job),
     executable: job.executable ?? job.duty ?? "unknown",
-    ...(job.duty ? { duty: job.duty } : {}),
+    duty: job.duty ?? job.action ?? job.executable ?? "unknown",
     ...(job.persona ? { staff: job.persona } : {}),
     ...(job.flavor ? { flavor: job.flavor } : {}),
     ...(job.schedule ? { schedule: job.schedule } : {}),

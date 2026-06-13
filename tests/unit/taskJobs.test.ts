@@ -27,6 +27,7 @@ describe("task job plan parsing", () => {
     const job = taskJobSpecToJob({ executable: "plan-verify", reason: "api slice", staff: "qa" }, 42)
 
     expect(job).toMatchObject({
+      duty: "plan-verify",
       executable: "plan-verify",
       cliArgs: { issue: 42 },
       target: 42,
@@ -97,6 +98,6 @@ describe("task job plan parsing", () => {
     await dispatchNextTaskJob(ctx, { name: "task-jobs" } as Profile)
 
     expect(ctx.output.nextJob).toEqual(job)
-    expect(ctx.output.afterNextJob).toEqual({ executable: "task-jobs", cliArgs: { issue: 42 } })
+    expect(ctx.output.afterNextJob).toEqual({ action: "task-jobs", cliArgs: { issue: 42 } })
   })
 })

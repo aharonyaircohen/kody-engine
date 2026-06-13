@@ -63,7 +63,7 @@ export const startFlow: PostflightScript = async (ctx, profile, _agentResult, ar
   const usePr = target === "pr" && !!state?.core.prUrl
   const targetNumber = usePr ? (parsePrNumber(state!.core.prUrl!) ?? issueNumber) : issueNumber
   ctx.output.nextDispatch = {
-    executable: entry,
+    action: entry,
     cliArgs: usePr ? { pr: targetNumber } : { issue: targetNumber },
   }
 }

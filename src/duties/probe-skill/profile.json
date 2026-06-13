@@ -1,0 +1,6 @@
+{
+  "name": "probe-skill",
+  "action": "probe-skill",
+  "executable": "probe-skill",
+  "describe": "Run the probe skill test executable."
+}

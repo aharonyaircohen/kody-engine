@@ -192,7 +192,7 @@ export const GOAL_TASK_WORKFLOW = "kody.yml"
  * own run (so it never blocks the cron scheduler's tick).
  *
  * No `--ref`: `gh` dispatches against the repository's default branch, which
- * is where `kody.yml` (and its `executable`/`base` inputs) lives. That can
+ * is where `kody.yml` (and its `duty`/`base` inputs) lives. That can
  * differ from `config.git.defaultBranch` (the integration branch the task PR
  * stacks onto, passed as `base`) — e.g. a repo whose code merges to `dev` but
  * whose workflows live on `main`.
@@ -207,7 +207,7 @@ export function dispatchTaskRun(issueNumber: number, base: string, cwd?: string)
         "-f",
         `issue_number=${issueNumber}`,
         "-f",
-        "executable=classify",
+        "duty=classify",
         "-f",
         `base=${base}`,
       ],

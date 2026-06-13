@@ -199,7 +199,7 @@ describe("dispatchClassified", () => {
     await dispatchClassified(c, profile(), null)
     // In-process hand-off — NOT a comment round-trip. This is what avoids the
     // bot-author deadlock (a bot-authored `@kody bug` is silently ignored).
-    expect(c.output.nextDispatch).toEqual({ executable: "bug", cliArgs: { issue: 99 } })
+    expect(c.output.nextDispatch).toEqual({ action: "bug", cliArgs: { issue: 99 } })
 
     const bodies = execFileSync.mock.calls
       .map((call) => (call[1] as string[]) ?? [])

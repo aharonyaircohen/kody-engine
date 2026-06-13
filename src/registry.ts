@@ -4,7 +4,7 @@
  * Two asset families live alongside each other:
  *
  *   - **Executables** (`src/executables/<name>/profile.json`) — private
- *     implementation units selected by duties or by `exec <name>`.
+ *     implementation units selected by duties.
  *   - **Duties** (`.kody/duties/<slug>/profile.json` + `duty.md`) — public
  *     work units and operator-facing actions. Duty discovery is handled by
  *     `listDutyActions()`, not by executable resolution.
@@ -281,7 +281,10 @@ function listProjectFolderDutyActions(root: string): DiscoveredDutyAction[] {
     const duty = readDutyFolder(root, slug)
     if (!duty) continue
     const action = duty.config.action ?? slug
-    const executable = duty.config.executable ?? duty.config.executables?.[0] ?? (duty.config.tickScript ? "duty-tick-scripted" : "duty-tick")
+    const executable =
+      duty.config.executable ??
+      duty.config.executables?.[0] ??
+      (duty.config.tickScript ? "duty-tick-scripted" : "duty-tick")
     out.push({
       action,
       duty: slug,
