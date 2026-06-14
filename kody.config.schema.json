@@ -63,6 +63,11 @@
           "pattern": "^[^/]+/.+$",
           "description": "Base provider/model string, for example minimax/MiniMax-M3 or claude/claude-sonnet-4-6."
         },
+        "reasoningEffort": {
+          "type": "string",
+          "enum": ["off", "low", "medium", "high"],
+          "description": "Default thinking effort for the Claude Agent SDK. Maps to maxThinkingTokens. 'off' (default) skips the thinking block entirely — no reasoning preamble, no extra tokens. 'low'/'medium'/'high' enable extended thinking with budgets 2_048/10_000/32_000. Overridable per-session via the REASONING_EFFORT env var or the dashboard's chat-level thinking dropdown."
+        },
         "perExecutable": {
           "type": "object",
           "description": "Optional provider/model override by executable name.",

@@ -23,6 +23,19 @@ export interface KodyConfig {
   agent: {
     model: string
     /**
+     * Thinking effort. Maps to the Claude Agent SDK's `maxThinkingTokens`
+     * (Anthropic extended thinking). When unset, the SDK runs without
+     * thinking — cheaper, faster, no reasoning preamble. A chat session
+     * can override per-session via the `REASONING_EFFORT` env var or
+     * `--reasoning-effort` CLI flag.
+     *
+     *   "agent": { "model": "claude/...", "reasoningEffort": "medium" }
+     *
+     * Budgets: off → not set (no thinking, no extra cost);
+     *          low → 2_048 · medium → 10_000 · high → 32_000 tokens.
+     */
+    reasoningEffort?: ReasoningEffort
+    /**
      * Per-executable model override. Lets consumers route specific stages to
      * cheaper or stronger models without forking the profile:
      *
@@ -143,6 +156,46 @@ export interface ProviderModel {
   model: string
 }
 
+/**
+ * User-facing thinking level. Maps to `maxThinkingTokens` for the Claude
+ * Agent SDK. Unset / `"off"` means "no thinking" — the SDK runs without
+ * the extended-thinking block, no extra tokens, no reasoning preamble.
+ *
+ * Resolution order (engine-side, all layers independent):
+ *   1. `--reasoning-effort` CLI flag (chat mode only — `kody chat …`)
+ *   2. `REASONING_EFFORT` env var (forwarded by the dashboard workflow)
+ *   3. `agent.reasoningEffort` in kody.config.json
+ *   4. unset → no `maxThinkingTokens` set on the SDK call
+ */
+export type ReasoningEffort = "off" | "low" | "medium" | "high"
+
+export const REASONING_EFFORTS: readonly ReasoningEffort[] = ["off", "low", "medium", "high"] as const
+
+/**
+ * Budget mapping. Indices must match REASONING_EFFORTS:
+ *   REASONING_BUDGETS[1] === 2048   (low)
+ *   REASONING_BUDGETS[2] === 10_000 (medium)
+ *   REASONING_BUDGETS[3] === 32_000 (high)
+ * Off is implicit — we don't set maxThinkingTokens at all in that case.
+ */
+export const REASONING_BUDGETS: Record<Exclude<ReasoningEffort, "off">, number> = {
+  low: 2_048,
+  medium: 10_000,
+  high: 32_000,
+}
+
+/**
+ * Parse a string from the env/CLI into a ReasoningEffort. Returns `null`
+ * for unset / unknown — caller should fall through to the next source in
+ * the resolution order. Case-insensitive; trims whitespace.
+ */
+export function parseReasoningEffort(raw: string | null | undefined): ReasoningEffort | null {
+  if (!raw) return null
+  const v = raw.trim().toLowerCase()
+  if (REASONING_EFFORTS.includes(v as ReasoningEffort)) return v as ReasoningEffort
+  return null
+}
+
 export const LITELLM_DEFAULT_PORT = 4000
 export const LITELLM_DEFAULT_URL = `http://localhost:${LITELLM_DEFAULT_PORT}`
 
@@ -206,6 +259,7 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     agent: {
       model: String(agent.model),
       ...parsePerExecutable(agent.perExecutable),
+      ...parseAgentReasoningEffort(agent.reasoningEffort),
     },
     issueContext: parseIssueContext(raw.issueContext),
     testRequirements: parseTestRequirements(raw.testRequirements),
@@ -336,6 +390,18 @@ function parsePerExecutable(raw: unknown): { perExecutable?: Record<string, stri
     if (typeof v === "string" && v.length > 0) out[k] = v
   }
   return Object.keys(out).length > 0 ? { perExecutable: out } : {}
+}
+
+/**
+ * Normalize `agent.reasoningEffort` from the raw config. Unknown / empty
+ * values drop to undefined so the engine falls through to the next
+ * resolution source (env var → CLI flag → unset). Forward-compatible:
+ * when a new level is added in the future, older engine versions
+ * silently ignore it instead of crashing on the new value.
+ */
+function parseAgentReasoningEffort(raw: unknown): { reasoningEffort?: ReasoningEffort } {
+  if (typeof raw !== "string") return {}
+  return { reasoningEffort: parseReasoningEffort(raw) ?? undefined }
 }
 
 function parseClassifyConfig(raw: unknown): KodyConfig["classify"] {

@@ -10,7 +10,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { AgentResult } from "../agent.js"
 import { runAgent } from "../agent.js"
-import type { ProviderModel } from "../config.js"
+import type { ProviderModel, ReasoningEffort } from "../config.js"
 import { listExecutables } from "../registry.js"
 import { prepareTaskArtifactsDir, taskArtifactsPromptAddendum, verifyTaskArtifacts } from "../task-artifacts.js"
 import { prepareAttachments } from "./attachments.js"
@@ -178,6 +178,12 @@ export interface ChatTurnOptions {
   repoToken?: string
   /** Override for the system prompt (tests). */
   systemPrompt?: string
+  /**
+   * Thinking level. Forwarded to `runAgent` as `reasoningEffort` and
+   * mapped to the SDK's `maxThinkingTokens` (Anthropic extended
+   * thinking). `undefined` / `"off"` = no thinking block, cheapest path.
+   */
+  reasoningEffort?: ReasoningEffort | null
   /** Seam for tests — defaults to real runAgent. */
   invokeAgent?: (prompt: string) => Promise<AgentResult>
 }
@@ -271,6 +277,7 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
         verbose: opts.verbose,
         quiet: opts.quiet,
         systemPromptAppend: systemPrompt,
+        ...(opts.reasoningEffort ? { reasoningEffort: opts.reasoningEffort } : {}),
         // Let the agent clone + work on OTHER repos mid-conversation (a
         // repo-less Brain serves many). Enabled whenever we know where repos
         // live; grants read access to that root via additionalDirectories.

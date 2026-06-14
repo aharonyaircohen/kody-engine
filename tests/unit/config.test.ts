@@ -220,4 +220,47 @@ describe("config: loadConfig", () => {
       expect(loadConfig(dir).defaultPrExecutable).toBeUndefined()
     }
   })
+
+  describe("agent.reasoningEffort", () => {
+    it("preserves a valid reasoningEffort from the config file", () => {
+      for (const value of ["off", "low", "medium", "high"]) {
+        const dir = tmpDir()
+        writeConfig(dir, {
+          github: { owner: "o", repo: "r" },
+          agent: { model: "m/x", reasoningEffort: value },
+        })
+        expect(loadConfig(dir).agent.reasoningEffort).toBe(value)
+      }
+    })
+
+    it("omits reasoningEffort when absent (cheapest path default)", () => {
+      const dir = tmpDir()
+      writeConfig(dir, {
+        github: { owner: "o", repo: "r" },
+        agent: { model: "m/x" },
+      })
+      expect(loadConfig(dir).agent.reasoningEffort).toBeUndefined()
+    })
+
+    it("omits reasoningEffort when empty-string (engine sees no env override)", () => {
+      const dir = tmpDir()
+      writeConfig(dir, {
+        github: { owner: "o", repo: "r" },
+        agent: { model: "m/x", reasoningEffort: "" },
+      })
+      expect(loadConfig(dir).agent.reasoningEffort).toBeUndefined()
+    })
+
+    it("drops unknown reasoningEffort values to undefined instead of throwing", () => {
+      // Forward-compatible: when we add a level in the future, old
+      // engine versions reading a newer config should not crash —
+      // they should silently ignore the unknown value.
+      const dir = tmpDir()
+      writeConfig(dir, {
+        github: { owner: "o", repo: "r" },
+        agent: { model: "m/x", reasoningEffort: "nuclear" },
+      })
+      expect(loadConfig(dir).agent.reasoningEffort).toBeUndefined()
+    })
+  })
 })
