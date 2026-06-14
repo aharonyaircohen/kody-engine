@@ -1,7 +1,7 @@
 {
   "name": "release-deploy",
   "role": "primitive",
-  "describe": "Release stage 4 — post the GitHub Deployment, wait for the host to settle, read back the URL.",
+  "describe": "",
   "inputs": [
     {
       "name": "issue",
@@ -23,8 +23,7 @@
     "tools": [
       "Read",
       "Bash",
-      "Grep",
-      "Glob"
+      "Grep"
     ],
     "hooks": [],
     "skills": [],
