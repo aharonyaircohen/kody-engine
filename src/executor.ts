@@ -276,20 +276,10 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     })
   }
 
-  // Start LiteLLM for non-anthropic providers — unless this is a
-  // build-only executable (preview-build) that runs no model. Those skip
-  // the litellm *install* in preflight, so starting it here would fail.
-  let litellm: Awaited<ReturnType<typeof startLitellmIfNeeded>> = null
-  if (profileName !== "preview-build") {
-    try {
-      litellm = await startLitellmIfNeeded(model, input.cwd)
-    } catch (err) {
-      return finishAndEnd({
-        exitCode: 99,
-        reason: `litellm startup failed: ${err instanceof Error ? err.message : String(err)}`,
-      })
-    }
-  }
+  // Lazily initialized on first real agent invocation. Mechanical profiles can
+  // set ctx.skipAgent during preflight, so starting provider infrastructure
+  // before preflight makes no-agent executables depend on agent-only setup.
+  let litellm: Awaited<ReturnType<typeof startLitellmIfNeeded>> | undefined
 
   const ctx: Context = {
     args,
@@ -360,6 +350,13 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     const pluginPaths = [...externalPlugins, ...(syntheticPath ? [syntheticPath] : [])]
     const agents = loadSubagents(profile)
 
+    if (litellm === undefined) {
+      try {
+        litellm = await startLitellmIfNeeded(model, input.cwd)
+      } catch (err) {
+        throw new Error(`litellm startup failed: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
     const lm = litellm
     return runAgent({
       prompt,
@@ -493,7 +490,14 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
         })
       }
       emitEvent(input.cwd, { executable: profileName, kind: "agent_start" })
-      agentResult = await invokeAgent(prompt)
+      try {
+        agentResult = await invokeAgent(prompt)
+      } catch (err) {
+        return finishAndEnd({
+          exitCode: 99,
+          reason: err instanceof Error ? err.message : String(err),
+        })
+      }
       emitEvent(input.cwd, {
         executable: profileName,
         kind: "agent_end",

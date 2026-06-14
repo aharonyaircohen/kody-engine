@@ -372,7 +372,13 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
 
   for (let attempt = 0; ; attempt++) {
     // The SDK message log reflects the final attempt — truncate on each try.
+    let ndjsonWriteFailed = false
+    let ndjsonWriteError: string | undefined
     const fullLog = fs.createWriteStream(ndjsonPath, { flags: "w" })
+    fullLog.on("error", (err) => {
+      ndjsonWriteFailed = true
+      ndjsonWriteError = err instanceof Error ? err.message : String(err)
+    })
     // Collect every `result` message's text. The SDK can emit multiple
     // `result` events when the session restarts mid-flight (background
     // checks, continuation turns). Keeping only the last one silently
@@ -385,8 +391,6 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     errorMessage = undefined
     tokens = { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 }
     messageCount = 0
-    let ndjsonWriteFailed = false
-    let ndjsonWriteError: string | undefined
     // Flips once the session runs a tool that could change durable state —
     // gates the connection retry so we never replay a mutating turn.
     let sawMutatingTool = false
@@ -571,11 +575,13 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         if (next.done) break
         const msg = next.value
         messageCount++
-        try {
-          fullLog.write(`${JSON.stringify(msg)}\n`)
-        } catch (e) {
-          ndjsonWriteFailed = true
-          ndjsonWriteError = e instanceof Error ? e.message : String(e)
+        if (!ndjsonWriteFailed) {
+          try {
+            fullLog.write(`${JSON.stringify(msg)}\n`)
+          } catch (e) {
+            ndjsonWriteFailed = true
+            ndjsonWriteError = e instanceof Error ? e.message : String(e)
+          }
         }
 
         const line = renderEvent(msg as SdkMessageLike, { verbose: opts.verbose, quiet: opts.quiet })
