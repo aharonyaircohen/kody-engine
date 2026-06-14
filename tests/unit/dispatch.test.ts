@@ -540,14 +540,27 @@ describe("dispatch: issue_comment on PR", () => {
 
 describe("dispatch: release orchestrator + sibling primitives", () => {
   const prev: Record<string, string | undefined> = {}
+  let tmp: string
+  let prevCwd: string
   beforeEach(() => {
     prev.EVENT_NAME = process.env.GITHUB_EVENT_NAME
     prev.EVENT_PATH = process.env.GITHUB_EVENT_PATH
     process.env.GITHUB_EVENT_NAME = "issue_comment"
+    // Isolate from the engine repo's own `.kody/duties/` + `.kody/executables/`
+    // shadows: those exist for live-testing the engine against itself and
+    // deliberately diverge from the built-in release shape (older 4-stage
+    // primitives with stripped inputs, plus a `release` duty that runs as
+    // `duty-tick` writing a report). These tests assert the *built-in*
+    // release behavior, so we run them in a fresh empty cwd.
+    prevCwd = process.cwd()
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-dispatch-release-"))
+    process.chdir(tmp)
   })
   afterEach(() => {
     process.env.GITHUB_EVENT_NAME = prev.EVENT_NAME
     process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
+    process.chdir(prevCwd)
+    fs.rmSync(tmp, { recursive: true, force: true })
   })
 
   it("'@kody release' routes to the orchestrator with the triggering issue injected", () => {
