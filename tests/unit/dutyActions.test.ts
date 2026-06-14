@@ -4,6 +4,7 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { listDutyActions, resolveDutyAction } from "../../src/registry.js"
 
+const originalCwd = process.cwd()
 let root: string
 
 beforeEach(() => {
@@ -17,7 +18,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  process.chdir("/Users/aguy/projects/kody2")
+  process.chdir(originalCwd)
   fs.rmSync(root, { recursive: true, force: true })
 })
 

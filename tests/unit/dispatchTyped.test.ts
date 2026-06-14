@@ -2,6 +2,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import type { KodyConfig } from "../../src/config.js"
 import { autoDispatchTyped } from "../../src/dispatch.js"
 
 function writeEvent(body: unknown): string {
@@ -9,6 +10,10 @@ function writeEvent(body: unknown): string {
   const p = path.join(dir, "event.json")
   fs.writeFileSync(p, JSON.stringify(body))
   return p
+}
+
+function testConfig(config: Partial<KodyConfig>): KodyConfig {
+  return config as KodyConfig
 }
 
 const prev: Record<string, string | undefined> = {}
@@ -127,7 +132,7 @@ describe("autoDispatchTyped: silent variants (legitimate no-op)", () => {
 })
 
 describe("autoDispatchTyped: membership gate (access.allowedAssociations)", () => {
-  const teamOnly = { access: { allowedAssociations: ["OWNER", "MEMBER", "COLLABORATOR"] } } as any
+  const teamOnly = testConfig({ access: { allowedAssociations: ["OWNER", "MEMBER", "COLLABORATOR"] } })
 
   it("routes a recognized command from an allowed association (MEMBER)", () => {
     process.env.GITHUB_EVENT_NAME = "issue_comment"
@@ -180,7 +185,7 @@ describe("autoDispatchTyped: membership gate (access.allowedAssociations)", () =
       comment: { body: "@kody run", user: { login: "stranger", type: "User" }, author_association: "NONE" },
       issue: { number: 7 },
     })
-    const out = autoDispatchTyped({ config: { access: { allowedAssociations: [] } } as any })
+    const out = autoDispatchTyped({ config: testConfig({ access: { allowedAssociations: [] } }) })
     expect(out.kind).toBe("route")
   })
 })

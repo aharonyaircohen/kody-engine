@@ -221,7 +221,9 @@ export class PoolManager {
     const destroyedSurplus = await this.destroySurplus(surplus)
     const destroyed = destroyedTracked + destroyedSurplus
     if (pruned > 0 || adopted > 0 || destroyed > 0) {
-      this.log(`resync: pruned ${pruned} stale, adopted ${adopted}, destroyed ${destroyed} surplus (free=${this.free.length})`)
+      this.log(
+        `resync: pruned ${pruned} stale, adopted ${adopted}, destroyed ${destroyed} surplus (free=${this.free.length})`,
+      )
     }
     await this.refill()
   }

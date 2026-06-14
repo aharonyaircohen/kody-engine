@@ -84,28 +84,6 @@ async function parseRpcResponse(res: Response): Promise<unknown> {
   throw new Error("no data: line in SSE response")
 }
 
-async function readSseEvents(res: Response): Promise<unknown[]> {
-  const reader = res.body!.getReader()
-  const decoder = new TextDecoder()
-  let buf = ""
-  const events: unknown[] = []
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buf += decoder.decode(value, { stream: true })
-  }
-  for (const line of buf.split("\n")) {
-    if (line.startsWith("data: ")) {
-      try {
-        events.push(JSON.parse(line.slice(6)))
-      } catch {
-        // skip
-      }
-    }
-  }
-  return events
-}
-
 // ────────────────────────────────────────────────────────────────────────────
 // fetch_repo
 // ────────────────────────────────────────────────────────────────────────────

@@ -24,9 +24,9 @@ import { type DutyFolder, listDutyFolderSlugs, readDutyFolder } from "../dutyFol
 import type { PreflightScript } from "../executables/types.js"
 import { gh } from "../issue.js"
 import { mintScheduledJob, runJob } from "../job.js"
-import { type ScheduleEvery, scheduleEveryToMs } from "./scheduleEvery.js"
 import { resolveBackend } from "./jobState/index.js"
 import { TASK_JOBS_MARKER } from "./planTaskJobs.js"
+import { type ScheduleEvery, scheduleEveryToMs } from "./scheduleEvery.js"
 
 export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args) => {
   ctx.skipAgent = true
@@ -96,7 +96,7 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
       // `workflow_dispatch` "Run now" bypasses this dispatcher, but
       // duty-tick's loader rejects a missing/dangling staff member there too.
       if (!config.staff || config.staff.trim().length === 0) {
-        process.stderr.write(`[jobs] ⏭  skip ${slug}: no staff assigned (add \"staff\" to profile.json)\n`)
+        process.stderr.write(`[jobs] ⏭  skip ${slug}: no staff assigned (add "staff" to profile.json)\n`)
         results.push({ slug, exitCode: 0, skipped: true, reason: "no staff assigned" })
         continue
       }

@@ -2,6 +2,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import type { KodyConfig } from "../../src/config.js"
 import { autoDispatch } from "../../src/dispatch.js"
 
 function writeEvent(body: unknown): string {
@@ -9,6 +10,10 @@ function writeEvent(body: unknown): string {
   const p = path.join(dir, "event.json")
   fs.writeFileSync(p, JSON.stringify(body))
   return p
+}
+
+function testConfig(config: Partial<KodyConfig>): KodyConfig {
+  return config as KodyConfig
 }
 
 describe("dispatch: explicit override", () => {
@@ -112,7 +117,7 @@ describe("dispatch: pull_request event", () => {
 
   it("routes an opened PR to onPullRequest, binding the number under the target's int input", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({ action: "opened", number: 7, pull_request: { number: 7 } })
-    expect(autoDispatch({ config: { onPullRequest: "preview-build" } as any })).toEqual({
+    expect(autoDispatch({ config: testConfig({ onPullRequest: "preview-build" }) })).toEqual({
       action: "preview-build",
       duty: "preview-build",
       executable: "preview-build",
@@ -123,7 +128,7 @@ describe("dispatch: pull_request event", () => {
 
   it("routes a synchronize (new commit) PR to onPullRequest", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({ action: "synchronize", number: 9, pull_request: { number: 9 } })
-    expect(autoDispatch({ config: { onPullRequest: "preview-build" } as any })).toEqual({
+    expect(autoDispatch({ config: testConfig({ onPullRequest: "preview-build" }) })).toEqual({
       action: "preview-build",
       duty: "preview-build",
       executable: "preview-build",
@@ -138,7 +143,7 @@ describe("dispatch: pull_request event", () => {
       number: 11,
       pull_request: { number: 11, merged: true },
     })
-    expect(autoDispatch({ config: { onPullRequest: "preview-build" } as any })).toBeNull()
+    expect(autoDispatch({ config: testConfig({ onPullRequest: "preview-build" }) })).toBeNull()
   })
 })
 
@@ -277,7 +282,7 @@ describe("dispatch: issue_comment on issue", () => {
     })
     expect(
       autoDispatch({
-        config: { defaultExecutable: "classify" } as any,
+        config: testConfig({ defaultExecutable: "classify" }),
       }),
     ).toBeNull()
   })
@@ -294,7 +299,7 @@ describe("dispatch: issue_comment on issue", () => {
     })
     expect(
       autoDispatch({
-        config: { defaultExecutable: "run" } as any,
+        config: testConfig({ defaultExecutable: "run" }),
       }),
     ).toEqual({
       action: "run",
@@ -312,7 +317,7 @@ describe("dispatch: issue_comment on issue", () => {
     })
     expect(
       autoDispatch({
-        config: { defaultExecutable: "run" } as any,
+        config: testConfig({ defaultExecutable: "run" }),
       }),
     ).toEqual({
       action: "run",
@@ -330,7 +335,7 @@ describe("dispatch: issue_comment on issue", () => {
     })
     expect(
       autoDispatch({
-        config: { defaultExecutable: "run" } as any,
+        config: testConfig({ defaultExecutable: "run" }),
       }),
     ).toEqual({
       action: "run",
@@ -358,7 +363,7 @@ describe("dispatch: issue_comment on issue", () => {
     })
     expect(
       autoDispatch({
-        config: { defaultExecutable: "run" } as any,
+        config: testConfig({ defaultExecutable: "run" }),
       }),
     ).toEqual({
       action: "run",
@@ -523,7 +528,7 @@ describe("dispatch: issue_comment on PR", () => {
       comment: { body: "@kody" },
       issue: { number: 23, pull_request: {} },
     })
-    expect(autoDispatch({ config: { defaultPrExecutable: "sync" } as any })).toEqual({
+    expect(autoDispatch({ config: testConfig({ defaultPrExecutable: "sync" }) })).toEqual({
       action: "sync",
       duty: "sync",
       executable: "sync",
