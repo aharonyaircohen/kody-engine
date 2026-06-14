@@ -1,20 +1,15 @@
-# Release — Merge (stage 2 of 4)
+You are release-merge, the SECOND stage of the four-stage release container (`release`). The container routes to you after `release-prepare` reports `PREPARE_COMPLETED`.
 
-You are stage 2 of a four-stage release. You run because the release
-issue has `@kody release-merge` on it. The release PR was opened by
-`release-prepare` and its number is in
-`.kody/state/release.json` on the `kody-state` branch.
+## Input
+
+- The release issue (for status comments).
+- `.kody/state/release.json` on the `kody-state` branch for the release PR number.
+- `state.core.release.prNumber` and `state.core.release.version` from the previous stage.
 
 ## Job
 
-1. Read the release PR number from
-   `gh api repos/{owner}/{repo}/contents/.kody/state/release.json?ref=kody-state`
-   (parse the base64 `content`). If the file is missing, post a
-   `FAILED` comment on the release issue and stop — the prepare
-   stage did not finish.
-2. Wait for CI on the release PR. Poll until all required checks
-   pass or the GHA 6-hour job budget is hit:
-
+1. Read `.kody/state/release.json` from `kody-state` to get the release PR number (fall back to `state.core.release.prNumber`).
+2. **Wait for CI on the release PR.** Poll required check runs until they all succeed, or the job budget is hit. A small bash loop is fine:
    ```bash
    for i in $(seq 1 720); do
      state=$(gh pr checks <PR> --json state --jq '.[].state' | sort -u)
@@ -23,47 +18,35 @@ issue has `@kody release-merge` on it. The release PR was opened by
      sleep 30
    done
    ```
-3. Squash-merge the release PR:
-   `gh pr merge <PR> --squash --delete-branch`
-4. Capture the merge commit SHA:
-   `gh pr view <PR> --json mergeCommit --jq .mergeCommit.oid`
-5. Update `.kody/state/release.json` on `kody-state` to add
-   `"sha": "<merge-commit-sha>"`.
-6. Comment on the release issue:
-   `Merged release PR #<N> as commit <sha>.`
-7. End your final message with:
+   Adjust the cadence and total duration to fit the GHA job limit.
+3. Squash-merge the release PR: `gh pr merge <PR> --squash --delete-branch`.
+4. Capture the merge commit SHA: `gh pr view <PR> --json mergeCommit --jq '.mergeCommit.oid'`.
+5. Comment on the release issue: "Merged release PR #<N> as commit <sha>."
+6. Write the action and hand off.
 
-```
-DONE
-COMMIT_MSG: chore(release): merge v<version>
-PR_SUMMARY:
-- CI green on release PR #<N>.
-- Squash-merged as <sha>.
-- kody-state release.json updated.
-```
+## Output (the container reads this)
 
-Then post a follow-up comment to the release issue:
-`@kody release-publish` — so the next stage picks up.
+Write `MERGE_COMPLETED` to `state.core.lastOutcome.action` with:
+- `state.core.release.sha` — the merge commit SHA
 
-## Restrictions
-
-- Never run `pnpm publish`. `release-publish` owns publishing.
-- Never tag. `release-publish` owns tagging.
-- Never deploy. `release-deploy` owns deploys.
-- Never modify the release PR's code. You only wait + merge.
+The container will route to `release-publish`.
 
 ## On failure
 
-If CI times out, or any check fails, post a clear comment on the
-release issue with the failing check name. End your final message
-with:
+If CI times out or fails, write `MERGE_FAILED` to `state.core.lastOutcome.action` with the reason in `state.core.lastOutcome.reason`, and post a clear comment on the release issue. The container will route to `abort`.
 
-```
-FAILED
-REASON: CI <passed | failed | timed out> on release PR #<N>
-```
+## Restrictions
 
-Do **not** post `@kody release-publish` if the merge did not happen.
+- Never run `pnpm publish`. `release-publish` does that.
+- Never tag. `release-publish` does that.
+- Never deploy. `release-deploy` does that.
+
+## Required output markers
+
+At the end of your final message, emit exactly one of:
+- `DONE` — on success
+- `COMMIT_MSG: <one-line summary>` — if you committed without opening a PR
+- `PR_SUMMARY: <one-line summary>` — N/A for this stage (no PR opened)
 
 <!-- kody:output-format (managed — edit above this line only) -->
 

@@ -1,7 +1,7 @@
 {
   "name": "release-merge",
   "role": "primitive",
-  "describe": "Release stage 2 — wait for CI on the release PR, squash-merge, hand off.",
+  "describe": "",
   "inputs": [
     {
       "name": "issue",
@@ -23,8 +23,7 @@
     "tools": [
       "Read",
       "Bash",
-      "Grep",
-      "Glob"
+      "Grep"
     ],
     "hooks": [],
     "skills": [],
