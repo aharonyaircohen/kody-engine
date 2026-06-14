@@ -1,0 +1,59 @@
+{
+  "name": "release-prepare",
+  "role": "primitive",
+  "describe": "Release stage 1 — decide bump, draft CHANGELOG, open the release PR.",
+  "inputs": [
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": true,
+      "describe": "GitHub issue number to work on."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "acceptEdits",
+    "maxTurns": null,
+    "maxTurnTimeoutSec": 1200,
+    "systemPromptAppend": null,
+    "cacheable": true,
+    "enableVerifyTool": true,
+    "verifyAttempts": 4,
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Bash",
+      "Grep",
+      "Glob"
+    ],
+    "hooks": [
+      "block-git"
+    ],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "lifecycle": "pr-branch",
+  "lifecycleConfig": {
+    "label": {
+      "name": "kody:running",
+      "color": "fbca04",
+      "description": "kody: working"
+    },
+    "context": "task",
+    "sync": false,
+    "verify": true,
+    "advance": false,
+    "mirrorState": true,
+    "finalize": true
+  },
+  "scripts": {
+    "preflight": [],
+    "postflight": []
+  }
+}
