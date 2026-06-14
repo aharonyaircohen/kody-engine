@@ -1,7 +1,7 @@
 {
   "name": "release-publish",
   "role": "primitive",
-  "describe": "Release stage 3 — tag the merge commit, publish to npm if applicable, hand off.",
+  "describe": "",
   "inputs": [
     {
       "name": "issue",
@@ -23,8 +23,7 @@
     "tools": [
       "Read",
       "Bash",
-      "Grep",
-      "Glob"
+      "Grep"
     ],
     "hooks": [],
     "skills": [],
