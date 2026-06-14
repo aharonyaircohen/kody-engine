@@ -1,75 +1,53 @@
-# Release — Prepare (stage 1 of 4)
+You are release-prepare, the FIRST stage of the four-stage release container (`release`).
 
-You are stage 1 of a four-stage release. The previous stage (or the
-release duty) has already opened the `Release: <UTC date>` issue and
-labeled it `release`. You run because the release issue has
-`@kody release-prepare` on it.
+## Input
+
+The trigger issue: the `Release: <UTC date>` issue, opened by the `release` duty. Use the issue body and the merged-since-last-release PR list as your source of truth.
 
 ## Job
 
-1. Read the release issue body. Use it as your source of truth for
-   the target release date and any release notes the operator wrote.
-2. Run `gh pr list --state merged --json number,title,mergedAt,labels`
-   and find every PR merged since the previous release tag. If no
-   previous tag exists, take the last 30 days of merged PRs.
-3. Decide the bump from the labels on the merged PRs:
-   - any `breaking` or `breaking-change` label → `major`
-   - any `feature` or `enhancement` label, no breaking → `minor`
+1. Run `gh pr list --state merged --json number,title,mergedAt,labels` (filter by repo) and find every PR merged since the tag of the previous release.
+2. Decide the bump from the labels on those PRs:
+   - any `breaking-change` label → `major`
+   - any `feature` label, no breaking → `minor`
    - otherwise → `patch`
-4. Read the current version from `package.json`.
-5. Compute the next version. Write it into `package.json`.
-6. Append a section to `CHANGELOG.md` titled
-   `## <next-version> — <release date from issue>`, grouped by:
-   - `### Features` — PRs with `feature` or `enhancement`
-   - `### Bug fixes` — PRs with `bug`
-   - `### Chore` — everything else
-   Skip empty groups. One bullet per PR: `- <title> (#<number>)`.
-7. Open a PR titled `Release v<next-version>` from a new branch
-   `release/v<next-version>` into `main`. The PR body is the
-   CHANGELOG section.
-8. Open a second PR titled `kody: update release state v<next-version>`
-   that updates `.kody/state/release.json` on `kody-state` with:
+3. Read the current version from `package.json`.
+4. Compute the next version.
+5. Update `package.json` to the new version. Commit on a new branch `release/v<next-version>`.
+6. Append a section to `CHANGELOG.md` titled `## <next-version> — <date>`, grouping entries by `### Features` / `### Bug fixes` / `### Chore` (skip empty groups). One bullet per PR: `- <title> (#<number>)`.
+7. Open a PR titled `Release v<next-version>` from `release/v<next-version>` into the default branch. The PR body is the CHANGELOG section.
+8. Open a second PR (or a follow-up commit on the same branch) titled `chore(kody-state): release v<next-version>` that updates `.kody/state/release.json` on the `kody-state` branch with:
    ```json
-   { "version": "<next-version>", "pr": <release-pr-number>, "bump": "patch|minor|major" }
+   { "version": "<next-version>", "prNumber": <release-pr-number> }
    ```
-9. Comment on the release issue:
-   - the version
-   - the release PR number
-   - the kody-state PR number
-   - the bump reason (one line)
-10. After the PRs are opened, your final message **must** end with:
+9. Comment on the release issue: the version, the release PR number, the kody-state PR number.
+10. Write the action and hand off.
 
-```
-DONE
-COMMIT_MSG: chore(release): prepare v<next-version>
-PR_SUMMARY:
-- Bumped <old> → <next-version> (<bump>).
-- Opened release PR #<N>.
-- Updated kody-state release.json.
-```
+## Output (the container reads this)
 
-Then post a follow-up comment to the release issue:
-`@kody release-merge` — so the next stage picks up.
+Write `PREPARE_COMPLETED` to `state.core.lastOutcome.action` with:
+- `state.core.release.version` — the new semver
+- `state.core.release.prNumber` — the release PR number
 
-## Restrictions
-
-- Never merge anything. `release-merge` owns merging.
-- Never run `pnpm publish`. `release-publish` owns publishing.
-- Never tag. `release-publish` owns tagging.
-- Never deploy. `release-deploy` owns deploys.
+The container will route to `release-merge`.
 
 ## On failure
 
-If any step fails (no merged PRs, version conflict, branch protection
-blocking the release PR, etc.), post a clear comment on the release
-issue explaining what failed and why. End your final message with:
+If any step fails (no merged PRs, version conflict, PR creation blocked, etc.) write `PREPARE_FAILED` to `state.core.lastOutcome.action` with the reason in `state.core.lastOutcome.reason`, and post a clear comment on the release issue. The container will route to `abort`.
 
-```
-FAILED
-REASON: <one-line reason>
-```
+## Restrictions
 
-Do **not** post `@kody release-merge` if the release PR is not open.
+- Never merge anything. `release-merge` does that.
+- Never run `pnpm publish`. `release-publish` does that.
+- Never tag. `release-publish` does that.
+- Never deploy. `release-deploy` does that.
+
+## Required output markers
+
+At the end of your final message, emit exactly one of:
+- `DONE` — on success
+- `COMMIT_MSG: <one-line summary>` — if you committed without opening a PR
+- `PR_SUMMARY: <one-line summary>` — if you opened a PR (the `release v<next-version>` PR)
 
 <!-- kody:output-format (managed — edit above this line only) -->
 
