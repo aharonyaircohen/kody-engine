@@ -17,7 +17,7 @@ import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type { AgentResult } from "../../agent.js"
-import type { ProviderModel } from "../../config.js"
+import type { ProviderModel, ReasoningEffort } from "../../config.js"
 import { gh } from "../../issue.js"
 import type { EventSink } from "../events.js"
 import { eventsFilePath, makeRunId } from "../events.js"
@@ -46,6 +46,12 @@ export interface InteractiveModeOptions {
   skipGit?: boolean
   /** Test seam — override poll interval (default 30s). */
   pollIntervalMs?: number
+  /**
+   * Thinking level. Forwarded to every `runChatTurn` call inside the
+   * loop so each turn gets the same thinking budget. Unset / `"off"`
+   * means no thinking block — cheapest path.
+   */
+  reasoningEffort?: ReasoningEffort | null
 }
 
 export interface InteractiveModeResult {
@@ -139,6 +145,7 @@ export async function runInteractiveMode(opts: InteractiveModeOptions): Promise<
         verbose: opts.verbose,
         quiet: opts.quiet,
         invokeAgent: opts.invokeAgent,
+        ...(opts.reasoningEffort ? { reasoningEffort: opts.reasoningEffort } : {}),
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)

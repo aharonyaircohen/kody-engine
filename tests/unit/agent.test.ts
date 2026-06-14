@@ -20,6 +20,7 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
 }))
 
 import { runAgent } from "../../src/agent.js"
+import { REASONING_BUDGETS } from "../../src/config.js"
 
 let ndjsonDir: string
 const baseOpts = () => ({
@@ -100,6 +101,65 @@ describe("runAgent: maxThinkingTokens passthrough", () => {
     await runAgent({ ...baseOpts(), maxThinkingTokens: -1 })
     const argsNeg = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
     expect(argsNeg.options).not.toHaveProperty("maxThinkingTokens")
+  })
+})
+
+describe("runAgent: reasoningEffort → maxThinkingTokens mapping", () => {
+  beforeEach(() => {
+    querySpy.mockClear()
+  })
+  afterEach(() => {
+    querySpy.mockClear()
+  })
+
+  it("omits maxThinkingTokens when reasoningEffort is unset (cheapest path)", async () => {
+    await runAgent(baseOpts())
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options).not.toHaveProperty("maxThinkingTokens")
+  })
+
+  it("omits maxThinkingTokens when reasoningEffort is null", async () => {
+    await runAgent({ ...baseOpts(), reasoningEffort: null })
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options).not.toHaveProperty("maxThinkingTokens")
+  })
+
+  it("omits maxThinkingTokens when reasoningEffort is 'off' (explicit no-thinking)", async () => {
+    await runAgent({ ...baseOpts(), reasoningEffort: "off" })
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options).not.toHaveProperty("maxThinkingTokens")
+  })
+
+  it("maps 'low' → REASONING_BUDGETS.low tokens", async () => {
+    await runAgent({ ...baseOpts(), reasoningEffort: "low" })
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options.maxThinkingTokens).toBe(REASONING_BUDGETS.low)
+  })
+
+  it("maps 'medium' → REASONING_BUDGETS.medium tokens", async () => {
+    await runAgent({ ...baseOpts(), reasoningEffort: "medium" })
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options.maxThinkingTokens).toBe(REASONING_BUDGETS.medium)
+  })
+
+  it("maps 'high' → REASONING_BUDGETS.high tokens", async () => {
+    await runAgent({ ...baseOpts(), reasoningEffort: "high" })
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options.maxThinkingTokens).toBe(REASONING_BUDGETS.high)
+  })
+
+  it("reasoningEffort wins over explicit maxThinkingTokens when both are set", async () => {
+    // User-facing field is canonical — never let a stale budget value
+    // override the level the user picked in the chat.
+    await runAgent({ ...baseOpts(), reasoningEffort: "low", maxThinkingTokens: 99_999 })
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options.maxThinkingTokens).toBe(REASONING_BUDGETS.low)
+  })
+
+  it("'off' wins over explicit maxThinkingTokens too (no thinking block at all)", async () => {
+    await runAgent({ ...baseOpts(), reasoningEffort: "off", maxThinkingTokens: 32_000 })
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options).not.toHaveProperty("maxThinkingTokens")
   })
 })
 

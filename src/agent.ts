@@ -2,7 +2,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { query } from "@anthropic-ai/claude-agent-sdk"
 import { ensureStableClaudeBinary } from "./claudeBinary.js"
-import { getAnthropicApiKeyOrDummy, type ProviderModel } from "./config.js"
+import { getAnthropicApiKeyOrDummy, type ProviderModel, REASONING_BUDGETS, type ReasoningEffort } from "./config.js"
 import { renderEvent, type SdkMessageLike } from "./format.js"
 
 export interface AgentTokenUsage {
@@ -99,6 +99,19 @@ export interface AgentOptions {
   agents?: Record<string, { description: string; prompt: string; tools?: string[]; model?: string }>
   /** Hard cap on agent turns. null/undefined = SDK default (unbounded). */
   maxTurns?: number | null
+  /**
+   * Thinking level. Maps to the SDK's `maxThinkingTokens` (Anthropic
+   * extended thinking). When set, overrides the explicit
+   * `maxThinkingTokens` field if both are provided — this is the
+   * preferred surface. Unset / `"off"` means no thinking block is sent
+   * to the model, which is the cheapest path (no reasoning preamble,
+   * no thinking-token spend).
+   *
+   * Resolution: `runChatTurn` reads from CLI flag → env var → config.
+   * Direct callers of `runAgent` (tests, executables) can set either
+   * field directly; `reasoningEffort` wins when both are set.
+   */
+  reasoningEffort?: ReasoningEffort | null
   /** Extended-thinking token budget. null/undefined = SDK default. */
   maxThinkingTokens?: number | null
   /**
@@ -495,7 +508,23 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       if (typeof opts.maxTurns === "number" && opts.maxTurns > 0) {
         queryOptions.maxTurns = opts.maxTurns
       }
-      if (typeof opts.maxThinkingTokens === "number" && opts.maxThinkingTokens > 0) {
+      // `reasoningEffort` is the canonical user-facing surface. When
+      // set, it fully owns the maxThinkingTokens slot — including
+      // `"off"`, which clears the block entirely (cheapest path). The
+      // explicit `maxThinkingTokens` field is the legacy surface for
+      // direct callers (tests, executables) that don't go through
+      // the level vocabulary; it only applies when `reasoningEffort`
+      // is not provided.
+      if (opts.reasoningEffort !== undefined && opts.reasoningEffort !== null) {
+        if (opts.reasoningEffort === "off") {
+          // Explicitly off: do NOT set maxThinkingTokens. Also clear
+          // any value a legacy caller might have left in the option
+          // bag. The SDK sees no thinking block.
+        } else {
+          const budget = REASONING_BUDGETS[opts.reasoningEffort]
+          if (budget) queryOptions.maxThinkingTokens = budget
+        }
+      } else if (typeof opts.maxThinkingTokens === "number" && opts.maxThinkingTokens > 0) {
         queryOptions.maxThinkingTokens = opts.maxThinkingTokens
       }
       if (typeof opts.systemPromptAppend === "string" && opts.systemPromptAppend.length > 0) {
