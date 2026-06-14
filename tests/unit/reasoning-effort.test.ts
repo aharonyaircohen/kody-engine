@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest"
-import {
-  REASONING_BUDGETS,
-  REASONING_EFFORTS,
-  parseReasoningEffort,
-} from "../../src/config.js"
+import { parseReasoningEffort, REASONING_BUDGETS, REASONING_EFFORTS } from "../../src/config.js"
 
 /**
  * Cross-repo contract: the dashboard's `reasoning-adapter.ts` and the
