@@ -261,8 +261,10 @@ open_prepare_pr() {
   fi
 
   # Bump version files.
-  local files
-  mapfile -t files < <(resolve_version_files)
+  local files=()
+  while IFS= read -r f; do
+    files+=("$f")
+  done < <(resolve_version_files)
   local touched=()
   for f in "${files[@]}"; do
     local res
