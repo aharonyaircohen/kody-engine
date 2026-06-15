@@ -35,22 +35,14 @@
   "scripts": {
     "preflight": [
       {
-        "script": "previewHealthTick",
+        "shell": "tick.sh",
         "with": {
-          "jobsDir": ".kody/duties"
-        }
+          "jobsDir": ".kody/duties",
+          "duty": "preview-health"
+        },
+        "timeoutSec": 300
       }
     ],
-    "postflight": [
-      {
-        "script": "writeJobStateFile",
-        "with": {
-          "jobsDir": ".kody/duties"
-        }
-      },
-      {
-        "script": "appendCompanyActivity"
-      }
-    ]
+    "postflight": []
   }
 }

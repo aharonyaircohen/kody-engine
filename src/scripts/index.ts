@@ -66,7 +66,6 @@ import { postIssueComment } from "./postIssueComment.js"
 import { postPlanComment } from "./postPlanComment.js"
 import { postResearchComment } from "./postResearchComment.js"
 import { postReviewResult } from "./postReviewResult.js"
-import { previewHealthTick } from "./previewHealthTick.js"
 import { promoteQaGoal } from "./promoteQaGoal.js"
 import { recordClassification } from "./recordClassification.js"
 import { recordOutcome } from "./recordOutcome.js"
@@ -141,7 +140,6 @@ export const preflightScripts: Record<string, PreflightScript> = {
   dispatchNextTaskJob,
   runTickScript,
   runPreviewBuild,
-  previewHealthTick,
   loadGoalState,
   handleAbandonedGoal,
   deriveGoalPhase,
