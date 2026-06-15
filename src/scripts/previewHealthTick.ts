@@ -6,7 +6,7 @@
  * posts inert recommendations for non-graduated repairs, and proposes the
  * next file-backed duty state for writeJobStateFile.
  */
-import type { Profile, PreflightScript } from "../executables/types.js"
+import type { PreflightScript, Profile } from "../executables/types.js"
 import { gh } from "../issue.js"
 import type { StateEnvelope } from "./issueStateComment.js"
 import { resolveBackend } from "./jobState/index.js"
@@ -91,7 +91,9 @@ function readLedgerModes(cwd: string): Record<RepairVerb, "ask" | "auto"> {
   }
 
   if (issues.length === 0) return modes
-  const lowest = [...issues].sort((a, b) => (a.number ?? Number.MAX_SAFE_INTEGER) - (b.number ?? Number.MAX_SAFE_INTEGER))[0]
+  const lowest = [...issues].sort(
+    (a, b) => (a.number ?? Number.MAX_SAFE_INTEGER) - (b.number ?? Number.MAX_SAFE_INTEGER),
+  )[0]
   const body = lowest?.body ?? ""
   if (!body.includes(LEDGER_START) || !body.includes(LEDGER_END)) return modes
 
@@ -109,7 +111,9 @@ function readLedgerModes(cwd: string): Record<RepairVerb, "ask" | "auto"> {
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
 }
 
 function ciFailing(rollup: PrCheck[] | undefined): boolean {
@@ -145,7 +149,8 @@ function detectRepair(cwd: string, slug: string, pr: PullRequest): { verb: Repai
   if (mergeable === "UNKNOWN") {
     return { verb: "defer", reason: `PR #${pr.number} mergeability still UNKNOWN; retry next tick.` }
   }
-  if (mergeable === "CONFLICTING") return { verb: "resolve", reason: `PR #${pr.number} merge conflicts \`${pr.baseRefName}\`.` }
+  if (mergeable === "CONFLICTING")
+    return { verb: "resolve", reason: `PR #${pr.number} merge conflicts \`${pr.baseRefName}\`.` }
   if (ciFailing(pr.statusCheckRollup)) return { verb: "fix-ci", reason: `PR #${pr.number} has failing CI checks.` }
   const drift = behindBy(cwd, slug, pr.baseRefName, pr.headRefName)
   if (drift > STALE_THRESHOLD) {
@@ -191,10 +196,9 @@ function autoRun(cwd: string, prNumber: number, verb: RepairVerb, reason: string
     }
   }
 
-  const autoReason =
-    AUTO_VERBS.has(verb)
-      ? "Policy: preview-health auto-runs `resolve` for merge conflicts."
-      : `Graduated: operator approved \`${verb}\` repeatedly. A **Reject** on any \`${verb}\` returns me asking.`
+  const autoReason = AUTO_VERBS.has(verb)
+    ? "Policy: preview-health auto-runs `resolve` for merge conflicts."
+    : `Graduated: operator approved \`${verb}\` repeatedly. A **Reject** on any \`${verb}\` returns me asking.`
   return postComment(
     cwd,
     prNumber,
