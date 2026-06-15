@@ -173,6 +173,11 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
     reason:
       "preview-build is the only executable that builds a deployable preview image (remote builder). Single-purpose; no other executable shares the build step.",
   },
+  previewHealthTick: {
+    owner: "preview-health",
+    reason:
+      "preview-health is a deterministic PR repair scanner. Single-purpose watch executable; no other executable shares this scan/dispatch step.",
+  },
   planTaskJobs: {
     owner: "task-jobs",
     reason:
