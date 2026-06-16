@@ -91,6 +91,18 @@ describe("profile: loadProfile", () => {
     expect(() => loadProfile(p)).not.toThrow()
   })
 
+  it("accepts state postflights when runScheduledExecutableTick is in preflight", () => {
+    const dir = tmpDir()
+    const p = writeProfile(dir, {
+      ...VALID_MIN,
+      scripts: {
+        preflight: [{ script: "runScheduledExecutableTick" }],
+        postflight: [{ script: "writeJobStateFile" }],
+      },
+    })
+    expect(() => loadProfile(p)).not.toThrow()
+  })
+
   it("resolves a duty that references an executable (how) + overlays who/when/tools", () => {
     // A thin duty: references the engine's `merge` executable (the HOW), adds
     // its own name + staff (WHO) + every (WHEN). No claudeCode of its own.

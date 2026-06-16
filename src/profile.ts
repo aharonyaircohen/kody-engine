@@ -236,7 +236,7 @@ export function loadProfile(profilePath: string): Profile {
   // Any of these preflights populate ctx.data.jobState: loadDutyState (folder
   // duty), loadJobFromFile (markdown duty via duty-tick), runTickScript (scripted
   // duty via duty-tick-scripted).
-  const STATE_LOADERS = ["loadDutyState", "loadJobFromFile", "runTickScript"]
+  const STATE_LOADERS = ["loadDutyState", "loadJobFromFile", "runTickScript", "runScheduledExecutableTick"]
   if (needsState && !STATE_LOADERS.some((s) => preNames.has(s))) {
     throw new ProfileError(
       profilePath,
