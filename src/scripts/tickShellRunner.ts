@@ -80,6 +80,8 @@ export function buildTickChildEnv(parent: NodeJS.ProcessEnv, force: boolean): No
     "GITHUB_WORKFLOW",
     "GITHUB_ACTIONS",
     "CI",
+    "KODY_DRY_RUN",
+    "KODY_NO_COMMIT",
   ])
 
   const env: NodeJS.ProcessEnv = {}

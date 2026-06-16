@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { KodyConfig } from "../../src/config.js"
 import type { Context, Profile } from "../../src/executables/types.js"
 import { runScheduledExecutableTick } from "../../src/scripts/runScheduledExecutableTick.js"
+import { buildTickChildEnv } from "../../src/scripts/tickShellRunner.js"
 
 function configFor(): KodyConfig {
   return {
@@ -48,6 +49,25 @@ afterEach(() => {
 })
 
 describe("runScheduledExecutableTick", () => {
+  it("forwards generic dry-run flags to executable-local shell", () => {
+    expect(
+      buildTickChildEnv(
+        {
+          PATH: "/bin",
+          KODY_DRY_RUN: "1",
+          KODY_NO_COMMIT: "1",
+          JOB_GAP_SCAN_DRY_RUN: "1",
+          SECRET_TOKEN: "nope",
+        },
+        false,
+      ),
+    ).toEqual({
+      PATH: "/bin",
+      KODY_DRY_RUN: "1",
+      KODY_NO_COMMIT: "1",
+    })
+  })
+
   it("runs the executable-local shell and parses the next-state fence", async () => {
     fs.writeFileSync(
       path.join(execDir, "tick.sh"),
