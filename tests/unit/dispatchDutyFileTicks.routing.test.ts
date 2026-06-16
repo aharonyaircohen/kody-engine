@@ -94,6 +94,20 @@ describe("dispatchDutyFileTicks routing", () => {
     expect(runExecutableMock.mock.calls[0]![0]).toBe("duty-tick")
   })
 
+  it("routes duty with executable to that executable and passes the duty slug", async () => {
+    writeJob("preview-health", { every: "15m", staff: "cto", executable: "preview-health" })
+
+    const ctx = ctxFor()
+    await dispatchDutyFileTicks(ctx, PROFILE, {
+      jobsDir: ".kody/duties",
+      targetExecutable: "duty-tick",
+      slugArg: "duty",
+    })
+
+    expect(runExecutableMock).toHaveBeenCalledTimes(1)
+    expect(runExecutableMock.mock.calls[0]![0]).toBe("preview-health")
+    expect(runExecutableMock.mock.calls[0]![1].cliArgs).toEqual({ duty: "preview-health" })
+  })
   it("skips a duty with no `staff:` (every duty must name an executor)", async () => {
     writeJob("orphan-duty", { every: "1h" })
 

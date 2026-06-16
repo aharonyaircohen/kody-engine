@@ -151,7 +151,7 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
       // (LLM-driven) target. Decided here, not in the executable, so the
       // routing rule lives in one place and the executables stay simple.
       const slugTarget = config.tickScript ? scriptedExecutable : (config.executable ?? targetExecutable)
-      const cliArgs = config.executable ? {} : { [slugArg]: slug }
+      const cliArgs = { [slugArg]: slug }
 
       process.stdout.write(`[jobs] → tick ${slug} (${slugTarget})\n`)
       try {

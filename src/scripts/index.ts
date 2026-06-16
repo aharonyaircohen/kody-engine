@@ -79,6 +79,7 @@ import { revertFlow } from "./revertFlow.js"
 import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
 import { runPreviewBuild } from "./runPreviewBuild.js"
+import { runScheduledExecutableTick } from "./runScheduledExecutableTick.js"
 import { runTickScript } from "./runTickScript.js"
 import { saveGoalState } from "./saveGoalState.js"
 import { saveTaskState } from "./saveTaskState.js"
@@ -138,6 +139,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   dispatchDutyFileTicks,
   planTaskJobs,
   dispatchNextTaskJob,
+  runScheduledExecutableTick,
   runTickScript,
   runPreviewBuild,
   loadGoalState,
