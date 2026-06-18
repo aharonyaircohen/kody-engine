@@ -20,7 +20,7 @@
  */
 
 import * as path from "node:path"
-import { listDutyFolderSlugs, type DutyFolder } from "../dutyFolders.js"
+import { type DutyFolder, listDutyFolderSlugs } from "../dutyFolders.js"
 import type { PreflightScript } from "../executables/types.js"
 import { gh } from "../issue.js"
 import { mintScheduledJob, runJob } from "../job.js"

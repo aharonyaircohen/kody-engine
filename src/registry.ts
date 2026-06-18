@@ -16,8 +16,8 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { getCompanyStoreAssetRoot } from "./companyStore.js"
-import { DUTY_BODY_FILE, DUTY_PROFILE_FILE, listDutyFolderSlugs, readDutyFolder } from "./dutyFolders.js"
 import type { DutyFolder } from "./dutyFolders.js"
+import { DUTY_BODY_FILE, DUTY_PROFILE_FILE, listDutyFolderSlugs, readDutyFolder } from "./dutyFolders.js"
 import type { InputSpec } from "./executables/types.js"
 
 export interface DiscoveredExecutable {

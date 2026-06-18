@@ -66,6 +66,11 @@ function classifySubtype(subtype: string | undefined): AgentOutcomeKind {
   return "generic_failed"
 }
 
+function isClaudeLoginRequiredText(text: string): boolean {
+  const normalized = text.toLowerCase()
+  return normalized.includes("not logged in") && normalized.includes("/login")
+}
+
 export interface AgentOptions {
   prompt: string
   model: ProviderModel
@@ -413,6 +418,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     // that already finished its work (a real risk for read-only flows where
     // `sawMutatingTool` stays false and the retry gate would otherwise fire).
     let sawTerminalSuccess = false
+    let sawLoginRequired = false
     // Flips when the SDK reports a "success" result that produced zero model
     // output — the session never actually reached the model (the classic
     // signature: litellm proxy crashed, SDK still emits subtype "success" with
@@ -614,7 +620,10 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         }
 
         const line = renderEvent(msg as SdkMessageLike, { verbose: opts.verbose, quiet: opts.quiet })
-        if (line) process.stdout.write(`${line}\n`)
+        if (line) {
+          if (isClaudeLoginRequiredText(line)) sawLoginRequired = true
+          process.stdout.write(`${line}\n`)
+        }
 
         const m = msg as SdkMessageLike
 
@@ -702,6 +711,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
             outcomeKind = "ok"
             sawTerminalSuccess = true
             const text = (typeof m.result === "string" ? m.result : "").trim()
+            if (isClaudeLoginRequiredText(text)) sawLoginRequired = true
             if (text) resultTexts.push(text)
           } else {
             outcome = "failed"
@@ -740,6 +750,11 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       )
     }
     finalText = resultTexts.join("\n\n---\n\n")
+    if (outcome === "completed" && sawLoginRequired) {
+      outcome = "failed"
+      outcomeKind = "model_error"
+      errorMessage = "Claude Code reported it is not logged in; refusing to mark agent run successful"
+    }
 
     // Detect a hollow "success" — one the SDK reported as subtype "success"
     // but where the model never actually answered (the dead-proxy signature:

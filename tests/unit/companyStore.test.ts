@@ -97,11 +97,7 @@ function writeExecutable(root: string, slug: string, profile: Record<string, unk
   fs.writeFileSync(path.join(dir, "profile.json"), `${JSON.stringify(profile)}\n`)
 }
 
-function writeDuty(
-  root: string,
-  slug: string,
-  input: { profile: Record<string, unknown>; body: string },
-): void {
+function writeDuty(root: string, slug: string, input: { profile: Record<string, unknown>; body: string }): void {
   const dir = path.join(root, slug)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "profile.json"), `${JSON.stringify(input.profile)}\n`)

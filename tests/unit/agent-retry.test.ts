@@ -49,6 +49,16 @@ const SUCCESS_WITH_TOKENS = {
   result: "",
   usage: { input_tokens: 10, output_tokens: 42 },
 }
+const LOGIN_REQUIRED_TEXT = "Not logged in · Please run /login"
+const LOGIN_REQUIRED_ASSISTANT = {
+  type: "assistant",
+  message: { content: [{ type: "text", text: LOGIN_REQUIRED_TEXT }] },
+}
+const LOGIN_REQUIRED_RESULT = {
+  type: "result",
+  subtype: "success",
+  result: LOGIN_REQUIRED_TEXT,
+}
 const CONNECTION_ERR = "API Error: Unable to connect to API (ConnectionRefused)"
 const writeToolUse = {
   type: "assistant",
@@ -170,6 +180,25 @@ describe("runAgent: no-work success demotion", () => {
   beforeEach(() => {
     attempts = []
     callIndex = 0
+  })
+
+  it("demotes login-required text before a success result", async () => {
+    attempts = [{ messages: [LOGIN_REQUIRED_ASSISTANT, SUCCESS_WITH_TOKENS] }, { messages: [SUCCESS] }]
+    const ensureBackend = vi.fn().mockResolvedValue(undefined)
+    const res = await runFlushed({ ...baseOpts(), ensureBackend })
+    expect(callIndex).toBe(1)
+    expect(res.outcome).toBe("failed")
+    expect(res.outcomeKind).toBe("model_error")
+    expect(res.error).toMatch(/not logged in/i)
+    expect(ensureBackend).not.toHaveBeenCalled()
+  })
+
+  it("demotes login-required terminal success result", async () => {
+    attempts = [{ messages: [LOGIN_REQUIRED_RESULT] }, { messages: [SUCCESS] }]
+    const res = await runFlushed()
+    expect(callIndex).toBe(1)
+    expect(res.outcome).toBe("failed")
+    expect(res.error).toMatch(/not logged in/i)
   })
 
   it("demotes a zero-output 'success' to failed (blocks the empty PR)", async () => {
