@@ -35,6 +35,14 @@ on:
         description: "Initial chat message (optional)"
         type: string
         default: ""
+      duty:
+        description: "Duty action to run (default: run)"
+        type: string
+        default: ""
+      executable:
+        description: "Legacy alias for duty action"
+        type: string
+        default: ""
       model:
         description: "Model override (optional, e.g. anthropic/claude-haiku-4-5-20251001)"
         type: string

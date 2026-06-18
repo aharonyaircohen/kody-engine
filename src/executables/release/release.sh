@@ -44,6 +44,7 @@ dry_run="${KODY_ARG_DRY_RUN:-false}"
 prefer="${KODY_ARG_PREFER:-}"
 
 default_branch="${KODY_CFG_GIT_DEFAULTBRANCH:-main}"
+release_branch="${KODY_CFG_RELEASE_RELEASEBRANCH:-}"
 notify_cmd="${KODY_CFG_RELEASE_NOTIFYCOMMAND:-}"
 notify_timeout_s=$(( ${KODY_CFG_RELEASE_TIMEOUTMS:-600000} / 1000 ))
 
@@ -67,6 +68,97 @@ if [[ ! -f package.json ]]; then
   echo "KODY_SKIP_AGENT=true"
   exit 1
 fi
+
+read_pkg_version_from_ref() {
+  local ref="$1"
+  git show "${ref}:package.json" 2>/dev/null | node -e 'let s=""; process.stdin.on("data", c => s += c); process.stdin.on("end", () => { try { console.log(JSON.parse(s).version || "") } catch { process.exit(1) } })'
+}
+
+finish_release_with_deploy() {
+  local version="$1"
+  local tag="$2"
+  local release_url="${3:-}"
+
+  current_step="deploy"
+  set +e
+  deploy_pr_url=$(open_deploy_pr "$version" "$issue")
+  deploy_rc=$?
+  set -e
+  if [[ "$deploy_rc" -ne 0 ]]; then
+    echo "[release] deploy step failed (rc=${deploy_rc}) — published v${version} but ${default_branch}→${release_branch} promotion PR was not opened" >&2
+    echo "KODY_REASON=release v${version}: published, but ${default_branch}→${release_branch} deploy PR failed"
+    echo "RELEASE_TAG=${tag}"
+    [[ -n "$release_url" ]] && echo "RELEASE_URL=${release_url}"
+    echo "RELEASE_FAILED=true"
+    exit 1
+  fi
+  if [[ -z "$deploy_pr_url" ]]; then
+    echo " (deploy: no-op — single-branch repo)"
+  else
+    echo "✓ deploy: ${deploy_pr_url}"
+  fi
+
+  current_step="notify"
+  notify_status="skipped"
+  if [[ -n "$notify_cmd" ]]; then
+    cmd="${notify_cmd//\$VERSION/$version}"
+    cmd="${cmd//\$DEPLOY_PR_URL/${deploy_pr_url:-}}"
+    echo " notify: ${cmd}"
+    if timeout "$notify_timeout_s" bash -c "$cmd"; then
+      notify_status="ok"
+    else
+      notify_status="failed"
+      echo "[release] notifyCommand failed (non-fatal)" >&2
+    fi
+  fi
+
+  current_step="done"
+  [[ -n "$deploy_pr_url" ]] && echo "KODY_PR_URL=${deploy_pr_url}"
+  echo "RELEASE_TAG=${tag}"
+  [[ -n "$release_url" ]] && echo "RELEASE_URL=${release_url}"
+  [[ -n "$deploy_pr_url" ]] && echo "RELEASE_DEPLOY_PR=${deploy_pr_url}"
+  echo "KODY_REASON=release v${version} complete (notify=${notify_status})"
+  echo "RELEASE_COMPLETED=true"
+  echo "KODY_SKIP_AGENT=true"
+}
+
+resume_prepared_release_if_needed() {
+  [[ -n "$release_branch" && "$release_branch" != "$default_branch" ]] || return 1
+
+  current_step="resume-check"
+  git fetch origin "$default_branch" "$release_branch" --tags
+
+  local default_version release_version
+  default_version=$(read_pkg_version_from_ref "origin/${default_branch}" || echo "")
+  release_version=$(read_pkg_version_from_ref "origin/${release_branch}" || echo "")
+  [[ -n "$default_version" && -n "$release_version" ]] || return 1
+  [[ "$default_version" != "$release_version" ]] || return 1
+
+  local version="$default_version"
+  local tag="v${version}"
+  echo "→ release: resuming prepared ${tag}; ${default_branch} is not promoted to ${release_branch}"
+
+  current_step="publish"
+  git checkout "$default_branch"
+  git reset --hard "origin/$default_branch"
+
+  local publish_status release_url
+  publish_status=$(tag_and_publish "$version")
+  release_url=$(create_gh_release "$tag" || echo "")
+  echo "✓ publish: tag=${tag} status=${publish_status} release_url=${release_url:-<none>}"
+  if [[ "$publish_status" == "failed" ]]; then
+    echo "[release] publishCommand failed but tag + GH release exist" >&2
+    echo "KODY_REASON=tag + GH release created, but publishCommand failed"
+    echo "RELEASE_FAILED=true"
+    echo "KODY_SKIP_AGENT=true"
+    exit 1
+  fi
+
+  finish_release_with_deploy "$version" "$tag" "$release_url"
+  exit 0
+}
+
+resume_prepared_release_if_needed
 
 # ── 1. Prepare ────────────────────────────────────────────────────────────
 current_step="prepare"
@@ -134,50 +226,5 @@ if [[ "$publish_status" == "failed" ]]; then
   exit 1
 fi
 
-# ── 5. Deploy PR (default → release branch) ───────────────────────────────
-# Distinguish three outcomes: rc!=0 is a real failure (do NOT mask as no-op);
-# rc==0 + empty URL is a genuine single-branch no-op; rc==0 + URL is success.
-current_step="deploy"
-set +e
-deploy_pr_url=$(open_deploy_pr "$new_version" "$issue")
-deploy_rc=$?
-set -e
-release_branch="${KODY_CFG_RELEASE_RELEASEBRANCH:-}"
-if [[ "$deploy_rc" -ne 0 ]]; then
-  echo "[release] deploy step failed (rc=${deploy_rc}) — published v${new_version} but the ${default_branch}→${release_branch} promotion PR was not opened" >&2
-  echo "KODY_REASON=release v${new_version}: published, but the ${default_branch}→${release_branch} deploy PR failed"
-  echo "RELEASE_TAG=${tag}"
-  [[ -n "$release_url" ]] && echo "RELEASE_URL=${release_url}"
-  echo "RELEASE_FAILED=true"
-  exit 1
-fi
-if [[ -z "$deploy_pr_url" ]]; then
-  echo "  (deploy: no-op — single-branch repo)"
-else
-  echo "✓ deploy: ${deploy_pr_url}"
-fi
-
-# ── 6. Notify ─────────────────────────────────────────────────────────────
-current_step="notify"
-notify_status="skipped"
-if [[ -n "$notify_cmd" ]]; then
-  cmd="${notify_cmd//\$VERSION/$new_version}"
-  cmd="${cmd//\$DEPLOY_PR_URL/${deploy_pr_url:-}}"
-  echo "  notify: ${cmd}"
-  if timeout "$notify_timeout_s" bash -c "$cmd"; then
-    notify_status="ok"
-  else
-    notify_status="failed"
-    echo "[release] notifyCommand failed (non-fatal)" >&2
-  fi
-fi
-
-# ── 7. Done ───────────────────────────────────────────────────────────────
-current_step="done"
-[[ -n "$deploy_pr_url" ]] && echo "KODY_PR_URL=${deploy_pr_url}"
-echo "RELEASE_TAG=${tag}"
-[[ -n "$release_url" ]] && echo "RELEASE_URL=${release_url}"
-[[ -n "$deploy_pr_url" ]] && echo "RELEASE_DEPLOY_PR=${deploy_pr_url}"
-echo "KODY_REASON=release v${new_version} complete (notify=${notify_status})"
-echo "RELEASE_COMPLETED=true"
-echo "KODY_SKIP_AGENT=true"
+finish_release_with_deploy "$new_version" "$tag" "$release_url"
+exit 0
