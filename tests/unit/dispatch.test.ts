@@ -73,6 +73,50 @@ describe("dispatch: workflow_dispatch event", () => {
     })
   })
 
+  it("routes workflow_dispatch duty=release to release executable", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-dispatch-release-workflow-"))
+    const prevCwd = process.cwd()
+    try {
+      process.chdir(tmp)
+      process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
+      process.env.GITHUB_EVENT_PATH = writeEvent({
+        inputs: { issue_number: "291", duty: "release" },
+      })
+      expect(autoDispatch()).toEqual({
+        action: "release",
+        duty: "release",
+        executable: "release",
+        cliArgs: { issue: 291 },
+        target: 291,
+      })
+    } finally {
+      process.chdir(prevCwd)
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  it("routes workflow_dispatch executable=release as legacy duty-action input", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-dispatch-release-workflow-"))
+    const prevCwd = process.cwd()
+    try {
+      process.chdir(tmp)
+      process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
+      process.env.GITHUB_EVENT_PATH = writeEvent({
+        inputs: { issue_number: "291", executable: "release" },
+      })
+      expect(autoDispatch()).toEqual({
+        action: "release",
+        duty: "release",
+        executable: "release",
+        cliArgs: { issue: 291 },
+        target: 291,
+      })
+    } finally {
+      process.chdir(prevCwd)
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
   it("returns null for workflow_dispatch with no issue_number — caller fans out via dispatchScheduledWatches(force)", () => {
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
     process.env.GITHUB_EVENT_PATH = writeEvent({ inputs: {} })

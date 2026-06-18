@@ -106,6 +106,16 @@ on:
         description: "GitHub issue number"
         required: true
         type: string
+      duty:
+        description: "Duty action to run (default: run)"
+        required: false
+        type: string
+        default: ""
+      executable:
+        description: "Legacy alias for duty action"
+        required: false
+        type: string
+        default: ""
   issue_comment:
     types: [created]
 
