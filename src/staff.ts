@@ -13,6 +13,7 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { getCompanyStoreAssetRoot } from "./companyStore.js"
 
 const DEFAULT_STAFF_DIR = ".kody/staff"
 
@@ -62,7 +63,7 @@ function stripFrontmatter(raw: string): string {
 export function loadStaffPersona(cwd: string, slug: string, staffDir: string = DEFAULT_STAFF_DIR): string {
   const trimmed = slug.trim()
   if (!trimmed) throw new Error("loadStaffPersona: empty staff slug")
-  const staffPath = path.join(cwd, staffDir, `${trimmed}.md`)
+  const staffPath = resolveStaffPersonaFile(cwd, trimmed, staffDir)
   if (fs.existsSync(staffPath)) {
     const body = stripFrontmatter(fs.readFileSync(staffPath, "utf-8"))
     if (body) return body
@@ -75,6 +76,19 @@ export function loadStaffPersona(cwd: string, slug: string, staffDir: string = D
   const builtin = BUILTIN_PERSONAS[trimmed]
   if (builtin) return builtin
   throw new Error(`loadStaffPersona: staff '${trimmed}' declared but ${staffPath} does not exist`)
+}
+
+export function resolveStaffPersonaFile(cwd: string, slug: string, staffDir: string = DEFAULT_STAFF_DIR): string {
+  const localPath = path.join(cwd, staffDir, `${slug}.md`)
+  if (fs.existsSync(localPath)) return localPath
+
+  const storeStaffRoot = getCompanyStoreAssetRoot("staff")
+  if (storeStaffRoot) {
+    const storePath = path.join(storeStaffRoot, `${slug}.md`)
+    if (fs.existsSync(storePath)) return storePath
+  }
+
+  return localPath
 }
 
 /**

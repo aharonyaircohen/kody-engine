@@ -38,9 +38,10 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { readDutyFolder } from "../dutyFolders.js"
 import { DUTY_MCP_TOOL_NAMES } from "../dutyMcp.js"
 import type { PreflightScript } from "../executables/types.js"
+import { resolveDutyFolder } from "../registry.js"
+import { resolveStaffPersonaFile } from "../staff.js"
 import { resolveBackend } from "./jobState/index.js"
 
 const DUTY_TOOL_PALETTE: ReadonlySet<string> = new Set(DUTY_MCP_TOOL_NAMES)
@@ -54,7 +55,7 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
     throw new Error(`loadJobFromFile: ctx.args.${slugArg} must be a non-empty slug`)
   }
 
-  const duty = readDutyFolder(path.join(ctx.cwd, jobsDir), slug)
+  const duty = resolveDutyFolder(slug, path.join(ctx.cwd, jobsDir))
   if (!duty) {
     throw new Error(`loadJobFromFile: duty folder not found or incomplete: ${path.join(ctx.cwd, jobsDir, slug)}`)
   }
@@ -75,7 +76,7 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
   let workerTitle = ""
   let workerPersona = ""
   if (workerSlug) {
-    const workerPath = path.join(ctx.cwd, workersDir, `${workerSlug}.md`)
+    const workerPath = resolveStaffPersonaFile(ctx.cwd, workerSlug, workersDir)
     if (!fs.existsSync(workerPath)) {
       throw new Error(`loadJobFromFile: duty '${slug}' declares staff '${workerSlug}' but ${workerPath} does not exist`)
     }

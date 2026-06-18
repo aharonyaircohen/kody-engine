@@ -15,7 +15,9 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { getCompanyStoreAssetRoot } from "./companyStore.js"
 import { DUTY_BODY_FILE, DUTY_PROFILE_FILE, listDutyFolderSlugs, readDutyFolder } from "./dutyFolders.js"
+import type { DutyFolder } from "./dutyFolders.js"
 import type { InputSpec } from "./executables/types.js"
 
 export interface DiscoveredExecutable {
@@ -32,7 +34,7 @@ export interface DiscoveredDutyAction {
   executable: string
   /** Extra args required to lower the duty to its implementation. */
   cliArgs: Record<string, unknown>
-  source: "project-folder" | "builtin"
+  source: "project-folder" | "company-store" | "builtin"
   describe?: string
   profilePath?: string
   bodyPath?: string
@@ -72,6 +74,14 @@ export function getProjectExecutablesRoot(): string {
  */
 export function getProjectDutiesRoot(): string {
   return path.join(process.cwd(), ".kody", "duties")
+}
+
+export function getCompanyStoreExecutablesRoot(): string | null {
+  return getCompanyStoreAssetRoot("executables")
+}
+
+export function getCompanyStoreDutiesRoot(): string | null {
+  return getCompanyStoreAssetRoot("duties")
 }
 
 /**
@@ -151,7 +161,13 @@ export function listBuiltinJobs(root: string = getBuiltinJobsRoot()): BuiltinJob
  * implementation units under `.kody/executables/<name>/`.
  */
 export function getExecutableRoots(): string[] {
-  return [getProjectExecutablesRoot(), getExecutablesRoot()]
+  const storeRoot = getCompanyStoreExecutablesRoot()
+  return [getProjectExecutablesRoot(), ...(storeRoot ? [storeRoot] : []), getExecutablesRoot()]
+}
+
+export function getDutyRoots(projectDutiesRoot: string = getProjectDutiesRoot()): string[] {
+  const storeRoot = getCompanyStoreDutiesRoot()
+  return [projectDutiesRoot, ...(storeRoot ? [storeRoot] : []), getBuiltinDutiesRoot()]
 }
 
 /**
@@ -231,7 +247,8 @@ export function hasExecutable(name: string, roots: string | string[] = getExecut
 /**
  * List public duty actions. Duties own the operator-facing action name; an
  * executable is only the selected implementation. Ordering is intentional:
- * project folder duties override engine built-ins.
+ * project folder duties override company store duties, which override
+ * engine built-ins.
  */
 export function listDutyActions(projectDutiesRoot: string = getProjectDutiesRoot()): DiscoveredDutyAction[] {
   const seen = new Set<string>()
@@ -243,8 +260,14 @@ export function listDutyActions(projectDutiesRoot: string = getProjectDutiesRoot
     out.push(action)
   }
 
-  for (const action of listProjectFolderDutyActions(projectDutiesRoot)) add(action)
-  for (const action of listBuiltinDutyActions()) add(action)
+  const roots = getDutyRoots(projectDutiesRoot)
+  for (const action of listFolderDutyActions(roots[0]!, "project-folder")) add(action)
+  if (roots.length === 3) {
+    for (const action of listFolderDutyActions(roots[1]!, "company-store")) add(action)
+    for (const action of listBuiltinDutyActions(roots[2]!)) add(action)
+  } else {
+    for (const action of listBuiltinDutyActions(roots[1]!)) add(action)
+  }
   return out.sort((a, b) => a.action.localeCompare(b.action))
 }
 
@@ -261,6 +284,15 @@ export function hasDutyAction(action: string, projectDutiesRoot: string = getPro
   return resolveDutyAction(action, projectDutiesRoot) !== null
 }
 
+export function resolveDutyFolder(slug: string, projectDutiesRoot: string = getProjectDutiesRoot()): DutyFolder | null {
+  if (!isSafeName(slug)) return null
+  for (const root of getDutyRoots(projectDutiesRoot)) {
+    const duty = readDutyFolder(root, slug)
+    if (duty) return duty
+  }
+  return null
+}
+
 /** Read the implementation profile inputs for a public duty action. */
 export function getDutyActionInputs(action: string): InputSpec[] | null {
   const resolved = resolveDutyAction(action)
@@ -273,7 +305,7 @@ export function isSafeName(name: string): boolean {
   return /^[a-z][a-z0-9-]*$/.test(name) && !name.includes("..")
 }
 
-function listProjectFolderDutyActions(root: string): DiscoveredDutyAction[] {
+function listFolderDutyActions(root: string, source: "project-folder" | "company-store"): DiscoveredDutyAction[] {
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
   const out: DiscoveredDutyAction[] = []
   for (const slug of listDutyFolderSlugs(root)) {
@@ -290,7 +322,7 @@ function listProjectFolderDutyActions(root: string): DiscoveredDutyAction[] {
       duty: slug,
       executable,
       cliArgs: duty.config.executable ? {} : { duty: slug },
-      source: "project-folder",
+      source,
       describe: duty.config.describe ?? duty.title,
       profilePath: duty.profilePath,
       bodyPath: duty.bodyPath,

@@ -13,11 +13,10 @@
 import * as path from "node:path"
 import type { KodyConfig } from "./config.js"
 import type { DispatchResult } from "./dispatch.js"
-import { readDutyFolder } from "./dutyFolders.js"
 import type { Job, JobFlavor } from "./executables/types.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
 import { runExecutable, runExecutableChain } from "./executor.js"
-import { getBuiltinDutiesRoot, getProjectDutiesRoot, resolveDutyAction } from "./registry.js"
+import { resolveDutyAction, resolveDutyFolder } from "./registry.js"
 
 export { stableJobKey } from "./jobIdentity.js"
 
@@ -194,13 +193,9 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   return run(profileName, input)
 }
 
-function loadDutyContext(slug: string | undefined, cwd: string): ReturnType<typeof readDutyFolder> {
+function loadDutyContext(slug: string | undefined, cwd: string): ReturnType<typeof resolveDutyFolder> {
   if (!slug) return null
-  return (
-    readDutyFolder(path.join(cwd, ".kody", "duties"), slug) ??
-    readDutyFolder(getProjectDutiesRoot(), slug) ??
-    readDutyFolder(getBuiltinDutiesRoot(), slug)
-  )
+  return resolveDutyFolder(slug, path.join(cwd, ".kody", "duties"))
 }
 
 // ────────────────────────────────────────────────────────────────────────────

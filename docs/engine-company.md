@@ -27,6 +27,28 @@ decide, report, or dispatch those primitives.
 
 For ledger storage and trust gates, see [ledgers.md](ledgers.md).
 
+## Company Store
+
+Shared company assets can come from a remote company store before engine
+built-ins. Defaults:
+
+```bash
+KODY_COMPANY_STORE=aharonyaircohen/kody-company-store
+KODY_COMPANY_STORE_REF=stable
+```
+
+`KODY_COMPANY_STORE_REF` is a Git ref, so it may be a branch, tag, or SHA.
+
+Resolution order:
+
+1. Repo-local `.kody/duties`, `.kody/executables`, `.kody/staff`
+2. Company store `.kody/duties`, `.kody/executables`, `.kody/staff`
+3. Engine built-ins
+
+Local repo assets are overrides. Store assets are shared defaults. `stable`
+should publish one canonical shared asset per slug; repo-specific variants stay
+local or use explicit names.
+
 ## Where Rules Live
 
 - `AGENTS.md` / `CLAUDE.md`: hard constraints and repo conventions.

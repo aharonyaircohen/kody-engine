@@ -20,10 +20,11 @@
  */
 
 import * as path from "node:path"
-import { type DutyFolder, listDutyFolderSlugs, readDutyFolder } from "../dutyFolders.js"
+import { listDutyFolderSlugs, type DutyFolder } from "../dutyFolders.js"
 import type { PreflightScript } from "../executables/types.js"
 import { gh } from "../issue.js"
 import { mintScheduledJob, runJob } from "../job.js"
+import { getCompanyStoreDutiesRoot, resolveDutyFolder } from "../registry.js"
 import { resolveBackend } from "./jobState/index.js"
 import { TASK_JOBS_MARKER } from "./planTaskJobs.js"
 import { type ScheduleEvery, scheduleEveryToMs } from "./scheduleEvery.js"
@@ -50,7 +51,9 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
   try {
     const onlyDuty = parseDutyFilter(ctx.args.duty)
     const jobsPath = path.join(ctx.cwd, jobsDir)
-    const slugs = filterSlugs(listDutyFolderSlugs(jobsPath), onlyDuty)
+    const storeJobsPath = getCompanyStoreDutiesRoot()
+    const dutyRoots = [jobsPath, ...(storeJobsPath ? [storeJobsPath] : [])]
+    const slugs = filterSlugs(listDutySlugs(dutyRoots), onlyDuty)
     ctx.data.jobSlugCount = slugs.length
 
     if (slugs.length === 0) {
@@ -71,7 +74,7 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
     const now = Date.now()
 
     for (const slug of slugs) {
-      const duty = readDutyFolder(jobsPath, slug)
+      const duty = resolveDutyFolder(slug, jobsPath)
       if (!duty) {
         process.stderr.write(`[jobs] ⏭  skip ${slug}: duty folder is missing profile.json or duty.md\n`)
         results.push({ slug, exitCode: 0, skipped: true, reason: "incomplete duty folder" })
@@ -266,6 +269,19 @@ function parseDutyFilter(raw: unknown): string | undefined {
 
 function filterSlugs(slugs: string[], onlyDuty: string | undefined): string[] {
   return onlyDuty ? slugs.filter((slug) => slug === onlyDuty) : slugs
+}
+
+function listDutySlugs(roots: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const root of roots) {
+    for (const slug of listDutyFolderSlugs(root)) {
+      if (seen.has(slug)) continue
+      seen.add(slug)
+      out.push(slug)
+    }
+  }
+  return out.sort()
 }
 
 interface DutyTaskIssue {

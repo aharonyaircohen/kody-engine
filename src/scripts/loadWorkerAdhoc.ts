@@ -27,8 +27,8 @@
  */
 
 import * as fs from "node:fs"
-import * as path from "node:path"
 import type { PreflightScript } from "../executables/types.js"
+import { resolveStaffPersonaFile } from "../staff.js"
 
 export const loadWorkerAdhoc: PreflightScript = async (ctx, _profile, args) => {
   const workersDir = String(args?.workersDir ?? ".kody/staff")
@@ -37,7 +37,7 @@ export const loadWorkerAdhoc: PreflightScript = async (ctx, _profile, args) => {
     throw new Error("loadWorkerAdhoc: ctx.args.worker must be a non-empty slug")
   }
 
-  const workerPath = path.join(ctx.cwd, workersDir, `${workerSlug}.md`)
+  const workerPath = resolveStaffPersonaFile(ctx.cwd, workerSlug, workersDir)
   if (!fs.existsSync(workerPath)) {
     throw new Error(`loadWorkerAdhoc: worker persona not found: ${workerPath}`)
   }
