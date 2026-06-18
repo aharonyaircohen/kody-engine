@@ -38,7 +38,7 @@ kody:  reads the issue → writes the code → runs your tests → opens a PR
 In the repo you want kody to work on:
 
 ```bash
-npx -y -p @kody-ade/kody-engine@latest kody init
+npx -y -p @kody-ade/kody-engine@latest kody-engine init
 ```
 
 Then add **one** repo secret — a model provider key (e.g. `ANTHROPIC_API_KEY`) —
@@ -72,7 +72,7 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 └─────────────────────────────────────────────┘
                     ↓
 ┌─────────────────────────────────────────────┐
-│ kody CLI (@kody-ade/kody-engine)           │
+│ kody-engine CLI (@kody-ade/kody-engine)    │
 │   bin/kody.ts — entrypoint                  │
 │   src/dispatch.ts — duty-driven routing     │
 │   src/executor.ts — runs duty implementations│
@@ -91,10 +91,10 @@ Executable directories are private implementation units and contain **only** thr
 ## Install in a consumer repo
 
 ```bash
-npx -y -p @kody-ade/kody-engine@latest kody init
+npx -y -p @kody-ade/kody-engine@latest kody-engine init
 ```
 
-`kody init` scaffolds [kody.config.json](kody.config.schema.json), `.github/workflows/kody.yml` (generated from `WORKFLOW_TEMPLATE` in [src/scripts/initFlow.ts](src/scripts/initFlow.ts)), and per-scheduled-duty workflow files. Idempotent — pass `--force` to overwrite.
+`kody-engine init` scaffolds [kody.config.json](kody.config.schema.json), `.github/workflows/kody.yml` (generated from `WORKFLOW_TEMPLATE` in [src/scripts/initFlow.ts](src/scripts/initFlow.ts)), and per-scheduled-duty workflow files. Idempotent — pass `--force` to overwrite.
 
 Required repo secrets: at least one model provider key (e.g. `MINIMAX_API_KEY`, `ANTHROPIC_API_KEY`). Recommended: `KODY_TOKEN` PAT so kody's commits trigger downstream CI and can modify `.github/workflows/*`.
 
@@ -121,6 +121,7 @@ kody-engine release           --issue <N> [--bump patch|minor|major] [--dry-run]
 kody-engine release-prepare   --issue <N> [--bump patch|minor|major] [--dry-run]
 kody-engine release-publish   --issue <N> [--dry-run]
 kody-engine release-deploy    --issue <N> [--dry-run]
+kody-engine npm-publish       [--tag latest] [--access public] [--dry-run]
 
 # scheduled duties and goals
 kody-engine duty-scheduler                                    # fan out due .kody/duties/<slug>/ folders
@@ -143,7 +144,7 @@ kody-engine stats                                             # inspect run/even
 
 ### Duties
 
-A **duty** is a folder at `.kody/duties/<slug>/` with `profile.json` metadata (`every`, `staff`, `action`, `executable`, `stage`, and related fields) plus human-owned prose in `duty.md`. `duty-scheduler` wakes on cron, finds due duties, and dispatches either `duty-tick` for an agent tick or `duty-tick-scripted` for a deterministic `tickScript` duty. `kody init` copies built-in starter duties and scaffolds `.kody/staff/kody.md`.
+A **duty** is a folder at `.kody/duties/<slug>/` with `profile.json` metadata (`every`, `staff`, `action`, `executable`, `stage`, and related fields) plus human-owned prose in `duty.md`. `duty-scheduler` wakes on cron, finds due duties, and dispatches either `duty-tick` for an agent tick or `duty-tick-scripted` for a deterministic `tickScript` duty. `kody-engine init` copies built-in starter duties and scaffolds `.kody/staff/kody.md`.
 
 Locked-toolbox duties can declare `"tools": [...]` in `profile.json` to run with only the named high-level MCP intents plus `submit_state`; duties without `tools` keep the legacy Bash/gh toolbox.
 

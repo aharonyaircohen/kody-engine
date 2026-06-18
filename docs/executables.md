@@ -21,6 +21,10 @@ Every executable lives at `src/executables/<name>/` and contains only:
 | `skills/<name>/`, `commands/<name>.md`, `agents/<name>.md`, `hooks/<name>.json` | optional | Claude Agent SDK plugin parts specific to this one executable. `buildSyntheticPlugin` resolves them from the executable dir first, then falls back to `src/plugins/` |
 | `types.ts` | (top-level only) | The shared `Profile` / `ScriptEntry` / `Context` contract — NOT a per-executable thing |
 
+Executable shell scripts read secrets from environment variables only. Kody
+runtime/dashboard/pool code owns decrypting `.kody/secrets.enc` and forwarding
+values; individual executables must not read the vault file directly.
+
 **No TypeScript inside executable directories.** Logic that has to be
 TypeScript and is shared across multiple executables lives in
 [`src/scripts/`](../src/scripts/) and is registered in
@@ -147,6 +151,7 @@ One line each, grouped by function. The full surface is
 | `release-prepare` | Bump version, regenerate `CHANGELOG.md`, open the release PR |
 | `release-publish` | Tag the merged commit, `prepublishOnly` + `npm publish`, create the GH release |
 | `release-deploy` | Run `deployCommand` + `notifyCommand` after publish |
+| `npm-publish` | Publish the current `package.json` version to npm using `NPM_TOKEN`; no agent |
 
 **Bootstrap & live-test**
 

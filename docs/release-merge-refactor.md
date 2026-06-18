@@ -187,7 +187,7 @@ echo "KODY_SKIP_AGENT=true"
 3. **Run `pnpm vitest run tests/unit`.** Should pass; tests don't reference the old release executables in a way that breaks.
 4. **`pnpm build`** to bundle.
 5. **`npm publish --tag beta --access public`** — note `--tag beta`, NOT `@latest`. A-Guy stays on whatever `@latest` resolves to.
-6. **Pin Tester's `kody.yml`** to the exact version: `npx -y -p @kody-ade/kody-engine@<X.Y.Z> kody`. Push.
+6. **Pin Tester's `kody.yml`** to the exact version: `npx -y -p @kody-ade/kody-engine@<X.Y.Z> kody-engine`. Push.
 7. **Set up Tester for a meaningful release:**
    - Ensure Tester has `dev` and `main` branches with a divergence (some commits on dev not on main).
    - Patch Tester's `kody.config.json`: `git.defaultBranch="dev"`, `release.releaseBranch="main"`. Push to dev.

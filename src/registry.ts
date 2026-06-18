@@ -78,7 +78,7 @@ export function getProjectDutiesRoot(): string {
  * Resolve the engine's built-in jobs root. Mirrors `getExecutablesRoot()` so
  * dev (`src/jobs`) and built (`dist/jobs`) layouts both work. Built-in jobs
  * are folder shapes (`<slug>/profile.json` + `duty.md`) scaffolded into
- * consumer repos by `kody init`; drop a new folder under `src/jobs/<slug>/`
+ * consumer repos by `kody-engine init`; drop a new folder under `src/jobs/<slug>/`
  * to ship a default.
  */
 export function getBuiltinJobsRoot(): string {
@@ -123,7 +123,7 @@ export interface BuiltinJob {
  * `{ slug, dir, profilePath, bodyPath }` for each duty under the built-in
  * jobs root. Folder shapes require both `profile.json` and `duty.md`.
  *
- * Sorted by slug. Used by `kody init` to scaffold default duties into
+ * Sorted by slug. Used by `kody-engine init` to scaffold default duties into
  * `.kody/duties/<slug>/` (folder shape) in consumer repos.
  */
 export function listBuiltinJobs(root: string = getBuiltinJobsRoot()): BuiltinJob[] {

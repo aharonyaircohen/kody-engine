@@ -1,7 +1,7 @@
 # Drop this file at .github/workflows/kody.yml in your repo.
 #
 # Triggers forward every relevant event to `kody`; the engine decides what
-# (if anything) to do. The job runs `npx kody` — no shell branching, no
+# (if anything) to do. The job runs `kody-engine` — no shell branching, no
 # routing logic in YAML. All orchestration lives in the kody npm package;
 # future capabilities ship via `npm publish`, not by editing this file.
 #

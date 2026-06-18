@@ -187,8 +187,12 @@ tests/{unit,int,e2e}
 8. **`.kody/` write allowlist.** Agents may write only allowed subtrees in
    [src/commit.ts](src/commit.ts), currently `.kody/memory/` and `.kody/tasks/`.
    Other `.kody/*` writes are blocked during `run`/`fix`/`resolve`. Watches that
-   open PRs must require `commitResult.pushed === true`, not only
-   `hasCommitsAhead`.
+open PRs must require `commitResult.pushed === true`, not only
+`hasCommitsAhead`.
+9. **Executable scripts read secrets from env only.** Repo vault secrets
+(`.kody/secrets.enc`) are decrypted by Kody runtime/dashboard/pool code and
+loaded into environment variables before executables run. Colocated executable
+shell scripts must not read or decrypt `.kody/secrets.enc` directly.
 
 ## Adding / Changing Executables
 
@@ -198,6 +202,8 @@ tests/{unit,int,e2e}
    [docs/executables.md](docs/executables.md).
 3. Add `prompt.md` if an agent runs.
 4. Add `.sh` for colocated mechanical work.
+   If it needs a secret, read the expected env var only; do not access the
+   vault file directly.
 5. Register new shared TS in `src/scripts/<name>.ts` and `src/scripts/index.ts`.
 6. Issue-triggered commands need no dispatch edits. PR-comment verbs do need an
    ordered PR switch case in [src/dispatch.ts](src/dispatch.ts) when names

@@ -41,7 +41,7 @@ LITELLM_PORT=4000
 LITELLM_LOG=/tmp/litellm.log
 LITELLM_PID=""
 
-# Provider → API key env var. Mirrors kody2/src/config.ts
+# Provider → API key env var. Mirrors src/config.ts
 # providerApiKeyEnvVar(). Add new providers in lockstep when the
 # engine learns about them. Plain space-separated list so this works
 # under any bash version (no `declare -A` requirement).

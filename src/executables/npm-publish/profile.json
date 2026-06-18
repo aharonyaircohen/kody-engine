@@ -1,0 +1,73 @@
+{
+  "name": "npm-publish",
+  "role": "utility",
+  "phase": "shipped",
+  "describe": "Publish the current package.json version to npm using NPM_TOKEN. No agent.",
+  "inputs": [
+    {
+      "name": "dry-run",
+      "flag": "--dry-run",
+      "type": "bool",
+      "required": false,
+      "describe": "Print the publish plan without requiring NPM_TOKEN or publishing."
+    },
+    {
+      "name": "tag",
+      "flag": "--tag",
+      "type": "string",
+      "required": false,
+      "describe": "npm dist-tag to publish under. Defaults to latest."
+    },
+    {
+      "name": "access",
+      "flag": "--access",
+      "type": "enum",
+      "values": ["public", "restricted"],
+      "required": false,
+      "describe": "npm package access. Defaults to public."
+    },
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": false,
+      "describe": "Issue/PR number to post terminal notice on."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "acceptEdits",
+    "maxTurns": 0,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "inputArtifacts": [],
+  "outputArtifacts": [],
+  "scripts": {
+    "preflight": [
+      { "script": "setCommentTarget", "with": { "type": "issue" } },
+      { "script": "loadTaskState" },
+      { "shell": "publish.sh", "timeoutSec": 900 },
+      { "script": "skipAgent" }
+    ],
+    "postflight": [
+      { "script": "recordOutcome" },
+      { "script": "saveTaskState" },
+      { "script": "notifyTerminal", "with": { "label": "npm publish" } }
+    ]
+  },
+  "output": {
+    "actionTypes": [
+      "NPM_PUBLISH_COMPLETED",
+      "NPM_PUBLISH_FAILED"
+    ]
+  }
+}
