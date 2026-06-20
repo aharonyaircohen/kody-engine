@@ -14,6 +14,7 @@ import * as path from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { jobReferenceBlock, operatorRequestBlock, runExecutable } from "../../src/executor.js"
 import { loadProfile } from "../../src/profile.js"
+import { resolveExecutable } from "../../src/registry.js"
 import * as taskArtifacts from "../../src/task-artifacts.js"
 
 function tmpDir(): string {
@@ -153,7 +154,9 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
   })
 
   it("resolve profile skips verify + checkCoverageWithRetry (merge op)", () => {
-    const profile = loadProfile(path.join(EXE_ROOT, "resolve/profile.json"))
+    const resolveProfile = resolveExecutable("resolve")
+    if (!resolveProfile) throw new Error("resolve executable not found")
+    const profile = loadProfile(resolveProfile)
     expect(profile.name).toBe("resolve")
     expect(profile.inputs.map((i) => i.name)).toEqual(["pr", "prefer"])
     const preScripts = profile.scripts.preflight.map((p) => p.script)

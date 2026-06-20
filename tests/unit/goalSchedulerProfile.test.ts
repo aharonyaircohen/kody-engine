@@ -6,10 +6,11 @@
  */
 
 import * as fs from "node:fs"
-import * as path from "node:path"
 import { describe, expect, it } from "vitest"
+import { resolveExecutable } from "../../src/registry.js"
 
-const profilePath = path.join(__dirname, "../../src/executables/goal-scheduler/profile.json")
+const profilePath = resolveExecutable("goal-scheduler")
+if (!profilePath) throw new Error("goal-scheduler executable not found")
 
 describe("goal-scheduler profile", () => {
   const profile = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as {

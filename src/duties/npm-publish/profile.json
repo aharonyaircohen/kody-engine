@@ -1,6 +1,0 @@
-{
-  "name": "npm-publish",
-  "action": "npm-publish",
-  "executable": "npm-publish",
-  "describe": "Publish the current package.json version to npm."
-}

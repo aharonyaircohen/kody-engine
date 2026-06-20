@@ -7,6 +7,8 @@
 import type { PostflightScript, PreflightScript } from "../executables/types.js"
 import { abortUnfinishedGitOps } from "./abortUnfinishedGitOps.js"
 import { advanceFlow } from "./advanceFlow.js"
+import { advanceManagedGoal } from "./advanceManagedGoal.js"
+import { applyDutyReports } from "./applyDutyReports.js"
 import { appendCompanyActivity } from "./appendCompanyActivity.js"
 import { buildSyntheticPlugin } from "./buildSyntheticPlugin.js"
 import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
@@ -82,6 +84,7 @@ import { runPreviewBuild } from "./runPreviewBuild.js"
 import { runScheduledExecutableTick } from "./runScheduledExecutableTick.js"
 import { runTickScript } from "./runTickScript.js"
 import { saveGoalState } from "./saveGoalState.js"
+import { saveManagedGoalState } from "./saveManagedGoalState.js"
 import { saveTaskState } from "./saveTaskState.js"
 import { setCommentTarget } from "./setCommentTarget.js"
 import { setLifecycleLabel } from "./setLifecycleLabel.js"
@@ -142,12 +145,14 @@ export const preflightScripts: Record<string, PreflightScript> = {
   runScheduledExecutableTick,
   runTickScript,
   runPreviewBuild,
+  advanceManagedGoal,
   loadGoalState,
   handleAbandonedGoal,
   deriveGoalPhase,
   dispatchNextTask,
   finalizeGoal,
   saveGoalState,
+  saveManagedGoalState,
 }
 
 export const postflightScripts: Record<string, PostflightScript> = {
@@ -183,6 +188,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   finalizeTerminal,
   advanceFlow,
   persistFlowState,
+  applyDutyReports,
   recordClassification,
   dispatchClassified,
   notifyTerminal,

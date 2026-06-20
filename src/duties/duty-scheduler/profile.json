@@ -1,6 +1,0 @@
-{
-  "name": "duty-scheduler",
-  "action": "duty-scheduler",
-  "executable": "duty-scheduler",
-  "describe": "Schedule due duty folders."
-}

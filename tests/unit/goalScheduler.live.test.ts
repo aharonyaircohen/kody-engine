@@ -22,17 +22,34 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { resolveExecutable } from "../../src/registry.js"
 
-const SCHEDULER_SH = path.join(__dirname, "../../src/executables/goal-scheduler/scheduler.sh")
+function schedulerPath(): string {
+  const resolved = resolveExecutable("goal-scheduler")
+  if (!resolved) throw new Error("goal-scheduler executable not found")
+  return path.join(path.dirname(resolved), "scheduler.sh")
+}
 
 let tmp: string
 let logFile: string
 
-function writeGoal(id: string, state: string | null): void {
+function writeGoal(id: string, state: string | null, extra: Record<string, unknown> = {}): void {
   const dir = path.join(tmp, ".kody", "goals", id)
   fs.mkdirSync(dir, { recursive: true })
   if (state !== null) {
-    fs.writeFileSync(path.join(dir, "state.json"), JSON.stringify({ version: 1, state }, null, 2))
+    fs.writeFileSync(path.join(dir, "state.json"), JSON.stringify({ version: 1, state, ...extra }, null, 2))
+  }
+}
+
+function managedGoalExtra(): Record<string, unknown> {
+  return {
+    type: "release",
+    destination: { outcome: "publish", evidence: ["releasePrExists"] },
+    duties: ["release-prepare"],
+    route: [{ evidence: "releasePrExists", stage: "prepare", duty: "release-prepare" }],
+    stage: "prepare",
+    facts: {},
+    blockers: [],
   }
 }
 
@@ -63,7 +80,7 @@ function installEngineStub(): string {
 
 function runScheduler(): { status: number; stdout: string; calls: string[] } {
   const binDir = installEngineStub()
-  const res = spawnSync("bash", [SCHEDULER_SH], {
+  const res = spawnSync("bash", [schedulerPath()], {
     cwd: tmp,
     env: {
       ...process.env,
@@ -97,6 +114,19 @@ describe("goal-scheduler live wiring", () => {
     expect(stdout).toContain("→ tick paymant")
     expect(stdout).toContain("ticked 1 active goal(s) of 1 total")
     expect(stdout).toContain("KODY_SKIP_AGENT=true")
+  })
+
+  it("routes managed goals to goal-manager and legacy goals to goal-tick", () => {
+    writeGoal("legacy", "active")
+    writeGoal("release-v1-2-3", "active", managedGoalExtra())
+
+    const { status, stdout, calls } = runScheduler()
+
+    expect(status).toBe(0)
+    expect(calls).toContain("kody-engine goal-tick --goal legacy")
+    expect(calls).toContain("kody-engine goal-manager --goal release-v1-2-3")
+    expect(stdout).toContain("→ tick legacy (goal-tick)")
+    expect(stdout).toContain("→ tick release-v1-2-3 (goal-manager)")
   })
 
   it("invokes kody-engine, never bare kody (regression guard)", () => {

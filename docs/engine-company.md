@@ -8,11 +8,21 @@ route, verify, and explain engine work.
 
 ## Core Rule
 
-Company layer coordinates. Engine primitives execute.
+Company layer coordinates. Engine runtime executes.
 
-Do not duplicate built-in engine executables like `run`, `fix`, `fix-ci`,
-`sync`, `resolve`, `merge`, or `release`. Company executables should inspect,
-decide, report, or dispatch those primitives.
+The engine package keeps only the minimal built-in `run` surface. Shared duties,
+executables, and staff live in `kody-store`; company executables should inspect,
+decide, report, or dispatch those store-backed responsibilities.
+
+## Concept Map
+
+- **Company / staff = who** — people or personas acting.
+- **Duty = standing responsibility / why** — recurring ownership and judgment.
+- **Goal = outcome + manager loop / what** — a temporary objective that observes
+  evidence, chooses the next missing outcome, and dispatches the right
+  responsibility until done or blocked.
+- **Executable = concrete action / how** — one mechanical unit of work.
+- **Job / run = execution record** — durable required work and its attempts.
 
 ## Pieces
 
@@ -43,7 +53,7 @@ Resolution order:
 
 1. Repo-local `.kody/duties`, `.kody/executables`, `.kody/staff`
 2. Company store `.kody/duties`, `.kody/executables`, `.kody/staff`
-3. Engine built-ins
+3. Engine built-ins (`run` only)
 
 Local repo assets are overrides. Store assets are shared defaults. `stable`
 should publish one canonical shared asset per slug; repo-specific variants stay
@@ -67,7 +77,7 @@ for company coordination, not as execution policy.
 - `cto`: architecture, invariants, PR safety, release safety.
 - `qa`: live verification and regression checks.
 - `tech-writer`: docs drift and terminology clarity.
-- `kody`: implementation through built-in engine primitives.
+- `kody`: implementation through store-backed responsibilities and the engine `run` primitive.
 
 ## Recommended Company Executables
 

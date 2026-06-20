@@ -11,7 +11,12 @@ shape is [`src/executables/types.ts`](../src/executables/types.ts).
 
 ## Directory contract
 
-Every executable lives at `src/executables/<name>/` and contains only:
+The engine package keeps only the minimal built-in `run` executable under
+`src/executables/run`. Shared company executables live in the company store under
+`.kody/executables/<name>/`; project-specific executables may also live in a
+consumer repo under the same `.kody/executables/<name>/` shape.
+
+Every executable directory contains only:
 
 | File / dir | Required | Purpose |
 | --- | --- | --- |
@@ -34,7 +39,7 @@ simplify it so shell can express it, or promote it to a real
 cross-cutting utility. The middle ground is what bloated the old flow
 scripts and is explicitly banned (see `AGENTS.md` invariant 2).
 
-Adding a new command = drop a new `src/executables/<name>/` dir with
+Adding a new shared command = add `.kody/executables/<name>/` in `kody-store` with its profile + prompt + any `.sh` scripts; register any new *shared* TS scripts in `src/scripts/index.ts`. Issue-triggered commands need no dispatch edits — [`src/dispatch.ts`](../src/dispatch.ts) picks the right one from the GHA event payload (PR/issue comment + body match).
 its profile + prompt + any `.sh` scripts; register any new *shared* TS
 scripts in `src/scripts/index.ts`. Issue-triggered commands need no
 dispatch edits — [`src/dispatch.ts`](../src/dispatch.ts) picks the
@@ -101,8 +106,8 @@ the profile, validates inputs, runs the declared scripts, and
 
 ## Catalog
 
-One line each, grouped by function. The full surface is
-`src/executables/`.
+One line each, grouped by function. The full shared command surface is now in
+`kody-store`; engine built-ins are intentionally limited to `run`.
 
 **Issue → code (agent, end-to-end)**
 
@@ -130,6 +135,7 @@ One line each, grouped by function. The full surface is
 | `resolve` | Merge default branch into the PR; agent resolves conflicts |
 | `sync` | The clean-merge happy path of `resolve`, exposed separately. Never invokes the agent |
 | `merge` | Squash-merge a release PR (mechanical, no agent) |
+| `ci-check` | Check PR CI and report goal evidence. No agent |
 | `revert` | `git revert` one or more commits on a PR. Fully mechanical |
 | `review` | Read-only structured diff review; verdict drives `fix`'s next action |
 | `ui-review` | Same as `review` but drives the preview deployment with the Playwright CLI |
@@ -141,7 +147,7 @@ One line each, grouped by function. The full surface is
 | Name | Role | What it does |
 | --- | --- | --- |
 | `duty-scheduler` | `watch` / `scheduled` (`*/5 * * * *`) | Ticks every `.kody/duties/<slug>/` folder via `duty-tick` |
-| `goal-scheduler` | `watch` / `scheduled` (`*/5 * * * *`) | Ticks every `.kody/goals/<id>/state.json` via `goal-tick` |
+| `goal-scheduler` | `watch` / `scheduled` (`*/5 * * * *`) | Ticks every `.kody/goals/<id>/state.json`; managed-goal contracts go to `goal-manager`, legacy stacked-task goals go to `goal-tick` |
 
 **Release stages (no agent, deterministic)**
 
@@ -163,7 +169,57 @@ One line each, grouped by function. The full surface is
 | `probe-skill` | Live-test: validates executable-local skill resolution |
 | `preview-build` | Run a preview build via the bundled templates |
 
-## `goal-tick` — the deterministic flow
+## `goal-manager` — evidence-driven goal loop
+
+`goal-manager` is the generic goal loop. A goal is the **what**: an outcome,
+required evidence, attached duties, route steps, facts, and blockers. Each tick
+loads `.kody/goals/<id>/state.json` from `kody-state`, finds the first missing
+destination evidence, and dispatches the duty/executable declared for that
+evidence. The dispatched evidence is recorded as `facts.pendingEvidence`, so the
+next scheduler tick waits instead of firing the same duty again. Once all
+evidence is true, the goal transitions to `state: "done"`.
+
+Minimum managed-goal shape:
+
+```json
+{
+  "state": "active",
+  "type": "release",
+  "destination": {
+    "outcome": "version 1.2.3 is published and verified",
+    "evidence": ["releasePrExists", "qaPassed", "packagePublished"]
+  },
+  "duties": ["release-prepare", "qa-goal", "npm-publish"],
+  "route": [
+    { "evidence": "releasePrExists", "stage": "prepare", "duty": "release-prepare", "executable": "release-prepare" },
+    { "evidence": "qaPassed", "stage": "qa", "duty": "qa-goal", "executable": "qa-goal", "args": { "issue": 123 } },
+    { "evidence": "packagePublished", "stage": "publish", "duty": "npm-publish", "executable": "npm-publish" }
+  ],
+  "stage": "prepare",
+  "facts": {},
+  "blockers": []
+}
+```
+
+## Duty Report Contract
+
+Duties and executables may report facts to a target by emitting one stdout line:
+
+```text
+KODY_DUTY_REPORT={"target":{"type":"goal","id":"release-aguy"},"evidence":{"releasePrExists":true},"facts":{"releasePr":123}}
+```
+
+Rules:
+
+- Reports are factual only. They do not set stage, route, duties, destination, blockers, or state.
+- `target.type` may be `goal`, `task`, or `duty`; goal targets are persisted today.
+- Goal evidence is stored as goal facts, so `goal-manager` can choose the next missing outcome on the next tick.
+- Profiles that should persist reports include `applyDutyReports` in postflight.
+- Route args may read reported facts with `{ "fact": "<name>" }`; for example `"args": { "pr": { "fact": "deployPr" } }` dispatches the next duty with the PR number reported by an earlier duty. Missing or non-scalar facts block the goal instead of dispatching bad input.
+
+For a CI gate, the goal routes missing CI evidence to the store `ci-health` duty. That duty uses the `ci-check` executable and reports the evidence true only when CI is green.
+
+## `goal-tick` — legacy stacked-task flow
 
 `goal-tick` is the only executable that runs a non-trivial chain with
 **no agent**. It advances a `.kody/goals/<id>/state.json` state
@@ -259,7 +315,7 @@ entirely.
 
 ## Adding a new executable
 
-1. Create `src/executables/<name>/`.
+1. Create `.kody/executables/<name>/` in `kody-store` for shared commands, or in a consumer repo for repo-local commands.
 2. Write `profile.json` (see [`src/executables/types.ts`](../src/executables/types.ts) for the shape). Pick a `role` and a `kind`.
 3. Write `prompt.md` if an agent runs in this executable.
 4. Add any `.sh` scripts for mechanical work.

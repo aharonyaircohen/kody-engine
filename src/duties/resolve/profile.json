@@ -1,6 +1,0 @@
-{
-  "name": "resolve",
-  "action": "resolve",
-  "executable": "resolve",
-  "describe": "Resolve merge conflicts on an existing PR."
-}

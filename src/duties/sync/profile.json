@@ -1,6 +1,0 @@
-{
-  "name": "sync",
-  "action": "sync",
-  "executable": "sync",
-  "describe": "Merge the base branch into a PR branch."
-}

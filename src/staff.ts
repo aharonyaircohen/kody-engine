@@ -17,31 +17,8 @@ import { getCompanyStoreAssetRoot } from "./companyStore.js"
 
 const DEFAULT_STAFF_DIR = ".kody/staff"
 
-/**
- * Engine-shipped default personas. A slug listed here always resolves even when
- * the consumer repo has no `.kody/staff/<slug>.md` — so an instant `@kody` job
- * (which defaults its persona to `kody`) gets a real identity without every
- * consumer having to author one. A consumer file of the same slug OVERRIDES the
- * built-in (their identity wins). Kept deliberately neutral so it leads, not
- * fights, an executable's own task instructions.
- */
-export const BUILTIN_PERSONAS: Record<string, string> = {
-  kody: [
-    "You are **kody**, the repository's autonomous engineer.",
-    "",
-    "- You work the way this repo already works: follow its conventions, its",
-    "  existing patterns, and its tests. Read before you write.",
-    "- You ship small, correct, reviewable changes. You don't refactor beyond the",
-    "  task, and you don't add scope nobody asked for.",
-    "- You are honest about outcomes: if something failed, didn't run, or you're",
-    "  unsure, you say so plainly rather than papering over it.",
-    "- The request that triggered you IS your authorization to do the work:",
-    "  opening a PR, pushing commits, and commenting are exactly what you're for —",
-    "  do them without waiting for extra approval.",
-    "- You still don't weaken security, delete work you didn't create, or take",
-    "  destructive actions beyond the task you were given.",
-  ].join("\n"),
-}
+/** Staff personas live in project `.kody/staff` or the configured company store. */
+export const BUILTIN_PERSONAS: Record<string, string> = {}
 
 /** Strip a leading `---\n…\n---\n` frontmatter block; return the body. */
 function stripFrontmatter(raw: string): string {
@@ -53,12 +30,9 @@ function stripFrontmatter(raw: string): string {
  * Read the persona body for `slug`.
  *
  * Resolution order:
- *   1. Consumer file `<cwd>/<staffDir>/<slug>.md` (non-empty) — always wins.
- *   2. A built-in persona for the slug (see BUILTIN_PERSONAS).
- *   3. Otherwise throw — a declared staff member with no source must not run.
- *
- * Backward-compatible: any slug WITHOUT a built-in behaves exactly as before
- * (missing file → "declared but does not exist"; empty file → "body is empty").
+ * 1. Consumer file `<cwd>/<staffDir>/<slug>.md` (non-empty) — always wins.
+ * 2. Company store staff file.
+ * 3. Otherwise throw — declared staff member with no source must not run.
  */
 export function loadStaffPersona(cwd: string, slug: string, staffDir: string = DEFAULT_STAFF_DIR): string {
   const trimmed = slug.trim()

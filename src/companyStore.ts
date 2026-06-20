@@ -51,6 +51,9 @@ function resolveCompanyStore(): { repo: string; ref: string } | null {
 }
 
 function fetchCompanyStore(repo: string, ref: string): string | null {
+  const localRoot = localStoreRoot(repo)
+  if (localRoot) return localRoot
+
   const url = repoToGitUrl(repo)
   const cacheDir = path.join(cacheRoot(), cacheKey(repo, ref))
 
@@ -73,6 +76,13 @@ function fetchCompanyStore(repo: string, ref: string): string | null {
     process.stderr.write(`[company-store] failed to fetch ${repo}#${ref}: ${msg}\n`)
     return null
   }
+}
+
+function localStoreRoot(repo: string): string | null {
+  if (!path.isAbsolute(repo) && !repo.startsWith(".")) return null
+  const root = path.resolve(repo)
+  if (!fs.existsSync(path.join(root, ".kody"))) return null
+  return root
 }
 
 function repoToGitUrl(repo: string): string {

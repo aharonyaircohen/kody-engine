@@ -3,6 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { KodyConfig } from "../../src/config.js"
+import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import type { Context, Profile } from "../../src/executables/types.js"
 import { parseTaskJobSpecs } from "../../src/scripts/planTaskJobs.js"
 
@@ -24,6 +25,8 @@ import { dispatchDutyFileTicks } from "../../src/scripts/dispatchDutyFileTicks.j
 let tmp: string
 
 beforeEach(() => {
+  vi.stubEnv("KODY_COMPANY_STORE", "0")
+  resetCompanyStoreCacheForTests()
   ghMock.mockReset()
   ghMock.mockReturnValue("https://github.com/o/r/issues/777")
   runJobMock.mockReset()
@@ -34,6 +37,8 @@ beforeEach(() => {
 
 afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true })
+  vi.unstubAllEnvs()
+  resetCompanyStoreCacheForTests()
   vi.clearAllMocks()
 })
 

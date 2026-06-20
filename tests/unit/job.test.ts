@@ -1,3 +1,6 @@
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // Hoist-safe mock of the executor so runJob is tested in isolation (no real
@@ -46,6 +49,32 @@ describe("runJob (Phase 1 seam)", () => {
     expect(input.preloadedData?.jobAction).toBe("run")
     expect(input.preloadedData?.jobDuty).toBe("run")
     expect(input.preloadedData?.jobExecutable).toBe("run")
+  })
+
+  it("resolves a duty-only job to the duty-selected executable", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-duty-job-"))
+    const dutyDir = path.join(cwd, ".kody", "duties", "ci-health")
+    fs.mkdirSync(dutyDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(dutyDir, "profile.json"),
+      JSON.stringify({ name: "ci-health", action: "ci-health", executable: "ci-check", staff: "kody" }),
+    )
+    fs.writeFileSync(path.join(dutyDir, "duty.md"), "# CI Health\n")
+
+    await runJob(
+      {
+        duty: "ci-health",
+        cliArgs: { pr: 456, goal: "release-aguy", evidence: "mainDeployPrGreen" },
+        flavor: "instant",
+      },
+      { cwd },
+    )
+
+    const [profile, input] = runExecutableChain.mock.calls[0]!
+    expect(profile).toBe("ci-check")
+    expect(input.cliArgs).toEqual({ pr: 456, goal: "release-aguy", evidence: "mainDeployPrGreen" })
+    expect(input.preloadedData?.jobDuty).toBe("ci-health")
+    expect(input.preloadedData?.jobExecutable).toBe("ci-check")
   })
 
   it("seeds inline why into preloadedData.jobWhy", async () => {

@@ -3,8 +3,8 @@
  *
  * Two asset families live alongside each other:
  *
- *   - **Executables** (`src/executables/<name>/profile.json`) — private
- *     implementation units selected by duties.
+ * - **Executables** (`.kody/executables/<name>/profile.json` in project/store,
+ *   plus minimal engine built-ins) implementation units selected by duties.
  *   - **Duties** (`.kody/duties/<slug>/profile.json` + `duty.md`) — public
  *     work units and operator-facing actions. Duty discovery is handled by
  *     `listDutyActions()`, not by executable resolution.

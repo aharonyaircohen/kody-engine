@@ -11,7 +11,7 @@
  *
  * Resolution order for each declared name:
  *   1. The executable's own directory:
- *      src/executables/<name>/{skills,commands,agents,hooks}/<entry>
+ *      the executable directory `{skills,commands,agents,hooks}/<entry>`
  *      — for parts that are specific to one executable.
  *   2. The engine's shared catalog:
  *      src/plugins/{skills,commands,agents,hooks}/<entry>
@@ -53,7 +53,7 @@ export const buildSyntheticPlugin: PreflightScript = async (ctx, profile) => {
   // Resolve plugin parts from the executable's own directory first, then fall
   // back to the engine's central catalog. Lets an executable ship local
   // skills/commands/subagents/hooks under
-  //   src/executables/<name>/{skills,commands,agents,hooks}/
+  //   the executable directory `{skills,commands,agents,hooks}/
   // without polluting the shared catalog.
   const resolvePart = (bucket: "skills" | "commands" | "agents" | "hooks", entry: string): string => {
     const local = path.join(profile.dir, bucket, entry)

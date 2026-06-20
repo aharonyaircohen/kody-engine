@@ -16,6 +16,7 @@ import type { KodyConfig } from "./config.js"
 import { loadConfig, parseProviderModel } from "./config.js"
 import { runContainerLoop } from "./container.js"
 import { DISCIPLINE } from "./discipline.js"
+import { parseDutyReportsFromText } from "./dutyReport.js"
 import { emitEvent } from "./events.js"
 import type { Context, InputSpec, Job, Profile, ScriptEntry } from "./executables/types.js"
 import { KODY_NAMESPACE, removeLabel } from "./lifecycleLabels.js"
@@ -38,7 +39,7 @@ import { firstRequiredFailure, verifyCliTools } from "./tools.js"
  * belongs here. Adding one without listing it here is a bug:
  * `tests/unit/postflightFailureSafety.test.ts` enforces the contract.
  */
-const MUTATING_POSTFLIGHTS: ReadonlySet<string> = new Set(["commitAndPush", "ensurePr"])
+const MUTATING_POSTFLIGHTS: ReadonlySet<string> = new Set(["commitAndPush", "ensurePr", "applyDutyReports"])
 
 /** True when `scriptName` is a state-mutating postflight (see MUTATING_POSTFLIGHTS). */
 export function isMutatingPostflight(scriptName: string | undefined): boolean {
@@ -1084,6 +1085,11 @@ async function runShellEntry(entry: ScriptEntry, ctx: Context, profile: Profile)
   if (prUrlMatch?.[1]) ctx.output.prUrl = prUrlMatch[1].trim()
   const reasonMatch = stdout.match(/^KODY_REASON=(.+)$/m)
   if (reasonMatch?.[1]) ctx.output.reason = reasonMatch[1].trim()
+  const dutyReports = parseDutyReportsFromText(stdout)
+  if (dutyReports.length > 0) {
+    const prior = Array.isArray(ctx.data.dutyReports) ? ctx.data.dutyReports : []
+    ctx.data.dutyReports = [...prior, ...dutyReports]
+  }
 
   if (timedOut) {
     ctx.skipAgent = true

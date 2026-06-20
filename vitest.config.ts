@@ -1,8 +1,16 @@
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { defineConfig } from "vitest/config"
+
+const here = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   test: {
     testTimeout: 30_000,
+    env: {
+      KODY_COMPANY_STORE: path.resolve(here, "../kody-store"),
+      KODY_COMPANY_STORE_REF: "working-tree",
+    },
     coverage: {
       provider: "v8",
       // json-summary feeds scripts/check-coverage-floor.ts (the posttest

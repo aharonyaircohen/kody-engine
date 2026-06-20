@@ -117,109 +117,80 @@ interface SoloEntry {
 }
 
 const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
-  commitGoalState: { owner: "goal-tick", reason: "goal-tick is bespoke — see AGENTS.md goal-chain section." },
-  deriveGoalPhase: { owner: "goal-tick", reason: "goal-tick state-machine step." },
-  dispatchDutyFileTicks: {
-    owner: "duty-scheduler",
-    reason:
-      "Solo since the worker model changed: a worker is now a stateless persona, not a ticked file, so worker-scheduler/worker-tick were deleted. duty-scheduler is the only fan-out over .kody/duties/.",
-  },
-  loadJobFromFile: {
-    owner: "duty-tick",
-    reason:
-      "Solo since worker-tick was deleted (workers are personas, not ticked files). duty-tick is the only executable that loads a duty body + its assigned worker persona.",
-  },
-  loadDutyState: {
-    owner: "job-live-verify",
-    reason:
-      "Folder-duty state loader used by the live job-wiring verifier. Kept as a shared script because folder duties in consumer repos use the same stateful-duty shape.",
-  },
-  runTickScript: {
-    owner: "duty-tick-scripted",
-    reason:
-      "Solo since worker-tick-scripted was deleted (no worker tick-loop in the persona model). duty-tick-scripted is the only deterministic ticked-file executable.",
-  },
-  dispatchNextTask: { owner: "goal-tick", reason: "goal-tick state-machine step." },
-  finalizeGoal: { owner: "goal-tick", reason: "goal-tick terminal step." },
-  handleAbandonedGoal: { owner: "goal-tick", reason: "goal-tick state-machine branch." },
-  initFlow: { owner: "init", reason: "init is residual — bootstrap, not a recurring flow." },
-  loadGoalState: { owner: "goal-tick", reason: "goal-tick state-machine step." },
-  loadWorkerAdhoc: { owner: "worker-ask", reason: "worker-ask-only ad-hoc worker-persona loader." },
-  markFlowSuccess: { owner: "revert", reason: "revert is bespoke (no-agent, see AGENTS.md)." },
+  abortUnfinishedGitOps: { owner: "run", reason: "run-only git safety check." },
+  advanceFlow: { owner: "run", reason: "run-only flow handoff after task branch work." },
+  checkCoverageWithRetry: { owner: "run", reason: "run-only coverage gate." },
+  commitAndPush: { owner: "run", reason: "run-only branch commit/push step." },
+  composePrompt: { owner: "run", reason: "run-only agent prompt composition in engine builtin surface." },
+  ensurePr: { owner: "run", reason: "run-only PR creation step." },
+  finalizeTerminal: { owner: "run", reason: "run-only terminal notification step." },
+  loadConventions: { owner: "run", reason: "run-only prompt context loader after catalog moved to store." },
+  loadCoverageRules: { owner: "run", reason: "run-only coverage rule context loader." },
+  loadTaskState: { owner: "run", reason: "run-only task state loader in minimal engine surface." },
+  loadMemoryContext: { owner: "run", reason: "run-only memory context loader after catalog moved to store." },
+  loadPriorArt: { owner: "run", reason: "run-only prior-art context loader." },
+  mirrorStateToPr: { owner: "run", reason: "run-only task state mirror." },
+  parseAgentResult: { owner: "run", reason: "run-only agent result parser in minimal engine surface." },
+  postIssueComment: { owner: "run", reason: "run-only issue comment result publisher." },
   requirePlanDeviations: { owner: "run", reason: "run-only plan-deviation check." },
-  resolveArtifacts: { owner: "run", reason: "run-only artifact resolver. Slotted via lifecycle contextExtras." },
-  resolveFlow: { owner: "resolve", reason: "resolve is bespoke (merge-only, no verify chain — see AGENTS.md)." },
-  revertFlow: { owner: "revert", reason: "revert is bespoke (no-agent)." },
-  saveGoalState: { owner: "goal-tick", reason: "goal-tick state-machine step." },
-  // serveFlow / brainServe / runnerServe / poolServe were here until the four
-  // long-lived servers moved out of src/executables/ into src/servers/ as
-  // hardcoded CLI verbs — they are no longer registered scripts, so they no
-  // longer belong in this solo-script allowlist.
-  stageMergeConflicts: { owner: "resolve", reason: "resolve-only postflight." },
-  // ── Newly solo since the agent task executables (feature/bug/chore/plan/…)
-  //    moved out of the engine to consumer repos. These were previously shared
-  //    with the build-family executables via the lifecycle macro; with those
-  //    gone, the named kept executable is now the only engine user. ──
-  runFlow: {
-    owner: "run",
-    reason:
-      "run bootstrap. Solo since feature/bug/chore collapsed/moved to consumer repos — run is the last engine build primitive.",
-  },
-  mergeFlow: { owner: "merge", reason: "merge is bespoke (no-agent self-gating squash). Solo to merge." },
-  promoteQaGoal: { owner: "qa-goal", reason: "qa-goal promotion step. Solo to qa-goal." },
-  runPreviewBuild: {
-    owner: "preview-build",
-    reason:
-      "preview-build is the only executable that builds a deployable preview image (remote builder). Single-purpose; no other executable shares the build step.",
-  },
-  planTaskJobs: {
-    owner: "task-jobs",
-    reason:
-      "task-jobs-only task-data planner. Kept in scripts so dashboard-written issue metadata can seed task state before dispatch.",
-  },
-  dispatchNextTaskJob: {
-    owner: "task-jobs",
-    reason:
-      "task-jobs-only handoff step. It selects the next pending planned job and returns a nextJob for the generic runner.",
-  },
-  failOnceTaskJob: {
-    owner: "task-job-fail-once",
-    reason:
-      "live-test-only deterministic failure/retry probe for task-jobs; it proves failed planned slices block and rerun.",
-  },
-  fixFlow: { owner: "fix", reason: "fix bootstrap: open PR branch and derive reviewer feedback." },
-  requireFeedbackActions: { owner: "fix", reason: "fix-only contract check for FEEDBACK_ACTIONS." },
-  fixCiFlow: { owner: "fix-ci", reason: "fix-ci bootstrap: open PR branch and attach failing CI logs." },
+  resolveArtifacts: { owner: "run", reason: "run-only artifact resolver." },
+  runFlow: { owner: "run", reason: "run bootstrap. Run is the only engine-bundled executable." },
+  saveTaskState: { owner: "run", reason: "run-only task state persistence." },
+  setLifecycleLabel: { owner: "run", reason: "run-only lifecycle label while engine keeps only run builtin." },
+  verifyWithRetry: { owner: "run", reason: "run-only verification gate." },
+  writeRunSummary: { owner: "run", reason: "run-only summary writer." },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Consumer-library scripts: the deterministic preflight/postflight logic for
-// the agent task executables that moved OUT of the engine into consumer repos
-// (.kody/executables/<slug>/). The executable's profile.json + prompt.md now
-// live in the consumer repo, but the engine still SHIPS these scripts — the
-// consumer profiles reference them by name and the registry resolves them from
-// the engine's compiled script catalog. So they have zero engine-side profile
-// owner by design, yet must not be deleted.
-//
-// Each maps to the moved executable whose consumer-repo profile calls it.
+// Consumer-library scripts: deterministic preflight/postflight logic for
+// executable profiles that now live in kody-store. The engine still ships the
+// TypeScript implementation catalog; store profiles reference scripts by name.
 // ─────────────────────────────────────────────────────────────────────────────
 const CONSUMER_LIBRARY_SCRIPTS: Record<string, string> = {
+  advanceManagedGoal: "goal-manager",
+  applyDutyReports: "goal/reporting executables",
+  buildSyntheticPlugin: "store executables with local skills/hooks",
   classifyByLabel: "classify",
-  recordClassification: "classify",
+  createQaGoal: "qa-engineer",
+  deriveGoalPhase: "goal-tick",
+  diagMcp: "research",
+  dispatch: "spec",
   dispatchClassified: "classify",
+  dispatchDutyFileTicks: "duty-scheduler",
+  dispatchDutyTicks: "duty-scheduler",
+  dispatchNextTask: "goal-tick",
+  dispatchNextTaskJob: "task-jobs",
+  failOnceTaskJob: "task-job-fail-once",
+  finalizeGoal: "goal-tick",
+  finishFlow: "release",
+  fixCiFlow: "fix-ci",
+  fixFlow: "fix",
+  handleAbandonedGoal: "goal-tick",
+  initFlow: "init",
+  loadDutyState: "job-live-verify",
+  loadJobFromFile: "duty-tick",
+  loadWorkerAdhoc: "worker-ask",
+  markFlowSuccess: "revert",
+  mergeFlow: "merge",
   parseReproOutput: "reproduce",
-  verifyReproFails: "reproduce",
+  planTaskJobs: "task-jobs",
   postPlanComment: "plan",
   postResearchComment: "research",
-  diagMcp: "research",
+  promoteQaGoal: "qa-goal",
+  recordClassification: "classify",
+  resolveFlow: "resolve",
   resolvePreviewUrl: "ui-review",
   resolveQaUrl: "qa-engineer",
-  warmupMcp: "qa-engineer",
-  createQaGoal: "qa-engineer",
+  revertFlow: "revert",
+  runPreviewBuild: "preview-build",
+  runTickScript: "duty-tick-scripted",
+  saveGoalState: "goal-tick",
+  saveManagedGoalState: "goal-manager",
+  stageMergeConflicts: "resolve",
   startFlow: "spec",
-  persistFlowState: "spec",
-  dispatch: "spec",
-  finishFlow: "release",
+  syncFlow: "sync",
+  verifyReproFails: "reproduce",
+  warmupMcp: "qa-engineer",
 }
 
 function buildUsageMap(): Map<string, Set<string>> {

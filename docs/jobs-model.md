@@ -17,14 +17,14 @@ Retries stay under the same job instead of becoming new work.
 
 | Concept | Answers | What it is |
 |---|---|---|
-| **persona** | who | reusable executor identity (`.kody/staff/<slug>.md`; engine ships a built-in `kody`) |
+| **persona** | who | reusable executor identity (`.kody/staff/<slug>.md`, usually from project or company store) |
 | **duty** | why | reusable intent - `profile.json` metadata plus the prose body of `.kody/duties/<slug>/duty.md` |
 | **executable** | how | reusable unit of work (`run`, `fix`, a duty's `profile.json`, …) |
 | **issue** | what | a GitHub **issue or PR** — the work-item a task is about |
 | **task** | task state | one issue/PR, its required jobs, outputs, and rolled-up state |
 | **job** | required work | one planned unit of work on the task; points to exactly one executable |
 | **run** | attempt | one execution attempt for a job; retries create more runs |
-| **goal** | orchestration | a **list of tasks** + state (related work) |
+| **goal** | what | outcome + manager loop; current implementation stores related tasks + state |
 
 Nesting: **goal → tasks → jobs → runs.** A goal is related tasks; a task is one
 issue/PR; a job is required work inside that task; a run is one attempt.
@@ -60,10 +60,10 @@ persist the run without the executor knowing task-state details.
 
 ### How each field is consumed
 
-- **persona →** the executor loads `.kody/staff/<persona>.md` (or the built-in)
-  and injects it as an authoritative-identity block. An executable's own
-  declared `staff` wins when present; otherwise the job's persona applies. A
-  missing built-in slug never crashes a consumer.
+- **persona →** the executor loads `.kody/staff/<persona>.md` from the project
+  or company store and injects it as an authoritative-identity block. An
+  executable's own declared `staff` wins when present; otherwise the job's
+  persona applies. Missing staff is a hard error.
 - **why (inline) →** the executor injects the operator's verbatim request as a
   **fenced, untrusted** "operator request" block in the system prompt, so the
   comment's wording shapes any executable's run — no per-prompt token needed.
@@ -149,12 +149,16 @@ moving to later pending jobs, so failed work is not skipped.
   on top of the existing `runJob` / `runExecutableChain` path. Rejected: a new
   orchestrator primitive or an "orchestrate" executable kind.
 
-## The goal = a task list
+## The goal = outcome + manager loop
 
-A goal (`.kody/goals/`, driven by `goal-scheduler` / `goal-tick`) is a list of
-tasks + state, spawning work per task. **Failure halts the goal:** a goal's
-tasks are related, so if a task fails the goal stops and resumes only once that
-task is fixed/retried — failures are not isolated.
+A goal (`.kody/goals/`, driven by `goal-scheduler`) is the durable **what**:
+an outcome plus state and evidence. Managed-goal files use `goal-manager`: they
+attach candidate duties and a route, then each tick chooses the first missing
+evidence and dispatches the responsible duty/executable.
+
+Legacy stacked-task goal files still use `goal-tick` during migration. In that
+model, failures halt the goal because tasks are related; the goal resumes once
+the failed task is fixed or retried.
 
 ## Status of the model
 

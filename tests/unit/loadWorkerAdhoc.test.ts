@@ -30,6 +30,7 @@ vi.mock("node:fs", () => ({
 }))
 
 import type { Context, Profile } from "../../src/executables/types.js"
+import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import { loadWorkerAdhoc } from "../../src/scripts/loadWorkerAdhoc.js"
 
 const CWD = "/repo"
@@ -47,6 +48,8 @@ function makeCtx(args: Record<string, unknown>): Context {
 const profile = {} as Profile
 
 beforeEach(() => {
+  vi.stubEnv("KODY_COMPANY_STORE", "0")
+  resetCompanyStoreCacheForTests()
   mocks.files.clear()
   mocks.existsSync.mockClear()
   mocks.readFileSync.mockClear()
@@ -55,6 +58,8 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env.GITHUB_EVENT_PATH
+  vi.unstubAllEnvs()
+  resetCompanyStoreCacheForTests()
 })
 
 describe("loadWorkerAdhoc: persona resolution", () => {

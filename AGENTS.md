@@ -15,9 +15,11 @@ The engine has two layers only:
 1. **Generic executor**: [src/executor.ts](src/executor.ts) loads a profile,
    validates args/tools, runs preflight scripts, optionally runs the agent, then
    runs postflight scripts. It knows no `run`/`fix`/`review` behavior.
-2. **Executable profiles**: `src/executables/<name>/profile.json` declares
-   inputs, tools, Claude Code features, CLI contracts, scripts, and optional
-   `runWhen` gates. `prompt.md` sits beside it when an agent runs.
+2. **Executable profiles**: the engine package keeps only
+   `src/executables/run`; shared duties, executables, and staff live in
+   `kody-store` under `.kody/`. Profiles declare inputs, tools, Claude Code
+   features, CLI contracts, scripts, and optional `runWhen` gates. `prompt.md`
+   sits beside a profile when an agent runs.
 
 The consumer workflow stays small: `.github/workflows/kody.yml` triggers on
 `@kody` or `workflow_dispatch` and runs
@@ -40,9 +42,9 @@ different terms, treat it as stale.
 
 | Term | Meaning |
 | --- | --- |
-| `persona` / `staff` | Who runs: reusable identity in `.kody/staff/<slug>.md`; engine ships built-in `kody`. |
+| `persona` / `staff` | Who runs: reusable identity in project/store `.kody/staff/<slug>.md`. |
 | `duty` | Why/when: recurring intent in `.kody/duties/<slug>/` with `profile.json` metadata and `duty.md` prose. |
-| `executable` | How: one command directory under `src/executables/<name>/`; the executor's atomic unit. |
+| `executable` | How: one command directory under `.kody/executables/<name>/` in project/store, or `src/executables/run` for the minimal engine builtin; the executor's atomic unit. |
 | `task` | One GitHub issue/PR plus jobs, artifacts, recent history, rolled-up state. |
 | `job` | Required work on a task; points to one executable and records runs. |
 | `run` | One execution attempt for a job. Retries add runs under the same job. |
@@ -64,9 +66,10 @@ where renaming would break public contracts: `Job` in [src/job.ts](src/job.ts),
 
 ## Engine Commands
 
-All commands are auto-discovered from `src/executables/`. Consumer repos may add
-repo-local executables under `.kody/executables/<name>/`; those are not engine
-commands.
+Commands are auto-discovered from project `.kody/executables/`, the configured
+company store, then engine built-ins. Engine built-ins are intentionally minimal:
+only `run` remains in `src/executables/`; the shared command catalog lives in
+`kody-store`.
 
 | Command | Input | Agent | Trigger / purpose |
 | --- | --- | --- | --- |
@@ -196,7 +199,9 @@ shell scripts must not read or decrypt `.kody/secrets.enc` directly.
 
 ## Adding / Changing Executables
 
-1. Create `src/executables/<name>/`.
+1. Create `.kody/executables/<name>/` in `kody-store` for shared commands, or
+   in a consumer repo for repo-local commands. Add to engine `src/executables/`
+   only for the minimal built-in runtime surface.
 2. Add `profile.json`; pick `role` and `kind`; see
    [src/executables/types.ts](src/executables/types.ts) and
    [docs/executables.md](docs/executables.md).
@@ -266,7 +271,7 @@ are informative rather than scary.
 ## New Session Checklist
 
 1. Read relevant `src/` code. Start with [src/executor.ts](src/executor.ts) and
-   the relevant `src/executables/<name>/` profile.
+   the relevant store/project `.kody/executables/<name>/` profile, or `src/executables/run` for the engine builtin.
 2. Classify the request: existing profile tweak, new profile, script change, or
    executor change. Most work is profiles/scripts.
 3. Run `pnpm typecheck && pnpm test && pnpm test:e2e` before commit.

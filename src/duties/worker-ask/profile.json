@@ -1,6 +1,0 @@
-{
-  "name": "worker-ask",
-  "action": "worker-ask",
-  "executable": "worker-ask",
-  "describe": "Run a staff member once against an inline request."
-}

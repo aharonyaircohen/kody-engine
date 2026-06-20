@@ -1,6 +1,0 @@
-{
-  "name": "fix",
-  "action": "fix",
-  "executable": "fix",
-  "describe": "Apply review feedback to an existing PR."
-}

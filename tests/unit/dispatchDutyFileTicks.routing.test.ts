@@ -13,6 +13,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest"
 import type { KodyConfig } from "../../src/config.js"
+import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import type { Context, Profile } from "../../src/executables/types.js"
 import { dispatchDutyFileTicks } from "../../src/scripts/dispatchDutyFileTicks.js"
 
@@ -28,6 +29,8 @@ const runExecutableMock = runExecutable as unknown as Mock
 let tmp: string
 
 beforeEach(() => {
+  vi.stubEnv("KODY_COMPANY_STORE", "0")
+  resetCompanyStoreCacheForTests()
   runExecutableMock.mockReset()
   runExecutableMock.mockResolvedValue({ exitCode: 0 })
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dispatch-routing-"))
@@ -36,6 +39,8 @@ beforeEach(() => {
 
 afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true })
+  vi.unstubAllEnvs()
+  resetCompanyStoreCacheForTests()
   vi.clearAllMocks()
 })
 
