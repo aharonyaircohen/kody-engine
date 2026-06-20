@@ -22,6 +22,10 @@ Goal templates and instances are physically separate:
 Templates are reusable definitions. Instances are live runs with facts and
 progress. Persisted runtime instances belong on the `kody-state` branch.
 
+Templates may come from `kody-store` or from the consumer repo. Store templates
+are shared defaults; consumer templates are repo-specific. Live instances are
+consumer-owned runtime state only.
+
 Store goals are inactive by default. A consumer repo activates shared goals in
 `kody.config.json`:
 
