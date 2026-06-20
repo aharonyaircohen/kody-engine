@@ -1,5 +1,7 @@
 # Release flow refactor: 4 executables → 1
 
+Status: the merged `release/` executable now lives in `kody-store` as a company-store asset, not under `src/executables/release`.
+
 ## Goal
 
 Replace the comment-driven release orchestrator (5 GHA runs, comment-as-state-machine) with a **single executable** that runs the entire release flow inside one GHA job. Identical user-facing behaviour; vastly simpler internals.

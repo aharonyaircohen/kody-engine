@@ -16,6 +16,46 @@ function testConfig(config: Partial<KodyConfig>): KodyConfig {
   return config as KodyConfig
 }
 
+function writeLocalReleaseAsset(root: string): void {
+  const dutyDir = path.join(root, ".kody", "duties", "release")
+  const executableDir = path.join(root, ".kody", "executables", "release")
+  fs.mkdirSync(dutyDir, { recursive: true })
+  fs.mkdirSync(executableDir, { recursive: true })
+  fs.writeFileSync(path.join(dutyDir, "duty.md"), "# Release\n\nRun release flow.\n")
+  fs.writeFileSync(
+    path.join(dutyDir, "profile.json"),
+    JSON.stringify({ name: "release", action: "release", executable: "release", describe: "Run release flow." }),
+  )
+  fs.writeFileSync(
+    path.join(executableDir, "profile.json"),
+    JSON.stringify({
+      name: "release",
+      role: "primitive",
+      describe: "Run release flow.",
+      inputs: [
+        { name: "issue", flag: "--issue", type: "int", required: true, describe: "Release issue number." },
+        { name: "bump", flag: "--bump", type: "enum", values: ["patch", "minor", "major"], describe: "Version bump." },
+      ],
+      claudeCode: {
+        model: "inherit",
+        permissionMode: "acceptEdits",
+        maxTurns: null,
+        maxThinkingTokens: null,
+        systemPromptAppend: null,
+        tools: [],
+        hooks: [],
+        skills: [],
+        commands: [],
+        subagents: [],
+        plugins: [],
+        mcpServers: [],
+      },
+      cliTools: [],
+      scripts: { preflight: [], postflight: [] },
+    }),
+  )
+}
+
 describe("dispatch: explicit override", () => {
   it("routes to run when issueNumber provided", () => {
     const r = autoDispatch({ explicit: { issueNumber: 42 } })
@@ -78,6 +118,7 @@ describe("dispatch: workflow_dispatch event", () => {
     const prevCwd = process.cwd()
     try {
       process.chdir(tmp)
+      writeLocalReleaseAsset(tmp)
       process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
       process.env.GITHUB_EVENT_PATH = writeEvent({
         inputs: { issue_number: "291", duty: "release" },
@@ -100,6 +141,7 @@ describe("dispatch: workflow_dispatch event", () => {
     const prevCwd = process.cwd()
     try {
       process.chdir(tmp)
+      writeLocalReleaseAsset(tmp)
       process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
       process.env.GITHUB_EVENT_PATH = writeEvent({
         inputs: { issue_number: "291", executable: "release" },
@@ -590,15 +632,12 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     prev.EVENT_NAME = process.env.GITHUB_EVENT_NAME
     prev.EVENT_PATH = process.env.GITHUB_EVENT_PATH
     process.env.GITHUB_EVENT_NAME = "issue_comment"
-    // Isolate from the engine repo's own `.kody/duties/` + `.kody/executables/`
-    // shadows: those exist for live-testing the engine against itself and
-    // deliberately diverge from the built-in release shape (older 4-stage
-    // primitives with stripped inputs, plus a `release` duty that runs as
-    // `duty-tick` writing a report). These tests assert the *built-in*
-    // release behavior, so we run them in a fresh empty cwd.
+    // Release now lives in project/store assets, not engine built-ins.
+    // Install a minimal local asset so these tests stay focused on dispatch.
     prevCwd = process.cwd()
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-dispatch-release-"))
     process.chdir(tmp)
+    writeLocalReleaseAsset(tmp)
   })
   afterEach(() => {
     process.env.GITHUB_EVENT_NAME = prev.EVENT_NAME

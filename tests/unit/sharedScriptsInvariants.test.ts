@@ -166,7 +166,6 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
       "run bootstrap. Solo since feature/bug/chore collapsed/moved to consumer repos — run is the last engine build primitive.",
   },
   mergeFlow: { owner: "merge", reason: "merge is bespoke (no-agent self-gating squash). Solo to merge." },
-  finishFlow: { owner: "release", reason: "release finalize step. Solo to release." },
   promoteQaGoal: { owner: "qa-goal", reason: "qa-goal promotion step. Solo to qa-goal." },
   runPreviewBuild: {
     owner: "preview-build",
@@ -220,6 +219,7 @@ const CONSUMER_LIBRARY_SCRIPTS: Record<string, string> = {
   startFlow: "spec",
   persistFlowState: "spec",
   dispatch: "spec",
+  finishFlow: "release",
 }
 
 function buildUsageMap(): Map<string, Set<string>> {

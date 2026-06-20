@@ -54,7 +54,7 @@ run a profile and how to route from it.
 | `orchestrator` | no | Drives primitives via a postflight transition table (comment-based; one GHA run per step). e.g. `classify` |
 | `container` | no | Runs declared `children` sequentially in-process (one GHA run for the whole flow). Routing is per-child `next` maps over action types — no `@kody` comments dispatched |
 | `watch` | no | Scheduled observer that inspects repo state and may trigger other executables. `kind: "scheduled"` is the typical pairing. `duty-scheduler`, `goal-scheduler` |
-| `utility` | no | One-off administrative work. `init`, `release`, `release-prepare`, `release-publish`, `release-deploy`, `plan-verify`, `probe-skill`, `job-live-verify` |
+| `utility` | no | One-off administrative work. `init`, `release-prepare`, `release-publish`, `release-deploy`, `plan-verify`, `probe-skill`, `job-live-verify` |
 
 ### `kind`
 
@@ -147,7 +147,7 @@ One line each, grouped by function. The full surface is
 
 | Name | What it does |
 | --- | --- |
-| `release` | Single `--mode prepare` or `--mode finalize`; routes to the two below |
+| `release` | Company-store executable. Runs the full release flow from `.kody/executables/release` when the store is enabled |
 | `release-prepare` | Bump version, regenerate `CHANGELOG.md`, open the release PR |
 | `release-publish` | Tag the merged commit, `prepublishOnly` + `npm publish`, create the GH release |
 | `release-deploy` | Run `deployCommand` + `notifyCommand` after publish |
