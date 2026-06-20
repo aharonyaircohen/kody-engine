@@ -18,11 +18,19 @@ decide, report, or dispatch those store-backed responsibilities.
 
 - **Company / staff = who** — people or personas acting.
 - **Duty = standing responsibility / why** — recurring ownership and judgment.
-- **Goal = outcome + manager loop / what** — a temporary objective that observes
-  evidence, chooses the next missing outcome, and dispatches the right
-  responsibility until done or blocked.
+- **Goal = outcome + manager loop / what** — a temporary objective with
+  destination evidence, attached duties, route, facts, and blockers. It chooses
+  the next missing evidence and dispatches the right responsibility until done or
+  blocked.
 - **Executable = concrete action / how** — one mechanical unit of work.
 - **Job / run = execution record** — durable required work and its attempts.
+
+Canonical noun docs:
+
+- [Goals](goals.md)
+- [Duties](duties.md)
+- [Staff](staff.md)
+- [Executables](executables.md)
 
 ## Pieces
 
@@ -33,7 +41,7 @@ decide, report, or dispatch those store-backed responsibilities.
 | Company executables | `.kody/executables/<slug>/` | Repo-local actions for inspection, reports, triage, and dispatch. |
 | Reports | `.kody/reports/*.md` | Shared state and findings. |
 | Context | `.kody/context/*.md` | Short background and vocabulary. Not hard rules. |
-| Goals | `.kody/goals/<id>/state.json` | Related task chains when larger work needs stacked PRs. |
+| Goals | `.kody/goals/<id>/state.json` | Managed company objectives. New managed goals use destination/evidence/duties/route/facts/blockers; legacy files may still be stacked-task goals until migrated. |
 
 For ledger storage and trust gates, see [ledgers.md](ledgers.md).
 

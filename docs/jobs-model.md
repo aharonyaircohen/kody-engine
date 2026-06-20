@@ -24,10 +24,19 @@ Retries stay under the same job instead of becoming new work.
 | **task** | task state | one issue/PR, its required jobs, outputs, and rolled-up state |
 | **job** | required work | one planned unit of work on the task; points to exactly one executable |
 | **run** | attempt | one execution attempt for a job; retries create more runs |
-| **goal** | what | outcome + manager loop; current implementation stores related tasks + state |
+| **goal** | what | outcome + manager loop; managed goals store destination evidence, attached duties, route, facts, blockers |
 
-Nesting: **goal → tasks → jobs → runs.** A goal is related tasks; a task is one
-issue/PR; a job is required work inside that task; a run is one attempt.
+Nesting: **goal → tasks → jobs → runs.** A managed goal is the outcome manager
+above tasks. Legacy stacked goals are deprecated migration state, not a parallel
+model. A task is one issue/PR; a job is required work inside that task; a run is
+one attempt.
+
+Canonical creation docs:
+
+- [Goals](goals.md)
+- [Duties](duties.md)
+- [Staff](staff.md)
+- [Executables](executables.md)
 
 ## Trigger vs engine (two vocabularies)
 
@@ -151,14 +160,31 @@ moving to later pending jobs, so failed work is not skipped.
 
 ## The goal = outcome + manager loop
 
-A goal (`.kody/goals/`, driven by `goal-scheduler`) is the durable **what**:
-an outcome plus state and evidence. Managed-goal files use `goal-manager`: they
-attach candidate duties and a route, then each tick chooses the first missing
-evidence and dispatches the responsible duty/executable.
+A goal is durable **what**. It names a destination and owns the manager loop that
+moves toward that destination. It is above duties in meaning: duties are
+responsibilities the goal may use, not the goal itself.
 
-Legacy stacked-task goal files still use `goal-tick` during migration. In that
-model, failures halt the goal because tasks are related; the goal resumes once
-the failed task is fixed or retried.
+The new company goal model is the **managed goal** contract stored in
+`.kody/goals/<id>/state.json` on `kody-state`. The contract is:
+
+- `destination` — outcome text plus ordered evidence names that define done.
+- `duties` — duties this goal is allowed to use.
+- `route` — one step per evidence item; each step names stage, duty, optional
+  executable, and optional args.
+- `facts` — observed evidence and values reported by duties.
+- `blockers` — reasons the manager loop could not safely dispatch next work.
+
+`goal-scheduler` wakes active goal files. If the file has the managed-goal
+contract, it routes the tick to `goal-manager`. `goal-manager` finds the first
+missing destination evidence, resolves route args from `facts`, dispatches the
+responsible duty/executable, and records `facts.pendingEvidence`. Later duty
+reports set evidence facts true. When every destination evidence item is true,
+the goal becomes `state: "done"`.
+
+This is not the old stacked-task goal flow. Legacy goal files may still use
+`goal-tick` during migration, but `goal-tick` is a bridge for old state, not the
+goal model. Real active objectives should be rewritten as managed goals; stale
+legacy goals should be closed or archived.
 
 ## Status of the model
 
@@ -182,8 +208,9 @@ All structural items are implemented:
 7. ✅ **One runner** — comment, manual, and cron paths all run through `runJob`.
 8. ✅ **Servers** (`serve` / `pool-serve` / `runner-serve` / `brain-serve`) are
    engine internals (`src/servers/` + hardcoded CLI verbs), out of the registry.
-9. ✅ **Goal** — the orchestration container: a list of tasks + state, a job per
-   task (`goal-scheduler` / `goal-tick` / `.kody/goals/`).
+9. ✅ **Goal** — outcome + manager loop. Managed goals use `goal-manager` with
+   destination/evidence/duties/route/facts/blockers; legacy stacked-task goals
+   are deprecated and should be migrated or closed.
 10. ✅ **Plan-and-split task execution** — `task-jobs` reads hidden issue task
     data, runs one child job per executable, waits in-process, summarizes the
     task, and retries failed children before later pending ones.
