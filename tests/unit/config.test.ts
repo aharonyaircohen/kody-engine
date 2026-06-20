@@ -110,6 +110,31 @@ describe("config: loadConfig", () => {
     expect(loadConfig(dir).agent.perExecutable).toBeUndefined()
   })
 
+  it("preserves agent.perExecutableReasoningEffort overrides", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: {
+        model: "claude/base",
+        perExecutableReasoningEffort: { run: "high", review: "medium", classify: "off", bogus: "nuclear" },
+      },
+    })
+    expect(loadConfig(dir).agent.perExecutableReasoningEffort).toEqual({
+      run: "high",
+      review: "medium",
+      classify: "off",
+    })
+  })
+
+  it("omits perExecutableReasoningEffort when absent or all-invalid", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "claude/base", perExecutableReasoningEffort: { run: "" } },
+    })
+    expect(loadConfig(dir).agent.perExecutableReasoningEffort).toBeUndefined()
+  })
+
   it("preserves quality commands", () => {
     const dir = tmpDir()
     writeConfig(dir, {

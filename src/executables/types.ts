@@ -8,7 +8,7 @@
  */
 
 import type { AgentResult } from "../agent.js"
-import type { KodyConfig } from "../config.js"
+import type { KodyConfig, ReasoningEffort } from "../config.js"
 import type { Phase } from "../state.js"
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -257,6 +257,8 @@ export interface ClaudeCodeSpec {
   maxTurns: number | null
   /** Extended-thinking token budget. null = SDK default. */
   maxThinkingTokens: number | null
+  /** User-facing effort level. When set, preferred over maxThinkingTokens. */
+  reasoningEffort?: ReasoningEffort | null
   /**
    * Watchdog: abort the agent if no SDK message arrives within this many
    * seconds. Per-profile override for the global 600s default. Useful on

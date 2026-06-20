@@ -47,6 +47,14 @@ describe("profile: loadProfile", () => {
     expect(profile.scripts.preflight[0]!.script).toBe("composePrompt")
   })
 
+  it("parses claudeCode.reasoningEffort on executable profiles", () => {
+    const dir = tmpDir()
+    const profile = loadProfile(
+      writeProfile(dir, { ...VALID_MIN, claudeCode: { ...VALID_MIN.claudeCode, reasoningEffort: "high" } }),
+    )
+    expect(profile.claudeCode.reasoningEffort).toBe("high")
+  })
+
   it("parses staff and every (duty fields); blanks → undefined", () => {
     const dir = tmpDir()
     const profile = loadProfile(writeProfile(dir, { ...VALID_MIN, staff: "kody", every: "1h" }))

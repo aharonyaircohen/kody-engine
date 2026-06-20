@@ -267,6 +267,12 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     : profile.claudeCode.model === "inherit"
       ? config.agent.model
       : profile.claudeCode.model
+  const profileHasThinkingTokens =
+    typeof profile.claudeCode.maxThinkingTokens === "number" && profile.claudeCode.maxThinkingTokens > 0
+  const reasoningEffort =
+    config.agent.perExecutableReasoningEffort?.[profileName] ??
+    profile.claudeCode.reasoningEffort ??
+    (profileHasThinkingTokens ? undefined : config.agent.reasoningEffort)
   let model: ReturnType<typeof parseProviderModel>
   try {
     model = parseProviderModel(modelSpec)
@@ -379,6 +385,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       pluginPaths: pluginPaths.length > 0 ? pluginPaths : undefined,
       agents,
       maxTurns: profile.claudeCode.maxTurns,
+      reasoningEffort,
       maxThinkingTokens: profile.claudeCode.maxThinkingTokens,
       maxTurnTimeoutMs:
         typeof profile.claudeCode.maxTurnTimeoutSec === "number"

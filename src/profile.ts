@@ -9,6 +9,7 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { parseReasoningEffort } from "./config.js"
 import { DUTY_MCP_TOOL_NAMES } from "./dutyMcp.js"
 import type {
   ClaudeCodeSpec,
@@ -369,6 +370,7 @@ function parseClaudeCode(p: string, raw: unknown): ClaudeCodeSpec {
     permissionMode,
     maxTurns: typeof r.maxTurns === "number" ? r.maxTurns : null,
     maxThinkingTokens: typeof r.maxThinkingTokens === "number" ? r.maxThinkingTokens : null,
+    reasoningEffort: typeof r.reasoningEffort === "string" ? parseReasoningEffort(r.reasoningEffort) : null,
     maxTurnTimeoutSec: typeof r.maxTurnTimeoutSec === "number" ? r.maxTurnTimeoutSec : null,
     systemPromptAppend: typeof r.systemPromptAppend === "string" ? r.systemPromptAppend : null,
     cacheable: r.cacheable === true,

@@ -54,6 +54,11 @@ export interface KodyConfig {
      * existing configs without this key see no behaviour change.
      */
     perExecutable?: Record<string, string>
+    /**
+     * Per-executable thinking effort override. Keeps LLM cost/quality tuning
+     * attached to the executable that actually invokes the agent.
+     */
+    perExecutableReasoningEffort?: Record<string, ReasoningEffort>
   }
   issueContext?: {
     commentLimit?: number
@@ -259,6 +264,7 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     agent: {
       model: String(agent.model),
       ...parsePerExecutable(agent.perExecutable),
+      ...parsePerExecutableReasoningEffort(agent.perExecutableReasoningEffort),
       ...parseAgentReasoningEffort(agent.reasoningEffort),
     },
     issueContext: parseIssueContext(raw.issueContext),
@@ -390,6 +396,18 @@ function parsePerExecutable(raw: unknown): { perExecutable?: Record<string, stri
     if (typeof v === "string" && v.length > 0) out[k] = v
   }
   return Object.keys(out).length > 0 ? { perExecutable: out } : {}
+}
+
+function parsePerExecutableReasoningEffort(raw: unknown): {
+  perExecutableReasoningEffort?: Record<string, ReasoningEffort>
+} {
+  if (!raw || typeof raw !== "object") return {}
+  const out: Record<string, ReasoningEffort> = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const effort = typeof v === "string" ? parseReasoningEffort(v) : null
+    if (effort) out[k] = effort
+  }
+  return Object.keys(out).length > 0 ? { perExecutableReasoningEffort: out } : {}
 }
 
 /**
