@@ -45,8 +45,17 @@ function writeGoal(id: string, state: string | null, extra: Record<string, unkno
   }
 }
 
-function activateGoals(...ids: string[]): void {
-  fs.writeFileSync(path.join(tmp, "kody.config.json"), JSON.stringify({ company: { activeGoals: ids } }, null, 2))
+function writeTemplate(slug: string, extra: Record<string, unknown> = {}): void {
+  const dir = path.join(tmp, ".kody", "goals", "templates", slug)
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(
+    path.join(dir, "state.json"),
+    JSON.stringify({ version: 1, kind: "template", templateId: slug, state: "inactive", ...extra }, null, 2),
+  )
+}
+
+function activateGoals(...items: unknown[]): void {
+  fs.writeFileSync(path.join(tmp, "kody.config.json"), JSON.stringify({ company: { activeGoals: items } }, null, 2))
 }
 
 function installEngineStub(): string {
@@ -77,6 +86,8 @@ function runScheduler(): { status: number; stdout: string; calls: string[] } {
       ...process.env,
       PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ""}`,
       KODY_LOG: logFile,
+      KODY_GOAL_SCHEDULER_NOW: "2026-06-20T12:00:00Z",
+      KODY_GOAL_SCHEDULER_SKIP_PERSIST: "1",
     },
     encoding: "utf-8",
   })
@@ -158,6 +169,27 @@ describe("goal-scheduler live wiring", () => {
     expect(calls).toContain("kody-engine goal-manager --goal ok-2")
     expect(stdout).toContain("tick fail-goal failed (continuing)")
     expect(stdout).toContain("scanned 3 goal instance(s), active=3, managed=3")
+  })
+
+  it("creates and ticks a scheduled goal instance from a template", () => {
+    writeTemplate("weekly-release", managedGoalExtra())
+    activateGoals({ template: "weekly-release", every: "1w", facts: { issue: 123 } })
+
+    const { status, stdout, calls } = runScheduler()
+
+    const instanceFile = path.join(tmp, ".kody", "goals", "instances", "weekly-release-2026-W25", "state.json")
+    const instance = JSON.parse(fs.readFileSync(instanceFile, "utf-8"))
+    expect(status).toBe(0)
+    expect(instance).toMatchObject({
+      kind: "instance",
+      template: "weekly-release",
+      sourceTemplate: "weekly-release",
+      state: "active",
+      facts: { issue: 123 },
+    })
+    expect(calls).toEqual(["kody-engine goal-manager --goal weekly-release-2026-W25"])
+    expect(stdout).toContain("created scheduled instance weekly-release-2026-W25")
+    expect(stdout).toContain("-> tick weekly-release-2026-W25 (goal-manager)")
   })
 
   it("no active goals configured skips cleanly without calling engine", () => {

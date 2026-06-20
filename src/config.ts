@@ -6,6 +6,15 @@ export interface TestRequirement {
   requireSibling: string
 }
 
+export type GoalActivation = string | ScheduledGoalActivation
+
+export interface ScheduledGoalActivation {
+  template: string
+  every?: string
+  idPrefix?: string
+  facts?: Record<string, unknown>
+}
+
 export interface KodyConfig {
   quality: {
     typecheck: string
@@ -135,7 +144,7 @@ export interface KodyConfig {
   }
   company?: {
     activeDuties?: string[]
-    activeGoals?: string[]
+    activeGoals?: GoalActivation[]
   }
   /**
    * Who may trigger kody via an `@kody` comment. Gates on the GitHub
@@ -369,23 +378,72 @@ function parseCompanyConfig(raw: unknown): KodyConfig["company"] {
   const r = raw as Record<string, unknown>
   const out: NonNullable<KodyConfig["company"]> = {}
   if (r.activeDuties !== undefined) out.activeDuties = parseSlugArray(r.activeDuties, "company.activeDuties")
-  if (r.activeGoals !== undefined) out.activeGoals = parseSlugArray(r.activeGoals, "company.activeGoals")
+  if (r.activeGoals !== undefined) out.activeGoals = parseGoalActivations(r.activeGoals)
   return Object.keys(out).length > 0 ? out : undefined
+}
+
+function parseGoalActivations(raw: unknown): GoalActivation[] {
+  if (!Array.isArray(raw)) throw new Error(`kody.config.json: company.activeGoals must be an array`)
+  const out: GoalActivation[] = []
+  const seen = new Set<string>()
+  for (const value of raw) {
+    if (typeof value === "string") {
+      const slug = parseSlug(value, "company.activeGoals")
+      if (!slug) continue
+      if (!seen.has(slug)) {
+        seen.add(slug)
+        out.push(slug)
+      }
+      continue
+    }
+
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error(`kody.config.json: company.activeGoals entries must be strings or goal schedule objects`)
+    }
+
+    const r = value as Record<string, unknown>
+    const template = typeof r.template === "string" ? parseSlug(r.template, "company.activeGoals.template") : ""
+    if (!template) throw new Error(`kody.config.json: company.activeGoals object requires template`)
+
+    const entry: ScheduledGoalActivation = { template }
+    if (r.every !== undefined) {
+      if (typeof r.every !== "string" || !/^[1-9][0-9]*[mhdw]$/.test(r.every.trim())) {
+        throw new Error(`kody.config.json: company.activeGoals every must look like "1d", "1w", "15m", or "2h"`)
+      }
+      entry.every = r.every.trim()
+    }
+    if (r.idPrefix !== undefined) {
+      if (typeof r.idPrefix !== "string") throw new Error(`kody.config.json: company.activeGoals idPrefix must be a string`)
+      const idPrefix = parseSlug(r.idPrefix, "company.activeGoals.idPrefix")
+      if (idPrefix) entry.idPrefix = idPrefix
+    }
+    const facts = recordValue(r.facts)
+    if (r.facts !== undefined && !facts) throw new Error(`kody.config.json: company.activeGoals facts must be an object`)
+    if (facts) entry.facts = facts
+    out.push(entry)
+  }
+  return out
 }
 
 function parseSlugArray(raw: unknown, field: string): string[] {
   if (!Array.isArray(raw)) throw new Error(`kody.config.json: ${field} must be an array of strings`)
   const out: string[] = []
   for (const value of raw) {
-    if (typeof value !== "string") throw new Error(`kody.config.json: ${field} entries must be strings`)
-    const slug = value.trim()
+    const slug = parseSlug(value, field)
     if (!slug) continue
-    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(slug)) {
-      throw new Error(`kody.config.json: ${field} contains invalid slug "${value}"`)
-    }
     out.push(slug)
   }
   return [...new Set(out)]
+}
+
+function parseSlug(value: unknown, field: string): string {
+  if (typeof value !== "string") throw new Error(`kody.config.json: ${field} entries must be strings`)
+  const slug = value.trim()
+  if (!slug) return ""
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(slug)) {
+    throw new Error(`kody.config.json: ${field} contains invalid slug "${value}"`)
+  }
+  return slug
 }
 
 function recordValue(raw: unknown): Record<string, unknown> | undefined {

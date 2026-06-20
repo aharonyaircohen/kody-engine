@@ -37,6 +37,22 @@ Store goals are inactive by default. A consumer repo activates shared goals in
 }
 ```
 
+Scheduled activation creates a fresh instance from the template every time bucket:
+
+```json
+{
+  "company": {
+    "activeGoals": [
+      { "template": "web-release", "every": "1w", "facts": { "issue": 123 } }
+    ]
+  }
+}
+```
+
+The scheduler writes the new instance under `.kody/goals/instances/<id>/state.json`
+on the consumer repo's `kody-state` branch, then ticks that instance. Supported
+intervals are `Nm`, `Nh`, `Nd`, and `Nw`.
+
 After activation, the consumer runtime instance should become `state: "active"`
 and include required repo facts such as `facts.issue`.
 

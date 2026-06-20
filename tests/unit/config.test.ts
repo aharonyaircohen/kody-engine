@@ -146,6 +146,47 @@ describe("config: loadConfig", () => {
     expect(cfg.quality).toEqual({ typecheck: "tc", testUnit: "tu", lint: "ln", format: "" })
   })
 
+  it("preserves string goal activations", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "m/x" },
+      company: { activeGoals: ["web-release", "web-release", " npm-release "] },
+    })
+
+    expect(loadConfig(dir).company?.activeGoals).toEqual(["web-release", "npm-release"])
+  })
+
+  it("loads scheduled goal template activations", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "m/x" },
+      company: {
+        activeGoals: [
+          "existing-goal",
+          { template: "web-release", every: "1w", idPrefix: "web", facts: { issue: 123 } },
+        ],
+      },
+    })
+
+    expect(loadConfig(dir).company?.activeGoals).toEqual([
+      "existing-goal",
+      { template: "web-release", every: "1w", idPrefix: "web", facts: { issue: 123 } },
+    ])
+  })
+
+  it("rejects invalid scheduled goal intervals", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "m/x" },
+      company: { activeGoals: [{ template: "web-release", every: "weekly" }] },
+    })
+
+    expect(() => loadConfig(dir)).toThrow(/activeGoals every/)
+  })
+
   it("normalizes access.allowedAssociations to upper-case", () => {
     const dir = tmpDir()
     writeConfig(dir, {
