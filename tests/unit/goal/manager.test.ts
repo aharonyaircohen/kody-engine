@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  applySimpleGoalTaskSummary,
   type ManagedGoal,
   managedGoalFromState,
   planManagedGoalTick,
+  SIMPLE_GOAL_EVIDENCE,
   writeManagedGoalToState,
 } from "../../../src/goal/manager.js"
 
@@ -21,6 +23,22 @@ function releaseGoal(overrides: Partial<ManagedGoal> = {}): ManagedGoal {
       { evidence: "packagePublished", stage: "publish", duty: "npm-publish", executable: "npm-publish" },
     ],
     stage: "prepare",
+    facts: {},
+    blockers: [],
+    ...overrides,
+  }
+}
+
+function simpleGoal(overrides: Partial<ManagedGoal> = {}): ManagedGoal {
+  return {
+    type: "simple",
+    destination: {
+      outcome: "all labelled tasks are complete",
+      evidence: [SIMPLE_GOAL_EVIDENCE],
+    },
+    duties: [],
+    route: [],
+    stage: "legacy",
     facts: {},
     blockers: [],
     ...overrides,
@@ -184,6 +202,33 @@ describe("planManagedGoalTick", () => {
     })
     expect(goal.stage).toBe("blocked")
     expect(goal.blockers).toEqual(["route duty release-prepare is not attached to this goal"])
+  })
+  it("waits for simple goal labelled tasks instead of blocking", () => {
+    const goal = simpleGoal()
+    applySimpleGoalTaskSummary(goal, { total: 2, open: 1 })
+
+    const decision = planManagedGoalTick(goal)
+
+    expect(decision).toEqual({
+      kind: "wait",
+      evidence: SIMPLE_GOAL_EVIDENCE,
+      stage: "waiting",
+      reason: "waiting for 1 open labelled task(s)",
+    })
+    expect(goal.stage).toBe("waiting")
+    expect(goal.blockers).toEqual([])
+    expect(goal.facts[SIMPLE_GOAL_EVIDENCE]).toBe(false)
+  })
+
+  it("completes simple goal when all labelled tasks are closed", () => {
+    const goal = simpleGoal()
+    applySimpleGoalTaskSummary(goal, { total: 2, open: 0 })
+
+    const decision = planManagedGoalTick(goal)
+
+    expect(decision).toEqual({ kind: "done" })
+    expect(goal.stage).toBe("done")
+    expect(goal.facts[SIMPLE_GOAL_EVIDENCE]).toBe(true)
   })
 })
 

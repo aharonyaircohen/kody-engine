@@ -197,7 +197,7 @@ function ensureFeatureBranchInner(
   cwd?: string,
   baseBranch?: string,
 ): BranchResult {
-  // baseBranch: optional fork point. When provided (e.g. by goal-tick passing
+  // baseBranch: optional fork point. When provided (e.g. by base override caller passing
   // --base goal-<id>), a brand-new feature branch is forked from origin/<base>
   // instead of origin/<defaultBranch>. If the feature branch already exists on
   // origin (re-running run on the same issue), we still pull it as-is — the
@@ -342,7 +342,7 @@ function ensureFeatureBranchInner(
       git(["rev-parse", "--verify", `origin/${baseBranch}`], cwd)
       forkPoint = baseBranch
     } catch {
-      // origin/<base> doesn't exist — silently fall back. The goal-tick is
+      // origin/<base> doesn't exist — silently fall back. The base override caller is
       // expected to have created the goal branch before dispatching, so
       // this path should be rare. Logged in callers via the resulting
       // branch name (still defaultBranch-derived).

@@ -53,7 +53,7 @@ neither of which is set in the Next.js server.
 
 - `executable` — picks the stage
 - `issue_number` — the issue or PR the stage acts on
-- `base` — branch context (goal-tick only)
+- `base` — optional safe branch context for executables that accept a base override
 
 What a duty does NOT pass: flags like `--scope`, `--focus`, etc. Those
 live in the **target**:

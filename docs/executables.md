@@ -83,11 +83,8 @@ declared scripts, optionally calls the agent, then runs postflight scripts.
 
 `goal-manager` is the generic managed-goal loop. It reads a managed goal,
 chooses the first missing destination evidence, dispatches the matching
-duty/executable route step, and records pending evidence. It is not the old
-stacked-task flow.
-
-`goal-tick` is the legacy stacked-task bridge. Keep it only for old goal state
-that has not been migrated yet.
+duty/executable route step, and records pending evidence. It is the only
+canonical goal runner.
 
 Implementation anchors:
 

@@ -297,7 +297,7 @@ changing the agent loop. Most-bang-per-buck UX improvements.
 - `src/scripts/acquireLock.ts` / `releaseLock.ts` use a GH commit-on-
   branch as a mutex (`refs/kody/locks/<slug>`). If acquire fails the
   tick exits clean — next wake will retry.
-- Wire into `goal-tick` and `duty-tick` preflight.
+- Wire into `goal-manager` and `duty-tick` preflight.
 - **Effort:** 2 days.
 
 #### 4e. **QW8 — container reset opt-in** (low)

@@ -44,6 +44,8 @@ model they want in `kody.config.json`:
 }
 ```
 
+See [Company Activation](company-activation.md) for the full activation contract.
+
 ## Pieces
 
 | Piece | Path | Purpose |
@@ -53,7 +55,8 @@ model they want in `kody.config.json`:
 | Company executables | `.kody/executables/<slug>/` | Repo-local actions for inspection, reports, triage, and dispatch. |
 | Reports | `.kody/reports/*.md` | Shared state and findings. |
 | Context | `.kody/context/*.md` | Short background and vocabulary. Not hard rules. |
-| Goals | `.kody/goals/<id>/state.json` | Managed company objectives. New managed goals use destination/evidence/duties/route/facts/blockers; legacy files may still be stacked-task goals until migrated. |
+| Goal templates | `.kody/goals/templates/<slug>/state.json` | Reusable managed objective definitions. |
+| Goal instances | `.kody/goals/instances/<id>/state.json` | Live managed objective runs with facts and progress. |
 
 For ledger storage and trust gates, see [ledgers.md](ledgers.md).
 

@@ -6,7 +6,7 @@
  * goal. The duty surfaces an inbox rec carrying `@kody qa-goal --issue <n>`.
  * When the operator approves, this verb reads the QA report that qa-engineer
  * left on issue <n> and promotes it into a real goal (manifest entry +
- * one fix-ticket per finding + a committed `.kody/goals/<id>/state.json`).
+ * one fix-ticket per finding + a committed `.kody/goals/instances/<id>/state.json`).
  *
  * Script-only: sets `ctx.skipAgent` so no LLM runs — it's pure orchestration
  * over the already-produced report. Reuses `promoteReportToGoal`.

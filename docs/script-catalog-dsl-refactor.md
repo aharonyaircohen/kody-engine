@@ -7,7 +7,7 @@ Stop `src/scripts/` from being a junk drawer of single-executable orchestration 
 **Success criteria:**
 1. Every script in `src/scripts/` is referenced by ≥2 executables (mechanically enforced).
 2. The 5 PR-branch executables (`fix`, `revert`, `resolve`, `fix-ci`, `init`) all run via a single shared lifecycle, with no per-executable `xxxFlow.ts` file.
-3. The 8 `goal-tick` solo scripts collapse into ≤2 shared scripts driven by profile config.
+3. Managed goals stay in the explicit `goal-manager` scripts; the old goal solo-script cluster is retired instead of abstracted.
 4. `src/scripts/index.ts` registers ~35 scripts instead of today's 76.
 
 ## Problem (data)
@@ -24,7 +24,7 @@ The 35 solo scripts cluster into recognisable shapes:
 | Cluster | Solo scripts | Used by |
 | --- | --- | --- |
 | PR-branch lifecycle | `fixFlow`, `revertFlow`, `resolveFlow`, `fixCiFlow`, `initFlow` | `fix`, `revert`, `resolve`, `fix-ci`, `init` |
-| Goal chain | `loadGoalState`, `saveGoalState`, `commitGoalState`, `deriveGoalPhase`, `dispatchNextTask`, `finalizeGoal`, `handleAbandonedGoal`, `parseJobStateFromAgentResult` | `goal-tick` |
+| Managed goal | `loadGoalState`, `advanceManagedGoal`, `saveManagedGoalState`, `commitGoalState` | `goal-manager` |
 | Dispatch/classify | `classifyByLabel`, `dispatchClassified`, `recordClassification`, `dispatch`, `dispatchDutyFileTicks` | `classify`, `spec`, `duty-scheduler` |
 | Duty tick | `loadJobFromFile`, `parseJobStateFromAgentResult`, `runTickScript` | `duty-tick`, `duty-tick-scripted` |
 | Reproduce | `parseReproOutput`, `verifyReproFails` | `reproduce` |
@@ -108,7 +108,7 @@ The executor itself never reads `lifecycle`. By the time the executor receives t
 | Lifecycle | Replaces | Cluster size |
 | --- | --- | --- |
 | `pr-branch` | `fixFlow`, `revertFlow`, `resolveFlow`, `fixCiFlow`, `initFlow` | 5 |
-| `goal-chain` | `loadGoalState`/`saveGoalState`/`commitGoalState`/`deriveGoalPhase`/`dispatchNextTask`/`finalizeGoal`/`handleAbandonedGoal` | 7 |
+| `managed-goal` | `loadGoalState`/`advanceManagedGoal`/`saveManagedGoalState`/`commitGoalState` | 4 |
 | `issue-comment` | `postPlanComment`, `postResearchComment` (parameterised by comment shape) | 2 |
 | `scheduled-watch` | already exists as `role: "watch"`; promote to first-class lifecycle | n/a |
 
@@ -213,27 +213,18 @@ For each executable:
 
 ---
 
-### Phase 4 — Build `lifecycle: "goal-chain"` for `goal-tick`
+### Phase 4 — Retired legacy goal chain
 
-**Scope:** collapse `goal-tick`'s 8 solo scripts.
+**Status:** obsolete after managed goals became canonical.
 
-Note: `goal-tick` is the highest-density solo cluster — 8 scripts for one executable. This is the right phase to validate that the lifecycle pattern handles complex state machines, not just linear flows.
+The old goal chain was removed instead of folded into a lifecycle abstraction. Managed goals now use the explicit `goal-manager` loop:
 
-**Code changes**
-1. New `src/lifecycles/goalChain.ts` expanding to a canonical sequence (load → derive-phase → dispatch-next → save → commit).
-2. Profile update: `src/executables/goal-tick/profile.json` gains `lifecycle: "goal-chain"` and `lifecycleConfig` for phase-specific behaviour.
-3. Delete: `loadGoalState`, `saveGoalState`, `commitGoalState`, `deriveGoalPhase`, `dispatchNextTask`, `finalizeGoal`, `handleAbandonedGoal`. Some may collapse into `src/lifecycles/goalChain.ts` internals (not new shared scripts — implementation detail of the lifecycle module).
-4. If `parseJobStateFromAgentResult` is genuinely shared with `duty-tick`, leave it. If not, demote it in phase 5.
+- `loadGoalState`
+- `advanceManagedGoal`
+- `saveManagedGoalState`
+- `commitGoalState`
 
-**Acceptance**
-- Solo-use script count drops from ~30 to ~22.
-- `tests/unit/goal/scripts.test.ts` (currently 401 lines) shrinks or refocuses on lifecycle behaviour.
-- `tests/int/` goal-related tests stay green.
-
-**Risks**
-- `goal-tick` is more state-heavy than `fix` etc. If the lifecycle module ends up looking like `goalFlow.ts` rebadged, **the abstraction failed** — stop, leave `goal-tick` bespoke, document in `AGENTS.md` why goal-tick is the exception. Don't force the pattern.
-
----
+Do not reintroduce the retired legacy goal phase/dispatch/finalize scripts for new goal work.
 
 ### Phase 5 — Relocate the residual + enforce the invariant
 

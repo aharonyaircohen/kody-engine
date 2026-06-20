@@ -23,10 +23,10 @@ describe("deriveBranchName", () => {
 
 describe("runFlow: resolveBaseOverride", () => {
   // The --base override is the only way a comment can redirect kody onto a
-  // non-default branch. dispatchNextTask is the intended caller; it passes
+  // non-default branch. Base override caller passes
   // either the leaf task branch or the repo's default branch (dev / main /
   // master). We accept any safe ref but reject path-traversal / shell-meta.
-  it("accepts kody-task branches (stacked-PR base)", () => {
+  it("accepts kody-task branches (safe task base)", () => {
     expect(resolveBaseOverride("42-add-button")).toBe("42-add-button")
     expect(resolveBaseOverride("1453-fix-typo")).toBe("1453-fix-typo")
   })

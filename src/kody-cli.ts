@@ -516,7 +516,7 @@ export async function runCi(argv: string[]): Promise<number> {
   try {
     const config = earlyConfig ?? loadConfig(cwd)
     // runExecutableChain follows any in-process stage hand-offs (classify →
-    // build, flow ping-pong, goal-tick → task pipeline) so a stage never has
+    // build, flow ping-pong, goal-manager -> duty pipeline) so a stage never has
     // to post a bot-authored `@kody` comment the follow-up run would ignore.
     // One-runner: the comment / manual route mints an INSTANT job and runs it.
     // runJob wraps runExecutableChain, so in-process stage hand-offs and exit

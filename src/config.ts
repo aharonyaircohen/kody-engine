@@ -45,7 +45,7 @@ export interface KodyConfig {
      *       "classify":      "claude/claude-haiku-4-5-20251001",
      *       "research":      "claude/claude-haiku-4-5-20251001",
      *       "plan":          "claude/claude-opus-4-7",
-     *       "goal-tick":     "claude/claude-haiku-4-5-20251001"
+     *       "goal-manager":     "claude/claude-haiku-4-5-20251001"
      *     }
      *   }
      *

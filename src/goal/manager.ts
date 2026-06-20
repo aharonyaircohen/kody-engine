@@ -1,5 +1,8 @@
 import type { GoalState } from "./state.js"
 
+export const SIMPLE_GOAL_TYPE = "simple"
+export const SIMPLE_GOAL_EVIDENCE = "labelledTasksComplete"
+
 export interface GoalDestination {
   outcome: string
   evidence: string[]
@@ -21,6 +24,11 @@ export interface ManagedGoal {
   stage?: string
   facts: Record<string, unknown>
   blockers: string[]
+}
+
+export interface SimpleGoalTaskSummary {
+  total: number
+  open: number
 }
 
 export type ManagedGoalDecision =
@@ -47,6 +55,16 @@ function firstMissingEvidence(goal: ManagedGoal): string | undefined {
 
 function pushBlocker(goal: ManagedGoal, reason: string): void {
   if (!goal.blockers.includes(reason)) goal.blockers.push(reason)
+}
+
+export function isSimpleGoal(goal: ManagedGoal): boolean {
+  return goal.type === SIMPLE_GOAL_TYPE
+}
+
+export function applySimpleGoalTaskSummary(goal: ManagedGoal, summary: SimpleGoalTaskSummary): void {
+  goal.facts.simpleAttachedTaskCount = summary.total
+  goal.facts.simpleOpenTaskCount = summary.open
+  goal.facts[SIMPLE_GOAL_EVIDENCE] = summary.total > 0 && summary.open === 0
 }
 
 function isFactReference(value: unknown): value is { fact: string } {
@@ -117,6 +135,18 @@ export function planManagedGoalTick(goal: ManagedGoal): ManagedGoalDecision {
 
   const step = goal.route.find((candidate) => candidate.evidence === missing)
   if (!step) {
+    if (isSimpleGoal(goal) && missing === SIMPLE_GOAL_EVIDENCE) {
+      goal.stage = "waiting"
+      delete goal.facts.pendingEvidence
+      const total = typeof goal.facts.simpleAttachedTaskCount === "number" ? goal.facts.simpleAttachedTaskCount : 0
+      const open = typeof goal.facts.simpleOpenTaskCount === "number" ? goal.facts.simpleOpenTaskCount : 0
+      return {
+        kind: "wait",
+        evidence: missing,
+        stage: "waiting",
+        reason: total === 0 ? "waiting for labelled tasks" : `waiting for ${open} open labelled task(s)`,
+      }
+    }
     const reason = `no route step for evidence: ${missing}`
     goal.stage = "blocked"
     pushBlocker(goal, reason)

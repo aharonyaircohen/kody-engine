@@ -195,16 +195,9 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   const cwd = args.cwd ?? process.cwd()
 
   // Configless implementations: skip config load.
-  // - init runs BEFORE a kody.config.json exists.
-  // - goal-scheduler is a scan-only lifecycle tool: walks `.kody/goals/*`
-  //   and dispatches a goal-tick subprocess for each active goal. No
-  //   config use of its own.
-  //
-  // goal-tick IS NOT configless — it needs config.git.defaultBranch to
-  // resolve the base for the first task in a stacked-PR run. The
-  // configless fallback in executor.ts hardcodes "main", which is wrong
-  // for repos defaulting to `dev`, `master`, etc. and silently collapsed
-  // the stack onto the wrong branch.
+  // - init runs BEFORE kody.config.json exists.
+  // - goal-scheduler is scan-only: it walks `.kody/goals/instances/*` and dispatches
+  //   goal-manager for each active managed goal. No config use of its own.
   const configlessCommands = new Set(["init", "goal-scheduler"])
 
   if (args.command === "__duty__") {

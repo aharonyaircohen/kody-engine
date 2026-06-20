@@ -1,65 +1,34 @@
 /**
  * Goal state file: shape, parsing, and disk I/O.
  *
- * Stacked-PR model: state.json carries only what's not derivable from
- * GitHub. The umbrella issue + goal PR + completedAt fields are gone —
- * the leaf PR's existence and child task PRs are the source of truth
- * for "where is this goal?".
- *
- * Schema is permissive (unknown fields preserved on round-trip) so
- * existing repos upgrade without losing data, and dashboard-written
- * fields (title, description) don't get stomped by the tick.
+ * Managed goals keep lifecycle at the top level and goal-manager data
+ * (destination, evidence, duties, route, facts, blockers) in the extra bag.
+ * Unknown fields are preserved on round-trip so dashboards and older files do
+ * not get stomped by ticks.
  */
 
 import * as fs from "node:fs"
 import * as path from "node:path"
 
-/**
- * All state values a goal may occupy. Drives the phase machine.
- *
- * `awaiting-merge`: DEPRECATED. The engine no longer auto-merges, so
- * nothing writes this state anymore — `finalizeGoal` now leaves the
- * cumulative diff as a single open, review-ready leaf PR and a human
- * merges it in GitHub. Retained only so existing state.json files
- * parked at `awaiting-merge` (pre-deprecation) still parse; the
- * scheduler skips the state, so such a legacy goal is inert until an
- * operator flips it back to `active`.
- */
-export type GoalLifecycleState = "active" | "abandoned" | "closed" | "awaiting-merge" | "done"
+/** All lifecycle states a managed goal may occupy. */
+export type GoalLifecycleState = "active" | "abandoned" | "closed" | "done"
 
-const VALID_STATES: ReadonlySet<string> = new Set(["active", "abandoned", "closed", "awaiting-merge", "done"])
+const VALID_STATES: ReadonlySet<string> = new Set(["active", "abandoned", "closed", "done"])
 
 /**
- * Strict view of fields the tick reads or writes. Other fields (e.g.
- * `title`, `description` written by the dashboard) round-trip via the
- * `extra` bag below.
+ * Strict view fields goal-manager reads and writes. Other fields round-trip
+ * through `extra`.
  */
 export interface GoalState {
-  /** Lifecycle state. Required — drives phase derivation. */
+  /** Lifecycle state. Required by goal-scheduler and goal-manager. */
   state: GoalLifecycleState
-  /**
-   * DEPRECATED. Was a one-shot "the user clicked Merge" flag consumed by
-   * the now-deleted `parkGoalForMerge`. The engine no longer auto-merges,
-   * so this flag is inert — kept only so legacy state.json files that
-   * still carry it round-trip without a parse error.
-   */
-  mergeApproved?: boolean
-  /** Most recently dispatched task issue number. Audit trail. */
-  lastDispatchedIssue?: number
-  /** ISO timestamp updated on every tick. */
+  /** ISO timestamp updated when goal-manager persists a change. */
   updatedAt?: string
-  /** ISO timestamp set when the goal first transitioned to `state==="active"`. */
+  /** ISO timestamp set when a goal is first created. */
   createdAt?: string
-  /** Same as createdAt for older goals; legacy field name. */
+  /** Legacy creation timestamp name; preserved for existing files. */
   startedAt?: string
-  /**
-   * Forward-compat: any other JSON keys present on disk pass through
-   * unchanged on save. Lets the dashboard write fields the tick doesn't
-   * understand without the tick stomping them.
-   *
-   * Legacy fields like `goalIssueNumber`, `goalPrUrl`, `completedAt`
-   * (umbrella-era) round-trip here untouched.
-   */
+  /** Managed-goal payload plus unknown dashboard/legacy fields. */
   extra: Record<string, unknown>
 }
 
@@ -74,12 +43,12 @@ export class GoalStateError extends Error {
 }
 
 /**
- * Parse a raw JSON-decoded value into a typed GoalState. Throws on
- * shape mismatches with the file path attached for diagnosis.
+ * Parse raw JSON-decoded value into typed GoalState. Throws on shape
+ * mismatches with the file path attached for diagnosis.
  */
 export function parseGoalState(filePath: string, raw: unknown): GoalState {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    throw new GoalStateError(filePath, "must be a JSON object")
+    throw new GoalStateError(filePath, "must be JSON object")
   }
   const r = raw as Record<string, unknown>
 
@@ -96,19 +65,12 @@ export function parseGoalState(filePath: string, raw: unknown): GoalState {
     extra: {},
   }
 
-  if (typeof r.mergeApproved === "boolean") {
-    parsed.mergeApproved = r.mergeApproved
-  }
-  if (typeof r.lastDispatchedIssue === "number" && Number.isFinite(r.lastDispatchedIssue)) {
-    parsed.lastDispatchedIssue = r.lastDispatchedIssue
-  }
   for (const ts of ["updatedAt", "createdAt", "startedAt"] as const) {
     const v = r[ts]
     if (typeof v === "string" && v.length > 0) parsed[ts] = v
   }
 
-  // Capture every other field on `extra` so it round-trips on save.
-  const known = new Set(["state", "mergeApproved", "lastDispatchedIssue", "updatedAt", "createdAt", "startedAt"])
+  const known = new Set(["state", "updatedAt", "createdAt", "startedAt"])
   for (const [k, v] of Object.entries(r)) {
     if (!known.has(k)) parsed.extra[k] = v
   }
@@ -117,25 +79,23 @@ export function parseGoalState(filePath: string, raw: unknown): GoalState {
 }
 
 /**
- * Serialize a GoalState back to the JSON shape on disk. Known fields
- * come first (stable diffs); `extra` fields trail.
+ * Serialize GoalState back to the JSON shape on disk. Known lifecycle fields
+ * come last so they cannot be overwritten by unknown extra data.
  */
 export function serializeGoalState(s: GoalState): string {
   const obj: Record<string, unknown> = { ...s.extra, state: s.state }
-  if (s.mergeApproved !== undefined) obj.mergeApproved = s.mergeApproved
-  if (s.lastDispatchedIssue !== undefined) obj.lastDispatchedIssue = s.lastDispatchedIssue
   if (s.createdAt !== undefined) obj.createdAt = s.createdAt
   if (s.startedAt !== undefined) obj.startedAt = s.startedAt
   if (s.updatedAt !== undefined) obj.updatedAt = s.updatedAt
   return `${JSON.stringify(obj, null, 2)}\n`
 }
 
-/** Resolve `<cwd>/.kody/goals/<id>/state.json` for a goal id. */
+/** Resolve `<cwd>/.kody/goals/instances/<id>/state.json` for a goal id. */
 export function goalStatePath(cwd: string, goalId: string): string {
-  return path.join(cwd, ".kody", "goals", goalId, "state.json")
+  return path.join(cwd, ".kody", "goals", "instances", goalId, "state.json")
 }
 
-/** Read + parse the goal state file. Throws GoalStateError on any failure. */
+/** Read and parse a goal state file. Throws GoalStateError on any failure. */
 export function readGoalState(cwd: string, goalId: string): GoalState {
   const file = goalStatePath(cwd, goalId)
   if (!fs.existsSync(file)) {
@@ -150,14 +110,14 @@ export function readGoalState(cwd: string, goalId: string): GoalState {
   return parseGoalState(file, raw)
 }
 
-/** Write the state back to disk. Best-effort writeFile; no atomicity guarantees. */
+/** Write state back to disk. Best-effort writeFile; no atomicity guarantees. */
 export function writeGoalState(cwd: string, goalId: string, state: GoalState): void {
   const file = goalStatePath(cwd, goalId)
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(file, serializeGoalState(state), "utf-8")
 }
 
-/** Returns a current ISO-8601 UTC timestamp matching the engine's existing format. */
+/** Returns the current ISO-8601 UTC timestamp matching the engine's format. */
 export function nowIso(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, "Z")
 }

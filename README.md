@@ -127,8 +127,8 @@ kody-engine npm-publish       [--tag latest] [--access public] [--dry-run]
 kody-engine duty-scheduler                                    # fan out due .kody/duties/<slug>/ folders
 kody-engine duty-tick          --duty <slug> [--force]        # one agent tick for one duty
 kody-engine duty-tick-scripted --duty <slug> [--force]        # one deterministic tickScript duty tick
-kody-engine goal-scheduler                                    # fan out active .kody/goals/* state files
-kody-engine goal-tick         --goal <id>                     # advance one stacked-PR goal
+kody-engine goal-scheduler                                    # fan out active .kody/goals/instances/* state files
+kody-engine goal-manager      --goal <id>                     # advance one managed goal instance
 
 # setup, servers, and utilities
 kody-engine init              [--force]                       # scaffold consumer repo

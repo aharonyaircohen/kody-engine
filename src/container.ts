@@ -24,7 +24,7 @@ const CONTAINER_MAX_ITERATIONS = 50
 /**
  * Read the input specs of a child executable's profile, returning null if the
  * profile can't be loaded. Used by the container loop to know which
- * parent-supplied args (e.g. `--base` from a goal-tick dispatch comment) to
+ * parent-supplied args (e.g. `--base` from a parent dispatch) to
  * forward to the child without crashing the parent on profile-load errors.
  */
 function getProfileInputsForChild(profileName: string, _cwd: string): InputSpec[] | null {
@@ -178,8 +178,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
       // that container's target-derivation doesn't already inject. Without
       // this, comment-supplied flags like `@kody --base <branch>` are
       // silently dropped between the container (e.g. chore/feature/fix/bug)
-      // and the run primitive — the stacked-PR flow depends on `--base`
-      // making it from goal-tick's dispatch comment through to runFlow.
+      // run primitive.
       const childInputs = getProfileInputsForChild(child.exec, input.cwd)
       if (childInputs) {
         for (const spec of childInputs) {

@@ -12,15 +12,15 @@ responsibility. A goal is a temporary objective.
 
 ## Canonical Shape
 
-Managed goals live as JSON state:
+Goal templates and instances are physically separate:
 
 ```text
-.kody/goals/<goal-id>/state.json
+.kody/goals/templates/<goal-slug>/state.json
+.kody/goals/instances/<goal-instance-id>/state.json
 ```
 
-The persisted runtime file belongs on the `kody-state` branch. Shared template
-goals may live in `kody-store` under the same path so consumer repos can copy or
-resolve them.
+Templates are reusable definitions. Instances are live runs with facts and
+progress. Persisted runtime instances belong on the `kody-state` branch.
 
 Store goals are inactive by default. A consumer repo activates shared goals in
 `kody.config.json`:
@@ -110,12 +110,11 @@ instead of dispatching bad input.
 
 ## Manager Loop
 
-`goal-scheduler` wakes active goal files. Managed-goal files route to
-`goal-manager`; legacy stacked-task files route to `goal-tick`.
+`goal-scheduler` wakes active managed-goal files and routes them to `goal-manager`. Unmanaged legacy state files are skipped until they are closed or rewritten in the managed shape.
 
 `goal-manager` is deterministic and no-agent:
 
-1. Load `.kody/goals/<id>/state.json`.
+1. Load `.kody/goals/instances/<id>/state.json`.
 2. Read `destination.evidence`.
 3. Find the first evidence key that is not `true` in `facts`.
 4. If that evidence is already `facts.pendingEvidence`, wait.
@@ -158,20 +157,16 @@ Use this checklist:
 5. Prefer existing duties and executables from `kody-store`.
 6. Use fact references for values discovered by earlier steps.
 7. Start with `state: "active"`, `facts: {}`, and `blockers: []`.
-8. Store shared goal templates in `kody-store`; store live runtime goal state on `kody-state`.
+8. Store shared goal templates under `.kody/goals/templates`; store live runtime instances under `.kody/goals/instances` on `kody-state`.
 
 ## Legacy Goal Migration
 
-Legacy stacked-task goals are deprecated. They are not a second goal model.
+Legacy goal-state files are not a second model. They should be handled in one of two ways:
 
-Treat each legacy goal as one of two things:
+1. **Stale runtime state**: close or archive it so the scheduler ignores it.
+2. **Real active objective**: rewrite it as a managed goal with `destination`, `evidence`, `duties`, `route`, `facts`, and `blockers`.
 
-1. **Stale runtime state**: close or archive it.
-2. **Real active objective**: rewrite it as a managed goal with `destination`,
-   `evidence`, `duties`, `route`, `facts`, and `blockers`.
-
-`goal-tick` exists only as a migration bridge for old stacked-task state. New
-goals must use the managed-goal contract and `goal-manager`.
+New goals must use the managed-goal contract and `goal-manager`.
 
 ## Do Not
 

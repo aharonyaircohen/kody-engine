@@ -23,7 +23,7 @@ describe("goal-scheduler profile", () => {
     expect(py?.install?.required).toBe(true)
   })
 
-  it("still declares gh", () => {
-    expect(profile.cliTools.some((t) => t.name === "gh")).toBe(true)
+  it("does not require gh to enumerate managed goals", () => {
+    expect(profile.cliTools.some((t) => t.name === "gh")).toBe(false)
   })
 })

@@ -29,15 +29,9 @@ export const runFlow: PreflightScript = async (ctx) => {
   ctx.data.commentTargetType = "issue"
   ctx.data.commentTargetNumber = issueNumber
 
-  // Resolve the base branch:
-  //   - Optional --base CLI flag — passed by goal-tick's dispatchNextTask as
-  //     `@kody --base <leaf-branch>`. Validated against the kody-task / legacy
-  //     goal-branch allowlist so comment-driven dispatch can't redirect kody
-  //     onto an arbitrary branch.
-  //
-  // The umbrella-era label fallback (`goal-runner:dispatched` + `goal:<id>` →
-  // `goal-<id>`) is gone: the stacked-PR model doesn't emit those labels,
-  // and the --base in the @kody comment is the only signal we need.
+  // Resolve base branch from an explicit, validated --base override.
+  // This remains useful for safe manual branch targeting; managed goals no
+  // longer dispatch stacked task branches through this path.
   const argBase = resolveBaseOverride(ctx.args.base as string | undefined)
   const baseRaw = ctx.args.base as string | undefined
   if (baseRaw && !argBase) {
@@ -74,8 +68,8 @@ function tryPost(issueNumber: number, body: string, cwd?: string): void {
 }
 
 /**
- * Validate a --base override. Returns the value if it parses as a safe
- * git branch ref, otherwise null. dispatchNextTask is the only intended
+ * git branch ref, otherwise null. Base overrides are intended for safe
+ * branch targeting only.
  * caller; it passes either the leaf task branch or the repo's default
  * branch (dev, main, etc.), so we need to accept any ordinary branch
  * name without leaving the door open for path-traversal / shell-meta

@@ -17,7 +17,6 @@ import { commitAndPush } from "./commitAndPush.js"
 import { commitGoalState } from "./commitGoalState.js"
 import { composePrompt } from "./composePrompt.js"
 import { createQaGoal } from "./createQaGoal.js"
-import { deriveGoalPhase } from "./deriveGoalPhase.js"
 import { deriveQaScopeFromIssue } from "./deriveQaScopeFromIssue.js"
 import { diagMcp } from "./diagMcp.js"
 import { discoverQaContext } from "./discoverQaContext.js"
@@ -25,16 +24,13 @@ import { dispatch } from "./dispatch.js"
 import { dispatchClassified } from "./dispatchClassified.js"
 import { dispatchDutyFileTicks } from "./dispatchDutyFileTicks.js"
 import { dispatchDutyTicks } from "./dispatchDutyTicks.js"
-import { dispatchNextTask } from "./dispatchNextTask.js"
 import { dispatchNextTaskJob } from "./dispatchNextTaskJob.js"
 import { ensurePr } from "./ensurePr.js"
 import { failOnceTaskJob } from "./failOnceTaskJob.js"
-import { finalizeGoal } from "./finalizeGoal.js"
 import { finalizeTerminal } from "./finalizeTerminal.js"
 import { finishFlow } from "./finishFlow.js"
 import { fixCiFlow } from "./fixCiFlow.js"
 import { fixFlow } from "./fixFlow.js"
-import { handleAbandonedGoal } from "./handleAbandonedGoal.js"
 import { initFlow } from "./initFlow.js"
 import { loadConventions } from "./loadConventions.js"
 import { loadCoverageRules } from "./loadCoverageRules.js"
@@ -83,7 +79,6 @@ import { runFlow } from "./runFlow.js"
 import { runPreviewBuild } from "./runPreviewBuild.js"
 import { runScheduledExecutableTick } from "./runScheduledExecutableTick.js"
 import { runTickScript } from "./runTickScript.js"
-import { saveGoalState } from "./saveGoalState.js"
 import { saveManagedGoalState } from "./saveManagedGoalState.js"
 import { saveTaskState } from "./saveTaskState.js"
 import { setCommentTarget } from "./setCommentTarget.js"
@@ -147,11 +142,6 @@ export const preflightScripts: Record<string, PreflightScript> = {
   runPreviewBuild,
   advanceManagedGoal,
   loadGoalState,
-  handleAbandonedGoal,
-  deriveGoalPhase,
-  dispatchNextTask,
-  finalizeGoal,
-  saveGoalState,
   saveManagedGoalState,
 }
 

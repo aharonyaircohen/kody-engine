@@ -27,7 +27,7 @@ Retries stay under the same job instead of becoming new work.
 | **goal** | what | outcome + manager loop; managed goals store destination evidence, attached duties, route, facts, blockers |
 
 Nesting: **goal → tasks → jobs → runs.** A managed goal is the outcome manager
-above tasks. Legacy stacked goals are deprecated migration state, not a parallel
+above tasks. Legacy stacked goals are archived migration state, not a parallel
 model. A task is one issue/PR; a job is required work inside that task; a run is
 one attempt.
 
@@ -165,7 +165,7 @@ moves toward that destination. It is above duties in meaning: duties are
 responsibilities the goal may use, not the goal itself.
 
 The new company goal model is the **managed goal** contract stored in
-`.kody/goals/<id>/state.json` on `kody-state`. The contract is:
+`.kody/goals/instances/<id>/state.json` on `kody-state`. The contract is:
 
 - `destination` — outcome text plus ordered evidence names that define done.
 - `duties` — duties this goal is allowed to use.
@@ -184,10 +184,7 @@ responsible duty/executable, and records `facts.pendingEvidence`. Later duty
 reports set evidence facts true. When every destination evidence item is true,
 the goal becomes `state: "done"`.
 
-This is not the old stacked-task goal flow. Legacy goal files may still use
-`goal-tick` during migration, but `goal-tick` is a bridge for old state, not the
-goal model. Real active objectives should be rewritten as managed goals; stale
-legacy goals should be closed or archived.
+This replaces the old legacy goal flow. Real active objectives should be rewritten as managed goals; stale legacy goals should be closed or archived.
 
 ## Status of the model
 
@@ -212,8 +209,7 @@ All structural items are implemented:
 8. ✅ **Servers** (`serve` / `pool-serve` / `runner-serve` / `brain-serve`) are
    engine internals (`src/servers/` + hardcoded CLI verbs), out of the registry.
 9. ✅ **Goal** — outcome + manager loop. Managed goals use `goal-manager` with
-   destination/evidence/duties/route/facts/blockers; legacy stacked-task goals
-   are deprecated and should be migrated or closed.
+   destination/evidence/duties/route/facts/blockers.
 10. ✅ **Plan-and-split task execution** — `task-jobs` reads hidden issue task
     data, runs one child job per executable, waits in-process, summarizes the
     task, and retries failed children before later pending ones.

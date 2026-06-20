@@ -9,7 +9,7 @@ Kody has ledgers, but they are not all the same kind of storage.
 | Trust ledger | `.kody/state/trust.json` on `kody-state` | dashboard writes, engine reads | Current gate for duty autonomy: `ask` or `auto`. |
 | Duty state | duty state backend / sidecar state | engine | Per-duty cursor/data/done and dedup data. |
 | Task job/run ledger | task state on issue/PR | engine | Required jobs, run attempts, outcomes, history. |
-| Goal state | `.kody/goals/<id>/state.json` on `kody-state` | engine/dashboard | Stacked-task progress. |
+| Goal instance state | `.kody/goals/instances/<id>/state.json` on `kody-state` | engine/dashboard | Managed goal progress. |
 | Run events | `.kody/runs/<runId>/events.jsonl` | engine | Execution trace/debug history. |
 
 ## Trust Ledger

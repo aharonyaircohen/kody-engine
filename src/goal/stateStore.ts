@@ -1,12 +1,12 @@
 /**
  * Goal state persistence on the dedicated `kody-state` branch.
  *
- * Goal lifecycle state (`.kody/goals/<id>/state.json`) used to be git-committed
+ * Goal lifecycle state (`.kody/goals/instances/<id>/state.json`) used to be git-committed
  * to the default branch on every tick — `chore(goals): dispatched/activate/…`
  * commits were the dominant default-branch churn. These helpers read and write
  * it via the GitHub Contents API against `kody-state` (see ../stateBranch)
- * instead, mirroring the job-state backend. Synchronous (gh subprocess) so the
- * existing sync goal-tick script chain needs no async changes.
+ * instead, mirroring the job-state backend. Synchronous (gh subprocess) so
+ * script callers do not need async state plumbing.
  */
 
 import { gh } from "../issue.js"
@@ -14,7 +14,7 @@ import { ensureStateBranch, STATE_BRANCH } from "../stateBranch.js"
 import { type GoalState, parseGoalState, serializeGoalState } from "./state.js"
 
 function statePath(goalId: string): string {
-  return `.kody/goals/${goalId}/state.json`
+  return `.kody/goals/instances/${goalId}/state.json`
 }
 
 function is404(err: unknown): boolean {

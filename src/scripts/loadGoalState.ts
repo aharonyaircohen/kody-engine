@@ -1,11 +1,6 @@
 /**
- * Preflight: load `.kody/goals/<goalId>/state.json` into `ctx.data.goal`.
- *
- * Required as the first preflight in goal-tick — every other script in
- * the chain reads `ctx.data.goal` (with fields gradually populated by
- * later scripts). On a missing or malformed file the script signals the
- * tick to skip the rest of the chain by setting `ctx.skipAgent` plus a
- * non-fatal exit reason; the next tick retries.
+ * Preflight: load `.kody/goals/instances/<goalId>/state.json` from the `kody-state`
+ * branch into `ctx.data.goal` for goal-manager scripts.
  */
 
 import type { PreflightScript } from "../executables/types.js"
@@ -20,7 +15,6 @@ export const loadGoalState: PreflightScript = async (ctx) => {
     return
   }
 
-  // Defensive against path traversal — same checks tick.sh did.
   if (goalId.includes("/") || goalId.includes("..")) {
     ctx.skipAgent = true
     ctx.output.exitCode = 1
@@ -38,32 +32,23 @@ export const loadGoalState: PreflightScript = async (ctx) => {
   }
 
   try {
-    // Goal state lives on the kody-state branch (not the working tree).
     const state = fetchGoalState(owner, repo, goalId, ctx.cwd)
     if (!state) {
-      process.stdout.write(`[goal-tick] no goal state for ${goalId} on ${owner}/${repo} — nothing to tick\n`)
+      process.stdout.write(`[goal-manager] no goal state for ${goalId} on ${owner}/${repo}; nothing to tick\n`)
       ctx.skipAgent = true
       ctx.output.exitCode = 0
       ctx.output.reason = "no goal state to tick"
       return
     }
+
     ctx.data.goal = {
       id: goalId,
       state: state.state,
-      lastDispatchedIssue: state.lastDispatchedIssue,
-      // Cache the full parsed object so saveGoalState can preserve `extra`.
       raw: state,
-      // `phase`, `childTasks`, `openTaskPrs`, `leafPr` are populated by
-      // deriveGoalPhase later in the chain. Initialize to undefined so
-      // runWhen on `data.goal.phase` can match correctly.
-      phase: undefined,
       defaultBranch: ctx.config.git.defaultBranch,
     }
   } catch (err) {
-    // No state file or parse error — emit a log line and let the tick
-    // exit cleanly (skipAgent without a non-zero exit). Matches the
-    // legacy "no state file at … — nothing to tick" behavior.
-    process.stdout.write(`[goal-tick] ${err instanceof Error ? err.message : String(err)}\n`)
+    process.stdout.write(`[goal-manager] ${err instanceof Error ? err.message : String(err)}\n`)
     ctx.skipAgent = true
     ctx.output.exitCode = 0
     ctx.output.reason = "no goal state to tick"

@@ -15,7 +15,7 @@
       "flag": "--base",
       "type": "string",
       "required": false,
-      "describe": "Optional base branch override. Used by goal-tick's stacked-PR dispatch so each task PR forks from the previous task's head ref. Accepts any safe git ref (see resolveBaseOverride in runFlow.ts)."
+      "describe": "Optional safe base branch override for manual branch targeting (see resolveBaseOverride in runFlow.ts)."
     }
   ],
   "claudeCode": {

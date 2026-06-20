@@ -687,7 +687,7 @@ export const MAX_CHAIN_HOPS = 60
 /**
  * Run an executable and follow any in-process stage hand-offs it requests via
  * `ctx.output.nextDispatch` (classify → build, a flow orchestrator↔child
- * ping-pong, goal-tick → the task pipeline). Each stage runs in the SAME
+ * ping-pong, goal-manager -> duty pipeline). Each stage runs in the SAME
  * process, inheriting cwd/config/verbosity from `input` and overriding only
  * the cliArgs. This replaces the old `@kody <next>` comment round-trip, which
  * deadlocked when Kody comments as a GitHub App (the bot-authored comment is

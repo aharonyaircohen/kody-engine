@@ -10,7 +10,7 @@
  *   3. Append the new goal to the `kody:goals-manifest` issue's embedded
  *      JSON (creating the manifest issue if absent). The dashboard reads
  *      this to render the goal in its UI.
- *   4. Write `.kody/goals/<id>/state.json` (`state: "active"`) and
+ *   4. Write `.kody/goals/instances/<id>/state.json` (`state: "active"`) and
  *      commit + push it on the current branch — that's how the engine
  *      knows to tick the goal.
  *   5. Open N task issues — one per finding — each labelled
@@ -28,6 +28,7 @@
  */
 import type { AgentResult } from "../agent.js"
 import type { PostflightScript } from "../executables/types.js"
+import type { ManagedGoal } from "../goal/manager.js"
 import { type GoalState, nowIso } from "../goal/state.js"
 import { putGoalState } from "../goal/stateStore.js"
 import { gh, postIssueComment, truncate } from "../issue.js"
@@ -319,6 +320,31 @@ function createTaskIssue(
   return { number: Number(m[1]), url }
 }
 
+export function buildQaManagedGoal(
+  goalId: string,
+  verdict: ReviewVerdict,
+  opened: number,
+  failed: number,
+): ManagedGoal {
+  return {
+    type: "qa",
+    destination: {
+      outcome: `QA findings filed for ${goalId}`,
+      evidence: ["qaFindingsFiled"],
+    },
+    duties: ["qa-goal"],
+    route: [],
+    stage: "filed",
+    facts: {
+      qaFindingsFiled: true,
+      verdict,
+      findingsOpened: opened,
+      findingsFailed: failed,
+    },
+    blockers: failed > 0 ? [`${failed} QA finding issue(s) failed to open`] : [],
+  }
+}
+
 export const createQaGoal: PostflightScript = async (ctx, _profile, agentResult: AgentResult | null) => {
   if (!agentResult || agentResult.outcome !== "completed") {
     const reason = agentResult?.error ?? "agent did not complete"
@@ -376,7 +402,7 @@ export const createQaGoal: PostflightScript = async (ctx, _profile, agentResult:
 /**
  * Turn a QA report (markdown + `<!-- KODY_QA_REPORT_JSON ... -->`) into a kody
  * goal: append to the goals manifest, open one fix-ticket per finding, and
- * write+commit `.kody/goals/<id>/state.json` so goal-scheduler ticks it. This
+ * write+commit `.kody/goals/instances/<id>/state.json` so goal-scheduler ticks it. This
  * is the operator-gated half of QA — invoked by the standalone qa-engineer
  * path and by the `qa-goal` verb (which approve posts). PASS / no-findings
  * reports open a single record issue instead.
@@ -519,7 +545,13 @@ export async function promoteReportToGoal(
   // Persist the activated goal's state to the kody-state branch so
   // goal-scheduler picks it up — off the default branch, no commit churn.
   const now = nowIso()
-  const goalState: GoalState = { state: "active", startedAt: now, updatedAt: now, extra: { version: 1 } }
+  const managedGoal = buildQaManagedGoal(goalId, verdict, opened.length, failed.length)
+  const goalState: GoalState = {
+    state: "active",
+    startedAt: now,
+    updatedAt: now,
+    extra: { version: 1, ...managedGoal },
+  }
   try {
     putGoalState(
       ctx.config.github.owner,

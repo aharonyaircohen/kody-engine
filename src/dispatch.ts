@@ -152,10 +152,8 @@ export function autoDispatch(opts?: {
     const inputs = objectValue(event.inputs)
     const n = parseInt(String(inputs?.issue_number ?? ""), 10)
     if (!Number.isNaN(n) && n > 0) {
-      // `duty` + `base` inputs let a dispatched run pick its duty action and
-      // stacked-PR base. goal-tick uses this to fire a fresh run per task
-      // (`duty=classify`, `base=<leaf>`) instead of posting an `@kody`
-      // comment a bot can't self-trigger. Default stays `run` for a bare
+      // `duty` + `base` inputs let dispatched runs pick a duty action
+      // and optional safe branch base without posting bot-authored comments.
       // manual dispatch with just an issue number.
       const actionName = String(inputs?.duty ?? inputs?.executable ?? "").trim() || "run"
       const route = resolveConfiguredAction(actionName)

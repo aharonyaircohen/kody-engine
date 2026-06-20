@@ -1,22 +1,14 @@
 /**
  * Live wiring test for the goal-scheduler shell preflight.
  *
- * Runs the REAL `goal-scheduler/scheduler.sh` against fixture
- * `.kody/goals/<id>/state.json` files, with a stub engine binary on
- * PATH that records how it was invoked. Proves the scheduler:
- *   - ticks every `active` goal exactly once via `goal-tick --goal <id>`
- *   - skips `paused` / `done` / missing-state goals
- *   - keeps going when one tick fails (one stuck goal must not starve)
- *   - invokes the engine by its REAL published bin name `kody-engine`
- *     (regression guard: the script previously called bare `kody`,
- *     which is not the bin name → `kody: command not found`, so every
- *     goal silently failed to advance).
- *
- * The PATH deliberately contains ONLY a `kody-engine` stub and no
- * `kody` stub: if the script regresses to calling `kody`, the run
- * fails with command-not-found and these tests go red.
+ * Runs the real goal-scheduler/scheduler.sh against fixture
+ * `.kody/goals/instances/<id>/state.json` files, with a stub engine binary on PATH.
+ * Proves the scheduler:
+ * - ticks every active managed goal exactly once via `goal-manager --goal <id>`
+ * - skips paused, done, missing-state, and legacy-shaped goal files
+ * - keeps going when one managed tick fails
+ * - invokes the published bin name `kody-engine`, never bare `kody`
  */
-
 import { spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as os from "node:os"
@@ -33,14 +25,6 @@ function schedulerPath(): string {
 let tmp: string
 let logFile: string
 
-function writeGoal(id: string, state: string | null, extra: Record<string, unknown> = {}): void {
-  const dir = path.join(tmp, ".kody", "goals", id)
-  fs.mkdirSync(dir, { recursive: true })
-  if (state !== null) {
-    fs.writeFileSync(path.join(dir, "state.json"), JSON.stringify({ version: 1, state, ...extra }, null, 2))
-  }
-}
-
 function managedGoalExtra(): Record<string, unknown> {
   return {
     type: "release",
@@ -53,11 +37,18 @@ function managedGoalExtra(): Record<string, unknown> {
   }
 }
 
-/**
- * Stub `kody-engine` on PATH. Appends `argv0 <args...>` to $KODY_LOG.
- * Exits non-zero for the goal id "fail-goal" so we can prove the
- * scheduler keeps going after a failed tick.
- */
+function writeGoal(id: string, state: string | null, extra: Record<string, unknown> = {}): void {
+  const dir = path.join(tmp, ".kody", "goals", "instances", id)
+  fs.mkdirSync(dir, { recursive: true })
+  if (state !== null) {
+    fs.writeFileSync(path.join(dir, "state.json"), JSON.stringify({ version: 1, state, ...extra }, null, 2))
+  }
+}
+
+function activateGoals(...ids: string[]): void {
+  fs.writeFileSync(path.join(tmp, "kody.config.json"), JSON.stringify({ company: { activeGoals: ids } }, null, 2))
+}
+
 function installEngineStub(): string {
   const binDir = path.join(tmp, "bin")
   fs.mkdirSync(binDir, { recursive: true })
@@ -84,7 +75,6 @@ function runScheduler(): { status: number; stdout: string; calls: string[] } {
     cwd: tmp,
     env: {
       ...process.env,
-      // Stub dir FIRST so a stray real `kody-engine` can't shadow it.
       PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ""}`,
       KODY_LOG: logFile,
     },
@@ -104,33 +94,35 @@ afterEach(() => {
 })
 
 describe("goal-scheduler live wiring", () => {
-  it("ticks an active goal once via the real kody-engine bin", () => {
-    writeGoal("paymant", "active")
+  it("ticks an active managed goal once via real kody-engine bin", () => {
+    writeGoal("release-v1-2-3", "active", managedGoalExtra())
+    activateGoals("release-v1-2-3")
 
     const { status, stdout, calls } = runScheduler()
 
     expect(status).toBe(0)
-    expect(calls).toEqual(["kody-engine goal-tick --goal paymant"])
-    expect(stdout).toContain("→ tick paymant")
-    expect(stdout).toContain("ticked 1 active goal(s) of 1 total")
+    expect(calls).toEqual(["kody-engine goal-manager --goal release-v1-2-3"])
+    expect(stdout).toContain("-> tick release-v1-2-3 (goal-manager)")
+    expect(stdout).toContain("scanned 1 goal instance(s), active=1, managed=1")
     expect(stdout).toContain("KODY_SKIP_AGENT=true")
   })
 
-  it("routes managed goals to goal-manager and legacy goals to goal-tick", () => {
+  it("skips active legacy-shaped goals", () => {
     writeGoal("legacy", "active")
-    writeGoal("release-v1-2-3", "active", managedGoalExtra())
+    writeGoal("managed", "active", managedGoalExtra())
+    activateGoals("legacy", "managed")
 
     const { status, stdout, calls } = runScheduler()
 
     expect(status).toBe(0)
-    expect(calls).toContain("kody-engine goal-tick --goal legacy")
-    expect(calls).toContain("kody-engine goal-manager --goal release-v1-2-3")
-    expect(stdout).toContain("→ tick legacy (goal-tick)")
-    expect(stdout).toContain("→ tick release-v1-2-3 (goal-manager)")
+    expect(calls).toEqual(["kody-engine goal-manager --goal managed"])
+    expect(stdout).toContain("skip legacy: legacy goal files are not managed-goal instances")
+    expect(stdout).toContain("-> tick managed (goal-manager)")
   })
 
-  it("invokes kody-engine, never bare kody (regression guard)", () => {
-    writeGoal("g1", "active")
+  it("invokes kody-engine, never bare kody", () => {
+    writeGoal("g1", "active", managedGoalExtra())
+    activateGoals("g1")
 
     const { status, calls } = runScheduler()
 
@@ -140,38 +132,39 @@ describe("goal-scheduler live wiring", () => {
   })
 
   it("skips paused and done goals", () => {
-    writeGoal("a", "active")
-    writeGoal("p", "paused")
-    writeGoal("d", "done")
+    writeGoal("a", "active", managedGoalExtra())
+    writeGoal("p", "paused", managedGoalExtra())
+    writeGoal("d", "done", managedGoalExtra())
+    activateGoals("a", "p", "d")
 
     const { status, stdout, calls } = runScheduler()
 
     expect(status).toBe(0)
-    expect(calls).toEqual(["kody-engine goal-tick --goal a"])
-    expect(stdout).toContain("ticked 1 active goal(s) of 3 total")
+    expect(calls).toEqual(["kody-engine goal-manager --goal a"])
+    expect(stdout).toContain("scanned 3 goal instance(s), active=1, managed=1")
   })
 
-  it("continues after a failed tick so one stuck goal can't starve the rest", () => {
-    writeGoal("ok-1", "active")
-    writeGoal("fail-goal", "active")
-    writeGoal("ok-2", "active")
+  it("continues after failed tick so one stuck goal cannot starve the rest", () => {
+    writeGoal("ok-1", "active", managedGoalExtra())
+    writeGoal("fail-goal", "active", managedGoalExtra())
+    writeGoal("ok-2", "active", managedGoalExtra())
+    activateGoals("ok-1", "fail-goal", "ok-2")
 
     const { status, stdout, calls } = runScheduler()
 
     expect(status).toBe(0)
-    expect(calls).toContain("kody-engine goal-tick --goal ok-1")
-    expect(calls).toContain("kody-engine goal-tick --goal fail-goal")
-    expect(calls).toContain("kody-engine goal-tick --goal ok-2")
+    expect(calls).toContain("kody-engine goal-manager --goal ok-1")
+    expect(calls).toContain("kody-engine goal-manager --goal fail-goal")
+    expect(calls).toContain("kody-engine goal-manager --goal ok-2")
     expect(stdout).toContain("tick fail-goal failed (continuing)")
-    expect(stdout).toContain("ticked 3 active goal(s) of 3 total")
+    expect(stdout).toContain("scanned 3 goal instance(s), active=3, managed=3")
   })
 
-  it("no .kody/goals dir → skips cleanly without calling the engine", () => {
+  it("no active goals configured skips cleanly without calling engine", () => {
     const { status, stdout, calls } = runScheduler()
 
     expect(status).toBe(0)
     expect(calls).toEqual([])
-    expect(stdout).toContain("nothing to schedule")
-    expect(stdout).toContain("KODY_SKIP_AGENT=true")
+    expect(stdout).toContain("no company.activeGoals configured")
   })
 })
