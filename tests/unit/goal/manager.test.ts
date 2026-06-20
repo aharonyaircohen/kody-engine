@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  type ManagedGoal,
   managedGoalFromState,
   planManagedGoalTick,
   writeManagedGoalToState,
-  type ManagedGoal,
 } from "../../../src/goal/manager.js"
 
 function releaseGoal(overrides: Partial<ManagedGoal> = {}): ManagedGoal {
@@ -81,42 +81,42 @@ describe("planManagedGoalTick", () => {
 
     const decision = planManagedGoalTick(goal)
 
-  expect(decision).toMatchObject({
-  kind: "dispatch",
-  evidence: "qaPassed",
-  cliArgs: { pr: 456, issue: 123 },
-  })
+    expect(decision).toMatchObject({
+      kind: "dispatch",
+      evidence: "qaPassed",
+      cliArgs: { pr: 456, issue: 123 },
+    })
   })
 
   it("can dispatch a duty without naming its executable", () => {
-  const goal = releaseGoal({
-  destination: {
-  outcome: "release PR is green",
-  evidence: ["releasePrExists", "mainDeployPrGreen"],
-  },
-  duties: ["release-prepare", "ci-health"],
-  route: [
-  { evidence: "releasePrExists", stage: "prepare", duty: "release-prepare", executable: "release-prepare" },
-  {
-  evidence: "mainDeployPrGreen",
-  stage: "wait-ci",
-  duty: "ci-health",
-  args: { pr: { fact: "releasePr" }, evidence: "mainDeployPrGreen" },
-  },
-  ],
-  facts: { releasePrExists: true, releasePr: 456 },
-  })
+    const goal = releaseGoal({
+      destination: {
+        outcome: "release PR is green",
+        evidence: ["releasePrExists", "mainDeployPrGreen"],
+      },
+      duties: ["release-prepare", "ci-health"],
+      route: [
+        { evidence: "releasePrExists", stage: "prepare", duty: "release-prepare", executable: "release-prepare" },
+        {
+          evidence: "mainDeployPrGreen",
+          stage: "wait-ci",
+          duty: "ci-health",
+          args: { pr: { fact: "releasePr" }, evidence: "mainDeployPrGreen" },
+        },
+      ],
+      facts: { releasePrExists: true, releasePr: 456 },
+    })
 
-  const decision = planManagedGoalTick(goal)
+    const decision = planManagedGoalTick(goal)
 
-  expect(decision).toEqual({
-  kind: "dispatch",
-  evidence: "mainDeployPrGreen",
-  stage: "wait-ci",
-  duty: "ci-health",
-  executable: undefined,
-  cliArgs: { pr: 456, evidence: "mainDeployPrGreen" },
-  })
+    expect(decision).toEqual({
+      kind: "dispatch",
+      evidence: "mainDeployPrGreen",
+      stage: "wait-ci",
+      duty: "ci-health",
+      executable: undefined,
+      cliArgs: { pr: 456, evidence: "mainDeployPrGreen" },
+    })
   })
 
   it("blocks when route arg references missing fact", () => {

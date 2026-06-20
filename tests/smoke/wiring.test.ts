@@ -23,9 +23,9 @@ const INPUT_TYPES = new Set(["string", "int", "bool", "enum"])
 
 describe("smoke: system wiring", () => {
   it("every shipped executable profile loads and validates with well-formed inputs", () => {
-    // Sanity floor, not a tight count — the four servers (serve/pool-serve/
-    // runner-serve/brain-serve) moved out of the registry into src/servers/.
-    expect(executables.length).toBeGreaterThan(15)
+    // The engine now ships only the minimal builtin executable catalog.
+    // Shared duties/executables live in the company store.
+    expect(executables.map((exe) => exe.name)).toEqual(["run"])
     const failures: string[] = []
     for (const exe of executables) {
       try {

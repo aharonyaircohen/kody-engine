@@ -6,9 +6,9 @@ vi.mock("../../src/goal/stateStore.js", () => ({
 }))
 
 import type { AgentResult } from "../../src/agent.js"
-import { serializeGoalState, type GoalState } from "../../src/goal/state.js"
-import { fetchGoalState, putGoalState } from "../../src/goal/stateStore.js"
 import type { Context, Profile } from "../../src/executables/types.js"
+import { type GoalState, serializeGoalState } from "../../src/goal/state.js"
+import { fetchGoalState, putGoalState } from "../../src/goal/stateStore.js"
 import { applyDutyReports } from "../../src/scripts/applyDutyReports.js"
 
 const fetchGoalStateMock = vi.mocked(fetchGoalState)

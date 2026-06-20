@@ -24,7 +24,14 @@ export interface ManagedGoal {
 }
 
 export type ManagedGoalDecision =
-  | { kind: "dispatch"; evidence: string; stage: string; duty: string; executable?: string; cliArgs: Record<string, unknown> }
+  | {
+      kind: "dispatch"
+      evidence: string
+      stage: string
+      duty: string
+      executable?: string
+      cliArgs: Record<string, unknown>
+    }
   | { kind: "wait"; evidence: string; stage: string; reason: string }
   | { kind: "blocked"; evidence: string; stage: string; reason: string }
   | { kind: "done" }

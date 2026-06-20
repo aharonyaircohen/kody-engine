@@ -31,8 +31,8 @@ function runCiCheck(checks: unknown): string {
     gh,
     [
       "#!/usr/bin/env bash",
-      "if [[ \"$1\" == \"pr\" && \"$2\" == \"checks\" ]]; then",
-      "  cat \"$GH_FIXTURE\"",
+      'if [[ "$1" == "pr" && "$2" == "checks" ]]; then',
+      '  cat "$GH_FIXTURE"',
       "  exit 0",
       "fi",
       "echo unexpected gh call >&2",

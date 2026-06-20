@@ -1,8 +1,8 @@
 import type { AgentResult } from "../agent.js"
-import { applyDutyReportToGoalState, parseDutyReportsFromText, type DutyReport } from "../dutyReport.js"
+import { applyDutyReportToGoalState, type DutyReport, parseDutyReportsFromText } from "../dutyReport.js"
+import type { PostflightScript } from "../executables/types.js"
 import { nowIso, serializeGoalState } from "../goal/state.js"
 import { fetchGoalState, putGoalState } from "../goal/stateStore.js"
-import type { PostflightScript } from "../executables/types.js"
 
 export const applyDutyReports: PostflightScript = async (ctx, _profile, agentResult) => {
   const reports = collectReports(ctx.data.dutyReports, agentResult)

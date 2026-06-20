@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { applyDutyReportToGoalState, parseDutyReportsFromText, type DutyReport } from "../../src/dutyReport.js"
+import { applyDutyReportToGoalState, type DutyReport, parseDutyReportsFromText } from "../../src/dutyReport.js"
 import type { GoalState } from "../../src/goal/state.js"
 
 describe("parseDutyReportsFromText", () => {
