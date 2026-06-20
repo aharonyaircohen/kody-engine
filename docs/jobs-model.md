@@ -174,6 +174,9 @@ The new company goal model is the **managed goal** contract stored in
 - `facts` — observed evidence and values reported by duties.
 - `blockers` — reasons the manager loop could not safely dispatch next work.
 
+Store goals are inactive templates. The consumer repo activates the goals it
+wants through `company.activeGoals` in `kody.config.json`.
+
 `goal-scheduler` wakes active goal files. If the file has the managed-goal
 contract, it routes the tick to `goal-manager`. `goal-manager` finds the first
 missing destination evidence, resolves route args from `facts`, dispatches the

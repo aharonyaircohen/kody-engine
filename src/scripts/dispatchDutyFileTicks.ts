@@ -52,8 +52,10 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
     const onlyDuty = parseDutyFilter(ctx.args.duty)
     const jobsPath = path.join(ctx.cwd, jobsDir)
     const storeJobsPath = getCompanyStoreDutiesRoot()
-    const dutyRoots = [jobsPath, ...(storeJobsPath ? [storeJobsPath] : [])]
-    const slugs = filterSlugs(listDutySlugs(dutyRoots), onlyDuty)
+    const slugs = filterSlugs(
+      listActivatedDutySlugs(jobsPath, storeJobsPath, ctx.config.company?.activeDuties),
+      onlyDuty,
+    )
     ctx.data.jobSlugCount = slugs.length
 
     if (slugs.length === 0) {
@@ -271,12 +273,22 @@ function filterSlugs(slugs: string[], onlyDuty: string | undefined): string[] {
   return onlyDuty ? slugs.filter((slug) => slug === onlyDuty) : slugs
 }
 
-function listDutySlugs(roots: string[]): string[] {
+function listActivatedDutySlugs(
+  projectRoot: string,
+  storeRoot: string | null,
+  activeStoreDuties: string[] | undefined,
+): string[] {
   const seen = new Set<string>()
   const out: string[] = []
-  for (const root of roots) {
-    for (const slug of listDutyFolderSlugs(root)) {
-      if (seen.has(slug)) continue
+  for (const slug of listDutyFolderSlugs(projectRoot)) {
+    if (seen.has(slug)) continue
+    seen.add(slug)
+    out.push(slug)
+  }
+  const active = new Set(activeStoreDuties ?? [])
+  if (storeRoot && active.size > 0) {
+    for (const slug of listDutyFolderSlugs(storeRoot)) {
+      if (!active.has(slug) || seen.has(slug)) continue
       seen.add(slug)
       out.push(slug)
     }

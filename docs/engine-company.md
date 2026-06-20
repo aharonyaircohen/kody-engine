@@ -32,6 +32,18 @@ Canonical noun docs:
 - [Staff](staff.md)
 - [Executables](executables.md)
 
+Store duties and goals are a catalog. Consumer repos activate the shared company
+model they want in `kody.config.json`:
+
+```json
+{
+  "company": {
+    "activeDuties": ["release"],
+    "activeGoals": ["web-release"]
+  }
+}
+```
+
 ## Pieces
 
 | Piece | Path | Purpose |

@@ -7,6 +7,20 @@ it, when it should run, and which executable usually implements it. A duty may
 serve many goals over time, but it is not a goal. A goal is a temporary outcome;
 a duty is recurring ownership.
 
+Store duties are inactive by default. A consumer repo activates shared duties in
+`kody.config.json`:
+
+```json
+{
+  "company": {
+    "activeDuties": ["release"]
+  }
+}
+```
+
+Local repo duties remain repo-owned. Store duty cadence such as `every` is only
+used after activation.
+
 ## Canonical Shape
 
 Duties live in project `.kody/duties/` or in the company store:

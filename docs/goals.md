@@ -22,6 +22,20 @@ The persisted runtime file belongs on the `kody-state` branch. Shared template
 goals may live in `kody-store` under the same path so consumer repos can copy or
 resolve them.
 
+Store goals are inactive by default. A consumer repo activates shared goals in
+`kody.config.json`:
+
+```json
+{
+  "company": {
+    "activeGoals": ["web-release"]
+  }
+}
+```
+
+After activation, the consumer runtime instance should become `state: "active"`
+and include required repo facts such as `facts.issue`.
+
 Required managed-goal shape:
 
 ```json

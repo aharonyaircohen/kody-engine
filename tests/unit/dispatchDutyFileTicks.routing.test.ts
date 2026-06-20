@@ -27,6 +27,7 @@ import { runExecutable } from "../../src/executor.js"
 const runExecutableMock = runExecutable as unknown as Mock
 
 let tmp: string
+let storeTmp: string
 
 beforeEach(() => {
   vi.stubEnv("KODY_COMPANY_STORE", "0")
@@ -34,11 +35,14 @@ beforeEach(() => {
   runExecutableMock.mockReset()
   runExecutableMock.mockResolvedValue({ exitCode: 0 })
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dispatch-routing-"))
+  storeTmp = fs.mkdtempSync(path.join(os.tmpdir(), "dispatch-store-"))
   fs.mkdirSync(path.join(tmp, ".kody", "duties"), { recursive: true })
+  fs.mkdirSync(path.join(storeTmp, ".kody", "duties"), { recursive: true })
 })
 
 afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true })
+  fs.rmSync(storeTmp, { recursive: true, force: true })
   vi.unstubAllEnvs()
   resetCompanyStoreCacheForTests()
   vi.clearAllMocks()
@@ -51,13 +55,21 @@ function writeJob(slug: string, profile: Record<string, unknown>, body = "# job\
   fs.writeFileSync(path.join(dir, "duty.md"), body)
 }
 
-function ctxFor(): Context {
+function writeStoreJob(slug: string, profile: Record<string, unknown>, body = "# store job\n"): void {
+  const dir = path.join(storeTmp, ".kody", "duties", slug)
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
+  fs.writeFileSync(path.join(dir, "duty.md"), body)
+}
+
+function ctxFor(configPatch: Partial<KodyConfig> = {}): Context {
   const config: KodyConfig = {
     quality: { typecheck: "", lint: "", format: "", testUnit: "" },
     git: { defaultBranch: "main" },
     github: { owner: "o", repo: "r" },
     agent: { model: "anthropic/test" },
     jobs: { stateBackend: "local-file" },
+    ...configPatch,
   }
   return {
     args: {},
@@ -124,6 +136,37 @@ describe("dispatchDutyFileTicks routing", () => {
     })
 
     expect(runExecutableMock).not.toHaveBeenCalled()
+  })
+
+  it("does not tick store duties unless consumer activates them", async () => {
+    vi.stubEnv("KODY_COMPANY_STORE", storeTmp)
+    resetCompanyStoreCacheForTests()
+    writeStoreJob("store-duty", { every: "1h", staff: "kody" })
+
+    const ctx = ctxFor()
+    await dispatchDutyFileTicks(ctx, PROFILE, {
+      jobsDir: ".kody/duties",
+      targetExecutable: "duty-tick",
+      slugArg: "duty",
+    })
+
+    expect(runExecutableMock).not.toHaveBeenCalled()
+  })
+
+  it("ticks store duties activated by the consumer", async () => {
+    vi.stubEnv("KODY_COMPANY_STORE", storeTmp)
+    resetCompanyStoreCacheForTests()
+    writeStoreJob("store-duty", { every: "1h", staff: "kody" })
+
+    const ctx = ctxFor({ company: { activeDuties: ["store-duty"] } })
+    await dispatchDutyFileTicks(ctx, PROFILE, {
+      jobsDir: ".kody/duties",
+      targetExecutable: "duty-tick",
+      slugArg: "duty",
+    })
+
+    expect(runExecutableMock).toHaveBeenCalledTimes(1)
+    expect(runExecutableMock.mock.calls[0]![1].cliArgs).toEqual({ duty: "store-duty" })
   })
 
   it("mixes routing across slugs in one tick", async () => {

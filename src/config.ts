@@ -133,6 +133,10 @@ export interface KodyConfig {
      */
     stateBackend?: "contents-api" | "local-file"
   }
+  company?: {
+    activeDuties?: string[]
+    activeGoals?: string[]
+  }
   /**
    * Who may trigger kody via an `@kody` comment. Gates on the GitHub
    * `comment.author_association` already present on the issue_comment event
@@ -281,6 +285,7 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     classify: parseClassifyConfig(raw.classify),
     release: parseReleaseConfig(raw.release),
     jobs: parseJobsConfig(raw.jobs),
+    company: parseCompanyConfig(raw.company),
     access: parseAccessConfig(raw.access),
   }
 }
@@ -357,6 +362,30 @@ function parseJobsConfig(raw: unknown): KodyConfig["jobs"] {
     )
   }
   return Object.keys(out).length > 0 ? out : undefined
+}
+
+function parseCompanyConfig(raw: unknown): KodyConfig["company"] {
+  if (!raw || typeof raw !== "object") return undefined
+  const r = raw as Record<string, unknown>
+  const out: NonNullable<KodyConfig["company"]> = {}
+  if (r.activeDuties !== undefined) out.activeDuties = parseSlugArray(r.activeDuties, "company.activeDuties")
+  if (r.activeGoals !== undefined) out.activeGoals = parseSlugArray(r.activeGoals, "company.activeGoals")
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+function parseSlugArray(raw: unknown, field: string): string[] {
+  if (!Array.isArray(raw)) throw new Error(`kody.config.json: ${field} must be an array of strings`)
+  const out: string[] = []
+  for (const value of raw) {
+    if (typeof value !== "string") throw new Error(`kody.config.json: ${field} entries must be strings`)
+    const slug = value.trim()
+    if (!slug) continue
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(slug)) {
+      throw new Error(`kody.config.json: ${field} contains invalid slug "${value}"`)
+    }
+    out.push(slug)
+  }
+  return [...new Set(out)]
 }
 
 function recordValue(raw: unknown): Record<string, unknown> | undefined {
