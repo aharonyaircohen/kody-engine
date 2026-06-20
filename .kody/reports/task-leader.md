@@ -1,7 +1,7 @@
-# task-leader duty — tick at 2026-06-20T01:36Z
+# task-leader duty — tick at 2026-06-20T09:44Z
 
 ## Status
-No-op tick — **7th consecutive blocker**.
+No-op tick — **10th consecutive blocker** (rev 19).
 
 ## Blocker
 `.kody/executables/task-leader/skills/task-leader-rules/SKILL.md` is missing locally.
@@ -14,7 +14,7 @@ The duty body requires reading and following this rules file exactly. It owns:
 - Release promotion PR gate
 - Final output format
 
-Without the rules file, the duty contract is undefined. Per the duty's Restrictions ("Do not perform actions outside the contract defined by this duty"), every intended action (request review, request fix, auto-merge, dispatch, escalate) is out of contract, so the safe path is no-op.
+Without the rules file, the duty contract is undefined. Per the duty'''s Restrictions ("Do not perform actions outside the contract defined by this duty"), every intended action (request review, request fix, auto-merge, dispatch, escalate) is out of contract, so the safe path is no-op.
 
 ## Tick history
 - rev 10 (1st blocker) — no-op
@@ -24,6 +24,9 @@ Without the rules file, the duty contract is undefined. Per the duty's Restricti
 - rev 14 (5th blocker) — no-op
 - rev 15 (6th blocker) — no-op
 - rev 16 (7th blocker) — no-op
+- rev 17 (8th blocker) — no-op
+- rev 18 (9th blocker) — no-op
+- rev 19 (10th blocker) — no-op
 
 ## Operator action needed
 Land `.kody/executables/task-leader/skills/task-leader-rules/SKILL.md` (and a `task-leader` executable directory if the engine expects one) so the duty can act on its next wake. The duty will remain in no-op state with the diagnostic report updated on every wake until the contract file is checked in.
