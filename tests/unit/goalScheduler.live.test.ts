@@ -188,7 +188,7 @@ describe("goal-scheduler live wiring", () => {
       facts: { issue: 123 },
     })
     expect(calls).toEqual(["kody-engine goal-manager --goal weekly-release-2026-W25"])
-    expect(stdout).toContain("created scheduled instance weekly-release-2026-W25")
+    expect(stdout).toContain("created goal instance weekly-release-2026-W25")
     expect(stdout).toContain("-> tick weekly-release-2026-W25 (goal-manager)")
   })
 
