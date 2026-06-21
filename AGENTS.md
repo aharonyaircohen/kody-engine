@@ -51,7 +51,7 @@ different terms, treat it as stale.
 | `run` | One execution attempt for a job. Retries add runs under the same job. |
 | `goal` | Related task list/state under `.kody/goals/<id>/state.json`; `goal-tick` advances stacked PRs. |
 | `watch` | Scheduled executable with `role: "watch"` and `kind: "scheduled"`; schedulers run no agent. |
-| `manager` | Prose only: a duty that oversees other duties. Not an executable. |
+| `manager` | Legacy prose label for progress ownership. Do not model it as a duty or executable. |
 | `mission` | Dead term. No `mission-*` executable exists. Do not use it. |
 
 Naming note: consumer-facing paths and prompt tokens use **duty/staff**:
