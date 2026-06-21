@@ -38,6 +38,20 @@ describe("entry: parseArgs", () => {
     expect(a.errors).toEqual([])
   })
 
+  it("routes explicit executable runner to __exec__", () => {
+    const a = parseArgs(["exec", "run", "--issue", "42", "--quiet"])
+    expect(a.command).toBe("__exec__")
+    expect(a.executableName).toBe("run")
+    expect(a.quiet).toBe(true)
+    expect(a.cliArgs).toEqual({ issue: "42", quiet: true })
+    expect(a.errors).toEqual([])
+  })
+
+  it("rejects exec without an executable name", () => {
+    const a = parseArgs(["exec", "--quiet"])
+    expect(a.errors).toEqual(["exec requires an executable name"])
+  })
+
   it("parses --verbose / --quiet flags through the generic parser", () => {
     const a = parseArgs(["run", "--issue", "1", "--verbose"])
     expect(a.verbose).toBe(true)

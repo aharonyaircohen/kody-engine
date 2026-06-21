@@ -17,7 +17,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { getCompanyStoreAssetRoot } from "./companyStore.js"
 import type { DutyFolder } from "./dutyFolders.js"
-import { DUTY_BODY_FILE, DUTY_PROFILE_FILE, listDutyFolderSlugs, readDutyFolder } from "./dutyFolders.js"
+import { DUTY_PROFILE_FILE, listDutyFolderSlugs, readDutyFolder } from "./dutyFolders.js"
 import type { InputSpec } from "./executables/types.js"
 
 const PUBLIC_EXECUTABLE_ACTION_ROLES = new Set(["primitive", "orchestrator", "container", "watch", "utility"])
@@ -87,27 +87,6 @@ export function getCompanyStoreDutiesRoot(): string | null {
   return getCompanyStoreAssetRoot("duties")
 }
 
-/**
- * Resolve the engine's built-in jobs root. Mirrors `getExecutablesRoot()` so
- * dev (`src/jobs`) and built (`dist/jobs`) layouts both work. Built-in jobs
- * are folder shapes (`<slug>/profile.json` + `duty.md`) scaffolded into
- * consumer repos by `kody-engine init`; drop a new folder under `src/jobs/<slug>/`
- * to ship a default.
- */
-export function getBuiltinJobsRoot(): string {
-  const here = path.dirname(new URL(import.meta.url).pathname)
-  const candidates = [
-    path.join(here, "jobs"), // dev: src/
-    path.join(here, "..", "jobs"), // built: dist/bin → dist/jobs
-    path.join(here, "..", "src", "jobs"), // fallback
-  ]
-  for (const c of candidates) {
-    if (fs.existsSync(c) && fs.statSync(c).isDirectory()) return c
-  }
-  return candidates[0]!
-}
-
-/** Built-in public duty-action definitions shipped with the engine. */
 export function getBuiltinDutiesRoot(): string {
   const here = path.dirname(new URL(import.meta.url).pathname)
   const candidates = [
@@ -119,42 +98,6 @@ export function getBuiltinDutiesRoot(): string {
     if (fs.existsSync(c) && fs.statSync(c).isDirectory()) return c
   }
   return candidates[0]!
-}
-
-export interface BuiltinJob {
-  slug: string
-  /** Directory containing the built-in duty (the folder shape's root). */
-  dir: string
-  /** Absolute path to the folder's `profile.json`. */
-  profilePath: string
-  /** Absolute path to the folder's `duty.md`. */
-  bodyPath: string
-}
-
-/**
- * List every built-in duty shipped with the engine. Returns
- * `{ slug, dir, profilePath, bodyPath }` for each duty under the built-in
- * jobs root. Folder shapes require both `profile.json` and `duty.md`.
- *
- * Sorted by slug. Used by `kody-engine init` to scaffold default duties into
- * `.kody/duties/<slug>/` (folder shape) in consumer repos.
- */
-export function listBuiltinJobs(root: string = getBuiltinJobsRoot()): BuiltinJob[] {
-  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
-  const out: BuiltinJob[] = []
-  for (const ent of fs.readdirSync(root, { withFileTypes: true })) {
-    if (ent.name.startsWith("_") || ent.name.startsWith(".")) continue
-    const full = path.join(root, ent.name)
-    if (ent.isDirectory()) {
-      const profilePath = path.join(full, DUTY_PROFILE_FILE)
-      const bodyPath = path.join(full, DUTY_BODY_FILE)
-      if (!fs.existsSync(profilePath) || !fs.statSync(profilePath).isFile()) continue
-      if (!fs.existsSync(bodyPath) || !fs.statSync(bodyPath).isFile()) continue
-      out.push({ slug: ent.name, dir: full, profilePath, bodyPath })
-    }
-  }
-  out.sort((a, b) => a.slug.localeCompare(b.slug))
-  return out
 }
 
 /**

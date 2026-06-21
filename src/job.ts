@@ -125,7 +125,11 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   const resolvedDuty = action ? resolveDutyAction(action, projectDutiesRoot) : null
   const dutyIdentity = valid.duty ?? resolvedDuty?.duty
   const dutyContext = loadDutyContext(dutyIdentity, base.cwd)
-  if (!resolvedDuty && !dutyContext) {
+  const explicitExecutableOnly =
+    valid.executable !== undefined &&
+    (valid.action === undefined || valid.action === valid.executable) &&
+    (valid.duty === undefined || valid.duty === valid.executable)
+  if (!resolvedDuty && !dutyContext && !explicitExecutableOnly) {
     throw new InvalidJobError(`job duty not found: ${action ?? valid.duty ?? "<none>"}`)
   }
   const dutySelectedExecutable =

@@ -47,6 +47,20 @@ Every executable is defined by `profile.json`.
 | `scripts.postflight` | yes | Ordered deterministic persistence, comments, reports, commits, or cleanup. |
 | `prompt.md` | when agent runs | Agent instructions. Do not add a prompt when `maxTurns: 0`. |
 
+## Public Action Boundary
+
+An executable is public only when its profile declares both `action` and
+`capabilityKind`. Those direct executable actions must still be one clear
+`observe`, `act`, or `verify` capability.
+
+Internal helpers omit `action` and `capabilityKind`. Examples include
+schedulers, tickers, managed-goal runners, task-job fixtures, and the legacy
+all-in-one release executable. Run them by in-process handoff or explicit CLI:
+
+```bash
+kody-engine exec <executable>
+```
+
 ## Script Composition
 
 Preflight and postflight lists are arrays of script entries. Each entry is one

@@ -82,19 +82,19 @@ only `run` remains in `src/executables/`; the shared command catalog lives in
 | `revert` | `--pr`, `--shas` | no | Mechanical `git revert` on PR branch. |
 | `merge` | `--pr` | no | Self-gating squash merge; refuses unless PR is CLEAN. |
 | `preview-build` | `--pr` | no | Per-PR preview build from config/manual dispatch. |
-| `release` | `--issue`, bump/dry-run/prefer flags | no | Single-job release flow: prepare, wait CI, merge, publish, deploy, notify. |
+| `exec release` | `--issue`, bump/dry-run/prefer flags | no | Legacy all-in-one release executable; public release work should use split duties below. |
 | `release-prepare` | bump/dry-run/prefer/issue | no | Version bump, changelog, release PR. |
 | `release-publish` | dry-run/issue | no | Tag, publish, GitHub release. |
 | `release-deploy` | dry-run/issue | no | Deploy and notify after publish. |
 | `init` | optional `--force` | no | Scaffold consumer config/workflow. |
 | `worker-ask` | `--worker` | yes | Dashboard `@staff` one-shot. |
 | `qa-goal` | `--issue` | no | Operator-approved QA report -> goal/tasks. |
-| `duty-scheduler` | none | no | Cron fan-out to due duty folders. |
-| `duty-tick` | `--duty`, optional `--force` | yes | One LLM tick for a duty. |
-| `duty-tick-scripted` | `--duty`, optional `--force` | no | Run duty `tickScript`. |
-| `goal-scheduler` | none | no | Cron fan-out to active goals. |
+| `exec duty-scheduler` | optional `--duty` | no | Internal cron/helper fan-out to due duty folders. |
+| `exec duty-tick` | `--duty`, optional `--force` | yes | Internal one-tick runner for a duty. |
+| `exec duty-tick-scripted` | `--duty`, optional `--force` | no | Internal runner for duty `tickScript`. |
+| `exec goal-scheduler` | none | no | Internal cron fan-out to active goals. |
 | `goal-tick` | `--goal` | no | Deterministic stacked-PR goal tick. |
-| `task-jobs` | `--issue` | no | Runs next planned executable in hidden task plan. |
+| `exec task-jobs` | `--issue` | no | Internal runner for next planned executable in hidden task plan. |
 | `plan-verify` | `--issue` | yes | Live-test plugin/skill/hook wiring. |
 | `probe-skill` | `--issue` | yes | Live-test executable-local skill resolution. |
 | `job-live-verify` | none | yes | Live-test job/staff/locked-tool wiring. |

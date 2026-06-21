@@ -10,21 +10,18 @@ const STORE_DUTIES_ROOT = path.join(STORE_ROOT, ".kody", "duties")
 const STORE_EXECUTABLES_ROOT = path.join(STORE_ROOT, ".kody", "executables")
 const CAPABILITY_KINDS = new Set(["observe", "act", "verify"])
 const CHAT_DUTY_ALIASES = new Set(["kody-analyzer", "kody-mem", "kody-operator", "kody-vibe"])
-const MIGRATED_EXECUTABLE_ACTIONS = [
-  "classify",
+const MIGRATED_EXECUTABLE_ACTIONS = ["classify", "qa-engineer", "spec", "worker-ask"]
+const INTERNAL_EXECUTABLE_ONLY_PROFILES = [
   "duty-scheduler",
   "duty-tick",
   "duty-tick-scripted",
   "goal-manager",
   "goal-scheduler",
-  "qa-engineer",
   "release",
-  "spec",
   "task-job-fail-once",
   "task-job-pass-a",
   "task-job-pass-b",
   "task-jobs",
-  "worker-ask",
 ]
 
 let envBefore: Record<string, string | undefined>
@@ -94,7 +91,7 @@ describe("kody-store capabilityKind profiles", () => {
     expect(actionSlugs).toEqual(expect.arrayContaining(MIGRATED_EXECUTABLE_ACTIONS))
   })
 
-  it("resolves migrated store wrappers as direct executable actions", () => {
+  it("resolves migrated store direct executable actions", () => {
     if (!fs.existsSync(STORE_ROOT)) return
 
     process.env.KODY_COMPANY_STORE = STORE_ROOT
@@ -111,6 +108,19 @@ describe("kody-store capabilityKind profiles", () => {
           source: "company-store-executable",
         }),
       )
+    }
+  })
+
+  it("keeps internal store executable helpers out of public duty actions", () => {
+    if (!fs.existsSync(STORE_ROOT)) return
+    process.env.KODY_COMPANY_STORE = STORE_ROOT
+    process.env.KODY_COMPANY_STORE_REF = "stable"
+    resetCompanyStoreCacheForTests()
+
+    const actionNames = listDutyActions().map((action) => action.action)
+    for (const executable of INTERNAL_EXECUTABLE_ONLY_PROFILES) {
+      expect(resolveExecutable(executable)).toBeTruthy()
+      expect(actionNames).not.toContain(executable)
     }
   })
 

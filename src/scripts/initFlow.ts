@@ -16,7 +16,7 @@ import pkg from "../../package.json"
 import type { PreflightScript } from "../executables/types.js"
 import { type EnsureLabelsResult, ensureLabels } from "../lifecycleLabels.js"
 import { loadProfile } from "../profile.js"
-import { listBuiltinJobs, listExecutables } from "../registry.js"
+import { listExecutables } from "../registry.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -217,40 +217,7 @@ export function performInit(cwd: string, force: boolean): InitResult {
     wrote.push(".github/workflows/kody.yml")
   }
 
-  // 3. .kody/duties/<slug>/{profile.json,duty.md} — copy every built-in
-  //    duty folder shipped with the engine. Built-in duties live under
-  //    `src/jobs/<slug>/` (dev) / `dist/jobs/<slug>/` (built); consumer
-  //    repos get a starter copy of each, scaffolded once and then
-  //    human-edited. Cadence is enforced by the profile's `every` field,
-  //    read by `dispatchDutyFileTicks`.
-  //
-  //    `--force` will overwrite consumer edits to these files — same
-  //    contract as `kody.yml` and `kody.config.json` above. Duty
-  //    profiles + bodies are *intended* to be edited (cadence,
-  //    thresholds, prompt prose), so use `--force` only when you accept
-  //    losing those edits.
-  const builtinJobs = listBuiltinJobs()
-  if (builtinJobs.length > 0) {
-    const jobsDir = path.join(cwd, ".kody", "duties")
-    fs.mkdirSync(jobsDir, { recursive: true })
-    for (const job of builtinJobs) {
-      const targetDir = path.join(jobsDir, job.slug)
-      const relProfile = path.join(".kody", "duties", job.slug, "profile.json")
-      const relBody = path.join(".kody", "duties", job.slug, "duty.md")
-      if (fs.existsSync(targetDir) && fs.existsSync(path.join(targetDir, "profile.json")) && !force) {
-        skipped.push(relProfile)
-        skipped.push(relBody)
-        continue
-      }
-      fs.mkdirSync(targetDir, { recursive: true })
-      fs.writeFileSync(path.join(targetDir, "profile.json"), fs.readFileSync(job.profilePath, "utf-8"))
-      fs.writeFileSync(path.join(targetDir, "duty.md"), fs.readFileSync(job.bodyPath, "utf-8"))
-      wrote.push(relProfile)
-      wrote.push(relBody)
-    }
-  }
-
-  // 4. .kody/staff/kody.md — default persona referenced by bundled duties.
+  // 3. .kody/staff/kody.md — default persona for Store/builtin actions.
   const staffDir = path.join(cwd, ".kody", "staff")
   const staffPath = path.join(staffDir, "kody.md")
   if (fs.existsSync(staffPath) && !force) {
@@ -261,7 +228,7 @@ export function performInit(cwd: string, force: boolean): InitResult {
     wrote.push(".kody/staff/kody.md")
   }
 
-  // 5. .github/workflows/kody-<name>.yml for every discovered scheduled duty action.
+  // 4. .github/workflows/kody-<name>.yml for every discovered scheduled executable profile.
   for (const exe of listExecutables()) {
     let profile: ReturnType<typeof loadProfile>
     try {
@@ -325,7 +292,7 @@ jobs:
           python-version: "3.12"
       - env:
           GH_TOKEN: \${{ secrets.KODY_TOKEN || github.token }}
-        run: npx -y -p @kody-ade/kody-engine@latest kody-engine ${name}
+        run: npx -y -p @kody-ade/kody-engine@latest kody-engine exec ${name}
 `
 }
 

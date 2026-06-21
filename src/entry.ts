@@ -5,7 +5,7 @@ import { runChat } from "./chat-cli.js"
 import { loadConfig } from "./config.js"
 import { runJob } from "./job.js"
 import { runCi } from "./kody-cli.js"
-import { hasDutyAction, listDutyActions, parseGenericFlags, resolveDutyAction } from "./registry.js"
+import { hasDutyAction, listDutyActions, parseGenericFlags, resolveDutyAction, resolveExecutable } from "./registry.js"
 import { brainServe } from "./servers/brain-serve.js"
 import { poolServe } from "./servers/pool-serve.js"
 import { runnerServe } from "./servers/runner-serve.js"
@@ -13,8 +13,9 @@ import { serve } from "./servers/serve.js"
 import { runStats } from "./stats.js"
 
 interface ParsedArgs {
-  command: "ci" | "chat" | "help" | "version" | "stats" | "server" | "__duty__"
+  command: "ci" | "chat" | "help" | "version" | "stats" | "server" | "__duty__" | "__exec__"
   actionName?: string
+  executableName?: string
   serverName?: "serve" | "pool-serve" | "runner-serve" | "brain-serve" | "brain-proxy" | "mcp-http-server"
   serverArgs?: string[]
   cliArgs?: Record<string, unknown>
@@ -39,6 +40,7 @@ Usage:
   kody-engine release --issue <N>                    [--cwd <path>] [--verbose|--quiet]
   kody-engine init                                   [--cwd <path>] [--verbose|--quiet]
   kody-engine <action>                               [--cwd <path>] [--verbose|--quiet]
+  kody-engine exec <executable>                      [--cwd <path>] [--verbose|--quiet]
   kody-engine ci      [preflight flags — see: kody-engine ci --help]
   kody-engine chat    [chat flags — see: kody-engine chat --help]
   kody-engine stats   [--since 7d|--run <id>|--json|--cwd <path>]
@@ -46,7 +48,8 @@ Usage:
   kody-engine version
 
 Top-level work commands are duty actions. A duty owns the public action name
-and selects an implementation executable.
+and selects an implementation executable. Use exec only for internal executable
+profiles such as scheduled helpers.
 
 Exit codes:
   0   success (PR opened, verify passed — or resolve produced a merge commit)
@@ -85,6 +88,25 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return { ...result, command: "stats", statsArgv: argv.slice(1) }
   }
 
+  if (cmd === "exec") {
+    const executableName = argv[1]
+    if (!executableName || executableName.startsWith("-")) {
+      result.errors.push("exec requires an executable name")
+      return result
+    }
+    if (!resolveExecutable(executableName)) {
+      result.errors.push(`unknown executable: ${executableName}`)
+      return result
+    }
+    result.command = "__exec__"
+    result.executableName = executableName
+    result.cliArgs = parseGenericFlags(argv.slice(2))
+    if (typeof result.cliArgs.cwd === "string") result.cwd = result.cliArgs.cwd
+    if (result.cliArgs.verbose === true) result.verbose = true
+    if (result.cliArgs.quiet === true) result.quiet = true
+    return result
+  }
+
   // Long-running servers are engine plumbing, not user work-verbs. They route
   // to src/servers/ as hardcoded CLI verbs (like ci/help/version), so the
   // executable registry never lists them and dispatch never treats them as verbs.
@@ -112,7 +134,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   }
 
   const discoveredActions = listDutyActions().map((e) => e.action)
-  const available = ["ci", "chat", "stats", "help", "version", ...discoveredActions]
+  const available = ["ci", "chat", "stats", "exec", "help", "version", ...discoveredActions]
   result.errors.push(`unknown command: ${cmd} (available: ${available.join(", ")})`)
   return result
 }
@@ -238,7 +260,41 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     }
   }
 
-  process.stderr.write("error: command did not resolve to a duty\n")
+  if (args.command === "__exec__") {
+    const executable = args.executableName!
+    const cliArgs = args.cliArgs ?? {}
+    const skipConfig = configlessCommands.has(executable)
+    try {
+      const result = await runJob(
+        {
+          action: executable,
+          duty: executable,
+          executable,
+          cliArgs,
+          target: numericTarget(cliArgs),
+          flavor: "instant",
+        },
+        {
+          cwd,
+          skipConfig,
+          verbose: args.verbose,
+          quiet: args.quiet,
+        },
+      )
+      if (result.exitCode !== 0 && result.reason) {
+        process.stderr.write(`error: ${result.reason}\n`)
+      }
+      return result.exitCode
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[kody] ${executable} crashed: ${msg}\n`)
+      if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`)
+      process.stdout.write(`PR_URL=FAILED: ${executable} crashed: ${msg}\n`)
+      return 99
+    }
+  }
+
+  process.stderr.write("error: command did not resolve to a duty or executable\n")
   return 64
 }
 

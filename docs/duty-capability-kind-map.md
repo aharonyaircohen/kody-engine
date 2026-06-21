@@ -36,7 +36,7 @@ Managers may call duties, but should not be modeled as ordinary duties.
 | Duty | New kind | Why |
 | --- | --- | --- |
 | `live-job-wiring` | `verify` | Confirms live job/staff/tool wiring. |
-| `release` | `split` | Current local release duty is a process, not one reusable capability. |
+| `release` | `helper` | Legacy all-in-one executable-only flow; split release duties are the reusable capabilities. |
 
 ## Store Duties
 
@@ -67,7 +67,7 @@ Managers may call duties, but should not be modeled as ordinary duties.
 | `feature` | `act` | Implements a feature/refactor. |
 | `fix` | `act` | Applies PR feedback. |
 | `fix-ci` | `act` | Fixes failing CI. |
-| `goal-manager` | `manager` | Chooses next missing evidence and dispatches work. |
+| `goal-manager` | `helper` | Internal managed-goal runner executable, not a duty capability kind. |
 | `goal-scheduler` | `helper` | Engine scheduler helper. |
 | `health-check` | `observe` | Finds stale Kody-assigned work. |
 | `init` | `act` | Installs/scaffolds Kody files. |
@@ -93,7 +93,7 @@ Managers may call duties, but should not be modeled as ordinary duties.
 | `qa-verify` | `verify` | Re-checks fixes before merge. |
 | `quality-watch` | `observe` | Finds security/coverage/flaky-test signals. |
 | `redispatch` | `split` | Observes stalled work and may resume/redispatch it. |
-| `release` | `split` | Full release flow; should become goal route or task plan. |
+| `release` | `helper` | Legacy all-in-one executable-only release flow; public release work uses split release duties. |
 | `release-deploy` | `act` | Deploys or promotes a release. |
 | `release-merge` | `act` | Merges a prepared release PR. |
 | `release-prepare` | `act` | Creates/prepares a release PR. |
