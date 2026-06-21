@@ -25,6 +25,12 @@ function writeDuty(slug: string, profile: Record<string, unknown>): void {
   fs.writeFileSync(path.join(dir, "duty.md"), `# ${slug}\n\nKeep ${slug} healthy.\n`)
 }
 
+function writeExecutable(slug: string, profile: Record<string, unknown>): void {
+  const dir = path.join(tmp, ".kody", "executables", slug)
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
+}
+
 function writeDutyState(slug: string, lastFiredAt: string): void {
   const file = path.join(tmp, ".kody", "duties", slug, "state.json")
   fs.mkdirSync(path.dirname(file), { recursive: true })
@@ -34,7 +40,7 @@ function writeDutyState(slug: string, lastFiredAt: string): void {
   )
 }
 
-function goalState(): GoalState {
+function goalState(duties: string[] = ["ci-health"]): GoalState {
   return {
     state: "active",
     extra: {
@@ -44,7 +50,7 @@ function goalState(): GoalState {
         outcome: "PRs stay mergeable",
         evidence: [],
       },
-      duties: ["ci-health"],
+      duties,
       route: [],
       stage: "watching",
       facts: {},
@@ -100,6 +106,27 @@ describe("standing goal duty scheduling", () => {
     const status = scheduleState.duties["ci-health"]!
     expect(typeof status.lastFiredAt).toBe("string")
     expect(typeof status.nextEligibleAt).toBe("string")
+  })
+
+  it("passes duty slug to due executable duties that declare a duty input", async () => {
+    writeDuty("auto-fix-ci", { every: "15m", staff: "kody", executable: "auto-fix-ci" })
+    writeExecutable("auto-fix-ci", {
+      inputs: [{ name: "duty", flag: "--duty", type: "string", required: true }],
+    })
+    const raw = goalState(["auto-fix-ci"])
+    const ctx = fakeCtx(raw)
+
+    await advanceManagedGoal(ctx, {} as any, {})
+
+    expect(ctx.output.nextDispatch).toEqual({
+      duty: "auto-fix-ci",
+      executable: "auto-fix-ci",
+      cliArgs: { duty: "auto-fix-ci" },
+    })
+    const updatedGoal = ctx.data.goal as GoalCtx
+    expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
+      lastDecision: { kind: "dispatch", duty: "auto-fix-ci", executable: "auto-fix-ci" },
+    })
   })
 
   it("waits when no duty is due", async () => {

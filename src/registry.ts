@@ -300,6 +300,31 @@ export function getDutyActionInputs(action: string): InputSpec[] | null {
   return getProfileInputs(resolved.executable)
 }
 
+export function resolveDutyExecution(duty: DutyFolder): { executable: string; cliArgs: Record<string, unknown> } {
+  const executable =
+    duty.config.executable ??
+    duty.config.executables?.[0] ??
+    (duty.config.tickScript ? "duty-tick-scripted" : "duty-tick")
+  const cliArgs = executableDeclaresInput(executable, "duty") ? { duty: duty.slug } : {}
+  return { executable, cliArgs }
+}
+
+function executableDeclaresInput(executable: string, inputName: string): boolean {
+  const profilePath = resolveExecutable(executable)
+  if (!profilePath) return false
+  try {
+    const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as { inputs?: unknown }
+    if (!Array.isArray(raw.inputs)) return false
+    return raw.inputs.some((entry) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false
+      const input = entry as { name?: unknown; flag?: unknown }
+      return input.name === inputName || input.flag === `--${inputName}`
+    })
+  } catch {
+    return false
+  }
+}
+
 /** Executable names: lowercase letters, digits, and dashes. Rejects traversal. */
 export function isSafeName(name: string): boolean {
   return /^[a-z][a-z0-9-]*$/.test(name) && !name.includes("..")
@@ -313,15 +338,12 @@ function listFolderDutyActions(root: string, source: "project-folder" | "company
     const duty = readDutyFolder(root, slug)
     if (!duty) continue
     const action = duty.config.action ?? slug
-    const executable =
-      duty.config.executable ??
-      duty.config.executables?.[0] ??
-      (duty.config.tickScript ? "duty-tick-scripted" : "duty-tick")
+    const { executable, cliArgs } = resolveDutyExecution(duty)
     out.push({
       action,
       duty: slug,
       executable,
-      cliArgs: duty.config.executable ? {} : { duty: slug },
+      cliArgs,
       source,
       describe: duty.config.describe ?? duty.title,
       profilePath: duty.profilePath,

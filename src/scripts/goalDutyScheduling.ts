@@ -4,7 +4,7 @@ import type { KodyConfig } from "../config.js"
 import type { DutyFolder } from "../dutyFolders.js"
 import type { ManagedGoal } from "../goal/manager.js"
 import { mintScheduledJob } from "../job.js"
-import { resolveDutyFolder } from "../registry.js"
+import { resolveDutyExecution, resolveDutyFolder } from "../registry.js"
 import { type ScheduleEvery, scheduleEveryToMs } from "./scheduleEvery.js"
 import { resolveBackend } from "./jobState/index.js"
 
@@ -206,10 +206,7 @@ async function describeDutySchedule(
 }
 
 function dutyDispatch(duty: DutyFolder): { duty: string; executable: string; cliArgs: Record<string, unknown> } {
-  const executable = duty.config.tickScript
-    ? "duty-tick-scripted"
-    : (duty.config.executable ?? duty.config.executables?.[0] ?? "duty-tick")
-  const cliArgs = duty.config.executable || duty.config.executables?.[0] ? {} : { duty: duty.slug }
+  const { executable, cliArgs } = resolveDutyExecution(duty)
   return { duty: duty.slug, executable, cliArgs }
 }
 
