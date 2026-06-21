@@ -13,6 +13,7 @@ import { parseReasoningEffort } from "./config.js"
 import { DUTY_MCP_TOOL_NAMES } from "./dutyMcp.js"
 import type {
   ClaudeCodeSpec,
+  CapabilityKind,
   CliToolSpec,
   ContainerChild,
   InputArtifactSpec,
@@ -33,6 +34,7 @@ const VALID_PERMISSION_MODES = new Set(["default", "acceptEdits", "plan", "bypas
 const VALID_ROLES = new Set(["primitive", "orchestrator", "container", "watch", "utility"])
 const VALID_CONTAINER_CHILD_TARGETS = new Set(["issue", "pr"])
 const VALID_PHASES = new Set(["research", "planning", "implementing", "reviewing", "shipped", "failed", "idle"])
+const VALID_CAPABILITY_KINDS = new Set(["observe", "act", "verify"])
 
 /**
  * Top-level profile keys that the loader understands. Unknown keys are
@@ -49,6 +51,7 @@ const KNOWN_PROFILE_KEYS = new Set([
   "dutyTools",
   "tools",
   "mentions",
+  "capabilityKind",
   "stage",
   "readsFrom",
   "writesTo",
@@ -122,6 +125,7 @@ export function loadProfile(profilePath: string): Profile {
       action: typeof r.action === "string" && r.action.trim() ? r.action.trim() : undefined,
       executable: execRef,
       describe: typeof r.describe === "string" ? r.describe : base.describe,
+      capabilityKind: parseCapabilityKind(profilePath, r.capabilityKind) ?? base.capabilityKind,
       staff: typeof r.staff === "string" && r.staff.trim() ? r.staff.trim() : base.staff,
       every: typeof r.every === "string" && r.every.trim() ? r.every.trim() : undefined,
       dutyTools: parseStringArray(r.dutyTools ?? r.tools) ?? base.dutyTools,
@@ -176,6 +180,7 @@ export function loadProfile(profilePath: string): Profile {
     action: typeof r.action === "string" && r.action.trim() ? r.action.trim() : undefined,
     executable: undefined,
     describe: typeof r.describe === "string" ? r.describe : "",
+    capabilityKind: parseCapabilityKind(profilePath, r.capabilityKind),
     // Optional persona to run as. Empty/blank string → undefined (no persona).
     staff: typeof r.staff === "string" && r.staff.trim() ? r.staff.trim() : undefined,
     // Optional recurrence cadence (scheduled duty). Blank → undefined (on-demand).
@@ -304,6 +309,14 @@ function requireString(p: string, r: Record<string, unknown>, key: string): stri
   return v
 }
 
+function parseCapabilityKind(p: string, raw: unknown): CapabilityKind | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined
+  if (typeof raw !== "string" || !VALID_CAPABILITY_KINDS.has(raw)) {
+    throw new ProfileError(p, `"capabilityKind" must be one of: observe | act | verify`)
+  }
+  return raw as CapabilityKind
+}
+
 function parseStringArray(raw: unknown): string[] | undefined {
   if (!Array.isArray(raw)) return undefined
   const values = raw.map((t) => String(t).trim()).filter(Boolean)
@@ -392,6 +405,17 @@ function parseCliTools(p: string, raw: unknown): CliToolSpec[] {
   if (!Array.isArray(raw)) throw new ProfileError(p, `"cliTools" must be an array or absent`)
   const out: CliToolSpec[] = []
   for (const [i, item] of raw.entries()) {
+    if (typeof item === "string" && item.trim()) {
+      const name = item.trim()
+      out.push({
+        name,
+        install: { required: false, checkCommand: `command -v ${name}` },
+        verify: `command -v ${name}`,
+        usage: "",
+        allowedUses: [],
+      })
+      continue
+    }
     if (!item || typeof item !== "object") {
       throw new ProfileError(p, `cliTools[${i}] must be an object`)
     }

@@ -52,6 +52,7 @@ Example:
 | --- | --- | --- |
 | `name` | yes | Duty slug. Must match the folder name. |
 | `describe` | yes | Short responsibility summary. |
+| `capabilityKind` | optional | Capability promise: `observe`, `act`, or `verify`. |
 | `action` | optional | Public action name. If absent, defaults to the duty name. |
 | `executable` | usually | Implementation executable, the how. |
 | `executables` | optional | Ordered executable list for duties that split work into child jobs. |
@@ -60,6 +61,14 @@ Example:
 | `mentions` | optional | GitHub logins to mention in duty output. |
 | `dutyTools` | optional | Locked duty MCP tool names. |
 | `disabled` | optional | Prevents scheduled execution. |
+
+`capabilityKind` selects the validated result model:
+
+| Kind | Result model |
+| --- | --- |
+| `observe` | `ObserveResult`: facts, alerts, suggested actions, or evidence. |
+| `act` | `ActResult`: action status plus changed/created resources, action result, or evidence. |
+| `verify` | `VerifyResult`: `passed` boolean plus evidence, blockers, or facts. |
 
 `duty.md` should define:
 

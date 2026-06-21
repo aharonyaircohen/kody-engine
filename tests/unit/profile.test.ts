@@ -55,6 +55,20 @@ describe("profile: loadProfile", () => {
     expect(profile.claudeCode.reasoningEffort).toBe("high")
   })
 
+  it("parses optional capabilityKind on executable profiles", () => {
+    const dir = tmpDir()
+    const profile = loadProfile(writeProfile(dir, { ...VALID_MIN, capabilityKind: "observe" }))
+
+    expect(profile.capabilityKind).toBe("observe")
+  })
+
+  it("rejects invalid capabilityKind values", () => {
+    const dir = tmpDir()
+    const p = writeProfile(dir, { ...VALID_MIN, capabilityKind: "manager" })
+
+    expect(() => loadProfile(p)).toThrow(/capabilityKind/)
+  })
+
   it("parses staff and every (duty fields); blanks → undefined", () => {
     const dir = tmpDir()
     const profile = loadProfile(writeProfile(dir, { ...VALID_MIN, staff: "kody", every: "1h" }))
@@ -133,6 +147,21 @@ describe("profile: loadProfile", () => {
     expect(profile.claudeCode).toBeTruthy()
   })
 
+  it("overlays capabilityKind on thin duty references", () => {
+    const dir = tmpDir()
+    const p = writeProfile(dir, {
+      name: "merge-ready-check",
+      executable: "merge",
+      capabilityKind: "verify",
+    })
+
+    const profile = loadProfile(p)
+
+    expect(profile.name).toBe("merge-ready-check")
+    expect(profile.executable).toBe("merge")
+    expect(profile.capabilityKind).toBe("verify")
+  })
+
   it("throws when a duty references an unknown executable", () => {
     const dir = tmpDir()
     const p = writeProfile(dir, { name: "x", executable: "no-such-executable-xyz" })
@@ -192,6 +221,21 @@ describe("profile: loadProfile", () => {
     const p = writeProfile(dir, good)
     const profile = loadProfile(p)
     expect(profile.claudeCode.tools).toEqual([])
+  })
+
+  it("accepts shorthand string cliTools entries", () => {
+    const dir = tmpDir()
+    const profile = loadProfile(writeProfile(dir, { ...VALID_MIN, cliTools: ["gh"] }))
+
+    expect(profile.cliTools).toEqual([
+      {
+        name: "gh",
+        install: { required: false, checkCommand: "command -v gh" },
+        verify: "command -v gh",
+        usage: "",
+        allowedUses: [],
+      },
+    ])
   })
 
   it("preserves runWhen on script entries", () => {
