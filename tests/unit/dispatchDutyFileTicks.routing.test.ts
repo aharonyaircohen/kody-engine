@@ -83,6 +83,21 @@ function ctxFor(configPatch: Partial<KodyConfig> = {}): Context {
 const PROFILE = {} as unknown as Profile
 
 describe("dispatchDutyFileTicks routing", () => {
+  it("does not flat-fan-out when explicit duty is required", async () => {
+    writeJob("watch-stale-prs", { every: "6h", staff: "kody" })
+    const ctx = ctxFor()
+
+    await dispatchDutyFileTicks(ctx, PROFILE, {
+      jobsDir: ".kody/duties",
+      targetExecutable: "duty-tick",
+      slugArg: "duty",
+      requireExplicitDuty: true,
+    })
+
+    expect(runExecutableMock).not.toHaveBeenCalled()
+    expect(ctx.output.reason).toBe("scheduled duty fan-out is owned by goal-scheduler")
+  })
+
   it("routes a duty with `tickScript:` to duty-tick-scripted", async () => {
     writeJob("auto-resolve", { tickScript: ".kody/scripts/auto-resolve-tick.sh", staff: "kody" })
 

@@ -9,6 +9,7 @@ import {
 import { serializeGoalState } from "../goal/state.js"
 import { gh } from "../issue.js"
 import type { GoalCtx } from "./goalCtx.js"
+import { isDutyCadenceGoal, planGoalDutySchedule, type GoalDutyScheduleState } from "./goalDutyScheduling.js"
 
 export const advanceManagedGoal: PreflightScript = async (ctx) => {
   ctx.skipAgent = true
@@ -25,6 +26,30 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
   const managed = managedGoalFromState(goal.raw)
   if (!managed) {
     ctx.output.reason = "goal has no managed-goal contract; nothing to advance"
+    return
+  }
+  if (isDutyCadenceGoal(managed, goal.raw.extra)) {
+    const previousScheduleState =
+      goal.raw.extra.scheduleState && typeof goal.raw.extra.scheduleState === "object"
+        ? (goal.raw.extra.scheduleState as GoalDutyScheduleState)
+        : undefined
+    const decision = await planGoalDutySchedule({
+      goal: managed,
+      cwd: ctx.cwd,
+      config: ctx.config,
+      previousScheduleState,
+    })
+    goal.raw = writeManagedGoalToState({ ...goal.raw, state: goal.state }, managed)
+    goal.raw.extra.scheduleState = decision.scheduleState
+    ctx.data.managedGoalDecision = decision
+    if (decision.kind === "dispatch" && decision.dispatch) {
+      ctx.output.nextDispatch = {
+        duty: decision.dispatch.duty,
+        executable: decision.dispatch.executable,
+        cliArgs: decision.dispatch.cliArgs,
+      }
+    }
+    ctx.output.reason = decision.reason
     return
   }
   if (isSimpleGoal(managed)) {

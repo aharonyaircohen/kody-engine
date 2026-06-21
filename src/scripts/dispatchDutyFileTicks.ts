@@ -50,6 +50,12 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
 
   try {
     const onlyDuty = parseDutyFilter(ctx.args.duty)
+    if (args?.requireExplicitDuty === true && !onlyDuty) {
+      ctx.output.exitCode = 0
+      ctx.output.reason = "scheduled duty fan-out is owned by goal-scheduler"
+      process.stdout.write("[jobs] no flat duty fan-out; goal-scheduler owns scheduled duty decisions\n")
+      return
+    }
     const jobsPath = path.join(ctx.cwd, jobsDir)
     const storeJobsPath = getCompanyStoreDutiesRoot()
     const slugs = filterSlugs(

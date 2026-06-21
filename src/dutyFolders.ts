@@ -86,7 +86,7 @@ export function parseDutyConfig(raw: Record<string, unknown>): DutyFolderConfig 
     every: isScheduleEvery(raw.every) ? raw.every : undefined,
     tickScript: stringField(raw.tickScript),
     disabled: typeof raw.disabled === "boolean" ? raw.disabled : undefined,
-    staff: stringField(raw.staff),
+    staff: stringField(raw.staff) ?? stringField(raw.runner),
     mentions: stringList(raw.mentions).map((m) => m.replace(/^@/, "")),
     tools,
     executables: stringList(raw.executables),
