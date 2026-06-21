@@ -111,7 +111,7 @@ describe("dispatchDutyFileTicks routing", () => {
     expect(runExecutableMock.mock.calls[0]![0]).toBe("duty-tick")
   })
 
-  it("routes duty with executable to that executable and passes the duty slug", async () => {
+  it("routes duty with executable without passing a synthetic duty arg", async () => {
     writeJob("preview-health", { every: "15m", staff: "cto", executable: "preview-health" })
 
     const ctx = ctxFor()
@@ -123,7 +123,7 @@ describe("dispatchDutyFileTicks routing", () => {
 
     expect(runExecutableMock).toHaveBeenCalledTimes(1)
     expect(runExecutableMock.mock.calls[0]![0]).toBe("preview-health")
-    expect(runExecutableMock.mock.calls[0]![1].cliArgs).toEqual({ duty: "preview-health" })
+    expect(runExecutableMock.mock.calls[0]![1].cliArgs).toEqual({})
   })
   it("skips a duty with no `staff:` (every duty must name an executor)", async () => {
     writeJob("orphan-duty", { every: "1h" })
