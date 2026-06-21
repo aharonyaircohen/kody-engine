@@ -11,8 +11,8 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 
-import { readDutyFolder } from "../dutyFolders.js"
 import type { PreflightScript } from "../executables/types.js"
+import { resolveDutyFolder } from "../registry.js"
 import { resolveBackend } from "./jobState/index.js"
 import { runTickShellAndParse } from "./tickShellRunner.js"
 
@@ -31,10 +31,10 @@ export const runScheduledExecutableTick: PreflightScript = async (ctx, profile, 
     return
   }
 
-  const duty = readDutyFolder(path.join(ctx.cwd, jobsDir), slug)
+  const duty = resolveDutyFolder(slug, path.join(ctx.cwd, jobsDir))
   if (!duty) {
     ctx.output.exitCode = 99
-    ctx.output.reason = `runScheduledExecutableTick: duty folder not found or incomplete: ${path.join(jobsDir, slug)}`
+    ctx.output.reason = `runScheduledExecutableTick: duty folder not found or incomplete: ${slug} (searched ${jobsDir} and company store)`
     return
   }
 

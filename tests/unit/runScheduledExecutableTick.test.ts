@@ -2,9 +2,10 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { KodyConfig } from "../../src/config.js"
+import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import type { Context, Profile } from "../../src/executables/types.js"
 import { runScheduledExecutableTick } from "../../src/scripts/runScheduledExecutableTick.js"
 import { buildTickChildEnv } from "../../src/scripts/tickShellRunner.js"
@@ -29,6 +30,19 @@ function ctxFor(cwd: string, slug: string): Context {
   }
 }
 
+function writeTickScript(): void {
+  fs.writeFileSync(
+    path.join(execDir, "tick.sh"),
+    `#!/usr/bin/env bash
+cat <<'EOF'
+\`\`\`kody-job-next-state
+{"cursor":"demo-1","data":{"seen":true},"done":false}
+\`\`\`
+EOF
+`,
+  )
+}
+
 let tmp: string
 let execDir: string
 
@@ -46,6 +60,8 @@ beforeEach(() => {
 
 afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true })
+  vi.unstubAllEnvs()
+  resetCompanyStoreCacheForTests()
 })
 
 describe("runScheduledExecutableTick", () => {
@@ -69,16 +85,7 @@ describe("runScheduledExecutableTick", () => {
   })
 
   it("runs the executable-local shell and parses the next-state fence", async () => {
-    fs.writeFileSync(
-      path.join(execDir, "tick.sh"),
-      `#!/usr/bin/env bash
-cat <<'EOF'
-\`\`\`kody-job-next-state
-{"cursor":"demo-1","data":{"seen":true},"done":false}
-\`\`\`
-EOF
-`,
-    )
+    writeTickScript()
 
     const ctx = ctxFor(tmp, "demo")
     await runScheduledExecutableTick(ctx, { name: "demo-watch", dir: execDir } as Profile, {
@@ -92,6 +99,42 @@ EOF
     expect(ctx.data.jobSlug).toBe("demo")
     expect(ctx.data.executableSlug).toBe("demo-watch")
     expect(ctx.data.nextStateParseError).toBeUndefined()
+    expect(ctx.data.nextJobState).toMatchObject({
+      cursor: "demo-1",
+      data: { seen: true },
+      done: false,
+    })
+  })
+
+  it("loads duty metadata from company store when project duty folder is absent", async () => {
+    writeTickScript()
+    fs.rmSync(path.join(tmp, ".kody", "duties", "demo"), { recursive: true, force: true })
+    const storeRoot = path.join(tmp, "store")
+    const storeDutyDir = path.join(storeRoot, ".kody", "duties", "demo")
+    fs.mkdirSync(storeDutyDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(storeDutyDir, "profile.json"),
+      JSON.stringify({
+        name: "demo",
+        every: "15m",
+        staff: "kody",
+        executable: "demo-watch",
+      }),
+    )
+    fs.writeFileSync(path.join(storeDutyDir, "duty.md"), "# Store Demo\n")
+    vi.stubEnv("KODY_COMPANY_STORE", storeRoot)
+    resetCompanyStoreCacheForTests()
+
+    const ctx = ctxFor(tmp, "demo")
+    await runScheduledExecutableTick(ctx, { name: "demo-watch", dir: execDir } as Profile, {
+      jobsDir: ".kody/duties",
+      slugArg: "duty",
+      shell: "tick.sh",
+    })
+
+    expect(ctx.skipAgent).toBe(true)
+    expect(ctx.output.exitCode).toBe(0)
+    expect(ctx.data.jobSlug).toBe("demo")
     expect(ctx.data.nextJobState).toMatchObject({
       cursor: "demo-1",
       data: { seen: true },
