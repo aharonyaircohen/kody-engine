@@ -72,6 +72,32 @@ describe("advanceManagedGoal", () => {
     expect(raw.facts).toEqual({ pendingEvidence: "releasePrExists" })
   })
 
+  it("lets route args reference the active goal id", async () => {
+    const ctx = fakeCtx(
+      state(
+        goalExtra({
+          route: [
+            {
+              evidence: "releasePrExists",
+              stage: "prepare",
+              duty: "release-prepare",
+              executable: "release-prepare",
+              args: { goal: { fact: "goalId" } },
+            },
+          ],
+        }),
+      ),
+    )
+
+    await advanceManagedGoal(ctx, fakeProfile())
+
+    expect(ctx.output.nextDispatch).toEqual({
+      duty: "release-prepare",
+      executable: "release-prepare",
+      cliArgs: { goal: "release-v1-2-3" },
+    })
+  })
+
   it("marks the loaded goal done when destination evidence is complete", async () => {
     const ctx = fakeCtx(state(goalExtra({ facts: { releasePrExists: true, qaPassed: true } })))
 

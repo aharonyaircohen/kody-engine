@@ -28,6 +28,12 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     ctx.output.reason = "goal has no managed-goal contract; nothing to advance"
     return
   }
+  const previousGoalIdFact = managed.facts.goalId
+  managed.facts.goalId = goal.id
+  const restoreGoalIdFact = () => {
+    if (previousGoalIdFact === undefined) delete managed.facts.goalId
+    else managed.facts.goalId = previousGoalIdFact
+  }
   if (isDutyCadenceGoal(managed, goal.raw.extra)) {
     const previousScheduleState =
       goal.raw.extra.scheduleState && typeof goal.raw.extra.scheduleState === "object"
@@ -39,6 +45,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
       config: ctx.config,
       previousScheduleState,
     })
+    restoreGoalIdFact()
     goal.raw = writeManagedGoalToState({ ...goal.raw, state: goal.state }, managed)
     goal.raw.extra.scheduleState = decision.scheduleState
     ctx.data.managedGoalDecision = decision
@@ -57,6 +64,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
   }
 
   const decision = planManagedGoalTick(managed)
+  restoreGoalIdFact()
   ctx.data.managedGoalDecision = decision
 
   if (decision.kind === "done") {
