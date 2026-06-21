@@ -1,6 +1,7 @@
 # Response Rule
 
 Do the work first, then answer with a clear headline and the simplest advice for how to proceed.
+Think more than you say: do the deeper analysis, then surface only the verdict, key reasons, and next step.
 
 # kody-engine Agent Guide
 
@@ -196,6 +197,17 @@ open PRs must require `commitResult.pushed === true`, not only
 (`.kody/secrets.enc`) are decrypted by Kody runtime/dashboard/pool code and
 loaded into environment variables before executables run. Colocated executable
 shell scripts must not read or decrypt `.kody/secrets.enc` directly.
+
+## Kody Clean Boundary
+
+Hard constraints:
+
+- **Engine**: runs the requested executable and reports success/failure.
+- **Preview executable/tool**: owns preview behavior and preview-provider details.
+- **Task-leader/release policy**: decides whether a preview result is required
+  for a given PR type.
+- **`.github/workflows/kody.yml`**: immutable launcher only; never change this
+  file.
 
 ## Adding / Changing Executables
 
