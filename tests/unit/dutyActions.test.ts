@@ -29,8 +29,14 @@ function writeFolderDuty(slug: string, profile: Record<string, unknown>): void {
   fs.writeFileSync(path.join(dir, "duty.md"), `# ${slug}\n`)
 }
 
+function writeExecutable(slug: string, profile: Record<string, unknown>): void {
+  const dir = path.join(root, ".kody", "executables", slug)
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, inputs: [], ...profile }, null, 2))
+}
+
 describe("duty actions", () => {
-  it("resolves a folder duty action to its declared executable", () => {
+  it("resolves folder duty action to its declared executable", () => {
     process.chdir(root)
     writeFolderDuty("memorize", { action: "remember", executable: "impl", staff: "kody" })
 
@@ -42,26 +48,39 @@ describe("duty actions", () => {
     })
   })
 
-  it("defaults a folder duty action to the duty slug and single executable", () => {
+  it("defaults folder duty action to the duty slug and first executable", () => {
     process.chdir(root)
-    writeFolderDuty("memorize", { executables: ["impl"], staff: "kody" })
+    writeFolderDuty("ship", { executables: ["impl"], staff: "kody" })
 
-    expect(resolveDutyAction("memorize")).toMatchObject({
-      action: "memorize",
-      duty: "memorize",
+    expect(resolveDutyAction("ship")).toMatchObject({
+      action: "ship",
+      duty: "ship",
       executable: "impl",
+      source: "project-folder",
     })
   })
 
-  it("uses duty-tick plus --duty for a folder duty with no implementation executable", () => {
+  it("defaults folder duty execution to duty-tick", () => {
     process.chdir(root)
-    writeFolderDuty("triage", { action: "triage", staff: "kody" })
+    writeFolderDuty("watch", { staff: "kody" })
 
-    expect(resolveDutyAction("triage")).toMatchObject({
-      action: "triage",
-      duty: "triage",
+    expect(resolveDutyAction("watch")).toMatchObject({
+      action: "watch",
+      duty: "watch",
       executable: "duty-tick",
-      cliArgs: { duty: "triage" },
+      source: "project-folder",
+    })
+  })
+
+  it("uses duty-tick-scripted for scripted folder duties", () => {
+    process.chdir(root)
+    writeFolderDuty("scripted", { tickScript: "node tick.mjs" })
+
+    expect(resolveDutyAction("scripted")).toMatchObject({
+      action: "scripted",
+      duty: "scripted",
+      executable: "duty-tick-scripted",
+      source: "project-folder",
     })
   })
 
@@ -75,9 +94,16 @@ describe("duty actions", () => {
     expect(resolveDutyAction("legacy")).toBeNull()
   })
 
-  it("resolves a folder duty action before a same-named executable", () => {
+  it("resolves folder duty action before the same action on an executable profile", () => {
     process.chdir(root)
     writeFolderDuty("daily-impl", { action: "ship", executable: "impl", staff: "kody" })
+    writeExecutable("direct-ship", {
+      action: "ship",
+      role: "utility",
+      capabilityKind: "act",
+      kind: "oneshot",
+      describe: "Ship directly.",
+    })
 
     expect(resolveDutyAction("ship")).toMatchObject({
       action: "ship",
@@ -85,6 +111,35 @@ describe("duty actions", () => {
       executable: "impl",
       source: "project-folder",
     })
+  })
+
+  it("resolves public action declared directly on a typed executable profile", () => {
+    process.chdir(root)
+    writeExecutable("direct-ship", {
+      action: "ship",
+      role: "utility",
+      capabilityKind: "act",
+      kind: "oneshot",
+      describe: "Ship directly.",
+    })
+
+    expect(resolveDutyAction("ship")).toMatchObject({
+      action: "ship",
+      duty: "direct-ship",
+      executable: "direct-ship",
+      source: "project-executable",
+    })
+  })
+
+  it("ignores direct executable actions that are not typed engine profiles", () => {
+    process.chdir(root)
+    writeExecutable("chatty", { action: "chatty", role: "chat", capabilityKind: "act" })
+    writeExecutable("untyped", { action: "untyped", role: "utility" })
+    writeExecutable("floating", { action: "floating", role: "utility", capabilityKind: "act", inputs: undefined })
+
+    expect(resolveDutyAction("chatty")).toBeNull()
+    expect(resolveDutyAction("untyped")).toBeNull()
+    expect(resolveDutyAction("floating")).toBeNull()
   })
 
   it("lists built-in public actions from engine duty definitions", () => {

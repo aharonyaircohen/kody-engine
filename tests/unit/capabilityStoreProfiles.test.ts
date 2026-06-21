@@ -3,11 +3,29 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import { loadProfile } from "../../src/profile.js"
-import { resolveExecutable } from "../../src/registry.js"
+import { listDutyActions, resolveExecutable } from "../../src/registry.js"
 
 const STORE_ROOT = process.env.KODY_STORE_PATH ?? path.resolve(process.cwd(), "..", "kody-store")
 const STORE_DUTIES_ROOT = path.join(STORE_ROOT, ".kody", "duties")
-const CLEAN_CAPABILITY_DUTY_COUNT = 56
+const STORE_EXECUTABLES_ROOT = path.join(STORE_ROOT, ".kody", "executables")
+const CAPABILITY_KINDS = new Set(["observe", "act", "verify"])
+const CHAT_DUTY_ALIASES = new Set(["kody-analyzer", "kody-mem", "kody-operator", "kody-vibe"])
+const MIGRATED_EXECUTABLE_ACTIONS = [
+  "classify",
+  "duty-scheduler",
+  "duty-tick",
+  "duty-tick-scripted",
+  "goal-manager",
+  "goal-scheduler",
+  "qa-engineer",
+  "release",
+  "spec",
+  "task-job-fail-once",
+  "task-job-pass-a",
+  "task-job-pass-b",
+  "task-jobs",
+  "worker-ask",
+]
 
 let envBefore: Record<string, string | undefined>
 
@@ -28,100 +46,113 @@ afterEach(() => {
 })
 
 describe("kody-store capabilityKind profiles", () => {
-  it("loads every marked store duty profile with a valid capability kind", () => {
+  it("keeps every remaining store duty profile typed", () => {
+    if (!fs.existsSync(STORE_DUTIES_ROOT)) return
+
+    const missingOrInvalid: string[] = []
+    for (const slug of fs.readdirSync(STORE_DUTIES_ROOT).sort()) {
+      const profilePath = path.join(STORE_DUTIES_ROOT, slug, "profile.json")
+      if (!fs.existsSync(profilePath)) continue
+      const raw = JSON.parse(fs.readFileSync(profilePath, "utf8")) as { capabilityKind?: unknown }
+      if (typeof raw.capabilityKind !== "string" || !CAPABILITY_KINDS.has(raw.capabilityKind)) {
+        missingOrInvalid.push(slug)
+      }
+    }
+
+    expect(missingOrInvalid).toEqual([])
+  })
+
+  it("keeps direct store executable actions typed and loadable", () => {
+    if (!fs.existsSync(STORE_EXECUTABLES_ROOT)) return
+
+    const invalid: string[] = []
+    const actionSlugs: string[] = []
+
+    for (const slug of fs.readdirSync(STORE_EXECUTABLES_ROOT).sort()) {
+      const profilePath = path.join(STORE_EXECUTABLES_ROOT, slug, "profile.json")
+      if (!fs.existsSync(profilePath)) continue
+      const raw = JSON.parse(fs.readFileSync(profilePath, "utf8")) as {
+        action?: unknown
+        capabilityKind?: unknown
+      }
+      if (typeof raw.action !== "string" || !raw.action.trim()) continue
+
+      actionSlugs.push(slug)
+      if (typeof raw.capabilityKind !== "string" || !CAPABILITY_KINDS.has(raw.capabilityKind)) {
+        invalid.push(`${slug}: capabilityKind`)
+        continue
+      }
+
+      try {
+        loadProfile(profilePath)
+      } catch (error) {
+        invalid.push(`${slug}: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+
+    expect(invalid).toEqual([])
+    expect(actionSlugs).toEqual(expect.arrayContaining(MIGRATED_EXECUTABLE_ACTIONS))
+  })
+
+  it("resolves migrated store wrappers as direct executable actions", () => {
+    if (!fs.existsSync(STORE_ROOT)) return
+
+    process.env.KODY_COMPANY_STORE = STORE_ROOT
+    process.env.KODY_COMPANY_STORE_REF = "stable"
+    resetCompanyStoreCacheForTests()
+
+    const actions = listDutyActions()
+    for (const action of MIGRATED_EXECUTABLE_ACTIONS) {
+      expect(actions).toContainEqual(
+        expect.objectContaining({
+          action,
+          duty: action,
+          executable: action,
+          source: "company-store-executable",
+        }),
+      )
+    }
+  })
+
+  it("does not route explicit store actions through generic duty tick wrappers", () => {
+    if (!fs.existsSync(STORE_ROOT)) return
+
+    process.env.KODY_COMPANY_STORE = STORE_ROOT
+    process.env.KODY_COMPANY_STORE_REF = "stable"
+    resetCompanyStoreCacheForTests()
+
+    const genericWrappers = listDutyActions()
+      .filter((action) => action.source === "company-store")
+      .filter((action) => action.executable === "duty-tick" || action.executable === "duty-tick-scripted")
+      .map((action) => action.action)
+
+    expect(genericWrappers).toEqual([])
+  })
+
+  it("names the remaining non-engine chat duty aliases explicitly", () => {
     if (!fs.existsSync(STORE_DUTIES_ROOT)) return
 
     process.env.KODY_COMPANY_STORE = STORE_ROOT
     process.env.KODY_COMPANY_STORE_REF = "stable"
     resetCompanyStoreCacheForTests()
 
-    const marked: Array<{ slug: string; kind: string }> = []
+    const nonEngineAliases: string[] = []
     for (const slug of fs.readdirSync(STORE_DUTIES_ROOT).sort()) {
       const profilePath = path.join(STORE_DUTIES_ROOT, slug, "profile.json")
       if (!fs.existsSync(profilePath)) continue
-      const raw = JSON.parse(fs.readFileSync(profilePath, "utf8")) as {
-        capabilityKind?: string
-        executable?: string
-        executables?: string[]
+      const raw = JSON.parse(fs.readFileSync(profilePath, "utf8")) as { action?: unknown; executable?: unknown }
+      if (typeof raw.action !== "string" || typeof raw.executable !== "string") continue
+
+      const executablePath = resolveExecutable(raw.executable)
+      if (!executablePath) continue
+
+      try {
+        loadProfile(executablePath)
+      } catch {
+        nonEngineAliases.push(slug)
       }
-      if (!raw.capabilityKind) continue
-      expect(["observe", "act", "verify"]).toContain(raw.capabilityKind)
-      for (const executable of referencedExecutables(raw)) {
-        const executablePath = resolveExecutable(executable)
-        expect(executablePath, `${slug} references ${executable}`).toBeTruthy()
-        loadProfile(executablePath!)
-      }
-      marked.push({ slug, kind: raw.capabilityKind })
     }
 
-    expect(marked).toHaveLength(CLEAN_CAPABILITY_DUTY_COUNT)
-    expect(marked.filter((entry) => entry.kind === "observe").map((entry) => entry.slug)).toEqual([
-      "cleanup",
-      "code-health",
-      "company-graph",
-      "delivery-graph",
-      "docs-health",
-      "documentation-maintenance",
-      "duty-call",
-      "health-check",
-      "job-gap-scan",
-      "memory-compaction",
-      "qa-sweep",
-      "quality-watch",
-      "release-state",
-      "repo-graph",
-      "research",
-      "skills-research",
-      "system-audit",
-      "work-briefing",
-    ])
-    expect(marked.filter((entry) => entry.kind === "act").map((entry) => entry.slug)).toEqual([
-      "bug",
-      "chore",
-      "feature",
-      "fix",
-      "fix-ci",
-      "init",
-      "merge",
-      "npm-publish",
-      "plan",
-      "preview-build",
-      "release-deploy",
-      "release-merge",
-      "release-prepare",
-      "release-publish",
-      "reproduce",
-      "resolve",
-      "revert",
-      "sync",
-      "task-memorize",
-      "vercel-dev-deploy",
-      "vercel-production-deploy",
-    ])
-    expect(marked.filter((entry) => entry.kind === "verify").map((entry) => entry.slug)).toEqual([
-      "approval-gate",
-      "ceo-performance-review",
-      "ci-health",
-      "design-review",
-      "duty-review",
-      "job-live-verify",
-      "plan-verify",
-      "probe-skill",
-      "qa",
-      "qa-goal",
-      "qa-verify",
-      "review",
-      "task-verifier",
-      "ui-review",
-      "verify-deployment-live",
-      "verify-package-published",
-      "verify-release-pr-ready",
-    ])
+    expect(nonEngineAliases).toEqual([...CHAT_DUTY_ALIASES].sort())
   })
 })
-
-function referencedExecutables(raw: { executable?: string; executables?: string[] }): string[] {
-  if (typeof raw.executable === "string" && raw.executable.trim()) return [raw.executable.trim()]
-  if (Array.isArray(raw.executables)) return raw.executables.map((item) => item.trim()).filter(Boolean)
-  return []
-}

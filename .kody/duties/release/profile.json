@@ -1,7 +1,0 @@
-{
-  "name": "release",
-  "describe": "Release",
-  "action": "release",
-  "every": "manual",
-  "runner": "kody"
-}

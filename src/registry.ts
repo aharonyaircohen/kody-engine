@@ -20,6 +20,9 @@ import type { DutyFolder } from "./dutyFolders.js"
 import { DUTY_BODY_FILE, DUTY_PROFILE_FILE, listDutyFolderSlugs, readDutyFolder } from "./dutyFolders.js"
 import type { InputSpec } from "./executables/types.js"
 
+const PUBLIC_EXECUTABLE_ACTION_ROLES = new Set(["primitive", "orchestrator", "container", "watch", "utility"])
+const PUBLIC_EXECUTABLE_CAPABILITY_KINDS = new Set(["observe", "act", "verify"])
+
 export interface DiscoveredExecutable {
   name: string
   profilePath: string
@@ -34,7 +37,7 @@ export interface DiscoveredDutyAction {
   executable: string
   /** Extra args required to lower the duty to its implementation. */
   cliArgs: Record<string, unknown>
-  source: "project-folder" | "company-store" | "builtin"
+  source: "project-folder" | "project-executable" | "company-store" | "company-store-executable" | "builtin"
   describe?: string
   profilePath?: string
   bodyPath?: string
@@ -261,9 +264,12 @@ export function listDutyActions(projectDutiesRoot: string = getProjectDutiesRoot
   }
 
   const roots = getDutyRoots(projectDutiesRoot)
+  const executableRoots = getExecutableRoots()
   for (const action of listFolderDutyActions(roots[0]!, "project-folder")) add(action)
+  for (const action of listExecutableDutyActions(executableRoots[0]!, "project-executable")) add(action)
   if (roots.length === 3) {
     for (const action of listFolderDutyActions(roots[1]!, "company-store")) add(action)
+    for (const action of listExecutableDutyActions(executableRoots[1]!, "company-store-executable")) add(action)
     for (const action of listBuiltinDutyActions(roots[2]!)) add(action)
   } else {
     for (const action of listBuiltinDutyActions(roots[1]!)) add(action)
@@ -328,6 +334,37 @@ function executableDeclaresInput(executable: string, inputName: string): boolean
 /** Executable names: lowercase letters, digits, and dashes. Rejects traversal. */
 export function isSafeName(name: string): boolean {
   return /^[a-z][a-z0-9-]*$/.test(name) && !name.includes("..")
+}
+
+function listExecutableDutyActions(
+  root: string,
+  source: "project-executable" | "company-store-executable",
+): DiscoveredDutyAction[] {
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
+  const out: DiscoveredDutyAction[] = []
+  for (const ent of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!ent.isDirectory() || !isSafeName(ent.name)) continue
+    const profilePath = path.join(root, ent.name, DUTY_PROFILE_FILE)
+    if (!fs.existsSync(profilePath) || !fs.statSync(profilePath).isFile()) continue
+    try {
+      const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as Record<string, unknown>
+      const action = typeof raw.action === "string" && raw.action.trim() ? raw.action.trim() : ""
+      if (!action) continue
+      if (!PUBLIC_EXECUTABLE_ACTION_ROLES.has(String(raw.role))) continue
+      if (!PUBLIC_EXECUTABLE_CAPABILITY_KINDS.has(String(raw.capabilityKind))) continue
+      if (!Array.isArray(raw.inputs)) continue
+      out.push({
+        action,
+        duty: ent.name,
+        executable: ent.name,
+        cliArgs: {},
+        source,
+        describe: typeof raw.describe === "string" ? raw.describe : undefined,
+        profilePath,
+      })
+    } catch {}
+  }
+  return out.sort((a, b) => a.action.localeCompare(b.action))
 }
 
 function listFolderDutyActions(root: string, source: "project-folder" | "company-store"): DiscoveredDutyAction[] {
