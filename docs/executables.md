@@ -109,6 +109,20 @@ Rules:
 - Profiles that need report persistence should include `applyDutyReports` in postflight.
 - Route args can read reported facts with `{ "fact": "<name>" }`.
 
+Duty reports are how a reusable capability hands evidence back to a goal. They
+are not a manager loop. An executable may report `releasePrExists`,
+`mainMerged`, or `productionDeployed`; the goal decides whether those facts
+complete the objective.
+
+When a duty profile declares `capabilityKind`, executable output should match
+that promise:
+
+| `capabilityKind` | Output should describe |
+| --- | --- |
+| `observe` | Facts, alerts, suggested actions, or evidence discovered. |
+| `act` | Created/changed resources, triggered operations, action status, or evidence. |
+| `verify` | Pass/fail result with evidence, blockers, and facts. |
+
 ## Creating An Executable
 
 Use this checklist:

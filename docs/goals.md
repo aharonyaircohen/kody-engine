@@ -10,6 +10,10 @@ the outcome is done or blocked.
 A goal may use duties, but it is not a duty. A duty is a standing
 responsibility. A goal is a temporary objective.
 
+Goals are the normal home for long-term progress routing. Duties stay reusable
+capabilities: `observe`, `act`, or `verify`. A goal may compose many duties,
+but a duty should not secretly become the goal's manager loop.
+
 ## Canonical Shape
 
 Goal templates and instances are physically separate:
@@ -144,6 +148,18 @@ instead of dispatching bad input.
 8. Dispatch the duty or executable for that evidence.
 9. Set `facts.pendingEvidence`.
 10. When all evidence is true, set `state: "done"`.
+
+The route step should name evidence a duty can produce, not a private phase
+inside the duty. For example, a web release route composes separate Act duties:
+
+| Evidence | Duty | Meaning |
+| --- | --- | --- |
+| `releasePrExists` | `release-prepare` | Create or reuse the release PR. |
+| `mainMerged` | `release-merge` | Merge the prepared PR after checks pass. |
+| `productionDeployed` | `vercel-production-deploy` | Deploy main to production and report the URL. |
+
+Do not replace that with one `release` duty that owns prepare, merge, deploy,
+and completion internally.
 
 Implementation anchors:
 
