@@ -1,10 +1,48 @@
 /**
- * Preflight: load `.kody/goals/instances/<goalId>/state.json` from the `kody-state`
+ * Preflight: load `.kody/goals/instances/<goalId>/state.json` from `kody-state`
  * branch into `ctx.data.goal` for goal-manager scripts.
  */
 
 import type { PreflightScript } from "../executables/types.js"
+import { type GoalState } from "../goal/state.js"
 import { fetchGoalState } from "../goal/stateStore.js"
+
+const DEFAULT_RETRY_DELAYS_MS = [250, 750, 1500, 2500]
+
+function retryDelaysMs(): number[] {
+  const raw = process.env.KODY_GOAL_STATE_RETRY_DELAYS_MS?.trim()
+  if (!raw) return DEFAULT_RETRY_DELAYS_MS
+  return raw
+    .split(",")
+    .map((part) => Number(part.trim()))
+    .filter((value) => Number.isFinite(value) && value >= 0)
+}
+
+function sleep(ms: number): Promise<void> {
+  if (ms <= 0) return Promise.resolve()
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function fetchGoalStateWithRetry(
+  owner: string,
+  repo: string,
+  goalId: string,
+  cwd: string,
+): Promise<GoalState | null> {
+  let state = fetchGoalState(owner, repo, goalId, cwd)
+  if (state) return state
+
+  for (const delay of retryDelaysMs()) {
+    await sleep(delay)
+    state = fetchGoalState(owner, repo, goalId, cwd)
+    if (state) {
+      process.stdout.write(`[goal-manager] loaded goal state for ${goalId} after retry\n`)
+      return state
+    }
+  }
+
+  return null
+}
 
 export const loadGoalState: PreflightScript = async (ctx) => {
   const goalId = ctx.args.goal
@@ -32,7 +70,7 @@ export const loadGoalState: PreflightScript = async (ctx) => {
   }
 
   try {
-    const state = fetchGoalState(owner, repo, goalId, ctx.cwd)
+    const state = await fetchGoalStateWithRetry(owner, repo, goalId, ctx.cwd)
     if (!state) {
       process.stdout.write(`[goal-manager] no goal state for ${goalId} on ${owner}/${repo}; nothing to tick\n`)
       ctx.skipAgent = true
