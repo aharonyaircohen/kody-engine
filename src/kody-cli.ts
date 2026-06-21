@@ -305,6 +305,7 @@ export async function runCi(argv: string[]): Promise<number> {
   const dispatchEventPath = process.env.GITHUB_EVENT_PATH
   let manualWorkflowDispatch = false
   let forceRunAction: string | null = null
+  let forceRunCliArgs: Record<string, unknown> = {}
   if (
     !args.issueNumber &&
     !autoFallback &&
@@ -317,13 +318,20 @@ export async function runCi(argv: string[]): Promise<number> {
       const issueInput = parseInt(String(evt?.inputs?.issue_number ?? ""), 10)
       const sessionInput = String(evt?.inputs?.sessionId ?? "")
       const dutyInput = String(evt?.inputs?.duty ?? evt?.inputs?.executable ?? "").trim()
+      const messageInput = String(evt?.inputs?.message ?? "").trim()
       const noTarget = !sessionInput && !(Number.isFinite(issueInput) && issueInput > 0)
       // Explicit `duty` + no target → manual one-shot "Run now" of that
       // single duty (a scheduled / no-target folder-duty), bypassing the
       // cadence guard. A bare dispatch (no duty) still fans out to every
       // watch duty (duty-scheduler et al.).
-      if (noTarget && dutyInput) forceRunAction = dutyInput
-      else manualWorkflowDispatch = noTarget
+      if (noTarget && dutyInput) {
+        forceRunAction = dutyInput
+        if (dutyInput === "goal-manager" && messageInput) {
+          forceRunCliArgs = { goal: messageInput }
+        }
+      } else {
+        manualWorkflowDispatch = noTarget
+      }
     } catch {
       manualWorkflowDispatch = false
     }
@@ -333,6 +341,13 @@ export async function runCi(argv: string[]): Promise<number> {
     const route = resolveDutyAction(forceRunAction)
     if (!route) {
       process.stderr.write(`[kody] manual one-shot action '${forceRunAction}' has no duty action\n`)
+      return 64
+    }
+    if (
+      route.executable === "goal-manager" &&
+      typeof forceRunCliArgs.goal !== "string"
+    ) {
+      process.stderr.write("[kody] manual goal-manager run requires message goal id\n")
       return 64
     }
     process.stdout.write(`→ kody: manual one-shot run of duty action ${route.action} (${route.duty})\n\n`)
@@ -368,7 +383,7 @@ export async function runCi(argv: string[]): Promise<number> {
         action: route.action,
         duty: route.duty,
         executable: route.executable,
-        cliArgs: route.cliArgs,
+        cliArgs: { ...route.cliArgs, ...forceRunCliArgs },
         flavor: "instant",
         force: true,
       },

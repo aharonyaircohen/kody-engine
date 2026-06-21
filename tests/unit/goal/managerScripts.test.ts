@@ -1,10 +1,17 @@
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
+vi.mock("../../../src/issue.js", () => ({
+  gh: vi.fn(),
+}))
 
 import type { ManagedGoal } from "../../../src/goal/manager.js"
 import type { GoalState } from "../../../src/goal/state.js"
+import { gh } from "../../../src/issue.js"
 import { advanceManagedGoal } from "../../../src/scripts/advanceManagedGoal.js"
 import type { GoalCtx } from "../../../src/scripts/goalCtx.js"
 import { saveManagedGoalState } from "../../../src/scripts/saveManagedGoalState.js"
+
+const ghMock = vi.mocked(gh)
 
 function releaseGoal(overrides: Partial<ManagedGoal> = {}): ManagedGoal {
   return {
@@ -57,6 +64,10 @@ function fakeProfile() {
 }
 
 describe("advanceManagedGoal", () => {
+  beforeEach(() => {
+    ghMock.mockReset()
+  })
+
   it("sets an in-process duty handoff for first missing evidence", async () => {
     const ctx = fakeCtx(state(goalExtra()))
 
@@ -96,6 +107,69 @@ describe("advanceManagedGoal", () => {
       executable: "release-prepare",
       cliArgs: { goal: "release-v1-2-3" },
     })
+  })
+
+  it("creates an issue fact before dispatching a release route that needs issue", async () => {
+    ghMock.mockReturnValueOnce(JSON.stringify([])).mockReturnValueOnce("https://github.com/o/r/issues/321")
+
+    const ctx = fakeCtx(
+      state({
+        type: "release",
+        destination: { outcome: "Publish Kody Dashboard to production safely." },
+      }),
+    )
+
+    await advanceManagedGoal(ctx, fakeProfile())
+
+    expect(ctx.output.nextDispatch).toEqual({
+      duty: "release",
+      executable: "release-prepare",
+      cliArgs: { issue: 321, goal: "release-v1-2-3" },
+    })
+    expect(((ctx.data.goal as GoalCtx).raw as GoalState).extra.facts).toMatchObject({
+      issue: 321,
+      pendingEvidence: "releasePrExists",
+    })
+    expect(ghMock.mock.calls[0]?.[0]).toEqual([
+      "issue",
+      "list",
+      "--state",
+      "all",
+      "--limit",
+      "100",
+      "--json",
+      "number,body",
+    ])
+    expect(ghMock.mock.calls[1]?.[0]).toEqual([
+      "issue",
+      "create",
+      "--title",
+      "Release: Publish Kody Dashboard to production safely.",
+      "--body-file",
+      "-",
+    ])
+  })
+
+  it("reuses an existing managed-goal issue marker", async () => {
+    ghMock.mockReturnValueOnce(
+      JSON.stringify([{ number: 654, body: "hello\n<!-- kody-managed-goal: release-v1-2-3 -->" }]),
+    )
+
+    const ctx = fakeCtx(
+      state({
+        type: "release",
+        destination: { outcome: "Publish Kody Dashboard to production safely." },
+      }),
+    )
+
+    await advanceManagedGoal(ctx, fakeProfile())
+
+    expect(ctx.output.nextDispatch).toEqual({
+      duty: "release",
+      executable: "release-prepare",
+      cliArgs: { issue: 654, goal: "release-v1-2-3" },
+    })
+    expect(ghMock).toHaveBeenCalledTimes(1)
   })
 
   it("marks the loaded goal done when destination evidence is complete", async () => {
