@@ -184,10 +184,9 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     quiet: base.quiet,
     preloadedData: Object.keys(preloadedData).length > 0 ? preloadedData : undefined,
   }
-  input.cliArgs =
-    resolvedDuty && profileName === resolvedDuty.executable
-      ? { ...resolvedDuty.cliArgs, ...input.cliArgs }
-      : input.cliArgs
+  const shouldApplyResolvedDutyArgs =
+    valid.executable === undefined && resolvedDuty && profileName === resolvedDuty.executable
+  input.cliArgs = shouldApplyResolvedDutyArgs ? { ...resolvedDuty.cliArgs, ...input.cliArgs } : input.cliArgs
 
   const run = base.chain === false ? runExecutable : runExecutableChain
   return run(profileName, input)

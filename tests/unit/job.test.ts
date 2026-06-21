@@ -76,6 +76,27 @@ describe("runJob (Phase 1 seam)", () => {
     expect(input.preloadedData?.jobDuty).toBe("ci-health")
     expect(input.preloadedData?.jobExecutable).toBe("ci-check")
   })
+  it("preserves duty identity without injecting duty args when executable is explicit", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-goal-handoff-"))
+    const dutyDir = path.join(cwd, ".kody", "duties", "company-graph")
+    fs.mkdirSync(dutyDir, { recursive: true })
+    fs.writeFileSync(path.join(dutyDir, "profile.json"), JSON.stringify({ name: "company-graph" }))
+    fs.writeFileSync(path.join(dutyDir, "duty.md"), "# Company Graph\n")
+    await runJob(
+      {
+        duty: "company-graph",
+        executable: "company-graph",
+        cliArgs: { goal: "hourly-monitor-goal-smoke" },
+        flavor: "instant",
+      },
+      { cwd },
+    )
+    const [profile, input] = runExecutableChain.mock.calls[0]!
+    expect(profile).toBe("company-graph")
+    expect(input.cliArgs).toEqual({ goal: "hourly-monitor-goal-smoke" })
+    expect(input.preloadedData?.jobDuty).toBe("company-graph")
+    expect(input.preloadedData?.jobExecutable).toBe("company-graph")
+  })
 
   it("seeds inline why into preloadedData.jobWhy", async () => {
     await runJob(
