@@ -111,7 +111,7 @@ async function loadConfigSafe(): Promise<KodyConfig> {
       quality: { typecheck: "", lint: "", format: "", testUnit: "" },
       git: { defaultBranch: "main" },
       github: { owner: "unknown", repo: "unknown" },
-      state: { repo: "unknown/kody-state", path: "unknown" },
+      state: { repo: "https://github.com/unknown/kody-state", path: "unknown" },
       agent: { model: "claude/claude-sonnet-4" },
     }
   }

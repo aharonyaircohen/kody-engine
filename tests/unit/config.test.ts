@@ -62,6 +62,27 @@ describe("config: loadConfig", () => {
     expect(cfg.github.owner).toBe("o")
     expect(cfg.agent.model).toBe("minimax/m")
     expect(cfg.git.defaultBranch).toBe("main")
+    expect(cfg.state).toEqual({ repo: "https://github.com/o/kody-state", path: "r" })
+  })
+
+  it("accepts full GitHub URL for state repo", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "minimax/m" },
+      state: { repo: "https://github.com/o/kody-state", path: "r" },
+    })
+    expect(loadConfig(dir).state).toEqual({ repo: "https://github.com/o/kody-state", path: "r" })
+  })
+
+  it("keeps legacy owner/repo state repo references readable", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "minimax/m" },
+      state: { repo: "o/kody-state", path: "r" },
+    })
+    expect(loadConfig(dir).state).toEqual({ repo: "o/kody-state", path: "r" })
   })
 
   it("throws when kody.config.json missing", () => {

@@ -47,9 +47,22 @@ function is404(err: unknown): boolean {
 
 export function parseStateRepoSlug(slug: string, field = "stateRepo"): { owner: string; repo: string } {
   const value = slug.trim()
-  const parts = value.split("/")
+  let repoPath = value
+  if (/^https?:\/\//i.test(value)) {
+    let parsed: URL
+    try {
+      parsed = new URL(value)
+    } catch {
+      throw new Error(`kody.config.json: ${field} must be a GitHub repository URL`)
+    }
+    if (parsed.protocol !== "https:" || parsed.hostname !== "github.com") {
+      throw new Error(`kody.config.json: ${field} must be a https://github.com repository URL`)
+    }
+    repoPath = parsed.pathname.replace(/^\/+|\/+$/g, "").replace(/\.git$/i, "")
+  }
+  const parts = repoPath.split("/")
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    throw new Error(`kody.config.json: ${field} must look like "owner/repo"`)
+    throw new Error(`kody.config.json: ${field} must be a https://github.com/owner/repo URL`)
   }
 
   for (const part of parts) {

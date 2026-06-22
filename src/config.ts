@@ -312,7 +312,9 @@ function parseStateConfig(raw: Record<string, unknown>, github: Record<string, u
   const repoRaw = typeof raw.stateRepo === "string" ? raw.stateRepo : nested.repo
   const pathRaw = typeof raw.statePath === "string" ? raw.statePath : nested.path
   const stateRepo =
-    typeof repoRaw === "string" && repoRaw.trim().length > 0 ? repoRaw.trim() : `${String(github.owner)}/kody-state`
+    typeof repoRaw === "string" && repoRaw.trim().length > 0
+      ? repoRaw.trim()
+      : `https://github.com/${String(github.owner)}/kody-state`
   parseStateRepoSlug(stateRepo)
   const statePath = typeof pathRaw === "string" && pathRaw.trim().length > 0 ? pathRaw.trim() : String(github.repo)
   return {
