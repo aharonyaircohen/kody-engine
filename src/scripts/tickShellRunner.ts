@@ -15,7 +15,7 @@ export interface TickShellRunOptions {
 }
 
 export function runTickShellAndParse(opts: TickShellRunOptions): void {
-  const childEnv = buildTickChildEnv(process.env, opts.force)
+  const childEnv = buildTickChildEnv(process.env, opts.force, opts.loaded)
   const result = spawnSync("bash", [opts.scriptPath], {
     cwd: opts.ctx.cwd,
     env: childEnv,
@@ -58,7 +58,7 @@ export function runTickShellAndParse(opts: TickShellRunOptions): void {
   opts.ctx.data.nextJobState = parsed.envelope
 }
 
-export function buildTickChildEnv(parent: NodeJS.ProcessEnv, force: boolean): NodeJS.ProcessEnv {
+export function buildTickChildEnv(parent: NodeJS.ProcessEnv, force: boolean, loaded?: LoadedJobState): NodeJS.ProcessEnv {
   const allow = new Set([
     "PATH",
     "HOME",
@@ -88,6 +88,10 @@ export function buildTickChildEnv(parent: NodeJS.ProcessEnv, force: boolean): No
   for (const [key, value] of Object.entries(parent)) {
     if (value === undefined) continue
     if (allow.has(key) || key.startsWith("KODY_PUBLIC_")) env[key] = value
+  }
+  if (loaded) {
+    env.KODY_JOB_STATE_JSON = JSON.stringify(loaded.state)
+    env.KODY_JOB_STATE_PATH = loaded.path
   }
   if (force) env.KODY_FORCE = "1"
   return env

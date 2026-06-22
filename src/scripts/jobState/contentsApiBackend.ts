@@ -24,6 +24,10 @@ export interface ContentsApiBackendOptions {
   cwd?: string
 }
 
+function stateRepoJobsDir(jobsDir: string): string {
+  return jobsDir.replace(/^\.kody\/?/, "").replace(/\/+$/, "")
+}
+
 export class ContentsApiBackend implements JobStateBackend {
   readonly name = "contents-api"
   private readonly config: StateRepoConfig
@@ -33,7 +37,7 @@ export class ContentsApiBackend implements JobStateBackend {
   constructor(opts: ContentsApiBackendOptions) {
     resolveStateRepoConfig(opts.config)
     this.config = opts.config
-    this.jobsDir = opts.jobsDir
+    this.jobsDir = stateRepoJobsDir(opts.jobsDir)
     this.cwd = opts.cwd
   }
 

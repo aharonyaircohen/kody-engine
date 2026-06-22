@@ -127,7 +127,7 @@ kody-engine npm-publish       [--tag latest] [--access public] [--dry-run]
 kody-engine agent-responsibility-scheduler                                    # fan out due .kody/agent-responsibilities/<slug>/ folders
 kody-engine agent-responsibility-tick          --agentResponsibility <slug> [--force]        # one agent tick for one agentResponsibility
 kody-engine agent-responsibility-tick-scripted --agentResponsibility <slug> [--force]        # one deterministic tickScript agentResponsibility tick
-kody-engine goal-scheduler                                    # fan out active .kody/goals/instances/* state files
+kody-engine goal-scheduler                                    # fan out active goal instances in configured state repo
 kody-engine goal-manager      --goal <id>                     # advance one managed goal instance
 
 # setup, servers, and utilities

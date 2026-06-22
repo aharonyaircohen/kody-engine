@@ -75,11 +75,19 @@ describe("runScheduledAgentActionTick", () => {
           SECRET_TOKEN: "nope",
         },
         false,
+        {
+          path: "agent-responsibilities/demo/state.json",
+          handle: null,
+          state: { version: 1, rev: 3, cursor: "demo", data: { ok: true }, done: false },
+          created: false,
+        },
       ),
     ).toEqual({
       PATH: "/bin",
       KODY_DRY_RUN: "1",
       KODY_NO_COMMIT: "1",
+      KODY_JOB_STATE_JSON: JSON.stringify({ version: 1, rev: 3, cursor: "demo", data: { ok: true }, done: false }),
+      KODY_JOB_STATE_PATH: "agent-responsibilities/demo/state.json",
     })
   })
 

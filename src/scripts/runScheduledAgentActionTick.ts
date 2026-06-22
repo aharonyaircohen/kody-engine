@@ -23,11 +23,11 @@ export const runScheduledAgentActionTick: PreflightScript = async (ctx, profile,
   const slugArg = String(args?.slugArg ?? "agentResponsibility")
   const fenceLabel = String(args?.fenceLabel ?? "kody-job-next-state")
   const shell = String(args?.shell ?? "tick.sh")
-  const slug = String(ctx.args[slugArg] ?? "").trim()
+  const slug = String(args?.slug ?? ctx.args[slugArg] ?? "").trim()
 
   if (!slug) {
     ctx.output.exitCode = 99
-    ctx.output.reason = `runScheduledAgentActionTick: ctx.args.${slugArg} must be non-empty agentResponsibility slug`
+    ctx.output.reason = `runScheduledAgentActionTick: args.slug or ctx.args.${slugArg} must be non-empty agentResponsibility slug`
     return
   }
 

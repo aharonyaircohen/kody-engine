@@ -24,8 +24,8 @@ Goal templates and instances are physically separate:
 ```
 
 Templates are reusable definitions. Instances are live runs with facts and
-progress. Persisted runtime instances belong in `stateRepo`, not the consumer
-repo or a `kody-state` branch.
+progress. Persisted runtime instances belong in the configured state repo, not
+the consumer repo.
 
 Templates may come from `kody-store` or a repo-specific source. Store templates
 are shared defaults. Live instances are consumer-owned runtime state only.

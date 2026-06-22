@@ -1,8 +1,8 @@
 /**
  * Goal state persistence in the configured Kody state repo.
  *
- * Consumer repos no longer own a `.kody/goals` runtime tree or a `kody-state`
- * branch. The canonical file lives under:
+ * Consumer repos no longer own a `.kody/goals` runtime tree. The canonical file
+ * lives under:
  *
  *   <statePath>/goals/instances/<id>/state.json
  */
