@@ -7,6 +7,10 @@
     "owner": "aharonyaircohen",
     "repo": "kody-engine"
   },
+  "state": {
+    "repo": "https://github.com/aharonyaircohen/kody-state",
+    "path": "kody-engine"
+  },
   "git": {
     "defaultBranch": "main"
   },
