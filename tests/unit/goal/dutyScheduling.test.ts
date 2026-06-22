@@ -108,6 +108,29 @@ describe("standing goal duty scheduling", () => {
     expect(typeof status.nextEligibleAt).toBe("string")
   })
 
+  it("keeps route-free routines on the duty-cadence loop", async () => {
+    writeDuty("ci-health", { every: "15m", staff: "kody" })
+    const raw = goalState(["ci-health"])
+    raw.extra.type = "routine"
+    const ctx = fakeCtx(raw)
+
+    await advanceManagedGoal(ctx, {} as any, {})
+
+    expect(ctx.output.reason).toBe("dispatch ci-health: first check for 15m")
+    expect(ctx.output.nextDispatch).toEqual({
+      duty: "ci-health",
+      executable: "duty-tick",
+      cliArgs: { duty: "ci-health" },
+    })
+    const updatedGoal = ctx.data.goal as GoalCtx
+    expect(updatedGoal.raw!.state).toBe("active")
+    expect(updatedGoal.raw!.extra.stage).toBe("watching")
+    expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
+      mode: "duty-cadence",
+      lastDecision: { kind: "dispatch", duty: "ci-health" },
+    })
+  })
+
   it("passes duty slug to due executable duties that declare a duty input", async () => {
     writeDuty("auto-fix-ci", { every: "15m", staff: "kody", executable: "auto-fix-ci" })
     writeExecutable("auto-fix-ci", {

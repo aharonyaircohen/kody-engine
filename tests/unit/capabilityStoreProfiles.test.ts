@@ -19,8 +19,6 @@ const INTERNAL_EXECUTABLE_ONLY_PROFILES = [
   "goal-scheduler",
   "release",
   "task-job-fail-once",
-  "task-job-pass-a",
-  "task-job-pass-b",
   "task-jobs",
 ]
 

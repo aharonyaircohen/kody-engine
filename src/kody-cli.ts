@@ -338,15 +338,20 @@ export async function runCi(argv: string[]): Promise<number> {
   }
   if (forceRunAction) {
     const config = earlyConfig ?? loadConfig(cwd)
-    const route = resolveDutyAction(forceRunAction)
+    const manualGoalManager = forceRunAction === "goal-manager"
+    const route = manualGoalManager
+      ? {
+          action: "goal-manager",
+          duty: "goal-manager",
+          executable: "goal-manager",
+          cliArgs: forceRunCliArgs,
+        }
+      : resolveDutyAction(forceRunAction)
     if (!route) {
       process.stderr.write(`[kody] manual one-shot action '${forceRunAction}' has no duty action\n`)
       return 64
     }
-    if (
-      route.executable === "goal-manager" &&
-      typeof forceRunCliArgs.goal !== "string"
-    ) {
+    if (route.executable === "goal-manager" && typeof forceRunCliArgs.goal !== "string") {
       process.stderr.write("[kody] manual goal-manager run requires message goal id\n")
       return 64
     }
