@@ -58,6 +58,21 @@ function writeConfig(dir: string): void {
   )
 }
 
+function writeScheduledExecutable(dir: string, name: string): void {
+  const executableDir = path.join(dir, ".kody", "executables", name)
+  fs.mkdirSync(executableDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(executableDir, "profile.json"),
+    JSON.stringify({
+      name,
+      role: "watch",
+      kind: "scheduled",
+      schedule: "*/5 * * * *",
+      scripts: { preflight: [], postflight: [] },
+    }),
+  )
+}
+
 afterEach(() => {
   for (const [key, value] of Object.entries(previousEnv)) {
     if (value === undefined) delete process.env[key]
@@ -106,6 +121,32 @@ describe("kody-cli manual goal dispatch", () => {
     await expect(
       runCi(["--cwd", dir, "--skip-install", "--skip-litellm"]),
     ).resolves.toBe(64)
-    expect(mocks.runJob).not.toHaveBeenCalled()
+  expect(mocks.runJob).not.toHaveBeenCalled()
+})
+
+it("runs scheduled watch executables from manual workflow dispatch", async () => {
+  const dir = tmpDir()
+  writeConfig(dir)
+  writeScheduledExecutable(dir, "goal-scheduler")
+  previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
+  previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
+  process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
+  process.env.GITHUB_EVENT_PATH = writeEvent({
+    inputs: { executable: "goal-scheduler" },
   })
+
+  await expect(
+    runCi(["--cwd", dir, "--skip-install", "--skip-litellm"]),
+  ).resolves.toBe(0)
+
+  expect(mocks.runJob).toHaveBeenCalledTimes(1)
+  expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
+    action: "goal-scheduler",
+    duty: "goal-scheduler",
+    executable: "goal-scheduler",
+    cliArgs: {},
+    flavor: "instant",
+    force: true,
+  })
+})
 })

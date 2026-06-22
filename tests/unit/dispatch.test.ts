@@ -3,7 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { KodyConfig } from "../../src/config.js"
-import { autoDispatch } from "../../src/dispatch.js"
+import { autoDispatch, dispatchScheduledWatches } from "../../src/dispatch.js"
 
 function writeEvent(body: unknown): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-dispatch-"))
@@ -181,6 +181,43 @@ describe("dispatch: schedule event", () => {
     process.env.GITHUB_EVENT_NAME = "schedule"
     process.env.GITHUB_EVENT_PATH = writeEvent({ schedule: "*/5 * * * *" })
     expect(autoDispatch()).toBeNull()
+  })
+
+  it("fans out scheduled watch executables even without duty actions", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-scheduled-watch-"))
+    const prevCwd = process.cwd()
+    try {
+      process.chdir(tmp)
+      const dir = path.join(tmp, ".kody", "executables", "goal-scheduler")
+      fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(
+        path.join(dir, "profile.json"),
+        JSON.stringify({
+          name: "goal-scheduler",
+          role: "watch",
+          kind: "scheduled",
+          schedule: "*/5 * * * *",
+          scripts: { preflight: [], postflight: [] },
+        }),
+      )
+
+      const matches = dispatchScheduledWatches({
+        now: new Date("2026-06-22T07:00:30Z"),
+        windowSec: 300,
+      })
+      expect(matches).toContainEqual(
+        expect.objectContaining({
+          action: "goal-scheduler",
+          duty: "goal-scheduler",
+          executable: "goal-scheduler",
+          cliArgs: {},
+          target: 0,
+        }),
+      )
+    } finally {
+      process.chdir(prevCwd)
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
   })
 })
 

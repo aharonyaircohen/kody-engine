@@ -485,13 +485,17 @@ export function dispatchScheduledWatches(opts?: { now?: Date; windowSec?: number
       }
     }
     const route = resolveConfiguredAction(exe.name)
-    if (!route) {
-      process.stderr.write(
-        `[kody] dispatchScheduledWatches: '${exe.name}' is scheduled but has no duty action; skipping\n`,
-      )
-      continue
-    }
-    out.push({ ...route, cliArgs: route.cliArgs, target: 0 })
+    out.push(
+      route
+        ? { ...route, cliArgs: route.cliArgs, target: 0 }
+        : {
+            action: exe.name,
+            duty: exe.name,
+            executable: exe.name,
+            cliArgs: {},
+            target: 0,
+          },
+    )
   }
   return out
 }

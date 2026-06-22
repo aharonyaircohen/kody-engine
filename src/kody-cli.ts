@@ -339,6 +339,13 @@ export async function runCi(argv: string[]): Promise<number> {
   if (forceRunAction) {
     const config = earlyConfig ?? loadConfig(cwd)
     const manualGoalManager = forceRunAction === "goal-manager"
+    const dutyRoute = manualGoalManager ? null : resolveDutyAction(forceRunAction)
+    const scheduledWatchRoute =
+      manualGoalManager || dutyRoute
+        ? undefined
+        : dispatchScheduledWatches({ force: true }).find(
+            (match) => match.action === forceRunAction || match.executable === forceRunAction,
+          )
     const route = manualGoalManager
       ? {
           action: "goal-manager",
@@ -346,7 +353,7 @@ export async function runCi(argv: string[]): Promise<number> {
           executable: "goal-manager",
           cliArgs: forceRunCliArgs,
         }
-      : resolveDutyAction(forceRunAction)
+      : (dutyRoute ?? scheduledWatchRoute)
     if (!route) {
       process.stderr.write(`[kody] manual one-shot action '${forceRunAction}' has no duty action\n`)
       return 64
@@ -355,7 +362,7 @@ export async function runCi(argv: string[]): Promise<number> {
       process.stderr.write("[kody] manual goal-manager run requires message goal id\n")
       return 64
     }
-    process.stdout.write(`→ kody: manual one-shot run of duty action ${route.action} (${route.duty})\n\n`)
+    process.stdout.write(`→ kody: manual one-shot run action ${route.action} (${route.duty})\n\n`)
     try {
       // Same preflight as the routed path: secrets, auth, deps, LiteLLM, git.
       // Without this the duty's agent has no LiteLLM proxy (non-Anthropic
