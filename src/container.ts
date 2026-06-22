@@ -13,8 +13,8 @@
 
 import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
-import { emitEvent } from "./events.js"
 import type { ContainerChild, Context, InputSpec, Profile } from "./agent-actions/types.js"
+import { emitEvent } from "./events.js"
 import { type ExecutorInput, type ExecutorOutput, resolveProfilePath, runAgentAction } from "./executor.js"
 import { loadProfile } from "./profile.js"
 import { type Action, emptyState, readTaskState, type TaskState, type TaskTarget } from "./state.js"
@@ -361,9 +361,9 @@ function resetWorkingTree(cwd: string): void {
 /**
  * Read the latest task state for the container's routing decision.
  *
- * Each child writes its outcome to the comment thread of whatever target it
+ * Each child writes its outcome to task state for whatever target it
  * ran against (saveTaskState reads `ctx.data.commentTargetType`). A child
- * with `target: "pr"` therefore writes its action to the PR's state comment,
+ * with `target: "pr"` therefore writes its action to the PR's state file,
  * not the issue's — so the container must read from that same target to see
  * the freshly-written REVIEW_ or FIX_ action. Reading the issue after a `pr`
  * child returns stale state (the prior `run` action) and the wildcard

@@ -38,10 +38,10 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { AGENT_RESPONSIBILITY_MCP_TOOL_NAMES } from "../agent-responsibilityMcp.js"
 import type { PreflightScript } from "../agent-actions/types.js"
-import { resolveAgentResponsibilityFolder } from "../registry.js"
+import { AGENT_RESPONSIBILITY_MCP_TOOL_NAMES } from "../agent-responsibilityMcp.js"
 import { resolveAgentFile } from "../agents.js"
+import { resolveAgentResponsibilityFolder } from "../registry.js"
 import { resolveBackend } from "./jobState/index.js"
 
 const AGENT_RESPONSIBILITY_TOOL_PALETTE: ReadonlySet<string> = new Set(AGENT_RESPONSIBILITY_MCP_TOOL_NAMES)
@@ -57,7 +57,9 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
 
   const agentResponsibility = resolveAgentResponsibilityFolder(slug, path.join(ctx.cwd, jobsDir))
   if (!agentResponsibility) {
-    throw new Error(`loadJobFromFile: agentResponsibility folder not found or incomplete: ${path.join(ctx.cwd, jobsDir, slug)}`)
+    throw new Error(
+      `loadJobFromFile: agentResponsibility folder not found or incomplete: ${path.join(ctx.cwd, jobsDir, slug)}`,
+    )
   }
   const { title, body, config } = agentResponsibility
 
@@ -78,7 +80,9 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
   if (agentSlug) {
     const agentPath = resolveAgentFile(ctx.cwd, agentSlug, agentsDir)
     if (!fs.existsSync(agentPath)) {
-      throw new Error(`loadJobFromFile: agentResponsibility '${slug}' declares agent '${agentSlug}' but ${agentPath} does not exist`)
+      throw new Error(
+        `loadJobFromFile: agentResponsibility '${slug}' declares agent '${agentSlug}' but ${agentPath} does not exist`,
+      )
     }
     const agentRaw = fs.readFileSync(agentPath, "utf-8")
     const parsed = parseJobFile(agentRaw, agentSlug)
@@ -103,7 +107,9 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
   // as plain comments (e.g. the QA agentResponsibilities) need this — the engine only
   // auto-stamps recs sent via the `recommend_to_operator` tool. The dashboard
   // reads the stamp to key trust per agentResponsibility instead of per agent.
-  ctx.data.jobIntent = body.replace(/\{\{\s*mentions\s*\}\}/g, mentions).replace(/\{\{\s*agentResponsibility\s*\}\}/g, slug)
+  ctx.data.jobIntent = body
+    .replace(/\{\{\s*mentions\s*\}\}/g, mentions)
+    .replace(/\{\{\s*agentResponsibility\s*\}\}/g, slug)
   ctx.data.jobState = loaded
   ctx.data.jobStateJson = JSON.stringify(loaded.state, null, 2)
   ctx.data.agentSlug = agentSlug

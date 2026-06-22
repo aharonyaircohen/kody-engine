@@ -139,6 +139,8 @@ describe("renderScheduledWorkflow", () => {
     expect(yml).toMatch(/uses: actions\/setup-python/)
     expect(yml).toMatch(/python-version:/)
     expect(yml).toContain("kody-engine exec agent-responsibility-scheduler")
-    expect(yml).toContain("\n        run: npx -y -p @kody-ade/kody-engine@latest kody-engine exec agent-responsibility-scheduler")
+    expect(yml).toContain(
+      "\n        run: npx -y -p @kody-ade/kody-engine@latest kody-engine exec agent-responsibility-scheduler",
+    )
   })
 })

@@ -20,6 +20,7 @@ function fakeCtx(data: Record<string, unknown>, args: Record<string, unknown> = 
     cwd: "/repo",
     config: {
       github: { owner: "o", repo: "r" },
+      state: { repo: "o/kody-state", path: "r" },
       git: { defaultBranch: "main" },
       quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       agent: { model: "anthropic/claude-haiku-4-5-20251001" },
@@ -67,7 +68,7 @@ describe("applyAgentResponsibilityReports", () => {
       null,
     )
 
-    const [, , goalId, next] = putGoalStateMock.mock.calls[0]!
+    const [, goalId, next] = putGoalStateMock.mock.calls[0]!
     expect(goalId).toBe("release-aguy")
     expect((next as GoalState).extra.facts).toEqual({ releasePrExists: true, releasePr: 123 })
   })
@@ -82,7 +83,7 @@ describe("applyAgentResponsibilityReports", () => {
 
     await applyAgentResponsibilityReports(fakeCtx({}), fakeProfile(), agentResult)
 
-    const [, , goalId, next] = putGoalStateMock.mock.calls[0]!
+    const [, goalId, next] = putGoalStateMock.mock.calls[0]!
     expect(goalId).toBe("release-aguy")
     expect((next as GoalState).extra.facts).toMatchObject({ releasePrExists: true })
   })
@@ -109,10 +110,13 @@ describe("applyAgentResponsibilityReports", () => {
       null,
     )
 
-    const [, , goalId, next] = putGoalStateMock.mock.calls[0]!
+    const [, goalId, next] = putGoalStateMock.mock.calls[0]!
     expect(goalId).toBe("release-aguy")
     expect((next as GoalState).extra.facts).toEqual({ releasePrExists: true, releasePr: 123 })
-    expect((next as GoalState).extra.lastAgentResponsibilityResult).toMatchObject({ status: "pass", summary: "Release PR exists." })
+    expect((next as GoalState).extra.lastAgentResponsibilityResult).toMatchObject({
+      status: "pass",
+      summary: "Release PR exists.",
+    })
   })
 
   it("applies agentResponsibility result failure as agentGoal evidence false plus blocker", async () => {
@@ -137,7 +141,7 @@ describe("applyAgentResponsibilityReports", () => {
       null,
     )
 
-    const [, , , next] = putGoalStateMock.mock.calls[0]!
+    const [, , next] = putGoalStateMock.mock.calls[0]!
     expect((next as GoalState).extra.facts).toEqual({ releasePrExists: false, reason: "ci" })
     expect((next as GoalState).extra.blockers).toEqual(["Release PR failed validation."])
   })
@@ -147,7 +151,11 @@ describe("applyAgentResponsibilityReports", () => {
     fetchGoalStateMock.mockReturnValueOnce(prior)
 
     await applyAgentResponsibilityReports(
-      fakeCtx({ agentResponsibilityReports: [{ target: { type: "goal", id: "release-aguy" }, evidence: { releasePrExists: true } }] }),
+      fakeCtx({
+        agentResponsibilityReports: [
+          { target: { type: "goal", id: "release-aguy" }, evidence: { releasePrExists: true } },
+        ],
+      }),
       fakeProfile(),
       null,
     )

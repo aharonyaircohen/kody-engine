@@ -65,10 +65,10 @@ Every run is a reducer application:
 (state, { agentAction, args, action })  ->  newState
 ```
 
-- `state` is read from the store comment at run start.
+- `state` is read from the configured Kody state repo at run start.
 - `agentAction` does its work, producing an action.
-- The postflight that writes the state comment is the reducer: it merges the action into state.
-- `newState` is written back to the store comment; the previous entry is appended to the history section.
+- The postflight that writes task state is the reducer: it merges the action into state.
+- `newState` is written back to the state repo file; the previous entry is appended to the history section.
 
 ## State structure
 

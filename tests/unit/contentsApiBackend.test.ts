@@ -28,8 +28,7 @@ function envelope(overrides: Partial<StateEnvelope> = {}): StateEnvelope {
 
 function backend() {
   return new ContentsApiBackend({
-    owner: "acme",
-    repo: "widgets",
+    config: { state: { repo: "acme/kody-state", path: "widgets" } },
     jobsDir: ".kody/jobs",
     cwd: "/tmp/repo",
   })
@@ -41,9 +40,8 @@ describe("ContentsApiBackend", () => {
   })
 
   describe("constructor", () => {
-    it("requires owner and repo", () => {
-      expect(() => new ContentsApiBackend({ owner: "", repo: "r", jobsDir: "x" })).toThrow(/owner.*required/i)
-      expect(() => new ContentsApiBackend({ owner: "o", repo: "", jobsDir: "x" })).toThrow(/repo.*required/i)
+    it("requires state or github config", () => {
+      expect(() => new ContentsApiBackend({ config: {}, jobsDir: "x" })).toThrow(/state.*github/i)
     })
   })
 
@@ -108,8 +106,8 @@ describe("ContentsApiBackend", () => {
     })
   })
 
-  // `save` calls ensureStateBranch first (a `gh` ref read) before the PUT, so
-  // the PUT is not necessarily call[0]. Locate it by the "PUT" arg.
+  // `save` may issue reads before the PUT, so the PUT is not necessarily
+  // call[0]. Locate it by the "PUT" arg.
   function putCall() {
     const call = gh.mock.calls.find((c: unknown[]) => Array.isArray(c[0]) && (c[0] as string[]).includes("PUT"))
     if (!call) throw new Error("no PUT gh call recorded")
@@ -197,8 +195,8 @@ describe("ContentsApiBackend", () => {
       })
     }
 
-    // Route gh by args: ref read (ensureStateBranch) → exists; GET contents →
-    // current remote; PUT → scripted sequence (first throws, then succeeds).
+    // Route gh by args: GET contents → current remote; PUT → scripted sequence
+    // (first throws, then succeeds).
     function routeGh(currentRemote: StateEnvelope, freshSha: string, putResults: Array<"ok" | string>) {
       let putIdx = 0
       gh.mockImplementation((args: string[]) => {

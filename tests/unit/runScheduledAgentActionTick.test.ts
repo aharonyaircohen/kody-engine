@@ -3,10 +3,9 @@ import * as os from "node:os"
 import * as path from "node:path"
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-
-import type { KodyConfig } from "../../src/config.js"
-import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import type { Context, Profile } from "../../src/agent-actions/types.js"
+import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
+import type { KodyConfig } from "../../src/config.js"
 import { runScheduledAgentActionTick } from "../../src/scripts/runScheduledAgentActionTick.js"
 import { buildTickChildEnv } from "../../src/scripts/tickShellRunner.js"
 

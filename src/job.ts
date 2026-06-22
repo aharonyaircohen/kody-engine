@@ -11,9 +11,9 @@
  */
 
 import * as path from "node:path"
+import type { Job, JobFlavor } from "./agent-actions/types.js"
 import type { KodyConfig } from "./config.js"
 import type { DispatchResult } from "./dispatch.js"
-import type { Job, JobFlavor } from "./agent-actions/types.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
 import { runAgentAction, runAgentActionChain } from "./executor.js"
 import { resolveAgentResponsibilityAction, resolveAgentResponsibilityFolder } from "./registry.js"
@@ -122,7 +122,9 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   const valid = validateJob(job)
   const action = valid.action ?? valid.agentResponsibility
   const projectAgentResponsibilitiesRoot = path.join(base.cwd, ".kody", "agent-responsibilities")
-  const resolvedAgentResponsibility = action ? resolveAgentResponsibilityAction(action, projectAgentResponsibilitiesRoot) : null
+  const resolvedAgentResponsibility = action
+    ? resolveAgentResponsibilityAction(action, projectAgentResponsibilitiesRoot)
+    : null
   const agentResponsibilityIdentity = valid.agentResponsibility ?? resolvedAgentResponsibility?.agentResponsibility
   const agentResponsibilityContext = loadAgentResponsibilityContext(agentResponsibilityIdentity, base.cwd)
   const explicitAgentActionOnly =
@@ -139,7 +141,9 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     (agentResponsibilityContext?.config.tickScript ? "agent-responsibility-tick-scripted" : undefined)
   const profileName = valid.agentAction ?? agentResponsibilitySelectedAgentAction
   if (!profileName) {
-    throw new InvalidJobError(`job agentResponsibility resolves to no agentAction: ${agentResponsibilityIdentity ?? action}`)
+    throw new InvalidJobError(
+      `job agentResponsibility resolves to no agentAction: ${agentResponsibilityIdentity ?? action}`,
+    )
   }
 
   const preloadedData: Record<string, unknown> = { ...(base.preloadedData ?? {}) }
@@ -150,7 +154,8 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   preloadedData.jobFlavor = valid.flavor
   if (valid.target !== undefined) preloadedData.jobTarget = valid.target
   if (valid.action !== undefined && valid.action.length > 0) preloadedData.jobAction = valid.action
-  if (agentResponsibilityIdentity !== undefined && agentResponsibilityIdentity.length > 0) preloadedData.jobAgentResponsibility = agentResponsibilityIdentity
+  if (agentResponsibilityIdentity !== undefined && agentResponsibilityIdentity.length > 0)
+    preloadedData.jobAgentResponsibility = agentResponsibilityIdentity
   const executableIdentity = profileName
   if (executableIdentity !== undefined && executableIdentity.length > 0)
     preloadedData.jobAgentAction = executableIdentity
@@ -161,7 +166,8 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     preloadedData.agentResponsibilityTitle = agentResponsibilityContext.title
     preloadedData.dutyIntent = agentResponsibilityContext.body
     preloadedData.jobIntent = agentResponsibilityContext.body
-    if (preloadedData.jobAgentResponsibility === undefined) preloadedData.jobAgentResponsibility = agentResponsibilityContext.slug
+    if (preloadedData.jobAgentResponsibility === undefined)
+      preloadedData.jobAgentResponsibility = agentResponsibilityContext.slug
     if (agentResponsibilityContext.config.agent && preloadedData.jobAgent === undefined) {
       preloadedData.jobAgent = agentResponsibilityContext.config.agent
     }
@@ -189,14 +195,21 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     preloadedData: Object.keys(preloadedData).length > 0 ? preloadedData : undefined,
   }
   const shouldApplyResolvedAgentResponsibilityArgs =
-    valid.agentAction === undefined && resolvedAgentResponsibility && profileName === resolvedAgentResponsibility.agentAction
-  input.cliArgs = shouldApplyResolvedAgentResponsibilityArgs ? { ...resolvedAgentResponsibility.cliArgs, ...input.cliArgs } : input.cliArgs
+    valid.agentAction === undefined &&
+    resolvedAgentResponsibility &&
+    profileName === resolvedAgentResponsibility.agentAction
+  input.cliArgs = shouldApplyResolvedAgentResponsibilityArgs
+    ? { ...resolvedAgentResponsibility.cliArgs, ...input.cliArgs }
+    : input.cliArgs
 
   const run = base.chain === false ? runAgentAction : runAgentActionChain
   return run(profileName, input)
 }
 
-function loadAgentResponsibilityContext(slug: string | undefined, cwd: string): ReturnType<typeof resolveAgentResponsibilityFolder> {
+function loadAgentResponsibilityContext(
+  slug: string | undefined,
+  cwd: string,
+): ReturnType<typeof resolveAgentResponsibilityFolder> {
   if (!slug) return null
   return resolveAgentResponsibilityFolder(slug, path.join(cwd, ".kody", "agent-responsibilities"))
 }

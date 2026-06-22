@@ -455,7 +455,11 @@ export async function runCi(argv: string[]): Promise<number> {
       )
       return 0
     }
-    if (outcome.kind === "silent" && earlyConfigError && outcome.reason.includes("no default agentResponsibility action configured")) {
+    if (
+      outcome.kind === "silent" &&
+      earlyConfigError &&
+      outcome.reason.includes("no default agentResponsibility action configured")
+    ) {
       process.stderr.write(`[kody] config error: ${earlyConfigError.message}\n`)
       return 64
     }
@@ -509,7 +513,9 @@ export async function runCi(argv: string[]): Promise<number> {
     const buildOnly = dispatch.agentAction === "preview-build"
 
     if (args.skipInstall || buildOnly) {
-      process.stdout.write(`→ kody: skipping dep install (${buildOnly ? "build-only agentAction" : "--skip-install"})\n`)
+      process.stdout.write(
+        `→ kody: skipping dep install (${buildOnly ? "build-only agentAction" : "--skip-install"})\n`,
+      )
     } else {
       const code = installDeps(pm, cwd)
       if (code !== 0) {
@@ -628,7 +634,9 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
   // restore the legacy behaviour while the new mode bakes in.
   const serial = process.env.KODY_SERIAL_WATCHES === "1"
   const runWatch = async (match: DispatchResult): Promise<number> => {
-    process.stdout.write(`\n→ kody: running watch agentResponsibility \`${match.agentResponsibility}\` (${match.agentAction})\n`)
+    process.stdout.write(
+      `\n→ kody: running watch agentResponsibility \`${match.agentResponsibility}\` (${match.agentAction})\n`,
+    )
     try {
       const result = await runJob(
         mintScheduledJob({

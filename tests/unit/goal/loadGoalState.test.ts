@@ -4,6 +4,7 @@ vi.mock("../../../src/goal/stateStore.js", () => ({
   fetchGoalState: vi.fn(),
 }))
 
+import type { Context, Profile } from "../../../src/agent-actions/types.js"
 import type { GoalState } from "../../../src/goal/state.js"
 import { fetchGoalState } from "../../../src/goal/stateStore.js"
 import { loadGoalState } from "../../../src/scripts/loadGoalState.js"
@@ -32,7 +33,7 @@ function fakeCtx() {
     },
     data: {},
     output: {},
-  } as any
+  } as unknown as Context
 }
 
 beforeEach(() => {
@@ -45,15 +46,21 @@ afterEach(() => {
 })
 
 describe("loadGoalState", () => {
-  it("retries state branch reads before treating a goal as missing", async () => {
+  it("retries state repo reads before treating a goal as missing", async () => {
     const state = goalState()
     vi.mocked(fetchGoalState).mockReturnValueOnce(null).mockReturnValueOnce(state)
 
     const ctx = fakeCtx()
-    await loadGoalState(ctx, {} as any)
+    await loadGoalState(ctx, {} as unknown as Profile)
 
     expect(fetchGoalState).toHaveBeenCalledTimes(2)
-    expect(fetchGoalState).toHaveBeenCalledWith("acme", "widgets", "release-v1", "/tmp/repo")
+    expect(fetchGoalState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        github: { owner: "acme", repo: "widgets" },
+      }),
+      "release-v1",
+      "/tmp/repo",
+    )
     expect(ctx.skipAgent).toBeUndefined()
     expect(ctx.output.reason).toBeUndefined()
     expect(ctx.data.goal).toEqual({
@@ -68,7 +75,7 @@ describe("loadGoalState", () => {
     vi.mocked(fetchGoalState).mockReturnValue(null)
 
     const ctx = fakeCtx()
-    await loadGoalState(ctx, {} as any)
+    await loadGoalState(ctx, {} as unknown as Profile)
 
     expect(fetchGoalState).toHaveBeenCalledTimes(3)
     expect(ctx.skipAgent).toBe(true)

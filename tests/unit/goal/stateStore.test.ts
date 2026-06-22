@@ -4,14 +4,12 @@ vi.mock("../../../src/issue.js", () => ({
   gh: vi.fn(),
 }))
 
-vi.mock("../../../src/stateBranch.js", () => ({
-  STATE_BRANCH: "kody-state",
-  ensureStateBranch: vi.fn(),
-}))
-
 import { fetchGoalState, putGoalState } from "../../../src/goal/stateStore.js"
 import { gh } from "../../../src/issue.js"
-import { ensureStateBranch } from "../../../src/stateBranch.js"
+
+const config = {
+  state: { repo: "acme/kody-state", path: "widgets" },
+}
 
 function b64(text: string): string {
   return Buffer.from(text, "utf-8").toString("base64")
@@ -22,17 +20,20 @@ beforeEach(() => {
 })
 
 describe("goal state store", () => {
-  it("returns null when the state file is missing", () => {
+  it("returns null when state file is missing", () => {
     vi.mocked(gh).mockImplementation(() => {
       throw new Error("HTTP 404 Not Found")
     })
 
-    expect(fetchGoalState("acme", "widgets", "release")).toBeNull()
+    expect(fetchGoalState(config, "release")).toBeNull()
   })
 
-  it("reads and decodes goal state from kody-state", () => {
+  it("reads and decodes goal state from the configured state repo", () => {
     vi.mocked(gh).mockReturnValue(
       JSON.stringify({
+        sha: "abc",
+        type: "file",
+        encoding: "base64",
         content: b64(
           JSON.stringify({
             state: "active",
@@ -47,47 +48,35 @@ describe("goal state store", () => {
       }),
     )
 
-    const state = fetchGoalState("acme", "widgets", "release")
+    const state = fetchGoalState(config, "release")
 
     expect(state?.state).toBe("active")
     expect(state?.extra.type).toBe("release")
     expect(vi.mocked(gh).mock.calls[0]?.[0]).toEqual([
       "api",
-      "/repos/acme/widgets/contents/.kody/goals/instances/release/state.json?ref=kody-state",
+      "/repos/acme/kody-state/contents/widgets/goals/instances/release/state.json",
     ])
   })
 
-  it("writes goal state with the current file sha", () => {
-    vi.mocked(gh).mockImplementation((args, opts) => {
-      if (args[1] === "/repos/acme/widgets/contents/.kody/goals/instances/release/state.json?ref=kody-state") {
-        return JSON.stringify({ sha: "abc123" })
-      }
-      if (args[1] === "--method") {
-        expect(JSON.parse(String(opts?.input))).toMatchObject({
-          message: "update goal",
-          branch: "kody-state",
-          sha: "abc123",
-        })
-        return JSON.stringify({ ok: true })
+  it("writes goal state with current file sha", () => {
+    vi.mocked(gh).mockImplementation((args, _opts) => {
+      const apiPath = args.find(
+        (arg) => arg === "/repos/acme/kody-state/contents/widgets/goals/instances/release/state.json",
+      )
+      if (apiPath) {
+        if (args.includes("--method")) return ""
+        return JSON.stringify({ sha: "old", type: "file", encoding: "base64", content: b64("{}") })
       }
       throw new Error(`unexpected gh call: ${args.join(" ")}`)
     })
 
-    putGoalState(
-      "acme",
-      "widgets",
-      "release",
-      { state: "done", extra: { type: "release" } },
-      "update goal",
-      "/tmp/repo",
-    )
+    putGoalState(config, "release", { state: "done", extra: { type: "release" } }, "update goal", "/tmp/repo")
 
-    expect(ensureStateBranch).toHaveBeenCalledWith("acme", "widgets", "/tmp/repo")
     expect(vi.mocked(gh).mock.calls.at(-1)?.[0]).toEqual([
       "api",
       "--method",
       "PUT",
-      "/repos/acme/widgets/contents/.kody/goals/instances/release/state.json",
+      "/repos/acme/kody-state/contents/widgets/goals/instances/release/state.json",
       "--input",
       "-",
     ])

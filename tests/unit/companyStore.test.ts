@@ -3,9 +3,9 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
-import { listAgentResponsibilityActions, listAgentActions, resolveAgentAction } from "../../src/registry.js"
 import { loadAgentIdentity } from "../../src/agents.js"
+import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
+import { listAgentActions, listAgentResponsibilityActions, resolveAgentAction } from "../../src/registry.js"
 
 let tmp: string
 let cwdBefore: string
@@ -63,7 +63,9 @@ describe("company store resolution", () => {
     expect(fs.realpathSync(resolveAgentAction("store-exe")!)).toBe(
       fs.realpathSync(path.join(consumer, ".kody", "agent-actions", "store-exe", "profile.json")),
     )
-    expect(listAgentResponsibilityActions().find((item) => item.action === "store-agent-responsibility")?.source).toBe("project-folder")
+    expect(listAgentResponsibilityActions().find((item) => item.action === "store-agent-responsibility")?.source).toBe(
+      "project-folder",
+    )
     expect(loadAgentIdentity(consumer, "cto")).toBe("Local CTO agent.")
   })
 })
@@ -97,7 +99,11 @@ function writeAgentAction(root: string, slug: string, profile: Record<string, un
   fs.writeFileSync(path.join(dir, "profile.json"), `${JSON.stringify(profile)}\n`)
 }
 
-function writeAgentResponsibility(root: string, slug: string, input: { profile: Record<string, unknown>; body: string }): void {
+function writeAgentResponsibility(
+  root: string,
+  slug: string,
+  input: { profile: Record<string, unknown>; body: string },
+): void {
   const dir = path.join(root, slug)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "profile.json"), `${JSON.stringify(input.profile)}\n`)

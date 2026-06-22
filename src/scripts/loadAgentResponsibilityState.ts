@@ -23,8 +23,8 @@
  * run with no memory — the same one agentResponsibility shape, statefulness opted in by config.
  */
 
-import { AGENT_RESPONSIBILITY_MCP_TOOL_NAMES } from "../agent-responsibilityMcp.js"
 import type { PreflightScript } from "../agent-actions/types.js"
+import { AGENT_RESPONSIBILITY_MCP_TOOL_NAMES } from "../agent-responsibilityMcp.js"
 import { resolveBackend } from "./jobState/index.js"
 
 const AGENT_RESPONSIBILITY_TOOL_PALETTE: ReadonlySet<string> = new Set(AGENT_RESPONSIBILITY_MCP_TOOL_NAMES)

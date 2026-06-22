@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
 
 import { managedGoalFromState } from "../../../src/goal/manager.js"
-import { expandManagedGoalState } from "../../../src/goal/typeDefinitions.js"
 import type { GoalState } from "../../../src/goal/state.js"
+import { expandManagedGoalState } from "../../../src/goal/typeDefinitions.js"
 
 describe("expandManagedGoalState", () => {
   it("expands a three-field release goal into a runnable managed goal", () => {
@@ -32,13 +32,13 @@ describe("expandManagedGoalState", () => {
           agentAction: "release-prepare",
           args: { issue: { fact: "issue" }, goal: { fact: "goalId" } },
         },
-          {
-            stage: "merge",
-            evidence: "mainMerged",
-            agentResponsibility: "release-merge",
-            agentAction: "release-merge",
-            args: { pr: { fact: "releasePr" }, issue: { fact: "issue" }, goal: { fact: "goalId" } },
-          },
+        {
+          stage: "merge",
+          evidence: "mainMerged",
+          agentResponsibility: "release-merge",
+          agentAction: "release-merge",
+          args: { pr: { fact: "releasePr" }, issue: { fact: "issue" }, goal: { fact: "goalId" } },
+        },
         {
           stage: "publish",
           evidence: "productionDeployed",
@@ -72,7 +72,9 @@ describe("expandManagedGoalState", () => {
       evidence: ["customEvidence"],
     })
     expect(expanded.extra.agentResponsibilities).toEqual(["custom-agentResponsibility"])
-    expect(expanded.extra.route).toEqual([{ stage: "custom", evidence: "customEvidence", agentResponsibility: "custom-agentResponsibility" }])
+    expect(expanded.extra.route).toEqual([
+      { stage: "custom", evidence: "customEvidence", agentResponsibility: "custom-agentResponsibility" },
+    ])
     expect(expanded.extra.facts).toEqual({ issue: 12 })
     expect(expanded.extra.blockers).toEqual(["keep"])
   })

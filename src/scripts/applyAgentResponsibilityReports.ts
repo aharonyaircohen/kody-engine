@@ -1,18 +1,18 @@
 import type { AgentResult } from "../agent.js"
+import type { PostflightScript } from "../agent-actions/types.js"
 import {
-  applyAgentResponsibilityReportToGoalState,
   type AgentResponsibilityReport,
+  applyAgentResponsibilityReportToGoalState,
   parseAgentResponsibilityReport,
   parseAgentResponsibilityReportsFromText,
 } from "../agent-responsibilityReport.js"
 import {
-  applyAgentResponsibilityResultToObjectiveState,
   type AgentResponsibilityResult,
+  applyAgentResponsibilityResultToObjectiveState,
   parseAgentResponsibilityResult,
   parseAgentResponsibilityResultsFromText,
 } from "../agent-responsibilityResult.js"
-import type { PostflightScript } from "../agent-actions/types.js"
-import { nowIso, serializeGoalState, type GoalState } from "../goal/state.js"
+import { type GoalState, nowIso, serializeGoalState } from "../goal/state.js"
 import { fetchGoalState, putGoalState } from "../goal/stateStore.js"
 
 export const applyAgentResponsibilityReports: PostflightScript = async (ctx, _profile, agentResult) => {
@@ -21,21 +21,14 @@ export const applyAgentResponsibilityReports: PostflightScript = async (ctx, _pr
   const resultGoalId = typeof ctx.args.goal === "string" && ctx.args.goal.length > 0 ? ctx.args.goal : null
   if (reports.length === 0 && (results.length === 0 || !resultGoalId)) return
 
-  const owner = ctx.config.github?.owner
-  const repo = ctx.config.github?.repo
-  if (!owner || !repo) {
-    process.stderr.write("[kody agentResponsibility-report] missing github owner/repo; cannot apply reports\n")
-    return
-  }
-
   const reportsByGoal = groupGoalReports(reports)
   const goalIds = new Set(reportsByGoal.keys())
   if (results.length > 0 && resultGoalId) goalIds.add(resultGoalId)
 
   for (const goalId of goalIds) {
-    const prior = fetchGoalState(owner, repo, goalId, ctx.cwd)
+    const prior = fetchGoalState(ctx.config, goalId, ctx.cwd)
     if (!prior) {
-      process.stderr.write(`[kody agentResponsibility-report] goal ${goalId} missing on kody-state; report skipped\n`)
+      process.stderr.write(`[kody agentResponsibility-report] goal ${goalId} missing in state repo; report skipped\n`)
       continue
     }
 
@@ -53,8 +46,7 @@ export const applyAgentResponsibilityReports: PostflightScript = async (ctx, _pr
 
     if (serializeGoalState(next) === serializeGoalState(prior)) continue
     putGoalState(
-      owner,
-      repo,
+      ctx.config,
       goalId,
       { ...next, updatedAt: nowIso() },
       describeMessage(goalId, reportsByGoal.get(goalId), results),
@@ -98,7 +90,11 @@ function groupGoalReports(reports: AgentResponsibilityReport[]): Map<string, Age
   return grouped
 }
 
-function describeMessage(goalId: string, reports: AgentResponsibilityReport[] | undefined, results: AgentResponsibilityResult[]): string {
+function describeMessage(
+  goalId: string,
+  reports: AgentResponsibilityReport[] | undefined,
+  results: AgentResponsibilityResult[],
+): string {
   const pieces: string[] = []
   if (reports && reports.length > 0) pieces.push(`report=${reports.length}`)
   if (results.length > 0) pieces.push(`result=${results.map((result) => result.status).join(",")}`)

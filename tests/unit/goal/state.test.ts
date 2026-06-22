@@ -1,17 +1,6 @@
-import * as fs from "node:fs"
-import * as os from "node:os"
-import * as path from "node:path"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 
-import {
-  GoalStateError,
-  goalStatePath,
-  nowIso,
-  parseGoalState,
-  readGoalState,
-  serializeGoalState,
-  writeGoalState,
-} from "../../../src/goal/state.js"
+import { GoalStateError, nowIso, parseGoalState, serializeGoalState } from "../../../src/goal/state.js"
 
 describe("parseGoalState", () => {
   it("rejects non-objects", () => {
@@ -32,7 +21,7 @@ describe("parseGoalState", () => {
     expect(s.extra).toEqual({})
   })
 
-  it("parses known timestamps and preserves unknown fields as extra", () => {
+  it("parses known timestamps and preserves unknown fields in extra", () => {
     const raw = {
       state: "done",
       legacyField: 41,
@@ -41,9 +30,7 @@ describe("parseGoalState", () => {
       startedAt: "2026-05-09T12:00:00Z",
       destination: { outcome: "ship", evidence: ["published"] },
     }
-
     const s = parseGoalState("/x", raw)
-
     expect(s).toMatchObject({
       state: "done",
       updatedAt: "2026-05-10T12:00:00Z",
@@ -55,68 +42,24 @@ describe("parseGoalState", () => {
       },
     })
   })
-
-  it("serializes extra payload plus lifecycle fields", () => {
-    expect(
-      serializeGoalState({
-        state: "active",
-        createdAt: "2026-05-09T12:00:00Z",
-        updatedAt: "2026-05-10T12:00:00Z",
-        extra: {
-          type: "release",
-          agentResponsibilities: ["release"],
-        },
-      }),
-    ).toBe(
-      `${JSON.stringify(
-        {
-          type: "release",
-          agentResponsibilities: ["release"],
-          state: "active",
-          createdAt: "2026-05-09T12:00:00Z",
-          updatedAt: "2026-05-10T12:00:00Z",
-        },
-        null,
-        2,
-      )}\n`,
-    )
-  })
 })
 
-describe("goal state file IO", () => {
-  let tmp: string
-
-  beforeEach(() => {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-goal-state-"))
-  })
-
-  afterEach(() => {
-    fs.rmSync(tmp, { recursive: true, force: true })
-  })
-
-  it("builds expected path", () => {
-    expect(goalStatePath(tmp, "g")).toBe(path.join(tmp, ".kody", "goals", "instances", "g", "state.json"))
-  })
-
-  it("throws GoalStateError when file missing", () => {
-    expect(() => readGoalState(tmp, "g")).toThrow(/file not found/)
-  })
-
-  it("throws GoalStateError on malformed JSON", () => {
-    const file = goalStatePath(tmp, "g")
-    fs.mkdirSync(path.dirname(file), { recursive: true })
-    fs.writeFileSync(file, "{not json", "utf-8")
-    expect(() => readGoalState(tmp, "g")).toThrow(/invalid JSON/)
-  })
-
-  it("write then read round-trips extra fields", () => {
-    writeGoalState(tmp, "g", {
+describe("serializeGoalState", () => {
+  it("round-trips state with unknown extra fields", () => {
+    const serialized = serializeGoalState({
       state: "active",
-      extra: { keep: "me", legacyField: 3 },
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-02T00:00:00Z",
+      extra: { type: "release", facts: { ok: true } },
     })
-    const round = readGoalState(tmp, "g")
-    expect(round.state).toBe("active")
-    expect(round.extra).toEqual({ keep: "me", legacyField: 3 })
+
+    expect(JSON.parse(serialized)).toEqual({
+      type: "release",
+      facts: { ok: true },
+      state: "active",
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-02T00:00:00Z",
+    })
   })
 })
 

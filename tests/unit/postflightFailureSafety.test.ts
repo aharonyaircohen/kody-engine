@@ -20,7 +20,13 @@ describe("postflight failure-safety: which scripts are state-mutating", () => {
   it("does NOT classify postflights that must run on failure (they report the failure)", () => {
     // These intentionally fire after a failed run to surface it to the
     // user/state machine — they must never be in the mutating set.
-    for (const safe of ["postIssueComment", "writeAgentRunSummary", "recordOutcome", "saveTaskState", "notifyTerminal"]) {
+    for (const safe of [
+      "postIssueComment",
+      "writeAgentRunSummary",
+      "recordOutcome",
+      "saveTaskState",
+      "notifyTerminal",
+    ]) {
       expect(isMutatingPostflight(safe)).toBe(false)
     }
   })

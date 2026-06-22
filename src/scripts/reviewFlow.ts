@@ -6,8 +6,8 @@
  *   ctx.data.commentTargetType = "pr", ctx.data.commentTargetNumber.
  */
 
-import { checkoutPrBranch, getCurrentBranch } from "../branch.js"
 import type { PreflightScript } from "../agent-actions/types.js"
+import { checkoutPrBranch, getCurrentBranch } from "../branch.js"
 import { getRunUrl } from "../gha.js"
 import { getPr, getPrDiff, postPrReviewComment } from "../issue.js"
 

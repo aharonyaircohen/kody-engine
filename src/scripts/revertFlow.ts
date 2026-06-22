@@ -8,8 +8,8 @@
  */
 
 import { execFileSync } from "node:child_process"
-import { checkoutPrBranch, getCurrentBranch } from "../branch.js"
 import type { PreflightScript } from "../agent-actions/types.js"
+import { checkoutPrBranch, getCurrentBranch } from "../branch.js"
 import { getRunUrl } from "../gha.js"
 import { getPr, postPrReviewComment } from "../issue.js"
 

@@ -7,7 +7,7 @@ import { dispatch } from "../../src/scripts/dispatch.js"
 import { finalizeTerminal } from "../../src/scripts/finalizeTerminal.js"
 import { finishFlow } from "../../src/scripts/finishFlow.js"
 import { startFlow } from "../../src/scripts/startFlow.js"
-import { emptyState, type FlowState, STATE_BEGIN, STATE_END, type TaskState } from "../../src/state.js"
+import { emptyState, type FlowState, type TaskState } from "../../src/state.js"
 
 const setKodyLabelMock = setKodyLabel as unknown as Mock
 
@@ -60,6 +60,7 @@ function ctx(overrides: Partial<Context> = {}): Context {
       quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       git: { defaultBranch: "main" },
       github: { owner: "o", repo: "r" },
+      state: { repo: "o/kody-state", path: "r" },
       agent: { model: "claude/claude-haiku-4-5-20251001" },
     },
     data: {},
@@ -70,6 +71,14 @@ function ctx(overrides: Partial<Context> = {}): Context {
 
 beforeEach(() => {
   execFileSync.mockReset()
+  execFileSync.mockImplementation((_cmd, args: unknown) => {
+    const a = (args as string[]) ?? []
+    if (a[0] === "api" && a.some((arg) => arg.includes("/contents/"))) {
+      if (a.includes("PUT")) return "{}"
+      throw new Error("HTTP 404 Not Found")
+    }
+    return ""
+  })
   setKodyLabelMock.mockReset()
 })
 afterEach(() => vi.clearAllMocks())
@@ -272,14 +281,6 @@ describe("advanceFlow", () => {
   })
 
   it("for PR-targeted children also mirrors action to the issue state and re-triggers by flow name", async () => {
-    const issueStateBody = `${STATE_BEGIN}\n\n\`\`\`json\n${JSON.stringify(emptyState())}\n\`\`\`\n\n${STATE_END}`
-    execFileSync.mockImplementation((_cmd, args: unknown) => {
-      const a = (args as string[]) ?? []
-      if (a[0] === "api" && (a[1] === "--paginate" || a[1]?.includes("comments"))) {
-        return JSON.stringify([{ id: 999, body: issueStateBody }])
-      }
-      return ""
-    })
     const flow: FlowState = { name: "bug", step: "review", issueNumber: 42, startedAt: "t" }
     const state: TaskState = { ...emptyState(), flow }
     const c = ctx({
@@ -290,10 +291,14 @@ describe("advanceFlow", () => {
       },
     })
     await advanceFlow(c, profile("review"), null)
-    const calls = execFileSync.mock.calls.map((c) => (c[1] as string[]) ?? [])
-    const patchCall = calls.find((a) => a.includes("PATCH"))
-    // State mirror still happens via gh api PATCH; the re-trigger is now in-process.
-    expect(patchCall).toBeDefined()
+    const putCall = execFileSync.mock.calls.find(
+      (call) => Array.isArray(call[1]) && (call[1] as string[]).includes("PUT"),
+    )
+    // State mirror still happens via the Contents API; the re-trigger is now in-process.
+    expect(putCall).toBeDefined()
+    const payload = JSON.parse((putCall![2] as { input?: string }).input ?? "{}") as { content?: string }
+    const stateJson = Buffer.from(payload.content ?? "", "base64").toString("utf-8")
+    expect(stateJson).toContain("REVIEW_PASS")
     expect(c.output.nextDispatch).toEqual({ action: "bug", cliArgs: { issue: 42 } })
   })
 })

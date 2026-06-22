@@ -49,7 +49,10 @@ export function parseAgentResponsibilityReport(raw: unknown): AgentResponsibilit
   }
 }
 
-export function applyAgentResponsibilityReportToGoalState(state: GoalState, report: AgentResponsibilityReport): GoalState {
+export function applyAgentResponsibilityReportToGoalState(
+  state: GoalState,
+  report: AgentResponsibilityReport,
+): GoalState {
   const priorFacts = parseFacts(state.extra.facts) ?? {}
   const nextFacts: Record<string, unknown> = { ...priorFacts }
 

@@ -56,7 +56,7 @@ See [Company Activation](company-activation.md) for the full activation contract
 | Reports | `.kody/reports/*.md` | Shared state and findings. |
 | Context | `.kody/context/*.md` | Short background and vocabulary. Not hard rules. |
 | Goal templates | `.kody/goals/templates/<slug>/state.json` | Reusable managed agentGoal definitions. |
-| Goal instances | `.kody/goals/instances/<id>/state.json` | Live managed agentGoal runs with facts and progress. |
+| Goal instances | `<statePath>/goals/instances/<id>/state.json` in `stateRepo` | Live managed agentGoal runs with facts and progress. |
 
 For ledger storage and trust gates, see [ledgers.md](ledgers.md).
 

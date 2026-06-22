@@ -23,7 +23,7 @@ Store goals are inactive templates. Consumer repos may also define local goal te
 
 ```text
 .kody/goals/templates/<slug>/state.json
-.kody/goals/instances/<id>/state.json
+<statePath>/goals/instances/<id>/state.json
 ```
 
 String activation keeps the old behavior: it activates existing instances by id or by template.
@@ -32,7 +32,7 @@ String activation keeps the old behavior: it activates existing instances by id 
 { "company": { "activeGoals": ["web-release"] } }
 ```
 
-Scheduled activation creates a fresh instance from the template for each time bucket, persists it to `kody-state`, then ticks that instance.
+Scheduled activation creates a fresh instance from the template for each time bucket, persists it to `stateRepo`, then ticks that instance.
 
 ```json
 {

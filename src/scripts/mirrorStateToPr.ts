@@ -1,11 +1,11 @@
 /**
  * Postflight: if this run produced (or already had) a PR, mirror the issue's
- * current task-state comment onto the PR so subsequent PR-targeted
+ * current task state onto the PR so subsequent PR-targeted
  * agentActions (review, fix) and the orchestrator can read the same flow
  * context from either place.
  *
- * Idempotent: if the PR already has a kody state-comment, the existing
- * writeTaskState call updates it in place. No-op when no PR exists.
+ * Idempotent: writeTaskState upserts the PR state file. No-op when no PR
+ * exists.
  *
  * Must run AFTER saveTaskState (which writes the issue-side state) and
  * AFTER ensurePr (which materializes prUrl).
@@ -27,14 +27,14 @@ export const mirrorStateToPr: PostflightScript = async (ctx) => {
 
   let state: TaskState
   try {
-    state = readTaskState("issue", issueNumber, ctx.cwd)
+    state = readTaskState("issue", issueNumber, ctx.cwd, ctx.config)
   } catch {
     return
   }
   if (prUrl && !state.core.prUrl) state.core.prUrl = prUrl
 
   try {
-    writeTaskState("pr", prNumber, state, ctx.cwd)
+    writeTaskState("pr", prNumber, state, ctx.cwd, ctx.config)
   } catch (err) {
     process.stderr.write(
       `[kody mirrorStateToPr] failed to mirror state to PR #${prNumber}: ${err instanceof Error ? err.message : String(err)}\n`,

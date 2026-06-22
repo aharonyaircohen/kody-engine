@@ -49,7 +49,10 @@ export function listAgentResponsibilityFolderSlugs(absDir: string): string[] {
 }
 
 export function isAgentResponsibilityFolder(dir: string): boolean {
-  return fs.existsSync(path.join(dir, AGENT_RESPONSIBILITY_PROFILE_FILE)) && fs.existsSync(path.join(dir, AGENT_RESPONSIBILITY_BODY_FILE))
+  return (
+    fs.existsSync(path.join(dir, AGENT_RESPONSIBILITY_PROFILE_FILE)) &&
+    fs.existsSync(path.join(dir, AGENT_RESPONSIBILITY_BODY_FILE))
+  )
 }
 
 export function readAgentResponsibilityFolder(root: string, slug: string): AgentResponsibilityFolder | null {

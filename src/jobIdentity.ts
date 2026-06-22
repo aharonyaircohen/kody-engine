@@ -4,9 +4,13 @@ import type { Job } from "./agent-actions/types.js"
 export function stableJobKey(job: Job): string {
   const agentResponsibility = job.agentResponsibility ?? job.action
   const agentAction = job.agentAction ?? agentResponsibility ?? "unknown"
-  if (job.flavor === "scheduled" && job.agentResponsibility) return `scheduled:${job.agentResponsibility}:${agentAction}`
+  if (job.flavor === "scheduled" && job.agentResponsibility)
+    return `scheduled:${job.agentResponsibility}:${agentAction}`
   const target = typeof job.target === "number" ? job.target : targetFromCliArgs(job.cliArgs)
-  const work = agentResponsibility && agentAction && agentAction !== agentResponsibility ? `${agentResponsibility}:${agentAction}` : (agentResponsibility ?? agentAction)
+  const work =
+    agentResponsibility && agentAction && agentAction !== agentResponsibility
+      ? `${agentResponsibility}:${agentAction}`
+      : (agentResponsibility ?? agentAction)
   return target === undefined ? `${job.flavor}:${work}` : `${job.flavor}:${work}:${target}`
 }
 

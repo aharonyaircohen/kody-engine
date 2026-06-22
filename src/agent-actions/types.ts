@@ -136,7 +136,7 @@ export interface Profile {
   /**
    * Declared artifacts produced by this agentAction. The persistArtifacts
    * postflight reads the named source field from ctx.data and writes an
-   * Artifact entry into the task-state comment's `artifacts` map.
+   * Artifact entry into the task state's `artifacts` map.
    */
   outputArtifacts: OutputArtifactSpec[]
   /**
@@ -477,11 +477,21 @@ export interface Context {
      * `@kody <next>` comment, which is silently ignored when Kody comments as
      * a GitHub App (bot author), stalling the pipeline at classify.
      */
-    nextDispatch?: { action?: string; agentResponsibility?: string; agentAction?: string; cliArgs: Record<string, unknown> }
+    nextDispatch?: {
+      action?: string
+      agentResponsibility?: string
+      agentAction?: string
+      cliArgs: Record<string, unknown>
+    }
     /** In-process hand-off to a full Job, preserving job identity in task state. */
     nextJob?: Job
     /** Where to return after nextJob succeeds. Used by task-jobs to keep draining pending work. */
-    afterNextJob?: { action?: string; agentResponsibility?: string; agentAction?: string; cliArgs: Record<string, unknown> }
+    afterNextJob?: {
+      action?: string
+      agentResponsibility?: string
+      agentAction?: string
+      cliArgs: Record<string, unknown>
+    }
   }
   /**
    * If a preflight script sets this to true, the executor skips the agent

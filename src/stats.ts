@@ -1,11 +1,11 @@
 /**
  * `kody stats` — rollup of structured run events for measuring stability
- * and velocity. Reads `.kody/agent-runs/<runId>/events.jsonl` files written by
+ * and velocity. Reads runtime event files written by
  * the executor (see src/events.ts) and prints per-agentAction success
  * rate, latency distribution, and token usage.
  *
  * Usage:
- *   kody stats              # all runs in .kody/agent-runs/
+ *   kody stats              # all local runtime runs
  *   kody stats --since 7d   # rolling window
  *   kody stats --json       # machine-readable output
  *   kody stats --run <id>   # detail one run
@@ -176,7 +176,7 @@ export async function runStats(argv: string[]): Promise<number> {
   const opts = parseStatsArgs(argv)
   const runIds = opts.runId ? [opts.runId] : listRuns(opts.cwd)
   if (runIds.length === 0) {
-    process.stdout.write(`no runs found under ${opts.cwd}/.kody/agent-runs/\n`)
+    process.stdout.write(`no local runtime runs found for ${opts.cwd}\n`)
     return 0
   }
   const cutoff = opts.sinceMs ? Date.now() - opts.sinceMs : null

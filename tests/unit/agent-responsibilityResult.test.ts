@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { parseAgentResponsibilityResult, parseAgentResponsibilityResultsFromText } from "../../src/agent-responsibilityResult.js"
+import {
+  parseAgentResponsibilityResult,
+  parseAgentResponsibilityResultsFromText,
+} from "../../src/agent-responsibilityResult.js"
 import { collectShellSideChannels } from "../../src/executor.js"
 
 describe("parseAgentResponsibilityResult", () => {
@@ -75,7 +78,9 @@ describe("parseAgentResponsibilityResultsFromText", () => {
 
   it("ignores malformed marker lines", () => {
     expect(parseAgentResponsibilityResultsFromText("KODY_AGENT_RESPONSIBILITY_RESULT={not json}\n")).toEqual([])
-    expect(parseAgentResponsibilityResultsFromText('KODY_AGENT_RESPONSIBILITY_RESULT={"version":1,"status":"pass"}\n')).toEqual([])
+    expect(
+      parseAgentResponsibilityResultsFromText('KODY_AGENT_RESPONSIBILITY_RESULT={"version":1,"status":"pass"}\n'),
+    ).toEqual([])
   })
 })
 

@@ -15,10 +15,14 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { getCompanyStoreAssetRoot } from "./companyStore.js"
-import type { AgentResponsibilityFolder } from "./agent-responsibilityFolders.js"
-import { AGENT_RESPONSIBILITY_PROFILE_FILE, listAgentResponsibilityFolderSlugs, readAgentResponsibilityFolder } from "./agent-responsibilityFolders.js"
 import type { InputSpec } from "./agent-actions/types.js"
+import type { AgentResponsibilityFolder } from "./agent-responsibilityFolders.js"
+import {
+  AGENT_RESPONSIBILITY_PROFILE_FILE,
+  listAgentResponsibilityFolderSlugs,
+  readAgentResponsibilityFolder,
+} from "./agent-responsibilityFolders.js"
+import { getCompanyStoreAssetRoot } from "./companyStore.js"
 
 const PUBLIC_AGENT_ACTION_ACTION_ROLES = new Set(["primitive", "orchestrator", "container", "watch", "utility"])
 const PUBLIC_AGENT_ACTION_CAPABILITY_KINDS = new Set(["observe", "act", "verify"])
@@ -111,7 +115,9 @@ export function getAgentActionRoots(): string[] {
   return [getProjectAgentActionsRoot(), ...(storeRoot ? [storeRoot] : []), getAgentActionsRoot()]
 }
 
-export function getAgentResponsibilityRoots(projectAgentResponsibilitiesRoot: string = getProjectAgentResponsibilitiesRoot()): string[] {
+export function getAgentResponsibilityRoots(
+  projectAgentResponsibilitiesRoot: string = getProjectAgentResponsibilitiesRoot(),
+): string[] {
   const storeRoot = getCompanyStoreAgentResponsibilitiesRoot()
   return [projectAgentResponsibilitiesRoot, ...(storeRoot ? [storeRoot] : []), getBuiltinAgentResponsibilitiesRoot()]
 }
@@ -196,7 +202,9 @@ export function hasAgentAction(name: string, roots: string | string[] = getAgent
  * project folder agentResponsibilities override company store agentResponsibilities, which override
  * engine built-ins.
  */
-export function listAgentResponsibilityActions(projectAgentResponsibilitiesRoot: string = getProjectAgentResponsibilitiesRoot()): DiscoveredAgentResponsibilityAction[] {
+export function listAgentResponsibilityActions(
+  projectAgentResponsibilitiesRoot: string = getProjectAgentResponsibilitiesRoot(),
+): DiscoveredAgentResponsibilityAction[] {
   const seen = new Set<string>()
   const out: DiscoveredAgentResponsibilityAction[] = []
   const add = (action: DiscoveredAgentResponsibilityAction) => {
@@ -212,7 +220,8 @@ export function listAgentResponsibilityActions(projectAgentResponsibilitiesRoot:
   for (const action of listAgentActionResponsibilityActions(executableRoots[0]!, "project-agentAction")) add(action)
   if (roots.length === 3) {
     for (const action of listFolderAgentResponsibilityActions(roots[1]!, "company-store")) add(action)
-    for (const action of listAgentActionResponsibilityActions(executableRoots[1]!, "company-store-agentAction")) add(action)
+    for (const action of listAgentActionResponsibilityActions(executableRoots[1]!, "company-store-agentAction"))
+      add(action)
     for (const action of listBuiltinAgentResponsibilityActions(roots[2]!)) add(action)
   } else {
     for (const action of listBuiltinAgentResponsibilityActions(roots[1]!)) add(action)
@@ -229,11 +238,17 @@ export function resolveAgentResponsibilityAction(
   return listAgentResponsibilityActions(projectAgentResponsibilitiesRoot).find((d) => d.action === action) ?? null
 }
 
-export function hasAgentResponsibilityAction(action: string, projectAgentResponsibilitiesRoot: string = getProjectAgentResponsibilitiesRoot()): boolean {
+export function hasAgentResponsibilityAction(
+  action: string,
+  projectAgentResponsibilitiesRoot: string = getProjectAgentResponsibilitiesRoot(),
+): boolean {
   return resolveAgentResponsibilityAction(action, projectAgentResponsibilitiesRoot) !== null
 }
 
-export function resolveAgentResponsibilityFolder(slug: string, projectAgentResponsibilitiesRoot: string = getProjectAgentResponsibilitiesRoot()): AgentResponsibilityFolder | null {
+export function resolveAgentResponsibilityFolder(
+  slug: string,
+  projectAgentResponsibilitiesRoot: string = getProjectAgentResponsibilitiesRoot(),
+): AgentResponsibilityFolder | null {
   if (!isSafeName(slug)) return null
   for (const root of getAgentResponsibilityRoots(projectAgentResponsibilitiesRoot)) {
     const agentResponsibility = readAgentResponsibilityFolder(root, slug)
@@ -249,12 +264,17 @@ export function getAgentResponsibilityActionInputs(action: string): InputSpec[] 
   return getProfileInputs(resolved.agentAction)
 }
 
-export function resolveAgentResponsibilityExecution(agentResponsibility: AgentResponsibilityFolder): { agentAction: string; cliArgs: Record<string, unknown> } {
+export function resolveAgentResponsibilityExecution(agentResponsibility: AgentResponsibilityFolder): {
+  agentAction: string
+  cliArgs: Record<string, unknown>
+} {
   const agentAction =
     agentResponsibility.config.agentAction ??
     agentResponsibility.config.agentActions?.[0] ??
     (agentResponsibility.config.tickScript ? "agent-responsibility-tick-scripted" : "agent-responsibility-tick")
-  const cliArgs = agentActionDeclaresInput(agentAction, "agentResponsibility") ? { agentResponsibility: agentResponsibility.slug } : {}
+  const cliArgs = agentActionDeclaresInput(agentAction, "agentResponsibility")
+    ? { agentResponsibility: agentResponsibility.slug }
+    : {}
   return { agentAction, cliArgs }
 }
 
@@ -310,7 +330,10 @@ function listAgentActionResponsibilityActions(
   return out.sort((a, b) => a.action.localeCompare(b.action))
 }
 
-function listFolderAgentResponsibilityActions(root: string, source: "project-folder" | "company-store"): DiscoveredAgentResponsibilityAction[] {
+function listFolderAgentResponsibilityActions(
+  root: string,
+  source: "project-folder" | "company-store",
+): DiscoveredAgentResponsibilityAction[] {
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
   const out: DiscoveredAgentResponsibilityAction[] = []
   for (const slug of listAgentResponsibilityFolderSlugs(root)) {
@@ -333,7 +356,9 @@ function listFolderAgentResponsibilityActions(root: string, source: "project-fol
   return out.sort((a, b) => a.action.localeCompare(b.action))
 }
 
-function listBuiltinAgentResponsibilityActions(root: string = getBuiltinAgentResponsibilitiesRoot()): DiscoveredAgentResponsibilityAction[] {
+function listBuiltinAgentResponsibilityActions(
+  root: string = getBuiltinAgentResponsibilitiesRoot(),
+): DiscoveredAgentResponsibilityAction[] {
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
   const out: DiscoveredAgentResponsibilityAction[] = []
   for (const slug of listAgentResponsibilityFolderSlugs(root)) {

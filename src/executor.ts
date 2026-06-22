@@ -12,20 +12,20 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { AgentResult } from "./agent.js"
 import { runAgent } from "./agent.js"
+import type { Context, InputSpec, Job, Profile, ScriptEntry } from "./agent-actions/types.js"
+import { parseAgentResponsibilityReportsFromText } from "./agent-responsibilityReport.js"
+import { parseAgentResponsibilityResultsFromText } from "./agent-responsibilityResult.js"
+import { frameAgentIdentity, loadAgentIdentity } from "./agents.js"
 import type { KodyConfig } from "./config.js"
 import { loadConfig, parseProviderModel } from "./config.js"
 import { runContainerLoop } from "./container.js"
 import { DISCIPLINE } from "./discipline.js"
-import { parseAgentResponsibilityReportsFromText } from "./agent-responsibilityReport.js"
-import { parseAgentResponsibilityResultsFromText } from "./agent-responsibilityResult.js"
 import { emitEvent } from "./events.js"
-import type { Context, InputSpec, Job, Profile, ScriptEntry } from "./agent-actions/types.js"
 import { KODY_NAMESPACE, removeLabel } from "./lifecycleLabels.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
 import { resolveAgentAction } from "./registry.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
-import { frameAgentIdentity, loadAgentIdentity } from "./agents.js"
 import type { TaskState, TaskTarget } from "./state.js"
 import { loadSubagents } from "./subagents.js"
 import { prepareTaskArtifactsDir, taskArtifactsPromptAddendum, verifyTaskArtifacts } from "./task-artifacts.js"
@@ -40,7 +40,11 @@ import { firstRequiredFailure, verifyCliTools } from "./tools.js"
  * belongs here. Adding one without listing it here is a bug:
  * `tests/unit/postflightFailureSafety.test.ts` enforces the contract.
  */
-const MUTATING_POSTFLIGHTS: ReadonlySet<string> = new Set(["commitAndPush", "ensurePr", "applyAgentResponsibilityReports"])
+const MUTATING_POSTFLIGHTS: ReadonlySet<string> = new Set([
+  "commitAndPush",
+  "ensurePr",
+  "applyAgentResponsibilityReports",
+])
 
 /** True when `scriptName` is a state-mutating postflight (see MUTATING_POSTFLIGHTS). */
 export function isMutatingPostflight(scriptName: string | undefined): boolean {
@@ -113,7 +117,9 @@ export function jobReferenceBlock(
   const jobId = typeof data.jobId === "string" && data.jobId.length > 0 ? data.jobId : null
   const flavor = typeof data.jobFlavor === "string" && data.jobFlavor.length > 0 ? data.jobFlavor : null
   const schedule = typeof data.jobSchedule === "string" && data.jobSchedule.length > 0 ? data.jobSchedule : null
-  const isJob = Boolean(jobId || flavor || schedule || data.jobAgentResponsibility || data.jobAgentAction || data.jobWhy)
+  const isJob = Boolean(
+    jobId || flavor || schedule || data.jobAgentResponsibility || data.jobAgentAction || data.jobWhy,
+  )
   if (!isJob) return null
 
   const agentResponsibility =
@@ -202,11 +208,21 @@ export interface ExecutorOutput {
    * when Kody ran as a GitHub App: the hand-off comment was bot-authored and
    * the follow-up run silently ignored it, stalling the pipeline at classify.
    */
-  nextDispatch?: { action?: string; agentResponsibility?: string; agentAction?: string; cliArgs: Record<string, unknown> }
+  nextDispatch?: {
+    action?: string
+    agentResponsibility?: string
+    agentAction?: string
+    cliArgs: Record<string, unknown>
+  }
   /** In-process hand-off to a full Job, preserving job identity in task state. */
   nextJob?: Job
   /** Where to return after nextJob succeeds. */
-  afterNextJob?: { action?: string; agentResponsibility?: string; agentAction?: string; cliArgs: Record<string, unknown> }
+  afterNextJob?: {
+    action?: string
+    agentResponsibility?: string
+    agentAction?: string
+    cliArgs: Record<string, unknown>
+  }
   /** Internal state snapshot for in-process continuations. */
   taskState?: TaskState
 }
@@ -433,12 +449,16 @@ export async function runAgentAction(profileName: string, input: ExecutorInput):
       // when a agentResponsibility declares `tools` in profile.json. The executor doesn't need
       // to know the palette — it just forwards the flag so agent.ts can spin
       // up the in-process `kody-agentResponsibility` MCP server with the right context.
-      enableAgentResponsibilityTool: Array.isArray(ctx.data.agentResponsibilityTools) && ctx.data.agentResponsibilityTools.length > 0,
+      enableAgentResponsibilityTool:
+        Array.isArray(ctx.data.agentResponsibilityTools) && ctx.data.agentResponsibilityTools.length > 0,
       agentResponsibilityOperatorMention:
-        typeof ctx.data.agentResponsibilityOperatorMention === "string" ? (ctx.data.agentResponsibilityOperatorMention as string) : undefined,
+        typeof ctx.data.agentResponsibilityOperatorMention === "string"
+          ? (ctx.data.agentResponsibilityOperatorMention as string)
+          : undefined,
       // Stamp the running agentResponsibility's slug onto recommendations so the dashboard
       // keys trust per agentResponsibility (not per agent). `jobSlug` is set by loadJobFromFile.
       agentResponsibilitySlug: typeof ctx.data.jobSlug === "string" ? (ctx.data.jobSlug as string) : undefined,
+      agentResponsibilityState: config.state,
       // owner/repo from kody.config.json; envelope falls back to GITHUB_REPOSITORY
       // for tester repos that don't set config.github (the file isn't always
       // checked in). Either way, agentResponsibilityMcp needs "owner/name" to hit the compare API.
@@ -626,8 +646,9 @@ export async function runAgentAction(profileName: string, input: ExecutorInput):
           const fsMod = await import("node:fs")
           const pathMod = await import("node:path")
           const { resolveRunId } = await import("./events.js")
+          const { runtimeStatePath } = await import("./runtimePaths.js")
           const runId = resolveRunId()
-          const dir = pathMod.join(input.cwd, ".kody", "agent-runs", runId, "crashes")
+          const dir = runtimeStatePath(input.cwd, "agent-runs", runId, "crashes")
           fsMod.mkdirSync(dir, { recursive: true })
           const file = pathMod.join(dir, `${label.replace(/[^a-zA-Z0-9_-]/g, "_")}-${Date.now()}.json`)
           fsMod.writeFileSync(
@@ -804,7 +825,11 @@ export async function runAgentActionChain(profileName: string, input: ExecutorIn
     }
   }
   if (result.nextDispatch || result.nextJob) {
-    const pending = result.nextDispatch?.agentAction ?? result.nextJob?.agentAction ?? result.nextJob?.agentResponsibility ?? "unknown"
+    const pending =
+      result.nextDispatch?.agentAction ??
+      result.nextJob?.agentAction ??
+      result.nextJob?.agentResponsibility ??
+      "unknown"
     process.stderr.write(`[kody] in-process hand-off cap (${MAX_CHAIN_HOPS}) reached; not running ${pending}\n`)
   }
   return result

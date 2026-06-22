@@ -5,7 +5,13 @@ import { runChat } from "./chat-cli.js"
 import { loadConfig } from "./config.js"
 import { runJob } from "./job.js"
 import { runCi } from "./kody-cli.js"
-import { hasAgentResponsibilityAction, listAgentResponsibilityActions, parseGenericFlags, resolveAgentResponsibilityAction, resolveAgentAction } from "./registry.js"
+import {
+  hasAgentResponsibilityAction,
+  listAgentResponsibilityActions,
+  parseGenericFlags,
+  resolveAgentAction,
+  resolveAgentResponsibilityAction,
+} from "./registry.js"
 import { brainServe } from "./servers/brain-serve.js"
 import { poolServe } from "./servers/pool-serve.js"
 import { runnerServe } from "./servers/runner-serve.js"
@@ -218,9 +224,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 
   // Configless implementations: skip config load.
   // - init runs BEFORE kody.config.json exists.
-  // - goal-scheduler is scan-only: it walks `.kody/goals/instances/*` and dispatches
-  //   goal-manager for each active managed goal. No config use of its own.
-  const configlessCommands = new Set(["init", "goal-scheduler"])
+  const configlessCommands = new Set(["init"])
 
   if (args.command === "__agent_responsibility__") {
     const route = resolveAgentResponsibilityAction(args.actionName!)

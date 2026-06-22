@@ -29,8 +29,8 @@ vi.mock("node:fs", () => ({
   readFileSync: mocks.readFileSync,
 }))
 
-import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import type { Context, Profile } from "../../src/agent-actions/types.js"
+import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import { loadAgentAdhoc } from "../../src/scripts/loadAgentAdhoc.js"
 
 const CWD = "/repo"

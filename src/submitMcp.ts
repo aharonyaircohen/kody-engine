@@ -59,7 +59,11 @@ const INPUT_SCHEMA: ZodRawShape = {
   data: z
     .record(z.string(), z.unknown())
     .describe("The next `data` object. Carry forward prior data and mutate only what you acted on this tick."),
-  done: z.boolean().describe("true only if this agentResponsibility is permanently finished; evergreen agentResponsibilities stay false."),
+  done: z
+    .boolean()
+    .describe(
+      "true only if this agentResponsibility is permanently finished; evergreen agentResponsibilities stay false.",
+    ),
 }
 
 /**

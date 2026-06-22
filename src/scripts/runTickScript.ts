@@ -29,8 +29,8 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { readAgentResponsibilityFolder } from "../agent-responsibilityFolders.js"
 import type { PreflightScript } from "../agent-actions/types.js"
+import { readAgentResponsibilityFolder } from "../agent-responsibilityFolders.js"
 import { resolveBackend } from "./jobState/index.js"
 import { runTickShellAndParse } from "./tickShellRunner.js"
 

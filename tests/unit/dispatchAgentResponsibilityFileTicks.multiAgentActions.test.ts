@@ -2,9 +2,9 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import type { Context, Profile } from "../../src/agent-actions/types.js"
 import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import type { KodyConfig } from "../../src/config.js"
-import type { Context, Profile } from "../../src/agent-actions/types.js"
 import { parseTaskJobSpecs } from "../../src/scripts/planTaskJobs.js"
 
 const ghMock = vi.hoisted(() => vi.fn())
@@ -42,7 +42,11 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-function writeAgentResponsibility(slug: string, profile: Record<string, unknown>, body = "# AgentResponsibility\n\nDo the work."): void {
+function writeAgentResponsibility(
+  slug: string,
+  profile: Record<string, unknown>,
+  body = "# AgentResponsibility\n\nDo the work.",
+): void {
   const dir = path.join(tmp, ".kody", "agent-responsibilities", slug)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
@@ -70,7 +74,11 @@ const PROFILE = {} as unknown as Profile
 
 describe("dispatchAgentResponsibilityFileTicks multi-agentAction agentResponsibilities", () => {
   it("creates a task issue and runs task-jobs for a agentResponsibility with agentActions", async () => {
-    writeAgentResponsibility("daily-check", { every: "1h", agent: "kody", agentActions: ["plan-verify", "probe-skill"] })
+    writeAgentResponsibility("daily-check", {
+      every: "1h",
+      agent: "kody",
+      agentActions: ["plan-verify", "probe-skill"],
+    })
 
     const ctx = ctxFor()
     await dispatchAgentResponsibilityFileTicks(ctx, PROFILE, {
@@ -81,7 +89,14 @@ describe("dispatchAgentResponsibilityFileTicks multi-agentAction agentResponsibi
 
     expect(ghMock).toHaveBeenCalledTimes(1)
     const [args, options] = ghMock.mock.calls[0]!
-    expect(args).toEqual(["issue", "create", "--title", "AgentResponsibility daily-check - multi-agentAction task", "--body-file", "-"])
+    expect(args).toEqual([
+      "issue",
+      "create",
+      "--title",
+      "AgentResponsibility daily-check - multi-agentAction task",
+      "--body-file",
+      "-",
+    ])
     expect(options.cwd).toBe(tmp)
 
     const specs = parseTaskJobSpecs(options.input)
@@ -126,7 +141,9 @@ describe("dispatchAgentResponsibilityFileTicks multi-agentAction agentResponsibi
       slugArg: "agentResponsibility",
     })
 
-    const state = JSON.parse(fs.readFileSync(path.join(tmp, ".kody", "agent-responsibilities", "daily-check/state.json"), "utf-8"))
+    const state = JSON.parse(
+      fs.readFileSync(path.join(tmp, ".kody", "agent-responsibilities", "daily-check/state.json"), "utf-8"),
+    )
     expect(state.data.lastTaskIssue).toBe(777)
     expect(state.data.lastTaskUrl).toBe("https://github.com/o/r/issues/777")
     expect(typeof state.data.lastFiredAt).toBe("string")

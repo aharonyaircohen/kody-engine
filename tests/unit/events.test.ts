@@ -3,6 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { __resetRunIdCache, emitEvent, listRuns, readEvents, resolveRunId } from "../../src/events.js"
+import { runtimeStatePath } from "../../src/runtimePaths.js"
 
 describe("events: resolveRunId", () => {
   beforeEach(() => {
@@ -54,10 +55,12 @@ describe("events: emitEvent + readEvents", () => {
     delete process.env.KODY_RUN_ID
     delete process.env.GITHUB_RUN_ID
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-events-"))
+    process.env.KODY_RUNTIME_DIR = path.join(tmpDir, "runtime")
   })
   afterEach(() => {
     __resetRunIdCache()
     delete process.env.KODY_RUN_ID
+    delete process.env.KODY_RUNTIME_DIR
     fs.rmSync(tmpDir, { recursive: true, force: true })
     delete process.env.KODY_EVENTS
   })
@@ -95,7 +98,7 @@ describe("events: emitEvent + readEvents", () => {
 
   it("skips malformed lines gracefully", () => {
     process.env.KODY_RUN_ID = "rid"
-    const runDir = path.join(tmpDir, ".kody", "agent-runs", "rid")
+    const runDir = runtimeStatePath(tmpDir, "agent-runs", "rid")
     fs.mkdirSync(runDir, { recursive: true })
     fs.writeFileSync(
       path.join(runDir, "events.jsonl"),
@@ -118,7 +121,7 @@ describe("events: emitEvent + readEvents", () => {
     expect(listRuns(tmpDir)).toEqual(["alpha", "beta"])
   })
 
-  it("listRuns returns [] when .kody/agent-runs/ does not exist", () => {
+  it("listRuns returns [] when runtime run directory does not exist", () => {
     expect(listRuns(tmpDir)).toEqual([])
   })
 })

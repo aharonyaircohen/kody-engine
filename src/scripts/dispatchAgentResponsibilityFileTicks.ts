@@ -20,8 +20,8 @@
  */
 
 import * as path from "node:path"
-import { type AgentResponsibilityFolder, listAgentResponsibilityFolderSlugs } from "../agent-responsibilityFolders.js"
 import type { PreflightScript } from "../agent-actions/types.js"
+import { type AgentResponsibilityFolder, listAgentResponsibilityFolderSlugs } from "../agent-responsibilityFolders.js"
 import { gh } from "../issue.js"
 import { mintScheduledJob, runJob } from "../job.js"
 import { getCompanyStoreAgentResponsibilitiesRoot, resolveAgentResponsibilityFolder } from "../registry.js"
@@ -53,7 +53,9 @@ export const dispatchAgentResponsibilityFileTicks: PreflightScript = async (ctx,
     if (args?.requireExplicitAgentResponsibility === true && !onlyAgentResponsibility) {
       ctx.output.exitCode = 0
       ctx.output.reason = "scheduled agentResponsibility fan-out is owned by goal-scheduler"
-      process.stdout.write("[jobs] no flat agentResponsibility fan-out; goal-scheduler owns scheduled agentResponsibility decisions\n")
+      process.stdout.write(
+        "[jobs] no flat agentResponsibility fan-out; goal-scheduler owns scheduled agentResponsibility decisions\n",
+      )
       return
     }
     const jobsPath = path.join(ctx.cwd, jobsDir)
@@ -71,7 +73,9 @@ export const dispatchAgentResponsibilityFileTicks: PreflightScript = async (ctx,
     }
 
     const filtered = onlyAgentResponsibility ? ` matching ${onlyAgentResponsibility}` : ""
-    process.stdout.write(`[jobs] ticking ${slugs.length} agent responsibility/ies${filtered} via ${targetAgentAction}\n`)
+    process.stdout.write(
+      `[jobs] ticking ${slugs.length} agent responsibility/ies${filtered} via ${targetAgentAction}\n`,
+    )
 
     const results: Array<{
       slug: string
@@ -84,7 +88,9 @@ export const dispatchAgentResponsibilityFileTicks: PreflightScript = async (ctx,
     for (const slug of slugs) {
       const agentResponsibility = resolveAgentResponsibilityFolder(slug, jobsPath)
       if (!agentResponsibility) {
-        process.stderr.write(`[jobs] ⏭  skip ${slug}: agentResponsibility folder is missing profile.json or agent-responsibility.md\n`)
+        process.stderr.write(
+          `[jobs] ⏭  skip ${slug}: agentResponsibility folder is missing profile.json or agent-responsibility.md\n`,
+        )
         results.push({ slug, exitCode: 0, skipped: true, reason: "incomplete agentResponsibility folder" })
         continue
       }
@@ -327,7 +333,11 @@ function createAgentResponsibilityTaskIssue(opts: {
   return { number: Number(match[1]), url }
 }
 
-function buildAgentResponsibilityTaskIssueBody(slug: string, agentResponsibilityBody: string, config: AgentResponsibilityFolder["config"]): string {
+function buildAgentResponsibilityTaskIssueBody(
+  slug: string,
+  agentResponsibilityBody: string,
+  config: AgentResponsibilityFolder["config"],
+): string {
   const specs = (config.agentActions ?? []).map((agentAction) => ({
     agentAction,
     agentResponsibility: slug,

@@ -12,9 +12,9 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest"
+import type { Context, Profile } from "../../src/agent-actions/types.js"
 import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import type { KodyConfig } from "../../src/config.js"
-import type { Context, Profile } from "../../src/agent-actions/types.js"
 import { dispatchAgentResponsibilityFileTicks } from "../../src/scripts/dispatchAgentResponsibilityFileTicks.js"
 
 vi.mock("../../src/executor.js", async () => {
@@ -219,7 +219,10 @@ describe("dispatchAgentResponsibilityFileTicks routing", () => {
 
   it("ignores a stale legacy .md next to a folder agentResponsibility", async () => {
     writeJob("hybrid", { every: "1h", agent: "kody" })
-    fs.writeFileSync(path.join(tmp, ".kody", "agent-responsibilities", "hybrid.md"), "---\nevery: 1h\nagent: kody\n---\n# stale\n")
+    fs.writeFileSync(
+      path.join(tmp, ".kody", "agent-responsibilities", "hybrid.md"),
+      "---\nevery: 1h\nagent: kody\n---\n# stale\n",
+    )
 
     const ctx = ctxFor()
     await dispatchAgentResponsibilityFileTicks(ctx, PROFILE, {

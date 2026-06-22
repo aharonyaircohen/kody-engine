@@ -93,9 +93,7 @@ describe("kody-cli manual goal dispatch", () => {
       inputs: { agentAction: "goal-manager", message: "weekly-docs" },
     })
 
-    await expect(
-      runCi(["--cwd", dir, "--skip-install", "--skip-litellm"]),
-    ).resolves.toBe(0)
+    await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
 
     expect(mocks.runJob).toHaveBeenCalledTimes(1)
     expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
@@ -118,35 +116,31 @@ describe("kody-cli manual goal dispatch", () => {
       inputs: { agentAction: "goal-manager" },
     })
 
-    await expect(
-      runCi(["--cwd", dir, "--skip-install", "--skip-litellm"]),
-    ).resolves.toBe(64)
-  expect(mocks.runJob).not.toHaveBeenCalled()
-})
-
-it("runs scheduled watch agentActions from manual workflow dispatch", async () => {
-  const dir = tmpDir()
-  writeConfig(dir)
-  writeScheduledAgentAction(dir, "goal-scheduler")
-  previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
-  previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
-  process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
-  process.env.GITHUB_EVENT_PATH = writeEvent({
-    inputs: { agentAction: "goal-scheduler" },
+    await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(64)
+    expect(mocks.runJob).not.toHaveBeenCalled()
   })
 
-  await expect(
-    runCi(["--cwd", dir, "--skip-install", "--skip-litellm"]),
-  ).resolves.toBe(0)
+  it("runs scheduled watch agentActions from manual workflow dispatch", async () => {
+    const dir = tmpDir()
+    writeConfig(dir)
+    writeScheduledAgentAction(dir, "goal-scheduler")
+    previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
+    previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
+    process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      inputs: { agentAction: "goal-scheduler" },
+    })
 
-  expect(mocks.runJob).toHaveBeenCalledTimes(1)
-  expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
-    action: "goal-scheduler",
-    agentResponsibility: "goal-scheduler",
-    agentAction: "goal-scheduler",
-    cliArgs: {},
-    flavor: "instant",
-    force: true,
+    await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
+
+    expect(mocks.runJob).toHaveBeenCalledTimes(1)
+    expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
+      action: "goal-scheduler",
+      agentResponsibility: "goal-scheduler",
+      agentAction: "goal-scheduler",
+      cliArgs: {},
+      flavor: "instant",
+      force: true,
+    })
   })
-})
 })

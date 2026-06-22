@@ -19,8 +19,19 @@ function releaseGoal(overrides: Partial<ManagedGoal> = {}): ManagedGoal {
     destination: { outcome: "publish and verify", evidence: ["releasePrExists", "qaPassed"] },
     agentResponsibilities: ["release-prepare", "qa-goal"],
     route: [
-      { evidence: "releasePrExists", stage: "prepare", agentResponsibility: "release-prepare", agentAction: "release-prepare" },
-      { evidence: "qaPassed", stage: "qa", agentResponsibility: "qa-goal", agentAction: "qa-goal", args: { issue: 55 } },
+      {
+        evidence: "releasePrExists",
+        stage: "prepare",
+        agentResponsibility: "release-prepare",
+        agentAction: "release-prepare",
+      },
+      {
+        evidence: "qaPassed",
+        stage: "qa",
+        agentResponsibility: "qa-goal",
+        agentAction: "qa-goal",
+        args: { issue: 55 },
+      },
     ],
     stage: "prepare",
     facts: {},

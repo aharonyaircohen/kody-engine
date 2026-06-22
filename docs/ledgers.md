@@ -6,11 +6,11 @@ Kody has ledgers, but they are not all the same kind of storage.
 
 | Ledger | Storage | Owner | Purpose |
 | --- | --- | --- | --- |
-| Trust ledger | `.kody/state/trust.json` on `kody-state` | dashboard writes, engine reads | Current gate for agentResponsibility autonomy: `ask` or `auto`. |
-| AgentResponsibility state | agentResponsibility state backend / sidecar state | engine | Per-agentResponsibility cursor/data/done and dedup data. |
-| Task job/run ledger | task state on issue/PR | engine | Required jobs, run attempts, outcomes, history. |
-| Goal instance state | `.kody/goals/instances/<id>/state.json` on `kody-state` | engine/dashboard | Managed goal progress. |
-| Run events | `.kody/agent-runs/<runId>/events.jsonl` | engine | Execution trace/debug history. |
+| Trust ledger | `<statePath>/state/trust.json` in `stateRepo` | dashboard writes, engine reads | Current gate for agentResponsibility autonomy: `ask` or `auto`. |
+| AgentResponsibility state | `<statePath>/agent-responsibilities/<slug>/state.json` in `stateRepo` | engine | Per-agentResponsibility cursor/data/done and dedup data. |
+| Task job/run ledger | `<statePath>/tasks/<issues-or-prs>/<number>/state.json` in `stateRepo` | engine | Required jobs, run attempts, outcomes, history. |
+| Goal instance state | `<statePath>/goals/instances/<id>/state.json` in `stateRepo` | engine/dashboard | Managed goal progress. |
+| Run events | local runtime scratch (`KODY_RUNTIME_DIR` or OS temp) | engine | Execution trace/debug history. |
 
 ## Trust Ledger
 

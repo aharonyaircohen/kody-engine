@@ -9,11 +9,9 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { parseReasoningEffort } from "./config.js"
-import { AGENT_RESPONSIBILITY_MCP_TOOL_NAMES } from "./agent-responsibilityMcp.js"
 import type {
-  ClaudeCodeSpec,
   CapabilityKind,
+  ClaudeCodeSpec,
   CliToolSpec,
   ContainerChild,
   InputArtifactSpec,
@@ -22,6 +20,8 @@ import type {
   Profile,
   ScriptEntry,
 } from "./agent-actions/types.js"
+import { AGENT_RESPONSIBILITY_MCP_TOOL_NAMES } from "./agent-responsibilityMcp.js"
+import { parseReasoningEffort } from "./config.js"
 import { applyLifecycle } from "./lifecycles/index.js"
 import { ProfileError } from "./profile-error.js"
 import { resolveAgentAction } from "./registry.js"
@@ -128,7 +128,8 @@ export function loadProfile(profilePath: string): Profile {
       capabilityKind: parseCapabilityKind(profilePath, r.capabilityKind) ?? base.capabilityKind,
       agent: typeof r.agent === "string" && r.agent.trim() ? r.agent.trim() : base.agent,
       every: typeof r.every === "string" && r.every.trim() ? r.every.trim() : undefined,
-      agentResponsibilityTools: parseStringArray(r.agentResponsibilityTools ?? r.tools) ?? base.agentResponsibilityTools,
+      agentResponsibilityTools:
+        parseStringArray(r.agentResponsibilityTools ?? r.tools) ?? base.agentResponsibilityTools,
       mentions: Array.isArray(r.mentions)
         ? (r.mentions as string[]).map((m) => String(m).trim()).filter(Boolean)
         : base.mentions,
@@ -242,7 +243,12 @@ export function loadProfile(profilePath: string): Profile {
   // Any of these preflights populate ctx.data.jobState: loadAgentResponsibilityState (folder
   // agentResponsibility), loadJobFromFile (markdown agentResponsibility via agent-responsibility-tick), runTickScript (scripted
   // agentResponsibility via agent-responsibility-tick-scripted).
-  const STATE_LOADERS = ["loadAgentResponsibilityState", "loadJobFromFile", "runTickScript", "runScheduledAgentActionTick"]
+  const STATE_LOADERS = [
+    "loadAgentResponsibilityState",
+    "loadJobFromFile",
+    "runTickScript",
+    "runScheduledAgentActionTick",
+  ]
   if (needsState && !STATE_LOADERS.some((s) => preNames.has(s))) {
     throw new ProfileError(
       profilePath,

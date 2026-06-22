@@ -14,14 +14,14 @@
  */
 
 import * as fs from "node:fs"
+import type { InputSpec } from "./agent-actions/types.js"
 import { BUILTIN_ALIASES, type KodyConfig } from "./config.js"
 import { cronMatchesInWindow } from "./cron-match.js"
-import type { InputSpec } from "./agent-actions/types.js"
 import {
   type DiscoveredAgentResponsibilityAction,
   getProfileInputs,
-  listAgentResponsibilityActions,
   listAgentActions,
+  listAgentResponsibilityActions,
   resolveAgentResponsibilityAction,
 } from "./registry.js"
 
@@ -280,7 +280,9 @@ export function autoDispatch(opts?: {
   // POLITE_WORDS filter above lets natural-language phrasings through to
   // the default — the "no firstToken" condition here is what gates them.
   if (!route && !firstToken) {
-    const defaultAction = isPr ? (opts?.config?.defaultPrAgentAction ?? null) : (opts?.config?.defaultAgentAction ?? null)
+    const defaultAction = isPr
+      ? (opts?.config?.defaultPrAgentAction ?? null)
+      : (opts?.config?.defaultAgentAction ?? null)
     route = defaultAction ? resolveConfiguredAction(defaultAction) : null
   }
   // Bot self-dispatch gate: a bot-authored comment may ONLY proceed when it

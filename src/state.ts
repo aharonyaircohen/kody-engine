@@ -1,22 +1,22 @@
 /**
  * Task state — the store for the reducer pattern.
  *
- * Each task (issue or PR) owns at most one kody-authored comment whose
- * body holds the canonical state. AgentActions read the state at the start
- * of a run, emit a typed Action, and the reducer merges the action into a
- * new state which is written back into the same comment.
+ * Each task (issue or PR) stores canonical JSON in the configured Kody state
+ * repo at tasks/issues/<number>/state.json or tasks/prs/<number>/state.json.
+ * AgentActions read the state at the start of a run, emit a typed Action, and
+ * the reducer merges the action into a new state written back to that file.
  *
  * See docs/architecture/state-reducer-pattern.md for the full concept.
  */
 
-import { execFileSync } from "node:child_process"
 import type { JobFlavor } from "./agent-actions/types.js"
+import { loadConfig } from "./config.js"
+import { readStateText, type StateRepoConfig, upsertStateText } from "./stateRepo.js"
 
 export const STATE_BEGIN = "<!-- kody:state:v1:begin -->"
 export const STATE_END = "<!-- kody:state:v1:end -->"
 const HISTORY_MAX_ENTRIES = 20
 const JOB_RUNS_MAX_ENTRIES = 20
-const API_TIMEOUT_MS = 30_000
 
 export type Phase = "research" | "planning" | "implementing" | "reviewing" | "shipped" | "failed" | "idle"
 
@@ -185,64 +185,41 @@ export function emptyState(): TaskState {
   }
 }
 
-function ghToken(): string | undefined {
-  return process.env.GH_PAT?.trim() || process.env.GH_TOKEN
-}
-
-function gh(args: string[], input?: string, cwd?: string): string {
-  const token = ghToken()
-  const env: NodeJS.ProcessEnv = token ? { ...process.env, GH_TOKEN: token } : { ...process.env }
-  return execFileSync("gh", args, {
-    encoding: "utf-8",
-    timeout: API_TIMEOUT_MS,
-    cwd,
-    env,
-    input,
-    stdio: input ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"],
-  }).trim()
-}
-
 /**
- * Locate the kody-owned state comment on a task. Returns the comment id +
- * body, or null if no such comment exists.
- */
-export function findStateComment(
-  target: TaskTarget,
-  number: number,
-  cwd?: string,
-): { id: string; body: string } | null {
-  const apiPath =
-    target === "issue"
-      ? `repos/{owner}/{repo}/issues/${number}/comments`
-      : `repos/{owner}/{repo}/issues/${number}/comments`
-  try {
-    const raw = gh(["api", "--paginate", apiPath], undefined, cwd)
-    const list = JSON.parse(raw) as Array<{ id: number; body: string }>
-    for (const c of list) {
-      if (c.body?.includes(STATE_BEGIN)) {
-        return { id: String(c.id), body: c.body }
-      }
-    }
-  } catch {
-    /* fall through */
-  }
-  return null
-}
-
-/**
- * Thrown when a state comment is PRESENT (STATE_BEGIN found) but its payload
- * can't be parsed — a truncated comment (GitHub's 64KB body cap), a clobbered
- * write, or a corrupted fence. Distinct from "no comment at all," which is a
- * legitimately empty state. Callers MUST treat this differently from
- * emptyState(): silently substituting empty state here makes the engine think
- * an in-progress task is brand new and re-do already-committed work (re-open
- * PRs, re-run completed children). See loadTaskState for the heal-then-bail
- * recovery.
+ * Thrown when persisted task state is present but its payload can't be parsed.
+ * Callers MUST treat this differently from emptyState(): silently substituting
+ * empty state here makes the engine think an in-progress task is brand new and
+ * re-do already-committed work (re-open PRs, re-run completed children). See
+ * loadTaskState for the heal-then-bail recovery.
  */
 export class CorruptStateError extends Error {
   constructor(message: string) {
     super(message)
     this.name = "CorruptStateError"
+  }
+}
+
+function taskStatePath(target: TaskTarget, number: number): string {
+  const bucket = target === "issue" ? "issues" : "prs"
+  return `tasks/${bucket}/${number}/state.json`
+}
+
+function taskStateConfig(cwd?: string, config?: StateRepoConfig): StateRepoConfig {
+  return config ?? loadConfig(cwd)
+}
+
+function normalizeTaskState(parsed: TaskState): TaskState {
+  if (parsed?.schemaVersion !== 1) {
+    throw new CorruptStateError(`unexpected schemaVersion: ${JSON.stringify(parsed?.schemaVersion)}`)
+  }
+  return {
+    schemaVersion: 1,
+    core: { ...emptyState().core, ...parsed.core },
+    agentActions: parsed.agentActions ?? {},
+    artifacts: parsed.artifacts && typeof parsed.artifacts === "object" ? parsed.artifacts : {},
+    jobs: normalizeJobs((parsed as { jobs?: unknown }).jobs),
+    history: Array.isArray(parsed.history) ? parsed.history : [],
+    flow: parsed.flow,
   }
 }
 
@@ -285,18 +262,7 @@ export function parseStateComment(body: string): TaskState {
       `state JSON unparseable (truncated comment?): ${err instanceof Error ? err.message : String(err)}`,
     )
   }
-  if (parsed?.schemaVersion !== 1) {
-    throw new CorruptStateError(`unexpected schemaVersion: ${JSON.stringify(parsed?.schemaVersion)}`)
-  }
-  return {
-    schemaVersion: 1,
-    core: { ...emptyState().core, ...parsed.core },
-    agentActions: parsed.agentActions ?? {},
-    artifacts: parsed.artifacts && typeof parsed.artifacts === "object" ? parsed.artifacts : {},
-    jobs: normalizeJobs((parsed as { jobs?: unknown }).jobs),
-    history: Array.isArray(parsed.history) ? parsed.history : [],
-    flow: parsed.flow,
-  }
+  return normalizeTaskState(parsed)
 }
 
 /**
@@ -382,7 +348,9 @@ export function upsertTaskJobs(state: TaskState, planned: PlannedTaskJob[], time
     jobs[plan.id] = {
       id: plan.id,
       agentAction: plan.agentAction,
-      ...((plan.agentResponsibility ?? prior?.agentResponsibility) ? { agentResponsibility: plan.agentResponsibility ?? prior?.agentResponsibility } : {}),
+      ...((plan.agentResponsibility ?? prior?.agentResponsibility)
+        ? { agentResponsibility: plan.agentResponsibility ?? prior?.agentResponsibility }
+        : {}),
       ...((plan.agent ?? prior?.agent) ? { agent: plan.agent ?? prior?.agent } : {}),
       ...((plan.flavor ?? prior?.flavor) ? { flavor: plan.flavor ?? prior?.flavor } : {}),
       ...((plan.schedule ?? prior?.schedule) ? { schedule: plan.schedule ?? prior?.schedule } : {}),
@@ -440,7 +408,9 @@ function reduceJobs(
   const next: TaskJob = {
     id,
     agentAction: job?.agentAction ?? prior?.agentAction ?? agentAction,
-    ...((job?.agentResponsibility ?? prior?.agentResponsibility) ? { agentResponsibility: job?.agentResponsibility ?? prior?.agentResponsibility } : {}),
+    ...((job?.agentResponsibility ?? prior?.agentResponsibility)
+      ? { agentResponsibility: job?.agentResponsibility ?? prior?.agentResponsibility }
+      : {}),
     ...((ranAsAgent ?? prior?.agent) ? { agent: ranAsAgent ?? prior?.agent } : {}),
     ...((job?.flavor ?? prior?.flavor) ? { flavor: job?.flavor ?? prior?.flavor } : {}),
     ...((job?.schedule ?? prior?.schedule) ? { schedule: job?.schedule ?? prior?.schedule } : {}),
@@ -629,9 +599,21 @@ export function renderStateComment(state: TaskState): string {
   return lines.join("\n")
 }
 
-export function readTaskState(target: TaskTarget, number: number, cwd?: string): TaskState {
-  const existing = findStateComment(target, number, cwd)
-  return existing ? parseStateComment(existing.body) : emptyState()
+export function readTaskState(target: TaskTarget, number: number, cwd?: string, config?: StateRepoConfig): TaskState {
+  const stateConfig = taskStateConfig(cwd, config)
+  const loaded = readStateText(stateConfig, cwd, taskStatePath(target, number))
+  if (!loaded) return emptyState()
+
+  let parsed: TaskState
+  try {
+    parsed = JSON.parse(loaded.content) as TaskState
+  } catch (err) {
+    throw new CorruptStateError(
+      `state repo JSON unparseable for ${loaded.path}: ${err instanceof Error ? err.message : String(err)}`,
+    )
+  }
+
+  return normalizeTaskState(parsed)
 }
 
 /**
@@ -645,19 +627,19 @@ export function setArtifact(state: TaskState, name: string, artifact: Artifact):
   }
 }
 
-export function writeTaskState(target: TaskTarget, number: number, state: TaskState, cwd?: string): void {
-  const body = renderStateComment(state)
-  const existing = findStateComment(target, number, cwd)
-  try {
-    if (existing) {
-      gh(["api", `repos/{owner}/{repo}/issues/comments/${existing.id}`, "-X", "PATCH", "-F", "body=@-"], body, cwd)
-    } else {
-      const sub = target === "issue" ? "issue" : "pr"
-      gh([sub, "comment", String(number), "--body-file", "-"], body, cwd)
-    }
-  } catch (err) {
-    process.stderr.write(
-      `[kody state] failed to write state on ${target} #${number}: ${err instanceof Error ? err.message : String(err)}\n`,
-    )
-  }
+export function writeTaskState(
+  target: TaskTarget,
+  number: number,
+  state: TaskState,
+  cwd?: string,
+  config?: StateRepoConfig,
+): void {
+  const stateConfig = taskStateConfig(cwd, config)
+  upsertStateText(
+    stateConfig,
+    cwd,
+    taskStatePath(target, number),
+    `${JSON.stringify(state, null, 2)}\n`,
+    `chore(tasks): update ${target} ${number} state`,
+  )
 }

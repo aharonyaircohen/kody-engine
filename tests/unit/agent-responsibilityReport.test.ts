@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { applyAgentResponsibilityReportToGoalState, type AgentResponsibilityReport, parseAgentResponsibilityReportsFromText } from "../../src/agent-responsibilityReport.js"
+import {
+  type AgentResponsibilityReport,
+  applyAgentResponsibilityReportToGoalState,
+  parseAgentResponsibilityReportsFromText,
+} from "../../src/agent-responsibilityReport.js"
 import type { GoalState } from "../../src/goal/state.js"
 
 describe("parseAgentResponsibilityReportsFromText", () => {
@@ -20,7 +24,9 @@ describe("parseAgentResponsibilityReportsFromText", () => {
 
   it("ignores malformed report lines instead of throwing", () => {
     expect(parseAgentResponsibilityReportsFromText("KODY_AGENT_RESPONSIBILITY_REPORT={not json}\n")).toEqual([])
-    expect(parseAgentResponsibilityReportsFromText('KODY_AGENT_RESPONSIBILITY_REPORT={"target":{"type":"goal"}}\n')).toEqual([])
+    expect(
+      parseAgentResponsibilityReportsFromText('KODY_AGENT_RESPONSIBILITY_REPORT={"target":{"type":"goal"}}\n'),
+    ).toEqual([])
   })
 })
 

@@ -1,5 +1,6 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { normalizeStatePath, parseStateRepoSlug } from "./stateRepo.js"
 
 export interface TestRequirement {
   pattern: string
@@ -28,6 +29,12 @@ export interface KodyConfig {
   github: {
     owner: string
     repo: string
+  }
+  state?: {
+    /** GitHub repository that stores this repo's Kody runtime state. */
+    repo: string
+    /** Folder inside `state.repo` that belongs to this consumer repo. */
+    path: string
   }
   agent: {
     model: string
@@ -274,6 +281,7 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
       owner: String(github.owner),
       repo: String(github.repo),
     },
+    state: parseStateConfig(raw, github),
     agent: {
       model: String(agent.model),
       ...parsePerAgentAction(agent.perAgentAction),
@@ -296,6 +304,20 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     jobs: parseJobsConfig(raw.jobs),
     company: parseCompanyConfig(raw.company),
     access: parseAccessConfig(raw.access),
+  }
+}
+
+function parseStateConfig(raw: Record<string, unknown>, github: Record<string, unknown>): KodyConfig["state"] {
+  const nested = recordValue(raw.state) ?? {}
+  const repoRaw = typeof raw.stateRepo === "string" ? raw.stateRepo : nested.repo
+  const pathRaw = typeof raw.statePath === "string" ? raw.statePath : nested.path
+  const stateRepo =
+    typeof repoRaw === "string" && repoRaw.trim().length > 0 ? repoRaw.trim() : `${String(github.owner)}/kody-state`
+  parseStateRepoSlug(stateRepo)
+  const statePath = typeof pathRaw === "string" && pathRaw.trim().length > 0 ? pathRaw.trim() : String(github.repo)
+  return {
+    repo: stateRepo,
+    path: normalizeStatePath(statePath),
   }
 }
 
@@ -377,7 +399,11 @@ function parseCompanyConfig(raw: unknown): KodyConfig["company"] {
   if (!raw || typeof raw !== "object") return undefined
   const r = raw as Record<string, unknown>
   const out: NonNullable<KodyConfig["company"]> = {}
-  if (r.activeAgentResponsibilities !== undefined) out.activeAgentResponsibilities = parseSlugArray(r.activeAgentResponsibilities, "company.activeAgentResponsibilities")
+  if (r.activeAgentResponsibilities !== undefined)
+    out.activeAgentResponsibilities = parseSlugArray(
+      r.activeAgentResponsibilities,
+      "company.activeAgentResponsibilities",
+    )
   if (r.activeGoals !== undefined) out.activeGoals = parseGoalActivations(r.activeGoals)
   return Object.keys(out).length > 0 ? out : undefined
 }
@@ -413,12 +439,14 @@ function parseGoalActivations(raw: unknown): GoalActivation[] {
       entry.every = r.every.trim()
     }
     if (r.idPrefix !== undefined) {
-      if (typeof r.idPrefix !== "string") throw new Error(`kody.config.json: company.activeGoals idPrefix must be a string`)
+      if (typeof r.idPrefix !== "string")
+        throw new Error(`kody.config.json: company.activeGoals idPrefix must be a string`)
       const idPrefix = parseSlug(r.idPrefix, "company.activeGoals.idPrefix")
       if (idPrefix) entry.idPrefix = idPrefix
     }
     const facts = recordValue(r.facts)
-    if (r.facts !== undefined && !facts) throw new Error(`kody.config.json: company.activeGoals facts must be an object`)
+    if (r.facts !== undefined && !facts)
+      throw new Error(`kody.config.json: company.activeGoals facts must be an object`)
     if (facts) entry.facts = facts
     out.push(entry)
   }

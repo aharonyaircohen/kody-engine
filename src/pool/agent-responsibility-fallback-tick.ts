@@ -44,7 +44,9 @@ export interface AgentResponsibilityTickResult {
   claimed: number
 }
 
-export async function runAgentResponsibilityFallbackTick(deps: AgentResponsibilityFallbackDeps): Promise<AgentResponsibilityTickResult> {
+export async function runAgentResponsibilityFallbackTick(
+  deps: AgentResponsibilityFallbackDeps,
+): Promise<AgentResponsibilityTickResult> {
   if (!(await deps.isDegraded())) {
     return { ran: false, claimed: 0 }
   }

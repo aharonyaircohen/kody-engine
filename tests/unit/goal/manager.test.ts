@@ -18,9 +18,25 @@ function releaseGoal(overrides: Partial<ManagedGoal> = {}): ManagedGoal {
     },
     agentResponsibilities: ["release-prepare", "qa-goal", "npm-publish"],
     route: [
-      { evidence: "releasePrExists", stage: "prepare", agentResponsibility: "release-prepare", agentAction: "release-prepare" },
-      { evidence: "qaPassed", stage: "qa", agentResponsibility: "qa-goal", agentAction: "qa-goal", args: { issue: 123 } },
-      { evidence: "packagePublished", stage: "publish", agentResponsibility: "npm-publish", agentAction: "npm-publish" },
+      {
+        evidence: "releasePrExists",
+        stage: "prepare",
+        agentResponsibility: "release-prepare",
+        agentAction: "release-prepare",
+      },
+      {
+        evidence: "qaPassed",
+        stage: "qa",
+        agentResponsibility: "qa-goal",
+        agentAction: "qa-goal",
+        args: { issue: 123 },
+      },
+      {
+        evidence: "packagePublished",
+        stage: "publish",
+        agentResponsibility: "npm-publish",
+        agentAction: "npm-publish",
+      },
     ],
     stage: "prepare",
     facts: {},
@@ -85,7 +101,12 @@ describe("planManagedGoalTick", () => {
     const goal = releaseGoal({
       facts: { releasePrExists: true, deployPr: 456 },
       route: [
-        { evidence: "releasePrExists", stage: "prepare", agentResponsibility: "release-prepare", agentAction: "release-prepare" },
+        {
+          evidence: "releasePrExists",
+          stage: "prepare",
+          agentResponsibility: "release-prepare",
+          agentAction: "release-prepare",
+        },
         {
           evidence: "qaPassed",
           stage: "qa",
@@ -93,7 +114,12 @@ describe("planManagedGoalTick", () => {
           agentAction: "qa-goal",
           args: { pr: { fact: "deployPr" }, issue: 123 },
         },
-        { evidence: "packagePublished", stage: "publish", agentResponsibility: "npm-publish", agentAction: "npm-publish" },
+        {
+          evidence: "packagePublished",
+          stage: "publish",
+          agentResponsibility: "npm-publish",
+          agentAction: "npm-publish",
+        },
       ],
     })
 
@@ -114,7 +140,12 @@ describe("planManagedGoalTick", () => {
       },
       agentResponsibilities: ["release-prepare", "ci-health"],
       route: [
-        { evidence: "releasePrExists", stage: "prepare", agentResponsibility: "release-prepare", agentAction: "release-prepare" },
+        {
+          evidence: "releasePrExists",
+          stage: "prepare",
+          agentResponsibility: "release-prepare",
+          agentAction: "release-prepare",
+        },
         {
           evidence: "mainDeployPrGreen",
           stage: "wait-ci",
@@ -141,7 +172,12 @@ describe("planManagedGoalTick", () => {
     const goal = releaseGoal({
       facts: { releasePrExists: true },
       route: [
-        { evidence: "releasePrExists", stage: "prepare", agentResponsibility: "release-prepare", agentAction: "release-prepare" },
+        {
+          evidence: "releasePrExists",
+          stage: "prepare",
+          agentResponsibility: "release-prepare",
+          agentAction: "release-prepare",
+        },
         {
           evidence: "qaPassed",
           stage: "qa",
@@ -149,7 +185,12 @@ describe("planManagedGoalTick", () => {
           agentAction: "qa-goal",
           args: { pr: { fact: "deployPr" } },
         },
-        { evidence: "packagePublished", stage: "publish", agentResponsibility: "npm-publish", agentAction: "npm-publish" },
+        {
+          evidence: "packagePublished",
+          stage: "publish",
+          agentResponsibility: "npm-publish",
+          agentAction: "npm-publish",
+        },
       ],
     })
 

@@ -4,6 +4,7 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { __resetRunIdCache } from "../../src/events.js"
 import { loadProfile } from "../../src/profile.js"
+import { runtimeStatePath } from "../../src/runtimePaths.js"
 
 function writeProfile(dir: string, body: Record<string, unknown>): string {
   const subdir = path.join(dir, "test-exec")
@@ -135,7 +136,7 @@ describe("Phase 4f: commitAndPush idempotency", () => {
 
   it("replays from sentinel on second call within the same run", async () => {
     // Pre-seed a sentinel as if a prior commitAndPush invocation wrote it.
-    const sentinelDir = path.join(tmp, ".kody", "agent-runs", "phase4f-run")
+    const sentinelDir = runtimeStatePath(tmp, "agent-runs", "phase4f-run")
     fs.mkdirSync(sentinelDir, { recursive: true })
     fs.writeFileSync(
       path.join(sentinelDir, "commit-test-exec.lock"),
@@ -172,7 +173,7 @@ describe("Phase 4f: commitAndPush idempotency", () => {
 
   it("env override KODY_COMMIT_IDEMPOTENCY=0 disables the sentinel replay", async () => {
     process.env.KODY_COMMIT_IDEMPOTENCY = "0"
-    const sentinelDir = path.join(tmp, ".kody", "agent-runs", "phase4f-run")
+    const sentinelDir = runtimeStatePath(tmp, "agent-runs", "phase4f-run")
     fs.mkdirSync(sentinelDir, { recursive: true })
     fs.writeFileSync(
       path.join(sentinelDir, "commit-test-exec.lock"),

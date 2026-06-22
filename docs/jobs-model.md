@@ -150,10 +150,9 @@ moving to later pending jobs, so failed work is not skipped.
   `agent-responsibility-scheduler` creates the task issue and `task-jobs` waits on the children.
   Rejected: making the agentResponsibility itself poll child state, because agentResponsibilities are cron
   triggers.
-- **No separate job storage.** The planned jobs live in the task state comment on
-  the issue, beside the task summary and run history. Rejected:
-  `.kody/jobs/`, because that splits one task's source of truth across two
-  locations.
+- **No consumer-repo job storage.** The planned jobs live in task state under
+  `stateRepo`; the issue/PR comment is only a readable mirror. Rejected:
+  `.kody/jobs/` in the consumer repo, because that contaminates product history.
 - **No new orchestration layer.** `task-jobs` is a small script-only agentAction
   on top of the existing `runJob` / `runAgentActionChain` path. Rejected: a new
   orchestrator primitive or an "orchestrate" agentAction kind.
@@ -165,7 +164,7 @@ moves toward that destination. It is above agentResponsibilities in meaning: age
 responsibilities the goal may use, not the goal itself.
 
 The new company goal model is the **managed goal** contract stored in
-`.kody/goals/instances/<id>/state.json` on `kody-state`. The contract is:
+`<statePath>/goals/instances/<id>/state.json` in `stateRepo`. The contract is:
 
 - `destination` — outcome text plus ordered evidence names that define done.
 - `agentResponsibilities` — agentResponsibilities this goal is allowed to use.

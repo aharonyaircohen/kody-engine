@@ -316,7 +316,7 @@ describe("stats: runStats", () => {
     mocks.listRuns.mockReturnValue([])
     const code = await runStats(["--cwd", "/tmp/empty"])
     expect(code).toBe(0)
-    expect(stdout).toContain("no runs found under /tmp/empty/.kody/agent-runs/")
+    expect(stdout).toContain("no local runtime runs found for /tmp/empty")
     expect(mocks.listRuns).toHaveBeenCalledWith("/tmp/empty")
   })
 

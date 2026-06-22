@@ -13,12 +13,18 @@
  * silently breaks every downstream consumer; this test fails immediately.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // vi.mock is hoisted above all top-level code, so the mock factories can't
 // reference module-level variables. vi.hoisted lets us share the spies.
 const mocks = vi.hoisted(() => ({
   gh: vi.fn(),
+  ghApi: vi.fn((args: string[]) => {
+    const apiPath = args.find((arg) => arg.includes("/contents/")) ?? ""
+    if (args[0] === "api" && args.includes("--method") && args.includes("PUT") && apiPath) return "{}"
+    if (args[0] === "api" && apiPath) throw new Error("HTTP 404 Not Found")
+    return ""
+  }),
   ghPr: vi.fn(),
   setKodyLabel: vi.fn(),
   removeLabel: vi.fn(),
@@ -41,6 +47,7 @@ vi.mock("../../src/issue.js", async (orig) => {
   const actual = (await orig()) as typeof import("../../src/issue.js")
   return {
     ...actual,
+    gh: mocks.ghApi,
     postIssueComment: mocks.gh,
     postPrReviewComment: mocks.ghPr,
   }
@@ -80,6 +87,7 @@ vi.mock("../../src/commit.js", async (orig) => {
 
 import type { AgentResult } from "../../src/agent.js"
 import type { Context } from "../../src/agent-actions/types.js"
+import { shouldBlockMutatingPostflight } from "../../src/executor.js"
 import { loadProfile } from "../../src/profile.js"
 import { listAgentActions } from "../../src/registry.js"
 import { postflightScripts } from "../../src/scripts/index.js"
@@ -94,6 +102,7 @@ function makeCtx(): Context {
     cwd: "/tmp/fake-repo",
     config: {
       github: { owner: "o", repo: "r" },
+      state: { repo: "o/kody-state", path: "r" },
       git: { defaultBranch: "main" },
       quality: { typecheck: "tsc", testUnit: "vitest", lint: "eslint", format: "prettier" },
       agent: { model: "anthropic/claude-haiku-4-5-20251001" },
@@ -104,8 +113,6 @@ function makeCtx(): Context {
       // Simulate state that earlier preflights would have set.
       commentTargetType: "issue",
       commentTargetNumber: 42,
-      commitResult: { committed: true, pushed: true },
-      hasCommitsAhead: true,
       branch: "kody/test-feature",
       changedFiles: ["src/foo.ts"],
       issue: { title: "Add foo" },
@@ -120,6 +127,16 @@ async function runPostflights(ctx: Context, agentResult: AgentResult, profileNam
   const profile = loadProfile(exe.profilePath)
   for (const entry of profile.scripts.postflight) {
     if (!entry.script) continue // shell entries skipped in this smoke
+    if (shouldBlockMutatingPostflight(entry.script, ctx.output.exitCode)) {
+      if (entry.script === "commitAndPush" && ctx.data.commitResult === undefined) {
+        ctx.data.commitResult = {
+          committed: false,
+          pushed: false,
+          skippedReason: `run already failed (exit ${ctx.output.exitCode}) - executor blocked ${entry.script}`,
+        }
+      }
+      continue
+    }
     const fn = postflightScripts[entry.script]
     if (!fn) throw new Error(`script ${entry.script} not registered`)
     // Honor runWhen the same way the real executor would.
@@ -149,10 +166,17 @@ async function runPostflights(ctx: Context, agentResult: AgentResult, profileNam
 
 describe("postflight chain: run profile, success path", () => {
   beforeEach(() => {
+    process.env.KODY_COMMIT_IDEMPOTENCY = "0"
     mocks.gh.mockClear()
+    mocks.ghApi.mockClear()
     mocks.ghPr.mockClear()
     mocks.verifyAll.mockClear()
     mocks.doEnsurePr.mockClear()
+    mocks.doCommitAndPush.mockClear()
+    mocks.hasCommitsAhead.mockClear()
+    mocks.listChangedFiles.mockClear()
+    mocks.listFilesInCommit.mockClear()
+    mocks.isForbiddenPath.mockClear()
     // Phase 4f added a sentinel-based commitAndPush idempotency replay.
     // The tests share `/tmp/fake-repo` as cwd, so sentinels from one
     // test would replay into the next. Clear them between tests so
@@ -163,6 +187,10 @@ describe("postflight chain: run profile, success path", () => {
     } catch {
       /* best effort */
     }
+  })
+
+  afterEach(() => {
+    delete process.env.KODY_COMMIT_IDEMPOTENCY
   })
 
   it("agent returns DONE+COMMIT_MSG → action is RUN_COMPLETED + comment posted", async () => {

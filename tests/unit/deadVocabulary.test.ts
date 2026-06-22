@@ -71,12 +71,12 @@ describe("dead vocabulary", () => {
     for (const file of walk(SRC_DIR)) {
       const text = fs.readFileSync(file, "utf-8")
       for (const term of BANNED) {
-      const found = typeof term === "string" ? text.includes(term) : term.test(text)
-      if (found) {
-        offenders.push(`${path.relative(SRC_DIR, file)} → "${String(term)}"`)
+        const found = typeof term === "string" ? text.includes(term) : term.test(text)
+        if (found) {
+          offenders.push(`${path.relative(SRC_DIR, file)} → "${String(term)}"`)
+        }
       }
     }
-  }
     expect(offenders, `retired vocabulary found:\n${offenders.join("\n")}`).toEqual([])
   })
 })

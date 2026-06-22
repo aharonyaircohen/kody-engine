@@ -1,12 +1,10 @@
 import * as path from "node:path"
-
-import type { KodyConfig } from "../config.js"
 import type { AgentResponsibilityFolder } from "../agent-responsibilityFolders.js"
+import type { KodyConfig } from "../config.js"
 import type { ManagedGoal } from "../goal/manager.js"
-import { mintScheduledJob } from "../job.js"
 import { resolveAgentResponsibilityExecution, resolveAgentResponsibilityFolder } from "../registry.js"
-import { type ScheduleEvery, scheduleEveryToMs } from "./scheduleEvery.js"
 import { resolveBackend } from "./jobState/index.js"
+import { type ScheduleEvery, scheduleEveryToMs } from "./scheduleEvery.js"
 
 export interface GoalAgentResponsibilityScheduleStatus {
   slug: string
@@ -56,7 +54,9 @@ export function isAgentResponsibilityCadenceGoal(goal: ManagedGoal, extra: Recor
   )
 }
 
-export async function planGoalAgentResponsibilitySchedule(opts: PlanGoalAgentResponsibilityScheduleOptions): Promise<GoalAgentResponsibilityScheduleDecision> {
+export async function planGoalAgentResponsibilitySchedule(
+  opts: PlanGoalAgentResponsibilityScheduleOptions,
+): Promise<GoalAgentResponsibilityScheduleDecision> {
   const now = opts.now ?? new Date()
   const at = now.toISOString()
   const jobsDir = opts.jobsDir ?? ".kody/agent-responsibilities"
@@ -83,7 +83,10 @@ export async function planGoalAgentResponsibilitySchedule(opts: PlanGoalAgentRes
     .find((status): status is GoalAgentResponsibilityScheduleStatus => status?.state === "due")
 
   if (!due) {
-    const reason = blockers.length > 0 ? "no runnable due agentResponsibility; blocked agentResponsibilities need attention" : "no agentResponsibility due now"
+    const reason =
+      blockers.length > 0
+        ? "no runnable due agentResponsibility; blocked agentResponsibilities need attention"
+        : "no agentResponsibility due now"
     const kind = blockers.length > 0 ? "blocked" : "idle"
     return {
       kind,
@@ -151,7 +154,13 @@ async function describeAgentResponsibilitySchedule(
     return { slug, title: agentResponsibility.title, cadence: config.every, state: "manual", reason: "manual only" }
   }
   if (!config.agent || config.agent.trim().length === 0) {
-    return { slug, title: agentResponsibility.title, cadence: config.every, state: "blocked", reason: "no agent assigned" }
+    return {
+      slug,
+      title: agentResponsibility.title,
+      cadence: config.every,
+      state: "blocked",
+      reason: "no agent assigned",
+    }
   }
   if (config.agentActions && config.agentActions.length > 1) {
     return {
@@ -170,14 +179,32 @@ async function describeAgentResponsibilitySchedule(
       if (typeof raw === "string" && validIso(raw)) lastFiredAt = raw
     }
   } catch {
-    return { slug, title: agentResponsibility.title, cadence: config.every, state: "due", reason: "state unreadable; run to refresh" }
+    return {
+      slug,
+      title: agentResponsibility.title,
+      cadence: config.every,
+      state: "due",
+      reason: "state unreadable; run to refresh",
+    }
   }
 
   if (!config.every) {
-    return { slug, title: agentResponsibility.title, state: "due", reason: "no cadence; check every goal tick", lastFiredAt }
+    return {
+      slug,
+      title: agentResponsibility.title,
+      state: "due",
+      reason: "no cadence; check every goal tick",
+      lastFiredAt,
+    }
   }
   if (!lastFiredAt) {
-    return { slug, title: agentResponsibility.title, cadence: config.every, state: "due", reason: `first check for ${config.every}` }
+    return {
+      slug,
+      title: agentResponsibility.title,
+      cadence: config.every,
+      state: "due",
+      reason: `first check for ${config.every}`,
+    }
   }
 
   const last = Date.parse(lastFiredAt)
@@ -205,7 +232,11 @@ async function describeAgentResponsibilitySchedule(
   }
 }
 
-function dutyDispatch(agentResponsibility: AgentResponsibilityFolder): { agentResponsibility: string; agentAction: string; cliArgs: Record<string, unknown> } {
+function dutyDispatch(agentResponsibility: AgentResponsibilityFolder): {
+  agentResponsibility: string
+  agentAction: string
+  cliArgs: Record<string, unknown>
+} {
   const { agentAction, cliArgs } = resolveAgentResponsibilityExecution(agentResponsibility)
   return { agentResponsibility: agentResponsibility.slug, agentAction, cliArgs }
 }
@@ -214,7 +245,10 @@ function validIso(value: string | undefined): value is string {
   return typeof value === "string" && !Number.isNaN(Date.parse(value))
 }
 
-function markAgentResponsibilitySelected(status: GoalAgentResponsibilityScheduleStatus, now: Date): GoalAgentResponsibilityScheduleStatus {
+function markAgentResponsibilitySelected(
+  status: GoalAgentResponsibilityScheduleStatus,
+  now: Date,
+): GoalAgentResponsibilityScheduleStatus {
   const lastFiredAt = now.toISOString()
   const nextEligibleAt =
     status.cadence && status.cadence !== "manual"

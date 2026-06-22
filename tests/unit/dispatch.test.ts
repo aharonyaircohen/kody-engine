@@ -350,7 +350,10 @@ describe("dispatch: issue_comment on issue", () => {
         path.join(tmp, ".kody", "agent-responsibilities", "remember", "profile.json"),
         JSON.stringify({ name: "remember", action: "remember", agentAction: "custom-impl", agent: "kody" }),
       )
-      fs.writeFileSync(path.join(tmp, ".kody", "agent-responsibilities", "remember", "agent-responsibility.md"), "# Remember\n")
+      fs.writeFileSync(
+        path.join(tmp, ".kody", "agent-responsibilities", "remember", "agent-responsibility.md"),
+        "# Remember\n",
+      )
       fs.writeFileSync(
         path.join(tmp, ".kody", "agent-actions", "custom-impl", "profile.json"),
         JSON.stringify({

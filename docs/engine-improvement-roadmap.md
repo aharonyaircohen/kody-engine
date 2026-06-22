@@ -99,7 +99,7 @@ consolidating context loading.
      schemaVersion: 1
    }
    ```
-   Persist to `.kody/agent-runs/<runId>/task-context.json` so children of a
+   Persist to runtime scratch storage so children of a
    single task workflow can re-read it without re-querying GH.
 4. **loadTaskContext preflight.** New script in `src/scripts/`.
    Composes existing loaders' outputs into the typed object.
@@ -190,8 +190,8 @@ real signal up to a bounded budget.
       attempts total before the run aborts.
    ```
 3. **Cap per-iteration tokens.** Truncate the verify result to ≤2 KB
-   of failure detail. Long suite logs go to `.kody/agent-runs/<id>/verify-
-   {iteration}.log` for post-mortem. (1 day)
+   of failure detail. Long suite logs go to runtime scratch storage for
+   post-mortem. (1 day)
 4. **Keep the postflight `verify` as ratifier.** It still runs after
    the agent finishes — if the agent forgot to call the tool or it
    returns stale data, the postflight is the authoritative gate. No
@@ -281,9 +281,7 @@ changing the agent loop. Most-bang-per-buck UX improvements.
 
 #### 4c. **QW13 — state.json artifact replacing GH comment parsing** (medium)
 
-- New `src/scripts/saveTaskStateFile.ts` writes
-  `.kody/agent-runs/<runId>/state.json` to the PR branch on every
-  postflight tick.
+- Task state writes to the configured Kody state repo on every postflight tick.
 - `readTaskState` updated: prefer the file (one GH API call), fall
   back to comment-parsing if the file is missing (back-compat for
   in-flight tasks).
@@ -311,8 +309,8 @@ changing the agent loop. Most-bang-per-buck UX improvements.
 
 #### 4f. **QW4 — commitAndPush idempotency** (low)
 
-- `src/scripts/commitAndPush.ts` writes a sentinel file
-  `.kody/agent-runs/<runId>/commit-<stage>.lock` on first run. Subsequent
+- `src/scripts/commitAndPush.ts` writes a sentinel file in runtime scratch
+  storage on first run. Subsequent
   calls in the same task no-op + log.
 - **Effort:** ½ day.
 
@@ -325,8 +323,7 @@ changing the agent loop. Most-bang-per-buck UX improvements.
 
 #### 4h. **QW6 — structured postflight crash artifact** (low)
 
-- On postflight crash, executor writes
-  `.kody/agent-runs/<runId>/crashes/<postflight>-<ts>.json` with reason +
+- On postflight crash, executor writes a runtime scratch crash artifact with reason +
   stack. Today only stderr — gone after the runner shuts down.
 - **Effort:** ½ day.
 

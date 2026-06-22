@@ -2,11 +2,11 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-
+import type { Context, Profile } from "../../../src/agent-actions/types.js"
+import type { GoalState } from "../../../src/goal/state.js"
 import { advanceManagedGoal } from "../../../src/scripts/advanceManagedGoal.js"
 import type { GoalAgentResponsibilityScheduleState } from "../../../src/scripts/goalAgentResponsibilityScheduling.js"
 import type { GoalCtx } from "../../../src/scripts/goalCtx.js"
-import type { GoalState } from "../../../src/goal/state.js"
 
 let tmp: string
 
@@ -79,7 +79,7 @@ function fakeCtx(raw: GoalState) {
       } satisfies GoalCtx,
     },
     output: { exitCode: 0 },
-  } as any
+  } as unknown as Context
 }
 
 describe("standing goal agentResponsibility scheduling", () => {
@@ -88,7 +88,7 @@ describe("standing goal agentResponsibility scheduling", () => {
     const raw = goalState()
     const ctx = fakeCtx(raw)
 
-    await advanceManagedGoal(ctx, {} as any, {})
+    await advanceManagedGoal(ctx, {} as unknown as Profile, {})
 
     expect(ctx.output.nextDispatch).toEqual({
       agentResponsibility: "ci-health",
@@ -114,7 +114,7 @@ describe("standing goal agentResponsibility scheduling", () => {
     raw.extra.type = "agentLoop"
     const ctx = fakeCtx(raw)
 
-    await advanceManagedGoal(ctx, {} as any, {})
+    await advanceManagedGoal(ctx, {} as unknown as Profile, {})
 
     expect(ctx.output.reason).toBe("dispatch ci-health: first check for 15m")
     expect(ctx.output.nextDispatch).toEqual({
@@ -139,7 +139,7 @@ describe("standing goal agentResponsibility scheduling", () => {
     const raw = goalState(["auto-fix-ci"])
     const ctx = fakeCtx(raw)
 
-    await advanceManagedGoal(ctx, {} as any, {})
+    await advanceManagedGoal(ctx, {} as unknown as Profile, {})
 
     expect(ctx.output.nextDispatch).toEqual({
       agentResponsibility: "auto-fix-ci",
@@ -158,7 +158,7 @@ describe("standing goal agentResponsibility scheduling", () => {
     const raw = goalState()
     const ctx = fakeCtx(raw)
 
-    await advanceManagedGoal(ctx, {} as any, {})
+    await advanceManagedGoal(ctx, {} as unknown as Profile, {})
 
     expect(ctx.output.nextDispatch).toBeUndefined()
     expect(ctx.output.reason).toBe("no agentResponsibility due now")

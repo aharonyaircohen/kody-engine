@@ -5,7 +5,11 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest"
-import { buildAgentResponsibilityMcpServer, AGENT_RESPONSIBILITY_MCP_TOOL_NAMES, agentResponsibilityToolDefinitions } from "../../src/agent-responsibilityMcp.js"
+import {
+  AGENT_RESPONSIBILITY_MCP_TOOL_NAMES,
+  agentResponsibilityToolDefinitions,
+  buildAgentResponsibilityMcpServer,
+} from "../../src/agent-responsibilityMcp.js"
 import { buildFetchRepoMcpServer, fetchRepoToolDefinition } from "../../src/fetchRepoMcp.js"
 import { buildMcpHttpServer, listenMcpHttpServer, type McpRouteConfig } from "../../src/servers/mcpHttpServer.js"
 import { buildSubmitMcpServer, submitStateToolDefinition } from "../../src/submitMcp.js"

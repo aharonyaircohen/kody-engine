@@ -2,8 +2,9 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { __resetRunIdCache } from "../../src/events.js"
 import type { Context, Profile } from "../../src/agent-actions/types.js"
+import { __resetRunIdCache } from "../../src/events.js"
+import { runtimeStatePath } from "../../src/runtimePaths.js"
 import { loadTaskContext } from "../../src/scripts/loadTaskContext.js"
 import { TASK_CONTEXT_SCHEMA_VERSION } from "../../src/taskContext.js"
 
@@ -17,6 +18,7 @@ function makeCtx(overrides: Partial<Context["data"]> = {}, cwd: string): Context
       quality: { typecheck: "", lint: "", format: "", testUnit: "" },
       git: { defaultBranch: "main" },
       github: { owner: "x", repo: "y" },
+      state: { repo: "x/kody-state", path: "y" },
       agent: { model: "claude/claude-sonnet-4-6" },
     },
     data: { ...overrides },
@@ -30,14 +32,16 @@ describe("loadTaskContext: assembly", () => {
     __resetRunIdCache()
     process.env.KODY_RUN_ID = "test-run"
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-load-ctx-"))
+    process.env.KODY_RUNTIME_DIR = path.join(tmpDir, "runtime")
   })
   afterEach(() => {
     delete process.env.KODY_RUN_ID
+    delete process.env.KODY_RUNTIME_DIR
     __resetRunIdCache()
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it("assembles taskContext from ctx.data and persists to .kody/agent-runs/<runId>/", async () => {
+  it("assembles taskContext from ctx.data and persists to runtime scratch", async () => {
     const ctx = makeCtx(
       {
         issue: {
@@ -58,7 +62,7 @@ describe("loadTaskContext: assembly", () => {
     )
     await loadTaskContext(ctx, fakeProfile)
     expect(ctx.data.taskContext).toBeDefined()
-    const persisted = path.join(tmpDir, ".kody", "agent-runs", "test-run", "task-context.json")
+    const persisted = runtimeStatePath(tmpDir, "agent-runs", "test-run", "task-context.json")
     expect(fs.existsSync(persisted)).toBe(true)
     const parsed = JSON.parse(fs.readFileSync(persisted, "utf-8"))
     expect(parsed.schemaVersion).toBe(TASK_CONTEXT_SCHEMA_VERSION)

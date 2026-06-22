@@ -21,8 +21,8 @@ vi.mock("node:child_process", () => ({
   execFileSync: (...args: unknown[]) => execFileSyncMock(...args),
 }))
 
-import { mergeBase } from "../../src/branch.js"
 import type { Context, Profile } from "../../src/agent-actions/types.js"
+import { mergeBase } from "../../src/branch.js"
 import { getPr, postPrReviewComment } from "../../src/issue.js"
 import { setKodyLabel } from "../../src/lifecycleLabels.js"
 import { syncFlow } from "../../src/scripts/syncFlow.js"

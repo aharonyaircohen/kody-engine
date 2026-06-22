@@ -401,7 +401,7 @@ describe("container: PR target resolution", () => {
 describe("container: target-aware state reads", () => {
   // Regression: live-test on issue 3175 surfaced that readContainerState was
   // hard-wired to read from the issue thread, ignoring child.target. After a
-  // child with target:"pr" wrote REVIEW_PASS to the PR's state comment, the
+  // child with target:"pr" wrote REVIEW_PASS to the PR's state file, the
   // container re-read from the issue and saw the *prior* RUN_COMPLETED still
   // sitting there, then routed via the wildcard fallback to abort.
 

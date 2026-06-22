@@ -109,7 +109,10 @@ describe("runJob (Phase 1 seam)", () => {
   })
 
   it("does not seed jobWhy for an empty why string", async () => {
-    await runJob({ agentResponsibility: "run", agentAction: "run", why: "", cliArgs: {}, flavor: "instant" }, { cwd: "/x" })
+    await runJob(
+      { agentResponsibility: "run", agentAction: "run", why: "", cliArgs: {}, flavor: "instant" },
+      { cwd: "/x" },
+    )
     const [, input] = runAgentActionChain.mock.calls[0]!
     expect(input.preloadedData?.jobWhy).toBeUndefined()
   })
@@ -183,7 +186,13 @@ describe("runJob (Phase 1 seam)", () => {
 
   it("uses the agentResponsibility reference in the stable key for scheduled jobs", async () => {
     await runJob(
-      { agentResponsibility: "agent-responsibility-tick", agentAction: "agent-responsibility-tick", schedule: "*/5 * * * *", cliArgs: {}, flavor: "scheduled" },
+      {
+        agentResponsibility: "agent-responsibility-tick",
+        agentAction: "agent-responsibility-tick",
+        schedule: "*/5 * * * *",
+        cliArgs: {},
+        flavor: "scheduled",
+      },
       { cwd: "/x" },
     )
     const [, input] = runAgentActionChain.mock.calls[0]!
@@ -191,7 +200,10 @@ describe("runJob (Phase 1 seam)", () => {
   })
 
   it("falls back to the agentResponsibility slug as the profile when no agentAction", async () => {
-    await runJob({ agentResponsibility: "run", schedule: "*/5 * * * *", cliArgs: {}, flavor: "scheduled" }, { cwd: "/x" })
+    await runJob(
+      { agentResponsibility: "run", schedule: "*/5 * * * *", cliArgs: {}, flavor: "scheduled" },
+      { cwd: "/x" },
+    )
     expect(runAgentActionChain.mock.calls[0]![0]).toBe("run")
   })
 
@@ -208,11 +220,15 @@ describe("runJob (Phase 1 seam)", () => {
   })
 
   it("rejects an agentAction-only job", () => {
-    expect(() => validateJob({ agentAction: "run", cliArgs: {}, flavor: "instant" })).toThrow(/agentResponsibility action or agentResponsibility/)
+    expect(() => validateJob({ agentAction: "run", cliArgs: {}, flavor: "instant" })).toThrow(
+      /agentResponsibility action or agentResponsibility/,
+    )
   })
 
   it("rejects an unknown flavor", () => {
-    expect(() => validateJob({ agentResponsibility: "run", agentAction: "run", cliArgs: {}, flavor: "bogus" })).toThrow(InvalidJobError)
+    expect(() => validateJob({ agentResponsibility: "run", agentAction: "run", cliArgs: {}, flavor: "bogus" })).toThrow(
+      InvalidJobError,
+    )
   })
 
   it("defaults cliArgs to an empty object when omitted", () => {
@@ -275,7 +291,14 @@ describe("mintScheduledJob (Phase 2)", () => {
   })
 
   it("carries the cadence onto ctx.data.jobSchedule so the ledger records when it fired", async () => {
-    await runJob(mintScheduledJob({ agentResponsibility: "agent-responsibility-tick", agentAction: "agent-responsibility-tick", schedule: "7d" }), { cwd: "/x" })
+    await runJob(
+      mintScheduledJob({
+        agentResponsibility: "agent-responsibility-tick",
+        agentAction: "agent-responsibility-tick",
+        schedule: "7d",
+      }),
+      { cwd: "/x" },
+    )
     const [, input] = runAgentActionChain.mock.calls.at(-1)!
     expect(input.preloadedData?.jobSchedule).toBe("7d")
     expect(input.preloadedData?.jobFlavor).toBe("scheduled")

@@ -22,8 +22,8 @@
  * When invoked, this is what Hermes connects to as an MCP client.
  */
 
-import { type KodyConfig, loadConfig } from "../config.js"
 import { agentResponsibilityToolDefinitions } from "../agent-responsibilityMcp.js"
+import { type KodyConfig, loadConfig } from "../config.js"
 import { fetchRepoToolDefinition } from "../fetchRepoMcp.js"
 import { buildMcpHttpServer, listenMcpHttpServer, type McpRouteConfig } from "../servers/mcpHttpServer.js"
 import { submitStateToolDefinition } from "../submitMcp.js"
@@ -75,6 +75,7 @@ export async function mcpHttpServer(): Promise<number> {
       version: "0.1.0",
       tools: agentResponsibilityToolDefinitions({
         repoSlug: process.env.GITHUB_REPOSITORY ?? "owner/repo",
+        state: config.state,
         operatorMention: process.env.OPERATOR_MENTION ?? "",
       }),
     },
@@ -110,6 +111,7 @@ async function loadConfigSafe(): Promise<KodyConfig> {
       quality: { typecheck: "", lint: "", format: "", testUnit: "" },
       git: { defaultBranch: "main" },
       github: { owner: "unknown", repo: "unknown" },
+      state: { repo: "unknown/kody-state", path: "unknown" },
       agent: { model: "claude/claude-sonnet-4" },
     }
   }

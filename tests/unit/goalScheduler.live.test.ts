@@ -2,7 +2,7 @@
  * Live wiring test for the goal-scheduler shell preflight.
  *
  * Runs the real goal-scheduler/scheduler.sh against fixture
- * `.kody/goals/instances/<id>/state.json` files, with a stub engine binary on PATH.
+ * goal instance state files, with a stub engine binary on PATH.
  * Proves the scheduler:
  * - ticks every active managed goal exactly once via `goal-manager --goal <id>`
  * - skips paused, done, missing-state, and legacy-shaped goal files

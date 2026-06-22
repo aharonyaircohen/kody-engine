@@ -2,16 +2,20 @@ import type { PreflightScript } from "../agent-actions/types.js"
 import {
   applySimpleGoalTaskSummary,
   isSimpleGoal,
+  type ManagedGoal,
   managedGoalFromState,
   planManagedGoalTick,
   writeManagedGoalToState,
-  type ManagedGoal,
 } from "../goal/manager.js"
 import { serializeGoalState } from "../goal/state.js"
 import { expandManagedGoalState } from "../goal/typeDefinitions.js"
 import { gh } from "../issue.js"
+import {
+  type GoalAgentResponsibilityScheduleState,
+  isAgentResponsibilityCadenceGoal,
+  planGoalAgentResponsibilitySchedule,
+} from "./goalAgentResponsibilityScheduling.js"
 import type { GoalCtx } from "./goalCtx.js"
-import { isAgentResponsibilityCadenceGoal, planGoalAgentResponsibilitySchedule, type GoalAgentResponsibilityScheduleState } from "./goalAgentResponsibilityScheduling.js"
 
 export const advanceManagedGoal: PreflightScript = async (ctx) => {
   ctx.skipAgent = true

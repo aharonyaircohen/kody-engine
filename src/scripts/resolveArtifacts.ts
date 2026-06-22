@@ -1,5 +1,5 @@
 /**
- * Preflight: resolve declared input artifacts from the task-state comment
+ * Preflight: resolve declared input artifacts from task state
  * into ctx.data.artifacts, so composePrompt can render them via
  * {{artifacts.<name>}} tokens.
  *

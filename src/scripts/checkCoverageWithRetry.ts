@@ -10,8 +10,8 @@
  */
 
 import type { AgentResult } from "../agent.js"
-import { checkCoverage, formatMissesForFeedback, getAddedFiles } from "../coverage.js"
 import type { Context, PostflightScript } from "../agent-actions/types.js"
+import { checkCoverage, formatMissesForFeedback, getAddedFiles } from "../coverage.js"
 import { parseAgentResult } from "../prompt.js"
 
 type Invoker = (prompt: string) => Promise<AgentResult>

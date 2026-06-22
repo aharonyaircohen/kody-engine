@@ -12,8 +12,8 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import type { KodyConfig } from "../../src/config.js"
 import type { Context, Profile } from "../../src/agent-actions/types.js"
+import type { KodyConfig } from "../../src/config.js"
 import { loadJobFromFile } from "../../src/scripts/loadJobFromFile.js"
 
 let tmp: string
@@ -28,7 +28,11 @@ afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true })
 })
 
-function writeAgentResponsibility(slug: string, profile: Record<string, unknown>, body = "# AgentResponsibility\nbody"): void {
+function writeAgentResponsibility(
+  slug: string,
+  profile: Record<string, unknown>,
+  body = "# AgentResponsibility\nbody",
+): void {
   const dir = path.join(tmp, ".kody", "agent-responsibilities", slug)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
@@ -96,7 +100,12 @@ describe("loadJobFromFile locked-toolbox (tools:)", () => {
     const profile = lockedProfile()
     await loadJobFromFile(ctx, profile, {})
 
-    expect(ctx.data.agentResponsibilityTools).toEqual(["read_check_runs", "ensure_issue", "dispatch_workflow", "ensure_comment"])
+    expect(ctx.data.agentResponsibilityTools).toEqual([
+      "read_check_runs",
+      "ensure_issue",
+      "dispatch_workflow",
+      "ensure_comment",
+    ])
     const lockedTools = (profile as unknown as { claudeCode: { tools: string[] } }).claudeCode.tools
     expect(lockedTools).toEqual([
       "mcp__kody-agent-responsibility__read_check_runs",
@@ -122,7 +131,11 @@ describe("loadJobFromFile locked-toolbox (tools:)", () => {
 describe("loadJobFromFile body {{mentions}} substitution", () => {
   it("replaces {{mentions}} inside the agentResponsibility body with the resolved handles", async () => {
     writeAgent("kody")
-    writeAgentResponsibility("docs-readme", { agent: "kody", mentions: ["a", "b"] }, "# AgentResponsibility\n{{mentions}} please review")
+    writeAgentResponsibility(
+      "docs-readme",
+      { agent: "kody", mentions: ["a", "b"] },
+      "# AgentResponsibility\n{{mentions}} please review",
+    )
 
     const ctx = ctxFor("docs-readme")
     await loadJobFromFile(ctx, PROFILE, {})

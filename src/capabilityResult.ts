@@ -128,11 +128,7 @@ function parseEvidenceItem(raw: unknown, path: string): CapabilityEvidenceItem {
   }
 }
 
-function optionalArray<T>(
-  raw: unknown,
-  path: string,
-  parseItem: (raw: unknown, path: string) => T,
-): T[] | undefined {
+function optionalArray<T>(raw: unknown, path: string, parseItem: (raw: unknown, path: string) => T): T[] | undefined {
   if (raw === undefined || raw === null) return undefined
   if (!Array.isArray(raw)) throw new CapabilityResultError(`${path} must be an array`)
   return raw.map((item, index) => parseItem(item, `${path}[${index}]`))

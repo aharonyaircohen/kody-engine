@@ -82,7 +82,7 @@ export const planTaskJobs: PreflightScript = async (ctx) => {
 
   const target = ctx.data.commentTargetType as TaskTarget | undefined
   const number = ctx.data.commentTargetNumber as number | undefined
-  if (target && number) writeTaskState(target, number, next, ctx.cwd)
+  if (target && number) writeTaskState(target, number, next, ctx.cwd, ctx.config)
 }
 
 function normalizeSpec(input: unknown, index: number): TaskJobSpec {
@@ -104,7 +104,9 @@ function normalizeSpec(input: unknown, index: number): TaskJobSpec {
   }
   return {
     agentAction,
-    ...(typeof raw.agentResponsibility === "string" && raw.agentResponsibility.trim() ? { agentResponsibility: raw.agentResponsibility.trim() } : {}),
+    ...(typeof raw.agentResponsibility === "string" && raw.agentResponsibility.trim()
+      ? { agentResponsibility: raw.agentResponsibility.trim() }
+      : {}),
     ...(typeof raw.reason === "string" && raw.reason.trim() ? { reason: raw.reason.trim() } : {}),
     ...(typeof raw.agent === "string" && raw.agent.trim() ? { agent: raw.agent.trim() } : {}),
     ...(typeof raw.agent === "string" && raw.agent.trim() ? { agent: raw.agent.trim() } : {}),

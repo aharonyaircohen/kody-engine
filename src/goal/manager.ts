@@ -195,7 +195,11 @@ function asRoute(value: unknown): GoalRouteStep[] | null {
   for (const item of value) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return null
     const raw = item as Record<string, unknown>
-    if (typeof raw.evidence !== "string" || typeof raw.stage !== "string" || typeof raw.agentResponsibility !== "string") {
+    if (
+      typeof raw.evidence !== "string" ||
+      typeof raw.stage !== "string" ||
+      typeof raw.agentResponsibility !== "string"
+    ) {
       return null
     }
     const args = raw.args === undefined ? undefined : asRecord(raw.args)

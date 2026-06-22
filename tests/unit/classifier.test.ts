@@ -49,6 +49,7 @@ function ctx(overrides: Partial<Context> = {}): Context {
       quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       git: { defaultBranch: "main" },
       github: { owner: "o", repo: "r" },
+      state: { repo: "o/kody-state", path: "r" },
       agent: { model: "claude/claude-haiku-4-5-20251001" },
     },
     data: {},
@@ -158,10 +159,9 @@ describe("recordClassification", () => {
       },
     })
     await recordClassification(c, profile(), null)
-    // Success path: recordClassification must NOT post any comment. The
-    // combined dispatch + audit + state comment is dispatchClassified's
-    // sole responsibility, which is what removes the concurrency race
-    // that previously stalled classify pipelines.
+    // Success path: recordClassification must NOT post any comment or write
+    // state. dispatchClassified owns state persistence plus the in-process
+    // handoff that avoids the old classify pipeline race.
     expect(execFileSync.mock.calls.length).toBe(0)
     expect((c.data.action as { type: string }).type).toBe("CLASSIFIED_AS_BUG")
     expect(c.data.classification).toBe("bug")
@@ -188,7 +188,14 @@ describe("recordClassification", () => {
 })
 
 describe("dispatchClassified", () => {
-  it("hands the next stage to the orchestrator in-process (no @kody comment) and posts an audit + state comment", async () => {
+  it("hands the next stage to the orchestrator in-process and persists state to the state repo", async () => {
+    execFileSync.mockImplementation((cmd: string, args: string[]) => {
+      if (cmd === "gh" && Array.isArray(args) && args[0] === "api") {
+        if (args.includes("--method") && args.includes("PUT")) return "{}"
+        throw new Error("HTTP 404 Not Found")
+      }
+      return ""
+    })
     const c = ctx({
       data: {
         classification: "bug",
@@ -201,19 +208,16 @@ describe("dispatchClassified", () => {
     // bot-author deadlock (a bot-authored `@kody bug` is silently ignored).
     expect(c.output.nextDispatch).toEqual({ action: "bug", cliArgs: { issue: 99 } })
 
-    const bodies = execFileSync.mock.calls
-      .map((call) => (call[1] as string[]) ?? [])
-      .filter((a) => a[3] === "--body")
-      .map((a) => a[4] as string)
-    // Exactly ONE comment posted: audit + state trail, with NO `@kody` line so
-    // it can't re-trigger anything.
-    expect(bodies.length).toBe(1)
-    const body = bodies[0]!
-    expect(body.includes("@kody")).toBe(false)
-    expect(body).toContain("🔎 kody classified as `bug`")
-    expect(body).toContain("<!-- kody:state:v1:begin -->")
-    expect(body).toContain("<!-- kody:state:v1:end -->")
-    expect(body).toContain("CLASSIFIED_AS_BUG")
+    const puts = execFileSync.mock.calls.filter(
+      (call) => call[0] === "gh" && Array.isArray(call[1]) && (call[1] as string[]).includes("PUT"),
+    )
+    expect(puts.length).toBe(1)
+    const args = puts[0]![1] as string[]
+    expect(args).toContain("/repos/o/kody-state/contents/r/tasks/issues/99/state.json")
+    const payload = JSON.parse((puts[0]![2] as { input?: string }).input ?? "{}") as { content?: string }
+    const stateJson = Buffer.from(payload.content ?? "", "base64").toString("utf-8")
+    expect(stateJson).toContain("CLASSIFIED_AS_BUG")
+    expect(stateJson).not.toContain("@kody")
   })
 
   it("is a no-op when no classification was recorded", async () => {

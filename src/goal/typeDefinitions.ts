@@ -1,5 +1,5 @@
-import type { GoalState } from "./state.js"
 import type { GoalRouteStep } from "./manager.js"
+import type { GoalState } from "./state.js"
 
 export type ManagedGoalTypeId = "improve" | "maintain" | "monitor" | "release" | "checklist"
 
@@ -24,7 +24,15 @@ const GOAL_TYPE_DEFINITIONS: Record<ManagedGoalTypeId, ManagedGoalTypeDefinition
   maintain: {
     type: "maintain",
     evidence: [],
-    agentResponsibilities: ["cleanup", "code-health", "docs-health", "documentation-maintenance", "memory-compaction", "repo-graph", "skills-research"],
+    agentResponsibilities: [
+      "cleanup",
+      "code-health",
+      "docs-health",
+      "documentation-maintenance",
+      "memory-compaction",
+      "repo-graph",
+      "skills-research",
+    ],
     route: [],
   },
   monitor: {
@@ -65,7 +73,14 @@ const GOAL_TYPE_DEFINITIONS: Record<ManagedGoalTypeId, ManagedGoalTypeDefinition
     type: "checklist",
     evidence: ["checklistComplete"],
     agentResponsibilities: ["task-verifier"],
-    route: [{ stage: "verify", evidence: "checklistComplete", agentResponsibility: "task-verifier", agentAction: "task-verifier" }],
+    route: [
+      {
+        stage: "verify",
+        evidence: "checklistComplete",
+        agentResponsibility: "task-verifier",
+        agentAction: "task-verifier",
+      },
+    ],
   },
 }
 
@@ -89,22 +104,28 @@ function routeArray(value: unknown): GoalRouteStep[] | null {
   for (const item of value) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return null
     const raw = item as Record<string, unknown>
-    if (typeof raw.stage !== "string" || typeof raw.evidence !== "string" || typeof raw.agentResponsibility !== "string") return null
+    if (
+      typeof raw.stage !== "string" ||
+      typeof raw.evidence !== "string" ||
+      typeof raw.agentResponsibility !== "string"
+    )
+      return null
     route.push({
       stage: raw.stage,
       evidence: raw.evidence,
       agentResponsibility: raw.agentResponsibility,
       agentAction: typeof raw.agentAction === "string" ? raw.agentAction : undefined,
-      args: raw.args && typeof raw.args === "object" && !Array.isArray(raw.args) ? { ...(raw.args as Record<string, unknown>) } : undefined,
+      args:
+        raw.args && typeof raw.args === "object" && !Array.isArray(raw.args)
+          ? { ...(raw.args as Record<string, unknown>) }
+          : undefined,
     })
   }
   return route
 }
 
 export function managedGoalTypeDefinition(type: string): ManagedGoalTypeDefinition | null {
-  return Object.prototype.hasOwnProperty.call(GOAL_TYPE_DEFINITIONS, type)
-    ? GOAL_TYPE_DEFINITIONS[type as ManagedGoalTypeId]
-    : null
+  return Object.hasOwn(GOAL_TYPE_DEFINITIONS, type) ? GOAL_TYPE_DEFINITIONS[type as ManagedGoalTypeId] : null
 }
 
 export function expandManagedGoalState(state: GoalState): GoalState {
@@ -136,7 +157,10 @@ export function expandManagedGoalState(state: GoalState): GoalState {
         outcome,
         evidence: evidence && evidence.length > 0 ? evidence : [...definition.evidence],
       },
-      agentResponsibilities: agentResponsibilities && agentResponsibilities.length > 0 ? agentResponsibilities : [...definition.agentResponsibilities],
+      agentResponsibilities:
+        agentResponsibilities && agentResponsibilities.length > 0
+          ? agentResponsibilities
+          : [...definition.agentResponsibilities],
       route: route && route.length > 0 ? route : cloneRoute(definition.route),
       facts,
       blockers: blockers ?? [],

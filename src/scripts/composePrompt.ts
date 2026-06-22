@@ -239,7 +239,9 @@ function formatAgentResponsibilityReference(data: Record<string, unknown>, profi
 
   const lines = ["# AgentResponsibility reference", ""]
   if (agentResponsibilitySlug) {
-    lines.push(`- AgentResponsibility: \`${agentResponsibilitySlug}\`${agentResponsibilityTitle ? ` — *${agentResponsibilityTitle}*` : ""}`)
+    lines.push(
+      `- AgentResponsibility: \`${agentResponsibilitySlug}\`${agentResponsibilityTitle ? ` — *${agentResponsibilityTitle}*` : ""}`,
+    )
   }
   if (agentActionSlug) {
     lines.push(`- AgentAction: \`${agentActionSlug}\``)

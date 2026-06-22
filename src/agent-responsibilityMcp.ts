@@ -34,6 +34,7 @@ import { createSdkMcpServer, type McpSdkServerConfigWithInstance, tool } from "@
 import type { ZodRawShape } from "zod"
 import { z } from "zod"
 import { gh } from "./issue.js"
+import { readStateText, type StateRepoConfig } from "./stateRepo.js"
 
 export interface AgentResponsibilityMcpHandle {
   /** Config object to drop into `mcpServers["kody-agentResponsibility"]`. */
@@ -43,6 +44,8 @@ export interface AgentResponsibilityMcpHandle {
 interface AgentResponsibilityMcpOptions {
   /** Repo slug "owner/name" — read from kody.config.json/runtime context. */
   repoSlug: string
+  /** Canonical Kody state location for this repo. Defaults from repoSlug. */
+  state?: StateRepoConfig["state"]
   /**
    * The operator @-mention prefix (e.g. "@aguyaharonyair") substituted into
    * recommend_to_operator comments. Empty string when the agentResponsibility's `mentions:`
@@ -180,7 +183,9 @@ function postRecommendation(
   agentResponsibilitySlug?: string,
 ): { ok: true } | { ok: false; error: string } {
   const mentioned = mention ? `${mention} ${message}` : message
-  const body = agentResponsibilitySlug ? `${mentioned}\n\n<!-- kody-agentResponsibility: ${agentResponsibilitySlug} -->` : mentioned
+  const body = agentResponsibilitySlug
+    ? `${mentioned}\n\n<!-- kody-agentResponsibility: ${agentResponsibilitySlug} -->`
+    : mentioned
   try {
     gh(["pr", "comment", String(prNumber), "--body", body])
     return { ok: true }
@@ -228,10 +233,12 @@ function readLedger(label: string): LedgerResult {
 // ---------------------------------------------------------------------------
 
 export type AgentResponsibilityTrustMode = "ask" | "auto"
-const TRUST_FILE_PATH = ".kody/state/trust.json"
-const TRUST_STATE_BRANCH = "kody-state"
+const TRUST_FILE_PATH = "state/trust.json"
 
-export function parseAgentResponsibilityTrustMode(rawJson: string, agentResponsibilitySlug: string): AgentResponsibilityTrustMode {
+export function parseAgentResponsibilityTrustMode(
+  rawJson: string,
+  agentResponsibilitySlug: string,
+): AgentResponsibilityTrustMode {
   try {
     const parsed = JSON.parse(rawJson) as { agentResponsibilities?: Record<string, { mode?: string }> }
     return parsed?.agentResponsibilities?.[agentResponsibilitySlug]?.mode === "auto" ? "auto" : "ask"
@@ -240,17 +247,33 @@ export function parseAgentResponsibilityTrustMode(rawJson: string, agentResponsi
   }
 }
 
-export function readAgentResponsibilityTrustMode(repoSlug: string, agentResponsibilitySlug?: string): AgentResponsibilityTrustMode {
+function defaultStateForRepoSlug(repoSlug: string): StateRepoConfig["state"] {
+  const [owner, repo] = repoSlug.split("/")
+  return { repo: `${owner}/kody-state`, path: repo ?? repoSlug }
+}
+
+export function readAgentResponsibilityTrustMode(
+  repoSlug: string,
+  agentResponsibilitySlug?: string,
+): AgentResponsibilityTrustMode
+export function readAgentResponsibilityTrustMode(
+  state: StateRepoConfig["state"] | undefined,
+  repoSlug: string,
+  agentResponsibilitySlug?: string,
+): AgentResponsibilityTrustMode
+export function readAgentResponsibilityTrustMode(
+  stateOrRepoSlug: StateRepoConfig["state"] | string | undefined,
+  repoSlugOrAgentResponsibilitySlug?: string,
+  maybeAgentResponsibilitySlug?: string,
+): AgentResponsibilityTrustMode {
+  const state = typeof stateOrRepoSlug === "string" ? undefined : stateOrRepoSlug
+  const repoSlug = typeof stateOrRepoSlug === "string" ? stateOrRepoSlug : (repoSlugOrAgentResponsibilitySlug ?? "")
+  const agentResponsibilitySlug =
+    typeof stateOrRepoSlug === "string" ? repoSlugOrAgentResponsibilitySlug : maybeAgentResponsibilitySlug
   if (!agentResponsibilitySlug) return "ask"
   try {
-    const b64 = gh([
-      "api",
-      `repos/${repoSlug}/contents/${TRUST_FILE_PATH}?ref=${TRUST_STATE_BRANCH}`,
-      "--jq",
-      ".content",
-    ])
-    const json = Buffer.from(b64.trim(), "base64").toString("utf-8")
-    return parseAgentResponsibilityTrustMode(json, agentResponsibilitySlug)
+    const loaded = readStateText({ state: state ?? defaultStateForRepoSlug(repoSlug) }, undefined, TRUST_FILE_PATH)
+    return loaded ? parseAgentResponsibilityTrustMode(loaded.content, agentResponsibilitySlug) : "ask"
   } catch {
     return "ask"
   }
@@ -380,7 +403,15 @@ export function dispatchWorkflow(
   issueNumber: number,
 ): { ok: true } | { ok: false; error: string } {
   try {
-    gh(["workflow", "run", workflowFile, "-f", `agentResponsibility=${agentResponsibility}`, "-f", `issue_number=${issueNumber}`])
+    gh([
+      "workflow",
+      "run",
+      workflowFile,
+      "-f",
+      `agentResponsibility=${agentResponsibility}`,
+      "-f",
+      `issue_number=${issueNumber}`,
+    ])
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -393,7 +424,10 @@ export function dispatchWorkflow(
 
 const GATE_EXEMPT_DUTIES: ReadonlySet<string> = new Set(["qa-engineer", "ui-review"])
 
-export function isDispatchGated(agentResponsibility: string | null | undefined, mode: AgentResponsibilityTrustMode): boolean {
+export function isDispatchGated(
+  agentResponsibility: string | null | undefined,
+  mode: AgentResponsibilityTrustMode,
+): boolean {
   if (mode === "auto") return false
   if (agentResponsibility && GATE_EXEMPT_DUTIES.has(agentResponsibility)) return false
   return true
@@ -415,7 +449,9 @@ function trustRefusal(agentResponsibilitySlug?: string): string {
 /**
  * Build all agentResponsibility tool definitions. Used by both adapters.
  */
-export function agentResponsibilityToolDefinitions(opts: AgentResponsibilityMcpOptions): AgentResponsibilityToolDefinition[] {
+export function agentResponsibilityToolDefinitions(
+  opts: AgentResponsibilityMcpOptions,
+): AgentResponsibilityToolDefinition[] {
   const workflowFile = opts.workflowFile ?? "kody.yml"
 
   const listTool: AgentResponsibilityToolDefinition = {
@@ -444,7 +480,9 @@ export function agentResponsibilityToolDefinitions(opts: AgentResponsibilityMcpO
     },
     handler: async (args) => {
       const pr = Number(args.pr)
-      if (isDispatchGated(verb, readAgentResponsibilityTrustMode(opts.repoSlug, opts.agentResponsibilitySlug))) {
+      if (
+        isDispatchGated(verb, readAgentResponsibilityTrustMode(opts.state, opts.repoSlug, opts.agentResponsibilitySlug))
+      ) {
         return { content: [{ type: "text", text: trustRefusal(opts.agentResponsibilitySlug) }] }
       }
       const result = dispatchVerb(workflowFile, verb, pr)
@@ -594,7 +632,12 @@ export function agentResponsibilityToolDefinitions(opts: AgentResponsibilityMcpO
     handler: async (args) => {
       const agentResponsibility = String(args.agentResponsibility ?? args.agentAction ?? "")
       const issueNumber = Number(args.issueNumber)
-      if (isDispatchGated(agentResponsibility, readAgentResponsibilityTrustMode(opts.repoSlug, opts.agentResponsibilitySlug))) {
+      if (
+        isDispatchGated(
+          agentResponsibility,
+          readAgentResponsibilityTrustMode(opts.state, opts.repoSlug, opts.agentResponsibilitySlug),
+        )
+      ) {
         return { content: [{ type: "text", text: trustRefusal(opts.agentResponsibilitySlug) }] }
       }
       const result = dispatchWorkflow(workflowFile, agentResponsibility, issueNumber)

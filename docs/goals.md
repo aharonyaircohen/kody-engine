@@ -20,15 +20,15 @@ Goal templates and instances are physically separate:
 
 ```text
 .kody/goals/templates/<goal-slug>/state.json
-.kody/goals/instances/<goal-instance-id>/state.json
+<statePath>/goals/instances/<goal-instance-id>/state.json
 ```
 
 Templates are reusable definitions. Instances are live runs with facts and
-progress. Persisted runtime instances belong on the `kody-state` branch.
+progress. Persisted runtime instances belong in `stateRepo`, not the consumer
+repo or a `kody-state` branch.
 
-Templates may come from `kody-store` or from the consumer repo. Store templates
-are shared defaults; consumer templates are repo-specific. Live instances are
-consumer-owned runtime state only.
+Templates may come from `kody-store` or a repo-specific source. Store templates
+are shared defaults. Live instances are consumer-owned runtime state only.
 
 Store goals are inactive by default. A consumer repo activates shared goals in
 `kody.config.json`:
@@ -53,8 +53,8 @@ Scheduled activation creates a fresh instance from the template every time bucke
 }
 ```
 
-The scheduler writes the new instance under `.kody/goals/instances/<id>/state.json`
-on the consumer repo's `kody-state` branch, then ticks that instance. Supported
+The scheduler writes the new instance under `<statePath>/goals/instances/<id>/state.json`
+in `stateRepo`, then ticks that instance. Supported
 intervals are `Nm`, `Nh`, `Nd`, and `Nw`.
 
 After activation, the consumer runtime instance should become `state: "active"`
@@ -138,7 +138,7 @@ instead of dispatching bad input.
 
 `goal-manager` is deterministic and no-agent:
 
-1. Load `.kody/goals/instances/<id>/state.json`.
+1. Load `<statePath>/goals/instances/<id>/state.json`.
 2. Read `destination.evidence`.
 3. Find the first evidence key that is not `true` in `facts`.
 4. If that evidence is already `facts.pendingEvidence`, wait.
@@ -193,7 +193,7 @@ Use this checklist:
 5. Prefer existing agentResponsibilities and agentActions from `kody-store`.
 6. Use fact references for values discovered by earlier steps.
 7. Start with `state: "active"`, `facts: {}`, and `blockers: []`.
-8. Store shared goal templates under `.kody/goals/templates`; store live runtime instances under `.kody/goals/instances` on `kody-state`.
+8. Store shared goal templates in `kody-store`; store live runtime instances under `<statePath>/goals/instances` in `stateRepo`.
 
 ## Legacy Goal Migration
 

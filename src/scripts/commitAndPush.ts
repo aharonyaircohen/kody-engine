@@ -15,6 +15,7 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
+import type { PostflightScript } from "../agent-actions/types.js"
 import {
   commitAndPush as doCommitAndPush,
   hasCommitsAhead,
@@ -23,7 +24,7 @@ import {
   listFilesInCommit,
 } from "../commit.js"
 import { resolveRunId } from "../events.js"
-import type { PostflightScript } from "../agent-actions/types.js"
+import { runtimeStatePath } from "../runtimePaths.js"
 
 const DEFAULT_COMMIT_MESSAGE = "chore: kody changes"
 
@@ -38,7 +39,7 @@ const DEFAULT_COMMIT_MESSAGE = "chore: kody changes"
  */
 function sentinelPathForStage(cwd: string, profileName: string): string {
   const runId = resolveRunId()
-  return path.join(cwd, ".kody", "agent-runs", runId, `commit-${profileName}.lock`)
+  return runtimeStatePath(cwd, "agent-runs", runId, `commit-${profileName}.lock`)
 }
 
 export const commitAndPush: PostflightScript = async (ctx, profile) => {

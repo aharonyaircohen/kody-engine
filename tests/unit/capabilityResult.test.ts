@@ -72,9 +72,7 @@ describe("parseCapabilityResult", () => {
   })
 
   it("rejects kind mismatches against the declared capability kind", () => {
-    expect(() => parseCapabilityResult({ kind: "act", status: "changed" }, "observe")).toThrow(
-      /expected observe/,
-    )
+    expect(() => parseCapabilityResult({ kind: "act", status: "changed" }, "observe")).toThrow(/expected observe/)
   })
 
   it("accepts realistic observe output for release state discovery", () => {

@@ -1,9 +1,9 @@
 /**
  * Postflight (runs last): apply the reducer to the task state with the
- * action emitted by parseAgentResult, then write the state comment.
+ * action emitted by parseAgentResult, then write the state repo file.
  *
  * If no action was emitted (agentAction had no agent run, e.g. init), a
- * synthetic action is composed from ctx.output so the state comment still
+ * synthetic action is composed from ctx.output so the task state still
  * reflects the run's outcome.
  */
 
@@ -53,7 +53,7 @@ export const saveTaskState: PostflightScript = async (ctx, profile) => {
   if (ctx.output.prUrl) next.core.prUrl = ctx.output.prUrl
   if (typeof ctx.data.runUrl === "string") next.core.runUrl = ctx.data.runUrl as string
 
-  writeTaskState(target, number, next, ctx.cwd)
+  writeTaskState(target, number, next, ctx.cwd, ctx.config)
   ctx.data.taskState = next
   ctx.data.taskStateRendered = renderStateComment(next)
 }

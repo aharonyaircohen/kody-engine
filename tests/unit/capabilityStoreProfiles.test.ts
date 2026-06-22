@@ -131,7 +131,11 @@ describe("kody-store capabilityKind profiles", () => {
 
     const genericWrappers = listAgentResponsibilityActions()
       .filter((action) => action.source === "company-store")
-      .filter((action) => action.agentAction === "agent-responsibility-tick" || action.agentAction === "agent-responsibility-tick-scripted")
+      .filter(
+        (action) =>
+          action.agentAction === "agent-responsibility-tick" ||
+          action.agentAction === "agent-responsibility-tick-scripted",
+      )
       .map((action) => action.action)
 
     expect(genericWrappers).toEqual([])

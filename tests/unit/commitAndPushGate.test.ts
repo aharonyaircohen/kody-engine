@@ -18,9 +18,10 @@ vi.mock("../../src/commit.js", async () => {
   }
 })
 
+import type { Profile } from "../../src/agent-actions/types.js"
 import { commitAndPush as doCommitAndPush } from "../../src/commit.js"
 import { __resetRunIdCache } from "../../src/events.js"
-import type { Profile } from "../../src/agent-actions/types.js"
+import { runtimeStatePath } from "../../src/runtimePaths.js"
 import { commitAndPush } from "../../src/scripts/commitAndPush.js"
 
 const profile = { name: "fix" } as Profile
@@ -35,6 +36,18 @@ function makeCtx(data: Record<string, unknown>) {
     skipAgent: false,
   }
 }
+
+beforeEach(() => {
+  __resetRunIdCache()
+  delete process.env.KODY_RUN_ID
+  process.env.KODY_COMMIT_IDEMPOTENCY = "0"
+})
+
+afterEach(() => {
+  __resetRunIdCache()
+  delete process.env.KODY_RUN_ID
+  delete process.env.KODY_COMMIT_IDEMPOTENCY
+})
 
 describe("commitAndPush: gate on agentDone", () => {
   it("skips commit when agentDone is false", async () => {
@@ -208,6 +221,7 @@ describe("commitAndPush: sentinel replay", () => {
     // one resolveRunId() returns (it caches the first computed value).
     __resetRunIdCache()
     process.env.KODY_RUN_ID = "test-run-sentinel"
+    process.env.KODY_COMMIT_IDEMPOTENCY = "1"
     // First invocation: commits + writes the sentinel.
     vi.mocked(doCommitAndPush).mockClear()
     vi.mocked(doCommitAndPush).mockReturnValueOnce({
@@ -220,7 +234,7 @@ describe("commitAndPush: sentinel replay", () => {
     await commitAndPush(ctx1 as never, { name: "fix" } as Profile, null)
 
     // Sentinel must have been written.
-    const sentinel = path.join(tmp, ".kody", "agent-runs", "test-run-sentinel", "commit-fix.lock")
+    const sentinel = runtimeStatePath(tmp, "agent-runs", "test-run-sentinel", "commit-fix.lock")
     expect(fs.existsSync(sentinel)).toBe(true)
 
     // Second invocation: the underlying commit must NOT be called again;
@@ -295,7 +309,12 @@ describe("commitAndPush: changedFiles population", () => {
       sha: "",
       message: "",
     })
-    vi.mocked(listChangedFiles).mockReturnValueOnce(["src/foo.ts", ".env", "kody.config.json", ".kody/agent-runs/x.jsonl"])
+    vi.mocked(listChangedFiles).mockReturnValueOnce([
+      "src/foo.ts",
+      ".env",
+      "kody.config.json",
+      ".kody/agent-runs/x.jsonl",
+    ])
     const ctx = makeCtx({ agentDone: true, commitMessage: "feat: x" })
     await commitAndPush(ctx as never, profile, null)
     expect(ctx.data.changedFiles).toEqual(["src/foo.ts"])

@@ -2,8 +2,8 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import type { KodyConfig } from "../../src/config.js"
 import type { Context, Profile } from "../../src/agent-actions/types.js"
+import type { KodyConfig } from "../../src/config.js"
 import { loadAgentResponsibilityState } from "../../src/scripts/loadAgentResponsibilityState.js"
 
 let tmp: string
@@ -58,7 +58,10 @@ describe("loadAgentResponsibilityState", () => {
 
   it("locks the toolbox + forces enableSubmitTool when agentResponsibilityTools declared", async () => {
     const ctx = ctxFor()
-    const profile = profileFor({}, { agentResponsibilityTools: ["read_check_runs", "ensure_issue"], mentions: ["alice"] })
+    const profile = profileFor(
+      {},
+      { agentResponsibilityTools: ["read_check_runs", "ensure_issue"], mentions: ["alice"] },
+    )
     await loadAgentResponsibilityState(ctx, profile, {})
     expect(profile.claudeCode.tools).toEqual([
       "mcp__kody-agent-responsibility__read_check_runs",

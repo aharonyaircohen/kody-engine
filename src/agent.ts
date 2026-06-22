@@ -2,7 +2,13 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { query } from "@anthropic-ai/claude-agent-sdk"
 import { ensureStableClaudeBinary } from "./claudeBinary.js"
-import { getAnthropicApiKeyOrDummy, type ProviderModel, REASONING_BUDGETS, type ReasoningEffort } from "./config.js"
+import {
+  getAnthropicApiKeyOrDummy,
+  type KodyConfig,
+  type ProviderModel,
+  REASONING_BUDGETS,
+  type ReasoningEffort,
+} from "./config.js"
 import { renderEvent, type SdkMessageLike } from "./format.js"
 
 export interface AgentTokenUsage {
@@ -173,6 +179,8 @@ export interface AgentOptions {
    * `enableAgentResponsibilityTool` is false.
    */
   dutyRepoSlug?: string
+  /** Canonical Kody state location used by locked agentResponsibility tools. */
+  agentResponsibilityState?: KodyConfig["state"]
   /**
    * Slug of the running agentResponsibility (`ctx.data.jobSlug`), stamped onto
    * `recommend_to_operator` comments so the dashboard keys trust per agentResponsibility.
@@ -481,6 +489,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         }
         const dutyHandle = buildAgentResponsibilityMcpServer({
           repoSlug: opts.dutyRepoSlug,
+          state: opts.agentResponsibilityState,
           operatorMention: opts.agentResponsibilityOperatorMention ?? "",
           ...(opts.agentResponsibilitySlug ? { agentResponsibilitySlug: opts.agentResponsibilitySlug } : {}),
         })
