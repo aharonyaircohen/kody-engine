@@ -9,7 +9,7 @@
  * stage in the same process removes that round-trip.
  *
  * Args (from profile entry's `with` object):
- *   - next:   child executable to invoke (e.g. "run", "review", "fix")
+ *   - next:   child agentAction to invoke (e.g. "run", "review", "fix")
  *   - target: "issue" | "pr" — which target the child runs against. When
  *             target is "pr" but `state.core.prUrl` is missing, the dispatch
  *             is aborted (the child profile would reject `--issue` anyway). A
@@ -18,7 +18,7 @@
  *             `kody:orchestrating`.
  */
 
-import type { PostflightScript, ScriptArgs } from "../executables/types.js"
+import type { PostflightScript, ScriptArgs } from "../agent-actions/types.js"
 import type { Action, TaskState } from "../state.js"
 
 export const dispatch: PostflightScript = async (ctx, _profile, _agentResult, args?: ScriptArgs) => {

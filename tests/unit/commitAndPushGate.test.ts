@@ -20,7 +20,7 @@ vi.mock("../../src/commit.js", async () => {
 
 import { commitAndPush as doCommitAndPush } from "../../src/commit.js"
 import { __resetRunIdCache } from "../../src/events.js"
-import type { Profile } from "../../src/executables/types.js"
+import type { Profile } from "../../src/agent-actions/types.js"
 import { commitAndPush } from "../../src/scripts/commitAndPush.js"
 
 const profile = { name: "fix" } as Profile
@@ -220,7 +220,7 @@ describe("commitAndPush: sentinel replay", () => {
     await commitAndPush(ctx1 as never, { name: "fix" } as Profile, null)
 
     // Sentinel must have been written.
-    const sentinel = path.join(tmp, ".kody", "runs", "test-run-sentinel", "commit-fix.lock")
+    const sentinel = path.join(tmp, ".kody", "agent-runs", "test-run-sentinel", "commit-fix.lock")
     expect(fs.existsSync(sentinel)).toBe(true)
 
     // Second invocation: the underlying commit must NOT be called again;
@@ -246,7 +246,7 @@ describe("commitAndPush: sentinel replay", () => {
     await commitAndPush(ctx as never, { name: "fix" } as Profile, null)
     // No sentinel must have been written when idempotency is disabled —
     // a future run should commit again, not replay an old result.
-    const sentinel = path.join(tmp, ".kody", "runs", "test-run-no-sentinel", "commit-fix.lock")
+    const sentinel = path.join(tmp, ".kody", "agent-runs", "test-run-no-sentinel", "commit-fix.lock")
     expect(fs.existsSync(sentinel)).toBe(false)
   })
 })
@@ -295,7 +295,7 @@ describe("commitAndPush: changedFiles population", () => {
       sha: "",
       message: "",
     })
-    vi.mocked(listChangedFiles).mockReturnValueOnce(["src/foo.ts", ".env", "kody.config.json", ".kody/runs/x.jsonl"])
+    vi.mocked(listChangedFiles).mockReturnValueOnce(["src/foo.ts", ".env", "kody.config.json", ".kody/agent-runs/x.jsonl"])
     const ctx = makeCtx({ agentDone: true, commitMessage: "feat: x" })
     await commitAndPush(ctx as never, profile, null)
     expect(ctx.data.changedFiles).toEqual(["src/foo.ts"])

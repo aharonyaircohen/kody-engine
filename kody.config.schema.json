@@ -68,9 +68,9 @@
           "enum": ["off", "low", "medium", "high"],
           "description": "Default thinking effort for the Claude Agent SDK. Maps to maxThinkingTokens. 'off' (default) skips the thinking block entirely — no reasoning preamble, no extra tokens. 'low'/'medium'/'high' enable extended thinking with budgets 2_048/10_000/32_000. Overridable per-session via the REASONING_EFFORT env var or the dashboard's chat-level thinking dropdown."
         },
-        "perExecutable": {
+        "perAgentAction": {
           "type": "object",
-          "description": "Optional provider/model override by executable name.",
+          "description": "Optional provider/model override by agentAction name.",
           "additionalProperties": {
             "type": "string",
             "pattern": "^[^/]+/.+$"
@@ -104,22 +104,22 @@
         }
       }
     },
-    "defaultExecutable": {
+    "defaultAgentAction": {
       "type": "string",
-      "description": "Executable used for bare @kody comments on issues.",
+      "description": "AgentAction used for bare @kody comments on issues.",
       "default": "run"
     },
-    "defaultPrExecutable": {
+    "defaultPrAgentAction": {
       "type": "string",
-      "description": "Optional executable used for bare @kody comments on PRs. Leave unset to require explicit PR commands."
+      "description": "Optional agentAction used for bare @kody comments on PRs. Leave unset to require explicit PR commands."
     },
     "onPullRequest": {
       "type": "string",
-      "description": "Optional executable to run on pull_request opened, synchronize, or reopened events."
+      "description": "Optional agentAction to run on pull_request opened, synchronize, or reopened events."
     },
     "aliases": {
       "type": "object",
-      "description": "Comment subcommand aliases, mapping typed word to executable name.",
+      "description": "Comment subcommand aliases, mapping typed word to agentAction name.",
       "additionalProperties": {
         "type": "string"
       }

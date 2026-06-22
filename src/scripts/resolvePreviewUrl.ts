@@ -13,7 +13,7 @@
  */
 
 import { findPreviewDeploymentUrl } from "../deployments.js"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../agent-actions/types.js"
 
 export const DEFAULT_PREVIEW_URL = "http://localhost:3000"
 

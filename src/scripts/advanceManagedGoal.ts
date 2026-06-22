@@ -1,4 +1,4 @@
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../agent-actions/types.js"
 import {
   applySimpleGoalTaskSummary,
   isSimpleGoal,
@@ -11,7 +11,7 @@ import { serializeGoalState } from "../goal/state.js"
 import { expandManagedGoalState } from "../goal/typeDefinitions.js"
 import { gh } from "../issue.js"
 import type { GoalCtx } from "./goalCtx.js"
-import { isDutyCadenceGoal, planGoalDutySchedule, type GoalDutyScheduleState } from "./goalDutyScheduling.js"
+import { isAgentResponsibilityCadenceGoal, planGoalAgentResponsibilitySchedule, type GoalAgentResponsibilityScheduleState } from "./goalAgentResponsibilityScheduling.js"
 
 export const advanceManagedGoal: PreflightScript = async (ctx) => {
   ctx.skipAgent = true
@@ -50,12 +50,12 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     return
   }
 
-  if (isDutyCadenceGoal(managed, goal.raw.extra)) {
+  if (isAgentResponsibilityCadenceGoal(managed, goal.raw.extra)) {
     const previousScheduleState =
       goal.raw.extra.scheduleState && typeof goal.raw.extra.scheduleState === "object"
-        ? (goal.raw.extra.scheduleState as GoalDutyScheduleState)
+        ? (goal.raw.extra.scheduleState as GoalAgentResponsibilityScheduleState)
         : undefined
-    const decision = await planGoalDutySchedule({
+    const decision = await planGoalAgentResponsibilitySchedule({
       goal: managed,
       cwd: ctx.cwd,
       config: ctx.config,
@@ -67,8 +67,8 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     ctx.data.managedGoalDecision = decision
     if (decision.kind === "dispatch" && decision.dispatch) {
       ctx.output.nextDispatch = {
-        duty: decision.dispatch.duty,
-        executable: decision.dispatch.executable,
+        agentResponsibility: decision.dispatch.agentResponsibility,
+        agentAction: decision.dispatch.agentAction,
         cliArgs: decision.dispatch.cliArgs,
       }
     }
@@ -95,11 +95,11 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
   }
 
   ctx.output.nextDispatch = {
-    duty: decision.duty,
-    executable: decision.executable,
+    agentResponsibility: decision.agentResponsibility,
+    agentAction: decision.agentAction,
     cliArgs: decision.cliArgs,
   }
-  ctx.output.reason = `dispatch ${decision.duty} for ${decision.evidence}`
+  ctx.output.reason = `dispatch ${decision.agentResponsibility} for ${decision.evidence}`
 }
 
 function readSimpleGoalTaskSummary(goalId: string, cwd?: string): { total: number; open: number } {
@@ -160,7 +160,7 @@ function createGoalIssue(goal: ManagedGoal, goalId: string, cwd?: string): numbe
     "",
     `Finish line: ${outcome}`,
     "",
-    "This issue was created by Kody so goal duties that require an issue can run end to end.",
+    "This issue was created by Kody so goal agentResponsibilities that require an issue can run end to end.",
     "",
     goalIssueMarker(goalId),
   ].join("\n")

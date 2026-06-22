@@ -21,7 +21,7 @@ vi.mock("../../src/litellm.js", () => ({
   startLitellmIfNeeded: vi.fn(async () => null),
 }))
 
-import { runExecutable } from "../../src/executor.js"
+import { runAgentAction } from "../../src/executor.js"
 
 const originalCwd = process.cwd()
 let dir: string
@@ -32,7 +32,7 @@ function writeJson(file: string, value: unknown): void {
 }
 
 function writeProbeProfile(claudeCode: Record<string, unknown> = {}): void {
-  const probeDir = path.join(dir, ".kody", "executables", "probe")
+  const probeDir = path.join(dir, ".kody", "agent-actions", "probe")
   writeJson(path.join(probeDir, "profile.json"), {
     name: "probe",
     role: "primitive",
@@ -80,14 +80,14 @@ afterEach(() => {
 })
 
 describe("executor: reasoning effort resolution", () => {
-  it("uses per-executable reasoning effort over the global default", async () => {
+  it("uses per-agentAction reasoning effort over the global default", async () => {
     writeProbeProfile()
     writeConfig({
       reasoningEffort: "low",
-      perExecutableReasoningEffort: { probe: "high" },
+      perAgentActionReasoningEffort: { probe: "high" },
     })
 
-    const out = await runExecutable("probe", { cliArgs: {}, cwd: dir })
+    const out = await runAgentAction("probe", { cliArgs: {}, cwd: dir })
 
     expect(out.exitCode).toBe(0)
     expect(runAgentSpy).toHaveBeenCalled()
@@ -98,7 +98,7 @@ describe("executor: reasoning effort resolution", () => {
     writeProbeProfile({ reasoningEffort: "medium" })
     writeConfig({ reasoningEffort: "low" })
 
-    const out = await runExecutable("probe", { cliArgs: {}, cwd: dir })
+    const out = await runAgentAction("probe", { cliArgs: {}, cwd: dir })
 
     expect(out.exitCode).toBe(0)
     expect(runAgentSpy.mock.calls[0]![0].reasoningEffort).toBe("medium")
@@ -108,7 +108,7 @@ describe("executor: reasoning effort resolution", () => {
     writeProbeProfile({ maxThinkingTokens: 8000 })
     writeConfig({ reasoningEffort: "low" })
 
-    const out = await runExecutable("probe", { cliArgs: {}, cwd: dir })
+    const out = await runAgentAction("probe", { cliArgs: {}, cwd: dir })
 
     expect(out.exitCode).toBe(0)
     expect(runAgentSpy.mock.calls[0]![0].reasoningEffort).toBeUndefined()

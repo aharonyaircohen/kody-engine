@@ -1,9 +1,9 @@
 /**
- * Postflight (single-session executables): stamp the TERMINAL label +
+ * Postflight (single-session agentActions): stamp the TERMINAL label +
  * phase/status after the PR exists.
  *
  * This is the orchestration-free replacement for what container profiles
- * did via `finishFlow`. A single-session executable (feature, bug, …) has
+ * did via `finishFlow`. A single-session agentAction (feature, bug, …) has
  * no orchestrator to re-trigger and no `state.flow` to clear — it just
  * needs the issue/PR to end in an honest terminal state so the dashboard
  * and goal-phase derivation don't show it stuck in "building" forever.
@@ -23,7 +23,7 @@
  * remove. Better a loud kody:failed than a silently stuck card.
  */
 
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../agent-actions/types.js"
 import { parsePrNumber } from "../issue.js"
 import { type KodyLabelSpec, setKodyLabel } from "../lifecycleLabels.js"
 import { type Phase, readTaskState, type Status, type TaskState, type TaskTarget, writeTaskState } from "../state.js"
@@ -83,7 +83,7 @@ export const finalizeTerminal: PostflightScript = async (ctx) => {
     const state = readTaskState(target, targetNumber, ctx.cwd)
     state.core.phase = phase
     state.core.status = status
-    state.core.currentExecutable = null
+    state.core.currentAgentAction = null
     writeTaskState(target, targetNumber, state, ctx.cwd)
   } catch (err) {
     process.stderr.write(

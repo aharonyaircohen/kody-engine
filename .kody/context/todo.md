@@ -3,4 +3,4 @@ agent: []
 ---
 
 - token burn
-- job as duty execution state ?
+- job as agentResponsibility execution state ?

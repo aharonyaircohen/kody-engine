@@ -1,4 +1,4 @@
-import type { Job, JobFlavor, PreflightScript } from "../executables/types.js"
+import type { Job, JobFlavor, PreflightScript } from "../agent-actions/types.js"
 import { stableJobKey, targetFromCliArgs } from "../jobIdentity.js"
 import {
   emptyState,
@@ -12,8 +12,8 @@ import {
 export const TASK_JOBS_MARKER = "kody:task-jobs:v1"
 
 export interface TaskJobSpec {
-  executable: string
-  duty?: string
+  agentAction: string
+  agentResponsibility?: string
   reason?: string
   agent?: string
   cliArgs?: Record<string, unknown>
@@ -41,8 +41,8 @@ export function taskJobSpecToJob(spec: TaskJobSpec, issueNumber: number): Job {
   const cliArgs = spec.cliArgs ?? { issue: issueNumber }
   const target = typeof spec.target === "number" ? spec.target : (targetFromCliArgs(cliArgs) ?? issueNumber)
   return {
-    duty: spec.duty ?? spec.executable,
-    executable: spec.executable,
+    agentResponsibility: spec.agentResponsibility ?? spec.agentAction,
+    agentAction: spec.agentAction,
     why: spec.reason,
     agent: spec.agent,
     schedule: spec.schedule,
@@ -90,9 +90,9 @@ function normalizeSpec(input: unknown, index: number): TaskJobSpec {
     throw new Error(`task job plan entry ${index} must be an object`)
   }
   const raw = input as Record<string, unknown>
-  const executable = typeof raw.executable === "string" ? raw.executable.trim() : ""
-  if (!/^[a-z][a-z0-9-]*$/.test(executable)) {
-    throw new Error(`task job plan entry ${index} must have a valid executable`)
+  const agentAction = typeof raw.agentAction === "string" ? raw.agentAction.trim() : ""
+  if (!/^[a-z][a-z0-9-]*$/.test(agentAction)) {
+    throw new Error(`task job plan entry ${index} must have a valid agentAction`)
   }
   const cliArgs = raw.cliArgs
   if (cliArgs !== undefined && (!cliArgs || typeof cliArgs !== "object" || Array.isArray(cliArgs))) {
@@ -103,8 +103,8 @@ function normalizeSpec(input: unknown, index: number): TaskJobSpec {
     throw new Error(`task job plan entry ${index} flavor must be "instant" or "scheduled"`)
   }
   return {
-    executable,
-    ...(typeof raw.duty === "string" && raw.duty.trim() ? { duty: raw.duty.trim() } : {}),
+    agentAction,
+    ...(typeof raw.agentResponsibility === "string" && raw.agentResponsibility.trim() ? { agentResponsibility: raw.agentResponsibility.trim() } : {}),
     ...(typeof raw.reason === "string" && raw.reason.trim() ? { reason: raw.reason.trim() } : {}),
     ...(typeof raw.agent === "string" && raw.agent.trim() ? { agent: raw.agent.trim() } : {}),
     ...(typeof raw.agent === "string" && raw.agent.trim() ? { agent: raw.agent.trim() } : {}),
@@ -118,8 +118,8 @@ function normalizeSpec(input: unknown, index: number): TaskJobSpec {
 function jobToPlannedTaskJob(job: Job): PlannedTaskJob {
   return {
     id: stableJobKey(job),
-    executable: job.executable ?? job.duty ?? "unknown",
-    duty: job.duty ?? job.action ?? job.executable ?? "unknown",
+    agentAction: job.agentAction ?? job.agentResponsibility ?? "unknown",
+    agentResponsibility: job.agentResponsibility ?? job.action ?? job.agentAction ?? "unknown",
     ...(job.agent ? { agent: job.agent } : {}),
     ...(job.flavor ? { flavor: job.flavor } : {}),
     ...(job.schedule ? { schedule: job.schedule } : {}),

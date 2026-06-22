@@ -1,7 +1,7 @@
 /**
  * Postflight: if this run produced (or already had) a PR, mirror the issue's
  * current task-state comment onto the PR so subsequent PR-targeted
- * executables (review, fix) and the orchestrator can read the same flow
+ * agentActions (review, fix) and the orchestrator can read the same flow
  * context from either place.
  *
  * Idempotent: if the PR already has a kody state-comment, the existing
@@ -11,7 +11,7 @@
  * AFTER ensurePr (which materializes prUrl).
  */
 
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../agent-actions/types.js"
 import { readTaskState, type TaskState, writeTaskState } from "../state.js"
 
 export const mirrorStateToPr: PostflightScript = async (ctx) => {

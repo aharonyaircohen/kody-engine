@@ -87,52 +87,52 @@ describe("config: loadConfig", () => {
     expect(() => loadConfig(dir)).toThrow(/github\.owner/)
   })
 
-  it("preserves agent.perExecutable model overrides", () => {
+  it("preserves agent.perAgentAction model overrides", () => {
     const dir = tmpDir()
     writeConfig(dir, {
       github: { owner: "o", repo: "r" },
       agent: {
         model: "claude/base",
-        perExecutable: { classify: "claude/haiku", plan: "claude/opus", bogus: "", nope: 5 },
+        perAgentAction: { classify: "claude/haiku", plan: "claude/opus", bogus: "", nope: 5 },
       },
     })
     const cfg = loadConfig(dir)
     // Valid string entries survive; empty-string and non-string entries drop.
-    expect(cfg.agent.perExecutable).toEqual({ classify: "claude/haiku", plan: "claude/opus" })
+    expect(cfg.agent.perAgentAction).toEqual({ classify: "claude/haiku", plan: "claude/opus" })
   })
 
-  it("omits perExecutable entirely when absent or all-invalid", () => {
+  it("omits perAgentAction entirely when absent or all-invalid", () => {
     const dir = tmpDir()
     writeConfig(dir, {
       github: { owner: "o", repo: "r" },
-      agent: { model: "claude/base", perExecutable: { x: "" } },
+      agent: { model: "claude/base", perAgentAction: { x: "" } },
     })
-    expect(loadConfig(dir).agent.perExecutable).toBeUndefined()
+    expect(loadConfig(dir).agent.perAgentAction).toBeUndefined()
   })
 
-  it("preserves agent.perExecutableReasoningEffort overrides", () => {
+  it("preserves agent.perAgentActionReasoningEffort overrides", () => {
     const dir = tmpDir()
     writeConfig(dir, {
       github: { owner: "o", repo: "r" },
       agent: {
         model: "claude/base",
-        perExecutableReasoningEffort: { run: "high", review: "medium", classify: "off", bogus: "nuclear" },
+        perAgentActionReasoningEffort: { run: "high", review: "medium", classify: "off", bogus: "nuclear" },
       },
     })
-    expect(loadConfig(dir).agent.perExecutableReasoningEffort).toEqual({
+    expect(loadConfig(dir).agent.perAgentActionReasoningEffort).toEqual({
       run: "high",
       review: "medium",
       classify: "off",
     })
   })
 
-  it("omits perExecutableReasoningEffort when absent or all-invalid", () => {
+  it("omits perAgentActionReasoningEffort when absent or all-invalid", () => {
     const dir = tmpDir()
     writeConfig(dir, {
       github: { owner: "o", repo: "r" },
-      agent: { model: "claude/base", perExecutableReasoningEffort: { run: "" } },
+      agent: { model: "claude/base", perAgentActionReasoningEffort: { run: "" } },
     })
-    expect(loadConfig(dir).agent.perExecutableReasoningEffort).toBeUndefined()
+    expect(loadConfig(dir).agent.perAgentActionReasoningEffort).toBeUndefined()
   })
 
   it("preserves quality commands", () => {
@@ -226,64 +226,64 @@ describe("config: loadConfig", () => {
     expect(() => loadConfig(dir)).toThrow(/access\.allowedAssociations contains "MEMBERS"/)
   })
 
-  it("loads defaultExecutable when set", () => {
+  it("loads defaultAgentAction when set", () => {
     const dir = tmpDir()
     writeConfig(dir, {
       github: { owner: "o", repo: "r" },
       agent: { model: "m/x" },
-      defaultExecutable: "orchestrator-plan-build-review",
+      defaultAgentAction: "orchestrator-plan-build-review",
     })
-    expect(loadConfig(dir).defaultExecutable).toBe("orchestrator-plan-build-review")
+    expect(loadConfig(dir).defaultAgentAction).toBe("orchestrator-plan-build-review")
   })
 
-  it("defaultExecutable defaults to 'run' when absent", () => {
+  it("defaultAgentAction defaults to 'run' when absent", () => {
     const dir = tmpDir()
     writeConfig(dir, {
       github: { owner: "o", repo: "r" },
       agent: { model: "m/x" },
     })
-    expect(loadConfig(dir).defaultExecutable).toBe("run")
+    expect(loadConfig(dir).defaultAgentAction).toBe("run")
   })
 
-  it("defaultExecutable defaults to 'run' when empty string", () => {
+  it("defaultAgentAction defaults to 'run' when empty string", () => {
     const dir = tmpDir()
     writeConfig(dir, {
       github: { owner: "o", repo: "r" },
       agent: { model: "m/x" },
-      defaultExecutable: "",
+      defaultAgentAction: "",
     })
-    expect(loadConfig(dir).defaultExecutable).toBe("run")
+    expect(loadConfig(dir).defaultAgentAction).toBe("run")
   })
 
-  it("defaultExecutable defaults to 'run' when non-string", () => {
+  it("defaultAgentAction defaults to 'run' when non-string", () => {
     const dir = tmpDir()
     writeConfig(dir, {
       github: { owner: "o", repo: "r" },
       agent: { model: "m/x" },
-      defaultExecutable: 42,
+      defaultAgentAction: 42,
     })
-    expect(loadConfig(dir).defaultExecutable).toBe("run")
+    expect(loadConfig(dir).defaultAgentAction).toBe("run")
   })
 
-  it("loads defaultPrExecutable when set", () => {
+  it("loads defaultPrAgentAction when set", () => {
     const dir = tmpDir()
     writeConfig(dir, {
       github: { owner: "o", repo: "r" },
       agent: { model: "m/x" },
-      defaultPrExecutable: "sync",
+      defaultPrAgentAction: "sync",
     })
-    expect(loadConfig(dir).defaultPrExecutable).toBe("sync")
+    expect(loadConfig(dir).defaultPrAgentAction).toBe("sync")
   })
 
-  it("omits defaultPrExecutable when absent, empty, or non-string", () => {
+  it("omits defaultPrAgentAction when absent, empty, or non-string", () => {
     for (const value of [undefined, "", 42]) {
       const dir = tmpDir()
       writeConfig(dir, {
         github: { owner: "o", repo: "r" },
         agent: { model: "m/x" },
-        ...(value === undefined ? {} : { defaultPrExecutable: value }),
+        ...(value === undefined ? {} : { defaultPrAgentAction: value }),
       })
-      expect(loadConfig(dir).defaultPrExecutable).toBeUndefined()
+      expect(loadConfig(dir).defaultPrAgentAction).toBeUndefined()
     }
   })
 

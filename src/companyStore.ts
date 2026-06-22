@@ -25,10 +25,16 @@ export function getCompanyStoreRoot(): string | null {
   return root
 }
 
-export function getCompanyStoreAssetRoot(kind: "duties" | "executables" | "goals" | "agents"): string | null {
+export function getCompanyStoreAssetRoot(kind: "agentResponsibilities" | "agentActions" | "goals" | "agents"): string | null {
   const root = getCompanyStoreRoot()
   if (!root) return null
-  return path.join(root, ".kody", kind)
+  const folderByKind: Record<typeof kind, string> = {
+    agentResponsibilities: "agent-responsibilities",
+    agentActions: "agent-actions",
+    goals: "goals",
+    agents: "agents",
+  }
+  return path.join(root, ".kody", folderByKind[kind])
 }
 
 export function resetCompanyStoreCacheForTests(): void {

@@ -6,7 +6,7 @@ export type ManagedGoalTypeId = "improve" | "maintain" | "monitor" | "release" |
 interface ManagedGoalTypeDefinition {
   type: ManagedGoalTypeId
   evidence: string[]
-  duties: string[]
+  agentResponsibilities: string[]
   route: GoalRouteStep[]
 }
 
@@ -14,49 +14,49 @@ const GOAL_TYPE_DEFINITIONS: Record<ManagedGoalTypeId, ManagedGoalTypeDefinition
   improve: {
     type: "improve",
     evidence: ["planReady", "changeImplemented", "changeVerified"],
-    duties: ["plan", "fix", "review"],
+    agentResponsibilities: ["plan", "fix", "review"],
     route: [
-      { stage: "plan", evidence: "planReady", duty: "plan", executable: "plan" },
-      { stage: "implement", evidence: "changeImplemented", duty: "fix", executable: "fix" },
-      { stage: "review", evidence: "changeVerified", duty: "review", executable: "review" },
+      { stage: "plan", evidence: "planReady", agentResponsibility: "plan", agentAction: "plan" },
+      { stage: "implement", evidence: "changeImplemented", agentResponsibility: "fix", agentAction: "fix" },
+      { stage: "review", evidence: "changeVerified", agentResponsibility: "review", agentAction: "review" },
     ],
   },
   maintain: {
     type: "maintain",
     evidence: [],
-    duties: ["cleanup", "code-health", "docs-health", "documentation-maintenance", "memory-compaction", "repo-graph", "skills-research"],
+    agentResponsibilities: ["cleanup", "code-health", "docs-health", "documentation-maintenance", "memory-compaction", "repo-graph", "skills-research"],
     route: [],
   },
   monitor: {
     type: "monitor",
     evidence: [],
-    duties: ["health-check", "pr-health-triage", "qa-sweep"],
+    agentResponsibilities: ["health-check", "pr-health-triage", "qa-sweep"],
     route: [],
   },
   release: {
     type: "release",
     evidence: ["releasePrExists", "mainMerged", "productionDeployed"],
-    duties: ["release", "release-merge", "vercel-production-deploy"],
+    agentResponsibilities: ["release", "release-merge", "vercel-production-deploy"],
     route: [
       {
         stage: "release",
         evidence: "releasePrExists",
-        duty: "release",
-        executable: "release-prepare",
+        agentResponsibility: "release",
+        agentAction: "release-prepare",
         args: { issue: { fact: "issue" }, goal: { fact: "goalId" } },
       },
       {
         stage: "merge",
         evidence: "mainMerged",
-        duty: "release-merge",
-        executable: "release-merge",
+        agentResponsibility: "release-merge",
+        agentAction: "release-merge",
         args: { pr: { fact: "releasePr" }, issue: { fact: "issue" }, goal: { fact: "goalId" } },
       },
       {
         stage: "publish",
         evidence: "productionDeployed",
-        duty: "vercel-production-deploy",
-        executable: "vercel-production-deploy",
+        agentResponsibility: "vercel-production-deploy",
+        agentAction: "vercel-production-deploy",
         args: { goal: { fact: "goalId" } },
       },
     ],
@@ -64,8 +64,8 @@ const GOAL_TYPE_DEFINITIONS: Record<ManagedGoalTypeId, ManagedGoalTypeDefinition
   checklist: {
     type: "checklist",
     evidence: ["checklistComplete"],
-    duties: ["task-verifier"],
-    route: [{ stage: "verify", evidence: "checklistComplete", duty: "task-verifier", executable: "task-verifier" }],
+    agentResponsibilities: ["task-verifier"],
+    route: [{ stage: "verify", evidence: "checklistComplete", agentResponsibility: "task-verifier", agentAction: "task-verifier" }],
   },
 }
 
@@ -73,8 +73,8 @@ function cloneRoute(route: GoalRouteStep[]): GoalRouteStep[] {
   return route.map((step) => ({
     stage: step.stage,
     evidence: step.evidence,
-    duty: step.duty,
-    ...(step.executable ? { executable: step.executable } : {}),
+    agentResponsibility: step.agentResponsibility,
+    ...(step.agentAction ? { agentAction: step.agentAction } : {}),
     ...(step.args ? { args: structuredClone(step.args) as Record<string, unknown> } : {}),
   }))
 }
@@ -89,12 +89,12 @@ function routeArray(value: unknown): GoalRouteStep[] | null {
   for (const item of value) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return null
     const raw = item as Record<string, unknown>
-    if (typeof raw.stage !== "string" || typeof raw.evidence !== "string" || typeof raw.duty !== "string") return null
+    if (typeof raw.stage !== "string" || typeof raw.evidence !== "string" || typeof raw.agentResponsibility !== "string") return null
     route.push({
       stage: raw.stage,
       evidence: raw.evidence,
-      duty: raw.duty,
-      executable: typeof raw.executable === "string" ? raw.executable : undefined,
+      agentResponsibility: raw.agentResponsibility,
+      agentAction: typeof raw.agentAction === "string" ? raw.agentAction : undefined,
       args: raw.args && typeof raw.args === "object" && !Array.isArray(raw.args) ? { ...(raw.args as Record<string, unknown>) } : undefined,
     })
   }
@@ -118,7 +118,7 @@ export function expandManagedGoalState(state: GoalState): GoalState {
       : {}
   const outcome = typeof destination.outcome === "string" ? destination.outcome : ""
   const evidence = stringArray(destination.evidence)
-  const duties = stringArray(state.extra.duties)
+  const agentResponsibilities = stringArray(state.extra.agentResponsibilities)
   const route = routeArray(state.extra.route)
   const facts =
     state.extra.facts && typeof state.extra.facts === "object" && !Array.isArray(state.extra.facts)
@@ -136,7 +136,7 @@ export function expandManagedGoalState(state: GoalState): GoalState {
         outcome,
         evidence: evidence && evidence.length > 0 ? evidence : [...definition.evidence],
       },
-      duties: duties && duties.length > 0 ? duties : [...definition.duties],
+      agentResponsibilities: agentResponsibilities && agentResponsibilities.length > 0 ? agentResponsibilities : [...definition.agentResponsibilities],
       route: route && route.length > 0 ? route : cloneRoute(definition.route),
       facts,
       blockers: blockers ?? [],

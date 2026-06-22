@@ -1,4 +1,4 @@
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../agent-actions/types.js"
 import { type GoalState, nowIso, serializeGoalState } from "../goal/state.js"
 import type { GoalCtx } from "./goalCtx.js"
 

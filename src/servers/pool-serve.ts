@@ -1,5 +1,5 @@
 /**
- * poolServe — preflight for the `pool-serve` executable.
+ * poolServe — preflight for the `pool-serve` agentAction.
  *
  * The warm-pool OWNER. Runs always-on and serves the pool API the dashboard
  * calls to claim a pre-booted, frozen runner. It owns runner capacity only;
@@ -23,7 +23,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 
 import { gitHubActionsDegraded } from "../github-health.js"
-import { runDutyFallbackTick } from "../pool/duty-fallback-tick.js"
+import { runAgentResponsibilityFallbackTick } from "../pool/agent-responsibility-fallback-tick.js"
 import type { FlyGuest } from "../pool/fly.js"
 import { bearerOk, derivePoolApiKey, deriveRunnerApiKey, masterKeyBytes } from "../pool/keys.js"
 import { type ClaimRequest, PoolRegistry } from "../pool/registry.js"
@@ -91,7 +91,7 @@ export function parseClaimRequest(body: unknown): { req: ClaimRequest } | { erro
     if (Number.isFinite(Number(b.idleExitMs))) req.idleExitMs = Number(b.idleExitMs)
     if (Number.isFinite(Number(b.hardCapMs))) req.hardCapMs = Number(b.hardCapMs)
   }
-  // mode "scheduled" needs no extra fields — runs the whole duty/goal fan-out.
+  // mode "scheduled" needs no extra fields — runs the whole agentResponsibility/goal fan-out.
   if (typeof b.ref === "string" && b.ref.trim()) req.ref = b.ref.trim()
   if (typeof b.model === "string" && b.model.trim()) req.model = b.model.trim()
   if (typeof b.sessionId === "string" && b.sessionId.trim()) req.sessionId = b.sessionId.trim()
@@ -149,21 +149,21 @@ export async function poolServe(): Promise<number> {
   }, refillMs)
 
   // GitHub-outage fallback: GitHub Actions' cron normally fires the scheduled
-  // duty/goal fan-out. When Actions is down that cron can't fire, so while this
+  // agentResponsibility/goal fan-out. When Actions is down that cron can't fire, so while this
   // always-on machine is awake we tick every 15 min and — ONLY if GitHub is
   // degraded — run the fan-out on a Fly runner per active repo. GitHub stays
-  // the default; the engine's per-duty cadence guard prevents double-runs.
-  // Set POOL_DUTY_TICK=0 to disable.
-  const dutyTickEnabled = (process.env.POOL_DUTY_TICK ?? "1") !== "0"
-  const dutyTickMs = envInt("POOL_DUTY_TICK_MS", 15 * 60_000)
+  // the default; the engine's per-agentResponsibility cadence guard prevents double-runs.
+  // Set POOL_AGENT_RESPONSIBILITY_TICK=0 to disable.
+  const dutyTickEnabled = (process.env.POOL_AGENT_RESPONSIBILITY_TICK ?? "1") !== "0"
+  const dutyTickMs = envInt("POOL_AGENT_RESPONSIBILITY_TICK_MS", 15 * 60_000)
   const dutyTick = dutyTickEnabled
     ? setInterval(() => {
-        runDutyFallbackTick({
+        runAgentResponsibilityFallbackTick({
           isDegraded: () => gitHubActionsDegraded(),
           activeRepos: () => registry.activeRepos(),
           claim: (owner, repo, req) => registry.claim(owner, repo, req),
           log,
-        }).catch((err) => log(`duty fallback tick failed: ${err instanceof Error ? err.message : String(err)}`))
+        }).catch((err) => log(`agentResponsibility fallback tick failed: ${err instanceof Error ? err.message : String(err)}`))
       }, dutyTickMs)
     : null
 

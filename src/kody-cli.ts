@@ -12,7 +12,7 @@ import {
   truncate,
 } from "./issue.js"
 import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
-import { resolveDutyAction } from "./registry.js"
+import { resolveAgentResponsibilityAction } from "./registry.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -283,7 +283,7 @@ export async function runCi(argv: string[]): Promise<number> {
 
   const args = parseCiArgs(argv)
   const cwd = args.cwd ? path.resolve(args.cwd) : process.cwd()
-  // Load config early so autoDispatch can consult legacy default duty action keys.
+  // Load config early so autoDispatch can consult legacy default agentResponsibility action keys.
   let earlyConfig: ReturnType<typeof loadConfig> | undefined
   let earlyConfigError: Error | undefined
   try {
@@ -296,10 +296,10 @@ export async function runCi(argv: string[]): Promise<number> {
   const autoFallback = !args.issueNumber ? autoDispatch({ config: earlyConfig }) : null
 
   // Schedule wakes and parameterless workflow_dispatch fan out to every
-  // watch executable whose `schedule` cron matches the wake window
+  // watch agentAction whose `schedule` cron matches the wake window
   // (workflow_dispatch ignores the cron — it's an explicit "fire all").
-  // duty-scheduler is itself a watch and continues to fire from this
-  // path; nightly suites and any future watch executables join naturally,
+  // agent-responsibility-scheduler is itself a watch and continues to fire from this
+  // path; nightly suites and any future watch agentActions join naturally,
   // no kody.yml or config edits.
   const eventName = process.env.GITHUB_EVENT_NAME
   const dispatchEventPath = process.env.GITHUB_EVENT_PATH
@@ -317,13 +317,13 @@ export async function runCi(argv: string[]): Promise<number> {
       const evt = JSON.parse(fs.readFileSync(dispatchEventPath, "utf-8"))
       const issueInput = parseInt(String(evt?.inputs?.issue_number ?? ""), 10)
       const sessionInput = String(evt?.inputs?.sessionId ?? "")
-      const dutyInput = String(evt?.inputs?.duty ?? evt?.inputs?.executable ?? "").trim()
+      const dutyInput = String(evt?.inputs?.agentResponsibility ?? evt?.inputs?.agentAction ?? "").trim()
       const messageInput = String(evt?.inputs?.message ?? "").trim()
       const noTarget = !sessionInput && !(Number.isFinite(issueInput) && issueInput > 0)
-      // Explicit `duty` + no target → manual one-shot "Run now" of that
-      // single duty (a scheduled / no-target folder-duty), bypassing the
-      // cadence guard. A bare dispatch (no duty) still fans out to every
-      // watch duty (duty-scheduler et al.).
+      // Explicit `agentResponsibility` + no target → manual one-shot "Run now" of that
+      // single agentResponsibility (a scheduled / no-target folder-agentResponsibility), bypassing the
+      // cadence guard. A bare dispatch (no agentResponsibility) still fans out to every
+      // watch agentResponsibility (agent-responsibility-scheduler et al.).
       if (noTarget && dutyInput) {
         forceRunAction = dutyInput
         if (dutyInput === "goal-manager" && messageInput) {
@@ -339,33 +339,33 @@ export async function runCi(argv: string[]): Promise<number> {
   if (forceRunAction) {
     const config = earlyConfig ?? loadConfig(cwd)
     const manualGoalManager = forceRunAction === "goal-manager"
-    const dutyRoute = manualGoalManager ? null : resolveDutyAction(forceRunAction)
+    const dutyRoute = manualGoalManager ? null : resolveAgentResponsibilityAction(forceRunAction)
     const scheduledWatchRoute =
       manualGoalManager || dutyRoute
         ? undefined
         : dispatchScheduledWatches({ force: true }).find(
-            (match) => match.action === forceRunAction || match.executable === forceRunAction,
+            (match) => match.action === forceRunAction || match.agentAction === forceRunAction,
           )
     const route = manualGoalManager
       ? {
           action: "goal-manager",
-          duty: "goal-manager",
-          executable: "goal-manager",
+          agentResponsibility: "goal-manager",
+          agentAction: "goal-manager",
           cliArgs: forceRunCliArgs,
         }
       : (dutyRoute ?? scheduledWatchRoute)
     if (!route) {
-      process.stderr.write(`[kody] manual one-shot action '${forceRunAction}' has no duty action\n`)
+      process.stderr.write(`[kody] manual one-shot action '${forceRunAction}' has no agentResponsibility action\n`)
       return 64
     }
-    if (route.executable === "goal-manager" && typeof forceRunCliArgs.goal !== "string") {
+    if (route.agentAction === "goal-manager" && typeof forceRunCliArgs.goal !== "string") {
       process.stderr.write("[kody] manual goal-manager run requires message goal id\n")
       return 64
     }
-    process.stdout.write(`→ kody: manual one-shot run action ${route.action} (${route.duty})\n\n`)
+    process.stdout.write(`→ kody: manual one-shot run action ${route.action} (${route.agentResponsibility})\n\n`)
     try {
       // Same preflight as the routed path: secrets, auth, deps, LiteLLM, git.
-      // Without this the duty's agent has no LiteLLM proxy (non-Anthropic
+      // Without this the agentResponsibility's agent has no LiteLLM proxy (non-Anthropic
       // models) and no installed consumer deps.
       const n = unpackAllSecrets()
       if (n > 0) process.stdout.write(`→ kody: unpacked ${n} secret(s)\n`)
@@ -387,14 +387,14 @@ export async function runCi(argv: string[]): Promise<number> {
       }
       configureGitIdentity(cwd)
     } catch (err) {
-      process.stderr.write(`[kody] manual duty preflight crashed: ${String(err)}\n`)
+      process.stderr.write(`[kody] manual agentResponsibility preflight crashed: ${String(err)}\n`)
       return 99
     }
     const result = await runJob(
       {
         action: route.action,
-        duty: route.duty,
-        executable: route.executable,
+        agentResponsibility: route.agentResponsibility,
+        agentAction: route.agentAction,
         cliArgs: { ...route.cliArgs, ...forceRunCliArgs },
         flavor: "instant",
         force: true,
@@ -423,7 +423,7 @@ export async function runCi(argv: string[]): Promise<number> {
     const outcome = autoDispatchTyped({ config: earlyConfig })
     if (outcome.kind === "unrecognized") {
       // Unpack secrets and resolve GH_TOKEN before calling `gh` — the
-      // routed-dispatch path does this later inside the executable
+      // routed-dispatch path does this later inside the agentAction
       // pipeline, but the unrecognized-token path bypasses that and would
       // otherwise hit the "set GH_TOKEN" error from the gh CLI.
       try {
@@ -455,7 +455,7 @@ export async function runCi(argv: string[]): Promise<number> {
       )
       return 0
     }
-    if (outcome.kind === "silent" && earlyConfigError && outcome.reason.includes("no default duty action configured")) {
+    if (outcome.kind === "silent" && earlyConfigError && outcome.reason.includes("no default agentResponsibility action configured")) {
       process.stderr.write(`[kody] config error: ${earlyConfigError.message}\n`)
       return 64
     }
@@ -475,9 +475,9 @@ export async function runCi(argv: string[]): Promise<number> {
     return 64
   }
 
-  const runRoute = args.issueNumber ? resolveDutyAction("run") : null
+  const runRoute = args.issueNumber ? resolveAgentResponsibilityAction("run") : null
   if (!autoFallback && args.issueNumber && !runRoute) {
-    process.stderr.write("[kody] required duty action 'run' not found\n")
+    process.stderr.write("[kody] required agentResponsibility action 'run' not found\n")
     return 64
   }
   const dispatch = autoFallback ?? {
@@ -488,7 +488,7 @@ export async function runCi(argv: string[]): Promise<number> {
   const issueNumber = dispatch.target
 
   process.stdout.write(
-    `→ kody preflight (cwd=${cwd}, action=${dispatch.action}, duty=${dispatch.duty}, executable=${dispatch.executable}, target=${issueNumber})\n`,
+    `→ kody preflight (cwd=${cwd}, action=${dispatch.action}, agentResponsibility=${dispatch.agentResponsibility}, agentAction=${dispatch.agentAction}, target=${issueNumber})\n`,
   )
 
   try {
@@ -506,10 +506,10 @@ export async function runCi(argv: string[]): Promise<number> {
     // the image) and runs no model — so the runner needs neither the
     // consumer's node_modules nor the LiteLLM proxy. Skipping both trims
     // ~1–2 min of otherwise-wasted preflight on the preview path.
-    const buildOnly = dispatch.executable === "preview-build"
+    const buildOnly = dispatch.agentAction === "preview-build"
 
     if (args.skipInstall || buildOnly) {
-      process.stdout.write(`→ kody: skipping dep install (${buildOnly ? "build-only executable" : "--skip-install"})\n`)
+      process.stdout.write(`→ kody: skipping dep install (${buildOnly ? "build-only agentAction" : "--skip-install"})\n`)
     } else {
       const code = installDeps(pm, cwd)
       if (code !== 0) {
@@ -520,7 +520,7 @@ export async function runCi(argv: string[]): Promise<number> {
 
     if (args.skipLitellm || buildOnly) {
       process.stdout.write(
-        `→ kody: skipping LiteLLM install (${buildOnly ? "build-only executable" : "--skip-litellm"})\n`,
+        `→ kody: skipping LiteLLM install (${buildOnly ? "build-only agentAction" : "--skip-litellm"})\n`,
       )
     } else {
       const code = installLitellmIfNeeded(cwd)
@@ -538,15 +538,15 @@ export async function runCi(argv: string[]): Promise<number> {
     return 99
   }
 
-  process.stdout.write(`→ kody: preflight done, handing off to kody ${dispatch.executable}\n\n`)
+  process.stdout.write(`→ kody: preflight done, handing off to kody ${dispatch.agentAction}\n\n`)
 
   try {
     const config = earlyConfig ?? loadConfig(cwd)
-    // runExecutableChain follows any in-process stage hand-offs (classify →
-    // build, flow ping-pong, goal-manager -> duty pipeline) so a stage never has
+    // runAgentActionChain follows any in-process stage hand-offs (classify →
+    // build, flow ping-pong, goal-manager -> agentResponsibility pipeline) so a stage never has
     // to post a bot-authored `@kody` comment the follow-up run would ignore.
     // One-runner: the comment / manual route mints an INSTANT job and runs it.
-    // runJob wraps runExecutableChain, so in-process stage hand-offs and exit
+    // runJob wraps runAgentActionChain, so in-process stage hand-offs and exit
     // codes are preserved. The minted job carries the default `kody` agent
     // (executor injects it) and the operator's verbatim request as `why`
     // (carried on the DispatchResult → surfaced as a fenced system block).
@@ -572,7 +572,7 @@ export async function runCi(argv: string[]): Promise<number> {
 }
 
 /**
- * Run every watch duty whose executable's `schedule` matches the wake window.
+ * Run every watch agentResponsibility whose agentAction's `schedule` matches the wake window.
  * Shares the same preflight (secret unpack, dep install, litellm, git
  * identity) as the single-target path; runs each match sequentially.
  * Aggregate exit code: 0 iff every watch returned 0.
@@ -586,8 +586,8 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
     return 0
   }
 
-  const names = matches.map((m) => `${m.duty}→${m.executable}`).join(", ")
-  process.stdout.write(`→ kody: scheduled wake — firing ${matches.length} watch dut(y/ies): ${names}\n`)
+  const names = matches.map((m) => `${m.agentResponsibility}→${m.agentAction}`).join(", ")
+  process.stdout.write(`→ kody: scheduled wake — firing ${matches.length} watch agent responsibility/ies: ${names}\n`)
 
   try {
     const n = unpackAllSecrets()
@@ -620,7 +620,7 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
 
   const config = loadConfig(cwd)
   // Parallel watch fanout — typical wake fires 2–3 independent watches
-  // (duty-scheduler, goal-scheduler, and future watches) that operate on
+  // (agent-responsibility-scheduler, goal-scheduler, and future watches) that operate on
   // disjoint targets and don't share working-tree state. Running them
   // sequentially makes the second one wait through MCP boot + agent
   // turns of the first for no reason. Aggregate via allSettled so one
@@ -628,27 +628,27 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
   // restore the legacy behaviour while the new mode bakes in.
   const serial = process.env.KODY_SERIAL_WATCHES === "1"
   const runWatch = async (match: DispatchResult): Promise<number> => {
-    process.stdout.write(`\n→ kody: running watch duty \`${match.duty}\` (${match.executable})\n`)
+    process.stdout.write(`\n→ kody: running watch agentResponsibility \`${match.agentResponsibility}\` (${match.agentAction})\n`)
     try {
       const result = await runJob(
         mintScheduledJob({
           action: match.action,
-          duty: match.duty,
-          executable: match.executable,
+          agentResponsibility: match.agentResponsibility,
+          agentAction: match.agentAction,
           cliArgs: match.cliArgs,
         }),
         { cwd, config, verbose: args.verbose, quiet: args.quiet, chain: false },
       )
       if (result.exitCode !== 0) {
         process.stderr.write(
-          `[kody] watch duty \`${match.duty}\` exited ${result.exitCode}: ${result.reason ?? "(no reason)"}\n`,
+          `[kody] watch agentResponsibility \`${match.agentResponsibility}\` exited ${result.exitCode}: ${result.reason ?? "(no reason)"}\n`,
         )
         return result.exitCode
       }
       return 0
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`[kody] watch duty \`${match.duty}\` crashed: ${msg}\n`)
+      process.stderr.write(`[kody] watch agentResponsibility \`${match.agentResponsibility}\` crashed: ${msg}\n`)
       return 99
     }
   }

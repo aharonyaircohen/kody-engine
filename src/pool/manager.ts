@@ -38,7 +38,7 @@ export interface PoolJob {
   repo: string
   githubToken: string
   /** "issue" (one-shot run) | "interactive" (long-lived chat session)
-   * | "scheduled" (duty/goal fan-out — Fly fallback for GitHub cron). */
+   * | "scheduled" (agentResponsibility/goal fan-out — Fly fallback for GitHub cron). */
   mode?: "issue" | "interactive" | "scheduled"
   /** Required for issue mode. */
   issueNumber?: number

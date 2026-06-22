@@ -1,6 +1,6 @@
 /**
  * Preflight: assemble QA context for the `qa-engineer` / `ui-review`
- * executables from dashboard-managed, per-repo stores. Replaces the legacy
+ * agentActions from dashboard-managed, per-repo stores. Replaces the legacy
  * committed `.kody/qa-guide.md` mechanism.
  *
  *   - scenarios / notes → the context entries, `.kody/context/*.md`
@@ -26,7 +26,7 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../agent-actions/types.js"
 import { readKodyVariables } from "./kodyVariables.js"
 
 const CONTEXT_DIR_REL_PATH = ".kody/context"

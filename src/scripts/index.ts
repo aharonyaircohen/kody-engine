@@ -4,12 +4,12 @@
  * here. Any profile referencing an unregistered script name fails at load.
  */
 
-import type { PostflightScript, PreflightScript } from "../executables/types.js"
+import type { PostflightScript, PreflightScript } from "../agent-actions/types.js"
 import { abortUnfinishedGitOps } from "./abortUnfinishedGitOps.js"
 import { advanceFlow } from "./advanceFlow.js"
 import { advanceManagedGoal } from "./advanceManagedGoal.js"
 import { appendCompanyActivity } from "./appendCompanyActivity.js"
-import { applyDutyReports } from "./applyDutyReports.js"
+import { applyAgentResponsibilityReports } from "./applyAgentResponsibilityReports.js"
 import { buildSyntheticPlugin } from "./buildSyntheticPlugin.js"
 import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
 import { classifyByLabel } from "./classifyByLabel.js"
@@ -22,8 +22,8 @@ import { diagMcp } from "./diagMcp.js"
 import { discoverQaContext } from "./discoverQaContext.js"
 import { dispatch } from "./dispatch.js"
 import { dispatchClassified } from "./dispatchClassified.js"
-import { dispatchDutyFileTicks } from "./dispatchDutyFileTicks.js"
-import { dispatchDutyTicks } from "./dispatchDutyTicks.js"
+import { dispatchAgentResponsibilityFileTicks } from "./dispatchAgentResponsibilityFileTicks.js"
+import { dispatchAgentResponsibilityTicks } from "./dispatchAgentResponsibilityTicks.js"
 import { dispatchNextTaskJob } from "./dispatchNextTaskJob.js"
 import { ensurePr } from "./ensurePr.js"
 import { failOnceTaskJob } from "./failOnceTaskJob.js"
@@ -34,7 +34,7 @@ import { fixFlow } from "./fixFlow.js"
 import { initFlow } from "./initFlow.js"
 import { loadConventions } from "./loadConventions.js"
 import { loadCoverageRules } from "./loadCoverageRules.js"
-import { loadDutyState } from "./loadDutyState.js"
+import { loadAgentResponsibilityState } from "./loadAgentResponsibilityState.js"
 import { loadGoalState } from "./loadGoalState.js"
 import { loadIssueContext } from "./loadIssueContext.js"
 import { loadIssueStateComment } from "./loadIssueStateComment.js"
@@ -77,7 +77,7 @@ import { revertFlow } from "./revertFlow.js"
 import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
 import { runPreviewBuild } from "./runPreviewBuild.js"
-import { runScheduledExecutableTick } from "./runScheduledExecutableTick.js"
+import { runScheduledAgentActionTick } from "./runScheduledAgentActionTick.js"
 import { runTickScript } from "./runTickScript.js"
 import { saveManagedGoalState } from "./saveManagedGoalState.js"
 import { saveTaskState } from "./saveTaskState.js"
@@ -94,7 +94,7 @@ import { waitForCi } from "./waitForCi.js"
 import { warmupMcp } from "./warmupMcp.js"
 import { writeIssueStateComment } from "./writeIssueStateComment.js"
 import { writeJobStateFile } from "./writeJobStateFile.js"
-import { writeRunSummary } from "./writeRunSummary.js"
+import { writeAgentRunSummary } from "./writeAgentRunSummary.js"
 
 export const preflightScripts: Record<string, PreflightScript> = {
   runFlow,
@@ -111,7 +111,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   loadIssueContext,
   loadIssueStateComment,
   loadJobFromFile,
-  loadDutyState,
+  loadAgentResponsibilityState,
   loadAgentAdhoc,
   loadConventions,
   loadCoverageRules,
@@ -133,11 +133,11 @@ export const preflightScripts: Record<string, PreflightScript> = {
   classifyByLabel,
   diagMcp,
   warmupMcp,
-  dispatchDutyTicks,
-  dispatchDutyFileTicks,
+  dispatchAgentResponsibilityTicks,
+  dispatchAgentResponsibilityFileTicks,
   planTaskJobs,
   dispatchNextTaskJob,
-  runScheduledExecutableTick,
+  runScheduledAgentActionTick,
   runTickScript,
   runPreviewBuild,
   advanceManagedGoal,
@@ -169,7 +169,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   postResearchComment,
   postReviewResult,
   persistArtifacts,
-  writeRunSummary,
+  writeAgentRunSummary,
   saveTaskState,
   mirrorStateToPr,
   startFlow,
@@ -178,7 +178,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   finalizeTerminal,
   advanceFlow,
   persistFlowState,
-  applyDutyReports,
+  applyAgentResponsibilityReports,
   recordClassification,
   dispatchClassified,
   notifyTerminal,

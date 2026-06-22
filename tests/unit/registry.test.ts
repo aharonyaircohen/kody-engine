@@ -3,13 +3,13 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
-  builtinExecutableNames,
-  hasExecutable,
-  isBuiltinExecutable,
+  builtinAgentActionNames,
+  hasAgentAction,
+  isBuiltinAgentAction,
   isSafeName,
-  listExecutables,
+  listAgentActions,
   parseGenericFlags,
-  resolveExecutable,
+  resolveAgentAction,
 } from "../../src/registry.js"
 
 function mkFixture(): string {
@@ -22,19 +22,19 @@ function writeProfile(root: string, name: string, body: object = {}): void {
   fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify(body))
 }
 
-describe("registry: builtin executables", () => {
-  it("detects the engine-bundled executables by name", () => {
-    const names = builtinExecutableNames()
+describe("registry: builtin agentActions", () => {
+  it("detects the engine-bundled agentActions by name", () => {
+    const names = builtinAgentActionNames()
     // a sample of known engine builtins
     expect(names.has("run")).toBe(true)
     expect(names.has("merge")).toBe(false)
-    expect(names.has("duty-scheduler")).toBe(false)
+    expect(names.has("agent-responsibility-scheduler")).toBe(false)
   })
 
-  it("isBuiltinExecutable is true for builtins, false for custom names", () => {
-    expect(isBuiltinExecutable("run")).toBe(true)
-    expect(isBuiltinExecutable("merge")).toBe(false)
-    expect(isBuiltinExecutable("a-custom-consumer-duty-xyz")).toBe(false)
+  it("isBuiltinAgentAction is true for builtins, false for custom names", () => {
+    expect(isBuiltinAgentAction("run")).toBe(true)
+    expect(isBuiltinAgentAction("merge")).toBe(false)
+    expect(isBuiltinAgentAction("a-custom-consumer-agentResponsibility-xyz")).toBe(false)
   })
 })
 
@@ -56,7 +56,7 @@ describe("registry: isSafeName", () => {
   })
 })
 
-describe("registry: listExecutables", () => {
+describe("registry: listAgentActions", () => {
   let root: string
 
   beforeEach(() => {
@@ -66,12 +66,12 @@ describe("registry: listExecutables", () => {
     fs.rmSync(root, { recursive: true, force: true })
   })
 
-  it("returns empty when root has no executables", () => {
-    expect(listExecutables(root)).toEqual([])
+  it("returns empty when root has no agentActions", () => {
+    expect(listAgentActions(root)).toEqual([])
   })
 
   it("returns empty when root does not exist", () => {
-    expect(listExecutables(path.join(root, "nope"))).toEqual([])
+    expect(listAgentActions(path.join(root, "nope"))).toEqual([])
   })
 
   it("finds every directory containing profile.json", () => {
@@ -79,7 +79,7 @@ describe("registry: listExecutables", () => {
     writeProfile(root, "review", { name: "review" })
     writeProfile(root, "watch-stale-prs", { name: "watch-stale-prs" })
 
-    const names = listExecutables(root).map((e) => e.name)
+    const names = listAgentActions(root).map((e) => e.name)
     expect(names).toEqual(["build", "review", "watch-stale-prs"])
   })
 
@@ -88,19 +88,19 @@ describe("registry: listExecutables", () => {
     fs.mkdirSync(path.join(root, "types"), { recursive: true })
     fs.writeFileSync(path.join(root, "types", "types.ts"), "export {}")
 
-    const names = listExecutables(root).map((e) => e.name)
+    const names = listAgentActions(root).map((e) => e.name)
     expect(names).toEqual(["build"])
   })
 
   it("returns absolute profilePath for each discovery", () => {
     writeProfile(root, "init", {})
-    const [exe] = listExecutables(root)
+    const [exe] = listAgentActions(root)
     expect(exe?.profilePath).toBe(path.join(root, "init", "profile.json"))
     expect(fs.existsSync(exe!.profilePath)).toBe(true)
   })
 })
 
-describe("registry: duty/executable separation", () => {
+describe("registry: agentResponsibility/agentAction separation", () => {
   let root: string
   const prevCwd = process.cwd()
 
@@ -114,25 +114,25 @@ describe("registry: duty/executable separation", () => {
     fs.rmSync(root, { recursive: true, force: true })
   })
 
-  it("resolves a duty's same-name executable from .kody/executables, not .kody/duties", () => {
-    const dutyDir = path.join(root, ".kody", "duties", "feature")
-    const exeDir = path.join(root, ".kody", "executables", "feature")
+  it("resolves a agentResponsibility's same-name agentAction from .kody/agent-actions, not .kody/agent-responsibilities", () => {
+    const dutyDir = path.join(root, ".kody", "agent-responsibilities", "feature")
+    const exeDir = path.join(root, ".kody", "agent-actions", "feature")
     fs.mkdirSync(dutyDir, { recursive: true })
     fs.mkdirSync(exeDir, { recursive: true })
     fs.writeFileSync(
       path.join(dutyDir, "profile.json"),
-      JSON.stringify({ name: "feature", action: "feature", executable: "feature" }),
+      JSON.stringify({ name: "feature", action: "feature", agentAction: "feature" }),
     )
-    fs.writeFileSync(path.join(dutyDir, "duty.md"), "# Feature\n")
+    fs.writeFileSync(path.join(dutyDir, "agent-responsibility.md"), "# Feature\n")
     fs.writeFileSync(path.join(exeDir, "profile.json"), JSON.stringify({ name: "feature" }))
 
     const expected = fs.realpathSync(path.join(exeDir, "profile.json"))
-    expect(fs.realpathSync(resolveExecutable("feature")!)).toBe(expected)
-    expect(fs.realpathSync(listExecutables().find((exe) => exe.name === "feature")!.profilePath)).toBe(expected)
+    expect(fs.realpathSync(resolveAgentAction("feature")!)).toBe(expected)
+    expect(fs.realpathSync(listAgentActions().find((exe) => exe.name === "feature")!.profilePath)).toBe(expected)
   })
 })
 
-describe("registry: hasExecutable", () => {
+describe("registry: hasAgentAction", () => {
   let root: string
   beforeEach(() => {
     root = mkFixture()
@@ -143,22 +143,22 @@ describe("registry: hasExecutable", () => {
 
   it("true when the profile exists", () => {
     writeProfile(root, "review", {})
-    expect(hasExecutable("review", root)).toBe(true)
+    expect(hasAgentAction("review", root)).toBe(true)
   })
 
   it("false when the directory exists but profile.json is missing", () => {
     fs.mkdirSync(path.join(root, "review"), { recursive: true })
-    expect(hasExecutable("review", root)).toBe(false)
+    expect(hasAgentAction("review", root)).toBe(false)
   })
 
   it("false on unknown name", () => {
-    expect(hasExecutable("nothing", root)).toBe(false)
+    expect(hasAgentAction("nothing", root)).toBe(false)
   })
 
   it("rejects unsafe names without touching the filesystem", () => {
     writeProfile(root, "build", {})
-    expect(hasExecutable("../build", root)).toBe(false)
-    expect(hasExecutable("..", root)).toBe(false)
+    expect(hasAgentAction("../build", root)).toBe(false)
+    expect(hasAgentAction("..", root)).toBe(false)
   })
 })
 

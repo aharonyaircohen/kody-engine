@@ -16,8 +16,8 @@ The engine has two layers only:
 1. **Generic executor**: [src/executor.ts](src/executor.ts) loads a profile,
    validates args/tools, runs preflight scripts, optionally runs the agent, then
    runs postflight scripts. It knows no `run`/`fix`/`review` behavior.
-2. **Executable profiles**: the engine package keeps only
-   `src/executables/run`; shared duties, executables, and staff live in
+2. **AgentAction profiles**: the engine package keeps only
+   `src/agent-actions/run`; shared agentResponsibilities, agentActions, and agent live in
    `kody-store` under `.kody/`. Profiles declare inputs, tools, Claude Code
    features, CLI contracts, scripts, and optional `runWhen` gates. `prompt.md`
    sits beside a profile when an agent runs.
@@ -34,7 +34,7 @@ The consumer workflow stays small: `.github/workflows/kody.yml` triggers on
   repo-local company layer that maintains this engine.
 - `.kody/context/*.md`: background only: company mission, vocabulary, strategy,
   product notes, decisions. Do not rely on it for hard rules unless an
-  executable explicitly loads it.
+  agentAction explicitly loads it.
 
 ## Vocabulary
 
@@ -43,33 +43,31 @@ different terms, treat it as stale.
 
 | Term | Meaning |
 | --- | --- |
-| `persona` / `staff` | Who runs: reusable identity in project/store `.kody/staff/<slug>.md`. |
-| `duty` | Why/when: recurring intent in `.kody/duties/<slug>/` with `profile.json` metadata and `duty.md` prose. |
-| `executable` | How: one command directory under `.kody/executables/<name>/` in project/store, or `src/executables/run` for the minimal engine builtin; the executor's atomic unit. |
+| `agent` / `agent` | Who agentRuns: reusable identity in project/store `.kody/agents/<slug>.md`. |
+| `agentResponsibility` | Why/when: recurring intent in `.kody/agent-responsibilities/<slug>/` with `profile.json` metadata and `agent-responsibility.md` prose. |
+| `agentAction` | How: one command directory under `.kody/agent-actions/<name>/` in project/store, or `src/agent-actions/run` for the minimal engine builtin; the executor's atomic unit. |
 | `task` | One GitHub issue/PR plus jobs, artifacts, recent history, rolled-up state. |
-| `job` | Required work on a task; points to one executable and records runs. |
+| `job` | Required work on a task; points to one agentAction and records runs. |
 | `run` | One execution attempt for a job. Retries add runs under the same job. |
 | `goal` | Related task list/state under `.kody/goals/<id>/state.json`; `goal-tick` advances stacked PRs. |
-| `watch` | Scheduled executable with `role: "watch"` and `kind: "scheduled"`; schedulers run no agent. |
-| `manager` | Legacy prose label for progress ownership. Do not model it as a duty or executable. |
-| `mission` | Dead term. No `mission-*` executable exists. Do not use it. |
+| `watch` | Scheduled agentAction with `role: "watch"` and `kind: "scheduled"`; schedulers run no agent. |
+| `manager` | Legacy prose label for progress ownership. Do not model it as a agentResponsibility or agentAction. |
+| `mission` | Dead term. No `mission-*` agentAction exists. Do not use it. |
 
-Naming note: consumer-facing paths and prompt tokens use **duty/staff**:
-`.kody/duties/<slug>/`, `duty-scheduler`, `duty-tick`,
-`{{dutyReference}}`, `{{dutySlug}}`, `{{staffSlug}}`,
-`{{executableSlug}}`, `{{dutySchedule}}`. Older `job` identifiers remain only
+Naming note: consumer-facing paths and prompt tokens use **agentResponsibility/agent**:
+`.kody/agent-responsibilities/<slug>/`, `agent-responsibility-scheduler`, `agent-responsibility-tick`,
+`{{agentResponsibilityReference}}`, `{{agentResponsibilitySlug}}`, `{{agentSlug}}`,
+`{{agentActionSlug}}`, `{{agentResponsibilitySchedule}}`. Older `job` identifiers remain only
 where renaming would break public contracts: `Job` in [src/job.ts](src/job.ts),
-`kody-job-next-state`, `loadJobFromFile`,
-`writeJobStateFile`, and legacy prompt tokens like `{{jobSlug}}` /
-`{{workerSlug}}`. The `deadVocabulary` guard bans `job-scheduler`,
-`job-tick`, `dispatchJobFileTicks`, `dispatchJobTicks`, but not the broad
-`job` token.
+`kody-job-next-state`, `loadJobFromFile`, and `writeJobStateFile`.
+The `deadVocabulary` guard bans retired scheduler/tick dispatch identifiers, but
+not the broad `job` token.
 
 ## Engine Commands
 
-Commands are auto-discovered from project `.kody/executables/`, the configured
+Commands are auto-discovered from project `.kody/agent-actions/`, the configured
 company store, then engine built-ins. Engine built-ins are intentionally minimal:
-only `run` remains in `src/executables/`; the shared command catalog lives in
+only `run` remains in `src/agent-actions/`; the shared command catalog lives in
 `kody-store`.
 
 | Command | Input | Agent | Trigger / purpose |
@@ -82,25 +80,25 @@ only `run` remains in `src/executables/`; the shared command catalog lives in
 | `revert` | `--pr`, `--shas` | no | Mechanical `git revert` on PR branch. |
 | `merge` | `--pr` | no | Self-gating squash merge; refuses unless PR is CLEAN. |
 | `preview-build` | `--pr` | no | Per-PR preview build from config/manual dispatch. |
-| `exec release` | `--issue`, bump/dry-run/prefer flags | no | Legacy all-in-one release executable; public release work should use split duties below. |
+| `exec release` | `--issue`, bump/dry-run/prefer flags | no | Legacy all-in-one release agentAction; public release work should use split agentResponsibilities below. |
 | `release-prepare` | bump/dry-run/prefer/issue | no | Version bump, changelog, release PR. |
 | `release-publish` | dry-run/issue | no | Tag, publish, GitHub release. |
 | `release-deploy` | dry-run/issue | no | Deploy and notify after publish. |
 | `init` | optional `--force` | no | Scaffold consumer config/workflow. |
-| `worker-ask` | `--worker` | yes | Dashboard `@staff` one-shot. |
+| `agent-ask` | `--agent` | yes | Dashboard `@agent` one-shot. |
 | `qa-goal` | `--issue` | no | Operator-approved QA report -> goal/tasks. |
-| `exec duty-scheduler` | optional `--duty` | no | Internal cron/helper fan-out to due duty folders. |
-| `exec duty-tick` | `--duty`, optional `--force` | yes | Internal one-tick runner for a duty. |
-| `exec duty-tick-scripted` | `--duty`, optional `--force` | no | Internal runner for duty `tickScript`. |
+| `exec agent-responsibility-scheduler` | optional `--agentResponsibility` | no | Internal cron/helper fan-out to due agentResponsibility folders. |
+| `exec agent-responsibility-tick` | `--agentResponsibility`, optional `--force` | yes | Internal one-tick runner for a agentResponsibility. |
+| `exec agent-responsibility-tick-scripted` | `--agentResponsibility`, optional `--force` | no | Internal runner for agentResponsibility `tickScript`. |
 | `exec goal-scheduler` | none | no | Internal cron fan-out to active goals. |
 | `goal-tick` | `--goal` | no | Deterministic stacked-PR goal tick. |
-| `exec task-jobs` | `--issue` | no | Internal runner for next planned executable in hidden task plan. |
+| `exec task-jobs` | `--issue` | no | Internal runner for next planned agentAction in hidden task plan. |
 | `plan-verify` | `--issue` | yes | Live-test plugin/skill/hook wiring. |
-| `probe-skill` | `--issue` | yes | Live-test executable-local skill resolution. |
-| `job-live-verify` | none | yes | Live-test job/staff/locked-tool wiring. |
+| `probe-skill` | `--issue` | yes | Live-test agentAction-local skill resolution. |
+| `job-live-verify` | none | yes | Live-test job/agent/locked-tool wiring. |
 
 Long-running CLI-only servers are hardcoded in [src/entry.ts](src/entry.ts), not
-the executable registry: `serve`, `pool-serve`, `runner-serve`, `brain-serve`,
+the agentAction registry: `serve`, `pool-serve`, `runner-serve`, `brain-serve`,
 `brain-proxy`, `mcp-http-server`. They are not reachable via `@kody <verb>`.
 
 ## Command Notes
@@ -108,7 +106,7 @@ the executable registry: `serve`, `pool-serve`, `runner-serve`, `brain-serve`,
 - `run`: preflight `runFlow -> loadTaskState -> resolveArtifacts ->
   loadConventions -> loadCoverageRules -> composePrompt`; postflight
   `parseAgentResult -> requirePlanDeviations -> verify/checkCoverage ->
-  commitAndPush -> ensurePr -> postIssueComment -> writeRunSummary ->
+  commitAndPush -> ensurePr -> postIssueComment -> writeAgentRunSummary ->
   saveTaskState -> mirrorStateToPr -> advanceFlow`.
 - `fix`: extracts feedback from PR comments unless `--feedback` is passed;
   `requireFeedbackActions` ensures something actionable was addressed.
@@ -119,38 +117,38 @@ the executable registry: `serve`, `pool-serve`, `runner-serve`, `brain-serve`,
 - `sync`: no-agent clean path of `resolve`.
 - `release`: deterministic, no agent. Stages are also invokable directly.
 - `init`: idempotent scaffold for `kody.config.json`, `kody.yml`, and scheduled
-  executable workflows; `--force` overwrites.
+  agentAction workflows; `--force` overwrites.
 
-## Duty Runtime
+## AgentResponsibility Runtime
 
-Duty folders:
+AgentResponsibility folders:
 
 ```text
-.kody/duties/<slug>/
-  profile.json   # every, staff, action/executable(s), tools, tickScript, mentions, disabled, stage
-  duty.md        # human-owned intent/prose
+.kody/agent-responsibilities/<slug>/
+  profile.json   # every, agent, action/agentAction(s), tools, tickScript, mentions, disabled, stage
+  agent-responsibility.md        # human-owned intent/prose
 ```
 
-- `duty-scheduler` runs every `*/5 * * * *`, lists duty folders, gates by
-  `every`, and invokes `duty-tick` or `duty-tick-scripted` in-process.
-- `duty-tick` loads duty + staff + state (`loadJobFromFile`), composes prompt,
-  lets the agent act via `gh`/`Read` or locked duty tools, then persists
+- `agent-responsibility-scheduler` runs every `*/5 * * * *`, lists agentResponsibility folders, gates by
+  `every`, and invokes `agent-responsibility-tick` or `agent-responsibility-tick-scripted` in-process.
+- `agent-responsibility-tick` loads agentResponsibility + agent + state (`loadJobFromFile`), composes prompt,
+  lets the agent act via `gh`/`Read` or locked agentResponsibility tools, then persists
   `kody-job-next-state` via `writeJobStateFile`.
-- `duty-tick-scripted` runs the duty `tickScript`, parses next state from
-  stdout, and persists it. Use for deterministic duties.
+- `agent-responsibility-tick-scripted` runs the agentResponsibility `tickScript`, parses next state from
+  stdout, and persists it. Use for deterministic agentResponsibilities.
 - `mentions` becomes a ready `@login` string exposed as `{{mentions}}`.
-- `tools` enables locked-toolbox mode: only `mcp__kody-duty__<tool>` plus
+- `tools` enables locked-toolbox mode: only `mcp__kody-agent-responsibility__<tool>` plus
   `submit_state`; no Bash/Read shell access.
-- The duty MCP palette currently exposes high-level intents such as
+- The agentResponsibility MCP palette currently exposes high-level intents such as
   `list_prs_to_repair`, `sync_pr`, `fix_ci_pr`, `resolve_pr`,
   `recommend_to_operator`, and `read_ledger`.
-- Duty state is sidecar state, not a GitHub issue comment. The body is
+- AgentResponsibility state is sidecar state, not a GitHub issue comment. The body is
   human-owned; the bot only advances state.
 
 Dispatch rule: bot-authored `@kody <verb>` comments are banned because bot
-comments are filtered to prevent self-dispatch loops. Duties must dispatch by
-`gh workflow run kody.yml -f executable=<name> -f issue_number=<n>` or, inside
-TS, `runExecutableChain(name, opts)`. See [docs/duty-dispatch.md](docs/duty-dispatch.md).
+comments are filtered to prevent self-dispatch loops. AgentResponsibilities must dispatch by
+`gh workflow run kody.yml -f agentAction=<name> -f issue_number=<n>` or, inside
+TS, `runAgentActionChain(name, opts)`. See [docs/agent-responsibility-dispatch.md](docs/agent-responsibility-dispatch.md).
 
 ## Repo Map
 
@@ -159,7 +157,7 @@ src/
   executor.ts, profile.ts, tools.ts, dispatch.ts, agent.ts, litellm.ts
   kody-cli.ts, entry.ts, gha.ts
   branch.ts, commit.ts, pr.ts, verify.ts, issue.ts, coverage.ts, prompt.ts, format.ts, config.ts
-  executables/<name>/{profile.json,prompt.md,*.sh,skills/,commands/,agents/,hooks/}
+  agentActions/<name>/{profile.json,prompt.md,*.sh,skills/,commands/,agents/,hooks/}
   scripts/*.ts      # shared pre/postflight catalog + registry
   lifecycles/*.ts   # profile lifecycle expanders
 bin/kody.ts
@@ -172,9 +170,9 @@ tests/{unit,int,e2e}
 1. **Executor is generic.** `executor.ts` must not mention role-specific
    concepts (`run`, `fix`, `review`, `issue`, `pr`). It only knows profile,
    scripts, context, SDK call.
-2. **Executable dirs contain no TypeScript.** Allowed: `profile.json`,
+2. **AgentAction dirs contain no TypeScript.** Allowed: `profile.json`,
    `prompt.md`, `*.sh`, and optional plugin parts (`skills/`, `commands/`,
-   `agents/`, `hooks/`). Shared TS belongs in `src/scripts/`; executable-specific
+   `agents/`, `hooks/`). Shared TS belongs in `src/scripts/`; agentAction-specific
    TS is a design smell unless promoted to real shared utility.
 3. **Scripts compose.** Each script does one deterministic thing. `runWhen`
    dotted-path equality is the only conditional primitive.
@@ -184,39 +182,39 @@ tests/{unit,int,e2e}
 5. **Workflow YAML stays minimal.** New capability ships via npm/profile/script,
    not consumer YAML churn.
 6. **Shared scripts stay generic.** No branching on `profile.name`; treat it as
-   an opaque label. Per-executable behavior belongs in profile-declared
+   an opaque label. Per-agentAction behavior belongs in profile-declared
    scripts/shell. Enforced by [tests/unit/sharedScriptsInvariants.test.ts](tests/unit/sharedScriptsInvariants.test.ts).
-7. **Shared scripts do not import executables.** `src/scripts/*.ts` may import
-   only the shared type contract from `../executables/types.js`.
+7. **Shared scripts do not import agentActions.** `src/scripts/*.ts` may import
+   only the shared type contract from `../agent-actions/types.js`.
 8. **`.kody/` write allowlist.** Agents may write only allowed subtrees in
    [src/commit.ts](src/commit.ts), currently `.kody/memory/` and `.kody/tasks/`.
    Other `.kody/*` writes are blocked during `run`/`fix`/`resolve`. Watches that
 open PRs must require `commitResult.pushed === true`, not only
 `hasCommitsAhead`.
-9. **Executable scripts read secrets from env only.** Repo vault secrets
+9. **AgentAction scripts read secrets from env only.** Repo vault secrets
 (`.kody/secrets.enc`) are decrypted by Kody runtime/dashboard/pool code and
-loaded into environment variables before executables run. Colocated executable
+loaded into environment variables before agentActions run. Colocated agentAction
 shell scripts must not read or decrypt `.kody/secrets.enc` directly.
 
 ## Kody Clean Boundary
 
 Hard constraints:
 
-- **Engine**: runs the requested executable and reports success/failure.
-- **Preview executable/tool**: owns preview behavior and preview-provider details.
+- **Engine**: runs the requested agentAction and reports success/failure.
+- **Preview agentAction/tool**: owns preview behavior and preview-provider details.
 - **Task-leader/release policy**: decides whether a preview result is required
   for a given PR type.
 - **`.github/workflows/kody.yml`**: immutable launcher only; never change this
   file.
 
-## Adding / Changing Executables
+## Adding / Changing AgentActions
 
-1. Create `.kody/executables/<name>/` in `kody-store` for shared commands, or
-   in a consumer repo for repo-local commands. Add to engine `src/executables/`
+1. Create `.kody/agent-actions/<name>/` in `kody-store` for shared commands, or
+   in a consumer repo for repo-local commands. Add to engine `src/agent-actions/`
    only for the minimal built-in runtime surface.
 2. Add `profile.json`; pick `role` and `kind`; see
-   [src/executables/types.ts](src/executables/types.ts) and
-   [docs/executables.md](docs/executables.md).
+   [src/agent-actions/types.ts](src/agent-actions/types.ts) and
+   [docs/agent-actions.md](docs/agent-actions.md).
 3. Add `prompt.md` if an agent runs.
 4. Add `.sh` for colocated mechanical work.
    If it needs a secret, read the expected env var only; do not access the
@@ -240,9 +238,9 @@ Status: documentation/refactor target; details in
 | `flow-state` | `spec`, `bug`, `feature`, `chore` | Shared shape: `finishFlow`, `persistFlowState`, `loadIssueContext`, `setLifecycleLabel`, `skipAgent`. `startFlow`/`dispatch` in `spec` may collapse into lifecycle. |
 | `goal-chain` | `goal-tick` | Deferred. Its `runWhen` state machine is the lifecycle: `loadGoalState`, `handleAbandonedGoal`, `deriveGoalPhase`, `finalizeGoal`, `dispatchNextTask`, `saveGoalState`, `commitGoalState`. Moving it would just rebadge `goalFlow.ts`. |
 | `release-stage` | `release`, `release-prepare`, `release-deploy`, `release-publish` | Shares `notifyTerminal`, `setCommentTarget`, `recordOutcome`, `skipAgent`, `advanceFlow`. [docs/release-merge-refactor.md](docs/release-merge-refactor.md) may collapse this first. |
-| `init-bootstrap` | `init` | No lifecycle likely; one-shot bootstrap. Treat as residual / possible `src/scripts/executable/init/` relocation. |
-| `dispatch` | `classify`, `duty-scheduler`, partly `spec` | Too few/divergent for abstraction; residual. |
-| residual | `reproduce`, `qa-engineer`/`ui-review`, `research`, `plan`, duty tick variants | Examples: `parseReproOutput`, `verifyReproFails`, `resolvePreviewUrl`, `resolveQaUrl`, `discoverQaContext`, `loadQaContext`, `warmupMcp`, `createQaGoal`, `diagMcp`, `postResearchComment`, `postPlanComment`, `loadJobFromFile`, `runTickScript`. |
+| `init-bootstrap` | `init` | No lifecycle likely; one-shot bootstrap. Treat as residual / possible `src/scripts/agentAction/init/` relocation. |
+| `dispatch` | `classify`, `agent-responsibility-scheduler`, partly `spec` | Too few/divergent for abstraction; residual. |
+| residual | `reproduce`, `qa-engineer`/`ui-review`, `research`, `plan`, agentResponsibility tick variants | Examples: `parseReproOutput`, `verifyReproFails`, `resolvePreviewUrl`, `resolveQaUrl`, `discoverQaContext`, `loadQaContext`, `warmupMcp`, `createQaGoal`, `diagMcp`, `postResearchComment`, `postPlanComment`, `loadJobFromFile`, `runTickScript`. |
 
 Mechanical enforcement counts lifecycle-expanded references and checks: no false
 positive solo allowlist entries, no unaccounted solo scripts, no stale entries.
@@ -283,7 +281,7 @@ are informative rather than scary.
 ## New Session Checklist
 
 1. Read relevant `src/` code. Start with [src/executor.ts](src/executor.ts) and
-   the relevant store/project `.kody/executables/<name>/` profile, or `src/executables/run` for the engine builtin.
+   the relevant store/project `.kody/agent-actions/<name>/` profile, or `src/agent-actions/run` for the engine builtin.
 2. Classify the request: existing profile tweak, new profile, script change, or
    executor change. Most work is profiles/scripts.
 3. Run `pnpm typecheck && pnpm test && pnpm test:e2e` before commit.

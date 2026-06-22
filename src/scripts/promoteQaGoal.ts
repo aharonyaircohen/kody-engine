@@ -1,9 +1,9 @@
 /**
  * Preflight for the `qa-goal` verb — the operator-gated half of QA.
  *
- * QA runs (qa-engineer dispatched by the qa / qa-sweep / approval-gate duties)
+ * QA runs (qa-engineer dispatched by the qa / qa-sweep / approval-gate agentResponsibilities)
  * now only POST their report on the tracking issue; they never auto-create the
- * goal. The duty surfaces an inbox rec carrying `@kody qa-goal --issue <n>`.
+ * goal. The agentResponsibility surfaces an inbox rec carrying `@kody qa-goal --issue <n>`.
  * When the operator approves, this verb reads the QA report that qa-engineer
  * left on issue <n> and promotes it into a real goal (manifest entry +
  * one fix-ticket per finding + a committed `.kody/goals/instances/<id>/state.json`).
@@ -11,7 +11,7 @@
  * Script-only: sets `ctx.skipAgent` so no LLM runs — it's pure orchestration
  * over the already-produced report. Reuses `promoteReportToGoal`.
  */
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../agent-actions/types.js"
 import { getIssue } from "../issue.js"
 import { promoteReportToGoal } from "./createQaGoal.js"
 

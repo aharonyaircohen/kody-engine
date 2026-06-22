@@ -154,7 +154,7 @@ async function issuePage(page: Page) {
 
   await smoothScroll(page, 400)
   await wait(page, 800)
-  await overlay(page, 'Posts a run summary on the issue', 2500)
+  await overlay(page, 'Posts a agent run summary on the issue', 2500)
 }
 
 async function prPage(page: Page) {

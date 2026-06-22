@@ -1,0 +1,173 @@
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
+
+import { advanceManagedGoal } from "../../../src/scripts/advanceManagedGoal.js"
+import type { GoalAgentResponsibilityScheduleState } from "../../../src/scripts/goalAgentResponsibilityScheduling.js"
+import type { GoalCtx } from "../../../src/scripts/goalCtx.js"
+import type { GoalState } from "../../../src/goal/state.js"
+
+let tmp: string
+
+beforeEach(() => {
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "goal-agentResponsibility-schedule-"))
+})
+
+afterEach(() => {
+  fs.rmSync(tmp, { recursive: true, force: true })
+})
+
+function writeAgentResponsibility(slug: string, profile: Record<string, unknown>): void {
+  const dir = path.join(tmp, ".kody", "agent-responsibilities", slug)
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
+  fs.writeFileSync(path.join(dir, "agent-responsibility.md"), `# ${slug}\n\nKeep ${slug} healthy.\n`)
+}
+
+function writeAgentAction(slug: string, profile: Record<string, unknown>): void {
+  const dir = path.join(tmp, ".kody", "agent-actions", slug)
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
+}
+
+function writeAgentResponsibilityState(slug: string, lastFiredAt: string): void {
+  const file = path.join(tmp, ".kody", "agent-responsibilities", slug, "state.json")
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(
+    file,
+    JSON.stringify({ version: 1, rev: 1, cursor: "seed", done: false, data: { lastFiredAt } }, null, 2),
+  )
+}
+
+function goalState(agentResponsibilities: string[] = ["ci-health"]): GoalState {
+  return {
+    state: "active",
+    extra: {
+      type: "standing",
+      scheduleMode: "agentLoop",
+      destination: {
+        outcome: "PRs stay mergeable",
+        evidence: [],
+      },
+      agentResponsibilities,
+      route: [],
+      stage: "watching",
+      facts: {},
+      blockers: [],
+    },
+  }
+}
+
+function fakeCtx(raw: GoalState) {
+  return {
+    args: { goal: "prs-stay-mergeable" },
+    cwd: tmp,
+    config: {
+      quality: { typecheck: "", lint: "", testUnit: "", format: "" },
+      git: { defaultBranch: "main" },
+      github: { owner: "o", repo: "r" },
+      agent: { model: "anthropic/claude-haiku-4-5-20251001" },
+      jobs: { stateBackend: "local-file" },
+    },
+    data: {
+      goal: {
+        id: "prs-stay-mergeable",
+        state: raw.state,
+        defaultBranch: "main",
+        raw,
+      } satisfies GoalCtx,
+    },
+    output: { exitCode: 0 },
+  } as any
+}
+
+describe("standing goal agentResponsibility scheduling", () => {
+  it("dispatches a due agentResponsibility and records the goal scheduling decision", async () => {
+    writeAgentResponsibility("ci-health", { every: "15m", agent: "kody", agentAction: "ci-check" })
+    const raw = goalState()
+    const ctx = fakeCtx(raw)
+
+    await advanceManagedGoal(ctx, {} as any, {})
+
+    expect(ctx.output.nextDispatch).toEqual({
+      agentResponsibility: "ci-health",
+      agentAction: "ci-check",
+      cliArgs: {},
+    })
+    const updatedGoal = ctx.data.goal as GoalCtx
+    expect(updatedGoal.raw).toBeDefined()
+    expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
+      mode: "agentLoop",
+      lastDecision: { kind: "dispatch", agentResponsibility: "ci-health", agentAction: "ci-check" },
+      agentResponsibilities: { "ci-health": { state: "due" } },
+    })
+    const scheduleState = updatedGoal.raw!.extra.scheduleState as GoalAgentResponsibilityScheduleState
+    const status = scheduleState.agentResponsibilities["ci-health"]!
+    expect(typeof status.lastFiredAt).toBe("string")
+    expect(typeof status.nextEligibleAt).toBe("string")
+  })
+
+  it("keeps route-free agentLoops on the agentLoop loop", async () => {
+    writeAgentResponsibility("ci-health", { every: "15m", agent: "kody", agentAction: "ci-check" })
+    const raw = goalState(["ci-health"])
+    raw.extra.type = "agentLoop"
+    const ctx = fakeCtx(raw)
+
+    await advanceManagedGoal(ctx, {} as any, {})
+
+    expect(ctx.output.reason).toBe("dispatch ci-health: first check for 15m")
+    expect(ctx.output.nextDispatch).toEqual({
+      agentResponsibility: "ci-health",
+      agentAction: "ci-check",
+      cliArgs: {},
+    })
+    const updatedGoal = ctx.data.goal as GoalCtx
+    expect(updatedGoal.raw!.state).toBe("active")
+    expect(updatedGoal.raw!.extra.stage).toBe("watching")
+    expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
+      mode: "agentLoop",
+      lastDecision: { kind: "dispatch", agentResponsibility: "ci-health" },
+    })
+  })
+
+  it("passes agentResponsibility slug to due agentAction agentResponsibilities that declare a agentResponsibility input", async () => {
+    writeAgentResponsibility("auto-fix-ci", { every: "15m", agent: "kody", agentAction: "auto-fix-ci" })
+    writeAgentAction("auto-fix-ci", {
+      inputs: [{ name: "agentResponsibility", flag: "--agentResponsibility", type: "string", required: true }],
+    })
+    const raw = goalState(["auto-fix-ci"])
+    const ctx = fakeCtx(raw)
+
+    await advanceManagedGoal(ctx, {} as any, {})
+
+    expect(ctx.output.nextDispatch).toEqual({
+      agentResponsibility: "auto-fix-ci",
+      agentAction: "auto-fix-ci",
+      cliArgs: { agentResponsibility: "auto-fix-ci" },
+    })
+    const updatedGoal = ctx.data.goal as GoalCtx
+    expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
+      lastDecision: { kind: "dispatch", agentResponsibility: "auto-fix-ci", agentAction: "auto-fix-ci" },
+    })
+  })
+
+  it("waits when no agentResponsibility is due", async () => {
+    writeAgentResponsibility("ci-health", { every: "15m", agent: "kody", agentAction: "ci-check" })
+    writeAgentResponsibilityState("ci-health", new Date().toISOString())
+    const raw = goalState()
+    const ctx = fakeCtx(raw)
+
+    await advanceManagedGoal(ctx, {} as any, {})
+
+    expect(ctx.output.nextDispatch).toBeUndefined()
+    expect(ctx.output.reason).toBe("no agentResponsibility due now")
+    const updatedGoal = ctx.data.goal as GoalCtx
+    expect(updatedGoal.raw).toBeDefined()
+    expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
+      mode: "agentLoop",
+      lastDecision: { kind: "idle" },
+      agentResponsibilities: { "ci-health": { state: "waiting" } },
+    })
+  })
+})

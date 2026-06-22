@@ -4,7 +4,7 @@
  * `ctx.data.goalPersistState` and marks `goalPersistChanged`.
  */
 
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../agent-actions/types.js"
 import type { GoalState } from "../goal/state.js"
 import { putGoalState } from "../goal/stateStore.js"
 import type { GoalCtx } from "./goalCtx.js"

@@ -45,12 +45,12 @@ export interface KodyConfig {
      */
     reasoningEffort?: ReasoningEffort
     /**
-     * Per-executable model override. Lets consumers route specific stages to
+     * Per-agentAction model override. Lets consumers route specific stages to
      * cheaper or stronger models without forking the profile:
      *
      *   "agent": {
      *     "model": "claude/claude-sonnet-4-6",
-     *     "perExecutable": {
+     *     "perAgentAction": {
      *       "classify":      "claude/claude-haiku-4-5-20251001",
      *       "research":      "claude/claude-haiku-4-5-20251001",
      *       "plan":          "claude/claude-opus-4-7",
@@ -58,16 +58,16 @@ export interface KodyConfig {
      *     }
      *   }
      *
-     * Resolution order in the executor: perExecutable[name] → profile.model
+     * Resolution order in the executor: perAgentAction[name] → profile.model
      * (when non-"inherit") → agent.model. Missing entries fall through —
      * existing configs without this key see no behaviour change.
      */
-    perExecutable?: Record<string, string>
+    perAgentAction?: Record<string, string>
     /**
-     * Per-executable thinking effort override. Keeps LLM cost/quality tuning
-     * attached to the executable that actually invokes the agent.
+     * Per-agentAction thinking effort override. Keeps LLM cost/quality tuning
+     * attached to the agentAction that actually invokes the agent.
      */
-    perExecutableReasoningEffort?: Record<string, ReasoningEffort>
+    perAgentActionReasoningEffort?: Record<string, ReasoningEffort>
   }
   issueContext?: {
     commentLimit?: number
@@ -75,19 +75,19 @@ export interface KodyConfig {
   }
   testRequirements?: TestRequirement[]
   /**
-   * Legacy key name: duty action to invoke when a user triggers bare `@kody`
+   * Legacy key name: agentResponsibility action to invoke when a user triggers bare `@kody`
    * on an issue with no subcommand. Defaults to "run" so a plain issue
    * comment implements the issue directly.
    */
-  defaultExecutable?: string
+  defaultAgentAction?: string
   /**
-   * Legacy key name: duty action to invoke when a bare `@kody` lands on a PR.
-   * Opt-in: absent means PR comments must name an explicit duty action such as
+   * Legacy key name: agentResponsibility action to invoke when a bare `@kody` lands on a PR.
+   * Opt-in: absent means PR comments must name an explicit agentResponsibility action such as
    * `resolve`, `sync`, or a repo-provided action.
    */
-  defaultPrExecutable?: string
+  defaultPrAgentAction?: string
   /**
-   * Duty action to run on a `pull_request` event whose action is `opened`,
+   * AgentResponsibility action to run on a `pull_request` event whose action is `opened`,
    * `synchronize`, or `reopened` — e.g. "preview-build" to rebuild a per-PR
    * preview on every push to the PR branch.
    *
@@ -95,14 +95,14 @@ export interface KodyConfig {
    * `closed`/`merged` actions are ALWAYS ignored here regardless of this
    * setting — the release orchestrator self-manages its own merge.
    *
-   * The dispatched PR number is bound under the target duty executable's first
+   * The dispatched PR number is bound under the target agentResponsibility agentAction's first
    * required int input (e.g. preview-build's `pr`). This only takes effect
    * when the consumer's kody.yml actually subscribes to `pull_request`
    * (opened/synchronize) — the trigger can only live in YAML, not here.
    */
   onPullRequest?: string
   /**
-   * Comment-subcommand aliases: map typed word → executable name. Merged with
+   * Comment-subcommand aliases: map typed word → agentAction name. Merged with
    * built-in compatibility aliases ({ build: "run" }). User entries override
    * built-ins. Dispatch resolves the first token against this map before the
    * registry.
@@ -110,7 +110,7 @@ export interface KodyConfig {
   aliases?: Record<string, string>
   /**
    * Classifier configuration (only honored when bare `@kody` routes to
-   * the `classify` executable). `labelMap` lets you override the built-in
+   * the `classify` agentAction). `labelMap` lets you override the built-in
    * label → flow mapping (see src/scripts/classifyByLabel.ts for defaults).
    */
   classify?: {
@@ -143,7 +143,7 @@ export interface KodyConfig {
     stateBackend?: "contents-api" | "local-file"
   }
   company?: {
-    activeDuties?: string[]
+    activeAgentResponsibilities?: string[]
     activeGoals?: GoalActivation[]
   }
   /**
@@ -276,17 +276,17 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     },
     agent: {
       model: String(agent.model),
-      ...parsePerExecutable(agent.perExecutable),
-      ...parsePerExecutableReasoningEffort(agent.perExecutableReasoningEffort),
+      ...parsePerAgentAction(agent.perAgentAction),
+      ...parsePerAgentActionReasoningEffort(agent.perAgentActionReasoningEffort),
       ...parseAgentReasoningEffort(agent.reasoningEffort),
     },
     issueContext: parseIssueContext(raw.issueContext),
     testRequirements: parseTestRequirements(raw.testRequirements),
-    defaultExecutable:
-      typeof raw.defaultExecutable === "string" && raw.defaultExecutable.length > 0 ? raw.defaultExecutable : "run",
-    defaultPrExecutable:
-      typeof raw.defaultPrExecutable === "string" && raw.defaultPrExecutable.length > 0
-        ? raw.defaultPrExecutable
+    defaultAgentAction:
+      typeof raw.defaultAgentAction === "string" && raw.defaultAgentAction.length > 0 ? raw.defaultAgentAction : "run",
+    defaultPrAgentAction:
+      typeof raw.defaultPrAgentAction === "string" && raw.defaultPrAgentAction.length > 0
+        ? raw.defaultPrAgentAction
         : undefined,
     onPullRequest:
       typeof raw.onPullRequest === "string" && raw.onPullRequest.length > 0 ? raw.onPullRequest : undefined,
@@ -377,7 +377,7 @@ function parseCompanyConfig(raw: unknown): KodyConfig["company"] {
   if (!raw || typeof raw !== "object") return undefined
   const r = raw as Record<string, unknown>
   const out: NonNullable<KodyConfig["company"]> = {}
-  if (r.activeDuties !== undefined) out.activeDuties = parseSlugArray(r.activeDuties, "company.activeDuties")
+  if (r.activeAgentResponsibilities !== undefined) out.activeAgentResponsibilities = parseSlugArray(r.activeAgentResponsibilities, "company.activeAgentResponsibilities")
   if (r.activeGoals !== undefined) out.activeGoals = parseGoalActivations(r.activeGoals)
   return Object.keys(out).length > 0 ? out : undefined
 }
@@ -470,23 +470,23 @@ function mergeAliases(raw: unknown): Record<string, string> {
 }
 
 /**
- * Parse `agent.perExecutable` into a validated string→string map, spread into
- * the returned `agent` object. Returns `{}` (not `{ perExecutable: undefined }`)
+ * Parse `agent.perAgentAction` into a validated string→string map, spread into
+ * the returned `agent` object. Returns `{}` (not `{ perAgentAction: undefined }`)
  * when absent so the spread is a clean no-op and the key stays off the object.
- * Without this, the executor's `config.agent.perExecutable?.[name]` lookup is
+ * Without this, the executor's `config.agent.perAgentAction?.[name]` lookup is
  * always undefined and every stage silently runs the base model.
  */
-function parsePerExecutable(raw: unknown): { perExecutable?: Record<string, string> } {
+function parsePerAgentAction(raw: unknown): { perAgentAction?: Record<string, string> } {
   if (!raw || typeof raw !== "object") return {}
   const out: Record<string, string> = {}
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
     if (typeof v === "string" && v.length > 0) out[k] = v
   }
-  return Object.keys(out).length > 0 ? { perExecutable: out } : {}
+  return Object.keys(out).length > 0 ? { perAgentAction: out } : {}
 }
 
-function parsePerExecutableReasoningEffort(raw: unknown): {
-  perExecutableReasoningEffort?: Record<string, ReasoningEffort>
+function parsePerAgentActionReasoningEffort(raw: unknown): {
+  perAgentActionReasoningEffort?: Record<string, ReasoningEffort>
 } {
   if (!raw || typeof raw !== "object") return {}
   const out: Record<string, ReasoningEffort> = {}
@@ -494,7 +494,7 @@ function parsePerExecutableReasoningEffort(raw: unknown): {
     const effort = typeof v === "string" ? parseReasoningEffort(v) : null
     if (effort) out[k] = effort
   }
-  return Object.keys(out).length > 0 ? { perExecutableReasoningEffort: out } : {}
+  return Object.keys(out).length > 0 ? { perAgentActionReasoningEffort: out } : {}
 }
 
 /**

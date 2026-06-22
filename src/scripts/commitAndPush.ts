@@ -6,7 +6,7 @@
  * Staging and pre-commit cleanup are the responsibility of earlier
  * postflight entries (e.g. abortUnfinishedGitOps for normal flows,
  * stageMergeConflicts for merge flows). This script does not branch on
- * executable identity.
+ * agentAction identity.
  *
  * Commit message source (in priority order):
  *   1. ctx.data.commitMessage (agent's COMMIT_MSG line, parsed by parseAgentResult)
@@ -23,7 +23,7 @@ import {
   listFilesInCommit,
 } from "../commit.js"
 import { resolveRunId } from "../events.js"
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../agent-actions/types.js"
 
 const DEFAULT_COMMIT_MESSAGE = "chore: kody changes"
 
@@ -38,7 +38,7 @@ const DEFAULT_COMMIT_MESSAGE = "chore: kody changes"
  */
 function sentinelPathForStage(cwd: string, profileName: string): string {
   const runId = resolveRunId()
-  return path.join(cwd, ".kody", "runs", runId, `commit-${profileName}.lock`)
+  return path.join(cwd, ".kody", "agent-runs", runId, `commit-${profileName}.lock`)
 }
 
 export const commitAndPush: PostflightScript = async (ctx, profile) => {
@@ -49,7 +49,7 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
   }
 
   // Idempotency sentinel — short-circuit if this commitAndPush has
-  // already run successfully for the same (runId, executable) tuple.
+  // already run successfully for the same (runId, agentAction) tuple.
   const idempotencyEnabled = process.env.KODY_COMMIT_IDEMPOTENCY !== "0"
   const sentinel = idempotencyEnabled ? sentinelPathForStage(ctx.cwd, profile.name) : null
   if (sentinel && fs.existsSync(sentinel)) {

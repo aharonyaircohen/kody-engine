@@ -16,23 +16,23 @@ afterEach(() => {
   fs.rmSync(cwd, { recursive: true, force: true })
 })
 
-function writeStaff(slug: string, contents: string): void {
+function writeAgent(slug: string, contents: string): void {
   fs.writeFileSync(path.join(cwd, ".kody", "agents", `${slug}.md`), contents)
 }
 
 describe("loadAgentIdentity", () => {
   it("returns the body with frontmatter stripped", () => {
-    writeStaff("cto", "---\ntitle: CTO\nrole: exec\n---\nYou are the CTO. Guard architecture.")
+    writeAgent("cto", "---\ntitle: CTO\nrole: exec\n---\nYou are the CTO. Guard architecture.")
     expect(loadAgentIdentity(cwd, "cto")).toBe("You are the CTO. Guard architecture.")
   })
 
   it("returns the whole file when there is no frontmatter", () => {
-    writeStaff("planner", "You are the planner.")
+    writeAgent("planner", "You are the planner.")
     expect(loadAgentIdentity(cwd, "planner")).toBe("You are the planner.")
   })
 
   it("trims a slug with surrounding whitespace", () => {
-    writeStaff("security", "Security agent.")
+    writeAgent("security", "Security agent.")
     expect(loadAgentIdentity(cwd, "  security  ")).toBe("Security agent.")
   })
 
@@ -41,7 +41,7 @@ describe("loadAgentIdentity", () => {
   })
 
   it("throws when the agent identity body is empty", () => {
-    writeStaff("hollow", "---\ntitle: x\n---\n")
+    writeAgent("hollow", "---\ntitle: x\n---\n")
     expect(() => loadAgentIdentity(cwd, "hollow")).toThrow(/agent identity body is empty/)
   })
 
@@ -54,12 +54,12 @@ describe("loadAgentIdentity", () => {
   })
 
   it("lets a consumer file override a store agent", () => {
-    writeStaff("kody", "My own kody identity.")
+    writeAgent("kody", "My own kody identity.")
     expect(loadAgentIdentity(cwd, "kody")).toBe("My own kody identity.")
   })
 
   it("throws when a consumer file for a store slug is empty", () => {
-    writeStaff("kody", "---\ntitle: x\n---\n")
+    writeAgent("kody", "---\ntitle: x\n---\n")
     expect(() => loadAgentIdentity(cwd, "kody")).toThrow(/agent identity body is empty/)
   })
 

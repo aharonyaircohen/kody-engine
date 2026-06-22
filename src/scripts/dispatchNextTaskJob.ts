@@ -1,4 +1,4 @@
-import type { Job, PreflightScript } from "../executables/types.js"
+import type { Job, PreflightScript } from "../agent-actions/types.js"
 import { stableJobKey } from "../jobIdentity.js"
 import { emptyState, nextPendingTaskJob, type TaskJob, type TaskState } from "../state.js"
 
@@ -28,8 +28,8 @@ export const dispatchNextTaskJob: PreflightScript = async (ctx, profile) => {
 function taskJobToJob(job: TaskJob, issueArg: unknown): Job {
   const target = typeof job.target === "number" ? job.target : typeof issueArg === "number" ? issueArg : undefined
   return {
-    duty: job.duty ?? job.executable,
-    executable: job.executable,
+    agentResponsibility: job.agentResponsibility ?? job.agentAction,
+    agentAction: job.agentAction,
     ...(job.reason ? { why: job.reason } : {}),
     ...(job.agent ? { agent: job.agent } : {}),
     ...(job.schedule ? { schedule: job.schedule } : {}),
@@ -42,7 +42,7 @@ function isJob(input: unknown): input is Job {
   if (!input || typeof input !== "object" || Array.isArray(input)) return false
   const job = input as Partial<Job>
   return (
-    (typeof job.duty === "string" || typeof job.action === "string") &&
+    (typeof job.agentResponsibility === "string" || typeof job.action === "string") &&
     (job.flavor === "instant" || job.flavor === "scheduled") &&
     (!job.cliArgs || (typeof job.cliArgs === "object" && !Array.isArray(job.cliArgs)))
   )

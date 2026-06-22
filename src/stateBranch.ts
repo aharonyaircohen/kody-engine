@@ -1,8 +1,8 @@
 /**
  * Dedicated branch for machine-written engine state.
  *
- * Background jobs/duties advance a per-job cursor every tick and persist it to
- * `.kody/duties/<slug>/state.json`. Committing those to the default branch
+ * Background jobs/agent-responsibilities advance a per-job cursor every tick and persist it to
+ * `.kody/agent-responsibilities/<slug>/state.json`. Committing those to the default branch
  * buried real code under a stream of `chore(jobs): update state …` commits.
  * Routing the writes here keeps the default branch clean — `kody-state` only
  * ever accumulates state commits and is never merged back.

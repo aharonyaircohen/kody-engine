@@ -64,14 +64,14 @@ describe("parseGoalState", () => {
         updatedAt: "2026-05-10T12:00:00Z",
         extra: {
           type: "release",
-          duties: ["release"],
+          agentResponsibilities: ["release"],
         },
       }),
     ).toBe(
       `${JSON.stringify(
         {
           type: "release",
-          duties: ["release"],
+          agentResponsibilities: ["release"],
           state: "active",
           createdAt: "2026-05-09T12:00:00Z",
           updatedAt: "2026-05-10T12:00:00Z",

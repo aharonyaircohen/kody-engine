@@ -20,7 +20,7 @@
  */
 
 import { execFileSync } from "node:child_process"
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../agent-actions/types.js"
 import { getProfileInputs } from "../registry.js"
 import { type Action, emptyState, findStateComment, reduce, renderStateComment, type TaskState } from "../state.js"
 import { jobMetaFromData } from "./saveTaskState.js"

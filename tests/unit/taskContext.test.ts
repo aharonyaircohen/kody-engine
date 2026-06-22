@@ -50,7 +50,7 @@ describe("taskContext: persist + read round-trip", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it("writes JSON to .kody/runs/<runId>/task-context.json and reads it back", () => {
+  it("writes JSON to .kody/agent-runs/<runId>/task-context.json and reads it back", () => {
     const ctx = buildTaskContext({
       runId: "rid-123",
       priorArt: "prior",
@@ -58,7 +58,7 @@ describe("taskContext: persist + read round-trip", () => {
     })
     const file = persistTaskContext(tmpDir, ctx)
     expect(file).not.toBeNull()
-    expect(file).toContain(".kody/runs/rid-123/task-context.json")
+    expect(file).toContain(".kody/agent-runs/rid-123/task-context.json")
     expect(fs.existsSync(file!)).toBe(true)
 
     const reloaded = readTaskContext(tmpDir, "rid-123")
@@ -73,7 +73,7 @@ describe("taskContext: persist + read round-trip", () => {
   })
 
   it("returns null when the persisted file has a stale schema version", () => {
-    const dir = path.join(tmpDir, ".kody", "runs", "stale-run")
+    const dir = path.join(tmpDir, ".kody", "agent-runs", "stale-run")
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(
       path.join(dir, "task-context.json"),
@@ -91,7 +91,7 @@ describe("taskContext: persist + read round-trip", () => {
   })
 
   it("returns null for malformed JSON", () => {
-    const dir = path.join(tmpDir, ".kody", "runs", "bad-run")
+    const dir = path.join(tmpDir, ".kody", "agent-runs", "bad-run")
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(path.join(dir, "task-context.json"), "{ not json")
     expect(readTaskContext(tmpDir, "bad-run")).toBeNull()

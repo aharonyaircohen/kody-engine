@@ -23,27 +23,27 @@ describe("expandManagedGoalState", () => {
         outcome: "Publish Kody Dashboard to production safely.",
         evidence: ["releasePrExists", "mainMerged", "productionDeployed"],
       },
-      duties: ["release", "release-merge", "vercel-production-deploy"],
+      agentResponsibilities: ["release", "release-merge", "vercel-production-deploy"],
       route: [
         {
           stage: "release",
           evidence: "releasePrExists",
-          duty: "release",
-          executable: "release-prepare",
+          agentResponsibility: "release",
+          agentAction: "release-prepare",
           args: { issue: { fact: "issue" }, goal: { fact: "goalId" } },
         },
           {
             stage: "merge",
             evidence: "mainMerged",
-            duty: "release-merge",
-            executable: "release-merge",
+            agentResponsibility: "release-merge",
+            agentAction: "release-merge",
             args: { pr: { fact: "releasePr" }, issue: { fact: "issue" }, goal: { fact: "goalId" } },
           },
         {
           stage: "publish",
           evidence: "productionDeployed",
-          duty: "vercel-production-deploy",
-          executable: "vercel-production-deploy",
+          agentResponsibility: "vercel-production-deploy",
+          agentAction: "vercel-production-deploy",
           args: { goal: { fact: "goalId" } },
         },
       ],
@@ -58,8 +58,8 @@ describe("expandManagedGoalState", () => {
       extra: {
         type: "release",
         destination: { outcome: "Release safely.", evidence: ["customEvidence"] },
-        duties: ["custom-duty"],
-        route: [{ stage: "custom", evidence: "customEvidence", duty: "custom-duty" }],
+        agentResponsibilities: ["custom-agentResponsibility"],
+        route: [{ stage: "custom", evidence: "customEvidence", agentResponsibility: "custom-agentResponsibility" }],
         facts: { issue: 12 },
         blockers: ["keep"],
       },
@@ -71,8 +71,8 @@ describe("expandManagedGoalState", () => {
       outcome: "Release safely.",
       evidence: ["customEvidence"],
     })
-    expect(expanded.extra.duties).toEqual(["custom-duty"])
-    expect(expanded.extra.route).toEqual([{ stage: "custom", evidence: "customEvidence", duty: "custom-duty" }])
+    expect(expanded.extra.agentResponsibilities).toEqual(["custom-agentResponsibility"])
+    expect(expanded.extra.route).toEqual([{ stage: "custom", evidence: "customEvidence", agentResponsibility: "custom-agentResponsibility" }])
     expect(expanded.extra.facts).toEqual({ issue: 12 })
     expect(expanded.extra.blockers).toEqual(["keep"])
   })

@@ -1,7 +1,7 @@
 /**
  * HTTP MCP server wrapper.
  *
- * Exposes kody's in-process MCP tools (fetch_repo, verify, submit_state, duty)
+ * Exposes kody's in-process MCP tools (fetch_repo, verify, submit_state, agentResponsibility)
  * over HTTP transport so external MCP clients — most importantly the Hermes
  * Agent API server — can call them.
  *
@@ -20,7 +20,7 @@ import { randomUUID } from "node:crypto"
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
-import type { DutyToolDefinition } from "../dutyMcp.js"
+import type { AgentResponsibilityToolDefinition } from "../agent-responsibilityMcp.js"
 import type { FetchRepoToolDefinition } from "../fetchRepoMcp.js"
 import type { SubmitStateToolDefinition } from "../submitMcp.js"
 import type { VerifyToolDefinition } from "../verifyMcp.js"
@@ -34,7 +34,7 @@ export interface McpRouteConfig {
   /** MCP server version. */
   version: string
   /** Tool definitions to register. */
-  tools: Array<FetchRepoToolDefinition | VerifyToolDefinition | SubmitStateToolDefinition | DutyToolDefinition>
+  tools: Array<FetchRepoToolDefinition | VerifyToolDefinition | SubmitStateToolDefinition | AgentResponsibilityToolDefinition>
 }
 
 export interface McpHttpServerOptions {

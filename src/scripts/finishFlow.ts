@@ -10,7 +10,7 @@
  */
 
 import { execFileSync } from "node:child_process"
-import type { PostflightScript, ScriptArgs } from "../executables/types.js"
+import type { PostflightScript, ScriptArgs } from "../agent-actions/types.js"
 import { parsePrNumber } from "../issue.js"
 import { KODY_NAMESPACE, setKodyLabel } from "../lifecycleLabels.js"
 import { type TaskState, type TaskTarget, writeTaskState } from "../state.js"
@@ -98,7 +98,7 @@ export const finishFlow: PostflightScript = async (ctx, profile, _agentResult, a
   if (terminal && state) {
     state.core.phase = terminal.phase
     state.core.status = terminal.status
-    state.core.currentExecutable = null
+    state.core.currentAgentAction = null
     const target = (ctx.data.commentTargetType as TaskTarget | undefined) ?? "issue"
     const targetNumber = (ctx.data.commentTargetNumber as number | undefined) ?? issueNumber
     try {

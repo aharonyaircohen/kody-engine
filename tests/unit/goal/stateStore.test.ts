@@ -38,7 +38,7 @@ describe("goal state store", () => {
             state: "active",
             type: "release",
             destination: { outcome: "ship", evidence: ["published"] },
-            duties: ["release"],
+            agentResponsibilities: ["release"],
             route: [],
             facts: {},
             blockers: [],

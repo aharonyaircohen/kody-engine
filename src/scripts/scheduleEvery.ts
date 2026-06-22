@@ -9,7 +9,7 @@ export type ScheduleEvery =
   | "3d"
   | "7d"
   /**
-   * Sentinel: the scheduler never auto-fires this duty. Only manual triggers
+   * Sentinel: the scheduler never auto-fires this agentResponsibility. Only manual triggers
    * (workflow_dispatch via the dashboard "Run now" button) execute it.
    */
   | "manual"

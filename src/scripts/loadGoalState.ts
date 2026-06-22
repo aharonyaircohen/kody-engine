@@ -3,7 +3,7 @@
  * branch into `ctx.data.goal` for goal-manager scripts.
  */
 
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../agent-actions/types.js"
 import { type GoalState } from "../goal/state.js"
 import { fetchGoalState } from "../goal/stateStore.js"
 

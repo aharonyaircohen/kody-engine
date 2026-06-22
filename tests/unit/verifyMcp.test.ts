@@ -90,7 +90,7 @@ describe("verifyMcp: buildVerifyMcpServer", () => {
     const server = buildVerifyMcpServer({
       config: baseConfig,
       cwd: "/tmp",
-      executable: "run",
+      agentAction: "run",
     })
     expect(server).toBeDefined()
     expect((server as { name?: string }).name).toBe("kody-verify")
@@ -105,7 +105,7 @@ describe("verifyMcp: buildVerifyMcpServer", () => {
     const server = buildVerifyMcpServer({
       config: baseConfig,
       cwd: "/tmp",
-      executable: "run",
+      agentAction: "run",
       __runVerify: fakeVerify,
     })
     // The McpServer instance exposes registered tools internally; we can't

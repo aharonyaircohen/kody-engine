@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const { postIssueComment } = vi.hoisted(() => ({ postIssueComment: vi.fn() }))
 vi.mock("../../src/issue.js", () => ({ postIssueComment }))
 
-import type { Context } from "../../src/executables/types.js"
+import type { Context } from "../../src/agent-actions/types.js"
 import { postAgentSummaryComment } from "../../src/scripts/postAgentSummaryComment.js"
 
 function makeCtx(data: Record<string, unknown>): Context {

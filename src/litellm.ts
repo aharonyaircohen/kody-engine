@@ -89,7 +89,7 @@ function locateLitellmScript(): string | null {
       "python3",
       [
         "-c",
-        "import os,sys; p=os.path.join(os.path.dirname(sys.executable),'litellm'); print(p if os.path.exists(p) else '')",
+        "import os,sys; p=os.path.join(os.path.dirname(sys.agentAction),'litellm'); print(p if os.path.exists(p) else '')",
       ],
       { encoding: "utf-8", timeout: 10_000 },
     ).trim()
@@ -108,8 +108,8 @@ function locateLitellmScript(): string | null {
  *
  * Installing here covers every entry path uniformly (the proxy only starts when
  * a non-Anthropic model needs it). Historically only the `ci` preflight
- * pip-installed litellm, so a scheduled duty invoked as `kody-engine
- * <executable>` directly failed with "litellm not installed".
+ * pip-installed litellm, so a scheduled agentResponsibility invoked as `kody-engine
+ * <agentAction>` directly failed with "litellm not installed".
  */
 export function resolveLitellmCommand(): string {
   try {

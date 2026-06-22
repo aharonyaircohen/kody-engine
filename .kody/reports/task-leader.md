@@ -1,20 +1,20 @@
-# task-leader duty — tick at 2026-06-20T10:00Z
+# task-leader agentResponsibility — tick at 2026-06-20T10:00Z
 
 ## Status
 No-op tick — **11th consecutive blocker** (rev 20).
 
 ## Blocker
-`.kody/executables/task-leader/skills/task-leader-rules/SKILL.md` is missing locally.
-The `.kody/executables/task-leader/` directory does not exist; only `release-*` executables are checked in.
+`.kody/agent-actions/task-leader/skills/task-leader-rules/SKILL.md` is missing locally.
+The `.kody/agent-actions/task-leader/` directory does not exist; only `release-*` agentActions are checked in.
 
-The duty body requires reading and following this rules file exactly. It owns:
+The agentResponsibility body requires reading and following this rules file exactly. It owns:
 - 6-step method
 - Normal small-PR gate
 - Release version PR gate
 - Release promotion PR gate
 - Final output format
 
-Without the rules file, the duty contract is undefined. Per the duty''s Restrictions ("Do not perform actions outside the contract defined by this duty"), every intended action (request review, request fix, auto-merge, dispatch, escalate) is out of contract, so the safe path is no-op.
+Without the rules file, the agentResponsibility contract is undefined. Per the agentResponsibility''s Restrictions ("Do not perform actions outside the contract defined by this agentResponsibility"), every intended action (request review, request fix, auto-merge, dispatch, escalate) is out of contract, so the safe path is no-op.
 
 ## Tick history
 - rev 10 (1st blocker) — no-op
@@ -30,4 +30,4 @@ Without the rules file, the duty contract is undefined. Per the duty''s Restrict
 - rev 20 (11th blocker) — no-op
 
 ## Operator action needed
-Land `.kody/executables/task-leader/skills/task-leader-rules/SKILL.md` (and a `task-leader` executable directory if the engine expects one) so the duty can act on its next wake. The duty will remain in no-op state with the diagnostic report updated on every wake until the contract file is checked in.
+Land `.kody/agent-actions/task-leader/skills/task-leader-rules/SKILL.md` (and a `task-leader` agentAction directory if the engine expects one) so the agentResponsibility can act on its next wake. The agentResponsibility will remain in no-op state with the diagnostic report updated on every wake until the contract file is checked in.

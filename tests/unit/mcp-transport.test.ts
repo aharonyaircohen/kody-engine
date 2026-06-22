@@ -5,7 +5,7 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest"
-import { buildDutyMcpServer, DUTY_MCP_TOOL_NAMES, dutyToolDefinitions } from "../../src/dutyMcp.js"
+import { buildAgentResponsibilityMcpServer, AGENT_RESPONSIBILITY_MCP_TOOL_NAMES, agentResponsibilityToolDefinitions } from "../../src/agent-responsibilityMcp.js"
 import { buildFetchRepoMcpServer, fetchRepoToolDefinition } from "../../src/fetchRepoMcp.js"
 import { buildMcpHttpServer, listenMcpHttpServer, type McpRouteConfig } from "../../src/servers/mcpHttpServer.js"
 import { buildSubmitMcpServer, submitStateToolDefinition } from "../../src/submitMcp.js"
@@ -47,7 +47,7 @@ describe("transport parity: verify", () => {
         agent: { model: "claude/claude-sonnet-4" },
       },
       cwd: "/tmp/parity",
-      executable: "test",
+      agentAction: "test",
     })
     expect(def.name).toBe("verify")
     expect(def.description).toBeTruthy()
@@ -62,7 +62,7 @@ describe("transport parity: verify", () => {
         agent: { model: "claude/claude-sonnet-4" },
       },
       cwd: "/tmp/parity",
-      executable: "test",
+      agentAction: "test",
     })
     expect(server.name).toBe("kody-verify")
   })
@@ -86,26 +86,26 @@ describe("transport parity: submit_state", () => {
 })
 
 // ────────────────────────────────────────────────────────────────────────────
-// duty
+// agentResponsibility
 // ────────────────────────────────────────────────────────────────────────────
 
-describe("transport parity: duty", () => {
+describe("transport parity: agentResponsibility", () => {
   it("exposes the same tool list via the transport-agnostic definition", () => {
-    const defs = dutyToolDefinitions({
+    const defs = agentResponsibilityToolDefinitions({
       repoSlug: "owner/repo",
       operatorMention: "@user",
     })
     const names = defs.map((d) => d.name).sort()
-    const expected = [...DUTY_MCP_TOOL_NAMES].sort()
+    const expected = [...AGENT_RESPONSIBILITY_MCP_TOOL_NAMES].sort()
     expect(names).toEqual(expected)
   })
 
-  it("buildDutyMcpServer returns the in-process adapter with the same name", () => {
-    const server = buildDutyMcpServer({
+  it("buildAgentResponsibilityMcpServer returns the in-process adapter with the same name", () => {
+    const server = buildAgentResponsibilityMcpServer({
       repoSlug: "owner/repo",
       operatorMention: "@user",
     })
-    expect(server.server.name).toBe("kody-duty")
+    expect(server.server.name).toBe("kody-agentResponsibility")
   })
 })
 
@@ -123,13 +123,13 @@ describe("transport parity: HTTP server advertises the same tool list as in-proc
     }
   })
 
-  it("exposes the same names for the duty tool list", async () => {
+  it("exposes the same names for the agentResponsibility tool list", async () => {
     const routes: McpRouteConfig[] = [
       {
-        path: "/mcp/duty",
-        name: "kody-duty",
+        path: "/mcp/agentResponsibility",
+        name: "kody-agentResponsibility",
         version: "0.1.0",
-        tools: dutyToolDefinitions({ repoSlug: "owner/repo", operatorMention: "@user" }),
+        tools: agentResponsibilityToolDefinitions({ repoSlug: "owner/repo", operatorMention: "@user" }),
       },
     ]
     const mcp = buildMcpHttpServer({ port: 0, host: "127.0.0.1", routes })
@@ -137,7 +137,7 @@ describe("transport parity: HTTP server advertises the same tool list as in-proc
     const url = `http://127.0.0.1:${mcp.port}`
 
     // initialize
-    const initRes = await fetch(`${url}/mcp/duty`, {
+    const initRes = await fetch(`${url}/mcp/agentResponsibility`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
       body: JSON.stringify({
@@ -150,7 +150,7 @@ describe("transport parity: HTTP server advertises the same tool list as in-proc
     const sessionId = initRes.headers.get("mcp-session-id")
 
     // tools/list
-    const listRes = await fetch(`${url}/mcp/duty`, {
+    const listRes = await fetch(`${url}/mcp/agentResponsibility`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -177,7 +177,7 @@ describe("transport parity: HTTP server advertises the same tool list as in-proc
       listedNames = (parsed.result?.tools ?? []).map((t) => t.name)
     }
 
-    const expected = [...DUTY_MCP_TOOL_NAMES].sort()
+    const expected = [...AGENT_RESPONSIBILITY_MCP_TOOL_NAMES].sort()
     expect(listedNames.sort()).toEqual(expected)
 
     await mcp.stop()

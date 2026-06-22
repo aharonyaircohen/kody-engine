@@ -17,14 +17,14 @@ function testConfig(config: Partial<KodyConfig>): KodyConfig {
 }
 
 function writeLocalReleaseAsset(root: string): void {
-  const dutyDir = path.join(root, ".kody", "duties", "release")
-  const executableDir = path.join(root, ".kody", "executables", "release")
+  const dutyDir = path.join(root, ".kody", "agent-responsibilities", "release")
+  const executableDir = path.join(root, ".kody", "agent-actions", "release")
   fs.mkdirSync(dutyDir, { recursive: true })
   fs.mkdirSync(executableDir, { recursive: true })
-  fs.writeFileSync(path.join(dutyDir, "duty.md"), "# Release\n\nRun release flow.\n")
+  fs.writeFileSync(path.join(dutyDir, "agent-responsibility.md"), "# Release\n\nRun release flow.\n")
   fs.writeFileSync(
     path.join(dutyDir, "profile.json"),
-    JSON.stringify({ name: "release", action: "release", executable: "release", describe: "Run release flow." }),
+    JSON.stringify({ name: "release", action: "release", agentAction: "release", describe: "Run release flow." }),
   )
   fs.writeFileSync(
     path.join(executableDir, "profile.json"),
@@ -61,8 +61,8 @@ describe("dispatch: explicit override", () => {
     const r = autoDispatch({ explicit: { issueNumber: 42 } })
     expect(r).toEqual({
       action: "run",
-      duty: "run",
-      executable: "run",
+      agentResponsibility: "run",
+      agentAction: "run",
       cliArgs: { issue: 42 },
       target: 42,
     })
@@ -92,28 +92,28 @@ describe("dispatch: workflow_dispatch event", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({ inputs: { issue_number: "17" } })
     expect(autoDispatch()).toEqual({
       action: "run",
-      duty: "run",
-      executable: "run",
+      agentResponsibility: "run",
+      agentAction: "run",
       cliArgs: { issue: 17 },
       target: 17,
     })
   })
 
-  it("routes duty + base inputs to that duty action with --base", () => {
+  it("routes agentResponsibility + base inputs to that agentResponsibility action with --base", () => {
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      inputs: { issue_number: "42", duty: "run", base: "11-x" },
+      inputs: { issue_number: "42", agentResponsibility: "run", base: "11-x" },
     })
     expect(autoDispatch()).toEqual({
       action: "run",
-      duty: "run",
-      executable: "run",
+      agentResponsibility: "run",
+      agentAction: "run",
       cliArgs: { issue: 42, base: "11-x" },
       target: 42,
     })
   })
 
-  it("routes workflow_dispatch duty=release to release executable", () => {
+  it("routes workflow_dispatch agentResponsibility=release to release agentAction", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-dispatch-release-workflow-"))
     const prevCwd = process.cwd()
     try {
@@ -121,12 +121,12 @@ describe("dispatch: workflow_dispatch event", () => {
       writeLocalReleaseAsset(tmp)
       process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
       process.env.GITHUB_EVENT_PATH = writeEvent({
-        inputs: { issue_number: "291", duty: "release" },
+        inputs: { issue_number: "291", agentResponsibility: "release" },
       })
       expect(autoDispatch()).toEqual({
         action: "release",
-        duty: "release",
-        executable: "release",
+        agentResponsibility: "release",
+        agentAction: "release",
         cliArgs: { issue: 291 },
         target: 291,
       })
@@ -136,7 +136,7 @@ describe("dispatch: workflow_dispatch event", () => {
     }
   })
 
-  it("routes workflow_dispatch executable=release as legacy duty-action input", () => {
+  it("routes workflow_dispatch agentAction=release as legacy agentResponsibility-action input", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-dispatch-release-workflow-"))
     const prevCwd = process.cwd()
     try {
@@ -144,12 +144,12 @@ describe("dispatch: workflow_dispatch event", () => {
       writeLocalReleaseAsset(tmp)
       process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
       process.env.GITHUB_EVENT_PATH = writeEvent({
-        inputs: { issue_number: "291", executable: "release" },
+        inputs: { issue_number: "291", agentAction: "release" },
       })
       expect(autoDispatch()).toEqual({
         action: "release",
-        duty: "release",
-        executable: "release",
+        agentResponsibility: "release",
+        agentAction: "release",
         cliArgs: { issue: 291 },
         target: 291,
       })
@@ -183,12 +183,12 @@ describe("dispatch: schedule event", () => {
     expect(autoDispatch()).toBeNull()
   })
 
-  it("fans out scheduled watch executables even without duty actions", () => {
+  it("fans out scheduled watch agentActions even without agentResponsibility actions", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-scheduled-watch-"))
     const prevCwd = process.cwd()
     try {
       process.chdir(tmp)
-      const dir = path.join(tmp, ".kody", "executables", "goal-scheduler")
+      const dir = path.join(tmp, ".kody", "agent-actions", "goal-scheduler")
       fs.mkdirSync(dir, { recursive: true })
       fs.writeFileSync(
         path.join(dir, "profile.json"),
@@ -208,8 +208,8 @@ describe("dispatch: schedule event", () => {
       expect(matches).toContainEqual(
         expect.objectContaining({
           action: "goal-scheduler",
-          duty: "goal-scheduler",
-          executable: "goal-scheduler",
+          agentResponsibility: "goal-scheduler",
+          agentAction: "goal-scheduler",
           cliArgs: {},
           target: 0,
         }),
@@ -242,8 +242,8 @@ describe("dispatch: pull_request event", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({ action: "opened", number: 7, pull_request: { number: 7 } })
     expect(autoDispatch({ config: testConfig({ onPullRequest: "preview-build" }) })).toEqual({
       action: "preview-build",
-      duty: "preview-build",
-      executable: "preview-build",
+      agentResponsibility: "preview-build",
+      agentAction: "preview-build",
       cliArgs: { pr: 7 },
       target: 7,
     })
@@ -253,8 +253,8 @@ describe("dispatch: pull_request event", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({ action: "synchronize", number: 9, pull_request: { number: 9 } })
     expect(autoDispatch({ config: testConfig({ onPullRequest: "preview-build" }) })).toEqual({
       action: "preview-build",
-      duty: "preview-build",
-      executable: "preview-build",
+      agentResponsibility: "preview-build",
+      agentAction: "preview-build",
       cliArgs: { pr: 9 },
       target: 9,
     })
@@ -282,15 +282,15 @@ describe("dispatch: issue_comment on issue", () => {
     process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
   })
 
-  it("routes '@kody run' to the run duty", () => {
+  it("routes '@kody run' to the run agentResponsibility", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody run" },
       issue: { number: 8 },
     })
     expect(autoDispatch()).toEqual({
       action: "run",
-      duty: "run",
-      executable: "run",
+      agentResponsibility: "run",
+      agentAction: "run",
       cliArgs: { issue: 8 },
       target: 8,
     })
@@ -298,7 +298,7 @@ describe("dispatch: issue_comment on issue", () => {
 
   it("ignores a bare @kody substring inside an email (no real mention) → null", () => {
     // Regression (#5): the gate was `.includes("@kody")`, so an email like
-    // `me@kody.dev` launched the default duty action on an unrelated comment.
+    // `me@kody.dev` launched the default agentResponsibility action on an unrelated comment.
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "ping me@kody.dev when this is ready" },
       issue: { number: 8 },
@@ -330,29 +330,29 @@ describe("dispatch: issue_comment on issue", () => {
     // "this now" is free text no input captured → carried as the job's `why`.
     expect(autoDispatch()).toEqual({
       action: "run",
-      duty: "run",
-      executable: "run",
+      agentResponsibility: "run",
+      agentAction: "run",
       cliArgs: { issue: 9 },
       target: 9,
       why: "this now",
     })
   })
 
-  it("routes '@kody <action>' through a duty action, not a bare executable", () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-duty-action-dispatch-"))
+  it("routes '@kody <action>' through a agentResponsibility action, not a bare agentAction", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-agentResponsibility-action-dispatch-"))
     const prevCwd = process.cwd()
     try {
       process.chdir(tmp)
-      fs.mkdirSync(path.join(tmp, ".kody", "duties"), { recursive: true })
-      fs.mkdirSync(path.join(tmp, ".kody", "executables", "custom-impl"), { recursive: true })
-      fs.mkdirSync(path.join(tmp, ".kody", "duties", "remember"), { recursive: true })
+      fs.mkdirSync(path.join(tmp, ".kody", "agent-responsibilities"), { recursive: true })
+      fs.mkdirSync(path.join(tmp, ".kody", "agent-actions", "custom-impl"), { recursive: true })
+      fs.mkdirSync(path.join(tmp, ".kody", "agent-responsibilities", "remember"), { recursive: true })
       fs.writeFileSync(
-        path.join(tmp, ".kody", "duties", "remember", "profile.json"),
-        JSON.stringify({ name: "remember", action: "remember", executable: "custom-impl", agent: "kody" }),
+        path.join(tmp, ".kody", "agent-responsibilities", "remember", "profile.json"),
+        JSON.stringify({ name: "remember", action: "remember", agentAction: "custom-impl", agent: "kody" }),
       )
-      fs.writeFileSync(path.join(tmp, ".kody", "duties", "remember", "duty.md"), "# Remember\n")
+      fs.writeFileSync(path.join(tmp, ".kody", "agent-responsibilities", "remember", "agent-responsibility.md"), "# Remember\n")
       fs.writeFileSync(
-        path.join(tmp, ".kody", "executables", "custom-impl", "profile.json"),
+        path.join(tmp, ".kody", "agent-actions", "custom-impl", "profile.json"),
         JSON.stringify({
           name: "custom-impl",
           inputs: [{ name: "issue", flag: "--issue", type: "int", required: true }],
@@ -365,8 +365,8 @@ describe("dispatch: issue_comment on issue", () => {
 
       expect(autoDispatch()).toEqual({
         action: "remember",
-        duty: "remember",
-        executable: "custom-impl",
+        agentResponsibility: "remember",
+        agentAction: "custom-impl",
         cliArgs: { issue: 12 },
         target: 12,
       })
@@ -383,16 +383,16 @@ describe("dispatch: issue_comment on issue", () => {
     })
     expect(autoDispatch()).toEqual({
       action: "run",
-      duty: "run",
-      executable: "run",
+      agentResponsibility: "run",
+      agentAction: "run",
       cliArgs: { issue: 15 },
       target: 15,
     })
   })
 
-  it("unknown subcommand returns null even when defaultExecutable is set (typo guard)", () => {
+  it("unknown subcommand returns null even when defaultAgentAction is set (typo guard)", () => {
     // Behavior changed in 0.4.36: a typed-but-unrecognized subcommand no
-    // longer silently routes to the default duty action. The kody-cli typed
+    // longer silently routes to the default agentResponsibility action. The kody-cli typed
     // wrapper (autoDispatchTyped) now classifies these as `unrecognized`
     // and posts a feedback comment back to the user. This was the bug
     // behind A-Guy-educ/A-Guy issue #1545: `@kody feature` ended up at
@@ -405,7 +405,7 @@ describe("dispatch: issue_comment on issue", () => {
     })
     expect(
       autoDispatch({
-        config: testConfig({ defaultExecutable: "classify" }),
+        config: testConfig({ defaultAgentAction: "classify" }),
       }),
     ).toBeNull()
   })
@@ -422,48 +422,48 @@ describe("dispatch: issue_comment on issue", () => {
     })
     expect(
       autoDispatch({
-        config: testConfig({ defaultExecutable: "run" }),
+        config: testConfig({ defaultAgentAction: "run" }),
       }),
     ).toEqual({
       action: "run",
-      duty: "run",
-      executable: "run",
+      agentResponsibility: "run",
+      agentAction: "run",
       cliArgs: { issue: 42, base: "3293-stacked-test-1" },
       target: 42,
     })
   })
 
-  it("falls back to defaultExecutable for `@kody` alone (no typo to surface)", () => {
+  it("falls back to defaultAgentAction for `@kody` alone (no typo to surface)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody" },
       issue: { number: 11 },
     })
     expect(
       autoDispatch({
-        config: testConfig({ defaultExecutable: "run" }),
+        config: testConfig({ defaultAgentAction: "run" }),
       }),
     ).toEqual({
       action: "run",
-      duty: "run",
-      executable: "run",
+      agentResponsibility: "run",
+      agentAction: "run",
       cliArgs: { issue: 11 },
       target: 11,
     })
   })
 
-  it("falls back to defaultExecutable for natural-language openings (please/kindly/...)", () => {
+  it("falls back to defaultAgentAction for natural-language openings (please/kindly/...)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody please fix the failing test" },
       issue: { number: 11 },
     })
     expect(
       autoDispatch({
-        config: testConfig({ defaultExecutable: "run" }),
+        config: testConfig({ defaultAgentAction: "run" }),
       }),
     ).toEqual({
       action: "run",
-      duty: "run",
-      executable: "run",
+      agentResponsibility: "run",
+      agentAction: "run",
       cliArgs: { issue: 11 },
       target: 11,
       // The natural-language remainder (politeness stripped) becomes `why`.
@@ -471,7 +471,7 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("unknown subcommand with no default duty action returns null", () => {
+  it("unknown subcommand with no default agentResponsibility action returns null", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody custom-exec" },
       issue: { number: 11 },
@@ -479,19 +479,19 @@ describe("dispatch: issue_comment on issue", () => {
     expect(autoDispatch()).toBeNull()
   })
 
-  it("bare '@kody' falls back to the legacy defaultExecutable action", () => {
+  it("bare '@kody' falls back to the legacy defaultAgentAction action", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody" },
       issue: { number: 12 },
     })
     expect(
       autoDispatch({
-        config: testConfig({ defaultExecutable: "run" }),
+        config: testConfig({ defaultAgentAction: "run" }),
       }),
     ).toEqual({
       action: "run",
-      duty: "run",
-      executable: "run",
+      agentResponsibility: "run",
+      agentAction: "run",
       cliArgs: { issue: 12 },
       target: 12,
     })
@@ -510,7 +510,7 @@ describe("dispatch: issue_comment on issue", () => {
       comment: { body: "@KoDy RUN" },
       issue: { number: 14 },
     })
-    expect(autoDispatch()?.executable).toBe("run")
+    expect(autoDispatch()?.agentAction).toBe("run")
   })
 })
 
@@ -533,8 +533,8 @@ describe("dispatch: issue_comment on PR", () => {
     })
     expect(autoDispatch()).toEqual({
       action: "fix-ci",
-      duty: "fix-ci",
-      executable: "fix-ci",
+      agentResponsibility: "fix-ci",
+      agentAction: "fix-ci",
       cliArgs: { pr: 20 },
       target: 20,
     })
@@ -547,8 +547,8 @@ describe("dispatch: issue_comment on PR", () => {
     })
     expect(autoDispatch()).toEqual({
       action: "fix-ci",
-      duty: "fix-ci",
-      executable: "fix-ci",
+      agentResponsibility: "fix-ci",
+      agentAction: "fix-ci",
       cliArgs: { pr: 21, runId: "123456" },
       target: 21,
     })
@@ -561,8 +561,8 @@ describe("dispatch: issue_comment on PR", () => {
     })
     expect(autoDispatch()).toEqual({
       action: "resolve",
-      duty: "resolve",
-      executable: "resolve",
+      agentResponsibility: "resolve",
+      agentAction: "resolve",
       cliArgs: { pr: 21 },
       target: 21,
     })
@@ -575,8 +575,8 @@ describe("dispatch: issue_comment on PR", () => {
     })
     expect(autoDispatch()).toEqual({
       action: "resolve",
-      duty: "resolve",
-      executable: "resolve",
+      agentResponsibility: "resolve",
+      agentAction: "resolve",
       cliArgs: { pr: 22, prefer: "ours" },
       target: 22,
     })
@@ -589,8 +589,8 @@ describe("dispatch: issue_comment on PR", () => {
     })
     expect(autoDispatch()).toEqual({
       action: "resolve",
-      duty: "resolve",
-      executable: "resolve",
+      agentResponsibility: "resolve",
+      agentAction: "resolve",
       cliArgs: { pr: 23, prefer: "theirs" },
       target: 23,
     })
@@ -603,8 +603,8 @@ describe("dispatch: issue_comment on PR", () => {
     })
     expect(autoDispatch()).toEqual({
       action: "sync",
-      duty: "sync",
-      executable: "sync",
+      agentResponsibility: "sync",
+      agentAction: "sync",
       cliArgs: { pr: 25 },
       target: 25,
     })
@@ -617,8 +617,8 @@ describe("dispatch: issue_comment on PR", () => {
     })
     expect(autoDispatch()).toEqual({
       action: "fix",
-      duty: "fix",
-      executable: "fix",
+      agentResponsibility: "fix",
+      agentAction: "fix",
       cliArgs: { pr: 24 },
       target: 24,
     })
@@ -631,8 +631,8 @@ describe("dispatch: issue_comment on PR", () => {
     })
     expect(autoDispatch()).toEqual({
       action: "fix",
-      duty: "fix",
-      executable: "fix",
+      agentResponsibility: "fix",
+      agentAction: "fix",
       cliArgs: { pr: 25, feedback: "address reviewer feedback" },
       target: 25,
     })
@@ -646,15 +646,15 @@ describe("dispatch: issue_comment on PR", () => {
     expect(autoDispatch()).toBeNull()
   })
 
-  it("bare '@kody' on PR falls back to the legacy defaultPrExecutable action", () => {
+  it("bare '@kody' on PR falls back to the legacy defaultPrAgentAction action", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody" },
       issue: { number: 23, pull_request: {} },
     })
-    expect(autoDispatch({ config: testConfig({ defaultPrExecutable: "sync" }) })).toEqual({
+    expect(autoDispatch({ config: testConfig({ defaultPrAgentAction: "sync" }) })).toEqual({
       action: "sync",
-      duty: "sync",
-      executable: "sync",
+      agentResponsibility: "sync",
+      agentAction: "sync",
       cliArgs: { pr: 23 },
       target: 23,
     })
@@ -690,8 +690,8 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     })
     expect(autoDispatch()).toEqual({
       action: "release",
-      duty: "release",
-      executable: "release",
+      agentResponsibility: "release",
+      agentAction: "release",
       cliArgs: { issue: 30 },
       target: 30,
     })
@@ -704,8 +704,8 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     })
     expect(autoDispatch()).toEqual({
       action: "release-prepare",
-      duty: "release-prepare",
-      executable: "release-prepare",
+      agentResponsibility: "release-prepare",
+      agentAction: "release-prepare",
       cliArgs: { issue: 31 },
       target: 31,
     })
@@ -718,8 +718,8 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     })
     expect(autoDispatch()).toEqual({
       action: "release-prepare",
-      duty: "release-prepare",
-      executable: "release-prepare",
+      agentResponsibility: "release-prepare",
+      agentAction: "release-prepare",
       cliArgs: { issue: 32, bump: "minor" },
       target: 32,
     })
@@ -732,8 +732,8 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     })
     expect(autoDispatch()).toEqual({
       action: "release-prepare",
-      duty: "release-prepare",
-      executable: "release-prepare",
+      agentResponsibility: "release-prepare",
+      agentAction: "release-prepare",
       cliArgs: { issue: 40, prefer: "ours" },
       target: 40,
     })
@@ -745,9 +745,9 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
       issue: { number: 41 },
     })
     const r = autoDispatch()
-    expect(r?.executable).toBe("release-prepare")
+    expect(r?.agentAction).toBe("release-prepare")
     expect(r?.action).toBe("release-prepare")
-    expect(r?.duty).toBe("release-prepare")
+    expect(r?.agentResponsibility).toBe("release-prepare")
     expect(r?.cliArgs.prefer).toBe("theirs")
     expect(r?.cliArgs.issue).toBe(41)
   })
@@ -759,8 +759,8 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     })
     expect(autoDispatch()).toEqual({
       action: "release-prepare",
-      duty: "release-prepare",
-      executable: "release-prepare",
+      agentResponsibility: "release-prepare",
+      agentAction: "release-prepare",
       cliArgs: { issue: 42, bump: "patch", "dry-run": true },
       target: 42,
     })
@@ -773,8 +773,8 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     })
     expect(autoDispatch()).toEqual({
       action: "release-publish",
-      duty: "release-publish",
-      executable: "release-publish",
+      agentResponsibility: "release-publish",
+      agentAction: "release-publish",
       cliArgs: { issue: 50 },
       target: 50,
     })
@@ -787,22 +787,22 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     })
     expect(autoDispatch()).toEqual({
       action: "release-deploy",
-      duty: "release-deploy",
-      executable: "release-deploy",
+      agentResponsibility: "release-deploy",
+      agentAction: "release-deploy",
       cliArgs: { issue: 51 },
       target: 51,
     })
   })
 
-  it("'@kody release minor' parses bump enum (release executable declares it after the merged-flow refactor)", () => {
+  it("'@kody release minor' parses bump enum (release agentAction declares it after the merged-flow refactor)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody release minor" },
       issue: { number: 33 },
     })
     expect(autoDispatch()).toEqual({
       action: "release",
-      duty: "release",
-      executable: "release",
+      agentResponsibility: "release",
+      agentAction: "release",
       cliArgs: { issue: 33, bump: "minor" },
       target: 33,
     })
@@ -854,7 +854,7 @@ describe("dispatch: alias misconfig surfacing", () => {
     stderrSpy.mockRestore()
   })
 
-  it("warns when a configured alias maps to a non-registered executable", () => {
+  it("warns when a configured alias maps to a non-registered agentAction", () => {
     process.env.GITHUB_EVENT_NAME = "issue_comment"
     process.env.GITHUB_EVENT_PATH = writeEvent({
       issue: { number: 9, pull_request: null },
@@ -862,8 +862,8 @@ describe("dispatch: alias misconfig surfacing", () => {
     })
     const result = autoDispatch({
       config: {
-        aliases: { "phantom-cmd": "no-such-executable" },
-        defaultExecutable: "classify",
+        aliases: { "phantom-cmd": "no-such-agentAction" },
+        defaultAgentAction: "classify",
       } as never,
     })
     // Behavior changed in 0.4.36: typed-but-unrecognized tokens no longer
@@ -871,13 +871,13 @@ describe("dispatch: alias misconfig surfacing", () => {
     // the user instead. The alias-misconfig warning still fires.
     expect(result).toBeNull()
     const warnings = stderrSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n")
-    expect(warnings).toMatch(/alias 'phantom-cmd' → 'no-such-executable'/)
-    expect(warnings).toMatch(/has no matching duty action/)
+    expect(warnings).toMatch(/alias 'phantom-cmd' → 'no-such-agentAction'/)
+    expect(warnings).toMatch(/has no matching agentResponsibility action/)
   })
 
-  it("logs the no-duty-action-resolved breadcrumb for any unrecognized token", () => {
+  it("logs the no-agentResponsibility-action-resolved breadcrumb for any unrecognized token", () => {
     // Behavior changed in 0.4.36: the breadcrumb fires whenever firstToken
-    // is set but no duty action resolves, so consumers (kody-cli) can
+    // is set but no agentResponsibility action resolves, so consumers (kody-cli) can
     // distinguish "user typed a typo" from "no @kody mention." The
     // breadcrumb itself is the diagnostic; the typed wrapper turns it
     // into user-facing feedback.
@@ -887,10 +887,10 @@ describe("dispatch: alias misconfig surfacing", () => {
       comment: { body: "@kody totally-unknown-thing", user: { login: "alice", type: "User" } },
     })
     autoDispatch({
-      config: { defaultExecutable: "classify", aliases: {} } as never,
+      config: { defaultAgentAction: "classify", aliases: {} } as never,
     })
     const warnings = stderrSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n")
-    expect(warnings).toMatch(/no duty action resolved/)
+    expect(warnings).toMatch(/no agentResponsibility action resolved/)
     expect(warnings).toMatch(/firstToken=totally-unknown-thing/)
   })
 

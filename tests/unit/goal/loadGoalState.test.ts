@@ -14,7 +14,7 @@ function goalState(): GoalState {
     extra: {
       type: "release",
       destination: { outcome: "ship", evidence: ["ready"] },
-      duties: ["release-prepare"],
+      agentResponsibilities: ["release-prepare"],
       route: [],
       facts: {},
       blockers: [],

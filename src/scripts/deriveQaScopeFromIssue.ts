@@ -1,25 +1,25 @@
 /**
  * Preflight: when qa-engineer is dispatched via workflow_dispatch with
- * `duty=qa-engineer` + `issue_number=<tracking>` (no `--scope` flag),
+ * `agentResponsibility=qa-engineer` + `issue_number=<tracking>` (no `--scope` flag),
  * derive the scope from the tracking issue's title.
  *
- * The qa duty creates the tracking issue with a fixed shape:
+ * The qa agentResponsibility creates the tracking issue with a fixed shape:
  *   `QA: <scope> (#<source-pr>)`
  *
  * This script parses that title and seeds `ctx.args.scope` so
  * `composePrompt` resolves `{{args.scope}}` exactly as it would have if the
  * dispatcher had passed `--scope "<title>"`. No flag needed, no YAML input,
- * no `@kody` self-dispatch comment — the duty just fires:
+ * no `@kody` self-dispatch comment — the agentResponsibility just fires:
  *
  *     gh workflow run kody.yml \
- *       -f duty=qa-engineer \
+ *       -f agentResponsibility=qa-engineer \
  *       -f issue_number=<tracking>
  *
  * Pre-existing `ctx.args.scope` is respected — a human running
  * `@kody qa-engineer --scope "..."` keeps full control.
  */
 
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../agent-actions/types.js"
 import { getIssue } from "../issue.js"
 
 const TITLE_PATTERN = /^QA(?:\s+\w+)?:\s*(.+?)(?:\s*\(#\d+\))?\s*$/i
@@ -41,7 +41,7 @@ export const deriveQaScopeFromIssue: PreflightScript = async (ctx) => {
     // Best-effort: a missing/inaccessible tracking issue isn't fatal. The
     // run continues with no scope and qa-engineer falls back to a broad
     // smoke pass over the discovered routes — the same behavior as the
-    // qa-sweep duty.
+    // qa-sweep agentResponsibility.
     process.stderr.write(
       `[kody] deriveQaScopeFromIssue: could not read #${issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
     )

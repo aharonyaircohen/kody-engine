@@ -2,7 +2,7 @@
  * Goal state file: shape, parsing, and disk I/O.
  *
  * Managed goals keep lifecycle at the top level and goal-manager data
- * (destination, evidence, duties, route, facts, blockers) in the extra bag.
+ * (destination, evidence, agentResponsibilities, route, facts, blockers) in the extra bag.
  * Unknown fields are preserved on round-trip so dashboards and older files do
  * not get stomped by ticks.
  */

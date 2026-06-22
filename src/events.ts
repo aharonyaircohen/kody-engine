@@ -1,11 +1,11 @@
 /**
  * Structured run event log (Phase 0 instrumentation).
  *
- * Each top-level `runExecutable` invocation emits a stream of events to
- * `.kody/runs/<runId>/events.jsonl`, capturing stage durations, preflight
+ * Each top-level `runAgentAction` invocation emits a stream of events to
+ * `.kody/agent-runs/<runId>/events.jsonl`, capturing stage durations, preflight
  * and postflight timings, and agent invocation details. Children of a
  * container inherit the run ID via the `KODY_RUN_ID` env var, so one
- * task produces one events file regardless of how many child executables
+ * task produces one events file regardless of how many child agentActions
  * fire.
  *
  * The emitter is best-effort: any IO failure is swallowed. The reader is
@@ -31,7 +31,7 @@ export type EventKind =
 export interface RunEvent {
   ts: string
   runId: string
-  executable: string
+  agentAction: string
   kind: EventKind
   /** Script name for preflight/postflight, child name for container_child. */
   name?: string
@@ -88,7 +88,7 @@ export function emitEvent(cwd: string, ev: Omit<RunEvent, "ts" | "runId">): void
       runId,
       ...ev,
     }
-    const eventsPath = path.join(cwd, ".kody", "runs", runId, "events.jsonl")
+    const eventsPath = path.join(cwd, ".kody", "agent-runs", runId, "events.jsonl")
     fs.mkdirSync(path.dirname(eventsPath), { recursive: true })
     fs.appendFileSync(eventsPath, `${JSON.stringify(fullEvent)}\n`)
   } catch {
@@ -98,7 +98,7 @@ export function emitEvent(cwd: string, ev: Omit<RunEvent, "ts" | "runId">): void
 
 /** Read all events for one run ID. Returns [] if the log does not exist. */
 export function readEvents(cwd: string, runId: string): RunEvent[] {
-  const eventsPath = path.join(cwd, ".kody", "runs", runId, "events.jsonl")
+  const eventsPath = path.join(cwd, ".kody", "agent-runs", runId, "events.jsonl")
   if (!fs.existsSync(eventsPath)) return []
   const lines = fs.readFileSync(eventsPath, "utf-8").split("\n")
   const out: RunEvent[] = []
@@ -114,9 +114,9 @@ export function readEvents(cwd: string, runId: string): RunEvent[] {
   return out
 }
 
-/** List every run ID present under `.kody/runs/`, sorted lexicographically. */
+/** List every run ID present under `.kody/agent-runs/`, sorted lexicographically. */
 export function listRuns(cwd: string): string[] {
-  const runsDir = path.join(cwd, ".kody", "runs")
+  const runsDir = path.join(cwd, ".kody", "agent-runs")
   if (!fs.existsSync(runsDir)) return []
   return fs
     .readdirSync(runsDir)

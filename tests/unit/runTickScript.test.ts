@@ -1,8 +1,8 @@
 /**
- * Unit tests for the `runTickScript` preflight (deterministic duty-tick).
+ * Unit tests for the `runTickScript` preflight (deterministic agent-responsibility-tick).
  *
  * These exercise the contract that motivated the code's existence: when a
- * duty declares `tickScript` in profile.json, the script's stdout is the
+ * agentResponsibility declares `tickScript` in profile.json, the script's stdout is the
  * single source of truth for next-state — no LLM in the loop. Earlier
  * regressions silently dropped state because the agent didn't echo the
  * fenced block, so we pin:
@@ -17,7 +17,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { KodyConfig } from "../../src/config.js"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/agent-actions/types.js"
 import { runTickScript } from "../../src/scripts/runTickScript.js"
 
 function configFor(): KodyConfig {
@@ -60,7 +60,7 @@ function writeJob(slug: string, profile: Record<string, unknown>, body = "# job\
   const dir = path.join(tmp, ".kody", "jobs", slug)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
-  fs.writeFileSync(path.join(dir, "duty.md"), body)
+  fs.writeFileSync(path.join(dir, "agent-responsibility.md"), body)
 }
 
 function writeScript(rel: string, contents: string): void {
@@ -132,7 +132,7 @@ EOF
     // Pins the maxBuffer fix. Without `maxBuffer: 16MB` on spawnSync,
     // stdout >1MB is silently truncated and the fenced block at the end
     // is dropped — the exact "silent state drop" failure mode this
-    // executable was written to prevent. The script writes ~2MB of
+    // agentAction was written to prevent. The script writes ~2MB of
     // preamble, then the fenced block.
     writeJob("demo", { tickScript: ".kody/scripts/big.sh" })
     writeScript(

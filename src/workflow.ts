@@ -74,7 +74,7 @@ export function getRecentFailedRunsForPr(prNumber: number, limit: number, cwd?: 
     )
     const parsed = JSON.parse(out)
     if (!Array.isArray(parsed)) return []
-    const runs: FailedRun[] = parsed.map((r) => ({
+    const agentRuns: FailedRun[] = parsed.map((r) => ({
       id: String(r.databaseId ?? ""),
       workflowName: r.workflowName ?? "",
       headBranch: r.headBranch ?? headBranch,
@@ -85,7 +85,7 @@ export function getRecentFailedRunsForPr(prNumber: number, limit: number, cwd?: 
     }))
     // Stable-sort head-SHA matches first (Array.sort is stable, and gh returns
     // most-recent-first, so recency order is preserved within each group).
-    return runs.sort((a, b) => (a.headSha === headSha ? 0 : 1) - (b.headSha === headSha ? 0 : 1))
+    return agentRuns.sort((a, b) => (a.headSha === headSha ? 0 : 1) - (b.headSha === headSha ? 0 : 1))
   } catch {
     return []
   }

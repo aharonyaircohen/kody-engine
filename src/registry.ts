@@ -3,11 +3,11 @@
  *
  * Two asset families live alongside each other:
  *
- * - **Executables** (`.kody/executables/<name>/profile.json` in project/store,
- *   plus minimal engine built-ins) implementation units selected by duties.
- *   - **Duties** (`.kody/duties/<slug>/profile.json` + `duty.md`) — public
- *     work units and operator-facing actions. Duty discovery is handled by
- *     `listDutyActions()`, not by executable resolution.
+ * - **AgentActions** (`.kody/agent-actions/<name>/profile.json` in project/store,
+ *   plus minimal engine built-ins) implementation units selected by agentResponsibilities.
+ *   - **AgentResponsibilities** (`.kody/agent-responsibilities/<slug>/profile.json` + `agent-responsibility.md`) — public
+ *     work units and operator-facing actions. AgentResponsibility discovery is handled by
+ *     `listAgentResponsibilityActions()`, not by agentAction resolution.
  *
  * Both follow the same dev/built path-resolution pattern so `src/` and
  * `dist/` layouts work identically.
@@ -16,43 +16,43 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { getCompanyStoreAssetRoot } from "./companyStore.js"
-import type { DutyFolder } from "./dutyFolders.js"
-import { DUTY_PROFILE_FILE, listDutyFolderSlugs, readDutyFolder } from "./dutyFolders.js"
-import type { InputSpec } from "./executables/types.js"
+import type { AgentResponsibilityFolder } from "./agent-responsibilityFolders.js"
+import { AGENT_RESPONSIBILITY_PROFILE_FILE, listAgentResponsibilityFolderSlugs, readAgentResponsibilityFolder } from "./agent-responsibilityFolders.js"
+import type { InputSpec } from "./agent-actions/types.js"
 
-const PUBLIC_EXECUTABLE_ACTION_ROLES = new Set(["primitive", "orchestrator", "container", "watch", "utility"])
-const PUBLIC_EXECUTABLE_CAPABILITY_KINDS = new Set(["observe", "act", "verify"])
+const PUBLIC_AGENT_ACTION_ACTION_ROLES = new Set(["primitive", "orchestrator", "container", "watch", "utility"])
+const PUBLIC_AGENT_ACTION_CAPABILITY_KINDS = new Set(["observe", "act", "verify"])
 
-export interface DiscoveredExecutable {
+export interface DiscoveredAgentAction {
   name: string
   profilePath: string
 }
 
-export interface DiscoveredDutyAction {
+export interface DiscoveredAgentResponsibilityAction {
   /** Public action typed by a user, e.g. `@kody run`. */
   action: string
-  /** Duty slug that owns the public action. */
-  duty: string
-  /** Implementation executable selected by the duty. */
-  executable: string
-  /** Extra args required to lower the duty to its implementation. */
+  /** AgentResponsibility slug that owns the public action. */
+  agentResponsibility: string
+  /** Implementation agentAction selected by the agentResponsibility. */
+  agentAction: string
+  /** Extra args required to lower the agentResponsibility to its implementation. */
   cliArgs: Record<string, unknown>
-  source: "project-folder" | "project-executable" | "company-store" | "company-store-executable" | "builtin"
+  source: "project-folder" | "project-agentAction" | "company-store" | "company-store-agentAction" | "builtin"
   describe?: string
   profilePath?: string
   bodyPath?: string
 }
 
 /**
- * Resolve the engine's built-in executables root. Mirrors `resolveProfilePath`
+ * Resolve the engine's built-in agentActions root. Mirrors `resolveProfilePath`
  * in executor.ts so dev (src/) and built (dist/) layouts both work.
  */
-export function getExecutablesRoot(): string {
+export function getAgentActionsRoot(): string {
   const here = path.dirname(new URL(import.meta.url).pathname)
   const candidates = [
-    path.join(here, "executables"), // dev: src/
-    path.join(here, "..", "executables"), // built: dist/bin → dist/executables
-    path.join(here, "..", "src", "executables"), // fallback
+    path.join(here, "agent-actions"), // dev: src/
+    path.join(here, "..", "agent-actions"), // built: dist/bin → dist/agent-actions
+    path.join(here, "..", "src", "agent-actions"), // fallback
   ]
   for (const c of candidates) {
     if (fs.existsSync(c) && fs.statSync(c).isDirectory()) return c
@@ -61,38 +61,38 @@ export function getExecutablesRoot(): string {
 }
 
 /**
- * Resolve the consumer-repo executables root. Looks for `.kody/executables/`
+ * Resolve the consumer-repo agentActions root. Looks for `.kody/agent-actions/`
  * relative to the current working directory (the engine runs from the
  * consumer repo's checkout). Returns the path even if it doesn't exist;
  * callers must check.
  */
-export function getProjectExecutablesRoot(): string {
-  return path.join(process.cwd(), ".kody", "executables")
+export function getProjectAgentActionsRoot(): string {
+  return path.join(process.cwd(), ".kody", "agent-actions")
 }
 
 /**
- * Resolve the consumer-repo duties root (`.kody/duties/`). A duty is a public
- * work unit: it owns action/purpose and selects an implementation executable.
+ * Resolve the consumer-repo agentResponsibilities root (`.kody/agent-responsibilities/`). A agentResponsibility is a public
+ * work unit: it owns action/purpose and selects an implementation agentAction.
  * Returns the path even if it doesn't exist; callers must check.
  */
-export function getProjectDutiesRoot(): string {
-  return path.join(process.cwd(), ".kody", "duties")
+export function getProjectAgentResponsibilitiesRoot(): string {
+  return path.join(process.cwd(), ".kody", "agent-responsibilities")
 }
 
-export function getCompanyStoreExecutablesRoot(): string | null {
-  return getCompanyStoreAssetRoot("executables")
+export function getCompanyStoreAgentActionsRoot(): string | null {
+  return getCompanyStoreAssetRoot("agentActions")
 }
 
-export function getCompanyStoreDutiesRoot(): string | null {
-  return getCompanyStoreAssetRoot("duties")
+export function getCompanyStoreAgentResponsibilitiesRoot(): string | null {
+  return getCompanyStoreAssetRoot("agentResponsibilities")
 }
 
-export function getBuiltinDutiesRoot(): string {
+export function getBuiltinAgentResponsibilitiesRoot(): string {
   const here = path.dirname(new URL(import.meta.url).pathname)
   const candidates = [
-    path.join(here, "duties"), // dev: src/
-    path.join(here, "..", "duties"), // built: dist/bin → dist/duties
-    path.join(here, "..", "src", "duties"), // fallback
+    path.join(here, "agent-responsibilities"), // dev: src/
+    path.join(here, "..", "agent-responsibilities"), // built: dist/bin → dist/agent-responsibilities
+    path.join(here, "..", "src", "agent-responsibilities"), // fallback
   ]
   for (const c of candidates) {
     if (fs.existsSync(c) && fs.statSync(c).isDirectory()) return c
@@ -101,32 +101,32 @@ export function getBuiltinDutiesRoot(): string {
 }
 
 /**
- * Ordered list of executable roots, project first, engine second. Project
+ * Ordered list of agentAction roots, project first, engine second. Project
  * roots override engine roots on name conflict — the consumer repo always
  * wins. Engine ships a stdlib; project repos can override or add private
- * implementation units under `.kody/executables/<name>/`.
+ * implementation units under `.kody/agent-actions/<name>/`.
  */
-export function getExecutableRoots(): string[] {
-  const storeRoot = getCompanyStoreExecutablesRoot()
-  return [getProjectExecutablesRoot(), ...(storeRoot ? [storeRoot] : []), getExecutablesRoot()]
+export function getAgentActionRoots(): string[] {
+  const storeRoot = getCompanyStoreAgentActionsRoot()
+  return [getProjectAgentActionsRoot(), ...(storeRoot ? [storeRoot] : []), getAgentActionsRoot()]
 }
 
-export function getDutyRoots(projectDutiesRoot: string = getProjectDutiesRoot()): string[] {
-  const storeRoot = getCompanyStoreDutiesRoot()
-  return [projectDutiesRoot, ...(storeRoot ? [storeRoot] : []), getBuiltinDutiesRoot()]
+export function getAgentResponsibilityRoots(projectAgentResponsibilitiesRoot: string = getProjectAgentResponsibilitiesRoot()): string[] {
+  const storeRoot = getCompanyStoreAgentResponsibilitiesRoot()
+  return [projectAgentResponsibilitiesRoot, ...(storeRoot ? [storeRoot] : []), getBuiltinAgentResponsibilitiesRoot()]
 }
 
 /**
- * Names of the engine-bundled executables (the dir names under the engine root
+ * Names of the engine-bundled agentActions (the dir names under the engine root
  * that contain a profile.json). Cached — the engine root never changes within a
- * process. Used to stop a consumer `.kody/duties/<name>/` folder from silently
- * shadowing an engine builtin (run/merge/serve/duty-scheduler/…).
+ * process. Used to stop a consumer `.kody/agent-responsibilities/<name>/` folder from silently
+ * shadowing an engine builtin (run/merge/serve/agent-responsibility-scheduler/…).
  */
 let _builtinNames: Set<string> | null = null
-export function builtinExecutableNames(): Set<string> {
+export function builtinAgentActionNames(): Set<string> {
   if (_builtinNames) return _builtinNames
   const out = new Set<string>()
-  const root = getExecutablesRoot()
+  const root = getAgentActionsRoot()
   try {
     for (const ent of fs.readdirSync(root, { withFileTypes: true })) {
       if (ent.isDirectory() && fs.existsSync(path.join(root, ent.name, "profile.json"))) out.add(ent.name)
@@ -138,28 +138,28 @@ export function builtinExecutableNames(): Set<string> {
   return out
 }
 
-/** True iff `name` is an engine-bundled executable that duties must not shadow. */
-export function isBuiltinExecutable(name: string): boolean {
-  return builtinExecutableNames().has(name)
+/** True iff `name` is an engine-bundled agentAction that agentResponsibilities must not shadow. */
+export function isBuiltinAgentAction(name: string): boolean {
+  return builtinAgentActionNames().has(name)
 }
 
 /**
- * List every discovered executable across executable roots. On name conflict
- * the first root wins, so a `.kody/executables/chat/` in the consumer repo
+ * List every discovered agentAction across agentAction roots. On name conflict
+ * the first root wins, so a `.kody/agent-actions/chat/` in the consumer repo
  * shadows the engine's `chat`. Each needs a directory containing a readable
  * `profile.json`. Directories without one are silently skipped.
  */
-export function listExecutables(roots: string | string[] = getExecutableRoots()): DiscoveredExecutable[] {
+export function listAgentActions(roots: string | string[] = getAgentActionRoots()): DiscoveredAgentAction[] {
   const rootList = typeof roots === "string" ? [roots] : roots
   const seen = new Set<string>()
-  const out: DiscoveredExecutable[] = []
+  const out: DiscoveredAgentAction[] = []
   for (const root of rootList) {
     if (!fs.existsSync(root)) continue
     const entries = fs.readdirSync(root, { withFileTypes: true })
     for (const ent of entries) {
       if (!ent.isDirectory()) continue
       if (seen.has(ent.name)) continue // earlier root wins
-      const profilePath = path.join(root, ent.name, DUTY_PROFILE_FILE)
+      const profilePath = path.join(root, ent.name, AGENT_RESPONSIBILITY_PROFILE_FILE)
       if (fs.existsSync(profilePath) && fs.statSync(profilePath).isFile()) {
         out.push({ name: ent.name, profilePath })
         seen.add(ent.name)
@@ -170,10 +170,10 @@ export function listExecutables(roots: string | string[] = getExecutableRoots())
 }
 
 /**
- * Resolve a single executable by name across all roots. Returns the first
+ * Resolve a single agentAction by name across all roots. Returns the first
  * matching `profile.json` path, or null if nothing matches.
  */
-export function resolveExecutable(name: string, roots: string | string[] = getExecutableRoots()): string | null {
+export function resolveAgentAction(name: string, roots: string | string[] = getAgentActionRoots()): string | null {
   if (!isSafeName(name)) return null
   const rootList = typeof roots === "string" ? [roots] : roots
   for (const root of rootList) {
@@ -186,80 +186,80 @@ export function resolveExecutable(name: string, roots: string | string[] = getEx
 }
 
 /** Convenience: true iff `<name>/profile.json` exists in any root. */
-export function hasExecutable(name: string, roots: string | string[] = getExecutableRoots()): boolean {
-  return resolveExecutable(name, roots) !== null
+export function hasAgentAction(name: string, roots: string | string[] = getAgentActionRoots()): boolean {
+  return resolveAgentAction(name, roots) !== null
 }
 
 /**
- * List public duty actions. Duties own the operator-facing action name; an
- * executable is only the selected implementation. Ordering is intentional:
- * project folder duties override company store duties, which override
+ * List public agentResponsibility actions. AgentResponsibilities own the operator-facing action name; an
+ * agentAction is only the selected implementation. Ordering is intentional:
+ * project folder agentResponsibilities override company store agentResponsibilities, which override
  * engine built-ins.
  */
-export function listDutyActions(projectDutiesRoot: string = getProjectDutiesRoot()): DiscoveredDutyAction[] {
+export function listAgentResponsibilityActions(projectAgentResponsibilitiesRoot: string = getProjectAgentResponsibilitiesRoot()): DiscoveredAgentResponsibilityAction[] {
   const seen = new Set<string>()
-  const out: DiscoveredDutyAction[] = []
-  const add = (action: DiscoveredDutyAction) => {
-    if (!isSafeName(action.action) || !isSafeName(action.duty) || !isSafeName(action.executable)) return
+  const out: DiscoveredAgentResponsibilityAction[] = []
+  const add = (action: DiscoveredAgentResponsibilityAction) => {
+    if (!isSafeName(action.action) || !isSafeName(action.agentResponsibility) || !isSafeName(action.agentAction)) return
     if (seen.has(action.action)) return
     seen.add(action.action)
     out.push(action)
   }
 
-  const roots = getDutyRoots(projectDutiesRoot)
-  const executableRoots = getExecutableRoots()
-  for (const action of listFolderDutyActions(roots[0]!, "project-folder")) add(action)
-  for (const action of listExecutableDutyActions(executableRoots[0]!, "project-executable")) add(action)
+  const roots = getAgentResponsibilityRoots(projectAgentResponsibilitiesRoot)
+  const executableRoots = getAgentActionRoots()
+  for (const action of listFolderAgentResponsibilityActions(roots[0]!, "project-folder")) add(action)
+  for (const action of listAgentActionResponsibilityActions(executableRoots[0]!, "project-agentAction")) add(action)
   if (roots.length === 3) {
-    for (const action of listFolderDutyActions(roots[1]!, "company-store")) add(action)
-    for (const action of listExecutableDutyActions(executableRoots[1]!, "company-store-executable")) add(action)
-    for (const action of listBuiltinDutyActions(roots[2]!)) add(action)
+    for (const action of listFolderAgentResponsibilityActions(roots[1]!, "company-store")) add(action)
+    for (const action of listAgentActionResponsibilityActions(executableRoots[1]!, "company-store-agentAction")) add(action)
+    for (const action of listBuiltinAgentResponsibilityActions(roots[2]!)) add(action)
   } else {
-    for (const action of listBuiltinDutyActions(roots[1]!)) add(action)
+    for (const action of listBuiltinAgentResponsibilityActions(roots[1]!)) add(action)
   }
   return out.sort((a, b) => a.action.localeCompare(b.action))
 }
 
-/** Resolve one public action to the duty that owns it. */
-export function resolveDutyAction(
+/** Resolve one public action to the agentResponsibility that owns it. */
+export function resolveAgentResponsibilityAction(
   action: string,
-  projectDutiesRoot: string = getProjectDutiesRoot(),
-): DiscoveredDutyAction | null {
+  projectAgentResponsibilitiesRoot: string = getProjectAgentResponsibilitiesRoot(),
+): DiscoveredAgentResponsibilityAction | null {
   if (!isSafeName(action)) return null
-  return listDutyActions(projectDutiesRoot).find((d) => d.action === action) ?? null
+  return listAgentResponsibilityActions(projectAgentResponsibilitiesRoot).find((d) => d.action === action) ?? null
 }
 
-export function hasDutyAction(action: string, projectDutiesRoot: string = getProjectDutiesRoot()): boolean {
-  return resolveDutyAction(action, projectDutiesRoot) !== null
+export function hasAgentResponsibilityAction(action: string, projectAgentResponsibilitiesRoot: string = getProjectAgentResponsibilitiesRoot()): boolean {
+  return resolveAgentResponsibilityAction(action, projectAgentResponsibilitiesRoot) !== null
 }
 
-export function resolveDutyFolder(slug: string, projectDutiesRoot: string = getProjectDutiesRoot()): DutyFolder | null {
+export function resolveAgentResponsibilityFolder(slug: string, projectAgentResponsibilitiesRoot: string = getProjectAgentResponsibilitiesRoot()): AgentResponsibilityFolder | null {
   if (!isSafeName(slug)) return null
-  for (const root of getDutyRoots(projectDutiesRoot)) {
-    const duty = readDutyFolder(root, slug)
-    if (duty) return duty
+  for (const root of getAgentResponsibilityRoots(projectAgentResponsibilitiesRoot)) {
+    const agentResponsibility = readAgentResponsibilityFolder(root, slug)
+    if (agentResponsibility) return agentResponsibility
   }
   return null
 }
 
-/** Read the implementation profile inputs for a public duty action. */
-export function getDutyActionInputs(action: string): InputSpec[] | null {
-  const resolved = resolveDutyAction(action)
+/** Read the implementation profile inputs for a public agentResponsibility action. */
+export function getAgentResponsibilityActionInputs(action: string): InputSpec[] | null {
+  const resolved = resolveAgentResponsibilityAction(action)
   if (!resolved) return null
-  return getProfileInputs(resolved.executable)
+  return getProfileInputs(resolved.agentAction)
 }
 
-export function resolveDutyExecution(duty: DutyFolder): { executable: string; cliArgs: Record<string, unknown> } {
-  const executable =
-    duty.config.executable ??
-    duty.config.executables?.[0] ??
-    (duty.config.tickScript ? "duty-tick-scripted" : "duty-tick")
-  const cliArgs = executableDeclaresInput(executable, "duty") ? { duty: duty.slug } : {}
-  return { executable, cliArgs }
+export function resolveAgentResponsibilityExecution(agentResponsibility: AgentResponsibilityFolder): { agentAction: string; cliArgs: Record<string, unknown> } {
+  const agentAction =
+    agentResponsibility.config.agentAction ??
+    agentResponsibility.config.agentActions?.[0] ??
+    (agentResponsibility.config.tickScript ? "agent-responsibility-tick-scripted" : "agent-responsibility-tick")
+  const cliArgs = agentActionDeclaresInput(agentAction, "agentResponsibility") ? { agentResponsibility: agentResponsibility.slug } : {}
+  return { agentAction, cliArgs }
 }
 
-function executableDeclaresInput(executable: string, inputName: string): boolean {
-  const profilePath = resolveExecutable(executable)
+function agentActionDeclaresInput(agentAction: string, inputName: string): boolean {
+  const profilePath = resolveAgentAction(agentAction)
   if (!profilePath) return false
   try {
     const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as { inputs?: unknown }
@@ -274,32 +274,32 @@ function executableDeclaresInput(executable: string, inputName: string): boolean
   }
 }
 
-/** Executable names: lowercase letters, digits, and dashes. Rejects traversal. */
+/** AgentAction names: lowercase letters, digits, and dashes. Rejects traversal. */
 export function isSafeName(name: string): boolean {
   return /^[a-z][a-z0-9-]*$/.test(name) && !name.includes("..")
 }
 
-function listExecutableDutyActions(
+function listAgentActionResponsibilityActions(
   root: string,
-  source: "project-executable" | "company-store-executable",
-): DiscoveredDutyAction[] {
+  source: "project-agentAction" | "company-store-agentAction",
+): DiscoveredAgentResponsibilityAction[] {
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
-  const out: DiscoveredDutyAction[] = []
+  const out: DiscoveredAgentResponsibilityAction[] = []
   for (const ent of fs.readdirSync(root, { withFileTypes: true })) {
     if (!ent.isDirectory() || !isSafeName(ent.name)) continue
-    const profilePath = path.join(root, ent.name, DUTY_PROFILE_FILE)
+    const profilePath = path.join(root, ent.name, AGENT_RESPONSIBILITY_PROFILE_FILE)
     if (!fs.existsSync(profilePath) || !fs.statSync(profilePath).isFile()) continue
     try {
       const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as Record<string, unknown>
       const action = typeof raw.action === "string" && raw.action.trim() ? raw.action.trim() : ""
       if (!action) continue
-      if (!PUBLIC_EXECUTABLE_ACTION_ROLES.has(String(raw.role))) continue
-      if (!PUBLIC_EXECUTABLE_CAPABILITY_KINDS.has(String(raw.capabilityKind))) continue
+      if (!PUBLIC_AGENT_ACTION_ACTION_ROLES.has(String(raw.role))) continue
+      if (!PUBLIC_AGENT_ACTION_CAPABILITY_KINDS.has(String(raw.capabilityKind))) continue
       if (!Array.isArray(raw.inputs)) continue
       out.push({
         action,
-        duty: ent.name,
-        executable: ent.name,
+        agentResponsibility: ent.name,
+        agentAction: ent.name,
         cliArgs: {},
         source,
         describe: typeof raw.describe === "string" ? raw.describe : undefined,
@@ -310,61 +310,61 @@ function listExecutableDutyActions(
   return out.sort((a, b) => a.action.localeCompare(b.action))
 }
 
-function listFolderDutyActions(root: string, source: "project-folder" | "company-store"): DiscoveredDutyAction[] {
+function listFolderAgentResponsibilityActions(root: string, source: "project-folder" | "company-store"): DiscoveredAgentResponsibilityAction[] {
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
-  const out: DiscoveredDutyAction[] = []
-  for (const slug of listDutyFolderSlugs(root)) {
+  const out: DiscoveredAgentResponsibilityAction[] = []
+  for (const slug of listAgentResponsibilityFolderSlugs(root)) {
     if (!isSafeName(slug)) continue
-    const duty = readDutyFolder(root, slug)
-    if (!duty) continue
-    const action = duty.config.action ?? slug
-    const { executable, cliArgs } = resolveDutyExecution(duty)
+    const agentResponsibility = readAgentResponsibilityFolder(root, slug)
+    if (!agentResponsibility) continue
+    const action = agentResponsibility.config.action ?? slug
+    const { agentAction, cliArgs } = resolveAgentResponsibilityExecution(agentResponsibility)
     out.push({
       action,
-      duty: slug,
-      executable,
+      agentResponsibility: slug,
+      agentAction,
       cliArgs,
       source,
-      describe: duty.config.describe ?? duty.title,
-      profilePath: duty.profilePath,
-      bodyPath: duty.bodyPath,
+      describe: agentResponsibility.config.describe ?? agentResponsibility.title,
+      profilePath: agentResponsibility.profilePath,
+      bodyPath: agentResponsibility.bodyPath,
     })
   }
   return out.sort((a, b) => a.action.localeCompare(b.action))
 }
 
-function listBuiltinDutyActions(root: string = getBuiltinDutiesRoot()): DiscoveredDutyAction[] {
+function listBuiltinAgentResponsibilityActions(root: string = getBuiltinAgentResponsibilitiesRoot()): DiscoveredAgentResponsibilityAction[] {
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
-  const out: DiscoveredDutyAction[] = []
-  for (const slug of listDutyFolderSlugs(root)) {
+  const out: DiscoveredAgentResponsibilityAction[] = []
+  for (const slug of listAgentResponsibilityFolderSlugs(root)) {
     if (!isSafeName(slug)) continue
-    const duty = readDutyFolder(root, slug)
-    if (!duty) continue
-    const action = duty.config.action ?? slug
-    const executable = duty.config.executable ?? slug
+    const agentResponsibility = readAgentResponsibilityFolder(root, slug)
+    if (!agentResponsibility) continue
+    const action = agentResponsibility.config.action ?? slug
+    const agentAction = agentResponsibility.config.agentAction ?? slug
     out.push({
       action,
-      duty: slug,
-      executable,
+      agentResponsibility: slug,
+      agentAction,
       cliArgs: {},
       source: "builtin",
-      describe: duty.config.describe ?? duty.title,
-      profilePath: duty.profilePath,
-      bodyPath: duty.bodyPath,
+      describe: agentResponsibility.config.describe ?? agentResponsibility.title,
+      profilePath: agentResponsibility.profilePath,
+      bodyPath: agentResponsibility.bodyPath,
     })
   }
   return out.sort((a, b) => a.action.localeCompare(b.action))
 }
 
 /**
- * Light-weight profile inspector: returns an executable's declared `inputs`
+ * Light-weight profile inspector: returns an agentAction's declared `inputs`
  * without running the full profile validator. Dispatch uses this to drive
  * comment-argument parsing entirely from profile metadata. Returns null if
- * the executable doesn't exist or the profile is unreadable (dispatch
+ * the agentAction doesn't exist or the profile is unreadable (dispatch
  * should degrade gracefully, not throw).
  */
-export function getProfileInputs(name: string, roots: string | string[] = getExecutableRoots()): InputSpec[] | null {
-  const profilePath = resolveExecutable(name, roots)
+export function getProfileInputs(name: string, roots: string | string[] = getAgentActionRoots()): InputSpec[] | null {
+  const profilePath = resolveAgentAction(name, roots)
   if (!profilePath) return null
   try {
     const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8"))
@@ -376,9 +376,9 @@ export function getProfileInputs(name: string, roots: string | string[] = getExe
 }
 
 /**
- * Minimal generic flag parser for auto-discovered executables.
+ * Minimal generic flag parser for auto-discovered agentActions.
  * Supports `--key value` and `--flag` (boolean). Unknown positionals
- * accumulate in `args._` for the executable to reject if it wishes.
+ * accumulate in `args._` for the agentAction to reject if it wishes.
  *
  * Dashed flags get both shapes in the output: `--run-id 42` produces
  * `{ "run-id": "42", runId: "42" }` so profiles can name inputs with

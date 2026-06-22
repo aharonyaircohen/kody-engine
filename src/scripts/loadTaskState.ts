@@ -6,7 +6,7 @@
  * ctx.data.commentTargetType + ctx.data.commentTargetNumber are populated.
  */
 
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../agent-actions/types.js"
 import { CorruptStateError, emptyState, readTaskState, type TaskTarget, writeTaskState } from "../state.js"
 
 export const loadTaskState: PreflightScript = async (ctx) => {

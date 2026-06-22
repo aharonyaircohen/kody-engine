@@ -4,7 +4,7 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { ExecutorInput } from "../../src/executor.js"
 import { loadProfile } from "../../src/profile.js"
-import { resolveExecutable } from "../../src/registry.js"
+import { resolveAgentAction } from "../../src/registry.js"
 
 // Mock context-loading dependencies so the container's preload step
 // produces a deterministic snapshot without hitting GitHub or the FS.
@@ -36,8 +36,8 @@ vi.mock("../../src/prompt.js", async () => {
 
 describe("Phase 5 wire-up: preloadContext on container profiles", () => {
   it("non-container profiles default to preloadContext: false", () => {
-    const resolveProfile = resolveExecutable("resolve")
-    if (!resolveProfile) throw new Error("resolve executable not found")
+    const resolveProfile = resolveAgentAction("resolve")
+    if (!resolveProfile) throw new Error("resolve agentAction not found")
     const profile = loadProfile(resolveProfile)
     expect(profile.preloadContext).toBe(false)
   })
@@ -56,7 +56,7 @@ describe("Phase 5 wire-up: ctx.data is seeded from preloadedData", () => {
     // Build a minimal primitive profile in tmp that has loadIssueContext
     // in its preflight + a single composePrompt-like script that records
     // what ctx.data looked like.
-    const profileDir = path.join(tmp, "src", "executables", "test-preload")
+    const profileDir = path.join(tmp, "src", "agent-actions", "test-preload")
     fs.mkdirSync(profileDir, { recursive: true })
     fs.writeFileSync(path.join(profileDir, "prompt.md"), "smoke")
     fs.writeFileSync(
@@ -88,7 +88,7 @@ describe("Phase 5 wire-up: ctx.data is seeded from preloadedData", () => {
       ),
     )
 
-    // The runExecutable resolver uses the registry which scans src/executables.
+    // The runAgentAction resolver uses the registry which scans src/agent-actions.
     // For this unit test we directly probe the seam: preloadedData → ctx.data merge.
     // The seam itself is asserted via the agent.ts loader fast-path tests; this
     // test just ensures the profile shape compiles + the field round-trips.

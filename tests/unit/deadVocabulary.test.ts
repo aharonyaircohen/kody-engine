@@ -8,22 +8,22 @@
  *
  *   - "kody-manager"  — the old issue-state marker/fence prefix; the state
  *                       comment is generic, not manager-specific.
- *   - "mission-tick" / "mission-scheduler" — the dead `mission-*` executable
- *                       family (renamed; no such executable exists).
- *   - "job-scheduler" / "job-tick" — the retired `job-*` executable family,
- *                       renamed to `duty-scheduler` / `duty-tick`. The
+ *   - "mission-tick" / "mission-scheduler" — the dead `mission-*` agentAction
+ *                       family (renamed; no such agentAction exists).
+ *   - "job-scheduler" / "job-tick" — the retired `job-*` agentAction family,
+ *                       renamed to `agent-responsibility-scheduler` / `agent-responsibility-tick`. The
  *                       `kody-job-next-state` fence label is a separate
  *                       concern (see parseJobStateFromAgentResult's alias
  *                       handling) and stays canonical, so it is NOT banned.
  *   - "dispatchJobFileTicks" / "dispatchJobTicks" — the retired dispatcher
- *                       script names, renamed to `dispatchDutyFileTicks` /
- *                       `dispatchDutyTicks`. The `Job` runtime envelope
+ *                       script names, renamed to `dispatchAgentResponsibilityFileTicks` /
+ *                       `dispatchAgentResponsibilityTicks`. The `Job` runtime envelope
  *                       (src/job.ts) is unaffected.
  *
  * NOT banned — "job" in general: the runtime envelope (`Job`, `JobFlavor`,
  * `Job` typed records), the `.kody/jobs/` engine scaffold path, the
  * `jobState`/`jobSlug`/`jobSchedule` ctx.data
- * fields (which the spec says MUST keep working alongside the new `duty*`
+ * fields (which the spec says MUST keep working alongside the new `agentResponsibility*`
  * aliases), and the `kody-job-next-state` fence label all keep their `job`
  * names by Phase-1 design. The deadVocabulary test targets the specific
  * identifiers that have been renamed (`job-scheduler`, `job-tick`,

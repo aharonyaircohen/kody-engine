@@ -1,21 +1,21 @@
 /**
- * Postflight: append a Company-Activity record after a duty tick.
+ * Postflight: append a Company-Activity record after a agentResponsibility tick.
  *
  * This is the engine-authored "what the company did" feed the dashboard
  * surfaces — a named, attributed action rather than a raw commit/PR. Every
- * `duty-tick` (scheduled OR manual "Run now") passes through here, so each one
+ * `agent-responsibility-tick` (scheduled OR manual "Run now") passes through here, so each one
  * records WHO ran WHAT, WHY, and the RESULT:
  *
- *   { ts, action, duty, dutyTitle, agent, agentTitle, trigger, outcome,
+ *   { ts, action, agentResponsibility, agentResponsibilityTitle, agent, agentTitle, trigger, outcome,
  *     durationMs, runUrl }
  *
  * Appended as one JSON line to `.kody/activity/<YYYY-MM-DD>.jsonl` via the
  * GitHub Contents API (read blob → append → PUT), committed to the dedicated
  * `kody-state` branch (NOT the default branch — this fires on every tick) so
  * the dashboard can read it with no shared state. Best-effort: any failure is
- * logged and swallowed — activity logging must never fail a duty run.
+ * logged and swallowed — activity logging must never fail a agentResponsibility run.
  */
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../agent-actions/types.js"
 import { getRunUrl } from "../gha.js"
 import { gh } from "../issue.js"
 import { ensureStateBranch, STATE_BRANCH } from "../stateBranch.js"
@@ -23,8 +23,8 @@ import { ensureStateBranch, STATE_BRANCH } from "../stateBranch.js"
 interface ActivityRecord {
   ts: string
   action: string
-  duty: string
-  dutyTitle: string | null
+  agentResponsibility: string
+  agentResponsibilityTitle: string | null
   agent: string | null
   agentTitle: string | null
   trigger: "schedule" | "manual" | "event"
@@ -88,19 +88,19 @@ export const appendCompanyActivity: PostflightScript = async (ctx, _profile, age
     // `jobSlug` is set by loadJobFromFile (agent path); the scripted path
     // (runTickScript) doesn't, so fall back to the `--job` CLI arg, which
     // both paths always carry.
-    const duty = String(ctx.data.jobSlug ?? ctx.args?.job ?? "").trim()
-    if (!owner || !repo || !duty) return
+    const agentResponsibility = String(ctx.data.jobSlug ?? ctx.args?.job ?? "").trim()
+    if (!owner || !repo || !agentResponsibility) return
 
-    const dutyTitle = (ctx.data.jobTitle as string | undefined) ?? null
+    const agentResponsibilityTitle = (ctx.data.jobTitle as string | undefined) ?? null
     const agent = (ctx.data.agentSlug as string | undefined) || null
     const agentTitle = (ctx.data.agentTitle as string | undefined) || null
     const force = ctx.args?.force === true
 
     const record: ActivityRecord = {
       ts: new Date().toISOString(),
-      action: `Ran duty: ${dutyTitle ?? duty}`,
-      duty,
-      dutyTitle,
+      action: `Ran agentResponsibility: ${agentResponsibilityTitle ?? agentResponsibility}`,
+      agentResponsibility,
+      agentResponsibilityTitle,
       agent,
       agentTitle,
       trigger: resolveTrigger(force),

@@ -8,7 +8,7 @@ import type {
   CapabilitySuggestedAction,
   ObserveResult,
   VerifyResult,
-} from "./executables/types.js"
+} from "./agent-actions/types.js"
 
 const ACT_STATUSES = new Set(["created", "changed", "triggered", "skipped", "failed"])
 const ALERT_LEVELS = new Set(["info", "warning", "error"])

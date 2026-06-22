@@ -3,8 +3,8 @@
  *
  * Covers all exported functions:
  *   - parseStatsArgs  (pure CLI flag parsing, incl. --since duration grammar)
- *   - summarizeRun    (pure event → run summary, incl. empty / token sums)
- *   - rollupByExecutable (pure event → per-executable rollup, percentiles)
+ *   - summarizeRun    (pure event → agent run summary, incl. empty / token sums)
+ *   - rollupByAgentAction (pure event → per-agentAction rollup, percentiles)
  *   - runStats        (IO orchestration; events.js mocked for listRuns/readEvents)
  *
  * The internal helpers (parseDuration, percentile, printReport, formatMs) are
@@ -25,12 +25,12 @@ vi.mock("../../src/events.js", async (orig) => {
   return { ...actual, listRuns: mocks.listRuns, readEvents: mocks.readEvents }
 })
 
-import { parseStatsArgs, rollupByExecutable, runStats, summarizeRun } from "../../src/stats.js"
+import { parseStatsArgs, rollupByAgentAction, runStats, summarizeRun } from "../../src/stats.js"
 
 function evt(partial: Partial<RunEvent> & { kind: RunEvent["kind"]; ts: string }): RunEvent {
   return {
     runId: "rid",
-    executable: "run",
+    agentAction: "run",
     ...partial,
   }
 }
@@ -96,20 +96,20 @@ describe("stats: summarizeRun", () => {
     expect(summary.durationMs).toBe(30_000)
     expect(summary.exitCode).toBe(0)
     expect(summary.ok).toBe(true)
-    expect(summary.executables).toEqual(["run"])
+    expect(summary.agentActions).toEqual(["run"])
   })
 
   it("uses the LAST stage_end (outer container) for window end and exit code", () => {
     const events: RunEvent[] = [
       evt({ kind: "stage_start", ts: "2026-05-11T08:00:00.000Z" }),
-      evt({ kind: "stage_end", executable: "child", ts: "2026-05-11T08:00:02.000Z", meta: { exitCode: 0 } }),
-      evt({ kind: "stage_end", executable: "run", ts: "2026-05-11T08:00:10.000Z", meta: { exitCode: 2 } }),
+      evt({ kind: "stage_end", agentAction: "child", ts: "2026-05-11T08:00:02.000Z", meta: { exitCode: 0 } }),
+      evt({ kind: "stage_end", agentAction: "run", ts: "2026-05-11T08:00:10.000Z", meta: { exitCode: 2 } }),
     ]
     const summary = summarizeRun(events)!
     expect(summary.endedAt).toBe("2026-05-11T08:00:10.000Z")
     expect(summary.exitCode).toBe(2)
     expect(summary.ok).toBe(false)
-    expect(summary.executables).toEqual(["run", "child"])
+    expect(summary.agentActions).toEqual(["run", "child"])
   })
 
   it("falls back to first/last event ts when stage events are absent", () => {
@@ -191,69 +191,69 @@ describe("stats: summarizeRun", () => {
   })
 })
 
-describe("stats: rollupByExecutable", () => {
+describe("stats: rollupByAgentAction", () => {
   it("returns [] when there are no stage_end events", () => {
-    expect(rollupByExecutable([evt({ kind: "stage_start", ts: "t1" })])).toEqual([])
+    expect(rollupByAgentAction([evt({ kind: "stage_start", ts: "t1" })])).toEqual([])
   })
 
-  it("groups stage_end events by executable with ok/failed counts", () => {
+  it("groups stage_end events by agentAction with ok/failed counts", () => {
     const events: RunEvent[] = [
-      evt({ kind: "stage_end", executable: "run", ts: "t1", durationMs: 100, outcome: "ok" }),
-      evt({ kind: "stage_end", executable: "run", ts: "t2", durationMs: 200, outcome: "ok" }),
-      evt({ kind: "stage_end", executable: "run", ts: "t3", durationMs: 300, outcome: "failed" }),
-      evt({ kind: "stage_end", executable: "fix", ts: "t4", durationMs: 50, outcome: "ok" }),
+      evt({ kind: "stage_end", agentAction: "run", ts: "t1", durationMs: 100, outcome: "ok" }),
+      evt({ kind: "stage_end", agentAction: "run", ts: "t2", durationMs: 200, outcome: "ok" }),
+      evt({ kind: "stage_end", agentAction: "run", ts: "t3", durationMs: 300, outcome: "failed" }),
+      evt({ kind: "stage_end", agentAction: "fix", ts: "t4", durationMs: 50, outcome: "ok" }),
     ]
-    const rollups = rollupByExecutable(events)
+    const rollups = rollupByAgentAction(events)
     expect(rollups).toHaveLength(2)
-    const run = rollups.find((r) => r.executable === "run")!
-    expect(run.runs).toBe(3)
+    const run = rollups.find((r) => r.agentAction === "run")!
+    expect(run.agentRuns).toBe(3)
     expect(run.ok).toBe(2)
     expect(run.failed).toBe(1)
     expect(run.meanMs).toBe(200)
-    expect(rollups.find((r) => r.executable === "fix")!.runs).toBe(1)
+    expect(rollups.find((r) => r.agentAction === "fix")!.agentRuns).toBe(1)
   })
 
   it("computes percentiles from the sorted duration set", () => {
     const events: RunEvent[] = Array.from({ length: 10 }, (_, i) =>
-      evt({ kind: "stage_end", executable: "run", ts: `t${i}`, durationMs: (i + 1) * 100, outcome: "ok" }),
+      evt({ kind: "stage_end", agentAction: "run", ts: `t${i}`, durationMs: (i + 1) * 100, outcome: "ok" }),
     )
-    const [run] = rollupByExecutable(events)
+    const [run] = rollupByAgentAction(events)
     expect(run!.p50Ms).toBe(600)
     expect(run!.p95Ms).toBe(1000)
   })
 
   it("drops zero/negative durations and yields zero percentiles when none remain", () => {
     const events: RunEvent[] = [
-      evt({ kind: "stage_end", executable: "run", ts: "t1", durationMs: 0, outcome: "ok" }),
-      evt({ kind: "stage_end", executable: "run", ts: "t2", outcome: "ok" }),
+      evt({ kind: "stage_end", agentAction: "run", ts: "t1", durationMs: 0, outcome: "ok" }),
+      evt({ kind: "stage_end", agentAction: "run", ts: "t2", outcome: "ok" }),
     ]
-    const [run] = rollupByExecutable(events)
-    expect(run!.runs).toBe(2)
+    const [run] = rollupByAgentAction(events)
+    expect(run!.agentRuns).toBe(2)
     expect(run!.p50Ms).toBe(0)
     expect(run!.p95Ms).toBe(0)
     expect(run!.meanMs).toBe(0)
   })
 
-  it("attributes agent_end tokens to the right executable", () => {
+  it("attributes agent_end tokens to the right agentAction", () => {
     const events: RunEvent[] = [
       evt({
         kind: "agent_end",
-        executable: "run",
+        agentAction: "run",
         ts: "t1",
         meta: { tokens: { input: 100, output: 50, cacheRead: 0, cacheCreate: 5 } },
       }),
       evt({
         kind: "agent_end",
-        executable: "fix",
+        agentAction: "fix",
         ts: "t2",
         meta: { tokens: { input: 200, output: 75, cacheRead: 10, cacheCreate: 0 } },
       }),
-      evt({ kind: "stage_end", executable: "run", ts: "t3", durationMs: 1000, outcome: "ok" }),
-      evt({ kind: "stage_end", executable: "fix", ts: "t4", durationMs: 500, outcome: "ok" }),
+      evt({ kind: "stage_end", agentAction: "run", ts: "t3", durationMs: 1000, outcome: "ok" }),
+      evt({ kind: "stage_end", agentAction: "fix", ts: "t4", durationMs: 500, outcome: "ok" }),
     ]
-    const rollups = rollupByExecutable(events)
-    const run = rollups.find((r) => r.executable === "run")!
-    const fix = rollups.find((r) => r.executable === "fix")!
+    const rollups = rollupByAgentAction(events)
+    const run = rollups.find((r) => r.agentAction === "run")!
+    const fix = rollups.find((r) => r.agentAction === "fix")!
     expect(run.totalInputTokens).toBe(100)
     expect(run.totalCacheCreateTokens).toBe(5)
     expect(fix.totalInputTokens).toBe(200)
@@ -262,13 +262,13 @@ describe("stats: rollupByExecutable", () => {
 
   it("sorts rollups by run count descending", () => {
     const events: RunEvent[] = [
-      evt({ kind: "stage_end", executable: "rare", ts: "t1", durationMs: 100, outcome: "ok" }),
-      evt({ kind: "stage_end", executable: "common", ts: "t2", durationMs: 100, outcome: "ok" }),
-      evt({ kind: "stage_end", executable: "common", ts: "t3", durationMs: 100, outcome: "ok" }),
-      evt({ kind: "stage_end", executable: "common", ts: "t4", durationMs: 100, outcome: "ok" }),
+      evt({ kind: "stage_end", agentAction: "rare", ts: "t1", durationMs: 100, outcome: "ok" }),
+      evt({ kind: "stage_end", agentAction: "common", ts: "t2", durationMs: 100, outcome: "ok" }),
+      evt({ kind: "stage_end", agentAction: "common", ts: "t3", durationMs: 100, outcome: "ok" }),
+      evt({ kind: "stage_end", agentAction: "common", ts: "t4", durationMs: 100, outcome: "ok" }),
     ]
-    const rollups = rollupByExecutable(events)
-    expect(rollups.map((r) => r.executable)).toEqual(["common", "rare"])
+    const rollups = rollupByAgentAction(events)
+    expect(rollups.map((r) => r.agentAction)).toEqual(["common", "rare"])
   })
 })
 
@@ -292,17 +292,17 @@ describe("stats: runStats", () => {
 
   function okRunEvents(runId: string, startTs: string): RunEvent[] {
     return [
-      evt({ runId, executable: "run", kind: "stage_start", ts: startTs }),
+      evt({ runId, agentAction: "run", kind: "stage_start", ts: startTs }),
       evt({
         runId,
-        executable: "run",
+        agentAction: "run",
         kind: "agent_end",
         ts: startTs,
         meta: { tokens: { input: 1000, output: 200, cacheRead: 50 } },
       }),
       evt({
         runId,
-        executable: "run",
+        agentAction: "run",
         kind: "stage_end",
         ts: new Date(new Date(startTs).getTime() + 5000).toISOString(),
         outcome: "ok",
@@ -316,11 +316,11 @@ describe("stats: runStats", () => {
     mocks.listRuns.mockReturnValue([])
     const code = await runStats(["--cwd", "/tmp/empty"])
     expect(code).toBe(0)
-    expect(stdout).toContain("no runs found under /tmp/empty/.kody/runs/")
+    expect(stdout).toContain("no runs found under /tmp/empty/.kody/agent-runs/")
     expect(mocks.listRuns).toHaveBeenCalledWith("/tmp/empty")
   })
 
-  it("prints a human report covering summary and per-executable table", async () => {
+  it("prints a human report covering summary and per-agentAction table", async () => {
     mocks.listRuns.mockReturnValue(["r1"])
     mocks.readEvents.mockImplementation(() => okRunEvents("r1", "2026-01-01T00:00:00.000Z"))
     const code = await runStats(["--cwd", "/tmp/repo"])
@@ -328,8 +328,8 @@ describe("stats: runStats", () => {
     expect(stdout).toContain("Kody run statistics — 1 runs")
     expect(stdout).toContain("success rate")
     expect(stdout).toContain("100.0%")
-    expect(stdout).toContain("Per-executable")
-    expect(stdout).toContain("executable")
+    expect(stdout).toContain("Per-agentAction")
+    expect(stdout).toContain("agentAction")
     expect(stdout).toContain("run")
     // formatMs(5000) → "5.0s"
     expect(stdout).toContain("5.0s")
@@ -341,10 +341,10 @@ describe("stats: runStats", () => {
     const code = await runStats(["--json", "--cwd", "/tmp/repo"])
     expect(code).toBe(0)
     const parsed = JSON.parse(stdout)
-    expect(parsed.runs).toHaveLength(1)
-    expect(parsed.runs[0].runId).toBe("r1")
-    expect(parsed.byExecutable[0].executable).toBe("run")
-    expect(parsed.byExecutable[0].totalInputTokens).toBe(1000)
+    expect(parsed.agentRuns).toHaveLength(1)
+    expect(parsed.agentRuns[0].runId).toBe("r1")
+    expect(parsed.byAgentAction[0].agentAction).toBe("run")
+    expect(parsed.byAgentAction[0].totalInputTokens).toBe(1000)
   })
 
   it("honors --run by reading exactly that run id and skipping listRuns", async () => {
@@ -354,7 +354,7 @@ describe("stats: runStats", () => {
     expect(mocks.listRuns).not.toHaveBeenCalled()
     expect(mocks.readEvents).toHaveBeenCalledWith(process.cwd(), "specific-run")
     const parsed = JSON.parse(stdout)
-    expect(parsed.runs[0].runId).toBe("specific-run")
+    expect(parsed.agentRuns[0].runId).toBe("specific-run")
   })
 
   it("skips runs with no events or that fail to summarize", async () => {
@@ -365,8 +365,8 @@ describe("stats: runStats", () => {
     const code = await runStats(["--json", "--cwd", "/tmp/repo"])
     expect(code).toBe(0)
     const parsed = JSON.parse(stdout)
-    expect(parsed.runs).toHaveLength(1)
-    expect(parsed.runs[0].runId).toBe("good")
+    expect(parsed.agentRuns).toHaveLength(1)
+    expect(parsed.agentRuns[0].runId).toBe("good")
   })
 
   it("filters out runs older than the --since cutoff", async () => {
@@ -379,7 +379,7 @@ describe("stats: runStats", () => {
     const code = await runStats(["--json", "--since", "7d", "--cwd", "/tmp/repo"])
     expect(code).toBe(0)
     const parsed = JSON.parse(stdout)
-    expect(parsed.runs.map((r: { runId: string }) => r.runId)).toEqual(["new"])
+    expect(parsed.agentRuns.map((r: { runId: string }) => r.runId)).toEqual(["new"])
   })
 
   it("reports 'no runs in the requested window' when --since filters everything out", async () => {

@@ -1,7 +1,7 @@
 /**
- * Preflight: deterministic alternative to the LLM-driven duty-tick.
+ * Preflight: deterministic alternative to the LLM-driven agent-responsibility-tick.
  *
- * Reads a duty folder's `profile.json`, executes the declared `tickScript`,
+ * Reads a agentResponsibility folder's `profile.json`, executes the declared `tickScript`,
  * captures its stdout, and parses the `kody-job-next-state` fenced
  * block directly into `ctx.data.nextJobState`. No agent runs.
  *
@@ -11,33 +11,33 @@
  * jobs spammed `@kody resolve` indefinitely.
  *
  * Contract:
- *   - Duty folder at `<jobsDir>/<slug>/` MUST declare `tickScript` in
+ *   - AgentResponsibility folder at `<jobsDir>/<slug>/` MUST declare `tickScript` in
  *     `profile.json` (relative path under cwd).
  *   - Script MUST emit a `kody-job-next-state` JSON fenced block on
  *     stdout. Anything else on stdout is preserved as run-log noise.
- *   - Non-zero script exit propagates to the executable's exitCode.
+ *   - Non-zero script exit propagates to the agentAction's exitCode.
  *
  * Reads   ctx.args[<slugArg>]
  * Writes  ctx.data.jobSlug, ctx.data.jobState, ctx.data.nextJobState
  *         (or ctx.data.nextStateParseError on failure)
  *
  * Script args (via `with:`):
- *   jobsDir     optional — default ".kody/duties"
+ *   jobsDir     optional — default ".kody/agent-responsibilities"
  *   slugArg     optional — default "job"
  *   fenceLabel  optional — default "kody-job-next-state"
  */
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { readDutyFolder } from "../dutyFolders.js"
-import type { PreflightScript } from "../executables/types.js"
+import { readAgentResponsibilityFolder } from "../agent-responsibilityFolders.js"
+import type { PreflightScript } from "../agent-actions/types.js"
 import { resolveBackend } from "./jobState/index.js"
 import { runTickShellAndParse } from "./tickShellRunner.js"
 
 export const runTickScript: PreflightScript = async (ctx, _profile, args) => {
   ctx.skipAgent = true
 
-  const jobsDir = String(args?.jobsDir ?? ".kody/duties")
+  const jobsDir = String(args?.jobsDir ?? ".kody/agent-responsibilities")
   const slugArg = String(args?.slugArg ?? "job")
   const fenceLabel = String(args?.fenceLabel ?? "kody-job-next-state")
   const slug = String(ctx.args[slugArg] ?? "").trim()
@@ -47,17 +47,17 @@ export const runTickScript: PreflightScript = async (ctx, _profile, args) => {
     return
   }
 
-  const duty = readDutyFolder(path.join(ctx.cwd, jobsDir), slug)
-  if (!duty) {
+  const agentResponsibility = readAgentResponsibilityFolder(path.join(ctx.cwd, jobsDir), slug)
+  if (!agentResponsibility) {
     ctx.output.exitCode = 99
-    ctx.output.reason = `runTickScript: duty folder not found or incomplete: ${path.join(ctx.cwd, jobsDir, slug)}`
+    ctx.output.reason = `runTickScript: agentResponsibility folder not found or incomplete: ${path.join(ctx.cwd, jobsDir, slug)}`
     return
   }
 
-  const tickScript = duty.config.tickScript
+  const tickScript = agentResponsibility.config.tickScript
   if (!tickScript) {
     ctx.output.exitCode = 99
-    ctx.output.reason = `runTickScript: duty ${slug} has no \`tickScript\` in profile.json — route via duty-tick instead`
+    ctx.output.reason = `runTickScript: agentResponsibility ${slug} has no \`tickScript\` in profile.json — route via agent-responsibility-tick instead`
     return
   }
 

@@ -27,7 +27,7 @@ kody:  reads the issue → writes the code → runs your tests → opens a PR
 - **No infrastructure.** Runs on the GitHub Actions you already have. One ~20-line
   workflow file, installed via `npx`. Nothing to deploy or keep online.
 - **Whole PR lifecycle, not just authoring.** `run`, `resolve`, `sync`, `merge`,
-  `revert`, previews, releases, and scheduled duties — one executor, many verbs.
+  `revert`, previews, releases, and scheduled agentResponsibilities — one executor, many verbs.
 - **Declarative & extensible.** Every command is a folder of `profile.json` +
   `prompt.md` + shell. Add a command by dropping a folder — no engine changes.
 - **Bring your own model.** Anthropic native, or any provider via the built-in
@@ -74,19 +74,19 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 ┌─────────────────────────────────────────────┐
 │ kody-engine CLI (@kody-ade/kody-engine)    │
 │   bin/kody.ts — entrypoint                  │
-│   src/dispatch.ts — duty-driven routing     │
-│   src/executor.ts — runs duty implementations│
-│   .kody/duties/<slug>/                      │
-│     profile.json · duty.md                  │
-│   src/executables/<name>/                   │
+│   src/dispatch.ts — agentResponsibility-driven routing     │
+│   src/executor.ts — runs agentResponsibility implementations│
+│   .kody/agent-responsibilities/<slug>/                      │
+│     profile.json · agent-responsibility.md                  │
+│   src/agent-actions/<name>/                   │
 │     profile.json · prompt.md · *.sh         │
 │   src/scripts/*.ts — cross-cutting catalog  │
 └─────────────────────────────────────────────┘
 ```
 
-Every top-level command is an auto-discovered duty action. The router has **zero executable names hardcoded** — comment dispatch resolves the first token after `@kody` through `config.aliases`, then falls back to the legacy-named `config.defaultExecutable` / `config.defaultPrExecutable` fields as default duty actions. Drop a new `.kody/duties/<slug>/` directory with `profile.json` + `duty.md`; that duty chooses its implementation executable.
+Every top-level command is an auto-discovered agentResponsibility action. The router has **zero agentAction names hardcoded** — comment dispatch resolves the first token after `@kody` through `config.aliases`, then falls back to the legacy-named `config.defaultAgentAction` / `config.defaultPrAgentAction` fields as default agentResponsibility actions. Drop a new `.kody/agent-responsibilities/<slug>/` directory with `profile.json` + `agent-responsibility.md`; that agentResponsibility chooses its implementation agentAction.
 
-Executable directories are private implementation units and contain **only** three kinds of files: `profile.json` (declaration), `prompt.md` (agent instructions), and `.sh` scripts (mechanical side-effect work). Cross-cutting TypeScript lives in [src/scripts/](src/scripts/); it can't import from `src/executables/` and can't branch on `profile.name`.
+AgentAction directories are private implementation units and contain **only** three kinds of files: `profile.json` (declaration), `prompt.md` (agent instructions), and `.sh` scripts (mechanical side-effect work). Cross-cutting TypeScript lives in [src/scripts/](src/scripts/); it can't import from `src/agent-actions/` and can't branch on `profile.name`.
 
 ## Install in a consumer repo
 
@@ -94,7 +94,7 @@ Executable directories are private implementation units and contain **only** thr
 npx -y -p @kody-ade/kody-engine@latest kody-engine init
 ```
 
-`kody-engine init` scaffolds [kody.config.json](kody.config.schema.json), `.github/workflows/kody.yml` (generated from `WORKFLOW_TEMPLATE` in [src/scripts/initFlow.ts](src/scripts/initFlow.ts)), and per-scheduled-duty workflow files. Idempotent — pass `--force` to overwrite.
+`kody-engine init` scaffolds [kody.config.json](kody.config.schema.json), `.github/workflows/kody.yml` (generated from `WORKFLOW_TEMPLATE` in [src/scripts/initFlow.ts](src/scripts/initFlow.ts)), and per-scheduled-agentResponsibility workflow files. Idempotent — pass `--force` to overwrite.
 
 Required repo secrets: at least one model provider key (e.g. `MINIMAX_API_KEY`, `ANTHROPIC_API_KEY`). Recommended: `KODY_TOKEN` PAT so kody's commits trigger downstream CI and can modify `.github/workflows/*`.
 
@@ -123,10 +123,10 @@ kody-engine release-publish   --issue <N> [--dry-run]
 kody-engine release-deploy    --issue <N> [--dry-run]
 kody-engine npm-publish       [--tag latest] [--access public] [--dry-run]
 
-# scheduled duties and goals
-kody-engine duty-scheduler                                    # fan out due .kody/duties/<slug>/ folders
-kody-engine duty-tick          --duty <slug> [--force]        # one agent tick for one duty
-kody-engine duty-tick-scripted --duty <slug> [--force]        # one deterministic tickScript duty tick
+# scheduled agentResponsibilities and goals
+kody-engine agent-responsibility-scheduler                                    # fan out due .kody/agent-responsibilities/<slug>/ folders
+kody-engine agent-responsibility-tick          --agentResponsibility <slug> [--force]        # one agent tick for one agentResponsibility
+kody-engine agent-responsibility-tick-scripted --agentResponsibility <slug> [--force]        # one deterministic tickScript agentResponsibility tick
 kody-engine goal-scheduler                                    # fan out active .kody/goals/instances/* state files
 kody-engine goal-manager      --goal <id>                     # advance one managed goal instance
 
@@ -138,15 +138,15 @@ kody-engine serve                                             # LiteLLM/editor h
 kody-engine brain-serve                                       # Brain SSE server
 kody-engine pool-serve                                        # warm-pool owner
 kody-engine runner-serve                                      # warm-pool one-shot runner
-kody-engine worker-ask        --worker <slug> --message "..." # ad-hoc staff persona run
+kody-engine agent-ask        --agent <slug> --message "..." # ad-hoc agent run
 kody-engine stats                                             # inspect run/event history
 ```
 
-### Duties
+### AgentResponsibilities
 
-A **duty** is a folder at `.kody/duties/<slug>/` with `profile.json` metadata (`every`, `staff`, `action`, `executable`, `stage`, and related fields) plus human-owned prose in `duty.md`. `duty-scheduler` wakes on cron, finds due duties, and dispatches either `duty-tick` for an agent tick or `duty-tick-scripted` for a deterministic `tickScript` duty. `kody-engine init` copies built-in starter duties and scaffolds `.kody/staff/kody.md`.
+A **agentResponsibility** is a folder at `.kody/agent-responsibilities/<slug>/` with `profile.json` metadata (`every`, `agent`, `action`, `agentAction`, `stage`, and related fields) plus human-owned prose in `agent-responsibility.md`. `agent-responsibility-scheduler` wakes on cron, finds due agentResponsibilities, and dispatches either `agent-responsibility-tick` for an agent tick or `agent-responsibility-tick-scripted` for a deterministic `tickScript` agentResponsibility. `kody-engine init` copies built-in starter agentResponsibilities and scaffolds `.kody/agents/kody.md`.
 
-Locked-toolbox duties can declare `"tools": [...]` in `profile.json` to run with only the named high-level MCP intents plus `submit_state`; duties without `tools` keep the legacy Bash/gh toolbox.
+Locked-toolbox agentResponsibilities can declare `"tools": [...]` in `profile.json` to run with only the named high-level MCP intents plus `submit_state`; agentResponsibilities without `tools` keep the legacy Bash/gh toolbox.
 
 ### `release`
 
@@ -154,7 +154,7 @@ Locked-toolbox duties can declare `"tools": [...]` in `profile.json` to run with
 
 ## Profiles
 
-A profile is declarative JSON + an adjacent `prompt.md`. See any directory under [src/executables/](src/executables/) for examples. Adding a new command = new directory + profile + prompt + any `.sh` scripts + registering any new shared TS utilities under [src/scripts/](src/scripts/). No executor, entry, or dispatch changes.
+A profile is declarative JSON + an adjacent `prompt.md`. See any directory under [src/agent-actions/](src/agent-actions/) for examples. Adding a new command = new directory + profile + prompt + any `.sh` scripts + registering any new shared TS utilities under [src/scripts/](src/scripts/). No executor, entry, or dispatch changes.
 
 See [AGENTS.md](AGENTS.md) for the full architectural contract.
 

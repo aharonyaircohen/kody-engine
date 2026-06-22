@@ -45,10 +45,10 @@ describe("smoke: CLI boots and validates args", () => {
     expect(r.stderr).toMatch(/--bogus/)
   })
 
-  it("runs a project duty action through its implementation executable", () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-duty-cli-smoke-"))
-    fs.mkdirSync(path.join(root, ".kody", "duties"), { recursive: true })
-    fs.mkdirSync(path.join(root, ".kody", "executables", "smoke-impl"), { recursive: true })
+  it("runs a project agentResponsibility action through its implementation agentAction", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-agentResponsibility-cli-smoke-"))
+    fs.mkdirSync(path.join(root, ".kody", "agent-responsibilities"), { recursive: true })
+    fs.mkdirSync(path.join(root, ".kody", "agent-actions", "smoke-impl"), { recursive: true })
     fs.writeFileSync(
       path.join(root, "kody.config.json"),
       JSON.stringify({
@@ -58,14 +58,14 @@ describe("smoke: CLI boots and validates args", () => {
         agent: { model: "anthropic/test" },
       }),
     )
-    fs.mkdirSync(path.join(root, ".kody", "duties", "smoke-duty"), { recursive: true })
+    fs.mkdirSync(path.join(root, ".kody", "agent-responsibilities", "smoke-agent-responsibility"), { recursive: true })
     fs.writeFileSync(
-      path.join(root, ".kody", "duties", "smoke-duty", "profile.json"),
-      JSON.stringify({ name: "smoke-duty", action: "smoke-action", executable: "smoke-impl", agent: "kody" }),
+      path.join(root, ".kody", "agent-responsibilities", "smoke-agent-responsibility", "profile.json"),
+      JSON.stringify({ name: "smoke-agent-responsibility", action: "smoke-action", agentAction: "smoke-impl", agent: "kody" }),
     )
-    fs.writeFileSync(path.join(root, ".kody", "duties", "smoke-duty", "duty.md"), "# Smoke\n")
+    fs.writeFileSync(path.join(root, ".kody", "agent-responsibilities", "smoke-agent-responsibility", "agent-responsibility.md"), "# Smoke\n")
     fs.writeFileSync(
-      path.join(root, ".kody", "executables", "smoke-impl", "profile.json"),
+      path.join(root, ".kody", "agent-actions", "smoke-impl", "profile.json"),
       JSON.stringify({
         name: "smoke-impl",
         role: "utility",

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest"
 import type { AgentResult } from "../../src/agent.js"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/agent-actions/types.js"
 import type { StateEnvelope } from "../../src/scripts/issueStateComment.js"
 import {
   extractNextStateFromText,
   parseJobStateFromAgentResult,
 } from "../../src/scripts/parseJobStateFromAgentResult.js"
 
-const profile = { name: "duty-tick" } as Profile
+const profile = { name: "agent-responsibility-tick" } as Profile
 const FENCE = "kody-job-next-state"
 
 function makeCtx(data: Record<string, unknown> = {}): Context {
@@ -135,7 +135,7 @@ describe("parseJobStateFromAgentResult", () => {
   })
 
   it("carries prior state forward when a clean finish emits no block", async () => {
-    // Evergreen duty (e.g. approval-gate) checks its queue, finds nothing,
+    // Evergreen agentResponsibility (e.g. approval-gate) checks its queue, finds nothing,
     // and stops without proposing state — a benign no-op, not a failure.
     const ctx = makeCtx({
       jobState: { path: "x", token: null, state: { rev: 4, cursor: "idle", data: { seen: 3 }, done: false } },
@@ -164,10 +164,10 @@ describe("parseJobStateFromAgentResult", () => {
   })
 })
 
-describe("parseJobStateFromAgentResult: kody-duty-next-state alias (Phase 1 rename)", () => {
-  const NEW = "kody-duty-next-state"
+describe("parseJobStateFromAgentResult: kody-agentResponsibility-next-state alias (Phase 1 rename)", () => {
+  const NEW = "kody-agentResponsibility-next-state"
 
-  it("accepts a kody-duty-next-state block when the configured label is kody-job-next-state (newly-authored duty)", async () => {
+  it("accepts a kody-agentResponsibility-next-state block when the configured label is kody-job-next-state (newly-authored agentResponsibility)", async () => {
     const ctx = makeCtx()
     const body = JSON.stringify({ cursor: "next", data: { fresh: true }, done: false })
     await parseJobStateFromAgentResult(ctx, profile, makeResult(fenced(NEW, body)), { fenceLabel: FENCE })
@@ -178,7 +178,7 @@ describe("parseJobStateFromAgentResult: kody-duty-next-state alias (Phase 1 rena
     expect(next.rev).toBe(1)
   })
 
-  it("accepts a kody-job-next-state block when the configured label is kody-duty-next-state (legacy agent, new profile)", async () => {
+  it("accepts a kody-job-next-state block when the configured label is kody-agentResponsibility-next-state (legacy agent, new profile)", async () => {
     // Symmetry: a profile that opts into the new label still recognises the
     // old one — prevents the same alias from being a one-way migration.
     const ctx = makeCtx()
@@ -208,14 +208,14 @@ describe("parseJobStateFromAgentResult: kody-duty-next-state alias (Phase 1 rena
     expect(ctx.data.nextStateParseError).toMatch(/JSON parse error/)
   })
 
-  it("alias does NOT trigger for a fence label that has no alias (only the two duty labels are aliased)", async () => {
+  it("alias does NOT trigger for a fence label that has no alias (only the two agentResponsibility labels are aliased)", async () => {
     // Generic labels like "kody-issue-next-state" are NOT aliased — the alias
-    // is a Phase 1 duty-pipeline concern, not a generic parser behaviour.
+    // is a Phase 1 agentResponsibility-pipeline concern, not a generic parser behaviour.
     // A profile that declares fenceLabel="kody-issue-next-state" should NOT
-    // pick up a stray kody-duty-next-state block.
+    // pick up a stray kody-agentResponsibility-next-state block.
     const ctx = makeCtx()
     const body = JSON.stringify({ cursor: "x", data: {}, done: false })
-    await parseJobStateFromAgentResult(ctx, profile, makeResult(fenced("kody-duty-next-state", body)), {
+    await parseJobStateFromAgentResult(ctx, profile, makeResult(fenced("kody-agentResponsibility-next-state", body)), {
       fenceLabel: "kody-issue-next-state",
     })
     expect(ctx.data.nextStateParseError).toMatch(/kody-issue-next-state/)

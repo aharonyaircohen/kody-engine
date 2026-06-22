@@ -2,7 +2,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import type { Profile } from "../../src/executables/types.js"
+import type { Profile } from "../../src/agent-actions/types.js"
 import { getPluginsCatalogRoot } from "../../src/scripts/buildSyntheticPlugin.js"
 import { captureSubagentTemplates, loadSubagents } from "../../src/subagents.js"
 
@@ -35,7 +35,7 @@ function makeProfile(subagents: string[], dir: string): Profile {
   } as Profile
 }
 
-/** Make a temp executable dir and write `agents/<file>.md` with given content. */
+/** Make a temp agentAction dir and write `agents/<file>.md` with given content. */
 function withLocalAgent(file: string, content: string): string {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-subagents-"))
   const agentsDir = path.join(tmp, "agents")
@@ -112,7 +112,7 @@ describe("loadSubagents", () => {
 
   it("prefers the load-time snapshot, surviving a dir that no longer exists (branch churn)", () => {
     // Capture from a real dir, then delete it to simulate a task-branch checkout
-    // that dropped the duty's agents/. loadSubagents must still succeed.
+    // that dropped the agentResponsibility's agents/. loadSubagents must still succeed.
     const tmp = withLocalAgent("scout", "---\nname: scout\ndescription: snap\n---\nsnapshot body\n")
     const profile = makeProfile(["scout"], tmp)
     profile.subagentTemplates = captureSubagentTemplates(profile)
@@ -128,7 +128,7 @@ describe("loadSubagents", () => {
     expect(Object.keys(snap)).toEqual(["present"])
   })
 
-  it("falls back to the shared catalog when the executable dir has no match", () => {
+  it("falls back to the shared catalog when the agentAction dir has no match", () => {
     const catalogAgents = path.join(getPluginsCatalogRoot(), "agents")
     const createdDir = !fs.existsSync(catalogAgents)
     if (createdDir) fs.mkdirSync(catalogAgents, { recursive: true })

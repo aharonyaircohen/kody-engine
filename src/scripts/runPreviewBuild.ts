@@ -5,7 +5,7 @@
  *
  * Runs inside the consumer's kody.yml workflow on ubuntu-latest (which
  * has docker pre-installed). The dashboard dispatches kody.yml with
- * `duty=preview-build` + `pr=<n>` when GitHub Actions is healthy;
+ * `agentResponsibility=preview-build` + `pr=<n>` when GitHub Actions is healthy;
  * the dashboard's Fly-builder spawn is the fallback.
  *
  * Required env (dispatcher / GHA-provided):
@@ -31,7 +31,7 @@ import { copyFile, writeFile } from "node:fs/promises"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../agent-actions/types.js"
 import {
   basePreviewAppName,
   buildEnvFromVault,

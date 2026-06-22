@@ -3,7 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { __resetRunIdCache } from "../../src/events.js"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/agent-actions/types.js"
 import { loadTaskContext } from "../../src/scripts/loadTaskContext.js"
 import { TASK_CONTEXT_SCHEMA_VERSION } from "../../src/taskContext.js"
 
@@ -37,7 +37,7 @@ describe("loadTaskContext: assembly", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it("assembles taskContext from ctx.data and persists to .kody/runs/<runId>/", async () => {
+  it("assembles taskContext from ctx.data and persists to .kody/agent-runs/<runId>/", async () => {
     const ctx = makeCtx(
       {
         issue: {
@@ -58,7 +58,7 @@ describe("loadTaskContext: assembly", () => {
     )
     await loadTaskContext(ctx, fakeProfile)
     expect(ctx.data.taskContext).toBeDefined()
-    const persisted = path.join(tmpDir, ".kody", "runs", "test-run", "task-context.json")
+    const persisted = path.join(tmpDir, ".kody", "agent-runs", "test-run", "task-context.json")
     expect(fs.existsSync(persisted)).toBe(true)
     const parsed = JSON.parse(fs.readFileSync(persisted, "utf-8"))
     expect(parsed.schemaVersion).toBe(TASK_CONTEXT_SCHEMA_VERSION)

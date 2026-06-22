@@ -11,15 +11,15 @@ export interface GoalDestination {
 export interface GoalRouteStep {
   evidence: string
   stage: string
-  duty: string
-  executable?: string
+  agentResponsibility: string
+  agentAction?: string
   args?: Record<string, unknown>
 }
 
 export interface ManagedGoal {
   type: string
   destination: GoalDestination
-  duties: string[]
+  agentResponsibilities: string[]
   route: GoalRouteStep[]
   stage?: string
   facts: Record<string, unknown>
@@ -36,8 +36,8 @@ export type ManagedGoalDecision =
       kind: "dispatch"
       evidence: string
       stage: string
-      duty: string
-      executable?: string
+      agentResponsibility: string
+      agentAction?: string
       cliArgs: Record<string, unknown>
     }
   | { kind: "wait"; evidence: string; stage: string; reason: string }
@@ -108,7 +108,7 @@ export function isManagedGoal(value: unknown): value is ManagedGoal {
     !!goal.destination &&
     typeof goal.destination === "object" &&
     Array.isArray((goal.destination as Partial<GoalDestination>).evidence) &&
-    Array.isArray(goal.duties) &&
+    Array.isArray(goal.agentResponsibilities) &&
     Array.isArray(goal.route) &&
     !!goal.facts &&
     typeof goal.facts === "object" &&
@@ -153,8 +153,8 @@ export function planManagedGoalTick(goal: ManagedGoal): ManagedGoalDecision {
     return { kind: "blocked", evidence: missing, stage: "blocked", reason }
   }
 
-  if (!goal.duties.includes(step.duty)) {
-    const reason = `route duty ${step.duty} is not attached to this goal`
+  if (!goal.agentResponsibilities.includes(step.agentResponsibility)) {
+    const reason = `route agentResponsibility ${step.agentResponsibility} is not attached to this goal`
     goal.stage = "blocked"
     pushBlocker(goal, reason)
     return { kind: "blocked", evidence: missing, stage: step.stage, reason }
@@ -173,8 +173,8 @@ export function planManagedGoalTick(goal: ManagedGoal): ManagedGoalDecision {
     kind: "dispatch",
     evidence: missing,
     stage: step.stage,
-    duty: step.duty,
-    executable: step.executable,
+    agentResponsibility: step.agentResponsibility,
+    agentAction: step.agentAction,
     cliArgs: resolved.cliArgs,
   }
 }
@@ -195,7 +195,7 @@ function asRoute(value: unknown): GoalRouteStep[] | null {
   for (const item of value) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return null
     const raw = item as Record<string, unknown>
-    if (typeof raw.evidence !== "string" || typeof raw.stage !== "string" || typeof raw.duty !== "string") {
+    if (typeof raw.evidence !== "string" || typeof raw.stage !== "string" || typeof raw.agentResponsibility !== "string") {
       return null
     }
     const args = raw.args === undefined ? undefined : asRecord(raw.args)
@@ -203,8 +203,8 @@ function asRoute(value: unknown): GoalRouteStep[] | null {
     route.push({
       evidence: raw.evidence,
       stage: raw.stage,
-      duty: raw.duty,
-      executable: typeof raw.executable === "string" ? raw.executable : undefined,
+      agentResponsibility: raw.agentResponsibility,
+      agentAction: typeof raw.agentAction === "string" ? raw.agentAction : undefined,
       args: args ?? undefined,
     })
   }
@@ -215,7 +215,7 @@ export function managedGoalFromState(state: GoalState): ManagedGoal | null {
   const extra = state.extra
   const destination = asRecord(extra.destination)
   const evidence = asStringArray(destination?.evidence)
-  const duties = asStringArray(extra.duties)
+  const agentResponsibilities = asStringArray(extra.agentResponsibilities)
   const route = asRoute(extra.route)
   const facts = asRecord(extra.facts)
   const blockers = asStringArray(extra.blockers)
@@ -225,7 +225,7 @@ export function managedGoalFromState(state: GoalState): ManagedGoal | null {
     !destination ||
     typeof destination.outcome !== "string" ||
     !evidence ||
-    !duties ||
+    !agentResponsibilities ||
     !route ||
     !facts ||
     !blockers
@@ -236,7 +236,7 @@ export function managedGoalFromState(state: GoalState): ManagedGoal | null {
   return {
     type: extra.type,
     destination: { outcome: destination.outcome, evidence },
-    duties,
+    agentResponsibilities,
     route,
     stage: typeof extra.stage === "string" ? extra.stage : undefined,
     facts,
@@ -251,7 +251,7 @@ export function writeManagedGoalToState(state: GoalState, goal: ManagedGoal): Go
       ...state.extra,
       type: goal.type,
       destination: goal.destination,
-      duties: goal.duties,
+      agentResponsibilities: goal.agentResponsibilities,
       route: goal.route,
       stage: goal.stage,
       facts: goal.facts,

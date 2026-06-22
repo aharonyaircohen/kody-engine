@@ -6,7 +6,7 @@
  *
  * Returns a flat { NAME: value } map. Missing file, unreadable file, or
  * unparseable JSON all degrade to {} — variables are an optional, fail-soft
- * input (the QA executables work with no credentials at all).
+ * input (the QA agentActions work with no credentials at all).
  */
 
 import * as fs from "node:fs"

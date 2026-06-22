@@ -30,26 +30,26 @@ describe("entry: parseArgs", () => {
     expect(parseArgs(["-v"]).command).toBe("version")
   })
 
-  it("routes a discovered public action to __duty__", () => {
+  it("routes a discovered public action to __agent_responsibility__", () => {
     const a = parseArgs(["run", "--issue", "42"])
-    expect(a.command).toBe("__duty__")
+    expect(a.command).toBe("__agent_responsibility__")
     expect(a.actionName).toBe("run")
     expect(a.cliArgs).toEqual({ issue: "42" })
     expect(a.errors).toEqual([])
   })
 
-  it("routes explicit executable runner to __exec__", () => {
+  it("routes explicit agentAction runner to __exec__", () => {
     const a = parseArgs(["exec", "run", "--issue", "42", "--quiet"])
     expect(a.command).toBe("__exec__")
-    expect(a.executableName).toBe("run")
+    expect(a.agentActionName).toBe("run")
     expect(a.quiet).toBe(true)
     expect(a.cliArgs).toEqual({ issue: "42", quiet: true })
     expect(a.errors).toEqual([])
   })
 
-  it("rejects exec without an executable name", () => {
+  it("rejects exec without an agentAction name", () => {
     const a = parseArgs(["exec", "--quiet"])
-    expect(a.errors).toEqual(["exec requires an executable name"])
+    expect(a.errors).toEqual(["exec requires an agentAction name"])
   })
 
   it("parses --verbose / --quiet flags through the generic parser", () => {

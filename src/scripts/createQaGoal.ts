@@ -1,5 +1,5 @@
 /**
- * Postflight for the `qa-engineer` executable. Turns the agent's QA report
+ * Postflight for the `qa-engineer` agentAction. Turns the agent's QA report
  * into a kody goal whose tasks are real, severity-labelled bug tickets:
  *
  *   1. Parse the agent's final message — markdown report on top + a
@@ -27,7 +27,7 @@
  *   missing report / parse failure / gh failure → 1+
  */
 import type { AgentResult } from "../agent.js"
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../agent-actions/types.js"
 import type { ManagedGoal } from "../goal/manager.js"
 import { type GoalState, nowIso } from "../goal/state.js"
 import { putGoalState } from "../goal/stateStore.js"
@@ -332,7 +332,7 @@ export function buildQaManagedGoal(
       outcome: `QA findings filed for ${goalId}`,
       evidence: ["qaFindingsFiled"],
     },
-    duties: ["qa-goal"],
+    agentResponsibilities: ["qa-goal"],
     route: [],
     stage: "filed",
     facts: {
@@ -368,11 +368,11 @@ export const createQaGoal: PostflightScript = async (ctx, _profile, agentResult:
   const verdict = detectVerdict(markdown)
   const existingIssue = ctx.args.issue as number | undefined
 
-  // ── Advisory mode (duty-driven QA) ──────────────────────────────────────
+  // ── Advisory mode (agentResponsibility-driven QA) ──────────────────────────────────────
   // When dispatched at a tracking issue (`--issue <n>`, as qa.md / qa-sweep /
   // approval-gate do), post the FULL report there (markdown + the
   // KODY_QA_REPORT_JSON block) and STOP. We do NOT auto-create the goal +
-  // fix-tickets — that would violate "QA never acts on its own". The duty
+  // fix-tickets — that would violate "QA never acts on its own". The agentResponsibility
   // reads this report and surfaces an inbox rec; goal creation is gated behind
   // operator approval via `@kody qa-goal --issue <n>` (see promoteQaGoal).
   if (typeof existingIssue === "number" && existingIssue > 0) {

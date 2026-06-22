@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/agent-actions/types.js"
 import { failOnceTaskJob } from "../../src/scripts/failOnceTaskJob.js"
 import { emptyState, reduce, upsertTaskJobs } from "../../src/state.js"
 
@@ -22,7 +22,7 @@ describe("failOnceTaskJob", () => {
   it("fails the first attempt for its planned job", async () => {
     const planned = upsertTaskJobs(
       emptyState(),
-      [{ id: "instant:task-job-fail-once:42", executable: "task-job-fail-once", flavor: "instant", target: 42 }],
+      [{ id: "instant:task-job-fail-once:42", agentAction: "task-job-fail-once", flavor: "instant", target: 42 }],
       "2026-06-08T08:00:00Z",
     )
     const ctx = makeCtx(planned)
@@ -37,7 +37,7 @@ describe("failOnceTaskJob", () => {
   it("succeeds after a failed run already exists", async () => {
     let state = upsertTaskJobs(
       emptyState(),
-      [{ id: "instant:task-job-fail-once:42", executable: "task-job-fail-once", flavor: "instant", target: 42 }],
+      [{ id: "instant:task-job-fail-once:42", agentAction: "task-job-fail-once", flavor: "instant", target: 42 }],
       "2026-06-08T08:00:00Z",
     )
     state = reduce(

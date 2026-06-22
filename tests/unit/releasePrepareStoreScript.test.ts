@@ -6,7 +6,7 @@ const STORE_ROOT = process.env.KODY_STORE_PATH ?? path.resolve(process.cwd(), ".
 const RELEASE_PREPARE_SCRIPT = path.join(
   STORE_ROOT,
   ".kody",
-  "executables",
+  "agent-actions",
   "release-prepare",
   "prepare.sh",
 )

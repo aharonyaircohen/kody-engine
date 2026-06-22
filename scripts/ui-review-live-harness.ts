@@ -19,7 +19,7 @@ import { runAgent } from "../src/agent.js"
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 import { loadConfig, parseProviderModel } from "../src/config.js"
-import type { Context } from "../src/executables/types.js"
+import type { Context } from "../src/agent-actions/types.js"
 import { startLitellmIfNeeded } from "../src/litellm.js"
 import { loadProfile } from "../src/profile.js"
 import { composePrompt } from "../src/scripts/composePrompt.js"
@@ -37,7 +37,7 @@ async function main(): Promise<void> {
   const repoRoot = path.resolve(repoArg)
   const diff = fs.readFileSync(path.resolve(diffFileArg), "utf-8")
 
-  const profilePath = path.resolve(HERE, "..", "src", "executables", "ui-review", "profile.json")
+  const profilePath = path.resolve(HERE, "..", "src", "agent-actions", "ui-review", "profile.json")
   const profile = loadProfile(profilePath)
   const config = loadConfig(repoRoot)
 
