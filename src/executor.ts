@@ -17,6 +17,7 @@ import { loadConfig, parseProviderModel } from "./config.js"
 import { runContainerLoop } from "./container.js"
 import { DISCIPLINE } from "./discipline.js"
 import { parseDutyReportsFromText } from "./dutyReport.js"
+import { parseDutyResultsFromText } from "./dutyResult.js"
 import { emitEvent } from "./events.js"
 import type { Context, InputSpec, Job, Profile, ScriptEntry } from "./executables/types.js"
 import { KODY_NAMESPACE, removeLabel } from "./lifecycleLabels.js"
@@ -53,6 +54,27 @@ export function isMutatingPostflight(scriptName: string | undefined): boolean {
  */
 export function shouldBlockMutatingPostflight(scriptName: string | undefined, exitCode: number | undefined): boolean {
   return isMutatingPostflight(scriptName) && (exitCode ?? 0) !== 0
+}
+
+export function collectShellSideChannels(ctx: Pick<Context, "data" | "output" | "skipAgent">, stdout: string): void {
+  if (/^KODY_SKIP_AGENT=true\s*$/m.test(stdout)) {
+    ctx.skipAgent = true
+    if (ctx.output.exitCode === undefined) ctx.output.exitCode = 0
+  }
+  const prUrlMatch = stdout.match(/^KODY_PR_URL=(.+)$/m)
+  if (prUrlMatch?.[1]) ctx.output.prUrl = prUrlMatch[1].trim()
+  const reasonMatch = stdout.match(/^KODY_REASON=(.+)$/m)
+  if (reasonMatch?.[1]) ctx.output.reason = reasonMatch[1].trim()
+  const dutyReports = parseDutyReportsFromText(stdout)
+  if (dutyReports.length > 0) {
+    const prior = Array.isArray(ctx.data.dutyReports) ? ctx.data.dutyReports : []
+    ctx.data.dutyReports = [...prior, ...dutyReports]
+  }
+  const dutyResults = parseDutyResultsFromText(stdout)
+  if (dutyResults.length > 0) {
+    const prior = Array.isArray(ctx.data.dutyResults) ? ctx.data.dutyResults : []
+    ctx.data.dutyResults = [...prior, ...dutyResults]
+  }
 }
 
 /**
@@ -1080,23 +1102,7 @@ async function runShellEntry(entry: ScriptEntry, ctx: Context, profile: Profile)
     return
   }
 
-  // Stdout marker: opt-in signal that the agent should be bypassed AND
-  // the preflight already did all the work. Set exitCode=0 too so
-  // postflight scripts (ensurePr, postIssueComment) can bail uniformly
-  // on "short-circuited successfully."
-  if (/^KODY_SKIP_AGENT=true\s*$/m.test(stdout)) {
-    ctx.skipAgent = true
-    if (ctx.output.exitCode === undefined) ctx.output.exitCode = 0
-  }
-  const prUrlMatch = stdout.match(/^KODY_PR_URL=(.+)$/m)
-  if (prUrlMatch?.[1]) ctx.output.prUrl = prUrlMatch[1].trim()
-  const reasonMatch = stdout.match(/^KODY_REASON=(.+)$/m)
-  if (reasonMatch?.[1]) ctx.output.reason = reasonMatch[1].trim()
-  const dutyReports = parseDutyReportsFromText(stdout)
-  if (dutyReports.length > 0) {
-    const prior = Array.isArray(ctx.data.dutyReports) ? ctx.data.dutyReports : []
-    ctx.data.dutyReports = [...prior, ...dutyReports]
-  }
+  collectShellSideChannels(ctx, stdout)
 
   if (timedOut) {
     ctx.skipAgent = true

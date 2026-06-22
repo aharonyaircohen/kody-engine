@@ -175,6 +175,22 @@ Use for:
 Do not fix the thing from a Verify duty. If verification fails, return evidence
 and blockers so another layer can choose the next Act duty.
 
+## Duty Results
+
+Duties return one standard machine result:
+
+```text
+KODY_DUTY_RESULT={"version":1,"status":"pass","summary":"CI is green.","facts":{"pr":123},"artifacts":[]}
+```
+
+Rules:
+
+- `status` must be `pass`, `fail`, `blocked`, `changed`, or `noop`.
+- `summary` is required and should be short.
+- `facts` is machine data for the parent objective or routine.
+- `artifacts` is optional links or paths.
+- The duty result says what happened; the parent decides progress and output.
+
 ## Duty Reports
 
 Many current executables report goal evidence through stdout instead of a full
@@ -216,7 +232,8 @@ Use this checklist:
 5. Add `staff` only when a specific persona matters.
 6. Add `every` only when the duty is scheduled.
 7. Write `duty.md` with purpose, inputs, outputs, allowed actions, and restrictions.
-8. If the duty serves a goal, emit factual `KODY_DUTY_REPORT` evidence.
+8. Emit `KODY_DUTY_RESULT` with the duty outcome.
+9. If the duty serves a current managed goal, also emit factual `KODY_DUTY_REPORT` evidence.
 
 ## Do Not
 

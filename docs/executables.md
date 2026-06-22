@@ -107,6 +107,22 @@ Implementation anchors:
 - `src/scripts/saveManagedGoalState.ts`
 - `tests/unit/goal/manager.test.ts`
 
+## Duty Result Contract
+
+Duty executables should return one machine-readable result when they finish:
+
+```text
+KODY_DUTY_RESULT={"version":1,"status":"pass","summary":"CI is green.","facts":{"pr":123},"artifacts":[]}
+```
+
+Rules:
+
+- `status` must be `pass`, `fail`, `blocked`, `changed`, or `noop`.
+- `summary` is required and should be short.
+- `facts` is machine data for the parent objective or routine.
+- `artifacts` is optional links or paths.
+- A duty result says what happened. The parent model decides what it means.
+
 ## Duty Report Contract
 
 Duties and executables may report facts by emitting one stdout line:

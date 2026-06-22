@@ -74,6 +74,9 @@ describe("ci-check executable", () => {
     expect(output).toContain(
       'KODY_DUTY_REPORT={"target":{"type":"goal","id":"release-aguy"},"evidence":{"mainDeployPrGreen":true},"facts":{"pr":123,"ciStatus":"green","ciChecks":2}}',
     )
+    expect(output).toContain(
+      'KODY_DUTY_RESULT={"version":1,"status":"pass","summary":"CI green on PR #123 (2 checks)","facts":{"pr":123,"ciStatus":"green","ciChecks":2}}',
+    )
     expect(output).toContain("KODY_REASON=CI green on PR #123")
     expect(output).toContain("KODY_SKIP_AGENT=true")
   })
@@ -83,6 +86,9 @@ describe("ci-check executable", () => {
 
     expect(output).toContain(
       'KODY_DUTY_REPORT={"target":{"type":"goal","id":"release-aguy"},"evidence":{"mainDeployPrGreen":false},"facts":{"pr":123,"ciStatus":"pending","ciChecks":1,"ciPending":1,"ciDetail":"test"}}',
+    )
+    expect(output).toContain(
+      'KODY_DUTY_RESULT={"version":1,"status":"blocked","summary":"CI pending on PR #123: test","facts":{"pr":123,"ciStatus":"pending","ciChecks":1,"ciPending":1,"ciDetail":"test"}}',
     )
     expect(output).toContain("KODY_REASON=CI pending on PR #123")
   })

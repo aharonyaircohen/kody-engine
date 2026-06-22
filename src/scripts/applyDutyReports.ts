@@ -1,12 +1,25 @@
 import type { AgentResult } from "../agent.js"
-import { applyDutyReportToGoalState, type DutyReport, parseDutyReportsFromText } from "../dutyReport.js"
+import {
+  applyDutyReportToGoalState,
+  type DutyReport,
+  parseDutyReport,
+  parseDutyReportsFromText,
+} from "../dutyReport.js"
+import {
+  applyDutyResultToObjectiveState,
+  type DutyResult,
+  parseDutyResult,
+  parseDutyResultsFromText,
+} from "../dutyResult.js"
 import type { PostflightScript } from "../executables/types.js"
-import { nowIso, serializeGoalState } from "../goal/state.js"
+import { nowIso, serializeGoalState, type GoalState } from "../goal/state.js"
 import { fetchGoalState, putGoalState } from "../goal/stateStore.js"
 
 export const applyDutyReports: PostflightScript = async (ctx, _profile, agentResult) => {
   const reports = collectReports(ctx.data.dutyReports, agentResult)
-  if (reports.length === 0) return
+  const results = collectResults(ctx.data.dutyResults, agentResult)
+  const resultGoalId = typeof ctx.args.goal === "string" && ctx.args.goal.length > 0 ? ctx.args.goal : null
+  if (reports.length === 0 && (results.length === 0 || !resultGoalId)) return
 
   const owner = ctx.config.github?.owner
   const repo = ctx.config.github?.repo
@@ -15,16 +28,38 @@ export const applyDutyReports: PostflightScript = async (ctx, _profile, agentRes
     return
   }
 
-  const goalReports = reports.filter((report) => report.target.type === "goal")
-  for (const report of goalReports) {
-    const prior = fetchGoalState(owner, repo, report.target.id, ctx.cwd)
+  const reportsByGoal = groupGoalReports(reports)
+  const goalIds = new Set(reportsByGoal.keys())
+  if (results.length > 0 && resultGoalId) goalIds.add(resultGoalId)
+
+  for (const goalId of goalIds) {
+    const prior = fetchGoalState(owner, repo, goalId, ctx.cwd)
     if (!prior) {
-      process.stderr.write(`[kody duty-report] goal ${report.target.id} missing on kody-state; report skipped\n`)
+      process.stderr.write(`[kody duty-report] goal ${goalId} missing on kody-state; report skipped\n`)
       continue
     }
-    const next = applyDutyReportToGoalState(prior, report)
+
+    let next: GoalState = prior
+    for (const report of reportsByGoal.get(goalId) ?? []) {
+      next = applyDutyReportToGoalState(next, report)
+    }
+    if (goalId === resultGoalId) {
+      const evidence =
+        typeof ctx.args.evidence === "string" && ctx.args.evidence.length > 0 ? ctx.args.evidence : undefined
+      for (const result of results) {
+        next = applyDutyResultToObjectiveState(next, result, evidence)
+      }
+    }
+
     if (serializeGoalState(next) === serializeGoalState(prior)) continue
-    putGoalState(owner, repo, report.target.id, { ...next, updatedAt: nowIso() }, describeMessage(report), ctx.cwd)
+    putGoalState(
+      owner,
+      repo,
+      goalId,
+      { ...next, updatedAt: nowIso() },
+      describeMessage(goalId, reportsByGoal.get(goalId), results),
+      ctx.cwd,
+    )
   }
 }
 
@@ -32,30 +67,40 @@ function collectReports(raw: unknown, agentResult: AgentResult | null): DutyRepo
   const out: DutyReport[] = []
   if (Array.isArray(raw)) {
     for (const item of raw) {
-      if (isDutyReport(item)) out.push(item)
+      const parsed = parseDutyReport(item)
+      if (parsed) out.push(parsed)
     }
   }
   if (agentResult?.finalText) out.push(...parseDutyReportsFromText(agentResult.finalText))
   return out
 }
 
-function isDutyReport(raw: unknown): raw is DutyReport {
-  return (
-    !!raw &&
-    typeof raw === "object" &&
-    !Array.isArray(raw) &&
-    !!(raw as DutyReport).target &&
-    ((raw as DutyReport).target.type === "goal" ||
-      (raw as DutyReport).target.type === "task" ||
-      (raw as DutyReport).target.type === "duty") &&
-    typeof (raw as DutyReport).target.id === "string"
-  )
+function collectResults(raw: unknown, agentResult: AgentResult | null): DutyResult[] {
+  const out: DutyResult[] = []
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      const parsed = parseDutyResult(item)
+      if (parsed) out.push(parsed)
+    }
+  }
+  if (agentResult?.finalText) out.push(...parseDutyResultsFromText(agentResult.finalText))
+  return out
 }
 
-function describeMessage(report: DutyReport): string {
-  const keys = [
-    ...Object.keys(report.evidence ?? {}).map((key) => `evidence:${key}`),
-    ...Object.keys(report.facts ?? {}).map((key) => `fact:${key}`),
-  ]
-  return `chore(goals): apply duty report for ${report.target.id}${keys.length ? ` (${keys.join(", ")})` : ""}`
+function groupGoalReports(reports: DutyReport[]): Map<string, DutyReport[]> {
+  const grouped = new Map<string, DutyReport[]>()
+  for (const report of reports) {
+    if (report.target.type !== "goal") continue
+    const list = grouped.get(report.target.id) ?? []
+    list.push(report)
+    grouped.set(report.target.id, list)
+  }
+  return grouped
+}
+
+function describeMessage(goalId: string, reports: DutyReport[] | undefined, results: DutyResult[]): string {
+  const pieces: string[] = []
+  if (reports && reports.length > 0) pieces.push(`report=${reports.length}`)
+  if (results.length > 0) pieces.push(`result=${results.map((result) => result.status).join(",")}`)
+  return `Apply duty output to ${goalId}${pieces.length > 0 ? ` (${pieces.join("; ")})` : ""}`
 }

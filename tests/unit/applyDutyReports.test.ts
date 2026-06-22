@@ -14,9 +14,9 @@ import { applyDutyReports } from "../../src/scripts/applyDutyReports.js"
 const fetchGoalStateMock = vi.mocked(fetchGoalState)
 const putGoalStateMock = vi.mocked(putGoalState)
 
-function fakeCtx(data: Record<string, unknown>): Context {
+function fakeCtx(data: Record<string, unknown>, args: Record<string, unknown> = {}): Context {
   return {
-    args: {},
+    args,
     cwd: "/repo",
     config: {
       github: { owner: "o", repo: "r" },
@@ -51,8 +51,7 @@ describe("applyDutyReports", () => {
   })
 
   it("applies shell-collected goal reports to kody-state", async () => {
-    const prior = goalState()
-    fetchGoalStateMock.mockReturnValueOnce(prior)
+    fetchGoalStateMock.mockReturnValueOnce(goalState())
 
     await applyDutyReports(
       fakeCtx({
@@ -68,30 +67,79 @@ describe("applyDutyReports", () => {
       null,
     )
 
-    expect(fetchGoalStateMock).toHaveBeenCalledWith("o", "r", "release-aguy", "/repo")
-    expect(putGoalStateMock).toHaveBeenCalledTimes(1)
     const [, , goalId, next] = putGoalStateMock.mock.calls[0]!
     expect(goalId).toBe("release-aguy")
-    expect((next as GoalState).extra.facts).toMatchObject({
-      releasePrExists: true,
-      releasePr: 123,
-    })
-    expect(((next as GoalState).extra.facts as Record<string, unknown>).pendingEvidence).toBeUndefined()
+    expect((next as GoalState).extra.facts).toEqual({ releasePrExists: true, releasePr: 123 })
   })
 
-  it("also parses report markers from agent final text", async () => {
+  it("applies agent-emitted goal reports", async () => {
     fetchGoalStateMock.mockReturnValueOnce(goalState())
     const agentResult = {
       outcome: "completed",
       finalText:
-        'DONE\nKODY_DUTY_REPORT={"target":{"type":"goal","id":"release-aguy"},"evidence":{"releasePrGreen":true}}',
+        'DONE\nKODY_DUTY_REPORT={"target":{"type":"goal","id":"release-aguy"},"evidence":{"releasePrExists":true}}',
     } as AgentResult
 
     await applyDutyReports(fakeCtx({}), fakeProfile(), agentResult)
 
     const [, , goalId, next] = putGoalStateMock.mock.calls[0]!
     expect(goalId).toBe("release-aguy")
-    expect((next as GoalState).extra.facts).toMatchObject({ releasePrGreen: true })
+    expect((next as GoalState).extra.facts).toMatchObject({ releasePrExists: true })
+  })
+
+  it("applies duty result pass to the pending objective evidence", async () => {
+    fetchGoalStateMock.mockReturnValueOnce(goalState())
+
+    await applyDutyReports(
+      fakeCtx(
+        {
+          dutyResults: [
+            {
+              version: 1,
+              status: "pass",
+              summary: "Release PR exists.",
+              facts: { releasePr: 123 },
+              artifacts: [],
+            },
+          ],
+        },
+        { goal: "release-aguy" },
+      ),
+      fakeProfile(),
+      null,
+    )
+
+    const [, , goalId, next] = putGoalStateMock.mock.calls[0]!
+    expect(goalId).toBe("release-aguy")
+    expect((next as GoalState).extra.facts).toEqual({ releasePrExists: true, releasePr: 123 })
+    expect((next as GoalState).extra.lastDutyResult).toMatchObject({ status: "pass", summary: "Release PR exists." })
+  })
+
+  it("applies duty result failure as objective evidence false plus blocker", async () => {
+    fetchGoalStateMock.mockReturnValueOnce(goalState())
+
+    await applyDutyReports(
+      fakeCtx(
+        {
+          dutyResults: [
+            {
+              version: 1,
+              status: "fail",
+              summary: "Release PR failed validation.",
+              facts: { reason: "ci" },
+              artifacts: [],
+            },
+          ],
+        },
+        { goal: "release-aguy", evidence: "releasePrExists" },
+      ),
+      fakeProfile(),
+      null,
+    )
+
+    const [, , , next] = putGoalStateMock.mock.calls[0]!
+    expect((next as GoalState).extra.facts).toEqual({ releasePrExists: false, reason: "ci" })
+    expect((next as GoalState).extra.blockers).toEqual(["Release PR failed validation."])
   })
 
   it("skips no-op reports", async () => {
