@@ -112,7 +112,7 @@ describe("goal-scheduler live wiring", () => {
     const { status, stdout, calls } = runScheduler()
 
     expect(status).toBe(0)
-    expect(calls).toEqual(["kody-engine goal-manager --goal release-v1-2-3"])
+    expect(calls).toEqual(["kody-engine exec goal-manager --goal release-v1-2-3"])
     expect(stdout).toContain("-> tick release-v1-2-3 (goal-manager)")
     expect(stdout).toContain("scanned 1 goal instance(s), active=1, managed=1")
     expect(stdout).toContain("KODY_SKIP_AGENT=true")
@@ -126,7 +126,7 @@ describe("goal-scheduler live wiring", () => {
     const { status, stdout, calls } = runScheduler()
 
     expect(status).toBe(0)
-    expect(calls).toEqual(["kody-engine goal-manager --goal managed"])
+    expect(calls).toEqual(["kody-engine exec goal-manager --goal managed"])
     expect(stdout).toContain("skip legacy: legacy goal files are not managed-goal instances")
     expect(stdout).toContain("-> tick managed (goal-manager)")
   })
@@ -151,7 +151,7 @@ describe("goal-scheduler live wiring", () => {
     const { status, stdout, calls } = runScheduler()
 
     expect(status).toBe(0)
-    expect(calls).toEqual(["kody-engine goal-manager --goal a"])
+    expect(calls).toEqual(["kody-engine exec goal-manager --goal a"])
     expect(stdout).toContain("scanned 3 goal instance(s), active=1, managed=1")
   })
 
@@ -164,9 +164,9 @@ describe("goal-scheduler live wiring", () => {
     const { status, stdout, calls } = runScheduler()
 
     expect(status).toBe(0)
-    expect(calls).toContain("kody-engine goal-manager --goal ok-1")
-    expect(calls).toContain("kody-engine goal-manager --goal fail-goal")
-    expect(calls).toContain("kody-engine goal-manager --goal ok-2")
+    expect(calls).toContain("kody-engine exec goal-manager --goal ok-1")
+    expect(calls).toContain("kody-engine exec goal-manager --goal fail-goal")
+    expect(calls).toContain("kody-engine exec goal-manager --goal ok-2")
     expect(stdout).toContain("tick fail-goal failed (continuing)")
     expect(stdout).toContain("scanned 3 goal instance(s), active=3, managed=3")
   })
@@ -187,7 +187,7 @@ describe("goal-scheduler live wiring", () => {
       state: "active",
       facts: { issue: 123 },
     })
-    expect(calls).toEqual(["kody-engine goal-manager --goal weekly-release-2026-W25"])
+    expect(calls).toEqual(["kody-engine exec goal-manager --goal weekly-release-2026-W25"])
     expect(stdout).toContain("created goal instance weekly-release-2026-W25")
     expect(stdout).toContain("-> tick weekly-release-2026-W25 (goal-manager)")
   })
