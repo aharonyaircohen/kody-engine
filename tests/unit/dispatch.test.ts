@@ -348,7 +348,7 @@ describe("dispatch: issue_comment on issue", () => {
       fs.mkdirSync(path.join(tmp, ".kody", "duties", "remember"), { recursive: true })
       fs.writeFileSync(
         path.join(tmp, ".kody", "duties", "remember", "profile.json"),
-        JSON.stringify({ name: "remember", action: "remember", executable: "custom-impl", staff: "kody" }),
+        JSON.stringify({ name: "remember", action: "remember", executable: "custom-impl", agent: "kody" }),
       )
       fs.writeFileSync(path.join(tmp, ".kody", "duties", "remember", "duty.md"), "# Remember\n")
       fs.writeFileSync(

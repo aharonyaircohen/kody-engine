@@ -48,13 +48,13 @@ describe("state: reduce", () => {
     expect(reduce(emptyState(), "build", ok).core.status).toBe("succeeded")
   })
 
-  it("records the staff that ran (durable proof) in core + history + comment", () => {
+  it("records the agent that ran (durable proof) in core + history + comment", () => {
     const s = reduce(emptyState(), "feature", ok, "shipped", "kody")
-    expect(s.core.ranAsStaff).toBe("kody")
-    expect(s.history.at(-1)?.staff).toBe("kody")
+    expect(s.core.ranAsAgent).toBe("kody")
+    expect(s.history.at(-1)?.agent).toBe("kody")
     expect(renderStateComment(s)).toContain("**Ran as:** `kody`")
     // round-trips through the comment wire format
-    expect(parseStateComment(renderStateComment(s)).core.ranAsStaff).toBe("kody")
+    expect(parseStateComment(renderStateComment(s)).core.ranAsAgent).toBe("kody")
   })
 
   it("stamps job identity (id/flavor/runUrl) + per-job status onto the ledger entry", () => {
@@ -77,7 +77,7 @@ describe("state: reduce", () => {
       jobId: "gh-77-1",
       flavor: "instant",
       target: 42,
-      persona: "kody",
+      agent: "kody",
       runUrl: "https://ci/run/77",
     })
 
@@ -85,7 +85,7 @@ describe("state: reduce", () => {
     expect(s.jobs["instant:run:42"]).toMatchObject({
       id: "instant:run:42",
       executable: "run",
-      staff: "kody",
+      agent: "kody",
       flavor: "instant",
       target: 42,
       status: "succeeded",
@@ -156,7 +156,7 @@ describe("state: reduce", () => {
     expect(s.jobs["instant:run:42"]?.runs.at(-1)?.id).toBe("gh-24")
   })
 
-  it("stores duty, executable, and staff as references instead of reshaping them", () => {
+  it("stores duty, executable, and agent as references instead of reshaping them", () => {
     const s = reduce(emptyState(), "duty-tick", ok, "idle", "triager", {
       jobKey: "scheduled:triage:duty-tick",
       jobId: "gh-9-1",
@@ -164,13 +164,13 @@ describe("state: reduce", () => {
       schedule: "*/5 * * * *",
       duty: "triage",
       executable: "duty-tick",
-      persona: "triager",
+      agent: "triager",
     })
 
     expect(s.jobs["scheduled:triage:duty-tick"]).toMatchObject({
       duty: "triage",
       executable: "duty-tick",
-      staff: "triager",
+      agent: "triager",
       flavor: "scheduled",
       schedule: "*/5 * * * *",
     })
@@ -208,9 +208,9 @@ describe("state: reduce", () => {
     expect(back.history.at(-1)?.flavor).toBe("scheduled")
   })
 
-  it("leaves ranAsStaff null when no staff (legacy, no persona)", () => {
+  it("leaves ranAsAgent null when no agent (legacy, no agent)", () => {
     const s = reduce(emptyState(), "build", ok)
-    expect(s.core.ranAsStaff ?? null).toBeNull()
+    expect(s.core.ranAsAgent ?? null).toBeNull()
     expect(renderStateComment(s)).not.toContain("Ran as:")
   })
 
@@ -428,7 +428,7 @@ describe("state: parseStateComment / renderStateComment", () => {
       jobId: "gh-77-1",
       flavor: "instant",
       target: 42,
-      persona: "kody",
+      agent: "kody",
       runUrl: "https://ci/run/77",
     })
     const s2 = parseStateComment(renderStateComment(s1))

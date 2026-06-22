@@ -70,7 +70,7 @@ const PROFILE = {} as unknown as Profile
 
 describe("dispatchDutyFileTicks multi-executable duties", () => {
   it("creates a task issue and runs task-jobs for a duty with executables", async () => {
-    writeDuty("daily-check", { every: "1h", staff: "kody", executables: ["plan-verify", "probe-skill"] })
+    writeDuty("daily-check", { every: "1h", agent: "kody", executables: ["plan-verify", "probe-skill"] })
 
     const ctx = ctxFor()
     await dispatchDutyFileTicks(ctx, PROFILE, {
@@ -89,7 +89,7 @@ describe("dispatchDutyFileTicks multi-executable duties", () => {
       {
         executable: "plan-verify",
         duty: "daily-check",
-        staff: "kody",
+        agent: "kody",
         reason: "Duty `daily-check` slice for `plan-verify`.",
         flavor: "scheduled",
         schedule: "1h",
@@ -97,7 +97,7 @@ describe("dispatchDutyFileTicks multi-executable duties", () => {
       {
         executable: "probe-skill",
         duty: "daily-check",
-        staff: "kody",
+        agent: "kody",
         reason: "Duty `daily-check` slice for `probe-skill`.",
         flavor: "scheduled",
         schedule: "1h",
@@ -108,7 +108,7 @@ describe("dispatchDutyFileTicks multi-executable duties", () => {
     expect(runJobMock.mock.calls[0]![0]).toMatchObject({
       duty: "daily-check",
       executable: "task-jobs",
-      persona: "kody",
+      agent: "kody",
       schedule: "1h",
       cliArgs: { issue: 777 },
       flavor: "scheduled",
@@ -118,7 +118,7 @@ describe("dispatchDutyFileTicks multi-executable duties", () => {
   })
 
   it("records the created task issue on the duty state file", async () => {
-    writeDuty("daily-check", { every: "1h", staff: "kody", executables: ["plan-verify"] })
+    writeDuty("daily-check", { every: "1h", agent: "kody", executables: ["plan-verify"] })
 
     await dispatchDutyFileTicks(ctxFor(), PROFILE, {
       jobsDir: ".kody/duties",

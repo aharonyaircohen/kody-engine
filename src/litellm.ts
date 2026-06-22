@@ -64,7 +64,7 @@ export interface LitellmHandle {
   /**
    * Ensure the proxy is reachable. If `/health` fails — the proxy crashed or
    * hung mid-run (the Approval Gate failure mode: a heavy request kills the
-   * single worker, after which every connection is refused) — this dumps the
+   * single agent, after which every connection is refused) — this dumps the
    * proxy's log tail so the crash reason is visible in the run log, then
    * respawns it and waits for health. Returns true when the proxy is healthy
    * (already, or after a restart).
@@ -192,8 +192,8 @@ export async function startLitellmIfNeeded(
     const pid = child?.pid
     if (typeof pid !== "number") return
     // The proxy is spawned `detached: true`, so it leads its own process group
-    // and forks a worker (uvicorn) that actually holds the port. `child.kill()`
-    // signals only the immediate PID, leaving the worker alive to squat port
+    // and forks an agent (uvicorn) that actually holds the port. `child.kill()`
+    // signals only the immediate PID, leaving the agent alive to squat port
     // 4000 and get "reused" by a later run. Signal the whole group (negative
     // pid), SIGTERM then SIGKILL after a short grace.
     try {

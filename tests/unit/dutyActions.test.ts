@@ -38,7 +38,7 @@ function writeExecutable(slug: string, profile: Record<string, unknown>): void {
 describe("duty actions", () => {
   it("resolves folder duty action to its declared executable", () => {
     process.chdir(root)
-    writeFolderDuty("memorize", { action: "remember", executable: "impl", staff: "kody" })
+    writeFolderDuty("memorize", { action: "remember", executable: "impl", agent: "kody" })
 
     expect(resolveDutyAction("remember")).toMatchObject({
       action: "remember",
@@ -50,7 +50,7 @@ describe("duty actions", () => {
 
   it("defaults folder duty action to the duty slug and first executable", () => {
     process.chdir(root)
-    writeFolderDuty("ship", { executables: ["impl"], staff: "kody" })
+    writeFolderDuty("ship", { executables: ["impl"], agent: "kody" })
 
     expect(resolveDutyAction("ship")).toMatchObject({
       action: "ship",
@@ -62,7 +62,7 @@ describe("duty actions", () => {
 
   it("defaults folder duty execution to duty-tick", () => {
     process.chdir(root)
-    writeFolderDuty("watch", { staff: "kody" })
+    writeFolderDuty("watch", { agent: "kody" })
 
     expect(resolveDutyAction("watch")).toMatchObject({
       action: "watch",
@@ -96,7 +96,7 @@ describe("duty actions", () => {
 
   it("resolves folder duty action before the same action on an executable profile", () => {
     process.chdir(root)
-    writeFolderDuty("daily-impl", { action: "ship", executable: "impl", staff: "kody" })
+    writeFolderDuty("daily-impl", { action: "ship", executable: "impl", agent: "kody" })
     writeExecutable("direct-ship", {
       action: "ship",
       role: "utility",

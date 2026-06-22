@@ -110,7 +110,7 @@ describe("saveTaskState: persistence", () => {
         jobId: "gh-42-1",
         jobFlavor: "instant",
         jobTarget: 42,
-        jobPersona: "kody",
+        jobAgent: "kody",
         runUrl: "https://github.com/x/y/actions/runs/42",
       }),
     })
@@ -121,7 +121,7 @@ describe("saveTaskState: persistence", () => {
     expect(next.jobs["instant:run:42"]).toMatchObject({
       id: "instant:run:42",
       executable: "run",
-      staff: "kody",
+      agent: "kody",
       flavor: "instant",
       target: 42,
       status: "succeeded",

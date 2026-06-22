@@ -61,7 +61,7 @@ describe("smoke: CLI boots and validates args", () => {
     fs.mkdirSync(path.join(root, ".kody", "duties", "smoke-duty"), { recursive: true })
     fs.writeFileSync(
       path.join(root, ".kody", "duties", "smoke-duty", "profile.json"),
-      JSON.stringify({ name: "smoke-duty", action: "smoke-action", executable: "smoke-impl", staff: "kody" }),
+      JSON.stringify({ name: "smoke-duty", action: "smoke-action", executable: "smoke-impl", agent: "kody" }),
     )
     fs.writeFileSync(path.join(root, ".kody", "duties", "smoke-duty", "duty.md"), "# Smoke\n")
     fs.writeFileSync(

@@ -1,6 +1,6 @@
 /**
  * Shared landing for "advise, don't change code" executables (`plan`,
- * `research`, and the generic `worker-ask` answer). They all do the same
+ * `research`, and the generic `agent-ask` answer). They all do the same
  * thing: when the agent completed, take its summary (ctx.data.prSummary),
  * optionally wrap it in a header, and post it as one best-effort comment on
  * the target the preflight stamped. The render/target rules differ; the

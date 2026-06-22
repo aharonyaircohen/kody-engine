@@ -26,14 +26,14 @@ export interface Profile {
    */
   action?: string
   /**
-   * Optional staff member this executable runs *as*. When set, the executor
-   * loads `.kody/staff/<staff>.md` and injects that persona (authoritative
+   * Optional agent this executable runs *as*. When set, the executor
+   * loads `.kody/agents/<agent>.md` and injects that agent (authoritative
    * identity) ahead of the executable's own system-prompt append. This is the
-   * unification hook: a "duty" is just an executable + a staff member. Absent →
-   * runs with no persona (unchanged legacy behaviour). A declared-but-missing
-   * staff file is fatal at run time (see src/staff.ts).
+   * unification hook: a "duty" is just an executable + an agent. Absent →
+   * runs with no agent (unchanged legacy behaviour). A declared-but-missing
+   * agent file is fatal at run time (see src/agents.ts).
    */
-  staff?: string
+  agent?: string
   describe: string
   /**
    * Author-facing capability promise for a duty/executable. This classifies the
@@ -59,8 +59,8 @@ export interface Profile {
    * A duty is the WHY/WHEN layer: it references an executable (the HOW) by name
    * rather than embedding it. When set, the loader resolves that executable's
    * full profile (claudeCode/scripts/prompt/agents) and overlays this duty's
-   * name + staff (WHO) + every (WHEN) + mentions. Absent → this profile IS an
-   * executable (defines its own how). executable = how, staff = who, duty = why.
+   * name + agent (WHO) + every (WHEN) + mentions. Absent → this profile IS an
+   * executable (defines its own how). executable = how, agent = who, duty = why.
    */
   executable?: string
   /**
@@ -536,8 +536,8 @@ export interface Job {
   /** Why (inline): free-text intent, e.g. an `@kody` comment body. Untrusted —
    *  fenced where it enters a prompt, not here. */
   why?: string
-  /** Who: a staff persona slug. */
-  persona?: string
+  /** Who: an agent identity slug. */
+  agent?: string
   /** When: cron expression. Set for scheduled jobs, absent for instant. */
   schedule?: string
   /** The issue/PR number this job acts on, when applicable. */

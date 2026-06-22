@@ -46,7 +46,7 @@ export const dispatchClassified: PostflightScript = async (ctx, profile) => {
   // The next stage finds this block via the `kody:state:v1` markers and
   // PATCHes the comment in place.
   const state = (ctx.data.taskState as TaskState | undefined) ?? emptyState()
-  const nextState = reduce(state, "classify", action, undefined, profile.staff, jobMetaFromData(ctx.data))
+  const nextState = reduce(state, "classify", action, undefined, profile.agent, jobMetaFromData(ctx.data))
   const stateBody = renderStateComment(nextState)
   ctx.data.taskState = nextState
   ctx.data.taskStateRendered = stateBody

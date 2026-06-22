@@ -11,7 +11,7 @@ export interface DutyFolderConfig {
   every?: ScheduleEvery
   tickScript?: string
   disabled?: boolean
-  staff?: string
+  agent?: string
   mentions?: string[]
   tools?: string[]
   executables?: string[]
@@ -86,7 +86,7 @@ export function parseDutyConfig(raw: Record<string, unknown>): DutyFolderConfig 
     every: isScheduleEvery(raw.every) ? raw.every : undefined,
     tickScript: stringField(raw.tickScript),
     disabled: typeof raw.disabled === "boolean" ? raw.disabled : undefined,
-    staff: stringField(raw.staff) ?? stringField(raw.runner),
+    agent: stringField(raw.agent),
     mentions: stringList(raw.mentions).map((m) => m.replace(/^@/, "")),
     tools,
     executables: stringList(raw.executables),

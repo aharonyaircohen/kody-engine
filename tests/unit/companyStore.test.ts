@@ -5,7 +5,7 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import { listDutyActions, listExecutables, resolveExecutable } from "../../src/registry.js"
-import { loadStaffPersona } from "../../src/staff.js"
+import { loadAgentIdentity } from "../../src/agents.js"
 
 let tmp: string
 let cwdBefore: string
@@ -30,7 +30,7 @@ afterEach(() => {
 })
 
 describe("company store resolution", () => {
-  it("loads executables, duty actions, and staff from a remote git ref", () => {
+  it("loads executables, duty actions, and agent from a remote git ref", () => {
     const remote = createStoreRepo()
     const consumer = path.join(tmp, "consumer")
     fs.mkdirSync(consumer, { recursive: true })
@@ -44,7 +44,7 @@ describe("company store resolution", () => {
     expect(action?.source).toBe("company-store")
     expect(action?.executable).toBe("store-exe")
 
-    expect(loadStaffPersona(consumer, "cto")).toBe("Store CTO persona.")
+    expect(loadAgentIdentity(consumer, "cto")).toBe("Store CTO agent.")
   })
 
   it("keeps local assets ahead of company store assets", () => {
@@ -55,8 +55,8 @@ describe("company store resolution", () => {
       profile: { action: "store-duty", executable: "local-exe" },
       body: "# Local Store Duty\n",
     })
-    fs.mkdirSync(path.join(consumer, ".kody", "staff"), { recursive: true })
-    fs.writeFileSync(path.join(consumer, ".kody", "staff", "cto.md"), "Local CTO persona.")
+    fs.mkdirSync(path.join(consumer, ".kody", "agents"), { recursive: true })
+    fs.writeFileSync(path.join(consumer, ".kody", "agents", "cto.md"), "Local CTO agent.")
     process.chdir(consumer)
     configureStore(remote)
 
@@ -64,7 +64,7 @@ describe("company store resolution", () => {
       fs.realpathSync(path.join(consumer, ".kody", "executables", "store-exe", "profile.json")),
     )
     expect(listDutyActions().find((item) => item.action === "store-duty")?.source).toBe("project-folder")
-    expect(loadStaffPersona(consumer, "cto")).toBe("Local CTO persona.")
+    expect(loadAgentIdentity(consumer, "cto")).toBe("Local CTO agent.")
   })
 })
 
@@ -79,11 +79,11 @@ function createStoreRepo(): string {
   const repo = path.join(tmp, "store")
   writeExecutable(path.join(repo, ".kody", "executables"), "store-exe", { name: "store-exe" })
   writeDuty(path.join(repo, ".kody", "duties"), "store-duty", {
-    profile: { action: "store-duty", executable: "store-exe", every: "manual", staff: "cto" },
+    profile: { action: "store-duty", executable: "store-exe", every: "manual", agent: "cto" },
     body: "# Store Duty\nShared duty body.\n",
   })
-  fs.mkdirSync(path.join(repo, ".kody", "staff"), { recursive: true })
-  fs.writeFileSync(path.join(repo, ".kody", "staff", "cto.md"), "Store CTO persona.")
+  fs.mkdirSync(path.join(repo, ".kody", "agents"), { recursive: true })
+  fs.writeFileSync(path.join(repo, ".kody", "agents", "cto.md"), "Store CTO agent.")
 
   git(repo, ["init", "-b", "stable"])
   git(repo, ["add", "."])

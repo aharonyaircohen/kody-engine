@@ -147,11 +147,11 @@ async function describeDutySchedule(
   if (config.disabled === true) {
     return { slug, title: duty.title, cadence: config.every, state: "disabled", reason: "disabled" }
   }
-  if (config.every === "manual" || (!config.every && !config.staff && config.executable)) {
+  if (config.every === "manual" || (!config.every && !config.agent && config.executable)) {
     return { slug, title: duty.title, cadence: config.every, state: "manual", reason: "manual only" }
   }
-  if (!config.staff || config.staff.trim().length === 0) {
-    return { slug, title: duty.title, cadence: config.every, state: "blocked", reason: "no staff assigned" }
+  if (!config.agent || config.agent.trim().length === 0) {
+    return { slug, title: duty.title, cadence: config.every, state: "blocked", reason: "no agent assigned" }
   }
   if (config.executables && config.executables.length > 1) {
     return {

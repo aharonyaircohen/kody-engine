@@ -4,7 +4,7 @@
  * committed `.kody/qa-guide.md` mechanism.
  *
  *   - scenarios / notes → the context entries, `.kody/context/*.md`
- *     (only entries whose `staff` list includes `qa-engineer`)
+ *     (only entries whose `agent` list includes `qa-engineer`)
  *   - login username     → variables file `.kody/variables.json`, key LOGIN_USER
  *   - password           → secret LOGIN_PASSWORD, read from process.env
  *
@@ -31,14 +31,14 @@ import { readKodyVariables } from "./kodyVariables.js"
 
 const CONTEXT_DIR_REL_PATH = ".kody/context"
 
-/** Slug of the QA staff member this preflight runs as. */
-const QA_STAFF = "qa-engineer"
+/** Slug of the QAn agent this preflight runs as. */
+const QA_AGENT = "qa-engineer"
 
-/** Wildcard token: a doc owned by `*` belongs to every staff member. */
-const ALL_STAFF = "*"
+/** Wildcard token: a doc owned by `*` belongs to every agent. */
+const ALL_AGENTS = "*"
 
-/** Map a legacy `audience:` consumer token onto its staff-member slug. */
-const LEGACY_AUDIENCE_TO_STAFF: Record<string, string> = { chat: "kody", qa: QA_STAFF }
+/** Map a legacy `audience:` consumer token onto its agent-member slug. */
+const LEGACY_AUDIENCE_TO_AGENT: Record<string, string> = { chat: "kody", qa: QA_AGENT }
 
 /** Frontmatter fence: a leading `---\n…\n---` block. */
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
@@ -58,19 +58,19 @@ function parseSlugList(value: string): string[] {
 }
 
 /**
- * Read the owning `staff` list and the post-frontmatter body from a context
+ * Read the owning `agent` list and the post-frontmatter body from a context
  * file. Context frontmatter is its own tiny format, so we parse it here.
- * The canonical format is an inline list — `staff: [kody, qa-engineer]`. A
- * legacy `audience:` list is mapped onto staff slugs (`chat` → `kody`,
- * `qa` → `qa-engineer`). An explicit empty `staff: []` is honored (unassigned
+ * The canonical format is an inline list — `agent: [kody, qa-engineer]`. A
+ * legacy `audience:` list is mapped onto agent slugs (`chat` → `kody`,
+ * `qa` → `qa-engineer`). An explicit empty `agent: []` is honored (unassigned
  * → owned by nobody). A file with no frontmatter defaults to `["kody"]`
  * (legacy = chat-only).
  */
-function readProfileStaff(raw: string): { staff: string[]; body: string } {
+function readProfileAgents(raw: string): { agent: string[]; body: string } {
   const m = FRONTMATTER_RE.exec(raw)
-  if (!m) return { staff: ["kody"], body: raw }
+  if (!m) return { agent: ["kody"], body: raw }
   const body = raw.slice(m[0].length)
-  let staff: string[] | null = null
+  let agent: string[] | null = null
   let legacy: string[] | null = null
   for (const line of (m[1] ?? "").split(/\r?\n/)) {
     const t = line.trim()
@@ -78,22 +78,22 @@ function readProfileStaff(raw: string): { staff: string[]; body: string } {
     if (c < 0) continue
     const key = t.slice(0, c).trim()
     const value = t.slice(c + 1).trim()
-    if (key === "staff") {
-      staff = parseSlugList(value) // may be [] → unassigned
+    if (key === "agent") {
+      agent = parseSlugList(value) // may be [] → unassigned
     } else if (key === "audience" || key === "for") {
       const mapped = parseSlugList(value)
-        .map((tok) => LEGACY_AUDIENCE_TO_STAFF[tok])
+        .map((tok) => LEGACY_AUDIENCE_TO_AGENT[tok])
         .filter(Boolean)
       if (mapped.length > 0) legacy = mapped
     }
   }
-  return { staff: staff ?? legacy ?? ["kody"], body }
+  return { agent: agent ?? legacy ?? ["kody"], body }
 }
 
 /**
  * Concatenate the QA-scoped `.kody/context/*.md` files into one markdown
  * block, each prefixed with a `## <filename>` heading. Only sections whose
- * `staff` list includes `qa-engineer` (or the `*` all-staff wildcard) are
+ * `agent` list includes `qa-engineer` (or the `*` all-agent wildcard) are
  * included — chat-only sections, unassigned docs, and frontmatter-less
  * legacy files (which default to `["kody"]`) are not for QA. Returns "" if
  * the dir is absent or has no QA sections.
@@ -114,8 +114,8 @@ function readProfile(cwd: string): string {
   for (const file of entries) {
     try {
       const raw = fs.readFileSync(path.join(dir, file), "utf-8")
-      const { staff, body } = readProfileStaff(raw)
-      if (!staff.includes(QA_STAFF) && !staff.includes(ALL_STAFF)) continue
+      const { agent, body } = readProfileAgents(raw)
+      if (!agent.includes(QA_AGENT) && !agent.includes(ALL_AGENTS)) continue
       blocks.push(`## ${file}\n\n${body.trim()}`)
     } catch {
       /* skip unreadable file */

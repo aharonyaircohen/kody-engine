@@ -151,9 +151,9 @@ jobs:
         run: npx -y -p @kody-ade/kody-engine@latest kody-engine ci
 `
 
-const DEFAULT_STAFF_PERSONA = `# Kody
+const DEFAULT_AGENT_IDENTITY = `# Kody
 
-You are Kody, the default maintenance staff member for scheduled duties.
+You are Kody, the default maintenance agent for scheduled duties.
 
 Keep actions narrow, prefer read-only inspection, and only use the tools or commands named by the duty.
 When a duty writes a report or dispatches work, keep the output factual and concise.
@@ -217,15 +217,15 @@ export function performInit(cwd: string, force: boolean): InitResult {
     wrote.push(".github/workflows/kody.yml")
   }
 
-  // 3. .kody/staff/kody.md — default persona for Store/builtin actions.
-  const staffDir = path.join(cwd, ".kody", "staff")
-  const staffPath = path.join(staffDir, "kody.md")
-  if (fs.existsSync(staffPath) && !force) {
-    skipped.push(".kody/staff/kody.md")
+  // 3. .kody/agents/kody.md — default agent for Store/builtin actions.
+  const agentsDir = path.join(cwd, ".kody", "agents")
+  const agentPath = path.join(agentsDir, "kody.md")
+  if (fs.existsSync(agentPath) && !force) {
+    skipped.push(".kody/agents/kody.md")
   } else {
-    fs.mkdirSync(staffDir, { recursive: true })
-    fs.writeFileSync(staffPath, DEFAULT_STAFF_PERSONA)
-    wrote.push(".kody/staff/kody.md")
+    fs.mkdirSync(agentsDir, { recursive: true })
+    fs.writeFileSync(agentPath, DEFAULT_AGENT_IDENTITY)
+    wrote.push(".kody/agents/kody.md")
   }
 
   // 4. .github/workflows/kody-<name>.yml for every discovered scheduled executable profile.

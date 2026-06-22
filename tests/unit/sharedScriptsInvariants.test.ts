@@ -165,7 +165,7 @@ const CONSUMER_LIBRARY_SCRIPTS: Record<string, string> = {
   initFlow: "init",
   loadDutyState: "job-live-verify",
   loadJobFromFile: "duty-tick",
-  loadWorkerAdhoc: "worker-ask",
+  loadAgentAdhoc: "agent-ask",
   markFlowSuccess: "revert",
   mergeFlow: "merge",
   parseReproOutput: "reproduce",

@@ -2,7 +2,7 @@
  * Preflight: load a folder-duty's persistent memory store by slug
  * (= `profile.name`). This is the state-only half of `loadJobFromFile`: a
  * folder-duty's body lives in `duty.md` (rendered by `composePrompt`) and its
- * identity in `profile.staff` (injected by the executor), so the only thing a
+ * identity in `profile.agent` (injected by the executor), so the only thing a
  * stateful duty needs loaded here is its cross-run state. It makes "scheduled ⇒
  * stateful" real: a scheduled folder-duty that declares this preflight (plus
  * `parseJobStateFromAgentResult` + `writeJobStateFile` postflights) carries
@@ -16,7 +16,7 @@
  *   ctx.data.dutySlug       alias of jobSlug
  *   ctx.data.dutyTitle      profile.describe
  *   ctx.data.executableSlug profile.executable ?? profile.name
- *   ctx.data.staffSlug      profile.staff ?? ""
+ *   ctx.data.agentSlug      profile.agent ?? ""
  *   ctx.data.dutySchedule   profile.every (or profile.schedule as fallback) — empty for on-demand
  *
  * Stateless duties simply omit this preflight (and the state postflights) and
@@ -48,8 +48,8 @@ export const loadDutyState: PreflightScript = async (ctx, profile, args) => {
   ctx.data.dutySlug = slug
   ctx.data.dutyTitle = profile.describe
   ctx.data.executableSlug = profile.executable ?? profile.name
-  ctx.data.staffSlug = profile.staff ?? ""
-  ctx.data.staffTitle = ""
+  ctx.data.agentSlug = profile.agent ?? ""
+  ctx.data.agentTitle = ""
   // `every:` is the new "15m".."7d" cadence string introduced alongside the
   // rename; legacy `schedule:` (cron) profiles still work. Empty for on-demand
   // duties — composePrompt renders the empty string and the prompt omits the

@@ -12,19 +12,19 @@ describe("task job plan parsing", () => {
 <!-- ${TASK_JOBS_MARKER}
 [
   { "executable": "plan-verify", "reason": "api slice" },
-  { "executable": "probe-skill", "staff": "qa", "reason": "ui slice" }
+  { "executable": "probe-skill", "agent": "qa", "reason": "ui slice" }
 ]
 -->
 `)
 
     expect(specs).toEqual([
       { executable: "plan-verify", reason: "api slice" },
-      { executable: "probe-skill", staff: "qa", reason: "ui slice" },
+      { executable: "probe-skill", agent: "qa", reason: "ui slice" },
     ])
   })
 
   it("turns each entry into one instant job targeting the parent issue by default", () => {
-    const job = taskJobSpecToJob({ executable: "plan-verify", reason: "api slice", staff: "qa" }, 42)
+    const job = taskJobSpecToJob({ executable: "plan-verify", reason: "api slice", agent: "qa" }, 42)
 
     expect(job).toMatchObject({
       duty: "plan-verify",
@@ -32,7 +32,7 @@ describe("task job plan parsing", () => {
       cliArgs: { issue: 42 },
       target: 42,
       flavor: "instant",
-      persona: "qa",
+      agent: "qa",
       why: "api slice",
     })
     expect(stableJobKey(job)).toBe("instant:plan-verify:42")
@@ -44,7 +44,7 @@ describe("task job plan parsing", () => {
         executable: "probe-skill",
         duty: "daily-check",
         reason: "UI slice",
-        staff: "qa",
+        agent: "qa",
         flavor: "scheduled",
         schedule: "1h",
       },
@@ -57,7 +57,7 @@ describe("task job plan parsing", () => {
       cliArgs: { issue: 42 },
       target: 42,
       flavor: "scheduled",
-      persona: "qa",
+      agent: "qa",
       schedule: "1h",
       why: "UI slice",
     })

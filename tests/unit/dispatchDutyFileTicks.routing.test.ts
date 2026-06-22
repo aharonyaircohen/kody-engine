@@ -84,7 +84,7 @@ const PROFILE = {} as unknown as Profile
 
 describe("dispatchDutyFileTicks routing", () => {
   it("does not flat-fan-out when explicit duty is required", async () => {
-    writeJob("watch-stale-prs", { every: "6h", staff: "kody" })
+    writeJob("watch-stale-prs", { every: "6h", agent: "kody" })
     const ctx = ctxFor()
 
     await dispatchDutyFileTicks(ctx, PROFILE, {
@@ -99,7 +99,7 @@ describe("dispatchDutyFileTicks routing", () => {
   })
 
   it("routes a duty with `tickScript:` to duty-tick-scripted", async () => {
-    writeJob("auto-resolve", { tickScript: ".kody/scripts/auto-resolve-tick.sh", staff: "kody" })
+    writeJob("auto-resolve", { tickScript: ".kody/scripts/auto-resolve-tick.sh", agent: "kody" })
 
     const ctx = ctxFor()
     await dispatchDutyFileTicks(ctx, PROFILE, {
@@ -113,7 +113,7 @@ describe("dispatchDutyFileTicks routing", () => {
   })
 
   it("routes a duty without `tickScript:` to the configured (default) target", async () => {
-    writeJob("watch-stale-prs", { every: "6h", staff: "kody" })
+    writeJob("watch-stale-prs", { every: "6h", agent: "kody" })
 
     const ctx = ctxFor()
     await dispatchDutyFileTicks(ctx, PROFILE, {
@@ -127,7 +127,7 @@ describe("dispatchDutyFileTicks routing", () => {
   })
 
   it("routes duty with executable without passing a synthetic duty arg", async () => {
-    writeJob("preview-health", { every: "15m", staff: "cto", executable: "preview-health" })
+    writeJob("preview-health", { every: "15m", agent: "cto", executable: "preview-health" })
 
     const ctx = ctxFor()
     await dispatchDutyFileTicks(ctx, PROFILE, {
@@ -140,7 +140,7 @@ describe("dispatchDutyFileTicks routing", () => {
     expect(runExecutableMock.mock.calls[0]![0]).toBe("preview-health")
     expect(runExecutableMock.mock.calls[0]![1].cliArgs).toEqual({})
   })
-  it("skips a duty with no `staff:` (every duty must name an executor)", async () => {
+  it("skips a duty with no `agent:` (every duty must name an executor)", async () => {
     writeJob("orphan-duty", { every: "1h" })
 
     const ctx = ctxFor()
@@ -156,7 +156,7 @@ describe("dispatchDutyFileTicks routing", () => {
   it("does not tick store duties unless consumer activates them", async () => {
     vi.stubEnv("KODY_COMPANY_STORE", storeTmp)
     resetCompanyStoreCacheForTests()
-    writeStoreJob("store-duty", { every: "1h", staff: "kody" })
+    writeStoreJob("store-duty", { every: "1h", agent: "kody" })
 
     const ctx = ctxFor()
     await dispatchDutyFileTicks(ctx, PROFILE, {
@@ -171,7 +171,7 @@ describe("dispatchDutyFileTicks routing", () => {
   it("ticks store duties activated by the consumer", async () => {
     vi.stubEnv("KODY_COMPANY_STORE", storeTmp)
     resetCompanyStoreCacheForTests()
-    writeStoreJob("store-duty", { every: "1h", staff: "kody" })
+    writeStoreJob("store-duty", { every: "1h", agent: "kody" })
 
     const ctx = ctxFor({ company: { activeDuties: ["store-duty"] } })
     await dispatchDutyFileTicks(ctx, PROFILE, {
@@ -185,8 +185,8 @@ describe("dispatchDutyFileTicks routing", () => {
   })
 
   it("mixes routing across slugs in one tick", async () => {
-    writeJob("scripted-duty", { tickScript: ".kody/scripts/x.sh", staff: "kody" })
-    writeJob("agent-duty", { every: "1h", staff: "kody" })
+    writeJob("scripted-duty", { tickScript: ".kody/scripts/x.sh", agent: "kody" })
+    writeJob("agent-duty", { every: "1h", agent: "kody" })
 
     const ctx = ctxFor()
     await dispatchDutyFileTicks(ctx, PROFILE, {
@@ -201,8 +201,8 @@ describe("dispatchDutyFileTicks routing", () => {
   })
 
   it("can target one duty slug without ticking the other due duties", async () => {
-    writeJob("scripted-duty", { tickScript: ".kody/scripts/x.sh", staff: "kody" })
-    writeJob("agent-duty", { every: "1h", staff: "kody" })
+    writeJob("scripted-duty", { tickScript: ".kody/scripts/x.sh", agent: "kody" })
+    writeJob("agent-duty", { every: "1h", agent: "kody" })
 
     const ctx = ctxFor()
     ctx.args = { duty: "agent-duty" }
@@ -218,7 +218,7 @@ describe("dispatchDutyFileTicks routing", () => {
   })
 
   it("ignores a stale legacy .md next to a folder duty", async () => {
-    writeJob("hybrid", { every: "1h", staff: "kody" })
+    writeJob("hybrid", { every: "1h", agent: "kody" })
     fs.writeFileSync(path.join(tmp, ".kody", "duties", "hybrid.md"), "---\nevery: 1h\nstaff: kody\n---\n# stale\n")
 
     const ctx = ctxFor()

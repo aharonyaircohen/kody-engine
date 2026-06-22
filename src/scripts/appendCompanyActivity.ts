@@ -6,7 +6,7 @@
  * `duty-tick` (scheduled OR manual "Run now") passes through here, so each one
  * records WHO ran WHAT, WHY, and the RESULT:
  *
- *   { ts, action, duty, dutyTitle, staff, staffTitle, trigger, outcome,
+ *   { ts, action, duty, dutyTitle, agent, agentTitle, trigger, outcome,
  *     durationMs, runUrl }
  *
  * Appended as one JSON line to `.kody/activity/<YYYY-MM-DD>.jsonl` via the
@@ -25,8 +25,8 @@ interface ActivityRecord {
   action: string
   duty: string
   dutyTitle: string | null
-  staff: string | null
-  staffTitle: string | null
+  agent: string | null
+  agentTitle: string | null
   trigger: "schedule" | "manual" | "event"
   outcome: "completed" | "failed" | "unknown"
   /**
@@ -92,8 +92,8 @@ export const appendCompanyActivity: PostflightScript = async (ctx, _profile, age
     if (!owner || !repo || !duty) return
 
     const dutyTitle = (ctx.data.jobTitle as string | undefined) ?? null
-    const staff = (ctx.data.workerSlug as string | undefined) || null
-    const staffTitle = (ctx.data.workerTitle as string | undefined) || null
+    const agent = (ctx.data.agentSlug as string | undefined) || null
+    const agentTitle = (ctx.data.agentTitle as string | undefined) || null
     const force = ctx.args?.force === true
 
     const record: ActivityRecord = {
@@ -101,8 +101,8 @@ export const appendCompanyActivity: PostflightScript = async (ctx, _profile, age
       action: `Ran duty: ${dutyTitle ?? duty}`,
       duty,
       dutyTitle,
-      staff,
-      staffTitle,
+      agent,
+      agentTitle,
       trigger: resolveTrigger(force),
       outcome: agentResult?.outcome ?? "unknown",
       outcomeKind: agentResult?.outcomeKind ?? null,

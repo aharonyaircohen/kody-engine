@@ -54,8 +54,8 @@ interface DutyMcpOptions {
   /**
    * Slug of the duty currently running (`ctx.data.jobSlug`). Stamped onto every
    * `recommend_to_operator` comment as `<!-- kody-duty: <slug> -->` so the
-   * dashboard keys trust per DUTY, not per persona. Omitted → no stamp (the
-   * dashboard then falls back to the persona slug).
+   * dashboard keys trust per DUTY, not per agent. Omitted → no stamp (the
+   * dashboard then falls back to the agent slug).
    */
   dutySlug?: string
 }
@@ -300,7 +300,7 @@ export function readThread(repoSlug: string, number: number, limit = 10): Thread
 // ---------------------------------------------------------------------------
 
 const CHECK_FAIL_CONCLUSIONS = new Set(["FAILURE", "TIMED_OUT", "STARTUP_FAILURE", "ACTION_REQUIRED"])
-const DEFAULT_IGNORE_CHECKS = ["run", "kody", "duty-tick", "worker-ask", "chat"]
+const DEFAULT_IGNORE_CHECKS = ["run", "kody", "duty-tick", "agent-ask", "chat"]
 
 export interface CheckRunsResult {
   sha: string

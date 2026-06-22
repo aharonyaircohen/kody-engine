@@ -22,8 +22,8 @@ export { stableJobKey } from "./jobIdentity.js"
 
 import { stableJobKey } from "./jobIdentity.js"
 
-/** Default staff persona for instant `@kody` jobs (the agreed starting point). */
-export const DEFAULT_INSTANT_PERSONA = "kody"
+/** Default agent identity for instant `@kody` jobs (the agreed starting point). */
+export const DEFAULT_INSTANT_AGENT = "kody"
 let localJobSeq = 0
 
 /**
@@ -73,7 +73,7 @@ export function validateJob(input: unknown): Job {
     executable: typeof j.executable === "string" ? j.executable : undefined,
     duty: typeof j.duty === "string" ? j.duty : undefined,
     why: typeof j.why === "string" ? j.why : undefined,
-    persona: typeof j.persona === "string" ? j.persona : undefined,
+    agent: typeof j.agent === "string" ? j.agent : undefined,
     schedule: typeof j.schedule === "string" ? j.schedule : undefined,
     target: typeof j.target === "number" ? j.target : undefined,
     cliArgs: (j.cliArgs as Record<string, unknown> | undefined) ?? {},
@@ -113,7 +113,7 @@ export interface RunJobBase {
  *                                              preflights; the executor injects
  *                                              it as a fenced operator-request
  *                                              block in the system prompt)
- *   - persona  → preloadedData.jobPersona
+ *   - agent  → preloadedData.jobAgent
  *
  * No caller mints Jobs yet — this is the seam later phases wire the comment and
  * cron paths into.
@@ -162,8 +162,8 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     preloadedData.dutyIntent = dutyContext.body
     preloadedData.jobIntent = dutyContext.body
     if (preloadedData.jobDuty === undefined) preloadedData.jobDuty = dutyContext.slug
-    if (dutyContext.config.staff && preloadedData.jobPersona === undefined) {
-      preloadedData.jobPersona = dutyContext.config.staff
+    if (dutyContext.config.agent && preloadedData.jobAgent === undefined) {
+      preloadedData.jobAgent = dutyContext.config.agent
     }
     if (dutyContext.config.every && preloadedData.jobSchedule === undefined) {
       preloadedData.jobSchedule = dutyContext.config.every
@@ -177,7 +177,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   // double-inject). The executor surfaces jobWhy to the agent as a fenced
   // "operator request" block, so the comment's wording shapes any instant run.
   if (valid.why !== undefined && valid.why.length > 0) preloadedData.jobWhy = valid.why
-  if (valid.persona !== undefined) preloadedData.jobPersona = valid.persona
+  if (valid.agent !== undefined) preloadedData.jobAgent = valid.agent
 
   const input: ExecutorInput = {
     cliArgs: { ...valid.cliArgs },
@@ -211,17 +211,17 @@ function loadDutyContext(slug: string | undefined, cwd: string): ReturnType<type
  * Mint an INSTANT job from a comment / manual-dispatch route. The trigger
  * resolves to a DispatchResult (executable + cliArgs + target); this turns it
  * into a Job. `why` is the operator's free-text request after `@kody <command>`
- * (carried on the DispatchResult); `persona` defaults to "kody" — instant verbs
- * ran persona-less before, and the default is the agreed starting point.
+ * (carried on the DispatchResult); `agent` defaults to "kody" — instant verbs
+ * ran agent-less before, and the default is the agreed starting point.
  * Both are overridable per call via `opts`.
  */
-export function mintInstantJob(dispatch: DispatchResult, opts?: { why?: string; persona?: string }): Job {
+export function mintInstantJob(dispatch: DispatchResult, opts?: { why?: string; agent?: string }): Job {
   return {
     action: dispatch.action,
     executable: dispatch.executable,
     duty: dispatch.duty,
     why: opts?.why ?? dispatch.why,
-    persona: opts?.persona ?? DEFAULT_INSTANT_PERSONA,
+    agent: opts?.agent ?? DEFAULT_INSTANT_AGENT,
     target: dispatch.target,
     cliArgs: dispatch.cliArgs,
     flavor: "instant",
@@ -238,8 +238,8 @@ export interface ScheduledJobInput {
   executable: string
   /** Cron cadence the duty fired on. */
   schedule?: string
-  /** Staff persona that runs it (from the duty's profile.json). */
-  persona?: string
+  /** Agent identity that runs it (from the duty's profile.json). */
+  agent?: string
   /** Args handed to the tick executable (e.g. `{ job: slug }` for `.md` duties). */
   cliArgs?: Record<string, unknown>
 }
@@ -255,7 +255,7 @@ export function mintScheduledJob(input: ScheduledJobInput): Job {
     duty: input.duty,
     executable: input.executable,
     schedule: input.schedule,
-    persona: input.persona,
+    agent: input.agent,
     cliArgs: input.cliArgs ?? {},
     flavor: "scheduled",
   }

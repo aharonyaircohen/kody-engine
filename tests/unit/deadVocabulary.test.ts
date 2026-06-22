@@ -39,7 +39,7 @@ import * as path from "node:path"
 import { describe, expect, it } from "vitest"
 
 const SRC_DIR = path.resolve(__dirname, "../../src")
-const BANNED = [
+const BANNED: Array<string | RegExp> = [
   "kody-manager",
   "mission-tick",
   "mission-scheduler",
@@ -47,6 +47,12 @@ const BANNED = [
   "job-tick",
   "dispatchJobFileTicks",
   "dispatchJobTicks",
+  /\bstaff\b/,
+  /\bStaff\b/,
+  /\bpersona\b/,
+  /\bPersona\b/,
+  "worker-ask",
+  "loadWorkerAdhoc",
 ]
 
 function walk(dir: string): string[] {
@@ -65,11 +71,12 @@ describe("dead vocabulary", () => {
     for (const file of walk(SRC_DIR)) {
       const text = fs.readFileSync(file, "utf-8")
       for (const term of BANNED) {
-        if (text.includes(term)) {
-          offenders.push(`${path.relative(SRC_DIR, file)} → "${term}"`)
-        }
+      const found = typeof term === "string" ? text.includes(term) : term.test(text)
+      if (found) {
+        offenders.push(`${path.relative(SRC_DIR, file)} → "${String(term)}"`)
       }
     }
+  }
     expect(offenders, `retired vocabulary found:\n${offenders.join("\n")}`).toEqual([])
   })
 })

@@ -29,7 +29,7 @@ export function jobMetaFromData(data: Record<string, unknown>): JobMeta {
     duty: typeof data.jobDuty === "string" ? data.jobDuty : undefined,
     executable: typeof data.jobExecutable === "string" ? data.jobExecutable : undefined,
     target: typeof data.jobTarget === "number" ? data.jobTarget : undefined,
-    persona: typeof data.jobPersona === "string" ? data.jobPersona : undefined,
+    agent: typeof data.jobAgent === "string" ? data.jobAgent : undefined,
     why: typeof data.jobWhy === "string" ? data.jobWhy : undefined,
   }
 }
@@ -46,7 +46,7 @@ export const saveTaskState: PostflightScript = async (ctx, profile) => {
   // Don't mutate the loaded prior state — `reduce` treats it as immutable input
   // and other postflights may hold the same reference. The prUrl/runUrl carry
   // is applied to `next` below, which is the only thing we persist.
-  const next = reduce(state, executable, action, profile.phase, profile.staff, {
+  const next = reduce(state, executable, action, profile.phase, profile.agent, {
     ...jobMetaFromData(ctx.data),
     ...(ctx.output.prUrl ? { prUrl: ctx.output.prUrl } : {}),
   })

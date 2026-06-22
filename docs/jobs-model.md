@@ -17,7 +17,7 @@ Retries stay under the same job instead of becoming new work.
 
 | Concept | Answers | What it is |
 |---|---|---|
-| **persona** | who | reusable executor identity (`.kody/staff/<slug>.md`, usually from project or company store) |
+| **agent** | who | reusable executor identity (`.kody/agents/<slug>.md`, usually from project or company store) |
 | **duty** | why | reusable intent - `profile.json` metadata plus the prose body of `.kody/duties/<slug>/duty.md` |
 | **executable** | how | reusable unit of work (`run`, `fix`, a duty's `profile.json`, …) |
 | **issue** | what | a GitHub **issue or PR** — the work-item a task is about |
@@ -35,7 +35,7 @@ Canonical creation docs:
 
 - [Goals](goals.md)
 - [Duties](duties.md)
-- [Staff](staff.md)
+- [Agent](agent.md)
 - [Executables](executables.md)
 
 ## Trigger vs engine (two vocabularies)
@@ -55,7 +55,7 @@ A `Job` ([`src/executables/types.ts`](../src/executables/types.ts)) binds the
 four nouns plus its target and args. In task state, the durable job is stored in
 `TaskState.jobs`; its runs are stored on `TaskJob.runs`.
 
-- **who** — `persona` (a staff slug; instant jobs default to `kody`)
+- **who** — `agent` (an agent slug; instant jobs default to `kody`)
 - **why** — `duty` (a reusable intent slug) **or** `why` (the operator's inline
   free-text request)
 - **when** — `schedule` (a scheduled job's cadence; absent for instant)
@@ -64,15 +64,15 @@ four nouns plus its target and args. In task state, the durable job is stored in
 
 `runJob(job, base)` lowers a job onto the generic executor. It seeds a stable
 task job key (`jobKey`) plus per-run metadata (`jobId`, `jobFlavor`,
-`jobSchedule`, `jobPersona`, `jobWhy`) into `ctx.data` so downstream scripts can
+`jobSchedule`, `jobAgent`, `jobWhy`) into `ctx.data` so downstream scripts can
 persist the run without the executor knowing task-state details.
 
 ### How each field is consumed
 
-- **persona →** the executor loads `.kody/staff/<persona>.md` from the project
+- **agent →** the executor loads `.kody/agents/<agent>.md` from the project
   or company store and injects it as an authoritative-identity block. An
-  executable's own declared `staff` wins when present; otherwise the job's
-  persona applies. Missing staff is a hard error.
+  executable's own declared `agent` wins when present; otherwise the job's
+  agent applies. Missing agent is a hard error.
 - **why (inline) →** the executor injects the operator's verbatim request as a
   **fenced, untrusted** "operator request" block in the system prompt, so the
   comment's wording shapes any executable's run — no per-prompt token needed.
@@ -87,7 +87,7 @@ persist the run without the executor knowing task-state details.
 
 A task is the `TaskState` ([`src/state.ts`](../src/state.ts)) for one issue/PR.
 Its `jobs` map is the durable source of truth for required work. Each job has a
-stable id, executable, optional duty/staff references, status, links, and a
+stable id, executable, optional duty/agent references, status, links, and a
 capped `runs` list.
 
 Its `history` remains a capped audit log of recent attempts. It is useful for
@@ -106,7 +106,7 @@ write the task data onto the issue:
 <!-- kody:task-jobs:v1
 [
   { "executable": "db-migration", "reason": "schema slice" },
-  { "executable": "api-worker", "reason": "API slice" },
+  { "executable": "api-agent", "reason": "API slice" },
   { "executable": "ui-builder", "reason": "UI slice" }
 ]
 -->
@@ -119,8 +119,8 @@ can declare the executable list directly:
 {
   "name": "feature-progress",
   "every": "1h",
-  "staff": "kody",
-  "executables": ["db-migration", "api-worker", "ui-builder"]
+  "agent": "kody",
+  "executables": ["db-migration", "api-agent", "ui-builder"]
 }
 ```
 
@@ -199,7 +199,7 @@ All structural items are implemented:
    when/who/how, sourced from the duty folder's `profile.json` at mint time.
    `duty.md` stays prose-only; metadata belongs in `profile.json`.
 4. ✅ **`@kody` mints an instant job** — the comment/manual route mints via
-   `mintInstantJob` and runs through `runJob`. Persona (`kody`) and inline `why`
+   `mintInstantJob` and runs through `runJob`. Agent (`kody`) and inline `why`
    are both consumed.
 5. ✅ **Cron mints a scheduled job** — `dispatchDutyFileTicks` mints one per due
    duty, carrying its cadence.

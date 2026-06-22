@@ -21,7 +21,7 @@ import { loadProfile } from "../../src/profile.js"
 import { type Action, emptyState, type TaskState, type TaskTarget } from "../../src/state.js"
 
 // Each test below `process.chdir()`s into a throwaway temp root and never
-// restored it — leaving the worker fork's cwd in a stray /tmp dir that later
+// restored it — leaving the agent fork's cwd in a stray /tmp dir that later
 // test files inherit (and that breaks git/gh spawns relying on cwd, which only
 // surfaces on Linux CI, not macOS). Restore the real cwd after every test.
 const ORIGINAL_CWD = process.cwd()

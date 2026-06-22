@@ -1,58 +1,58 @@
 /**
- * Preflight for `worker-ask`: load a worker persona and an inline message
+ * Preflight for `agent-ask`: load an agent identity and an inline message
  * for a stateless, ad-hoc tick. No duty folder, no job state, no commit.
  *
- * This is the engine half of the dashboard's "@mention a staff member in a
- * message" feature: a staff member is a stateless persona, so an ad-hoc
- * request is just that persona answering one inline prompt — there is no
+ * This is the engine half of the dashboard's "@mention an agent in a
+ * message" feature: an agent is a stateless agent, so an ad-hoc
+ * request is just that agent answering one inline prompt — there is no
  * `.kody/duties/<slug>/`, no cadence, and nothing to persist.
  *
  * Message resolution (production vs. CLI):
  *   1. The dispatching `issue_comment` body (GITHUB_EVENT_PATH), with the
- *      leading `@kody worker-ask ...` directive line stripped. This path
+ *      leading `@kody agent-ask ...` directive line stripped. This path
  *      preserves the message verbatim — newlines, code blocks, markdown —
  *      because it never goes through whitespace-collapsing arg tokenizing.
  *   2. Fallback: `ctx.args.message` (the `bindsCommentRest` input), for
  *      local CLI / tests where no GitHub event file exists.
  *
  * Sets:
- *   ctx.data.workerSlug     the worker slug
- *   ctx.data.workerTitle    worker file H1, or humanized slug
- *   ctx.data.workerPersona  worker persona body (post-frontmatter)
+ *   ctx.data.agentSlug     the agent slug
+ *   ctx.data.agentTitle    agent file H1, or humanized slug
+ *   ctx.data.agentIdentity  agent identity body (post-frontmatter)
  *   ctx.data.message        the inline request (verbatim)
  *   ctx.data.thread         discussion number to reply into, or ""
  *
  * Script args (via `with:`):
- *   workersDir    optional — default ".kody/staff"
+ *   agentsDir    optional — default ".kody/agents"
  */
 
 import * as fs from "node:fs"
 import type { PreflightScript } from "../executables/types.js"
-import { resolveStaffPersonaFile } from "../staff.js"
+import { resolveAgentFile } from "../agents.js"
 
-export const loadWorkerAdhoc: PreflightScript = async (ctx, _profile, args) => {
-  const workersDir = String(args?.workersDir ?? ".kody/staff")
-  const workerSlug = String(ctx.args.worker ?? "").trim()
-  if (!workerSlug) {
-    throw new Error("loadWorkerAdhoc: ctx.args.worker must be a non-empty slug")
+export const loadAgentAdhoc: PreflightScript = async (ctx, _profile, args) => {
+  const agentsDir = String(args?.agentsDir ?? ".kody/agents")
+  const agentSlug = String(ctx.args.agent ?? "").trim()
+  if (!agentSlug) {
+    throw new Error("loadAgentAdhoc: ctx.args.agent must be a non-empty slug")
   }
 
-  const workerPath = resolveStaffPersonaFile(ctx.cwd, workerSlug, workersDir)
-  if (!fs.existsSync(workerPath)) {
-    throw new Error(`loadWorkerAdhoc: worker persona not found: ${workerPath}`)
+  const agentPath = resolveAgentFile(ctx.cwd, agentSlug, agentsDir)
+  if (!fs.existsSync(agentPath)) {
+    throw new Error(`loadAgentAdhoc: agent identity not found: ${agentPath}`)
   }
-  const { title, body } = parsePersona(fs.readFileSync(workerPath, "utf-8"), workerSlug)
+  const { title, body } = parseAgentFile(fs.readFileSync(agentPath, "utf-8"), agentSlug)
 
   const message = resolveMessage(ctx.args.message)
   if (!message) {
     throw new Error(
-      "loadWorkerAdhoc: no message — neither the dispatching comment body nor ctx.args.message provided one",
+      "loadAgentAdhoc: no message — neither the dispatching comment body nor ctx.args.message provided one",
     )
   }
 
-  ctx.data.workerSlug = workerSlug
-  ctx.data.workerTitle = title
-  ctx.data.workerPersona = body
+  ctx.data.agentSlug = agentSlug
+  ctx.data.agentTitle = title
+  ctx.data.agentIdentity = body
   ctx.data.message = message
   ctx.data.thread = String(ctx.args.thread ?? "").trim()
 }
@@ -81,8 +81,8 @@ function readCommentBody(): string {
 }
 
 /**
- * Drop the `@kody worker-ask ...` invocation line(s) from the top of the
- * comment so the persona sees only the human's actual request + context.
+ * Drop the `@kody agent-ask ...` invocation line(s) from the top of the
+ * comment so the agent sees only the human's actual request + context.
  * Only contiguous leading lines that contain the directive are removed —
  * a later line that merely mentions `@kody` in prose is preserved.
  */
@@ -95,7 +95,7 @@ function stripDirective(body: string): string {
       start++
       continue
     }
-    if (/@kody\s+worker-ask\b/i.test(line)) {
+    if (/@kody\s+agent-ask\b/i.test(line)) {
       start++
       continue
     }
@@ -104,7 +104,7 @@ function stripDirective(body: string): string {
   return lines.slice(start).join("\n").trim()
 }
 
-function parsePersona(raw: string, slug: string): { title: string; body: string } {
+function parseAgentFile(raw: string, slug: string): { title: string; body: string } {
   const stripped = stripLeadingFrontmatter(raw)
   const trimmed = stripped.trim()
   const firstLine = trimmed.split("\n", 1)[0] ?? ""

@@ -46,7 +46,7 @@ const KNOWN_PROFILE_KEYS = new Set([
   "name",
   "action",
   "executable",
-  "staff",
+  "agent",
   "every",
   "dutyTools",
   "tools",
@@ -109,9 +109,9 @@ export function loadProfile(profilePath: string): Profile {
 
   // Duty-as-reference: a duty names an executable (the HOW) instead of embedding
   // it. Resolve that executable's full profile and overlay this duty's identity
-  // (name) + staff (WHO) + every (WHEN) + mentions. The duty folder is then a
+  // (name) + agent (WHO) + every (WHEN) + mentions. The duty folder is then a
   // thin binding — no claudeCode/prompt/scripts of its own.
-  // executable = how, staff = who, duty = why/when.
+  // executable = how, agent = who, duty = why/when.
   const execRef = typeof r.executable === "string" ? r.executable.trim() : ""
   if (execRef) {
     const refPath = resolveExecutable(execRef)
@@ -126,7 +126,7 @@ export function loadProfile(profilePath: string): Profile {
       executable: execRef,
       describe: typeof r.describe === "string" ? r.describe : base.describe,
       capabilityKind: parseCapabilityKind(profilePath, r.capabilityKind) ?? base.capabilityKind,
-      staff: typeof r.staff === "string" && r.staff.trim() ? r.staff.trim() : base.staff,
+      agent: typeof r.agent === "string" && r.agent.trim() ? r.agent.trim() : base.agent,
       every: typeof r.every === "string" && r.every.trim() ? r.every.trim() : undefined,
       dutyTools: parseStringArray(r.dutyTools ?? r.tools) ?? base.dutyTools,
       mentions: Array.isArray(r.mentions)
@@ -181,8 +181,8 @@ export function loadProfile(profilePath: string): Profile {
     executable: undefined,
     describe: typeof r.describe === "string" ? r.describe : "",
     capabilityKind: parseCapabilityKind(profilePath, r.capabilityKind),
-    // Optional persona to run as. Empty/blank string → undefined (no persona).
-    staff: typeof r.staff === "string" && r.staff.trim() ? r.staff.trim() : undefined,
+    // Optional agent to run as. Empty/blank string → undefined (no agent).
+    agent: typeof r.agent === "string" && r.agent.trim() ? r.agent.trim() : undefined,
     // Optional recurrence cadence (scheduled duty). Blank → undefined (on-demand).
     every: typeof r.every === "string" && r.every.trim() ? r.every.trim() : undefined,
     // Locked-toolbox palette + mentions from folder-duty profile metadata.

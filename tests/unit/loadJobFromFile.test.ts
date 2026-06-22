@@ -1,8 +1,8 @@
 /**
  * Unit tests for `loadJobFromFile` — the preflight that loads a file-based
- * duty (body, state, staff persona) into `ctx.data`.
+ * duty (body, state, agent identity) into `ctx.data`.
  *
- * Focus here: the `mentions` profile field is read alongside `staff`
+ * Focus here: the `mentions` profile field is read alongside `agent`
  * and exposed to the duty prompt as a ready-to-insert `ctx.data.mentions`
  * string ("@a @b"), or "" when absent. Uses the local-file state backend so
  * the test never touches GitHub.
@@ -21,7 +21,7 @@ let tmp: string
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "load-job-"))
   fs.mkdirSync(path.join(tmp, ".kody", "duties"), { recursive: true })
-  fs.mkdirSync(path.join(tmp, ".kody", "staff"), { recursive: true })
+  fs.mkdirSync(path.join(tmp, ".kody", "agents"), { recursive: true })
 })
 
 afterEach(() => {
@@ -35,8 +35,8 @@ function writeDuty(slug: string, profile: Record<string, unknown>, body = "# Dut
   fs.writeFileSync(path.join(dir, "duty.md"), body)
 }
 
-function writeStaff(slug: string, body = "# Persona\nidentity"): void {
-  fs.writeFileSync(path.join(tmp, ".kody", "staff", `${slug}.md`), body)
+function writeStaff(slug: string, body = "# Agent\nidentity"): void {
+  fs.writeFileSync(path.join(tmp, ".kody", "agents", `${slug}.md`), body)
 }
 
 function ctxFor(slug: string): Context {
@@ -61,7 +61,7 @@ const PROFILE = {} as unknown as Profile
 describe("loadJobFromFile mentions", () => {
   it("formats a `mentions: a, b` list into a ready-to-insert '@a @b' string", async () => {
     writeStaff("kody")
-    writeDuty("changelog-verify", { staff: "kody", mentions: ["a", "b"] })
+    writeDuty("changelog-verify", { agent: "kody", mentions: ["a", "b"] })
 
     const ctx = ctxFor("changelog-verify")
     await loadJobFromFile(ctx, PROFILE, {})
@@ -71,7 +71,7 @@ describe("loadJobFromFile mentions", () => {
 
   it("sets ctx.data.mentions to '' when the duty declares no mentions", async () => {
     writeStaff("kody")
-    writeDuty("broad-sweep", { staff: "kody" })
+    writeDuty("broad-sweep", { agent: "kody" })
 
     const ctx = ctxFor("broad-sweep")
     await loadJobFromFile(ctx, PROFILE, {})
@@ -88,7 +88,7 @@ describe("loadJobFromFile locked-toolbox (tools:)", () => {
   it("revokes Bash/Read and locks allowedTools to the declared kody-duty tools + submit_state", async () => {
     writeStaff("cto")
     writeDuty("dev-ci-health", {
-      staff: "cto",
+      agent: "cto",
       tools: ["read_check_runs", "ensure_issue", "dispatch_workflow", "ensure_comment"],
     })
 
@@ -113,7 +113,7 @@ describe("loadJobFromFile locked-toolbox (tools:)", () => {
 
   it("throws if a duty declares a tool not in the kody-duty palette", async () => {
     writeStaff("cto")
-    writeDuty("bad", { staff: "cto", tools: ["read_check_runs", "make_coffee"] })
+    writeDuty("bad", { agent: "cto", tools: ["read_check_runs", "make_coffee"] })
 
     await expect(loadJobFromFile(ctxFor("bad"), lockedProfile(), {})).rejects.toThrow(/make_coffee/)
   })
@@ -122,7 +122,7 @@ describe("loadJobFromFile locked-toolbox (tools:)", () => {
 describe("loadJobFromFile body {{mentions}} substitution", () => {
   it("replaces {{mentions}} inside the duty body with the resolved handles", async () => {
     writeStaff("kody")
-    writeDuty("docs-readme", { staff: "kody", mentions: ["a", "b"] }, "# Duty\n{{mentions}} please review")
+    writeDuty("docs-readme", { agent: "kody", mentions: ["a", "b"] }, "# Duty\n{{mentions}} please review")
 
     const ctx = ctxFor("docs-readme")
     await loadJobFromFile(ctx, PROFILE, {})
@@ -133,7 +133,7 @@ describe("loadJobFromFile body {{mentions}} substitution", () => {
 
   it("tolerates inner whitespace and renders empty when no mentions are declared", async () => {
     writeStaff("kody")
-    writeDuty("docs-code", { staff: "kody" }, "line {{ mentions }} end")
+    writeDuty("docs-code", { agent: "kody" }, "line {{ mentions }} end")
 
     const ctx = ctxFor("docs-code")
     await loadJobFromFile(ctx, PROFILE, {})
@@ -146,7 +146,7 @@ describe("loadJobFromFile body {{mentions}} substitution", () => {
 describe("loadJobFromFile duty-noun aliases (Phase 1 rename)", () => {
   it("populates dutySlug/dutyTitle from the duty folder, mirroring jobSlug/jobTitle", async () => {
     writeStaff("kody")
-    writeDuty("stale-prs", { staff: "kody" }, "# Stale PR Watcher\nbody text")
+    writeDuty("stale-prs", { agent: "kody" }, "# Stale PR Watcher\nbody text")
 
     const ctx = ctxFor("stale-prs")
     await loadJobFromFile(ctx, { ...PROFILE, name: "duty-tick" }, {})
@@ -159,23 +159,23 @@ describe("loadJobFromFile duty-noun aliases (Phase 1 rename)", () => {
     expect(ctx.data.jobTitle).toBe("Stale PR Watcher")
   })
 
-  it("populates staffSlug/staffTitle from the staff file, mirroring workerSlug/workerTitle", async () => {
-    writeStaff("kody", "# Kody — root persona")
-    writeDuty("stale-prs", { staff: "kody" }, "# Stale PR Watcher")
+  it("populates agentSlug/agentTitle from the agent file, mirroring agentSlug/agentTitle", async () => {
+    writeStaff("kody", "# Kody — root agent")
+    writeDuty("stale-prs", { agent: "kody" }, "# Stale PR Watcher")
 
     const ctx = ctxFor("stale-prs")
     await loadJobFromFile(ctx, { ...PROFILE, name: "duty-tick" }, {})
 
-    expect(ctx.data.staffSlug).toBe("kody")
-    expect(ctx.data.staffTitle).toBe("Kody — root persona")
+    expect(ctx.data.agentSlug).toBe("kody")
+    expect(ctx.data.agentTitle).toBe("Kody — root agent")
     // Legacy fields still populated.
-    expect(ctx.data.workerSlug).toBe("kody")
-    expect(ctx.data.workerTitle).toBe("Kody — root persona")
+    expect(ctx.data.agentSlug).toBe("kody")
+    expect(ctx.data.agentTitle).toBe("Kody — root agent")
   })
 
   it("populates executableSlug from profile.name", async () => {
     writeStaff("kody")
-    writeDuty("stale-prs", { staff: "kody" }, "# Stale PR Watcher")
+    writeDuty("stale-prs", { agent: "kody" }, "# Stale PR Watcher")
 
     const ctx = ctxFor("stale-prs")
     await loadJobFromFile(ctx, { ...PROFILE, name: "duty-tick" }, {})
@@ -185,7 +185,7 @@ describe("loadJobFromFile duty-noun aliases (Phase 1 rename)", () => {
 
   it("populates dutySchedule from the duty profile", async () => {
     writeStaff("kody")
-    writeDuty("stale-prs", { staff: "kody", every: "1h" }, "# Stale PR Watcher")
+    writeDuty("stale-prs", { agent: "kody", every: "1h" }, "# Stale PR Watcher")
 
     const ctx = ctxFor("stale-prs")
     await loadJobFromFile(ctx, { ...PROFILE, name: "duty-tick" }, {})
@@ -193,15 +193,15 @@ describe("loadJobFromFile duty-noun aliases (Phase 1 rename)", () => {
     expect(ctx.data.dutySchedule).toBe("1h")
   })
 
-  it("leaves staffSlug empty when the duty has no staff declared", async () => {
-    writeDuty("orphan", {}, "# Orphan Duty\nno staff")
+  it("leaves agentSlug empty when the duty has no agent declared", async () => {
+    writeDuty("orphan", {}, "# Orphan Duty\nno agent")
 
     const ctx = ctxFor("orphan")
     await loadJobFromFile(ctx, { ...PROFILE, name: "duty-tick" }, {})
 
-    expect(ctx.data.staffSlug).toBe("")
-    expect(ctx.data.staffTitle).toBe("")
-    expect(ctx.data.workerSlug).toBe("")
-    expect(ctx.data.workerTitle).toBe("")
+    expect(ctx.data.agentSlug).toBe("")
+    expect(ctx.data.agentTitle).toBe("")
+    expect(ctx.data.agentSlug).toBe("")
+    expect(ctx.data.agentTitle).toBe("")
   })
 })

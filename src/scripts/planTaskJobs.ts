@@ -15,8 +15,7 @@ export interface TaskJobSpec {
   executable: string
   duty?: string
   reason?: string
-  staff?: string
-  persona?: string
+  agent?: string
   cliArgs?: Record<string, unknown>
   target?: number
   flavor?: JobFlavor
@@ -45,7 +44,7 @@ export function taskJobSpecToJob(spec: TaskJobSpec, issueNumber: number): Job {
     duty: spec.duty ?? spec.executable,
     executable: spec.executable,
     why: spec.reason,
-    persona: spec.persona ?? spec.staff,
+    agent: spec.agent,
     schedule: spec.schedule,
     target,
     cliArgs,
@@ -107,8 +106,8 @@ function normalizeSpec(input: unknown, index: number): TaskJobSpec {
     executable,
     ...(typeof raw.duty === "string" && raw.duty.trim() ? { duty: raw.duty.trim() } : {}),
     ...(typeof raw.reason === "string" && raw.reason.trim() ? { reason: raw.reason.trim() } : {}),
-    ...(typeof raw.staff === "string" && raw.staff.trim() ? { staff: raw.staff.trim() } : {}),
-    ...(typeof raw.persona === "string" && raw.persona.trim() ? { persona: raw.persona.trim() } : {}),
+    ...(typeof raw.agent === "string" && raw.agent.trim() ? { agent: raw.agent.trim() } : {}),
+    ...(typeof raw.agent === "string" && raw.agent.trim() ? { agent: raw.agent.trim() } : {}),
     ...(cliArgs ? { cliArgs: cliArgs as Record<string, unknown> } : {}),
     ...(typeof raw.target === "number" && Number.isFinite(raw.target) ? { target: raw.target } : {}),
     ...(flavor === "instant" || flavor === "scheduled" ? { flavor } : {}),
@@ -121,7 +120,7 @@ function jobToPlannedTaskJob(job: Job): PlannedTaskJob {
     id: stableJobKey(job),
     executable: job.executable ?? job.duty ?? "unknown",
     duty: job.duty ?? job.action ?? job.executable ?? "unknown",
-    ...(job.persona ? { staff: job.persona } : {}),
+    ...(job.agent ? { agent: job.agent } : {}),
     ...(job.flavor ? { flavor: job.flavor } : {}),
     ...(job.schedule ? { schedule: job.schedule } : {}),
     ...(typeof job.target === "number" ? { target: job.target } : {}),

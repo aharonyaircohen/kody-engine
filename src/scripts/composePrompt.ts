@@ -12,15 +12,15 @@
  * string (fail-soft).
  *
  * Tokens specific to the duty pipeline (set by loadJobFromFile /
- * loadDutyState; see also the legacy `{{jobSlug}}` / `{{workerSlug}}` /
+ * loadDutyState; see also the legacy `{{jobSlug}}` / `{{agentSlug}}` /
  * `{{jobSchedule}}` aliases which remain populated for back-compat):
  *   - {{dutyReference}}    full "Duty reference" block: slug + title +
- *                           executable + staff + cadence (one block)
+ *                           executable + agent + cadence (one block)
  *   - {{dutySlug}}         the duty slug (alias of {{jobSlug}})
  *   - {{dutyTitle}}        the duty title (alias of {{jobTitle}})
  *   - {{executableSlug}}   the executable doing the tick (profile.name)
- *   - {{staffSlug}}        the staff member (alias of {{workerSlug}})
- *   - {{staffTitle}}       the staff file H1 (alias of {{workerTitle}})
+ *   - {{agentSlug}}        the agent (alias of {{agentSlug}})
+ *   - {{agentTitle}}       the agent file H1 (alias of {{agentTitle}})
  *   - {{dutySchedule}}     cadence string ("15m".."7d" or cron), or "" for
  *                           on-demand (alias of {{jobSchedule}} for the
  *                           duty-tick-scripted path)
@@ -131,7 +131,7 @@ export const composePrompt: PreflightScript = async (ctx, profile) => {
     defaultBranch: ctx.config.git.defaultBranch,
     branch: (ctx.data.branch as string) ?? "",
     // The `{{dutyReference}}` block is built from ctx.data.* (with legacy
-    // jobSlug/jobTitle/workerSlug/jobSchedule fallbacks) so a duty prompt can
+    // jobSlug/jobTitle/agentSlug/jobSchedule fallbacks) so a duty prompt can
     // place a labeled summary at the top. The five underlying tokens are
     // also exposed individually so a template can compose them differently
     // (e.g. put the executable slug inline in a header).
@@ -139,8 +139,8 @@ export const composePrompt: PreflightScript = async (ctx, profile) => {
     dutySlug: pickToken(ctx.data, "dutySlug", "jobSlug"),
     dutyTitle: pickToken(ctx.data, "dutyTitle", "jobTitle"),
     executableSlug: pickToken(ctx.data, "executableSlug") || profile.name,
-    staffSlug: pickToken(ctx.data, "staffSlug", "workerSlug"),
-    staffTitle: pickToken(ctx.data, "staffTitle", "workerTitle"),
+    agentSlug: pickToken(ctx.data, "agentSlug", "agentSlug"),
+    agentTitle: pickToken(ctx.data, "agentTitle", "agentTitle"),
     dutySchedule: pickToken(ctx.data, "dutySchedule", "jobSchedule"),
   }
 
@@ -215,12 +215,12 @@ function formatToolsUsage(profile: Profile): string {
 /**
  * Render the `{{dutyReference}}` token — a single labeled block at the top of
  * a duty tick's prompt that names the duty, the executable doing the tick,
- * the assigned staff member, and the cadence. The five underlying tokens
- * (`{{dutySlug}}`, `{{dutyTitle}}`, `{{executableSlug}}`, `{{staffSlug}}`,
+ * the assigned agent, and the cadence. The five underlying tokens
+ * (`{{dutySlug}}`, `{{dutyTitle}}`, `{{executableSlug}}`, `{{agentSlug}}`,
  * `{{dutySchedule}}`) are also exposed individually so templates can place
  * them in different spots.
  *
- * Fields fall back to legacy ctx.data.* (jobSlug / jobTitle / workerSlug /
+ * Fields fall back to legacy ctx.data.* (jobSlug / jobTitle / agentSlug /
  * jobSchedule) so a duty prompt that hasn't been re-mapped still produces a
  * coherent block. Each field renders as a bulleted line; missing/empty
  * fields are omitted rather than rendered as blank "Foo: ".
@@ -233,8 +233,8 @@ function formatDutyReference(data: Record<string, unknown>, profileName: string)
   // compose-time so a bare profile that never ran the loader still renders
   // something coherent.
   const executableSlug = pickToken(data, "executableSlug") || profileName
-  const staffSlug = pickToken(data, "staffSlug", "workerSlug")
-  const staffTitle = pickToken(data, "staffTitle", "workerTitle")
+  const agentSlug = pickToken(data, "agentSlug", "agentSlug")
+  const agentTitle = pickToken(data, "agentTitle", "agentTitle")
   const dutySchedule = pickToken(data, "dutySchedule", "jobSchedule")
 
   const lines = ["# Duty reference", ""]
@@ -244,11 +244,11 @@ function formatDutyReference(data: Record<string, unknown>, profileName: string)
   if (executableSlug) {
     lines.push(`- Executable: \`${executableSlug}\``)
   }
-  const staffLine = staffSlug
-    ? `\`${staffSlug}\`${staffTitle && staffTitle !== staffSlug ? ` — *${staffTitle}*` : ""}`
+  const staffLine = agentSlug
+    ? `\`${agentSlug}\`${agentTitle && agentTitle !== agentSlug ? ` — *${agentTitle}*` : ""}`
     : ""
   if (staffLine) {
-    lines.push(`- Staff: ${staffLine}`)
+    lines.push(`- Agent: ${staffLine}`)
   }
   if (dutySchedule) {
     lines.push(`- Cadence: \`${dutySchedule}\``)

@@ -38,7 +38,7 @@ export interface TaskJob {
   id: string
   executable: string
   duty?: string
-  staff?: string
+  agent?: string
   flavor?: JobFlavor
   schedule?: string
   target?: number
@@ -56,7 +56,7 @@ export interface PlannedTaskJob {
   id: string
   executable: string
   duty?: string
-  staff?: string
+  agent?: string
   flavor?: JobFlavor
   schedule?: string
   target?: number
@@ -80,12 +80,12 @@ export interface TaskState {
     prUrl?: string
     runUrl?: string
     /**
-     * Staff member the most recent run executed as (the duty's `staff`),
-     * recorded by the executor when it loads + injects that persona. Durable
+     * Agent member the most recent run executed as (the duty's `agent`),
+     * recorded by the executor when it loads + injects that agent. Durable
      * proof of *who* ran — surfaced in the rendered comment. Null/absent when
-     * the run had no staff (legacy executable with no persona).
+     * the run had no agent (legacy executable with no agent).
      */
-    ranAsStaff?: string | null
+    ranAsAgent?: string | null
   }
   executables: Record<string, ExecutableState>
   /**
@@ -152,8 +152,8 @@ export interface HistoryEntry {
   executable: string
   action: string
   note?: string
-  /** Staff member this run executed as, when the duty declares one. */
-  staff?: string
+  /** Agent member this run executed as, when the duty declares one. */
+  agent?: string
   /** Stable id for this job run (CI run id when in Actions, else a stamp). */
   jobId?: string
   /** Whether this run was an instant (`@kody`) or scheduled (cron) job. */
@@ -320,7 +320,7 @@ export interface JobMeta {
   duty?: string
   executable?: string
   target?: number
-  persona?: string
+  agent?: string
   why?: string
 }
 
@@ -329,7 +329,7 @@ export function reduce(
   executable: string,
   action: Action | null,
   phase?: Phase,
-  staff?: string | null,
+  agent?: string | null,
   job?: JobMeta,
 ): TaskState {
   if (!action) return state
@@ -338,7 +338,7 @@ export function reduce(
     ...state.executables,
     [executable]: { ...(state.executables[executable] ?? { lastAction: null }), lastAction: action },
   }
-  const ranAsStaff = typeof staff === "string" && staff.length > 0 ? staff : undefined
+  const ranAsAgent = typeof agent === "string" && agent.length > 0 ? agent : undefined
   // Each run appends one audit entry. The durable job state is updated below
   // via `reduceJobs`, keyed by the stable jobKey when the caller knows it.
   const entry: HistoryEntry = {
@@ -346,7 +346,7 @@ export function reduce(
     executable,
     action: action.type,
     note: noteFromAction(action),
-    staff: ranAsStaff,
+    agent: ranAsAgent,
     status: statusFromAction(action),
     ...(job?.jobId ? { jobId: job.jobId } : {}),
     ...(job?.flavor ? { flavor: job.flavor } : {}),
@@ -354,7 +354,7 @@ export function reduce(
     ...(job?.runUrl ? { runUrl: job.runUrl } : {}),
   }
   const newHistory = [...state.history, entry].slice(-HISTORY_MAX_ENTRIES)
-  const newJobs = reduceJobs(state.jobs ?? {}, executable, action, staff, job)
+  const newJobs = reduceJobs(state.jobs ?? {}, executable, action, agent, job)
   return {
     schemaVersion: 1,
     core: {
@@ -362,7 +362,7 @@ export function reduce(
       attempts: newAttempts,
       lastOutcome: action,
       currentExecutable: executable,
-      ranAsStaff: ranAsStaff ?? null,
+      ranAsAgent: ranAsAgent ?? null,
       status: statusFromAction(action),
       phase: phaseFromAction(action, phase),
     },
@@ -383,7 +383,7 @@ export function upsertTaskJobs(state: TaskState, planned: PlannedTaskJob[], time
       id: plan.id,
       executable: plan.executable,
       ...((plan.duty ?? prior?.duty) ? { duty: plan.duty ?? prior?.duty } : {}),
-      ...((plan.staff ?? prior?.staff) ? { staff: plan.staff ?? prior?.staff } : {}),
+      ...((plan.agent ?? prior?.agent) ? { agent: plan.agent ?? prior?.agent } : {}),
       ...((plan.flavor ?? prior?.flavor) ? { flavor: plan.flavor ?? prior?.flavor } : {}),
       ...((plan.schedule ?? prior?.schedule) ? { schedule: plan.schedule ?? prior?.schedule } : {}),
       ...(typeof plan.target === "number"
@@ -418,7 +418,7 @@ function reduceJobs(
   jobs: Record<string, TaskJob>,
   executable: string,
   action: Action,
-  staff?: string | null,
+  agent?: string | null,
   job?: JobMeta,
 ): Record<string, TaskJob> {
   const status = statusFromAction(action)
@@ -436,12 +436,12 @@ function reduceJobs(
     ...(prUrl ? { prUrl } : {}),
   }
   const runs = [...(prior?.runs ?? []), run].slice(-JOB_RUNS_MAX_ENTRIES)
-  const ranAsStaff = typeof staff === "string" && staff.length > 0 ? staff : job?.persona
+  const ranAsAgent = typeof agent === "string" && agent.length > 0 ? agent : job?.agent
   const next: TaskJob = {
     id,
     executable: job?.executable ?? prior?.executable ?? executable,
     ...((job?.duty ?? prior?.duty) ? { duty: job?.duty ?? prior?.duty } : {}),
-    ...((ranAsStaff ?? prior?.staff) ? { staff: ranAsStaff ?? prior?.staff } : {}),
+    ...((ranAsAgent ?? prior?.agent) ? { agent: ranAsAgent ?? prior?.agent } : {}),
     ...((job?.flavor ?? prior?.flavor) ? { flavor: job?.flavor ?? prior?.flavor } : {}),
     ...((job?.schedule ?? prior?.schedule) ? { schedule: job?.schedule ?? prior?.schedule } : {}),
     ...(typeof job?.target === "number"
@@ -497,7 +497,7 @@ function normalizeJobs(input: unknown): Record<string, TaskJob> {
       id: raw.id,
       executable: raw.executable,
       ...(typeof raw.duty === "string" ? { duty: raw.duty } : {}),
-      ...(typeof raw.staff === "string" ? { staff: raw.staff } : {}),
+      ...(typeof raw.agent === "string" ? { agent: raw.agent } : {}),
       ...(raw.flavor === "instant" || raw.flavor === "scheduled" ? { flavor: raw.flavor } : {}),
       ...(typeof raw.schedule === "string" ? { schedule: raw.schedule } : {}),
       ...(typeof raw.target === "number" ? { target: raw.target } : {}),
@@ -553,8 +553,8 @@ export function renderStateComment(state: TaskState): string {
   if (state.core.currentExecutable) {
     lines.push(`- **Last executable:** \`${state.core.currentExecutable}\``)
   }
-  if (state.core.ranAsStaff) {
-    lines.push(`- **Ran as:** \`${state.core.ranAsStaff}\``)
+  if (state.core.ranAsAgent) {
+    lines.push(`- **Ran as:** \`${state.core.ranAsAgent}\``)
   }
   if (state.core.lastOutcome) {
     lines.push(`- **Last action:** \`${state.core.lastOutcome.type}\``)

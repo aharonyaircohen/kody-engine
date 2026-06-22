@@ -84,7 +84,7 @@ function fakeCtx(raw: GoalState) {
 
 describe("standing goal duty scheduling", () => {
   it("dispatches a due duty and records the goal scheduling decision", async () => {
-    writeDuty("ci-health", { every: "15m", staff: "kody" })
+    writeDuty("ci-health", { every: "15m", agent: "kody" })
     const raw = goalState()
     const ctx = fakeCtx(raw)
 
@@ -109,7 +109,7 @@ describe("standing goal duty scheduling", () => {
   })
 
   it("keeps route-free routines on the duty-cadence loop", async () => {
-    writeDuty("ci-health", { every: "15m", staff: "kody" })
+    writeDuty("ci-health", { every: "15m", agent: "kody" })
     const raw = goalState(["ci-health"])
     raw.extra.type = "routine"
     const ctx = fakeCtx(raw)
@@ -132,7 +132,7 @@ describe("standing goal duty scheduling", () => {
   })
 
   it("passes duty slug to due executable duties that declare a duty input", async () => {
-    writeDuty("auto-fix-ci", { every: "15m", staff: "kody", executable: "auto-fix-ci" })
+    writeDuty("auto-fix-ci", { every: "15m", agent: "kody", executable: "auto-fix-ci" })
     writeExecutable("auto-fix-ci", {
       inputs: [{ name: "duty", flag: "--duty", type: "string", required: true }],
     })
@@ -153,7 +153,7 @@ describe("standing goal duty scheduling", () => {
   })
 
   it("waits when no duty is due", async () => {
-    writeDuty("ci-health", { every: "15m", staff: "kody" })
+    writeDuty("ci-health", { every: "15m", agent: "kody" })
     writeDutyState("ci-health", new Date().toISOString())
     const raw = goalState()
     const ctx = fakeCtx(raw)

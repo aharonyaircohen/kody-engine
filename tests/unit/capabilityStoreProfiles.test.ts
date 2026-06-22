@@ -10,7 +10,7 @@ const STORE_DUTIES_ROOT = path.join(STORE_ROOT, ".kody", "duties")
 const STORE_EXECUTABLES_ROOT = path.join(STORE_ROOT, ".kody", "executables")
 const CAPABILITY_KINDS = new Set(["observe", "act", "verify"])
 const CHAT_DUTY_ALIASES = new Set(["kody-analyzer", "kody-mem", "kody-operator", "kody-vibe"])
-const MIGRATED_EXECUTABLE_ACTIONS = ["classify", "qa-engineer", "spec", "worker-ask"]
+const MIGRATED_EXECUTABLE_ACTIONS = ["classify", "qa-engineer", "spec", "agent-ask"]
 const INTERNAL_EXECUTABLE_ONLY_PROFILES = [
   "duty-scheduler",
   "duty-tick",

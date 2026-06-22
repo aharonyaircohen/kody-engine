@@ -13,7 +13,7 @@ The company store is a catalog. Consumer repos decide which shared duties and go
 
 ## Duties
 
-Store duties are inactive by default. A store duty may declare `every`, `staff`, or `executable`, but those fields are only used after the consumer lists the duty under `company.activeDuties`.
+Store duties are inactive by default. A store duty may declare `every`, `agent`, or `executable`, but those fields are only used after the consumer lists the duty under `company.activeDuties`.
 
 Missing or empty `company.activeDuties` means no store duties auto-run. Local repo duties remain repo-owned.
 

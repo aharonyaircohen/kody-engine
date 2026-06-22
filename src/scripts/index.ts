@@ -45,7 +45,7 @@ import { loadPriorArt } from "./loadPriorArt.js"
 import { loadQaContext } from "./loadQaContext.js"
 import { loadTaskContext } from "./loadTaskContext.js"
 import { loadTaskState } from "./loadTaskState.js"
-import { loadWorkerAdhoc } from "./loadWorkerAdhoc.js"
+import { loadAgentAdhoc } from "./loadAgentAdhoc.js"
 import { markFlowSuccess } from "./markFlowSuccess.js"
 import { mergeFlow } from "./mergeFlow.js"
 import { mergeReleasePr } from "./mergeReleasePr.js"
@@ -112,7 +112,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   loadIssueStateComment,
   loadJobFromFile,
   loadDutyState,
-  loadWorkerAdhoc,
+  loadAgentAdhoc,
   loadConventions,
   loadCoverageRules,
   loadLinkedFinding,

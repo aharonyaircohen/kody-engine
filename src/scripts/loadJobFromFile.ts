@@ -13,26 +13,26 @@
  *   ctx.data.jobIntent       the duty body
  *   ctx.data.jobStateJson    rendered prior state, or seed on first run
  *   ctx.data.jobState        LoadedJobState (path, handle, state, created)
- *   ctx.data.workerSlug      the assigned staff slug (or "" if none)
- *   ctx.data.workerTitle     staff file H1, or humanized staff slug
- *   ctx.data.workerPersona   staff persona body (post-frontmatter), or ""
+ *   ctx.data.agentSlug      the assigned agent slug (or "" if none)
+ *   ctx.data.agentTitle     agent file H1, or humanized agent slug
+ *   ctx.data.agentIdentity   agent identity body (post-frontmatter), or ""
  *   ctx.data.mentions        "@a @b" from the duty profile's `mentions`, or ""
  *
  *   ctx.data.dutySlug        alias of jobSlug — the "Duty" noun introduced
  *                            by Phase 1 of the duty-pipeline rename
  *   ctx.data.dutyTitle       alias of jobTitle
- *   ctx.data.staffSlug       alias of workerSlug — the staff member (who)
- *   ctx.data.staffTitle      alias of workerTitle
+ *   ctx.data.agentSlug       alias of agentSlug — the agent (who)
+ *   ctx.data.agentTitle      alias of agentTitle
  *   ctx.data.executableSlug  profile.name — the executable doing the tick (how)
  *
- * The staff member is *who* the tick runs as: a duty names exactly one
- * staff member via `profile.json`; its persona is injected ahead of the duty
- * body by `duty-tick`. A staff slug that points at a missing file is a hard
+ * The agent is *who* the tick runs as: a duty names exactly one
+ * agent via `profile.json`; its agent is injected ahead of the duty
+ * body by `duty-tick`. An agent slug that points at a missing file is a hard
  * error — a duty must not silently run with no executor identity.
  *
  * Script args (via `with:`):
  *   jobsDir       optional — default ".kody/duties"
- *   workersDir    optional — default ".kody/staff"
+ *   agentsDir    optional — default ".kody/agents"
  *   slugArg       optional — name of the CLI input holding the slug (default "job")
  */
 
@@ -41,14 +41,14 @@ import * as path from "node:path"
 import { DUTY_MCP_TOOL_NAMES } from "../dutyMcp.js"
 import type { PreflightScript } from "../executables/types.js"
 import { resolveDutyFolder } from "../registry.js"
-import { resolveStaffPersonaFile } from "../staff.js"
+import { resolveAgentFile } from "../agents.js"
 import { resolveBackend } from "./jobState/index.js"
 
 const DUTY_TOOL_PALETTE: ReadonlySet<string> = new Set(DUTY_MCP_TOOL_NAMES)
 
 export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
   const jobsDir = String(args?.jobsDir ?? ".kody/duties")
-  const workersDir = String(args?.workersDir ?? ".kody/staff")
+  const agentsDir = String(args?.agentsDir ?? ".kody/agents")
   const slugArg = String(args?.slugArg ?? "job")
   const slug = String(ctx.args[slugArg] ?? "").trim()
   if (!slug) {
@@ -68,22 +68,22 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
   // string when none are declared. Fail-soft: never throws.
   const mentions = (config.mentions ?? []).map((login) => `@${login}`).join(" ")
 
-  // Resolve the assigned staff member (persona) — *who* this tick runs as.
-  // The duty owns scheduling; the staff member is identity/doctrine injected
-  // ahead of the duty body. A `staff` value pointing at a missing file is fatal: a
+  // Resolve the assigned agent (agent) — *who* this tick runs as.
+  // The duty owns scheduling; the agent is identity/doctrine injected
+  // ahead of the duty body. A `agent` value pointing at a missing file is fatal: a
   // duty must never run without the executor identity it declared.
-  const workerSlug = (config.staff ?? "").trim()
-  let workerTitle = ""
-  let workerPersona = ""
-  if (workerSlug) {
-    const workerPath = resolveStaffPersonaFile(ctx.cwd, workerSlug, workersDir)
-    if (!fs.existsSync(workerPath)) {
-      throw new Error(`loadJobFromFile: duty '${slug}' declares staff '${workerSlug}' but ${workerPath} does not exist`)
+  const agentSlug = (config.agent ?? "").trim()
+  let agentTitle = ""
+  let agentIdentity = ""
+  if (agentSlug) {
+    const agentPath = resolveAgentFile(ctx.cwd, agentSlug, agentsDir)
+    if (!fs.existsSync(agentPath)) {
+      throw new Error(`loadJobFromFile: duty '${slug}' declares agent '${agentSlug}' but ${agentPath} does not exist`)
     }
-    const workerRaw = fs.readFileSync(workerPath, "utf-8")
-    const parsed = parseJobFile(workerRaw, workerSlug)
-    workerTitle = parsed.title
-    workerPersona = parsed.body
+    const agentRaw = fs.readFileSync(agentPath, "utf-8")
+    const parsed = parseJobFile(agentRaw, agentSlug)
+    agentTitle = parsed.title
+    agentIdentity = parsed.body
   }
 
   // Backend-agnostic load. Returns a seed envelope on first run.
@@ -102,26 +102,26 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
   // recommendations with `<!-- kody-duty: {{duty}} -->`. Duties that post recs
   // as plain comments (e.g. the QA duties) need this — the engine only
   // auto-stamps recs sent via the `recommend_to_operator` tool. The dashboard
-  // reads the stamp to key trust per duty instead of per persona.
+  // reads the stamp to key trust per duty instead of per agent.
   ctx.data.jobIntent = body.replace(/\{\{\s*mentions\s*\}\}/g, mentions).replace(/\{\{\s*duty\s*\}\}/g, slug)
   ctx.data.jobState = loaded
   ctx.data.jobStateJson = JSON.stringify(loaded.state, null, 2)
-  ctx.data.workerSlug = workerSlug
-  ctx.data.workerTitle = workerTitle
-  ctx.data.workerPersona = workerPersona
+  ctx.data.agentSlug = agentSlug
+  ctx.data.agentTitle = agentTitle
+  ctx.data.agentIdentity = agentIdentity
   ctx.data.mentions = mentions
 
   // Duty-noun aliases. The domain noun for one tick of a markdown duty is
   // "Duty", not "Job" — the engine's `Job` runtime envelope (src/job.ts) and
   // the scheduled-watch executable shape are a separate concern, see AGENTS.md.
-  // The legacy `jobSlug` / `jobTitle` / `workerSlug` / `workerTitle` fields
+  // The legacy `jobSlug` / `jobTitle` / `agentSlug` / `agentTitle` fields
   // stay populated above for backwards compat with the kody-job-next-state
   // fence label, existing prompt templates, and any operator-written duty
   // bodies that still reference the old tokens.
   ctx.data.dutySlug = slug
   ctx.data.dutyTitle = title
-  ctx.data.staffSlug = workerSlug
-  ctx.data.staffTitle = workerTitle
+  ctx.data.agentSlug = agentSlug
+  ctx.data.agentTitle = agentTitle
   ctx.data.executableSlug = profile.name
   ctx.data.dutySchedule = config.every ?? ""
 
@@ -162,7 +162,7 @@ interface ParsedJob {
 }
 
 function parseJobFile(raw: string, slug: string): ParsedJob {
-  // Staff personas may carry their own small metadata block. Duty metadata is
+  // Agent identitys may carry their own small metadata block. Duty metadata is
   // not read here; folder duties use profile.json via readDutyFolder().
   let stripped = raw
   if (stripped.startsWith("---\n")) {

@@ -83,7 +83,7 @@ Example:
 | `action` | optional | Public action name. If absent, defaults to duty name. |
 | `executable` | usually | Implementation executable, the concrete how. |
 | `executables` | optional | Ordered executable list for split task work. Use sparingly. |
-| `staff` | optional | Staff persona, the who. |
+| `agent` | optional | Agent identity, the who. |
 | `every` | optional | Scheduler cadence. Use `manual` for on-demand duties. |
 | `mentions` | optional | GitHub logins to mention in duty output. |
 | `dutyTools` | optional | Locked duty MCP tool names. |
@@ -229,7 +229,7 @@ Use this checklist:
 2. Name the duty by the one capability it provides, not the whole process.
 3. Choose exactly one `capabilityKind`: `observe`, `act`, or `verify`.
 4. Put the concrete work in an executable.
-5. Add `staff` only when a specific persona matters.
+5. Add `agent` only when a specific agent matters.
 6. Add `every` only when the duty is scheduled.
 7. Write `duty.md` with purpose, inputs, outputs, allowed actions, and restrictions.
 8. Emit `KODY_DUTY_RESULT` with the duty outcome.

@@ -72,7 +72,7 @@ export const advanceFlow: PostflightScript = async (ctx, profile) => {
   const action = ctx.data.action as Action | undefined
   let nextIssueState: TaskState = issueState
   if (targetType === "pr" && action) {
-    nextIssueState = reduce(issueState, profile.name, action, profile.phase, profile.staff, jobMetaFromData(ctx.data))
+    nextIssueState = reduce(issueState, profile.name, action, profile.phase, profile.agent, jobMetaFromData(ctx.data))
     // Preserve PR URL on the issue's state too.
     if (state?.core.prUrl && !nextIssueState.core.prUrl) nextIssueState.core.prUrl = state.core.prUrl
   }

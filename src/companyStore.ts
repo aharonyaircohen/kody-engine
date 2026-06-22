@@ -25,7 +25,7 @@ export function getCompanyStoreRoot(): string | null {
   return root
 }
 
-export function getCompanyStoreAssetRoot(kind: "duties" | "executables" | "goals" | "staff"): string | null {
+export function getCompanyStoreAssetRoot(kind: "duties" | "executables" | "goals" | "agents"): string | null {
   const root = getCompanyStoreRoot()
   if (!root) return null
   return path.join(root, ".kody", kind)

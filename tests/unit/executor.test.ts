@@ -106,7 +106,7 @@ describe("executor: jobReferenceBlock", () => {
       {
         name: "live-job-wiring",
         executable: "job-live-verify",
-        staff: "live-verifier",
+        agent: "live-verifier",
         describe: "Live duty description",
       },
       {
@@ -124,12 +124,12 @@ describe("executor: jobReferenceBlock", () => {
     expect(block).toContain("Schedule: manual")
     expect(block).toContain("Duty: live-job-wiring")
     expect(block).toContain("Executable: job-live-verify")
-    expect(block).toContain("Staff: live-verifier")
+    expect(block).toContain("Agent: live-verifier")
     expect(block).toContain("Description: Live duty description")
   })
 
   it("does not render for legacy direct executable calls without job metadata", () => {
-    expect(jobReferenceBlock("run", { name: "run", describe: "", staff: undefined }, {})).toBeNull()
+    expect(jobReferenceBlock("run", { name: "run", describe: "", agent: undefined }, {})).toBeNull()
   })
 })
 

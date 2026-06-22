@@ -103,11 +103,11 @@ describe("loadDutyState duty-noun aliases (Phase 1 rename)", () => {
     expect(ctx.data.executableSlug).toBe("duty-tick-scripted")
   })
 
-  it("populates staffSlug from profile.staff when set", async () => {
+  it("populates agentSlug from profile.agent when set", async () => {
     const ctx = ctxFor()
-    const profile = profileFor({}, { staff: "kody" })
+    const profile = profileFor({}, { agent: "kody" })
     await loadDutyState(ctx, profile, {})
-    expect(ctx.data.staffSlug).toBe("kody")
+    expect(ctx.data.agentSlug).toBe("kody")
   })
 
   it("populates dutySchedule from profile.every (new cadence string), or profile.schedule fallback", async () => {

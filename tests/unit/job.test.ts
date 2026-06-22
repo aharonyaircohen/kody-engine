@@ -9,7 +9,7 @@ const { runExecutableChain } = vi.hoisted(() => ({ runExecutableChain: vi.fn() }
 vi.mock("../../src/executor.js", () => ({ runExecutableChain }))
 
 import {
-  DEFAULT_INSTANT_PERSONA,
+  DEFAULT_INSTANT_AGENT,
   InvalidJobError,
   mintInstantJob,
   mintScheduledJob,
@@ -57,7 +57,7 @@ describe("runJob (Phase 1 seam)", () => {
     fs.mkdirSync(dutyDir, { recursive: true })
     fs.writeFileSync(
       path.join(dutyDir, "profile.json"),
-      JSON.stringify({ name: "ci-health", action: "ci-health", executable: "ci-check", staff: "kody" }),
+      JSON.stringify({ name: "ci-health", action: "ci-health", executable: "ci-check", agent: "kody" }),
     )
     fs.writeFileSync(path.join(dutyDir, "duty.md"), "# CI Health\n")
 
@@ -172,13 +172,13 @@ describe("runJob (Phase 1 seam)", () => {
     expect(input.preloadedData?.jobWhy).toBe("also add tests")
   })
 
-  it("seeds persona into preloadedData.jobPersona", async () => {
+  it("seeds agent into preloadedData.jobAgent", async () => {
     await runJob(
-      { duty: "run", persona: "kody", schedule: "*/5 * * * *", cliArgs: {}, flavor: "scheduled" },
+      { duty: "run", agent: "kody", schedule: "*/5 * * * *", cliArgs: {}, flavor: "scheduled" },
       { cwd: "/x" },
     )
     const [, input] = runExecutableChain.mock.calls[0]!
-    expect(input.preloadedData?.jobPersona).toBe("kody")
+    expect(input.preloadedData?.jobAgent).toBe("kody")
   })
 
   it("uses the duty reference in the stable key for scheduled jobs", async () => {
@@ -195,12 +195,12 @@ describe("runJob (Phase 1 seam)", () => {
     expect(runExecutableChain.mock.calls[0]![0]).toBe("run")
   })
 
-  it("seeds only job identity (no why/persona) for a bare scheduled job", async () => {
+  it("seeds only job identity (no why/agent) for a bare scheduled job", async () => {
     await runJob({ duty: "run", cliArgs: {}, flavor: "scheduled" }, { cwd: "/x" })
     const [, input] = runExecutableChain.mock.calls[0]!
     expect(input.preloadedData?.jobFlavor).toBe("scheduled")
     expect(input.preloadedData?.jobWhy).toBeUndefined()
-    expect(input.preloadedData?.jobPersona).toBeUndefined()
+    expect(input.preloadedData?.jobAgent).toBeUndefined()
   })
 
   it("rejects a job with no duty action or duty", () => {
@@ -236,12 +236,12 @@ describe("mintInstantJob (Phase 2)", () => {
     })
   })
 
-  it("defaults persona to the standard staff member", () => {
-    expect(mintInstantJob(dispatch).persona).toBe(DEFAULT_INSTANT_PERSONA)
+  it("defaults agent to the standard agent", () => {
+    expect(mintInstantJob(dispatch).agent).toBe(DEFAULT_INSTANT_AGENT)
   })
 
-  it("lets the caller override the persona", () => {
-    expect(mintInstantJob(dispatch, { persona: "reviewer" }).persona).toBe("reviewer")
+  it("lets the caller override the agent", () => {
+    expect(mintInstantJob(dispatch, { agent: "reviewer" }).agent).toBe("reviewer")
   })
 
   it("produces a job that runJob can run", async () => {
@@ -257,14 +257,14 @@ describe("mintScheduledJob (Phase 2)", () => {
       duty: "stale-prs",
       executable: "duty-tick",
       schedule: "*/5 * * * *",
-      persona: "kody",
+      agent: "kody",
       cliArgs: { duty: "stale-prs" },
     })
     expect(job).toMatchObject({
       duty: "stale-prs",
       executable: "duty-tick",
       schedule: "*/5 * * * *",
-      persona: "kody",
+      agent: "kody",
       cliArgs: { duty: "stale-prs" },
       flavor: "scheduled",
     })

@@ -101,14 +101,14 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
         continue
       }
 
-      // Every duty must name an executor. The staff member is the persona
+      // Every duty must name an executor. The agent is the agent
       // the tick runs as; with none declared there's no identity to run, so
       // skip (loudly) rather than fall back to an implicit default. Manual
       // `workflow_dispatch` "Run now" bypasses this dispatcher, but
-      // duty-tick's loader rejects a missing/dangling staff member there too.
-      if (!config.staff || config.staff.trim().length === 0) {
-        process.stderr.write(`[jobs] ⏭  skip ${slug}: no staff assigned (add "staff" to profile.json)\n`)
-        results.push({ slug, exitCode: 0, skipped: true, reason: "no staff assigned" })
+      // duty-tick's loader rejects a missing/dangling agent there too.
+      if (!config.agent || config.agent.trim().length === 0) {
+        process.stderr.write(`[jobs] ⏭  skip ${slug}: no agent assigned (add "agent" to profile.json)\n`)
+        results.push({ slug, exitCode: 0, skipped: true, reason: "no agent assigned" })
         continue
       }
 
@@ -138,7 +138,7 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
               duty: slug,
               executable: "task-jobs",
               schedule: config.every,
-              persona: config.staff,
+              agent: config.agent,
               cliArgs: { issue: task.number },
             }),
             { cwd: ctx.cwd, config: ctx.config, verbose: ctx.verbose, quiet: ctx.quiet },
@@ -173,7 +173,7 @@ export const dispatchDutyFileTicks: PreflightScript = async (ctx, _profile, args
             duty: slug,
             executable: slugTarget,
             schedule: config.every,
-            persona: config.staff,
+            agent: config.agent,
             cliArgs,
           }),
           { cwd: ctx.cwd, config: ctx.config, verbose: ctx.verbose, quiet: ctx.quiet, chain: false },
@@ -331,7 +331,7 @@ function buildDutyTaskIssueBody(slug: string, dutyBody: string, config: DutyFold
   const specs = (config.executables ?? []).map((executable) => ({
     executable,
     duty: slug,
-    ...(config.staff ? { staff: config.staff } : {}),
+    ...(config.agent ? { agent: config.agent } : {}),
     reason: `Duty \`${slug}\` slice for \`${executable}\`.`,
     flavor: "scheduled",
     ...(config.every ? { schedule: config.every } : {}),

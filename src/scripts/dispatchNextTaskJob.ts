@@ -31,7 +31,7 @@ function taskJobToJob(job: TaskJob, issueArg: unknown): Job {
     duty: job.duty ?? job.executable,
     executable: job.executable,
     ...(job.reason ? { why: job.reason } : {}),
-    ...(job.staff ? { persona: job.staff } : {}),
+    ...(job.agent ? { agent: job.agent } : {}),
     ...(job.schedule ? { schedule: job.schedule } : {}),
     ...(typeof target === "number" ? { target, cliArgs: { issue: target } } : { cliArgs: {} }),
     flavor: job.flavor ?? "instant",
