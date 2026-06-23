@@ -198,9 +198,9 @@ describe("ContentsApiBackend", () => {
     // Route gh by args: GET contents → current remote; PUT → scripted sequence
     // (first throws, then succeeds).
     function routeGh(currentRemote: StateEnvelope, freshSha: string, putResults: Array<"ok" | string>) {
-  let putIdx = 0
-  gh.mockImplementation((args: string[]) => {
-    if (args.includes("PUT")) {
+      let putIdx = 0
+      gh.mockImplementation((args: string[]) => {
+        if (args.includes("PUT")) {
           const r = putResults[putIdx++] ?? "ok"
           if (r !== "ok") throw new Error(r)
           return "{}"

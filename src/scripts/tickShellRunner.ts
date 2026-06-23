@@ -58,7 +58,11 @@ export function runTickShellAndParse(opts: TickShellRunOptions): void {
   opts.ctx.data.nextJobState = parsed.envelope
 }
 
-export function buildTickChildEnv(parent: NodeJS.ProcessEnv, force: boolean, loaded?: LoadedJobState): NodeJS.ProcessEnv {
+export function buildTickChildEnv(
+  parent: NodeJS.ProcessEnv,
+  force: boolean,
+  loaded?: LoadedJobState,
+): NodeJS.ProcessEnv {
   const allow = new Set([
     "PATH",
     "HOME",
