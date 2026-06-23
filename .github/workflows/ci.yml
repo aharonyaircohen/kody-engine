@@ -11,6 +11,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: aharonyaircohen/kody-company-store
+          ref: stable
+          path: ../kody-store
       - uses: pnpm/action-setup@v6
         with: { version: 11 }
       - uses: actions/setup-node@v4
