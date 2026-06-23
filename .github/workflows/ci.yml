@@ -9,17 +9,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      KODY_COMPANY_STORE: ${{ github.workspace }}/kody-store
-      KODY_COMPANY_STORE_REF: stable
-      KODY_STORE_PATH: ${{ github.workspace }}/kody-store
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
-        with:
-          repository: aharonyaircohen/kody-company-store
-          ref: stable
-          path: kody-store
+      - name: Checkout company store for tests
+        run: git clone --depth 1 --branch stable https://github.com/aharonyaircohen/kody-company-store.git ../kody-store
       - uses: pnpm/action-setup@v6
         with: { version: 11 }
       - uses: actions/setup-node@v4
