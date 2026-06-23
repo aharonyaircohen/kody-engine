@@ -1,8 +1,15 @@
+import { generateKeyPairSync } from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { detectPackageManager, parseCiArgs, resolveAuthToken, runCi, unpackAllSecrets } from "../../src/kody-cli.js"
+
+const { privateKey: appPrivateKey } = generateKeyPairSync("rsa", {
+  modulusLength: 2048,
+  privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  publicKeyEncoding: { type: "spki", format: "pem" },
+})
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-cli-test-"))
@@ -117,6 +124,27 @@ describe("kody-cli: unpackAllSecrets", () => {
 })
 
 describe("kody-cli: resolveAuthToken", () => {
+  it("prefers GitHub App mint over a prefilled workflow token", async () => {
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      const body = String(url).endsWith("/installation")
+        ? JSON.stringify({ id: 12345 })
+        : JSON.stringify({ token: "ghs_installation" })
+      return new Response(body, { status: 200 })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const env: NodeJS.ProcessEnv = {
+      KODY_APP_ID: "42",
+      KODY_APP_PRIVATE_KEY: appPrivateKey,
+      GITHUB_REPOSITORY: "A-Guy-educ/A-Guy-Web",
+      KODY_TOKEN: "ghs_current_repo",
+    }
+
+    expect(await resolveAuthToken(env)).toBe("ghs_installation")
+    expect(env.GH_TOKEN).toBe("ghs_installation")
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it("picks KODY_TOKEN first", async () => {
     const env: NodeJS.ProcessEnv = { KODY_TOKEN: "k", GH_TOKEN: "g", GITHUB_TOKEN: "gh", GH_PAT: "p" }
     expect(await resolveAuthToken(env)).toBe("k")

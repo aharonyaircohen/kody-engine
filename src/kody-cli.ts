@@ -109,6 +109,21 @@ export function unpackAllSecrets(env: NodeJS.ProcessEnv = process.env): number {
 }
 
 export async function resolveAuthToken(env: NodeJS.ProcessEnv = process.env): Promise<string | undefined> {
+  // App credentials are the modern Kody auth path. Prefer minting here over
+  // a workflow-provided token because the workflow token may only cover the
+  // current repo, while Kody state can live in a sibling repo.
+  const creds = readAppCreds(env)
+  if (creds) {
+    try {
+      const minted = await mintAppInstallationToken(creds)
+      env.GH_TOKEN = minted
+      process.stdout.write("→ kody: GH_TOKEN minted from GitHub App (KODY_APP_ID/KODY_APP_PRIVATE_KEY)\n")
+      return minted
+    } catch (err) {
+      process.stdout.write(`→ kody: WARNING GitHub App token mint failed: ${(err as Error).message}\n`)
+    }
+  }
+
   const sources: Array<[string, string | undefined]> = [
     ["KODY_TOKEN", env.KODY_TOKEN],
     ["GH_TOKEN", env.GH_TOKEN],
@@ -123,21 +138,6 @@ export async function resolveAuthToken(env: NodeJS.ProcessEnv = process.env): Pr
     // (that was temporary diagnostics for the kodyade throttle hunt).
     process.stdout.write(`→ kody: GH_TOKEN sourced from env.${picked![0]}\n`)
     return token
-  }
-
-  // No ready-made token — fall back to minting one from GitHub App creds
-  // (KODY_APP_ID + KODY_APP_PRIVATE_KEY). Mints once; the ~1h installation
-  // token is fine for typical runs but does NOT auto-refresh yet.
-  const creds = readAppCreds(env)
-  if (creds) {
-    try {
-      const minted = await mintAppInstallationToken(creds)
-      env.GH_TOKEN = minted
-      process.stdout.write("→ kody: GH_TOKEN minted from GitHub App (KODY_APP_ID/KODY_APP_PRIVATE_KEY)\n")
-      return minted
-    } catch (err) {
-      process.stdout.write(`→ kody: WARNING GitHub App token mint failed: ${(err as Error).message}\n`)
-    }
   }
 
   process.stdout.write(
