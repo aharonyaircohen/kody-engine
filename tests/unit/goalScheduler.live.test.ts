@@ -24,6 +24,7 @@ function schedulerPath(): string {
 
 let tmp: string
 let logFile: string
+let ghLogFile: string
 
 function managedGoalExtra(): Record<string, unknown> {
   return {
@@ -43,6 +44,10 @@ function writeGoal(id: string, state: string | null, extra: Record<string, unkno
   if (state !== null) {
     fs.writeFileSync(path.join(dir, "state.json"), JSON.stringify({ version: 1, state, ...extra }, null, 2))
   }
+}
+
+function writeConfig(config: Record<string, unknown>): void {
+  fs.writeFileSync(path.join(tmp, "kody.config.json"), `${JSON.stringify(config, null, 2)}\n`)
 }
 
 function writeTemplate(slug: string, extra: Record<string, unknown> = {}): void {
@@ -78,26 +83,61 @@ function installEngineStub(): string {
   return binDir
 }
 
-function runScheduler(): { status: number; stdout: string; calls: string[] } {
+function installGhStub(binDir: string): void {
+  const stub = path.join(binDir, "gh")
+  fs.writeFileSync(
+    stub,
+    [
+      "#!/usr/bin/env bash",
+      'echo "gh $*" >> "$KODY_GH_LOG"',
+      'if [ "$1" = "api" ] && [ "$2" = "/repos/A-Guy-educ/kody-state/contents/A-Guy-Web/goals/instances" ]; then',
+      '  printf \'[{"name":"web-release","type":"dir"}]\\n\'',
+      "  exit 0",
+      "fi",
+      'if [ "$1" = "api" ] && [ "$2" = "/repos/A-Guy-educ/kody-state/contents/A-Guy-Web/goals/instances/web-release/state.json" ]; then',
+      '  printf \'{"type":"file","encoding":"base64","content":"%s"}\\n\' "$(printf \'%s\' "$KODY_REMOTE_GOAL_JSON" | base64 | tr -d \'\\n\')"',
+      "  exit 0",
+      "fi",
+      'echo "unexpected gh call: $*" >&2',
+      "exit 9",
+      "",
+    ].join("\n"),
+  )
+  fs.chmodSync(stub, 0o755)
+}
+
+function runScheduler(options: { remote?: boolean } = {}): {
+  status: number
+  stdout: string
+  stderr: string
+  calls: string[]
+  ghCalls: string[]
+} {
   const binDir = installEngineStub()
+  if (options.remote) installGhStub(binDir)
   const res = spawnSync("bash", [schedulerPath()], {
     cwd: tmp,
     env: {
       ...process.env,
       PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ""}`,
       KODY_LOG: logFile,
+      KODY_GH_LOG: ghLogFile,
       KODY_GOAL_SCHEDULER_NOW: "2026-06-20T12:00:00Z",
-      KODY_GOAL_SCHEDULER_SKIP_PERSIST: "1",
+      ...(options.remote
+        ? { KODY_REMOTE_GOAL_JSON: JSON.stringify({ version: 1, state: "active", ...managedGoalExtra() }) }
+        : { KODY_GOAL_SCHEDULER_SKIP_PERSIST: "1" }),
     },
     encoding: "utf-8",
   })
   const calls = fs.existsSync(logFile) ? fs.readFileSync(logFile, "utf-8").trim().split("\n").filter(Boolean) : []
-  return { status: res.status ?? -1, stdout: res.stdout ?? "", calls }
+  const ghCalls = fs.existsSync(ghLogFile) ? fs.readFileSync(ghLogFile, "utf-8").trim().split("\n").filter(Boolean) : []
+  return { status: res.status ?? -1, stdout: res.stdout ?? "", stderr: res.stderr ?? "", calls, ghCalls }
 }
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "goal-sched-"))
   logFile = path.join(tmp, "calls.log")
+  ghLogFile = path.join(tmp, "gh-calls.log")
 })
 
 afterEach(() => {
@@ -140,6 +180,22 @@ describe("goal-scheduler live wiring", () => {
     expect(status).toBe(0)
     expect(calls.every((c) => c.startsWith("kody-engine "))).toBe(true)
     expect(calls.some((c) => c.startsWith("kody "))).toBe(false)
+  })
+
+  it("normalizes URL-form state.repo before using GitHub contents API", () => {
+    writeConfig({
+      github: { owner: "A-Guy-educ", repo: "A-Guy-Web" },
+      state: { repo: "https://github.com/A-Guy-educ/kody-state", path: "A-Guy-Web" },
+      company: { activeGoals: ["web-release"] },
+    })
+
+    const { status, stderr, calls, ghCalls } = runScheduler({ remote: true })
+
+    expect(status, stderr).toBe(0)
+    expect(ghCalls).toContain("gh api /repos/A-Guy-educ/kody-state/contents/A-Guy-Web/goals/instances")
+    expect(ghCalls).toContain("gh api /repos/A-Guy-educ/kody-state/contents/A-Guy-Web/goals/instances/web-release/state.json")
+    expect(ghCalls.some((call) => call.includes("/repos/https://github.com"))).toBe(false)
+    expect(calls).toEqual(["kody-engine exec goal-manager --goal web-release"])
   })
 
   it("skips paused and done goals", () => {
