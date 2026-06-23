@@ -49,6 +49,7 @@ describe("smoke: CLI boots and validates args", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-agentResponsibility-cli-smoke-"))
     fs.mkdirSync(path.join(root, ".kody", "agent-responsibilities"), { recursive: true })
     fs.mkdirSync(path.join(root, ".kody", "agent-actions", "smoke-impl"), { recursive: true })
+    fs.mkdirSync(path.join(root, ".kody", "agents"), { recursive: true })
     fs.writeFileSync(
       path.join(root, "kody.config.json"),
       JSON.stringify({
@@ -59,6 +60,7 @@ describe("smoke: CLI boots and validates args", () => {
       }),
     )
     fs.mkdirSync(path.join(root, ".kody", "agent-responsibilities", "smoke-agent-responsibility"), { recursive: true })
+    fs.writeFileSync(path.join(root, ".kody", "agents", "kody.md"), "# Kody\n")
     fs.writeFileSync(
       path.join(root, ".kody", "agent-responsibilities", "smoke-agent-responsibility", "profile.json"),
       JSON.stringify({
@@ -99,7 +101,7 @@ describe("smoke: CLI boots and validates args", () => {
       }),
     )
 
-    const r = runCli(["smoke-action"], { cwd: root })
+    const r = runCli(["smoke-action"], { cwd: root, env: { KODY_COMPANY_STORE: "off" } })
     expect(r.status).toBe(0)
   })
 })
