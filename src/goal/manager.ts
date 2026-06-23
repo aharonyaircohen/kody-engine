@@ -14,6 +14,7 @@ export interface GoalRouteStep {
   agentResponsibility: string
   agentAction?: string
   args?: Record<string, unknown>
+  saveReport?: boolean
 }
 
 export interface ManagedGoal {
@@ -39,6 +40,7 @@ export type ManagedGoalDecision =
       agentResponsibility: string
       agentAction?: string
       cliArgs: Record<string, unknown>
+      saveReport?: boolean
     }
   | { kind: "wait"; evidence: string; stage: string; reason: string }
   | { kind: "blocked"; evidence: string; stage: string; reason: string }
@@ -173,10 +175,11 @@ export function planManagedGoalTick(goal: ManagedGoal): ManagedGoalDecision {
     kind: "dispatch",
     evidence: missing,
     stage: step.stage,
-    agentResponsibility: step.agentResponsibility,
-    agentAction: step.agentAction,
-    cliArgs: resolved.cliArgs,
-  }
+      agentResponsibility: step.agentResponsibility,
+      agentAction: step.agentAction,
+      cliArgs: resolved.cliArgs,
+      ...(step.saveReport === true ? { saveReport: true } : {}),
+    }
 }
 
 function asStringArray(value: unknown): string[] | null {
@@ -210,6 +213,7 @@ function asRoute(value: unknown): GoalRouteStep[] | null {
       agentResponsibility: raw.agentResponsibility,
       agentAction: typeof raw.agentAction === "string" ? raw.agentAction : undefined,
       args: args ?? undefined,
+      saveReport: raw.saveReport === true,
     })
   }
   return route

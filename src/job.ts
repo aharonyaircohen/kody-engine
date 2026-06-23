@@ -79,6 +79,7 @@ export function validateJob(input: unknown): Job {
     cliArgs: (j.cliArgs as Record<string, unknown> | undefined) ?? {},
     flavor: j.flavor,
     force: j.force === true,
+    saveReport: j.saveReport === true,
   }
 }
 
@@ -161,6 +162,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     preloadedData.jobAgentAction = executableIdentity
   // The job carries *when*: a scheduled job's cadence, recorded in the ledger.
   if (valid.schedule !== undefined && valid.schedule.length > 0) preloadedData.jobSchedule = valid.schedule
+  if (valid.saveReport === true) preloadedData.jobSaveReport = true
   if (agentResponsibilityContext) {
     preloadedData.agentResponsibilitySlug = agentResponsibilityContext.slug
     preloadedData.agentResponsibilityTitle = agentResponsibilityContext.title
@@ -170,9 +172,6 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
       preloadedData.jobAgentResponsibility = agentResponsibilityContext.slug
     if (agentResponsibilityContext.config.agent && preloadedData.jobAgent === undefined) {
       preloadedData.jobAgent = agentResponsibilityContext.config.agent
-    }
-    if (agentResponsibilityContext.config.every && preloadedData.jobSchedule === undefined) {
-      preloadedData.jobSchedule = agentResponsibilityContext.config.every
     }
     if (agentResponsibilityContext.config.mentions && agentResponsibilityContext.config.mentions.length > 0) {
       preloadedData.mentions = agentResponsibilityContext.config.mentions.map((login: string) => `@${login}`).join(" ")
@@ -255,6 +254,8 @@ export interface ScheduledJobInput {
   agent?: string
   /** Args handed to the tick agentAction (e.g. `{ job: slug }` for `.md` agentResponsibilities). */
   cliArgs?: Record<string, unknown>
+  /** Save this run's final output as reports/<agentResponsibility>.md. */
+  saveReport?: boolean
 }
 
 /**
@@ -271,5 +272,6 @@ export function mintScheduledJob(input: ScheduledJobInput): Job {
     agent: input.agent,
     cliArgs: input.cliArgs ?? {},
     flavor: "scheduled",
+    saveReport: input.saveReport === true,
   }
 }

@@ -113,21 +113,14 @@ describe("loadAgentResponsibilityState agentResponsibility-noun aliases (Phase 1
     expect(ctx.data.agentSlug).toBe("kody")
   })
 
-  it("populates agentResponsibilitySchedule from profile.every (new cadence string), or profile.schedule fallback", async () => {
+  it("populates agentResponsibilitySchedule from runtime jobSchedule", async () => {
     const ctx = ctxFor()
-    const profile = profileFor({}, { every: "15m" })
-    await loadAgentResponsibilityState(ctx, profile, {})
-    expect(ctx.data.agentResponsibilitySchedule).toBe("15m")
-  })
-
-  it("falls back to profile.schedule when profile.every is absent (cron-style)", async () => {
-    const ctx = ctxFor()
-    const profile = profileFor({}, { schedule: "*/5 * * * *" })
-    await loadAgentResponsibilityState(ctx, profile, {})
+    ctx.data.jobSchedule = "*/5 * * * *"
+    await loadAgentResponsibilityState(ctx, profileFor(), {})
     expect(ctx.data.agentResponsibilitySchedule).toBe("*/5 * * * *")
   })
 
-  it("renders empty agentResponsibilitySchedule for an on-demand agentResponsibility (no every/schedule)", async () => {
+  it("renders empty agentResponsibilitySchedule when no runtime schedule exists", async () => {
     const ctx = ctxFor()
     await loadAgentResponsibilityState(ctx, profileFor(), {})
     expect(ctx.data.agentResponsibilitySchedule).toBe("")

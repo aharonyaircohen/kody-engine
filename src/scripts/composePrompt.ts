@@ -15,13 +15,13 @@
  * loadAgentResponsibilityState; see also the legacy `{{jobSlug}}` / `{{agentSlug}}` /
  * `{{jobSchedule}}` aliases which remain populated for back-compat):
  *   - {{agentResponsibilityReference}}    full "AgentResponsibility reference" block: slug + title +
- *                           agentAction + agent + cadence (one block)
+ *                           agentAction + agent + runtime cadence when present (one block)
  *   - {{agentResponsibilitySlug}}         the agentResponsibility slug (alias of {{jobSlug}})
  *   - {{agentResponsibilityTitle}}        the agentResponsibility title (alias of {{jobTitle}})
  *   - {{agentActionSlug}}   the agentAction doing the tick (profile.name)
  *   - {{agentSlug}}        the agent (alias of {{agentSlug}})
  *   - {{agentTitle}}       the agent file H1 (alias of {{agentTitle}})
- *   - {{agentResponsibilitySchedule}}     cadence string ("15m".."7d" or cron), or "" for
+ *   - {{agentResponsibilitySchedule}}     runtime goal/loop/job cadence, or "" when absent
  *                           on-demand (alias of {{jobSchedule}} for the
  *                           agent-responsibility-tick-scripted path)
  */

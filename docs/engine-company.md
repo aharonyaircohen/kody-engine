@@ -16,14 +16,19 @@ decide, report, or dispatch those store-backed responsibilities.
 
 ## Concept Map
 
+- **Intent = for** — what company is for, or what it is optimizing toward.
 - **Company / agent = who** — people or agents acting.
 - **AgentResponsibility = standing responsibility / why** — recurring ownership and judgment.
 - **Goal = outcome + manager loop / what** — a temporary agentGoal with
   destination evidence, attached agentResponsibilities, route, facts, and blockers. It chooses
   the next missing evidence and dispatches the right responsibility until done or
   blocked.
+- **AgentLoop = cadence / when** — recurring heartbeat that wakes a goal or responsibility.
 - **AgentAction = concrete action / how** — one mechanical unit of work.
 - **Job / run = execution record** — durable required work and its attempts.
+
+Intent selects and prioritizes goals and agentLoops. It is not another execution
+chain; goals and agentLoops still own their own runtime state.
 
 Canonical noun docs:
 

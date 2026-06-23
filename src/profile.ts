@@ -109,9 +109,9 @@ export function loadProfile(profilePath: string): Profile {
 
   // AgentResponsibility-as-reference: a agentResponsibility names an agentAction (the HOW) instead of embedding
   // it. Resolve that agentAction's full profile and overlay this agentResponsibility's identity
-  // (name) + agent (WHO) + every (WHEN) + mentions. The agentResponsibility folder is then a
+  // (name) + agent (WHO) + mentions. The agentResponsibility folder then
   // thin binding — no claudeCode/prompt/scripts of its own.
-  // agentAction = how, agent = who, agentResponsibility = why/when.
+  // agentAction = how, agent = who, agentResponsibility = why.
   const execRef = typeof r.agentAction === "string" ? r.agentAction.trim() : ""
   if (execRef) {
     const refPath = resolveAgentAction(execRef)
@@ -127,7 +127,6 @@ export function loadProfile(profilePath: string): Profile {
       describe: typeof r.describe === "string" ? r.describe : base.describe,
       capabilityKind: parseCapabilityKind(profilePath, r.capabilityKind) ?? base.capabilityKind,
       agent: typeof r.agent === "string" && r.agent.trim() ? r.agent.trim() : base.agent,
-      every: typeof r.every === "string" && r.every.trim() ? r.every.trim() : undefined,
       agentResponsibilityTools:
         parseStringArray(r.agentResponsibilityTools ?? r.tools) ?? base.agentResponsibilityTools,
       mentions: Array.isArray(r.mentions)
@@ -184,8 +183,6 @@ export function loadProfile(profilePath: string): Profile {
     capabilityKind: parseCapabilityKind(profilePath, r.capabilityKind),
     // Optional agent to run as. Empty/blank string → undefined (no agent).
     agent: typeof r.agent === "string" && r.agent.trim() ? r.agent.trim() : undefined,
-    // Optional recurrence cadence (scheduled agentResponsibility). Blank → undefined (on-demand).
-    every: typeof r.every === "string" && r.every.trim() ? r.every.trim() : undefined,
     // Locked-toolbox palette + mentions from folder-agentResponsibility profile metadata.
     agentResponsibilityTools: parseStringArray(r.agentResponsibilityTools ?? r.tools),
     mentions: Array.isArray(r.mentions)

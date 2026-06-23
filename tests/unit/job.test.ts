@@ -305,4 +305,18 @@ describe("mintScheduledJob (Phase 2)", () => {
     expect(input.preloadedData?.jobAgentResponsibility).toBe("agent-responsibility-tick")
     expect(input.preloadedData?.jobAgentAction).toBe("agent-responsibility-tick")
   })
+
+  it("carries saveReport onto ctx.data.jobSaveReport", async () => {
+    await runJob(
+      mintScheduledJob({
+        agentResponsibility: "model-health-audit",
+        agentAction: "model-health-audit",
+        saveReport: true,
+      }),
+      { cwd: "/x" },
+    )
+
+    const [, input] = runAgentActionChain.mock.calls.at(-1)!
+    expect(input.preloadedData?.jobSaveReport).toBe(true)
+  })
 })

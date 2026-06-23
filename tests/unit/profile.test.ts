@@ -69,15 +69,15 @@ describe("profile: loadProfile", () => {
     expect(() => loadProfile(p)).toThrow(/capabilityKind/)
   })
 
-  it("parses agent and every (agentResponsibility fields); blanks → undefined", () => {
+  it("parses agent and ignores legacy every on agentResponsibility fields", () => {
     const dir = tmpDir()
     const profile = loadProfile(writeProfile(dir, { ...VALID_MIN, agent: "kody", every: "1h" }))
     expect(profile.agent).toBe("kody")
-    expect(profile.every).toBe("1h")
+    expect((profile as unknown as Record<string, unknown>).every).toBeUndefined()
     const dir2 = tmpDir()
     const blanks = loadProfile(writeProfile(dir2, { ...VALID_MIN, agent: "  ", every: "" }))
     expect(blanks.agent).toBeUndefined()
-    expect(blanks.every).toBeUndefined()
+    expect((blanks as unknown as Record<string, unknown>).every).toBeUndefined()
   })
 
   it("rejects agentResponsibilityTools not in the kody-agentResponsibility palette (fail-fast at load)", () => {
@@ -127,7 +127,7 @@ describe("profile: loadProfile", () => {
 
   it("resolves a agentResponsibility that references an agentAction (how) + overlays who/when/tools", () => {
     // A thin agentResponsibility: references the engine's `merge` agentAction (the HOW), adds
-    // its own name + agent (WHO) + every (WHEN). No claudeCode of its own.
+    // its own name + agent (WHO). No claudeCode of its own.
     const dir = tmpDir()
     const p = writeProfile(dir, {
       name: "merge-daily",
@@ -140,7 +140,7 @@ describe("profile: loadProfile", () => {
     expect(profile.name).toBe("merge-daily") // agentResponsibility identity
     expect(profile.agentAction).toBe("merge") // how (preserved for prompt/job reference)
     expect(profile.agent).toBe("cto") // who (overlaid)
-    expect(profile.every).toBe("1d") // when (overlaid)
+    expect((profile as unknown as Record<string, unknown>).every).toBeUndefined() // legacy cadence ignored
     expect(profile.agentResponsibilityTools).toEqual(["ensure_issue"]) // toolbox (overlaid)
     // how came from the referenced agentAction: dir + claudeCode are merge's.
     expect(profile.dir.endsWith(path.join("agent-actions", "merge"))).toBe(true)

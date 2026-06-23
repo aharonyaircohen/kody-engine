@@ -17,19 +17,29 @@ Retries stay under the same job instead of becoming new work.
 
 | Concept | Answers | What it is |
 |---|---|---|
+| **intent** | for | company-level purpose; what the company is optimizing toward, used to choose and prioritize goals and agentLoops |
 | **agent** | who | reusable executor identity (`.kody/agents/<slug>.md`, usually from project or company store) |
-| **agentResponsibility** | why | reusable intent - `profile.json` metadata plus the prose body of `.kody/agent-responsibilities/<slug>/agent-responsibility.md` |
+| **agentResponsibility** | why | reusable responsibility/capability contract - `profile.json` metadata plus the prose body of `.kody/agent-responsibilities/<slug>/agent-responsibility.md` |
 | **agentAction** | how | reusable unit of work (`run`, `fix`, a agentResponsibility's `profile.json`, …) |
 | **issue** | what | a GitHub **issue or PR** — the work-item a task is about |
 | **task** | task state | one issue/PR, its required jobs, outputs, and rolled-up state |
 | **job** | required work | one planned unit of work on the task; points to exactly one agentAction |
 | **run** | attempt | one execution attempt for a job; retries create more runs |
 | **goal** | what | outcome + manager loop; managed goals store destination evidence, attached agentResponsibilities, route, facts, blockers |
+| **agentLoop** | when | stateful heartbeat wrapper; stores schedule/cursor and wakes another target such as a goal |
+
+Compact mapping: **intent = for**, **agent = who**, **agentResponsibility = why**,
+**agentAction = how**, **agentLoop = when**, **goal = what**.
 
 Nesting: **goal → tasks → jobs → runs.** A managed goal is the outcome manager
 above tasks. Legacy stacked goals are archived migration state, not a parallel
 model. A task is one issue/PR; a job is required work inside that task; a run is
 one attempt.
+
+State boundary: agentActions and agentResponsibilities are reusable definitions.
+They should be stateless with respect to business progress. Goals and agentLoops
+are stateful instances. A scheduled agentResponsibility may keep only operational
+cursor/dedup state; it must not own goal progress or decide completion.
 
 Canonical creation docs:
 

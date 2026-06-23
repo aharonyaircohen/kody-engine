@@ -49,6 +49,17 @@ AgentResponsibility provides one reusable capability.
 AgentAction performs the concrete work.
 ```
 
+## State Boundary
+
+AgentActions and agentResponsibilities are reusable definitions. They can run many times with new inputs, but they should not remember long-term business progress.
+
+- `agentAction`: concrete execution; emits output or reports for this run.
+- `agentResponsibility`: capability contract; explains why/when/who/how and maps to one action or a small ordered action list.
+- `goal`: durable outcome state; owns destination evidence, stage, facts, and blockers.
+- `agentLoop`: durable cadence state; owns heartbeat/cursor data and the target it wakes.
+
+A scheduled agentResponsibility may have an operational ledger for cursors or deduplication. That ledger is not goal progress. If the system needs to decide what is complete or which step is next, put that in a goal or agentLoop, not in the responsibility.
+
 ## Canonical Shape
 
 AgentResponsibilities live in project `.kody/agent-responsibilities/` or in the company store:

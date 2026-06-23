@@ -59,7 +59,7 @@ function goalState(agentResponsibilities: string[] = ["ci-health"]): GoalState {
   }
 }
 
-function fakeCtx(raw: GoalState) {
+function fakeCtx(raw: GoalState): Context {
   return {
     args: { goal: "prs-stay-mergeable" },
     cwd: tmp,
@@ -67,8 +67,7 @@ function fakeCtx(raw: GoalState) {
       quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       git: { defaultBranch: "main" },
       github: { owner: "o", repo: "r" },
-      agent: { model: "anthropic/claude-haiku-4-5-20251001" },
-      jobs: { stateBackend: "local-file" },
+      agent: { model: "anthropic/claude-haiku-4-5-20251001", cliArgs: {} },
     },
     data: {
       goal: {
@@ -83,8 +82,8 @@ function fakeCtx(raw: GoalState) {
 }
 
 describe("standing goal agentResponsibility scheduling", () => {
-  it("dispatches a due agentResponsibility and records the goal scheduling decision", async () => {
-    writeAgentResponsibility("ci-health", { every: "15m", agent: "kody", agentAction: "ci-check" })
+  it("dispatches runnable agentResponsibility and records goal scheduling decision", async () => {
+    writeAgentResponsibility("ci-health", { agent: "kody", agentAction: "ci-check" })
     const raw = goalState()
     const ctx = fakeCtx(raw)
 
@@ -99,24 +98,29 @@ describe("standing goal agentResponsibility scheduling", () => {
     expect(updatedGoal.raw).toBeDefined()
     expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
       mode: "agentLoop",
-      lastDecision: { kind: "dispatch", agentResponsibility: "ci-health", agentAction: "ci-check" },
-      agentResponsibilities: { "ci-health": { state: "due" } },
+      lastDecision: {
+        kind: "dispatch",
+        agentResponsibility: "ci-health",
+        agentAction: "ci-check",
+        reason: "ready for loop tick",
+      },
+      agentResponsibilities: { "ci-health": { state: "due", reason: "ready for loop tick" } },
     })
     const scheduleState = updatedGoal.raw!.extra.scheduleState as GoalAgentResponsibilityScheduleState
     const status = scheduleState.agentResponsibilities["ci-health"]!
     expect(typeof status.lastFiredAt).toBe("string")
-    expect(typeof status.nextEligibleAt).toBe("string")
+    expect(status).not.toHaveProperty("nextEligibleAt")
   })
 
-  it("keeps route-free agentLoops on the agentLoop loop", async () => {
-    writeAgentResponsibility("ci-health", { every: "15m", agent: "kody", agentAction: "ci-check" })
+  it("keeps route-free agentLoops on agentLoop loop", async () => {
+    writeAgentResponsibility("ci-health", { agent: "kody", agentAction: "ci-check" })
     const raw = goalState(["ci-health"])
     raw.extra.type = "agentLoop"
     const ctx = fakeCtx(raw)
 
     await advanceManagedGoal(ctx, {} as unknown as Profile, {})
 
-    expect(ctx.output.reason).toBe("dispatch ci-health: first check for 15m")
+    expect(ctx.output.reason).toBe("dispatch ci-health: ready for loop tick")
     expect(ctx.output.nextDispatch).toEqual({
       agentResponsibility: "ci-health",
       agentAction: "ci-check",
@@ -131,8 +135,8 @@ describe("standing goal agentResponsibility scheduling", () => {
     })
   })
 
-  it("passes agentResponsibility slug to due agentAction agentResponsibilities that declare a agentResponsibility input", async () => {
-    writeAgentResponsibility("auto-fix-ci", { every: "15m", agent: "kody", agentAction: "auto-fix-ci" })
+  it("passes agentResponsibility slug when agentAction inputs declare agentResponsibility", async () => {
+    writeAgentResponsibility("auto-fix-ci", { agent: "kody", agentAction: "auto-fix-ci" })
     writeAgentAction("auto-fix-ci", {
       inputs: [{ name: "agentResponsibility", flag: "--agentResponsibility", type: "string", required: true }],
     })
@@ -152,22 +156,29 @@ describe("standing goal agentResponsibility scheduling", () => {
     })
   })
 
-  it("waits when no agentResponsibility is due", async () => {
-    writeAgentResponsibility("ci-health", { every: "15m", agent: "kody", agentAction: "ci-check" })
-    writeAgentResponsibilityState("ci-health", new Date().toISOString())
-    const raw = goalState()
+  it("selects the oldest runnable agentResponsibility on each loop tick", async () => {
+    writeAgentResponsibility("ci-health", { agent: "kody", agentAction: "ci-check" })
+    writeAgentResponsibility("stale-prs", { agent: "kody", agentAction: "pr-check" })
+    writeAgentResponsibilityState("ci-health", "2026-01-02T00:00:00.000Z")
+    writeAgentResponsibilityState("stale-prs", "2026-01-01T00:00:00.000Z")
+    const raw = goalState(["ci-health", "stale-prs"])
     const ctx = fakeCtx(raw)
 
     await advanceManagedGoal(ctx, {} as unknown as Profile, {})
 
-    expect(ctx.output.nextDispatch).toBeUndefined()
-    expect(ctx.output.reason).toBe("no agentResponsibility due now")
+    expect(ctx.output.nextDispatch).toEqual({
+      agentResponsibility: "stale-prs",
+      agentAction: "pr-check",
+      cliArgs: {},
+    })
     const updatedGoal = ctx.data.goal as GoalCtx
-    expect(updatedGoal.raw).toBeDefined()
     expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
       mode: "agentLoop",
-      lastDecision: { kind: "idle" },
-      agentResponsibilities: { "ci-health": { state: "waiting" } },
+      lastDecision: { kind: "dispatch", agentResponsibility: "stale-prs" },
+      agentResponsibilities: {
+        "ci-health": { state: "due", lastFiredAt: "2026-01-02T00:00:00.000Z" },
+        "stale-prs": { state: "due" },
+      },
     })
   })
 })

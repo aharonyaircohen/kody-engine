@@ -56,10 +56,10 @@ export interface Profile {
    */
   role: "primitive" | "orchestrator" | "container" | "watch" | "utility"
   /**
-   * A agentResponsibility is the WHY/WHEN layer: it references an agentAction (the HOW) by name
-   * rather than embedding it. When set, the loader resolves that agentAction's
-   * full profile (claudeCode/scripts/prompt/agents) and overlays this agentResponsibility's
-   * name + agent (WHO) + every (WHEN) + mentions. Absent → this profile IS an
+   * A agentResponsibility is the WHY layer: it references an agentAction (the HOW) by name
+   * rather than embedding it. When set, loader resolves the agentAction's
+   * full profile (claudeCode/scripts/prompt/agents) and overlays agentResponsibility's
+   * name + agent (WHO) + mentions. Absent -> this profile IS an
    * agentAction (defines its own how). agentAction = how, agent = who, agentResponsibility = why.
    */
   agentAction?: string
@@ -70,14 +70,6 @@ export interface Profile {
    * `schedule:`). Scheduled profiles must declare a `schedule` cron string.
    */
   kind: "oneshot" | "scheduled"
-  /**
-   * Recurrence cadence for a agentResponsibility that runs on a timer (unified successor to a
-   * markdown agentResponsibility's `every:` metadata). One of the ScheduleEvery values
-   * ("15m".."7d" | "manual"). Present → the agent-responsibility-scheduler fires a one-shot run
-   * when due (no target). Absent → on-demand only (runs against an issue/PR).
-   * This is what makes "scheduled" just a field on the one agentResponsibility shape.
-   */
-  every?: string
   /**
    * Locked-toolbox palette (unified successor to a markdown agentResponsibility's `tools:`
    * metadata). When non-empty, loadAgentResponsibilityState sets ctx.data.agentResponsibilityTools so the
@@ -477,21 +469,23 @@ export interface Context {
      * `@kody <next>` comment, which is silently ignored when Kody comments as
      * a GitHub App (bot author), stalling the pipeline at classify.
      */
-    nextDispatch?: {
-      action?: string
-      agentResponsibility?: string
-      agentAction?: string
-      cliArgs: Record<string, unknown>
-    }
+  nextDispatch?: {
+    action?: string
+    agentResponsibility?: string
+    agentAction?: string
+    cliArgs: Record<string, unknown>
+    saveReport?: boolean
+  }
     /** In-process hand-off to a full Job, preserving job identity in task state. */
     nextJob?: Job
     /** Where to return after nextJob succeeds. Used by task-jobs to keep draining pending work. */
-    afterNextJob?: {
-      action?: string
-      agentResponsibility?: string
-      agentAction?: string
-      cliArgs: Record<string, unknown>
-    }
+  afterNextJob?: {
+    action?: string
+    agentResponsibility?: string
+    agentAction?: string
+    cliArgs: Record<string, unknown>
+    saveReport?: boolean
+  }
   }
   /**
    * If a preflight script sets this to true, the executor skips the agent
@@ -558,4 +552,6 @@ export interface Job {
   flavor: JobFlavor
   /** Manual force-run (bypass cadence) for a scheduled job. */
   force?: boolean
+  /** Save this responsibility run output as reports/<responsibility>.md. */
+  saveReport?: boolean
 }

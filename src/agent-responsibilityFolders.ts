@@ -1,7 +1,6 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type { CapabilityKind } from "./agent-actions/types.js"
-import { isScheduleEvery, type ScheduleEvery } from "./scripts/scheduleEvery.js"
 
 export const AGENT_RESPONSIBILITY_PROFILE_FILE = "profile.json"
 export const AGENT_RESPONSIBILITY_BODY_FILE = "agent-responsibility.md"
@@ -9,7 +8,6 @@ export const AGENT_RESPONSIBILITY_BODY_FILE = "agent-responsibility.md"
 export interface AgentResponsibilityFolderConfig {
   action?: string
   agentAction?: string
-  every?: ScheduleEvery
   tickScript?: string
   disabled?: boolean
   agent?: string
@@ -88,7 +86,6 @@ export function parseAgentResponsibilityConfig(raw: Record<string, unknown>): Ag
   return {
     action: stringField(raw.action),
     agentAction: stringField(raw.agentAction),
-    every: isScheduleEvery(raw.every) ? raw.every : undefined,
     tickScript: stringField(raw.tickScript),
     disabled: typeof raw.disabled === "boolean" ? raw.disabled : undefined,
     agent: stringField(raw.agent),

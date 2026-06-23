@@ -74,6 +74,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
         agentResponsibility: decision.dispatch.agentResponsibility,
         agentAction: decision.dispatch.agentAction,
         cliArgs: decision.dispatch.cliArgs,
+        ...(goal.raw.extra.saveReport === true ? { saveReport: true } : {}),
       }
     }
     ctx.output.reason = decision.reason
@@ -102,6 +103,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     agentResponsibility: decision.agentResponsibility,
     agentAction: decision.agentAction,
     cliArgs: decision.cliArgs,
+    ...(decision.saveReport === true ? { saveReport: true } : {}),
   }
   ctx.output.reason = `dispatch ${decision.agentResponsibility} for ${decision.evidence}`
 }

@@ -4,15 +4,12 @@ import type { KodyConfig } from "../config.js"
 import type { ManagedGoal } from "../goal/manager.js"
 import { resolveAgentResponsibilityExecution, resolveAgentResponsibilityFolder } from "../registry.js"
 import { resolveBackend } from "./jobState/index.js"
-import { type ScheduleEvery, scheduleEveryToMs } from "./scheduleEvery.js"
 
 export interface GoalAgentResponsibilityScheduleStatus {
   slug: string
   title?: string
-  cadence?: ScheduleEvery
   lastFiredAt?: string
-  nextEligibleAt?: string
-  state: "due" | "waiting" | "manual" | "disabled" | "blocked"
+  state: "due" | "disabled" | "blocked"
   reason: string
 }
 
@@ -57,10 +54,10 @@ export function isAgentResponsibilityCadenceGoal(goal: ManagedGoal, extra: Recor
 export async function planGoalAgentResponsibilitySchedule(
   opts: PlanGoalAgentResponsibilityScheduleOptions,
 ): Promise<GoalAgentResponsibilityScheduleDecision> {
-  const now = opts.now ?? new Date()
-  const at = now.toISOString()
   const jobsDir = opts.jobsDir ?? ".kody/agent-responsibilities"
   const jobsRoot = path.join(opts.cwd, jobsDir)
+  const now = opts.now ?? new Date()
+  const at = now.toISOString()
   const backend = resolveBackend({ config: opts.config, cwd: opts.cwd, jobsDir })
   const statuses: Record<string, GoalAgentResponsibilityScheduleStatus> = {}
   const blockers: string[] = []
@@ -71,7 +68,6 @@ export async function planGoalAgentResponsibilitySchedule(
       agentResponsibility,
       slug,
       backend,
-      now.getTime(),
       opts.previousScheduleState?.agentResponsibilities[slug],
     )
     statuses[slug] = status
@@ -80,13 +76,14 @@ export async function planGoalAgentResponsibilitySchedule(
 
   const due = opts.goal.agentResponsibilities
     .map((slug) => statuses[slug])
-    .find((status): status is GoalAgentResponsibilityScheduleStatus => status?.state === "due")
+    .filter((status): status is GoalAgentResponsibilityScheduleStatus => status?.state === "due")
+    .sort(compareOldestLastFired)[0]
 
   if (!due) {
     const reason =
       blockers.length > 0
-        ? "no runnable due agentResponsibility; blocked agentResponsibilities need attention"
-        : "no agentResponsibility due now"
+        ? "no runnable agentResponsibility; blocked agentResponsibilities need attention"
+        : "no runnable agentResponsibility"
     const kind = blockers.length > 0 ? "blocked" : "idle"
     return {
       kind,
@@ -141,36 +138,26 @@ async function describeAgentResponsibilitySchedule(
   agentResponsibility: AgentResponsibilityFolder | null,
   slug: string,
   backend: ReturnType<typeof resolveBackend>,
-  now: number,
   previous?: GoalAgentResponsibilityScheduleStatus,
 ): Promise<GoalAgentResponsibilityScheduleStatus> {
   if (!agentResponsibility) return { slug, state: "blocked", reason: "agentResponsibility folder missing" }
 
   const { config } = agentResponsibility
   if (config.disabled === true) {
-    return { slug, title: agentResponsibility.title, cadence: config.every, state: "disabled", reason: "disabled" }
-  }
-  if (config.every === "manual" || (!config.every && !config.agent && config.agentAction)) {
-    return { slug, title: agentResponsibility.title, cadence: config.every, state: "manual", reason: "manual only" }
+    return { slug, title: agentResponsibility.title, state: "disabled", reason: "disabled" }
   }
   if (!config.agent || config.agent.trim().length === 0) {
-    return {
-      slug,
-      title: agentResponsibility.title,
-      cadence: config.every,
-      state: "blocked",
-      reason: "no agent assigned",
-    }
+    return { slug, title: agentResponsibility.title, state: "blocked", reason: "no agent assigned" }
   }
   if (config.agentActions && config.agentActions.length > 1) {
     return {
       slug,
       title: agentResponsibility.title,
-      cadence: config.every,
       state: "blocked",
       reason: "multi-agentAction agentResponsibility needs task-jobs route",
     }
   }
+
   let lastFiredAt = validIso(previous?.lastFiredAt) ? previous?.lastFiredAt : undefined
   try {
     if (!lastFiredAt) {
@@ -182,53 +169,17 @@ async function describeAgentResponsibilitySchedule(
     return {
       slug,
       title: agentResponsibility.title,
-      cadence: config.every,
       state: "due",
-      reason: "state unreadable; run to refresh",
+      reason: "state unreadable; ready for loop tick",
     }
   }
 
-  if (!config.every) {
-    return {
-      slug,
-      title: agentResponsibility.title,
-      state: "due",
-      reason: "no cadence; check every goal tick",
-      lastFiredAt,
-    }
-  }
-  if (!lastFiredAt) {
-    return {
-      slug,
-      title: agentResponsibility.title,
-      cadence: config.every,
-      state: "due",
-      reason: `first check for ${config.every}`,
-    }
-  }
-
-  const last = Date.parse(lastFiredAt)
-  const interval = scheduleEveryToMs(config.every)
-  const next = new Date(last + interval).toISOString()
-  if (now - last >= interval) {
-    return {
-      slug,
-      title: agentResponsibility.title,
-      cadence: config.every,
-      state: "due",
-      reason: `due ${config.every}`,
-      lastFiredAt,
-      nextEligibleAt: next,
-    }
-  }
   return {
     slug,
     title: agentResponsibility.title,
-    cadence: config.every,
-    state: "waiting",
-    reason: `next due ${next}`,
+    state: "due",
+    reason: "ready for loop tick",
     lastFiredAt,
-    nextEligibleAt: next,
   }
 }
 
@@ -241,6 +192,15 @@ function dutyDispatch(agentResponsibility: AgentResponsibilityFolder): {
   return { agentResponsibility: agentResponsibility.slug, agentAction, cliArgs }
 }
 
+function compareOldestLastFired(
+  a: GoalAgentResponsibilityScheduleStatus,
+  b: GoalAgentResponsibilityScheduleStatus,
+): number {
+  const aTime = validIso(a.lastFiredAt) ? Date.parse(a.lastFiredAt) : Number.NEGATIVE_INFINITY
+  const bTime = validIso(b.lastFiredAt) ? Date.parse(b.lastFiredAt) : Number.NEGATIVE_INFINITY
+  return aTime - bTime
+}
+
 function validIso(value: string | undefined): value is string {
   return typeof value === "string" && !Number.isNaN(Date.parse(value))
 }
@@ -249,10 +209,5 @@ function markAgentResponsibilitySelected(
   status: GoalAgentResponsibilityScheduleStatus,
   now: Date,
 ): GoalAgentResponsibilityScheduleStatus {
-  const lastFiredAt = now.toISOString()
-  const nextEligibleAt =
-    status.cadence && status.cadence !== "manual"
-      ? new Date(now.getTime() + scheduleEveryToMs(status.cadence)).toISOString()
-      : status.nextEligibleAt
-  return { ...status, lastFiredAt, nextEligibleAt }
+  return { ...status, lastFiredAt: now.toISOString() }
 }

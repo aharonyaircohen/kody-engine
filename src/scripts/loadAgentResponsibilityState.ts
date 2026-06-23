@@ -17,7 +17,7 @@
  *   ctx.data.agentResponsibilityTitle      profile.describe
  *   ctx.data.agentActionSlug profile.agentAction ?? profile.name
  *   ctx.data.agentSlug      profile.agent ?? ""
- *   ctx.data.agentResponsibilitySchedule   profile.every (or profile.schedule as fallback) — empty for on-demand
+ *   ctx.data.agentResponsibilitySchedule   runtime job schedule when supplied, otherwise empty
  *
  * Stateless agentResponsibilities simply omit this preflight (and the state postflights) and
  * run with no memory — the same one agentResponsibility shape, statefulness opted in by config.
@@ -50,11 +50,8 @@ export const loadAgentResponsibilityState: PreflightScript = async (ctx, profile
   ctx.data.agentActionSlug = profile.agentAction ?? profile.name
   ctx.data.agentSlug = profile.agent ?? ""
   ctx.data.agentTitle = ""
-  // `every:` is the new "15m".."7d" cadence string introduced alongside the
-  // rename; legacy `schedule:` (cron) profiles still work. Empty for on-demand
-  // agentResponsibilities — composePrompt renders the empty string and the prompt omits the
-  // cadence line.
-  ctx.data.agentResponsibilitySchedule = profile.every ?? profile.schedule ?? ""
+  // Runtime cadence comes from the scheduled job/goal/loop, not the responsibility profile.
+  ctx.data.agentResponsibilitySchedule = String(ctx.data.jobSchedule ?? "")
 
   // Mentions → "@a @b" for the {{mentions}} prompt token + the agentResponsibility-MCP
   // operator mention (mirrors loadJobFromFile).

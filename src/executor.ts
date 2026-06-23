@@ -26,6 +26,7 @@ import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
 import { resolveAgentAction } from "./registry.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
+import { writeResponsibilityReport } from "./scripts/writeResponsibilityReport.js"
 import type { TaskState, TaskTarget } from "./state.js"
 import { loadSubagents } from "./subagents.js"
 import { prepareTaskArtifactsDir, taskArtifactsPromptAddendum, verifyTaskArtifacts } from "./task-artifacts.js"
@@ -214,6 +215,7 @@ export interface ExecutorOutput {
     agentResponsibility?: string
     agentAction?: string
     cliArgs: Record<string, unknown>
+    saveReport?: boolean
   }
   /** In-process hand-off to a full Job, preserving job identity in task state. */
   nextJob?: Job
@@ -223,6 +225,7 @@ export interface ExecutorOutput {
     agentResponsibility?: string
     agentAction?: string
     cliArgs: Record<string, unknown>
+    saveReport?: boolean
   }
   /** Internal state snapshot for in-process continuations. */
   taskState?: TaskState
@@ -686,6 +689,8 @@ export async function runAgentAction(profileName: string, input: ExecutorInput):
       })
     }
 
+    await writeResponsibilityReport(ctx, profile, agentResult)
+
     return finishAndEnd({
       exitCode: ctx.output.exitCode ?? 0,
       prUrl: ctx.output.prUrl,
@@ -841,6 +846,7 @@ function handoffToJob(handoff: {
   agentResponsibility?: string
   agentAction?: string
   cliArgs: Record<string, unknown>
+  saveReport?: boolean
 }): Job | null {
   const dutyOrAction = handoff.action ?? handoff.agentResponsibility
   if (!dutyOrAction) return null
@@ -850,6 +856,7 @@ function handoffToJob(handoff: {
     agentAction: handoff.agentAction,
     cliArgs: handoff.cliArgs,
     flavor: "instant",
+    saveReport: handoff.saveReport === true,
   }
 }
 

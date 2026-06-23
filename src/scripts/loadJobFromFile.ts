@@ -129,7 +129,7 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
   ctx.data.agentSlug = agentSlug
   ctx.data.agentTitle = agentTitle
   ctx.data.agentActionSlug = profile.name
-  ctx.data.agentResponsibilitySchedule = config.every ?? ""
+  ctx.data.agentResponsibilitySchedule = String(ctx.data.jobSchedule ?? "")
 
   // Locked-toolbox mode (`tools` in profile.json). When declared, the agentResponsibility body
   // is pure intent — the LLM picks tools by name from the kody-agentResponsibility palette
