@@ -15,6 +15,7 @@ describe("postflight failure-safety: which scripts are state-mutating", () => {
     expect(isMutatingPostflight("commitAndPush")).toBe(true)
     expect(isMutatingPostflight("ensurePr")).toBe(true)
     expect(isMutatingPostflight("applyAgentResponsibilityReports")).toBe(true)
+    expect(isMutatingPostflight("openAgentFactoryStatePr")).toBe(true)
   })
 
   it("does NOT classify postflights that must run on failure (they report the failure)", () => {
@@ -38,7 +39,7 @@ describe("postflight failure-safety: which scripts are state-mutating", () => {
 
   it("every name in the mutating set is a real registered postflight", () => {
     // Guard against a typo'd entry that would silently never match.
-    for (const name of ["commitAndPush", "ensurePr", "applyAgentResponsibilityReports"]) {
+    for (const name of ["commitAndPush", "ensurePr", "applyAgentResponsibilityReports", "openAgentFactoryStatePr"]) {
       expect(Object.keys(postflightScripts)).toContain(name)
     }
   })

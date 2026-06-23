@@ -44,6 +44,7 @@ const MUTATING_POSTFLIGHTS: ReadonlySet<string> = new Set([
   "commitAndPush",
   "ensurePr",
   "applyAgentResponsibilityReports",
+  "openAgentFactoryStatePr",
 ])
 
 /** True when `scriptName` is a state-mutating postflight (see MUTATING_POSTFLIGHTS). */

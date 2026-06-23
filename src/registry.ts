@@ -15,7 +15,7 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { InputSpec } from "./agent-actions/types.js"
+import type { CapabilityKind, InputSpec } from "./agent-actions/types.js"
 import type { AgentResponsibilityFolder } from "./agent-responsibilityFolders.js"
 import {
   AGENT_RESPONSIBILITY_PROFILE_FILE,
@@ -43,6 +43,7 @@ export interface DiscoveredAgentResponsibilityAction {
   cliArgs: Record<string, unknown>
   source: "project-folder" | "project-agentAction" | "company-store" | "company-store-agentAction" | "builtin"
   describe?: string
+  capabilityKind?: CapabilityKind
   profilePath?: string
   bodyPath?: string
 }
@@ -349,6 +350,7 @@ function listFolderAgentResponsibilityActions(
       cliArgs,
       source,
       describe: agentResponsibility.config.describe ?? agentResponsibility.title,
+      capabilityKind: agentResponsibility.config.capabilityKind,
       profilePath: agentResponsibility.profilePath,
       bodyPath: agentResponsibility.bodyPath,
     })
@@ -374,6 +376,7 @@ function listBuiltinAgentResponsibilityActions(
       cliArgs: {},
       source: "builtin",
       describe: agentResponsibility.config.describe ?? agentResponsibility.title,
+      capabilityKind: agentResponsibility.config.capabilityKind,
       profilePath: agentResponsibility.profilePath,
       bodyPath: agentResponsibility.bodyPath,
     })

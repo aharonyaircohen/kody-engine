@@ -51,6 +51,7 @@ import { mergeFlow } from "./mergeFlow.js"
 import { mergeReleasePr } from "./mergeReleasePr.js"
 import { mirrorStateToPr } from "./mirrorStateToPr.js"
 import { notifyTerminal } from "./notifyTerminal.js"
+import { openAgentFactoryStatePr } from "./openAgentFactoryStatePr.js"
 import { openQaIssue } from "./openQaIssue.js"
 import { parseAgentResult } from "./parseAgentResult.js"
 import { parseIssueStateFromAgentResult } from "./parseIssueStateFromAgentResult.js"
@@ -182,6 +183,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   recordClassification,
   dispatchClassified,
   notifyTerminal,
+  openAgentFactoryStatePr,
   openQaIssue,
   createQaGoal,
   failOnceTaskJob,

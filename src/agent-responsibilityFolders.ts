@@ -1,5 +1,6 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
+import type { CapabilityKind } from "./agent-actions/types.js"
 import { isScheduleEvery, type ScheduleEvery } from "./scripts/scheduleEvery.js"
 
 export const AGENT_RESPONSIBILITY_PROFILE_FILE = "profile.json"
@@ -15,6 +16,7 @@ export interface AgentResponsibilityFolderConfig {
   mentions?: string[]
   tools?: string[]
   agentActions?: string[]
+  capabilityKind?: CapabilityKind
   describe?: string
   stage?: string
   readsFrom?: string[]
@@ -93,6 +95,7 @@ export function parseAgentResponsibilityConfig(raw: Record<string, unknown>): Ag
     mentions: stringList(raw.mentions).map((m) => m.replace(/^@/, "")),
     tools,
     agentActions: stringList(raw.agentActions),
+    capabilityKind: capabilityKindField(raw.capabilityKind),
     describe: stringField(raw.describe),
     stage: stringField(raw.stage),
     readsFrom: stringList(raw.readsFrom ?? raw.reads_from),
@@ -143,4 +146,9 @@ function stringList(value: unknown): string[] {
       .filter(Boolean)
   }
   return []
+}
+
+function capabilityKindField(value: unknown): CapabilityKind | undefined {
+  if (value === "observe" || value === "act" || value === "verify") return value
+  return undefined
 }
