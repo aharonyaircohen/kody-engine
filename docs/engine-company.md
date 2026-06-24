@@ -30,6 +30,17 @@ decide, report, or dispatch those store-backed responsibilities.
 Intent selects and prioritizes goals and agentLoops. It is not another execution
 chain; goals and agentLoops still own their own runtime state.
 
+## CTO company manager
+
+The first company manager is `cto`, running the `company-manager` responsibility.
+It reads active intent files under `<statePath>/intents/<id>/intent.json`,
+compares them with current goal/loop state, and applies validated portfolio
+actions. This is portfolio orchestration: creating, linking, pausing, or
+resuming goals and agentLoops so the agency serves active intent.
+
+Intent may list lightweight `metrics` names. Metrics are not a separate model in
+v1; they tell CTO how intent should be judged.
+
 Canonical noun docs:
 
 - [Goals](goals.md)

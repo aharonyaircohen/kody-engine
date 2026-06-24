@@ -9,7 +9,9 @@ import { abortUnfinishedGitOps } from "./abortUnfinishedGitOps.js"
 import { advanceFlow } from "./advanceFlow.js"
 import { advanceManagedGoal } from "./advanceManagedGoal.js"
 import { appendCompanyActivity } from "./appendCompanyActivity.js"
+import { appendCompanyIntentDecision } from "./appendCompanyIntentDecision.js"
 import { applyAgentResponsibilityReports } from "./applyAgentResponsibilityReports.js"
+import { applyCompanyManagerDecision } from "./applyCompanyManagerDecision.js"
 import { buildSyntheticPlugin } from "./buildSyntheticPlugin.js"
 import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
 import { classifyByLabel } from "./classifyByLabel.js"
@@ -34,6 +36,8 @@ import { fixFlow } from "./fixFlow.js"
 import { initFlow } from "./initFlow.js"
 import { loadAgentAdhoc } from "./loadAgentAdhoc.js"
 import { loadAgentResponsibilityState } from "./loadAgentResponsibilityState.js"
+import { loadCompanyIntents } from "./loadCompanyIntents.js"
+import { loadCompanyPortfolio } from "./loadCompanyPortfolio.js"
 import { loadConventions } from "./loadConventions.js"
 import { loadCoverageRules } from "./loadCoverageRules.js"
 import { loadGoalState } from "./loadGoalState.js"
@@ -54,6 +58,7 @@ import { notifyTerminal } from "./notifyTerminal.js"
 import { openAgentFactoryStatePr } from "./openAgentFactoryStatePr.js"
 import { openQaIssue } from "./openQaIssue.js"
 import { parseAgentResult } from "./parseAgentResult.js"
+import { parseCompanyManagerDecision } from "./parseCompanyManagerDecision.js"
 import { parseIssueStateFromAgentResult } from "./parseIssueStateFromAgentResult.js"
 import { parseJobStateFromAgentResult } from "./parseJobStateFromAgentResult.js"
 import { parseReproOutput } from "./parseReproOutput.js"
@@ -114,6 +119,8 @@ export const preflightScripts: Record<string, PreflightScript> = {
   loadIssueStateComment,
   loadJobFromFile,
   loadAgentResponsibilityState,
+  loadCompanyIntents,
+  loadCompanyPortfolio,
   loadAgentAdhoc,
   loadConventions,
   loadCoverageRules,
@@ -149,12 +156,15 @@ export const preflightScripts: Record<string, PreflightScript> = {
 
 export const postflightScripts: Record<string, PostflightScript> = {
   parseAgentResult,
+  parseCompanyManagerDecision,
   parseIssueStateFromAgentResult,
   parseJobStateFromAgentResult,
   parseReproOutput,
   writeIssueStateComment,
   writeJobStateFile,
   appendCompanyActivity,
+  appendCompanyIntentDecision,
+  applyCompanyManagerDecision,
   requireFeedbackActions,
   requirePlanDeviations,
   verify,

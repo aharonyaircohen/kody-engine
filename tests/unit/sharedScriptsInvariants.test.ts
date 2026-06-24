@@ -151,7 +151,9 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
 // ─────────────────────────────────────────────────────────────────────────────
 const CONSUMER_LIBRARY_SCRIPTS: Record<string, string> = {
   advanceManagedGoal: "goal-manager",
+  appendCompanyIntentDecision: "company-manager",
   applyAgentResponsibilityReports: "goal/reporting agentActions",
+  applyCompanyManagerDecision: "company-manager",
   buildSyntheticPlugin: "store agentActions with local skills/hooks",
   classifyByLabel: "classify",
   createQaGoal: "qa-engineer",
@@ -167,10 +169,13 @@ const CONSUMER_LIBRARY_SCRIPTS: Record<string, string> = {
   fixFlow: "fix",
   initFlow: "init",
   loadAgentResponsibilityState: "job-live-verify",
+  loadCompanyIntents: "company-manager",
+  loadCompanyPortfolio: "company-manager",
   loadJobFromFile: "agent-responsibility-tick",
   loadAgentAdhoc: "agent-ask",
   markFlowSuccess: "revert",
   mergeFlow: "merge",
+  parseCompanyManagerDecision: "company-manager",
   parseReproOutput: "reproduce",
   planTaskJobs: "task-jobs",
   postPlanComment: "plan",

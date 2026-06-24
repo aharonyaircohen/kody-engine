@@ -31,6 +31,10 @@ Retries stay under the same job instead of becoming new work.
 Compact mapping: **intent = for**, **agent = who**, **agentResponsibility = why**,
 **agentAction = how**, **agentLoop = when**, **goal = what**.
 
+The CTO `company-manager` loop reads intent and performs portfolio
+orchestration. It may create or adjust goals and agentLoops, but goal-manager
+still owns step-by-step execution inside each goal.
+
 Nesting: **goal → tasks → jobs → runs.** A managed goal is the outcome manager
 above tasks. Legacy stacked goals are archived migration state, not a parallel
 model. A task is one issue/PR; a job is required work inside that task; a run is
