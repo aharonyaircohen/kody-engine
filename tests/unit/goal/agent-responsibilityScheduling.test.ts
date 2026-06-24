@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { Context, Profile } from "../../../src/agent-actions/types.js"
 import type { GoalState } from "../../../src/goal/state.js"
 import { advanceManagedGoal } from "../../../src/scripts/advanceManagedGoal.js"
-import type { GoalAgentResponsibilityScheduleState } from "../../../src/scripts/goalAgentResponsibilityScheduling.js"
+import {
+  planGoalAgentResponsibilitySchedule,
+  type GoalAgentResponsibilityScheduleState,
+} from "../../../src/scripts/goalAgentResponsibilityScheduling.js"
 import type { GoalCtx } from "../../../src/scripts/goalCtx.js"
 
 let tmp: string
@@ -68,6 +71,7 @@ function fakeCtx(raw: GoalState): Context {
       git: { defaultBranch: "main" },
       github: { owner: "o", repo: "r" },
       agent: { model: "anthropic/claude-haiku-4-5-20251001", cliArgs: {} },
+      jobs: { stateBackend: "local-file" },
     },
     data: {
       goal: {

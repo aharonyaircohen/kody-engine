@@ -196,11 +196,12 @@ describe("loadJobFromFile agentResponsibility-noun aliases (Phase 1 rename)", ()
     expect(ctx.data.agentActionSlug).toBe("agent-responsibility-tick")
   })
 
-  it("populates agentResponsibilitySchedule from the agentResponsibility profile", async () => {
+  it("populates agentResponsibilitySchedule from the runtime job schedule", async () => {
     writeAgent("kody")
-    writeAgentResponsibility("stale-prs", { agent: "kody", every: "1h" }, "# Stale PR Watcher")
+    writeAgentResponsibility("stale-prs", { agent: "kody" }, "# Stale PR Watcher")
 
     const ctx = ctxFor("stale-prs")
+    ctx.data.jobSchedule = "1h"
     await loadJobFromFile(ctx, { ...PROFILE, name: "agent-responsibility-tick" }, {})
 
     expect(ctx.data.agentResponsibilitySchedule).toBe("1h")
