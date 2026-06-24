@@ -1,5 +1,5 @@
 /**
- * runnerServe — preflight for the `runner-serve` executable.
+ * runnerServe — preflight for the `runner-serve` agentAction.
  *
  * Idle HTTP server for a WARM-POOL one-shot runner. A pooled machine boots
  * into this mode with NO issue baked in, starts the listener, and is then
@@ -23,8 +23,8 @@
  *                          process exits on completion. 409 if already busy
  *                          (a pooled runner handles exactly one job).
  *
- * LiteLLM: the always-on proxy forward (localhost:4000 → KODY_LITELLM_URL) is
- * set up once at boot by entrypoint-serve.sh, so per-job spawn is skipped.
+ * LiteLLM: each accepted job uses the normal runner path, which prewarms or
+ * starts a local proxy from that repo's secrets.
  */
 
 import { spawn } from "node:child_process"
@@ -43,7 +43,7 @@ export interface RunnerJob {
    * "interactive": boot a long-lived `kody` chat session (the Vibe runner) —
    * emits chat.ready, takes turns via the dashboard's append/event path.
    * "scheduled": run the scheduled fan-out (`GITHUB_EVENT_NAME=schedule`) —
-   * the same duty/goal tick GitHub Actions' cron triggers, used as the Fly
+   * the same agentResponsibility/goal tick GitHub Actions' cron triggers, used as the Fly
    * fallback when GitHub Actions is down. No issueNumber/sessionId needed.
    */
   mode?: "issue" | "interactive" | "scheduled"
@@ -173,7 +173,7 @@ async function defaultRunJob(job: RunnerJob): Promise<void> {
     REF: branch,
     GITHUB_TOKEN: job.githubToken,
     // Scheduled mode drives the engine down the same path GitHub Actions' cron
-    // takes (runScheduledFanOut → due duties/goals). Bare `kody` routes on this.
+    // takes (runScheduledFanOut → due agentResponsibilities/goals). Bare `kody` routes on this.
     ...(scheduled ? { GITHUB_EVENT_NAME: "schedule" } : {}),
     // GITHUB_REPOSITORY + GH_TOKEN are normally injected by GitHub Actions.
     // The engine's interactive mode needs GITHUB_REPOSITORY to persist
@@ -222,7 +222,7 @@ async function defaultRunJob(job: RunnerJob): Promise<void> {
 
   // Issue mode: one-shot `kody run --issue N`. Interactive + scheduled modes:
   // bare `kody`, routed by env — SESSION_ID → chat session (Vibe runner), or
-  // GITHUB_EVENT_NAME=schedule → the scheduled duty/goal fan-out.
+  // GITHUB_EVENT_NAME=schedule → the scheduled agentResponsibility/goal fan-out.
   const runArgs = interactive || scheduled ? [] : ["run", "--issue", String(job.issueNumber)]
   const jobDesc = interactive
     ? `interactive session ${job.sessionId}`

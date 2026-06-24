@@ -21,12 +21,23 @@ export interface IssueData {
   labels?: string[]
 }
 
-function ghToken(): string | undefined {
-  return process.env.GH_PAT?.trim() || process.env.GH_TOKEN
+interface GhOptions {
+  input?: string
+  cwd?: string
+  preferRepoToken?: boolean
 }
 
-export function gh(args: string[], options?: { input?: string; cwd?: string }): string {
-  const token = ghToken()
+function ghToken(preferRepoToken = false): string | undefined {
+  const githubToken = process.env.GITHUB_TOKEN?.trim()
+  const kodyToken = process.env.KODY_TOKEN?.trim()
+  const ghToken = process.env.GH_TOKEN?.trim()
+  const ghPat = process.env.GH_PAT?.trim()
+
+  return preferRepoToken ? githubToken || kodyToken || ghToken || ghPat : ghPat || ghToken || kodyToken || githubToken
+}
+
+export function gh(args: string[], options?: GhOptions): string {
+  const token = ghToken(options?.preferRepoToken)
   const env: NodeJS.ProcessEnv = token ? { ...process.env, GH_TOKEN: token } : { ...process.env }
   return execFileSync("gh", args, {
     encoding: "utf-8",
@@ -80,10 +91,10 @@ export function stripKodyMentions(body: string): string {
  *
  * Why we look at the start only: chat replies, status pings, and prose can
  * mention `@kody` mid-sentence — those are fine. The dispatch contract is
- * "first word is @kody, second word is an executable" — the same shape a
+ * "first word is @kody, second word is an agentAction" — the same shape a
  * human types to trigger a stage. When the BOT writes that shape, it's
  * either (a) a relic of the old comment-based self-dispatch (now banned —
- * use `runExecutableChain` or `dispatchExecutable`) or (b) a future helper
+ * use `runAgentActionChain` or `dispatchAgentAction`) or (b) a future helper
  * that bypassed the typed dispatch API. Either way, fail loudly so the
  * regression is visible instead of silently filtered downstream by the
  * bot-author gate in `dispatch.ts`.
@@ -100,9 +111,9 @@ export class BotDispatchCommentError extends Error {
   constructor(slug: string) {
     super(
       `bot self-dispatch via @kody comments is banned. ` +
-        `Refusing to post "@kody ${slug} …" — use runExecutableChain (same-run) ` +
-        `or dispatchExecutable (cross-run) instead. ` +
-        `See docs/duty-dispatch.md for the contract.`,
+        `Refusing to post "@kody ${slug} …" — use runAgentActionChain (same-run) ` +
+        `or dispatchAgentAction (cross-run) instead. ` +
+        `See docs/agent-responsibility-dispatch.md for the contract.`,
     )
     this.name = "BotDispatchCommentError"
   }
@@ -154,7 +165,7 @@ export const DEFAULT_COMMENT_MAX_BYTES = 16_000
  * Format issue comments into the markdown block used by prompt templates
  * (`{{issue.commentsFormatted}}`). Most-recent first, capped at `limit`
  * comments and `maxBytes` per body. Shared so every issue-driven
- * executable (plan, research, run) renders comments identically.
+ * agentAction (plan, research, run) renders comments identically.
  */
 export function formatIssueComments(comments: IssueComment[], limit: number, maxBytes: number): string {
   const sorted = [...comments].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
@@ -263,7 +274,7 @@ export function getPrComments(prNumber: number, cwd?: string): PrComment[] {
 }
 
 /**
- * Matches a review body produced by the `review` executable or a similarly
+ * Matches a review body produced by the `review` agentAction or a similarly
  * structured human-written review. The review prompt requires a verdict
  * heading; a body without it is a trigger/status/state comment, not a review.
  */
@@ -284,7 +295,7 @@ export function isReviewShaped(body: string): boolean {
  *   1. A formal PR review (submitted through GitHub's review UI — always a
  *      review by construction), or
  *   2. An issue comment whose body contains a `## Verdict:` heading (the
- *      contract our review executable emits).
+ *      contract our review agentAction emits).
  *
  * Everything else — trigger comments like `@kody fix`, bot status pings
  * (⚙️/✅/⚠️/👀 …), task-state blocks, random chatter — is ignored. This

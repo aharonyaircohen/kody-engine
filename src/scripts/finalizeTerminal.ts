@@ -1,16 +1,16 @@
 /**
- * Postflight (single-session executables): stamp the TERMINAL label +
+ * Postflight (single-session agentActions): stamp the TERMINAL label +
  * phase/status after the PR exists.
  *
  * This is the orchestration-free replacement for what container profiles
- * did via `finishFlow`. A single-session executable (feature, bug, …) has
+ * did via `finishFlow`. A single-session agentAction (feature, bug, …) has
  * no orchestrator to re-trigger and no `state.flow` to clear — it just
  * needs the issue/PR to end in an honest terminal state so the dashboard
  * and goal-phase derivation don't show it stuck in "building" forever.
  *
  * Runs LAST in the pr-branch tail (after saveTaskState), gated by
  * `lifecycleConfig.finalize: true`. It re-reads the just-written state
- * comment (saveTaskState is authoritative) and decides:
+ * file (saveTaskState is authoritative) and decides:
  *
  *   - success  := agent exited 0 AND a PR was created  → kody:done,
  *                 phase "shipped", status "succeeded".
@@ -23,7 +23,7 @@
  * remove. Better a loud kody:failed than a silently stuck card.
  */
 
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../agent-actions/types.js"
 import { parsePrNumber } from "../issue.js"
 import { type KodyLabelSpec, setKodyLabel } from "../lifecycleLabels.js"
 import { type Phase, readTaskState, type Status, type TaskState, type TaskTarget, writeTaskState } from "../state.js"
@@ -59,7 +59,7 @@ export const finalizeTerminal: PostflightScript = async (ctx) => {
   // not reassign after reducing).
   let prUrl: string | undefined
   try {
-    prUrl = readTaskState(target, targetNumber, ctx.cwd).core.prUrl
+    prUrl = readTaskState(target, targetNumber, ctx.cwd, ctx.config).core.prUrl
   } catch {
     prUrl = undefined
   }
@@ -75,16 +75,16 @@ export const finalizeTerminal: PostflightScript = async (ctx) => {
   const prNumber = prUrl ? parsePrNumber(prUrl) : null
   if (prNumber && prNumber !== issueNumber) setKodyLabel(prNumber, spec, ctx.cwd)
 
-  // Flip the state comment to the terminal phase/status so the dashboard
+  // Flip the state file to the terminal phase/status so the dashboard
   // reads a real terminus instead of the last mid-run "implementing".
   // Best-effort: a failed write is logged, not thrown — the user-visible
   // label is already in place.
   try {
-    const state = readTaskState(target, targetNumber, ctx.cwd)
+    const state = readTaskState(target, targetNumber, ctx.cwd, ctx.config)
     state.core.phase = phase
     state.core.status = status
-    state.core.currentExecutable = null
-    writeTaskState(target, targetNumber, state, ctx.cwd)
+    state.core.currentAgentAction = null
+    writeTaskState(target, targetNumber, state, ctx.cwd, ctx.config)
   } catch (err) {
     process.stderr.write(
       `[kody finalizeTerminal] failed to write terminal state on ${target} #${targetNumber}: ${err instanceof Error ? err.message : String(err)}\n`,

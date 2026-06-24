@@ -1,46 +1,68 @@
 /**
  * Live wiring test for the goal-scheduler shell preflight.
  *
- * Runs the REAL `goal-scheduler/scheduler.sh` against fixture
- * `.kody/goals/<id>/state.json` files, with a stub engine binary on
- * PATH that records how it was invoked. Proves the scheduler:
- *   - ticks every `active` goal exactly once via `goal-tick --goal <id>`
- *   - skips `paused` / `done` / missing-state goals
- *   - keeps going when one tick fails (one stuck goal must not starve)
- *   - invokes the engine by its REAL published bin name `kody-engine`
- *     (regression guard: the script previously called bare `kody`,
- *     which is not the bin name → `kody: command not found`, so every
- *     goal silently failed to advance).
- *
- * The PATH deliberately contains ONLY a `kody-engine` stub and no
- * `kody` stub: if the script regresses to calling `kody`, the run
- * fails with command-not-found and these tests go red.
+ * Runs the real goal-scheduler/scheduler.sh against fixture
+ * goal instance state files, with a stub engine binary on PATH.
+ * Proves the scheduler:
+ * - ticks every active managed goal exactly once via `goal-manager --goal <id>`
+ * - skips paused, done, missing-state, and legacy-shaped goal files
+ * - keeps going when one managed tick fails
+ * - invokes the published bin name `kody-engine`, never bare `kody`
  */
-
 import { spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { resolveAgentAction } from "../../src/registry.js"
 
-const SCHEDULER_SH = path.join(__dirname, "../../src/executables/goal-scheduler/scheduler.sh")
+function schedulerPath(): string {
+  const resolved = resolveAgentAction("goal-scheduler")
+  if (!resolved) throw new Error("goal-scheduler agentAction not found")
+  return path.join(path.dirname(resolved), "scheduler.sh")
+}
 
 let tmp: string
 let logFile: string
+let ghLogFile: string
 
-function writeGoal(id: string, state: string | null): void {
-  const dir = path.join(tmp, ".kody", "goals", id)
-  fs.mkdirSync(dir, { recursive: true })
-  if (state !== null) {
-    fs.writeFileSync(path.join(dir, "state.json"), JSON.stringify({ version: 1, state }, null, 2))
+function managedGoalExtra(): Record<string, unknown> {
+  return {
+    type: "release",
+    destination: { outcome: "publish", evidence: ["releasePrExists"] },
+    agentResponsibilities: ["release-prepare"],
+    route: [{ evidence: "releasePrExists", stage: "prepare", agentResponsibility: "release-prepare" }],
+    stage: "prepare",
+    facts: {},
+    blockers: [],
   }
 }
 
-/**
- * Stub `kody-engine` on PATH. Appends `argv0 <args...>` to $KODY_LOG.
- * Exits non-zero for the goal id "fail-goal" so we can prove the
- * scheduler keeps going after a failed tick.
- */
+function writeGoal(id: string, state: string | null, extra: Record<string, unknown> = {}): void {
+  const dir = path.join(tmp, ".kody", "goals", "instances", id)
+  fs.mkdirSync(dir, { recursive: true })
+  if (state !== null) {
+    fs.writeFileSync(path.join(dir, "state.json"), JSON.stringify({ version: 1, state, ...extra }, null, 2))
+  }
+}
+
+function writeConfig(config: Record<string, unknown>): void {
+  fs.writeFileSync(path.join(tmp, "kody.config.json"), `${JSON.stringify(config, null, 2)}\n`)
+}
+
+function writeTemplate(slug: string, extra: Record<string, unknown> = {}): void {
+  const dir = path.join(tmp, ".kody", "goals", "templates", slug)
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(
+    path.join(dir, "state.json"),
+    JSON.stringify({ version: 1, kind: "template", templateId: slug, state: "inactive", ...extra }, null, 2),
+  )
+}
+
+function activateGoals(...items: unknown[]): void {
+  fs.writeFileSync(path.join(tmp, "kody.config.json"), JSON.stringify({ company: { activeGoals: items } }, null, 2))
+}
+
 function installEngineStub(): string {
   const binDir = path.join(tmp, "bin")
   fs.mkdirSync(binDir, { recursive: true })
@@ -61,25 +83,61 @@ function installEngineStub(): string {
   return binDir
 }
 
-function runScheduler(): { status: number; stdout: string; calls: string[] } {
+function installGhStub(binDir: string): void {
+  const stub = path.join(binDir, "gh")
+  fs.writeFileSync(
+    stub,
+    [
+      "#!/usr/bin/env bash",
+      'echo "gh $*" >> "$KODY_GH_LOG"',
+      'if [ "$1" = "api" ] && [ "$2" = "/repos/A-Guy-educ/kody-state/contents/A-Guy-Web/goals/instances" ]; then',
+      '  printf \'[{"name":"web-release","type":"dir"}]\\n\'',
+      "  exit 0",
+      "fi",
+      'if [ "$1" = "api" ] && [ "$2" = "/repos/A-Guy-educ/kody-state/contents/A-Guy-Web/goals/instances/web-release/state.json" ]; then',
+      '  printf \'{"type":"file","encoding":"base64","content":"%s"}\\n\' "$(printf \'%s\' "$KODY_REMOTE_GOAL_JSON" | base64 | tr -d \'\\n\')"',
+      "  exit 0",
+      "fi",
+      'echo "unexpected gh call: $*" >&2',
+      "exit 9",
+      "",
+    ].join("\n"),
+  )
+  fs.chmodSync(stub, 0o755)
+}
+
+function runScheduler(options: { remote?: boolean; now?: string } = {}): {
+  status: number
+  stdout: string
+  stderr: string
+  calls: string[]
+  ghCalls: string[]
+} {
   const binDir = installEngineStub()
-  const res = spawnSync("bash", [SCHEDULER_SH], {
+  if (options.remote) installGhStub(binDir)
+  const res = spawnSync("bash", [schedulerPath()], {
     cwd: tmp,
     env: {
       ...process.env,
-      // Stub dir FIRST so a stray real `kody-engine` can't shadow it.
       PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ""}`,
       KODY_LOG: logFile,
+      KODY_GH_LOG: ghLogFile,
+      KODY_GOAL_SCHEDULER_NOW: options.now ?? "2026-06-20T12:00:00Z",
+      ...(options.remote
+        ? { KODY_REMOTE_GOAL_JSON: JSON.stringify({ version: 1, state: "active", ...managedGoalExtra() }) }
+        : { KODY_GOAL_SCHEDULER_SKIP_PERSIST: "1" }),
     },
     encoding: "utf-8",
   })
   const calls = fs.existsSync(logFile) ? fs.readFileSync(logFile, "utf-8").trim().split("\n").filter(Boolean) : []
-  return { status: res.status ?? -1, stdout: res.stdout ?? "", calls }
+  const ghCalls = fs.existsSync(ghLogFile) ? fs.readFileSync(ghLogFile, "utf-8").trim().split("\n").filter(Boolean) : []
+  return { status: res.status ?? -1, stdout: res.stdout ?? "", stderr: res.stderr ?? "", calls, ghCalls }
 }
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "goal-sched-"))
   logFile = path.join(tmp, "calls.log")
+  ghLogFile = path.join(tmp, "gh-calls.log")
 })
 
 afterEach(() => {
@@ -87,20 +145,35 @@ afterEach(() => {
 })
 
 describe("goal-scheduler live wiring", () => {
-  it("ticks an active goal once via the real kody-engine bin", () => {
-    writeGoal("paymant", "active")
+  it("ticks an active managed goal once via real kody-engine bin", () => {
+    writeGoal("release-v1-2-3", "active", managedGoalExtra())
+    activateGoals("release-v1-2-3")
 
     const { status, stdout, calls } = runScheduler()
 
     expect(status).toBe(0)
-    expect(calls).toEqual(["kody-engine goal-tick --goal paymant"])
-    expect(stdout).toContain("→ tick paymant")
-    expect(stdout).toContain("ticked 1 active goal(s) of 1 total")
+    expect(calls).toEqual(["kody-engine exec goal-manager --goal release-v1-2-3"])
+    expect(stdout).toContain("-> tick release-v1-2-3 (goal-manager)")
+    expect(stdout).toContain("scanned 1 goal instance(s), active=1, managed=1")
     expect(stdout).toContain("KODY_SKIP_AGENT=true")
   })
 
-  it("invokes kody-engine, never bare kody (regression guard)", () => {
-    writeGoal("g1", "active")
+  it("skips active legacy-shaped goals", () => {
+    writeGoal("legacy", "active")
+    writeGoal("managed", "active", managedGoalExtra())
+    activateGoals("legacy", "managed")
+
+    const { status, stdout, calls } = runScheduler()
+
+    expect(status).toBe(0)
+    expect(calls).toEqual(["kody-engine exec goal-manager --goal managed"])
+    expect(stdout).toContain("skip legacy: legacy goal files are not managed-goal instances")
+    expect(stdout).toContain("-> tick managed (goal-manager)")
+  })
+
+  it("invokes kody-engine, never bare kody", () => {
+    writeGoal("g1", "active", managedGoalExtra())
+    activateGoals("g1")
 
     const { status, calls } = runScheduler()
 
@@ -109,39 +182,119 @@ describe("goal-scheduler live wiring", () => {
     expect(calls.some((c) => c.startsWith("kody "))).toBe(false)
   })
 
+  it("normalizes URL-form state.repo before using GitHub contents API", () => {
+    writeConfig({
+      github: { owner: "A-Guy-educ", repo: "A-Guy-Web" },
+      state: { repo: "https://github.com/A-Guy-educ/kody-state", path: "A-Guy-Web" },
+      company: { activeGoals: ["web-release"] },
+    })
+
+    const { status, stderr, calls, ghCalls } = runScheduler({ remote: true })
+
+    expect(status, stderr).toBe(0)
+    expect(ghCalls).toContain("gh api /repos/A-Guy-educ/kody-state/contents/A-Guy-Web/goals/instances")
+    expect(ghCalls).toContain(
+      "gh api /repos/A-Guy-educ/kody-state/contents/A-Guy-Web/goals/instances/web-release/state.json",
+    )
+    expect(ghCalls.some((call) => call.includes("/repos/https://github.com"))).toBe(false)
+    expect(calls).toEqual(["kody-engine exec goal-manager --goal web-release"])
+  })
+
   it("skips paused and done goals", () => {
-    writeGoal("a", "active")
-    writeGoal("p", "paused")
-    writeGoal("d", "done")
+    writeGoal("a", "active", managedGoalExtra())
+    writeGoal("p", "paused", managedGoalExtra())
+    writeGoal("d", "done", managedGoalExtra())
+    activateGoals("a", "p", "d")
 
     const { status, stdout, calls } = runScheduler()
 
     expect(status).toBe(0)
-    expect(calls).toEqual(["kody-engine goal-tick --goal a"])
-    expect(stdout).toContain("ticked 1 active goal(s) of 3 total")
+    expect(calls).toEqual(["kody-engine exec goal-manager --goal a"])
+    expect(stdout).toContain("scanned 3 goal instance(s), active=1, managed=1")
   })
 
-  it("continues after a failed tick so one stuck goal can't starve the rest", () => {
-    writeGoal("ok-1", "active")
-    writeGoal("fail-goal", "active")
-    writeGoal("ok-2", "active")
+  it("continues after failed tick so one stuck goal cannot starve the rest", () => {
+    writeGoal("ok-1", "active", managedGoalExtra())
+    writeGoal("fail-goal", "active", managedGoalExtra())
+    writeGoal("ok-2", "active", managedGoalExtra())
+    activateGoals("ok-1", "fail-goal", "ok-2")
 
     const { status, stdout, calls } = runScheduler()
 
     expect(status).toBe(0)
-    expect(calls).toContain("kody-engine goal-tick --goal ok-1")
-    expect(calls).toContain("kody-engine goal-tick --goal fail-goal")
-    expect(calls).toContain("kody-engine goal-tick --goal ok-2")
+    expect(calls).toContain("kody-engine exec goal-manager --goal ok-1")
+    expect(calls).toContain("kody-engine exec goal-manager --goal fail-goal")
+    expect(calls).toContain("kody-engine exec goal-manager --goal ok-2")
     expect(stdout).toContain("tick fail-goal failed (continuing)")
-    expect(stdout).toContain("ticked 3 active goal(s) of 3 total")
+    expect(stdout).toContain("scanned 3 goal instance(s), active=3, managed=3")
   })
 
-  it("no .kody/goals dir → skips cleanly without calling the engine", () => {
+  it("creates and ticks a scheduled goal instance from a template", () => {
+    writeTemplate("weekly-release", managedGoalExtra())
+    activateGoals({ template: "weekly-release", every: "1w", facts: { issue: 123 } })
+
+    const { status, stdout, calls } = runScheduler()
+
+    const instanceFile = path.join(tmp, ".kody", "goals", "instances", "weekly-release-2026-W25", "state.json")
+    const instance = JSON.parse(fs.readFileSync(instanceFile, "utf-8"))
+    expect(status).toBe(0)
+    expect(instance).toMatchObject({
+      kind: "instance",
+      template: "weekly-release",
+      sourceTemplate: "weekly-release",
+      state: "active",
+      facts: { issue: 123 },
+    })
+    expect(calls).toEqual(["kody-engine exec goal-manager --goal weekly-release-2026-W25"])
+    expect(stdout).toContain("created goal instance weekly-release-2026-W25")
+    expect(stdout).toContain("-> tick weekly-release-2026-W25 (goal-manager)")
+  })
+
+  it("waits until scheduled goal preferred runtime in local timezone", () => {
+    writeTemplate("web-release", managedGoalExtra())
+    activateGoals({
+      template: "web-release",
+      every: "1d",
+      idPrefix: "web-release",
+      preferredRunTime: { time: "10:00", timezone: "Asia/Jerusalem" },
+    })
+
+    const before = runScheduler({ now: "2026-06-24T06:59:00Z" })
+    expect(before.status).toBe(0)
+    expect(before.calls).toEqual([])
+    expect(before.stdout).toContain("skip web-release: waiting preferred time 10:00 Asia/Jerusalem")
+    expect(fs.existsSync(path.join(tmp, ".kody", "goals", "instances", "web-release-2026-06-24"))).toBe(false)
+
+    const after = runScheduler({ now: "2026-06-24T07:01:00Z" })
+    expect(after.status).toBe(0)
+    expect(after.calls).toEqual(["kody-engine exec goal-manager --goal web-release-2026-06-24"])
+    expect(after.stdout).toContain("created goal instance web-release-2026-06-24")
+  })
+
+  it("scheduled goal activation does not tick stale singleton instances from the same template", () => {
+    writeTemplate("web-release", managedGoalExtra())
+    writeGoal("web-release", "active", {
+      ...managedGoalExtra(),
+      template: "web-release",
+      sourceTemplate: "web-release",
+      stage: "merge",
+      facts: { issue: 294, releasePr: 295, releasePrExists: true, pendingEvidence: "mainMerged" },
+    })
+    activateGoals({ template: "web-release", every: "1d", idPrefix: "web-release" })
+
+    const { status, calls, stdout } = runScheduler({ now: "2026-06-24T07:01:00Z" })
+
+    expect(status).toBe(0)
+    expect(calls).toEqual(["kody-engine exec goal-manager --goal web-release-2026-06-24"])
+    expect(stdout).toContain("created goal instance web-release-2026-06-24")
+    expect(stdout).not.toContain("-> tick web-release (goal-manager)")
+  })
+
+  it("no active goals configured skips cleanly without calling engine", () => {
     const { status, stdout, calls } = runScheduler()
 
     expect(status).toBe(0)
     expect(calls).toEqual([])
-    expect(stdout).toContain("nothing to schedule")
-    expect(stdout).toContain("KODY_SKIP_AGENT=true")
+    expect(stdout).toContain("no company.activeGoals configured")
   })
 })

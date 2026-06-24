@@ -3,7 +3,7 @@
  * change the thinking depth when invoked via the kody CLI? Exercises the full
  * path: parseArgs → loadProfile → parseClaudeCode → executor → runAgent → SDK.
  *
- * For each budget, we create a temporary profile under src/executables/, run
+ * For each budget, we create a temporary profile under src/agent-actions/, run
  * `pnpm kody:run <name>` against a temp project dir, parse the NDJSON, and delete
  * the profile. No commits, no persistent fixtures.
  */
@@ -13,7 +13,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 
 const REPO_ROOT = path.resolve(new URL(".", import.meta.url).pathname, "..")
-const EXECUTABLES_ROOT = path.join(REPO_ROOT, "src", "executables")
+const EXECUTABLES_ROOT = path.join(REPO_ROOT, "src", "agent-actions")
 
 const REASONING_PROMPT = [
   "Find the unique 10-digit number N (using each of the digits 0, 1, 2, 3, 4, 5,",

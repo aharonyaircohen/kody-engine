@@ -1,13 +1,13 @@
 import * as childProcess from "node:child_process"
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/agent-actions/types.js"
 import { setKodyLabel } from "../../src/lifecycleLabels.js"
 import { advanceFlow } from "../../src/scripts/advanceFlow.js"
 import { dispatch } from "../../src/scripts/dispatch.js"
 import { finalizeTerminal } from "../../src/scripts/finalizeTerminal.js"
 import { finishFlow } from "../../src/scripts/finishFlow.js"
 import { startFlow } from "../../src/scripts/startFlow.js"
-import { emptyState, type FlowState, STATE_BEGIN, STATE_END, type TaskState } from "../../src/state.js"
+import { emptyState, type FlowState, type TaskState } from "../../src/state.js"
 
 const setKodyLabelMock = setKodyLabel as unknown as Mock
 
@@ -60,6 +60,7 @@ function ctx(overrides: Partial<Context> = {}): Context {
       quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       git: { defaultBranch: "main" },
       github: { owner: "o", repo: "r" },
+      state: { repo: "o/kody-state", path: "r" },
       agent: { model: "claude/claude-haiku-4-5-20251001" },
     },
     data: {},
@@ -70,6 +71,14 @@ function ctx(overrides: Partial<Context> = {}): Context {
 
 beforeEach(() => {
   execFileSync.mockReset()
+  execFileSync.mockImplementation((_cmd, args: unknown) => {
+    const a = (args as string[]) ?? []
+    if (a[0] === "api" && a.some((arg) => arg.includes("/contents/"))) {
+      if (a.includes("PUT")) return "{}"
+      throw new Error("HTTP 404 Not Found")
+    }
+    return ""
+  })
   setKodyLabelMock.mockReset()
 })
 afterEach(() => vi.clearAllMocks())
@@ -83,7 +92,7 @@ describe("startFlow", () => {
     // not from a removed --flow CLI arg.
     expect(state.flow).toMatchObject({ name: "bug", step: "plan", issueNumber: 42 })
     // In-process hand-off, NOT an @kody comment (which a bot can't self-trigger).
-    expect(c.output.nextDispatch).toEqual({ executable: "plan", cliArgs: { issue: 42 } })
+    expect(c.output.nextDispatch).toEqual({ action: "plan", cliArgs: { issue: 42 } })
     expect(execFileSync).not.toHaveBeenCalled()
   })
 
@@ -110,14 +119,14 @@ describe("startFlow", () => {
     }
     const c = ctx({ data: { taskState: state }, args: { issue: 42 } })
     await startFlow(c, profile("bug"), null, { entry: "review", target: "pr" })
-    expect(c.output.nextDispatch).toEqual({ executable: "review", cliArgs: { pr: 77 } })
+    expect(c.output.nextDispatch).toEqual({ action: "review", cliArgs: { pr: 77 } })
   })
 
   it("falls back to issue when target=pr but no prUrl exists", async () => {
     const state: TaskState = { ...emptyState() }
     const c = ctx({ data: { taskState: state }, args: { issue: 42 } })
     await startFlow(c, profile("bug"), null, { entry: "review", target: "pr" })
-    expect(c.output.nextDispatch).toEqual({ executable: "review", cliArgs: { issue: 42 } })
+    expect(c.output.nextDispatch).toEqual({ action: "review", cliArgs: { issue: 42 } })
   })
 
   it("no-ops without crashing when `with.entry` is missing", async () => {
@@ -134,7 +143,7 @@ describe("dispatch", () => {
     const c = ctx({ data: { taskState: state } })
     await dispatch(c, profile(), null, { next: "run", target: "issue" })
     expect(state.flow?.step).toBe("run")
-    expect(c.output.nextDispatch).toEqual({ executable: "run", cliArgs: { issue: 42 } })
+    expect(c.output.nextDispatch).toEqual({ action: "run", cliArgs: { issue: 42 } })
     expect(execFileSync).not.toHaveBeenCalled()
   })
 
@@ -146,7 +155,7 @@ describe("dispatch", () => {
     }
     const c = ctx({ data: { taskState: state } })
     await dispatch(c, profile(), null, { next: "review", target: "pr" })
-    expect(c.output.nextDispatch).toEqual({ executable: "review", cliArgs: { pr: 9 } })
+    expect(c.output.nextDispatch).toEqual({ action: "review", cliArgs: { pr: 9 } })
   })
 
   it("no-ops without crashing when `with.next` is missing", async () => {
@@ -258,7 +267,7 @@ describe("advanceFlow", () => {
     }
     const c = ctx({ data: { taskState: state, commentTargetType: "issue" } })
     await advanceFlow(c, profile("plan"), null)
-    expect(c.output.nextDispatch).toEqual({ executable: "bug", cliArgs: { issue: 42 } })
+    expect(c.output.nextDispatch).toEqual({ action: "bug", cliArgs: { issue: 42 } })
   })
 
   it("re-runs <flow.name> in-process regardless of which child just finished", async () => {
@@ -268,18 +277,10 @@ describe("advanceFlow", () => {
     }
     const c = ctx({ args: { issue: 7 }, data: { taskState: state, commentTargetType: "issue" } })
     await advanceFlow(c, profile("run"), null)
-    expect(c.output.nextDispatch).toEqual({ executable: "feature", cliArgs: { issue: 7 } })
+    expect(c.output.nextDispatch).toEqual({ action: "feature", cliArgs: { issue: 7 } })
   })
 
   it("for PR-targeted children also mirrors action to the issue state and re-triggers by flow name", async () => {
-    const issueStateBody = `${STATE_BEGIN}\n\n\`\`\`json\n${JSON.stringify(emptyState())}\n\`\`\`\n\n${STATE_END}`
-    execFileSync.mockImplementation((_cmd, args: unknown) => {
-      const a = (args as string[]) ?? []
-      if (a[0] === "api" && (a[1] === "--paginate" || a[1]?.includes("comments"))) {
-        return JSON.stringify([{ id: 999, body: issueStateBody }])
-      }
-      return ""
-    })
     const flow: FlowState = { name: "bug", step: "review", issueNumber: 42, startedAt: "t" }
     const state: TaskState = { ...emptyState(), flow }
     const c = ctx({
@@ -290,11 +291,15 @@ describe("advanceFlow", () => {
       },
     })
     await advanceFlow(c, profile("review"), null)
-    const calls = execFileSync.mock.calls.map((c) => (c[1] as string[]) ?? [])
-    const patchCall = calls.find((a) => a.includes("PATCH"))
-    // State mirror still happens via gh api PATCH; the re-trigger is now in-process.
-    expect(patchCall).toBeDefined()
-    expect(c.output.nextDispatch).toEqual({ executable: "bug", cliArgs: { issue: 42 } })
+    const putCall = execFileSync.mock.calls.find(
+      (call) => Array.isArray(call[1]) && (call[1] as string[]).includes("PUT"),
+    )
+    // State mirror still happens via the Contents API; the re-trigger is now in-process.
+    expect(putCall).toBeDefined()
+    const payload = JSON.parse((putCall![2] as { input?: string }).input ?? "{}") as { content?: string }
+    const stateJson = Buffer.from(payload.content ?? "", "base64").toString("utf-8")
+    expect(stateJson).toContain("REVIEW_PASS")
+    expect(c.output.nextDispatch).toEqual({ action: "bug", cliArgs: { issue: 42 } })
   })
 })
 

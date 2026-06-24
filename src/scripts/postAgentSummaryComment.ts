@@ -1,13 +1,13 @@
 /**
- * Shared landing for "advise, don't change code" executables (`plan`,
- * `research`, and the generic `worker-ask` answer). They all do the same
+ * Shared landing for "advise, don't change code" agentActions (`plan`,
+ * `research`, and the generic `agent-ask` answer). They all do the same
  * thing: when the agent completed, take its summary (ctx.data.prSummary),
  * optionally wrap it in a header, and post it as one best-effort comment on
  * the target the preflight stamped. The render/target rules differ; the
  * guard-and-post boilerplate doesn't — so it lives here once.
  */
 
-import type { Context } from "../executables/types.js"
+import type { Context } from "../agent-actions/types.js"
 import { postIssueComment as ghPostIssueComment } from "../issue.js"
 
 export interface PostSummaryOptions {
@@ -20,7 +20,7 @@ export interface PostSummaryOptions {
 /**
  * No-op unless the agent finished and produced a non-empty summary on a known
  * target. Posting is best-effort: a failed comment never fails the run,
- * because the run summary / state block still captures the body.
+ * because the agent run summary / state block still captures the body.
  */
 export function postAgentSummaryComment(ctx: Context, opts: PostSummaryOptions = {}): void {
   if (!ctx.data.agentDone) return
@@ -34,6 +34,6 @@ export function postAgentSummaryComment(ctx: Context, opts: PostSummaryOptions =
   try {
     ghPostIssueComment(targetNumber, rendered, ctx.cwd)
   } catch {
-    /* best effort — run summary / state block still captures the body */
+    /* best effort — agent run summary / state block still captures the body */
   }
 }

@@ -1,3 +1,6 @@
+import fs from "node:fs"
+import os from "node:os"
+import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const querySpy = vi.fn()
@@ -14,12 +17,21 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
 
 import { runAgent } from "../../src/agent.js"
 
-const baseOpts = {
+let ndjsonDir: string
+const baseOpts = () => ({
   prompt: "hi",
   model: { provider: "minimax", model: "m" },
   cwd: process.cwd(),
-  ndjsonDir: "/tmp/kody-outcome-test",
-}
+  ndjsonDir,
+})
+
+beforeEach(() => {
+  ndjsonDir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-outcome-test-"))
+})
+
+afterEach(() => {
+  fs.rmSync(ndjsonDir, { recursive: true, force: true })
+})
 
 describe("runAgent: typed AgentOutcomeKind", () => {
   beforeEach(() => querySpy.mockClear())
@@ -31,7 +43,7 @@ describe("runAgent: typed AgentOutcomeKind", () => {
     queryGenFactory = async function* () {
       yield { type: "result", subtype: "success", result: "DONE" }
     }
-    const res = await runAgent(baseOpts)
+    const res = await runAgent(baseOpts())
     expect(res.outcome).toBe("completed")
     expect(res.outcomeKind).toBe("ok")
   })
@@ -40,7 +52,7 @@ describe("runAgent: typed AgentOutcomeKind", () => {
     queryGenFactory = async function* () {
       yield { type: "result", subtype: "error_max_turns", result: "" }
     }
-    const res = await runAgent(baseOpts)
+    const res = await runAgent(baseOpts())
     expect(res.outcome).toBe("failed")
     expect(res.outcomeKind).toBe("out_of_turns")
   })
@@ -49,7 +61,7 @@ describe("runAgent: typed AgentOutcomeKind", () => {
     queryGenFactory = async function* () {
       yield { type: "result", subtype: "error_rate_limit", result: "" }
     }
-    const res = await runAgent(baseOpts)
+    const res = await runAgent(baseOpts())
     expect(res.outcomeKind).toBe("rate_limit")
   })
 
@@ -57,7 +69,7 @@ describe("runAgent: typed AgentOutcomeKind", () => {
     queryGenFactory = async function* () {
       yield { type: "result", subtype: "tool_failed", result: "" }
     }
-    const res = await runAgent(baseOpts)
+    const res = await runAgent(baseOpts())
     expect(res.outcomeKind).toBe("tool_error")
   })
 
@@ -67,7 +79,7 @@ describe("runAgent: typed AgentOutcomeKind", () => {
       // biome-ignore lint/correctness/noUnreachable: needed to mark generator
       yield { type: "result", subtype: "success", result: "DONE" }
     }
-    const res = await runAgent(baseOpts)
+    const res = await runAgent(baseOpts())
     expect(res.outcomeKind).toBe("model_error")
     expect(res.error).toMatch(/network exploded/)
   })
@@ -77,7 +89,7 @@ describe("runAgent: typed AgentOutcomeKind", () => {
       await new Promise((resolve) => setTimeout(resolve, 200))
       yield { type: "result", subtype: "success", result: "DONE" }
     }
-    const res = await runAgent({ ...baseOpts, maxTurnTimeoutMs: 50 })
+    const res = await runAgent({ ...baseOpts(), maxTurnTimeoutMs: 50 })
     expect(res.outcomeKind).toBe("stalled")
   })
 
@@ -85,7 +97,7 @@ describe("runAgent: typed AgentOutcomeKind", () => {
     queryGenFactory = async function* () {
       yield { type: "result", subtype: "something_weird", result: "" }
     }
-    const res = await runAgent(baseOpts)
+    const res = await runAgent(baseOpts())
     expect(res.outcomeKind).toBe("generic_failed")
   })
 })

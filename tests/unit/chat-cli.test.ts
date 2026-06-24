@@ -63,4 +63,48 @@ describe("chat-cli: parseChatArgs", () => {
     const a = parseChatArgs(["--session", "s1", "--dashboard-url", "https://x/i?token=t"], {})
     expect(a.dashboardUrl).toBe("https://x/i?token=t")
   })
+
+  describe("reasoning effort", () => {
+    it("captures --reasoning-effort flag for every canonical level", () => {
+      expect(parseChatArgs(["--session", "s1", "--reasoning-effort", "off"], {}).reasoningEffort).toBe("off")
+      expect(parseChatArgs(["--session", "s1", "--reasoning-effort", "low"], {}).reasoningEffort).toBe("low")
+      expect(parseChatArgs(["--session", "s1", "--reasoning-effort", "medium"], {}).reasoningEffort).toBe("medium")
+      expect(parseChatArgs(["--session", "s1", "--reasoning-effort", "high"], {}).reasoningEffort).toBe("high")
+    })
+
+    it("accepts case-insensitive --reasoning-effort values", () => {
+      expect(parseChatArgs(["--session", "s1", "--reasoning-effort", "HIGH"], {}).reasoningEffort).toBe("high")
+      expect(parseChatArgs(["--session", "s1", "--reasoning-effort", "Medium"], {}).reasoningEffort).toBe("medium")
+    })
+
+    it("drops --reasoning-effort to undefined for unknown values (don't fail the parse)", () => {
+      // The dashboard may forward stale or typo'd values; we don't
+      // reject the request, we just fall through to the next resolution
+      // source (env → config → unset).
+      expect(parseChatArgs(["--session", "s1", "--reasoning-effort", "nuclear"], {}).reasoningEffort).toBeUndefined()
+      expect(parseChatArgs(["--session", "s1", "--reasoning-effort", ""], {}).reasoningEffort).toBeUndefined()
+    })
+
+    it("falls back to REASONING_EFFORT env var when the flag is absent", () => {
+      const a = parseChatArgs(["--session", "s1"], { REASONING_EFFORT: "high" })
+      expect(a.reasoningEffort).toBe("high")
+    })
+
+    it("CLI flag wins over env when both are set", () => {
+      const a = parseChatArgs(["--session", "s1", "--reasoning-effort", "low"], {
+        REASONING_EFFORT: "high",
+      })
+      expect(a.reasoningEffort).toBe("low")
+    })
+
+    it("ignores empty REASONING_EFFORT env (Actions sends '' for unset inputs)", () => {
+      const a = parseChatArgs(["--session", "s1"], { REASONING_EFFORT: "" })
+      expect(a.reasoningEffort).toBeUndefined()
+    })
+
+    it("is undefined by default — engine's cheapest path (no thinking block)", () => {
+      const a = parseChatArgs(["--session", "s1"], {})
+      expect(a.reasoningEffort).toBeUndefined()
+    })
+  })
 })

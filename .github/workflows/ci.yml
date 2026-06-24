@@ -11,6 +11,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout company store for tests
+        run: git clone --depth 1 --branch stable https://github.com/aharonyaircohen/kody-company-store.git ../kody-store
       - uses: pnpm/action-setup@v6
         with: { version: 11 }
       - uses: actions/setup-node@v4

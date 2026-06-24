@@ -7,14 +7,14 @@
  * model can't see them and falls back to doing the work itself. Passing
  * them directly via the SDK `agents` option is the reliable path.
  *
- * Resolution mirrors buildSyntheticPlugin: the executable's own
+ * Resolution mirrors buildSyntheticPlugin: the agentAction's own
  * `<profile.dir>/agents/<name>.md` wins, then the shared catalog at
  * `src/plugins/agents/<name>.md`.
  */
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { Profile } from "./executables/types.js"
+import type { Profile } from "./agent-actions/types.js"
 import { getPluginsCatalogRoot } from "./scripts/buildSyntheticPlugin.js"
 
 export interface LoadedAgent {
@@ -50,8 +50,8 @@ function resolveAgentFile(profileDir: string, name: string): string {
  * Snapshot every declared subagent's raw markdown at profile-load time, keyed
  * by the declared name. Mirrors `readPromptTemplates` (see profile.ts): the
  * profile dir is read on the default checkout BEFORE any task branch switch,
- * so the captured content survives a later checkout that drops the duty's
- * `agents/` (e.g. a PR-branch review where `.kody/duties/<slug>/` doesn't
+ * so the captured content survives a later checkout that drops the agentResponsibility's
+ * `agents/` (e.g. a PR-branch review where `.kody/agent-responsibilities/<slug>/` doesn't
  * exist). Best-effort — a name that can't be resolved here is simply absent
  * from the snapshot, and `loadSubagents` falls back to a disk read (which then
  * surfaces the real "not found" error at use time).
@@ -81,7 +81,7 @@ export function loadSubagents(profile: Profile): Record<string, LoadedAgent> | u
   const agents: Record<string, LoadedAgent> = {}
   for (const name of names) {
     // Prefer the load-time snapshot (survives task-branch checkout that may have
-    // dropped the duty's agents/ dir); fall back to a fresh disk read.
+    // dropped the agentResponsibility's agents/ dir); fall back to a fresh disk read.
     const raw = profile.subagentTemplates?.[name] ?? fs.readFileSync(resolveAgentFile(profile.dir, name), "utf-8")
     const { fm, body } = splitFrontmatter(raw)
     if (!body) throw new Error(`loadSubagents: agent '${name}' has an empty prompt body`)

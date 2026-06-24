@@ -21,8 +21,8 @@ vi.mock("node:child_process", () => ({
   execFileSync: (...args: unknown[]) => execFileSyncMock(...args),
 }))
 
+import type { Context, Profile } from "../../src/agent-actions/types.js"
 import { mergeBase } from "../../src/branch.js"
-import type { Context, Profile } from "../../src/executables/types.js"
 import { getPr, postPrReviewComment } from "../../src/issue.js"
 import { setKodyLabel } from "../../src/lifecycleLabels.js"
 import { syncFlow } from "../../src/scripts/syncFlow.js"
@@ -46,7 +46,7 @@ beforeEach(() => {
   vi.mocked(getPr).mockReturnValue({ state: "OPEN", number: 42, baseRefName: "main" } as never)
 })
 
-describe("syncFlow with announceOnSuccess=true (sync executable)", () => {
+describe("syncFlow with announceOnSuccess=true (sync agentAction)", () => {
   it("reports 'already up to date' without commenting when merge is a no-op", async () => {
     vi.mocked(mergeBase).mockReturnValue("clean")
     execFileSyncMock.mockReturnValue("abc123\n")

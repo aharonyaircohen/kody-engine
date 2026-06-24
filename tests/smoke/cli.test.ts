@@ -4,6 +4,9 @@
  * are the fastest "is the build runnable at all" signals and run first in CI.
  */
 
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
 import { describe, expect, it } from "vitest"
 import { packageVersion, runCli } from "./helpers.js"
 
@@ -40,5 +43,65 @@ describe("smoke: CLI boots and validates args", () => {
     const r = runCli(["run", "--issue", "1", "--bogus"])
     expect(r.status).toBe(64)
     expect(r.stderr).toMatch(/--bogus/)
+  })
+
+  it("runs a project agentResponsibility action through its implementation agentAction", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-agentResponsibility-cli-smoke-"))
+    fs.mkdirSync(path.join(root, ".kody", "agent-responsibilities"), { recursive: true })
+    fs.mkdirSync(path.join(root, ".kody", "agent-actions", "smoke-impl"), { recursive: true })
+    fs.mkdirSync(path.join(root, ".kody", "agents"), { recursive: true })
+    fs.writeFileSync(
+      path.join(root, "kody.config.json"),
+      JSON.stringify({
+        quality: { typecheck: "", lint: "", format: "", testUnit: "" },
+        git: { defaultBranch: "main" },
+        github: { owner: "o", repo: "r" },
+        agent: { model: "anthropic/test" },
+      }),
+    )
+    fs.mkdirSync(path.join(root, ".kody", "agent-responsibilities", "smoke-agent-responsibility"), { recursive: true })
+    fs.writeFileSync(path.join(root, ".kody", "agents", "kody.md"), "# Kody\n")
+    fs.writeFileSync(
+      path.join(root, ".kody", "agent-responsibilities", "smoke-agent-responsibility", "profile.json"),
+      JSON.stringify({
+        name: "smoke-agent-responsibility",
+        action: "smoke-action",
+        agentAction: "smoke-impl",
+        agent: "kody",
+      }),
+    )
+    fs.writeFileSync(
+      path.join(root, ".kody", "agent-responsibilities", "smoke-agent-responsibility", "agent-responsibility.md"),
+      "# Smoke\n",
+    )
+    fs.writeFileSync(
+      path.join(root, ".kody", "agent-actions", "smoke-impl", "profile.json"),
+      JSON.stringify({
+        name: "smoke-impl",
+        role: "utility",
+        describe: "smoke impl",
+        kind: "oneshot",
+        inputs: [],
+        claudeCode: {
+          model: "inherit",
+          permissionMode: "default",
+          maxTurns: 0,
+          maxThinkingTokens: null,
+          systemPromptAppend: null,
+          tools: [],
+          hooks: [],
+          skills: [],
+          commands: [],
+          subagents: [],
+          plugins: [],
+          mcpServers: [],
+        },
+        cliTools: [],
+        scripts: { preflight: [{ script: "skipAgent" }], postflight: [] },
+      }),
+    )
+
+    const r = runCli(["smoke-action"], { cwd: root, env: { KODY_COMPANY_STORE: "off" } })
+    expect(r.status).toBe(0)
   })
 })

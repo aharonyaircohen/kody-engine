@@ -1,7 +1,7 @@
 /**
  * Postflight: post the agent's final answer as a plain comment on the
  * target issue/PR. This is the generic "comment-only" landing — used by
- * executables that advise rather than change code (no branch, no PR).
+ * agentActions that advise rather than change code (no branch, no PR).
  *
  * The answer is the agent's final summary (ctx.data.prSummary, set by
  * parseAgentResult). The comment target (issue/PR + number) is stamped by a
@@ -14,7 +14,7 @@
  * wrote — same exposure as postReviewResult.
  */
 
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../agent-actions/types.js"
 import { postAgentSummaryComment } from "./postAgentSummaryComment.js"
 
 export const postAgentComment: PostflightScript = async (ctx) => {

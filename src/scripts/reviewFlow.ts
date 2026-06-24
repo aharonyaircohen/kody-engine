@@ -1,13 +1,13 @@
 /**
- * Preflight for the `review` executable. Checks out the PR, fetches
+ * Preflight for the `review` agentAction. Checks out the PR, fetches
  * diff + metadata, posts a "started" comment. Read-only — no branch
  * modification, no conventions about commits. Sets:
  *   ctx.data.pr, ctx.data.prDiff, ctx.data.branch,
  *   ctx.data.commentTargetType = "pr", ctx.data.commentTargetNumber.
  */
 
+import type { PreflightScript } from "../agent-actions/types.js"
 import { checkoutPrBranch, getCurrentBranch } from "../branch.js"
-import type { PreflightScript } from "../executables/types.js"
 import { getRunUrl } from "../gha.js"
 import { getPr, getPrDiff, postPrReviewComment } from "../issue.js"
 

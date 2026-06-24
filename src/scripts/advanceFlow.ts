@@ -1,8 +1,8 @@
 /**
- * Postflight (added to every child executable's tail): if a flow is in
+ * Postflight (added to every child agentAction's tail): if a flow is in
  * progress, re-trigger the flow orchestrator IN-PROCESS via
  * `ctx.output.nextDispatch` (kody-cli runs it). `state.flow.name` is the
- * executable name of the orchestrator itself (e.g. "bug", "feature", "spec",
+ * agentAction name of the orchestrator itself (e.g. "bug", "feature", "spec",
  * "chore") per the semantic-naming convention.
  *
  * Why in-process instead of an `@kody <flow.name>` comment: when Kody runs as
@@ -27,7 +27,7 @@
  */
 
 import { execFileSync } from "node:child_process"
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../agent-actions/types.js"
 import { type Action, readTaskState, reduce, type TaskState, writeTaskState } from "../state.js"
 import { jobMetaFromData } from "./saveTaskState.js"
 
@@ -60,7 +60,7 @@ export const advanceFlow: PostflightScript = async (ctx, profile) => {
   const curState = state as TaskState
   let issueState: TaskState
   try {
-    issueState = readTaskState("issue", flow.issueNumber, ctx.cwd)
+    issueState = readTaskState("issue", flow.issueNumber, ctx.cwd, ctx.config)
   } catch {
     issueState = curState
   }
@@ -72,7 +72,7 @@ export const advanceFlow: PostflightScript = async (ctx, profile) => {
   const action = ctx.data.action as Action | undefined
   let nextIssueState: TaskState = issueState
   if (targetType === "pr" && action) {
-    nextIssueState = reduce(issueState, profile.name, action, profile.phase, profile.staff, jobMetaFromData(ctx.data))
+    nextIssueState = reduce(issueState, profile.name, action, profile.phase, profile.agent, jobMetaFromData(ctx.data))
     // Preserve PR URL on the issue's state too.
     if (state?.core.prUrl && !nextIssueState.core.prUrl) nextIssueState.core.prUrl = state.core.prUrl
   }
@@ -85,7 +85,7 @@ export const advanceFlow: PostflightScript = async (ctx, profile) => {
     // tell the issue why we stopped.
     nextIssueState.flow = undefined
     try {
-      writeTaskState("issue", flow.issueNumber, nextIssueState, ctx.cwd)
+      writeTaskState("issue", flow.issueNumber, nextIssueState, ctx.cwd, ctx.config)
     } catch (err) {
       process.stderr.write(
         `[kody advanceFlow] failed to clear looping flow on issue #${flow.issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
@@ -107,7 +107,7 @@ export const advanceFlow: PostflightScript = async (ctx, profile) => {
   // re-triggering, so the next run sees the higher count.
   nextIssueState.flow = { ...flow, hops }
   try {
-    writeTaskState("issue", flow.issueNumber, nextIssueState, ctx.cwd)
+    writeTaskState("issue", flow.issueNumber, nextIssueState, ctx.cwd, ctx.config)
   } catch (err) {
     process.stderr.write(
       `[kody advanceFlow] failed to persist hop count on issue #${flow.issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
@@ -116,5 +116,5 @@ export const advanceFlow: PostflightScript = async (ctx, profile) => {
 
   // Re-run the same sub-orchestrator that started this flow (e.g. "bug",
   // "feature") in-process, so it advances to the next stage.
-  ctx.output.nextDispatch = { executable: flow.name, cliArgs: { issue: flow.issueNumber } }
+  ctx.output.nextDispatch = { action: flow.name, cliArgs: { issue: flow.issueNumber } }
 }
