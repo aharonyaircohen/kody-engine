@@ -13,6 +13,8 @@ export interface IssueData {
   title: string
   body: string
   comments: IssueComment[]
+  url?: string
+  isPullRequest?: boolean
   /**
    * GitHub labels applied to the issue. Used by the classifier's fast
    * path. Optional for backward compat with call sites that construct an
@@ -50,15 +52,18 @@ export function gh(args: string[], options?: GhOptions): string {
 }
 
 export function getIssue(issueNumber: number, cwd?: string): IssueData {
-  const output = gh(["issue", "view", String(issueNumber), "--json", "number,title,body,comments,labels"], { cwd })
+  const output = gh(["issue", "view", String(issueNumber), "--json", "number,title,body,comments,labels,url"], { cwd })
   const parsed = JSON.parse(output)
   if (typeof parsed?.title !== "string") {
     throw new Error(`Issue #${issueNumber}: unexpected response shape`)
   }
+  const url = typeof parsed.url === "string" ? parsed.url : undefined
   return {
     number: parsed.number ?? issueNumber,
     title: parsed.title,
     body: parsed.body ?? "",
+    url,
+    isPullRequest: typeof url === "string" && /\/pull\/\d+$/.test(url),
     comments: (parsed.comments ?? []).map((c: { body: string; createdAt: string; author?: { login?: string } }) => ({
       body: c.body ?? "",
       author: c.author?.login ?? "unknown",

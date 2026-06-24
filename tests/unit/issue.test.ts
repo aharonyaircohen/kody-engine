@@ -1,5 +1,18 @@
-import { describe, expect, it } from "vitest"
-import { formatIssueComments, isReviewShaped, truncate } from "../../src/issue.js"
+import * as childProcess from "node:child_process"
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest"
+
+vi.mock("node:child_process", async () => {
+  const actual = await vi.importActual<typeof import("node:child_process")>("node:child_process")
+  return { ...actual, execFileSync: vi.fn() }
+})
+
+import { formatIssueComments, getIssue, isReviewShaped, truncate } from "../../src/issue.js"
+
+const execFileSync = childProcess.execFileSync as unknown as Mock
+
+beforeEach(() => {
+  execFileSync.mockReset()
+})
 
 describe("issue: formatIssueComments", () => {
   const c = (body: string, author: string, createdAt: string) => ({ body, author, createdAt })
@@ -89,5 +102,37 @@ describe("issue: isReviewShaped", () => {
 
   it("rejects an empty body", () => {
     expect(isReviewShaped("")).toBe(false)
+  })
+})
+
+describe("issue: getIssue", () => {
+  it("marks GitHub issue-view responses whose URL is a pull request", () => {
+    execFileSync.mockReturnValue(
+      JSON.stringify({
+        number: 413,
+        title: "#373: Button fix",
+        body: "",
+        comments: [],
+        labels: [],
+        url: "https://github.com/owner/repo/pull/413",
+      }),
+    )
+
+    expect(getIssue(413).isPullRequest).toBe(true)
+  })
+
+  it("does not mark normal issue URLs as pull requests", () => {
+    execFileSync.mockReturnValue(
+      JSON.stringify({
+        number: 373,
+        title: "Button fix",
+        body: "",
+        comments: [],
+        labels: [],
+        url: "https://github.com/owner/repo/issues/373",
+      }),
+    )
+
+    expect(getIssue(373).isPullRequest).toBe(false)
   })
 })

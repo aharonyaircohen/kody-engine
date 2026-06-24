@@ -26,6 +26,15 @@ export const runFlow: PreflightScript = async (ctx) => {
     cfgCtx.commentMaxBytes ?? DEFAULT_COMMENT_MAX_BYTES,
   )
   ctx.data.issue = { ...issue, commentsFormatted }
+  if (issue.isPullRequest) {
+    ctx.data.commentTargetType = "pr"
+    ctx.data.commentTargetNumber = issueNumber
+    ctx.skipAgent = true
+    ctx.output.exitCode = 1
+    ctx.output.reason = `run target #${issueNumber} is a pull request; dispatch a PR action or the source issue instead`
+    return
+  }
+
   ctx.data.commentTargetType = "issue"
   ctx.data.commentTargetNumber = issueNumber
 

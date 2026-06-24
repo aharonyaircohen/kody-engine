@@ -34,6 +34,7 @@ import { createSdkMcpServer, type McpSdkServerConfigWithInstance, tool } from "@
 import type { ZodRawShape } from "zod"
 import { z } from "zod"
 import { gh } from "./issue.js"
+import { getProfileInputs, resolveAgentResponsibilityAction } from "./registry.js"
 import { readStateText, type StateRepoConfig } from "./stateRepo.js"
 
 export interface AgentResponsibilityMcpHandle {
@@ -170,10 +171,11 @@ function listRepairCandidates(repoSlug: string): RepairCandidate[] {
 
 function dispatchVerb(
   workflowFile: string,
+  repoSlug: string,
   agentResponsibility: string,
   prNumber: number,
 ): { ok: true } | { ok: false; error: string } {
-  return dispatchWorkflow(workflowFile, agentResponsibility, prNumber)
+  return dispatchWorkflow(workflowFile, agentResponsibility, prNumber, repoSlug)
 }
 
 function postRecommendation(
@@ -405,7 +407,26 @@ export function dispatchWorkflow(
   workflowFile: string,
   agentResponsibility: string,
   issueNumber: number,
+  repoSlug?: string,
 ): { ok: true } | { ok: false; error: string } {
+  const expected = expectedDispatchTarget(agentResponsibility)
+  if (repoSlug && expected) {
+    const target = readDispatchTargetKind(repoSlug, issueNumber)
+    if (!target.ok) return target
+    if (expected === "issue" && target.kind === "pr") {
+      return {
+        ok: false,
+        error: `refusing to dispatch ${agentResponsibility} on PR #${issueNumber}; dispatch the source issue or use a PR action`,
+      }
+    }
+    if (expected === "pr" && target.kind === "issue") {
+      return {
+        ok: false,
+        error: `refusing to dispatch ${agentResponsibility} on issue #${issueNumber}; expected a PR target`,
+      }
+    }
+  }
+
   try {
     gh([
       "workflow",
@@ -419,6 +440,32 @@ export function dispatchWorkflow(
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+function expectedDispatchTarget(agentResponsibility: string): "issue" | "pr" | null {
+  const route = resolveAgentResponsibilityAction(agentResponsibility)
+  if (!route) return null
+  const inputs = getProfileInputs(route.agentAction)
+  const numeric = inputs?.find((input) => input.type === "int" && input.required)
+  if (numeric?.name === "issue") return "issue"
+  if (numeric?.name === "pr") return "pr"
+  return null
+}
+
+function readDispatchTargetKind(
+  repoSlug: string,
+  issueNumber: number,
+): { ok: true; kind: "issue" | "pr" } | { ok: false; error: string } {
+  try {
+    const raw = gh(["api", `repos/${repoSlug}/issues/${issueNumber}`])
+    const parsed = JSON.parse(raw) as { pull_request?: unknown }
+    return { ok: true, kind: parsed.pull_request ? "pr" : "issue" }
+  } catch (err) {
+    return {
+      ok: false,
+      error: `could not verify target #${issueNumber}: ${err instanceof Error ? err.message : String(err)}`,
+    }
   }
 }
 
@@ -489,7 +536,7 @@ export function agentResponsibilityToolDefinitions(
       ) {
         return { content: [{ type: "text", text: trustRefusal(opts.agentResponsibilitySlug) }] }
       }
-      const result = dispatchVerb(workflowFile, verb, pr)
+      const result = dispatchVerb(workflowFile, opts.repoSlug, verb, pr)
       const text = result.ok
         ? `Dispatched \`${verb}\` on PR #${pr}. The repair runs in its own workflow_dispatch — wait for the next tick to see the new headSha.`
         : `Dispatch failed for \`${verb}\` on PR #${pr}: ${result.error}`
@@ -644,7 +691,7 @@ export function agentResponsibilityToolDefinitions(
       ) {
         return { content: [{ type: "text", text: trustRefusal(opts.agentResponsibilitySlug) }] }
       }
-      const result = dispatchWorkflow(workflowFile, agentResponsibility, issueNumber)
+      const result = dispatchWorkflow(workflowFile, agentResponsibility, issueNumber, opts.repoSlug)
       const text = result.ok
         ? `Dispatched agentResponsibility \`${agentResponsibility}\` on #${issueNumber} via workflow_dispatch.`
         : `Dispatch failed for agentResponsibility \`${agentResponsibility}\` on #${issueNumber}: ${result.error}`

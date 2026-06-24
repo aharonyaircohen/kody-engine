@@ -6,7 +6,7 @@ vi.mock("../../src/issue.js", () => ({
   gh: vi.fn(),
 }))
 
-import { ensureComment, ensureIssue, readCheckRuns } from "../../src/agent-responsibilityMcp.js"
+import { dispatchWorkflow, ensureComment, ensureIssue, readCheckRuns } from "../../src/agent-responsibilityMcp.js"
 import { gh } from "../../src/issue.js"
 
 const REPO = "owner/repo"
@@ -84,6 +84,63 @@ describe("ensureComment — idempotent comment by marker", () => {
     expect(result).toEqual({ posted: true })
     const commentCall = vi.mocked(gh).mock.calls.find((c) => (c[0] as string[])[1] === "comment")
     expect((commentCall![1] as { input?: string })?.input).toContain("<!-- kody-track-comment:dispatched -->")
+  })
+})
+
+describe("dispatchWorkflow — target kind guard", () => {
+  it("refuses to dispatch issue-targeted run on a pull request number", () => {
+    vi.mocked(gh).mockImplementation((args: string[]) => {
+      if (args[0] === "api" && args[1] === `repos/${REPO}/issues/413`) {
+        return JSON.stringify({ number: 413, pull_request: { url: `https://api.github.com/repos/${REPO}/pulls/413` } })
+      }
+      throw new Error(`unexpected gh call: ${args.join(" ")}`)
+    })
+
+    const result = dispatchWorkflow("kody.yml", "run", 413, REPO)
+
+    expect(result).toEqual({
+      ok: false,
+      error: "refusing to dispatch run on PR #413; dispatch the source issue or use a PR action",
+    })
+    expect(vi.mocked(gh).mock.calls.some((c) => (c[0] as string[]).includes("workflow"))).toBe(false)
+  })
+
+  it("allows PR-targeted actions on pull request numbers", () => {
+    vi.mocked(gh).mockImplementation((args: string[]) => {
+      if (args[0] === "api" && args[1] === `repos/${REPO}/issues/413`) {
+        return JSON.stringify({ number: 413, pull_request: { url: `https://api.github.com/repos/${REPO}/pulls/413` } })
+      }
+      if (args[0] === "workflow" && args[1] === "run") return ""
+      throw new Error(`unexpected gh call: ${args.join(" ")}`)
+    })
+
+    expect(dispatchWorkflow("kody.yml", "sync", 413, REPO)).toEqual({ ok: true })
+    expect(vi.mocked(gh).mock.calls.map((c) => c[0] as string[])).toContainEqual([
+      "workflow",
+      "run",
+      "kody.yml",
+      "-f",
+      "agentResponsibility=sync",
+      "-f",
+      "issue_number=413",
+    ])
+  })
+
+  it("refuses PR-targeted actions on issue numbers", () => {
+    vi.mocked(gh).mockImplementation((args: string[]) => {
+      if (args[0] === "api" && args[1] === `repos/${REPO}/issues/373`) {
+        return JSON.stringify({ number: 373 })
+      }
+      throw new Error(`unexpected gh call: ${args.join(" ")}`)
+    })
+
+    const result = dispatchWorkflow("kody.yml", "sync", 373, REPO)
+
+    expect(result).toEqual({
+      ok: false,
+      error: "refusing to dispatch sync on issue #373; expected a PR target",
+    })
+    expect(vi.mocked(gh).mock.calls.some((c) => (c[0] as string[]).includes("workflow"))).toBe(false)
   })
 })
 
