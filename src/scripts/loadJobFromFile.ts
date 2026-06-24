@@ -148,8 +148,8 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
       )
     }
     // Revoke shell + Read; keep submit_state (state persistence). The LLM can
-    // now only call mcp__kody-agent-responsibility__<tool> + mcp__kody-submit__submit_state.
-    const mcpToolNames = declaredTools.map((name: string) => `mcp__kody-agent-responsibility__${name}`)
+    // now only call mcp__kody-agentResponsibility__<tool> + mcp__kody-submit__submit_state.
+    const mcpToolNames = declaredTools.map((name: string) => `mcp__kody-agentResponsibility__${name}`)
     profile.claudeCode.tools = [...mcpToolNames, "mcp__kody-submit__submit_state"]
     ctx.data.agentResponsibilityTools = declaredTools
     ctx.data.agentResponsibilityOperatorMention = mentions

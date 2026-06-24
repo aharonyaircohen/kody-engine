@@ -108,10 +108,10 @@ describe("loadJobFromFile locked-toolbox (tools:)", () => {
     ])
     const lockedTools = (profile as unknown as { claudeCode: { tools: string[] } }).claudeCode.tools
     expect(lockedTools).toEqual([
-      "mcp__kody-agent-responsibility__read_check_runs",
-      "mcp__kody-agent-responsibility__ensure_issue",
-      "mcp__kody-agent-responsibility__dispatch_workflow",
-      "mcp__kody-agent-responsibility__ensure_comment",
+      "mcp__kody-agentResponsibility__read_check_runs",
+      "mcp__kody-agentResponsibility__ensure_issue",
+      "mcp__kody-agentResponsibility__dispatch_workflow",
+      "mcp__kody-agentResponsibility__ensure_comment",
       "mcp__kody-submit__submit_state",
     ])
     // The raw escape hatches are gone.
