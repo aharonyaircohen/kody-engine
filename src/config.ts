@@ -13,6 +13,7 @@ export interface ScheduledGoalActivation {
   template: string
   every?: string
   idPrefix?: string
+  preferredRunTime?: { time: string; timezone: string }
   facts?: Record<string, unknown>
 }
 
@@ -446,6 +447,14 @@ function parseGoalActivations(raw: unknown): GoalActivation[] {
       const idPrefix = parseSlug(r.idPrefix, "company.activeGoals.idPrefix")
       if (idPrefix) entry.idPrefix = idPrefix
     }
+    if (r.preferredRunTime !== undefined) {
+      const preferredRunTime = parsePreferredRunTime(r.preferredRunTime)
+      if (!preferredRunTime)
+        throw new Error(
+          `kody.config.json: company.activeGoals preferredRunTime must be { "time": "HH:MM", "timezone": "Area/Name" }`,
+        )
+      entry.preferredRunTime = preferredRunTime
+    }
     const facts = recordValue(r.facts)
     if (r.facts !== undefined && !facts)
       throw new Error(`kody.config.json: company.activeGoals facts must be an object`)
@@ -453,6 +462,14 @@ function parseGoalActivations(raw: unknown): GoalActivation[] {
     out.push(entry)
   }
   return out
+}
+
+function parsePreferredRunTime(raw: unknown): { time: string; timezone: string } | null {
+  const r = recordValue(raw)
+  if (!r) return null
+  if (typeof r.time !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(r.time.trim())) return null
+  if (typeof r.timezone !== "string" || !r.timezone.trim()) return null
+  return { time: r.time.trim(), timezone: r.timezone.trim() }
 }
 
 function parseSlugArray(raw: unknown, field: string): string[] {

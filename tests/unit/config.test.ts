@@ -85,6 +85,32 @@ describe("config: loadConfig", () => {
     expect(loadConfig(dir).state).toEqual({ repo: "o/kody-state", path: "r" })
   })
 
+  it("parses scheduled goal preferred runtime", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "minimax/m" },
+      company: {
+        activeGoals: [
+          {
+            template: "web-release",
+            every: "1d",
+            idPrefix: "web-release",
+            preferredRunTime: { time: "10:00", timezone: "Asia/Jerusalem" },
+          },
+        ],
+      },
+    })
+    expect(loadConfig(dir).company?.activeGoals).toEqual([
+      {
+        template: "web-release",
+        every: "1d",
+        idPrefix: "web-release",
+        preferredRunTime: { time: "10:00", timezone: "Asia/Jerusalem" },
+      },
+    ])
+  })
+
   it("throws when kody.config.json missing", () => {
     const dir = tmpDir()
     expect(() => loadConfig(dir)).toThrow(/not found/)

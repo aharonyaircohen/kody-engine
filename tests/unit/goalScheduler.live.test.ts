@@ -106,7 +106,7 @@ function installGhStub(binDir: string): void {
   fs.chmodSync(stub, 0o755)
 }
 
-function runScheduler(options: { remote?: boolean } = {}): {
+function runScheduler(options: { remote?: boolean; now?: string } = {}): {
   status: number
   stdout: string
   stderr: string
@@ -122,7 +122,7 @@ function runScheduler(options: { remote?: boolean } = {}): {
       PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ""}`,
       KODY_LOG: logFile,
       KODY_GH_LOG: ghLogFile,
-      KODY_GOAL_SCHEDULER_NOW: "2026-06-20T12:00:00Z",
+      KODY_GOAL_SCHEDULER_NOW: options.now ?? "2026-06-20T12:00:00Z",
       ...(options.remote
         ? { KODY_REMOTE_GOAL_JSON: JSON.stringify({ version: 1, state: "active", ...managedGoalExtra() }) }
         : { KODY_GOAL_SCHEDULER_SKIP_PERSIST: "1" }),
@@ -193,7 +193,9 @@ describe("goal-scheduler live wiring", () => {
 
     expect(status, stderr).toBe(0)
     expect(ghCalls).toContain("gh api /repos/A-Guy-educ/kody-state/contents/A-Guy-Web/goals/instances")
-    expect(ghCalls).toContain("gh api /repos/A-Guy-educ/kody-state/contents/A-Guy-Web/goals/instances/web-release/state.json")
+    expect(ghCalls).toContain(
+      "gh api /repos/A-Guy-educ/kody-state/contents/A-Guy-Web/goals/instances/web-release/state.json",
+    )
     expect(ghCalls.some((call) => call.includes("/repos/https://github.com"))).toBe(false)
     expect(calls).toEqual(["kody-engine exec goal-manager --goal web-release"])
   })
@@ -246,6 +248,46 @@ describe("goal-scheduler live wiring", () => {
     expect(calls).toEqual(["kody-engine exec goal-manager --goal weekly-release-2026-W25"])
     expect(stdout).toContain("created goal instance weekly-release-2026-W25")
     expect(stdout).toContain("-> tick weekly-release-2026-W25 (goal-manager)")
+  })
+
+  it("waits until scheduled goal preferred runtime in local timezone", () => {
+    writeTemplate("web-release", managedGoalExtra())
+    activateGoals({
+      template: "web-release",
+      every: "1d",
+      idPrefix: "web-release",
+      preferredRunTime: { time: "10:00", timezone: "Asia/Jerusalem" },
+    })
+
+    const before = runScheduler({ now: "2026-06-24T06:59:00Z" })
+    expect(before.status).toBe(0)
+    expect(before.calls).toEqual([])
+    expect(before.stdout).toContain("skip web-release: waiting preferred time 10:00 Asia/Jerusalem")
+    expect(fs.existsSync(path.join(tmp, ".kody", "goals", "instances", "web-release-2026-06-24"))).toBe(false)
+
+    const after = runScheduler({ now: "2026-06-24T07:01:00Z" })
+    expect(after.status).toBe(0)
+    expect(after.calls).toEqual(["kody-engine exec goal-manager --goal web-release-2026-06-24"])
+    expect(after.stdout).toContain("created goal instance web-release-2026-06-24")
+  })
+
+  it("scheduled goal activation does not tick stale singleton instances from the same template", () => {
+    writeTemplate("web-release", managedGoalExtra())
+    writeGoal("web-release", "active", {
+      ...managedGoalExtra(),
+      template: "web-release",
+      sourceTemplate: "web-release",
+      stage: "merge",
+      facts: { issue: 294, releasePr: 295, releasePrExists: true, pendingEvidence: "mainMerged" },
+    })
+    activateGoals({ template: "web-release", every: "1d", idPrefix: "web-release" })
+
+    const { status, calls, stdout } = runScheduler({ now: "2026-06-24T07:01:00Z" })
+
+    expect(status).toBe(0)
+    expect(calls).toEqual(["kody-engine exec goal-manager --goal web-release-2026-06-24"])
+    expect(stdout).toContain("created goal instance web-release-2026-06-24")
+    expect(stdout).not.toContain("-> tick web-release (goal-manager)")
   })
 
   it("no active goals configured skips cleanly without calling engine", () => {
