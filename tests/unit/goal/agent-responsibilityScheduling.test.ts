@@ -8,7 +8,6 @@ import type { GoalState } from "../../../src/goal/state.js"
 import { advanceManagedGoal } from "../../../src/scripts/advanceManagedGoal.js"
 import {
   type GoalAgentResponsibilityScheduleState,
-  planGoalAgentResponsibilitySchedule,
   planGoalTargetLoopSchedule,
 } from "../../../src/scripts/goalAgentResponsibilityScheduling.js"
 import type { GoalCtx } from "../../../src/scripts/goalCtx.js"
@@ -152,7 +151,6 @@ describe("standing goal agentResponsibility scheduling", () => {
     const raw = goalState([])
     raw.extra.type = "agentLoop"
     raw.extra.loopTarget = { type: "goal", id: "web-release" }
-    raw.extra.preferredRunTime = { time: "10:00", timezone: "Asia/Jerusalem" }
     const ctx = fakeCtx(raw)
 
     await advanceManagedGoal(ctx, {} as unknown as Profile, {})

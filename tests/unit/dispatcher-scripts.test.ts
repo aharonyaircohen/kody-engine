@@ -7,7 +7,7 @@ import { dispatch } from "../../src/scripts/dispatch.js"
 import { finalizeTerminal } from "../../src/scripts/finalizeTerminal.js"
 import { finishFlow } from "../../src/scripts/finishFlow.js"
 import { startFlow } from "../../src/scripts/startFlow.js"
-import { emptyState, type FlowState, STATE_BEGIN, STATE_END, type TaskState } from "../../src/state.js"
+import { emptyState, type FlowState, type TaskState } from "../../src/state.js"
 
 const setKodyLabelMock = setKodyLabel as unknown as Mock
 
@@ -461,10 +461,7 @@ describe("finalizeTerminal", () => {
       }
       // Issue 42's state file is missing → 404 → readStateText returns null
       // → readTaskState returns emptyState. The write still succeeds.
-      if (
-        a[0] === "api" &&
-        a.some((arg) => typeof arg === "string" && arg.includes("/tasks/issues/42/"))
-      ) {
+      if (a[0] === "api" && a.some((arg) => typeof arg === "string" && arg.includes("/tasks/issues/42/"))) {
         if (a.includes("PUT")) return "{}"
         throw new Error("HTTP 404 Not Found")
       }
