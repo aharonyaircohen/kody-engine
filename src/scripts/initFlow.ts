@@ -1,5 +1,5 @@
 /**
- * initFlow — preflight for the `init` executable.
+ * initFlow — preflight for the `init` agentAction.
  *
  * Scaffolds a consumer repo: writes `kody.config.json` and
  * `.github/workflows/kody.yml` if absent (or when `--force`). Detects the
@@ -13,10 +13,10 @@ import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import pkg from "../../package.json"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../agent-actions/types.js"
 import { type EnsureLabelsResult, ensureLabels } from "../lifecycleLabels.js"
 import { loadProfile } from "../profile.js"
-import { listBuiltinJobs, listExecutables } from "../registry.js"
+import { listAgentActions } from "../registry.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -42,7 +42,7 @@ interface OwnerRepo {
 
 // Derive the published config schema URL from this package's own
 // repository.url, so a fork that republishes under its own scope points
-// `kody init` consumers at the fork's schema instead of the original repo.
+// `kody-engine init` consumers at the fork's schema instead of the original repo.
 function schemaUrlFromPkg(): string {
   const fallback = "https://raw.githubusercontent.com/aharonyaircohen/kody-engine/main/kody.config.schema.json"
   const repoUrl = (pkg as { repository?: { url?: string } }).repository?.url
@@ -106,6 +106,16 @@ on:
         description: "GitHub issue number"
         required: true
         type: string
+      agentResponsibility:
+        description: "AgentResponsibility action to run (default: run)"
+        required: false
+        type: string
+        default: ""
+      agentAction:
+        description: "Legacy alias for agentResponsibility action"
+        required: false
+        type: string
+        default: ""
   issue_comment:
     types: [created]
 
@@ -141,12 +151,12 @@ jobs:
         run: npx -y -p @kody-ade/kody-engine@latest kody-engine ci
 `
 
-const DEFAULT_STAFF_PERSONA = `# Kody
+const DEFAULT_AGENT_IDENTITY = `# Kody
 
-You are Kody, the default maintenance staff member for scheduled duties.
+You are Kody, the default maintenance agent for scheduled agentResponsibilities.
 
-Keep actions narrow, prefer read-only inspection, and only use the tools or commands named by the duty.
-When a duty writes a report or dispatches work, keep the output factual and concise.
+Keep actions narrow, prefer read-only inspection, and only use the tools or commands named by the agentResponsibility.
+When a agentResponsibility writes a report or dispatches work, keep the output factual and concise.
 `
 
 function defaultBranchFromGit(cwd: string): string {
@@ -207,45 +217,19 @@ export function performInit(cwd: string, force: boolean): InitResult {
     wrote.push(".github/workflows/kody.yml")
   }
 
-  // 3. .kody/duties/<slug>.md — copy every built-in duty markdown shipped
-  //    with the engine. Built-in duties live under `src/jobs/` (dev) /
-  //    `dist/jobs/` (built); consumer repos get a starter copy each,
-  //    scaffolded once and then human-edited. Cadence is enforced by the
-  //    file's `every:` frontmatter, read by `dispatchDutyFileTicks`.
-  //
-  //    `--force` will overwrite consumer edits to these files — same
-  //    contract as `kody.yml` and `kody.config.json` above. Duty files
-  //    are *intended* to be edited (cadence, thresholds, prompt prose),
-  //    so use `--force` only when you accept losing those edits.
-  const builtinJobs = listBuiltinJobs()
-  if (builtinJobs.length > 0) {
-    const jobsDir = path.join(cwd, ".kody", "duties")
-    fs.mkdirSync(jobsDir, { recursive: true })
-    for (const job of builtinJobs) {
-      const rel = path.join(".kody", "duties", `${job.slug}.md`)
-      const target = path.join(cwd, rel)
-      if (fs.existsSync(target) && !force) {
-        skipped.push(rel)
-        continue
-      }
-      fs.writeFileSync(target, fs.readFileSync(job.filePath, "utf-8"))
-      wrote.push(rel)
-    }
-  }
-
-  // 4. .kody/staff/kody.md — default persona referenced by bundled duties.
-  const staffDir = path.join(cwd, ".kody", "staff")
-  const staffPath = path.join(staffDir, "kody.md")
-  if (fs.existsSync(staffPath) && !force) {
-    skipped.push(".kody/staff/kody.md")
+  // 3. .kody/agents/kody.md — default agent for Store/builtin actions.
+  const agentsDir = path.join(cwd, ".kody", "agents")
+  const agentPath = path.join(agentsDir, "kody.md")
+  if (fs.existsSync(agentPath) && !force) {
+    skipped.push(".kody/agents/kody.md")
   } else {
-    fs.mkdirSync(staffDir, { recursive: true })
-    fs.writeFileSync(staffPath, DEFAULT_STAFF_PERSONA)
-    wrote.push(".kody/staff/kody.md")
+    fs.mkdirSync(agentsDir, { recursive: true })
+    fs.writeFileSync(agentPath, DEFAULT_AGENT_IDENTITY)
+    wrote.push(".kody/agents/kody.md")
   }
 
-  // 5. .github/workflows/kody-<name>.yml for every discovered scheduled executable.
-  for (const exe of listExecutables()) {
+  // 4. .github/workflows/kody-<name>.yml for every discovered scheduled agentAction profile.
+  for (const exe of listAgentActions()) {
     let profile: ReturnType<typeof loadProfile>
     try {
       profile = loadProfile(exe.profilePath)
@@ -262,7 +246,7 @@ export function performInit(cwd: string, force: boolean): InitResult {
     wrote.push(`.github/workflows/kody-${exe.name}.yml`)
   }
 
-  // 6. Create/update every kody-owned label declared across the executable
+  // 6. Create/update every kody-owned label declared across the agentAction
   //    profile set. Best-effort: if `gh` isn't installed/authenticated, this
   //    is skipped silently and setKodyLabel will lazily create the label on
   //    first use during a real flow run.
@@ -277,9 +261,9 @@ export function performInit(cwd: string, force: boolean): InitResult {
 }
 
 export function renderScheduledWorkflow(name: string, cron: string): string {
-  return `# Scheduled kody executable: ${name}
-# Generated by \`kody init\`. Regenerate with \`kody init --force\`.
-# Edit the cron below or the executable's profile.json#schedule.
+  return `# Scheduled kody agentResponsibility: ${name}
+# Generated by \`kody-engine init\`. Regenerate with \`kody-engine init --force\`.
+# Edit the cron below or the agentResponsibility's implementation profile.json#schedule.
 
 name: kody ${name}
 
@@ -308,7 +292,7 @@ jobs:
           python-version: "3.12"
       - env:
           GH_TOKEN: \${{ secrets.KODY_TOKEN || github.token }}
-        run: npx -y -p @kody-ade/kody-engine@latest kody-engine ${name}
+        run: npx -y -p @kody-ade/kody-engine@latest kody-engine exec ${name}
 `
 }
 
@@ -318,7 +302,7 @@ export const initFlow: PreflightScript = async (ctx) => {
 
   const { wrote, skipped, labels } = performInit(cwd, force)
 
-  process.stdout.write("→ kody init\n")
+  process.stdout.write("→ kody-engine init\n")
   for (const f of wrote) process.stdout.write(`  wrote    ${f}\n`)
   for (const f of skipped) process.stdout.write(`  skipped  ${f} (already exists; pass --force to overwrite)\n`)
   if (labels) {

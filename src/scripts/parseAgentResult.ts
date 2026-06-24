@@ -4,7 +4,7 @@
  * reducer will merge into task state.
  */
 
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../agent-actions/types.js"
 import { parseAgentResult as parse } from "../prompt.js"
 import type { Action } from "../state.js"
 
@@ -31,7 +31,7 @@ export const parseAgentResult: PostflightScript = async (ctx, profile, agentResu
   if (parsed.done) {
     // prSummary is intentionally NOT in the payload — for plan/run/research
     // it's the entire artifact body (tens of KB). The reducer stores the
-    // full action under both `core.lastOutcome` and `executables[x].lastAction`,
+    // full action under both `core.lastOutcome` and `agentActions[x].lastAction`,
     // so embedding prSummary there would persist it 2× into the state comment.
     // Consumers read prSummary from ctx.data within the same run, or from
     // state.artifacts.<name>.content (set by persistArtifacts) across runs.

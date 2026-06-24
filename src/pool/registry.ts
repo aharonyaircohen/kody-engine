@@ -41,7 +41,7 @@ export interface ClaimRequest {
   /** owner/name */
   repo: string
   /** "issue" (default, one-shot run) | "interactive" (long-lived chat session)
-   * | "scheduled" (run the duty/goal fan-out — Fly fallback for GitHub cron). */
+   * | "scheduled" (run the agentResponsibility/goal fan-out — Fly fallback for GitHub cron). */
   mode?: "issue" | "interactive" | "scheduled"
   /** Required for issue mode. */
   issueNumber?: number
@@ -66,7 +66,6 @@ export interface RegistryConfig {
     region: string
     guest: import("./fly.js").FlyGuest
     runnerApiKey: string
-    litellmUrl: string
     port: number
     healthTimeoutMs: number
     /** Fly app name (in each repo's own account). */
@@ -82,6 +81,7 @@ export interface RegistryConfig {
 
 export class PoolRegistry {
   private pools = new Map<string, PoolManager>()
+  private poolCreates = new Map<string, Promise<PoolManager | null>>()
   private readonly resolveFlyToken: (owner: string, repo: string) => Promise<string | null>
   private readonly resolvePoolMin: (owner: string, repo: string) => Promise<number>
   private readonly log: (msg: string) => void
@@ -123,6 +123,17 @@ export class PoolRegistry {
     const existing = this.pools.get(repoTag)
     if (existing) return existing
 
+    const pending = this.poolCreates.get(repoTag)
+    if (pending) return pending
+
+    const creating = this.createPool(owner, repo, repoTag).finally(() => {
+      this.poolCreates.delete(repoTag)
+    })
+    this.poolCreates.set(repoTag, creating)
+    return creating
+  }
+
+  private async createPool(owner: string, repo: string, repoTag: string): Promise<PoolManager | null> {
     let flyToken: string | null
     try {
       flyToken = await this.resolveFlyToken(owner, repo)
@@ -203,9 +214,19 @@ export class PoolRegistry {
     return pm.claim(job)
   }
 
-  /** Status for a single repo's pool, or null if none exists yet. */
+  /** Status for a single repo's pool already known to this owner. */
   status(owner: string, repo: string): ReturnType<PoolManager["status"]> | null {
     return this.pools.get(this.key(owner, repo))?.status() ?? null
+  }
+
+  /**
+   * Status for a repo, creating/adopting its pool on first read when the repo
+   * has pool credentials. This lets a restarted owner recover from existing
+   * pooled machines without waiting for the next claim.
+   */
+  async statusFor(owner: string, repo: string): Promise<ReturnType<PoolManager["status"]> | null> {
+    const pm = await this.getPool(owner, repo)
+    return pm?.status() ?? null
   }
 
   /** Resync every active repo pool (periodic self-heal). Also re-reads each

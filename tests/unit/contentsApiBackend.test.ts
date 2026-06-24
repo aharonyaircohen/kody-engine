@@ -28,8 +28,7 @@ function envelope(overrides: Partial<StateEnvelope> = {}): StateEnvelope {
 
 function backend() {
   return new ContentsApiBackend({
-    owner: "acme",
-    repo: "widgets",
+    config: { state: { repo: "acme/kody-state", path: "widgets" } },
     jobsDir: ".kody/jobs",
     cwd: "/tmp/repo",
   })
@@ -41,9 +40,8 @@ describe("ContentsApiBackend", () => {
   })
 
   describe("constructor", () => {
-    it("requires owner and repo", () => {
-      expect(() => new ContentsApiBackend({ owner: "", repo: "r", jobsDir: "x" })).toThrow(/owner.*required/i)
-      expect(() => new ContentsApiBackend({ owner: "o", repo: "", jobsDir: "x" })).toThrow(/repo.*required/i)
+    it("requires state or github config", () => {
+      expect(() => new ContentsApiBackend({ config: {}, jobsDir: "x" })).toThrow(/state.*github/i)
     })
   })
 
@@ -59,7 +57,7 @@ describe("ContentsApiBackend", () => {
       expect(out.handle).toBeNull()
       expect(out.state.rev).toBe(0)
       expect(out.state.cursor).toBe("seed")
-      expect(out.path).toBe(".kody/jobs/auto-sync.state.json")
+      expect(out.path).toBe("jobs/auto-sync/state.json")
     })
 
     it("decodes a base64 contents response into a LoadedJobState", () => {
@@ -71,7 +69,7 @@ describe("ContentsApiBackend", () => {
           encoding: "base64",
           content: Buffer.from(body, "utf-8").toString("base64"),
           sha: "abc123",
-          path: ".kody/jobs/auto-sync.state.json",
+          path: "jobs/auto-sync/state.json",
         }),
       )
 
@@ -101,15 +99,15 @@ describe("ContentsApiBackend", () => {
           encoding: "base64",
           content: Buffer.from(JSON.stringify({ not: "envelope" }), "utf-8").toString("base64"),
           sha: "abc",
-          path: ".kody/jobs/auto-sync.state.json",
+          path: "jobs/auto-sync/state.json",
         }),
       )
       expect(() => backend().load("auto-sync")).toThrow(/not a StateEnvelope/i)
     })
   })
 
-  // `save` calls ensureStateBranch first (a `gh` ref read) before the PUT, so
-  // the PUT is not necessarily call[0]. Locate it by the "PUT" arg.
+  // `save` may issue reads before the PUT, so the PUT is not necessarily
+  // call[0]. Locate it by the "PUT" arg.
   function putCall() {
     const call = gh.mock.calls.find((c: unknown[]) => Array.isArray(c[0]) && (c[0] as string[]).includes("PUT"))
     if (!call) throw new Error("no PUT gh call recorded")
@@ -121,7 +119,7 @@ describe("ContentsApiBackend", () => {
       gh.mockReturnValue("{}")
       const next = envelope({ rev: 1 })
       const wrote = backend().save(
-        { path: ".kody/jobs/auto-sync.state.json", handle: null, state: envelope({ rev: 0 }), created: true },
+        { path: "jobs/auto-sync/state.json", handle: null, state: envelope({ rev: 0 }), created: true },
         next,
       )
       expect(wrote).toBe(true)
@@ -138,7 +136,7 @@ describe("ContentsApiBackend", () => {
       gh.mockReturnValue("{}")
       const wrote = backend().save(
         {
-          path: ".kody/jobs/auto-sync.state.json",
+          path: "jobs/auto-sync/state.json",
           handle: "old-sha",
           state: envelope({ rev: 5, cursor: "before" }),
           created: false,
@@ -155,7 +153,7 @@ describe("ContentsApiBackend", () => {
       const next = envelope({ rev: 6, cursor: "same", data: { x: 1 } })
 
       const wrote = backend().save(
-        { path: ".kody/jobs/auto-sync.state.json", handle: "sha", state: prev, created: false },
+        { path: "jobs/auto-sync/state.json", handle: "sha", state: prev, created: false },
         next,
       )
       expect(wrote).toBe(false)
@@ -167,7 +165,7 @@ describe("ContentsApiBackend", () => {
       const prev = envelope({ rev: 5, cursor: "a" })
       const next = envelope({ rev: 6, cursor: "b" })
       const wrote = backend().save(
-        { path: ".kody/jobs/auto-sync.state.json", handle: "sha", state: prev, created: false },
+        { path: "jobs/auto-sync/state.json", handle: "sha", state: prev, created: false },
         next,
       )
       expect(wrote).toBe(true)
@@ -178,7 +176,7 @@ describe("ContentsApiBackend", () => {
       const prev = envelope({ data: { x: 1 } })
       const next = envelope({ data: { x: 2 } })
       const wrote = backend().save(
-        { path: ".kody/jobs/auto-sync.state.json", handle: "sha", state: prev, created: false },
+        { path: "jobs/auto-sync/state.json", handle: "sha", state: prev, created: false },
         next,
       )
       expect(wrote).toBe(true)
@@ -193,16 +191,15 @@ describe("ContentsApiBackend", () => {
         encoding: "base64",
         content: Buffer.from(JSON.stringify(state), "utf-8").toString("base64"),
         sha,
-        path: ".kody/jobs/auto-sync.state.json",
+        path: "jobs/auto-sync/state.json",
       })
     }
 
-    // Route gh by args: ref read (ensureStateBranch) → exists; GET contents →
-    // current remote; PUT → scripted sequence (first throws, then succeeds).
+    // Route gh by args: GET contents → current remote; PUT → scripted sequence
+    // (first throws, then succeeds).
     function routeGh(currentRemote: StateEnvelope, freshSha: string, putResults: Array<"ok" | string>) {
       let putIdx = 0
       gh.mockImplementation((args: string[]) => {
-        if (args.includes("git/ref/heads/kody-state") || args.some((a) => a.includes("git/ref"))) return "{}"
         if (args.includes("PUT")) {
           const r = putResults[putIdx++] ?? "ok"
           if (r !== "ok") throw new Error(r)
@@ -218,7 +215,7 @@ describe("ContentsApiBackend", () => {
       routeGh(remote, "fresh-sha", ["HTTP 409: Conflict", "ok"])
       const wrote = backend().save(
         {
-          path: ".kody/jobs/auto-sync.state.json",
+          path: "jobs/auto-sync/state.json",
           handle: "stale-sha",
           state: envelope({ cursor: "before" }),
           created: false,
@@ -238,7 +235,7 @@ describe("ContentsApiBackend", () => {
       routeGh(envelope({ cursor: "after", data: { k: 1 } }), "fresh-sha", ["HTTP 422: Unprocessable"])
       const wrote = backend().save(
         {
-          path: ".kody/jobs/auto-sync.state.json",
+          path: "jobs/auto-sync/state.json",
           handle: "stale-sha",
           state: envelope({ cursor: "before" }),
           created: false,
@@ -255,7 +252,7 @@ describe("ContentsApiBackend", () => {
       expect(() =>
         backend().save(
           {
-            path: ".kody/jobs/auto-sync.state.json",
+            path: "jobs/auto-sync/state.json",
             handle: "stale-sha",
             state: envelope({ cursor: "before" }),
             created: false,

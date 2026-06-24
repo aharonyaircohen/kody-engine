@@ -2,16 +2,10 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
-import type { Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/agent-actions/types.js"
 import { buildSyntheticPlugin, getPluginsCatalogRoot } from "../../src/scripts/buildSyntheticPlugin.js"
 
-function makeCtx(): {
-  args: Record<string, unknown>
-  cwd: string
-  config: any
-  data: Record<string, unknown>
-  output: { exitCode: number }
-} {
+function makeCtx(): Context {
   return {
     args: { issue: 1 },
     cwd: os.tmpdir(),
@@ -66,7 +60,7 @@ describe("buildSyntheticPlugin: catalog root", () => {
 describe("buildSyntheticPlugin: no-op path", () => {
   it("does nothing when all arrays are empty", async () => {
     const ctx = makeCtx()
-    await buildSyntheticPlugin(ctx as any, makeProfile({}))
+    await buildSyntheticPlugin(ctx, makeProfile({}))
     expect(ctx.data.syntheticPluginPath).toBeUndefined()
   })
 })
@@ -74,7 +68,7 @@ describe("buildSyntheticPlugin: no-op path", () => {
 describe("buildSyntheticPlugin: skill copy", () => {
   it("copies kody-live-marker skill into synthetic plugin dir", async () => {
     const ctx = makeCtx()
-    await buildSyntheticPlugin(ctx as any, makeProfile({ skills: ["kody-live-marker"] }))
+    await buildSyntheticPlugin(ctx, makeProfile({ skills: ["kody-live-marker"] }))
     const root = ctx.data.syntheticPluginPath as string
     expect(fs.existsSync(path.join(root, "skills", "kody-live-marker", "SKILL.md"))).toBe(true)
     const manifest = JSON.parse(fs.readFileSync(path.join(root, ".claude-plugin", "plugin.json"), "utf-8"))
@@ -84,12 +78,12 @@ describe("buildSyntheticPlugin: skill copy", () => {
 
   it("throws a clear error for unknown skill", async () => {
     const ctx = makeCtx()
-    await expect(buildSyntheticPlugin(ctx as any, makeProfile({ skills: ["does-not-exist"] }))).rejects.toThrow(
-      /skills entry 'does-not-exist' not found in executable dir .* or catalog/,
+    await expect(buildSyntheticPlugin(ctx, makeProfile({ skills: ["does-not-exist"] }))).rejects.toThrow(
+      /skills entry 'does-not-exist' not found in agentAction dir .* or catalog/,
     )
   })
 
-  it("prefers an executable-local skill over the catalog", async () => {
+  it("prefers an agentAction-local skill over the catalog", async () => {
     const ctx = makeCtx()
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-local-skill-"))
     try {
@@ -99,7 +93,7 @@ describe("buildSyntheticPlugin: skill copy", () => {
 
       const profile = makeProfile({ skills: ["kody-live-marker"] })
       profile.dir = tmp
-      await buildSyntheticPlugin(ctx as any, profile)
+      await buildSyntheticPlugin(ctx, profile)
 
       const root = ctx.data.syntheticPluginPath as string
       const copied = fs.readFileSync(path.join(root, "skills", "kody-live-marker", "SKILL.md"), "utf-8")
@@ -109,7 +103,7 @@ describe("buildSyntheticPlugin: skill copy", () => {
     }
   })
 
-  it("loads an executable-local skill that is not in the catalog", async () => {
+  it("loads an agentAction-local skill that is not in the catalog", async () => {
     const ctx = makeCtx()
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-local-skill-only-"))
     try {
@@ -119,7 +113,7 @@ describe("buildSyntheticPlugin: skill copy", () => {
 
       const profile = makeProfile({ skills: ["exec-only-skill"] })
       profile.dir = tmp
-      await buildSyntheticPlugin(ctx as any, profile)
+      await buildSyntheticPlugin(ctx, profile)
 
       const root = ctx.data.syntheticPluginPath as string
       expect(fs.existsSync(path.join(root, "skills", "exec-only-skill", "SKILL.md"))).toBe(true)
@@ -132,15 +126,15 @@ describe("buildSyntheticPlugin: skill copy", () => {
 describe("buildSyntheticPlugin: command copy", () => {
   it("copies kody-live-probe command", async () => {
     const ctx = makeCtx()
-    await buildSyntheticPlugin(ctx as any, makeProfile({ commands: ["kody-live-probe"] }))
+    await buildSyntheticPlugin(ctx, makeProfile({ commands: ["kody-live-probe"] }))
     const root = ctx.data.syntheticPluginPath as string
     expect(fs.existsSync(path.join(root, "commands", "kody-live-probe.md"))).toBe(true)
   })
 
   it("throws a clear error for unknown command", async () => {
     const ctx = makeCtx()
-    await expect(buildSyntheticPlugin(ctx as any, makeProfile({ commands: ["does-not-exist"] }))).rejects.toThrow(
-      /commands entry 'does-not-exist.md' not found in executable dir .* or catalog/,
+    await expect(buildSyntheticPlugin(ctx, makeProfile({ commands: ["does-not-exist"] }))).rejects.toThrow(
+      /commands entry 'does-not-exist.md' not found in agentAction dir .* or catalog/,
     )
   })
 })
@@ -148,7 +142,7 @@ describe("buildSyntheticPlugin: command copy", () => {
 describe("buildSyntheticPlugin: hook merge", () => {
   it("merges kody-live-trace hooks into one hooks.json", async () => {
     const ctx = makeCtx()
-    await buildSyntheticPlugin(ctx as any, makeProfile({ hooks: ["kody-live-trace"] }))
+    await buildSyntheticPlugin(ctx, makeProfile({ hooks: ["kody-live-trace"] }))
     const root = ctx.data.syntheticPluginPath as string
     const merged = JSON.parse(fs.readFileSync(path.join(root, "hooks", "hooks.json"), "utf-8"))
     expect(Array.isArray(merged.hooks.PreToolUse)).toBe(true)
@@ -157,8 +151,8 @@ describe("buildSyntheticPlugin: hook merge", () => {
 
   it("throws a clear error for unknown hook", async () => {
     const ctx = makeCtx()
-    await expect(buildSyntheticPlugin(ctx as any, makeProfile({ hooks: ["does-not-exist"] }))).rejects.toThrow(
-      /hooks entry 'does-not-exist.json' not found in executable dir .* or catalog/,
+    await expect(buildSyntheticPlugin(ctx, makeProfile({ hooks: ["does-not-exist"] }))).rejects.toThrow(
+      /hooks entry 'does-not-exist.json' not found in agentAction dir .* or catalog/,
     )
   })
 })
@@ -167,7 +161,7 @@ describe("buildSyntheticPlugin: all features together", () => {
   it("assembles skills + commands + hooks into one plugin", async () => {
     const ctx = makeCtx()
     await buildSyntheticPlugin(
-      ctx as any,
+      ctx,
       makeProfile({
         skills: ["kody-live-marker"],
         commands: ["kody-live-probe"],

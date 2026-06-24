@@ -65,7 +65,6 @@ function baseConfig(overrides: Partial<RegistryConfig> = {}): RegistryConfig {
       region: "iad",
       guest: { cpu_kind: "shared", cpus: 1, memory_mb: 256 },
       runnerApiKey: "rk",
-      litellmUrl: "http://litellm",
       port: 8080,
       healthTimeoutMs: 1000,
       app: "kody-app",
@@ -169,6 +168,29 @@ describe("PoolRegistry.claim — happy path with injected resolvers", () => {
 
     expect(mocks.PoolManagerCtor).toHaveBeenCalledTimes(1)
     expect(reg.activeRepos()).toEqual(["o/r"])
+  })
+
+  it("serializes concurrent first access so status/claim cannot double-warm a repo", async () => {
+    mocks.readRepoSecrets.mockResolvedValue({})
+    let releaseFlyToken!: (token: string) => void
+    const resolveFlyToken = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          releaseFlyToken = resolve
+        }),
+    )
+    const reg = new PoolRegistry(baseConfig({ resolveFlyToken }))
+
+    const status = reg.statusFor("o", "r")
+    const claim = reg.claim("O", "R", makeReq())
+    await Promise.resolve()
+    releaseFlyToken("fly-token")
+
+    await expect(status).resolves.toEqual({ min: 1, free: 1, booting: 0, claimsInFlight: 0, total: 2 })
+    await expect(claim).resolves.toEqual({ ok: true, machineId: "m-1" })
+    expect(resolveFlyToken).toHaveBeenCalledTimes(1)
+    expect(mocks.FlyClientCtor).toHaveBeenCalledTimes(1)
+    expect(mocks.PoolManagerCtor).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -331,6 +353,24 @@ describe("PoolRegistry.status", () => {
 
     expect(reg.status("O", "R")).toEqual({ min: 1, free: 1, booting: 0, claimsInFlight: 0, total: 2 })
     expect(pm.status).toHaveBeenCalled()
+  })
+
+  it("statusFor lazily creates the repo pool and returns its status", async () => {
+    const pm = makeFakePm()
+    mocks.PoolManagerCtor.mockImplementationOnce(() => pm)
+    mocks.readRepoSecret.mockResolvedValueOnce("fly-token")
+    mocks.readRepoSecret.mockResolvedValueOnce("2")
+    const reg = new PoolRegistry(baseConfig())
+
+    await expect(reg.statusFor("o", "r")).resolves.toEqual({
+      min: 1,
+      free: 1,
+      booting: 0,
+      claimsInFlight: 0,
+      total: 2,
+    })
+    expect(mocks.PoolManagerCtor).toHaveBeenCalledTimes(1)
+    expect(pm.reconcile).toHaveBeenCalledTimes(1)
   })
 })
 

@@ -1,7 +1,7 @@
 /**
  * Shared parsing for the "labeled fenced JSON state envelope" protocol.
  *
- * Several executables ask the agent (or a deterministic tick script) to emit
+ * Several agentActions ask the agent (or a deterministic tick script) to emit
  * its proposed next state as a single fenced code block tagged with a known
  * label:
  *

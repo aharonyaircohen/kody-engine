@@ -5,7 +5,7 @@
  *
  * Extracted from executor.ts: the executor stays the generic
  * preflight→agent→postflight runner; container orchestration (the only
- * multi-child shape) lives here. `runExecutable`/`resolveProfilePath` are
+ * multi-child shape) lives here. `runAgentAction`/`resolveProfilePath` are
  * imported back from the executor — a runtime-only circular reference that
  * ESM resolves because both are hoisted function declarations called only
  * at run time, never during module evaluation.
@@ -13,18 +13,18 @@
 
 import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
+import type { ContainerChild, Context, InputSpec, Profile } from "./agent-actions/types.js"
 import { emitEvent } from "./events.js"
-import type { ContainerChild, Context, InputSpec, Profile } from "./executables/types.js"
-import { type ExecutorInput, type ExecutorOutput, resolveProfilePath, runExecutable } from "./executor.js"
+import { type ExecutorInput, type ExecutorOutput, resolveProfilePath, runAgentAction } from "./executor.js"
 import { loadProfile } from "./profile.js"
-import { type Action, readTaskState, type TaskState, type TaskTarget } from "./state.js"
+import { type Action, emptyState, readTaskState, type TaskState, type TaskTarget } from "./state.js"
 
 const CONTAINER_MAX_ITERATIONS = 50
 
 /**
- * Read the input specs of a child executable's profile, returning null if the
+ * Read the input specs of a child agentAction's profile, returning null if the
  * profile can't be loaded. Used by the container loop to know which
- * parent-supplied args (e.g. `--base` from a goal-tick dispatch comment) to
+ * parent-supplied args (e.g. `--base` from a parent dispatch) to
  * forward to the child without crashing the parent on profile-load errors.
  */
 function getProfileInputsForChild(profileName: string, _cwd: string): InputSpec[] | null {
@@ -46,7 +46,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
     return
   }
 
-  const runChild = input.__runChild ?? ((name, opts) => runExecutable(name, opts))
+  const runChild = input.__runChild ?? ((name, opts) => runAgentAction(name, opts))
   const reader = input.__readTaskState ?? readTaskState
 
   const issueNumber = ctx.args.issue as number | undefined
@@ -136,7 +136,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
     // re-doing committed work (e.g. a plan that already produced an artifact).
     const priorState = readContainerState(ctx, child, reader)
     if (priorState.core?.prUrl) knownPrUrl = priorState.core.prUrl
-    const priorAction = priorState.executables?.[child.exec]?.lastAction
+    const priorAction = priorState.agentActions?.[child.exec]?.lastAction
     let actionType: string | undefined
     if (priorAction && /_COMPLETED$/i.test(priorAction.type)) {
       process.stderr.write(`[kody container] skipping ${child.exec}: already completed (${priorAction.type})\n`)
@@ -178,8 +178,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
       // that container's target-derivation doesn't already inject. Without
       // this, comment-supplied flags like `@kody --base <branch>` are
       // silently dropped between the container (e.g. chore/feature/fix/bug)
-      // and the run primitive — the stacked-PR flow depends on `--base`
-      // making it from goal-tick's dispatch comment through to runFlow.
+      // run primitive.
       const childInputs = getProfileInputsForChild(child.exec, input.cwd)
       if (childInputs) {
         for (const spec of childInputs) {
@@ -216,7 +215,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
           preloadedData: preloadedSnapshot,
         })
         emitEvent(input.cwd, {
-          executable: profile.name,
+          agentAction: profile.name,
           kind: "container_child",
           name: child.exec,
           durationMs: Date.now() - childStartedAt,
@@ -225,7 +224,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
         })
       } catch (err) {
         emitEvent(input.cwd, {
-          executable: profile.name,
+          agentAction: profile.name,
           kind: "container_child",
           name: child.exec,
           durationMs: Date.now() - childStartedAt,
@@ -263,7 +262,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
       const next = readContainerState(ctx, child, reader)
       if (next.core?.prUrl) knownPrUrl = next.core.prUrl
       const nextAttempts = next.core?.attempts?.[child.exec] ?? 0
-      const nextChildAction = next.executables?.[child.exec]?.lastAction
+      const nextChildAction = next.agentActions?.[child.exec]?.lastAction
       const childWrote = nextAttempts > priorAttempts && nextChildAction != null
       if (childWrote && nextChildAction) {
         actionType = nextChildAction.type
@@ -287,7 +286,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
           next.core = {
             phase: "idle",
             status: "pending",
-            currentExecutable: null,
+            currentAgentAction: null,
             lastOutcome: synthetic,
             // Bump attempts here too — a synthesized action is, semantically,
             // a saveTaskState write that just didn't happen mechanically.
@@ -362,9 +361,9 @@ function resetWorkingTree(cwd: string): void {
 /**
  * Read the latest task state for the container's routing decision.
  *
- * Each child writes its outcome to the comment thread of whatever target it
+ * Each child writes its outcome to task state for whatever target it
  * ran against (saveTaskState reads `ctx.data.commentTargetType`). A child
- * with `target: "pr"` therefore writes its action to the PR's state comment,
+ * with `target: "pr"` therefore writes its action to the PR's state file,
  * not the issue's — so the container must read from that same target to see
  * the freshly-written REVIEW_ or FIX_ action. Reading the issue after a `pr`
  * child returns stale state (the prior `run` action) and the wildcard
@@ -401,19 +400,7 @@ function readContainerState(
   if (cached && typeof cached === "object") {
     return cached
   }
-  return {
-    schemaVersion: 1,
-    core: {
-      phase: "idle",
-      status: "pending",
-      currentExecutable: null,
-      lastOutcome: null,
-      attempts: {},
-    },
-    executables: {},
-    artifacts: {},
-    history: [],
-  }
+  return emptyState()
 }
 
 function parsePrNumber(url: string): number | null {

@@ -1,7 +1,7 @@
 /**
  * Preflight: assemble whatever context the prior loaders populated into a
  * typed TaskContext object on ctx.data.taskContext, and persist a snapshot
- * to `.kody/runs/<runId>/task-context.json`.
+ * to runtime scratch storage.
  *
  * Composition contract: this script ALWAYS runs after the existing
  * loaders (loadIssueContext, loadConventions, loadPriorArt,
@@ -14,9 +14,9 @@
  * TaskContext just has `priorArt: ""`.
  */
 
+import type { PreflightScript } from "../agent-actions/types.js"
 import type { TestRequirement } from "../config.js"
 import { resolveRunId } from "../events.js"
-import type { PreflightScript } from "../executables/types.js"
 import type { IssueData } from "../issue.js"
 import type { LoadedConvention } from "../prompt.js"
 import { buildTaskContext, persistTaskContext, type TaskContext } from "../taskContext.js"

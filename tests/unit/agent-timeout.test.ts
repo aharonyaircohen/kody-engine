@@ -1,3 +1,6 @@
+import fs from "node:fs"
+import os from "node:os"
+import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const querySpy = vi.fn()
@@ -14,12 +17,21 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
 
 import { runAgent } from "../../src/agent.js"
 
-const baseOpts = {
+let ndjsonDir: string
+const baseOpts = () => ({
   prompt: "hi",
   model: { provider: "minimax", model: "m" },
   cwd: process.cwd(),
-  ndjsonDir: "/tmp/kody-agent-timeout-test",
-}
+  ndjsonDir,
+})
+
+beforeEach(() => {
+  ndjsonDir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-agent-timeout-test-"))
+})
+
+afterEach(() => {
+  fs.rmSync(ndjsonDir, { recursive: true, force: true })
+})
 
 describe("runAgent: per-turn watchdog", () => {
   beforeEach(() => {
@@ -34,7 +46,7 @@ describe("runAgent: per-turn watchdog", () => {
     queryGenFactory = async function* () {
       yield { type: "result", subtype: "success", result: "DONE" }
     }
-    const res = await runAgent({ ...baseOpts, maxTurnTimeoutMs: 5000 })
+    const res = await runAgent({ ...baseOpts(), maxTurnTimeoutMs: 5000 })
     expect(res.outcome).toBe("completed")
     expect(res.error).toBeUndefined()
   })
@@ -45,7 +57,7 @@ describe("runAgent: per-turn watchdog", () => {
       await new Promise((resolve) => setTimeout(resolve, 500))
       yield { type: "result", subtype: "success", result: "DONE" }
     }
-    const res = await runAgent({ ...baseOpts, maxTurnTimeoutMs: 100 })
+    const res = await runAgent({ ...baseOpts(), maxTurnTimeoutMs: 100 })
     expect(res.outcome).toBe("failed")
     expect(res.error).toMatch(/stalled/i)
     expect(res.error).toMatch(/0s|1s/)
@@ -57,7 +69,7 @@ describe("runAgent: per-turn watchdog", () => {
       await new Promise((resolve) => setTimeout(resolve, 200))
       yield { type: "result", subtype: "success", result: "DONE" }
     }
-    const res = await runAgent({ ...baseOpts, maxTurnTimeoutMs: 0 })
+    const res = await runAgent({ ...baseOpts(), maxTurnTimeoutMs: 0 })
     expect(res.outcome).toBe("completed")
   })
 
@@ -67,7 +79,7 @@ describe("runAgent: per-turn watchdog", () => {
       await new Promise((resolve) => setTimeout(resolve, 200))
       yield { type: "result", subtype: "success", result: "DONE" }
     }
-    const res = await runAgent({ ...baseOpts })
+    const res = await runAgent({ ...baseOpts() })
     expect(res.outcome).toBe("completed")
   })
 
@@ -76,7 +88,7 @@ describe("runAgent: per-turn watchdog", () => {
       yield { type: "assistant", message: { content: [{ type: "text", text: "x" }] } }
       yield { type: "result", subtype: "success", result: "DONE" }
     }
-    const res = await runAgent({ ...baseOpts, maxTurnTimeoutMs: 5000 })
+    const res = await runAgent({ ...baseOpts(), maxTurnTimeoutMs: 5000 })
     expect(res.messageCount).toBe(2)
     expect(typeof res.durationMs).toBe("number")
     expect(res.durationMs!).toBeGreaterThanOrEqual(0)
@@ -96,7 +108,7 @@ describe("runAgent: per-turn watchdog", () => {
         usage: { input_tokens: 50, output_tokens: 30, cache_creation_input_tokens: 10 },
       }
     }
-    const res = await runAgent({ ...baseOpts, maxTurnTimeoutMs: 5000 })
+    const res = await runAgent({ ...baseOpts(), maxTurnTimeoutMs: 5000 })
     expect(res.tokens?.input).toBe(150)
     expect(res.tokens?.output).toBe(50)
     expect(res.tokens?.cacheRead).toBe(50)

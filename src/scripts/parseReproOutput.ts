@@ -30,7 +30,7 @@
  * specific reason.
  */
 
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../agent-actions/types.js"
 import type { Action } from "../state.js"
 
 export interface ReproFailureSignature {

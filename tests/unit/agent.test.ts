@@ -1,3 +1,6 @@
+import fs from "node:fs"
+import os from "node:os"
+import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const querySpy = vi.fn()
@@ -17,13 +20,23 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
 }))
 
 import { runAgent } from "../../src/agent.js"
+import { REASONING_BUDGETS } from "../../src/config.js"
 
-const baseOpts = {
+let ndjsonDir: string
+const baseOpts = () => ({
   prompt: "hi",
   model: { provider: "minimax", model: "m" },
   cwd: process.cwd(),
-  ndjsonDir: "/tmp/kody-agent-test",
-}
+  ndjsonDir,
+})
+
+beforeEach(() => {
+  ndjsonDir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-agent-test-"))
+})
+
+afterEach(() => {
+  fs.rmSync(ndjsonDir, { recursive: true, force: true })
+})
 
 describe("runAgent: settingSources passthrough", () => {
   beforeEach(() => {
@@ -34,19 +47,19 @@ describe("runAgent: settingSources passthrough", () => {
   })
 
   it("defaults settingSources to ['project', 'local']", async () => {
-    await runAgent(baseOpts)
+    await runAgent(baseOpts())
     const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
     expect(args.options.settingSources).toEqual(["project", "local"])
   })
 
   it("honours explicit settingSources override", async () => {
-    await runAgent({ ...baseOpts, settingSources: [] })
+    await runAgent({ ...baseOpts(), settingSources: [] })
     const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
     expect(args.options.settingSources).toEqual([])
   })
 
   it("honours a single-source override", async () => {
-    await runAgent({ ...baseOpts, settingSources: ["user"] })
+    await runAgent({ ...baseOpts(), settingSources: ["user"] })
     const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
     expect(args.options.settingSources).toEqual(["user"])
   })
@@ -61,33 +74,92 @@ describe("runAgent: maxThinkingTokens passthrough", () => {
   })
 
   it("forwards maxThinkingTokens to the SDK when positive", async () => {
-    await runAgent({ ...baseOpts, maxThinkingTokens: 10_000 })
+    await runAgent({ ...baseOpts(), maxThinkingTokens: 10_000 })
     const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
     expect(args.options.maxThinkingTokens).toBe(10_000)
   })
 
   it("omits maxThinkingTokens when unset", async () => {
-    await runAgent(baseOpts)
+    await runAgent(baseOpts())
     const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
     expect(args.options).not.toHaveProperty("maxThinkingTokens")
   })
 
   it("omits maxThinkingTokens when null", async () => {
-    await runAgent({ ...baseOpts, maxThinkingTokens: null })
+    await runAgent({ ...baseOpts(), maxThinkingTokens: null })
     const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
     expect(args.options).not.toHaveProperty("maxThinkingTokens")
   })
 
   it("omits maxThinkingTokens when zero or negative", async () => {
-    await runAgent({ ...baseOpts, maxThinkingTokens: 0 })
+    await runAgent({ ...baseOpts(), maxThinkingTokens: 0 })
     const argsZero = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
     expect(argsZero.options).not.toHaveProperty("maxThinkingTokens")
 
     querySpy.mockClear()
 
-    await runAgent({ ...baseOpts, maxThinkingTokens: -1 })
+    await runAgent({ ...baseOpts(), maxThinkingTokens: -1 })
     const argsNeg = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
     expect(argsNeg.options).not.toHaveProperty("maxThinkingTokens")
+  })
+})
+
+describe("runAgent: reasoningEffort → maxThinkingTokens mapping", () => {
+  beforeEach(() => {
+    querySpy.mockClear()
+  })
+  afterEach(() => {
+    querySpy.mockClear()
+  })
+
+  it("omits maxThinkingTokens when reasoningEffort is unset (cheapest path)", async () => {
+    await runAgent(baseOpts())
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options).not.toHaveProperty("maxThinkingTokens")
+  })
+
+  it("omits maxThinkingTokens when reasoningEffort is null", async () => {
+    await runAgent({ ...baseOpts(), reasoningEffort: null })
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options).not.toHaveProperty("maxThinkingTokens")
+  })
+
+  it("omits maxThinkingTokens when reasoningEffort is 'off' (explicit no-thinking)", async () => {
+    await runAgent({ ...baseOpts(), reasoningEffort: "off" })
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options).not.toHaveProperty("maxThinkingTokens")
+  })
+
+  it("maps 'low' → REASONING_BUDGETS.low tokens", async () => {
+    await runAgent({ ...baseOpts(), reasoningEffort: "low" })
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options.maxThinkingTokens).toBe(REASONING_BUDGETS.low)
+  })
+
+  it("maps 'medium' → REASONING_BUDGETS.medium tokens", async () => {
+    await runAgent({ ...baseOpts(), reasoningEffort: "medium" })
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options.maxThinkingTokens).toBe(REASONING_BUDGETS.medium)
+  })
+
+  it("maps 'high' → REASONING_BUDGETS.high tokens", async () => {
+    await runAgent({ ...baseOpts(), reasoningEffort: "high" })
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options.maxThinkingTokens).toBe(REASONING_BUDGETS.high)
+  })
+
+  it("reasoningEffort wins over explicit maxThinkingTokens when both are set", async () => {
+    // User-facing field is canonical — never let a stale budget value
+    // override the level the user picked in the chat.
+    await runAgent({ ...baseOpts(), reasoningEffort: "low", maxThinkingTokens: 99_999 })
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options.maxThinkingTokens).toBe(REASONING_BUDGETS.low)
+  })
+
+  it("'off' wins over explicit maxThinkingTokens too (no thinking block at all)", async () => {
+    await runAgent({ ...baseOpts(), reasoningEffort: "off", maxThinkingTokens: 32_000 })
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options).not.toHaveProperty("maxThinkingTokens")
   })
 })
 
@@ -107,7 +179,7 @@ describe("runAgent: finalText collection", () => {
       { type: "result", subtype: "success", result: "DONE\nCOMMIT_MSG: fix: x\nPR_SUMMARY:\n- x" },
       { type: "result", subtype: "success", result: "background check complete" },
     ]
-    const out = await runAgent(baseOpts)
+    const out = await runAgent(baseOpts())
     expect(out.outcome).toBe("completed")
     expect(out.finalText).toMatch(/^DONE/)
     expect(out.finalText).toContain("COMMIT_MSG: fix: x")
@@ -119,7 +191,7 @@ describe("runAgent: finalText collection", () => {
       { type: "result", subtype: "success", result: "   " },
       { type: "result", subtype: "success", result: "DONE" },
     ]
-    const out = await runAgent(baseOpts)
+    const out = await runAgent(baseOpts())
     expect(out.finalText).toBe("DONE")
   })
 })

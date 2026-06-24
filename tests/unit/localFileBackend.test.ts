@@ -62,14 +62,16 @@ describe("LocalFileBackend", () => {
       expect(out.handle).toBeNull()
       expect(out.state.rev).toBe(0)
       expect(out.state.cursor).toBe("seed")
-      expect(out.path).toBe(".kody/jobs/auto-sync.state.json")
+      expect(out.path).toBe(".kody/jobs/auto-sync/state.json")
     })
 
     it("reads and parses an existing state file", () => {
       const dir = path.join(cwd, ".kody/jobs")
+      const stateDir = path.join(dir, "auto-sync")
       fs.mkdirSync(dir, { recursive: true })
+      fs.mkdirSync(stateDir, { recursive: true })
       const state = envelope({ rev: 7, cursor: "tick-7" })
-      fs.writeFileSync(path.join(dir, "auto-sync.state.json"), JSON.stringify(state, null, 2))
+      fs.writeFileSync(path.join(stateDir, "state.json"), JSON.stringify(state, null, 2))
 
       const b = new LocalFileBackend({ cwd, jobsDir: ".kody/jobs", owner: "o", repo: "r" })
       const out = b.load("auto-sync")
@@ -80,18 +82,18 @@ describe("LocalFileBackend", () => {
     })
 
     it("throws on invalid JSON", () => {
-      const dir = path.join(cwd, ".kody/jobs")
-      fs.mkdirSync(dir, { recursive: true })
-      fs.writeFileSync(path.join(dir, "auto-sync.state.json"), "not json")
+      const stateDir = path.join(cwd, ".kody/jobs", "auto-sync")
+      fs.mkdirSync(stateDir, { recursive: true })
+      fs.writeFileSync(path.join(stateDir, "state.json"), "not json")
 
       const b = new LocalFileBackend({ cwd, jobsDir: ".kody/jobs", owner: "o", repo: "r" })
       expect(() => b.load("auto-sync")).toThrow(/not valid JSON/i)
     })
 
     it("throws on non-StateEnvelope JSON", () => {
-      const dir = path.join(cwd, ".kody/jobs")
-      fs.mkdirSync(dir, { recursive: true })
-      fs.writeFileSync(path.join(dir, "auto-sync.state.json"), JSON.stringify({ wrong: "shape" }))
+      const stateDir = path.join(cwd, ".kody/jobs", "auto-sync")
+      fs.mkdirSync(stateDir, { recursive: true })
+      fs.writeFileSync(path.join(stateDir, "state.json"), JSON.stringify({ wrong: "shape" }))
 
       const b = new LocalFileBackend({ cwd, jobsDir: ".kody/jobs", owner: "o", repo: "r" })
       expect(() => b.load("auto-sync")).toThrow(/not a StateEnvelope/i)
@@ -102,34 +104,35 @@ describe("LocalFileBackend", () => {
     it("creates the jobs directory and writes the file when seeding", () => {
       const b = new LocalFileBackend({ cwd, jobsDir: ".kody/jobs", owner: "o", repo: "r" })
       const wrote = b.save(
-        { path: ".kody/jobs/auto-sync.state.json", handle: null, state: envelope({ rev: 0 }), created: true },
+        { path: ".kody/jobs/auto-sync/state.json", handle: null, state: envelope({ rev: 0 }), created: true },
         envelope({ rev: 1 }),
       )
       expect(wrote).toBe(true)
-      const onDisk = fs.readFileSync(path.join(cwd, ".kody/jobs/auto-sync.state.json"), "utf-8")
+      const onDisk = fs.readFileSync(path.join(cwd, ".kody/jobs/auto-sync/state.json"), "utf-8")
       expect(JSON.parse(onDisk)).toEqual(envelope({ rev: 1 }))
     })
 
     it("skips writes when state is structurally unchanged", () => {
       const dir = path.join(cwd, ".kody/jobs")
-      fs.mkdirSync(dir, { recursive: true })
+      const stateDir = path.join(dir, "auto-sync")
+      fs.mkdirSync(stateDir, { recursive: true })
       const prev = envelope({ rev: 5, cursor: "same", data: { x: 1 } })
-      fs.writeFileSync(path.join(dir, "auto-sync.state.json"), JSON.stringify(prev))
+      fs.writeFileSync(path.join(stateDir, "state.json"), JSON.stringify(prev))
 
       const b = new LocalFileBackend({ cwd, jobsDir: ".kody/jobs", owner: "o", repo: "r" })
       const next = envelope({ rev: 6, cursor: "same", data: { x: 1 } })
-      const wrote = b.save({ path: ".kody/jobs/auto-sync.state.json", handle: null, state: prev, created: false }, next)
+      const wrote = b.save({ path: ".kody/jobs/auto-sync/state.json", handle: null, state: prev, created: false }, next)
       expect(wrote).toBe(false)
       // Original file untouched.
-      expect(JSON.parse(fs.readFileSync(path.join(dir, "auto-sync.state.json"), "utf-8"))).toEqual(prev)
+      expect(JSON.parse(fs.readFileSync(path.join(stateDir, "state.json"), "utf-8"))).toEqual(prev)
     })
 
     it("writes when cursor or data changes", () => {
       const b = new LocalFileBackend({ cwd, jobsDir: ".kody/jobs", owner: "o", repo: "r" })
       const prev = envelope({ rev: 5, cursor: "a" })
-      b.save({ path: ".kody/jobs/auto-sync.state.json", handle: null, state: prev, created: true }, prev)
+      b.save({ path: ".kody/jobs/auto-sync/state.json", handle: null, state: prev, created: true }, prev)
       const next = envelope({ rev: 6, cursor: "b" })
-      const wrote = b.save({ path: ".kody/jobs/auto-sync.state.json", handle: null, state: prev, created: false }, next)
+      const wrote = b.save({ path: ".kody/jobs/auto-sync/state.json", handle: null, state: prev, created: false }, next)
       expect(wrote).toBe(true)
     })
 
@@ -139,14 +142,14 @@ describe("LocalFileBackend", () => {
       // otherwise leave a truncated file that wedges the next load).
       const b = new LocalFileBackend({ cwd, jobsDir: ".kody/jobs", owner: "o", repo: "r" })
       b.save(
-        { path: ".kody/jobs/auto-sync.state.json", handle: null, state: envelope({ rev: 0 }), created: true },
+        { path: ".kody/jobs/auto-sync/state.json", handle: null, state: envelope({ rev: 0 }), created: true },
         envelope({ rev: 1 }),
       )
       const dir = path.join(cwd, ".kody/jobs")
       const entries = fs.readdirSync(dir)
-      expect(entries).toEqual(["auto-sync.state.json"])
+      expect(entries).toEqual(["auto-sync"])
       // Final file is complete, parseable JSON.
-      expect(() => JSON.parse(fs.readFileSync(path.join(dir, "auto-sync.state.json"), "utf-8"))).not.toThrow()
+      expect(() => JSON.parse(fs.readFileSync(path.join(dir, "auto-sync", "state.json"), "utf-8"))).not.toThrow()
     })
   })
 

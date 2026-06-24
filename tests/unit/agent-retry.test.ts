@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import fs from "node:fs"
+import os from "node:os"
+import path from "node:path"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // Programmable SDK mock: each query() call consumes the next spec. The
 // generator yields any scripted messages first, then throws if `throw` is set
@@ -23,15 +26,16 @@ import { runAgent } from "../../src/agent.js"
 
 type RunAgentOpts = Parameters<typeof runAgent>[0]
 
-const baseOpts: RunAgentOpts = {
+let ndjsonDir: string
+const baseOpts = (): RunAgentOpts => ({
   prompt: "hi",
   model: { provider: "minimax", model: "m" },
   cwd: process.cwd(),
-  ndjsonDir: "/tmp/kody-agent-retry-test",
+  ndjsonDir,
   // Disable the per-turn watchdog so the only timer is the retry backoff
   // (flushed instantly via fake timers below).
   maxTurnTimeoutMs: 0,
-}
+})
 
 const SUCCESS = { type: "result", subtype: "success", result: "DONE" }
 // The dead-proxy signature: SDK reports subtype "success" but the session
@@ -45,6 +49,16 @@ const SUCCESS_WITH_TOKENS = {
   result: "",
   usage: { input_tokens: 10, output_tokens: 42 },
 }
+const LOGIN_REQUIRED_TEXT = "Not logged in · Please run /login"
+const LOGIN_REQUIRED_ASSISTANT = {
+  type: "assistant",
+  message: { content: [{ type: "text", text: LOGIN_REQUIRED_TEXT }] },
+}
+const LOGIN_REQUIRED_RESULT = {
+  type: "result",
+  subtype: "success",
+  result: LOGIN_REQUIRED_TEXT,
+}
 const CONNECTION_ERR = "API Error: Unable to connect to API (ConnectionRefused)"
 const writeToolUse = {
   type: "assistant",
@@ -52,7 +66,7 @@ const writeToolUse = {
 }
 
 /** Run runAgent while flushing the retry backoff timers instantly. */
-async function runFlushed(opts: RunAgentOpts = baseOpts) {
+async function runFlushed(opts: RunAgentOpts = baseOpts()) {
   vi.useFakeTimers()
   try {
     const promise = runAgent(opts)
@@ -62,6 +76,14 @@ async function runFlushed(opts: RunAgentOpts = baseOpts) {
     vi.useRealTimers()
   }
 }
+
+beforeEach(() => {
+  ndjsonDir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-agent-retry-test-"))
+})
+
+afterEach(() => {
+  fs.rmSync(ndjsonDir, { recursive: true, force: true })
+})
 
 describe("runAgent: transient connection retry", () => {
   beforeEach(() => {
@@ -125,7 +147,7 @@ describe("runAgent: transient connection retry", () => {
   it("calls ensureBackend before retrying a connection failure", async () => {
     attempts = [{ throw: CONNECTION_ERR }, { messages: [SUCCESS] }]
     const ensureBackend = vi.fn().mockResolvedValue(undefined)
-    const res = await runFlushed({ ...baseOpts, ensureBackend })
+    const res = await runFlushed({ ...baseOpts(), ensureBackend })
     expect(ensureBackend).toHaveBeenCalledTimes(1)
     expect(res.outcome).toBe("completed")
   })
@@ -133,7 +155,7 @@ describe("runAgent: transient connection retry", () => {
   it("calls ensureBackend once per retry until attempts are exhausted", async () => {
     attempts = [{ throw: CONNECTION_ERR }]
     const ensureBackend = vi.fn().mockResolvedValue(undefined)
-    await runFlushed({ ...baseOpts, ensureBackend })
+    await runFlushed({ ...baseOpts(), ensureBackend })
     // 3 attempts total → recovery runs before retry 2 and retry 3.
     expect(ensureBackend).toHaveBeenCalledTimes(2)
   })
@@ -141,14 +163,14 @@ describe("runAgent: transient connection retry", () => {
   it("does not call ensureBackend for a non-transient error", async () => {
     attempts = [{ throw: "Invalid API key" }]
     const ensureBackend = vi.fn().mockResolvedValue(undefined)
-    await runFlushed({ ...baseOpts, ensureBackend })
+    await runFlushed({ ...baseOpts(), ensureBackend })
     expect(ensureBackend).not.toHaveBeenCalled()
   })
 
   it("retries even if ensureBackend itself throws", async () => {
     attempts = [{ throw: CONNECTION_ERR }, { messages: [SUCCESS] }]
     const ensureBackend = vi.fn().mockRejectedValue(new Error("restart failed"))
-    const res = await runFlushed({ ...baseOpts, ensureBackend })
+    const res = await runFlushed({ ...baseOpts(), ensureBackend })
     expect(ensureBackend).toHaveBeenCalledTimes(1)
     expect(res.outcome).toBe("completed")
   })
@@ -158,6 +180,25 @@ describe("runAgent: no-work success demotion", () => {
   beforeEach(() => {
     attempts = []
     callIndex = 0
+  })
+
+  it("demotes login-required text before a success result", async () => {
+    attempts = [{ messages: [LOGIN_REQUIRED_ASSISTANT, SUCCESS_WITH_TOKENS] }, { messages: [SUCCESS] }]
+    const ensureBackend = vi.fn().mockResolvedValue(undefined)
+    const res = await runFlushed({ ...baseOpts(), ensureBackend })
+    expect(callIndex).toBe(1)
+    expect(res.outcome).toBe("failed")
+    expect(res.outcomeKind).toBe("model_error")
+    expect(res.error).toMatch(/not logged in/i)
+    expect(ensureBackend).not.toHaveBeenCalled()
+  })
+
+  it("demotes login-required terminal success result", async () => {
+    attempts = [{ messages: [LOGIN_REQUIRED_RESULT] }, { messages: [SUCCESS] }]
+    const res = await runFlushed()
+    expect(callIndex).toBe(1)
+    expect(res.outcome).toBe("failed")
+    expect(res.error).toMatch(/not logged in/i)
   })
 
   it("demotes a zero-output 'success' to failed (blocks the empty PR)", async () => {
@@ -173,7 +214,7 @@ describe("runAgent: no-work success demotion", () => {
   it("runs ensureBackend on a no-work success (restarts a crashed proxy)", async () => {
     attempts = [{ messages: [EMPTY_SUCCESS] }]
     const ensureBackend = vi.fn().mockResolvedValue(undefined)
-    await runFlushed({ ...baseOpts, ensureBackend })
+    await runFlushed({ ...baseOpts(), ensureBackend })
     // Same recovery path as a transient connection error: 2 retries.
     expect(ensureBackend).toHaveBeenCalledTimes(2)
   })
@@ -181,7 +222,7 @@ describe("runAgent: no-work success demotion", () => {
   it("recovers when a no-work success is followed by a real success", async () => {
     attempts = [{ messages: [EMPTY_SUCCESS] }, { messages: [SUCCESS] }]
     const ensureBackend = vi.fn().mockResolvedValue(undefined)
-    const res = await runFlushed({ ...baseOpts, ensureBackend })
+    const res = await runFlushed({ ...baseOpts(), ensureBackend })
     expect(ensureBackend).toHaveBeenCalledTimes(1)
     expect(res.outcome).toBe("completed")
   })
@@ -207,7 +248,7 @@ describe("runAgent: hollow-success detection via backend health probe", () => {
     attempts = [{ messages: [SUCCESS] }]
     const isBackendHealthy = vi.fn().mockResolvedValue(false)
     const ensureBackend = vi.fn().mockResolvedValue(undefined)
-    const res = await runFlushed({ ...baseOpts, isBackendHealthy, ensureBackend })
+    const res = await runFlushed({ ...baseOpts(), isBackendHealthy, ensureBackend })
     expect(res.outcome).toBe("failed")
     expect(res.error).toMatch(/proxy crashed mid-request|unreachable/i)
     // Demotion routed it through recovery: the proxy got a restart attempt.
@@ -217,7 +258,7 @@ describe("runAgent: hollow-success detection via backend health probe", () => {
   it("does NOT demote a 'success' when the backend is alive", async () => {
     attempts = [{ messages: [SUCCESS] }]
     const isBackendHealthy = vi.fn().mockResolvedValue(true)
-    const res = await runFlushed({ ...baseOpts, isBackendHealthy })
+    const res = await runFlushed({ ...baseOpts(), isBackendHealthy })
     expect(res.outcome).toBe("completed")
   })
 
@@ -226,7 +267,7 @@ describe("runAgent: hollow-success detection via backend health probe", () => {
     // Dead after attempt 1 → demote + restart; alive after attempt 2 → success.
     const isBackendHealthy = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true)
     const ensureBackend = vi.fn().mockResolvedValue(undefined)
-    const res = await runFlushed({ ...baseOpts, isBackendHealthy, ensureBackend })
+    const res = await runFlushed({ ...baseOpts(), isBackendHealthy, ensureBackend })
     expect(res.outcome).toBe("completed")
     expect(ensureBackend).toHaveBeenCalledTimes(1)
   })

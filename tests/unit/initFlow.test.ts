@@ -28,17 +28,17 @@ describe("initFlow: performInit", () => {
     const result = performInit(dir, false)
     expect(result.wrote).toContain("kody.config.json")
     expect(result.wrote).toContain(".github/workflows/kody.yml")
-    expect(result.wrote).toContain(".kody/staff/kody.md")
-    // Every discovered scheduled executable also gets its own workflow file.
+    expect(result.wrote).toContain(".kody/agents/kody.md")
+    // Every discovered scheduled agentAction also gets its own workflow file.
     const scheduledWorkflows = result.wrote.filter((f) => /\.github\/workflows\/kody-.+\.yml$/.test(f))
     expect(scheduledWorkflows.length).toBeGreaterThanOrEqual(1)
     expect(result.skipped).toEqual([])
     expect(fs.existsSync(path.join(dir, "kody.config.json"))).toBe(true)
     expect(fs.existsSync(path.join(dir, ".github/workflows/kody.yml"))).toBe(true)
-    expect(fs.existsSync(path.join(dir, ".kody/staff/kody.md"))).toBe(true)
+    expect(fs.existsSync(path.join(dir, ".kody/agents/kody.md"))).toBe(true)
 
-    const duty = fs.readFileSync(path.join(dir, ".kody/duties/watch-stale-prs.md"), "utf-8")
-    expect(duty).toMatch(/^staff: kody$/m)
+    expect(result.wrote.some((file) => file.startsWith(".kody/agent-responsibilities/"))).toBe(false)
+    expect(fs.existsSync(path.join(dir, ".kody/agent-responsibilities"))).toBe(false)
   })
 
   it("detects package manager from lockfile", () => {
@@ -80,22 +80,28 @@ describe("initFlow: performInit", () => {
     expect(second.wrote).toEqual([])
     expect(second.skipped).toContain("kody.config.json")
     expect(second.skipped).toContain(".github/workflows/kody.yml")
-    expect(second.skipped).toContain(".kody/staff/kody.md")
+    expect(second.skipped).toContain(".kody/agents/kody.md")
+    expect(second.skipped.some((file) => file.startsWith(".kody/agent-responsibilities/"))).toBe(false)
     const after = fs.readFileSync(path.join(dir, "kody.config.json"), "utf-8")
     expect(after).toMatch(/user-edit/)
   })
 
-  it("preserves an existing default staff persona unless force is true", () => {
+  it("does not manage local agentResponsibility folders", () => {
     dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
-    const staffPath = path.join(dir, ".kody/staff/kody.md")
-    fs.mkdirSync(path.dirname(staffPath), { recursive: true })
-    fs.writeFileSync(staffPath, "# Custom Kody\n")
+    const dutyDir = path.join(dir, ".kody/agent-responsibilities/local-only")
+    fs.mkdirSync(dutyDir, { recursive: true })
+    const profilePath = path.join(dutyDir, "profile.json")
+    const bodyPath = path.join(dutyDir, "agent-responsibility.md")
+    fs.writeFileSync(profilePath, `{"user-edit":"keep me on profile"}`)
+    fs.writeFileSync(bodyPath, `# user-edited agentResponsibility - do not clobber\n`)
 
-    const result = performInit(dir, false)
-    expect(result.skipped).toContain(".kody/staff/kody.md")
-    expect(fs.readFileSync(staffPath, "utf-8")).toBe("# Custom Kody\n")
+    const result = performInit(dir, true)
+
+    expect(result.wrote.some((file) => file.startsWith(".kody/agent-responsibilities/"))).toBe(false)
+    expect(result.skipped.some((file) => file.startsWith(".kody/agent-responsibilities/"))).toBe(false)
+    expect(fs.readFileSync(profilePath, "utf-8")).toMatch(/user-edit/)
+    expect(fs.readFileSync(bodyPath, "utf-8")).toMatch(/user-edited agentResponsibility/)
   })
-
   it("overwrites existing files when force is true", () => {
     dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
     fs.writeFileSync(path.join(dir, "kody.config.json"), `{"user-edit":"stale"}`)
@@ -128,9 +134,13 @@ describe("initFlow: performInit", () => {
 describe("renderScheduledWorkflow", () => {
   it("sets up Python so non-Anthropic models (litellm) work on the scheduled path", () => {
     // Regression: scheduled workflows omitted Python, so litellm couldn't
-    // install and scheduled duties failed on MiniMax/other non-Anthropic models.
-    const yml = renderScheduledWorkflow("duty-scheduler", "*/5 * * * *")
+    // install and scheduled agentResponsibilities failed on MiniMax/other non-Anthropic models.
+    const yml = renderScheduledWorkflow("agent-responsibility-scheduler", "*/5 * * * *")
     expect(yml).toMatch(/uses: actions\/setup-python/)
     expect(yml).toMatch(/python-version:/)
+    expect(yml).toContain("kody-engine exec agent-responsibility-scheduler")
+    expect(yml).toContain(
+      "\n        run: npx -y -p @kody-ade/kody-engine@latest kody-engine exec agent-responsibility-scheduler",
+    )
   })
 })

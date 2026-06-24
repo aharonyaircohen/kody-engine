@@ -25,19 +25,19 @@ export interface ResolveBackendOptions {
 }
 
 export function resolveBackend(opts: ResolveBackendOptions): JobStateBackend {
-  const owner = opts.config.github?.owner
-  const repo = opts.config.github?.repo
-  if (!owner || !repo) {
-    throw new Error("resolveBackend: config.github.owner and config.github.repo must be set")
-  }
-
   const requested = opts.config.jobs?.stateBackend ?? "contents-api"
 
   switch (requested) {
     case "contents-api":
-      return new ContentsApiBackend({ owner, repo, jobsDir: opts.jobsDir, cwd: opts.cwd })
-    case "local-file":
+      return new ContentsApiBackend({ config: opts.config, jobsDir: opts.jobsDir, cwd: opts.cwd })
+    case "local-file": {
+      const owner = opts.config.github?.owner
+      const repo = opts.config.github?.repo
+      if (!owner || !repo) {
+        throw new Error("resolveBackend: config.github.owner and config.github.repo must be set")
+      }
       return new LocalFileBackend({ cwd: opts.cwd, jobsDir: opts.jobsDir, owner, repo })
+    }
     default: {
       // Exhaustiveness check — TS will catch unhandled cases at compile time.
       const _exhaustive: never = requested

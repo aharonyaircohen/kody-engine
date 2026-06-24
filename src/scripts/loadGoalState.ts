@@ -1,15 +1,45 @@
 /**
- * Preflight: load `.kody/goals/<goalId>/state.json` into `ctx.data.goal`.
- *
- * Required as the first preflight in goal-tick — every other script in
- * the chain reads `ctx.data.goal` (with fields gradually populated by
- * later scripts). On a missing or malformed file the script signals the
- * tick to skip the rest of the chain by setting `ctx.skipAgent` plus a
- * non-fatal exit reason; the next tick retries.
+ * Preflight: load goal state from the configured Kody state repo into
+ * `ctx.data.goal` for goal-manager scripts.
  */
 
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../agent-actions/types.js"
+import type { KodyConfig } from "../config.js"
+import { type GoalState } from "../goal/state.js"
 import { fetchGoalState } from "../goal/stateStore.js"
+import { resolveStateRepoConfig } from "../stateRepo.js"
+
+const DEFAULT_RETRY_DELAYS_MS = [250, 750, 1500, 2500]
+
+function retryDelaysMs(): number[] {
+  const raw = process.env.KODY_GOAL_STATE_RETRY_DELAYS_MS?.trim()
+  if (!raw) return DEFAULT_RETRY_DELAYS_MS
+  return raw
+    .split(",")
+    .map((part) => Number(part.trim()))
+    .filter((value) => Number.isFinite(value) && value >= 0)
+}
+
+function sleep(ms: number): Promise<void> {
+  if (ms <= 0) return Promise.resolve()
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function fetchGoalStateWithRetry(config: KodyConfig, goalId: string, cwd: string): Promise<GoalState | null> {
+  let state = fetchGoalState(config, goalId, cwd)
+  if (state) return state
+
+  for (const delay of retryDelaysMs()) {
+    await sleep(delay)
+    state = fetchGoalState(config, goalId, cwd)
+    if (state) {
+      process.stdout.write(`[goal-manager] loaded goal state for ${goalId} after retry\n`)
+      return state
+    }
+  }
+
+  return null
+}
 
 export const loadGoalState: PreflightScript = async (ctx) => {
   const goalId = ctx.args.goal
@@ -20,7 +50,6 @@ export const loadGoalState: PreflightScript = async (ctx) => {
     return
   }
 
-  // Defensive against path traversal — same checks tick.sh did.
   if (goalId.includes("/") || goalId.includes("..")) {
     ctx.skipAgent = true
     ctx.output.exitCode = 1
@@ -28,42 +57,27 @@ export const loadGoalState: PreflightScript = async (ctx) => {
     return
   }
 
-  const owner = ctx.config.github?.owner
-  const repo = ctx.config.github?.repo
-  if (!owner || !repo) {
-    ctx.skipAgent = true
-    ctx.output.exitCode = 1
-    ctx.output.reason = "missing github owner/repo in config"
-    return
-  }
-
   try {
-    // Goal state lives on the kody-state branch (not the working tree).
-    const state = fetchGoalState(owner, repo, goalId, ctx.cwd)
+    const state = await fetchGoalStateWithRetry(ctx.config, goalId, ctx.cwd)
     if (!state) {
-      process.stdout.write(`[goal-tick] no goal state for ${goalId} on ${owner}/${repo} — nothing to tick\n`)
+      const stateTarget = resolveStateRepoConfig(ctx.config)
+      process.stdout.write(
+        `[goal-manager] no goal state for ${goalId} in ${stateTarget.repo}/${stateTarget.path}; nothing to tick\n`,
+      )
       ctx.skipAgent = true
       ctx.output.exitCode = 0
       ctx.output.reason = "no goal state to tick"
       return
     }
+
     ctx.data.goal = {
       id: goalId,
       state: state.state,
-      lastDispatchedIssue: state.lastDispatchedIssue,
-      // Cache the full parsed object so saveGoalState can preserve `extra`.
       raw: state,
-      // `phase`, `childTasks`, `openTaskPrs`, `leafPr` are populated by
-      // deriveGoalPhase later in the chain. Initialize to undefined so
-      // runWhen on `data.goal.phase` can match correctly.
-      phase: undefined,
       defaultBranch: ctx.config.git.defaultBranch,
     }
   } catch (err) {
-    // No state file or parse error — emit a log line and let the tick
-    // exit cleanly (skipAgent without a non-zero exit). Matches the
-    // legacy "no state file at … — nothing to tick" behavior.
-    process.stdout.write(`[goal-tick] ${err instanceof Error ? err.message : String(err)}\n`)
+    process.stdout.write(`[goal-manager] ${err instanceof Error ? err.message : String(err)}\n`)
     ctx.skipAgent = true
     ctx.output.exitCode = 0
     ctx.output.reason = "no goal state to tick"

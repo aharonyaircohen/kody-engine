@@ -2,7 +2,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/agent-actions/types.js"
 import { resolveQaUrl } from "../../src/scripts/resolveQaUrl.js"
 
 function makeCtx(overrides: Partial<Context["args"]> = {}, cwd = "/tmp"): Context {

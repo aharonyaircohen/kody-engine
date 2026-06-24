@@ -1,12 +1,12 @@
 /**
- * Preflight: read the task's state comment into ctx.data.taskState.
- * Returns emptyState() if no kody state comment exists yet.
+ * Preflight: read the task's state repo file into ctx.data.taskState.
+ * Returns emptyState() if no Kody task state file exists yet.
  *
  * Must run AFTER the mode flow (runFlow/fixFlow/...) so that
  * ctx.data.commentTargetType + ctx.data.commentTargetNumber are populated.
  */
 
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../agent-actions/types.js"
 import { CorruptStateError, emptyState, readTaskState, type TaskTarget, writeTaskState } from "../state.js"
 
 export const loadTaskState: PreflightScript = async (ctx) => {
@@ -17,20 +17,19 @@ export const loadTaskState: PreflightScript = async (ctx) => {
     return
   }
   try {
-    ctx.data.taskState = readTaskState(target, number, ctx.cwd)
+    ctx.data.taskState = readTaskState(target, number, ctx.cwd, ctx.config)
   } catch (err) {
     if (err instanceof CorruptStateError) {
-      // A present-but-unparseable state comment. Proceeding on emptyState()
+      // A present-but-unparseable state file. Proceeding on emptyState()
       // would silently redo committed work (re-open PRs, re-run children), so
-      // bail loud instead. Heal the comment to a valid empty state first
-      // (writeTaskState matches the marker without parsing, so it isn't
-      // poisoned by the corruption) — that way the next trigger starts clean
-      // rather than crashing forever on the same bad comment.
+      // bail loud instead. Heal the file to a valid empty state first so the
+      // next trigger starts clean rather than crashing forever on the same bad
+      // payload.
       process.stderr.write(
         `[kody state] CORRUPT state on ${target} #${number}: ${err.message} — healing to empty and bailing so committed work isn't silently redone.\n`,
       )
       try {
-        writeTaskState(target, number, emptyState(), ctx.cwd)
+        writeTaskState(target, number, emptyState(), ctx.cwd, ctx.config)
       } catch {
         /* best effort — bail loud regardless */
       }

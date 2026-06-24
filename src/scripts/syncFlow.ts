@@ -11,20 +11,20 @@
  *   - announceOnSuccess (default false): when true, success paths post the
  *     user-facing "✅ kody sync ..." / "ℹ️ kody sync ..." PR comment and set
  *     `output.exitCode = 0` + `output.reason`. Set this in the `sync`
- *     executable's profile, where syncFlow IS the run. Leave unset (false)
- *     when used as a preflight in another executable — the parent owns the
+ *     agentAction's profile, where syncFlow IS the run. Leave unset (false)
+ *     when used as a preflight in another agentAction — the parent owns the
  *     user voice on success.
  *
  * Failure paths always announce — the user needs to know why their run
- * stopped, regardless of which executable triggered it.
+ * stopped, regardless of which agentAction triggered it.
  *
  * Sets `ctx.data.syncResult` to "noop" | "merged" on success for downstream
  * visibility. Failure paths leave `syncResult` unset and bail the run.
  */
 
 import { execFileSync } from "node:child_process"
+import type { PreflightScript, ScriptArgs } from "../agent-actions/types.js"
 import { checkoutPrBranch, getCurrentBranch, mergeBase } from "../branch.js"
-import type { PreflightScript, ScriptArgs } from "../executables/types.js"
 import { getRunUrl } from "../gha.js"
 import { getPr, postPrReviewComment } from "../issue.js"
 import { type KodyLabelSpec, setKodyLabel } from "../lifecycleLabels.js"
@@ -111,7 +111,7 @@ export const syncFlow: PreflightScript = async (ctx, _profile, args?: ScriptArgs
 }
 
 /**
- * Re-stamp kody:done on the PR. The sync executable's preflight stamps
+ * Re-stamp kody:done on the PR. The sync agentAction's preflight stamps
  * kody:syncing (which evicts kody:done via the lifecycle mutex), and the
  * executor's finally-clear removes kody:syncing on exit — without this, a
  * synced PR ends up unlabeled and falls out of the dashboard's "done"
