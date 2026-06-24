@@ -1,25 +1,28 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Context, Profile } from "../../../src/agent-actions/types.js"
 import type { ManagedGoal } from "../../../src/goal/manager.js"
 import type { GoalState } from "../../../src/goal/state.js"
 import { advanceManagedGoal } from "../../../src/scripts/advanceManagedGoal.js"
 import {
+  type GoalAgentResponsibilityScheduleState,
   planGoalAgentResponsibilitySchedule,
   planGoalTargetLoopSchedule,
-  type GoalAgentResponsibilityScheduleState,
 } from "../../../src/scripts/goalAgentResponsibilityScheduling.js"
 import type { GoalCtx } from "../../../src/scripts/goalCtx.js"
 
 let tmp: string
+let cwdSpy: ReturnType<typeof vi.spyOn>
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "goal-agentResponsibility-schedule-"))
+  cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(tmp)
 })
 
 afterEach(() => {
+  cwdSpy.mockRestore()
   fs.rmSync(tmp, { recursive: true, force: true })
 })
 

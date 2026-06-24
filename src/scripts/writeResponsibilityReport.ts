@@ -38,22 +38,12 @@ function writeReport(ctx: Context, profile: Profile, agentResult: AgentResult | 
     return
   }
 
-  upsertStateText(
-    ctx.config,
-    ctx.cwd,
-    filePath,
-    body,
-    `chore(reports): refresh ${slug}`,
-  )
+  upsertStateText(ctx.config, ctx.cwd, filePath, body, `chore(reports): refresh ${slug}`)
   ctx.data.responsibilityReport = { slug, path: filePath, changed: true }
 }
 
 function responsibilitySlug(ctx: Context): string | null {
-  const candidates = [
-    ctx.data.jobAgentResponsibility,
-    ctx.data.agentResponsibilitySlug,
-    ctx.data.jobSlug,
-  ]
+  const candidates = [ctx.data.jobAgentResponsibility, ctx.data.agentResponsibilitySlug, ctx.data.jobSlug]
   for (const candidate of candidates) {
     if (typeof candidate === "string" && candidate.trim()) return candidate.trim()
   }

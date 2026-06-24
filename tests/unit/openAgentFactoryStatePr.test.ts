@@ -44,7 +44,7 @@ function bundle(overrides: Record<string, unknown> = {}): string {
     files: [
       {
         path: ".kody/agent-actions/example/profile.json",
-        content: "{\n  \"name\": \"example\"\n}\n",
+        content: '{\n  "name": "example"\n}\n',
       },
     ],
     ...overrides,
@@ -60,14 +60,17 @@ function mockSuccessfulGh(): void {
     if (path.endsWith("/git/trees")) return JSON.stringify({ sha: "new-tree" })
     if (path.endsWith("/git/commits")) return JSON.stringify({ sha: "new-commit" })
     if (path.includes("/git/refs/heads/agent-factory/")) return JSON.stringify({})
-    if (path.endsWith("/pulls")) return JSON.stringify({ html_url: "https://github.com/acme/kody-state/pull/7", number: 7 })
+    if (path.endsWith("/pulls"))
+      return JSON.stringify({ html_url: "https://github.com/acme/kody-state/pull/7", number: 7 })
     if (args[0] === "issue" && args[1] === "comment") return ""
     throw new Error(`unexpected gh call: ${args.join(" ")}`)
   })
 }
 
 function inputForPath(pathSuffix: string): unknown {
-  const call = gh.mock.calls.find((c: unknown[]) => Array.isArray(c[0]) && (c[0] as string[]).some((arg) => arg.endsWith(pathSuffix)))
+  const call = gh.mock.calls.find(
+    (c: unknown[]) => Array.isArray(c[0]) && (c[0] as string[]).some((arg) => arg.endsWith(pathSuffix)),
+  )
   if (!call) throw new Error(`no call for ${pathSuffix}`)
   return JSON.parse((call as [string[], { input: string }])[1].input)
 }
@@ -84,7 +87,9 @@ describe("openAgentFactoryStatePr", () => {
 
     await openAgentFactoryStatePr(ctx, profile, agentResult)
 
-    expect(gh.mock.calls.some((call: unknown[]) => (call[0] as string[]).includes("/repos/acme/kody-state/pulls"))).toBe(true)
+    expect(
+      gh.mock.calls.some((call: unknown[]) => (call[0] as string[]).includes("/repos/acme/kody-state/pulls")),
+    ).toBe(true)
     expect(ctx.output.prUrl).toBe("https://github.com/acme/kody-state/pull/7")
     expect(ctx.data.agentFactoryStatePr).toMatchObject({
       repo: "acme/kody-state",
@@ -104,7 +109,7 @@ describe("openAgentFactoryStatePr", () => {
         path: "app-state/.kody/agent-actions/example/profile.json",
         mode: "100644",
         type: "blob",
-        content: "{\n  \"name\": \"example\"\n}\n",
+        content: '{\n  "name": "example"\n}\n',
       },
     ])
   })

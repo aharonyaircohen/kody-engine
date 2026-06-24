@@ -1,8 +1,5 @@
 import type { PostflightScript } from "../agent-actions/types.js"
-import {
-  logAppliedCompanyManagerActions,
-  type AppliedCompanyManagerAction,
-} from "./applyCompanyManagerDecision.js"
+import { type AppliedCompanyManagerAction, logAppliedCompanyManagerActions } from "./applyCompanyManagerDecision.js"
 
 export const appendCompanyIntentDecision: PostflightScript = async (ctx) => {
   const applied = ctx.data.companyManagerApplied as AppliedCompanyManagerAction[] | undefined

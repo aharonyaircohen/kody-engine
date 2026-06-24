@@ -103,11 +103,11 @@ export const finalizeTerminal: PostflightScript = async (ctx) => {
   // it — the mirror would just re-PATCH the same comment.
   if (target === "pr" && issueNumber && issueNumber !== targetNumber) {
     try {
-      const issueState = readTaskState("issue", issueNumber, ctx.cwd)
+      const issueState = readTaskState("issue", issueNumber, ctx.cwd, ctx.config)
       issueState.core.phase = phase
       issueState.core.status = status
-      issueState.core.currentExecutable = null
-      writeTaskState("issue", issueNumber, issueState, ctx.cwd)
+      issueState.core.currentAgentAction = null
+      writeTaskState("issue", issueNumber, issueState, ctx.cwd, ctx.config)
     } catch (err) {
       process.stderr.write(
         `[kody finalizeTerminal] failed to mirror terminal state to issue #${issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,

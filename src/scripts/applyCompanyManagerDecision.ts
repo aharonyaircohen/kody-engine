@@ -1,18 +1,18 @@
 import type { PostflightScript } from "../agent-actions/types.js"
 import {
-  buildAgentLoopState,
-  buildManagedGoalState,
-  type CompanyManagerAction,
-  type CompanyManagerDecision,
-} from "../companyManagerDecision.js"
-import {
   appendCompanyIntentDecision,
   readCompanyIntent,
   writeCompanyGoalState,
   writeCompanyIntent,
 } from "../companyIntent.js"
-import { fetchGoalState } from "../goal/stateStore.js"
+import {
+  buildAgentLoopState,
+  buildManagedGoalState,
+  type CompanyManagerAction,
+  type CompanyManagerDecision,
+} from "../companyManagerDecision.js"
 import { nowIso } from "../goal/state.js"
+import { fetchGoalState } from "../goal/stateStore.js"
 
 export interface AppliedCompanyManagerAction {
   kind: string
@@ -35,18 +35,34 @@ export const applyCompanyManagerDecision: PostflightScript = async (ctx) => {
   ctx.data.companyManagerApplySummary = `company-manager applied ${applied.filter((item) => item.changed).length}/${applied.length} action(s)`
 }
 
-function applyAction(config: Parameters<PostflightScript>[0]["config"], cwd: string, action: CompanyManagerAction): AppliedCompanyManagerAction {
+function applyAction(
+  config: Parameters<PostflightScript>[0]["config"],
+  cwd: string,
+  action: CompanyManagerAction,
+): AppliedCompanyManagerAction {
   if (action.kind === "createManagedGoal") {
     const existing = fetchGoalState(config, action.id, cwd)
     if (existing) return applied(action, false, "goal already exists")
-    writeCompanyGoalState(config, cwd, action.id, buildManagedGoalState(action), `chore(goals): create ${action.id} from intent ${action.intentId}`)
+    writeCompanyGoalState(
+      config,
+      cwd,
+      action.id,
+      buildManagedGoalState(action),
+      `chore(goals): create ${action.id} from intent ${action.intentId}`,
+    )
     return applied(action, true, action.reason, action.id)
   }
 
   if (action.kind === "createAgentLoop") {
     const existing = fetchGoalState(config, action.id, cwd)
     if (existing) return applied(action, false, "loop already exists")
-    writeCompanyGoalState(config, cwd, action.id, buildAgentLoopState(action), `chore(goals): create loop ${action.id} from intent ${action.intentId}`)
+    writeCompanyGoalState(
+      config,
+      cwd,
+      action.id,
+      buildAgentLoopState(action),
+      `chore(goals): create loop ${action.id} from intent ${action.intentId}`,
+    )
     return applied(action, true, action.reason, action.id)
   }
 
@@ -65,7 +81,13 @@ function applyAction(config: Parameters<PostflightScript>[0]["config"], cwd: str
         lifecycleChangeReason: action.reason,
       },
     }
-    writeCompanyGoalState(config, cwd, action.id, next, `chore(goals): ${action.state} ${action.id} from intent ${action.intentId}`)
+    writeCompanyGoalState(
+      config,
+      cwd,
+      action.id,
+      next,
+      `chore(goals): ${action.state} ${action.id} from intent ${action.intentId}`,
+    )
     return applied(action, true, action.reason, action.id)
   }
 
