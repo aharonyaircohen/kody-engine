@@ -64,8 +64,8 @@ describe("loadAgentResponsibilityState", () => {
     )
     await loadAgentResponsibilityState(ctx, profile, {})
     expect(profile.claudeCode.tools).toEqual([
-      "mcp__kody-agent-responsibility__read_check_runs",
-      "mcp__kody-agent-responsibility__ensure_issue",
+      "mcp__kody-agentResponsibility__read_check_runs",
+      "mcp__kody-agentResponsibility__ensure_issue",
       "mcp__kody-submit__submit_state",
     ])
     expect(profile.claudeCode.enableSubmitTool).toBe(true)

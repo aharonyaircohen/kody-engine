@@ -76,8 +76,8 @@ export const loadAgentResponsibilityState: PreflightScript = async (ctx, profile
     ctx.data.agentResponsibilityOperatorMention = mentions
     // Lock the toolbox: rewrite allowedTools to the agentResponsibility MCP palette (+ submit),
     // revoking Bash/Read — mirrors loadJobFromFile. Without this the SDK blocks
-    // the mcp__kody-agent-responsibility__* calls for permission and the agent stalls.
-    const mcpToolNames = declaredTools.map((name) => `mcp__kody-agent-responsibility__${name}`)
+    // the mcp__kody-agentResponsibility__* calls for permission and the agent stalls.
+    const mcpToolNames = declaredTools.map((name) => `mcp__kody-agentResponsibility__${name}`)
     profile.claudeCode.tools = [...mcpToolNames, "mcp__kody-submit__submit_state"]
     // The submit tool is in the allowed list, so its MCP server MUST exist —
     // the executor only spins it up when enableSubmitTool is true. Force it on
