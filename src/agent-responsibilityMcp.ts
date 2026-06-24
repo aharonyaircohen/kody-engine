@@ -333,14 +333,18 @@ export interface CheckRunsResult {
 }
 
 export function readCheckRuns(repoSlug: string, ref: string, ignoreNames: string[]): CheckRunsResult {
-  const sha = gh(["api", `repos/${repoSlug}/commits/${ref}`, "--jq", ".sha"]).trim()
-  const raw = gh([
-    "api",
-    `repos/${repoSlug}/commits/${sha}/check-runs`,
-    "--paginate",
-    "--jq",
-    ".check_runs[] | {name, status, conclusion, details_url}",
-  ])
+  const ghOptions = { preferRepoToken: true }
+  const sha = gh(["api", `repos/${repoSlug}/commits/${ref}`, "--jq", ".sha"], ghOptions).trim()
+  const raw = gh(
+    [
+      "api",
+      `repos/${repoSlug}/commits/${sha}/check-runs`,
+      "--paginate",
+      "--jq",
+      ".check_runs[] | {name, status, conclusion, details_url}",
+    ],
+    ghOptions,
+  )
   const ignore = new Set(ignoreNames.map((n) => n.toLowerCase()))
   const checks = raw
     .split("\n")

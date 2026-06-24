@@ -97,6 +97,26 @@ describe("readCheckRuns — branch CI classification", () => {
     })
   }
 
+  it("uses repo token for check-run reads", () => {
+    mockChecks(JSON.stringify({ name: "health", status: "completed", conclusion: "success", details_url: "u1" }))
+
+    readCheckRuns(REPO, "dev", [])
+
+    expect(vi.mocked(gh).mock.calls).toEqual([
+      [["api", `repos/${REPO}/commits/dev`, "--jq", ".sha"], { preferRepoToken: true }],
+      [
+        [
+          "api",
+          `repos/${REPO}/commits/${sha}/check-runs`,
+          "--paginate",
+          "--jq",
+          ".check_runs[] | {name, status, conclusion, details_url}",
+        ],
+        { preferRepoToken: true },
+      ],
+    ])
+  })
+
   it("is RED when a non-Kody check has a terminal failure, even while others run, and excludes Kody jobs", () => {
     mockChecks(
       [

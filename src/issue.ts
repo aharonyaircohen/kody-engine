@@ -21,17 +21,23 @@ export interface IssueData {
   labels?: string[]
 }
 
-function ghToken(): string | undefined {
-  return (
-    process.env.GITHUB_TOKEN?.trim() ||
-    process.env.KODY_TOKEN?.trim() ||
-    process.env.GH_TOKEN?.trim() ||
-    process.env.GH_PAT?.trim()
-  )
+interface GhOptions {
+  input?: string
+  cwd?: string
+  preferRepoToken?: boolean
 }
 
-export function gh(args: string[], options?: { input?: string; cwd?: string }): string {
-  const token = ghToken()
+function ghToken(preferRepoToken = false): string | undefined {
+  const githubToken = process.env.GITHUB_TOKEN?.trim()
+  const kodyToken = process.env.KODY_TOKEN?.trim()
+  const ghToken = process.env.GH_TOKEN?.trim()
+  const ghPat = process.env.GH_PAT?.trim()
+
+  return preferRepoToken ? githubToken || kodyToken || ghToken || ghPat : ghPat || ghToken || kodyToken || githubToken
+}
+
+export function gh(args: string[], options?: GhOptions): string {
+  const token = ghToken(options?.preferRepoToken)
   const env: NodeJS.ProcessEnv = token ? { ...process.env, GH_TOKEN: token } : { ...process.env }
   return execFileSync("gh", args, {
     encoding: "utf-8",
