@@ -108,6 +108,28 @@ export function unpackAllSecrets(env: NodeJS.ProcessEnv = process.env): number {
   return count
 }
 
+function recoverCheckoutToken(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): string | undefined {
+  if (env.GITHUB_TOKEN?.trim()) return env.GITHUB_TOKEN.trim()
+  let header = ""
+  try {
+    header = execFileSync("git", ["config", "--local", "--get", "http.https://github.com/.extraheader"], {
+      cwd,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim()
+  } catch {
+    return undefined
+  }
+  const match = /^AUTHORIZATION:\s+basic\s+(.+)$/i.exec(header)
+  if (!match) return undefined
+  const decoded = Buffer.from(match[1]!, "base64").toString("utf-8")
+  const token = decoded.includes(":") ? decoded.slice(decoded.indexOf(":") + 1).trim() : decoded.trim()
+  if (!token) return undefined
+  env.GITHUB_TOKEN = token
+  process.stdout.write("→ kody: GITHUB_TOKEN recovered from actions/checkout credentials\n")
+  return token
+}
+
 export async function resolveAuthToken(env: NodeJS.ProcessEnv = process.env): Promise<string | undefined> {
   // App credentials are the modern Kody auth path. Prefer minting here over
   // a workflow-provided token because the workflow token may only cover the
@@ -117,6 +139,7 @@ export async function resolveAuthToken(env: NodeJS.ProcessEnv = process.env): Pr
     try {
       const minted = await mintAppInstallationToken(creds)
       env.GH_TOKEN = minted
+      recoverCheckoutToken(env)
       process.stdout.write("→ kody: GH_TOKEN minted from GitHub App (KODY_APP_ID/KODY_APP_PRIVATE_KEY)\n")
       return minted
     } catch (err) {
@@ -133,6 +156,7 @@ export async function resolveAuthToken(env: NodeJS.ProcessEnv = process.env): Pr
   const picked = sources.find(([, v]) => !!v)
   const token = picked?.[1]
   if (token && !env.GH_TOKEN) env.GH_TOKEN = token
+  recoverCheckoutToken(env)
   if (token) {
     // Log only which env var the token came from — no length/prefix/hash
     // (that was temporary diagnostics for the kodyade throttle hunt).

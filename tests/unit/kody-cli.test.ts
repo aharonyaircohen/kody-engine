@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process"
 import { generateKeyPairSync } from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
@@ -155,6 +156,30 @@ describe("kody-cli: resolveAuthToken", () => {
     const env: NodeJS.ProcessEnv = { GH_TOKEN: "g" }
     expect(await resolveAuthToken(env)).toBe("g")
     expect(env.GH_TOKEN).toBe("g")
+  })
+
+  it("keeps GH_PAT for state writes while recovering checkout token for repo calls", async () => {
+    const cwd = process.cwd()
+    const dir = tmpDir()
+    try {
+      process.chdir(dir)
+      execFileSync("git", ["init"], { stdio: "ignore" })
+      const checkoutToken = "repo-token"
+      const encoded = Buffer.from(`x-access-token:${checkoutToken}`).toString("base64")
+      execFileSync("git", [
+        "config",
+        "--local",
+        "http.https://github.com/.extraheader",
+        `AUTHORIZATION: basic ${encoded}`,
+      ])
+      const env: NodeJS.ProcessEnv = { GH_PAT: "state-token" }
+      expect(await resolveAuthToken(env)).toBe("state-token")
+      expect(env.GH_TOKEN).toBe("state-token")
+      expect(env.GITHUB_TOKEN).toBe(checkoutToken)
+    } finally {
+      process.chdir(cwd)
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it("falls back to GITHUB_TOKEN and copies into GH_TOKEN", async () => {

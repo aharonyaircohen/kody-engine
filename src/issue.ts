@@ -22,7 +22,12 @@ export interface IssueData {
 }
 
 function ghToken(): string | undefined {
-  return process.env.GH_PAT?.trim() || process.env.GH_TOKEN
+  return (
+    process.env.GITHUB_TOKEN?.trim() ||
+    process.env.KODY_TOKEN?.trim() ||
+    process.env.GH_TOKEN?.trim() ||
+    process.env.GH_PAT?.trim()
+  )
 }
 
 export function gh(args: string[], options?: { input?: string; cwd?: string }): string {
