@@ -17,11 +17,24 @@ export interface GoalRouteStep {
   saveReport?: boolean
 }
 
+export interface ManagedLoopTarget {
+  type: "goal" | "agentResponsibility"
+  id: string
+}
+
+export interface ManagedGoalPreferredRunTime {
+  time: string
+  timezone: string
+}
+
 export interface ManagedGoal {
   type: string
   destination: GoalDestination
   agentResponsibilities: string[]
   route: GoalRouteStep[]
+  schedule?: string
+  preferredRunTime?: ManagedGoalPreferredRunTime
+  loopTarget?: ManagedLoopTarget
   stage?: string
   facts: Record<string, unknown>
   blockers: string[]
@@ -175,11 +188,11 @@ export function planManagedGoalTick(goal: ManagedGoal): ManagedGoalDecision {
     kind: "dispatch",
     evidence: missing,
     stage: step.stage,
-      agentResponsibility: step.agentResponsibility,
-      agentAction: step.agentAction,
-      cliArgs: resolved.cliArgs,
-      ...(step.saveReport === true ? { saveReport: true } : {}),
-    }
+    agentResponsibility: step.agentResponsibility,
+    agentAction: step.agentAction,
+    cliArgs: resolved.cliArgs,
+    ...(step.saveReport === true ? { saveReport: true } : {}),
+  }
 }
 
 function asStringArray(value: unknown): string[] | null {
@@ -219,6 +232,22 @@ function asRoute(value: unknown): GoalRouteStep[] | null {
   return route
 }
 
+function asPreferredRunTime(value: unknown): ManagedGoalPreferredRunTime | undefined {
+  const raw = asRecord(value)
+  if (!raw) return undefined
+  if (typeof raw.time !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(raw.time)) return undefined
+  if (typeof raw.timezone !== "string" || raw.timezone.trim().length === 0) return undefined
+  return { time: raw.time, timezone: raw.timezone }
+}
+
+function asLoopTarget(value: unknown): ManagedLoopTarget | undefined {
+  const raw = asRecord(value)
+  if (!raw) return undefined
+  if (raw.type !== "goal" && raw.type !== "agentResponsibility") return undefined
+  if (typeof raw.id !== "string" || raw.id.trim().length === 0) return undefined
+  return { type: raw.type, id: raw.id }
+}
+
 export function managedGoalFromState(state: GoalState): ManagedGoal | null {
   const extra = state.extra
   const destination = asRecord(extra.destination)
@@ -246,6 +275,9 @@ export function managedGoalFromState(state: GoalState): ManagedGoal | null {
     destination: { outcome: destination.outcome, evidence },
     agentResponsibilities,
     route,
+    schedule: typeof extra.schedule === "string" ? extra.schedule : undefined,
+    preferredRunTime: asPreferredRunTime(extra.preferredRunTime),
+    loopTarget: asLoopTarget(extra.loopTarget),
     stage: typeof extra.stage === "string" ? extra.stage : undefined,
     facts,
     blockers,

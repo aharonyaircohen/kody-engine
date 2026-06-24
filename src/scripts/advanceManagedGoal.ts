@@ -13,7 +13,9 @@ import { gh } from "../issue.js"
 import {
   type GoalAgentResponsibilityScheduleState,
   isAgentResponsibilityCadenceGoal,
+  isGoalTargetLoop,
   planGoalAgentResponsibilitySchedule,
+  planGoalTargetLoopSchedule,
 } from "./goalAgentResponsibilityScheduling.js"
 import type { GoalCtx } from "./goalCtx.js"
 
@@ -51,6 +53,27 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     restoreGoalIdFact()
     goal.raw = writeManagedGoalToState({ ...goal.raw, state: goal.state }, managed)
     ctx.output.reason = reason
+    return
+  }
+
+  if (isGoalTargetLoop(managed)) {
+    const previousScheduleState =
+      goal.raw.extra.scheduleState && typeof goal.raw.extra.scheduleState === "object"
+        ? (goal.raw.extra.scheduleState as GoalAgentResponsibilityScheduleState)
+        : undefined
+    const decision = planGoalTargetLoopSchedule({ goal: managed, previousScheduleState })
+    restoreGoalIdFact()
+    goal.raw = writeManagedGoalToState({ ...goal.raw, state: goal.state }, managed)
+    goal.raw.extra.scheduleState = decision.scheduleState
+    ctx.data.managedGoalDecision = decision
+    if (decision.kind === "dispatch" && decision.dispatch) {
+      ctx.output.nextDispatch = {
+        action: decision.dispatch.action,
+        agentAction: decision.dispatch.agentAction,
+        cliArgs: decision.dispatch.cliArgs,
+      }
+    }
+    ctx.output.reason = decision.reason
     return
   }
 

@@ -3,10 +3,12 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { Context, Profile } from "../../../src/agent-actions/types.js"
+import type { ManagedGoal } from "../../../src/goal/manager.js"
 import type { GoalState } from "../../../src/goal/state.js"
 import { advanceManagedGoal } from "../../../src/scripts/advanceManagedGoal.js"
 import {
   planGoalAgentResponsibilitySchedule,
+  planGoalTargetLoopSchedule,
   type GoalAgentResponsibilityScheduleState,
 } from "../../../src/scripts/goalAgentResponsibilityScheduling.js"
 import type { GoalCtx } from "../../../src/scripts/goalCtx.js"
@@ -62,6 +64,19 @@ function goalState(agentResponsibilities: string[] = ["ci-health"]): GoalState {
   }
 }
 
+function goalTargetLoop(): ManagedGoal {
+  return {
+    type: "agentLoop",
+    destination: { outcome: "daily web release loop", evidence: [] },
+    agentResponsibilities: [],
+    route: [],
+    facts: {},
+    blockers: [],
+    loopTarget: { type: "goal", id: "web-release" },
+    preferredRunTime: { time: "10:00", timezone: "Asia/Jerusalem" },
+  }
+}
+
 function fakeCtx(raw: GoalState): Context {
   return {
     args: { goal: "prs-stay-mergeable" },
@@ -86,6 +101,77 @@ function fakeCtx(raw: GoalState): Context {
 }
 
 describe("standing goal agentResponsibility scheduling", () => {
+  it("waits before a goal target loop preferred time", () => {
+    const decision = planGoalTargetLoopSchedule({
+      goal: goalTargetLoop(),
+      now: new Date("2026-06-24T06:59:00Z"),
+    })
+
+    expect(decision.kind).toBe("idle")
+    expect(decision.dispatch).toBeUndefined()
+    expect(decision.reason).toBe("waiting preferred time 10:00 Asia/Jerusalem")
+  })
+
+  it("dispatches a goal target loop after preferred time once per local day", () => {
+    const decision = planGoalTargetLoopSchedule({
+      goal: goalTargetLoop(),
+      now: new Date("2026-06-24T07:01:00Z"),
+    })
+
+    expect(decision).toMatchObject({
+      kind: "dispatch",
+      dispatch: {
+        action: "goal-manager",
+        agentAction: "goal-manager",
+        cliArgs: { goal: "web-release" },
+      },
+      scheduleState: {
+        lastDecision: {
+          kind: "dispatch",
+          targetType: "goal",
+          targetId: "web-release",
+          agentAction: "goal-manager",
+        },
+      },
+    })
+
+    const secondDecision = planGoalTargetLoopSchedule({
+      goal: goalTargetLoop(),
+      now: new Date("2026-06-24T07:15:00Z"),
+      previousScheduleState: decision.scheduleState,
+    })
+
+    expect(secondDecision.kind).toBe("idle")
+    expect(secondDecision.reason).toBe("already dispatched today at preferred time 10:00 Asia/Jerusalem")
+  })
+
+  it("hands goal target loops to goal-manager", async () => {
+    const raw = goalState([])
+    raw.extra.type = "agentLoop"
+    raw.extra.loopTarget = { type: "goal", id: "web-release" }
+    raw.extra.preferredRunTime = { time: "10:00", timezone: "Asia/Jerusalem" }
+    const ctx = fakeCtx(raw)
+
+    await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+
+    expect(ctx.output.nextDispatch).toEqual({
+      action: "goal-manager",
+      agentAction: "goal-manager",
+      cliArgs: { goal: "web-release" },
+    })
+    const updatedGoal = ctx.data.goal as GoalCtx
+    expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
+      mode: "agentLoop",
+      lastDecision: {
+        kind: "dispatch",
+        targetType: "goal",
+        targetId: "web-release",
+        agentAction: "goal-manager",
+      },
+      agentResponsibilities: {},
+    })
+  })
+
   it("dispatches runnable agentResponsibility and records goal scheduling decision", async () => {
     writeAgentResponsibility("ci-health", { agent: "kody", agentAction: "ci-check" })
     const raw = goalState()

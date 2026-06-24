@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Agent loops can now dispatch a target goal after their preferred local runtime, once per local day.
+
 ## [0.4.211] — restore fix-ci command
 
 ### Fixed
