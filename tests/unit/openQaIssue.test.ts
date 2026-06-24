@@ -20,7 +20,7 @@ vi.mock("../../src/issue.js", async (orig) => {
 })
 
 import type { AgentResult } from "../../src/agent.js"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/agent-actions/types.js"
 import { openQaIssue } from "../../src/scripts/openQaIssue.js"
 
 const profile = {} as Profile

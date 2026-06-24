@@ -270,7 +270,7 @@ function createPr(branch: string, base: string, title: string, body: string, dra
   const args = ["pr", "create", "--head", branch, "--base", base, "--title", title, "--body-file", "-"]
   if (draft) args.push("--draft")
   // Goal-task PRs (base = goal-<id>) are merged into the goal branch by
-  // goal-tick on a subsequent tick — we don't enable GitHub auto-merge here.
+  // goal-manager on a subsequent tick — we don't enable GitHub auto-merge here.
   const url = gh(args, { input: body, cwd }).trim()
   const match = url.match(/\/pull\/(\d+)$/)
   const number = match ? parseInt(match[1], 10) : 0

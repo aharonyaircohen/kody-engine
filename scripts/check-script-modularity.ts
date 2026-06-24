@@ -3,10 +3,10 @@
  * Script-catalog modularity check (WARN MODE).
  *
  * Invariant: `src/scripts/` is for cross-cutting utilities used by ≥2
- * executables. Solo-use scripts violate the invariant in CLAUDE.md.
+ * agentActions. Solo-use scripts violate the invariant in CLAUDE.md.
  *
- * This check parses every `src/executables/*\/profile.json`, builds the
- * `script-name → [executables]` map, and prints solo-use scripts.
+ * This check parses every `src/agent-actions/*\/profile.json`, builds the
+ * `script-name → [agentActions]` map, and prints solo-use scripts.
  *
  * Currently exits 0 even when violations exist (warn mode). When the
  * lifecycle refactor lands (see docs/script-catalog-dsl-refactor.md),
@@ -17,7 +17,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 
 const MODE: "warn" | "error" = "warn"
-const EXEC_DIR = "src/executables"
+const EXEC_DIR = "src/agent-actions"
 
 type ProfileEntry = { script?: string } | string
 
@@ -60,7 +60,7 @@ if (solo.length > 0) {
     }
     console.log(`    - ${script}`)
   }
-  console.log(`\n[modularity] Fix path: either (a) demote to a shell script colocated with the executable, (b) inline the logic, or (c) generalise so a second executable uses it. See docs/script-catalog-dsl-refactor.md.`)
+  console.log(`\n[modularity] Fix path: either (a) demote to a shell script colocated with the agentAction, (b) inline the logic, or (c) generalise so a second agentAction uses it. See docs/script-catalog-dsl-refactor.md.`)
 }
 
 if (MODE === "error" && solo.length > 0) {

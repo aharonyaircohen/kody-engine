@@ -7,14 +7,14 @@
  * state is a refusal, not a force: a draft, a conflict, a behind-base branch,
  * or pending/failing required checks all leave the PR untouched and post a
  * comment explaining why. This is what "self-gating" means — the primitive
- * never overrides a branch-protection rule, so it is safe for the CTO duty to
+ * never overrides a branch-protection rule, so it is safe for the CTO agentResponsibility to
  * dispatch unattended once the `merge` verb has graduated.
  *
  * Reads   ctx.args.pr
  * Effects merges the PR (or not) + posts one PR comment; sets ctx.skipAgent.
  */
 
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../agent-actions/types.js"
 import { commentOnIssue, mergePrSquash } from "../goal/operations.js"
 import { gh } from "../issue.js"
 

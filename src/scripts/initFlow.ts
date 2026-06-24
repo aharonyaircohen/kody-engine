@@ -1,5 +1,5 @@
 /**
- * initFlow — preflight for the `init` executable.
+ * initFlow — preflight for the `init` agentAction.
  *
  * Scaffolds a consumer repo: writes `kody.config.json` and
  * `.github/workflows/kody.yml` if absent (or when `--force`). Detects the
@@ -13,10 +13,10 @@ import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import pkg from "../../package.json"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../agent-actions/types.js"
 import { type EnsureLabelsResult, ensureLabels } from "../lifecycleLabels.js"
 import { loadProfile } from "../profile.js"
-import { listBuiltinJobs, listExecutables } from "../registry.js"
+import { listAgentActions } from "../registry.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -42,7 +42,7 @@ interface OwnerRepo {
 
 // Derive the published config schema URL from this package's own
 // repository.url, so a fork that republishes under its own scope points
-// `kody init` consumers at the fork's schema instead of the original repo.
+// `kody-engine init` consumers at the fork's schema instead of the original repo.
 function schemaUrlFromPkg(): string {
   const fallback = "https://raw.githubusercontent.com/aharonyaircohen/kody-engine/main/kody.config.schema.json"
   const repoUrl = (pkg as { repository?: { url?: string } }).repository?.url
@@ -106,6 +106,16 @@ on:
         description: "GitHub issue number"
         required: true
         type: string
+      agentResponsibility:
+        description: "AgentResponsibility action to run (default: run)"
+        required: false
+        type: string
+        default: ""
+      agentAction:
+        description: "Legacy alias for agentResponsibility action"
+        required: false
+        type: string
+        default: ""
   issue_comment:
     types: [created]
 
@@ -141,12 +151,12 @@ jobs:
         run: npx -y -p @kody-ade/kody-engine@latest kody-engine ci
 `
 
-const DEFAULT_STAFF_PERSONA = `# Kody
+const DEFAULT_AGENT_IDENTITY = `# Kody
 
-You are Kody, the default maintenance staff member for scheduled duties.
+You are Kody, the default maintenance agent for scheduled agentResponsibilities.
 
-Keep actions narrow, prefer read-only inspection, and only use the tools or commands named by the duty.
-When a duty writes a report or dispatches work, keep the output factual and concise.
+Keep actions narrow, prefer read-only inspection, and only use the tools or commands named by the agentResponsibility.
+When a agentResponsibility writes a report or dispatches work, keep the output factual and concise.
 `
 
 function defaultBranchFromGit(cwd: string): string {
@@ -175,20 +185,12 @@ function defaultBranchFromGit(cwd: string): string {
 export interface InitResult {
   wrote: string[]
   skipped: string[]
-  /**
-   * Slugs where a folder duty and a `.md` duty collide on disk. The folder
-   * wins at runtime (dedup'd in `dispatchDutyFileTicks`); `kody init` surfaces
-   * the collision as a one-time deprecation nudge so the user can migrate or
-   * remove the orphan markdown. See issue #50.
-   */
-  collisions?: string[]
   labels?: EnsureLabelsResult
 }
 
 export function performInit(cwd: string, force: boolean): InitResult {
   const wrote: string[] = []
   const skipped: string[] = []
-  const collisions: string[] = []
 
   const pm = detectPackageManager(cwd)
   const ownerRepo = detectOwnerRepo(cwd)
@@ -215,88 +217,19 @@ export function performInit(cwd: string, force: boolean): InitResult {
     wrote.push(".github/workflows/kody.yml")
   }
 
-  // 3. .kody/duties/<slug>/{profile.json,prompt.md} — copy every built-in
-  //    duty folder shipped with the engine. Built-in duties live under
-  //    `src/jobs/<slug>/` (dev) / `dist/jobs/<slug>/` (built); consumer
-  //    repos get a starter copy of each, scaffolded once and then
-  //    human-edited. Cadence is enforced by the profile's `every` field,
-  //    read by `dispatchDutyFileTicks`.
-  //
-  //    Folder shape is the unified successor to the legacy `<slug>.md`
-  //    file: dispatching the same slug from both a folder and a `.md` is
-  //    a dedup'd fire (folder wins, `.md` skipped). Markdown-only
-  //    built-ins are still discovered and copied as a single `.md` so
-  //    a half-migrated engine doesn't drop duties — the deprecation
-  //    log + removal land in #46-B.
-  //
-  //    `--force` will overwrite consumer edits to these files — same
-  //    contract as `kody.yml` and `kody.config.json` above. Duty
-  //    profiles + bodies are *intended* to be edited (cadence,
-  //    thresholds, prompt prose), so use `--force` only when you accept
-  //    losing those edits.
-  const builtinJobs = listBuiltinJobs()
-  if (builtinJobs.length > 0) {
-    const jobsDir = path.join(cwd, ".kody", "duties")
-    fs.mkdirSync(jobsDir, { recursive: true })
-    for (const job of builtinJobs) {
-      if (job.filePath && !job.profilePath) {
-        // Legacy `.md` built-in: copy as-is. Removed once #46-B lands.
-        const rel = path.join(".kody", "duties", `${job.slug}.md`)
-        const target = path.join(cwd, rel)
-        if (fs.existsSync(target) && !force) {
-          skipped.push(rel)
-          continue
-        }
-        fs.writeFileSync(target, fs.readFileSync(job.filePath, "utf-8"))
-        wrote.push(rel)
-        continue
-      }
-      const targetDir = path.join(jobsDir, job.slug)
-      const relProfile = path.join(".kody", "duties", job.slug, "profile.json")
-      const relPrompt = path.join(".kody", "duties", job.slug, "prompt.md")
-      if (fs.existsSync(targetDir) && fs.existsSync(path.join(targetDir, "profile.json")) && !force) {
-        skipped.push(relProfile)
-        skipped.push(relPrompt)
-        continue
-      }
-      fs.mkdirSync(targetDir, { recursive: true })
-      fs.writeFileSync(path.join(targetDir, "profile.json"), fs.readFileSync(job.profilePath, "utf-8"))
-      fs.writeFileSync(path.join(targetDir, "prompt.md"), fs.readFileSync(job.promptPath, "utf-8"))
-      wrote.push(relProfile)
-      wrote.push(relPrompt)
-    }
-
-    // Collision nudge: a folder duty and a `.md` duty with the same slug
-    // are dedup'd at runtime (folder wins, .md is skipped — see
-    // `dispatchDutyFileTicks`), but the markdown sibling is a legacy shape
-    // the user almost certainly wants to migrate or remove. Surface the
-    // collision here so `kody init` is the one place that tells the user
-    // "you have a stale markdown next to a folder duty" — the runtime
-    // nudge fires only on the cron wake, which may be infrequent.
-    for (const slug of findShadowCollisions(jobsDir)) {
-      collisions.push(slug)
-      // One nudge per colliding slug per init run. Points at the consumer
-      // migration subsection in duty-dispatch.md (the closest thing to a
-      // "legacy markdown" subsection in the docs as of #50).
-      process.stdout.write(
-        `[duties] markdown duty '${slug}' is shadowed by folder duty; migrate or remove (see docs/duty-dispatch.md#consumer-migration)\n`,
-      )
-    }
-  }
-
-  // 4. .kody/staff/kody.md — default persona referenced by bundled duties.
-  const staffDir = path.join(cwd, ".kody", "staff")
-  const staffPath = path.join(staffDir, "kody.md")
-  if (fs.existsSync(staffPath) && !force) {
-    skipped.push(".kody/staff/kody.md")
+  // 3. .kody/agents/kody.md — default agent for Store/builtin actions.
+  const agentsDir = path.join(cwd, ".kody", "agents")
+  const agentPath = path.join(agentsDir, "kody.md")
+  if (fs.existsSync(agentPath) && !force) {
+    skipped.push(".kody/agents/kody.md")
   } else {
-    fs.mkdirSync(staffDir, { recursive: true })
-    fs.writeFileSync(staffPath, DEFAULT_STAFF_PERSONA)
-    wrote.push(".kody/staff/kody.md")
+    fs.mkdirSync(agentsDir, { recursive: true })
+    fs.writeFileSync(agentPath, DEFAULT_AGENT_IDENTITY)
+    wrote.push(".kody/agents/kody.md")
   }
 
-  // 5. .github/workflows/kody-<name>.yml for every discovered scheduled executable.
-  for (const exe of listExecutables()) {
+  // 4. .github/workflows/kody-<name>.yml for every discovered scheduled agentAction profile.
+  for (const exe of listAgentActions()) {
     let profile: ReturnType<typeof loadProfile>
     try {
       profile = loadProfile(exe.profilePath)
@@ -313,7 +246,7 @@ export function performInit(cwd: string, force: boolean): InitResult {
     wrote.push(`.github/workflows/kody-${exe.name}.yml`)
   }
 
-  // 6. Create/update every kody-owned label declared across the executable
+  // 6. Create/update every kody-owned label declared across the agentAction
   //    profile set. Best-effort: if `gh` isn't installed/authenticated, this
   //    is skipped silently and setKodyLabel will lazily create the label on
   //    first use during a real flow run.
@@ -325,39 +258,13 @@ export function performInit(cwd: string, force: boolean): InitResult {
   }
 
   const result: InitResult = { wrote, skipped, labels }
-  if (collisions.length > 0) result.collisions = collisions
   return result
 }
 
-/**
- * Find every slug in `jobsDir` that exists as BOTH a `.md` file and a
- * folder shape — a runtime-shadow collision that `dispatchDutyFileTicks`
- * dedups at tick time. Sorted by slug for stable output. Returns an
- * empty array if the directory doesn't exist (e.g. on a brand-new repo
- * before any duties are scaffolded).
- */
-function findShadowCollisions(jobsDir: string): string[] {
-  if (!fs.existsSync(jobsDir)) return []
-  let entries: fs.Dirent[]
-  try {
-    entries = fs.readdirSync(jobsDir, { withFileTypes: true })
-  } catch {
-    return []
-  }
-  const mdSlugs = new Set<string>()
-  const folderSlugs = new Set<string>()
-  for (const e of entries) {
-    if (e.name.startsWith("_") || e.name.startsWith(".")) continue
-    if (e.isFile() && e.name.endsWith(".md")) mdSlugs.add(e.name.slice(0, -3))
-    else if (e.isDirectory()) folderSlugs.add(e.name)
-  }
-  return [...mdSlugs].filter((s) => folderSlugs.has(s)).sort()
-}
-
 export function renderScheduledWorkflow(name: string, cron: string): string {
-  return `# Scheduled kody executable: ${name}
-# Generated by \`kody init\`. Regenerate with \`kody init --force\`.
-# Edit the cron below or the executable's profile.json#schedule.
+  return `# Scheduled kody agentResponsibility: ${name}
+# Generated by \`kody-engine init\`. Regenerate with \`kody-engine init --force\`.
+# Edit the cron below or the agentResponsibility's implementation profile.json#schedule.
 
 name: kody ${name}
 
@@ -386,7 +293,7 @@ jobs:
           python-version: "3.12"
       - env:
           GH_TOKEN: \${{ secrets.KODY_TOKEN || github.token }}
-        run: npx -y -p @kody-ade/kody-engine@latest kody-engine ${name}
+        run: npx -y -p @kody-ade/kody-engine@latest kody-engine exec ${name}
 `
 }
 
@@ -396,7 +303,7 @@ export const initFlow: PreflightScript = async (ctx) => {
 
   const { wrote, skipped, labels } = performInit(cwd, force)
 
-  process.stdout.write("→ kody init\n")
+  process.stdout.write("→ kody-engine init\n")
   for (const f of wrote) process.stdout.write(`  wrote    ${f}\n`)
   for (const f of skipped) process.stdout.write(`  skipped  ${f} (already exists; pass --force to overwrite)\n`)
   if (labels) {

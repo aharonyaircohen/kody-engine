@@ -30,7 +30,7 @@ describe("entrypoint-brain.sh: Hermes config sanity", () => {
     expect(entrypoint).toContain("/mcp/fetch-repo")
     expect(entrypoint).toContain("/mcp/verify")
     expect(entrypoint).toContain("/mcp/submit-state")
-    expect(entrypoint).toContain("/mcp/duty")
+    expect(entrypoint).toContain("/mcp/agentResponsibility")
   })
 
   it("sends the Authorization header to kody's MCP server (which requires it)", () => {

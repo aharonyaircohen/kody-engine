@@ -64,7 +64,7 @@ export interface LitellmHandle {
   /**
    * Ensure the proxy is reachable. If `/health` fails — the proxy crashed or
    * hung mid-run (the Approval Gate failure mode: a heavy request kills the
-   * single worker, after which every connection is refused) — this dumps the
+   * single agent, after which every connection is refused) — this dumps the
    * proxy's log tail so the crash reason is visible in the run log, then
    * respawns it and waits for health. Returns true when the proxy is healthy
    * (already, or after a restart).
@@ -89,7 +89,7 @@ function locateLitellmScript(): string | null {
       "python3",
       [
         "-c",
-        "import os,sys; p=os.path.join(os.path.dirname(sys.executable),'litellm'); print(p if os.path.exists(p) else '')",
+        "import os,sys; p=os.path.join(os.path.dirname(sys.agentAction),'litellm'); print(p if os.path.exists(p) else '')",
       ],
       { encoding: "utf-8", timeout: 10_000 },
     ).trim()
@@ -108,8 +108,8 @@ function locateLitellmScript(): string | null {
  *
  * Installing here covers every entry path uniformly (the proxy only starts when
  * a non-Anthropic model needs it). Historically only the `ci` preflight
- * pip-installed litellm, so a scheduled duty invoked as `kody-engine
- * <executable>` directly failed with "litellm not installed".
+ * pip-installed litellm, so a scheduled agentResponsibility invoked as `kody-engine
+ * <agentAction>` directly failed with "litellm not installed".
  */
 export function resolveLitellmCommand(): string {
   try {
@@ -158,12 +158,12 @@ export async function startLitellmIfNeeded(
   let logPath: string | undefined
 
   const spawnProxy = (): void => {
-    const configPath = path.join(os.tmpdir(), `kody-litellm-${Date.now()}.yaml`)
+    const configPath = path.join(os.tmpdir(), `kody-local-litellm-${Date.now()}.yaml`)
     fs.writeFileSync(configPath, generateLitellmConfigYaml(model))
     // `cmd` is always a runnable litellm CLI (the bare command or an absolute
     // path to the console script), so the proxy args are uniform.
     const args = ["--config", configPath, "--port", port]
-    const nextLogPath = path.join(os.tmpdir(), `kody-litellm-${Date.now()}.log`)
+    const nextLogPath = path.join(os.tmpdir(), `kody-local-litellm-${Date.now()}.log`)
     const outFd = fs.openSync(nextLogPath, "w")
     child = spawn(cmd, args, { stdio: ["ignore", outFd, outFd], detached: true, env: childEnv })
     fs.closeSync(outFd)
@@ -192,8 +192,8 @@ export async function startLitellmIfNeeded(
     const pid = child?.pid
     if (typeof pid !== "number") return
     // The proxy is spawned `detached: true`, so it leads its own process group
-    // and forks a worker (uvicorn) that actually holds the port. `child.kill()`
-    // signals only the immediate PID, leaving the worker alive to squat port
+    // and forks an agent (uvicorn) that actually holds the port. `child.kill()`
+    // signals only the immediate PID, leaving the agent alive to squat port
     // 4000 and get "reused" by a later run. Signal the whole group (negative
     // pid), SIGTERM then SIGKILL after a short grace.
     try {

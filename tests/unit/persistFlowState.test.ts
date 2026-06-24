@@ -16,7 +16,7 @@ vi.mock("../../src/state.js", async (importOriginal) => {
   }
 })
 
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/agent-actions/types.js"
 import { persistFlowState } from "../../src/scripts/persistFlowState.js"
 import { emptyState, type TaskState } from "../../src/state.js"
 

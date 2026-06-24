@@ -23,7 +23,13 @@ import { eventsFilePath, FileSink, HttpSink, makeRunId, TeeSink } from "./chat/e
 import { runChatTurn } from "./chat/loop.js"
 import { runInteractiveMode } from "./chat/modes/interactive.js"
 import { readMeta, seedInitialMessage, sessionFilePath } from "./chat/session.js"
-import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
+import {
+  loadConfig,
+  needsLitellmProxy,
+  parseProviderModel,
+  parseReasoningEffort,
+  type ReasoningEffort,
+} from "./config.js"
 import { configureGitIdentity, installLitellmIfNeeded, resolveAuthToken, unpackAllSecrets } from "./kody-cli.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 import { pushWithRetry } from "./pushWithRetry.js"
@@ -36,6 +42,7 @@ export interface ChatArgs {
   model?: string
   dashboardUrl?: string
   cwd?: string
+  reasoningEffort?: ReasoningEffort
   verbose?: boolean
   quiet?: boolean
   errors: string[]
@@ -45,10 +52,16 @@ export const CHAT_HELP = `kody chat — dashboard-driven chat session
 
 Usage:
   kody chat [--session <id>] [--message <text>] [--model <provider/model>]
+             [--reasoning-effort <off|low|medium|high>]
              [--dashboard-url <url>] [--cwd <path>] [--verbose|--quiet]
 
-All inputs may also come from env: SESSION_ID, INIT_MESSAGE, MODEL, DASHBOARD_URL.
+All inputs may also come from env: SESSION_ID, INIT_MESSAGE, MODEL, REASONING_EFFORT, DASHBOARD_URL.
 CLI flags take precedence over env. SESSION_ID is required.
+
+Thinking level maps to the Claude Agent SDK's maxThinkingTokens (Anthropic
+extended thinking). Default is unset (no thinking — cheapest). Set via the
+dashboard's chat-level thinking dropdown, the REASONING_EFFORT env var,
+or this flag.
 
 Exit codes:
   0   reply emitted successfully
@@ -63,6 +76,7 @@ export function parseChatArgs(argv: string[], env: NodeJS.ProcessEnv = process.e
     if (arg === "--session") result.sessionId = argv[++i]
     else if (arg === "--message") result.initMessage = argv[++i]
     else if (arg === "--model") result.model = argv[++i]
+    else if (arg === "--reasoning-effort") result.reasoningEffort = parseReasoningEffort(argv[++i]) ?? undefined
     else if (arg === "--dashboard-url") result.dashboardUrl = argv[++i]
     else if (arg === "--cwd") result.cwd = argv[++i]
     else if (arg === "--verbose") result.verbose = true
@@ -77,6 +91,7 @@ export function parseChatArgs(argv: string[], env: NodeJS.ProcessEnv = process.e
   result.initMessage = result.initMessage ?? env.INIT_MESSAGE ?? undefined
   result.model = result.model ?? env.MODEL ?? undefined
   result.dashboardUrl = result.dashboardUrl ?? env.DASHBOARD_URL ?? undefined
+  result.reasoningEffort = result.reasoningEffort ?? parseReasoningEffort(env.REASONING_EFFORT) ?? undefined
 
   // Normalize empty strings (GH Actions passes `""` for unset optional inputs).
   for (const key of ["sessionId", "initMessage", "model", "dashboardUrl"] as const) {
@@ -85,7 +100,7 @@ export function parseChatArgs(argv: string[], env: NodeJS.ProcessEnv = process.e
   }
 
   if (!result.sessionId && !result.errors.includes("__HELP__")) {
-    result.errors.push("--session <id> (or SESSION_ID env) is required")
+    result.errors.push("--session <id> (or SESSION_ID env) is required)")
   }
 
   return result
@@ -169,6 +184,11 @@ export async function runChat(argv: string[]): Promise<number> {
 
   const config = tryLoadConfig(cwd)
   const modelSpec = args.model ?? config?.agent.model ?? DEFAULT_MODEL
+  // Resolve reasoning effort: CLI flag → env → config default → unset.
+  // Unset stays unset (no maxThinkingTokens set on the SDK call — the
+  // cheapest path, no reasoning preamble).
+  const reasoningEffort: ReasoningEffort | undefined =
+    args.reasoningEffort ?? config?.agent.reasoningEffort ?? undefined
   let model: ReturnType<typeof parseProviderModel>
   try {
     model = parseProviderModel(modelSpec)
@@ -230,6 +250,7 @@ export async function runChat(argv: string[]): Promise<number> {
         meta,
         verbose: args.verbose,
         quiet: args.quiet,
+        ...(reasoningEffort ? { reasoningEffort } : {}),
       })
       return result.exitCode
     }
@@ -243,6 +264,7 @@ export async function runChat(argv: string[]): Promise<number> {
       sink,
       verbose: args.verbose,
       quiet: args.quiet,
+      ...(reasoningEffort ? { reasoningEffort } : {}),
     })
     commitChatFiles(cwd, sessionId, args.verbose ?? false)
     return result.exitCode

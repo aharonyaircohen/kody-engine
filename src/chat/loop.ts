@@ -10,8 +10,8 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { AgentResult } from "../agent.js"
 import { runAgent } from "../agent.js"
-import type { ProviderModel } from "../config.js"
-import { listExecutables } from "../registry.js"
+import type { ProviderModel, ReasoningEffort } from "../config.js"
+import { listAgentActions } from "../registry.js"
 import { prepareTaskArtifactsDir, taskArtifactsPromptAddendum, verifyTaskArtifacts } from "../task-artifacts.js"
 import { prepareAttachments } from "./attachments.js"
 import type { ChatEvent, EventSink } from "./events.js"
@@ -120,15 +120,15 @@ export const CROSS_REPO_PROMPT = [
 ].join("\n")
 
 /**
- * Discover engine + project executables and render a markdown catalog the
+ * Discover engine + project agentActions and render a markdown catalog the
  * chat agent can read. Rebuilt each call so a freshly-added `<name>/profile.json`
  * is picked up without a restart. Failures degrade silently (empty string)
  * because the rest of the chat loop must not depend on this list being present.
  */
-export function buildExecutableCatalog(): string {
-  let discovered: ReturnType<typeof listExecutables>
+export function buildAgentActionCatalog(): string {
+  let discovered: ReturnType<typeof listAgentActions>
   try {
-    discovered = listExecutables()
+    discovered = listAgentActions()
   } catch {
     return ""
   }
@@ -146,11 +146,11 @@ export function buildExecutableCatalog(): string {
   if (entries.length === 0) return ""
   const lines = [
     "",
-    "# Available executables",
+    "# Available agentActions",
     "These run inside the engine, NOT inside this chat. You cannot invoke them",
     "directly — to run one, tell the user to post `@kody <name>` (with any flags)",
     "as a comment on the relevant issue or PR. The dispatcher binds the issue/PR",
-    "number to the executable's inputs automatically.",
+    "number to the agentAction's inputs automatically.",
     "",
   ]
   for (const e of entries) {
@@ -178,6 +178,12 @@ export interface ChatTurnOptions {
   repoToken?: string
   /** Override for the system prompt (tests). */
   systemPrompt?: string
+  /**
+   * Thinking level. Forwarded to `runAgent` as `reasoningEffort` and
+   * mapped to the SDK's `maxThinkingTokens` (Anthropic extended
+   * thinking). `undefined` / `"off"` = no thinking block, cheapest path.
+   */
+  reasoningEffort?: ReasoningEffort | null
   /** Seam for tests — defaults to real runAgent. */
   invokeAgent?: (prompt: string) => Promise<AgentResult>
 }
@@ -208,7 +214,7 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   const { turns: promptTurns, imagePaths } = prepareAttachments(turns, opts.cwd, opts.sessionId)
 
   const basePrompt = opts.systemPrompt ?? CHAT_SYSTEM_PROMPT
-  const catalog = buildExecutableCatalog()
+  const catalog = buildAgentActionCatalog()
   // Per-task artifacts contract appended to every chat session so the
   // agent writes context.json / memory-recs.json / followups.json /
   // handoff-notes.md to .kody/tasks/<sessionId>/ before its final reply.
@@ -225,7 +231,7 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   // learned) are factual background, so they sit right after the base
   // prompt. User instructions are behavioral overrides — placed last among
   // the context blocks so they win on tone/style by recency, but still
-  // ahead of the executable catalog + artifact contract, which are hard
+  // ahead of the agentAction catalog + artifact contract, which are hard
   // operational requirements the agent must not override.
   // Advertise the fetch_repo tool only when it's actually wired (reposRoot set).
   const crossRepoBlock = opts.reposRoot ? CROSS_REPO_PROMPT : null
@@ -271,6 +277,7 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
         verbose: opts.verbose,
         quiet: opts.quiet,
         systemPromptAppend: systemPrompt,
+        ...(opts.reasoningEffort ? { reasoningEffort: opts.reasoningEffort } : {}),
         // Let the agent clone + work on OTHER repos mid-conversation (a
         // repo-less Brain serves many). Enabled whenever we know where repos
         // live; grants read access to that root via additionalDirectories.

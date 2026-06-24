@@ -7,7 +7,7 @@
  * finishFlow doesn't post a `fix-applied` success comment for a red verify.
  */
 
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../agent-actions/types.js"
 import type { Action } from "../state.js"
 import { summarizeFailure, verifyAllWithRetry } from "../verify.js"
 

@@ -14,7 +14,7 @@
  *
  * Side effects (success path):
  *   - Sets `ctx.data.classification` and `ctx.data.classificationReason`
- *     for downstream scripts (writeRunSummary, dispatchClassified).
+ *     for downstream scripts (writeAgentRunSummary, dispatchClassified).
  *   - Sets `ctx.data.classificationAudit` — the human-readable audit
  *     line that dispatchClassified embeds in its combined comment.
  *   - Writes a typed action into ctx.data.action so dispatchClassified
@@ -27,7 +27,7 @@
  */
 
 import { execFileSync } from "node:child_process"
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../agent-actions/types.js"
 import type { Action } from "../state.js"
 
 const API_TIMEOUT_MS = 30_000

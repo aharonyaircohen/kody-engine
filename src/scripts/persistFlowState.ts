@@ -14,7 +14,7 @@
  *   - issue state-comment via writeTaskState.
  */
 
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../agent-actions/types.js"
 import { type TaskState, writeTaskState } from "../state.js"
 
 export const persistFlowState: PostflightScript = async (ctx) => {
@@ -23,7 +23,7 @@ export const persistFlowState: PostflightScript = async (ctx) => {
   const issueNumber = (ctx.args.issue as number | undefined) ?? state.flow?.issueNumber
   if (!issueNumber) return
   try {
-    writeTaskState("issue", issueNumber, state, ctx.cwd)
+    writeTaskState("issue", issueNumber, state, ctx.cwd, ctx.config)
   } catch (err) {
     process.stderr.write(
       `[kody persistFlowState] failed to write state on issue #${issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,

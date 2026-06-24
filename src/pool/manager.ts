@@ -25,7 +25,6 @@ export interface PoolConfig {
   region: string
   guest: FlyGuest
   runnerApiKey: string
-  litellmUrl: string
   port: number
   healthTimeoutMs: number
   /** owner/repo tag — pooled machines are tagged with it so each repo's pool
@@ -39,7 +38,7 @@ export interface PoolJob {
   repo: string
   githubToken: string
   /** "issue" (one-shot run) | "interactive" (long-lived chat session)
-   * | "scheduled" (duty/goal fan-out — Fly fallback for GitHub cron). */
+   * | "scheduled" (agentResponsibility/goal fan-out — Fly fallback for GitHub cron). */
   mode?: "issue" | "interactive" | "scheduled"
   /** Required for issue mode. */
   issueNumber?: number
@@ -74,6 +73,7 @@ export interface PoolManagerDeps {
 
 export class PoolManager {
   private free: FreeMachine[] = []
+  private claimed = new Set<string>()
   private booting = 0
   private claimsInFlight = 0
   private refilling = false
@@ -97,16 +97,15 @@ export class PoolManager {
 
   /**
    * Resize the warm target at runtime (per-repo, sourced from the repo's vault
-   * POOL_MIN). Raising it warms up immediately via refill; lowering it just
-   * stops topping up — surplus machines drain as they're claimed/auto-destroyed,
-   * never force-killed. No-op when unchanged or given a bad value.
+   * POOL_MIN). Raising it warms immediately; lowering it prunes idle surplus
+   * warm machines. No-op when unchanged or given a bad value.
    */
   setMin(min: number): void {
     if (!Number.isInteger(min) || min < 0) return
     if (min === this.deps.config.min) return
     this.deps.config.min = min
     this.log(`min set to ${min}`)
-    void this.refill()
+    void this.rebalance("setMin")
   }
 
   /**
@@ -116,12 +115,17 @@ export class PoolManager {
   async reconcile(): Promise<void> {
     const machines = await this.deps.fly.listPooled(this.deps.config.repoTag)
     this.free = []
+    const surplus: string[] = []
     for (const m of machines) {
-      if ((m.state === "suspended" || m.state === "suspending") && m.private_ip) {
+      if (!isSuspendedWithIp(m)) continue
+      if (this.warmCapacity() < this.deps.config.min) {
         this.free.push({ id: m.id, privateIp: m.private_ip })
+      } else {
+        surplus.push(m.id)
       }
     }
-    this.log(`reconcile: adopted ${this.free.length} suspended machine(s)`)
+    const destroyed = await this.destroySurplus(surplus)
+    this.log(`reconcile: adopted ${this.free.length} suspended machine(s), destroyed ${destroyed} surplus`)
     await this.refill()
   }
 
@@ -139,6 +143,7 @@ export class PoolManager {
       const machine = this.free.shift() // ← atomic: no await before this
       if (!machine) break
       this.claimsInFlight++
+      this.claimed.add(machine.id)
       try {
         await this.deps.fly.start(machine.id)
         const healthy = await this.deps.fly.waitHealthy(this.baseUrl(machine), {
@@ -167,6 +172,7 @@ export class PoolManager {
         await this.safeDestroy(machine.id)
         lastReason = errMsg(err)
       } finally {
+        this.claimed.delete(machine.id)
         this.claimsInFlight--
       }
     }
@@ -196,17 +202,28 @@ export class PoolManager {
     // Prune free entries Fly no longer has (destroyed/gone).
     this.free = this.free.filter((f) => liveIds.has(f.id))
     const pruned = before - this.free.length
-    // Adopt suspended machines we aren't already tracking as free.
-    const tracked = new Set(this.free.map((f) => f.id))
+    const destroyedTracked = await this.trimFreeSurplus("resync")
+
+    // Adopt suspended machines we aren't already tracking as free or claiming.
+    const tracked = new Set([...this.free.map((f) => f.id), ...this.claimed])
     let adopted = 0
+    const surplus: string[] = []
     for (const m of machines) {
-      if ((m.state === "suspended" || m.state === "suspending") && m.private_ip && !tracked.has(m.id)) {
+      if (!isSuspendedWithIp(m) || tracked.has(m.id)) continue
+      if (this.warmCapacity() < this.deps.config.min) {
         this.free.push({ id: m.id, privateIp: m.private_ip })
+        tracked.add(m.id)
         adopted++
+      } else if (this.booting === 0) {
+        surplus.push(m.id)
       }
     }
-    if (pruned > 0 || adopted > 0) {
-      this.log(`resync: pruned ${pruned} stale, adopted ${adopted} (free=${this.free.length})`)
+    const destroyedSurplus = await this.destroySurplus(surplus)
+    const destroyed = destroyedTracked + destroyedSurplus
+    if (pruned > 0 || adopted > 0 || destroyed > 0) {
+      this.log(
+        `resync: pruned ${pruned} stale, adopted ${adopted}, destroyed ${destroyed} surplus (free=${this.free.length})`,
+      )
     }
     await this.refill()
   }
@@ -240,7 +257,6 @@ export class PoolManager {
       region: cfg.region,
       guest: cfg.guest,
       runnerApiKey: cfg.runnerApiKey,
-      litellmUrl: cfg.litellmUrl,
       repoTag: cfg.repoTag,
       port: cfg.port,
     })
@@ -268,11 +284,41 @@ export class PoolManager {
     return `http://[${m.privateIp}]:${this.deps.config.port}`
   }
 
-  private async safeDestroy(id: string): Promise<void> {
+  private warmCapacity(): number {
+    return this.free.length + this.booting
+  }
+
+  private async rebalance(reason: string): Promise<void> {
+    await this.trimFreeSurplus(reason)
+    await this.refill()
+  }
+
+  private async trimFreeSurplus(reason: string): Promise<number> {
+    const surplus: string[] = []
+    while (this.free.length > this.deps.config.min) {
+      const machine = this.free.pop()
+      if (machine) surplus.push(machine.id)
+    }
+    const destroyed = await this.destroySurplus(surplus)
+    if (destroyed > 0) this.log(`${reason}: destroyed ${destroyed} surplus free machine(s)`)
+    return destroyed
+  }
+
+  private async destroySurplus(ids: string[]): Promise<number> {
+    let destroyed = 0
+    for (const id of ids) {
+      if (await this.safeDestroy(id)) destroyed++
+    }
+    return destroyed
+  }
+
+  private async safeDestroy(id: string): Promise<boolean> {
     try {
       await this.deps.fly.destroy(id)
+      return true
     } catch (err) {
       this.log(`destroy ${id} failed: ${errMsg(err)}`)
+      return false
     }
   }
 }
@@ -292,4 +338,8 @@ async function defaultPostRun(m: FreeMachine, job: PoolJob, cfg: PoolConfig): Pr
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
+}
+
+function isSuspendedWithIp(m: FlyMachine): m is FlyMachine & { private_ip: string } {
+  return (m.state === "suspended" || m.state === "suspending") && !!m.private_ip
 }

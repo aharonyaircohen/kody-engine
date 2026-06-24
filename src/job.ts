@@ -2,7 +2,7 @@
  * Job — the unified execution unit (Phase 1: additive seam, no caller yet).
  *
  * `runJob` lowers a validated Job onto the existing executor
- * (`runExecutableChain`). This is the single entry point every trigger path
+ * (`runAgentActionChain`). This is the single entry point every trigger path
  * (comment, cron, manual) will funnel through in later phases. It deliberately
  * does NOT touch executor.ts — a Job maps to a (profileName, ExecutorInput) pair.
  *
@@ -10,24 +10,33 @@
  * and validates at boundaries the same way config.ts does.
  */
 
+import * as path from "node:path"
+import type { Job, JobFlavor } from "./agent-actions/types.js"
 import type { KodyConfig } from "./config.js"
 import type { DispatchResult } from "./dispatch.js"
-import type { Job, JobFlavor } from "./executables/types.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
-import { runExecutable, runExecutableChain } from "./executor.js"
+import { runAgentAction, runAgentActionChain } from "./executor.js"
+import { resolveAgentResponsibilityAction, resolveAgentResponsibilityFolder } from "./registry.js"
 
-/** Default staff persona for instant `@kody` jobs (the agreed starting point). */
-export const DEFAULT_INSTANT_PERSONA = "kody"
+export { stableJobKey } from "./jobIdentity.js"
+
+import { stableJobKey } from "./jobIdentity.js"
+
+/** Default agent identity for instant `@kody` jobs (the agreed starting point). */
+export const DEFAULT_INSTANT_AGENT = "kody"
+let localJobSeq = 0
 
 /**
- * Stable id for a job run, recorded in the task ledger. In GitHub Actions the
- * workflow run (id + attempt) IS the job, so reuse it — re-running a run keeps
- * a distinct id per attempt. Off-CI, fall back to a flavor + timestamp stamp.
+ * Stable id for one run attempt, recorded under the task job. In GitHub Actions
+ * the workflow run (id + attempt) is the natural attempt id; a local sequence
+ * keeps multiple in-process child jobs distinct inside the same workflow run.
+ * Off-CI, fall back to a flavor + timestamp stamp plus the same counter.
  */
 export function newJobId(flavor: JobFlavor): string {
+  localJobSeq += 1
   const runId = process.env.GITHUB_RUN_ID
-  if (runId) return `gh-${runId}-${process.env.GITHUB_RUN_ATTEMPT ?? "1"}`
-  return `${flavor}-${Date.now()}`
+  if (runId) return `gh-${runId}-${process.env.GITHUB_RUN_ATTEMPT ?? "1"}-${localJobSeq}`
+  return `${flavor}-${Date.now()}-${localJobSeq}`
 }
 
 /** Thrown when a minted Job fails boundary validation. */
@@ -39,18 +48,19 @@ export class InvalidJobError extends Error {
 }
 
 /**
- * Validate a minted Job at the boundary. A Job must name at least one of
- * `executable` or `duty` (something to run), a known `flavor`, and (if present)
- * an object `cliArgs`. `why` is untrusted free text and is NOT content-checked
- * here — fencing happens where it enters a prompt.
+ * Validate a minted Job at the boundary. A Job must name a agentResponsibility/action, a
+ * known `flavor`, and (if present) an object `cliArgs`. `agentAction` is only
+ * an implementation selected under that agentResponsibility; it is never valid by itself.
+ * `why` is untrusted free text and is NOT content-checked here — fencing
+ * happens where it enters a prompt.
  */
 export function validateJob(input: unknown): Job {
   if (!input || typeof input !== "object") {
     throw new InvalidJobError("job must be an object")
   }
   const j = input as Record<string, unknown>
-  if (typeof j.executable !== "string" && typeof j.duty !== "string") {
-    throw new InvalidJobError("job must reference an executable or a duty")
+  if (typeof j.agentResponsibility !== "string" && typeof j.action !== "string") {
+    throw new InvalidJobError("job must reference a agentResponsibility action or agentResponsibility")
   }
   if (j.flavor !== "instant" && j.flavor !== "scheduled") {
     throw new InvalidJobError(`job.flavor must be "instant" or "scheduled" (got ${String(j.flavor)})`)
@@ -59,15 +69,17 @@ export function validateJob(input: unknown): Job {
     throw new InvalidJobError("job.cliArgs must be an object when present")
   }
   return {
-    executable: typeof j.executable === "string" ? j.executable : undefined,
-    duty: typeof j.duty === "string" ? j.duty : undefined,
+    action: typeof j.action === "string" ? j.action : undefined,
+    agentAction: typeof j.agentAction === "string" ? j.agentAction : undefined,
+    agentResponsibility: typeof j.agentResponsibility === "string" ? j.agentResponsibility : undefined,
     why: typeof j.why === "string" ? j.why : undefined,
-    persona: typeof j.persona === "string" ? j.persona : undefined,
+    agent: typeof j.agent === "string" ? j.agent : undefined,
     schedule: typeof j.schedule === "string" ? j.schedule : undefined,
     target: typeof j.target === "number" ? j.target : undefined,
     cliArgs: (j.cliArgs as Record<string, unknown> | undefined) ?? {},
     flavor: j.flavor,
     force: j.force === true,
+    saveReport: j.saveReport === true,
   }
 }
 
@@ -75,13 +87,15 @@ export function validateJob(input: unknown): Job {
 export interface RunJobBase {
   cwd: string
   config?: KodyConfig
+  skipConfig?: boolean
   verbose?: boolean
   quiet?: boolean
+  preloadedData?: Record<string, unknown>
   /**
-   * Follow in-process stage hand-offs (`runExecutableChain`) — the default,
+   * Follow in-process stage hand-offs (`runAgentActionChain`) — the default,
    * matching the comment/manual route. Set `false` for the cron tick path,
-   * which fans out one-shot ticks via `runExecutable` (no chaining), so the
-   * scheduler's per-duty invocation stays byte-identical to its prior call.
+   * which fans out one-shot ticks via `runAgentAction` (no chaining), so the
+   * scheduler's per-agentResponsibility invocation stays byte-identical to its prior call.
    */
   chain?: boolean
 }
@@ -90,55 +104,113 @@ export interface RunJobBase {
  * Execute a Job by lowering it onto the existing executor.
  *
  * Mapping:
- *   - profile = job.executable ?? job.duty   (the runner / "how")
+ *   - agentResponsibility/action resolves first             (the public work unit / "why")
+ *   - profile = job.agentAction ?? agentResponsibility.agentAction (the implementation / "how")
  *   - cliArgs = job.cliArgs                   (target already bound by the minter)
- *   - duty/executable → preloadedData          (seeded so the executor can
+ *   - agentResponsibility/agentAction → preloadedData          (seeded so the executor can
  *                                              expose the job references to
  *                                              the model generically)
  *   - inline why → preloadedData.jobWhy        (seeded into ctx.data before
  *                                              preflights; the executor injects
  *                                              it as a fenced operator-request
  *                                              block in the system prompt)
- *   - persona  → preloadedData.jobPersona
+ *   - agent  → preloadedData.jobAgent
  *
  * No caller mints Jobs yet — this is the seam later phases wire the comment and
  * cron paths into.
  */
 export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput> {
   const valid = validateJob(job)
-  const profileName = valid.executable ?? valid.duty
+  const action = valid.action ?? valid.agentResponsibility
+  const projectAgentResponsibilitiesRoot = path.join(base.cwd, ".kody", "agent-responsibilities")
+  const resolvedAgentResponsibility = action
+    ? resolveAgentResponsibilityAction(action, projectAgentResponsibilitiesRoot)
+    : null
+  const agentResponsibilityIdentity = valid.agentResponsibility ?? resolvedAgentResponsibility?.agentResponsibility
+  const agentResponsibilityContext = loadAgentResponsibilityContext(agentResponsibilityIdentity, base.cwd)
+  const explicitAgentActionOnly =
+    valid.agentAction !== undefined &&
+    (valid.action === undefined || valid.action === valid.agentAction) &&
+    (valid.agentResponsibility === undefined || valid.agentResponsibility === valid.agentAction)
+  if (!resolvedAgentResponsibility && !agentResponsibilityContext && !explicitAgentActionOnly) {
+    throw new InvalidJobError(`job agentResponsibility not found: ${action ?? valid.agentResponsibility ?? "<none>"}`)
+  }
+  const agentResponsibilitySelectedAgentAction =
+    resolvedAgentResponsibility?.agentAction ??
+    agentResponsibilityContext?.config.agentAction ??
+    agentResponsibilityContext?.config.agentActions?.[0] ??
+    (agentResponsibilityContext?.config.tickScript ? "agent-responsibility-tick-scripted" : undefined)
+  const profileName = valid.agentAction ?? agentResponsibilitySelectedAgentAction
   if (!profileName) {
-    throw new InvalidJobError("job resolves to no executable or duty")
+    throw new InvalidJobError(
+      `job agentResponsibility resolves to no agentAction: ${agentResponsibilityIdentity ?? action}`,
+    )
   }
 
-  const preloadedData: Record<string, unknown> = {}
-  // Every job is recorded in the task ledger (state.ts history) — stamp its
-  // identity so the reducer can attribute the run. The CI run is the natural
-  // job id in Actions; fall back to a flavor-stamped id locally.
+  const preloadedData: Record<string, unknown> = { ...(base.preloadedData ?? {}) }
+  // Stamp both identities: jobKey is stable required work on the task; jobId is
+  // this execution attempt.
   preloadedData.jobId = newJobId(valid.flavor)
+  preloadedData.jobKey = stableJobKey(valid)
   preloadedData.jobFlavor = valid.flavor
-  if (valid.duty !== undefined && valid.duty.length > 0) preloadedData.jobDuty = valid.duty
-  if (valid.executable !== undefined && valid.executable.length > 0) preloadedData.jobExecutable = valid.executable
+  if (valid.target !== undefined) preloadedData.jobTarget = valid.target
+  if (valid.action !== undefined && valid.action.length > 0) preloadedData.jobAction = valid.action
+  if (agentResponsibilityIdentity !== undefined && agentResponsibilityIdentity.length > 0)
+    preloadedData.jobAgentResponsibility = agentResponsibilityIdentity
+  const executableIdentity = profileName
+  if (executableIdentity !== undefined && executableIdentity.length > 0)
+    preloadedData.jobAgentAction = executableIdentity
   // The job carries *when*: a scheduled job's cadence, recorded in the ledger.
   if (valid.schedule !== undefined && valid.schedule.length > 0) preloadedData.jobSchedule = valid.schedule
+  if (valid.saveReport === true) preloadedData.jobSaveReport = true
+  if (agentResponsibilityContext) {
+    preloadedData.agentResponsibilitySlug = agentResponsibilityContext.slug
+    preloadedData.agentResponsibilityTitle = agentResponsibilityContext.title
+    preloadedData.dutyIntent = agentResponsibilityContext.body
+    preloadedData.jobIntent = agentResponsibilityContext.body
+    if (preloadedData.jobAgentResponsibility === undefined)
+      preloadedData.jobAgentResponsibility = agentResponsibilityContext.slug
+    if (agentResponsibilityContext.config.agent && preloadedData.jobAgent === undefined) {
+      preloadedData.jobAgent = agentResponsibilityContext.config.agent
+    }
+    if (agentResponsibilityContext.config.mentions && agentResponsibilityContext.config.mentions.length > 0) {
+      preloadedData.mentions = agentResponsibilityContext.config.mentions.map((login: string) => `@${login}`).join(" ")
+    }
+  }
   // Inline why → ctx.data.jobWhy (NOT jobIntent — that token is the scheduled
-  // duty BODY, consumed via {{jobIntent}} by duty-tick; reusing it would
+  // agentResponsibility BODY, consumed via {{jobIntent}} by agent-responsibility-tick; reusing it would
   // double-inject). The executor surfaces jobWhy to the agent as a fenced
   // "operator request" block, so the comment's wording shapes any instant run.
   if (valid.why !== undefined && valid.why.length > 0) preloadedData.jobWhy = valid.why
-  if (valid.persona !== undefined) preloadedData.jobPersona = valid.persona
+  if (valid.agent !== undefined) preloadedData.jobAgent = valid.agent
 
   const input: ExecutorInput = {
     cliArgs: { ...valid.cliArgs },
     cwd: base.cwd,
     config: base.config,
+    skipConfig: base.skipConfig,
     verbose: base.verbose,
     quiet: base.quiet,
     preloadedData: Object.keys(preloadedData).length > 0 ? preloadedData : undefined,
   }
+  const shouldApplyResolvedAgentResponsibilityArgs =
+    valid.agentAction === undefined &&
+    resolvedAgentResponsibility &&
+    profileName === resolvedAgentResponsibility.agentAction
+  input.cliArgs = shouldApplyResolvedAgentResponsibilityArgs
+    ? { ...resolvedAgentResponsibility.cliArgs, ...input.cliArgs }
+    : input.cliArgs
 
-  const run = base.chain === false ? runExecutable : runExecutableChain
+  const run = base.chain === false ? runAgentAction : runAgentActionChain
   return run(profileName, input)
+}
+
+function loadAgentResponsibilityContext(
+  slug: string | undefined,
+  cwd: string,
+): ReturnType<typeof resolveAgentResponsibilityFolder> {
+  if (!slug) return null
+  return resolveAgentResponsibilityFolder(slug, path.join(cwd, ".kody", "agent-responsibilities"))
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -149,49 +221,57 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
 
 /**
  * Mint an INSTANT job from a comment / manual-dispatch route. The trigger
- * resolves to a DispatchResult (executable + cliArgs + target); this turns it
+ * resolves to a DispatchResult (agentAction + cliArgs + target); this turns it
  * into a Job. `why` is the operator's free-text request after `@kody <command>`
- * (carried on the DispatchResult); `persona` defaults to "kody" — instant verbs
- * ran persona-less before, and the default is the agreed starting point.
+ * (carried on the DispatchResult); `agent` defaults to "kody" — instant verbs
+ * ran agent-less before, and the default is the agreed starting point.
  * Both are overridable per call via `opts`.
  */
-export function mintInstantJob(dispatch: DispatchResult, opts?: { why?: string; persona?: string }): Job {
+export function mintInstantJob(dispatch: DispatchResult, opts?: { why?: string; agent?: string }): Job {
   return {
-    executable: dispatch.executable,
+    action: dispatch.action,
+    agentAction: dispatch.agentAction,
+    agentResponsibility: dispatch.agentResponsibility,
     why: opts?.why ?? dispatch.why,
-    persona: opts?.persona ?? DEFAULT_INSTANT_PERSONA,
+    agent: opts?.agent ?? DEFAULT_INSTANT_AGENT,
     target: dispatch.target,
     cliArgs: dispatch.cliArgs,
     flavor: "instant",
   }
 }
 
-/** Inputs the cron tick path resolves per due duty slug. */
+/** Inputs the cron tick path resolves per due agentResponsibility slug. */
 export interface ScheduledJobInput {
-  /** The duty slug (its "why" lives in `.kody/duties/<slug>.md`). */
-  duty: string
-  /** The executable that ticks it (duty-tick / duty-tick-scripted, or a folder-duty slug). */
-  executable: string
-  /** Cron cadence the duty fired on. */
+  /** Public action for this scheduled agentResponsibility, when distinct from the slug. */
+  action?: string
+  /** The agentResponsibility slug (its "why" lives in `.kody/agent-responsibilities/<slug>/agent-responsibility.md`). */
+  agentResponsibility: string
+  /** The agentAction that ticks it (agent-responsibility-tick / agent-responsibility-tick-scripted, or a folder-agentResponsibility slug). */
+  agentAction: string
+  /** Cron cadence the agentResponsibility fired on. */
   schedule?: string
-  /** Staff persona that runs it (from the duty's `staff:` frontmatter). */
-  persona?: string
-  /** Args handed to the tick executable (e.g. `{ job: slug }` for `.md` duties). */
+  /** Agent identity that runs it (from the agentResponsibility's profile.json). */
+  agent?: string
+  /** Args handed to the tick agentAction (e.g. `{ job: slug }` for `.md` agentResponsibilities). */
   cliArgs?: Record<string, unknown>
+  /** Save this run's final output as reports/<agentResponsibility>.md. */
+  saveReport?: boolean
 }
 
 /**
- * Mint a SCHEDULED job from a due duty slug. The cron path enumerates due
- * duties; each becomes a scheduled Job whose `executable` is the ticker and
- * whose `duty` carries the intent. No caller yet — wired in a later phase.
+ * Mint a SCHEDULED job from a due agentResponsibility slug. The cron path enumerates due
+ * agentResponsibilities; each becomes a scheduled Job whose `agentAction` is the ticker and
+ * whose `agentResponsibility` carries the intent. No caller yet — wired in a later phase.
  */
 export function mintScheduledJob(input: ScheduledJobInput): Job {
   return {
-    duty: input.duty,
-    executable: input.executable,
+    action: input.action,
+    agentResponsibility: input.agentResponsibility,
+    agentAction: input.agentAction,
     schedule: input.schedule,
-    persona: input.persona,
+    agent: input.agent,
     cliArgs: input.cliArgs ?? {},
     flavor: "scheduled",
+    saveReport: input.saveReport === true,
   }
 }

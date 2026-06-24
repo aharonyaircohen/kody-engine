@@ -23,7 +23,6 @@ set -euo pipefail
 #   PORT              HTTP port for brain-serve (default: 8080)
 #   MODEL             model override, e.g. "anthropic/claude-sonnet-4-6" (optional)
 #   ALL_SECRETS       JSON blob of provider keys (mirrors GH Actions toJSON(secrets))
-#   KODY_LITELLM_URL  optional always-on litellm proxy URL (e.g. http://kody-litellm.internal:4000)
 
 # REPO is OPTIONAL. A repo-less Brain boots with no work repo and clones
 # each repo on demand per chat message (into $BRAIN_REPOS_ROOT). When REPO
@@ -59,10 +58,7 @@ LITELLM_PROVIDERS="anthropic:ANTHROPIC_API_KEY openai:OPENAI_API_KEY gemini:GEMI
 
 # Flatten ALL_SECRETS into top-level env vars BEFORE anything else looks
 # at them. The chat loop / startLitellmIfNeeded reads provider keys from
-# process.env directly, and the local-fallback LiteLLM config also uses
-# `os.environ/<KEY>`. We do this even when KODY_LITELLM_URL is set — if
-# the shared proxy is unreachable, the engine will spawn its own and
-# expects the keys to already be in env.
+# process.env directly, and the local LiteLLM config uses `os.environ/<KEY>`.
 extract_secrets_to_env() {
   if ! command -v jq >/dev/null 2>&1; then
     echo "→ brain: secret-extract skipped (jq not in PATH)"
@@ -85,27 +81,6 @@ extract_secrets_to_env() {
 extract_secrets_to_env
 
 prewarm_litellm() {
-  if [ -n "${KODY_LITELLM_URL:-}" ]; then
-    if ! command -v socat >/dev/null 2>&1; then
-      echo "→ brain: KODY_LITELLM_URL set but socat missing — skipping forward"
-      return 0
-    fi
-    local target_host target_port
-    target_host="$(echo "$KODY_LITELLM_URL" | sed -E 's#^https?://([^:/]+).*#\1#')"
-    target_port="$(echo "$KODY_LITELLM_URL" | sed -nE 's#^https?://[^:]+:([0-9]+).*#\1#p')"
-    target_port="${target_port:-4000}"
-    if [ -z "$target_host" ]; then
-      echo "→ brain: KODY_LITELLM_URL malformed ('${KODY_LITELLM_URL}') — skipping forward"
-      return 0
-    fi
-    echo "→ brain: forwarding localhost:${LITELLM_PORT} → ${target_host}:${target_port} (always-on litellm)"
-    socat "TCP-LISTEN:${LITELLM_PORT},reuseaddr,fork" \
-          "TCP:${target_host}:${target_port}" \
-          >>/tmp/socat.log 2>&1 &
-    LITELLM_PID=$!
-    return 0
-  fi
-
   if ! command -v litellm >/dev/null 2>&1; then
     echo "→ brain: pre-warm skipped (litellm not in PATH)"
     return 0
@@ -119,7 +94,7 @@ prewarm_litellm() {
     return 0
   fi
 
-  cfg=/tmp/kody-litellm.yaml
+  cfg=/tmp/kody-local-litellm.yaml
   : >"$cfg"
   printf 'model_list:\n' >>"$cfg"
 
@@ -197,7 +172,7 @@ if [ -n "$LITELLM_PID" ]; then
     sleep 1
   done
   if [ "$LITELLM_READY" = "0" ] && [ -n "$LITELLM_PID" ]; then
-    echo "→ brain: pre-warm forward never responded — releasing port"
+    echo "→ brain: pre-warm never responded — releasing port"
     kill "$LITELLM_PID" 2>/dev/null || true
     wait "$LITELLM_PID" 2>/dev/null || true
     LITELLM_PID=""
@@ -298,8 +273,8 @@ mcp_servers:
     enabled: true
     headers:
       Authorization: "Bearer ${BRAIN_API_KEY}"
-  kody-duty:
-    url: http://127.0.0.1:${MCP_PORT}/mcp/duty
+  kody-agentResponsibility:
+    url: http://127.0.0.1:${MCP_PORT}/mcp/agentResponsibility
     transport: streamable-http
     enabled: true
     headers:

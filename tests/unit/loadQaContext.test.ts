@@ -2,7 +2,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/agent-actions/types.js"
 import { loadQaContext } from "../../src/scripts/loadQaContext.js"
 
 function mktmp(): string {
@@ -79,25 +79,25 @@ describe("loadQaContext", () => {
     expect(ctx.data.qaAuthBlock).toContain("no `LOGIN_PASSWORD` secret was found")
   })
 
-  it("includes only sections whose staff contains qa-engineer; legacy audience is mapped, unassigned/chat/legacy-less excluded", async () => {
+  it("includes only sections whose agent contains qa-engineer; legacy audience is mapped, unassigned/chat/legacy-less excluded", async () => {
     const profileDir = path.join(tmp, ".kody", "context")
     fs.mkdirSync(profileDir, { recursive: true })
     fs.writeFileSync(
       path.join(profileDir, "scenarios.md"),
-      "---\nstaff: [qa-engineer]\n---\n\nCheck the checkout flow.",
+      "---\nagent: [qa-engineer]\n---\n\nCheck the checkout flow.",
     )
-    // Multi-staff section — included in QA because the list contains qa-engineer.
+    // Multi-agent section — included in QA because the list contains qa-engineer.
     fs.writeFileSync(
       path.join(profileDir, "shared.md"),
-      "---\nstaff: [kody, qa-engineer]\n---\n\nSeed data lives in fixtures.",
+      "---\nagent: [kody, qa-engineer]\n---\n\nSeed data lives in fixtures.",
     )
     // Legacy audience list → mapped (qa → qa-engineer) → included.
     fs.writeFileSync(path.join(profileDir, "legacy.md"), "---\naudience: [qa]\n---\n\nLegacy QA note.")
-    // All-staff wildcard → belongs to every staff member → included.
-    fs.writeFileSync(path.join(profileDir, "everywhere.md"), "---\nstaff: [*]\n---\n\nApplies to all staff.")
-    fs.writeFileSync(path.join(profileDir, "mission.md"), "---\nstaff: [kody]\n---\n\nWe sell widgets.")
+    // All-agent wildcard → belongs to every agent → included.
+    fs.writeFileSync(path.join(profileDir, "everywhere.md"), "---\nagent: [*]\n---\n\nApplies to all agent.")
+    fs.writeFileSync(path.join(profileDir, "mission.md"), "---\nagent: [kody]\n---\n\nWe sell widgets.")
     // Explicit empty list → unassigned → excluded from QA.
-    fs.writeFileSync(path.join(profileDir, "draft.md"), "---\nstaff: []\n---\n\nUnassigned draft.")
+    fs.writeFileSync(path.join(profileDir, "draft.md"), "---\nagent: []\n---\n\nUnassigned draft.")
     // Frontmatter-less file → defaults to [kody] → excluded from QA.
     fs.writeFileSync(path.join(profileDir, "about.md"), "about")
 
@@ -112,7 +112,7 @@ describe("loadQaContext", () => {
     expect(qaProfile).toContain("## legacy.md")
     expect(qaProfile).toContain("Legacy QA note.")
     expect(qaProfile).toContain("## everywhere.md")
-    expect(qaProfile).toContain("Applies to all staff.")
+    expect(qaProfile).toContain("Applies to all agent.")
     // chat-only, unassigned, and frontmatter-less files are excluded.
     expect(qaProfile).not.toContain("We sell widgets.")
     expect(qaProfile).not.toContain("## mission.md")
@@ -120,7 +120,7 @@ describe("loadQaContext", () => {
     expect(qaProfile).not.toContain("## draft.md")
     expect(qaProfile).not.toContain("## about.md")
     // frontmatter must not leak into the prompt.
-    expect(qaProfile).not.toContain("staff:")
+    expect(qaProfile).not.toContain("agent:")
     expect(qaProfile).not.toContain("audience:")
   })
 

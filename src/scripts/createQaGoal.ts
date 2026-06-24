@@ -1,5 +1,5 @@
 /**
- * Postflight for the `qa-engineer` executable. Turns the agent's QA report
+ * Postflight for the `qa-engineer` agentAction. Turns the agent's QA report
  * into a kody goal whose tasks are real, severity-labelled bug tickets:
  *
  *   1. Parse the agent's final message — markdown report on top + a
@@ -10,9 +10,8 @@
  *   3. Append the new goal to the `kody:goals-manifest` issue's embedded
  *      JSON (creating the manifest issue if absent). The dashboard reads
  *      this to render the goal in its UI.
- *   4. Write `.kody/goals/<id>/state.json` (`state: "active"`) and
- *      commit + push it on the current branch — that's how the engine
- *      knows to tick the goal.
+ *   4. Write `<statePath>/goals/instances/<id>/state.json`
+ *      (`state: "active"`) in the configured state repo.
  *   5. Open N task issues — one per finding — each labelled
  *      `goal:<id>`, `severity:P{n}`, `kody:qa-finding`. The issue body
  *      is rendered from the structured fields.
@@ -27,7 +26,8 @@
  *   missing report / parse failure / gh failure → 1+
  */
 import type { AgentResult } from "../agent.js"
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../agent-actions/types.js"
+import type { ManagedGoal } from "../goal/manager.js"
 import { type GoalState, nowIso } from "../goal/state.js"
 import { putGoalState } from "../goal/stateStore.js"
 import { gh, postIssueComment, truncate } from "../issue.js"
@@ -319,6 +319,31 @@ function createTaskIssue(
   return { number: Number(m[1]), url }
 }
 
+export function buildQaManagedGoal(
+  goalId: string,
+  verdict: ReviewVerdict,
+  opened: number,
+  failed: number,
+): ManagedGoal {
+  return {
+    type: "qa",
+    destination: {
+      outcome: `QA findings filed for ${goalId}`,
+      evidence: ["qaFindingsFiled"],
+    },
+    agentResponsibilities: ["qa-goal"],
+    route: [],
+    stage: "filed",
+    facts: {
+      qaFindingsFiled: true,
+      verdict,
+      findingsOpened: opened,
+      findingsFailed: failed,
+    },
+    blockers: failed > 0 ? [`${failed} QA finding issue(s) failed to open`] : [],
+  }
+}
+
 export const createQaGoal: PostflightScript = async (ctx, _profile, agentResult: AgentResult | null) => {
   if (!agentResult || agentResult.outcome !== "completed") {
     const reason = agentResult?.error ?? "agent did not complete"
@@ -342,11 +367,11 @@ export const createQaGoal: PostflightScript = async (ctx, _profile, agentResult:
   const verdict = detectVerdict(markdown)
   const existingIssue = ctx.args.issue as number | undefined
 
-  // ── Advisory mode (duty-driven QA) ──────────────────────────────────────
+  // ── Advisory mode (agentResponsibility-driven QA) ──────────────────────────────────────
   // When dispatched at a tracking issue (`--issue <n>`, as qa.md / qa-sweep /
   // approval-gate do), post the FULL report there (markdown + the
   // KODY_QA_REPORT_JSON block) and STOP. We do NOT auto-create the goal +
-  // fix-tickets — that would violate "QA never acts on its own". The duty
+  // fix-tickets — that would violate "QA never acts on its own". The agentResponsibility
   // reads this report and surfaces an inbox rec; goal creation is gated behind
   // operator approval via `@kody qa-goal --issue <n>` (see promoteQaGoal).
   if (typeof existingIssue === "number" && existingIssue > 0) {
@@ -376,7 +401,7 @@ export const createQaGoal: PostflightScript = async (ctx, _profile, agentResult:
 /**
  * Turn a QA report (markdown + `<!-- KODY_QA_REPORT_JSON ... -->`) into a kody
  * goal: append to the goals manifest, open one fix-ticket per finding, and
- * write+commit `.kody/goals/<id>/state.json` so goal-scheduler ticks it. This
+ * write `<statePath>/goals/instances/<id>/state.json` in the state repo so goal-scheduler ticks it. This
  * is the operator-gated half of QA — invoked by the standalone qa-engineer
  * path and by the `qa-goal` verb (which approve posts). PASS / no-findings
  * reports open a single record issue instead.
@@ -516,22 +541,21 @@ export async function promoteReportToGoal(
     }
   }
 
-  // Persist the activated goal's state to the kody-state branch so
-  // goal-scheduler picks it up — off the default branch, no commit churn.
+  // Persist the activated goal's state to the configured state repo so
+  // goal-scheduler picks it up without consumer-branch commit churn.
   const now = nowIso()
-  const goalState: GoalState = { state: "active", startedAt: now, updatedAt: now, extra: { version: 1 } }
+  const managedGoal = buildQaManagedGoal(goalId, verdict, opened.length, failed.length)
+  const goalState: GoalState = {
+    state: "active",
+    startedAt: now,
+    updatedAt: now,
+    extra: { version: 1, ...managedGoal },
+  }
   try {
-    putGoalState(
-      ctx.config.github.owner,
-      ctx.config.github.repo,
-      goalId,
-      goalState,
-      `chore(goals): activate ${goalId}`,
-      ctx.cwd,
-    )
+    putGoalState(ctx.config, goalId, goalState, `chore(goals): activate ${goalId}`, ctx.cwd)
   } catch (err) {
     process.stderr.write(
-      `[createQaGoal] failed to persist goal state to kody-state: ${err instanceof Error ? err.message : String(err)}\n` +
+      `[createQaGoal] failed to persist goal state to state repo: ${err instanceof Error ? err.message : String(err)}\n` +
         `[createQaGoal]   goal-scheduler will not see ${goalId} until this succeeds.\n`,
     )
   }

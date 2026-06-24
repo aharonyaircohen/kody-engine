@@ -14,7 +14,7 @@
  * share the GitHub number space, so `gh issue edit` works for both.
  */
 
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../agent-actions/types.js"
 import { KODY_NAMESPACE, setKodyLabel } from "../lifecycleLabels.js"
 
 export const setLifecycleLabel: PreflightScript = async (ctx, _profile, args) => {

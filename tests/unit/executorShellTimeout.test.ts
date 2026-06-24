@@ -11,11 +11,11 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { runExecutable } from "../../src/executor.js"
+import { runAgentAction } from "../../src/executor.js"
 
 function makeFixture(opts: { exeName: string; timeoutSec?: number; sleepSec: number }): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-shell-timeout-"))
-  const exeDir = path.join(root, ".kody", "executables", opts.exeName)
+  const exeDir = path.join(root, ".kody", "agent-actions", opts.exeName)
   fs.mkdirSync(exeDir, { recursive: true })
   fs.writeFileSync(
     path.join(exeDir, "slow.sh"),
@@ -72,7 +72,7 @@ describe("executor: shell entry timeout", () => {
   it("times out with exit 124 and explicit reason when entry timeoutSec is exceeded", async () => {
     const root = makeFixture({ exeName: "timeout-fixture-a", timeoutSec: 1, sleepSec: 5 })
     process.chdir(root)
-    const result = await runExecutable("timeout-fixture-a", {
+    const result = await runAgentAction("timeout-fixture-a", {
       cliArgs: {},
       cwd: root,
       skipConfig: true,
@@ -86,7 +86,7 @@ describe("executor: shell entry timeout", () => {
     const root = makeFixture({ exeName: "timeout-fixture-b", sleepSec: 5 })
     process.chdir(root)
     process.env.KODY_SHELL_TIMEOUT_SEC = "1"
-    const result = await runExecutable("timeout-fixture-b", {
+    const result = await runAgentAction("timeout-fixture-b", {
       cliArgs: {},
       cwd: root,
       skipConfig: true,
@@ -105,7 +105,7 @@ describe("executor: shell entry timeout", () => {
   it("kills backgrounded descendants on timeout (process group)", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-shell-timeout-pg-"))
     const exeName = "timeout-fixture-pg"
-    const exeDir = path.join(root, ".kody", "executables", exeName)
+    const exeDir = path.join(root, ".kody", "agent-actions", exeName)
     fs.mkdirSync(exeDir, { recursive: true })
     const markerPath = path.join(root, "leaked.marker")
     fs.writeFileSync(
@@ -142,7 +142,7 @@ describe("executor: shell entry timeout", () => {
     fs.writeFileSync(path.join(exeDir, "profile.json"), JSON.stringify(profile, null, 2))
 
     process.chdir(root)
-    const result = await runExecutable(exeName, { cliArgs: {}, cwd: root, skipConfig: true })
+    const result = await runAgentAction(exeName, { cliArgs: {}, cwd: root, skipConfig: true })
     expect(result.exitCode).toBe(124)
 
     // Wait past when the leaked descendant would have written the marker.

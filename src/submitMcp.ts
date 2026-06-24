@@ -1,18 +1,18 @@
 /**
  * In-process MCP server exposing a `submit_state` tool to the agent.
  *
- * Why this exists: a duty-tick agent must persist its decision as a state
+ * Why this exists: a agent-responsibility-tick agent must persist its decision as a state
  * envelope. The legacy contract asked the model to END its reply with a
- * fenced `kody-job-next-state` JSON block — which long/complex duties (e.g.
+ * fenced `kody-job-next-state` JSON block — which long/complex agentResponsibilities (e.g.
  * approval-gate) routinely forgot, so the tick failed "agent did not emit a
- * fenced block" and the duty never did its work. A structured tool the model
+ * fenced block" and the agentResponsibility never did its work. A structured tool the model
  * CALLS is far more reliable than a trailing-text convention it must remember.
  *
  * The agent calls `submit_state({ cursor, data, done })` once when done; the
  * handler captures the payload into a per-invocation closure that `runAgent`
  * reads back as `AgentResult.submittedState`. The fenced-block path is kept as
  * a fallback (see parseJobStateFromAgentResult) so this is purely additive —
- * a duty that still emits the block, or a model that ignores the tool, behaves
+ * a agentResponsibility that still emits the block, or a model that ignores the tool, behaves
  * exactly as before.
  *
  * Built per-runAgent invocation (not module-level) so each call binds its own
@@ -59,7 +59,11 @@ const INPUT_SCHEMA: ZodRawShape = {
   data: z
     .record(z.string(), z.unknown())
     .describe("The next `data` object. Carry forward prior data and mutate only what you acted on this tick."),
-  done: z.boolean().describe("true only if this duty is permanently finished; evergreen duties stay false."),
+  done: z
+    .boolean()
+    .describe(
+      "true only if this agentResponsibility is permanently finished; evergreen agentResponsibilities stay false.",
+    ),
 }
 
 /**

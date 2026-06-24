@@ -79,7 +79,7 @@ describe("litellm: resolveLitellmCommand (auto-install)", () => {
   it("installs on demand when missing, then returns the script path", () => {
     routeExec({ whichOk: false, importOkSeq: [false, true], pipOk: true, scriptPath: "/py/bin/litellm" })
     expect(resolveLitellmCommand()).toBe("/py/bin/litellm")
-    // pip install was attempted (this is the gap that broke scheduled duties)
+    // pip install was attempted (this is the gap that broke scheduled agentResponsibilities)
     const installed = mockExec.mock.calls.some(
       (c) => (c[0] === "pip" || c[0] === "pip3") && Array.isArray(c[1]) && c[1].includes("install"),
     )

@@ -2,7 +2,13 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { query } from "@anthropic-ai/claude-agent-sdk"
 import { ensureStableClaudeBinary } from "./claudeBinary.js"
-import { getAnthropicApiKeyOrDummy, type ProviderModel } from "./config.js"
+import {
+  getAnthropicApiKeyOrDummy,
+  type KodyConfig,
+  type ProviderModel,
+  REASONING_BUDGETS,
+  type ReasoningEffort,
+} from "./config.js"
 import { renderEvent, type SdkMessageLike } from "./format.js"
 
 export interface AgentTokenUsage {
@@ -39,7 +45,7 @@ export interface AgentResult {
   finalText: string
   /**
    * State the agent submitted via the in-process `submit_state` tool
-   * (duty-tick only, when `enableSubmitTool` is set). Preferred over the
+   * (agent-responsibility-tick only, when `enableSubmitTool` is set). Preferred over the
    * legacy fenced `kody-job-next-state` block when present. Undefined when
    * the tool wasn't enabled or the agent never called it.
    */
@@ -64,6 +70,11 @@ function classifySubtype(subtype: string | undefined): AgentOutcomeKind {
   if (lower.includes("tool")) return "tool_error"
   if (lower.includes("error")) return "model_error"
   return "generic_failed"
+}
+
+function isClaudeLoginRequiredText(text: string): boolean {
+  const normalized = text.toLowerCase()
+  return normalized.includes("not logged in") && normalized.includes("/login")
 }
 
 export interface AgentOptions {
@@ -99,6 +110,19 @@ export interface AgentOptions {
   agents?: Record<string, { description: string; prompt: string; tools?: string[]; model?: string }>
   /** Hard cap on agent turns. null/undefined = SDK default (unbounded). */
   maxTurns?: number | null
+  /**
+   * Thinking level. Maps to the SDK's `maxThinkingTokens` (Anthropic
+   * extended thinking). When set, overrides the explicit
+   * `maxThinkingTokens` field if both are provided — this is the
+   * preferred surface. Unset / `"off"` means no thinking block is sent
+   * to the model, which is the cheapest path (no reasoning preamble,
+   * no thinking-token spend).
+   *
+   * Resolution: `runChatTurn` reads from CLI flag → env var → config.
+   * Direct callers of `runAgent` (tests, agentActions) can set either
+   * field directly; `reasoningEffort` wins when both are set.
+   */
+  reasoningEffort?: ReasoningEffort | null
   /** Extended-thinking token budget. null/undefined = SDK default. */
   maxThinkingTokens?: number | null
   /**
@@ -129,38 +153,40 @@ export interface AgentOptions {
   enableVerifyTool?: boolean
   /**
    * Opt-in: build an in-process MCP server exposing a `submit_state` tool the
-   * agent calls to persist its next state (used by duty-tick instead of relying
+   * agent calls to persist its next state (used by agent-responsibility-tick instead of relying
    * on a trailing fenced block). Default false.
    */
   enableSubmitTool?: boolean
   /**
-   * Opt-in (duty-tick locked-toolbox mode): build an in-process MCP server
-   * exposing typed duty primitives (list_prs_to_repair, sync_pr, fix_ci_pr,
-   * resolve_pr, recommend_to_operator, read_ledger). Triggered by a duty
-   * declaring `tools:` frontmatter — `loadJobFromFile` then revokes Bash/Read
-   * and locks `allowedTools` to only the duty's declared MCP tools (plus
+   * Opt-in (agent-responsibility-tick locked-toolbox mode): build an in-process MCP server
+   * exposing typed agentResponsibility primitives (list_prs_to_repair, sync_pr, fix_ci_pr,
+   * resolve_pr, recommend_to_operator, read_ledger). Triggered by a agentResponsibility
+   * declaring `tools:` metadata — `loadJobFromFile` then revokes Bash/Read
+   * and locks `allowedTools` to only the agentResponsibility's declared MCP tools (plus
    * `submit_state`). Default false.
    */
-  enableDutyTool?: boolean
+  enableAgentResponsibilityTool?: boolean
   /**
-   * Operator @-mention prefix the duty MCP uses for `recommend_to_operator`
-   * (e.g. "@aguyaharonyair"). Comes from the duty's `mentions:` frontmatter.
-   * Empty string when the duty declared no operator (comment is still posted,
-   * just without a mention). Ignored when `enableDutyTool` is false.
+   * Operator @-mention prefix the agentResponsibility MCP uses for `recommend_to_operator`
+   * (e.g. "@aguyaharonyair"). Comes from the agentResponsibility's `mentions:` metadata.
+   * Empty string when the agentResponsibility declared no operator (comment is still posted,
+   * just without a mention). Ignored when `enableAgentResponsibilityTool` is false.
    */
-  dutyOperatorMention?: string
+  agentResponsibilityOperatorMention?: string
   /**
-   * Repo slug "owner/name" the duty MCP uses for `gh api compare/...` calls.
+   * Repo slug "owner/name" the agentResponsibility MCP uses for `gh api compare/...` calls.
    * Falls back from kody.config.json → GITHUB_REPOSITORY. Ignored when
-   * `enableDutyTool` is false.
+   * `enableAgentResponsibilityTool` is false.
    */
   dutyRepoSlug?: string
+  /** Canonical Kody state location used by locked agentResponsibility tools. */
+  agentResponsibilityState?: KodyConfig["state"]
   /**
-   * Slug of the running duty (`ctx.data.jobSlug`), stamped onto
-   * `recommend_to_operator` comments so the dashboard keys trust per duty.
-   * Ignored when `enableDutyTool` is false.
+   * Slug of the running agentResponsibility (`ctx.data.jobSlug`), stamped onto
+   * `recommend_to_operator` comments so the dashboard keys trust per agentResponsibility.
+   * Ignored when `enableAgentResponsibilityTool` is false.
    */
-  dutyDutySlug?: string
+  agentResponsibilitySlug?: string
   /**
    * Opt-in (chat/Brain): build an in-process MCP server exposing a
    * `fetch_repo` tool so the agent can clone and work on repos other than the
@@ -176,8 +202,8 @@ export interface AgentOptions {
   verifyToolMaxAttempts?: number | null
   /** Config passed to the verify tool's underlying `verifyAllWithRetry` call. */
   verifyConfig?: unknown
-  /** Executable name (for event-emission attribution from the verify tool). */
-  executableName?: string
+  /** AgentAction name (for event-emission attribution from the verify tool). */
+  agentActionName?: string
   /**
    * Filesystem sources the SDK should auto-load. `"project"` loads
    * `<cwd>/.claude/` (skills, commands, settings.json) and CLAUDE.md;
@@ -372,7 +398,13 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
 
   for (let attempt = 0; ; attempt++) {
     // The SDK message log reflects the final attempt — truncate on each try.
+    let ndjsonWriteFailed = false
+    let ndjsonWriteError: string | undefined
     const fullLog = fs.createWriteStream(ndjsonPath, { flags: "w" })
+    fullLog.on("error", (err) => {
+      ndjsonWriteFailed = true
+      ndjsonWriteError = err instanceof Error ? err.message : String(err)
+    })
     // Collect every `result` message's text. The SDK can emit multiple
     // `result` events when the session restarts mid-flight (background
     // checks, continuation turns). Keeping only the last one silently
@@ -385,8 +417,6 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     errorMessage = undefined
     tokens = { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 }
     messageCount = 0
-    let ndjsonWriteFailed = false
-    let ndjsonWriteError: string | undefined
     // Flips once the session runs a tool that could change durable state —
     // gates the connection retry so we never replay a mutating turn.
     let sawMutatingTool = false
@@ -396,6 +426,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     // that already finished its work (a real risk for read-only flows where
     // `sawMutatingTool` stays false and the retry gate would otherwise fire).
     let sawTerminalSuccess = false
+    let sawLoginRequired = false
     // Flips when the SDK reports a "success" result that produced zero model
     // output — the session never actually reached the model (the classic
     // signature: litellm proxy crashed, SDK still emits subtype "success" with
@@ -432,7 +463,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         const verifyServer = buildVerifyMcpServer({
           config: opts.verifyConfig as Parameters<typeof buildVerifyMcpServer>[0]["config"],
           cwd: opts.cwd,
-          executable: opts.executableName ?? "agent",
+          agentAction: opts.agentActionName ?? "agent",
           maxAttempts:
             typeof opts.verifyToolMaxAttempts === "number" && opts.verifyToolMaxAttempts > 0
               ? opts.verifyToolMaxAttempts
@@ -448,20 +479,21 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         getSubmitted = submitHandle.getSubmitted
         mcpEntries.push(["kody-submit", submitHandle.server as unknown as Record<string, unknown>])
       }
-      if (opts.enableDutyTool) {
-        // Lazy import — only duties in locked-toolbox mode pay for this.
-        const { buildDutyMcpServer } = await import("./dutyMcp.js")
+      if (opts.enableAgentResponsibilityTool) {
+        // Lazy import — only agentResponsibilities in locked-toolbox mode pay for this.
+        const { buildAgentResponsibilityMcpServer } = await import("./agent-responsibilityMcp.js")
         if (!opts.dutyRepoSlug) {
           throw new Error(
-            "enableDutyTool requires dutyRepoSlug (owner/name) — set kody.config.json github.{owner,repo} or GITHUB_REPOSITORY env var",
+            "enableAgentResponsibilityTool requires dutyRepoSlug (owner/name) — set kody.config.json github.{owner,repo} or GITHUB_REPOSITORY env var",
           )
         }
-        const dutyHandle = buildDutyMcpServer({
+        const dutyHandle = buildAgentResponsibilityMcpServer({
           repoSlug: opts.dutyRepoSlug,
-          operatorMention: opts.dutyOperatorMention ?? "",
-          ...(opts.dutyDutySlug ? { dutySlug: opts.dutyDutySlug } : {}),
+          state: opts.agentResponsibilityState,
+          operatorMention: opts.agentResponsibilityOperatorMention ?? "",
+          ...(opts.agentResponsibilitySlug ? { agentResponsibilitySlug: opts.agentResponsibilitySlug } : {}),
         })
-        mcpEntries.push(["kody-duty", dutyHandle.server as unknown as Record<string, unknown>])
+        mcpEntries.push(["kody-agentResponsibility", dutyHandle.server as unknown as Record<string, unknown>])
       }
       if (opts.enableFetchRepoTool && opts.reposRoot) {
         // Lazy import — keeps the SDK MCP machinery off the cold path for the
@@ -491,7 +523,23 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       if (typeof opts.maxTurns === "number" && opts.maxTurns > 0) {
         queryOptions.maxTurns = opts.maxTurns
       }
-      if (typeof opts.maxThinkingTokens === "number" && opts.maxThinkingTokens > 0) {
+      // `reasoningEffort` is the canonical user-facing surface. When
+      // set, it fully owns the maxThinkingTokens slot — including
+      // `"off"`, which clears the block entirely (cheapest path). The
+      // explicit `maxThinkingTokens` field is the legacy surface for
+      // direct callers (tests, agentActions) that don't go through
+      // the level vocabulary; it only applies when `reasoningEffort`
+      // is not provided.
+      if (opts.reasoningEffort !== undefined && opts.reasoningEffort !== null) {
+        if (opts.reasoningEffort === "off") {
+          // Explicitly off: do NOT set maxThinkingTokens. Also clear
+          // any value a legacy caller might have left in the option
+          // bag. The SDK sees no thinking block.
+        } else {
+          const budget = REASONING_BUDGETS[opts.reasoningEffort]
+          if (budget) queryOptions.maxThinkingTokens = budget
+        }
+      } else if (typeof opts.maxThinkingTokens === "number" && opts.maxThinkingTokens > 0) {
         queryOptions.maxThinkingTokens = opts.maxThinkingTokens
       }
       if (typeof opts.systemPromptAppend === "string" && opts.systemPromptAppend.length > 0) {
@@ -571,15 +619,20 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         if (next.done) break
         const msg = next.value
         messageCount++
-        try {
-          fullLog.write(`${JSON.stringify(msg)}\n`)
-        } catch (e) {
-          ndjsonWriteFailed = true
-          ndjsonWriteError = e instanceof Error ? e.message : String(e)
+        if (!ndjsonWriteFailed) {
+          try {
+            fullLog.write(`${JSON.stringify(msg)}\n`)
+          } catch (e) {
+            ndjsonWriteFailed = true
+            ndjsonWriteError = e instanceof Error ? e.message : String(e)
+          }
         }
 
         const line = renderEvent(msg as SdkMessageLike, { verbose: opts.verbose, quiet: opts.quiet })
-        if (line) process.stdout.write(`${line}\n`)
+        if (line) {
+          if (isClaudeLoginRequiredText(line)) sawLoginRequired = true
+          process.stdout.write(`${line}\n`)
+        }
 
         const m = msg as SdkMessageLike
 
@@ -667,6 +720,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
             outcomeKind = "ok"
             sawTerminalSuccess = true
             const text = (typeof m.result === "string" ? m.result : "").trim()
+            if (isClaudeLoginRequiredText(text)) sawLoginRequired = true
             if (text) resultTexts.push(text)
           } else {
             outcome = "failed"
@@ -705,6 +759,11 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       )
     }
     finalText = resultTexts.join("\n\n---\n\n")
+    if (outcome === "completed" && sawLoginRequired) {
+      outcome = "failed"
+      outcomeKind = "model_error"
+      errorMessage = "Claude Code reported it is not logged in; refusing to mark agent run successful"
+    }
 
     // Detect a hollow "success" — one the SDK reported as subtype "success"
     // but where the model never actually answered (the dead-proxy signature:

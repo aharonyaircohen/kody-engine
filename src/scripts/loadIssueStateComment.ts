@@ -13,7 +13,7 @@
  *   issueArg    optional — name of the CLI input holding the issue number (default "issue")
  */
 
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../agent-actions/types.js"
 import { getIssue } from "../issue.js"
 import { findStateComment } from "./issueStateComment.js"
 

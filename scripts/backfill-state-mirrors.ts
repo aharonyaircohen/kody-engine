@@ -125,7 +125,7 @@ function main(): void {
     const oldStatus = state.core.status
     state.core.phase = terminal.phase
     state.core.status = terminal.status
-    state.core.currentExecutable = null
+    state.core.currentAgentAction = null
     process.stdout.write(
       `#${issue.number}: ${oldPhase}/${oldStatus} → ${terminal.phase}/${terminal.status}\n`,
     )

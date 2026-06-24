@@ -10,7 +10,7 @@ vi.mock("../../src/state.js", async (importOriginal) => {
   }
 })
 
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/agent-actions/types.js"
 import { saveTaskState } from "../../src/scripts/saveTaskState.js"
 import { type Action, emptyState, type TaskState } from "../../src/state.js"
 
@@ -67,7 +67,7 @@ describe("saveTaskState: persistence", () => {
     expect(number).toBe(42)
     expect(cwd).toBe("/repo")
     expect(next.core.lastOutcome?.type).toBe("RUN_COMPLETED")
-    expect(next.core.currentExecutable).toBe("run")
+    expect(next.core.currentAgentAction).toBe("run")
     expect(typeof ctx.data.taskStateRendered).toBe("string")
   })
 
@@ -99,6 +99,35 @@ describe("saveTaskState: persistence", () => {
     await saveTaskState(ctx, profile, null)
     const next = writeTaskStateSpy.mock.calls[0]![2] as TaskState
     expect(next.core.runUrl).toBe("https://github.com/x/y/actions/runs/1")
+  })
+
+  it("persists the current run under a durable task job", async () => {
+    const action: Action = { type: "RUN_COMPLETED", payload: {}, timestamp: "2026-01-01T00:00:00Z" }
+    const ctx = makeCtx({
+      data: targetedData({
+        action,
+        jobKey: "instant:run:42",
+        jobId: "gh-42-1",
+        jobFlavor: "instant",
+        jobTarget: 42,
+        jobAgent: "kody",
+        runUrl: "https://github.com/x/y/actions/runs/42",
+      }),
+    })
+
+    await saveTaskState(ctx, profile, null)
+
+    const next = writeTaskStateSpy.mock.calls[0]![2] as TaskState
+    expect(next.jobs["instant:run:42"]).toMatchObject({
+      id: "instant:run:42",
+      agentAction: "run",
+      agent: "kody",
+      flavor: "instant",
+      target: 42,
+      status: "succeeded",
+      runUrl: "https://github.com/x/y/actions/runs/42",
+    })
+    expect(next.jobs["instant:run:42"]?.agentRuns.at(-1)?.id).toBe("gh-42-1")
   })
 
   it("does not mutate the loaded prior state when carrying prUrl/runUrl", async () => {

@@ -9,7 +9,6 @@ const CONFIG: PoolConfig = {
   region: "fra",
   guest: { cpu_kind: "performance", cpus: 1, memory_mb: 2048 },
   runnerApiKey: "runner-key",
-  litellmUrl: "http://kody-litellm.internal:4000",
   port: 8080,
   healthTimeoutMs: 5_000,
   repoTag: "o/r",
@@ -172,6 +171,50 @@ describe("PoolManager.resync", () => {
     // m2 pruned, but refill tops back up to min=2.
     expect(pm.status().free).toBe(2)
   })
+
+  it("caps adopted suspended machines at min and destroys idle surplus", async () => {
+    const existing: FlyMachine[] = [
+      { id: "old1", state: "suspended", private_ip: "fdaa::1" },
+      { id: "old2", state: "suspended", private_ip: "fdaa::2" },
+      { id: "old3", state: "suspended", private_ip: "fdaa::3" },
+    ]
+    const { fly, created, destroyed } = makeFly({ listPooled: async () => existing })
+    const pm = new PoolManager({ fly, config: CONFIG, postRun: async () => true })
+
+    await pm.resync()
+
+    expect(pm.status().free).toBe(2)
+    expect(created).toHaveLength(0)
+    expect(destroyed).toEqual(["old3"])
+  })
+
+  it("does not re-adopt a machine while it is being claimed", async () => {
+    let releaseStart!: () => void
+    const startGate = new Promise<void>((resolve) => {
+      releaseStart = resolve
+    })
+    const { fly, created, started } = makeFly({
+      start: async (id: string) => {
+        started.push(id)
+        await startGate
+      },
+      listPooled: async () => [{ id: "m1", state: "suspended", private_ip: "fdaa::1" }],
+    })
+    const pm = new PoolManager({ fly, config: { ...CONFIG, min: 1 }, postRun: async () => true })
+    await pm.refill()
+
+    const claim = pm.claim(JOB)
+    await waitFor(() => started.length === 1)
+    await pm.resync()
+
+    expect(created).toHaveLength(2)
+    expect(pm.status().free).toBe(1)
+
+    releaseStart()
+    await expect(claim).resolves.toMatchObject({ ok: true, machineId: "m1" })
+    await waitFor(() => pm.status().free === 1)
+    expect(created).toHaveLength(2)
+  })
 })
 
 describe("PoolManager.reconcile", () => {
@@ -183,5 +226,22 @@ describe("PoolManager.reconcile", () => {
     // adopted 1 + booted 1 more to reach min=2
     expect(pm.status().free).toBe(2)
     expect(created).toHaveLength(1)
+  })
+
+  it("adopts only min suspended machines and destroys restart surplus", async () => {
+    const existing: FlyMachine[] = [
+      { id: "old1", state: "suspended", private_ip: "fdaa::1" },
+      { id: "old2", state: "suspended", private_ip: "fdaa::2" },
+      { id: "old3", state: "suspended", private_ip: "fdaa::3" },
+      { id: "running", state: "started", private_ip: "fdaa::4" },
+    ]
+    const { fly, created, destroyed } = makeFly({ listPooled: async () => existing })
+    const pm = new PoolManager({ fly, config: CONFIG, postRun: async () => true })
+
+    await pm.reconcile()
+
+    expect(pm.status().free).toBe(2)
+    expect(created).toHaveLength(0)
+    expect(destroyed).toEqual(["old3"])
   })
 })

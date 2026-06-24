@@ -3,11 +3,13 @@ import {
   type Action,
   CorruptStateError,
   emptyState,
+  nextPendingTaskJob,
   parseStateComment,
   reduce,
   renderStateComment,
   STATE_BEGIN,
   STATE_END,
+  upsertTaskJobs,
 } from "../../src/state.js"
 
 describe("state: emptyState", () => {
@@ -16,10 +18,11 @@ describe("state: emptyState", () => {
     expect(s.schemaVersion).toBe(1)
     expect(s.core.phase).toBe("idle")
     expect(s.core.status).toBe("pending")
-    expect(s.core.currentExecutable).toBeNull()
+    expect(s.core.currentAgentAction).toBeNull()
     expect(s.core.lastOutcome).toBeNull()
     expect(s.core.attempts).toEqual({})
-    expect(s.executables).toEqual({})
+    expect(s.agentActions).toEqual({})
+    expect(s.jobs).toEqual({})
     expect(s.history).toEqual([])
   })
 })
@@ -28,34 +31,35 @@ describe("state: reduce", () => {
   const ok: Action = { type: "RUN_COMPLETED", payload: { prUrl: "u" }, timestamp: "2026-04-20T09:00:00Z" }
   const fail: Action = { type: "RUN_FAILED", payload: { reason: "boom" }, timestamp: "2026-04-20T09:05:00Z" }
 
-  it("increments attempts for the executable", () => {
+  it("increments attempts for the agentAction", () => {
     const s1 = reduce(emptyState(), "build", ok)
     expect(s1.core.attempts).toEqual({ build: 1 })
     const s2 = reduce(s1, "build", fail)
     expect(s2.core.attempts).toEqual({ build: 2 })
   })
 
-  it("records the latest action as lastOutcome and per-executable lastAction", () => {
+  it("records the latest action as lastOutcome and per-agentAction lastAction", () => {
     const s = reduce(emptyState(), "build", ok)
     expect(s.core.lastOutcome).toEqual(ok)
-    expect(s.executables.build?.lastAction).toEqual(ok)
+    expect(s.agentActions.build?.lastAction).toEqual(ok)
   })
 
   it("derives status=succeeded from *_COMPLETED", () => {
     expect(reduce(emptyState(), "build", ok).core.status).toBe("succeeded")
   })
 
-  it("records the staff that ran (durable proof) in core + history + comment", () => {
+  it("records the agent that ran (durable proof) in core + history + comment", () => {
     const s = reduce(emptyState(), "feature", ok, "shipped", "kody")
-    expect(s.core.ranAsStaff).toBe("kody")
-    expect(s.history.at(-1)?.staff).toBe("kody")
+    expect(s.core.ranAsAgent).toBe("kody")
+    expect(s.history.at(-1)?.agent).toBe("kody")
     expect(renderStateComment(s)).toContain("**Ran as:** `kody`")
     // round-trips through the comment wire format
-    expect(parseStateComment(renderStateComment(s)).core.ranAsStaff).toBe("kody")
+    expect(parseStateComment(renderStateComment(s)).core.ranAsAgent).toBe("kody")
   })
 
   it("stamps job identity (id/flavor/runUrl) + per-job status onto the ledger entry", () => {
     const s = reduce(emptyState(), "run", ok, "shipped", null, {
+      jobKey: "instant:run:42",
       jobId: "gh-77-1",
       flavor: "instant",
       runUrl: "https://ci/run/77",
@@ -67,8 +71,114 @@ describe("state: reduce", () => {
     expect(entry.status).toBe("succeeded")
   })
 
+  it("creates durable task job data separate from the history log", () => {
+    const s = reduce(emptyState(), "run", ok, "shipped", "kody", {
+      jobKey: "instant:run:42",
+      jobId: "gh-77-1",
+      flavor: "instant",
+      target: 42,
+      agent: "kody",
+      runUrl: "https://ci/run/77",
+    })
+
+    expect(Object.keys(s.jobs)).toEqual(["instant:run:42"])
+    expect(s.jobs["instant:run:42"]).toMatchObject({
+      id: "instant:run:42",
+      agentAction: "run",
+      agent: "kody",
+      flavor: "instant",
+      target: 42,
+      status: "succeeded",
+      runUrl: "https://ci/run/77",
+    })
+    expect(s.jobs["instant:run:42"]?.agentRuns).toEqual([
+      {
+        id: "gh-77-1",
+        timestamp: "2026-04-20T09:00:00Z",
+        action: "RUN_COMPLETED",
+        status: "succeeded",
+        note: "u",
+        runUrl: "https://ci/run/77",
+        prUrl: "u",
+      },
+    ])
+    expect(s.history.at(-1)?.jobId).toBe("gh-77-1")
+  })
+
+  it("keeps one durable job while appending retry runs underneath it", () => {
+    let s = reduce(emptyState(), "run", fail, undefined, null, {
+      jobKey: "instant:run:42",
+      jobId: "gh-1-1",
+      flavor: "instant",
+    })
+    s = reduce(s, "run", ok, "shipped", null, {
+      jobKey: "instant:run:42",
+      jobId: "gh-1-2",
+      flavor: "instant",
+    })
+
+    expect(Object.keys(s.jobs)).toEqual(["instant:run:42"])
+    expect(s.jobs["instant:run:42"]?.status).toBe("succeeded")
+    expect(s.jobs["instant:run:42"]?.agentRuns.map((r) => r.id)).toEqual(["gh-1-1", "gh-1-2"])
+    expect(s.jobs["instant:run:42"]?.agentRuns.map((r) => r.status)).toEqual(["failed", "succeeded"])
+    expect(s.history.map((h) => h.jobId)).toEqual(["gh-1-1", "gh-1-2"])
+  })
+
+  it("tracks separate jobs by stable key", () => {
+    let s = reduce(emptyState(), "run", ok, "shipped", null, {
+      jobKey: "instant:run:42",
+      jobId: "gh-run-1",
+      flavor: "instant",
+    })
+    s = reduce(s, "review", ok, "reviewing", null, {
+      jobKey: "instant:review:42",
+      jobId: "gh-review-1",
+      flavor: "instant",
+    })
+
+    expect(Object.keys(s.jobs).sort()).toEqual(["instant:review:42", "instant:run:42"])
+    expect(s.jobs["instant:run:42"]?.agentAction).toBe("run")
+    expect(s.jobs["instant:review:42"]?.agentAction).toBe("review")
+  })
+
+  it("caps run attempts per job while keeping the durable job", () => {
+    let s = emptyState()
+    for (let i = 0; i < 25; i++) {
+      s = reduce(s, "run", { type: "RUN_COMPLETED", payload: {}, timestamp: `t${i}` }, "shipped", null, {
+        jobKey: "instant:run:42",
+        jobId: `gh-${i}`,
+        flavor: "instant",
+      })
+    }
+
+    expect(s.jobs["instant:run:42"]?.agentRuns.length).toBe(20)
+    expect(s.jobs["instant:run:42"]?.agentRuns[0]?.id).toBe("gh-5")
+    expect(s.jobs["instant:run:42"]?.agentRuns.at(-1)?.id).toBe("gh-24")
+  })
+
+  it("stores agentResponsibility, agentAction, and agent as references instead of reshaping them", () => {
+    const s = reduce(emptyState(), "agent-responsibility-tick", ok, "idle", "triager", {
+      jobKey: "scheduled:triage:agent-responsibility-tick",
+      jobId: "gh-9-1",
+      flavor: "scheduled",
+      schedule: "*/5 * * * *",
+      agentResponsibility: "triage",
+      agentAction: "agent-responsibility-tick",
+      agent: "triager",
+    })
+
+    expect(s.jobs["scheduled:triage:agent-responsibility-tick"]).toMatchObject({
+      agentResponsibility: "triage",
+      agentAction: "agent-responsibility-tick",
+      agent: "triager",
+      flavor: "scheduled",
+      schedule: "*/5 * * * *",
+    })
+  })
+
   it("records a scheduled job's cadence on its ledger entry", () => {
     const s = reduce(emptyState(), "watch-stale-prs", ok, "idle", "kody", {
+      jobKey: "scheduled:watch-stale-prs",
       jobId: "gh-9-1",
       flavor: "scheduled",
       schedule: "7d",
@@ -98,9 +208,9 @@ describe("state: reduce", () => {
     expect(back.history.at(-1)?.flavor).toBe("scheduled")
   })
 
-  it("leaves ranAsStaff null when no staff (legacy, no persona)", () => {
+  it("leaves ranAsAgent null when no agent (legacy, no agent)", () => {
     const s = reduce(emptyState(), "build", ok)
-    expect(s.core.ranAsStaff ?? null).toBeNull()
+    expect(s.core.ranAsAgent ?? null).toBeNull()
     expect(renderStateComment(s)).not.toContain("Ran as:")
   })
 
@@ -121,6 +231,97 @@ describe("state: reduce", () => {
   it("is a no-op when action is null", () => {
     const s = emptyState()
     expect(reduce(s, "build", null)).toBe(s)
+  })
+})
+
+describe("state: explicit task jobs", () => {
+  it("seeds planned jobs as pending durable work", () => {
+    const s = upsertTaskJobs(
+      emptyState(),
+      [
+        { id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant", target: 42, reason: "api" },
+        { id: "instant:probe-skill:42", agentAction: "probe-skill", flavor: "instant", target: 42, reason: "ui" },
+      ],
+      "2026-06-08T08:00:00Z",
+    )
+
+    expect(Object.keys(s.jobs)).toEqual(["instant:plan-verify:42", "instant:probe-skill:42"])
+    expect(s.jobs["instant:plan-verify:42"]).toMatchObject({
+      agentAction: "plan-verify",
+      status: "pending",
+      target: 42,
+      reason: "api",
+      agentRuns: [],
+    })
+    expect(renderStateComment(s)).toContain("**Jobs:** 0/2 complete")
+  })
+
+  it("preserves completed runs when the plan is seen again", () => {
+    const planned = { id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant" as const, target: 42 }
+    let s = upsertTaskJobs(emptyState(), [planned], "2026-06-08T08:00:00Z")
+    s = reduce(
+      s,
+      "plan-verify",
+      { type: "VERIFY_COMPLETED", payload: {}, timestamp: "2026-06-08T08:05:00Z" },
+      "idle",
+      null,
+      {
+        jobKey: "instant:plan-verify:42",
+        jobId: "gh-1-1",
+        flavor: "instant",
+        target: 42,
+      },
+    )
+
+    const replanned = upsertTaskJobs(s, [{ ...planned, reason: "updated plan text" }], "2026-06-08T08:10:00Z")
+
+    expect(replanned.jobs["instant:plan-verify:42"]?.status).toBe("succeeded")
+    expect(replanned.jobs["instant:plan-verify:42"]?.reason).toBe("updated plan text")
+    expect(replanned.jobs["instant:plan-verify:42"]?.agentRuns.map((r) => r.id)).toEqual(["gh-1-1"])
+  })
+
+  it("selects the next pending planned job in plan order", () => {
+    let s = upsertTaskJobs(
+      emptyState(),
+      [
+        { id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant", target: 42 },
+        { id: "instant:probe-skill:42", agentAction: "probe-skill", flavor: "instant", target: 42 },
+      ],
+      "2026-06-08T08:00:00Z",
+    )
+    s = reduce(
+      s,
+      "plan-verify",
+      { type: "VERIFY_COMPLETED", payload: {}, timestamp: "2026-06-08T08:05:00Z" },
+      "idle",
+      null,
+      { jobKey: "instant:plan-verify:42", jobId: "gh-1-1", flavor: "instant", target: 42 },
+    )
+
+    const next = nextPendingTaskJob(s, ["instant:plan-verify:42", "instant:probe-skill:42"])
+    expect(next?.id).toBe("instant:probe-skill:42")
+  })
+
+  it("selects a failed planned job before later pending jobs so reruns retry the failed slice", () => {
+    let s = upsertTaskJobs(
+      emptyState(),
+      [
+        { id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant", target: 42 },
+        { id: "instant:probe-skill:42", agentAction: "probe-skill", flavor: "instant", target: 42 },
+      ],
+      "2026-06-08T08:00:00Z",
+    )
+    s = reduce(
+      s,
+      "plan-verify",
+      { type: "PLAN_VERIFY_FAILED", payload: { reason: "boom" }, timestamp: "2026-06-08T08:05:00Z" },
+      "idle",
+      null,
+      { jobKey: "instant:plan-verify:42", jobId: "gh-1-1", flavor: "instant", target: 42 },
+    )
+
+    const next = nextPendingTaskJob(s, ["instant:plan-verify:42", "instant:probe-skill:42"])
+    expect(next?.id).toBe("instant:plan-verify:42")
   })
 })
 
@@ -220,6 +421,34 @@ describe("state: parseStateComment / renderStateComment", () => {
     expect(reloaded.artifacts.plan?.content).toBe(planContentWithMarkers)
   })
 
+  it("round-trips durable jobs through the hidden state block", () => {
+    const action: Action = { type: "RUN_COMPLETED", payload: { prUrl: "u" }, timestamp: "2026-04-20T09:00:00Z" }
+    const s1 = reduce(emptyState(), "run", action, "shipped", "kody", {
+      jobKey: "instant:run:42",
+      jobId: "gh-77-1",
+      flavor: "instant",
+      target: 42,
+      agent: "kody",
+      runUrl: "https://ci/run/77",
+    })
+    const s2 = parseStateComment(renderStateComment(s1))
+
+    expect(s2.jobs["instant:run:42"]?.status).toBe("succeeded")
+    expect(s2.jobs["instant:run:42"]?.agentRuns.at(-1)?.id).toBe("gh-77-1")
+  })
+
+  it("parses older state comments that do not have jobs", () => {
+    const body = `${STATE_BEGIN}\n\n\`\`\`json\n${JSON.stringify({
+      schemaVersion: 1,
+      core: emptyState().core,
+      artifacts: {},
+      agentActions: {},
+      history: [],
+    })}\n\`\`\`\n\n${STATE_END}`
+
+    expect(parseStateComment(body).jobs).toEqual({})
+  })
+
   it("renders a human section with attempts + PR URL", () => {
     const s = reduce(emptyState(), "build", {
       type: "RUN_COMPLETED",
@@ -231,6 +460,29 @@ describe("state: parseStateComment / renderStateComment", () => {
     expect(body).toMatch(/## .*kody task state/)
     expect(body).toMatch(/\*\*Attempts:\*\* build:1/)
     expect(body).toMatch(/\*\*PR:\*\* https:\/\/ex\/pull\/42/)
+  })
+
+  it("renders a human jobs summary and jobs section", () => {
+    const s = reduce(
+      emptyState(),
+      "run",
+      {
+        type: "RUN_COMPLETED",
+        payload: {},
+        timestamp: "t",
+      },
+      "shipped",
+      null,
+      {
+        jobKey: "instant:run:42",
+        jobId: "gh-1",
+        flavor: "instant",
+      },
+    )
+    const body = renderStateComment(s)
+    expect(body).toContain("**Jobs:** 1/1 complete")
+    expect(body).toContain("### Jobs")
+    expect(body).toContain("`instant:run:42` **run** → `succeeded` (1 runs)")
   })
 
   it("puts the title at the top and collapses the JSON in <details>", () => {

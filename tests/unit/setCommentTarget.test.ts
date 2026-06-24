@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/agent-actions/types.js"
 import { setCommentTarget } from "../../src/scripts/setCommentTarget.js"
 
 const profile = { name: "release-prepare" } as Profile
