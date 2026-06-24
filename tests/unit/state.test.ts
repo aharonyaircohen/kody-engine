@@ -18,10 +18,10 @@ describe("state: emptyState", () => {
     expect(s.schemaVersion).toBe(1)
     expect(s.core.phase).toBe("idle")
     expect(s.core.status).toBe("pending")
-    expect(s.core.currentExecutable).toBeNull()
+    expect(s.core.currentAgentAction).toBeNull()
     expect(s.core.lastOutcome).toBeNull()
     expect(s.core.attempts).toEqual({})
-    expect(s.executables).toEqual({})
+    expect(s.agentActions).toEqual({})
     expect(s.jobs).toEqual({})
     expect(s.history).toEqual([])
   })
@@ -31,30 +31,30 @@ describe("state: reduce", () => {
   const ok: Action = { type: "RUN_COMPLETED", payload: { prUrl: "u" }, timestamp: "2026-04-20T09:00:00Z" }
   const fail: Action = { type: "RUN_FAILED", payload: { reason: "boom" }, timestamp: "2026-04-20T09:05:00Z" }
 
-  it("increments attempts for the executable", () => {
+  it("increments attempts for the agentAction", () => {
     const s1 = reduce(emptyState(), "build", ok)
     expect(s1.core.attempts).toEqual({ build: 1 })
     const s2 = reduce(s1, "build", fail)
     expect(s2.core.attempts).toEqual({ build: 2 })
   })
 
-  it("records the latest action as lastOutcome and per-executable lastAction", () => {
+  it("records the latest action as lastOutcome and per-agentAction lastAction", () => {
     const s = reduce(emptyState(), "build", ok)
     expect(s.core.lastOutcome).toEqual(ok)
-    expect(s.executables.build?.lastAction).toEqual(ok)
+    expect(s.agentActions.build?.lastAction).toEqual(ok)
   })
 
   it("derives status=succeeded from *_COMPLETED", () => {
     expect(reduce(emptyState(), "build", ok).core.status).toBe("succeeded")
   })
 
-  it("records the staff that ran (durable proof) in core + history + comment", () => {
+  it("records the agent that ran (durable proof) in core + history + comment", () => {
     const s = reduce(emptyState(), "feature", ok, "shipped", "kody")
-    expect(s.core.ranAsStaff).toBe("kody")
-    expect(s.history.at(-1)?.staff).toBe("kody")
+    expect(s.core.ranAsAgent).toBe("kody")
+    expect(s.history.at(-1)?.agent).toBe("kody")
     expect(renderStateComment(s)).toContain("**Ran as:** `kody`")
     // round-trips through the comment wire format
-    expect(parseStateComment(renderStateComment(s)).core.ranAsStaff).toBe("kody")
+    expect(parseStateComment(renderStateComment(s)).core.ranAsAgent).toBe("kody")
   })
 
   it("stamps job identity (id/flavor/runUrl) + per-job status onto the ledger entry", () => {
@@ -77,21 +77,21 @@ describe("state: reduce", () => {
       jobId: "gh-77-1",
       flavor: "instant",
       target: 42,
-      persona: "kody",
+      agent: "kody",
       runUrl: "https://ci/run/77",
     })
 
     expect(Object.keys(s.jobs)).toEqual(["instant:run:42"])
     expect(s.jobs["instant:run:42"]).toMatchObject({
       id: "instant:run:42",
-      executable: "run",
-      staff: "kody",
+      agentAction: "run",
+      agent: "kody",
       flavor: "instant",
       target: 42,
       status: "succeeded",
       runUrl: "https://ci/run/77",
     })
-    expect(s.jobs["instant:run:42"]?.runs).toEqual([
+    expect(s.jobs["instant:run:42"]?.agentRuns).toEqual([
       {
         id: "gh-77-1",
         timestamp: "2026-04-20T09:00:00Z",
@@ -119,8 +119,8 @@ describe("state: reduce", () => {
 
     expect(Object.keys(s.jobs)).toEqual(["instant:run:42"])
     expect(s.jobs["instant:run:42"]?.status).toBe("succeeded")
-    expect(s.jobs["instant:run:42"]?.runs.map((r) => r.id)).toEqual(["gh-1-1", "gh-1-2"])
-    expect(s.jobs["instant:run:42"]?.runs.map((r) => r.status)).toEqual(["failed", "succeeded"])
+    expect(s.jobs["instant:run:42"]?.agentRuns.map((r) => r.id)).toEqual(["gh-1-1", "gh-1-2"])
+    expect(s.jobs["instant:run:42"]?.agentRuns.map((r) => r.status)).toEqual(["failed", "succeeded"])
     expect(s.history.map((h) => h.jobId)).toEqual(["gh-1-1", "gh-1-2"])
   })
 
@@ -137,8 +137,8 @@ describe("state: reduce", () => {
     })
 
     expect(Object.keys(s.jobs).sort()).toEqual(["instant:review:42", "instant:run:42"])
-    expect(s.jobs["instant:run:42"]?.executable).toBe("run")
-    expect(s.jobs["instant:review:42"]?.executable).toBe("review")
+    expect(s.jobs["instant:run:42"]?.agentAction).toBe("run")
+    expect(s.jobs["instant:review:42"]?.agentAction).toBe("review")
   })
 
   it("caps run attempts per job while keeping the durable job", () => {
@@ -151,26 +151,26 @@ describe("state: reduce", () => {
       })
     }
 
-    expect(s.jobs["instant:run:42"]?.runs.length).toBe(20)
-    expect(s.jobs["instant:run:42"]?.runs[0]?.id).toBe("gh-5")
-    expect(s.jobs["instant:run:42"]?.runs.at(-1)?.id).toBe("gh-24")
+    expect(s.jobs["instant:run:42"]?.agentRuns.length).toBe(20)
+    expect(s.jobs["instant:run:42"]?.agentRuns[0]?.id).toBe("gh-5")
+    expect(s.jobs["instant:run:42"]?.agentRuns.at(-1)?.id).toBe("gh-24")
   })
 
-  it("stores duty, executable, and staff as references instead of reshaping them", () => {
-    const s = reduce(emptyState(), "duty-tick", ok, "idle", "triager", {
-      jobKey: "scheduled:triage:duty-tick",
+  it("stores agentResponsibility, agentAction, and agent as references instead of reshaping them", () => {
+    const s = reduce(emptyState(), "agent-responsibility-tick", ok, "idle", "triager", {
+      jobKey: "scheduled:triage:agent-responsibility-tick",
       jobId: "gh-9-1",
       flavor: "scheduled",
       schedule: "*/5 * * * *",
-      duty: "triage",
-      executable: "duty-tick",
-      persona: "triager",
+      agentResponsibility: "triage",
+      agentAction: "agent-responsibility-tick",
+      agent: "triager",
     })
 
-    expect(s.jobs["scheduled:triage:duty-tick"]).toMatchObject({
-      duty: "triage",
-      executable: "duty-tick",
-      staff: "triager",
+    expect(s.jobs["scheduled:triage:agent-responsibility-tick"]).toMatchObject({
+      agentResponsibility: "triage",
+      agentAction: "agent-responsibility-tick",
+      agent: "triager",
       flavor: "scheduled",
       schedule: "*/5 * * * *",
     })
@@ -208,9 +208,9 @@ describe("state: reduce", () => {
     expect(back.history.at(-1)?.flavor).toBe("scheduled")
   })
 
-  it("leaves ranAsStaff null when no staff (legacy, no persona)", () => {
+  it("leaves ranAsAgent null when no agent (legacy, no agent)", () => {
     const s = reduce(emptyState(), "build", ok)
-    expect(s.core.ranAsStaff ?? null).toBeNull()
+    expect(s.core.ranAsAgent ?? null).toBeNull()
     expect(renderStateComment(s)).not.toContain("Ran as:")
   })
 
@@ -239,25 +239,25 @@ describe("state: explicit task jobs", () => {
     const s = upsertTaskJobs(
       emptyState(),
       [
-        { id: "instant:plan-verify:42", executable: "plan-verify", flavor: "instant", target: 42, reason: "api" },
-        { id: "instant:probe-skill:42", executable: "probe-skill", flavor: "instant", target: 42, reason: "ui" },
+{ id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant", target: 42, reason: "api" },
+        { id: "instant:probe-skill:42", agentAction: "probe-skill", flavor: "instant", target: 42, reason: "ui" },
       ],
       "2026-06-08T08:00:00Z",
     )
 
     expect(Object.keys(s.jobs)).toEqual(["instant:plan-verify:42", "instant:probe-skill:42"])
     expect(s.jobs["instant:plan-verify:42"]).toMatchObject({
-      executable: "plan-verify",
+      agentAction: "plan-verify",
       status: "pending",
       target: 42,
       reason: "api",
-      runs: [],
+      agentRuns: [],
     })
     expect(renderStateComment(s)).toContain("**Jobs:** 0/2 complete")
   })
 
   it("preserves completed runs when the plan is seen again", () => {
-    const planned = { id: "instant:plan-verify:42", executable: "plan-verify", flavor: "instant" as const, target: 42 }
+const planned = { id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant" as const, target: 42 }
     let s = upsertTaskJobs(emptyState(), [planned], "2026-06-08T08:00:00Z")
     s = reduce(
       s,
@@ -277,15 +277,15 @@ describe("state: explicit task jobs", () => {
 
     expect(replanned.jobs["instant:plan-verify:42"]?.status).toBe("succeeded")
     expect(replanned.jobs["instant:plan-verify:42"]?.reason).toBe("updated plan text")
-    expect(replanned.jobs["instant:plan-verify:42"]?.runs.map((r) => r.id)).toEqual(["gh-1-1"])
+    expect(replanned.jobs["instant:plan-verify:42"]?.agentRuns.map((r) => r.id)).toEqual(["gh-1-1"])
   })
 
   it("selects the next pending planned job in plan order", () => {
     let s = upsertTaskJobs(
       emptyState(),
       [
-        { id: "instant:plan-verify:42", executable: "plan-verify", flavor: "instant", target: 42 },
-        { id: "instant:probe-skill:42", executable: "probe-skill", flavor: "instant", target: 42 },
+{ id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant", target: 42 },
+        { id: "instant:probe-skill:42", agentAction: "probe-skill", flavor: "instant", target: 42 },
       ],
       "2026-06-08T08:00:00Z",
     )
@@ -306,8 +306,8 @@ describe("state: explicit task jobs", () => {
     let s = upsertTaskJobs(
       emptyState(),
       [
-        { id: "instant:plan-verify:42", executable: "plan-verify", flavor: "instant", target: 42 },
-        { id: "instant:probe-skill:42", executable: "probe-skill", flavor: "instant", target: 42 },
+{ id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant", target: 42 },
+        { id: "instant:probe-skill:42", agentAction: "probe-skill", flavor: "instant", target: 42 },
       ],
       "2026-06-08T08:00:00Z",
     )
@@ -428,13 +428,13 @@ describe("state: parseStateComment / renderStateComment", () => {
       jobId: "gh-77-1",
       flavor: "instant",
       target: 42,
-      persona: "kody",
+      agent: "kody",
       runUrl: "https://ci/run/77",
     })
     const s2 = parseStateComment(renderStateComment(s1))
 
     expect(s2.jobs["instant:run:42"]?.status).toBe("succeeded")
-    expect(s2.jobs["instant:run:42"]?.runs.at(-1)?.id).toBe("gh-77-1")
+    expect(s2.jobs["instant:run:42"]?.agentRuns.at(-1)?.id).toBe("gh-77-1")
   })
 
   it("parses older state comments that do not have jobs", () => {
@@ -442,7 +442,7 @@ describe("state: parseStateComment / renderStateComment", () => {
       schemaVersion: 1,
       core: emptyState().core,
       artifacts: {},
-      executables: {},
+      agentActions: {},
       history: [],
     })}\n\`\`\`\n\n${STATE_END}`
 

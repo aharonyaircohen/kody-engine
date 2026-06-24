@@ -11,7 +11,7 @@ vi.mock("../../src/lifecycleLabels.js", () => ({
   setKodyLabel: vi.fn(),
 }))
 
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/agent-actions/types.js"
 import { postIssueComment as ghPostIssueComment } from "../../src/issue.js"
 import { setKodyLabel } from "../../src/lifecycleLabels.js"
 import { postIssueComment } from "../../src/scripts/postIssueComment.js"
@@ -90,7 +90,7 @@ describe("postIssueComment: container-child softening", () => {
     expect(body).toContain("feature container will route")
   })
 
-  it("includes the child's executable name in the informational message", async () => {
+  it("includes the child's agentAction name in the informational message", async () => {
     process.env.KODY_CONTAINER_PARENT = "bug"
     await postIssueComment(makeContainerChildCtx(), { name: "research" } as Profile, null)
     const body = String(vi.mocked(ghPostIssueComment).mock.calls[0]![1])

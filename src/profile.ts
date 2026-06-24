@@ -1,7 +1,7 @@
 /**
  * Profile loader + validator.
  *
- * Reads an executable profile.json from disk, applies permissive defaults,
+ * Reads an agentAction profile.json from disk, applies permissive defaults,
  * and checks invariants (every referenced script exists in the registry,
  * every input spec is well-formed, etc.). The executor treats a loaded
  * Profile as trustworthy.
@@ -9,8 +9,8 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { DUTY_MCP_TOOL_NAMES } from "./dutyMcp.js"
 import type {
+  CapabilityKind,
   ClaudeCodeSpec,
   CliToolSpec,
   ContainerChild,
@@ -19,10 +19,12 @@ import type {
   OutputArtifactSpec,
   Profile,
   ScriptEntry,
-} from "./executables/types.js"
+} from "./agent-actions/types.js"
+import { AGENT_RESPONSIBILITY_MCP_TOOL_NAMES } from "./agent-responsibilityMcp.js"
+import { parseReasoningEffort } from "./config.js"
 import { applyLifecycle } from "./lifecycles/index.js"
 import { ProfileError } from "./profile-error.js"
-import { resolveExecutable } from "./registry.js"
+import { resolveAgentAction } from "./registry.js"
 import { captureSubagentTemplates } from "./subagents.js"
 
 export { ProfileError } from "./profile-error.js"
@@ -32,6 +34,7 @@ const VALID_PERMISSION_MODES = new Set(["default", "acceptEdits", "plan", "bypas
 const VALID_ROLES = new Set(["primitive", "orchestrator", "container", "watch", "utility"])
 const VALID_CONTAINER_CHILD_TARGETS = new Set(["issue", "pr"])
 const VALID_PHASES = new Set(["research", "planning", "implementing", "reviewing", "shipped", "failed", "idle"])
+const VALID_CAPABILITY_KINDS = new Set(["observe", "act", "verify"])
 
 /**
  * Top-level profile keys that the loader understands. Unknown keys are
@@ -41,11 +44,17 @@ const VALID_PHASES = new Set(["research", "planning", "implementing", "reviewing
  */
 const KNOWN_PROFILE_KEYS = new Set([
   "name",
-  "executable",
-  "staff",
+  "action",
+  "agentAction",
+  "agent",
   "every",
-  "dutyTools",
+  "agentResponsibilityTools",
+  "tools",
   "mentions",
+  "capabilityKind",
+  "stage",
+  "readsFrom",
+  "writesTo",
   "describe",
   "role",
   "kind",
@@ -98,28 +107,28 @@ export function loadProfile(profilePath: string): Profile {
     )
   }
 
-  // Duty-as-reference: a duty names an executable (the HOW) instead of embedding
-  // it. Resolve that executable's full profile and overlay this duty's identity
-  // (name) + staff (WHO) + every (WHEN) + mentions. The duty folder is then a
+  // AgentResponsibility-as-reference: a agentResponsibility names an agentAction (the HOW) instead of embedding
+  // it. Resolve that agentAction's full profile and overlay this agentResponsibility's identity
+  // (name) + agent (WHO) + mentions. The agentResponsibility folder then
   // thin binding — no claudeCode/prompt/scripts of its own.
-  // executable = how, staff = who, duty = why/when.
-  const execRef = typeof r.executable === "string" ? r.executable.trim() : ""
+  // agentAction = how, agent = who, agentResponsibility = why.
+  const execRef = typeof r.agentAction === "string" ? r.agentAction.trim() : ""
   if (execRef) {
-    const refPath = resolveExecutable(execRef)
+    const refPath = resolveAgentAction(execRef)
     if (!refPath) {
-      throw new ProfileError(profilePath, `duty references unknown executable '${execRef}'`)
+      throw new ProfileError(profilePath, `agentResponsibility references unknown agentAction '${execRef}'`)
     }
     const base = loadProfile(refPath)
     return {
       ...base,
       name: requireString(profilePath, r, "name"),
-      executable: execRef,
+      action: typeof r.action === "string" && r.action.trim() ? r.action.trim() : undefined,
+      agentAction: execRef,
       describe: typeof r.describe === "string" ? r.describe : base.describe,
-      staff: typeof r.staff === "string" && r.staff.trim() ? r.staff.trim() : base.staff,
-      every: typeof r.every === "string" && r.every.trim() ? r.every.trim() : undefined,
-      dutyTools: Array.isArray(r.dutyTools)
-        ? (r.dutyTools as string[]).map((t) => String(t).trim()).filter(Boolean)
-        : base.dutyTools,
+      capabilityKind: parseCapabilityKind(profilePath, r.capabilityKind) ?? base.capabilityKind,
+      agent: typeof r.agent === "string" && r.agent.trim() ? r.agent.trim() : base.agent,
+      agentResponsibilityTools:
+        parseStringArray(r.agentResponsibilityTools ?? r.tools) ?? base.agentResponsibilityTools,
       mentions: Array.isArray(r.mentions)
         ? (r.mentions as string[]).map((m) => String(m).trim()).filter(Boolean)
         : base.mentions,
@@ -168,16 +177,14 @@ export function loadProfile(profilePath: string): Profile {
 
   const profile: Profile = {
     name: requireString(profilePath, r, "name"),
-    executable: undefined,
+    action: typeof r.action === "string" && r.action.trim() ? r.action.trim() : undefined,
+    agentAction: undefined,
     describe: typeof r.describe === "string" ? r.describe : "",
-    // Optional persona to run as. Empty/blank string → undefined (no persona).
-    staff: typeof r.staff === "string" && r.staff.trim() ? r.staff.trim() : undefined,
-    // Optional recurrence cadence (scheduled duty). Blank → undefined (on-demand).
-    every: typeof r.every === "string" && r.every.trim() ? r.every.trim() : undefined,
-    // Locked-toolbox palette + mentions (folder-duty successors to frontmatter).
-    dutyTools: Array.isArray(r.dutyTools)
-      ? (r.dutyTools as string[]).map((t) => String(t).trim()).filter(Boolean)
-      : undefined,
+    capabilityKind: parseCapabilityKind(profilePath, r.capabilityKind),
+    // Optional agent to run as. Empty/blank string → undefined (no agent).
+    agent: typeof r.agent === "string" && r.agent.trim() ? r.agent.trim() : undefined,
+    // Locked-toolbox palette + mentions from folder-agentResponsibility profile metadata.
+    agentResponsibilityTools: parseStringArray(r.agentResponsibilityTools ?? r.tools),
     mentions: Array.isArray(r.mentions)
       ? (r.mentions as string[]).map((m) => String(m).trim()).filter(Boolean)
       : undefined,
@@ -210,30 +217,35 @@ export function loadProfile(profilePath: string): Profile {
     applyLifecycle(profile, profilePath)
   }
 
-  // Fail-fast at load (profile.json is static, unlike .md frontmatter):
-  // a dutyTools typo should be caught here, not at the duty's first run.
-  if (profile.dutyTools && profile.dutyTools.length > 0) {
-    const palette = new Set<string>(DUTY_MCP_TOOL_NAMES)
-    const unknown = profile.dutyTools.filter((t) => !palette.has(t))
+  // Fail-fast at load (profile.json is static):
+  // a agentResponsibilityTools typo should be caught here, not at the agentResponsibility's first run.
+  if (profile.agentResponsibilityTools && profile.agentResponsibilityTools.length > 0) {
+    const palette = new Set<string>(AGENT_RESPONSIBILITY_MCP_TOOL_NAMES)
+    const unknown = profile.agentResponsibilityTools.filter((t) => !palette.has(t))
     if (unknown.length > 0) {
       throw new ProfileError(
         profilePath,
-        `dutyTools not in the kody-duty palette: ${unknown.join(", ")}. Available: ${[...DUTY_MCP_TOOL_NAMES].join(", ")}`,
+        `agentResponsibilityTools not in the kody-agentResponsibility palette: ${unknown.join(", ")}. Available: ${[...AGENT_RESPONSIBILITY_MCP_TOOL_NAMES].join(", ")}`,
       )
     }
   }
 
   // State-script pairing: writeJobStateFile/parseJobStateFromAgentResult read
-  // ctx.data.jobState, which only a state loader (loadDutyState or
+  // ctx.data.jobState, which only a state loader (loadAgentResponsibilityState or
   // loadJobFromFile) sets. Declaring the save half without the load half throws
   // at run time — catch the misconfig at load instead.
   const preNames = new Set(profile.scripts.preflight.map((e) => e.script).filter(Boolean))
   const postNames = profile.scripts.postflight.map((e) => e.script).filter(Boolean)
   const needsState = postNames.includes("writeJobStateFile") || postNames.includes("parseJobStateFromAgentResult")
-  // Any of these preflights populate ctx.data.jobState: loadDutyState (folder
-  // duty), loadJobFromFile (markdown duty via duty-tick), runTickScript (scripted
-  // duty via duty-tick-scripted).
-  const STATE_LOADERS = ["loadDutyState", "loadJobFromFile", "runTickScript"]
+  // Any of these preflights populate ctx.data.jobState: loadAgentResponsibilityState (folder
+  // agentResponsibility), loadJobFromFile (markdown agentResponsibility via agent-responsibility-tick), runTickScript (scripted
+  // agentResponsibility via agent-responsibility-tick-scripted).
+  const STATE_LOADERS = [
+    "loadAgentResponsibilityState",
+    "loadJobFromFile",
+    "runTickScript",
+    "runScheduledAgentActionTick",
+  ]
   if (needsState && !STATE_LOADERS.some((s) => preNames.has(s))) {
     throw new ProfileError(
       profilePath,
@@ -242,18 +254,18 @@ export function loadProfile(profilePath: string): Profile {
   }
 
   // Snapshot declared subagents now, on the default checkout, so they survive a
-  // later task-branch switch that may drop the duty's agents/ dir.
+  // later task-branch switch that may drop the agentResponsibility's agents/ dir.
   profile.subagentTemplates = captureSubagentTemplates(profile)
 
   return profile
 }
 
 /**
- * Capture a profile's prompt template files at load time — `prompt.md` and any
- * `prompts/*.md` — keyed by absolute path. Done here (alongside reading
- * profile.json, before any preflight) so the templates are safe from
- * working-tree churn later in the run (see Profile.promptTemplates). Best-effort:
- * missing files are simply absent from the map.
+ * Capture a profile's prompt template files at load time — `prompt.md`,
+ * folder-agentResponsibility `agent-responsibility.md`, and any `prompts/*.md` — keyed by absolute path.
+ * Done here (alongside reading profile.json, before any preflight) so the
+ * templates are safe from working-tree churn later in the run
+ * (see Profile.promptTemplates). Best-effort: missing files are simply absent.
  */
 function readPromptTemplates(dir: string): Record<string, string> {
   const out: Record<string, string> = {}
@@ -265,6 +277,7 @@ function readPromptTemplates(dir: string): Record<string, string> {
     }
   }
   read(path.join(dir, "prompt.md"))
+  read(path.join(dir, "agent-responsibility.md"))
   try {
     const promptsDir = path.join(dir, "prompts")
     for (const ent of fs.readdirSync(promptsDir)) {
@@ -297,6 +310,20 @@ function requireString(p: string, r: Record<string, unknown>, key: string): stri
     throw new ProfileError(p, `"${key}" must be a non-empty string`)
   }
   return v
+}
+
+function parseCapabilityKind(p: string, raw: unknown): CapabilityKind | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined
+  if (typeof raw !== "string" || !VALID_CAPABILITY_KINDS.has(raw)) {
+    throw new ProfileError(p, `"capabilityKind" must be one of: observe | act | verify`)
+  }
+  return raw as CapabilityKind
+}
+
+function parseStringArray(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const values = raw.map((t) => String(t).trim()).filter(Boolean)
+  return values.length > 0 ? values : undefined
 }
 
 function parseInputs(p: string, raw: unknown): InputSpec[] {
@@ -349,8 +376,8 @@ function parseClaudeCode(p: string, raw: unknown): ClaudeCodeSpec {
   }
 
   const tools = Array.isArray(r.tools) ? (r.tools as string[]) : []
-  // An empty tools array is permitted for configless / agentless executables
-  // (e.g. `init`, `release`). Such executables must set ctx.skipAgent in a
+  // An empty tools array is permitted for configless / agentless agentActions
+  // (e.g. `init`, `release`). Such agentActions must set ctx.skipAgent in a
   // preflight script — the executor refuses to invoke the agent without tools
   // and without skipAgent, surfacing the misconfiguration loudly.
 
@@ -359,6 +386,7 @@ function parseClaudeCode(p: string, raw: unknown): ClaudeCodeSpec {
     permissionMode,
     maxTurns: typeof r.maxTurns === "number" ? r.maxTurns : null,
     maxThinkingTokens: typeof r.maxThinkingTokens === "number" ? r.maxThinkingTokens : null,
+    reasoningEffort: typeof r.reasoningEffort === "string" ? parseReasoningEffort(r.reasoningEffort) : null,
     maxTurnTimeoutSec: typeof r.maxTurnTimeoutSec === "number" ? r.maxTurnTimeoutSec : null,
     systemPromptAppend: typeof r.systemPromptAppend === "string" ? r.systemPromptAppend : null,
     cacheable: r.cacheable === true,
@@ -380,6 +408,17 @@ function parseCliTools(p: string, raw: unknown): CliToolSpec[] {
   if (!Array.isArray(raw)) throw new ProfileError(p, `"cliTools" must be an array or absent`)
   const out: CliToolSpec[] = []
   for (const [i, item] of raw.entries()) {
+    if (typeof item === "string" && item.trim()) {
+      const name = item.trim()
+      out.push({
+        name,
+        install: { required: false, checkCommand: `command -v ${name}` },
+        verify: `command -v ${name}`,
+        usage: "",
+        allowedUses: [],
+      })
+      continue
+    }
     if (!item || typeof item !== "object") {
       throw new ProfileError(p, `cliTools[${i}] must be an object`)
     }
@@ -529,7 +568,7 @@ function parseScriptList(p: string, key: string, raw: unknown): ScriptEntry[] {
     if (!hasScript && !hasShell) {
       throw new ProfileError(
         p,
-        `scripts.${key}[${i}] must set "script" (registered TS function) or "shell" (filename in executable dir)`,
+        `scripts.${key}[${i}] must set "script" (registered TS function) or "shell" (filename in agentAction dir)`,
       )
     }
     const entry: ScriptEntry = {}

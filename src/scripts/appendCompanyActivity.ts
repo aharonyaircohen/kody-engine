@@ -1,42 +1,25 @@
 /**
- * Postflight: append a Company-Activity record after a duty tick.
+ * Postflight: append a Company Activity record for an agent responsibility tick.
  *
- * This is the engine-authored "what the company did" feed the dashboard
- * surfaces — a named, attributed action rather than a raw commit/PR. Every
- * `duty-tick` (scheduled OR manual "Run now") passes through here, so each one
- * records WHO ran WHAT, WHY, and the RESULT:
- *
- *   { ts, action, duty, dutyTitle, staff, staffTitle, trigger, outcome,
- *     durationMs, runUrl }
- *
- * Appended as one JSON line to `.kody/activity/<YYYY-MM-DD>.jsonl` via the
- * GitHub Contents API (read blob → append → PUT), committed to the dedicated
- * `kody-state` branch (NOT the default branch — this fires on every tick) so
- * the dashboard can read it with no shared state. Best-effort: any failure is
- * logged and swallowed — activity logging must never fail a duty run.
+ * The activity feed is Kody runtime state, so it lives in the configured state
+ * repo under `activity/<YYYY-MM-DD>.jsonl`.
  */
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../agent-actions/types.js"
 import { getRunUrl } from "../gha.js"
-import { gh } from "../issue.js"
-import { ensureStateBranch, STATE_BRANCH } from "../stateBranch.js"
+import { appendStateLine } from "../stateRepo.js"
 
 interface ActivityRecord {
   ts: string
   action: string
-  duty: string
-  dutyTitle: string | null
-  staff: string | null
-  staffTitle: string | null
+  agentResponsibility: string
+  agentResponsibilityTitle: string | null
+  agent: string | null
+  agentTitle: string | null
   trigger: "schedule" | "manual" | "event"
   outcome: "completed" | "failed" | "unknown"
-  /**
-   * Structured failure kind from the agent (stalled, out_of_turns,
-   * rate_limit, tool_error, model_error, ...). Null on success or when the
-   * agent didn't run. Lets the dashboard say WHY a run failed instead of a
-   * bare "failed", and distinguish "stopped early" from a real failure.
-   */
+  /** Structured failure kind: stalled, out_of_turns, rate_limit, tool_error, etc. */
   outcomeKind: string | null
-  /** Short human-readable failure message (the agent's `error`). */
+  /** Short human-readable failure message. */
   reason: string | null
   durationMs: number | null
   runUrl: string | null
@@ -49,60 +32,28 @@ function resolveTrigger(force: boolean): ActivityRecord["trigger"] {
   return "event"
 }
 
-function appendLine(owner: string, repo: string, cwd: string, record: ActivityRecord): void {
-  const filePath = `.kody/activity/${record.ts.slice(0, 10)}.jsonl`
-  let existing = ""
-  let sha: string | undefined
-
-  try {
-    const out = gh(["api", `/repos/${owner}/${repo}/contents/${filePath}?ref=${STATE_BRANCH}`], { cwd })
-    const json = JSON.parse(out) as { content?: string; sha?: string }
-    if (json.sha) sha = json.sha
-    if (json.content) existing = Buffer.from(json.content, "base64").toString("utf-8")
-  } catch {
-    /* 404 — file (or state branch) doesn't exist yet; start fresh */
-  }
-
-  const body = `${existing}${JSON.stringify(record)}\n`
-  const payload: Record<string, unknown> = {
-    message: `chore(activity): ${record.action}`,
-    content: Buffer.from(body, "utf-8").toString("base64"),
-    // Keep this high-frequency feed off the default branch.
-    branch: STATE_BRANCH,
-  }
-  if (sha) payload.sha = sha
-
-  // The Contents API rejects a write to a branch that doesn't exist yet.
-  ensureStateBranch(owner, repo, cwd)
-
-  gh(["api", "--method", "PUT", `/repos/${owner}/${repo}/contents/${filePath}`, "--input", "-"], {
-    cwd,
-    input: JSON.stringify(payload),
-  })
+function appendLine(ctx: Parameters<PostflightScript>[0], record: ActivityRecord): void {
+  const filePath = `activity/${record.ts.slice(0, 10)}.jsonl`
+  appendStateLine(ctx.config, ctx.cwd, filePath, JSON.stringify(record), `chore(activity): ${record.action}`)
 }
 
 export const appendCompanyActivity: PostflightScript = async (ctx, _profile, agentResult) => {
   try {
-    const owner = ctx.config?.github?.owner
-    const repo = ctx.config?.github?.repo
-    // `jobSlug` is set by loadJobFromFile (agent path); the scripted path
-    // (runTickScript) doesn't, so fall back to the `--job` CLI arg, which
-    // both paths always carry.
-    const duty = String(ctx.data.jobSlug ?? ctx.args?.job ?? "").trim()
-    if (!owner || !repo || !duty) return
+    const agentResponsibility = String(ctx.data.jobSlug ?? ctx.args?.job ?? "").trim()
+    if (!agentResponsibility) return
 
-    const dutyTitle = (ctx.data.jobTitle as string | undefined) ?? null
-    const staff = (ctx.data.workerSlug as string | undefined) || null
-    const staffTitle = (ctx.data.workerTitle as string | undefined) || null
+    const agentResponsibilityTitle = (ctx.data.jobTitle as string | undefined) ?? null
+    const agent = (ctx.data.agentSlug as string | undefined) || null
+    const agentTitle = (ctx.data.agentTitle as string | undefined) || null
     const force = ctx.args?.force === true
 
     const record: ActivityRecord = {
       ts: new Date().toISOString(),
-      action: `Ran duty: ${dutyTitle ?? duty}`,
-      duty,
-      dutyTitle,
-      staff,
-      staffTitle,
+      action: `Ran agentResponsibility: ${agentResponsibilityTitle ?? agentResponsibility}`,
+      agentResponsibility,
+      agentResponsibilityTitle,
+      agent,
+      agentTitle,
       trigger: resolveTrigger(force),
       outcome: agentResult?.outcome ?? "unknown",
       outcomeKind: agentResult?.outcomeKind ?? null,
@@ -111,7 +62,7 @@ export const appendCompanyActivity: PostflightScript = async (ctx, _profile, age
       runUrl: getRunUrl() || null,
     }
 
-    appendLine(owner, repo, ctx.cwd, record)
+    appendLine(ctx, record)
   } catch (err) {
     process.stderr.write(
       `[activity] company-activity append failed: ${err instanceof Error ? err.message : String(err)}\n`,

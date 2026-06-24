@@ -1,6 +1,6 @@
 /**
  * Local-file backend: job state lives as plain files on disk under
- * `<cwd>/<jobsDir>/<slug>.state.json`. No git involvement at all.
+ * `<cwd>/<jobsDir>/<slug>/state.json`. No git involvement at all.
  *
  * Durability between workflow runs is provided by the `hydrate`/`persist`
  * lifecycle, which restores from / saves to the GitHub Actions cache when
@@ -20,7 +20,7 @@ import { isStateUnchanged, type JobStateBackend, type LoadedJobState, stateFileP
 export interface LocalFileBackendOptions {
   /** Absolute path to the consumer repo working tree. */
   cwd: string
-  /** Duty directory relative to cwd (e.g. ".kody/duties"). */
+  /** AgentResponsibility directory relative to cwd (e.g. ".kody/agent-responsibilities"). */
   jobsDir: string
   /** Owner/repo are used as cache key components for cross-repo isolation. */
   owner: string

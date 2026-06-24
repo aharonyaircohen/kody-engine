@@ -2,6 +2,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import type { KodyConfig } from "../../src/config.js"
 import { autoDispatchTyped } from "../../src/dispatch.js"
 
 function writeEvent(body: unknown): string {
@@ -9,6 +10,10 @@ function writeEvent(body: unknown): string {
   const p = path.join(dir, "event.json")
   fs.writeFileSync(p, JSON.stringify(body))
   return p
+}
+
+function testConfig(config: Partial<KodyConfig>): KodyConfig {
+  return config as KodyConfig
 }
 
 const prev: Record<string, string | undefined> = {}
@@ -28,7 +33,7 @@ describe("autoDispatchTyped: route variant", () => {
     const out = autoDispatchTyped({ explicit: { issueNumber: 42 } })
     expect(out.kind).toBe("route")
     if (out.kind === "route") {
-      expect(out.executable).toBe("run")
+      expect(out.agentAction).toBe("run")
       expect(out.target).toBe(42)
     }
   })
@@ -42,7 +47,7 @@ describe("autoDispatchTyped: route variant", () => {
     const out = autoDispatchTyped()
     expect(out.kind).toBe("route")
     if (out.kind === "route") {
-      expect(out.executable).toBe("run")
+      expect(out.agentAction).toBe("run")
       expect(out.target).toBe(7)
     }
   })
@@ -100,7 +105,7 @@ describe("autoDispatchTyped: silent variants (legitimate no-op)", () => {
   })
 
   it("routes an explicit @kody command even from a bot (self-dispatch)", () => {
-    // Kody runs as a bot when the repo token is a GitHub App; duties and
+    // Kody runs as a bot when the repo token is a GitHub App; agentResponsibilities and
     // flows self-dispatch by posting `@kody <command>`. An explicit, resolved
     // command must be honored, not dropped as "bot chatter".
     process.env.GITHUB_EVENT_NAME = "issue_comment"
@@ -110,7 +115,7 @@ describe("autoDispatchTyped: silent variants (legitimate no-op)", () => {
     })
     const out = autoDispatchTyped()
     expect(out.kind).toBe("route")
-    if (out.kind === "route") expect(out.executable).toBe("run")
+    if (out.kind === "route") expect(out.agentAction).toBe("run")
   })
 
   it("returns silent for bot chatter without an explicit command", () => {
@@ -127,7 +132,7 @@ describe("autoDispatchTyped: silent variants (legitimate no-op)", () => {
 })
 
 describe("autoDispatchTyped: membership gate (access.allowedAssociations)", () => {
-  const teamOnly = { access: { allowedAssociations: ["OWNER", "MEMBER", "COLLABORATOR"] } } as any
+  const teamOnly = testConfig({ access: { allowedAssociations: ["OWNER", "MEMBER", "COLLABORATOR"] } })
 
   it("routes a recognized command from an allowed association (MEMBER)", () => {
     process.env.GITHUB_EVENT_NAME = "issue_comment"
@@ -137,7 +142,7 @@ describe("autoDispatchTyped: membership gate (access.allowedAssociations)", () =
     })
     const out = autoDispatchTyped({ config: teamOnly })
     expect(out.kind).toBe("route")
-    if (out.kind === "route") expect(out.executable).toBe("run")
+    if (out.kind === "route") expect(out.agentAction).toBe("run")
   })
 
   it("silently ignores a blocked association even when the subcommand is real", () => {
@@ -180,7 +185,7 @@ describe("autoDispatchTyped: membership gate (access.allowedAssociations)", () =
       comment: { body: "@kody run", user: { login: "stranger", type: "User" }, author_association: "NONE" },
       issue: { number: 7 },
     })
-    const out = autoDispatchTyped({ config: { access: { allowedAssociations: [] } } as any })
+    const out = autoDispatchTyped({ config: testConfig({ access: { allowedAssociations: [] } }) })
     expect(out.kind).toBe("route")
   })
 })
@@ -192,8 +197,8 @@ describe("autoDispatchTyped: unrecognized variant (user-facing feedback needed)"
       comment: { body: "@kody totally-not-a-real-command", user: { login: "alice", type: "User" } },
       issue: { number: 9 },
     })
-    const out = autoDispatchTyped({ config: { defaultExecutable: undefined } as never })
-    // No defaultExecutable for issues → legacy autoDispatch returns null →
+    const out = autoDispatchTyped({ config: { defaultAgentAction: undefined } as never })
+    // No defaultAgentAction for issues → legacy autoDispatch returns null →
     // typed wrapper classifies as unrecognized.
     expect(out.kind).toBe("unrecognized")
     if (out.kind === "unrecognized") {
@@ -203,7 +208,7 @@ describe("autoDispatchTyped: unrecognized variant (user-facing feedback needed)"
       expect(out.available).toContain("run")
       expect(out.available).toContain("resolve")
       expect(out.available).toContain("merge")
-      // Watch executables (goal-/job-) are filtered out — they're internal.
+      // Watch agentActions (goal-/job-) are filtered out — they're internal.
       expect(out.available.find((n) => n.startsWith("goal-"))).toBeUndefined()
       expect(out.available.find((n) => n.startsWith("job-"))).toBeUndefined()
     }
@@ -215,7 +220,7 @@ describe("autoDispatchTyped: unrecognized variant (user-facing feedback needed)"
       comment: { body: "@kody totally-not-a-real-command", user: { login: "alice", type: "User" } },
       issue: { number: 9, pull_request: {} },
     })
-    const out = autoDispatchTyped({ config: { defaultPrExecutable: undefined } as never })
+    const out = autoDispatchTyped({ config: { defaultPrAgentAction: undefined } as never })
     expect(out.kind).toBe("unrecognized")
     if (out.kind === "unrecognized") {
       expect(out.token).toBe("totally-not-a-real-command")
@@ -225,17 +230,17 @@ describe("autoDispatchTyped: unrecognized variant (user-facing feedback needed)"
   })
 })
 
-describe("autoDispatchTyped: typo'd command does NOT fall through to default executable", () => {
+describe("autoDispatchTyped: typo'd command does NOT fall through to default agentResponsibility action", () => {
   it("returns unrecognized even when a default is configured (typo guard)", () => {
     process.env.GITHUB_EVENT_NAME = "issue_comment"
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody totally-not-a-real-command-035", user: { login: "alice", type: "User" } },
       issue: { number: 11 },
     })
-    // Reproduces the live-tested A-Guy-educ/A-Guy bug: defaultExecutable
+    // Reproduces the live-tested A-Guy-educ/A-Guy bug: defaultAgentAction
     // was 'classify', so any @kody comment routed there silently — a
     // typo'd command was indistinguishable from `@kody` on its own.
-    const out = autoDispatchTyped({ config: { defaultExecutable: "classify" } as never })
+    const out = autoDispatchTyped({ config: { defaultAgentAction: "classify" } as never })
     expect(out.kind).toBe("unrecognized")
     if (out.kind === "unrecognized") {
       expect(out.token).toBe("totally-not-a-real-command-035")
@@ -248,9 +253,9 @@ describe("autoDispatchTyped: typo'd command does NOT fall through to default exe
       comment: { body: "@kody", user: { login: "alice", type: "User" } },
       issue: { number: 12 },
     })
-    const out = autoDispatchTyped({ config: { defaultExecutable: "classify" } as never })
+    const out = autoDispatchTyped({ config: { defaultAgentAction: "run" } as never })
     expect(out.kind).toBe("route")
-    if (out.kind === "route") expect(out.executable).toBe("classify")
+    if (out.kind === "route") expect(out.agentAction).toBe("run")
   })
 
   it("falls through to the default for natural-language lead-ins (please/kindly/etc)", () => {
@@ -260,9 +265,9 @@ describe("autoDispatchTyped: typo'd command does NOT fall through to default exe
         comment: { body: `@kody ${polite} fix the test failure`, user: { login: "alice", type: "User" } },
         issue: { number: 13 },
       })
-      const out = autoDispatchTyped({ config: { defaultExecutable: "classify" } as never })
+      const out = autoDispatchTyped({ config: { defaultAgentAction: "run" } as never })
       expect(out.kind, `polite word "${polite}"`).toBe("route")
-      if (out.kind === "route") expect(out.executable).toBe("classify")
+      if (out.kind === "route") expect(out.agentAction).toBe("run")
     }
   })
 
@@ -272,7 +277,7 @@ describe("autoDispatchTyped: typo'd command does NOT fall through to default exe
       comment: { body: "@kody panl", user: { login: "alice", type: "User" } },
       issue: { number: 14 },
     })
-    const out = autoDispatchTyped({ config: { defaultExecutable: undefined } as never })
+    const out = autoDispatchTyped({ config: { defaultAgentAction: undefined } as never })
     expect(out.kind).toBe("unrecognized")
     if (out.kind === "unrecognized") expect(out.token).toBe("panl")
   })
@@ -293,14 +298,14 @@ describe("autoDispatchTyped: typo'd command does NOT fall through to default exe
     }
   })
 
-  it("falls through to defaultPrExecutable for `@kody` alone on a PR", () => {
+  it("falls through to defaultPrAgentAction for `@kody` alone on a PR", () => {
     process.env.GITHUB_EVENT_NAME = "issue_comment"
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody", user: { login: "alice", type: "User" } },
       issue: { number: 99, pull_request: { url: "https://x" } },
     })
-    const out = autoDispatchTyped({ config: { defaultPrExecutable: "sync" } as never })
+    const out = autoDispatchTyped({ config: { defaultPrAgentAction: "sync" } as never })
     expect(out.kind).toBe("route")
-    if (out.kind === "route") expect(out.executable).toBe("sync")
+    if (out.kind === "route") expect(out.agentAction).toBe("sync")
   })
 })

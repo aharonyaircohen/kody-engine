@@ -2,7 +2,7 @@
  * Tests for the HTTP MCP server.
  *
  * The HTTP MCP server exposes kody's MCP tools (fetch_repo, verify,
- * submit_state, duty) over HTTP transport. Hermes Agent connects to it as an
+ * submit_state, agentResponsibility) over HTTP transport. Hermes Agent connects to it as an
  * MCP client. These tests exercise the JSON-RPC + SSE handshake the same way
  * the official MCP SDK client would.
  */
@@ -82,28 +82,6 @@ async function parseRpcResponse(res: Response): Promise<unknown> {
     }
   }
   throw new Error("no data: line in SSE response")
-}
-
-async function readSseEvents(res: Response): Promise<unknown[]> {
-  const reader = res.body!.getReader()
-  const decoder = new TextDecoder()
-  let buf = ""
-  const events: unknown[] = []
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buf += decoder.decode(value, { stream: true })
-  }
-  for (const line of buf.split("\n")) {
-    if (line.startsWith("data: ")) {
-      try {
-        events.push(JSON.parse(line.slice(6)))
-      } catch {
-        // skip
-      }
-    }
-  }
-  return events
 }
 
 // ────────────────────────────────────────────────────────────────────────────

@@ -1,15 +1,15 @@
 /**
- * poolServe — preflight for the `pool-serve` executable.
+ * poolServe — preflight for the `pool-serve` agentAction.
  *
- * The warm-pool OWNER. Runs always-on, co-located on the kody-litellm Fly
- * machine: it supervises the LiteLLM proxy child AND serves the pool API the
- * dashboard calls to claim a pre-booted, frozen runner.
+ * The warm-pool OWNER. Runs always-on and serves the pool API the dashboard
+ * calls to claim a pre-booted, frozen runner. It owns runner capacity only;
+ * every runner is responsible for its own local LiteLLM lifecycle.
  *
  * Single process = single owner = the claim is a synchronous in-memory pick,
  * which is why this sidesteps the distributed-lock problem (see PoolManager).
  *
  * Endpoints (POOL_API_PORT, default 4100 — exposed publicly + authed):
- *   GET  /healthz       — 200 { ok, litellm, pool } (no auth)
+ *   GET  /healthz       — 200 { ok, repos } (no auth)
  *   GET  /pool/status   — auth: Bearer/X-Api-Key $POOL_API_KEY → counts
  *   POST /pool/claim    — auth: $POOL_API_KEY; body = the runner job.
  *                         200 { ok:true, machineId } on success,
@@ -20,11 +20,10 @@
  * are both derived from KODY_MASTER_KEY via HKDF — never transmitted.
  */
 
-import { type ChildProcess, spawn } from "node:child_process"
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 
 import { gitHubActionsDegraded } from "../github-health.js"
-import { runDutyFallbackTick } from "../pool/duty-fallback-tick.js"
+import { runAgentResponsibilityFallbackTick } from "../pool/agent-responsibility-fallback-tick.js"
 import type { FlyGuest } from "../pool/fly.js"
 import { bearerOk, derivePoolApiKey, deriveRunnerApiKey, masterKeyBytes } from "../pool/keys.js"
 import { type ClaimRequest, PoolRegistry } from "../pool/registry.js"
@@ -92,45 +91,12 @@ export function parseClaimRequest(body: unknown): { req: ClaimRequest } | { erro
     if (Number.isFinite(Number(b.idleExitMs))) req.idleExitMs = Number(b.idleExitMs)
     if (Number.isFinite(Number(b.hardCapMs))) req.hardCapMs = Number(b.hardCapMs)
   }
-  // mode "scheduled" needs no extra fields — runs the whole duty/goal fan-out.
+  // mode "scheduled" needs no extra fields — runs the whole agentResponsibility/goal fan-out.
   if (typeof b.ref === "string" && b.ref.trim()) req.ref = b.ref.trim()
   if (typeof b.model === "string" && b.model.trim()) req.model = b.model.trim()
   if (typeof b.sessionId === "string" && b.sessionId.trim()) req.sessionId = b.sessionId.trim()
   if (typeof b.dashboardUrl === "string" && b.dashboardUrl.trim()) req.dashboardUrl = b.dashboardUrl.trim()
   return { req }
-}
-
-/** Supervise the LiteLLM proxy child — restart it if it dies, so a pool-owner
- * crash never leaves the always-on proxy down. Best-effort, isolated from the
- * pool logic. */
-function superviseLitellm(): ChildProcess | null {
-  if (process.env.POOL_DISABLE_LITELLM === "1") return null
-  const port = String(envInt("LITELLM_PORT", 4000))
-  const config = process.env.LITELLM_CONFIG ?? "/app/config.yaml"
-  // Bind IPv6 dual-stack ("::"), NOT 0.0.0.0. Fly's private 6PN network is
-  // IPv6-only, so runners reaching kody-litellm.internal:4000 need the proxy
-  // listening on IPv6 — 0.0.0.0 (IPv4) is unreachable over 6PN. On Linux ::
-  // accepts IPv4-mapped connections too, so localhost health checks still work.
-  const host = process.env.LITELLM_HOST ?? "::"
-  let restarts = 0
-  const start = (): ChildProcess => {
-    log(`starting litellm child (port ${port}, host ${host})`)
-    const child = spawn("litellm", ["--config", config, "--port", port, "--host", host], {
-      stdio: "inherit",
-    })
-    child.on("exit", (code) => {
-      restarts++
-      if (restarts > 50) {
-        process.stderr.write("[pool-serve] litellm restarted too many times — giving up\n")
-        return
-      }
-      log(`litellm exited (${code}) — restarting in 2s`)
-      setTimeout(start, 2_000)
-    })
-    child.on("error", (err) => process.stderr.write(`[pool-serve] litellm spawn error: ${err.message}\n`))
-    return child
-  }
-  return start()
 }
 
 export async function poolServe(): Promise<number> {
@@ -146,21 +112,17 @@ export async function poolServe(): Promise<number> {
   const poolApiKey = derivePoolApiKey(master)
   const runnerApiKey = deriveRunnerApiKey(master)
 
-  // NOTE: do NOT read FLY_APP_NAME here — Fly auto-injects it as the OWNER's
-  // own app (kody-litellm). POOL_RUNNER_APP is the canonical runner-app name
-  // (it must exist in each repo-owner's Fly account).
+  // NOTE: do NOT read FLY_APP_NAME here — Fly auto-injects the pool owner's
+  // app name. POOL_RUNNER_APP is the canonical runner-app name (it must exist
+  // in each repo-owner's Fly account).
   const app = process.env.POOL_RUNNER_APP ?? "kody-runner"
   const region = process.env.POOL_REGION ?? "fra"
   const perf = (process.env.POOL_PERF ?? "medium") as keyof typeof PERF_GUEST
   const guest = PERF_GUEST[perf] ?? PERF_GUEST.medium
-  const litellmUrl = process.env.KODY_LITELLM_URL ?? "http://kody-litellm.internal:4000"
   const min = envInt("POOL_MIN", 2)
   const runnerPort = envInt("RUNNER_PORT", 8080)
   const apiPort = envInt("POOL_API_PORT", 4100)
   const healthTimeoutMs = envInt("POOL_HEALTH_TIMEOUT_MS", 120_000)
-
-  // Keep the always-on proxy hot regardless of pool health.
-  const litellm = superviseLitellm()
 
   // One pool per repo, each created with that repo's own vault Fly token.
   const registry = new PoolRegistry({
@@ -172,7 +134,6 @@ export async function poolServe(): Promise<number> {
       region,
       guest,
       runnerApiKey,
-      litellmUrl,
       port: runnerPort,
       healthTimeoutMs,
       app,
@@ -188,21 +149,23 @@ export async function poolServe(): Promise<number> {
   }, refillMs)
 
   // GitHub-outage fallback: GitHub Actions' cron normally fires the scheduled
-  // duty/goal fan-out. When Actions is down that cron can't fire, so while this
+  // agentResponsibility/goal fan-out. When Actions is down that cron can't fire, so while this
   // always-on machine is awake we tick every 15 min and — ONLY if GitHub is
   // degraded — run the fan-out on a Fly runner per active repo. GitHub stays
-  // the default; the engine's per-duty cadence guard prevents double-runs.
-  // Set POOL_DUTY_TICK=0 to disable.
-  const dutyTickEnabled = (process.env.POOL_DUTY_TICK ?? "1") !== "0"
-  const dutyTickMs = envInt("POOL_DUTY_TICK_MS", 15 * 60_000)
+  // the default; the engine's per-agentResponsibility cadence guard prevents double-runs.
+  // Set POOL_AGENT_RESPONSIBILITY_TICK=0 to disable.
+  const dutyTickEnabled = (process.env.POOL_AGENT_RESPONSIBILITY_TICK ?? "1") !== "0"
+  const dutyTickMs = envInt("POOL_AGENT_RESPONSIBILITY_TICK_MS", 15 * 60_000)
   const dutyTick = dutyTickEnabled
     ? setInterval(() => {
-        runDutyFallbackTick({
+        runAgentResponsibilityFallbackTick({
           isDegraded: () => gitHubActionsDegraded(),
           activeRepos: () => registry.activeRepos(),
           claim: (owner, repo, req) => registry.claim(owner, repo, req),
           log,
-        }).catch((err) => log(`duty fallback tick failed: ${err instanceof Error ? err.message : String(err)}`))
+        }).catch((err) =>
+          log(`agentResponsibility fallback tick failed: ${err instanceof Error ? err.message : String(err)}`),
+        )
       }, dutyTickMs)
     : null
 
@@ -214,7 +177,6 @@ export async function poolServe(): Promise<number> {
       if (req.method === "GET" && url.pathname === "/healthz") {
         return sendJson(res, 200, {
           ok: true,
-          litellm: litellm ? "supervised" : "off",
           repos: registry.activeRepos(),
         })
       }
@@ -231,7 +193,7 @@ export async function poolServe(): Promise<number> {
         const repoParam = (url.searchParams.get("repo") ?? "").trim()
         const [owner, repo] = repoParam.split("/")
         if (!owner || !repo) return sendJson(res, 400, { error: "repo query (owner/name) required" })
-        return sendJson(res, 200, { status: registry.status(owner, repo) })
+        return sendJson(res, 200, { status: await registry.statusFor(owner, repo) })
       }
 
       if (req.method === "POST" && url.pathname === "/pool/claim") {
@@ -252,7 +214,7 @@ export async function poolServe(): Promise<number> {
 
       return sendJson(res, 404, { error: "not found" })
     } catch (err) {
-      // Never let a handler bug crash the process (and take litellm with it).
+      // Never let a handler bug crash the process.
       process.stderr.write(`[pool-serve] handler error: ${err instanceof Error ? err.message : String(err)}\n`)
       try {
         sendJson(res, 500, { error: "internal error" })

@@ -1,8 +1,8 @@
 /**
  * GitHub Actions health probe (engine side).
  *
- * Used by pool-serve's duty-tick to decide whether GitHub Actions can run the
- * scheduled fan-out, or whether the engine should run due duties on Fly itself.
+ * Used by pool-serve's agent-responsibility-tick to decide whether GitHub Actions can run the
+ * scheduled fan-out, or whether the engine should run due agentResponsibilities on Fly itself.
  * Signal: GitHub's public status page Actions component. Fails OPEN (assume
  * operational) on any HTTP/parse error — a status-page hiccup must never make
  * the engine think GitHub is down and start duplicating GitHub's own cron work.

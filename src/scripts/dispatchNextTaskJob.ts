@@ -1,4 +1,4 @@
-import type { Job, PreflightScript } from "../executables/types.js"
+import type { Job, PreflightScript } from "../agent-actions/types.js"
 import { stableJobKey } from "../jobIdentity.js"
 import { emptyState, nextPendingTaskJob, type TaskJob, type TaskState } from "../state.js"
 
@@ -21,17 +21,17 @@ export const dispatchNextTaskJob: PreflightScript = async (ctx, profile) => {
     : []
   ctx.output.nextJob = plannedJobs.find((job) => stableJobKey(job) === next.id) ?? taskJobToJob(next, ctx.args.issue)
   if (typeof ctx.args.issue === "number") {
-    ctx.output.afterNextJob = { executable: profile.name, cliArgs: { issue: ctx.args.issue } }
+    ctx.output.afterNextJob = { action: profile.action ?? profile.name, cliArgs: { issue: ctx.args.issue } }
   }
 }
 
 function taskJobToJob(job: TaskJob, issueArg: unknown): Job {
   const target = typeof job.target === "number" ? job.target : typeof issueArg === "number" ? issueArg : undefined
   return {
-    executable: job.executable,
-    ...(job.duty ? { duty: job.duty } : {}),
+    agentResponsibility: job.agentResponsibility ?? job.agentAction,
+    agentAction: job.agentAction,
     ...(job.reason ? { why: job.reason } : {}),
-    ...(job.staff ? { persona: job.staff } : {}),
+    ...(job.agent ? { agent: job.agent } : {}),
     ...(job.schedule ? { schedule: job.schedule } : {}),
     ...(typeof target === "number" ? { target, cliArgs: { issue: target } } : { cliArgs: {} }),
     flavor: job.flavor ?? "instant",
@@ -42,7 +42,7 @@ function isJob(input: unknown): input is Job {
   if (!input || typeof input !== "object" || Array.isArray(input)) return false
   const job = input as Partial<Job>
   return (
-    typeof job.executable === "string" &&
+    (typeof job.agentResponsibility === "string" || typeof job.action === "string") &&
     (job.flavor === "instant" || job.flavor === "scheduled") &&
     (!job.cliArgs || (typeof job.cliArgs === "object" && !Array.isArray(job.cliArgs)))
   )

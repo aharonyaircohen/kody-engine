@@ -92,7 +92,7 @@ describe("bin/mcp-http-server: env validation", () => {
     expect(opts.apiKey).toBe("secret-key")
   })
 
-  it("registers all 4 expected MCP routes (single-tool routes vs. duty palette)", async () => {
+  it("registers all 4 expected MCP routes (single-tool routes vs. agentResponsibility palette)", async () => {
     process.env.GITHUB_TOKEN = "gh-test"
     await Promise.race([mcpHttpServer(), new Promise((resolve) => setTimeout(resolve, 50))])
     const opts = buildMcpHttpServer.mock.calls[0]?.[0] as {
@@ -102,19 +102,19 @@ describe("bin/mcp-http-server: env validation", () => {
     expect(paths).toContain("/mcp/fetch-repo")
     expect(paths).toContain("/mcp/verify")
     expect(paths).toContain("/mcp/submit-state")
-    expect(paths).toContain("/mcp/duty")
+    expect(paths).toContain("/mcp/agentResponsibility")
     // The fetch-repo / verify / submit-state routes each carry exactly
-    // one tool. The duty route is a palette (11 tools) — it would be
+    // one tool. The agentResponsibility route is a palette (11 tools) — it would be
     // a bug to flatten it into separate routes since each tool calls
-    // into the same locked-duty trust gate (see dutyMcp.ts).
-    const singleToolRoutes = opts.routes.filter((r) => r.path !== "/mcp/duty")
+    // into the same locked-agentResponsibility trust gate (see agentResponsibilityMcp.ts).
+    const singleToolRoutes = opts.routes.filter((r) => r.path !== "/mcp/agentResponsibility")
     for (const r of singleToolRoutes) {
       expect(r.tools).toHaveLength(1)
     }
-    expect(opts.routes.find((r) => r.path === "/mcp/duty")?.tools.length).toBeGreaterThan(1)
+    expect(opts.routes.find((r) => r.path === "/mcp/agentResponsibility")?.tools.length).toBeGreaterThan(1)
   })
 
-  it("forwards GITHUB_REPOSITORY + OPERATOR_MENTION env to the duty route", async () => {
+  it("forwards GITHUB_REPOSITORY + OPERATOR_MENTION env to the agentResponsibility route", async () => {
     process.env.GITHUB_TOKEN = "gh-test"
     process.env.GITHUB_REPOSITORY = "owner/repo"
     process.env.OPERATOR_MENTION = "@alice"
@@ -122,12 +122,12 @@ describe("bin/mcp-http-server: env validation", () => {
     const opts = buildMcpHttpServer.mock.calls[0]?.[0] as {
       routes: Array<{ path: string; tools: Array<{ name: string }> }>
     }
-    // The duty tool's handler was constructed with the env-derived
+    // The agentResponsibility tool's handler was constructed with the env-derived
     // repoSlug. We can't read the closure from here, but we can assert
     // the route + tool were registered with the expected identity so a
-    // future maintainer reading this test sees what env feeds the duty
-    // route's dutyOperatorMention / dutyRepoSlug fields.
-    const dutyRoute = opts.routes.find((r) => r.path === "/mcp/duty")
+    // future maintainer reading this test sees what env feeds the agentResponsibility
+    // route's agentResponsibilityOperatorMention / dutyRepoSlug fields.
+    const dutyRoute = opts.routes.find((r) => r.path === "/mcp/agentResponsibility")
     expect(dutyRoute).toBeDefined()
     expect(dutyRoute?.tools[0]?.name).toBeTruthy()
   })

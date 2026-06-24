@@ -3,14 +3,14 @@ import * as path from "node:path"
 import { describe, expect, it } from "vitest"
 import { getPluginsCatalogRoot } from "../../src/scripts/buildSyntheticPlugin.js"
 
-const EXECUTABLES_ROOT = path.resolve(new URL(".", import.meta.url).pathname, "..", "..", "src", "executables")
+const EXECUTABLES_ROOT = path.resolve(new URL(".", import.meta.url).pathname, "..", "..", "src", "agent-actions")
 
 interface ProfileShape {
   name: string
   claudeCode?: { hooks?: string[]; skills?: string[]; commands?: string[]; subagents?: string[] }
 }
 
-function listExecutables(): { name: string; dir: string; profile: ProfileShape }[] {
+function listAgentActions(): { name: string; dir: string; profile: ProfileShape }[] {
   const out: { name: string; dir: string; profile: ProfileShape }[] = []
   for (const entry of fs.readdirSync(EXECUTABLES_ROOT, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue
@@ -41,10 +41,10 @@ function partExists(execDir: string, bucket: string, entry: string): boolean {
   return fs.existsSync(catalogPath)
 }
 
-describe("every executable's plugin-part references resolve", () => {
-  const executables = listExecutables()
+describe("every agentAction's plugin-part references resolve", () => {
+  const agentActions = listAgentActions()
 
-  for (const { name, dir, profile } of executables) {
+  for (const { name, dir, profile } of agentActions) {
     const cc = profile.claudeCode ?? {}
 
     if ((cc.hooks ?? []).length > 0) {
@@ -69,8 +69,8 @@ describe("every executable's plugin-part references resolve", () => {
     }
   }
 
-  it("found at least one executable with a hook reference (sanity)", () => {
-    const totalHooks = executables.reduce((acc, e) => acc + (e.profile.claudeCode?.hooks?.length ?? 0), 0)
+  it("found at least one agentAction with a hook reference (sanity)", () => {
+    const totalHooks = agentActions.reduce((acc, e) => acc + (e.profile.claudeCode?.hooks?.length ?? 0), 0)
     expect(totalHooks).toBeGreaterThan(0)
   })
 })

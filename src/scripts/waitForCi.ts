@@ -21,7 +21,7 @@
  */
 
 import { execFileSync } from "node:child_process"
-import type { PostflightScript, ScriptArgs } from "../executables/types.js"
+import type { PostflightScript, ScriptArgs } from "../agent-actions/types.js"
 import { parsePrNumber, postPrReviewComment } from "../issue.js"
 import { type Action, type TaskState } from "../state.js"
 

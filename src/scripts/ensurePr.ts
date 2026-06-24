@@ -8,7 +8,7 @@
  * undefined into a success message ("✅ kody PR opened: undefined").
  */
 
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../agent-actions/types.js"
 import { ensurePr as doEnsurePr } from "../pr.js"
 import type { PrOutcome } from "./prOutcome.js"
 

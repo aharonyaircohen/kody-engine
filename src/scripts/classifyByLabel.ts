@@ -23,7 +23,7 @@
  *   }
  */
 
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../agent-actions/types.js"
 import type { IssueData } from "../issue.js"
 
 const VALID_CLASSES = new Set(["feature", "bug", "spec", "chore"])

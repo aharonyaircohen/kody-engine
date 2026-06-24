@@ -6,13 +6,13 @@
  *      Using profile.name as an opaque label (state keys, logs, producedBy
  *      tags, action-type prefixes) is allowed.
  *
- *   2. No file under src/scripts/ may import from src/executables/ —
- *      shared code cannot reach into executable-specific code, structurally
- *      preventing the per-executable branching pattern from ever creeping
+ *   2. No file under src/scripts/ may import from src/agent-actions/ —
+ *      shared code cannot reach into agentAction-specific code, structurally
+ *      preventing the per-agentAction branching pattern from ever creeping
  *      back in.
  *
  * When this test fails, the fix is to move the offending logic into the
- * specific executable's directory (see AGENTS.md § "clean executor layer").
+ * specific agentAction's directory (see AGENTS.md § "clean executor layer").
  */
 
 import * as fs from "node:fs"
@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest"
 import { loadProfile } from "../../src/profile.js"
 
 const SCRIPTS_DIR = path.resolve(__dirname, "../../src/scripts")
-const EXECUTABLES_DIR = path.resolve(__dirname, "../../src/executables")
+const EXECUTABLES_DIR = path.resolve(__dirname, "../../src/agent-actions")
 
 function listScriptFiles(): string[] {
   return fs
@@ -30,14 +30,14 @@ function listScriptFiles(): string[] {
     .map((f) => path.join(SCRIPTS_DIR, f))
 }
 
-function listExecutableNames(): string[] {
+function listAgentActionNames(): string[] {
   return fs
     .readdirSync(EXECUTABLES_DIR, { withFileTypes: true })
     .filter((e) => e.isDirectory())
     .map((e) => e.name)
 }
 
-describe("shared scripts: invariant — no executable-name branching", () => {
+describe("shared scripts: invariant — no agentAction-name branching", () => {
   it("does not compare profile.name as a branch condition", () => {
     const offenders: { file: string; line: number; text: string }[] = []
     // Matches: profile.name === / !== / == / != / switch(profile.name)
@@ -53,11 +53,11 @@ describe("shared scripts: invariant — no executable-name branching", () => {
     expect(offenders).toEqual([])
   })
 
-  it("does not compare against literal executable names (catches aliased comparisons)", () => {
+  it("does not compare against literal agentAction names (catches aliased comparisons)", () => {
     // Catches the evade pattern: `const kind = profile.name; if (kind === "resolve")`.
-    // Builds a regex from the actual executable names on disk, so the rule
-    // stays accurate as executables are added/removed.
-    const names = listExecutableNames()
+    // Builds a regex from the actual agentAction names on disk, so the rule
+    // stays accurate as agentActions are added/removed.
+    const names = listAgentActionNames()
     expect(names.length).toBeGreaterThan(0)
     const nameGroup = names.map((n) => n.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")).join("|")
     const pattern = new RegExp(`[!=]==?\\s*["'](?:${nameGroup})["']|case\\s+["'](?:${nameGroup})["']\\s*:`)
@@ -73,10 +73,10 @@ describe("shared scripts: invariant — no executable-name branching", () => {
     expect(offenders).toEqual([])
   })
 
-  it("does not import from src/executables/", () => {
+  it("does not import from src/agent-actions/", () => {
     const offenders: { file: string; line: number; text: string }[] = []
-    // Matches any import/require path that resolves into ../executables/
-    const pattern = /from\s+["'][^"']*\/executables\/[^"']+["']|require\(\s*["'][^"']*\/executables\/[^"']+["']/
+    // Matches any import/require path that resolves into ../agent-actions/
+    const pattern = /from\s+["'][^"']*\/agent-actions\/[^"']+["']|require\(\s*["'][^"']*\/agent-actions\/[^"']+["']/
     for (const file of listScriptFiles()) {
       const lines = fs.readFileSync(file, "utf-8").split("\n")
       lines.forEach((text, i) => {
@@ -85,24 +85,24 @@ describe("shared scripts: invariant — no executable-name branching", () => {
         }
       })
     }
-    // Importing types from "../executables/types.js" is allowed — it's the
+    // Importing types from "../agent-actions/types.js" is allowed — it's the
     // shared contract, not an implementation. Everything else is banned.
-    const real = offenders.filter((o) => !/executables\/types(\.js)?["']/.test(o.text))
+    const real = offenders.filter((o) => !/agent-actions\/types(\.js)?["']/.test(o.text))
     expect(real).toEqual([])
   })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Modularity invariant: src/scripts/ is for CROSS-CUTTING utilities. Single-
-// executable scripts must be explicitly allowlisted as "known solo" until
-// they're either generalised (referenced by ≥2 executables) or moved to an
-// executable-local subdirectory. New solo scripts that sneak in without
+// agentAction scripts must be explicitly allowlisted as "known solo" until
+// they're either generalised (referenced by ≥2 agentActions) or moved to an
+// agentAction-local subdirectory. New solo scripts that sneak in without
 // allowlisting fail this test loudly, surfacing the "shared utility" lie
 // before it compounds.
 //
 // Owners of this allowlist: when removing the last reference to a solo
 // script, also remove the entry here. When a solo script becomes referenced
-// by ≥2 executables, also remove the entry (the script is now genuinely
+// by ≥2 agentActions, also remove the entry (the script is now genuinely
 // shared and no longer solo).
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -117,109 +117,83 @@ interface SoloEntry {
 }
 
 const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
-  commitGoalState: { owner: "goal-tick", reason: "goal-tick is bespoke — see AGENTS.md goal-chain section." },
-  deriveGoalPhase: { owner: "goal-tick", reason: "goal-tick state-machine step." },
-  dispatchDutyFileTicks: {
-    owner: "duty-scheduler",
-    reason:
-      "Solo since the worker model changed: a worker is now a stateless persona, not a ticked file, so worker-scheduler/worker-tick were deleted. duty-scheduler is the only fan-out over .kody/duties/.",
+  abortUnfinishedGitOps: { owner: "run", reason: "run-only git safety check." },
+  advanceFlow: { owner: "run", reason: "run-only flow handoff after task branch work." },
+  checkCoverageWithRetry: { owner: "run", reason: "run-only coverage gate." },
+  commitAndPush: { owner: "run", reason: "run-only branch commit/push step." },
+  ensurePr: { owner: "run", reason: "run-only PR creation step." },
+  finalizeTerminal: { owner: "run", reason: "run-only terminal notification step." },
+  loadConventions: { owner: "run", reason: "run-only prompt context loader after catalog moved to store." },
+  loadCoverageRules: { owner: "run", reason: "run-only coverage rule context loader." },
+  loadIssueContext: { owner: "agent-factory", reason: "agent-factory-only issue request loader for model PRs." },
+  loadMemoryContext: { owner: "run", reason: "run-only memory context loader after catalog moved to store." },
+  loadPriorArt: { owner: "run", reason: "run-only prior-art context loader." },
+  loadTaskState: { owner: "run", reason: "run-only task state loader in minimal engine surface." },
+  mirrorStateToPr: { owner: "run", reason: "run-only task state mirror." },
+  openAgentFactoryStatePr: {
+    owner: "agent-factory",
+    reason: "agent-factory-only state-repo branch and PR creator for reviewed model definitions.",
   },
-  loadJobFromFile: {
-    owner: "duty-tick",
-    reason:
-      "Solo since worker-tick was deleted (workers are personas, not ticked files). duty-tick is the only executable that loads a duty body + its assigned worker persona.",
-  },
-  loadDutyState: {
-    owner: "job-live-verify",
-    reason:
-      "Folder-duty state loader used by the live job-wiring verifier. Kept as a shared script because folder duties in consumer repos use the same stateful-duty shape.",
-  },
-  runTickScript: {
-    owner: "duty-tick-scripted",
-    reason:
-      "Solo since worker-tick-scripted was deleted (no worker tick-loop in the persona model). duty-tick-scripted is the only deterministic ticked-file executable.",
-  },
-  dispatchNextTask: { owner: "goal-tick", reason: "goal-tick state-machine step." },
-  finalizeGoal: { owner: "goal-tick", reason: "goal-tick terminal step." },
-  handleAbandonedGoal: { owner: "goal-tick", reason: "goal-tick state-machine branch." },
-  initFlow: { owner: "init", reason: "init is residual — bootstrap, not a recurring flow." },
-  loadGoalState: { owner: "goal-tick", reason: "goal-tick state-machine step." },
-  loadWorkerAdhoc: { owner: "worker-ask", reason: "worker-ask-only ad-hoc worker-persona loader." },
-  markFlowSuccess: { owner: "revert", reason: "revert is bespoke (no-agent, see AGENTS.md)." },
+  postIssueComment: { owner: "run", reason: "run-only issue comment result publisher." },
   requirePlanDeviations: { owner: "run", reason: "run-only plan-deviation check." },
-  resolveArtifacts: { owner: "run", reason: "run-only artifact resolver. Slotted via lifecycle contextExtras." },
-  resolveFlow: { owner: "resolve", reason: "resolve is bespoke (merge-only, no verify chain — see AGENTS.md)." },
-  revertFlow: { owner: "revert", reason: "revert is bespoke (no-agent)." },
-  saveGoalState: { owner: "goal-tick", reason: "goal-tick state-machine step." },
-  // serveFlow / brainServe / runnerServe / poolServe were here until the four
-  // long-lived servers moved out of src/executables/ into src/servers/ as
-  // hardcoded CLI verbs — they are no longer registered scripts, so they no
-  // longer belong in this solo-script allowlist.
-  stageMergeConflicts: { owner: "resolve", reason: "resolve-only postflight." },
-  // ── Newly solo since the agent task executables (feature/bug/chore/plan/…)
-  //    moved out of the engine to consumer repos. These were previously shared
-  //    with the build-family executables via the lifecycle macro; with those
-  //    gone, the named kept executable is now the only engine user. ──
-  runFlow: {
-    owner: "run",
-    reason:
-      "run bootstrap. Solo since feature/bug/chore collapsed/moved to consumer repos — run is the last engine build primitive.",
-  },
-  mergeFlow: { owner: "merge", reason: "merge is bespoke (no-agent self-gating squash). Solo to merge." },
-  finishFlow: { owner: "release", reason: "release finalize step. Solo to release." },
-  promoteQaGoal: { owner: "qa-goal", reason: "qa-goal promotion step. Solo to qa-goal." },
-  runPreviewBuild: {
-    owner: "preview-build",
-    reason:
-      "preview-build is the only executable that builds a deployable preview image (remote builder). Single-purpose; no other executable shares the build step.",
-  },
-  planTaskJobs: {
-    owner: "task-jobs",
-    reason:
-      "task-jobs-only task-data planner. Kept in scripts so dashboard-written issue metadata can seed task state before dispatch.",
-  },
-  dispatchNextTaskJob: {
-    owner: "task-jobs",
-    reason:
-      "task-jobs-only handoff step. It selects the next pending planned job and returns a nextJob for the generic runner.",
-  },
-  failOnceTaskJob: {
-    owner: "task-job-fail-once",
-    reason:
-      "live-test-only deterministic failure/retry probe for task-jobs; it proves failed planned slices block and rerun.",
-  },
-  fixFlow: { owner: "fix", reason: "fix bootstrap: open PR branch and derive reviewer feedback." },
-  requireFeedbackActions: { owner: "fix", reason: "fix-only contract check for FEEDBACK_ACTIONS." },
-  fixCiFlow: { owner: "fix-ci", reason: "fix-ci bootstrap: open PR branch and attach failing CI logs." },
+  resolveArtifacts: { owner: "run", reason: "run-only artifact resolver." },
+  runFlow: { owner: "run", reason: "run bootstrap. Run is the only engine-bundled agentAction." },
+  saveTaskState: { owner: "run", reason: "run-only task state persistence." },
+  setLifecycleLabel: { owner: "run", reason: "run-only lifecycle label while engine keeps only run builtin." },
+  verifyWithRetry: { owner: "run", reason: "run-only verification gate." },
+  writeAgentRunSummary: { owner: "run", reason: "run-only summary writer." },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Consumer-library scripts: the deterministic preflight/postflight logic for
-// the agent task executables that moved OUT of the engine into consumer repos
-// (.kody/executables/<slug>/). The executable's profile.json + prompt.md now
-// live in the consumer repo, but the engine still SHIPS these scripts — the
-// consumer profiles reference them by name and the registry resolves them from
-// the engine's compiled script catalog. So they have zero engine-side profile
-// owner by design, yet must not be deleted.
-//
-// Each maps to the moved executable whose consumer-repo profile calls it.
+// Consumer-library scripts: deterministic preflight/postflight logic for
+// agentAction profiles that now live in kody-store. The engine still ships the
+// TypeScript implementation catalog; store profiles reference scripts by name.
 // ─────────────────────────────────────────────────────────────────────────────
 const CONSUMER_LIBRARY_SCRIPTS: Record<string, string> = {
+  advanceManagedGoal: "goal-manager",
+  appendCompanyIntentDecision: "company-manager",
+  applyAgentResponsibilityReports: "goal/reporting agentActions",
+  applyCompanyManagerDecision: "company-manager",
+  buildSyntheticPlugin: "store agentActions with local skills/hooks",
   classifyByLabel: "classify",
-  recordClassification: "classify",
+  createQaGoal: "qa-engineer",
+  diagMcp: "research",
+  dispatch: "spec",
   dispatchClassified: "classify",
+  dispatchAgentResponsibilityFileTicks: "agent-responsibility-scheduler",
+  dispatchAgentResponsibilityTicks: "agent-responsibility-scheduler",
+  dispatchNextTaskJob: "task-jobs",
+  failOnceTaskJob: "task-job-fail-once",
+  finishFlow: "release",
+  fixCiFlow: "fix-ci",
+  fixFlow: "fix",
+  initFlow: "init",
+  loadAgentResponsibilityState: "job-live-verify",
+  loadCompanyIntents: "company-manager",
+  loadCompanyPortfolio: "company-manager",
+  loadJobFromFile: "agent-responsibility-tick",
+  loadAgentAdhoc: "agent-ask",
+  markFlowSuccess: "revert",
+  mergeFlow: "merge",
+  parseCompanyManagerDecision: "company-manager",
   parseReproOutput: "reproduce",
-  verifyReproFails: "reproduce",
+  planTaskJobs: "task-jobs",
   postPlanComment: "plan",
   postResearchComment: "research",
-  diagMcp: "research",
+  promoteQaGoal: "qa-goal",
+  recordClassification: "classify",
+  resolveFlow: "resolve",
   resolvePreviewUrl: "ui-review",
   resolveQaUrl: "qa-engineer",
-  warmupMcp: "qa-engineer",
-  createQaGoal: "qa-engineer",
+  revertFlow: "revert",
+  runPreviewBuild: "preview-build",
+  runTickScript: "agent-responsibility-tick-scripted",
+  saveManagedGoalState: "goal-manager",
+  stageMergeConflicts: "resolve",
   startFlow: "spec",
-  persistFlowState: "spec",
-  dispatch: "spec",
+  syncFlow: "sync",
+  verifyReproFails: "reproduce",
+  warmupMcp: "qa-engineer",
 }
 
 function buildUsageMap(): Map<string, Set<string>> {
@@ -228,11 +202,11 @@ function buildUsageMap(): Map<string, Set<string>> {
   // structural truth — a lifecycle-driven reference is still a reference
   // to that script from that profile, just expressed via a macro instead
   // of a literal entry. Without this, lifecycle migration would falsely
-  // turn 3-executable shared scripts (syncFlow, loadMemoryContext, etc.)
+  // turn 3-agentAction shared scripts (syncFlow, loadMemoryContext, etc.)
   // into "solo" merely because their explicit profile references moved
   // into the lifecycle module.
   const usage = new Map<string, Set<string>>()
-  for (const name of listExecutableNames()) {
+  for (const name of listAgentActionNames()) {
     const profilePath = path.join(EXECUTABLES_DIR, name, "profile.json")
     if (!fs.existsSync(profilePath)) continue
     let profile: ReturnType<typeof loadProfile>
@@ -253,7 +227,7 @@ function buildUsageMap(): Map<string, Set<string>> {
 }
 
 describe("script catalog: modularity invariant", () => {
-  it("every script referenced by ≥2 executables is genuinely shared (not in solo allowlist)", () => {
+  it("every script referenced by ≥2 agentActions is genuinely shared (not in solo allowlist)", () => {
     const usage = buildUsageMap()
     const wrongly_allowlisted: string[] = []
     for (const [name, owners] of usage) {
@@ -273,7 +247,7 @@ describe("script catalog: modularity invariant", () => {
       if (owners.size === 1 && !KNOWN_SOLO_SCRIPTS[name]) {
         const owner = [...owners][0]
         unaccounted.push(
-          `${name} (used only by ${owner}) — add to KNOWN_SOLO_SCRIPTS with a reason, OR generalise so a second executable uses it`,
+          `${name} (used only by ${owner}) — add to KNOWN_SOLO_SCRIPTS with a reason, OR generalise so a second agentAction uses it`,
         )
       }
     }
@@ -297,13 +271,13 @@ describe("script catalog: modularity invariant", () => {
   })
 })
 
-describe("consumer-library scripts (kept in engine, owned by moved executables)", () => {
-  it("each consumer-library script still exists in src/scripts/ (moved executables call it by name)", () => {
+describe("consumer-library scripts (kept in engine, owned by moved agentActions)", () => {
+  it("each consumer-library script still exists in src/scripts/ (moved agentActions call it by name)", () => {
     const missing: string[] = []
     for (const name of Object.keys(CONSUMER_LIBRARY_SCRIPTS)) {
       if (!fs.existsSync(path.join(SCRIPTS_DIR, `${name}.ts`))) {
         missing.push(
-          `${name}: listed as consumer-library (for the moved "${CONSUMER_LIBRARY_SCRIPTS[name]}" executable) but src/scripts/${name}.ts is gone — consumer repos that copied that executable will break`,
+          `${name}: listed as consumer-library (for the moved "${CONSUMER_LIBRARY_SCRIPTS[name]}" agentAction) but src/scripts/${name}.ts is gone — consumer repos that copied that agentAction will break`,
         )
       }
     }

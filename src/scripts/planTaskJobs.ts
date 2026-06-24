@@ -1,4 +1,4 @@
-import type { Job, JobFlavor, PreflightScript } from "../executables/types.js"
+import type { Job, JobFlavor, PreflightScript } from "../agent-actions/types.js"
 import { stableJobKey, targetFromCliArgs } from "../jobIdentity.js"
 import {
   emptyState,
@@ -12,10 +12,10 @@ import {
 export const TASK_JOBS_MARKER = "kody:task-jobs:v1"
 
 export interface TaskJobSpec {
-  executable: string
+  agentAction: string
+  agentResponsibility?: string
   reason?: string
-  staff?: string
-  persona?: string
+  agent?: string
   cliArgs?: Record<string, unknown>
   target?: number
   flavor?: JobFlavor
@@ -41,9 +41,10 @@ export function taskJobSpecToJob(spec: TaskJobSpec, issueNumber: number): Job {
   const cliArgs = spec.cliArgs ?? { issue: issueNumber }
   const target = typeof spec.target === "number" ? spec.target : (targetFromCliArgs(cliArgs) ?? issueNumber)
   return {
-    executable: spec.executable,
+    agentResponsibility: spec.agentResponsibility ?? spec.agentAction,
+    agentAction: spec.agentAction,
     why: spec.reason,
-    persona: spec.persona ?? spec.staff,
+    agent: spec.agent,
     schedule: spec.schedule,
     target,
     cliArgs,
@@ -81,7 +82,7 @@ export const planTaskJobs: PreflightScript = async (ctx) => {
 
   const target = ctx.data.commentTargetType as TaskTarget | undefined
   const number = ctx.data.commentTargetNumber as number | undefined
-  if (target && number) writeTaskState(target, number, next, ctx.cwd)
+  if (target && number) writeTaskState(target, number, next, ctx.cwd, ctx.config)
 }
 
 function normalizeSpec(input: unknown, index: number): TaskJobSpec {
@@ -89,9 +90,9 @@ function normalizeSpec(input: unknown, index: number): TaskJobSpec {
     throw new Error(`task job plan entry ${index} must be an object`)
   }
   const raw = input as Record<string, unknown>
-  const executable = typeof raw.executable === "string" ? raw.executable.trim() : ""
-  if (!/^[a-z][a-z0-9-]*$/.test(executable)) {
-    throw new Error(`task job plan entry ${index} must have a valid executable`)
+  const agentAction = typeof raw.agentAction === "string" ? raw.agentAction.trim() : ""
+  if (!/^[a-z][a-z0-9-]*$/.test(agentAction)) {
+    throw new Error(`task job plan entry ${index} must have a valid agentAction`)
   }
   const cliArgs = raw.cliArgs
   if (cliArgs !== undefined && (!cliArgs || typeof cliArgs !== "object" || Array.isArray(cliArgs))) {
@@ -102,10 +103,12 @@ function normalizeSpec(input: unknown, index: number): TaskJobSpec {
     throw new Error(`task job plan entry ${index} flavor must be "instant" or "scheduled"`)
   }
   return {
-    executable,
+    agentAction,
+    ...(typeof raw.agentResponsibility === "string" && raw.agentResponsibility.trim()
+      ? { agentResponsibility: raw.agentResponsibility.trim() }
+      : {}),
     ...(typeof raw.reason === "string" && raw.reason.trim() ? { reason: raw.reason.trim() } : {}),
-    ...(typeof raw.staff === "string" && raw.staff.trim() ? { staff: raw.staff.trim() } : {}),
-    ...(typeof raw.persona === "string" && raw.persona.trim() ? { persona: raw.persona.trim() } : {}),
+    ...(typeof raw.agent === "string" && raw.agent.trim() ? { agent: raw.agent.trim() } : {}),
     ...(cliArgs ? { cliArgs: cliArgs as Record<string, unknown> } : {}),
     ...(typeof raw.target === "number" && Number.isFinite(raw.target) ? { target: raw.target } : {}),
     ...(flavor === "instant" || flavor === "scheduled" ? { flavor } : {}),
@@ -116,9 +119,9 @@ function normalizeSpec(input: unknown, index: number): TaskJobSpec {
 function jobToPlannedTaskJob(job: Job): PlannedTaskJob {
   return {
     id: stableJobKey(job),
-    executable: job.executable ?? job.duty ?? "unknown",
-    ...(job.duty ? { duty: job.duty } : {}),
-    ...(job.persona ? { staff: job.persona } : {}),
+    agentAction: job.agentAction ?? job.agentResponsibility ?? "unknown",
+    agentResponsibility: job.agentResponsibility ?? job.action ?? job.agentAction ?? "unknown",
+    ...(job.agent ? { agent: job.agent } : {}),
     ...(job.flavor ? { flavor: job.flavor } : {}),
     ...(job.schedule ? { schedule: job.schedule } : {}),
     ...(typeof job.target === "number" ? { target: job.target } : {}),

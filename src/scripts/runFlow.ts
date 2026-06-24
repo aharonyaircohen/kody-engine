@@ -1,11 +1,11 @@
 /**
- * Flow script for the `run` executable.
+ * Flow script for the `run` agentAction.
  * Loads the issue, creates/checks out a feature branch, posts the "started"
  * comment. Issue number lives in `ctx.args.issue`.
  */
 
+import type { PreflightScript } from "../agent-actions/types.js"
 import { ensureFeatureBranch } from "../branch.js"
-import type { PreflightScript } from "../executables/types.js"
 import { getRunUrl } from "../gha.js"
 import {
   DEFAULT_COMMENT_LIMIT,
@@ -26,18 +26,21 @@ export const runFlow: PreflightScript = async (ctx) => {
     cfgCtx.commentMaxBytes ?? DEFAULT_COMMENT_MAX_BYTES,
   )
   ctx.data.issue = { ...issue, commentsFormatted }
+  if (issue.isPullRequest) {
+    ctx.data.commentTargetType = "pr"
+    ctx.data.commentTargetNumber = issueNumber
+    ctx.skipAgent = true
+    ctx.output.exitCode = 1
+    ctx.output.reason = `run target #${issueNumber} is a pull request; dispatch a PR action or the source issue instead`
+    return
+  }
+
   ctx.data.commentTargetType = "issue"
   ctx.data.commentTargetNumber = issueNumber
 
-  // Resolve the base branch:
-  //   - Optional --base CLI flag — passed by goal-tick's dispatchNextTask as
-  //     `@kody --base <leaf-branch>`. Validated against the kody-task / legacy
-  //     goal-branch allowlist so comment-driven dispatch can't redirect kody
-  //     onto an arbitrary branch.
-  //
-  // The umbrella-era label fallback (`goal-runner:dispatched` + `goal:<id>` →
-  // `goal-<id>`) is gone: the stacked-PR model doesn't emit those labels,
-  // and the --base in the @kody comment is the only signal we need.
+  // Resolve base branch from an explicit, validated --base override.
+  // This remains useful for safe manual branch targeting; managed goals no
+  // longer dispatch stacked task branches through this path.
   const argBase = resolveBaseOverride(ctx.args.base as string | undefined)
   const baseRaw = ctx.args.base as string | undefined
   if (baseRaw && !argBase) {
@@ -74,8 +77,8 @@ function tryPost(issueNumber: number, body: string, cwd?: string): void {
 }
 
 /**
- * Validate a --base override. Returns the value if it parses as a safe
- * git branch ref, otherwise null. dispatchNextTask is the only intended
+ * git branch ref, otherwise null. Base overrides are intended for safe
+ * branch targeting only.
  * caller; it passes either the leaf task branch or the repo's default
  * branch (dev, main, etc.), so we need to accept any ordinary branch
  * name without leaving the door open for path-traversal / shell-meta

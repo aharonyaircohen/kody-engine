@@ -11,7 +11,7 @@
  *
  * TaskContext is the typed schema that captures that shared context.
  * The loadTaskContext preflight assembles it from the existing loaders'
- * ctx.data fields and persists it to `.kody/runs/<runId>/task-context.json`
+ * ctx.data fields and persists it to runtime scratch storage
  * so:
  *   1. Future scripts have a typed read surface for context
  *      (vs. duck-typing ctx.data.* fields).
@@ -31,6 +31,7 @@ import * as path from "node:path"
 import type { TestRequirement } from "./config.js"
 import type { IssueData } from "./issue.js"
 import type { LoadedConvention } from "./prompt.js"
+import { runtimeStatePath } from "./runtimePaths.js"
 
 /** Bump when the schema changes incompatibly. Readers reject mismatched versions. */
 export const TASK_CONTEXT_SCHEMA_VERSION = 1 as const
@@ -41,7 +42,7 @@ export interface TaskContext {
   builtAt: string
   /** runId from src/events.ts — ties this context to a specific task run. */
   runId: string
-  /** Optional issue snapshot. Present for run/fix-type executables. */
+  /** Optional issue snapshot. Present for run/fix-type agentActions. */
   issue?: IssueData & {
     /** Pre-formatted comment block used by composePrompt. */
     commentsFormatted: string
@@ -84,13 +85,13 @@ export function buildTaskContext(args: {
 }
 
 /**
- * Persist a TaskContext to `.kody/runs/<runId>/task-context.json`. Best
+ * Persist a TaskContext to runtime scratch storage. Best
  * effort: failures are logged to stderr but never throw so the
  * preflight does not block the agent.
  */
 export function persistTaskContext(cwd: string, ctx: TaskContext): string | null {
   try {
-    const dir = path.join(cwd, ".kody", "runs", ctx.runId)
+    const dir = runtimeStatePath(cwd, "agent-runs", ctx.runId)
     fs.mkdirSync(dir, { recursive: true })
     const file = path.join(dir, "task-context.json")
     fs.writeFileSync(file, `${JSON.stringify(ctx, null, 2)}\n`)
@@ -107,7 +108,7 @@ export function persistTaskContext(cwd: string, ctx: TaskContext): string | null
  * schema mismatch — callers should fall back to fresh loaders.
  */
 export function readTaskContext(cwd: string, runId: string): TaskContext | null {
-  const file = path.join(cwd, ".kody", "runs", runId, "task-context.json")
+  const file = runtimeStatePath(cwd, "agent-runs", runId, "task-context.json")
   if (!fs.existsSync(file)) return null
   try {
     const parsed = JSON.parse(fs.readFileSync(file, "utf-8")) as TaskContext

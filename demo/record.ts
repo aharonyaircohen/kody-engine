@@ -154,7 +154,7 @@ async function issuePage(page: Page) {
 
   await smoothScroll(page, 400)
   await wait(page, 800)
-  await overlay(page, 'Posts a run summary on the issue', 2500)
+  await overlay(page, 'Posts a agent run summary on the issue', 2500)
 }
 
 async function prPage(page: Page) {
@@ -190,7 +190,7 @@ async function endCard(page: Page) {
     </div>
     <div style="margin-top: 32px;">
       <code style="font-size: 16px; color: #58a6ff; background: rgba(88,166,255,0.1); padding: 10px 20px; border-radius: 8px; border: 1px solid rgba(88,166,255,0.25);">
-        npx -y -p @kody-ade/kody-engine@latest kody init
+        npx -y -p @kody-ade/kody-engine@latest kody-engine init
       </code>
     </div>
     <div style="font-size: 15px; color: #6e7681; margin-top: 20px;">

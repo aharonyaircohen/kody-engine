@@ -3,9 +3,15 @@ import { brainProxy } from "./bin/brain-proxy.js"
 import { mcpHttpServer } from "./bin/mcp-http-server.js"
 import { runChat } from "./chat-cli.js"
 import { loadConfig } from "./config.js"
-import { runExecutableChain } from "./executor.js"
+import { runJob } from "./job.js"
 import { runCi } from "./kody-cli.js"
-import { hasExecutable, listExecutables, parseGenericFlags } from "./registry.js"
+import {
+  hasAgentResponsibilityAction,
+  listAgentResponsibilityActions,
+  parseGenericFlags,
+  resolveAgentAction,
+  resolveAgentResponsibilityAction,
+} from "./registry.js"
 import { brainServe } from "./servers/brain-serve.js"
 import { poolServe } from "./servers/pool-serve.js"
 import { runnerServe } from "./servers/runner-serve.js"
@@ -13,8 +19,9 @@ import { serve } from "./servers/serve.js"
 import { runStats } from "./stats.js"
 
 interface ParsedArgs {
-  command: "ci" | "chat" | "help" | "version" | "stats" | "server" | "__executable__"
-  executableName?: string
+  command: "ci" | "chat" | "help" | "version" | "stats" | "server" | "__agent_responsibility__" | "__exec__"
+  actionName?: string
+  agentActionName?: string
   serverName?: "serve" | "pool-serve" | "runner-serve" | "brain-serve" | "brain-proxy" | "mcp-http-server"
   serverArgs?: string[]
   cliArgs?: Record<string, unknown>
@@ -38,16 +45,17 @@ Usage:
   kody-engine preview-build --pr <N>                 [--cwd <path>] [--verbose|--quiet]
   kody-engine release --issue <N>                    [--cwd <path>] [--verbose|--quiet]
   kody-engine init                                   [--cwd <path>] [--verbose|--quiet]
-  kody-engine <executable>                           [--cwd <path>] [--verbose|--quiet]
+  kody-engine <action>                               [--cwd <path>] [--verbose|--quiet]
+  kody-engine exec <agentAction>                      [--cwd <path>] [--verbose|--quiet]
   kody-engine ci      [preflight flags — see: kody-engine ci --help]
   kody-engine chat    [chat flags — see: kody-engine chat --help]
   kody-engine stats   [--since 7d|--run <id>|--json|--cwd <path>]
   kody-engine help
   kody-engine version
 
-Each top-level command is a discovered executable under
-\`src/executables/<name>/profile.json\`. Drop in a new directory to add a new
-command; consumer repos can also provide their own executable profiles.
+Top-level work commands are agentResponsibility actions. A agentResponsibility owns the public action name
+and selects an implementation agentAction. Use exec only for internal agentAction
+profiles such as scheduled helpers.
 
 Exit codes:
   0   success (PR opened, verify passed — or resolve produced a merge commit)
@@ -86,9 +94,28 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return { ...result, command: "stats", statsArgv: argv.slice(1) }
   }
 
+  if (cmd === "exec") {
+    const agentActionName = argv[1]
+    if (!agentActionName || agentActionName.startsWith("-")) {
+      result.errors.push("exec requires an agentAction name")
+      return result
+    }
+    if (!resolveAgentAction(agentActionName)) {
+      result.errors.push(`unknown agentAction: ${agentActionName}`)
+      return result
+    }
+    result.command = "__exec__"
+    result.agentActionName = agentActionName
+    result.cliArgs = parseGenericFlags(argv.slice(2))
+    if (typeof result.cliArgs.cwd === "string") result.cwd = result.cliArgs.cwd
+    if (result.cliArgs.verbose === true) result.verbose = true
+    if (result.cliArgs.quiet === true) result.quiet = true
+    return result
+  }
+
   // Long-running servers are engine plumbing, not user work-verbs. They route
   // to src/servers/ as hardcoded CLI verbs (like ci/help/version), so the
-  // executable registry never lists them and dispatch never treats them as verbs.
+  // agentAction registry never lists them and dispatch never treats them as verbs.
   const SERVER_VERBS = new Set(["serve", "pool-serve", "runner-serve", "brain-serve", "brain-proxy", "mcp-http-server"])
   if (SERVER_VERBS.has(cmd)) {
     result.command = "server"
@@ -101,11 +128,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return result
   }
 
-  // Every other top-level command is a discovered executable (run, resolve,
-  // sync, merge, init, release, scheduled watches, consumer profiles, ...).
-  if (hasExecutable(cmd)) {
-    result.command = "__executable__"
-    result.executableName = cmd
+  // Public top-level work commands are agentResponsibility actions.
+  if (hasAgentResponsibilityAction(cmd)) {
+    result.command = "__agent_responsibility__"
+    result.actionName = cmd
     result.cliArgs = parseGenericFlags(argv.slice(1))
     if (typeof result.cliArgs.cwd === "string") result.cwd = result.cliArgs.cwd
     if (result.cliArgs.verbose === true) result.verbose = true
@@ -113,8 +139,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return result
   }
 
-  const discovered = listExecutables().map((e) => e.name)
-  const available = ["ci", "chat", "stats", "help", "version", ...discovered]
+  const discoveredActions = listAgentResponsibilityActions().map((e) => e.action)
+  const available = ["ci", "chat", "stats", "exec", "help", "version", ...discoveredActions]
   result.errors.push(`unknown command: ${cmd} (available: ${available.join(", ")})`)
   return result
 }
@@ -196,41 +222,91 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 
   const cwd = args.cwd ?? process.cwd()
 
-  // Configless executables: skip config load.
-  // - init runs BEFORE a kody.config.json exists.
-  // - goal-scheduler is a scan-only lifecycle tool: walks `.kody/goals/*`
-  //   and dispatches a goal-tick subprocess for each active goal. No
-  //   config use of its own.
-  //
-  // goal-tick IS NOT configless — it needs config.git.defaultBranch to
-  // resolve the base for the first task in a stacked-PR run. The
-  // configless fallback in executor.ts hardcodes "main", which is wrong
-  // for repos defaulting to `dev`, `master`, etc. and silently collapsed
-  // the stack onto the wrong branch.
-  const configlessCommands = new Set(["init", "goal-scheduler"])
-  const skipConfig = configlessCommands.has(args.executableName ?? "")
+  // Configless implementations: skip config load.
+  // - init runs BEFORE kody.config.json exists.
+  const configlessCommands = new Set(["init"])
 
-  try {
-    // runExecutableChain so an explicitly-invoked stage follows its in-process
-    // hand-offs too — notably `goal-scheduler` shells out to
-    // `kody-engine goal-tick`, whose dispatchNextTask hands the task pipeline
-    // off via nextDispatch; without chaining here the goal would never build.
-    const result = await runExecutableChain(args.executableName!, {
-      cliArgs: args.cliArgs ?? {},
-      cwd,
-      skipConfig,
-      verbose: args.verbose,
-      quiet: args.quiet,
-    })
-    if (result.exitCode !== 0 && result.reason) {
-      process.stderr.write(`error: ${result.reason}\n`)
+  if (args.command === "__agent_responsibility__") {
+    const route = resolveAgentResponsibilityAction(args.actionName!)
+    if (!route) {
+      process.stderr.write(`error: unknown agentResponsibility action '${args.actionName}'\n`)
+      return 64
     }
-    return result.exitCode
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[kody] ${args.executableName} crashed: ${msg}\n`)
-    if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`)
-    process.stdout.write(`PR_URL=FAILED: ${args.executableName} crashed: ${msg}\n`)
-    return 99
+    const cliArgs = { ...route.cliArgs, ...(args.cliArgs ?? {}) }
+    const skipConfig = configlessCommands.has(route.agentAction)
+    try {
+      const result = await runJob(
+        {
+          action: route.action,
+          agentResponsibility: route.agentResponsibility,
+          agentAction: route.agentAction,
+          cliArgs,
+          target: numericTarget(cliArgs),
+          flavor: "instant",
+        },
+        {
+          cwd,
+          skipConfig,
+          verbose: args.verbose,
+          quiet: args.quiet,
+        },
+      )
+      if (result.exitCode !== 0 && result.reason) {
+        process.stderr.write(`error: ${result.reason}\n`)
+      }
+      return result.exitCode
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[kody] ${args.actionName} crashed: ${msg}\n`)
+      if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`)
+      process.stdout.write(`PR_URL=FAILED: ${args.actionName} crashed: ${msg}\n`)
+      return 99
+    }
   }
+
+  if (args.command === "__exec__") {
+    const agentAction = args.agentActionName!
+    const cliArgs = args.cliArgs ?? {}
+    const skipConfig = configlessCommands.has(agentAction)
+    try {
+      const result = await runJob(
+        {
+          action: agentAction,
+          agentResponsibility: agentAction,
+          agentAction,
+          cliArgs,
+          target: numericTarget(cliArgs),
+          flavor: "instant",
+        },
+        {
+          cwd,
+          skipConfig,
+          verbose: args.verbose,
+          quiet: args.quiet,
+        },
+      )
+      if (result.exitCode !== 0 && result.reason) {
+        process.stderr.write(`error: ${result.reason}\n`)
+      }
+      return result.exitCode
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[kody] ${agentAction} crashed: ${msg}\n`)
+      if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`)
+      process.stdout.write(`PR_URL=FAILED: ${agentAction} crashed: ${msg}\n`)
+      return 99
+    }
+  }
+
+  process.stderr.write("error: command did not resolve to a agentResponsibility or agentAction\n")
+  return 64
+}
+
+function numericTarget(cliArgs: Record<string, unknown>): number | undefined {
+  for (const key of ["issue", "pr"]) {
+    const raw = cliArgs[key]
+    const n = typeof raw === "number" ? raw : typeof raw === "string" ? parseInt(raw, 10) : Number.NaN
+    if (Number.isFinite(n) && n > 0) return n
+  }
+  return undefined
 }

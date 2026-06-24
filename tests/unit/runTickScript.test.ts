@@ -1,13 +1,13 @@
 /**
- * Unit tests for the `runTickScript` preflight (deterministic duty-tick).
+ * Unit tests for the `runTickScript` preflight (deterministic agent-responsibility-tick).
  *
  * These exercise the contract that motivated the code's existence: when a
- * job declares `tickScript:` in frontmatter, the script's stdout is the
+ * agentResponsibility declares `tickScript` in profile.json, the script's stdout is the
  * single source of truth for next-state — no LLM in the loop. Earlier
  * regressions silently dropped state because the agent didn't echo the
  * fenced block, so we pin:
  *   - happy path persists nextJobState parsed from stdout
- *   - missing tickScript frontmatter fails loudly (not silently)
+ *   - missing tickScript field fails loudly (not silently)
  *   - non-zero script exit propagates
  *   - missing fenced block sets nextStateParseError (writeJobStateFile guards)
  */
@@ -16,8 +16,8 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import type { Context, Profile } from "../../src/agent-actions/types.js"
 import type { KodyConfig } from "../../src/config.js"
-import type { Context, Profile } from "../../src/executables/types.js"
 import { runTickScript } from "../../src/scripts/runTickScript.js"
 
 function configFor(): KodyConfig {
@@ -26,7 +26,7 @@ function configFor(): KodyConfig {
     git: { defaultBranch: "main" },
     github: { owner: "acme", repo: "widgets" },
     agent: { model: "anthropic/test" },
-    // local-file backend writes/reads `.kody/jobs/<slug>.state.json`
+    // local-file backend writes/reads `.kody/jobs/<slug>/state.json`
     // synchronously — no network, suitable for unit tests.
     jobs: { stateBackend: "local-file" },
   }
@@ -56,9 +56,11 @@ afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true })
 })
 
-function writeJob(slug: string, frontmatter: string, body = "# job\n"): void {
-  const fm = frontmatter ? `---\n${frontmatter}\n---\n` : ""
-  fs.writeFileSync(path.join(tmp, ".kody", "jobs", `${slug}.md`), fm + body)
+function writeJob(slug: string, profile: Record<string, unknown>, body = "# job\n"): void {
+  const dir = path.join(tmp, ".kody", "jobs", slug)
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
+  fs.writeFileSync(path.join(dir, "agent-responsibility.md"), body)
 }
 
 function writeScript(rel: string, contents: string): void {
@@ -70,7 +72,7 @@ function writeScript(rel: string, contents: string): void {
 
 describe("runTickScript", () => {
   it("parses next-state from script stdout into ctx.data.nextJobState", async () => {
-    writeJob("demo", "tickScript: .kody/scripts/demo.sh")
+    writeJob("demo", { tickScript: ".kody/scripts/demo.sh" })
     writeScript(
       ".kody/scripts/demo.sh",
       `#!/usr/bin/env bash
@@ -94,8 +96,8 @@ EOF
     expect(next.data.perPr["42"]).toEqual({ lastSha: "abc", attempts: 1 })
   })
 
-  it("fails loudly when frontmatter has no tickScript", async () => {
-    writeJob("demo", "every: 1h")
+  it("fails loudly when the profile has no tickScript", async () => {
+    writeJob("demo", { every: "1h" })
 
     const ctx = ctxFor(tmp, "demo")
     await runTickScript(ctx, PROFILE, { jobsDir: ".kody/jobs", slugArg: "job" })
@@ -105,7 +107,7 @@ EOF
   })
 
   it("propagates a non-zero script exit", async () => {
-    writeJob("demo", "tickScript: .kody/scripts/fail.sh")
+    writeJob("demo", { tickScript: ".kody/scripts/fail.sh" })
     writeScript(".kody/scripts/fail.sh", "#!/usr/bin/env bash\nexit 7\n")
 
     const ctx = ctxFor(tmp, "demo")
@@ -116,7 +118,7 @@ EOF
   })
 
   it("sets nextStateParseError when stdout omits the fenced block", async () => {
-    writeJob("demo", "tickScript: .kody/scripts/silent.sh")
+    writeJob("demo", { tickScript: ".kody/scripts/silent.sh" })
     writeScript(".kody/scripts/silent.sh", "#!/usr/bin/env bash\necho 'no fence here'\n")
 
     const ctx = ctxFor(tmp, "demo")
@@ -130,9 +132,9 @@ EOF
     // Pins the maxBuffer fix. Without `maxBuffer: 16MB` on spawnSync,
     // stdout >1MB is silently truncated and the fenced block at the end
     // is dropped — the exact "silent state drop" failure mode this
-    // executable was written to prevent. The script writes ~2MB of
+    // agentAction was written to prevent. The script writes ~2MB of
     // preamble, then the fenced block.
-    writeJob("demo", "tickScript: .kody/scripts/big.sh")
+    writeJob("demo", { tickScript: ".kody/scripts/big.sh" })
     writeScript(
       ".kody/scripts/big.sh",
       `#!/usr/bin/env bash
@@ -161,7 +163,7 @@ EOF
     // bubbles up as `exited null` and operators can't tell timeout from
     // exec failure. We override the 5min default by triggering a SIGTERM
     // explicitly — `spawnSync`'s `timeout` option is the same code path.
-    writeJob("demo", "tickScript: .kody/scripts/hang.sh")
+    writeJob("demo", { tickScript: ".kody/scripts/hang.sh" })
     // `kill -SIGTERM $$` simulates what `timeout: ...` does to a hung
     // script, without making the test wait 5 minutes.
     writeScript(".kody/scripts/hang.sh", "#!/usr/bin/env bash\nkill -SIGTERM $$\nsleep 30\n")
@@ -179,7 +181,7 @@ EOF
     // script — a footgun amplified by `set -x`. The script echoes its
     // env into the fenced data block; we assert the secret is absent
     // and that allow-listed vars (PATH, GH_TOKEN) survive.
-    writeJob("demo", "tickScript: .kody/scripts/env.sh")
+    writeJob("demo", { tickScript: ".kody/scripts/env.sh" })
     // Heredoc is QUOTED so backticks don't run as command substitution;
     // we emit the JSON via a single printf (variable interpolation
     // explicit) instead of mixing variable refs into the fenced block.

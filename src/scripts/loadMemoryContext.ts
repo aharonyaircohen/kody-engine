@@ -1,11 +1,11 @@
 /**
  * Preflight: surface the project's `.kody/memory/` markdown wiki into the
- * agent's prompt as `{{memoryContext}}`. Cross-cutting — any executable can
+ * agent's prompt as `{{memoryContext}}`. Cross-cutting — any agentAction can
  * opt in by listing this in its preflight.
  *
  * Strategy:
  *   - Walk the memory dir, take at most MAX_PAGES pages.
- *   - If the executable has an issue/PR title in ctx.data, score pages by
+ *   - If the agentAction has an issue/PR title in ctx.data, score pages by
  *     simple keyword overlap with that title to favor relevance.
  *   - Otherwise return the most-recently-updated pages (by `updated:`
  *     frontmatter, falling back to mtime).
@@ -17,7 +17,7 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../agent-actions/types.js"
 
 const MEMORY_DIR_RELATIVE = ".kody/memory"
 const MAX_PAGES = 8

@@ -1,21 +1,70 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
+
+const stateApi = vi.hoisted(() => {
+  const files = new Map<string, { content: string; sha: string }>()
+  let seq = 1
+  const gh = vi.fn((args: string[], options?: { input?: string }) => {
+    const apiPath = args.find((arg) => arg.startsWith("/repos/") && arg.includes("/contents/"))
+    if (!apiPath) return ""
+
+    if (args.includes("--method") && args.includes("PUT")) {
+      const payload = JSON.parse(options?.input ?? "{}") as { content?: string }
+      const sha = `sha-${seq++}`
+      files.set(apiPath, { content: payload.content ?? "", sha })
+      return JSON.stringify({ content: { sha } })
+    }
+
+    const file = files.get(apiPath)
+    if (!file) throw new Error("gh: Not Found (HTTP 404)")
+    return JSON.stringify({
+      type: "file",
+      encoding: "base64",
+      content: file.content,
+      sha: file.sha,
+      path: apiPath.split("/contents/")[1],
+    })
+  })
+
+  return {
+    gh,
+    reset() {
+      gh.mockClear()
+      files.clear()
+      seq = 1
+    },
+  }
+})
+
+vi.mock("../../src/issue.js", async (orig) => {
+  const actual = await orig<typeof import("../../src/issue.js")>()
+  return { ...actual, gh: stateApi.gh }
+})
+
 import type { KodyConfig } from "../../src/config.js"
-import { runExecutableChain } from "../../src/executor.js"
+import { runAgentActionChain } from "../../src/executor.js"
 import { emptyState, upsertTaskJobs } from "../../src/state.js"
 
 const config: KodyConfig = {
   quality: { typecheck: "", lint: "", testUnit: "", format: "" },
   git: { defaultBranch: "main" },
   github: { owner: "o", repo: "r" },
+  state: { repo: "o/kody-state", path: "r" },
   agent: { model: "claude/claude-haiku-4-5-20251001" },
 }
 
 function writeProfile(root: string, name: string, preflight: unknown[], postflight: unknown[] = []): void {
-  const dir = path.join(root, ".kody", "executables", name)
+  const dir = path.join(root, ".kody", "agent-actions", name)
+  const dutyDir = path.join(root, ".kody", "agent-responsibilities", name)
   fs.mkdirSync(dir, { recursive: true })
+  fs.mkdirSync(dutyDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(dutyDir, "profile.json"),
+    JSON.stringify({ name, action: name, agentAction: name, describe: `${name} agentResponsibility` }, null, 2),
+  )
+  fs.writeFileSync(path.join(dutyDir, "agent-responsibility.md"), `# ${name}\n\nRun ${name}.\n`)
   fs.writeFileSync(
     path.join(dir, "profile.json"),
     JSON.stringify(
@@ -53,6 +102,7 @@ describe("executor: nextJob chain", () => {
   const originalCwd = process.cwd()
 
   afterEach(() => {
+    stateApi.reset()
     process.chdir(originalCwd)
     if (tmp) fs.rmSync(tmp, { recursive: true, force: true })
     tmp = ""
@@ -65,7 +115,8 @@ describe("executor: nextJob chain", () => {
     writeProfile(tmp, "child", [{ script: "skipAgent" }], [{ script: "saveTaskState" }])
 
     const plannedJob = {
-      executable: "child",
+      agentResponsibility: "child",
+      agentAction: "child",
       cliArgs: { issue: 42 },
       target: 42,
       flavor: "instant" as const,
@@ -73,11 +124,20 @@ describe("executor: nextJob chain", () => {
     }
     const taskState = upsertTaskJobs(
       emptyState(),
-      [{ id: "instant:child:42", executable: "child", flavor: "instant", target: 42, reason: "child slice" }],
+      [
+        {
+          id: "instant:child:42",
+          agentResponsibility: "child",
+          agentAction: "child",
+          flavor: "instant",
+          target: 42,
+          reason: "child slice",
+        },
+      ],
       "2026-06-08T08:00:00Z",
     )
 
-    const result = await runExecutableChain("parent", {
+    const result = await runAgentActionChain("parent", {
       cliArgs: { issue: 42 },
       cwd: tmp,
       config,
@@ -109,14 +169,16 @@ describe("executor: nextJob chain", () => {
     writeProfile(tmp, "child", [{ script: "skipAgent" }], [{ script: "recordOutcome" }, { script: "saveTaskState" }])
 
     const failerJob = {
-      executable: "failer",
+      agentResponsibility: "failer",
+      agentAction: "failer",
       cliArgs: { issue: 42 },
       target: 42,
       flavor: "instant" as const,
       why: "first slice",
     }
     const childJob = {
-      executable: "child",
+      agentResponsibility: "child",
+      agentAction: "child",
       cliArgs: { issue: 42 },
       target: 42,
       flavor: "instant" as const,
@@ -126,8 +188,22 @@ describe("executor: nextJob chain", () => {
     const taskState = upsertTaskJobs(
       emptyState(),
       [
-        { id: "instant:failer:42", executable: "failer", flavor: "instant", target: 42, reason: "first slice" },
-        { id: "instant:child:42", executable: "child", flavor: "instant", target: 42, reason: "second slice" },
+        {
+          id: "instant:failer:42",
+          agentResponsibility: "failer",
+          agentAction: "failer",
+          flavor: "instant",
+          target: 42,
+          reason: "first slice",
+        },
+        {
+          id: "instant:child:42",
+          agentResponsibility: "child",
+          agentAction: "child",
+          flavor: "instant",
+          target: 42,
+          reason: "second slice",
+        },
       ],
       "2026-06-08T08:00:00Z",
     )
@@ -138,7 +214,7 @@ describe("executor: nextJob chain", () => {
       commentTargetNumber: 42,
     }
 
-    const first = await runExecutableChain("parent", {
+    const first = await runAgentActionChain("parent", {
       cliArgs: { issue: 42 },
       cwd: tmp,
       config,
@@ -149,7 +225,7 @@ describe("executor: nextJob chain", () => {
     expect(first.taskState?.jobs["instant:failer:42"]?.status).toBe("failed")
     expect(first.taskState?.jobs["instant:child:42"]?.status).toBe("pending")
 
-    const second = await runExecutableChain("parent", {
+    const second = await runAgentActionChain("parent", {
       cliArgs: { issue: 42 },
       cwd: tmp,
       config,
@@ -159,7 +235,10 @@ describe("executor: nextJob chain", () => {
     expect(second.exitCode).toBe(0)
     expect(second.reason).toBe("all planned task jobs are complete")
     expect(second.taskState?.jobs["instant:failer:42"]?.status).toBe("succeeded")
-    expect(second.taskState?.jobs["instant:failer:42"]?.runs.map((run) => run.status)).toEqual(["failed", "succeeded"])
+    expect(second.taskState?.jobs["instant:failer:42"]?.agentRuns.map((run) => run.status)).toEqual([
+      "failed",
+      "succeeded",
+    ])
     expect(second.taskState?.jobs["instant:child:42"]?.status).toBe("succeeded")
   })
 })

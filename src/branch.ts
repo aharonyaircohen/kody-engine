@@ -53,11 +53,11 @@ function resetWorkingTree(cwd?: string): void {
   }
   try {
     // `-e .kody` excludes kody's own directory from the clean. Consumer
-    // executables live at `.kody/executables/<name>/` and are TRACKED, but the
+    // agentActions live at `.kody/agent-actions/<name>/` and are TRACKED, but the
     // consumer repo's `.gitignore` ignores `.kody/*` and re-includes them via a
-    // negation (`!.kody/executables/**`). On the CI runner, `git clean -fd`'s
+    // negation (`!.kody/agent-actions/**`). On the CI runner, `git clean -fd`'s
     // directory walk over that negated-ignore pattern removes the whole
-    // `.kody/executables/<name>` directory — so the next preflight (composePrompt)
+    // `.kody/agent-actions/<name>` directory — so the next preflight (composePrompt)
     // crashes with "no prompt template found" (readdir ENOENT). Excluding `.kody`
     // keeps the engine's tracked assets intact; the ephemeral runtime state under
     // `.kody/` is gitignored bookkeeping that's safe to leave on an ephemeral runner.
@@ -75,7 +75,7 @@ function resetWorkingTree(cwd?: string): void {
  * is ephemeral and may carry build artifacts written by earlier steps
  * (e.g. payload's `importMap.js` regenerated during `pnpm install`); these
  * would otherwise make `gh pr checkout` refuse with "Your local changes
- * would be overwritten by checkout" and crash the executable.
+ * would be overwritten by checkout" and crash the agentAction.
  *
  * Discarding is safe because nothing the engine cares about lives in the
  * runner's pre-checkout working tree — the PR's branch contents are the
@@ -99,8 +99,8 @@ export function checkoutPrBranch(prNumber: number, cwd?: string): string {
   }
   try {
     // Exclude `.kody` for the same reason as resetWorkingTree: `git clean -fd`
-    // otherwise removes the tracked-but-ignore-negated `.kody/executables/<name>`
-    // dirs on the CI runner, breaking PR-driven executables (fix/fix-ci/resolve).
+    // otherwise removes the tracked-but-ignore-negated `.kody/agent-actions/<name>`
+    // dirs on the CI runner, breaking PR-driven agentActions (fix/fix-ci/resolve).
     execFileSync("git", ["clean", "-fd", "-e", ".kody"], {
       cwd,
       env,
@@ -118,7 +118,7 @@ export function checkoutPrBranch(prNumber: number, cwd?: string): string {
   })
   // The checkout can drop kody's tracked-but-ignore-negated `.kody/` assets;
   // restore them from the checked-out branch's HEAD tree (no-op if that branch
-  // predates the executables — those PRs would need a rebase regardless).
+  // predates the agentActions — those PRs would need a rebase regardless).
   restoreKodyAssets(cwd)
   return getCurrentBranch(cwd)
 }
@@ -154,11 +154,11 @@ export function mergeBase(baseBranch: string, cwd?: string): "clean" | "conflict
 }
 
 /**
- * Force-restore kody's own tracked assets (`.kody/executables`, `.kody/missions`,
+ * Force-restore kody's own tracked assets (`.kody/agent-actions`, `.kody/missions`,
  * …) into the working tree from the current HEAD tree. A branch checkout on the
  * CI runner can drop these: they're tracked, but the consumer repo's `.gitignore`
  * ignores `.kody/*` and re-includes them via a negation, and git's working-tree
- * update over that pattern removes the `.kody/executables/<name>` directory —
+ * update over that pattern removes the `.kody/agent-actions/<name>` directory —
  * which makes the next preflight (composePrompt) crash with readdir ENOENT.
  * `git checkout HEAD -- .kody` rematerialises whatever the branch dance dropped.
  * Best-effort: repos that don't track `.kody` just no-op (the checkout errors).
@@ -197,7 +197,7 @@ function ensureFeatureBranchInner(
   cwd?: string,
   baseBranch?: string,
 ): BranchResult {
-  // baseBranch: optional fork point. When provided (e.g. by goal-tick passing
+  // baseBranch: optional fork point. When provided (e.g. by base override caller passing
   // --base goal-<id>), a brand-new feature branch is forked from origin/<base>
   // instead of origin/<defaultBranch>. If the feature branch already exists on
   // origin (re-running run on the same issue), we still pull it as-is — the
@@ -342,7 +342,7 @@ function ensureFeatureBranchInner(
       git(["rev-parse", "--verify", `origin/${baseBranch}`], cwd)
       forkPoint = baseBranch
     } catch {
-      // origin/<base> doesn't exist — silently fall back. The goal-tick is
+      // origin/<base> doesn't exist — silently fall back. The base override caller is
       // expected to have created the goal branch before dispatching, so
       // this path should be rare. Logged in callers via the resulting
       // branch name (still defaultBranch-derived).

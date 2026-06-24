@@ -1,19 +1,19 @@
-# State-reducer pattern for executables
+# State-reducer pattern for agentActions
 
 Status: proposed
 
 ## The idea
 
-Model each executable as a **pure function**, the task (issue/PR) as a **store**, and the executable's output as a **typed action**. Any future orchestrator reads the store, dispatches an executable, and applies the returned state change. No free-text parsing, no implicit state reconstruction.
+Model each agentAction as a **pure function**, the task (issue/PR) as a **store**, and the agentAction's output as a **typed action**. Any future orchestrator reads the store, dispatches an agentAction, and applies the returned state change. No free-text parsing, no implicit state reconstruction.
 
 ## The three concepts
 
-### 1. Executable = pure function
+### 1. AgentAction = pure function
 
-Each executable declares an explicit contract:
+Each agentAction declares an explicit contract:
 
 ```
-executable :: (stateSlice, args) -> (newStateSlice, action)
+agentAction :: (stateSlice, args) -> (newStateSlice, action)
 ```
 
 - **Input schema**: which parts of the task state it reads + which CLI args it accepts.
@@ -34,12 +34,12 @@ The GitHub issue or PR is the canonical state location. A single structured comm
   "core": {
     "phase": "implementing",
     "status": "running",
-    "currentExecutable": "build",
+    "currentAgentAction": "build",
     "lastOutcome": null,
     "attempts": { "build": 1 },
     "prUrl": "https://github.com/…/pull/456"
   },
-  "executables": {
+  "agentActions": {
     "build":  { "lastAction": { "type": "BUILD_COMPLETED",  "payload": { "commitSha": "abc123" } } },
     "review": { "lastAction": null }
   }
@@ -62,13 +62,13 @@ Rules:
 Every run is a reducer application:
 
 ```
-(state, { executable, args, action })  ->  newState
+(state, { agentAction, args, action })  ->  newState
 ```
 
-- `state` is read from the store comment at run start.
-- `executable` does its work, producing an action.
-- The postflight that writes the state comment is the reducer: it merges the action into state.
-- `newState` is written back to the store comment; the previous entry is appended to the history section.
+- `state` is read from the configured Kody state repo at run start.
+- `agentAction` does its work, producing an action.
+- The postflight that writes task state is the reducer: it merges the action into state.
+- `newState` is written back to the state repo file; the previous entry is appended to the history section.
 
 ## State structure
 
@@ -78,20 +78,20 @@ state = {
   core: {
     phase:             "research" | "planning" | "implementing" | "reviewing" | "shipped" | "failed",
     status:            "pending"  | "running" | "succeeded" | "failed",
-    currentExecutable: string | null,
+    currentAgentAction: string | null,
     lastOutcome:       action | null,
-    attempts:          Record<executableName, number>,
+    attempts:          Record<agentActionName, number>,
     prUrl?:            string,
   },
-  executables: Record<executableName, {
+  agentActions: Record<agentActionName, {
     lastAction: action | null,
-    // per-executable namespaced data ("build" may stash branch, "review" may stash verdict, etc.)
+    // per-agentAction namespaced data ("build" may stash branch, "review" may stash verdict, etc.)
   }>,
 }
 ```
 
 - **core** is the predictable contract every reader depends on.
-- **executables** is open-ended; each executable owns its own namespace.
+- **agentActions** is open-ended; each agentAction owns its own namespace.
 - **History** is append-only below the JSON block; never edited.
 
 ## Action shape
@@ -104,7 +104,7 @@ action = {
 }
 ```
 
-Emitted by the executable, parsed by the reducer, written into `core.lastOutcome` + appended to history.
+Emitted by the agentAction, parsed by the reducer, written into `core.lastOutcome` + appended to history.
 
 ## Scope of this doc
 
@@ -116,7 +116,7 @@ This ADR covers **pattern only**:
 
 Out of scope (follow-up decisions):
 
-- Orchestrator executable that chains multiple runs
+- Orchestrator agentAction that chains multiple runs
 - Multi-task coordination
 - State-machine validation engine
 - README-level announcement of the pattern
@@ -126,5 +126,5 @@ Out of scope (follow-up decisions):
 - **Determinism.** Orchestrators dispatch on `action.type`, not on free-text parsing.
 - **Testability.** Each reducer is a pure function of its state slice.
 - **Debuggability.** The history section is an audit log.
-- **Composability.** Any orchestrator can drive any executable as long as schemas match.
+- **Composability.** Any orchestrator can drive any agentAction as long as schemas match.
 - **Incremental cost.** Roughly the work of adding one store-read and one store-write helper plus one schema field per profile.

@@ -1,8 +1,16 @@
+import { execFileSync } from "node:child_process"
+import { generateKeyPairSync } from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { detectPackageManager, parseCiArgs, resolveAuthToken, runCi, unpackAllSecrets } from "../../src/kody-cli.js"
+
+const { privateKey: appPrivateKey } = generateKeyPairSync("rsa", {
+  modulusLength: 2048,
+  privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  publicKeyEncoding: { type: "spki", format: "pem" },
+})
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-cli-test-"))
@@ -117,6 +125,27 @@ describe("kody-cli: unpackAllSecrets", () => {
 })
 
 describe("kody-cli: resolveAuthToken", () => {
+  it("prefers GitHub App mint over a prefilled workflow token", async () => {
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      const body = String(url).endsWith("/installation")
+        ? JSON.stringify({ id: 12345 })
+        : JSON.stringify({ token: "ghs_installation" })
+      return new Response(body, { status: 200 })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const env: NodeJS.ProcessEnv = {
+      KODY_APP_ID: "42",
+      KODY_APP_PRIVATE_KEY: appPrivateKey,
+      GITHUB_REPOSITORY: "A-Guy-educ/A-Guy-Web",
+      KODY_TOKEN: "ghs_current_repo",
+    }
+
+    expect(await resolveAuthToken(env)).toBe("ghs_installation")
+    expect(env.GH_TOKEN).toBe("ghs_installation")
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it("picks KODY_TOKEN first", async () => {
     const env: NodeJS.ProcessEnv = { KODY_TOKEN: "k", GH_TOKEN: "g", GITHUB_TOKEN: "gh", GH_PAT: "p" }
     expect(await resolveAuthToken(env)).toBe("k")
@@ -127,6 +156,30 @@ describe("kody-cli: resolveAuthToken", () => {
     const env: NodeJS.ProcessEnv = { GH_TOKEN: "g" }
     expect(await resolveAuthToken(env)).toBe("g")
     expect(env.GH_TOKEN).toBe("g")
+  })
+
+  it("keeps GH_PAT for state writes while recovering checkout token for repo calls", async () => {
+    const cwd = process.cwd()
+    const dir = tmpDir()
+    try {
+      process.chdir(dir)
+      execFileSync("git", ["init"], { stdio: "ignore" })
+      const checkoutToken = "repo-token"
+      const encoded = Buffer.from(`x-access-token:${checkoutToken}`).toString("base64")
+      execFileSync("git", [
+        "config",
+        "--local",
+        "http.https://github.com/.extraheader",
+        `AUTHORIZATION: basic ${encoded}`,
+      ])
+      const env: NodeJS.ProcessEnv = { GH_PAT: "state-token" }
+      expect(await resolveAuthToken(env)).toBe("state-token")
+      expect(env.GH_TOKEN).toBe("state-token")
+      expect(env.GITHUB_TOKEN).toBe(checkoutToken)
+    } finally {
+      process.chdir(cwd)
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it("falls back to GITHUB_TOKEN and copies into GH_TOKEN", async () => {

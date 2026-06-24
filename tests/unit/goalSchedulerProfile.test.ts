@@ -6,10 +6,11 @@
  */
 
 import * as fs from "node:fs"
-import * as path from "node:path"
 import { describe, expect, it } from "vitest"
+import { resolveAgentAction } from "../../src/registry.js"
 
-const profilePath = path.join(__dirname, "../../src/executables/goal-scheduler/profile.json")
+const profilePath = resolveAgentAction("goal-scheduler")
+if (!profilePath) throw new Error("goal-scheduler agentAction not found")
 
 describe("goal-scheduler profile", () => {
   const profile = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as {
@@ -22,7 +23,7 @@ describe("goal-scheduler profile", () => {
     expect(py?.install?.required).toBe(true)
   })
 
-  it("still declares gh", () => {
-    expect(profile.cliTools.some((t) => t.name === "gh")).toBe(true)
+  it("does not require gh to enumerate managed goals", () => {
+    expect(profile.cliTools.some((t) => t.name === "gh")).toBe(false)
   })
 })
