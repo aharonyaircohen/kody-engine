@@ -17,5 +17,10 @@
   "quality": {
     "typecheck": "pnpm typecheck",
     "testUnit": "pnpm test"
+  },
+  "company": {
+    "activeGoals": [
+      "ci-health"
+    ]
   }
 }
