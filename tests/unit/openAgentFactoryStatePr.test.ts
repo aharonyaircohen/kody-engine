@@ -44,7 +44,7 @@ function bundle(overrides: Record<string, unknown> = {}): string {
     files: [
       {
         path: "agent-actions/example/profile.json",
-        content: "{\n  \"name\": \"example\"\n}\n",
+        content: '{\n  "name": "example"\n}\n',
       },
     ],
     ...overrides,

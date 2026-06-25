@@ -147,13 +147,7 @@ function emitSse(res: ServerResponse, event: BrainEvent): void {
 }
 
 function envGithubToken(): string {
-  return (
-    process.env.KODY_TOKEN ??
-    process.env.GH_TOKEN ??
-    process.env.GITHUB_TOKEN ??
-    process.env.GH_PAT ??
-    ""
-  ).trim()
+  return (process.env.KODY_TOKEN ?? process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? process.env.GH_PAT ?? "").trim()
 }
 
 function parseRepoSlug(repo: string | undefined): { owner: string; repo: string } | null {

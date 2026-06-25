@@ -29,8 +29,8 @@ import { agentRunDir } from "./runtimePaths.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
 import { writeResponsibilityReport } from "./scripts/writeResponsibilityReport.js"
 import type { TaskState, TaskTarget } from "./state.js"
-import { loadSubagents } from "./subagents.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
+import { loadSubagents } from "./subagents.js"
 import {
   persistTaskArtifactsToState,
   prepareTaskArtifactsDir,
