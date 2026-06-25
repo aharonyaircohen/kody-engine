@@ -1,14 +1,19 @@
 import type { AgentResult } from "../agent.js"
 import type { PostflightScript } from "../agent-actions/types.js"
 import {
+  type AgentResponsibilityEvidence,
+  agentResponsibilityReportToEvidence,
+  agentResponsibilityResultToEvidence,
+  applyAgentResponsibilityEvidenceToGoalState,
+  mergeResponsibilityEvidence,
+} from "../agent-responsibilityEvidence.js"
+import {
   type AgentResponsibilityReport,
-  applyAgentResponsibilityReportToGoalState,
   parseAgentResponsibilityReport,
   parseAgentResponsibilityReportsFromText,
 } from "../agent-responsibilityReport.js"
 import {
   type AgentResponsibilityResult,
-  applyAgentResponsibilityResultToObjectiveState,
   parseAgentResponsibilityResult,
   parseAgentResponsibilityResultsFromText,
 } from "../agent-responsibilityResult.js"
@@ -21,13 +26,14 @@ export const applyAgentResponsibilityReports: PostflightScript = async (ctx, _pr
   const reports = collectReports(ctx.data.agentResponsibilityReports, agentResult)
   const results = collectResults(ctx.data.dutyResults, agentResult)
   const resultGoalId = typeof ctx.args.goal === "string" && ctx.args.goal.length > 0 ? ctx.args.goal : null
-  if (reports.length === 0 && (results.length === 0 || !resultGoalId)) return
+  const explicitEvidence =
+    typeof ctx.args.evidence === "string" && ctx.args.evidence.length > 0 ? ctx.args.evidence : undefined
+  const evidenceItems = collectGoalResponsibilityEvidence(reports, results, resultGoalId, explicitEvidence)
+  if (evidenceItems.length === 0) return
 
-  const reportsByGoal = groupGoalReports(reports)
-  const goalIds = new Set(reportsByGoal.keys())
-  if (results.length > 0 && resultGoalId) goalIds.add(resultGoalId)
+  const evidenceByGoal = groupGoalEvidence(evidenceItems)
 
-  for (const goalId of goalIds) {
+  for (const [goalId, goalEvidence] of evidenceByGoal) {
     const prior = fetchGoalState(ctx.config, goalId, ctx.cwd)
     if (!prior) {
       stageGoalRunLogEvent(ctx.data, goalId, {
@@ -37,8 +43,9 @@ export const applyAgentResponsibilityReports: PostflightScript = async (ctx, _pr
         reason: "goal missing in state repo",
         inspection: {
           responsibilityOutput: {
-            reports: reportsByGoal.get(goalId)?.length ?? 0,
-            results: goalId === resultGoalId ? results.length : 0,
+            kind: "responsibility-evidence",
+            count: goalEvidence.length,
+            items: goalEvidence.map(responsibilityEvidenceOutput),
           },
           missingEvidence: [],
           blockers: ["goal missing in state repo"],
@@ -51,55 +58,33 @@ export const applyAgentResponsibilityReports: PostflightScript = async (ctx, _pr
     }
 
     let next: GoalState = prior
-    for (const report of reportsByGoal.get(goalId) ?? []) {
+    for (const evidence of goalEvidence) {
       const beforeSnapshot = snapshotFromState(goalId, next)
-      next = applyAgentResponsibilityReportToGoalState(next, report)
+      next = applyAgentResponsibilityEvidenceToGoalState(next, evidence)
       const afterSnapshot = snapshotFromState(goalId, next)
       const change = goalRunLogChange(beforeSnapshot, afterSnapshot)
-      const output = responsibilityReportOutput(report, afterSnapshot)
+      const output = responsibilityEvidenceOutput(evidence)
       stageGoalRunLogEvent(ctx.data, goalId, {
         source: "goal-loop",
         event: change ? "goal.evidence.applied" : "goal.evidence.unchanged",
         goalState: next.state,
-        evidenceValues: report.evidence,
-        facts: report.facts,
+        evidence: evidence.explicitEvidence,
+        evidenceValues: evidence.evidence,
+        status: evidence.status,
+        reason: evidence.summary,
+        facts: evidence.facts,
+        artifacts: evidence.artifacts,
         goal: afterSnapshot ?? undefined,
-        inspection: evidenceInspection(beforeSnapshot, afterSnapshot, output),
+        inspection: evidenceInspection(beforeSnapshot, afterSnapshot, output, evidence.explicitEvidence),
         decision: {
           ...evidenceDecision(change, afterSnapshot, output),
-          evidence: report.evidence,
+          evidence: evidence.explicitEvidence,
+          evidenceValues: evidence.evidence,
         },
         change,
       })
     }
-    if (goalId === resultGoalId) {
-      const evidence =
-        typeof ctx.args.evidence === "string" && ctx.args.evidence.length > 0 ? ctx.args.evidence : undefined
-      for (const result of results) {
-        const beforeSnapshot = snapshotFromState(goalId, next)
-        next = applyAgentResponsibilityResultToObjectiveState(next, result, evidence)
-        const afterSnapshot = snapshotFromState(goalId, next)
-        const change = goalRunLogChange(beforeSnapshot, afterSnapshot)
-        const output = responsibilityResultOutput(result)
-        stageGoalRunLogEvent(ctx.data, goalId, {
-          source: "goal-loop",
-          event: change ? "goal.evidence.applied" : "goal.evidence.unchanged",
-          goalState: next.state,
-          evidence,
-          status: result.status,
-          reason: result.summary,
-          facts: result.facts,
-          artifacts: result.artifacts,
-          goal: afterSnapshot ?? beforeSnapshot ?? undefined,
-          inspection: evidenceInspection(beforeSnapshot, afterSnapshot, output, evidence),
-          decision: {
-            ...evidenceDecision(change, afterSnapshot, output),
-            evidence,
-          },
-          change,
-        })
-      }
-    }
+
     const beforeCompletionSnapshot = snapshotFromState(goalId, next)
     next = completeSatisfiedManagedGoal(next)
     const afterCompletionSnapshot = snapshotFromState(goalId, next)
@@ -125,13 +110,7 @@ export const applyAgentResponsibilityReports: PostflightScript = async (ctx, _pr
       flushLogs(ctx)
       continue
     }
-    putGoalState(
-      ctx.config,
-      goalId,
-      { ...next, updatedAt: nowIso() },
-      describeMessage(goalId, reportsByGoal.get(goalId), results),
-      ctx.cwd,
-    )
+    putGoalState(ctx.config, goalId, { ...next, updatedAt: nowIso() }, describeMessage(goalId, goalEvidence), ctx.cwd)
     flushLogs(ctx)
   }
 }
@@ -170,13 +149,30 @@ function collectResults(raw: unknown, agentResult: AgentResult | null): AgentRes
   return out
 }
 
-function groupGoalReports(reports: AgentResponsibilityReport[]): Map<string, AgentResponsibilityReport[]> {
-  const grouped = new Map<string, AgentResponsibilityReport[]>()
+function collectGoalResponsibilityEvidence(
+  reports: AgentResponsibilityReport[],
+  results: AgentResponsibilityResult[],
+  fallbackGoalId: string | null,
+  explicitEvidence?: string,
+): AgentResponsibilityEvidence[] {
+  const items: AgentResponsibilityEvidence[] = []
   for (const report of reports) {
-    if (report.target.type !== "goal") continue
-    const list = grouped.get(report.target.id) ?? []
-    list.push(report)
-    grouped.set(report.target.id, list)
+    const evidence = agentResponsibilityReportToEvidence(report)
+    if (evidence) items.push(evidence)
+  }
+  for (const result of results) {
+    const evidence = agentResponsibilityResultToEvidence(result, fallbackGoalId, explicitEvidence)
+    if (evidence) items.push(evidence)
+  }
+  return mergeResponsibilityEvidence(items)
+}
+
+function groupGoalEvidence(evidenceItems: AgentResponsibilityEvidence[]): Map<string, AgentResponsibilityEvidence[]> {
+  const grouped = new Map<string, AgentResponsibilityEvidence[]>()
+  for (const evidence of evidenceItems) {
+    const list = grouped.get(evidence.target.id) ?? []
+    list.push(evidence)
+    grouped.set(evidence.target.id, list)
   }
   return grouped
 }
@@ -196,38 +192,17 @@ function snapshotFromState(goalId: string, state: GoalState): Record<string, unk
   return managed ? goalRunLogSnapshot(goalId, state.state, managed) : null
 }
 
-function responsibilityReportOutput(
-  report: AgentResponsibilityReport,
-  goalAfter: Record<string, unknown> | null,
-): Record<string, unknown> {
-  const evidence = report.evidence ?? {}
-  const values = Object.values(evidence)
-  const status = values.some((value) => value === false)
-    ? "fail"
-    : values.length > 0 || report.facts
-      ? "changed"
-      : "noop"
+function responsibilityEvidenceOutput(evidence: AgentResponsibilityEvidence): Record<string, unknown> {
   return {
-    kind: "report",
-    status,
-    summary: "responsibility reported goal evidence",
-    evidence,
-    facts: report.facts ?? {},
-    artifacts: [],
-    missingEvidence: stringArrayField(goalAfter, "missingEvidence"),
-    blockers: stringArrayField(goalAfter, "blockers"),
-  }
-}
-
-function responsibilityResultOutput(result: AgentResponsibilityResult): Record<string, unknown> {
-  return {
-    kind: "result",
-    status: result.status,
-    summary: result.summary,
-    facts: result.facts,
-    artifacts: result.artifacts,
-    missingEvidence: result.missingEvidence,
-    blockers: result.blockers,
+    kind: "responsibility-evidence",
+    sources: evidence.sources,
+    status: evidence.status,
+    summary: evidence.summary,
+    evidence: evidence.evidence ?? {},
+    facts: evidence.facts,
+    artifacts: evidence.artifacts,
+    missingEvidence: evidence.missingEvidence,
+    blockers: evidence.blockers,
   }
 }
 
@@ -287,13 +262,7 @@ function stringArrayField(record: Record<string, unknown> | null | undefined, ke
   return Array.isArray(value) && value.every((item) => typeof item === "string") ? value : []
 }
 
-function describeMessage(
-  goalId: string,
-  reports: AgentResponsibilityReport[] | undefined,
-  results: AgentResponsibilityResult[],
-): string {
-  const pieces: string[] = []
-  if (reports && reports.length > 0) pieces.push(`report=${reports.length}`)
-  if (results.length > 0) pieces.push(`result=${results.map((result) => result.status).join(",")}`)
+function describeMessage(goalId: string, evidenceItems: AgentResponsibilityEvidence[]): string {
+  const pieces = evidenceItems.map((evidence) => `${evidence.sources.join("+")}:${evidence.status}`)
   return `Apply agentResponsibility output to ${goalId}${pieces.length > 0 ? ` (${pieces.join("; ")})` : ""}`
 }

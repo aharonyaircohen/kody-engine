@@ -95,7 +95,8 @@ describe("applyAgentResponsibilityReports", () => {
           event: "goal.evidence.applied",
           inspection: expect.objectContaining({
             responsibilityOutput: expect.objectContaining({
-              kind: "report",
+              kind: "responsibility-evidence",
+              sources: ["report"],
               status: "changed",
               evidence: { releasePrExists: true },
               facts: { releasePr: 123 },
@@ -155,11 +156,64 @@ describe("applyAgentResponsibilityReports", () => {
     const [, goalId, next] = putGoalStateMock.mock.calls[0]!
     expect(goalId).toBe("release-aguy")
     expect((next as GoalState).extra.facts).toEqual({ releasePrExists: true, releasePr: 123 })
-    expect((next as GoalState).extra.lastAgentResponsibilityResult).toMatchObject({
+    expect((next as GoalState).extra.lastAgentResponsibilityResult).toBeUndefined()
+  })
+
+  it("merges report and result output before writing one goal evidence event", async () => {
+    fetchGoalStateMock.mockReturnValueOnce(goalState())
+    const data = {
+      agentResponsibilityReports: [
+        {
+          target: { type: "goal", id: "release-aguy" },
+          evidence: { releasePrExists: true },
+          facts: { releasePr: 123 },
+        },
+      ],
+      dutyResults: [
+        {
+          version: 1,
+          status: "pass",
+          summary: "Release PR exists.",
+          facts: { headSha: "abc123" },
+          artifacts: [{ label: "PR", url: "https://github.com/o/r/pull/123" }],
+          missingEvidence: [],
+          blockers: [],
+        },
+      ],
+    }
+
+    await applyAgentResponsibilityReports(
+      fakeCtx(data, { goal: "release-aguy", evidence: "releasePrExists" }),
+      fakeProfile(),
+      null,
+    )
+
+    const [, , next] = putGoalStateMock.mock.calls[0]!
+    expect((next as GoalState).extra.facts).toEqual({
+      releasePrExists: true,
+      releasePr: 123,
+      headSha: "abc123",
+    })
+    const evidenceEvents = stagedGoalEvents(data, "release-aguy").filter(
+      (event) => event.event === "goal.evidence.applied",
+    )
+    expect(evidenceEvents).toHaveLength(1)
+    expect(evidenceEvents[0]).toMatchObject({
+      source: "goal-loop",
       status: "pass",
-      summary: "Release PR exists.",
-      missingEvidence: [],
-      blockers: [],
+      reason: "Release PR exists.",
+      evidence: "releasePrExists",
+      evidenceValues: { releasePrExists: true },
+      facts: { releasePr: 123, headSha: "abc123" },
+      artifacts: [{ label: "PR", url: "https://github.com/o/r/pull/123" }],
+      inspection: {
+        responsibilityOutput: {
+          kind: "responsibility-evidence",
+          sources: ["report", "result"],
+          status: "pass",
+          summary: "Release PR exists.",
+        },
+      },
     })
   })
 
@@ -245,21 +299,32 @@ describe("applyAgentResponsibilityReports", () => {
     expect((next as GoalState).extra.blockers).toEqual(["CI is red."])
   })
 
-  it("skips no-op reports", async () => {
+  it("logs no-op reports without persisting unchanged goal state", async () => {
     const prior: GoalState = { state: "active", extra: { facts: { releasePrExists: true } } }
     fetchGoalStateMock.mockReturnValueOnce(prior)
+    const data = {
+      agentResponsibilityReports: [
+        { target: { type: "goal", id: "release-aguy" }, evidence: { releasePrExists: true } },
+      ],
+    }
 
-    await applyAgentResponsibilityReports(
-      fakeCtx({
-        agentResponsibilityReports: [
-          { target: { type: "goal", id: "release-aguy" }, evidence: { releasePrExists: true } },
-        ],
-      }),
-      fakeProfile(),
-      null,
-    )
+    await applyAgentResponsibilityReports(fakeCtx(data), fakeProfile(), null)
 
     expect(putGoalStateMock).not.toHaveBeenCalled()
+    expect(stagedGoalEvents(data, "release-aguy")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "goal.evidence.unchanged",
+          inspection: expect.objectContaining({
+            responsibilityOutput: expect.objectContaining({
+              kind: "responsibility-evidence",
+              sources: ["report"],
+            }),
+          }),
+          decision: expect.objectContaining({ kind: "no-state-change" }),
+        }),
+      ]),
+    )
     expect(serializeGoalState(prior)).toContain("releasePrExists")
   })
 })

@@ -168,9 +168,15 @@ Implementation anchors:
 - `src/scripts/saveManagedGoalState.ts`
 - `tests/unit/goal/manager.test.ts`
 
-## AgentResponsibility Reports
+## Responsibility Evidence
 
-AgentResponsibilities and agentActions report observed facts with one stdout line:
+AgentResponsibilities and agentActions return structured evidence for the goal to apply:
+
+```text
+KODY_AGENT_RESPONSIBILITY_RESULT={"version":1,"target":{"type":"goal","id":"release-aguy"},"status":"pass","summary":"Release PR exists.","evidence":{"releasePrExists":true},"facts":{"releasePr":123},"artifacts":[],"missingEvidence":[],"blockers":[]}
+```
+
+Older actions may still report observed facts with this compatibility line:
 
 ```text
 KODY_AGENT_RESPONSIBILITY_REPORT={"target":{"type":"goal","id":"release-aguy"},"evidence":{"releasePrExists":true},"facts":{"releasePr":123}}
@@ -180,7 +186,9 @@ Rules:
 
 - Reports may set evidence truth and factual values under `facts`.
 - Reports must not set `destination`, `agentResponsibilities`, `route`, `stage`, `blockers`, or `state`.
-- Profiles that emit reports should include `applyAgentResponsibilityReports` in postflight.
+- New responsibilities should use `KODY_AGENT_RESPONSIBILITY_RESULT` with `target` and `evidence`.
+- Do not emit both marker types for the same evidence in new code. Existing mixed output is merged before the goal writes its log.
+- Profiles that emit responsibility evidence should include `applyAgentResponsibilityReports` in postflight.
 
 ## Creating A Managed Goal
 

@@ -29,8 +29,10 @@ describe("parseAgentResponsibilityResult", () => {
     expect(
       parseAgentResponsibilityResult({
         version: 1,
+        target: { type: "goal", id: "release-aguy" },
         status: "changed",
         summary: "Release PR created.",
+        evidence: { releasePrExists: true },
         facts: { pr: 123, headSha: "abc123" },
         artifacts: [{ label: "Pull request", url: "https://github.com/example/repo/pull/123" }],
         missingEvidence: ["productionDeployed"],
@@ -38,8 +40,10 @@ describe("parseAgentResponsibilityResult", () => {
       }),
     ).toEqual({
       version: 1,
+      target: { type: "goal", id: "release-aguy" },
       status: "changed",
       summary: "Release PR created.",
+      evidence: { releasePrExists: true },
       facts: { pr: 123, headSha: "abc123" },
       artifacts: [{ label: "Pull request", url: "https://github.com/example/repo/pull/123" }],
       missingEvidence: ["productionDeployed"],
@@ -60,6 +64,22 @@ describe("parseAgentResponsibilityResult", () => {
         status: "pass",
         summary: "Done.",
         artifacts: [{ label: "CI" }],
+      }),
+    ).toBeNull()
+    expect(
+      parseAgentResponsibilityResult({
+        version: 1,
+        status: "pass",
+        summary: "Done.",
+        target: { type: "unknown", id: "release-aguy" },
+      }),
+    ).toBeNull()
+    expect(
+      parseAgentResponsibilityResult({
+        version: 1,
+        status: "pass",
+        summary: "Done.",
+        evidence: { releasePrExists: "yes" },
       }),
     ).toBeNull()
     expect(
