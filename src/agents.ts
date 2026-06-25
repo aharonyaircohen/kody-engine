@@ -6,8 +6,8 @@
  * loadAgentAdhoc.ts). A `agent` field on a profile lets the executor run that
  * agentAction *as* a named agent.
  *
- * Resolution mirrors the agentResponsibility path: `.kody/agents/<slug>.md`, frontmatter
- * stripped, body returned. A declared-but-missing agent file is fatal — an
+ * Resolution mirrors the agentResponsibility path: hydrated local
+ * `.kody/agents/<slug>.md`, frontmatter stripped, body returned. A declared-but-missing agent file is fatal — an
  * agentAction must never silently run without the identity it asked for.
  */
 
@@ -17,7 +17,7 @@ import { getCompanyStoreAssetRoot } from "./companyStore.js"
 
 const DEFAULT_AGENT_DIR = ".kody/agents"
 
-/** Agent identitys live in project `.kody/agents` or the configured company store. */
+/** Agent identitys live in the hydrated local `.kody/agents` cache or the configured company store. */
 export const BUILTIN_AGENTS: Record<string, string> = {}
 
 /** Strip a leading `---\n…\n---\n` frontmatter block; return the body. */
@@ -30,7 +30,7 @@ function stripFrontmatter(raw: string): string {
  * Read the agent identity body for `slug`.
  *
  * Resolution order:
- * 1. Consumer file `<cwd>/<agentsDir>/<slug>.md` (non-empty) — always wins.
+ * 1. Hydrated local file `<cwd>/<agentsDir>/<slug>.md` (non-empty) — always wins.
  * 2. Company store agent file.
  * 3. Otherwise throw — declared agent with no source must not run.
  */

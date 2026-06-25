@@ -6,17 +6,17 @@
  * hard-killed at ~300s. Before this, the turn ran inside that request, so a
  * turn longer than the Vercel ceiling was lost. Now a turn runs to completion
  * server-side regardless of client connection; every event is tagged with a
- * per-chat monotonic `seq` and appended to
- * `<cwd>/.kody/brain-events/<chatId>.jsonl`. A disconnected client reconnects
- * with `?since=<seq>` (GET /chats/:id/stream) and we replay the gap from the
- * log, then live-tail the still-running turn until its terminal event.
+ * per-chat monotonic `seq` and appended to a local cache that brain-serve syncs
+ * to `brain-events/<chatId>.jsonl` in the configured state repo. A disconnected
+ * client reconnects with `?since=<seq>` (GET /chats/:id/stream) and we replay
+ * the gap from the log, then live-tail the still-running turn until its
+ * terminal event.
  *
- * Persistence is the source of truth for replay; the in-memory registry only
- * accelerates live fan-out. If the process restarts mid-turn the in-memory
- * turn is gone but the log survives — a resume then replays what was persisted
- * and, finding no terminal event and no live turn, reports an honest
- * "interrupted" error instead of hanging forever. (Persisted under the cwd,
- * so a Fly volume mount keeps it across reconnects.)
+ * The state repo is the source of truth for replay; the in-memory registry only
+ * accelerates live fan-out. If the process restarts mid-turn the in-memory turn
+ * is gone but the synced log survives — a resume then replays what was
+ * persisted and, finding no terminal event and no live turn, reports an honest
+ * "interrupted" error instead of hanging forever.
  *
  * This mirrors the VPS brain's turn-log.js so both Brain backends honour the
  * same resumable contract the dashboard proxy already speaks.
@@ -24,7 +24,9 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
+import posixPath from "node:path/posix"
 
+import { runtimeStatePath } from "../runtimePaths.js"
 import type { BrainEvent } from "../servers/brain-serve.js"
 
 export interface TurnRecord {
@@ -45,12 +47,16 @@ interface LiveTurn {
 /** chatId -> live turn state */
 const live = new Map<string, LiveTurn>()
 
-function eventsPath(dir: string, chatId: string): string {
-  return path.join(dir, ".kody", "brain-events", `${chatId}.jsonl`)
+export function brainEventsFilePath(dir: string, chatId: string): string {
+  return runtimeStatePath(dir, "brain-events", `${chatId}.jsonl`)
+}
+
+export function brainEventsStatePath(chatId: string): string {
+  return posixPath.join("brain-events", `${chatId}.jsonl`)
 }
 
 function lastPersistedSeq(dir: string, chatId: string): number {
-  const p = eventsPath(dir, chatId)
+  const p = brainEventsFilePath(dir, chatId)
   if (!fs.existsSync(p)) return 0
   const lines = fs.readFileSync(p, "utf-8").split("\n").filter(Boolean)
   if (lines.length === 0) return 0
@@ -62,7 +68,7 @@ function lastPersistedSeq(dir: string, chatId: string): number {
 }
 
 export function readSince(dir: string, chatId: string, since: number): TurnRecord[] {
-  const p = eventsPath(dir, chatId)
+  const p = brainEventsFilePath(dir, chatId)
   if (!fs.existsSync(p)) return []
   const out: TurnRecord[] = []
   for (const line of fs.readFileSync(p, "utf-8").split("\n")) {
@@ -99,7 +105,7 @@ export function beginTurn(dir: string, chatId: string): (event: BrainEvent) => v
   }
   live.set(chatId, state)
 
-  const p = eventsPath(dir, chatId)
+  const p = brainEventsFilePath(dir, chatId)
   fs.mkdirSync(path.dirname(p), { recursive: true })
 
   return (event: BrainEvent) => {
@@ -147,7 +153,7 @@ export function endTurnIfUnterminated(dir: string, chatId: string, errMessage: s
     event: { type: "error", error: errMessage || "turn ended unexpectedly", chatId },
   }
   try {
-    fs.appendFileSync(eventsPath(dir, chatId), `${JSON.stringify(rec)}\n`)
+    fs.appendFileSync(brainEventsFilePath(dir, chatId), `${JSON.stringify(rec)}\n`)
   } catch {
     /* best effort */
   }

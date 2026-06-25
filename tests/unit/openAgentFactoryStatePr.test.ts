@@ -43,7 +43,7 @@ function bundle(overrides: Record<string, unknown> = {}): string {
     summary: "Creates a small example agentAction for review.",
     files: [
       {
-        path: ".kody/agent-actions/example/profile.json",
+        path: "agent-actions/example/profile.json",
         content: "{\n  \"name\": \"example\"\n}\n",
       },
     ],
@@ -101,7 +101,7 @@ describe("openAgentFactoryStatePr", () => {
     const tree = inputForPath("/git/trees") as { tree: Array<{ path: string; content: string }> }
     expect(tree.tree).toEqual([
       {
-        path: "app-state/.kody/agent-actions/example/profile.json",
+        path: "app-state/agent-actions/example/profile.json",
         mode: "100644",
         type: "blob",
         content: "{\n  \"name\": \"example\"\n}\n",
@@ -125,5 +125,22 @@ describe("openAgentFactoryStatePr", () => {
         agentResult,
       ),
     ).rejects.toThrow(/relative path/)
+  })
+
+  it("strips legacy .kody prefixes from generated paths", async () => {
+    mockSuccessfulGh()
+
+    await openAgentFactoryStatePr(
+      makeCtx(
+        bundle({
+          files: [{ path: ".kody/agent-actions/example/profile.json", content: "{}\n" }],
+        }),
+      ),
+      profile,
+      agentResult,
+    )
+
+    const tree = inputForPath("/git/trees") as { tree: Array<{ path: string; content: string }> }
+    expect(tree.tree[0]?.path).toBe("app-state/agent-actions/example/profile.json")
   })
 })

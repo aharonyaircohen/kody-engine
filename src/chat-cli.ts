@@ -15,7 +15,6 @@
  *  6. Commit + push session and events back so the dashboard sees the reply.
  */
 
-import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type { EventSink } from "./chat/events.js"
@@ -23,6 +22,7 @@ import { eventsFilePath, FileSink, HttpSink, makeRunId, TeeSink } from "./chat/e
 import { runChatTurn } from "./chat/loop.js"
 import { runInteractiveMode } from "./chat/modes/interactive.js"
 import { readMeta, seedInitialMessage, sessionFilePath } from "./chat/session.js"
+import { persistChatFilesToState, syncChatFilesFromState } from "./chat/state-sync.js"
 import {
   loadConfig,
   needsLitellmProxy,
@@ -32,7 +32,7 @@ import {
 } from "./config.js"
 import { configureGitIdentity, installLitellmIfNeeded, resolveAuthToken, unpackAllSecrets } from "./kody-cli.js"
 import { startLitellmIfNeeded } from "./litellm.js"
-import { pushWithRetry } from "./pushWithRetry.js"
+import { hydrateStateWorkspace } from "./stateWorkspace.js"
 
 const DEFAULT_MODEL = "claude/claude-haiku-4-5-20251001"
 
@@ -106,45 +106,6 @@ export function parseChatArgs(argv: string[], env: NodeJS.ProcessEnv = process.e
   return result
 }
 
-function commitChatFiles(cwd: string, sessionId: string, verbose: boolean): void {
-  const sessionFile = path.relative(cwd, sessionFilePath(cwd, sessionId))
-  const eventsFile = path.relative(cwd, eventsFilePath(cwd, sessionId))
-  // Per-task artifacts written by the agent at end of session
-  // (.kody/tasks/<sessionId>/{context,memory-recs,followups}.json +
-  // handoff-notes.md). Committing the whole dir is durable even if
-  // the agent renamed/added files we don't know about.
-  const safeSession = sessionId.replace(/[^a-zA-Z0-9._-]/g, "_")
-  const tasksDir = path.join(".kody", "tasks", safeSession)
-  const candidatePaths = [sessionFile, eventsFile, tasksDir]
-  const paths = candidatePaths.filter((p) => fs.existsSync(path.join(cwd, p)))
-  if (paths.length === 0) return
-  const opts = { cwd, stdio: verbose ? "inherit" : "pipe" } as const
-  try {
-    // -f because consumer repos sometimes gitignore .kody/* — committing
-    // session/event files is the durable fallback the dashboard depends on,
-    // not a user-content path that needs to be opt-in.
-    execFileSync("git", ["add", "-f", ...paths], opts)
-    execFileSync("git", ["commit", "--quiet", "-m", `chat: reply for ${sessionId}`], opts)
-  } catch (err) {
-    // Add/commit failed (nothing staged, hook failure, etc). HttpSink
-    // already delivered the real-time event, so we surface as a warning
-    // and stop — there's nothing to push.
-    const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[kody:chat] commit skipped: ${msg}\n`)
-    return
-  }
-
-  // Push with fetch+rebase retry. A bare `git push` here used to silently
-  // drop the commit when a concurrent push landed first (cron fan-out hits
-  // the same branch). Persistent failure is now a hard error so an operator
-  // notices instead of seeing "SESSION ok" with no commit on origin.
-  const result = pushWithRetry({ cwd })
-  if (!result.ok) {
-    process.stderr.write(`[kody:chat] push FAILED after ${result.attempts} attempt(s): ${result.reason}\n`)
-    throw new Error(`chat push failed: ${result.reason}`)
-  }
-}
-
 function tryLoadConfig(cwd: string): ReturnType<typeof loadConfig> | null {
   try {
     return loadConfig(cwd)
@@ -183,6 +144,11 @@ export async function runChat(argv: string[]): Promise<number> {
   configureGitIdentity(cwd)
 
   const config = tryLoadConfig(cwd)
+  if (!config) {
+    process.stderr.write("error: kody chat requires kody.config.json with configured state.repo/state.path\n")
+    return 64
+  }
+  hydrateStateWorkspace(config, cwd)
   const modelSpec = args.model ?? config?.agent.model ?? DEFAULT_MODEL
   // Resolve reasoning effort: CLI flag → env → config default → unset.
   // Unset stays unset (no maxThinkingTokens set on the SDK call — the
@@ -226,6 +192,9 @@ export async function runChat(argv: string[]): Promise<number> {
   process.stdout.write(`→ kody:chat: litellm proxy ready (url=${litellm?.url ?? "skipped"})\n`)
 
   const sessionFile = sessionFilePath(cwd, sessionId)
+  if (config) {
+    syncChatFilesFromState(config, cwd, sessionId)
+  }
   if (args.initMessage) seedInitialMessage(sessionFile, args.initMessage)
 
   const sink = buildSink(cwd, sessionId, args.dashboardUrl)
@@ -250,6 +219,7 @@ export async function runChat(argv: string[]): Promise<number> {
         meta,
         verbose: args.verbose,
         quiet: args.quiet,
+        stateConfig: config,
         ...(reasoningEffort ? { reasoningEffort } : {}),
       })
       return result.exitCode
@@ -264,9 +234,10 @@ export async function runChat(argv: string[]): Promise<number> {
       sink,
       verbose: args.verbose,
       quiet: args.quiet,
+      stateConfig: config,
       ...(reasoningEffort ? { reasoningEffort } : {}),
     })
-    commitChatFiles(cwd, sessionId, args.verbose ?? false)
+    persistChatFilesToState(config, cwd, sessionId)
     return result.exitCode
   } finally {
     try {

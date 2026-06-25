@@ -27,7 +27,7 @@ export interface Profile {
   action?: string
   /**
    * Optional agent this agentAction runs *as*. When set, the executor
-   * loads `.kody/agents/<agent>.md` and injects that agent (authoritative
+   * loads hydrated `.kody/agents/<agent>.md` and injects that agent (authoritative
    * identity) ahead of the agentAction's own system-prompt append. This is the
    * unification hook: a "agentResponsibility" is just an agentAction + an agent. Absent →
    * runs with no agent (unchanged legacy behaviour). A declared-but-missing

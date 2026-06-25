@@ -14,15 +14,10 @@ export const FORBIDDEN_PATH_PREFIXES = [
   "build/",
 ]
 
-// Paths that override the forbidden-prefix check. `.kody/` is blanket-blocked
-// to keep agents out of runtime state and configs during run/fix/resolve, but
-// a few narrow paths are legitimate write targets for the agent:
-//   - `.kody/memory/` — the markdown knowledge base (memorize + sticky-note
-//     inbox + filed memories).
-//   - `.kody/tasks/` — per-task artifacts (context.json, memory-recs.json,
-//     followups.json, handoff-notes.md) written by the agent at end of
-//     every issue/agent-mode task per the task-artifacts contract.
-const ALLOWED_PATH_PREFIXES = [".kody/memory/", ".kody/tasks/"]
+// Durable Kody state belongs in the configured external state repo. Any legacy
+// `.kody/*` files in the working tree must never be staged back into the
+// consumer repo.
+const ALLOWED_PATH_PREFIXES: string[] = []
 
 // `kody.config.json` is the engine's trust anchor: it declares the model,
 // allowed associations, and `publishCommand` (which the release path runs via

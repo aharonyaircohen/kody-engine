@@ -20,7 +20,7 @@ function makeCtx(overrides: Partial<Context["args"]> = {}, cwd = "/tmp"): Contex
   }
 }
 
-/** Write a `.kody/variables.json` with the given variables under `cwd`. */
+/** Write the hydrated local variables cache with the given variables under `cwd`. */
 function writeVariables(cwd: string, vars: Record<string, string>): void {
   const variables: Record<string, { value: string }> = {}
   for (const [k, v] of Object.entries(vars)) variables[k] = { value: v }
@@ -70,7 +70,7 @@ describe("resolveQaUrl", () => {
     const ctx = makeCtx({}, tmp)
     await resolveQaUrl(ctx, stubProfile)
     expect(ctx.data.previewUrl).toBe("https://dev.example.com")
-    expect(ctx.data.previewUrlSource).toBe("QA_URL variable (.kody/variables.json)")
+    expect(ctx.data.previewUrlSource).toBe("QA_URL variable (state repo variables.json)")
   })
 
   it("trims whitespace on every source", async () => {

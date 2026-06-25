@@ -1,16 +1,18 @@
 /**
  * Chat session file I/O.
  *
- * Sessions are JSONL at `<cwd>/.kody/sessions/<sessionId>.jsonl`, one JSON
- * object per line with the shape produced by the Kody-Dashboard UI.
+ * Sessions are durable JSONL files at `sessions/<sessionId>.jsonl` in the
+ * configured state repo. Chat runtimes hydrate a local cache at
+ * `<cwd>/.kody/sessions/<sessionId>.jsonl` while executing.
  *
- * The dashboard writes the latest turn through the GitHub Contents API before
- * dispatching the workflow, so when chat runs the file is already seeded.
- * We only append assistant turns here.
+ * The dashboard writes the latest turn through the state repo before dispatching
+ * the workflow, so when chat runs the cache is already seeded. We only append
+ * assistant turns here.
  */
 
 import * as fs from "node:fs"
 import * as path from "node:path"
+import posixPath from "node:path/posix"
 
 export interface ChatTurn {
   role: "user" | "assistant"
@@ -38,6 +40,10 @@ export interface SessionMeta {
 
 export function sessionFilePath(cwd: string, sessionId: string): string {
   return path.join(cwd, ".kody", "sessions", `${sessionId}.jsonl`)
+}
+
+export function sessionStatePath(sessionId: string): string {
+  return posixPath.join("sessions", `${sessionId}.jsonl`)
 }
 
 /**

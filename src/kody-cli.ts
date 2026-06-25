@@ -13,6 +13,8 @@ import {
 } from "./issue.js"
 import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
 import { resolveAgentResponsibilityAction } from "./registry.js"
+import { lastRunLogPath } from "./runtimePaths.js"
+import { hydrateStateWorkspace } from "./stateWorkspace.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -279,7 +281,7 @@ export function configureGitIdentity(cwd: string): void {
 
 function postFailureTail(issueNumber: number | undefined, cwd: string, reason: string): void {
   if (!issueNumber) return
-  const logPath = path.join(cwd, ".kody", "last-run.jsonl")
+  const logPath = lastRunLogPath(cwd)
   let tail = ""
   try {
     if (fs.existsSync(logPath)) {
@@ -312,6 +314,7 @@ export async function runCi(argv: string[]): Promise<number> {
   let earlyConfigError: Error | undefined
   try {
     earlyConfig = loadConfig(cwd)
+    hydrateStateWorkspace(earlyConfig, cwd)
   } catch (err) {
     earlyConfigError = err instanceof Error ? err : new Error(String(err))
   }

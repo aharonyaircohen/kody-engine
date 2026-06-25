@@ -10,6 +10,7 @@ import {
   type ReasoningEffort,
 } from "./config.js"
 import { renderEvent, type SdkMessageLike } from "./format.js"
+import { agentRunDir } from "./runtimePaths.js"
 
 export interface AgentTokenUsage {
   input: number
@@ -194,6 +195,8 @@ export interface AgentOptions {
    * `reposRoot` via `additionalDirectories`. Default false.
    */
   enableFetchRepoTool?: boolean
+  /** Extra filesystem roots the SDK should grant tool access to. */
+  additionalDirectories?: string[]
   /** Where fetch_repo clones live (`<reposRoot>/<owner>/<name>`). */
   reposRoot?: string
   /** GitHub token fetch_repo uses to clone private repos (the user's PAT). */
@@ -330,6 +333,7 @@ const AGENT_KEEP_SECRETS: ReadonlySet<string> = new Set([
   "ANTHROPIC_API_KEY",
   "ANTHROPIC_AUTH_TOKEN",
   "ANTHROPIC_BASE_URL",
+  "CLAUDE_CODE_OAUTH_TOKEN",
   "GH_TOKEN",
   "GITHUB_TOKEN",
 ])
@@ -361,7 +365,7 @@ export function stripAgentSecrets(env: Record<string, string>): Record<string, s
 }
 
 export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
-  const ndjsonDir = opts.ndjsonDir ?? path.join(opts.cwd, ".kody")
+  const ndjsonDir = opts.ndjsonDir ?? agentRunDir(opts.cwd)
   fs.mkdirSync(ndjsonDir, { recursive: true })
   const ndjsonPath = path.join(ndjsonDir, "last-run.jsonl")
 
@@ -447,6 +451,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         permissionMode: opts.permissionModeOverride ?? "acceptEdits",
         env,
       }
+      const additionalDirectories = new Set(opts.additionalDirectories ?? [])
       const mcpEntries: Array<[string, Record<string, unknown>]> = []
       if (opts.mcpServers && opts.mcpServers.length > 0) {
         for (const s of opts.mcpServers) {
@@ -509,7 +514,10 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         ;(queryOptions.allowedTools as string[]).push("mcp__kody-fetch-repo__fetch_repo")
         // Grant the agent's file tools read/work access to every fetched repo
         // (they live under reposRoot, outside the turn's cwd).
-        queryOptions.additionalDirectories = [opts.reposRoot]
+        additionalDirectories.add(opts.reposRoot)
+      }
+      if (additionalDirectories.size > 0) {
+        queryOptions.additionalDirectories = [...additionalDirectories]
       }
       if (mcpEntries.length > 0) {
         queryOptions.mcpServers = Object.fromEntries(mcpEntries)
