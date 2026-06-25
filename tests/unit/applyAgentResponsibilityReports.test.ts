@@ -217,6 +217,50 @@ describe("applyAgentResponsibilityReports", () => {
     })
   })
 
+  it("does not apply legacy --evidence when a result declares its own evidence", async () => {
+    fetchGoalStateMock.mockReturnValueOnce(goalState())
+    const data = {
+      dutyResults: [
+        {
+          version: 1,
+          target: { type: "goal", id: "release-aguy" },
+          status: "pass",
+          summary: "Production deployed.",
+          evidence: { productionDeployed: true },
+          facts: {},
+          artifacts: [],
+          missingEvidence: [],
+          blockers: [],
+        },
+      ],
+    }
+
+    await applyAgentResponsibilityReports(
+      fakeCtx(data, { goal: "release-aguy", evidence: "releasePrExists" }),
+      fakeProfile(),
+      null,
+    )
+
+    const [, , next] = putGoalStateMock.mock.calls[0]!
+    expect((next as GoalState).extra.facts).toEqual({
+      pendingEvidence: "releasePrExists",
+      productionDeployed: true,
+    })
+    expect(stagedGoalEvents(data, "release-aguy")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "goal.evidence.applied",
+          evidence: undefined,
+          evidenceValues: { productionDeployed: true },
+          decision: expect.objectContaining({
+            evidence: undefined,
+            evidenceValues: { productionDeployed: true },
+          }),
+        }),
+      ]),
+    )
+  })
+
   it("marks managed goal done when result satisfies final destination evidence", async () => {
     fetchGoalStateMock.mockReturnValueOnce({
       state: "active",
