@@ -333,6 +333,47 @@ describe("goal-scheduler live wiring", () => {
     expect(stdout).toContain("skip web-release: active scheduled instance already running (web-release-2026-06-24)")
   })
 
+  it("ticks only the oldest active scheduled instance when duplicate buckets exist", () => {
+    writeTemplate("web-release", managedGoalExtra())
+    writeGoal("web-release-2026-06-24", "active", {
+      ...managedGoalExtra(),
+      kind: "instance",
+      template: "web-release",
+      sourceTemplate: "web-release",
+      createdAt: "2026-06-24T10:48:43Z",
+      stage: "publish",
+      facts: {
+        issue: 521,
+        releasePr: 522,
+        releasePrExists: true,
+        mainMerged: true,
+        pendingEvidence: "productionDeployed",
+      },
+    })
+    writeGoal("web-release-2026-06-25", "active", {
+      ...managedGoalExtra(),
+      kind: "instance",
+      template: "web-release",
+      sourceTemplate: "web-release",
+      createdAt: "2026-06-25T08:14:18Z",
+      stage: "release",
+      facts: {},
+    })
+    activateGoals({
+      template: "web-release",
+      every: "1d",
+      idPrefix: "web-release",
+      preferredRunTime: { time: "10:00", timezone: "Asia/Jerusalem" },
+    })
+
+    const { status, calls, stdout } = runScheduler({ now: "2026-06-25T07:01:00Z" })
+
+    expect(status).toBe(0)
+    expect(calls).toEqual(["kody-engine exec goal-manager --goal web-release-2026-06-24"])
+    expect(stdout).toContain("skip web-release: active scheduled instance already running (web-release-2026-06-24)")
+    expect(stdout).not.toContain("-> tick web-release-2026-06-25 (goal-manager)")
+  })
+
   it("scheduled goal activation does not tick stale singleton instances from the same template", () => {
     writeTemplate("web-release", managedGoalExtra())
     writeGoal("web-release", "active", {
