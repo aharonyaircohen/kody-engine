@@ -16,6 +16,8 @@ export interface AgentResponsibilityResult {
   summary: string
   facts: Record<string, unknown>
   artifacts: AgentResponsibilityResultArtifact[]
+  missingEvidence: string[]
+  blockers: string[]
 }
 
 const RESULT_LINE = /^KODY_AGENT_RESPONSIBILITY_RESULT=(.+)$/gm
@@ -52,6 +54,10 @@ export function parseAgentResponsibilityResult(raw: unknown): AgentResponsibilit
 
   const artifacts = parseArtifacts(obj.artifacts)
   if (!artifacts) return null
+  const missingEvidence = parseOptionalStringArray(obj.missingEvidence)
+  if (!missingEvidence) return null
+  const blockers = parseOptionalStringArray(obj.blockers)
+  if (!blockers) return null
 
   return {
     version: 1,
@@ -59,6 +65,8 @@ export function parseAgentResponsibilityResult(raw: unknown): AgentResponsibilit
     summary,
     facts,
     artifacts,
+    missingEvidence,
+    blockers,
   }
 }
 
@@ -87,8 +95,12 @@ export function applyAgentResponsibilityResultToObjectiveState(
   }
 
   const blockers = parseStringArray(state.extra.blockers) ?? []
-  if ((result.status === "fail" || result.status === "blocked") && !blockers.includes(result.summary)) {
-    blockers.push(result.summary)
+  const resultBlockers =
+    result.blockers.length > 0 || (result.status !== "fail" && result.status !== "blocked")
+      ? result.blockers
+      : [result.summary]
+  for (const blocker of resultBlockers) {
+    if (!blockers.includes(blocker)) blockers.push(blocker)
   }
 
   return {
@@ -102,6 +114,8 @@ export function applyAgentResponsibilityResultToObjectiveState(
         summary: result.summary,
         facts: result.facts,
         artifacts: result.artifacts,
+        missingEvidence: result.missingEvidence,
+        blockers: result.blockers,
       },
     },
   }
@@ -132,6 +146,11 @@ function parseStringArray(raw: unknown): string[] | null {
     out.push(item)
   }
   return out
+}
+
+function parseOptionalStringArray(raw: unknown): string[] | null {
+  if (raw === undefined) return []
+  return parseStringArray(raw)
 }
 
 function parseArtifacts(raw: unknown): AgentResponsibilityResultArtifact[] | null {

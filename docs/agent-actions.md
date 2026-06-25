@@ -112,7 +112,7 @@ Implementation anchors:
 AgentResponsibility agentActions should return one machine-readable result when they finish:
 
 ```text
-KODY_AGENT_RESPONSIBILITY_RESULT={"version":1,"status":"pass","summary":"CI is green.","facts":{"pr":123},"artifacts":[]}
+KODY_AGENT_RESPONSIBILITY_RESULT={"version":1,"status":"pass","summary":"CI is green.","facts":{"pr":123},"artifacts":[],"missingEvidence":[],"blockers":[]}
 ```
 
 Rules:
@@ -121,6 +121,8 @@ Rules:
 - `summary` is required and should be short.
 - `facts` is machine data for the parent agentGoal or agentLoop.
 - `artifacts` is optional links or paths.
+- `missingEvidence` names expected evidence still not proven.
+- `blockers` names concrete blockers the parent should recover from or stop on.
 - A agentResponsibility result says what happened. The parent model decides what it means.
 
 ## AgentResponsibility Report Contract
