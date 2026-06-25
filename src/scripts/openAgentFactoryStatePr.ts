@@ -199,7 +199,11 @@ function normalizeBundleFiles(
     if (file.path.startsWith("/") || file.path.includes("\\")) {
       throw new Error(`openAgentFactoryStatePr: files[${index}].path must be a relative POSIX path`)
     }
-    const relativePath = normalizeStatePath(file.path, `files[${index}].path`)
+    const normalizedPath = normalizeStatePath(file.path, `files[${index}].path`)
+    const relativePath = normalizedPath.replace(/^\.kody\/?/, "")
+    if (!relativePath) {
+      throw new Error(`openAgentFactoryStatePr: files[${index}].path must point to a state repo file`)
+    }
     if (seen.has(relativePath)) {
       throw new Error(`openAgentFactoryStatePr: duplicate generated file path: ${relativePath}`)
     }

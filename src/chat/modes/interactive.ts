@@ -13,19 +13,17 @@
  *  - `chat.exit`  — emitted on idle timeout, hard cap, or fatal error.
  */
 
-import { execFileSync } from "node:child_process"
-import * as fs from "node:fs"
-import * as path from "node:path"
 import type { AgentResult } from "../../agent.js"
 import type { ProviderModel, ReasoningEffort } from "../../config.js"
-import { gh } from "../../issue.js"
+import type { StateRepoConfig } from "../../stateRepo.js"
 import type { EventSink } from "../events.js"
-import { eventsFilePath, makeRunId } from "../events.js"
+import { makeRunId } from "../events.js"
 import { waitForNextUserMessage } from "../inbox.js"
 import type { ChatTurnResult } from "../loop.js"
 import { runChatTurn } from "../loop.js"
 import type { SessionMeta } from "../session.js"
 import { readSession, sessionFilePath } from "../session.js"
+import { persistChatFilesToState, syncChatSessionFromState } from "../state-sync.js"
 
 const DEFAULT_IDLE_EXIT_MS = 5 * 60_000 // 5 minutes
 const DEFAULT_HARD_CAP_MS = 30 * 60_000 // 30 minutes (spike cap; raise to 6h after validation)
@@ -44,6 +42,8 @@ export interface InteractiveModeOptions {
   invokeAgent?: (prompt: string) => Promise<AgentResult>
   /** Test seam — skip git pull, commit, push. Useful for in-process simulation. */
   skipGit?: boolean
+  /** Configured external state repo for durable session/event JSONL. */
+  stateConfig?: StateRepoConfig | null
   /** Test seam — override poll interval (default 30s). */
   pollIntervalMs?: number
   /**
@@ -92,7 +92,7 @@ export async function runInteractiveMode(opts: InteractiveModeOptions): Promise<
   // the user sends — defeating the "warm up button → input enables" UX.
   if (!opts.skipGit) {
     process.stdout.write(`→ kody:chat:interactive: committing chat.ready event to git\n`)
-    commitTurn(opts.cwd, opts.sessionId, opts.verbose ?? false)
+    commitTurn(opts.cwd, opts.sessionId, opts.verbose ?? false, opts.stateConfig ?? null)
     process.stdout.write(`→ kody:chat:interactive: chat.ready committed; entering poll loop\n`)
   }
 
@@ -103,6 +103,9 @@ export async function runInteractiveMode(opts: InteractiveModeOptions): Promise<
   let turnsCompleted = 0
 
   while (true) {
+    if (opts.stateConfig && !opts.skipGit) {
+      syncChatSessionFromState(opts.stateConfig, opts.cwd, opts.sessionId)
+    }
     const turns = readSession(sessionFile)
     const pendingIdx = findNextUserTurn(turns, watermark)
 
@@ -115,18 +118,23 @@ export async function runInteractiveMode(opts: InteractiveModeOptions): Promise<
         deadlineMs,
         pollIntervalMs: opts.pollIntervalMs ?? DEFAULT_POLL_MS,
         skipPull: opts.skipGit,
+        ...(opts.stateConfig
+          ? {
+              sync: () => syncChatSessionFromState(opts.stateConfig!, opts.cwd, opts.sessionId),
+            }
+          : {}),
       })
       if (result.kind === "idle-timeout") {
         await emitExit(opts, "idle-timeout", turnsCompleted)
         // Push the exit event so dashboards relying on the git-fallback
         // path see the lifecycle end (HttpSink delivers it real-time, but
         // a freshly-loading client needs the durable record too).
-        if (!opts.skipGit) commitTurn(opts.cwd, opts.sessionId, opts.verbose ?? false)
+        if (!opts.skipGit) commitTurn(opts.cwd, opts.sessionId, opts.verbose ?? false, opts.stateConfig ?? null)
         return { exitCode: 0, reason: "idle-timeout", turnsCompleted }
       }
       if (result.kind === "deadline") {
         await emitExit(opts, "deadline", turnsCompleted)
-        if (!opts.skipGit) commitTurn(opts.cwd, opts.sessionId, opts.verbose ?? false)
+        if (!opts.skipGit) commitTurn(opts.cwd, opts.sessionId, opts.verbose ?? false, opts.stateConfig ?? null)
         return { exitCode: 0, reason: "deadline", turnsCompleted }
       }
       // New message arrived — fall through and process it via runChatTurn,
@@ -145,13 +153,14 @@ export async function runInteractiveMode(opts: InteractiveModeOptions): Promise<
         verbose: opts.verbose,
         quiet: opts.quiet,
         invokeAgent: opts.invokeAgent,
+        stateConfig: opts.stateConfig,
         ...(opts.reasoningEffort ? { reasoningEffort: opts.reasoningEffort } : {}),
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       await emit(opts.sink, "chat.error", opts.sessionId, `loop-${turnsCompleted}`, { error: msg })
       await emitExit(opts, "fatal", turnsCompleted)
-      if (!opts.skipGit) commitTurn(opts.cwd, opts.sessionId, opts.verbose ?? false)
+      if (!opts.skipGit) commitTurn(opts.cwd, opts.sessionId, opts.verbose ?? false, opts.stateConfig ?? null)
       return { exitCode: 99, reason: "fatal", turnsCompleted }
     }
 
@@ -163,7 +172,7 @@ export async function runInteractiveMode(opts: InteractiveModeOptions): Promise<
       // tear down the session — the user can retry.
     } else {
       turnsCompleted += 1
-      if (!opts.skipGit) commitTurn(opts.cwd, opts.sessionId, opts.verbose ?? false)
+      if (!opts.skipGit) commitTurn(opts.cwd, opts.sessionId, opts.verbose ?? false, opts.stateConfig ?? null)
     }
 
     // Advance watermark past everything we've seen, including the just-appended
@@ -182,146 +191,14 @@ function findNextUserTurn(turns: ReturnType<typeof readSession>, fromIdx: number
   return -1
 }
 
-/**
- * Persist the chat session/event JSONLs to the default branch via the
- * GitHub Contents API (one PUT per file) instead of `git commit` + `push`.
- *
- * Why not git push: every interactive session — default-branch *and*
- * vibe/PR runs — funnels these files onto a single shared branch (main).
- * A push updates the whole branch ref, so N concurrent sessions reject
- * each other with non-fast-forward and grind through a rebase-retry
- * storm. The Contents API commits server-side and only conflicts when
- * the *same file* changed under us (stale blob sha) — distinct sessions
- * write distinct files, so they never contend. As a bonus the PR diff
- * stays clean (the commit lands on the default branch, not the runner's
- * checked-out PR branch) with no worktree detour.
- *
- * The files are append-only and the runner has already polled the
- * dashboard's user-turn appends into its local copy before this fires,
- * so the local file is authoritative — a straight overwrite is correct.
- * The only residual race is the dashboard appending a user turn between
- * our GET and PUT (same file); that surfaces as a 409/422 and is handled
- * by the refetch + line-union retry below.
- */
-function commitTurn(cwd: string, sessionId: string, _verbose: boolean): void {
-  const sessionRel = path.relative(cwd, sessionFilePath(cwd, sessionId))
-  const eventsRel = path.relative(cwd, eventsFilePath(cwd, sessionId))
-  const rels = [sessionRel, eventsRel].filter((p) => fs.existsSync(path.join(cwd, p)))
-  if (rels.length === 0) return
-
-  const repository = process.env.GITHUB_REPOSITORY
-  if (!repository) {
-    process.stderr.write(
-      `[kody:chat:interactive] GITHUB_REPOSITORY unset; cannot persist session/events via Contents API\n`,
-    )
+/** Persist chat session/event JSONLs to the configured external state repo. */
+function commitTurn(cwd: string, sessionId: string, _verbose: boolean, stateConfig: StateRepoConfig | null): void {
+  if (stateConfig) {
+    persistChatFilesToState(stateConfig, cwd, sessionId, `chat: interactive turn for ${sessionId}`)
     return
   }
-  const branch = defaultBranch(cwd) ?? "main"
 
-  for (const rel of rels) {
-    const repoPath = rel.split(path.sep).join("/")
-    const localText = fs.readFileSync(path.join(cwd, rel), "utf-8")
-    putJsonlViaContents(repository, branch, repoPath, localText, sessionId, cwd)
-  }
-}
-
-/** Split JSONL text into non-empty lines (trailing newline tolerated). */
-function jsonlLines(text: string): string[] {
-  return text.split("\n").filter((l) => l.length > 0)
-}
-
-interface RemoteBlob {
-  sha: string | null
-  lines: string[]
-}
-
-/** GET the file's current blob sha + decoded lines. 404 ⇒ file is new. */
-function getRemoteBlob(repository: string, branch: string, repoPath: string, cwd: string): RemoteBlob {
-  try {
-    const raw = gh(["api", `/repos/${repository}/contents/${repoPath}?ref=${encodeURIComponent(branch)}`], { cwd })
-    const o = JSON.parse(raw) as { type?: string; encoding?: string; content?: string; sha?: string }
-    if (o.type === "file" && o.encoding === "base64" && typeof o.content === "string" && typeof o.sha === "string") {
-      return { sha: o.sha, lines: jsonlLines(Buffer.from(o.content, "base64").toString("utf-8")) }
-    }
-    return { sha: null, lines: [] }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    if (/HTTP 404/i.test(msg) || /Not Found/i.test(msg)) return { sha: null, lines: [] }
-    throw err
-  }
-}
-
-/**
- * PUT one append-only JSONL file via the Contents API, retrying on a
- * same-file sha conflict (409/422). On retry the local lines are unioned
- * with any remote-only lines so a concurrent dashboard append is never
- * clobbered (append-only ⇒ union is safe; the resulting order matches
- * what a git-rebase replay would have produced).
- */
-function putJsonlViaContents(
-  repository: string,
-  branch: string,
-  repoPath: string,
-  localText: string,
-  sessionId: string,
-  cwd: string,
-): void {
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    const remote = getRemoteBlob(repository, branch, repoPath, cwd)
-
-    let body = localText
-    if (attempt > 1 && remote.lines.length > 0) {
-      const localLines = jsonlLines(localText)
-      const localSet = new Set(localLines)
-      const extra = remote.lines.filter((l) => !localSet.has(l))
-      if (extra.length > 0) body = `${[...localLines, ...extra].join("\n")}\n`
-    }
-
-    const payload: Record<string, unknown> = {
-      message: `chat: interactive turn for ${sessionId}`,
-      content: Buffer.from(body, "utf-8").toString("base64"),
-      branch,
-    }
-    if (remote.sha) payload.sha = remote.sha
-
-    try {
-      gh(["api", "--method", "PUT", `/repos/${repository}/contents/${repoPath}`, "--input", "-"], {
-        cwd,
-        input: JSON.stringify(payload),
-      })
-      return
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      const isConflict = /HTTP 409/i.test(msg) || /HTTP 422/i.test(msg) || /does not match|but expected/i.test(msg)
-      if (!isConflict || attempt === 3) {
-        process.stderr.write(`[kody:chat:interactive] Contents PUT failed (${repoPath}, attempt ${attempt}): ${msg}\n`)
-        return
-      }
-      process.stderr.write(
-        `[kody:chat:interactive] Contents PUT conflict (${repoPath}, attempt ${attempt}); refetch+union+retry\n`,
-      )
-    }
-  }
-}
-
-/**
- * Returns the repo's default branch name (the branch HEAD points at on
- * the remote — typically `main`). Falls back to `null` if it can't be
- * determined; callers should default to `"main"`.
- */
-function defaultBranch(cwd: string): string | null {
-  try {
-    const out = execFileSync("git", ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], {
-      cwd,
-      stdio: ["ignore", "pipe", "ignore"],
-    })
-    const symbolic = out.toString("utf-8").trim()
-    // Output shape: `origin/main` → strip the remote prefix.
-    if (symbolic.startsWith("origin/")) return symbolic.slice("origin/".length)
-    return symbolic || null
-  } catch {
-    return null
-  }
+  throw new Error(`kody chat interactive requires state repo config for session ${sessionId}`)
 }
 
 async function emitExit(

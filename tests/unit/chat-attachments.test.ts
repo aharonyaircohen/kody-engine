@@ -4,6 +4,7 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { prepareAttachments } from "../../src/chat/attachments.js"
 import type { ChatTurn } from "../../src/chat/session.js"
+import { runtimeStatePath } from "../../src/runtimePaths.js"
 
 const PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
@@ -29,6 +30,8 @@ describe("chat attachments: prepareAttachments", () => {
 
     expect(imagePaths).toHaveLength(1)
     expect(fs.existsSync(imagePaths[0]!)).toBe(true)
+    expect(imagePaths[0]!).toContain(runtimeStatePath(cwd, "attachments", "s1"))
+    expect(imagePaths[0]!).not.toContain(path.join(cwd, ".kody"))
     expect(imagePaths[0]!.endsWith(".png")).toBe(true)
     // No base64 left in the prompt text, and the path is referenced.
     expect(out[0]!.content).not.toContain("base64,")
