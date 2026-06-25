@@ -437,7 +437,7 @@ function readMemoryIndexBlock(cwd: string): string {
   if (!trimmed) return ""
   const body =
     trimmed.length > MAX_INDEX_BYTES
-      ? trimmed.slice(0, MAX_INDEX_BYTES) + "\n\n_… (memory index truncated; use recall_search to read more)_"
+      ? `${trimmed.slice(0, MAX_INDEX_BYTES)}\n\n_… (memory index truncated; use recall_search to read more)_`
       : trimmed
   return [
     "# Project memory index (state repo `memory/INDEX.md`)",

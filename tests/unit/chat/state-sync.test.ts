@@ -7,7 +7,8 @@ vi.mock("../../../src/issue.js", () => ({
   gh: vi.fn(),
 }))
 
-import { gh as ghMock } from "../../../src/issue.js"
+import { eventsFilePath, eventsStatePath } from "../../../src/chat/events.js"
+import { sessionFilePath, sessionStatePath } from "../../../src/chat/session.js"
 import {
   persistChatFilesToState,
   persistJsonlFileToState,
@@ -15,8 +16,7 @@ import {
   syncChatSessionFromState,
   syncJsonlFileFromState,
 } from "../../../src/chat/state-sync.js"
-import { eventsFilePath, eventsStatePath } from "../../../src/chat/events.js"
-import { sessionFilePath, sessionStatePath } from "../../../src/chat/session.js"
+import { gh as ghMock } from "../../../src/issue.js"
 import type { StateRepoConfig } from "../../../src/stateRepo.js"
 
 const gh = ghMock as unknown as ReturnType<typeof vi.fn>
