@@ -20,10 +20,12 @@ describe("parseAgentResponsibilityResult", () => {
       summary: "CI is green.",
       facts: {},
       artifacts: [],
+      missingEvidence: [],
+      blockers: [],
     })
   })
 
-  it("accepts facts and artifacts", () => {
+  it("accepts facts, artifacts, missing evidence, and blockers", () => {
     expect(
       parseAgentResponsibilityResult({
         version: 1,
@@ -31,6 +33,8 @@ describe("parseAgentResponsibilityResult", () => {
         summary: "Release PR created.",
         facts: { pr: 123, headSha: "abc123" },
         artifacts: [{ label: "Pull request", url: "https://github.com/example/repo/pull/123" }],
+        missingEvidence: ["productionDeployed"],
+        blockers: ["production deploy is waiting for CI"],
       }),
     ).toEqual({
       version: 1,
@@ -38,6 +42,8 @@ describe("parseAgentResponsibilityResult", () => {
       summary: "Release PR created.",
       facts: { pr: 123, headSha: "abc123" },
       artifacts: [{ label: "Pull request", url: "https://github.com/example/repo/pull/123" }],
+      missingEvidence: ["productionDeployed"],
+      blockers: ["production deploy is waiting for CI"],
     })
   })
 
@@ -56,6 +62,22 @@ describe("parseAgentResponsibilityResult", () => {
         artifacts: [{ label: "CI" }],
       }),
     ).toBeNull()
+    expect(
+      parseAgentResponsibilityResult({
+        version: 1,
+        status: "pass",
+        summary: "Done.",
+        missingEvidence: "releasePrExists",
+      }),
+    ).toBeNull()
+    expect(
+      parseAgentResponsibilityResult({
+        version: 1,
+        status: "pass",
+        summary: "Done.",
+        blockers: [123],
+      }),
+    ).toBeNull()
   })
 })
 
@@ -72,6 +94,8 @@ describe("parseAgentResponsibilityResultsFromText", () => {
         summary: "CI failed.",
         facts: { check: "test" },
         artifacts: [],
+        missingEvidence: [],
+        blockers: [],
       },
     ])
   })
@@ -101,6 +125,8 @@ describe("collectShellSideChannels", () => {
           summary: "CI is green.",
           facts: { pr: 123 },
           artifacts: [],
+          missingEvidence: [],
+          blockers: [],
         },
       ],
     })

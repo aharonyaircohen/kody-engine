@@ -48,10 +48,19 @@ function goalState(): GoalState {
     state: "active",
     extra: {
       type: "release",
+      destination: { outcome: "release is prepared", evidence: ["releasePrExists"] },
+      agentResponsibilities: ["release-prepare"],
+      route: [],
+      stage: "prepare",
       facts: { pendingEvidence: "releasePrExists" },
       blockers: [],
     },
   }
+}
+
+function stagedGoalEvents(data: Record<string, unknown>, goalId: string): Array<Record<string, unknown>> {
+  const logs = data.__goalRunLogs as Record<string, { events: Array<Record<string, unknown>> }> | undefined
+  return logs?.[goalId]?.events ?? []
 }
 
 describe("applyAgentResponsibilityReports", () => {
@@ -63,25 +72,45 @@ describe("applyAgentResponsibilityReports", () => {
 
   it("applies shell-collected goal reports to kody-state", async () => {
     fetchGoalStateMock.mockReturnValueOnce(goalState())
+    const data = {
+      agentResponsibilityReports: [
+        {
+          target: { type: "goal", id: "release-aguy" },
+          evidence: { releasePrExists: true },
+          facts: { releasePr: 123 },
+        },
+      ],
+    }
 
-    await applyAgentResponsibilityReports(
-      fakeCtx({
-        agentResponsibilityReports: [
-          {
-            target: { type: "goal", id: "release-aguy" },
-            evidence: { releasePrExists: true },
-            facts: { releasePr: 123 },
-          },
-        ],
-      }),
-      fakeProfile(),
-      null,
-    )
+    await applyAgentResponsibilityReports(fakeCtx(data), fakeProfile(), null)
 
     const [, goalId, next] = putGoalStateMock.mock.calls[0]!
     expect(goalId).toBe("release-aguy")
     expect((next as GoalState).extra.facts).toEqual({ releasePrExists: true, releasePr: 123 })
     expect(flushGoalRunLogEventsMock).toHaveBeenCalledOnce()
+    expect(stagedGoalEvents(data, "release-aguy")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: "goal-loop",
+          event: "goal.evidence.applied",
+          inspection: expect.objectContaining({
+            responsibilityOutput: expect.objectContaining({
+              kind: "report",
+              status: "changed",
+              evidence: { releasePrExists: true },
+              facts: { releasePr: 123 },
+              artifacts: [],
+              missingEvidence: [],
+              blockers: [],
+            }),
+          }),
+          decision: expect.objectContaining({
+            kind: "accept-evidence",
+            nextStep: "done",
+          }),
+        }),
+      ]),
+    )
   })
 
   it("applies agent-emitted goal reports", async () => {
@@ -112,6 +141,8 @@ describe("applyAgentResponsibilityReports", () => {
               summary: "Release PR exists.",
               facts: { releasePr: 123 },
               artifacts: [],
+              missingEvidence: [],
+              blockers: [],
             },
           ],
         },
@@ -127,6 +158,8 @@ describe("applyAgentResponsibilityReports", () => {
     expect((next as GoalState).extra.lastAgentResponsibilityResult).toMatchObject({
       status: "pass",
       summary: "Release PR exists.",
+      missingEvidence: [],
+      blockers: [],
     })
   })
 
@@ -161,6 +194,8 @@ describe("applyAgentResponsibilityReports", () => {
               summary: "Production deployed.",
               facts: { productionDeploymentUrl: "https://example.com" },
               artifacts: [],
+              missingEvidence: [],
+              blockers: [],
             },
           ],
         },
@@ -194,6 +229,8 @@ describe("applyAgentResponsibilityReports", () => {
               summary: "Release PR failed validation.",
               facts: { reason: "ci" },
               artifacts: [],
+              missingEvidence: ["releasePrExists"],
+              blockers: ["CI is red."],
             },
           ],
         },
@@ -205,7 +242,7 @@ describe("applyAgentResponsibilityReports", () => {
 
     const [, , next] = putGoalStateMock.mock.calls[0]!
     expect((next as GoalState).extra.facts).toEqual({ releasePrExists: false, reason: "ci" })
-    expect((next as GoalState).extra.blockers).toEqual(["Release PR failed validation."])
+    expect((next as GoalState).extra.blockers).toEqual(["CI is red."])
   })
 
   it("skips no-op reports", async () => {

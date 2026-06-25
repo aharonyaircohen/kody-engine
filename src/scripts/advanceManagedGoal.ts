@@ -8,7 +8,7 @@ import {
   planManagedGoalTick,
   writeManagedGoalToState,
 } from "../goal/manager.js"
-import { stageGoalRunLogEvent } from "../goal/runLog.js"
+import { goalRunLogChange, goalRunLogSnapshot, stageGoalRunLogEvent } from "../goal/runLog.js"
 import { serializeGoalState } from "../goal/state.js"
 import { expandManagedGoalState } from "../goal/typeDefinitions.js"
 import { gh } from "../issue.js"
@@ -39,16 +39,25 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     ctx.output.reason = "goal has no managed-goal contract; nothing to advance"
     return
   }
+  const previousGoalIdFact = managed.facts.goalId
+  managed.facts.goalId = goal.id
+  const startSnapshot = goalRunLogSnapshot(goal.id, goal.state, managed)
   stageGoalRunLogEvent(ctx.data, goal.id, {
     source: "goal-manager",
     event: "goal.tick.start",
     goalType: managed.type,
     goalState: goal.state,
     stage: managed.stage,
+    goal: startSnapshot,
+    inspection: {
+      requiredEvidence: startSnapshot.requiredEvidence,
+      satisfiedEvidence: startSnapshot.satisfiedEvidence,
+      missingEvidence: startSnapshot.missingEvidence,
+      pendingEvidence: startSnapshot.pendingEvidence,
+      blockers: startSnapshot.blockers,
+    },
     facts: managed.facts,
   })
-  const previousGoalIdFact = managed.facts.goalId
-  managed.facts.goalId = goal.id
   const restoreGoalIdFact = () => {
     if (previousGoalIdFact === undefined) delete managed.facts.goalId
     else managed.facts.goalId = previousGoalIdFact
@@ -62,6 +71,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     if (!managed.blockers.includes(reason)) managed.blockers.push(reason)
     restoreGoalIdFact()
     goal.raw = writeManagedGoalToState({ ...goal.raw, state: goal.state }, managed)
+    const blockedSnapshot = goalRunLogSnapshot(goal.id, goal.state, managed)
     stageGoalRunLogEvent(ctx.data, goal.id, {
       source: "goal-manager",
       event: "goal.tick.blocked",
@@ -70,12 +80,20 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
       stage: managed.stage,
       status: "blocked",
       reason,
+      goal: blockedSnapshot,
+      inspection: {
+        purpose: "prepare goal issue fact before dispatch",
+        routeNeedsIssueFact: true,
+      },
+      decision: { kind: "blocked", reason },
+      change: goalRunLogChange(startSnapshot, blockedSnapshot),
     })
     ctx.output.reason = reason
     return
   }
 
   if (isGoalTargetLoop(managed)) {
+    const beforeSnapshot = goalRunLogSnapshot(goal.id, goal.state, managed)
     const previousScheduleState =
       goal.raw.extra.scheduleState && typeof goal.raw.extra.scheduleState === "object"
         ? (goal.raw.extra.scheduleState as GoalAgentResponsibilityScheduleState)
@@ -105,12 +123,32 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
           ? { type: "goal", id: decision.dispatch.cliArgs.goal }
           : managed.loopTarget,
       dispatch: decision.dispatch,
+      goal: goalRunLogSnapshot(goal.id, goal.state, managed),
+      inspection: {
+        loopTarget: managed.loopTarget,
+        preferredRunTime: managed.preferredRunTime,
+        previousScheduleState,
+        scheduleState: decision.scheduleState,
+      },
+      decision: {
+        kind: decision.kind,
+        reason: decision.reason,
+        dispatch: decision.dispatch,
+      },
+      change: {
+        ...(goalRunLogChange(beforeSnapshot, goalRunLogSnapshot(goal.id, goal.state, managed)) ?? {}),
+        scheduleState: {
+          previousDecision: previousScheduleState?.lastDecision,
+          nextDecision: decision.scheduleState.lastDecision,
+        },
+      },
     })
     ctx.output.reason = decision.reason
     return
   }
 
   if (isAgentResponsibilityCadenceGoal(managed, goal.raw.extra)) {
+    const beforeSnapshot = goalRunLogSnapshot(goal.id, goal.state, managed)
     const previousScheduleState =
       goal.raw.extra.scheduleState && typeof goal.raw.extra.scheduleState === "object"
         ? (goal.raw.extra.scheduleState as GoalAgentResponsibilityScheduleState)
@@ -142,24 +180,57 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
       status: decision.kind,
       reason: decision.reason,
       dispatch: decision.dispatch,
+      goal: goalRunLogSnapshot(goal.id, goal.state, managed),
+      inspection: {
+        agentResponsibilities: decision.scheduleState.agentResponsibilities,
+        previousScheduleState,
+        scheduleState: decision.scheduleState,
+      },
+      decision: {
+        kind: decision.kind,
+        reason: decision.reason,
+        dispatch: decision.dispatch,
+      },
+      change: {
+        ...(goalRunLogChange(beforeSnapshot, goalRunLogSnapshot(goal.id, goal.state, managed)) ?? {}),
+        scheduleState: {
+          previousDecision: previousScheduleState?.lastDecision,
+          nextDecision: decision.scheduleState.lastDecision,
+        },
+      },
     })
     ctx.output.reason = decision.reason
     return
   }
+  let simpleTaskSummary: { total: number; open: number } | undefined
   if (isSimpleGoal(managed)) {
-    applySimpleGoalTaskSummary(managed, readSimpleGoalTaskSummary(goal.id, ctx.cwd))
+    simpleTaskSummary = readSimpleGoalTaskSummary(goal.id, ctx.cwd)
+    applySimpleGoalTaskSummary(managed, simpleTaskSummary)
   }
 
+  const beforeDecisionSnapshot = goalRunLogSnapshot(goal.id, goal.state, managed)
   const decision = planManagedGoalTick(managed)
   restoreGoalIdFact()
   ctx.data.managedGoalDecision = decision
-  stageManagedGoalDecision(ctx.data, goal.id, managed, goal.state, decision)
 
   if (decision.kind === "done") {
     goal.state = "done"
   }
 
   goal.raw = writeManagedGoalToState({ ...goal.raw, state: goal.state }, managed)
+  const afterDecisionSnapshot = goalRunLogSnapshot(goal.id, goal.state, managed)
+  stageManagedGoalDecision(ctx.data, goal.id, managed, goal.state, decision, {
+    goalSnapshot: afterDecisionSnapshot,
+    inspection: {
+      requiredEvidence: beforeDecisionSnapshot.requiredEvidence,
+      satisfiedEvidence: beforeDecisionSnapshot.satisfiedEvidence,
+      missingEvidence: beforeDecisionSnapshot.missingEvidence,
+      pendingEvidence: beforeDecisionSnapshot.pendingEvidence,
+      route: beforeDecisionSnapshot.route,
+      simpleTaskSummary,
+    },
+    change: goalRunLogChange(beforeDecisionSnapshot, afterDecisionSnapshot),
+  })
 
   if (decision.kind === "blocked" || decision.kind === "wait" || decision.kind === "idle" || decision.kind === "done") {
     ctx.output.reason = decision.kind === "done" ? "managed goal complete" : decision.reason
@@ -181,6 +252,11 @@ function stageManagedGoalDecision(
   goal: ManagedGoal,
   goalState: string,
   decision: ManagedGoalDecision,
+  details: {
+    goalSnapshot: Record<string, unknown>
+    inspection: Record<string, unknown>
+    change: Record<string, unknown> | undefined
+  },
 ): void {
   if (decision.kind === "dispatch") {
     stageGoalRunLogEvent(data, goalId, {
@@ -196,6 +272,17 @@ function stageManagedGoalDecision(
         agentAction: decision.agentAction,
         cliArgs: decision.cliArgs,
       },
+      goal: details.goalSnapshot,
+      inspection: details.inspection,
+      decision: {
+        kind: decision.kind,
+        evidence: decision.evidence,
+        stage: decision.stage,
+        agentResponsibility: decision.agentResponsibility,
+        agentAction: decision.agentAction,
+        cliArgs: decision.cliArgs,
+      },
+      change: details.change,
     })
     return
   }
@@ -209,6 +296,10 @@ function stageManagedGoalDecision(
       stage: "done",
       status: decision.kind,
       reason: "managed goal complete",
+      goal: details.goalSnapshot,
+      inspection: details.inspection,
+      decision: { kind: decision.kind, reason: "managed goal complete" },
+      change: details.change,
     })
     return
   }
@@ -222,6 +313,10 @@ function stageManagedGoalDecision(
       stage: goal.stage,
       status: decision.kind,
       reason: decision.reason,
+      goal: details.goalSnapshot,
+      inspection: details.inspection,
+      decision: { kind: decision.kind, reason: decision.reason },
+      change: details.change,
     })
     return
   }
@@ -235,6 +330,15 @@ function stageManagedGoalDecision(
     evidence: decision.evidence,
     status: decision.kind,
     reason: decision.reason,
+    goal: details.goalSnapshot,
+    inspection: details.inspection,
+    decision: {
+      kind: decision.kind,
+      evidence: decision.evidence,
+      stage: decision.stage,
+      reason: decision.reason,
+    },
+    change: details.change,
   })
 }
 
