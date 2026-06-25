@@ -5,6 +5,7 @@
  */
 
 import type { PostflightScript } from "../agent-actions/types.js"
+import { refreshGoalDashboardReport } from "../goal/report.js"
 import { flushGoalRunLogEvents } from "../goal/runLog.js"
 import type { GoalState } from "../goal/state.js"
 import { putGoalState } from "../goal/stateStore.js"
@@ -17,6 +18,7 @@ export const commitGoalState: PostflightScript = async (ctx) => {
     return
   }
   if (ctx.data.goalPersistChanged !== true) {
+    refreshReportOrFail(ctx, goal.id, goal.raw)
     flushLogs(ctx)
     return
   }
@@ -29,6 +31,7 @@ export const commitGoalState: PostflightScript = async (ctx) => {
 
   try {
     putGoalState(ctx.config, goal.id, updated, describeCommitMessage(goal), ctx.cwd)
+    refreshReportOrFail(ctx, goal.id, updated)
   } catch (err) {
     process.stderr.write(
       `[goal-manager] commitGoalState: persist to state repo failed (${
@@ -37,6 +40,23 @@ export const commitGoalState: PostflightScript = async (ctx) => {
     )
   } finally {
     flushLogs(ctx)
+  }
+}
+
+function refreshReportOrFail(ctx: Parameters<PostflightScript>[0], goalId: string, state: GoalState | undefined): void {
+  if (!state) return
+  try {
+    refreshGoalDashboardReport({
+      config: ctx.config,
+      cwd: ctx.cwd,
+      data: ctx.data,
+      goalId,
+      state,
+    })
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err)
+    ctx.output.reason = ctx.output.reason ? `${ctx.output.reason}; ${reason}` : reason
+    if (ctx.output.exitCode === 0) ctx.output.exitCode = 99
   }
 }
 

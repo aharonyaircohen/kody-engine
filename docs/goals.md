@@ -189,6 +189,7 @@ Rules:
 - New responsibilities should use `KODY_AGENT_RESPONSIBILITY_RESULT` with `target` and `evidence`.
 - Do not emit both marker types for the same evidence in new code. Existing mixed output is merged before the goal writes its log.
 - Profiles that emit responsibility evidence should include `applyAgentResponsibilityReports` in postflight.
+- `saveReport` refreshes Dashboard markdown from the goal/loop decision path, after state persistence succeeds.
 
 ## Creating A Managed Goal
 

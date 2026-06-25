@@ -18,12 +18,10 @@ import {
   parseAgentResponsibilityResultsFromText,
 } from "../agent-responsibilityResult.js"
 import { managedGoalFromState, planManagedGoalTick, writeManagedGoalToState } from "../goal/manager.js"
+import { refreshGoalDashboardReport, responsibilityEvidenceOutput } from "../goal/report.js"
 import { flushGoalRunLogEvents, goalRunLogChange, goalRunLogSnapshot, stageGoalRunLogEvent } from "../goal/runLog.js"
 import { type GoalState, nowIso, serializeGoalState } from "../goal/state.js"
 import { fetchGoalState, putGoalState } from "../goal/stateStore.js"
-import { readStateText, upsertStateText } from "../stateRepo.js"
-
-const REPORT_SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
 
 export const applyAgentResponsibilityReports: PostflightScript = async (ctx, _profile, agentResult) => {
   const reports = collectReports(ctx.data.agentResponsibilityReports, agentResult)
@@ -112,20 +110,14 @@ export const applyAgentResponsibilityReports: PostflightScript = async (ctx, _pr
     const changed = serializeGoalState(next) !== serializeGoalState(prior)
     const nextForOutput = changed ? { ...next, updatedAt: nowIso() } : next
 
-    writeGoalDashboardReport(
-      ctx,
-      goalId,
-      nextForOutput,
-      afterCompletionSnapshot ?? beforeCompletionSnapshot,
-      goalEvidence,
-    )
-
-    if (!changed) {
+    try {
+      if (changed) {
+        putGoalState(ctx.config, goalId, nextForOutput, describeMessage(goalId, goalEvidence), ctx.cwd)
+      }
+      refreshReportOrFail(ctx, goalId, nextForOutput, goalEvidence)
+    } finally {
       flushLogs(ctx)
-      continue
     }
-    putGoalState(ctx.config, goalId, nextForOutput, describeMessage(goalId, goalEvidence), ctx.cwd)
-    flushLogs(ctx)
   }
 }
 
@@ -139,169 +131,24 @@ function flushLogs(ctx: Parameters<PostflightScript>[0]): void {
   }
 }
 
-function writeGoalDashboardReport(
+function refreshReportOrFail(
   ctx: Parameters<PostflightScript>[0],
   goalId: string,
   state: GoalState,
-  snapshot: Record<string, unknown> | null,
   evidenceItems: AgentResponsibilityEvidence[],
 ): void {
-  if (ctx.data.jobSaveReport !== true) return
-  if (!REPORT_SLUG_RE.test(goalId)) {
-    fail(ctx, `goal report: invalid goal id "${goalId}"`)
-    return
-  }
-
-  const filePath = `reports/${goalId}.md`
-  const body = goalReportBody(goalId, state, snapshot, evidenceItems)
   try {
-    const current = readStateText(ctx.config, ctx.cwd, filePath)
-    if (current?.content === body) {
-      recordGoalReport(ctx.data, { slug: goalId, path: current.path, changed: false })
-      return
-    }
-    upsertStateText(ctx.config, ctx.cwd, filePath, body, `chore(reports): refresh ${goalId}`)
-    recordGoalReport(ctx.data, { slug: goalId, path: filePath, changed: true })
+    refreshGoalDashboardReport({
+      config: ctx.config,
+      cwd: ctx.cwd,
+      data: ctx.data,
+      goalId,
+      state,
+      evidenceItems,
+    })
   } catch (err) {
-    fail(ctx, `goal report: ${err instanceof Error ? err.message : String(err)}`)
+    fail(ctx, err instanceof Error ? err.message : String(err))
   }
-}
-
-function recordGoalReport(
-  data: Record<string, unknown>,
-  report: { slug: string; path: string; changed: boolean },
-): void {
-  const prior = Array.isArray(data.goalReports) ? data.goalReports : []
-  data.goalReports = [...prior, report]
-}
-
-function goalReportBody(
-  goalId: string,
-  state: GoalState,
-  snapshot: Record<string, unknown> | null,
-  evidenceItems: AgentResponsibilityEvidence[],
-): string {
-  const outputs = evidenceItems.map(responsibilityEvidenceOutput)
-  const latestOutput = outputs.at(-1)
-  const nextStep =
-    state.state === "done" ? "done" : latestOutput ? nextStepFromEvidence(snapshot, latestOutput) : "wait"
-  const facts = recordField(snapshot, "facts") ?? recordField(state.extra, "facts") ?? {}
-  const blockers = uniqueStrings([
-    ...stringArrayField(snapshot, "blockers"),
-    ...evidenceItems.flatMap((item) => item.blockers),
-  ])
-  const missingEvidence = uniqueStrings([
-    ...stringArrayField(snapshot, "missingEvidence"),
-    ...evidenceItems.flatMap((item) => item.missingEvidence),
-  ])
-  const artifacts = uniqueArtifacts(evidenceItems.flatMap((item) => item.artifacts))
-
-  return [
-    `# ${goalId}`,
-    "",
-    "## Status",
-    `- State: ${state.state}`,
-    `- Stage: ${stringField(snapshot, "stage") ?? stringField(state.extra, "stage") ?? "unknown"}`,
-    `- Next step: ${nextStep}`,
-    `- Updated: ${state.updatedAt ?? state.createdAt ?? state.startedAt ?? "unknown"}`,
-    "",
-    "## Decision",
-    `- Reason: ${decisionReason(state, latestOutput, missingEvidence, blockers)}`,
-    `- Required evidence: ${listOrNone(stringArrayField(snapshot, "requiredEvidence"))}`,
-    `- Satisfied evidence: ${listOrNone(stringArrayField(snapshot, "satisfiedEvidence"))}`,
-    `- Missing evidence: ${listOrNone(missingEvidence)}`,
-    `- Blockers: ${listOrNone(blockers)}`,
-    "",
-    "## Responsibility Evidence",
-    ...outputs.flatMap((output, index) => evidenceOutputMarkdown(index + 1, output)),
-    "",
-    "## Facts",
-    fencedJson(facts),
-    "",
-    "## Artifacts",
-    ...artifactMarkdown(artifacts),
-    "",
-  ].join("\n")
-}
-
-function decisionReason(
-  state: GoalState,
-  latestOutput: Record<string, unknown> | undefined,
-  missingEvidence: string[],
-  blockers: string[],
-): string {
-  if (state.state === "done") return "destination evidence satisfied"
-  if (blockers.length > 0) return blockers[0] ?? "blocked"
-  const summary = stringField(latestOutput, "summary")
-  if (summary) return summary
-  if (missingEvidence.length > 0) return `waiting for ${missingEvidence[0]}`
-  return "waiting for more evidence"
-}
-
-function evidenceOutputMarkdown(index: number, output: Record<string, unknown>): string[] {
-  return [
-    `### Output ${index}`,
-    `- Status: ${stringField(output, "status") ?? "unknown"}`,
-    `- Summary: ${stringField(output, "summary") ?? "no summary"}`,
-    `- Sources: ${listOrNone(stringArrayField(output, "sources"))}`,
-    `- Evidence values: ${inlineJson(recordField(output, "evidence") ?? {})}`,
-    `- Missing evidence: ${listOrNone(stringArrayField(output, "missingEvidence"))}`,
-    `- Blockers: ${listOrNone(stringArrayField(output, "blockers"))}`,
-    "",
-  ]
-}
-
-function artifactMarkdown(artifacts: AgentResponsibilityEvidence["artifacts"]): string[] {
-  if (artifacts.length === 0) return ["- none"]
-  return artifacts.map((artifact) => {
-    if (artifact.url) return `- [${artifact.label}](${artifact.url})`
-    return `- ${artifact.label}: ${artifact.path}`
-  })
-}
-
-function fencedJson(value: Record<string, unknown>): string {
-  return ["```json", JSON.stringify(value, null, 2), "```"].join("\n")
-}
-
-function inlineJson(value: Record<string, unknown>): string {
-  return JSON.stringify(value)
-}
-
-function listOrNone(values: string[]): string {
-  return values.length > 0 ? values.join(", ") : "none"
-}
-
-function uniqueStrings(values: string[]): string[] {
-  return [...new Set(values)].sort()
-}
-
-function stringField(record: Record<string, unknown> | null | undefined, key: string): string | undefined {
-  const value = record?.[key]
-  return typeof value === "string" && value.trim() ? value : undefined
-}
-
-function recordField(
-  record: Record<string, unknown> | null | undefined,
-  key: string,
-): Record<string, unknown> | undefined {
-  const value = record?.[key]
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? { ...(value as Record<string, unknown>) }
-    : undefined
-}
-
-function uniqueArtifacts(
-  artifacts: AgentResponsibilityEvidence["artifacts"],
-): AgentResponsibilityEvidence["artifacts"] {
-  const seen = new Set<string>()
-  const out: AgentResponsibilityEvidence["artifacts"] = []
-  for (const artifact of artifacts) {
-    const key = `${artifact.label}\n${artifact.url ?? ""}\n${artifact.path ?? ""}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push(artifact)
-  }
-  return out
 }
 
 function fail(ctx: Parameters<PostflightScript>[0], reason: string): void {
@@ -374,20 +221,6 @@ function completeSatisfiedManagedGoal(state: GoalState): GoalState {
 function snapshotFromState(goalId: string, state: GoalState): Record<string, unknown> | null {
   const managed = managedGoalFromState(state)
   return managed ? goalRunLogSnapshot(goalId, state.state, managed) : null
-}
-
-function responsibilityEvidenceOutput(evidence: AgentResponsibilityEvidence): Record<string, unknown> {
-  return {
-    kind: "responsibility-evidence",
-    sources: evidence.sources,
-    status: evidence.status,
-    summary: evidence.summary,
-    evidence: evidence.evidence ?? {},
-    facts: evidence.facts,
-    artifacts: evidence.artifacts,
-    missingEvidence: evidence.missingEvidence,
-    blockers: evidence.blockers,
-  }
 }
 
 function evidenceInspection(

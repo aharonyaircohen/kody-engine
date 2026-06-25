@@ -253,7 +253,7 @@ export interface ScheduledJobInput {
   agent?: string
   /** Args handed to the tick agentAction (e.g. `{ job: slug }` for `.md` agentResponsibilities). */
   cliArgs?: Record<string, unknown>
-  /** Ask the owning goal/loop to refresh reports/<goal-or-loop>.md after it applies evidence. */
+  /** Ask the owning goal/loop to refresh reports/<goal-or-loop>.md after its persisted decision. */
   saveReport?: boolean
 }
 

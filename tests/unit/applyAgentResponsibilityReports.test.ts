@@ -308,6 +308,41 @@ describe("applyAgentResponsibilityReports", () => {
     expect(body).toContain('"releasePr": 123')
     expect(body).toContain("[PR](https://github.com/o/r/pull/123)")
     expect(data.goalReports).toEqual([{ slug: "release-aguy", path: "reports/release-aguy.md", changed: true }])
+    expect(putGoalStateMock.mock.invocationCallOrder[0]).toBeLessThan(upsertStateTextMock.mock.invocationCallOrder[0]!)
+  })
+
+  it("does not write a dashboard report when goal state persistence fails", async () => {
+    fetchGoalStateMock.mockReturnValueOnce(goalState())
+    putGoalStateMock.mockImplementationOnce(() => {
+      throw new Error("state write failed")
+    })
+
+    await expect(
+      applyAgentResponsibilityReports(
+        fakeCtx(
+          {
+            jobSaveReport: true,
+            dutyResults: [
+              {
+                version: 1,
+                status: "pass",
+                summary: "Release PR exists.",
+                facts: { releasePr: 123 },
+                artifacts: [],
+                missingEvidence: [],
+                blockers: [],
+              },
+            ],
+          },
+          { goal: "release-aguy", evidence: "releasePrExists" },
+        ),
+        fakeProfile(),
+        null,
+      ),
+    ).rejects.toThrow("state write failed")
+
+    expect(upsertStateTextMock).not.toHaveBeenCalled()
+    expect(flushGoalRunLogEventsMock).toHaveBeenCalledOnce()
   })
 
   it("does not write a dashboard report unless saveReport is requested", async () => {
