@@ -13,6 +13,7 @@ import {
   parseAgentResponsibilityResultsFromText,
 } from "../agent-responsibilityResult.js"
 import { managedGoalFromState, planManagedGoalTick, writeManagedGoalToState } from "../goal/manager.js"
+import { flushGoalRunLogEvents, stageGoalRunLogEvent } from "../goal/runLog.js"
 import { type GoalState, nowIso, serializeGoalState } from "../goal/state.js"
 import { fetchGoalState, putGoalState } from "../goal/stateStore.js"
 
@@ -35,24 +36,64 @@ export const applyAgentResponsibilityReports: PostflightScript = async (ctx, _pr
 
     let next: GoalState = prior
     for (const report of reportsByGoal.get(goalId) ?? []) {
+      stageGoalRunLogEvent(ctx.data, goalId, {
+        source: "goal-report",
+        event: "goal.evidence.reported",
+        goalState: prior.state,
+        evidenceValues: report.evidence,
+        facts: report.facts,
+      })
       next = applyAgentResponsibilityReportToGoalState(next, report)
     }
     if (goalId === resultGoalId) {
       const evidence =
         typeof ctx.args.evidence === "string" && ctx.args.evidence.length > 0 ? ctx.args.evidence : undefined
       for (const result of results) {
+        stageGoalRunLogEvent(ctx.data, goalId, {
+          source: "goal-report",
+          event: "goal.result.applied",
+          goalState: prior.state,
+          evidence,
+          status: result.status,
+          reason: result.summary,
+          facts: result.facts,
+          artifacts: result.artifacts,
+        })
         next = applyAgentResponsibilityResultToObjectiveState(next, result, evidence)
       }
     }
     next = completeSatisfiedManagedGoal(next)
+    if (prior.state !== "done" && next.state === "done") {
+      stageGoalRunLogEvent(ctx.data, goalId, {
+        source: "goal-report",
+        event: "goal.completed",
+        goalState: "done",
+        status: "done",
+        reason: "destination evidence satisfied",
+      })
+    }
 
-    if (serializeGoalState(next) === serializeGoalState(prior)) continue
+    if (serializeGoalState(next) === serializeGoalState(prior)) {
+      flushLogs(ctx)
+      continue
+    }
     putGoalState(
       ctx.config,
       goalId,
       { ...next, updatedAt: nowIso() },
       describeMessage(goalId, reportsByGoal.get(goalId), results),
       ctx.cwd,
+    )
+    flushLogs(ctx)
+  }
+}
+
+function flushLogs(ctx: Parameters<PostflightScript>[0]): void {
+  try {
+    flushGoalRunLogEvents(ctx.config, ctx.cwd, ctx.data)
+  } catch (err) {
+    process.stderr.write(
+      `[kody agentResponsibility-report] goal log persist failed (${err instanceof Error ? err.message : String(err)})\n`,
     )
   }
 }

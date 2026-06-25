@@ -3,10 +3,12 @@ import {
   applySimpleGoalTaskSummary,
   isSimpleGoal,
   type ManagedGoal,
+  type ManagedGoalDecision,
   managedGoalFromState,
   planManagedGoalTick,
   writeManagedGoalToState,
 } from "../goal/manager.js"
+import { stageGoalRunLogEvent } from "../goal/runLog.js"
 import { serializeGoalState } from "../goal/state.js"
 import { expandManagedGoalState } from "../goal/typeDefinitions.js"
 import { gh } from "../issue.js"
@@ -37,6 +39,14 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     ctx.output.reason = "goal has no managed-goal contract; nothing to advance"
     return
   }
+  stageGoalRunLogEvent(ctx.data, goal.id, {
+    source: "goal-manager",
+    event: "goal.tick.start",
+    goalType: managed.type,
+    goalState: goal.state,
+    stage: managed.stage,
+    facts: managed.facts,
+  })
   const previousGoalIdFact = managed.facts.goalId
   managed.facts.goalId = goal.id
   const restoreGoalIdFact = () => {
@@ -52,6 +62,15 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     if (!managed.blockers.includes(reason)) managed.blockers.push(reason)
     restoreGoalIdFact()
     goal.raw = writeManagedGoalToState({ ...goal.raw, state: goal.state }, managed)
+    stageGoalRunLogEvent(ctx.data, goal.id, {
+      source: "goal-manager",
+      event: "goal.tick.blocked",
+      goalType: managed.type,
+      goalState: goal.state,
+      stage: managed.stage,
+      status: "blocked",
+      reason,
+    })
     ctx.output.reason = reason
     return
   }
@@ -73,6 +92,20 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
         cliArgs: decision.dispatch.cliArgs,
       }
     }
+    stageGoalRunLogEvent(ctx.data, goal.id, {
+      source: "goal-manager",
+      event: decision.kind === "dispatch" ? "loop.tick.dispatch" : `loop.tick.${decision.kind}`,
+      goalType: managed.type,
+      goalState: goal.state,
+      stage: managed.stage,
+      status: decision.kind,
+      reason: decision.reason,
+      target:
+        decision.dispatch?.cliArgs.goal && typeof decision.dispatch.cliArgs.goal === "string"
+          ? { type: "goal", id: decision.dispatch.cliArgs.goal }
+          : managed.loopTarget,
+      dispatch: decision.dispatch,
+    })
     ctx.output.reason = decision.reason
     return
   }
@@ -100,6 +133,16 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
         ...(goal.raw.extra.saveReport === true ? { saveReport: true } : {}),
       }
     }
+    stageGoalRunLogEvent(ctx.data, goal.id, {
+      source: "goal-manager",
+      event: decision.kind === "dispatch" ? "loop.tick.dispatch" : `loop.tick.${decision.kind}`,
+      goalType: managed.type,
+      goalState: goal.state,
+      stage: managed.stage,
+      status: decision.kind,
+      reason: decision.reason,
+      dispatch: decision.dispatch,
+    })
     ctx.output.reason = decision.reason
     return
   }
@@ -110,6 +153,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
   const decision = planManagedGoalTick(managed)
   restoreGoalIdFact()
   ctx.data.managedGoalDecision = decision
+  stageManagedGoalDecision(ctx.data, goal.id, managed, goal.state, decision)
 
   if (decision.kind === "done") {
     goal.state = "done"
@@ -129,6 +173,69 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     ...(decision.saveReport === true ? { saveReport: true } : {}),
   }
   ctx.output.reason = `dispatch ${decision.agentResponsibility} for ${decision.evidence}`
+}
+
+function stageManagedGoalDecision(
+  data: Record<string, unknown>,
+  goalId: string,
+  goal: ManagedGoal,
+  goalState: string,
+  decision: ManagedGoalDecision,
+): void {
+  if (decision.kind === "dispatch") {
+    stageGoalRunLogEvent(data, goalId, {
+      source: "goal-manager",
+      event: "goal.tick.dispatch",
+      goalType: goal.type,
+      goalState,
+      stage: decision.stage,
+      evidence: decision.evidence,
+      status: decision.kind,
+      dispatch: {
+        agentResponsibility: decision.agentResponsibility,
+        agentAction: decision.agentAction,
+        cliArgs: decision.cliArgs,
+      },
+    })
+    return
+  }
+
+  if (decision.kind === "done") {
+    stageGoalRunLogEvent(data, goalId, {
+      source: "goal-manager",
+      event: "goal.tick.done",
+      goalType: goal.type,
+      goalState: "done",
+      stage: "done",
+      status: decision.kind,
+      reason: "managed goal complete",
+    })
+    return
+  }
+
+  if (decision.kind === "idle") {
+    stageGoalRunLogEvent(data, goalId, {
+      source: "goal-manager",
+      event: "goal.tick.idle",
+      goalType: goal.type,
+      goalState,
+      stage: goal.stage,
+      status: decision.kind,
+      reason: decision.reason,
+    })
+    return
+  }
+
+  stageGoalRunLogEvent(data, goalId, {
+    source: "goal-manager",
+    event: `goal.tick.${decision.kind}`,
+    goalType: goal.type,
+    goalState,
+    stage: decision.stage,
+    evidence: decision.evidence,
+    status: decision.kind,
+    reason: decision.reason,
+  })
 }
 
 function readSimpleGoalTaskSummary(goalId: string, cwd?: string): { total: number; open: number } {

@@ -4,15 +4,24 @@ vi.mock("../../src/goal/stateStore.js", () => ({
   fetchGoalState: vi.fn(),
   putGoalState: vi.fn(),
 }))
+vi.mock("../../src/goal/runLog.js", async () => {
+  const actual = await vi.importActual<typeof import("../../src/goal/runLog.js")>("../../src/goal/runLog.js")
+  return {
+    ...actual,
+    flushGoalRunLogEvents: vi.fn(),
+  }
+})
 
 import type { AgentResult } from "../../src/agent.js"
 import type { Context, Profile } from "../../src/agent-actions/types.js"
+import { flushGoalRunLogEvents } from "../../src/goal/runLog.js"
 import { type GoalState, serializeGoalState } from "../../src/goal/state.js"
 import { fetchGoalState, putGoalState } from "../../src/goal/stateStore.js"
 import { applyAgentResponsibilityReports } from "../../src/scripts/applyAgentResponsibilityReports.js"
 
 const fetchGoalStateMock = vi.mocked(fetchGoalState)
 const putGoalStateMock = vi.mocked(putGoalState)
+const flushGoalRunLogEventsMock = vi.mocked(flushGoalRunLogEvents)
 
 function fakeCtx(data: Record<string, unknown>, args: Record<string, unknown> = {}): Context {
   return {
@@ -49,6 +58,7 @@ describe("applyAgentResponsibilityReports", () => {
   beforeEach(() => {
     fetchGoalStateMock.mockReset()
     putGoalStateMock.mockReset()
+    flushGoalRunLogEventsMock.mockReset()
   })
 
   it("applies shell-collected goal reports to kody-state", async () => {
@@ -71,6 +81,7 @@ describe("applyAgentResponsibilityReports", () => {
     const [, goalId, next] = putGoalStateMock.mock.calls[0]!
     expect(goalId).toBe("release-aguy")
     expect((next as GoalState).extra.facts).toEqual({ releasePrExists: true, releasePr: 123 })
+    expect(flushGoalRunLogEventsMock).toHaveBeenCalledOnce()
   })
 
   it("applies agent-emitted goal reports", async () => {
