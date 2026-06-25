@@ -42,24 +42,10 @@ describe("commit: isForbiddenPath", () => {
     expect(isForbiddenPath(".env.example")).toBe(false)
   })
 
-  it("allows .kody/memory/ for memorize", () => {
-    expect(isForbiddenPath(".kody/memory/architecture/executor.md")).toBe(false)
-    expect(isForbiddenPath(".kody/memory/conventions/gitignore.md")).toBe(false)
-    expect(isForbiddenPath(".kody/memory/index.md")).toBe(false)
-  })
-
-  it("allows .kody/tasks/ for per-task artifacts", () => {
-    expect(isForbiddenPath(".kody/tasks/1/context.json")).toBe(false)
-    expect(isForbiddenPath(".kody/tasks/abc/memory-recs.json")).toBe(false)
-    expect(isForbiddenPath(".kody/tasks/1.json")).toBe(false)
-  })
-
-  it("still blocks other .kody/ paths even with the memory/tasks allowlists", () => {
-    expect(isForbiddenPath(".kody/last-run.jsonl")).toBe(true)
-    // Allowlist prefixes are directory-scoped: lookalikes that aren't under
-    // .kody/memory/ or .kody/tasks/ stay blocked.
-    expect(isForbiddenPath(".kody/memory.md")).toBe(true)
-    expect(isForbiddenPath(".kody/tasksfoo.json")).toBe(true)
+  it("blocks memory and task artifacts because durable Kody state lives in the state repo", () => {
+    expect(isForbiddenPath(".kody/memory/architecture/executor.md")).toBe(true)
+    expect(isForbiddenPath(".kody/tasks/1/context.json")).toBe(true)
+    expect(isForbiddenPath(".kody/tmp/tasks/1/context.json")).toBe(true)
   })
 })
 

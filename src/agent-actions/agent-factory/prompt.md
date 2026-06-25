@@ -34,7 +34,7 @@ Use the current Kody vocabulary:
 - Do not activate generated definitions yourself.
 - Do not create a consumer-repo PR.
 - The deterministic postflight will open a review PR in the configured state repo under the configured state path.
-- Put generated file paths relative to the consumer repo, usually under `.kody/...`.
+- Put generated file paths relative to the configured state path, for example `agent-actions/...`, `agent-responsibilities/...`, `agents/...`, `goals/...`, or `memory/...`.
 - Produce complete file contents. Do not describe patches.
 - Prefer a small bundle over a broad framework. Include assumptions in the summary.
 
@@ -53,7 +53,7 @@ PR_SUMMARY:
   "summary": "human explanation and assumptions",
   "files": [
     {
-      "path": ".kody/agent-actions/example/profile.json",
+      "path": "agent-actions/example/profile.json",
       "content": "{\n  \"name\": \"example\"\n}\n"
     }
   ]

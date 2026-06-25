@@ -112,20 +112,24 @@ Implementation anchors:
 AgentResponsibility agentActions should return one machine-readable result when they finish:
 
 ```text
-KODY_AGENT_RESPONSIBILITY_RESULT={"version":1,"status":"pass","summary":"CI is green.","facts":{"pr":123},"artifacts":[]}
+KODY_AGENT_RESPONSIBILITY_RESULT={"version":1,"target":{"type":"goal","id":"web-release"},"status":"pass","summary":"CI is green.","evidence":{"ciGreen":true},"facts":{"pr":123},"artifacts":[],"missingEvidence":[],"blockers":[]}
 ```
 
 Rules:
 
+- `target` names the goal or loop that should consume this evidence when known.
 - `status` must be `pass`, `fail`, `blocked`, `changed`, or `noop`.
 - `summary` is required and should be short.
+- `evidence` is optional boolean proof for named goal/loop evidence.
 - `facts` is machine data for the parent agentGoal or agentLoop.
 - `artifacts` is optional links or paths.
+- `missingEvidence` names expected evidence still not proven.
+- `blockers` names concrete blockers the parent should recover from or stop on.
 - A agentResponsibility result says what happened. The parent model decides what it means.
 
 ## AgentResponsibility Report Contract
 
-AgentResponsibilities and agentActions may report facts by emitting one stdout line:
+Older agentResponsibilities and agentActions may report facts by emitting one stdout line:
 
 ```text
 KODY_AGENT_RESPONSIBILITY_REPORT={"target":{"type":"goal","id":"release-aguy"},"evidence":{"releasePrExists":true},"facts":{"releasePr":123}}
@@ -136,13 +140,16 @@ Rules:
 - Reports are factual only.
 - Reports do not set goal `stage`, `route`, `agentResponsibilities`, `destination`, `blockers`, or `state`.
 - Goal evidence is stored under goal `facts`.
-- Profiles that need report persistence should include `applyAgentResponsibilityReports` in postflight.
+- New agentResponsibilities should prefer `KODY_AGENT_RESPONSIBILITY_RESULT` with `target` and `evidence`.
+- Do not emit both marker types for the same evidence in new code. The engine merges both only for compatibility with existing actions.
+- Profiles that emit responsibility evidence should include `applyAgentResponsibilityReports` in postflight so the goal can apply the evidence.
+- `saveReport` refreshes Dashboard markdown from the goal/loop decision path, after state persistence succeeds.
 - Route args can read reported facts with `{ "fact": "<name>" }`.
 
-AgentResponsibility reports are how a reusable capability hands evidence back to a goal. They
-are not a manager loop. An agentAction may report `releasePrExists`,
-`mainMerged`, or `productionDeployed`; the goal decides whether those facts
-complete the agentGoal.
+AgentResponsibility output is how a reusable capability hands evidence back to a goal. It is
+not a manager loop. An agentAction may prove `releasePrExists`, `mainMerged`,
+or `productionDeployed`; the goal decides whether those facts complete the
+agentGoal and writes the goal log.
 
 When a agentResponsibility profile declares `capabilityKind`, agentAction output should match
 that promise:

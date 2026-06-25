@@ -154,7 +154,7 @@ export function mergeBase(baseBranch: string, cwd?: string): "clean" | "conflict
 }
 
 /**
- * Force-restore kody's own tracked assets (`.kody/agent-actions`, `.kody/missions`,
+* Force-restore legacy kody-owned tracked assets (`.kody/agent-actions`, `.kody/missions`,
  * …) into the working tree from the current HEAD tree. A branch checkout on the
  * CI runner can drop these: they're tracked, but the consumer repo's `.gitignore`
  * ignores `.kody/*` and re-includes them via a negation, and git's working-tree

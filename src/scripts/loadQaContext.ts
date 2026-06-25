@@ -3,20 +3,20 @@
  * agentActions from dashboard-managed, per-repo stores. Replaces the legacy
  * committed `.kody/qa-guide.md` mechanism.
  *
- *   - scenarios / notes → the context entries, `.kody/context/*.md`
+*   - scenarios / notes → the state-repo `context/*.md` entries
  *     (only entries whose `agent` list includes `qa-engineer`)
- *   - login username     → variables file `.kody/variables.json`, key LOGIN_USER
+ *   - login username     → state-repo variables file `variables.json`, key LOGIN_USER
  *   - password           → secret LOGIN_PASSWORD, read from process.env
  *
  * The password is a vault secret the dashboard mirrors into the repo's GitHub
  * Actions secrets, so the engine sees it at runtime via `ALL_SECRETS`
  * (unpacked into `process.env`) — the same path as every other secret. We do
- * NOT decrypt `.kody/secrets.enc` here; CI never has KODY_MASTER_KEY (it
+ * NOT decrypt state-repo `secrets.enc` here; CI never has KODY_MASTER_KEY (it
  * doesn't need it — secrets are mirrored, not decrypted in CI).
  *
  * Populates:
  *   ctx.data.qaLogin     — the LOGIN_USER variable ("" if unset)
- *   ctx.data.qaProfile   — concatenated `.kody/context/*.md` markdown ("" if none)
+ *   ctx.data.qaProfile   — concatenated state-repo context markdown ("" if none)
  *   ctx.data.qaAuthBlock — a complete, ready-to-insert auth instruction string
  *
  * Every step is fail-soft: missing variables, missing password, or a missing
@@ -91,12 +91,12 @@ function readProfileAgents(raw: string): { agent: string[]; body: string } {
 }
 
 /**
- * Concatenate the QA-scoped `.kody/context/*.md` files into one markdown
- * block, each prefixed with a `## <filename>` heading. Only sections whose
- * `agent` list includes `qa-engineer` (or the `*` all-agent wildcard) are
- * included — chat-only sections, unassigned docs, and frontmatter-less
- * legacy files (which default to `["kody"]`) are not for QA. Returns "" if
- * the dir is absent or has no QA sections.
+ * Concatenate the QA-scoped state-repo context files from the hydrated local
+ * cache into one markdown block, each prefixed with a `## <filename>` heading.
+ * Only sections whose `agent` list includes `qa-engineer` (or the `*` all-agent
+ * wildcard) are included — chat-only sections, unassigned docs, and
+ * frontmatter-less legacy files (which default to `["kody"]`) are not for QA.
+ * Returns "" if the dir is absent or has no QA sections.
  */
 function readProfile(cwd: string): string {
   const dir = path.join(cwd, CONTEXT_DIR_REL_PATH)

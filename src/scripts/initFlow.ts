@@ -158,7 +158,6 @@ You are Kody, the default maintenance agent for scheduled agentResponsibilities.
 Keep actions narrow, prefer read-only inspection, and only use the tools or commands named by the agentResponsibility.
 When a agentResponsibility writes a report or dispatches work, keep the output factual and concise.
 `
-
 function defaultBranchFromGit(cwd: string): string {
   try {
     const ref = execFileSync("git", ["symbolic-ref", "refs/remotes/origin/HEAD"], {
@@ -217,7 +216,7 @@ export function performInit(cwd: string, force: boolean): InitResult {
     wrote.push(".github/workflows/kody.yml")
   }
 
-  // 3. .kody/agents/kody.md — default agent for Store/builtin actions.
+// 3. .kody/agents/kody.md — default agent for Store/builtin actions.
   const agentsDir = path.join(cwd, ".kody", "agents")
   const agentPath = path.join(agentsDir, "kody.md")
   if (fs.existsSync(agentPath) && !force) {

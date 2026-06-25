@@ -92,10 +92,10 @@ export interface RunJobBase {
   quiet?: boolean
   preloadedData?: Record<string, unknown>
   /**
-   * Follow in-process stage hand-offs (`runAgentActionChain`) — the default,
-   * matching the comment/manual route. Set `false` for the cron tick path,
-   * which fans out one-shot ticks via `runAgentAction` (no chaining), so the
-   * scheduler's per-agentResponsibility invocation stays byte-identical to its prior call.
+/**
+   * Follow in-process stage hand-offs (`runAgentActionChain`) by default,
+   * matching the comment/manual route. Scheduled watch fan-out can set `false`
+   * for one-shot ticks that must not follow a returned nextDispatch.
    */
   chain?: boolean
 }
@@ -254,7 +254,7 @@ export interface ScheduledJobInput {
   agent?: string
   /** Args handed to the tick agentAction (e.g. `{ job: slug }` for `.md` agentResponsibilities). */
   cliArgs?: Record<string, unknown>
-  /** Save this run's final output as reports/<agentResponsibility>.md. */
+/** Ask the owning goal/loop to refresh reports/<goal-or-loop>.md after its persisted decision. */
   saveReport?: boolean
 }
 

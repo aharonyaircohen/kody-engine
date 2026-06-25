@@ -40,7 +40,7 @@ export const dispatchAgentResponsibilityTicks: PreflightScript = async (ctx, _pr
     return
   }
 
-  process.stdout.write(`[duties] ticking ${issues.length} issue(s) via ${targetAgentAction}\n`)
+process.stdout.write(`[duties] ticking ${issues.length} issue(s) via ${targetAgentAction}\n`)
 
   const results: Array<{ issue: number; exitCode: number; reason?: string }> = []
   for (const issue of issues) {

@@ -3,7 +3,7 @@
  *
  * Two asset families live alongside each other:
  *
- * - **AgentActions** (`.kody/agent-actions/<name>/profile.json` in project/store,
+* - **AgentActions** (`.kody/agent-actions/<name>/profile.json` in the hydrated local cache/store,
  *   plus minimal engine built-ins) implementation units selected by agentResponsibilities.
  *   - **AgentResponsibilities** (`.kody/agent-responsibilities/<slug>/profile.json` + `agent-responsibility.md`) — public
  *     work units and operator-facing actions. AgentResponsibility discovery is handled by
@@ -66,9 +66,9 @@ export function getAgentActionsRoot(): string {
 }
 
 /**
- * Resolve the consumer-repo agentActions root. Looks for `.kody/agent-actions/`
- * relative to the current working directory (the engine runs from the
- * consumer repo's checkout). Returns the path even if it doesn't exist;
+* Resolve the hydrated local agentActions root. Looks for `.kody/agent-actions/`
+ * relative to the current working directory after state-repo hydration.
+ * Returns the path even if it doesn't exist;
  * callers must check.
  */
 export function getProjectAgentActionsRoot(): string {
@@ -76,7 +76,7 @@ export function getProjectAgentActionsRoot(): string {
 }
 
 /**
- * Resolve the consumer-repo agentResponsibilities root (`.kody/agent-responsibilities/`). A agentResponsibility is a public
+* Resolve the hydrated local agentResponsibilities root (`.kody/agent-responsibilities/`). A agentResponsibility is a public
  * work unit: it owns action/purpose and selects an implementation agentAction.
  * Returns the path even if it doesn't exist; callers must check.
  */
@@ -107,9 +107,9 @@ export function getBuiltinAgentResponsibilitiesRoot(): string {
 
 /**
  * Ordered list of agentAction roots, project first, engine second. Project
- * roots override engine roots on name conflict — the consumer repo always
- * wins. Engine ships a stdlib; project repos can override or add private
- * implementation units under `.kody/agent-actions/<name>/`.
+* roots override engine roots on name conflict — hydrated state-repo assets
+ * win. Engine ships a stdlib; projects can override or add private
+ * implementation units under state-repo `agent-actions/<name>/`.
  */
 export function getAgentActionRoots(): string[] {
   const storeRoot = getCompanyStoreAgentActionsRoot()
@@ -126,7 +126,7 @@ export function getAgentResponsibilityRoots(
 /**
  * Names of the engine-bundled agentActions (the dir names under the engine root
  * that contain a profile.json). Cached — the engine root never changes within a
- * process. Used to stop a consumer `.kody/agent-responsibilities/<name>/` folder from silently
+* process. Used to stop a hydrated `.kody/agent-responsibilities/<name>/` folder from silently
  * shadowing an engine builtin (run/merge/serve/agent-responsibility-scheduler/…).
  */
 let _builtinNames: Set<string> | null = null
@@ -152,7 +152,7 @@ export function isBuiltinAgentAction(name: string): boolean {
 
 /**
  * List every discovered agentAction across agentAction roots. On name conflict
- * the first root wins, so a `.kody/agent-actions/chat/` in the consumer repo
+* the first root wins, so hydrated state-repo `agent-actions/chat/`
  * shadows the engine's `chat`. Each needs a directory containing a readable
  * `profile.json`. Directories without one are silently skipped.
  */

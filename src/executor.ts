@@ -25,11 +25,18 @@ import { KODY_NAMESPACE, removeLabel } from "./lifecycleLabels.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
 import { resolveAgentAction } from "./registry.js"
+import { agentRunDir } from "./runtimePaths.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
 import { writeResponsibilityReport } from "./scripts/writeResponsibilityReport.js"
 import type { TaskState, TaskTarget } from "./state.js"
+import { hydrateStateWorkspace } from "./stateWorkspace.js"
 import { loadSubagents } from "./subagents.js"
-import { prepareTaskArtifactsDir, taskArtifactsPromptAddendum, verifyTaskArtifacts } from "./task-artifacts.js"
+import {
+  persistTaskArtifactsToState,
+  prepareTaskArtifactsDir,
+  taskArtifactsPromptAddendum,
+  verifyTaskArtifacts,
+} from "./task-artifacts.js"
 import { firstRequiredFailure, verifyCliTools } from "./tools.js"
 
 /**
@@ -299,6 +306,10 @@ export async function runAgentAction(profileName: string, input: ExecutorInput):
     }
   }
 
+  if (!input.skipConfig && config.github.owner && config.github.repo) {
+    hydrateStateWorkspace(config, input.cwd)
+  }
+
   // Resolve model. Precedence:
   //   1. config.agent.perAgentAction[profileName] (per-stage override)
   //   2. profile.claudeCode.model (when not "inherit")
@@ -345,10 +356,10 @@ export async function runAgentAction(profileName: string, input: ExecutorInput):
   }
 
   // Per-task artifacts: if this run targets a concrete issue or PR,
-  // prepare `.kody/tasks/<id>/` so the agent can write context.json /
+  // prepare a local temp dir so the agent can write context.json /
   // memory-recs.json / followups.json / handoff-notes.md as its final
-  // act. Skipped for agentActions that have no issue/PR target (e.g.
-  // brain-serve, dispatchers, system tasks) — those produce no artifacts.
+  // act. The executor uploads those files to the external state repo;
+  // the consumer repo never owns the durable copy.
   const taskTarget = (args.issue ?? args.pr) as number | undefined
   const taskArtifacts =
     typeof taskTarget === "number" && Number.isFinite(taskTarget)
@@ -367,7 +378,7 @@ export async function runAgentAction(profileName: string, input: ExecutorInput):
         })()
       : null
 
-  const ndjsonDir = path.join(input.cwd, ".kody")
+const ndjsonDir = agentRunDir(input.cwd)
   // Agent binding: run *as* an agent, injected into the system-prompt append
   // (after DISCIPLINE, before the profile's own append) so identity leads task
   // instructions. Two sources, in priority order:
@@ -421,6 +432,7 @@ export async function runAgentAction(profileName: string, input: ExecutorInput):
       verbose: input.verbose,
       quiet: input.quiet,
       ndjsonDir,
+      additionalDirectories: taskArtifacts ? [taskArtifacts.absDir] : undefined,
       allowedToolsOverride: profile.claudeCode.tools,
       permissionModeOverride: profile.claudeCode.permissionMode,
       mcpServers: profile.claudeCode.mcpServers.length > 0 ? profile.claudeCode.mcpServers : undefined,
@@ -706,16 +718,21 @@ export async function runAgentAction(profileName: string, input: ExecutorInput):
     // preflight bail, thrown exception) so labels never strand a PR/issue
     // outside the lifecycle taxonomy. Best-effort, never throws.
     clearStampedLifecycleLabels(profile, ctx)
-    // Best-effort: warn if the agent didn't produce the per-task artifacts.
-    // Missing artifacts never fail the task — this is observability only.
+    // Best-effort: warn if the agent didn't produce the per-task artifacts,
+    // then persist whatever exists to the external state repo.
     if (taskArtifacts) {
       try {
         const missing = verifyTaskArtifacts(taskArtifacts.absDir)
         if (missing.length > 0) {
           process.stderr.write(`[task-artifacts] task ${taskArtifacts.taskId} missing: ${missing.join(", ")}\n`)
         }
-      } catch {
-        /* best effort */
+        if (!input.skipConfig && (config.state || (config.github.owner && config.github.repo))) {
+          persistTaskArtifactsToState(config, input.cwd, taskArtifacts)
+        }
+      } catch (err) {
+        process.stderr.write(
+          `[task-artifacts] persist failed for task ${taskArtifacts.taskId}: ${err instanceof Error ? err.message : String(err)}\n`,
+        )
       }
     }
     try {
@@ -878,10 +895,10 @@ function clearStampedLifecycleLabels(profile: Profile, ctx: Context): void {
 // ────────────────────────────────────────────────────────────────────────────
 
 export function resolveProfilePath(profileName: string): string {
-  // Delegate to the registry, which knows about both the consumer-repo
-  // root (`.kody/agent-actions/`) and the engine-bundled root. Project roots
-  // win on name conflict — letting consumer repos override engine
-  // agentActions or add new ones without forking.
+// Delegate to the registry, which knows about both the hydrated state-repo
+  // root (`.kody/agent-actions/`) and the engine-bundled root. Hydrated roots
+  // win on name conflict, letting repos override engine agentActions or add
+  // new ones without forking.
   const found = resolveAgentAction(profileName)
   if (found) return found
   // Fall back to the legacy engine-only search so the error surface (file

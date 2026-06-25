@@ -23,9 +23,8 @@ const INPUT_TYPES = new Set(["string", "int", "bool", "enum"])
 
 describe("smoke: system wiring", () => {
   it("every shipped agentAction profile loads and validates with well-formed inputs", () => {
-    // The engine now ships only the minimal builtin agentAction catalog.
-    // Shared agentResponsibilities/agent-actions live in the company store.
-    expect(agentActions.map((exe) => exe.name)).toEqual(["run"])
+// Keep this list explicit so newly bundled agentActions are reviewed.
+    expect(agentActions.map((exe) => exe.name)).toEqual(["agent-factory", "run"])
     const failures: string[] = []
     for (const exe of agentActions) {
       try {

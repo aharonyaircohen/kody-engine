@@ -2,8 +2,8 @@
  * JobStateBackend — storage abstraction for file-based job state.
  *
  * The engine treats job state as a `StateEnvelope` keyed by job slug.
- * How that state is durably stored (tracked file via Contents API, on-disk
- * file backed by Actions cache, future S3/Redis, …) is a backend concern.
+ * How that state is durably stored (tracked file via Contents API; test seams
+ * may use local files) is a backend concern.
  *
  * Lifecycle:
  *   hydrate?()                 — once per workflow run, before any tick
@@ -14,8 +14,7 @@
  *
  * `hydrate` and `persist` are optional — backends that are always live
  * (e.g. contents-API) leave them undefined. Backends that snapshot the
- * job directory between runs (e.g. local-file + Actions cache)
- * implement them.
+ * job directory between runs implement them.
  */
 
 import type { StateEnvelope } from "../issueStateComment.js"

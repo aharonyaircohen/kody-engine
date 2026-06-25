@@ -53,7 +53,7 @@ export interface TaskContext {
   conventions: LoadedConvention[]
   /** Markdown block of prior-art PR diffs + reviews; empty string if none. */
   priorArt: string
-  /** Memory wiki excerpt; empty string if no .kody/memory/ in repo. */
+  /** Memory wiki excerpt; empty string if no state-repo memory is configured. */
   memoryContext: string
   /** Test coverage rules from kody.config.json testRequirements. */
   coverageRules: TestRequirement[]
