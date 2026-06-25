@@ -177,7 +177,7 @@
       "properties": {
         "stateBackend": {
           "type": "string",
-          "enum": ["contents-api", "local-file"],
+          "enum": ["contents-api"],
           "default": "contents-api"
         }
       }

@@ -193,6 +193,16 @@ describe("config: loadConfig", () => {
     expect(cfg.quality).toEqual({ typecheck: "tc", testUnit: "tu", lint: "ln", format: "" })
   })
 
+  it("rejects local-file job state storage in kody.config.json", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "m/x" },
+      jobs: { stateBackend: "local-file" },
+    })
+    expect(() => loadConfig(dir)).toThrow(/local-file is not a supported durable storage mode/)
+  })
+
   it("preserves string goal activations", () => {
     const dir = tmpDir()
     writeConfig(dir, {

@@ -142,11 +142,9 @@ export interface KodyConfig {
   jobs?: {
     /**
      * Storage backend for file-based job state.
-     *   "contents-api" (default) — durable tracked file, one commit per change.
-     *   "local-file"             — on-disk file, snapshotted to GitHub Actions
-     *                              cache between workflow runs. Eliminates
-     *                              commit churn but is bound to the cache
-     *                              lifecycle (evicted after 7 days idle).
+     *   "contents-api" (default) — durable file in the configured state repo.
+     *   "local-file" is accepted only by direct in-process test/dev configs;
+     *   kody.config.json rejects it.
      */
     stateBackend?: "contents-api" | "local-file"
   }
@@ -388,11 +386,11 @@ function parseJobsConfig(raw: unknown): KodyConfig["jobs"] {
   if (!raw || typeof raw !== "object") return undefined
   const r = raw as Record<string, unknown>
   const out: NonNullable<KodyConfig["jobs"]> = {}
-  if (r.stateBackend === "contents-api" || r.stateBackend === "local-file") {
+  if (r.stateBackend === "contents-api") {
     out.stateBackend = r.stateBackend
   } else if (typeof r.stateBackend === "string") {
     throw new Error(
-      `kody.config.json: jobs.stateBackend must be "contents-api" or "local-file", got "${r.stateBackend}"`,
+      `kody.config.json: jobs.stateBackend must be "contents-api"; local-file is not a supported durable storage mode`,
     )
   }
   return Object.keys(out).length > 0 ? out : undefined

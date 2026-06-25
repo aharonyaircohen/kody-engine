@@ -55,7 +55,7 @@ export interface ClaimRequest {
 }
 
 export interface RegistryConfig {
-  /** Operator GitHub token used to read each repo's .kody/secrets.enc. */
+  /** Operator GitHub token used to read each repo's state-repo secrets.enc. */
   githubToken: string
   /** KODY_MASTER_KEY bytes — decrypts the vault. */
   masterKey: Buffer
