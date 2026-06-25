@@ -277,7 +277,9 @@ function latestGoalRunLogEvent(data: Record<string, unknown>, goalId: string): R
   const events = (log as Record<string, unknown>).events
   if (!Array.isArray(events)) return undefined
   const latest = events.at(-1)
-  return latest && typeof latest === "object" && !Array.isArray(latest) ? (latest as Record<string, unknown>) : undefined
+  return latest && typeof latest === "object" && !Array.isArray(latest)
+    ? (latest as Record<string, unknown>)
+    : undefined
 }
 
 function recordGoalReport(data: Record<string, unknown>, report: GoalDashboardReportWrite): void {

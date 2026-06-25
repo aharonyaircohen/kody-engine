@@ -209,7 +209,9 @@ function parseRouteStep(value: unknown): CreateManagedGoalAction["route"][number
     stage: requiredString(input.stage, "route.stage"),
     evidence: requiredString(input.evidence, "route.evidence"),
     agentResponsibility: slug(input.agentResponsibility, "route.agentResponsibility"),
-    ...(typeof input.agentAction === "string" && input.agentAction.trim() ? { agentAction: input.agentAction.trim() } : {}),
+    ...(typeof input.agentAction === "string" && input.agentAction.trim()
+      ? { agentAction: input.agentAction.trim() }
+      : {}),
     ...(record(input.args) ? { args: record(input.args)! } : {}),
   }
 }
@@ -231,7 +233,10 @@ function requiredString(value: unknown, field: string): string {
 
 function stringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return []
-  return value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean)
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 function nonEmptyStringArray(value: unknown, field: string): string[] {

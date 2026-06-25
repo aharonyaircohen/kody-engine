@@ -38,7 +38,7 @@ describe("task job plan parsing", () => {
     expect(stableJobKey(job)).toBe("instant:plan-verify:42")
   })
 
-it("turns a agentResponsibility-planned entry into one scheduled child job", () => {
+  it("turns a agentResponsibility-planned entry into one scheduled child job", () => {
     const job = taskJobSpecToJob(
       {
         agentAction: "probe-skill",

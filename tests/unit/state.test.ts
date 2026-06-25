@@ -239,7 +239,7 @@ describe("state: explicit task jobs", () => {
     const s = upsertTaskJobs(
       emptyState(),
       [
-{ id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant", target: 42, reason: "api" },
+        { id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant", target: 42, reason: "api" },
         { id: "instant:probe-skill:42", agentAction: "probe-skill", flavor: "instant", target: 42, reason: "ui" },
       ],
       "2026-06-08T08:00:00Z",
@@ -257,7 +257,7 @@ describe("state: explicit task jobs", () => {
   })
 
   it("preserves completed runs when the plan is seen again", () => {
-const planned = { id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant" as const, target: 42 }
+    const planned = { id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant" as const, target: 42 }
     let s = upsertTaskJobs(emptyState(), [planned], "2026-06-08T08:00:00Z")
     s = reduce(
       s,
@@ -284,7 +284,7 @@ const planned = { id: "instant:plan-verify:42", agentAction: "plan-verify", flav
     let s = upsertTaskJobs(
       emptyState(),
       [
-{ id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant", target: 42 },
+        { id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant", target: 42 },
         { id: "instant:probe-skill:42", agentAction: "probe-skill", flavor: "instant", target: 42 },
       ],
       "2026-06-08T08:00:00Z",
@@ -306,7 +306,7 @@ const planned = { id: "instant:plan-verify:42", agentAction: "plan-verify", flav
     let s = upsertTaskJobs(
       emptyState(),
       [
-{ id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant", target: 42 },
+        { id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant", target: 42 },
         { id: "instant:probe-skill:42", agentAction: "probe-skill", flavor: "instant", target: 42 },
       ],
       "2026-06-08T08:00:00Z",

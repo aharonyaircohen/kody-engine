@@ -53,7 +53,7 @@ export const saveTaskState: PostflightScript = async (ctx, profile) => {
   if (ctx.output.prUrl) next.core.prUrl = ctx.output.prUrl
   if (typeof ctx.data.runUrl === "string") next.core.runUrl = ctx.data.runUrl as string
 
-writeTaskState(target, number, next, ctx.cwd, ctx.config)
+  writeTaskState(target, number, next, ctx.cwd, ctx.config)
   ctx.data.taskState = next
   ctx.data.taskStateRendered = renderStateComment(next)
 }

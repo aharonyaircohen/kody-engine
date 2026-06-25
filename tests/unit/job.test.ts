@@ -28,7 +28,7 @@ describe("runJob (Phase 1 seam)", () => {
     vi.unstubAllEnvs()
   })
 
-it("lowers an instant job onto runAgentActionChain with its agentAction + cliArgs", async () => {
+  it("lowers an instant job onto runAgentActionChain with its agentAction + cliArgs", async () => {
     await runJob(
       { agentResponsibility: "run", agentAction: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" },
       { cwd: "/x" },
