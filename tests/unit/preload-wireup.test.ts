@@ -36,7 +36,7 @@ vi.mock("../../src/prompt.js", async () => {
 
 describe("Phase 5 wire-up: preloadContext on container profiles", () => {
   it("non-container profiles default to preloadContext: false", () => {
-    const resolveProfile = resolveAgentAction("resolve")
+    const resolveProfile = resolveAgentAction("run")
     if (!resolveProfile) throw new Error("resolve agentAction not found")
     const profile = loadProfile(resolveProfile)
     expect(profile.preloadContext).toBe(false)

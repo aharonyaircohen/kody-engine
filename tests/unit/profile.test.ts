@@ -126,24 +126,24 @@ describe("profile: loadProfile", () => {
   })
 
   it("resolves a agentResponsibility that references an agentAction (how) + overlays who/when/tools", () => {
-    // A thin agentResponsibility: references the engine's `merge` agentAction (the HOW), adds
+    // A thin agentResponsibility: references the engine's `run` agentAction (the HOW), adds
     // its own name + agent (WHO). No claudeCode of its own.
     const dir = tmpDir()
     const p = writeProfile(dir, {
       name: "merge-daily",
-      agentAction: "merge",
+      agentAction: "run",
       agent: "cto",
       every: "1d",
       agentResponsibilityTools: ["ensure_issue"],
     })
     const profile = loadProfile(p)
     expect(profile.name).toBe("merge-daily") // agentResponsibility identity
-    expect(profile.agentAction).toBe("merge") // how (preserved for prompt/job reference)
+    expect(profile.agentAction).toBe("run") // how (preserved for prompt/job reference)
     expect(profile.agent).toBe("cto") // who (overlaid)
     expect((profile as unknown as Record<string, unknown>).every).toBeUndefined() // legacy cadence ignored
     expect(profile.agentResponsibilityTools).toEqual(["ensure_issue"]) // toolbox (overlaid)
-    // how came from the referenced agentAction: dir + claudeCode are merge's.
-    expect(profile.dir.endsWith(path.join("agent-actions", "merge"))).toBe(true)
+    // how came from the referenced agentAction: dir + claudeCode are run's.
+    expect(profile.dir.endsWith(path.join("agent-actions", "run"))).toBe(true)
     expect(profile.claudeCode).toBeTruthy()
   })
 
@@ -151,14 +151,14 @@ describe("profile: loadProfile", () => {
     const dir = tmpDir()
     const p = writeProfile(dir, {
       name: "merge-ready-check",
-      agentAction: "merge",
+      agentAction: "run",
       capabilityKind: "verify",
     })
 
     const profile = loadProfile(p)
 
     expect(profile.name).toBe("merge-ready-check")
-    expect(profile.agentAction).toBe("merge")
+    expect(profile.agentAction).toBe("run")
     expect(profile.capabilityKind).toBe("verify")
   })
 
