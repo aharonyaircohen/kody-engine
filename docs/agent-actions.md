@@ -142,7 +142,8 @@ Rules:
 - Goal evidence is stored under goal `facts`.
 - New agentResponsibilities should prefer `KODY_AGENT_RESPONSIBILITY_RESULT` with `target` and `evidence`.
 - Do not emit both marker types for the same evidence in new code. The engine merges both only for compatibility with existing actions.
-- Profiles that need report persistence should include `applyAgentResponsibilityReports` in postflight.
+- Profiles that emit responsibility evidence should include `applyAgentResponsibilityReports` in postflight.
+- `saveReport` refreshes Dashboard markdown from the goal/loop decision path, after state persistence succeeds.
 - Route args can read reported facts with `{ "fact": "<name>" }`.
 
 AgentResponsibility output is how a reusable capability hands evidence back to a goal. It is

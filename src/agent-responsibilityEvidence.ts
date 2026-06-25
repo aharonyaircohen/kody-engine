@@ -54,15 +54,17 @@ export function agentResponsibilityResultToEvidence(
   fallbackGoalId: string | null,
   explicitEvidence?: string,
 ): AgentResponsibilityEvidence | null {
-  const targetId = result.target?.type === "goal" ? result.target.id : fallbackGoalId
+  if (result.target && result.target.type !== "goal") return null
+  const targetId = result.target?.id ?? fallbackGoalId
   if (!targetId) return null
+  const hasEvidenceValues = Object.keys(result.evidence ?? {}).length > 0
   return {
     version: 1,
     target: { type: "goal", id: targetId },
     status: result.status,
     summary: result.summary,
     evidence: result.evidence,
-    explicitEvidence,
+    explicitEvidence: hasEvidenceValues ? undefined : explicitEvidence,
     facts: result.facts,
     artifacts: result.artifacts,
     missingEvidence: result.missingEvidence,
@@ -111,7 +113,8 @@ export function applyAgentResponsibilityEvidenceToGoalState(
   }
 
   const pending = typeof nextFacts.pendingEvidence === "string" ? nextFacts.pendingEvidence : ""
-  const statusEvidence = evidence.explicitEvidence || pending
+  const hasEvidenceValues = Object.keys(evidence.evidence ?? {}).length > 0
+  const statusEvidence = evidence.explicitEvidence || (hasEvidenceValues ? "" : pending)
   const hasPendingEvidenceValue = pending ? Object.hasOwn(evidence.evidence ?? {}, pending) : false
   const terminalStatus = evidence.status === "pass" || evidence.status === "fail" || evidence.status === "blocked"
   if (statusEvidence && !Object.hasOwn(evidence.evidence ?? {}, statusEvidence)) {

@@ -18,6 +18,7 @@ import {
   parseAgentResponsibilityResultsFromText,
 } from "../agent-responsibilityResult.js"
 import { managedGoalFromState, planManagedGoalTick, writeManagedGoalToState } from "../goal/manager.js"
+import { refreshGoalDashboardReport, responsibilityEvidenceOutput } from "../goal/report.js"
 import { flushGoalRunLogEvents, goalRunLogChange, goalRunLogSnapshot, stageGoalRunLogEvent } from "../goal/runLog.js"
 import { type GoalState, nowIso, serializeGoalState } from "../goal/state.js"
 import { fetchGoalState, putGoalState } from "../goal/stateStore.js"
@@ -106,12 +107,17 @@ export const applyAgentResponsibilityReports: PostflightScript = async (ctx, _pr
       })
     }
 
-    if (serializeGoalState(next) === serializeGoalState(prior)) {
+    const changed = serializeGoalState(next) !== serializeGoalState(prior)
+    const nextForOutput = changed ? { ...next, updatedAt: nowIso() } : next
+
+    try {
+      if (changed) {
+        putGoalState(ctx.config, goalId, nextForOutput, describeMessage(goalId, goalEvidence), ctx.cwd)
+      }
+      refreshReportOrFail(ctx, goalId, nextForOutput, goalEvidence)
+    } finally {
       flushLogs(ctx)
-      continue
     }
-    putGoalState(ctx.config, goalId, { ...next, updatedAt: nowIso() }, describeMessage(goalId, goalEvidence), ctx.cwd)
-    flushLogs(ctx)
   }
 }
 
@@ -123,6 +129,31 @@ function flushLogs(ctx: Parameters<PostflightScript>[0]): void {
       `[kody agentResponsibility-report] goal log persist failed (${err instanceof Error ? err.message : String(err)})\n`,
     )
   }
+}
+
+function refreshReportOrFail(
+  ctx: Parameters<PostflightScript>[0],
+  goalId: string,
+  state: GoalState,
+  evidenceItems: AgentResponsibilityEvidence[],
+): void {
+  try {
+    refreshGoalDashboardReport({
+      config: ctx.config,
+      cwd: ctx.cwd,
+      data: ctx.data,
+      goalId,
+      state,
+      evidenceItems,
+    })
+  } catch (err) {
+    fail(ctx, err instanceof Error ? err.message : String(err))
+  }
+}
+
+function fail(ctx: Parameters<PostflightScript>[0], reason: string): void {
+  ctx.output.reason = ctx.output.reason ? `${ctx.output.reason}; ${reason}` : reason
+  if (ctx.output.exitCode === 0) ctx.output.exitCode = 99
 }
 
 function collectReports(raw: unknown, agentResult: AgentResult | null): AgentResponsibilityReport[] {
@@ -190,20 +221,6 @@ function completeSatisfiedManagedGoal(state: GoalState): GoalState {
 function snapshotFromState(goalId: string, state: GoalState): Record<string, unknown> | null {
   const managed = managedGoalFromState(state)
   return managed ? goalRunLogSnapshot(goalId, state.state, managed) : null
-}
-
-function responsibilityEvidenceOutput(evidence: AgentResponsibilityEvidence): Record<string, unknown> {
-  return {
-    kind: "responsibility-evidence",
-    sources: evidence.sources,
-    status: evidence.status,
-    summary: evidence.summary,
-    evidence: evidence.evidence ?? {},
-    facts: evidence.facts,
-    artifacts: evidence.artifacts,
-    missingEvidence: evidence.missingEvidence,
-    blockers: evidence.blockers,
-  }
 }
 
 function evidenceInspection(

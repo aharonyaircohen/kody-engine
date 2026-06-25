@@ -39,7 +39,7 @@ agentResponsibility:
 | Choose next missing evidence | Goal manager |
 | Track required issue/PR work and attempts | Task/job/run state |
 | Do one reusable inspect/change/confirm action | AgentResponsibility plus agentAction |
-| Structure evidence and write progress audit logs | Goal/loop via `applyAgentResponsibilityReports` |
+| Structure evidence and write progress audit logs | Goal/loop decision and persistence path |
 
 The important boundary is:
 
@@ -222,7 +222,8 @@ Rules:
 - Reports must not set `state`, `stage`, `route`, `agentResponsibilities`, `destination`, or `blockers`.
 - New agentResponsibilities should prefer `KODY_AGENT_RESPONSIBILITY_RESULT` with `target` and `evidence`.
 - Do not emit both marker types for the same evidence in new code. The engine merges both only for compatibility with existing actions.
-- Profiles that emit reports should include `applyAgentResponsibilityReports` in postflight.
+- Profiles that emit reports should include `applyAgentResponsibilityReports` in postflight so the goal can apply the evidence.
+- `saveReport` refreshes Dashboard markdown from the goal/loop decision path, after state persistence succeeds.
 
 ## Composition Example
 

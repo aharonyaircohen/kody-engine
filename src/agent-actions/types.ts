@@ -552,6 +552,6 @@ export interface Job {
   flavor: JobFlavor
   /** Manual force-run (bypass cadence) for a scheduled job. */
   force?: boolean
-  /** Save this responsibility run output as reports/<responsibility>.md. */
+  /** Ask the owning goal/loop to refresh reports/<goal-or-loop>.md after its persisted decision. */
   saveReport?: boolean
 }

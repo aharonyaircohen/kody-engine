@@ -59,6 +59,56 @@ describe("agent responsibility evidence", () => {
     })
   })
 
+  it("ignores result markers that explicitly target non-goal owners", () => {
+    expect(
+      agentResponsibilityResultToEvidence(
+        {
+          version: 1,
+          target: { type: "task", id: "123" },
+          status: "pass",
+          summary: "Task evidence exists.",
+          facts: { task: 123 },
+          artifacts: [],
+          missingEvidence: [],
+          blockers: [],
+        },
+        "release-aguy",
+        "releasePrExists",
+      ),
+    ).toBeNull()
+  })
+
+  it("does not attach legacy explicit evidence when result declares evidence values", () => {
+    expect(
+      agentResponsibilityResultToEvidence(
+        {
+          version: 1,
+          target: { type: "goal", id: "release-aguy" },
+          status: "pass",
+          summary: "Production deployed.",
+          evidence: { productionDeployed: true },
+          facts: {},
+          artifacts: [],
+          missingEvidence: [],
+          blockers: [],
+        },
+        "release-aguy",
+        "releasePrExists",
+      ),
+    ).toEqual({
+      version: 1,
+      target: { type: "goal", id: "release-aguy" },
+      status: "pass",
+      summary: "Production deployed.",
+      evidence: { productionDeployed: true },
+      facts: {},
+      artifacts: [],
+      missingEvidence: [],
+      blockers: [],
+      sources: ["result"],
+    })
+  })
+
   it("merges matching report and result evidence into one item", () => {
     const merged = mergeResponsibilityEvidence([
       {
@@ -146,5 +196,32 @@ describe("agent responsibility evidence", () => {
     })
 
     expect(next.extra.facts).toEqual({ releasePrExists: true })
+  })
+
+  it("does not map pass status to pending evidence when explicit evidence values exist", () => {
+    const state: GoalState = {
+      state: "active",
+      extra: {
+        facts: { pendingEvidence: "releasePrExists" },
+      },
+    }
+
+    const next = applyAgentResponsibilityEvidenceToGoalState(state, {
+      version: 1,
+      target: { type: "goal", id: "release-aguy" },
+      status: "pass",
+      summary: "Production deployed.",
+      evidence: { productionDeployed: true },
+      facts: {},
+      artifacts: [],
+      missingEvidence: [],
+      blockers: [],
+      sources: ["result"],
+    })
+
+    expect(next.extra.facts).toEqual({
+      pendingEvidence: "releasePrExists",
+      productionDeployed: true,
+    })
   })
 })
