@@ -214,21 +214,9 @@ export function cleanupExistingBranchForRerun(branchName: string, cwd?: string):
   // already warns the user that a re-rerun is idempotent, and an
   // unclosed PR from the prior run doesn't block the new one.
   try {
-    const out = gh(
-      [
-        "pr",
-        "list",
-        "--state",
-        "open",
-        "--head",
-        branchName,
-        "--json",
-        "number",
-        "--limit",
-        "100",
-      ],
-      { cwd },
-    )
+    const out = gh(["pr", "list", "--state", "open", "--head", branchName, "--json", "number", "--limit", "100"], {
+      cwd,
+    })
     const parsed = JSON.parse(out) as { number?: number }[]
     for (const pr of parsed) {
       if (typeof pr.number !== "number") continue

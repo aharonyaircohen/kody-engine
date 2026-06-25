@@ -468,10 +468,12 @@ describe("dispatch: issue_comment on issue", () => {
       action: "run",
       agentResponsibility: "run",
       agentAction: "run",
-      cliArgs: { issue: 11 },
+      cliArgs: { issue: 11, feedback: "fix the failing test" },
       target: 11,
-      // The natural-language remainder (politeness stripped) becomes `why`.
-      why: "fix the failing test",
+      // issue #39: `run` declares `feedback` with `bindsCommentRest: true`,
+      // so the politeness-stripped remainder lands in `cliArgs.feedback`
+      // (the run's plan-context feedback) instead of being carried as the
+      // job's free-text `why`.
     })
   })
 

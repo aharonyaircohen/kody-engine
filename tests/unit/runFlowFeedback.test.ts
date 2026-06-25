@@ -20,7 +20,7 @@ vi.mock("../../src/gha.js", () => ({
   getRunUrl: vi.fn(() => ""),
 }))
 
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/agent-actions/types.js"
 import { runFlow } from "../../src/scripts/runFlow.js"
 
 const profile = {} as Profile
