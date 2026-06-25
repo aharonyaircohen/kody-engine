@@ -11,6 +11,7 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
+import posixPath from "node:path/posix"
 
 export interface ChatTurn {
   role: "user" | "assistant"
@@ -38,6 +39,10 @@ export interface SessionMeta {
 
 export function sessionFilePath(cwd: string, sessionId: string): string {
   return path.join(cwd, ".kody", "sessions", `${sessionId}.jsonl`)
+}
+
+export function sessionStatePath(sessionId: string): string {
+  return posixPath.join("sessions", `${sessionId}.jsonl`)
 }
 
 /**

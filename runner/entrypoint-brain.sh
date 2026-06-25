@@ -23,6 +23,9 @@ set -euo pipefail
 #   PORT              HTTP port for brain-serve (default: 8080)
 #   MODEL             model override, e.g. "anthropic/claude-sonnet-4-6" (optional)
 #   ALL_SECRETS       JSON blob of provider keys (mirrors GH Actions toJSON(secrets))
+#                      Optional Claude Code subscription auth:
+#                      CLAUDE_CODE_AUTH_B64 = base64(.tgz) containing only
+#                      .claude.json and/or .claude/.credentials.json.
 
 # REPO is OPTIONAL. A repo-less Brain boots with no work repo and clones
 # each repo on demand per chat message (into $BRAIN_REPOS_ROOT). When REPO
@@ -79,6 +82,91 @@ extract_secrets_to_env() {
 }
 
 extract_secrets_to_env
+
+restore_claude_code_auth() {
+  authBundle="${CLAUDE_CODE_AUTH_B64:-}"
+  if [ -z "$authBundle" ] && command -v jq >/dev/null 2>&1 \
+    && [ -n "${ALL_SECRETS:-}" ] && [ "${ALL_SECRETS}" != "{}" ]; then
+    authBundle="$(printf '%s' "$ALL_SECRETS" | jq -r '.CLAUDE_CODE_AUTH_B64 // empty' 2>/dev/null || true)"
+  fi
+
+  if [ -z "$authBundle" ]; then
+    echo "→ brain: Claude Code auth restore skipped (CLAUDE_CODE_AUTH_B64 empty)"
+    return 0
+  fi
+
+  if ! command -v base64 >/dev/null 2>&1 || ! command -v tar >/dev/null 2>&1; then
+    echo "→ brain: ERROR: cannot restore Claude Code auth (base64/tar missing)"
+    return 1
+  fi
+
+  tmpdir="$(mktemp -d)"
+  archive="$tmpdir/claude-code-auth.tgz"
+  members="$tmpdir/members.txt"
+  listing="$tmpdir/listing.txt"
+  extract="$tmpdir/extract"
+  if ! printf '%s' "$authBundle" | base64 -d >"$archive" 2>/dev/null; then
+    rm -rf "$tmpdir"
+    echo "→ brain: ERROR: CLAUDE_CODE_AUTH_B64 is not valid base64"
+    return 1
+  fi
+  if ! tar -tzf "$archive" >"$members" 2>/dev/null; then
+    rm -rf "$tmpdir"
+    echo "→ brain: ERROR: CLAUDE_CODE_AUTH_B64 is not a valid .tgz archive"
+    return 1
+  fi
+  if ! tar -tvzf "$archive" >"$listing" 2>/dev/null; then
+    rm -rf "$tmpdir"
+    echo "→ brain: ERROR: Claude Code auth archive cannot be inspected"
+    return 1
+  fi
+
+  while IFS= read -r member; do
+    normalized="${member#./}"
+    case "$normalized" in
+      ".claude"|".claude/"|".claude.json"|".claude/.credentials.json"|".claude/settings.json"|".claude/settings.local.json")
+        ;;
+      ""|/*|*..*|*\\*)
+        rm -rf "$tmpdir"
+        echo "→ brain: ERROR: Claude Code auth archive contains unsafe path: $member"
+        return 1
+        ;;
+      *)
+        rm -rf "$tmpdir"
+        echo "→ brain: ERROR: Claude Code auth archive contains unsupported path: $member"
+        return 1
+        ;;
+    esac
+  done <"$members"
+
+  if awk '{ print substr($1, 1, 1) }' "$listing" | grep -Ev '^[d-]$' >/dev/null; then
+    rm -rf "$tmpdir"
+    echo "→ brain: ERROR: Claude Code auth archive may contain only files and directories"
+    return 1
+  fi
+
+  mkdir -p "$extract"
+  tar -xzf "$archive" -C "$extract"
+  mkdir -p /root/.claude
+  [ -f "$extract/.claude.json" ] && cp "$extract/.claude.json" /root/.claude.json
+  [ -f "$extract/.claude/.credentials.json" ] && cp "$extract/.claude/.credentials.json" /root/.claude/.credentials.json
+  [ -f "$extract/.claude/settings.json" ] && cp "$extract/.claude/settings.json" /root/.claude/settings.json
+  [ -f "$extract/.claude/settings.local.json" ] && cp "$extract/.claude/settings.local.json" /root/.claude/settings.local.json
+  [ -f /root/.claude.json ] && chmod 600 /root/.claude.json
+  [ -f /root/.claude/.credentials.json ] && chmod 600 /root/.claude/.credentials.json
+  [ -f /root/.claude/settings.json ] && chmod 600 /root/.claude/settings.json
+  [ -f /root/.claude/settings.local.json ] && chmod 600 /root/.claude/settings.local.json
+  chmod 700 /root/.claude
+  if [ "${CLAUDE_CODE_AUTH_ALLOW_ANTHROPIC_ENV:-}" != "1" ]; then
+    unset ANTHROPIC_API_KEY
+    unset ANTHROPIC_AUTH_TOKEN
+    echo "→ brain: cleared Anthropic API env so Claude Code can use subscription auth"
+  fi
+  rm -rf "$tmpdir"
+  echo "→ brain: restored Claude Code auth bundle"
+}
+
+restore_claude_code_auth
 
 prewarm_litellm() {
   if ! command -v litellm >/dev/null 2>&1; then
