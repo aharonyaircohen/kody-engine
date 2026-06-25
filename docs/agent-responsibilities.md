@@ -191,7 +191,7 @@ and blockers so another layer can choose the next Act agentResponsibility.
 AgentResponsibilities return one standard machine result:
 
 ```text
-KODY_AGENT_RESPONSIBILITY_RESULT={"version":1,"status":"pass","summary":"CI is green.","facts":{"pr":123},"artifacts":[]}
+KODY_AGENT_RESPONSIBILITY_RESULT={"version":1,"status":"pass","summary":"CI is green.","facts":{"pr":123},"artifacts":[],"missingEvidence":[],"blockers":[]}
 ```
 
 Rules:
@@ -200,6 +200,8 @@ Rules:
 - `summary` is required and should be short.
 - `facts` is machine data for the parent agentGoal or agentLoop.
 - `artifacts` is optional links or paths.
+- `missingEvidence` names expected evidence still not proven.
+- `blockers` names concrete blockers the parent should recover from or stop on.
 - The agentResponsibility result says what happened; the parent decides progress and output.
 
 ## AgentResponsibility Reports
