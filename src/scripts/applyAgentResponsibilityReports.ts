@@ -12,6 +12,7 @@ import {
   parseAgentResponsibilityResult,
   parseAgentResponsibilityResultsFromText,
 } from "../agent-responsibilityResult.js"
+import { managedGoalFromState, planManagedGoalTick, writeManagedGoalToState } from "../goal/manager.js"
 import { type GoalState, nowIso, serializeGoalState } from "../goal/state.js"
 import { fetchGoalState, putGoalState } from "../goal/stateStore.js"
 
@@ -43,6 +44,7 @@ export const applyAgentResponsibilityReports: PostflightScript = async (ctx, _pr
         next = applyAgentResponsibilityResultToObjectiveState(next, result, evidence)
       }
     }
+    next = completeSatisfiedManagedGoal(next)
 
     if (serializeGoalState(next) === serializeGoalState(prior)) continue
     putGoalState(
@@ -88,6 +90,16 @@ function groupGoalReports(reports: AgentResponsibilityReport[]): Map<string, Age
     grouped.set(report.target.id, list)
   }
   return grouped
+}
+
+function completeSatisfiedManagedGoal(state: GoalState): GoalState {
+  if (state.state !== "active") return state
+  const managed = managedGoalFromState(state)
+  if (!managed) return state
+  if (!managed.destination.evidence.every((evidence) => managed.facts[evidence] === true)) return state
+  const decision = planManagedGoalTick(managed)
+  if (decision.kind !== "done") return state
+  return writeManagedGoalToState({ ...state, state: "done" }, managed)
 }
 
 function describeMessage(

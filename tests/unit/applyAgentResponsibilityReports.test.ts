@@ -119,6 +119,57 @@ describe("applyAgentResponsibilityReports", () => {
     })
   })
 
+  it("marks managed goal done when result satisfies final destination evidence", async () => {
+    fetchGoalStateMock.mockReturnValueOnce({
+      state: "active",
+      extra: {
+        type: "web-release",
+        destination: {
+          outcome: "Release is prepared, merged main, and deployed production.",
+          evidence: ["releasePrExists", "mainMerged", "productionDeployed"],
+        },
+        agentResponsibilities: ["release-prepare", "release-merge", "vercel-production-deploy"],
+        route: [],
+        stage: "publish",
+        facts: {
+          releasePrExists: true,
+          mainMerged: true,
+          pendingEvidence: "productionDeployed",
+        },
+        blockers: [],
+      },
+    })
+
+    await applyAgentResponsibilityReports(
+      fakeCtx(
+        {
+          dutyResults: [
+            {
+              version: 1,
+              status: "pass",
+              summary: "Production deployed.",
+              facts: { productionDeploymentUrl: "https://example.com" },
+              artifacts: [],
+            },
+          ],
+        },
+        { goal: "release-aguy", evidence: "productionDeployed" },
+      ),
+      fakeProfile(),
+      null,
+    )
+
+    const [, , next] = putGoalStateMock.mock.calls[0]!
+    expect((next as GoalState).state).toBe("done")
+    expect((next as GoalState).extra.stage).toBe("done")
+    expect((next as GoalState).extra.facts).toEqual({
+      releasePrExists: true,
+      mainMerged: true,
+      productionDeployed: true,
+      productionDeploymentUrl: "https://example.com",
+    })
+  })
+
   it("applies agentResponsibility result failure as agentGoal evidence false plus blocker", async () => {
     fetchGoalStateMock.mockReturnValueOnce(goalState())
 
