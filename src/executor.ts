@@ -26,7 +26,6 @@ import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
 import { resolveAgentAction } from "./registry.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
-import { writeResponsibilityReport } from "./scripts/writeResponsibilityReport.js"
 import type { TaskState, TaskTarget } from "./state.js"
 import { loadSubagents } from "./subagents.js"
 import { prepareTaskArtifactsDir, taskArtifactsPromptAddendum, verifyTaskArtifacts } from "./task-artifacts.js"
@@ -688,8 +687,6 @@ export async function runAgentAction(profileName: string, input: ExecutorInput):
         outcome: postOutcome,
       })
     }
-
-    await writeResponsibilityReport(ctx, profile, agentResult)
 
     return finishAndEnd({
       exitCode: ctx.output.exitCode ?? 0,

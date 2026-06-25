@@ -69,7 +69,7 @@ See [Company Activation](company-activation.md) for the full activation contract
 | Agent | `.kody/agents/<slug>.md` | Who is acting. Identity only. |
 | AgentResponsibilities | `.kody/agent-responsibilities/<slug>/` | Recurring responsibility: cadence, owner, intent. |
 | Company agentActions | `.kody/agent-actions/<slug>/` | Repo-local actions for inspection, reports, triage, and dispatch. |
-| Reports | `<statePath>/reports/*.md` in `stateRepo` | Shared state findings. |
+| Reports | `<statePath>/reports/*.md` in `stateRepo` | Goal/loop-owned state findings for Dashboard display. |
 | Context | `.kody/context/*.md` | Short background and vocabulary. Not hard rules. |
 | Goal templates | `.kody/goals/templates/<slug>/state.json` | Reusable managed agentGoal definitions. |
 | Goal instances | `<statePath>/goals/instances/<id>/state.json` in `stateRepo` | Live managed agentGoal runs with facts and progress. |
