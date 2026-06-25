@@ -169,4 +169,33 @@ describe("kody-cli manual goal dispatch", () => {
       chain: true,
     })
   })
+
+  it("checks scheduled watches when workflow event has no direct action", async () => {
+    const dir = tmpDir()
+    writeConfig(dir)
+    writeScheduledAgentAction(dir, "goal-scheduler")
+    previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
+    previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "plain comment", user: { login: "alice", type: "User" }, author_association: "OWNER" },
+      issue: { number: 42 },
+    })
+
+    await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
+
+    expect(mocks.runJob).toHaveBeenCalledTimes(1)
+    expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
+      dispatch: {
+        action: "goal-scheduler",
+        agentResponsibility: "goal-scheduler",
+        agentAction: "goal-scheduler",
+        cliArgs: {},
+      },
+    })
+    expect(mocks.runJob.mock.calls[0]?.[1]).toMatchObject({
+      cwd: dir,
+      chain: true,
+    })
+  })
 })
