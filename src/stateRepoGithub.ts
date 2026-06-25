@@ -1,6 +1,12 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { normalizeStatePath, parseStateRepo, parseStateRepoSlug, stateRepoPath, type StateRepoConfig } from "./stateRepo.js"
+import {
+  normalizeStatePath,
+  parseStateRepo,
+  parseStateRepoSlug,
+  type StateRepoConfig,
+  stateRepoPath,
+} from "./stateRepo.js"
 
 const GITHUB_API = "https://api.github.com"
 const REQ_TIMEOUT_MS = 30_000

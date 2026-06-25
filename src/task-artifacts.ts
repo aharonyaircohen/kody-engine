@@ -25,7 +25,7 @@ import fs from "node:fs"
 import path from "node:path"
 import posixPath from "node:path/posix"
 import { runtimeStatePath } from "./runtimePaths.js"
-import { upsertStateText, type StateRepoConfig } from "./stateRepo.js"
+import { type StateRepoConfig, upsertStateText } from "./stateRepo.js"
 
 export const TASK_ARTIFACT_FILES = ["context.json", "memory-recs.json", "followups.json", "handoff-notes.md"] as const
 
