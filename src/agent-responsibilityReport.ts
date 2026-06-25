@@ -35,10 +35,10 @@ export function parseAgentResponsibilityReportsFromText(text: string): AgentResp
 export function parseAgentResponsibilityReport(raw: unknown): AgentResponsibilityReport | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
   const obj = raw as Record<string, unknown>
-  const target = parseTarget(obj.target)
+  const target = parseAgentResponsibilityReportTarget(obj.target)
   if (!target) return null
 
-  const evidence = parseBooleanRecord(obj.evidence)
+  const evidence = parseAgentResponsibilityReportEvidence(obj.evidence)
   const facts = parseFacts(obj.facts)
   if (!evidence && !facts) return null
 
@@ -78,7 +78,7 @@ export function applyAgentResponsibilityReportToGoalState(
   }
 }
 
-function parseTarget(raw: unknown): AgentResponsibilityReportTarget | null {
+export function parseAgentResponsibilityReportTarget(raw: unknown): AgentResponsibilityReportTarget | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
   const target = raw as Record<string, unknown>
   if (target.type !== "goal" && target.type !== "task" && target.type !== "agentResponsibility") return null
@@ -86,7 +86,7 @@ function parseTarget(raw: unknown): AgentResponsibilityReportTarget | null {
   return { type: target.type, id: target.id.trim() }
 }
 
-function parseBooleanRecord(raw: unknown): Record<string, boolean> | null {
+export function parseAgentResponsibilityReportEvidence(raw: unknown): Record<string, boolean> | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
   const out: Record<string, boolean> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {

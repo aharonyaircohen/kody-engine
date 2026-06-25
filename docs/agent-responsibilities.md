@@ -39,7 +39,7 @@ agentResponsibility:
 | Choose next missing evidence | Goal manager |
 | Track required issue/PR work and attempts | Task/job/run state |
 | Do one reusable inspect/change/confirm action | AgentResponsibility plus agentAction |
-| Persist factual evidence back to a goal | AgentResponsibility report via `applyAgentResponsibilityReports` |
+| Structure evidence and write progress audit logs | Goal/loop via `applyAgentResponsibilityReports` |
 
 The important boundary is:
 
@@ -191,13 +191,15 @@ and blockers so another layer can choose the next Act agentResponsibility.
 AgentResponsibilities return one standard machine result:
 
 ```text
-KODY_AGENT_RESPONSIBILITY_RESULT={"version":1,"status":"pass","summary":"CI is green.","facts":{"pr":123},"artifacts":[],"missingEvidence":[],"blockers":[]}
+KODY_AGENT_RESPONSIBILITY_RESULT={"version":1,"target":{"type":"goal","id":"web-release"},"status":"pass","summary":"CI is green.","evidence":{"ciGreen":true},"facts":{"pr":123},"artifacts":[],"missingEvidence":[],"blockers":[]}
 ```
 
 Rules:
 
+- `target` names the goal or loop that should consume this evidence when known.
 - `status` must be `pass`, `fail`, `blocked`, `changed`, or `noop`.
 - `summary` is required and should be short.
+- `evidence` is optional boolean proof for named goal/loop evidence.
 - `facts` is machine data for the parent agentGoal or agentLoop.
 - `artifacts` is optional links or paths.
 - `missingEvidence` names expected evidence still not proven.
@@ -206,8 +208,8 @@ Rules:
 
 ## AgentResponsibility Reports
 
-Many current agentActions report goal evidence through stdout instead of a full
-capability result object:
+Some current agentActions report goal evidence through stdout instead of a full
+capability result object. This path remains for compatibility:
 
 ```text
 KODY_AGENT_RESPONSIBILITY_REPORT={"target":{"type":"goal","id":"web-release"},"evidence":{"releasePrExists":true},"facts":{"releasePr":338}}
@@ -218,6 +220,8 @@ Rules:
 - Reports are factual.
 - Reports may set evidence and facts.
 - Reports must not set `state`, `stage`, `route`, `agentResponsibilities`, `destination`, or `blockers`.
+- New agentResponsibilities should prefer `KODY_AGENT_RESPONSIBILITY_RESULT` with `target` and `evidence`.
+- Do not emit both marker types for the same evidence in new code. The engine merges both only for compatibility with existing actions.
 - Profiles that emit reports should include `applyAgentResponsibilityReports` in postflight.
 
 ## Composition Example
@@ -245,8 +249,8 @@ Use this checklist:
 5. Add `agent` only when a specific agent matters.
 6. Add `every` only when the agentResponsibility is scheduled.
 7. Write `agent-responsibility.md` with purpose, inputs, outputs, allowed actions, and restrictions.
-8. Emit `KODY_AGENT_RESPONSIBILITY_RESULT` with the agentResponsibility outcome.
-9. If the agentResponsibility serves a current managed goal, also emit factual `KODY_AGENT_RESPONSIBILITY_REPORT` evidence.
+8. Emit `KODY_AGENT_RESPONSIBILITY_RESULT` with status, summary, facts, artifacts, missing evidence, blockers, and goal evidence when relevant.
+9. Let the goal or loop apply that evidence, decide the next step, and write the progress log.
 
 ## Do Not
 

@@ -1,3 +1,8 @@
+import {
+  type AgentResponsibilityReportTarget,
+  parseAgentResponsibilityReportEvidence,
+  parseAgentResponsibilityReportTarget,
+} from "./agent-responsibilityReport.js"
 import type { GoalState } from "./goal/state.js"
 
 export const AGENT_RESPONSIBILITY_RESULT_MARKER = "KODY_AGENT_RESPONSIBILITY_RESULT"
@@ -12,8 +17,10 @@ export interface AgentResponsibilityResultArtifact {
 
 export interface AgentResponsibilityResult {
   version: 1
+  target?: AgentResponsibilityReportTarget
   status: AgentResponsibilityResultStatus
   summary: string
+  evidence?: Record<string, boolean>
   facts: Record<string, unknown>
   artifacts: AgentResponsibilityResultArtifact[]
   missingEvidence: string[]
@@ -49,6 +56,11 @@ export function parseAgentResponsibilityResult(raw: unknown): AgentResponsibilit
   const summary = typeof obj.summary === "string" ? obj.summary.trim() : ""
   if (!summary) return null
 
+  const target = obj.target === undefined ? undefined : parseAgentResponsibilityReportTarget(obj.target)
+  if (obj.target !== undefined && !target) return null
+  const evidence = obj.evidence === undefined ? undefined : parseAgentResponsibilityReportEvidence(obj.evidence)
+  if (obj.evidence !== undefined && !evidence) return null
+
   const facts = parseFacts(obj.facts)
   if (!facts) return null
 
@@ -61,8 +73,10 @@ export function parseAgentResponsibilityResult(raw: unknown): AgentResponsibilit
 
   return {
     version: 1,
+    ...(target ? { target } : {}),
     status: obj.status,
     summary,
+    ...(evidence ? { evidence } : {}),
     facts,
     artifacts,
     missingEvidence,
@@ -81,15 +95,19 @@ export function applyAgentResponsibilityResultToObjectiveState(
     if (CONTROL_FACT_KEYS.has(key)) continue
     nextFacts[key] = value
   }
+  for (const [key, value] of Object.entries(result.evidence ?? {})) {
+    nextFacts[key] = value
+  }
 
   const evidence = evidenceOverride || (typeof nextFacts.pendingEvidence === "string" ? nextFacts.pendingEvidence : "")
-  if (evidence) {
+  const resultIncludesEvidence = evidence ? Object.hasOwn(result.evidence ?? {}, evidence) : false
+  const terminalStatus = result.status === "pass" || result.status === "fail" || result.status === "blocked"
+  if (evidence && !resultIncludesEvidence) {
     if (result.status === "pass") nextFacts[evidence] = true
     if (result.status === "fail" || result.status === "blocked") nextFacts[evidence] = false
-    if (
-      (result.status === "pass" || result.status === "fail" || result.status === "blocked") &&
-      nextFacts.pendingEvidence === evidence
-    ) {
+  }
+  if (evidence) {
+    if (nextFacts.pendingEvidence === evidence && (resultIncludesEvidence || terminalStatus)) {
       delete nextFacts.pendingEvidence
     }
   }
@@ -110,8 +128,10 @@ export function applyAgentResponsibilityResultToObjectiveState(
       facts: nextFacts,
       blockers,
       lastAgentResponsibilityResult: {
+        target: result.target,
         status: result.status,
         summary: result.summary,
+        evidence: result.evidence,
         facts: result.facts,
         artifacts: result.artifacts,
         missingEvidence: result.missingEvidence,
