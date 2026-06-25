@@ -179,6 +179,14 @@ export function detectPackageManager(cwd: string): PackageManager {
   return "npm"
 }
 
+function shouldChainScheduledWatch(match: DispatchResult): boolean {
+  return (
+    match.action === "goal-scheduler" ||
+    match.agentResponsibility === "goal-scheduler" ||
+    match.agentAction === "goal-scheduler"
+  )
+}
+
 function shellOut(cmd: string, args: string[], cwd: string, stream = true): number {
   try {
     execFileSync(cmd, args, {
@@ -672,7 +680,13 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
           agentAction: match.agentAction,
           cliArgs: match.cliArgs,
         }),
-        { cwd, config, verbose: args.verbose, quiet: args.quiet, chain: false },
+        {
+          cwd,
+          config,
+          verbose: args.verbose,
+          quiet: args.quiet,
+          chain: shouldChainScheduledWatch(match),
+        },
       )
       if (result.exitCode !== 0) {
         process.stderr.write(

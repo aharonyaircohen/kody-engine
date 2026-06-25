@@ -143,4 +143,30 @@ describe("kody-cli manual goal dispatch", () => {
       force: true,
     })
   })
+
+  it("chains scheduled goal-scheduler ticks from schedule events", async () => {
+    const dir = tmpDir()
+    writeConfig(dir)
+    writeScheduledAgentAction(dir, "goal-scheduler")
+    previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
+    previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
+    process.env.GITHUB_EVENT_NAME = "schedule"
+    process.env.GITHUB_EVENT_PATH = writeEvent({ schedule: "*/5 * * * *" })
+
+    await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
+
+    expect(mocks.runJob).toHaveBeenCalledTimes(1)
+    expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
+      dispatch: {
+        action: "goal-scheduler",
+        agentResponsibility: "goal-scheduler",
+        agentAction: "goal-scheduler",
+        cliArgs: {},
+      },
+    })
+    expect(mocks.runJob.mock.calls[0]?.[1]).toMatchObject({
+      cwd: dir,
+      chain: true,
+    })
+  })
 })

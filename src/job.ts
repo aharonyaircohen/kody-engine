@@ -92,10 +92,9 @@ export interface RunJobBase {
   quiet?: boolean
   preloadedData?: Record<string, unknown>
   /**
-   * Follow in-process stage hand-offs (`runAgentActionChain`) — the default,
-   * matching the comment/manual route. Set `false` for the cron tick path,
-   * which fans out one-shot ticks via `runAgentAction` (no chaining), so the
-   * scheduler's per-agentResponsibility invocation stays byte-identical to its prior call.
+   * Follow in-process stage hand-offs (`runAgentActionChain`) by default,
+   * matching the comment/manual route. Scheduled watch fan-out can set `false`
+   * for one-shot ticks that must not follow a returned nextDispatch.
    */
   chain?: boolean
 }
