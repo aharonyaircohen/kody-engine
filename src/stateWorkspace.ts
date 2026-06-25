@@ -47,11 +47,26 @@ function hydrateDirectory(config: StateRepoConfig, cwd: string, stateDir: string
 
 export function hydrateStateWorkspace(config: StateRepoConfig, cwd: string): void {
   for (const mapping of DIR_MAPPINGS) {
-    hydrateDirectory(config, cwd, mapping.stateDir, mapping.localDir)
+    try {
+      hydrateDirectory(config, cwd, mapping.stateDir, mapping.localDir)
+    } catch (err) {
+      // Hydration is best-effort. `listStateDirectory` swallows 404 (a
+      // not-yet-provisioned state repo), but transient GitHub API failures
+      // — 403 rate-limit, 5xx, network errors — would otherwise abort the
+      // whole run. Log and proceed: the consumer repo's own `.kody/`
+      // assets stay intact and the run continues from them.
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[kody state-workspace] skipping ${mapping.stateDir}: ${msg}\n`)
+    }
   }
 
   for (const mapping of FILE_MAPPINGS) {
-    const file = readStateText(config, cwd, mapping.statePath)
-    if (file) writeLocalFile(cwd, mapping.localPath, file.content)
+    try {
+      const file = readStateText(config, cwd, mapping.statePath)
+      if (file) writeLocalFile(cwd, mapping.localPath, file.content)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[kody state-workspace] skipping ${mapping.statePath}: ${msg}\n`)
+    }
   }
 }
