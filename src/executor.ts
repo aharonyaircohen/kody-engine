@@ -27,10 +27,9 @@ import { loadProfile, validateScriptReferences } from "./profile.js"
 import { resolveAgentAction } from "./registry.js"
 import { agentRunDir } from "./runtimePaths.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
-import { writeResponsibilityReport } from "./scripts/writeResponsibilityReport.js"
 import type { TaskState, TaskTarget } from "./state.js"
-import { loadSubagents } from "./subagents.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
+import { loadSubagents } from "./subagents.js"
 import {
   persistTaskArtifactsToState,
   prepareTaskArtifactsDir,
@@ -700,8 +699,6 @@ export async function runAgentAction(profileName: string, input: ExecutorInput):
         outcome: postOutcome,
       })
     }
-
-    await writeResponsibilityReport(ctx, profile, agentResult)
 
     return finishAndEnd({
       exitCode: ctx.output.exitCode ?? 0,

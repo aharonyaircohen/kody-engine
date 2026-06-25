@@ -469,23 +469,23 @@ export interface Context {
      * `@kody <next>` comment, which is silently ignored when Kody comments as
      * a GitHub App (bot author), stalling the pipeline at classify.
      */
-  nextDispatch?: {
-    action?: string
-    agentResponsibility?: string
-    agentAction?: string
-    cliArgs: Record<string, unknown>
-    saveReport?: boolean
-  }
+    nextDispatch?: {
+      action?: string
+      agentResponsibility?: string
+      agentAction?: string
+      cliArgs: Record<string, unknown>
+      saveReport?: boolean
+    }
     /** In-process hand-off to a full Job, preserving job identity in task state. */
     nextJob?: Job
     /** Where to return after nextJob succeeds. Used by task-jobs to keep draining pending work. */
-  afterNextJob?: {
-    action?: string
-    agentResponsibility?: string
-    agentAction?: string
-    cliArgs: Record<string, unknown>
-    saveReport?: boolean
-  }
+    afterNextJob?: {
+      action?: string
+      agentResponsibility?: string
+      agentAction?: string
+      cliArgs: Record<string, unknown>
+      saveReport?: boolean
+    }
   }
   /**
    * If a preflight script sets this to true, the executor skips the agent
@@ -552,6 +552,6 @@ export interface Job {
   flavor: JobFlavor
   /** Manual force-run (bypass cadence) for a scheduled job. */
   force?: boolean
-  /** Save this responsibility run output as reports/<responsibility>.md. */
+  /** Ask the owning goal/loop to refresh reports/<goal-or-loop>.md after it applies evidence. */
   saveReport?: boolean
 }

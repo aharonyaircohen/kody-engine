@@ -11,6 +11,14 @@ vi.mock("../../src/goal/runLog.js", async () => {
     flushGoalRunLogEvents: vi.fn(),
   }
 })
+vi.mock("../../src/stateRepo.js", async () => {
+  const actual = await vi.importActual<typeof import("../../src/stateRepo.js")>("../../src/stateRepo.js")
+  return {
+    ...actual,
+    readStateText: vi.fn(),
+    upsertStateText: vi.fn(),
+  }
+})
 
 import type { AgentResult } from "../../src/agent.js"
 import type { Context, Profile } from "../../src/agent-actions/types.js"
@@ -18,10 +26,13 @@ import { flushGoalRunLogEvents } from "../../src/goal/runLog.js"
 import { type GoalState, serializeGoalState } from "../../src/goal/state.js"
 import { fetchGoalState, putGoalState } from "../../src/goal/stateStore.js"
 import { applyAgentResponsibilityReports } from "../../src/scripts/applyAgentResponsibilityReports.js"
+import { readStateText, upsertStateText } from "../../src/stateRepo.js"
 
 const fetchGoalStateMock = vi.mocked(fetchGoalState)
 const putGoalStateMock = vi.mocked(putGoalState)
 const flushGoalRunLogEventsMock = vi.mocked(flushGoalRunLogEvents)
+const readStateTextMock = vi.mocked(readStateText)
+const upsertStateTextMock = vi.mocked(upsertStateText)
 
 function fakeCtx(data: Record<string, unknown>, args: Record<string, unknown> = {}): Context {
   return {
@@ -68,11 +79,14 @@ describe("applyAgentResponsibilityReports", () => {
     fetchGoalStateMock.mockReset()
     putGoalStateMock.mockReset()
     flushGoalRunLogEventsMock.mockReset()
+    readStateTextMock.mockReset()
+    upsertStateTextMock.mockReset()
+    readStateTextMock.mockReturnValue(null)
   })
 
   it("applies shell-collected goal reports to kody-state", async () => {
     fetchGoalStateMock.mockReturnValueOnce(goalState())
-    const data = {
+    const data: Record<string, unknown> = {
       agentResponsibilityReports: [
         {
           target: { type: "goal", id: "release-aguy" },
@@ -161,7 +175,7 @@ describe("applyAgentResponsibilityReports", () => {
 
   it("merges report and result output before writing one goal evidence event", async () => {
     fetchGoalStateMock.mockReturnValueOnce(goalState())
-    const data = {
+    const data: Record<string, unknown> = {
       agentResponsibilityReports: [
         {
           target: { type: "goal", id: "release-aguy" },
@@ -259,6 +273,68 @@ describe("applyAgentResponsibilityReports", () => {
         }),
       ]),
     )
+  })
+
+  it("writes a goal-owned dashboard report when saveReport is requested", async () => {
+    fetchGoalStateMock.mockReturnValueOnce(goalState())
+    const data: Record<string, unknown> = {
+      jobSaveReport: true,
+      dutyResults: [
+        {
+          version: 1,
+          status: "pass",
+          summary: "Release PR exists.",
+          facts: { releasePr: 123 },
+          artifacts: [{ label: "PR", url: "https://github.com/o/r/pull/123" }],
+          missingEvidence: [],
+          blockers: [],
+        },
+      ],
+    }
+
+    await applyAgentResponsibilityReports(
+      fakeCtx(data, { goal: "release-aguy", evidence: "releasePrExists" }),
+      fakeProfile(),
+      null,
+    )
+
+    expect(upsertStateTextMock).toHaveBeenCalledOnce()
+    const [, , path, body, message] = upsertStateTextMock.mock.calls[0]!
+    expect(path).toBe("reports/release-aguy.md")
+    expect(message).toBe("chore(reports): refresh release-aguy")
+    expect(body).toContain("# release-aguy")
+    expect(body).toContain("- Next step: done")
+    expect(body).toContain("- Summary: Release PR exists.")
+    expect(body).toContain('"releasePr": 123')
+    expect(body).toContain("[PR](https://github.com/o/r/pull/123)")
+    expect(data.goalReports).toEqual([{ slug: "release-aguy", path: "reports/release-aguy.md", changed: true }])
+  })
+
+  it("does not write a dashboard report unless saveReport is requested", async () => {
+    fetchGoalStateMock.mockReturnValueOnce(goalState())
+
+    await applyAgentResponsibilityReports(
+      fakeCtx(
+        {
+          dutyResults: [
+            {
+              version: 1,
+              status: "pass",
+              summary: "Release PR exists.",
+              facts: { releasePr: 123 },
+              artifacts: [],
+              missingEvidence: [],
+              blockers: [],
+            },
+          ],
+        },
+        { goal: "release-aguy", evidence: "releasePrExists" },
+      ),
+      fakeProfile(),
+      null,
+    )
+
+    expect(upsertStateTextMock).not.toHaveBeenCalled()
   })
 
   it("marks managed goal done when result satisfies final destination evidence", async () => {
