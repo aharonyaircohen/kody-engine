@@ -15,7 +15,7 @@ describe("entry: fix-ci args", () => {
     // so the registry picks it up regardless of whether the store is present.
     prevCwd = process.cwd()
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-fix-ci-cmd-"))
-    const dir = path.join(tmp, ".kody", "agent-responsibilities", "fix-ci")
+    const dir = path.join(tmp, ".kody", "capabilities", "fix-ci")
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(
       path.join(dir, "profile.json"),
@@ -24,13 +24,14 @@ describe("entry: fix-ci args", () => {
           name: "fix-ci",
           action: "fix-ci",
           agentAction: "fix-ci",
+          capabilityKind: "act",
           describe: "Fix latest failing CI on PR.",
         },
         null,
         2,
       ),
     )
-    fs.writeFileSync(path.join(dir, "agent-responsibility.md"), "# Fix CI\n\nFix latest failing CI on PR.\n")
+    fs.writeFileSync(path.join(dir, "capability.md"), "# Fix CI\n\nFix latest failing CI on PR.\n")
     process.chdir(tmp)
   })
 

@@ -219,9 +219,7 @@ function isArtifact(value: unknown): value is CapabilityEvidence["artifacts"][nu
   )
 }
 
-function uniqueArtifacts(
-  artifacts: CapabilityEvidence["artifacts"],
-): CapabilityEvidence["artifacts"] {
+function uniqueArtifacts(artifacts: CapabilityEvidence["artifacts"]): CapabilityEvidence["artifacts"] {
   const seen = new Set<string>()
   const out: CapabilityEvidence["artifacts"] = []
   for (const artifact of artifacts) {

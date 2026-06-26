@@ -16,7 +16,7 @@ describe("entry: resolve args", () => {
     // present.
     prevCwd = process.cwd()
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-resolve-cmd-"))
-    const dir = path.join(tmp, ".kody", "agent-responsibilities", "resolve")
+    const dir = path.join(tmp, ".kody", "capabilities", "resolve")
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(
       path.join(dir, "profile.json"),
@@ -25,13 +25,14 @@ describe("entry: resolve args", () => {
           name: "resolve",
           action: "resolve",
           agentAction: "resolve",
+          capabilityKind: "act",
           describe: "Merge base into PR and resolve conflicts.",
         },
         null,
         2,
       ),
     )
-    fs.writeFileSync(path.join(dir, "agent-responsibility.md"), "# Resolve\n\nMerge base into PR.\n")
+    fs.writeFileSync(path.join(dir, "capability.md"), "# Resolve\n\nMerge base into PR.\n")
     process.chdir(tmp)
   })
 

@@ -9,8 +9,8 @@ import {
   hasCapabilityAction,
   listCapabilityActions,
   parseGenericFlags,
-  resolveExecutable,
   resolveCapabilityAction,
+  resolveExecutable,
 } from "./registry.js"
 import { brainServe } from "./servers/brain-serve.js"
 import { poolServe } from "./servers/pool-serve.js"
@@ -128,7 +128,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return result
   }
 
-// Public top-level work commands are capabilities.
+  // Public top-level work commands are capabilities.
   if (hasCapabilityAction(cmd)) {
     result.command = "__capability__"
     result.actionName = cmd

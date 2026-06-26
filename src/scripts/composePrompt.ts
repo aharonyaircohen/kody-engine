@@ -268,9 +268,7 @@ function formatCapabilityReference(data: Record<string, unknown>, profileName: s
 
   const lines = ["# Capability reference", ""]
   if (capabilitySlug) {
-    lines.push(
-      `- Capability: \`${capabilitySlug}\`${capabilityTitle ? ` — *${capabilityTitle}*` : ""}`,
-    )
+    lines.push(`- Capability: \`${capabilitySlug}\`${capabilityTitle ? ` — *${capabilityTitle}*` : ""}`)
   }
   if (executableSlug) {
     lines.push(`- Executable: \`${executableSlug}\``)

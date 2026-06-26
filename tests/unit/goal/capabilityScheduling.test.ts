@@ -13,13 +13,29 @@ import {
 import type { GoalCtx } from "../../../src/scripts/goalCtx.js"
 
 let tmp: string
+let prevCwd: string
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "goal-capability-schedule-"))
+  // `resolveCapabilityExecution` looks up the executable at
+  // `process.cwd()/.kody/executables/<name>/profile.json`. The capability
+  // folder is found via `ctx.cwd`, but the executable lookup is global —
+  // chdir into the temp dir so the fixture we wrote is the one the
+  // resolver reads.
+  prevCwd = process.cwd()
+  process.chdir(tmp)
 })
 
 afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true })
+  if (prevCwd) {
+    try {
+      process.chdir(prevCwd)
+    } catch {
+      /* cwd already gone — fine */
+    }
+    prevCwd = ""
+  }
 })
 
 function writeCapability(slug: string, profile: Record<string, unknown>): void {
@@ -150,7 +166,7 @@ describe("standing goal capability scheduling", () => {
     raw.extra.loopTarget = { type: "goal", id: "web-release" }
     const ctx = fakeCtx(raw)
 
-      await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+    await advanceManagedGoal(ctx, {} as unknown as Profile, {})
 
     expect(ctx.output.nextDispatch).toEqual({
       action: "goal-manager",
@@ -223,7 +239,7 @@ describe("standing goal capability scheduling", () => {
     })
   })
 
-it("passes capability slug when executable inputs declare capability", async () => {
+  it("passes capability slug when executable inputs declare capability", async () => {
     writeCapability("auto-fix-ci", { agent: "kody", executable: "auto-fix-ci" })
     writeExecutable("auto-fix-ci", {
       inputs: [{ name: "capability", flag: "--capability", type: "string", required: true }],
@@ -231,7 +247,7 @@ it("passes capability slug when executable inputs declare capability", async () 
     const raw = goalState(["auto-fix-ci"])
     const ctx = fakeCtx(raw)
 
-      await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+    await advanceManagedGoal(ctx, {} as unknown as Profile, {})
 
     expect(ctx.output.nextDispatch).toEqual({
       capability: "auto-fix-ci",

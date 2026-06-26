@@ -109,10 +109,7 @@ describe("runJob (Phase 1 seam)", () => {
   })
 
   it("does not seed jobWhy for an empty why string", async () => {
-    await runJob(
-      { capability: "run", executable: "run", why: "", cliArgs: {}, flavor: "instant" },
-      { cwd: "/x" },
-    )
+    await runJob({ capability: "run", executable: "run", why: "", cliArgs: {}, flavor: "instant" }, { cwd: "/x" })
     const [, input] = runExecutableChain.mock.calls[0]!
     expect(input.preloadedData?.jobWhy).toBeUndefined()
   })
@@ -200,10 +197,7 @@ describe("runJob (Phase 1 seam)", () => {
   })
 
   it("falls back to the capability slug as the profile when no executable", async () => {
-    await runJob(
-      { capability: "run", schedule: "*/5 * * * *", cliArgs: {}, flavor: "scheduled" },
-      { cwd: "/x" },
-    )
+    await runJob({ capability: "run", schedule: "*/5 * * * *", cliArgs: {}, flavor: "scheduled" }, { cwd: "/x" })
     expect(runExecutableChain.mock.calls[0]![0]).toBe("run")
   })
 

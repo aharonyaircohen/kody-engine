@@ -330,7 +330,7 @@ describe("dispatch: issue_comment on issue", () => {
       action: "run",
       capability: "run",
       executable: "run",
-      cliArgs: { issue: 9 },
+      cliArgs: { issue: 9, feedback: "this now" },
       target: 9,
     })
   })
@@ -467,9 +467,9 @@ describe("dispatch: issue_comment on issue", () => {
       }),
     ).toEqual({
       action: "run",
-capability: "run",
+      capability: "run",
       executable: "run",
-      cliArgs: { issue: 11 },
+      cliArgs: { issue: 11, feedback: "fix the failing test" },
       target: 11,
       // issue #39: `run` declares `feedback` with `bindsCommentRest: true`,
       // so the politeness-stripped remainder lands in `cliArgs.feedback`

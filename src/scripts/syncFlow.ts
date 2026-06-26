@@ -23,8 +23,8 @@
  */
 
 import { execFileSync } from "node:child_process"
-import type { PreflightScript, ScriptArgs } from "../executables/types.js"
 import { checkoutPrBranch, getCurrentBranch, mergeBase } from "../branch.js"
+import type { PreflightScript, ScriptArgs } from "../executables/types.js"
 import { getRunUrl } from "../gha.js"
 import { getPr, postPrReviewComment } from "../issue.js"
 import { type KodyLabelSpec, setKodyLabel } from "../lifecycleLabels.js"

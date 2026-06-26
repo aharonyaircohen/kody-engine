@@ -3,9 +3,9 @@ import * as os from "node:os"
 import * as path from "node:path"
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import type { Context, Profile } from "../../src/executables/types.js"
 import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import type { KodyConfig } from "../../src/config.js"
+import type { Context, Profile } from "../../src/executables/types.js"
 import { runScheduledExecutableTick } from "../../src/scripts/runScheduledExecutableTick.js"
 import { buildTickChildEnv } from "../../src/scripts/tickShellRunner.js"
 

@@ -458,9 +458,7 @@ describe("applyCapabilityReports", () => {
     const prior: GoalState = { state: "active", extra: { facts: { releasePrExists: true } } }
     fetchGoalStateMock.mockReturnValueOnce(prior)
     const data = {
-      capabilityReports: [
-        { target: { type: "goal", id: "release-aguy" }, evidence: { releasePrExists: true } },
-      ],
+      capabilityReports: [{ target: { type: "goal", id: "release-aguy" }, evidence: { releasePrExists: true } }],
     }
 
     await applyCapabilityReports(fakeCtx(data), fakeProfile(), null)

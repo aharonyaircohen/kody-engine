@@ -9,6 +9,8 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { CAPABILITY_MCP_TOOL_NAMES } from "./capabilityMcp.js"
+import { parseReasoningEffort } from "./config.js"
 import type {
   CapabilityKind,
   ClaudeCodeSpec,
@@ -20,8 +22,6 @@ import type {
   Profile,
   ScriptEntry,
 } from "./executables/types.js"
-import { CAPABILITY_MCP_TOOL_NAMES } from "./capabilityMcp.js"
-import { parseReasoningEffort } from "./config.js"
 import { applyLifecycle } from "./lifecycles/index.js"
 import { ProfileError } from "./profile-error.js"
 import { resolveExecutable } from "./registry.js"
@@ -111,7 +111,7 @@ export function loadProfile(profilePath: string): Profile {
     )
   }
 
-// Capability-as-reference: an capability stores a capability
+  // Capability-as-reference: an capability stores a capability
   // contract and names the executable implementation instead of embedding it.
   // Resolve that executable's full profile and overlay this contract's identity
   // (name) + agent (who) + mentions. The capability folder then stays a
@@ -138,8 +138,7 @@ export function loadProfile(profilePath: string): Profile {
       describe: typeof r.describe === "string" ? r.describe : base.describe,
       capabilityKind: parseCapabilityKind(profilePath, r.capabilityKind) ?? base.capabilityKind,
       agent: typeof r.agent === "string" && r.agent.trim() ? r.agent.trim() : base.agent,
-      capabilityTools:
-        parseStringArray(r.capabilityTools ?? r.capabilityTools ?? r.tools) ?? base.capabilityTools,
+      capabilityTools: parseStringArray(r.capabilityTools ?? r.capabilityTools ?? r.tools) ?? base.capabilityTools,
       mentions: Array.isArray(r.mentions)
         ? (r.mentions as string[]).map((m) => String(m).trim()).filter(Boolean)
         : base.mentions,
@@ -252,12 +251,7 @@ export function loadProfile(profilePath: string): Profile {
   // Any of these preflights populate ctx.data.jobState: loadCapabilityState (folder
   // capability), loadJobFromFile (markdown capability via capability-tick), runTickScript (scripted
   // capability via capability-tick-scripted).
-  const STATE_LOADERS = [
-    "loadCapabilityState",
-    "loadJobFromFile",
-    "runTickScript",
-    "runScheduledExecutableTick",
-  ]
+  const STATE_LOADERS = ["loadCapabilityState", "loadJobFromFile", "runTickScript", "runScheduledExecutableTick"]
   if (needsState && !STATE_LOADERS.some((s) => preNames.has(s))) {
     throw new ProfileError(
       profilePath,

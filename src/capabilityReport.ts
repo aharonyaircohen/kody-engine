@@ -49,10 +49,7 @@ export function parseCapabilityReport(raw: unknown): CapabilityReport | null {
   }
 }
 
-export function applyCapabilityReportToGoalState(
-  state: GoalState,
-  report: CapabilityReport,
-): GoalState {
+export function applyCapabilityReportToGoalState(state: GoalState, report: CapabilityReport): GoalState {
   const priorFacts = parseFacts(state.extra.facts) ?? {}
   const nextFacts: Record<string, unknown> = { ...priorFacts }
 
