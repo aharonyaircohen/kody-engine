@@ -8,8 +8,8 @@
  * `lifecycle` itself (keeps invariant 1 intact).
  *
  * Lifecycles exist to consolidate orchestration boilerplate (label, context
- * loading, verify, commit, comment) that recurs across many agentActions.
- * Per-agentAction specifics still go in `scripts.preflight` and
+ * loading, verify, commit, comment) that recurs across many executables.
+ * Per-executable specifics still go in `scripts.preflight` and
  * `scripts.postflight` — the lifecycle wraps them, it doesn't replace them.
  *
  * Adding a new lifecycle: create `src/lifecycles/<name>.ts`, export a
@@ -17,7 +17,7 @@
  * load time by `applyLifecycle`.
  */
 
-import type { Profile } from "../agent-actions/types.js"
+import type { Profile } from "../executables/types.js"
 import { ProfileError } from "../profile-error.js"
 import { prBranchLifecycle } from "./prBranch.js"
 

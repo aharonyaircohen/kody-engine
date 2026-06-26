@@ -1,5 +1,5 @@
 import type { AgentResult } from "../agent.js"
-import type { Context, PostflightScript } from "../agent-actions/types.js"
+import type { Context, PostflightScript } from "../executables/types.js"
 import { gh } from "../issue.js"
 import { normalizeStatePath, parseStateRepo, stateRepoPath } from "../stateRepo.js"
 

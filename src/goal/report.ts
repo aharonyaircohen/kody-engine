@@ -1,4 +1,4 @@
-import type { AgentResponsibilityEvidence } from "../agent-responsibilityEvidence.js"
+import type { CapabilityEvidence } from "../capabilityEvidence.js"
 import { readStateText, type StateRepoConfig, upsertStateText } from "../stateRepo.js"
 import { managedGoalFromState } from "./manager.js"
 import { goalRunLogSnapshot } from "./runLog.js"
@@ -19,7 +19,7 @@ export interface GoalDashboardReportInput {
   data: Record<string, unknown>
   goalId: string
   state: GoalState
-  evidenceItems?: AgentResponsibilityEvidence[]
+  evidenceItems?: CapabilityEvidence[]
 }
 
 export function goalDashboardReportRequested(data: Record<string, unknown>, state?: GoalState): boolean {
@@ -54,9 +54,9 @@ export function refreshGoalDashboardReport(input: GoalDashboardReportInput): Goa
   return report
 }
 
-export function responsibilityEvidenceOutput(evidence: AgentResponsibilityEvidence): Record<string, unknown> {
+export function capabilityEvidenceOutput(evidence: CapabilityEvidence): Record<string, unknown> {
   return {
-    kind: "responsibility-evidence",
+    kind: "capability-evidence",
     sources: evidence.sources,
     status: evidence.status,
     summary: evidence.summary,
@@ -73,9 +73,9 @@ function goalReportBody(
   state: GoalState,
   snapshot: Record<string, unknown> | null,
   latestEvent: Record<string, unknown> | undefined,
-  evidenceItems: AgentResponsibilityEvidence[],
+  evidenceItems: CapabilityEvidence[],
 ): string {
-  const outputs = evidenceItems.map(responsibilityEvidenceOutput)
+  const outputs = evidenceItems.map(capabilityEvidenceOutput)
   const latestOutput = outputs.at(-1)
   const facts = recordField(snapshot, "facts") ?? recordField(state.extra, "facts") ?? {}
   const blockers = uniqueStrings([
@@ -109,8 +109,8 @@ function goalReportBody(
     `- Missing evidence: ${listOrNone(missingEvidence)}`,
     `- Blockers: ${listOrNone(blockers)}`,
     "",
-    "## Responsibility Evidence",
-    ...responsibilityEvidenceMarkdown(outputs),
+    "## Capability Evidence",
+    ...capabilityEvidenceMarkdown(outputs),
     "",
     "## Facts",
     fencedJson(facts),
@@ -121,7 +121,7 @@ function goalReportBody(
   ].join("\n")
 }
 
-function responsibilityEvidenceMarkdown(outputs: Record<string, unknown>[]): string[] {
+function capabilityEvidenceMarkdown(outputs: Record<string, unknown>[]): string[] {
   if (outputs.length === 0) return ["- none"]
   return outputs.flatMap((output, index) => evidenceOutputMarkdown(index + 1, output))
 }
@@ -156,7 +156,7 @@ function evidenceOutputMarkdown(index: number, output: Record<string, unknown>):
   ]
 }
 
-function artifactMarkdown(artifacts: AgentResponsibilityEvidence["artifacts"]): string[] {
+function artifactMarkdown(artifacts: CapabilityEvidence["artifacts"]): string[] {
   if (artifacts.length === 0) return ["- none"]
   return artifacts.map((artifact) => {
     if (artifact.url) return `- [${artifact.label}](${artifact.url})`
@@ -203,13 +203,13 @@ function stringArrayField(record: Record<string, unknown> | null | undefined, ke
 function artifactArrayField(
   record: Record<string, unknown> | null | undefined,
   key: string,
-): AgentResponsibilityEvidence["artifacts"] {
+): CapabilityEvidence["artifacts"] {
   const value = record?.[key]
   if (!Array.isArray(value)) return []
   return value.filter(isArtifact)
 }
 
-function isArtifact(value: unknown): value is AgentResponsibilityEvidence["artifacts"][number] {
+function isArtifact(value: unknown): value is CapabilityEvidence["artifacts"][number] {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false
   const record = value as Record<string, unknown>
   return (
@@ -220,10 +220,10 @@ function isArtifact(value: unknown): value is AgentResponsibilityEvidence["artif
 }
 
 function uniqueArtifacts(
-  artifacts: AgentResponsibilityEvidence["artifacts"],
-): AgentResponsibilityEvidence["artifacts"] {
+  artifacts: CapabilityEvidence["artifacts"],
+): CapabilityEvidence["artifacts"] {
   const seen = new Set<string>()
-  const out: AgentResponsibilityEvidence["artifacts"] = []
+  const out: CapabilityEvidence["artifacts"] = []
   for (const artifact of artifacts) {
     const key = `${artifact.label}\n${artifact.url ?? ""}\n${artifact.path ?? ""}`
     if (seen.has(key)) continue
@@ -236,7 +236,7 @@ function uniqueArtifacts(
 function nextStepFromEvent(
   state: GoalState,
   goalAfter: Record<string, unknown> | null,
-  responsibilityOutput: Record<string, unknown> | undefined,
+  capabilityOutput: Record<string, unknown> | undefined,
   latestEvent: Record<string, unknown> | undefined,
 ): "dispatch" | "wait" | "rescue" | "block" | "done" {
   if (state.state === "done") return "done"
@@ -245,16 +245,16 @@ function nextStepFromEvent(
   if (decisionKind === "dispatch") return "dispatch"
   if (decisionKind === "blocked" || decisionKind === "reject-evidence") return "block"
   if (decisionKind === "wait" || decisionKind === "idle" || decisionKind === "no-state-change") return "wait"
-  if (responsibilityOutput) return nextStepFromEvidence(goalAfter, responsibilityOutput)
+  if (capabilityOutput) return nextStepFromEvidence(goalAfter, capabilityOutput)
   return "wait"
 }
 
 function nextStepFromEvidence(
   goalAfter: Record<string, unknown> | null,
-  responsibilityOutput: Record<string, unknown>,
+  capabilityOutput: Record<string, unknown>,
 ): "dispatch" | "wait" | "rescue" | "block" | "done" {
-  const status = typeof responsibilityOutput.status === "string" ? responsibilityOutput.status : ""
-  const outputBlockers = stringArrayField(responsibilityOutput, "blockers")
+  const status = typeof capabilityOutput.status === "string" ? capabilityOutput.status : ""
+  const outputBlockers = stringArrayField(capabilityOutput, "blockers")
   const goalBlockers = stringArrayField(goalAfter, "blockers")
   const missingEvidence = stringArrayField(goalAfter, "missingEvidence")
   if (goalAfter && missingEvidence.length === 0) return "done"

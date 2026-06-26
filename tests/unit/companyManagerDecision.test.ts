@@ -20,9 +20,9 @@ DONE
       "id": "publish-current-release",
       "outcome": "Publish current release safely",
       "evidence": ["releasePrExists"],
-      "agentResponsibilities": ["release"],
+      "capabilities": ["release"],
       "route": [
-        { "stage": "release", "evidence": "releasePrExists", "agentResponsibility": "release" }
+        { "stage": "release", "evidence": "releasePrExists", "capability": "release" }
       ],
       "reason": "release confidence requires tracked release proof"
     }
@@ -65,9 +65,9 @@ DONE
       "id": "publish-current-release",
       "outcome": "Publish current release safely",
       "evidence": ["releasePrExists"],
-      "agentResponsibilities": ["release"],
+      "capabilities": ["release"],
       "route": [
-        { "stage": "release", "evidence": "releasePrExists", "agentResponsibility": "release" }
+        { "stage": "release", "evidence": "releasePrExists", "capability": "release" }
       ],
       "reason": "release confidence requires tracked release proof"
     }
@@ -83,7 +83,7 @@ DONE
       extra: {
         type: "release",
         destination: { outcome: "Publish current release safely", evidence: ["releasePrExists"] },
-        agentResponsibilities: ["release"],
+        capabilities: ["release"],
         createdByIntent: "release-confidence",
         manager: "cto",
       },
@@ -92,7 +92,7 @@ DONE
 
   it("builds agent loop state from createAgentLoop action", () => {
     const decision = parseCompanyManagerDecisionText(`
-KODY_COMPANY_MANAGER_DECISION={"actions":[{"kind":"createAgentLoop","intentId":"release-confidence","id":"release-health-loop","outcome":"Watch release health","every":"1d","agentResponsibilities":["ci-health"],"reason":"release confidence needs health checks"}]}
+KODY_COMPANY_MANAGER_DECISION={"actions":[{"kind":"createAgentLoop","intentId":"release-confidence","id":"release-health-loop","outcome":"Watch release health","every":"1d","capabilities":["ci-health"],"reason":"release confidence needs health checks"}]}
 `)
     const action = decision.actions[0]
     if (!action || action.kind !== "createAgentLoop") throw new Error("expected createAgentLoop")
@@ -103,7 +103,7 @@ KODY_COMPANY_MANAGER_DECISION={"actions":[{"kind":"createAgentLoop","intentId":"
         type: "agentLoop",
         scheduleMode: "agentLoop",
         schedule: "1d",
-        agentResponsibilities: ["ci-health"],
+        capabilities: ["ci-health"],
         createdByIntent: "release-confidence",
       },
     })

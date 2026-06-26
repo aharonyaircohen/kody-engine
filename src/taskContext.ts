@@ -42,7 +42,7 @@ export interface TaskContext {
   builtAt: string
   /** runId from src/events.ts — ties this context to a specific task run. */
   runId: string
-  /** Optional issue snapshot. Present for run/fix-type agentActions. */
+  /** Optional issue snapshot. Present for run/fix-type executables. */
   issue?: IssueData & {
     /** Pre-formatted comment block used by composePrompt. */
     commentsFormatted: string

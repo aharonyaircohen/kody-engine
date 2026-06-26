@@ -27,7 +27,7 @@
  */
 
 import { execFileSync } from "node:child_process"
-import type { PostflightScript } from "../agent-actions/types.js"
+import type { PostflightScript } from "../executables/types.js"
 import type { Action } from "../state.js"
 
 const API_TIMEOUT_MS = 30_000

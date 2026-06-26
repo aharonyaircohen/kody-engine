@@ -1,18 +1,18 @@
 /**
- * Postflight: append a Company Activity record for an agent responsibility tick.
+ * Postflight: append a Company Activity record for an capability tick.
  *
  * The activity feed is Kody runtime state, so it lives in the configured state
  * repo under `activity/<YYYY-MM-DD>.jsonl`.
  */
-import type { PostflightScript } from "../agent-actions/types.js"
+import type { PostflightScript } from "../executables/types.js"
 import { getRunUrl } from "../gha.js"
 import { appendStateLine } from "../stateRepo.js"
 
 interface ActivityRecord {
   ts: string
   action: string
-  agentResponsibility: string
-  agentResponsibilityTitle: string | null
+  capability: string
+  capabilityTitle: string | null
   agent: string | null
   agentTitle: string | null
   trigger: "schedule" | "manual" | "event"
@@ -39,19 +39,19 @@ function appendLine(ctx: Parameters<PostflightScript>[0], record: ActivityRecord
 
 export const appendCompanyActivity: PostflightScript = async (ctx, _profile, agentResult) => {
   try {
-    const agentResponsibility = String(ctx.data.jobSlug ?? ctx.args?.job ?? "").trim()
-    if (!agentResponsibility) return
+    const capability = String(ctx.data.jobSlug ?? ctx.args?.job ?? "").trim()
+    if (!capability) return
 
-    const agentResponsibilityTitle = (ctx.data.jobTitle as string | undefined) ?? null
+    const capabilityTitle = (ctx.data.jobTitle as string | undefined) ?? null
     const agent = (ctx.data.agentSlug as string | undefined) || null
     const agentTitle = (ctx.data.agentTitle as string | undefined) || null
     const force = ctx.args?.force === true
 
     const record: ActivityRecord = {
       ts: new Date().toISOString(),
-      action: `Ran agentResponsibility: ${agentResponsibilityTitle ?? agentResponsibility}`,
-      agentResponsibility,
-      agentResponsibilityTitle,
+      action: `Ran capability: ${capabilityTitle ?? capability}`,
+      capability,
+      capabilityTitle,
       agent,
       agentTitle,
       trigger: resolveTrigger(force),

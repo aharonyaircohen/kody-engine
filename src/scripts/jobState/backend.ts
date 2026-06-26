@@ -79,9 +79,9 @@ export function isStateUnchanged(prev: StateEnvelope, next: StateEnvelope): bool
 }
 
 /**
- * Compute the canonical state-file path for a given agentResponsibility slug. Backends
+ * Compute the canonical state-file path for a given capability slug. Backends
  * that map slugs to files use this so all backends agree on the folder
- * layout: `.kody/agent-responsibilities/<slug>/state.json`.
+ * layout: `.kody/capabilities/<slug>/state.json`.
  */
 export function stateFilePath(jobsDir: string, slug: string): string {
   return `${jobsDir.replace(/\/+$/, "")}/${slug}/state.json`

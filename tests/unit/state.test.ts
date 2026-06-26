@@ -18,10 +18,10 @@ describe("state: emptyState", () => {
     expect(s.schemaVersion).toBe(1)
     expect(s.core.phase).toBe("idle")
     expect(s.core.status).toBe("pending")
-    expect(s.core.currentAgentAction).toBeNull()
+    expect(s.core.currentExecutable).toBeNull()
     expect(s.core.lastOutcome).toBeNull()
     expect(s.core.attempts).toEqual({})
-    expect(s.agentActions).toEqual({})
+    expect(s.executables).toEqual({})
     expect(s.jobs).toEqual({})
     expect(s.history).toEqual([])
   })
@@ -31,17 +31,17 @@ describe("state: reduce", () => {
   const ok: Action = { type: "RUN_COMPLETED", payload: { prUrl: "u" }, timestamp: "2026-04-20T09:00:00Z" }
   const fail: Action = { type: "RUN_FAILED", payload: { reason: "boom" }, timestamp: "2026-04-20T09:05:00Z" }
 
-  it("increments attempts for the agentAction", () => {
+  it("increments attempts for the executable", () => {
     const s1 = reduce(emptyState(), "build", ok)
     expect(s1.core.attempts).toEqual({ build: 1 })
     const s2 = reduce(s1, "build", fail)
     expect(s2.core.attempts).toEqual({ build: 2 })
   })
 
-  it("records the latest action as lastOutcome and per-agentAction lastAction", () => {
+  it("records the latest action as lastOutcome and per-executable lastAction", () => {
     const s = reduce(emptyState(), "build", ok)
     expect(s.core.lastOutcome).toEqual(ok)
-    expect(s.agentActions.build?.lastAction).toEqual(ok)
+    expect(s.executables.build?.lastAction).toEqual(ok)
   })
 
   it("derives status=succeeded from *_COMPLETED", () => {
@@ -84,7 +84,7 @@ describe("state: reduce", () => {
     expect(Object.keys(s.jobs)).toEqual(["instant:run:42"])
     expect(s.jobs["instant:run:42"]).toMatchObject({
       id: "instant:run:42",
-      agentAction: "run",
+      executable: "run",
       agent: "kody",
       flavor: "instant",
       target: 42,
@@ -137,8 +137,8 @@ describe("state: reduce", () => {
     })
 
     expect(Object.keys(s.jobs).sort()).toEqual(["instant:review:42", "instant:run:42"])
-    expect(s.jobs["instant:run:42"]?.agentAction).toBe("run")
-    expect(s.jobs["instant:review:42"]?.agentAction).toBe("review")
+    expect(s.jobs["instant:run:42"]?.executable).toBe("run")
+    expect(s.jobs["instant:review:42"]?.executable).toBe("review")
   })
 
   it("caps run attempts per job while keeping the durable job", () => {
@@ -156,20 +156,20 @@ describe("state: reduce", () => {
     expect(s.jobs["instant:run:42"]?.agentRuns.at(-1)?.id).toBe("gh-24")
   })
 
-  it("stores agentResponsibility, agentAction, and agent as references instead of reshaping them", () => {
-    const s = reduce(emptyState(), "agent-responsibility-tick", ok, "idle", "triager", {
-      jobKey: "scheduled:triage:agent-responsibility-tick",
+  it("stores capability, executable, and agent as references instead of reshaping them", () => {
+    const s = reduce(emptyState(), "capability-tick", ok, "idle", "triager", {
+      jobKey: "scheduled:triage:capability-tick",
       jobId: "gh-9-1",
       flavor: "scheduled",
       schedule: "*/5 * * * *",
-      agentResponsibility: "triage",
-      agentAction: "agent-responsibility-tick",
+      capability: "triage",
+      executable: "capability-tick",
       agent: "triager",
     })
 
-    expect(s.jobs["scheduled:triage:agent-responsibility-tick"]).toMatchObject({
-      agentResponsibility: "triage",
-      agentAction: "agent-responsibility-tick",
+    expect(s.jobs["scheduled:triage:capability-tick"]).toMatchObject({
+      capability: "triage",
+      executable: "capability-tick",
       agent: "triager",
       flavor: "scheduled",
       schedule: "*/5 * * * *",
@@ -239,15 +239,15 @@ describe("state: explicit task jobs", () => {
     const s = upsertTaskJobs(
       emptyState(),
       [
-        { id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant", target: 42, reason: "api" },
-        { id: "instant:probe-skill:42", agentAction: "probe-skill", flavor: "instant", target: 42, reason: "ui" },
+        { id: "instant:plan-verify:42", executable: "plan-verify", flavor: "instant", target: 42, reason: "api" },
+        { id: "instant:probe-skill:42", executable: "probe-skill", flavor: "instant", target: 42, reason: "ui" },
       ],
       "2026-06-08T08:00:00Z",
     )
 
     expect(Object.keys(s.jobs)).toEqual(["instant:plan-verify:42", "instant:probe-skill:42"])
     expect(s.jobs["instant:plan-verify:42"]).toMatchObject({
-      agentAction: "plan-verify",
+      executable: "plan-verify",
       status: "pending",
       target: 42,
       reason: "api",
@@ -257,7 +257,7 @@ describe("state: explicit task jobs", () => {
   })
 
   it("preserves completed runs when the plan is seen again", () => {
-    const planned = { id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant" as const, target: 42 }
+    const planned = { id: "instant:plan-verify:42", executable: "plan-verify", flavor: "instant" as const, target: 42 }
     let s = upsertTaskJobs(emptyState(), [planned], "2026-06-08T08:00:00Z")
     s = reduce(
       s,
@@ -284,8 +284,8 @@ describe("state: explicit task jobs", () => {
     let s = upsertTaskJobs(
       emptyState(),
       [
-        { id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant", target: 42 },
-        { id: "instant:probe-skill:42", agentAction: "probe-skill", flavor: "instant", target: 42 },
+        { id: "instant:plan-verify:42", executable: "plan-verify", flavor: "instant", target: 42 },
+        { id: "instant:probe-skill:42", executable: "probe-skill", flavor: "instant", target: 42 },
       ],
       "2026-06-08T08:00:00Z",
     )
@@ -306,8 +306,8 @@ describe("state: explicit task jobs", () => {
     let s = upsertTaskJobs(
       emptyState(),
       [
-        { id: "instant:plan-verify:42", agentAction: "plan-verify", flavor: "instant", target: 42 },
-        { id: "instant:probe-skill:42", agentAction: "probe-skill", flavor: "instant", target: 42 },
+        { id: "instant:plan-verify:42", executable: "plan-verify", flavor: "instant", target: 42 },
+        { id: "instant:probe-skill:42", executable: "probe-skill", flavor: "instant", target: 42 },
       ],
       "2026-06-08T08:00:00Z",
     )
@@ -442,7 +442,7 @@ describe("state: parseStateComment / renderStateComment", () => {
       schemaVersion: 1,
       core: emptyState().core,
       artifacts: {},
-      agentActions: {},
+      executables: {},
       history: [],
     })}\n\`\`\`\n\n${STATE_END}`
 

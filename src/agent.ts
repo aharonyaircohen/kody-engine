@@ -45,7 +45,7 @@ export interface AgentResult {
   finalText: string
   /**
    * State the agent submitted via the in-process `submit_state` tool
-   * (agent-responsibility-tick only, when `enableSubmitTool` is set). Preferred over the
+   * (capability-tick only, when `enableSubmitTool` is set). Preferred over the
    * legacy fenced `kody-job-next-state` block when present. Undefined when
    * the tool wasn't enabled or the agent never called it.
    */
@@ -119,7 +119,7 @@ export interface AgentOptions {
    * no thinking-token spend).
    *
    * Resolution: `runChatTurn` reads from CLI flag → env var → config.
-   * Direct callers of `runAgent` (tests, agentActions) can set either
+   * Direct callers of `runAgent` (tests, executables) can set either
    * field directly; `reasoningEffort` wins when both are set.
    */
   reasoningEffort?: ReasoningEffort | null
@@ -153,40 +153,40 @@ export interface AgentOptions {
   enableVerifyTool?: boolean
   /**
    * Opt-in: build an in-process MCP server exposing a `submit_state` tool the
-   * agent calls to persist its next state (used by agent-responsibility-tick instead of relying
+   * agent calls to persist its next state (used by capability-tick instead of relying
    * on a trailing fenced block). Default false.
    */
   enableSubmitTool?: boolean
   /**
-   * Opt-in (agent-responsibility-tick locked-toolbox mode): build an in-process MCP server
-   * exposing typed agentResponsibility primitives (list_prs_to_repair, sync_pr, fix_ci_pr,
-   * resolve_pr, recommend_to_operator, read_ledger). Triggered by a agentResponsibility
+   * Opt-in (capability-tick locked-toolbox mode): build an in-process MCP server
+   * exposing typed capability primitives (list_prs_to_repair, sync_pr, fix_ci_pr,
+   * resolve_pr, recommend_to_operator, read_ledger). Triggered by a capability
    * declaring `tools:` metadata — `loadJobFromFile` then revokes Bash/Read
-   * and locks `allowedTools` to only the agentResponsibility's declared MCP tools (plus
+   * and locks `allowedTools` to only the capability's declared MCP tools (plus
    * `submit_state`). Default false.
    */
-  enableAgentResponsibilityTool?: boolean
+  enableCapabilityTool?: boolean
   /**
-   * Operator @-mention prefix the agentResponsibility MCP uses for `recommend_to_operator`
-   * (e.g. "@aguyaharonyair"). Comes from the agentResponsibility's `mentions:` metadata.
-   * Empty string when the agentResponsibility declared no operator (comment is still posted,
-   * just without a mention). Ignored when `enableAgentResponsibilityTool` is false.
+   * Operator @-mention prefix the capability MCP uses for `recommend_to_operator`
+   * (e.g. "@aguyaharonyair"). Comes from the capability's `mentions:` metadata.
+   * Empty string when the capability declared no operator (comment is still posted,
+   * just without a mention). Ignored when `enableCapabilityTool` is false.
    */
-  agentResponsibilityOperatorMention?: string
+  capabilityOperatorMention?: string
   /**
-   * Repo slug "owner/name" the agentResponsibility MCP uses for `gh api compare/...` calls.
+   * Repo slug "owner/name" the capability MCP uses for `gh api compare/...` calls.
    * Falls back from kody.config.json → GITHUB_REPOSITORY. Ignored when
-   * `enableAgentResponsibilityTool` is false.
+   * `enableCapabilityTool` is false.
    */
   dutyRepoSlug?: string
-  /** Canonical Kody state location used by locked agentResponsibility tools. */
-  agentResponsibilityState?: KodyConfig["state"]
+  /** Canonical Kody state location used by locked capability tools. */
+  capabilityState?: KodyConfig["state"]
   /**
-   * Slug of the running agentResponsibility (`ctx.data.jobSlug`), stamped onto
-   * `recommend_to_operator` comments so the dashboard keys trust per agentResponsibility.
-   * Ignored when `enableAgentResponsibilityTool` is false.
+   * Slug of the running capability (`ctx.data.jobSlug`), stamped onto
+   * `recommend_to_operator` comments so the dashboard keys trust per capability.
+   * Ignored when `enableCapabilityTool` is false.
    */
-  agentResponsibilitySlug?: string
+  capabilitySlug?: string
   /**
    * Opt-in (chat/Brain): build an in-process MCP server exposing a
    * `fetch_repo` tool so the agent can clone and work on repos other than the
@@ -202,8 +202,8 @@ export interface AgentOptions {
   verifyToolMaxAttempts?: number | null
   /** Config passed to the verify tool's underlying `verifyAllWithRetry` call. */
   verifyConfig?: unknown
-  /** AgentAction name (for event-emission attribution from the verify tool). */
-  agentActionName?: string
+  /** Executable name (for event-emission attribution from the verify tool). */
+  executableName?: string
   /**
    * Filesystem sources the SDK should auto-load. `"project"` loads
    * `<cwd>/.claude/` (skills, commands, settings.json) and CLAUDE.md;
@@ -463,7 +463,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         const verifyServer = buildVerifyMcpServer({
           config: opts.verifyConfig as Parameters<typeof buildVerifyMcpServer>[0]["config"],
           cwd: opts.cwd,
-          agentAction: opts.agentActionName ?? "agent",
+          executable: opts.executableName ?? "agent",
           maxAttempts:
             typeof opts.verifyToolMaxAttempts === "number" && opts.verifyToolMaxAttempts > 0
               ? opts.verifyToolMaxAttempts
@@ -479,21 +479,21 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         getSubmitted = submitHandle.getSubmitted
         mcpEntries.push(["kody-submit", submitHandle.server as unknown as Record<string, unknown>])
       }
-      if (opts.enableAgentResponsibilityTool) {
-        // Lazy import — only agentResponsibilities in locked-toolbox mode pay for this.
-        const { buildAgentResponsibilityMcpServer } = await import("./agent-responsibilityMcp.js")
+      if (opts.enableCapabilityTool) {
+        // Lazy import — only capabilities in locked-toolbox mode pay for this.
+        const { buildCapabilityMcpServer } = await import("./capabilityMcp.js")
         if (!opts.dutyRepoSlug) {
           throw new Error(
-            "enableAgentResponsibilityTool requires dutyRepoSlug (owner/name) — set kody.config.json github.{owner,repo} or GITHUB_REPOSITORY env var",
+            "enableCapabilityTool requires dutyRepoSlug (owner/name) — set kody.config.json github.{owner,repo} or GITHUB_REPOSITORY env var",
           )
         }
-        const dutyHandle = buildAgentResponsibilityMcpServer({
+        const dutyHandle = buildCapabilityMcpServer({
           repoSlug: opts.dutyRepoSlug,
-          state: opts.agentResponsibilityState,
-          operatorMention: opts.agentResponsibilityOperatorMention ?? "",
-          ...(opts.agentResponsibilitySlug ? { agentResponsibilitySlug: opts.agentResponsibilitySlug } : {}),
+          state: opts.capabilityState,
+          operatorMention: opts.capabilityOperatorMention ?? "",
+          ...(opts.capabilitySlug ? { capabilitySlug: opts.capabilitySlug } : {}),
         })
-        mcpEntries.push(["kody-agentResponsibility", dutyHandle.server as unknown as Record<string, unknown>])
+        mcpEntries.push(["kody-capability", dutyHandle.server as unknown as Record<string, unknown>])
       }
       if (opts.enableFetchRepoTool && opts.reposRoot) {
         // Lazy import — keeps the SDK MCP machinery off the cold path for the
@@ -527,7 +527,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       // set, it fully owns the maxThinkingTokens slot — including
       // `"off"`, which clears the block entirely (cheapest path). The
       // explicit `maxThinkingTokens` field is the legacy surface for
-      // direct callers (tests, agentActions) that don't go through
+      // direct callers (tests, executables) that don't go through
       // the level vocabulary; it only applies when `reasoningEffort`
       // is not provided.
       if (opts.reasoningEffort !== undefined && opts.reasoningEffort !== null) {

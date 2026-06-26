@@ -29,7 +29,7 @@ describe("initFlow: performInit", () => {
     expect(result.wrote).toContain("kody.config.json")
     expect(result.wrote).toContain(".github/workflows/kody.yml")
     expect(result.wrote).toContain(".kody/agents/kody.md")
-    // Every discovered scheduled agentAction also gets its own workflow file.
+    // Every discovered scheduled executable also gets its own workflow file.
     const scheduledWorkflows = result.wrote.filter((f) => /\.github\/workflows\/kody-.+\.yml$/.test(f))
     expect(scheduledWorkflows.length).toBeGreaterThanOrEqual(1)
     expect(result.skipped).toEqual([])
@@ -37,8 +37,8 @@ describe("initFlow: performInit", () => {
     expect(fs.existsSync(path.join(dir, ".github/workflows/kody.yml"))).toBe(true)
     expect(fs.existsSync(path.join(dir, ".kody/agents/kody.md"))).toBe(true)
 
-    expect(result.wrote.some((file) => file.startsWith(".kody/agent-responsibilities/"))).toBe(false)
-    expect(fs.existsSync(path.join(dir, ".kody/agent-responsibilities"))).toBe(false)
+    expect(result.wrote.some((file) => file.startsWith(".kody/capabilities/"))).toBe(false)
+    expect(fs.existsSync(path.join(dir, ".kody/capabilities"))).toBe(false)
   })
 
   it("detects package manager from lockfile", () => {
@@ -81,26 +81,25 @@ describe("initFlow: performInit", () => {
     expect(second.skipped).toContain("kody.config.json")
     expect(second.skipped).toContain(".github/workflows/kody.yml")
     expect(second.skipped).toContain(".kody/agents/kody.md")
-    expect(second.skipped.some((file) => file.startsWith(".kody/agent-responsibilities/"))).toBe(false)
     const after = fs.readFileSync(path.join(dir, "kody.config.json"), "utf-8")
     expect(after).toMatch(/user-edit/)
   })
 
-  it("does not manage local agentResponsibility folders", () => {
+  it("does not manage local capability folders", () => {
     dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
-    const dutyDir = path.join(dir, ".kody/agent-responsibilities/local-only")
+    const dutyDir = path.join(dir, ".kody/capabilities/local-only")
     fs.mkdirSync(dutyDir, { recursive: true })
     const profilePath = path.join(dutyDir, "profile.json")
-    const bodyPath = path.join(dutyDir, "agent-responsibility.md")
+    const bodyPath = path.join(dutyDir, "capability.md")
     fs.writeFileSync(profilePath, `{"user-edit":"keep me on profile"}`)
-    fs.writeFileSync(bodyPath, `# user-edited agentResponsibility - do not clobber\n`)
+    fs.writeFileSync(bodyPath, `# user-edited capability - do not clobber\n`)
 
     const result = performInit(dir, true)
 
-    expect(result.wrote.some((file) => file.startsWith(".kody/agent-responsibilities/"))).toBe(false)
-    expect(result.skipped.some((file) => file.startsWith(".kody/agent-responsibilities/"))).toBe(false)
+    expect(result.wrote.some((file) => file.startsWith(".kody/capabilities/"))).toBe(false)
+    expect(result.skipped.some((file) => file.startsWith(".kody/capabilities/"))).toBe(false)
     expect(fs.readFileSync(profilePath, "utf-8")).toMatch(/user-edit/)
-    expect(fs.readFileSync(bodyPath, "utf-8")).toMatch(/user-edited agentResponsibility/)
+    expect(fs.readFileSync(bodyPath, "utf-8")).toMatch(/user-edited capability/)
   })
   it("overwrites existing files when force is true", () => {
     dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
@@ -134,13 +133,13 @@ describe("initFlow: performInit", () => {
 describe("renderScheduledWorkflow", () => {
   it("sets up Python so non-Anthropic models (litellm) work on the scheduled path", () => {
     // Regression: scheduled workflows omitted Python, so litellm couldn't
-    // install and scheduled agentResponsibilities failed on MiniMax/other non-Anthropic models.
-    const yml = renderScheduledWorkflow("agent-responsibility-scheduler", "*/5 * * * *")
+    // install and scheduled capabilities failed on MiniMax/other non-Anthropic models.
+    const yml = renderScheduledWorkflow("capability-scheduler", "*/5 * * * *")
     expect(yml).toMatch(/uses: actions\/setup-python/)
     expect(yml).toMatch(/python-version:/)
-    expect(yml).toContain("kody-engine exec agent-responsibility-scheduler")
+    expect(yml).toContain("kody-engine exec capability-scheduler")
     expect(yml).toContain(
-      "\n        run: npx -y -p @kody-ade/kody-engine@latest kody-engine exec agent-responsibility-scheduler",
+      "\n        run: npx -y -p @kody-ade/kody-engine@latest kody-engine exec capability-scheduler",
     )
   })
 })

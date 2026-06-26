@@ -2,7 +2,7 @@
  * Job — the unified execution unit (Phase 1: additive seam, no caller yet).
  *
  * `runJob` lowers a validated Job onto the existing executor
- * (`runAgentActionChain`). This is the single entry point every trigger path
+ * (`runExecutableChain`). This is the single entry point every trigger path
  * (comment, cron, manual) will funnel through in later phases. It deliberately
  * does NOT touch executor.ts — a Job maps to a (profileName, ExecutorInput) pair.
  *
@@ -11,12 +11,12 @@
  */
 
 import * as path from "node:path"
-import type { Job, JobFlavor } from "./agent-actions/types.js"
+import type { Job, JobFlavor } from "./executables/types.js"
 import type { KodyConfig } from "./config.js"
 import type { DispatchResult } from "./dispatch.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
-import { runAgentAction, runAgentActionChain } from "./executor.js"
-import { resolveAgentResponsibilityAction, resolveAgentResponsibilityFolder } from "./registry.js"
+import { runExecutable, runExecutableChain } from "./executor.js"
+import { resolveCapabilityAction, resolveCapabilityFolder } from "./registry.js"
 
 export { stableJobKey } from "./jobIdentity.js"
 
@@ -48,9 +48,9 @@ export class InvalidJobError extends Error {
 }
 
 /**
- * Validate a minted Job at the boundary. A Job must name a agentResponsibility/action, a
- * known `flavor`, and (if present) an object `cliArgs`. `agentAction` is only
- * an implementation selected under that agentResponsibility; it is never valid by itself.
+ * Validate a minted Job at the boundary. A Job must name a capability/action, a
+ * known `flavor`, and (if present) an object `cliArgs`. `executable` is only
+ * an implementation selected under that capability; it is never valid by itself.
  * `why` is untrusted free text and is NOT content-checked here — fencing
  * happens where it enters a prompt.
  */
@@ -59,8 +59,8 @@ export function validateJob(input: unknown): Job {
     throw new InvalidJobError("job must be an object")
   }
   const j = input as Record<string, unknown>
-  if (typeof j.agentResponsibility !== "string" && typeof j.action !== "string") {
-    throw new InvalidJobError("job must reference a agentResponsibility action or agentResponsibility")
+  if (typeof j.capability !== "string" && typeof j.action !== "string") {
+    throw new InvalidJobError("job must reference a capability action or capability")
   }
   if (j.flavor !== "instant" && j.flavor !== "scheduled") {
     throw new InvalidJobError(`job.flavor must be "instant" or "scheduled" (got ${String(j.flavor)})`)
@@ -70,8 +70,8 @@ export function validateJob(input: unknown): Job {
   }
   return {
     action: typeof j.action === "string" ? j.action : undefined,
-    agentAction: typeof j.agentAction === "string" ? j.agentAction : undefined,
-    agentResponsibility: typeof j.agentResponsibility === "string" ? j.agentResponsibility : undefined,
+    executable: typeof j.executable === "string" ? j.executable : undefined,
+    capability: typeof j.capability === "string" ? j.capability : undefined,
     why: typeof j.why === "string" ? j.why : undefined,
     agent: typeof j.agent === "string" ? j.agent : undefined,
     schedule: typeof j.schedule === "string" ? j.schedule : undefined,
@@ -92,10 +92,9 @@ export interface RunJobBase {
   quiet?: boolean
   preloadedData?: Record<string, unknown>
   /**
-   * Follow in-process stage hand-offs (`runAgentActionChain`) — the default,
-   * matching the comment/manual route. Set `false` for the cron tick path,
-   * which fans out one-shot ticks via `runAgentAction` (no chaining), so the
-   * scheduler's per-agentResponsibility invocation stays byte-identical to its prior call.
+   * Follow in-process stage hand-offs (`runExecutableChain`) by default,
+   * matching the comment/manual route. Scheduled watch fan-out can set `false`
+   * for one-shot ticks that must not follow a returned nextDispatch.
    */
   chain?: boolean
 }
@@ -104,10 +103,10 @@ export interface RunJobBase {
  * Execute a Job by lowering it onto the existing executor.
  *
  * Mapping:
- *   - agentResponsibility/action resolves first             (the public capability contract)
- *   - profile = job.agentAction ?? agentResponsibility.agentAction (the implementation)
+ *   - capability/action resolves first             (the public capability contract)
+ *   - profile = job.executable ?? capability.executable (the implementation)
  *   - cliArgs = job.cliArgs                   (target already bound by the minter)
- *   - agentResponsibility/agentAction → preloadedData          (seeded so the executor can
+ *   - capability/executable → preloadedData          (seeded so the executor can
  *                                              expose the job references to
  *                                              the model generically)
  *   - inline why → preloadedData.jobWhy        (seeded into ctx.data before
@@ -121,29 +120,29 @@ export interface RunJobBase {
  */
 export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput> {
   const valid = validateJob(job)
-  const action = valid.action ?? valid.agentResponsibility
-  const projectAgentResponsibilitiesRoot = path.join(base.cwd, ".kody", "agent-responsibilities")
-  const resolvedAgentResponsibility = action
-    ? resolveAgentResponsibilityAction(action, projectAgentResponsibilitiesRoot)
+  const action = valid.action ?? valid.capability
+  const projectCapabilitiesRoot = path.join(base.cwd, ".kody", "capabilities")
+  const resolvedCapability = action
+    ? resolveCapabilityAction(action, projectCapabilitiesRoot)
     : null
-  const agentResponsibilityIdentity = valid.agentResponsibility ?? resolvedAgentResponsibility?.agentResponsibility
-  const agentResponsibilityContext = loadAgentResponsibilityContext(agentResponsibilityIdentity, base.cwd)
-  const explicitAgentActionOnly =
-    valid.agentAction !== undefined &&
-    (valid.action === undefined || valid.action === valid.agentAction) &&
-    (valid.agentResponsibility === undefined || valid.agentResponsibility === valid.agentAction)
-  if (!resolvedAgentResponsibility && !agentResponsibilityContext && !explicitAgentActionOnly) {
-    throw new InvalidJobError(`job agentResponsibility not found: ${action ?? valid.agentResponsibility ?? "<none>"}`)
+  const capabilityIdentity = valid.capability ?? resolvedCapability?.capability
+  const capabilityContext = loadCapabilityContext(capabilityIdentity, base.cwd)
+  const explicitExecutableOnly =
+    valid.executable !== undefined &&
+    (valid.action === undefined || valid.action === valid.executable) &&
+    (valid.capability === undefined || valid.capability === valid.executable)
+  if (!resolvedCapability && !capabilityContext && !explicitExecutableOnly) {
+    throw new InvalidJobError(`job capability not found: ${action ?? valid.capability ?? "<none>"}`)
   }
-  const agentResponsibilitySelectedAgentAction =
-    resolvedAgentResponsibility?.agentAction ??
-    agentResponsibilityContext?.config.agentAction ??
-    agentResponsibilityContext?.config.agentActions?.[0] ??
-    (agentResponsibilityContext?.config.tickScript ? "agent-responsibility-tick-scripted" : undefined)
-  const profileName = valid.agentAction ?? agentResponsibilitySelectedAgentAction
+  const capabilitySelectedExecutable =
+    resolvedCapability?.executable ??
+    capabilityContext?.config.executable ??
+    capabilityContext?.config.executables?.[0] ??
+    (capabilityContext?.config.tickScript ? "capability-tick-scripted" : undefined)
+  const profileName = valid.executable ?? capabilitySelectedExecutable
   if (!profileName) {
     throw new InvalidJobError(
-      `job agentResponsibility resolves to no agentAction: ${agentResponsibilityIdentity ?? action}`,
+      `job capability resolves to no executable: ${capabilityIdentity ?? action}`,
     )
   }
 
@@ -155,30 +154,30 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   preloadedData.jobFlavor = valid.flavor
   if (valid.target !== undefined) preloadedData.jobTarget = valid.target
   if (valid.action !== undefined && valid.action.length > 0) preloadedData.jobAction = valid.action
-  if (agentResponsibilityIdentity !== undefined && agentResponsibilityIdentity.length > 0)
-    preloadedData.jobAgentResponsibility = agentResponsibilityIdentity
+  if (capabilityIdentity !== undefined && capabilityIdentity.length > 0)
+    preloadedData.jobCapability = capabilityIdentity
   const executableIdentity = profileName
   if (executableIdentity !== undefined && executableIdentity.length > 0)
-    preloadedData.jobAgentAction = executableIdentity
+    preloadedData.jobExecutable = executableIdentity
   // The job carries *when*: a scheduled job's cadence, recorded in the ledger.
   if (valid.schedule !== undefined && valid.schedule.length > 0) preloadedData.jobSchedule = valid.schedule
   if (valid.saveReport === true) preloadedData.jobSaveReport = true
-  if (agentResponsibilityContext) {
-    preloadedData.agentResponsibilitySlug = agentResponsibilityContext.slug
-    preloadedData.agentResponsibilityTitle = agentResponsibilityContext.title
-    preloadedData.dutyIntent = agentResponsibilityContext.body
-    preloadedData.jobIntent = agentResponsibilityContext.body
-    if (preloadedData.jobAgentResponsibility === undefined)
-      preloadedData.jobAgentResponsibility = agentResponsibilityContext.slug
-    if (agentResponsibilityContext.config.agent && preloadedData.jobAgent === undefined) {
-      preloadedData.jobAgent = agentResponsibilityContext.config.agent
+  if (capabilityContext) {
+    preloadedData.capabilitySlug = capabilityContext.slug
+    preloadedData.capabilityTitle = capabilityContext.title
+    preloadedData.dutyIntent = capabilityContext.body
+    preloadedData.jobIntent = capabilityContext.body
+    if (preloadedData.jobCapability === undefined)
+      preloadedData.jobCapability = capabilityContext.slug
+    if (capabilityContext.config.agent && preloadedData.jobAgent === undefined) {
+      preloadedData.jobAgent = capabilityContext.config.agent
     }
-    if (agentResponsibilityContext.config.mentions && agentResponsibilityContext.config.mentions.length > 0) {
-      preloadedData.mentions = agentResponsibilityContext.config.mentions.map((login: string) => `@${login}`).join(" ")
+    if (capabilityContext.config.mentions && capabilityContext.config.mentions.length > 0) {
+      preloadedData.mentions = capabilityContext.config.mentions.map((login: string) => `@${login}`).join(" ")
     }
   }
   // Inline why → ctx.data.jobWhy (NOT jobIntent — that token is the scheduled
-  // agentResponsibility BODY, consumed via {{jobIntent}} by agent-responsibility-tick; reusing it would
+  // capability BODY, consumed via {{jobIntent}} by capability-tick; reusing it would
   // double-inject). The executor surfaces jobWhy to the agent as a fenced
   // "operator request" block, so the comment's wording shapes any instant run.
   if (valid.why !== undefined && valid.why.length > 0) preloadedData.jobWhy = valid.why
@@ -193,24 +192,24 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     quiet: base.quiet,
     preloadedData: Object.keys(preloadedData).length > 0 ? preloadedData : undefined,
   }
-  const shouldApplyResolvedAgentResponsibilityArgs =
-    valid.agentAction === undefined &&
-    resolvedAgentResponsibility &&
-    profileName === resolvedAgentResponsibility.agentAction
-  input.cliArgs = shouldApplyResolvedAgentResponsibilityArgs
-    ? { ...resolvedAgentResponsibility.cliArgs, ...input.cliArgs }
+  const shouldApplyResolvedCapabilityArgs =
+    valid.executable === undefined &&
+    resolvedCapability &&
+    profileName === resolvedCapability.executable
+  input.cliArgs = shouldApplyResolvedCapabilityArgs
+    ? { ...resolvedCapability.cliArgs, ...input.cliArgs }
     : input.cliArgs
 
-  const run = base.chain === false ? runAgentAction : runAgentActionChain
+  const run = base.chain === false ? runExecutable : runExecutableChain
   return run(profileName, input)
 }
 
-function loadAgentResponsibilityContext(
+function loadCapabilityContext(
   slug: string | undefined,
   cwd: string,
-): ReturnType<typeof resolveAgentResponsibilityFolder> {
+): ReturnType<typeof resolveCapabilityFolder> {
   if (!slug) return null
-  return resolveAgentResponsibilityFolder(slug, path.join(cwd, ".kody", "agent-responsibilities"))
+  return resolveCapabilityFolder(slug, path.join(cwd, ".kody", "capabilities"))
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -221,7 +220,7 @@ function loadAgentResponsibilityContext(
 
 /**
  * Mint an INSTANT job from a comment / manual-dispatch route. The trigger
- * resolves to a DispatchResult (agentAction + cliArgs + target); this turns it
+ * resolves to a DispatchResult (executable + cliArgs + target); this turns it
  * into a Job. `why` is the operator's free-text request after `@kody <command>`
  * (carried on the DispatchResult); `agent` defaults to "kody" — instant verbs
  * ran agent-less before, and the default is the agreed starting point.
@@ -230,8 +229,8 @@ function loadAgentResponsibilityContext(
 export function mintInstantJob(dispatch: DispatchResult, opts?: { why?: string; agent?: string }): Job {
   return {
     action: dispatch.action,
-    agentAction: dispatch.agentAction,
-    agentResponsibility: dispatch.agentResponsibility,
+    executable: dispatch.executable,
+    capability: dispatch.capability,
     why: opts?.why ?? dispatch.why,
     agent: opts?.agent ?? DEFAULT_INSTANT_AGENT,
     target: dispatch.target,
@@ -240,34 +239,34 @@ export function mintInstantJob(dispatch: DispatchResult, opts?: { why?: string; 
   }
 }
 
-/** Inputs the cron tick path resolves per due agentResponsibility slug. */
+/** Inputs the cron tick path resolves per due capability slug. */
 export interface ScheduledJobInput {
-  /** Public action for this scheduled agentResponsibility, when distinct from the slug. */
+  /** Public action for this scheduled capability, when distinct from the slug. */
   action?: string
-  /** The agentResponsibility slug (its capability contract body lives in `.kody/agent-responsibilities/<slug>/agent-responsibility.md`). */
-  agentResponsibility: string
-  /** The agentAction that ticks it (agent-responsibility-tick / agent-responsibility-tick-scripted, or a folder-agentResponsibility slug). */
-  agentAction: string
-  /** Cron cadence the agentResponsibility fired on. */
+  /** The capability slug (its capability contract body lives in `.kody/capabilities/<slug>/capability.md`). */
+  capability: string
+  /** The executable that ticks it (capability-tick / capability-tick-scripted, or a folder-capability slug). */
+  executable: string
+  /** Cron cadence the capability fired on. */
   schedule?: string
-  /** Agent identity that runs it (from the agentResponsibility's profile.json). */
+  /** Agent identity that runs it (from the capability's profile.json). */
   agent?: string
-  /** Args handed to the tick agentAction (e.g. `{ job: slug }` for `.md` agentResponsibilities). */
+  /** Args handed to the tick executable (e.g. `{ job: slug }` for `.md` capabilities). */
   cliArgs?: Record<string, unknown>
   /** Ask the owning goal/loop to refresh reports/<goal-or-loop>.md after its persisted decision. */
   saveReport?: boolean
 }
 
 /**
- * Mint a SCHEDULED job from a due agentResponsibility slug. The cron path enumerates due
- * agentResponsibilities; each becomes a scheduled Job whose `agentAction` is the ticker and
- * whose `agentResponsibility` carries the intent. No caller yet — wired in a later phase.
+ * Mint a SCHEDULED job from a due capability slug. The cron path enumerates due
+ * capabilities; each becomes a scheduled Job whose `executable` is the ticker and
+ * whose `capability` carries the intent. No caller yet — wired in a later phase.
  */
 export function mintScheduledJob(input: ScheduledJobInput): Job {
   return {
     action: input.action,
-    agentResponsibility: input.agentResponsibility,
-    agentAction: input.agentAction,
+    capability: input.capability,
+    executable: input.executable,
     schedule: input.schedule,
     agent: input.agent,
     cliArgs: input.cliArgs ?? {},

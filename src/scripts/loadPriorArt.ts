@@ -10,7 +10,7 @@
  *
  * Design:
  *   - Pure consumer of state. Does not parse prose. Does not know about
- *     "research" or "plan" — any agentAction that wants prior art can use it.
+ *     "research" or "plan" — any executable that wants prior art can use it.
  *   - Tolerant of absence: missing artifact / empty array / invalid JSON all
  *     produce an empty block without erroring, because prior art is advisory
  *     context, not a required input. The planner is capable without it.
@@ -19,7 +19,7 @@
  *     when a prior PR was large.
  */
 
-import type { PreflightScript } from "../agent-actions/types.js"
+import type { PreflightScript } from "../executables/types.js"
 import { gh } from "../issue.js"
 import type { TaskState } from "../state.js"
 

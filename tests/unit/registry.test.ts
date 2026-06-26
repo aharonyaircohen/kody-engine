@@ -2,17 +2,18 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import {
-  builtinAgentActionNames,
-  hasAgentAction,
-  isBuiltinAgentAction,
+  builtinExecutableNames,
+  hasExecutable,
+  isBuiltinExecutable,
   isSafeName,
-  listAgentActions,
-  listAgentResponsibilityActions,
+  listExecutables,
+  listCapabilityActions,
   parseGenericFlags,
-  resolveAgentAction,
-  resolveAgentResponsibilityAction,
-  resolveAgentResponsibilityFolder,
+  resolveExecutable,
+  resolveCapabilityAction,
+  resolveCapabilityFolder,
 } from "../../src/registry.js"
 
 function mkFixture(): string {
@@ -25,19 +26,19 @@ function writeProfile(root: string, name: string, body: object = {}): void {
   fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify(body))
 }
 
-describe("registry: builtin agentActions", () => {
-  it("detects the engine-bundled agentActions by name", () => {
-    const names = builtinAgentActionNames()
+describe("registry: builtin executables", () => {
+  it("detects the engine-bundled executables by name", () => {
+    const names = builtinExecutableNames()
     // a sample of known engine builtins
     expect(names.has("run")).toBe(true)
     expect(names.has("merge")).toBe(false)
-    expect(names.has("agent-responsibility-scheduler")).toBe(false)
+    expect(names.has("capability-scheduler")).toBe(false)
   })
 
-  it("isBuiltinAgentAction is true for builtins, false for custom names", () => {
-    expect(isBuiltinAgentAction("run")).toBe(true)
-    expect(isBuiltinAgentAction("merge")).toBe(false)
-    expect(isBuiltinAgentAction("a-custom-consumer-agentResponsibility-xyz")).toBe(false)
+  it("isBuiltinExecutable is true for builtins, false for custom names", () => {
+    expect(isBuiltinExecutable("run")).toBe(true)
+    expect(isBuiltinExecutable("merge")).toBe(false)
+    expect(isBuiltinExecutable("a-custom-consumer-capability-xyz")).toBe(false)
   })
 })
 
@@ -59,7 +60,7 @@ describe("registry: isSafeName", () => {
   })
 })
 
-describe("registry: listAgentActions", () => {
+describe("registry: listExecutables", () => {
   let root: string
 
   beforeEach(() => {
@@ -69,12 +70,12 @@ describe("registry: listAgentActions", () => {
     fs.rmSync(root, { recursive: true, force: true })
   })
 
-  it("returns empty when root has no agentActions", () => {
-    expect(listAgentActions(root)).toEqual([])
+  it("returns empty when root has no executables", () => {
+    expect(listExecutables(root)).toEqual([])
   })
 
   it("returns empty when root does not exist", () => {
-    expect(listAgentActions(path.join(root, "nope"))).toEqual([])
+    expect(listExecutables(path.join(root, "nope"))).toEqual([])
   })
 
   it("finds every directory containing profile.json", () => {
@@ -82,7 +83,7 @@ describe("registry: listAgentActions", () => {
     writeProfile(root, "review", { name: "review" })
     writeProfile(root, "watch-stale-prs", { name: "watch-stale-prs" })
 
-    const names = listAgentActions(root).map((e) => e.name)
+    const names = listExecutables(root).map((e) => e.name)
     expect(names).toEqual(["build", "review", "watch-stale-prs"])
   })
 
@@ -91,61 +92,79 @@ describe("registry: listAgentActions", () => {
     fs.mkdirSync(path.join(root, "types"), { recursive: true })
     fs.writeFileSync(path.join(root, "types", "types.ts"), "export {}")
 
-    const names = listAgentActions(root).map((e) => e.name)
+    const names = listExecutables(root).map((e) => e.name)
     expect(names).toEqual(["build"])
   })
 
   it("returns absolute profilePath for each discovery", () => {
     writeProfile(root, "init", {})
-    const [exe] = listAgentActions(root)
+    const [exe] = listExecutables(root)
     expect(exe?.profilePath).toBe(path.join(root, "init", "profile.json"))
     expect(fs.existsSync(exe!.profilePath)).toBe(true)
   })
 })
 
-describe("registry: agentResponsibility/agentAction separation", () => {
+describe("registry: capability/executable separation", () => {
   let root: string
+  let previousStore: string | undefined
   const prevCwd = process.cwd()
 
   beforeEach(() => {
     root = mkFixture()
+    previousStore = process.env.KODY_COMPANY_STORE
+    process.env.KODY_COMPANY_STORE = "0"
+    resetCompanyStoreCacheForTests()
     process.chdir(root)
   })
 
   afterEach(() => {
     process.chdir(prevCwd)
+    if (previousStore === undefined) delete process.env.KODY_COMPANY_STORE
+    else process.env.KODY_COMPANY_STORE = previousStore
+    resetCompanyStoreCacheForTests()
     fs.rmSync(root, { recursive: true, force: true })
   })
 
-  it("resolves a agentResponsibility's same-name agentAction from .kody/agent-actions, not .kody/agent-responsibilities", () => {
-    const dutyDir = path.join(root, ".kody", "agent-responsibilities", "feature")
-    const exeDir = path.join(root, ".kody", "agent-actions", "feature")
+  it("resolves project executables but keeps thin capability contracts out of executable discovery", () => {
+    const dutyDir = path.join(root, ".kody", "capabilities", "feature")
+    const exeDir = path.join(root, ".kody", "executables", "feature")
     fs.mkdirSync(dutyDir, { recursive: true })
     fs.mkdirSync(exeDir, { recursive: true })
     fs.writeFileSync(
       path.join(dutyDir, "profile.json"),
-      JSON.stringify({ name: "feature", action: "feature", agentAction: "feature" }),
+      JSON.stringify({ name: "feature", action: "feature", executable: "feature" }),
     )
-    fs.writeFileSync(path.join(dutyDir, "agent-responsibility.md"), "# Feature\n")
-    fs.writeFileSync(path.join(exeDir, "profile.json"), JSON.stringify({ name: "feature" }))
+    fs.writeFileSync(path.join(dutyDir, "capability.md"), "# Feature\n")
+    fs.writeFileSync(path.join(exeDir, "profile.json"), JSON.stringify({ name: "feature", role: "primitive" }))
 
-    const expected = fs.realpathSync(path.join(exeDir, "profile.json"))
-    expect(fs.realpathSync(resolveAgentAction("feature")!)).toBe(expected)
-    expect(fs.realpathSync(listAgentActions().find((exe) => exe.name === "feature")!.profilePath)).toBe(expected)
+    expect(fs.realpathSync(resolveExecutable("feature")!)).toBe(
+      fs.realpathSync(path.join(exeDir, "profile.json")),
+    )
+    expect(fs.realpathSync(listExecutables().find((exe) => exe.name === "feature")!.profilePath)).toBe(
+      fs.realpathSync(path.join(exeDir, "profile.json")),
+    )
+    expect(resolveCapabilityAction("feature")).toBeNull()
   })
 })
 
 describe("registry: capabilities root", () => {
   let root: string
+  let previousStore: string | undefined
   const prevCwd = process.cwd()
 
   beforeEach(() => {
     root = mkFixture()
+    previousStore = process.env.KODY_COMPANY_STORE
+    process.env.KODY_COMPANY_STORE = "0"
+    resetCompanyStoreCacheForTests()
     process.chdir(root)
   })
 
   afterEach(() => {
     process.chdir(prevCwd)
+    if (previousStore === undefined) delete process.env.KODY_COMPANY_STORE
+    else process.env.KODY_COMPANY_STORE = previousStore
+    resetCompanyStoreCacheForTests()
     fs.rmSync(root, { recursive: true, force: true })
   })
 
@@ -158,20 +177,20 @@ describe("registry: capabilities root", () => {
         name: "triage",
         action: "triage",
         capabilityKind: "observe",
-        agentAction: "triage",
+        implementation: "triage",
         describe: "Triage incoming work.",
       }),
     )
     fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Triage\n\nWatch incoming work.\n")
 
-    expect(resolveAgentResponsibilityAction("triage")).toMatchObject({
+    expect(resolveCapabilityAction("triage")).toMatchObject({
       action: "triage",
-      agentResponsibility: "triage",
-      agentAction: "triage",
+      capability: "triage",
+      executable: "triage",
       source: "project-folder",
       capabilityKind: "observe",
     })
-    expect(fs.realpathSync(resolveAgentResponsibilityFolder("triage")!.bodyPath)).toBe(
+    expect(fs.realpathSync(resolveCapabilityFolder("triage")!.bodyPath)).toBe(
       fs.realpathSync(path.join(capabilityDir, "capability.md")),
     )
   })
@@ -192,90 +211,85 @@ describe("registry: capabilities root", () => {
     )
     fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Ship\n\nShip requested work.\n")
 
-    expect(resolveAgentResponsibilityAction("ship")).toMatchObject({
+    expect(resolveCapabilityAction("ship")).toMatchObject({
       action: "ship",
-      agentResponsibility: "ship",
-      agentAction: "ship",
+      capability: "ship",
+      executable: "ship",
       source: "project-folder",
       capabilityKind: "act",
     })
   })
 
-  it("resolves .kody/capabilities profiles as implementation profiles before legacy agent-actions", () => {
+  it("prefers full .kody/capabilities implementation profiles over project executables", () => {
     const capabilityDir = path.join(root, ".kody", "capabilities", "ship")
-    const legacyDir = path.join(root, ".kody", "agent-actions", "ship")
+    const executableDir = path.join(root, ".kody", "executables", "ship")
     fs.mkdirSync(capabilityDir, { recursive: true })
-    fs.mkdirSync(legacyDir, { recursive: true })
+    fs.mkdirSync(executableDir, { recursive: true })
     fs.writeFileSync(
       path.join(capabilityDir, "profile.json"),
       JSON.stringify({ name: "capability-ship", role: "primitive" }),
     )
     fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Ship\n")
-    fs.writeFileSync(path.join(legacyDir, "profile.json"), JSON.stringify({ name: "legacy-ship" }))
+    fs.writeFileSync(path.join(executableDir, "profile.json"), JSON.stringify({ name: "executable-ship", role: "primitive" }))
 
-    expect(fs.realpathSync(resolveAgentAction("ship")!)).toBe(
+    expect(fs.realpathSync(resolveExecutable("ship")!)).toBe(
       fs.realpathSync(path.join(capabilityDir, "profile.json")),
     )
-    expect(fs.realpathSync(listAgentActions().find((item) => item.name === "ship")!.profilePath)).toBe(
+    expect(fs.realpathSync(listExecutables().find((item) => item.name === "ship")!.profilePath)).toBe(
       fs.realpathSync(path.join(capabilityDir, "profile.json")),
     )
   })
 
   it("does not treat thin .kody/capabilities contracts as implementation profiles", () => {
     const capabilityDir = path.join(root, ".kody", "capabilities", "ship")
-    const legacyDir = path.join(root, ".kody", "agent-actions", "ship")
+    const executableDir = path.join(root, ".kody", "executables", "ship")
     fs.mkdirSync(capabilityDir, { recursive: true })
-    fs.mkdirSync(legacyDir, { recursive: true })
+    fs.mkdirSync(executableDir, { recursive: true })
     fs.writeFileSync(
       path.join(capabilityDir, "profile.json"),
       JSON.stringify({
         name: "ship",
         action: "ship",
         capabilityKind: "act",
-        agentAction: "ship",
+        implementation: "ship",
         describe: "Public shipping contract.",
       }),
     )
     fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Ship\n")
-    fs.writeFileSync(path.join(legacyDir, "profile.json"), JSON.stringify({ name: "legacy-ship" }))
+    fs.writeFileSync(path.join(executableDir, "profile.json"), JSON.stringify({ name: "executable-ship", role: "primitive" }))
 
-    expect(resolveAgentResponsibilityAction("ship")).toMatchObject({
+    expect(resolveCapabilityAction("ship")).toMatchObject({
       action: "ship",
-      agentResponsibility: "ship",
-      agentAction: "ship",
+      capability: "ship",
+      executable: "ship",
       source: "project-folder",
       capabilityKind: "act",
     })
-    expect(fs.realpathSync(resolveAgentAction("ship")!)).toBe(
-      fs.realpathSync(path.join(legacyDir, "profile.json")),
+    expect(fs.realpathSync(resolveExecutable("ship")!)).toBe(
+      fs.realpathSync(path.join(executableDir, "profile.json")),
     )
-    expect(fs.realpathSync(listAgentActions().find((item) => item.name === "ship")!.profilePath)).toBe(
-      fs.realpathSync(path.join(legacyDir, "profile.json")),
+    expect(fs.realpathSync(listExecutables().find((item) => item.name === "ship")!.profilePath)).toBe(
+      fs.realpathSync(path.join(executableDir, "profile.json")),
     )
   })
 
-  it("keeps legacy agent-responsibilities readable as fallback after capabilities", () => {
-    const legacyDir = path.join(root, ".kody", "agent-responsibilities", "audit")
+  it("does not read removed capabilities roots as capability fallbacks", () => {
+    const oldRoot = ["agent", "respon", "sibilities"].join("-")
+    const oldBody = ["agent", "respon", "sibility.md"].join("-")
+    const legacyDir = path.join(root, ".kody", oldRoot, "audit")
     fs.mkdirSync(legacyDir, { recursive: true })
     fs.writeFileSync(
       path.join(legacyDir, "profile.json"),
       JSON.stringify({ name: "audit", action: "audit", capabilityKind: "verify" }),
     )
-    fs.writeFileSync(path.join(legacyDir, "agent-responsibility.md"), "# Audit\n\nLegacy body.\n")
+    fs.writeFileSync(path.join(legacyDir, oldBody), "# Audit\n\nLegacy body.\n")
 
-    expect(listAgentResponsibilityActions().find((item) => item.action === "audit")).toMatchObject({
-      action: "audit",
-      agentResponsibility: "audit",
-      source: "project-folder",
-      capabilityKind: "verify",
-    })
-    expect(fs.realpathSync(resolveAgentResponsibilityFolder("audit")!.bodyPath)).toBe(
-      fs.realpathSync(path.join(legacyDir, "agent-responsibility.md")),
-    )
+    expect(listCapabilityActions().find((item) => item.action === "audit")).toBeUndefined()
+    expect(resolveCapabilityFolder("audit")).toBeNull()
   })
 })
 
-describe("registry: hasAgentAction", () => {
+describe("registry: hasExecutable", () => {
   let root: string
   beforeEach(() => {
     root = mkFixture()
@@ -286,22 +300,22 @@ describe("registry: hasAgentAction", () => {
 
   it("true when the profile exists", () => {
     writeProfile(root, "review", {})
-    expect(hasAgentAction("review", root)).toBe(true)
+    expect(hasExecutable("review", root)).toBe(true)
   })
 
   it("false when the directory exists but profile.json is missing", () => {
     fs.mkdirSync(path.join(root, "review"), { recursive: true })
-    expect(hasAgentAction("review", root)).toBe(false)
+    expect(hasExecutable("review", root)).toBe(false)
   })
 
   it("false on unknown name", () => {
-    expect(hasAgentAction("nothing", root)).toBe(false)
+    expect(hasExecutable("nothing", root)).toBe(false)
   })
 
   it("rejects unsafe names without touching the filesystem", () => {
     writeProfile(root, "build", {})
-    expect(hasAgentAction("../build", root)).toBe(false)
-    expect(hasAgentAction("..", root)).toBe(false)
+    expect(hasExecutable("../build", root)).toBe(false)
+    expect(hasExecutable("..", root)).toBe(false)
   })
 })
 

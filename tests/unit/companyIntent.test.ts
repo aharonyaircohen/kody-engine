@@ -29,9 +29,9 @@ describe("company intent model", () => {
       portfolio: {
         goals: ["publish-current-release"],
         loops: ["release-health-loop"],
-        responsibilities: ["ci-health"],
+        capabilities: ["ci-health"],
       },
-      manager: { agent: "cto", loop: "company-manager-loop", responsibility: "company-manager", reviewEvery: "1d" },
+      manager: { agent: "cto", loop: "company-manager-loop", capability: "company-manager", reviewEvery: "1d" },
       createdAt: "2026-06-24T00:00:00Z",
       updatedAt: "2026-06-24T00:00:00Z",
     })
@@ -42,7 +42,7 @@ describe("company intent model", () => {
       for: "safe, boring releases",
       posture: "confidence",
       metrics: ["ciGreen", "previewHealthy"],
-      manager: { agent: "cto", loop: "company-manager-loop", responsibility: "company-manager" },
+      manager: { agent: "cto", loop: "company-manager-loop", capability: "company-manager" },
     })
   })
 

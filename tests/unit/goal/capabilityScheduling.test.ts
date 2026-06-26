@@ -2,41 +2,41 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import type { Context, Profile } from "../../../src/agent-actions/types.js"
+import type { Context, Profile } from "../../../src/executables/types.js"
 import type { ManagedGoal } from "../../../src/goal/manager.js"
 import type { GoalState } from "../../../src/goal/state.js"
 import { advanceManagedGoal } from "../../../src/scripts/advanceManagedGoal.js"
 import {
-  type GoalAgentResponsibilityScheduleState,
+  type GoalCapabilityScheduleState,
   planGoalTargetLoopSchedule,
-} from "../../../src/scripts/goalAgentResponsibilityScheduling.js"
+} from "../../../src/scripts/goalCapabilityScheduling.js"
 import type { GoalCtx } from "../../../src/scripts/goalCtx.js"
 
 let tmp: string
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "goal-agentResponsibility-schedule-"))
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "goal-capability-schedule-"))
 })
 
 afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true })
 })
 
-function writeAgentResponsibility(slug: string, profile: Record<string, unknown>): void {
-  const dir = path.join(tmp, ".kody", "agent-responsibilities", slug)
+function writeCapability(slug: string, profile: Record<string, unknown>): void {
+  const dir = path.join(tmp, ".kody", "capabilities", slug)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
-  fs.writeFileSync(path.join(dir, "agent-responsibility.md"), `# ${slug}\n\nKeep ${slug} healthy.\n`)
+  fs.writeFileSync(path.join(dir, "capability.md"), `# ${slug}\n\nKeep ${slug} healthy.\n`)
 }
 
-function writeAgentAction(slug: string, profile: Record<string, unknown>): void {
-  const dir = path.join(tmp, ".kody", "agent-actions", slug)
+function writeExecutable(slug: string, profile: Record<string, unknown>): void {
+  const dir = path.join(tmp, ".kody", "executables", slug)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
 }
 
-function writeAgentResponsibilityState(slug: string, lastFiredAt: string): void {
-  const file = path.join(tmp, ".kody", "agent-responsibilities", slug, "state.json")
+function writeCapabilityState(slug: string, lastFiredAt: string): void {
+  const file = path.join(tmp, ".kody", "capabilities", slug, "state.json")
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(
     file,
@@ -44,7 +44,7 @@ function writeAgentResponsibilityState(slug: string, lastFiredAt: string): void 
   )
 }
 
-function goalState(agentResponsibilities: string[] = ["ci-health"]): GoalState {
+function goalState(capabilities: string[] = ["ci-health"]): GoalState {
   return {
     state: "active",
     extra: {
@@ -54,7 +54,7 @@ function goalState(agentResponsibilities: string[] = ["ci-health"]): GoalState {
         outcome: "PRs stay mergeable",
         evidence: [],
       },
-      agentResponsibilities,
+      capabilities,
       route: [],
       stage: "watching",
       facts: {},
@@ -67,7 +67,7 @@ function goalTargetLoop(): ManagedGoal {
   return {
     type: "agentLoop",
     destination: { outcome: "daily web release loop", evidence: [] },
-    agentResponsibilities: [],
+    capabilities: [],
     route: [],
     facts: {},
     blockers: [],
@@ -99,7 +99,7 @@ function fakeCtx(raw: GoalState): Context {
   } as unknown as Context
 }
 
-describe("standing goal agentResponsibility scheduling", () => {
+describe("standing goal capability scheduling", () => {
   it("waits before a goal target loop preferred time", () => {
     const decision = planGoalTargetLoopSchedule({
       goal: goalTargetLoop(),
@@ -121,7 +121,7 @@ describe("standing goal agentResponsibility scheduling", () => {
       kind: "dispatch",
       dispatch: {
         action: "goal-manager",
-        agentAction: "goal-manager",
+        executable: "goal-manager",
         cliArgs: { goal: "web-release" },
       },
       scheduleState: {
@@ -129,7 +129,7 @@ describe("standing goal agentResponsibility scheduling", () => {
           kind: "dispatch",
           targetType: "goal",
           targetId: "web-release",
-          agentAction: "goal-manager",
+          executable: "goal-manager",
         },
       },
     })
@@ -160,7 +160,7 @@ describe("standing goal agentResponsibility scheduling", () => {
 
       expect(ctx.output.nextDispatch).toEqual({
         action: "goal-manager",
-        agentAction: "goal-manager",
+        executable: "goal-manager",
         cliArgs: { goal: "web-release" },
       })
       const updatedGoal = ctx.data.goal as GoalCtx
@@ -170,25 +170,25 @@ describe("standing goal agentResponsibility scheduling", () => {
           kind: "dispatch",
           targetType: "goal",
           targetId: "web-release",
-          agentAction: "goal-manager",
+          executable: "goal-manager",
         },
-        agentResponsibilities: {},
+        capabilities: {},
       })
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it("dispatches runnable agentResponsibility and records goal scheduling decision", async () => {
-    writeAgentResponsibility("ci-health", { agent: "kody", agentAction: "ci-check" })
+  it("dispatches runnable capability and records goal scheduling decision", async () => {
+    writeCapability("ci-health", { agent: "kody", executable: "ci-check" })
     const raw = goalState()
     const ctx = fakeCtx(raw)
 
     await advanceManagedGoal(ctx, {} as unknown as Profile, {})
 
     expect(ctx.output.nextDispatch).toEqual({
-      agentResponsibility: "ci-health",
-      agentAction: "ci-check",
+      capability: "ci-health",
+      executable: "ci-check",
       cliArgs: {},
     })
     const updatedGoal = ctx.data.goal as GoalCtx
@@ -197,20 +197,20 @@ describe("standing goal agentResponsibility scheduling", () => {
       mode: "agentLoop",
       lastDecision: {
         kind: "dispatch",
-        agentResponsibility: "ci-health",
-        agentAction: "ci-check",
+        capability: "ci-health",
+        executable: "ci-check",
         reason: "ready for loop tick",
       },
-      agentResponsibilities: { "ci-health": { state: "due", reason: "ready for loop tick" } },
+      capabilities: { "ci-health": { state: "due", reason: "ready for loop tick" } },
     })
-    const scheduleState = updatedGoal.raw!.extra.scheduleState as GoalAgentResponsibilityScheduleState
-    const status = scheduleState.agentResponsibilities["ci-health"]!
+    const scheduleState = updatedGoal.raw!.extra.scheduleState as GoalCapabilityScheduleState
+    const status = scheduleState.capabilities["ci-health"]!
     expect(typeof status.lastFiredAt).toBe("string")
     expect(status).not.toHaveProperty("nextEligibleAt")
   })
 
   it("keeps route-free agentLoops on agentLoop loop", async () => {
-    writeAgentResponsibility("ci-health", { agent: "kody", agentAction: "ci-check" })
+    writeCapability("ci-health", { agent: "kody", executable: "ci-check" })
     const raw = goalState(["ci-health"])
     raw.extra.type = "agentLoop"
     const ctx = fakeCtx(raw)
@@ -219,8 +219,8 @@ describe("standing goal agentResponsibility scheduling", () => {
 
     expect(ctx.output.reason).toBe("dispatch ci-health: ready for loop tick")
     expect(ctx.output.nextDispatch).toEqual({
-      agentResponsibility: "ci-health",
-      agentAction: "ci-check",
+      capability: "ci-health",
+      executable: "ci-check",
       cliArgs: {},
     })
     const updatedGoal = ctx.data.goal as GoalCtx
@@ -228,14 +228,14 @@ describe("standing goal agentResponsibility scheduling", () => {
     expect(updatedGoal.raw!.extra.stage).toBe("watching")
     expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
       mode: "agentLoop",
-      lastDecision: { kind: "dispatch", agentResponsibility: "ci-health" },
+      lastDecision: { kind: "dispatch", capability: "ci-health" },
     })
   })
 
-  it("passes agentResponsibility slug when agentAction inputs declare agentResponsibility", async () => {
-    writeAgentResponsibility("auto-fix-ci", { agent: "kody", agentAction: "auto-fix-ci" })
-    writeAgentAction("auto-fix-ci", {
-      inputs: [{ name: "agentResponsibility", flag: "--agentResponsibility", type: "string", required: true }],
+  it("passes capability slug when executable inputs declare capability", async () => {
+    writeCapability("auto-fix-ci", { agent: "kody", executable: "auto-fix-ci" })
+    writeExecutable("auto-fix-ci", {
+      inputs: [{ name: "capability", flag: "--capability", type: "string", required: true }],
     })
     const raw = goalState(["auto-fix-ci"])
     const ctx = fakeCtx(raw)
@@ -243,36 +243,36 @@ describe("standing goal agentResponsibility scheduling", () => {
     await advanceManagedGoal(ctx, {} as unknown as Profile, {})
 
     expect(ctx.output.nextDispatch).toEqual({
-      agentResponsibility: "auto-fix-ci",
-      agentAction: "auto-fix-ci",
-      cliArgs: { agentResponsibility: "auto-fix-ci" },
+      capability: "auto-fix-ci",
+      executable: "auto-fix-ci",
+      cliArgs: { capability: "auto-fix-ci" },
     })
     const updatedGoal = ctx.data.goal as GoalCtx
     expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
-      lastDecision: { kind: "dispatch", agentResponsibility: "auto-fix-ci", agentAction: "auto-fix-ci" },
+      lastDecision: { kind: "dispatch", capability: "auto-fix-ci", executable: "auto-fix-ci" },
     })
   })
 
-  it("selects the oldest runnable agentResponsibility on each loop tick", async () => {
-    writeAgentResponsibility("ci-health", { agent: "kody", agentAction: "ci-check" })
-    writeAgentResponsibility("stale-prs", { agent: "kody", agentAction: "pr-check" })
-    writeAgentResponsibilityState("ci-health", "2026-01-02T00:00:00.000Z")
-    writeAgentResponsibilityState("stale-prs", "2026-01-01T00:00:00.000Z")
+  it("selects the oldest runnable capability on each loop tick", async () => {
+    writeCapability("ci-health", { agent: "kody", executable: "ci-check" })
+    writeCapability("stale-prs", { agent: "kody", executable: "pr-check" })
+    writeCapabilityState("ci-health", "2026-01-02T00:00:00.000Z")
+    writeCapabilityState("stale-prs", "2026-01-01T00:00:00.000Z")
     const raw = goalState(["ci-health", "stale-prs"])
     const ctx = fakeCtx(raw)
 
     await advanceManagedGoal(ctx, {} as unknown as Profile, {})
 
     expect(ctx.output.nextDispatch).toEqual({
-      agentResponsibility: "stale-prs",
-      agentAction: "pr-check",
+      capability: "stale-prs",
+      executable: "pr-check",
       cliArgs: {},
     })
     const updatedGoal = ctx.data.goal as GoalCtx
     expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
       mode: "agentLoop",
-      lastDecision: { kind: "dispatch", agentResponsibility: "stale-prs" },
-      agentResponsibilities: {
+      lastDecision: { kind: "dispatch", capability: "stale-prs" },
+      capabilities: {
         "ci-health": { state: "due", lastFiredAt: "2026-01-02T00:00:00.000Z" },
         "stale-prs": { state: "due" },
       },

@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e 'process.stderr.write(\"kody read-only mode: this agentAction does not modify files; do not call Write/Edit/NotebookEdit\\n\");process.exit(2)'"
+            "command": "node -e 'process.stderr.write(\"kody read-only mode: this executable does not modify files; do not call Write/Edit/NotebookEdit\\n\");process.exit(2)'"
           }
         ]
       }

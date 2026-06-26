@@ -1,4 +1,4 @@
-import type { PreflightScript } from "../agent-actions/types.js"
+import type { PreflightScript } from "../executables/types.js"
 import { listCompanyIntents } from "../companyIntent.js"
 
 export const loadCompanyIntents: PreflightScript = async (ctx) => {

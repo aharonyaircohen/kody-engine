@@ -2,7 +2,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import type { Context, Profile } from "../../src/agent-actions/types.js"
+import type { Context, Profile } from "../../src/executables/types.js"
 import { writeAgentRunSummary } from "../../src/scripts/writeAgentRunSummary.js"
 
 function baseCtx(overrides: Partial<Context> = {}): Context {
@@ -43,7 +43,7 @@ describe("writeAgentRunSummary", () => {
     await writeAgentRunSummary(ctx, fakeProfile("run"), null)
     const written = fs.readFileSync(summaryFile, "utf-8")
     expect(written).toMatch(/success/)
-    expect(written).toMatch(/\*\*AgentAction:\*\* `run`/)
+    expect(written).toMatch(/\*\*Executable:\*\* `run`/)
     expect(written).toMatch(/issue #42/)
     expect(written).toMatch(/pull\/99/)
     expect(written).toMatch(/Exit code:\*\* 0/)

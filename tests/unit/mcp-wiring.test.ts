@@ -30,7 +30,7 @@ import { query } from "@anthropic-ai/claude-agent-sdk"
 const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "kody-mcp-"))
 
 function writeProfile(root: string, name: string, mcpServers: unknown[]): string {
-  const dir = path.join(root, "agent-actions", name)
+  const dir = path.join(root, "executables", name)
   fs.mkdirSync(dir, { recursive: true })
   const profile = {
     name,

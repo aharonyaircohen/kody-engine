@@ -1,5 +1,5 @@
 /**
- * Shared landing for "advise, don't change code" agentActions (`plan`,
+ * Shared landing for "advise, don't change code" executables (`plan`,
  * `research`, and the generic `agent-ask` answer). They all do the same
  * thing: when the agent completed, take its summary (ctx.data.prSummary),
  * optionally wrap it in a header, and post it as one best-effort comment on
@@ -7,7 +7,7 @@
  * guard-and-post boilerplate doesn't — so it lives here once.
  */
 
-import type { Context } from "../agent-actions/types.js"
+import type { Context } from "../executables/types.js"
 import { postIssueComment as ghPostIssueComment } from "../issue.js"
 
 export interface PostSummaryOptions {

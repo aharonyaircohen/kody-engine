@@ -45,10 +45,10 @@ describe("smoke: CLI boots and validates args", () => {
     expect(r.stderr).toMatch(/--bogus/)
   })
 
-  it("runs a project agentResponsibility action through its implementation agentAction", () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-agentResponsibility-cli-smoke-"))
-    fs.mkdirSync(path.join(root, ".kody", "agent-responsibilities"), { recursive: true })
-    fs.mkdirSync(path.join(root, ".kody", "agent-actions", "smoke-impl"), { recursive: true })
+  it("runs a project capability action through its implementation executable", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-cli-smoke-"))
+    fs.mkdirSync(path.join(root, ".kody", "capabilities"), { recursive: true })
+    fs.mkdirSync(path.join(root, ".kody", "executables", "smoke-impl"), { recursive: true })
     fs.mkdirSync(path.join(root, ".kody", "agents"), { recursive: true })
     fs.writeFileSync(
       path.join(root, "kody.config.json"),
@@ -59,23 +59,23 @@ describe("smoke: CLI boots and validates args", () => {
         agent: { model: "anthropic/test" },
       }),
     )
-    fs.mkdirSync(path.join(root, ".kody", "agent-responsibilities", "smoke-agent-responsibility"), { recursive: true })
+    fs.mkdirSync(path.join(root, ".kody", "capabilities", "smoke-capability"), { recursive: true })
     fs.writeFileSync(path.join(root, ".kody", "agents", "kody.md"), "# Kody\n")
     fs.writeFileSync(
-      path.join(root, ".kody", "agent-responsibilities", "smoke-agent-responsibility", "profile.json"),
+      path.join(root, ".kody", "capabilities", "smoke-capability", "profile.json"),
       JSON.stringify({
-        name: "smoke-agent-responsibility",
+        name: "smoke-capability",
         action: "smoke-action",
-        agentAction: "smoke-impl",
+        executable: "smoke-impl",
         agent: "kody",
       }),
     )
     fs.writeFileSync(
-      path.join(root, ".kody", "agent-responsibilities", "smoke-agent-responsibility", "agent-responsibility.md"),
+      path.join(root, ".kody", "capabilities", "smoke-capability", "capability.md"),
       "# Smoke\n",
     )
     fs.writeFileSync(
-      path.join(root, ".kody", "agent-actions", "smoke-impl", "profile.json"),
+      path.join(root, ".kody", "executables", "smoke-impl", "profile.json"),
       JSON.stringify({
         name: "smoke-impl",
         role: "utility",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { Context, Profile } from "../../src/agent-actions/types.js"
+import type { Context, Profile } from "../../src/executables/types.js"
 import { stableJobKey } from "../../src/job.js"
 import { dispatchNextTaskJob } from "../../src/scripts/dispatchNextTaskJob.js"
 import { parseTaskJobSpecs, TASK_JOBS_MARKER, taskJobSpecToJob } from "../../src/scripts/planTaskJobs.js"
@@ -11,24 +11,24 @@ describe("task job plan parsing", () => {
 
 <!-- ${TASK_JOBS_MARKER}
 [
-  { "agentAction": "plan-verify", "reason": "api slice" },
-  { "agentAction": "probe-skill", "agent": "qa", "reason": "ui slice" }
+  { "executable": "plan-verify", "reason": "api slice" },
+  { "executable": "probe-skill", "agent": "qa", "reason": "ui slice" }
 ]
 -->
 `)
 
     expect(specs).toEqual([
-      { agentAction: "plan-verify", reason: "api slice" },
-      { agentAction: "probe-skill", agent: "qa", reason: "ui slice" },
+      { executable: "plan-verify", reason: "api slice" },
+      { executable: "probe-skill", agent: "qa", reason: "ui slice" },
     ])
   })
 
   it("turns each entry into one instant job targeting the parent issue by default", () => {
-    const job = taskJobSpecToJob({ agentAction: "plan-verify", reason: "api slice", agent: "qa" }, 42)
+    const job = taskJobSpecToJob({ executable: "plan-verify", reason: "api slice", agent: "qa" }, 42)
 
     expect(job).toMatchObject({
-      agentResponsibility: "plan-verify",
-      agentAction: "plan-verify",
+      capability: "plan-verify",
+      executable: "plan-verify",
       cliArgs: { issue: 42 },
       target: 42,
       flavor: "instant",
@@ -38,11 +38,11 @@ describe("task job plan parsing", () => {
     expect(stableJobKey(job)).toBe("instant:plan-verify:42")
   })
 
-  it("turns a agentResponsibility-planned entry into one scheduled child job", () => {
+  it("turns a capability-planned entry into one scheduled child job", () => {
     const job = taskJobSpecToJob(
       {
-        agentAction: "probe-skill",
-        agentResponsibility: "daily-check",
+        executable: "probe-skill",
+        capability: "daily-check",
         reason: "UI slice",
         agent: "qa",
         flavor: "scheduled",
@@ -52,8 +52,8 @@ describe("task job plan parsing", () => {
     )
 
     expect(job).toMatchObject({
-      agentResponsibility: "daily-check",
-      agentAction: "probe-skill",
+      capability: "daily-check",
+      executable: "probe-skill",
       cliArgs: { issue: 42 },
       target: 42,
       flavor: "scheduled",
@@ -65,7 +65,7 @@ describe("task job plan parsing", () => {
   })
 
   it("keeps explicit cliArgs when the task data needs a non-default target", () => {
-    const job = taskJobSpecToJob({ agentAction: "review", cliArgs: { pr: 77 }, reason: "review slice" }, 42)
+    const job = taskJobSpecToJob({ executable: "review", cliArgs: { pr: 77 }, reason: "review slice" }, 42)
 
     expect(job.cliArgs).toEqual({ pr: 77 })
     expect(job.target).toBe(77)
@@ -74,17 +74,17 @@ describe("task job plan parsing", () => {
 
   it("rejects malformed task data instead of silently running the wrong thing", () => {
     expect(() => parseTaskJobSpecs(`<!-- ${TASK_JOBS_MARKER}\n{}\n-->`)).toThrow(/array/)
-    expect(() => parseTaskJobSpecs(`<!-- ${TASK_JOBS_MARKER}\n[{ "reason": "missing agentAction" }]\n-->`)).toThrow(
-      /agentAction/,
+    expect(() => parseTaskJobSpecs(`<!-- ${TASK_JOBS_MARKER}\n[{ "reason": "missing executable" }]\n-->`)).toThrow(
+      /executable/,
     )
   })
 
   it("dispatches the next pending job with a task-jobs return address", async () => {
-    const job = taskJobSpecToJob({ agentAction: "plan-verify", reason: "api slice" }, 42)
+    const job = taskJobSpecToJob({ executable: "plan-verify", reason: "api slice" }, 42)
     const id = stableJobKey(job)
     const taskState = upsertTaskJobs(
       emptyState(),
-      [{ id, agentAction: "plan-verify", flavor: "instant", target: 42, reason: "api slice" }],
+      [{ id, executable: "plan-verify", flavor: "instant", target: 42, reason: "api slice" }],
       "2026-06-08T08:00:00Z",
     )
     const ctx = {
