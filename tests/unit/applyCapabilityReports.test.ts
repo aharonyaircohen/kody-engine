@@ -21,11 +21,11 @@ vi.mock("../../src/stateRepo.js", async () => {
 })
 
 import type { AgentResult } from "../../src/agent.js"
-import type { Context, Profile } from "../../src/agent-actions/types.js"
+import type { Context, Profile } from "../../src/executables/types.js"
 import { flushGoalRunLogEvents } from "../../src/goal/runLog.js"
 import { type GoalState, serializeGoalState } from "../../src/goal/state.js"
 import { fetchGoalState, putGoalState } from "../../src/goal/stateStore.js"
-import { applyAgentResponsibilityReports } from "../../src/scripts/applyAgentResponsibilityReports.js"
+import { applyCapabilityReports } from "../../src/scripts/applyCapabilityReports.js"
 import { readStateText, upsertStateText } from "../../src/stateRepo.js"
 
 const fetchGoalStateMock = vi.mocked(fetchGoalState)
@@ -60,7 +60,7 @@ function goalState(): GoalState {
     extra: {
       type: "release",
       destination: { outcome: "release is prepared", evidence: ["releasePrExists"] },
-      agentResponsibilities: ["release-prepare"],
+      capabilities: ["release-prepare"],
       route: [],
       stage: "prepare",
       facts: { pendingEvidence: "releasePrExists" },
@@ -74,7 +74,7 @@ function stagedGoalEvents(data: Record<string, unknown>, goalId: string): Array<
   return logs?.[goalId]?.events ?? []
 }
 
-describe("applyAgentResponsibilityReports", () => {
+describe("applyCapabilityReports", () => {
   beforeEach(() => {
     fetchGoalStateMock.mockReset()
     putGoalStateMock.mockReset()
@@ -87,7 +87,7 @@ describe("applyAgentResponsibilityReports", () => {
   it("applies shell-collected goal reports to kody-state", async () => {
     fetchGoalStateMock.mockReturnValueOnce(goalState())
     const data: Record<string, unknown> = {
-      agentResponsibilityReports: [
+      capabilityReports: [
         {
           target: { type: "goal", id: "release-aguy" },
           evidence: { releasePrExists: true },
@@ -96,7 +96,7 @@ describe("applyAgentResponsibilityReports", () => {
       ],
     }
 
-    await applyAgentResponsibilityReports(fakeCtx(data), fakeProfile(), null)
+    await applyCapabilityReports(fakeCtx(data), fakeProfile(), null)
 
     const [, goalId, next] = putGoalStateMock.mock.calls[0]!
     expect(goalId).toBe("release-aguy")
@@ -108,8 +108,8 @@ describe("applyAgentResponsibilityReports", () => {
           source: "goal-loop",
           event: "goal.evidence.applied",
           inspection: expect.objectContaining({
-            responsibilityOutput: expect.objectContaining({
-              kind: "responsibility-evidence",
+            capabilityOutput: expect.objectContaining({
+              kind: "capability-evidence",
               sources: ["report"],
               status: "changed",
               evidence: { releasePrExists: true },
@@ -133,20 +133,20 @@ describe("applyAgentResponsibilityReports", () => {
     const agentResult = {
       outcome: "completed",
       finalText:
-        'DONE\nKODY_AGENT_RESPONSIBILITY_REPORT={"target":{"type":"goal","id":"release-aguy"},"evidence":{"releasePrExists":true}}',
+        'DONE\nKODY_CAPABILITY_REPORT={"target":{"type":"goal","id":"release-aguy"},"evidence":{"releasePrExists":true}}',
     } as AgentResult
 
-    await applyAgentResponsibilityReports(fakeCtx({}), fakeProfile(), agentResult)
+    await applyCapabilityReports(fakeCtx({}), fakeProfile(), agentResult)
 
     const [, goalId, next] = putGoalStateMock.mock.calls[0]!
     expect(goalId).toBe("release-aguy")
     expect((next as GoalState).extra.facts).toMatchObject({ releasePrExists: true })
   })
 
-  it("applies agentResponsibility result pass to the pending agentGoal evidence", async () => {
+  it("applies capability result pass to the pending agentGoal evidence", async () => {
     fetchGoalStateMock.mockReturnValueOnce(goalState())
 
-    await applyAgentResponsibilityReports(
+    await applyCapabilityReports(
       fakeCtx(
         {
           dutyResults: [
@@ -170,13 +170,13 @@ describe("applyAgentResponsibilityReports", () => {
     const [, goalId, next] = putGoalStateMock.mock.calls[0]!
     expect(goalId).toBe("release-aguy")
     expect((next as GoalState).extra.facts).toEqual({ releasePrExists: true, releasePr: 123 })
-    expect((next as GoalState).extra.lastAgentResponsibilityResult).toBeUndefined()
+    expect((next as GoalState).extra.lastCapabilityResult).toBeUndefined()
   })
 
   it("merges report and result output before writing one goal evidence event", async () => {
     fetchGoalStateMock.mockReturnValueOnce(goalState())
     const data: Record<string, unknown> = {
-      agentResponsibilityReports: [
+      capabilityReports: [
         {
           target: { type: "goal", id: "release-aguy" },
           evidence: { releasePrExists: true },
@@ -196,7 +196,7 @@ describe("applyAgentResponsibilityReports", () => {
       ],
     }
 
-    await applyAgentResponsibilityReports(
+    await applyCapabilityReports(
       fakeCtx(data, { goal: "release-aguy", evidence: "releasePrExists" }),
       fakeProfile(),
       null,
@@ -221,8 +221,8 @@ describe("applyAgentResponsibilityReports", () => {
       facts: { releasePr: 123, headSha: "abc123" },
       artifacts: [{ label: "PR", url: "https://github.com/o/r/pull/123" }],
       inspection: {
-        responsibilityOutput: {
-          kind: "responsibility-evidence",
+        capabilityOutput: {
+          kind: "capability-evidence",
           sources: ["report", "result"],
           status: "pass",
           summary: "Release PR exists.",
@@ -249,7 +249,7 @@ describe("applyAgentResponsibilityReports", () => {
       ],
     }
 
-    await applyAgentResponsibilityReports(
+    await applyCapabilityReports(
       fakeCtx(data, { goal: "release-aguy", evidence: "releasePrExists" }),
       fakeProfile(),
       null,
@@ -292,7 +292,7 @@ describe("applyAgentResponsibilityReports", () => {
       ],
     }
 
-    await applyAgentResponsibilityReports(
+    await applyCapabilityReports(
       fakeCtx(data, { goal: "release-aguy", evidence: "releasePrExists" }),
       fakeProfile(),
       null,
@@ -318,7 +318,7 @@ describe("applyAgentResponsibilityReports", () => {
     })
 
     await expect(
-      applyAgentResponsibilityReports(
+      applyCapabilityReports(
         fakeCtx(
           {
             jobSaveReport: true,
@@ -348,7 +348,7 @@ describe("applyAgentResponsibilityReports", () => {
   it("does not write a dashboard report unless saveReport is requested", async () => {
     fetchGoalStateMock.mockReturnValueOnce(goalState())
 
-    await applyAgentResponsibilityReports(
+    await applyCapabilityReports(
       fakeCtx(
         {
           dutyResults: [
@@ -381,7 +381,7 @@ describe("applyAgentResponsibilityReports", () => {
           outcome: "Release is prepared, merged main, and deployed production.",
           evidence: ["releasePrExists", "mainMerged", "productionDeployed"],
         },
-        agentResponsibilities: ["release-prepare", "release-merge", "vercel-production-deploy"],
+        capabilities: ["release-prepare", "release-merge", "vercel-production-deploy"],
         route: [],
         stage: "publish",
         facts: {
@@ -393,7 +393,7 @@ describe("applyAgentResponsibilityReports", () => {
       },
     })
 
-    await applyAgentResponsibilityReports(
+    await applyCapabilityReports(
       fakeCtx(
         {
           dutyResults: [
@@ -425,10 +425,10 @@ describe("applyAgentResponsibilityReports", () => {
     })
   })
 
-  it("applies agentResponsibility result failure as agentGoal evidence false plus blocker", async () => {
+  it("applies capability result failure as agentGoal evidence false plus blocker", async () => {
     fetchGoalStateMock.mockReturnValueOnce(goalState())
 
-    await applyAgentResponsibilityReports(
+    await applyCapabilityReports(
       fakeCtx(
         {
           dutyResults: [
@@ -458,12 +458,12 @@ describe("applyAgentResponsibilityReports", () => {
     const prior: GoalState = { state: "active", extra: { facts: { releasePrExists: true } } }
     fetchGoalStateMock.mockReturnValueOnce(prior)
     const data = {
-      agentResponsibilityReports: [
+      capabilityReports: [
         { target: { type: "goal", id: "release-aguy" }, evidence: { releasePrExists: true } },
       ],
     }
 
-    await applyAgentResponsibilityReports(fakeCtx(data), fakeProfile(), null)
+    await applyCapabilityReports(fakeCtx(data), fakeProfile(), null)
 
     expect(putGoalStateMock).not.toHaveBeenCalled()
     expect(stagedGoalEvents(data, "release-aguy")).toEqual(
@@ -471,8 +471,8 @@ describe("applyAgentResponsibilityReports", () => {
         expect.objectContaining({
           event: "goal.evidence.unchanged",
           inspection: expect.objectContaining({
-            responsibilityOutput: expect.objectContaining({
-              kind: "responsibility-evidence",
+            capabilityOutput: expect.objectContaining({
+              kind: "capability-evidence",
               sources: ["report"],
             }),
           }),

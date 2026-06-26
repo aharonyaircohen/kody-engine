@@ -4,11 +4,11 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
 import { loadProfile } from "../../src/profile.js"
-import { resolveAgentAction } from "../../src/registry.js"
+import { resolveExecutable } from "../../src/registry.js"
 
 function ciCheckProfilePath(): string {
-  const resolved = resolveAgentAction("ci-check")
-  if (!resolved) throw new Error("ci-check agentAction not found")
+  const resolved = resolveExecutable("ci-check")
+  if (!resolved) throw new Error("ci-check executable not found")
   return resolved
 }
 
@@ -57,12 +57,12 @@ function runCiCheck(checks: unknown): string {
   })
 }
 
-describe("ci-check agentAction", () => {
-  it("loads the agentAction profile", () => {
-    const agentAction = loadProfile(ciCheckProfilePath())
+describe("ci-check executable", () => {
+  it("loads the executable profile", () => {
+    const executable = loadProfile(ciCheckProfilePath())
 
-    expect(agentAction.name).toBe("ci-check")
-    expect(agentAction.scripts.postflight.map((entry) => entry.script)).toContain("applyAgentResponsibilityReports")
+    expect(executable.name).toBe("ci-check")
+    expect(executable.scripts.postflight.map((entry) => entry.script)).toContain("applyCapabilityReports")
   })
 
   it("reports requested evidence true when every CI check is green", () => {
@@ -72,10 +72,10 @@ describe("ci-check agentAction", () => {
     ])
 
     expect(output).toContain(
-      'KODY_AGENT_RESPONSIBILITY_REPORT={"target":{"type":"goal","id":"release-aguy"},"evidence":{"mainDeployPrGreen":true},"facts":{"pr":123,"ciStatus":"green","ciChecks":2}}',
+      'KODY_CAPABILITY_REPORT={"target":{"type":"goal","id":"release-aguy"},"evidence":{"mainDeployPrGreen":true},"facts":{"pr":123,"ciStatus":"green","ciChecks":2}}',
     )
     expect(output).toContain(
-      'KODY_AGENT_RESPONSIBILITY_RESULT={"version":1,"status":"pass","summary":"CI green on PR #123 (2 checks)","facts":{"pr":123,"ciStatus":"green","ciChecks":2}}',
+      'KODY_CAPABILITY_RESULT={"version":1,"status":"pass","summary":"CI green on PR #123 (2 checks)","facts":{"pr":123,"ciStatus":"green","ciChecks":2}}',
     )
     expect(output).toContain("KODY_REASON=CI green on PR #123")
     expect(output).toContain("KODY_SKIP_AGENT=true")
@@ -85,10 +85,10 @@ describe("ci-check agentAction", () => {
     const output = runCiCheck([{ name: "unit", workflow: "test", bucket: "pending", state: "IN_PROGRESS" }])
 
     expect(output).toContain(
-      'KODY_AGENT_RESPONSIBILITY_REPORT={"target":{"type":"goal","id":"release-aguy"},"evidence":{"mainDeployPrGreen":false},"facts":{"pr":123,"ciStatus":"pending","ciChecks":1,"ciPending":1,"ciDetail":"test"}}',
+      'KODY_CAPABILITY_REPORT={"target":{"type":"goal","id":"release-aguy"},"evidence":{"mainDeployPrGreen":false},"facts":{"pr":123,"ciStatus":"pending","ciChecks":1,"ciPending":1,"ciDetail":"test"}}',
     )
     expect(output).toContain(
-      'KODY_AGENT_RESPONSIBILITY_RESULT={"version":1,"status":"blocked","summary":"CI pending on PR #123: test","facts":{"pr":123,"ciStatus":"pending","ciChecks":1,"ciPending":1,"ciDetail":"test"}}',
+      'KODY_CAPABILITY_RESULT={"version":1,"status":"blocked","summary":"CI pending on PR #123: test","facts":{"pr":123,"ciStatus":"pending","ciChecks":1,"ciPending":1,"ciDetail":"test"}}',
     )
     expect(output).toContain("KODY_REASON=CI pending on PR #123")
   })

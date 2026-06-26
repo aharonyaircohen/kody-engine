@@ -1,4 +1,4 @@
-# Capabilities and legacy AgentActions
+# Capabilities and legacy Executables
 
 A **Capability** is the company layer's public **how**. The new project/store
 asset root is:
@@ -9,17 +9,17 @@ asset root is:
   capability.md
 ```
 
-An **AgentAction** is the legacy implementation storage behind a capability.
-The engine still reads `.kody/agent-actions/<slug>/` for compatibility, but
-capabilities are resolved before legacy agentActions.
+An **Executable** is the legacy implementation storage behind a capability.
+The engine still reads `.kody/executables/<slug>/` for compatibility, but
+capabilities are resolved before legacy executables.
 
-An agentAction is one concrete action the generic executor can run. It may be
+An executable is one concrete action the generic executor can run. It may be
 mechanical and no-agent, or it may invoke an agent with a prompt, tools, hooks,
 skills, and postflight checks.
 
-An agentAction is not a agentResponsibility and not a goal. AgentResponsibilities
+An executable is not a capability and not a goal. Capabilities
 store capability contracts: public action, kind, owner, cadence, and output
-contract. Goals choose which capability or evidence comes next. AgentActions
+contract. Goals choose which capability or evidence comes next. Executables
 perform the implementation.
 
 ## Canonical Shape
@@ -33,53 +33,53 @@ Shared capabilities live in `kody-store`:
   *.sh           # optional mechanical helpers
 ```
 
-Legacy shared agentActions may still live in `kody-store`:
+Legacy shared executables may still live in `kody-store`:
 
 ```text
-.kody/agent-actions/<slug>/
+.kody/executables/<slug>/
   profile.json
   prompt.md      # only when an agent runs
   *.sh           # optional mechanical helpers
 ```
 
-Project-specific agentActions may live in the same path inside a consumer repo.
-The engine package keeps only the minimal built-in `run` agentAction under
-`src/agent-actions/run`.
+Project-specific executables may live in the same path inside a consumer repo.
+The engine package keeps only the minimal built-in `run` executable under
+`src/executables/run`.
 
-AgentAction directories must not contain TypeScript. Shared TypeScript belongs in
+Executable directories must not contain TypeScript. Shared TypeScript belongs in
 `src/scripts/` and must be registered in `src/scripts/index.ts`.
 
 ## Profile Contract
 
-Every agentAction is defined by `profile.json`.
+Every executable is defined by `profile.json`.
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `name` | yes | AgentAction slug. Must match the agentAction directory. |
+| `name` | yes | Executable slug. Must match the executable directory. |
 | `role` | yes | Semantic role: `primitive`, `orchestrator`, `container`, `watch`, or `utility`. |
 | `kind` | yes | Execution timing, usually `oneshot` or `scheduled`. |
 | `describe` | yes | Short human-readable action summary. |
 | `inputs` | yes | CLI input contract. Use flags; do not parse ad hoc strings in scripts. |
-| `claudeCode` | yes | Agent configuration. Use `maxTurns: 0` and empty tool lists for no-agent agentActions. |
+| `claudeCode` | yes | Agent configuration. Use `maxTurns: 0` and empty tool lists for no-agent executables. |
 | `cliTools` | yes | External tools required by shell or scripts. Empty array when none. |
-| `inputArtifacts` | yes | Task artifacts this agentAction consumes. Empty array when none. |
-| `outputArtifacts` | yes | Task artifacts this agentAction writes. Empty array when none. |
+| `inputArtifacts` | yes | Task artifacts this executable consumes. Empty array when none. |
+| `outputArtifacts` | yes | Task artifacts this executable writes. Empty array when none. |
 | `scripts.preflight` | yes | Ordered deterministic setup, validation, dispatch, or no-agent work. |
 | `scripts.postflight` | yes | Ordered deterministic persistence, comments, reports, commits, or cleanup. |
 | `prompt.md` | when agent runs | Agent instructions. Do not add a prompt when `maxTurns: 0`. |
 
 ## Public Action Boundary
 
-An agentAction is public only when its profile declares both `action` and
-`capabilityKind`. Those direct agentAction actions must still be one clear
+An executable is public only when its profile declares both `action` and
+`capabilityKind`. Those direct executable actions must still be one clear
 `observe`, `act`, or `verify` capability.
 
 Internal helpers omit `action` and `capabilityKind`. Examples include
 schedulers, tickers, managed-goal runners, task-job fixtures, and the legacy
-all-in-one release agentAction. Run them by in-process handoff or explicit CLI:
+all-in-one release executable. Run them by in-process handoff or explicit CLI:
 
 ```bash
-kody-engine exec <agentAction>
+kody-engine exec <executable>
 ```
 
 ## Script Composition
@@ -89,7 +89,7 @@ of these:
 
 - A registered TypeScript script from `src/scripts/index.ts`, using
   `script: "<name>"`.
-- A shell script colocated in the agentAction directory, using
+- A shell script colocated in the executable directory, using
   `shell: "<name>.sh"`.
 
 `runWhen` is the only conditional primitive. It maps dotted context paths to
@@ -114,11 +114,11 @@ expected values:
 The executor stays generic. It loads the profile, validates inputs, runs the
 declared scripts, optionally calls the agent, then runs postflight scripts.
 
-## Goal-Related AgentActions
+## Goal-Related Executables
 
 `goal-manager` is the generic managed-goal loop. It reads a managed goal,
 chooses the first missing destination evidence, dispatches the matching
-agentResponsibility/agentAction route step, and records pending evidence. It is the only
+capability/executable route step, and records pending evidence. It is the only
 canonical goal runner.
 
 Implementation anchors:
@@ -128,12 +128,12 @@ Implementation anchors:
 - `src/scripts/saveManagedGoalState.ts`
 - `tests/unit/goal/manager.test.ts`
 
-## AgentResponsibility Result Contract
+## Capability Result Contract
 
-AgentResponsibility agentActions should return one machine-readable result when they finish:
+Capability executables should return one machine-readable result when they finish:
 
 ```text
-KODY_AGENT_RESPONSIBILITY_RESULT={"version":1,"target":{"type":"goal","id":"web-release"},"status":"pass","summary":"CI is green.","evidence":{"ciGreen":true},"facts":{"pr":123},"artifacts":[],"missingEvidence":[],"blockers":[]}
+KODY_CAPABILITY_RESULT={"version":1,"target":{"type":"goal","id":"web-release"},"status":"pass","summary":"CI is green.","evidence":{"ciGreen":true},"facts":{"pr":123},"artifacts":[],"missingEvidence":[],"blockers":[]}
 ```
 
 Rules:
@@ -146,33 +146,33 @@ Rules:
 - `artifacts` is optional links or paths.
 - `missingEvidence` names expected evidence still not proven.
 - `blockers` names concrete blockers the parent should recover from or stop on.
-- A agentResponsibility result says what happened. The parent model decides what it means.
+- A capability result says what happened. The parent model decides what it means.
 
-## AgentResponsibility Report Contract
+## Capability Report Contract
 
-Older agentResponsibilities and agentActions may report facts by emitting one stdout line:
+Older capabilities and executables may report facts by emitting one stdout line:
 
 ```text
-KODY_AGENT_RESPONSIBILITY_REPORT={"target":{"type":"goal","id":"release-aguy"},"evidence":{"releasePrExists":true},"facts":{"releasePr":123}}
+KODY_CAPABILITY_REPORT={"target":{"type":"goal","id":"release-aguy"},"evidence":{"releasePrExists":true},"facts":{"releasePr":123}}
 ```
 
 Rules:
 
 - Reports are factual only.
-- Reports do not set goal `stage`, `route`, `agentResponsibilities`, `destination`, `blockers`, or `state`.
+- Reports do not set goal `stage`, `route`, `capabilities`, `destination`, `blockers`, or `state`.
 - Goal evidence is stored under goal `facts`.
-- New agentResponsibilities should prefer `KODY_AGENT_RESPONSIBILITY_RESULT` with `target` and `evidence`.
+- New capabilities should prefer `KODY_CAPABILITY_RESULT` with `target` and `evidence`.
 - Do not emit both marker types for the same evidence in new code. The engine merges both only for compatibility with existing actions.
-- Profiles that emit responsibility evidence should include `applyAgentResponsibilityReports` in postflight.
+- Profiles that emit capability evidence should include `applyCapabilityReports` in postflight.
 - `saveReport` refreshes Dashboard markdown from the goal/loop decision path, after state persistence succeeds.
 - Route args can read reported facts with `{ "fact": "<name>" }`.
 
-AgentResponsibility output is how a reusable capability hands evidence back to a goal. It is
-not a manager loop. An agentAction may prove `releasePrExists`, `mainMerged`,
+Capability output is how a reusable capability hands evidence back to a goal. It is
+not a manager loop. An executable may prove `releasePrExists`, `mainMerged`,
 or `productionDeployed`; the goal decides whether those facts complete the
 agentGoal and writes the goal log.
 
-When a agentResponsibility profile declares `capabilityKind`, agentAction output should match
+When a capability profile declares `capabilityKind`, executable output should match
 that promise:
 
 | `capabilityKind` | Output should describe |
@@ -181,24 +181,24 @@ that promise:
 | `act` | Created/changed resources, triggered operations, action status, or evidence. |
 | `verify` | Pass/fail result with evidence, blockers, and facts. |
 
-## Creating An AgentAction
+## Creating An Executable
 
 Use this checklist:
 
-1. Reuse an existing agentAction if it already performs the concrete action.
-2. Put shared agentActions in `kody-store` under `.kody/agent-actions/<slug>/`.
-3. Put project-specific agentActions in the consumer repo under the same path.
+1. Reuse an existing executable if it already performs the concrete action.
+2. Put shared executables in `kody-store` under `.kody/executables/<slug>/`.
+3. Put project-specific executables in the consumer repo under the same path.
 4. Add `profile.json` with explicit inputs, tools, scripts, and agent config.
 5. Add `prompt.md` only when an agent runs.
 6. Add shell helpers only for local mechanical work.
 7. Put reusable TypeScript in `src/scripts/` and register it in `src/scripts/index.ts`.
-8. Wire agentResponsibilities to the agentAction through agentResponsibility `profile.json`.
+8. Wire capabilities to the executable through capability `profile.json`.
 9. Add focused tests when routing, scripts, or profile behavior changes.
 
 ## Do Not
 
-- Do not encode why or when in an agentAction; that belongs in a agentResponsibility.
-- Do not encode the destination/outcome manager loop in an agentAction; that belongs in a goal.
-- Do not branch shared scripts on agentAction names.
+- Do not encode why or when in an executable; that belongs in a capability.
+- Do not encode the destination/outcome manager loop in an executable; that belongs in a goal.
+- Do not branch shared scripts on executable names.
 - Do not change consumer workflow YAML for normal new capabilities.
-- Do not read `.kody/secrets.enc` from agentAction shell scripts; read injected environment variables.
+- Do not read `.kody/secrets.enc` from executable shell scripts; read injected environment variables.

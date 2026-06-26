@@ -3,10 +3,10 @@ import * as os from "node:os"
 import * as path from "node:path"
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import type { Context, Profile } from "../../src/agent-actions/types.js"
+import type { Context, Profile } from "../../src/executables/types.js"
 import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import type { KodyConfig } from "../../src/config.js"
-import { runScheduledAgentActionTick } from "../../src/scripts/runScheduledAgentActionTick.js"
+import { runScheduledExecutableTick } from "../../src/scripts/runScheduledExecutableTick.js"
 import { buildTickChildEnv } from "../../src/scripts/tickShellRunner.js"
 
 function configFor(): KodyConfig {
@@ -21,7 +21,7 @@ function configFor(): KodyConfig {
 
 function ctxFor(cwd: string, slug: string): Context {
   return {
-    args: { agentResponsibility: slug },
+    args: { capability: slug },
     cwd,
     config: configFor(),
     data: {},
@@ -47,14 +47,14 @@ let execDir: string
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "scheduled-exec-tick-"))
-  execDir = path.join(tmp, ".kody", "agent-actions", "demo-watch")
-  fs.mkdirSync(path.join(tmp, ".kody", "agent-responsibilities", "demo"), { recursive: true })
+  execDir = path.join(tmp, ".kody", "capabilities", "demo-watch")
+  fs.mkdirSync(path.join(tmp, ".kody", "capabilities", "demo"), { recursive: true })
   fs.mkdirSync(execDir, { recursive: true })
   fs.writeFileSync(
-    path.join(tmp, ".kody", "agent-responsibilities", "demo", "profile.json"),
-    JSON.stringify({ name: "demo", agent: "kody", agentAction: "demo-watch" }),
+    path.join(tmp, ".kody", "capabilities", "demo", "profile.json"),
+    JSON.stringify({ name: "demo", capabilityKind: "observe", agent: "kody", implementation: "demo-watch" }),
   )
-  fs.writeFileSync(path.join(tmp, ".kody", "agent-responsibilities", "demo", "agent-responsibility.md"), "# Demo\n")
+  fs.writeFileSync(path.join(tmp, ".kody", "capabilities", "demo", "capability.md"), "# Demo\n")
 })
 
 afterEach(() => {
@@ -63,8 +63,8 @@ afterEach(() => {
   resetCompanyStoreCacheForTests()
 })
 
-describe("runScheduledAgentActionTick", () => {
-  it("forwards generic dry-run flags to agentAction-local shell", () => {
+describe("runScheduledExecutableTick", () => {
+  it("forwards generic dry-run flags to executable-local shell", () => {
     expect(
       buildTickChildEnv(
         {
@@ -76,7 +76,7 @@ describe("runScheduledAgentActionTick", () => {
         },
         false,
         {
-          path: "agent-responsibilities/demo/state.json",
+          path: "capabilities/demo/state.json",
           handle: null,
           state: { version: 1, rev: 3, cursor: "demo", data: { ok: true }, done: false },
           created: false,
@@ -87,24 +87,24 @@ describe("runScheduledAgentActionTick", () => {
       KODY_DRY_RUN: "1",
       KODY_NO_COMMIT: "1",
       KODY_JOB_STATE_JSON: JSON.stringify({ version: 1, rev: 3, cursor: "demo", data: { ok: true }, done: false }),
-      KODY_JOB_STATE_PATH: "agent-responsibilities/demo/state.json",
+      KODY_JOB_STATE_PATH: "capabilities/demo/state.json",
     })
   })
 
-  it("runs the agentAction-local shell and parses the next-state fence", async () => {
+  it("runs the executable-local shell and parses the next-state fence", async () => {
     writeTickScript()
 
     const ctx = ctxFor(tmp, "demo")
-    await runScheduledAgentActionTick(ctx, { name: "demo-watch", dir: execDir } as Profile, {
-      jobsDir: ".kody/agent-responsibilities",
-      slugArg: "agentResponsibility",
+    await runScheduledExecutableTick(ctx, { name: "demo-watch", dir: execDir } as Profile, {
+      jobsDir: ".kody/capabilities",
+      slugArg: "capability",
       shell: "tick.sh",
     })
 
     expect(ctx.skipAgent).toBe(true)
     expect(ctx.output.exitCode).toBe(0)
     expect(ctx.data.jobSlug).toBe("demo")
-    expect(ctx.data.agentActionSlug).toBe("demo-watch")
+    expect(ctx.data.executableSlug).toBe("demo-watch")
     expect(ctx.data.nextStateParseError).toBeUndefined()
     expect(ctx.data.nextJobState).toMatchObject({
       cursor: "demo-1",
@@ -113,29 +113,30 @@ describe("runScheduledAgentActionTick", () => {
     })
   })
 
-  it("loads agentResponsibility metadata from company store when project agentResponsibility folder is absent", async () => {
+  it("loads capability metadata from company store when project capability folder is absent", async () => {
     writeTickScript()
-    fs.rmSync(path.join(tmp, ".kody", "agent-responsibilities", "demo"), { recursive: true, force: true })
+    fs.rmSync(path.join(tmp, ".kody", "capabilities", "demo"), { recursive: true, force: true })
     const storeRoot = path.join(tmp, "store")
-    const storeAgentResponsibilityDir = path.join(storeRoot, ".kody", "agent-responsibilities", "demo")
-    fs.mkdirSync(storeAgentResponsibilityDir, { recursive: true })
+    const storeCapabilityDir = path.join(storeRoot, ".kody", "capabilities", "demo")
+    fs.mkdirSync(storeCapabilityDir, { recursive: true })
     fs.writeFileSync(
-      path.join(storeAgentResponsibilityDir, "profile.json"),
+      path.join(storeCapabilityDir, "profile.json"),
       JSON.stringify({
         name: "demo",
+        capabilityKind: "observe",
         every: "15m",
         agent: "kody",
-        agentAction: "demo-watch",
+        implementation: "demo-watch",
       }),
     )
-    fs.writeFileSync(path.join(storeAgentResponsibilityDir, "agent-responsibility.md"), "# Store Demo\n")
+    fs.writeFileSync(path.join(storeCapabilityDir, "capability.md"), "# Store Demo\n")
     vi.stubEnv("KODY_COMPANY_STORE", storeRoot)
     resetCompanyStoreCacheForTests()
 
     const ctx = ctxFor(tmp, "demo")
-    await runScheduledAgentActionTick(ctx, { name: "demo-watch", dir: execDir } as Profile, {
-      jobsDir: ".kody/agent-responsibilities",
-      slugArg: "agentResponsibility",
+    await runScheduledExecutableTick(ctx, { name: "demo-watch", dir: execDir } as Profile, {
+      jobsDir: ".kody/capabilities",
+      slugArg: "capability",
       shell: "tick.sh",
     })
 

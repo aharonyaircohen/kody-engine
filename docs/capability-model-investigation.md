@@ -1,23 +1,23 @@
-# AgentResponsibility Capability Model Investigation
+# Capability Capability Model Investigation
 
 ## Verdict
 
 The proposed Observe / Act / Verify model is a strong simplification if it is
-treated as the public capability contract for a agentResponsibility-like unit, not as a new
+treated as the public capability contract for a capability-like unit, not as a new
 orchestration layer.
 
 The model should be considered correct only if it keeps these boundaries:
 
 - Goals decide long-term progress.
 - Tasks and jobs record required work and attempts.
-- A agentResponsibility/capability does one kind of work and returns structured output.
+- A capability/capability does one kind of work and returns structured output.
 - The executor stays generic.
 - Existing execution mechanics such as `role: "utility"` or `role: "watch"` do
   not get confused with the new capability kind.
 
 ## Question Being Tested
 
-Should Kody simplify agentResponsibilities into one reusable capability model with one of three
+Should Kody simplify capabilities into one reusable capability model with one of three
 contract kinds?
 
 ```text
@@ -27,7 +27,7 @@ Verify  = confirm pass/fail evidence
 ```
 
 This investigation is not asking whether Kody needs goals, tasks, jobs, or runs.
-Those remain separate. It asks whether agentResponsibility/agentAction authoring becomes simpler
+Those remain separate. It asks whether capability/executable authoring becomes simpler
 when each reusable capability has one clear promise and one structured output
 shape.
 
@@ -40,21 +40,21 @@ The current documented model says:
 - AgentLoop = when to check or wake work.
 - Agent = who runs.
 - Capability = how the agency can produce a result.
-- AgentResponsibility = current storage for a capability contract.
-- AgentAction = current storage for a capability implementation.
+- Capability = current storage for a capability contract.
+- Executable = current storage for a capability implementation.
 - Job = required work on a task.
 - Run = one attempt.
 
 The current code already supports this split:
 
-- A job lowers to one selected agentAction.
+- A job lowers to one selected executable.
 - A managed goal reads missing evidence, chooses a route step, dispatches a
-  agentResponsibility/agentAction, then waits for reported evidence.
-- AgentResponsibility reports can add facts/evidence to goal state, but cannot set goal state,
+  capability/executable, then waits for reported evidence.
+- Capability reports can add facts/evidence to goal state, but cannot set goal state,
   route, destination, or completion directly.
 
 That means the proposed simplification aligns with the direction of the system:
-agentResponsibilities should produce facts, changes, or evidence, while goals and tasks decide
+capabilities should produce facts, changes, or evidence, while goals and tasks decide
 what those results mean.
 
 ## Evidence Anchors
@@ -62,20 +62,20 @@ what those results mean.
 This investigation is grounded in these current contracts:
 
 - `docs/jobs-model.md`: defines intent, goal, loop, agent, capability, current
-  storage names, job, and run, and states that a job points to one agentAction.
-- `docs/agent-responsibilities.md`: defines agentResponsibilities as current
+  storage names, job, and run, and states that a job points to one executable.
+- `docs/capabilities.md`: defines capabilities as current
   storage for capability contracts: metadata, routing, cadence, and allowed outputs.
-- `docs/agent-actions.md`: defines agentActions as concrete runnable actions and
-  documents agentResponsibility reports.
+- `docs/executables.md`: defines executables as concrete runnable actions and
+  documents capability reports.
 - `docs/goals.md`: defines managed goals as outcome managers that route missing
-  evidence to agentResponsibilities/agent-actions.
-- `src/job.ts`: lowers jobs into selected agentAction runs.
+  evidence to capabilities/executables.
+- `src/job.ts`: lowers jobs into selected executable runs.
 - `src/goal/manager.ts`: plans one goal tick from missing evidence and route
   facts.
-- `src/scripts/applyAgentResponsibilityReports.ts`: applies factual agentResponsibility reports without
+- `src/scripts/applyCapabilityReports.ts`: applies factual capability reports without
   letting reports own goal structure.
 - `src/scripts/planTaskJobs.ts` and `src/scripts/dispatchNextTaskJob.ts`:
-  keep multi-step task work in task/job machinery rather than inside one agentResponsibility.
+  keep multi-step task work in task/job machinery rather than inside one capability.
 
 ## Proposed Shape
 
@@ -278,12 +278,12 @@ Ambiguous or high-risk candidates:
   dispatch action. Under the proposed model, either split them into Observe
   plus Act, or classify them as Act with an explicit precondition scan.
 - `release`: this is a full process. It should become a goal route or task plan,
-  not a single agentResponsibility capability.
+  not a single capability capability.
 - `task-leader`: this sounds like a manager/orchestrator. It should not be a
-  normal agentResponsibility capability unless reduced to one clear output.
-- `goal-manager`: this is intentionally above agentResponsibilities. It should not be
+  normal capability capability unless reduced to one clear output.
+- `goal-manager`: this is intentionally above capabilities. It should not be
   reclassified as Observe, Act, or Verify.
-- `agent-responsibility-scheduler` and `goal-scheduler`: these are engine scheduling helpers,
+- `capability-scheduler` and `goal-scheduler`: these are engine scheduling helpers,
   not company capabilities.
 - `classify`: this is not a clean Observe/Act/Verify fit. It may be a separate
   router/helper, or it can be treated as Observe only if its output is a
@@ -293,9 +293,9 @@ Ambiguous or high-risk candidates:
 
 The model is correct if these tests pass.
 
-### 1. Single Responsibility Test
+### 1. Single Purpose Test
 
-For every agentResponsibility/capability, ask:
+For every capability/capability, ask:
 
 ```text
 Does this mainly inspect, change, or confirm?
@@ -321,9 +321,9 @@ Correct:
 
 Wrong:
 
-- AgentResponsibility writes long-term progress directly.
-- AgentResponsibility mutates goal route/state/destination.
-- AgentResponsibility decides the whole business outcome is done.
+- Capability writes long-term progress directly.
+- Capability mutates goal route/state/destination.
+- Capability decides the whole business outcome is done.
 
 ### 3. Replay Test
 
@@ -352,7 +352,7 @@ internal steps?
 If yes, the boundary is good.
 
 If the caller must know internal private state, hidden phases, or special
-side-effects, the agentResponsibility is too large.
+side-effects, the capability is too large.
 
 ### 5. UI Test
 
@@ -374,11 +374,11 @@ Bad examples:
 - "Handle PRs"
 - "Run company process"
 
-Those names hide multiple responsibilities.
+Those names hide multiple concerns.
 
 ## Main Risk
 
-The biggest risk is moving orchestration out of "agentResponsibility" in name only, then hiding
+The biggest risk is moving orchestration out of "capability" in name only, then hiding
 it inside Observe or Act implementations.
 
 The most likely failure shape:
@@ -409,14 +409,14 @@ Run        = one attempt
 ```
 
 In the current repo, `Capability` can be implemented by the existing
-agentResponsibility/profile/agentAction system. The user-facing model can simplify before the
+capability/profile/executable system. The user-facing model can simplify before the
 internal folders fully converge.
 
 ## Recommended Migration
 
 ### Phase 1: Add classification only
 
-Add optional `capabilityKind` to profiles or agentResponsibility profiles:
+Add optional `capabilityKind` to profiles or capability profiles:
 
 ```text
 observe | act | verify
@@ -434,7 +434,7 @@ Validation:
 
 Introduce output contracts for each capability kind.
 
-Start with agentResponsibility reports and task outputs:
+Start with capability reports and task outputs:
 
 - Observe can emit facts, alerts, suggested actions.
 - Act can emit changed resources and result.
@@ -445,7 +445,7 @@ decides.
 
 ### Phase 3: Classify the catalog
 
-Create a catalog report that lists every agentResponsibility/agentAction and one of:
+Create a catalog report that lists every capability/executable and one of:
 
 ```text
 observe
@@ -482,7 +482,7 @@ Possible enforcement:
 - Observe profiles cannot include dispatch scripts unless explicitly exempt.
 - Verify profiles cannot include commit/publish/merge scripts.
 - Act profiles must declare idempotency or duplicate protection.
-- Goal reports cannot write `state`, `route`, `destination`, or `agentResponsibilities`.
+- Goal reports cannot write `state`, `route`, `destination`, or `capabilities`.
 
 ## Proof Work Before Committing To The Model
 
@@ -496,7 +496,7 @@ Do these before making the field required:
 Observe -> Act -> Verify
 ```
 
-4. Confirm the remodeled flow does not need agentResponsibility-owned progress state.
+4. Confirm the remodeled flow does not need capability-owned progress state.
 5. Confirm the dashboard can present the new model more simply.
 6. Add tests for profile parsing, output validation, and goal report safety.
 7. Run a live test in the tester repo using one Observe, one Act, and one Verify
@@ -505,13 +505,13 @@ Observe -> Act -> Verify
 ## Decision
 
 Adopt the model if the release and PR-repair flows can be expressed without a
-single agentResponsibility owning the whole process.
+single capability owning the whole process.
 
-Reject or revise it if too many real agentResponsibilities require this shape:
+Reject or revise it if too many real capabilities require this shape:
 
 ```text
 inspect -> decide -> act -> verify -> update long-term progress
 ```
 
-That shape is not a agentResponsibility. It is a manager loop, and Kody already has a better
+That shape is not a capability. It is a manager loop, and Kody already has a better
 home for that: goals, tasks, and jobs.

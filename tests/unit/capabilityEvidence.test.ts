@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  agentResponsibilityReportToEvidence,
-  agentResponsibilityResultToEvidence,
-  applyAgentResponsibilityEvidenceToGoalState,
-  mergeResponsibilityEvidence,
-} from "../../src/agent-responsibilityEvidence.js"
+  capabilityReportToEvidence,
+  capabilityResultToEvidence,
+  applyCapabilityEvidenceToGoalState,
+  mergeCapabilityEvidence,
+} from "../../src/capabilityEvidence.js"
 import type { GoalState } from "../../src/goal/state.js"
 
-describe("agent responsibility evidence", () => {
-  it("converts goal reports into canonical responsibility evidence", () => {
+describe("agent capability evidence", () => {
+  it("converts goal reports into canonical capability evidence", () => {
     expect(
-      agentResponsibilityReportToEvidence({
+      capabilityReportToEvidence({
         target: { type: "goal", id: "release-aguy" },
         evidence: { releasePrExists: true },
         facts: { releasePr: 123 },
@@ -20,7 +20,7 @@ describe("agent responsibility evidence", () => {
       version: 1,
       target: { type: "goal", id: "release-aguy" },
       status: "changed",
-      summary: "responsibility reported goal evidence",
+      summary: "capability reported goal evidence",
       evidence: { releasePrExists: true },
       facts: { releasePr: 123 },
       artifacts: [],
@@ -30,9 +30,9 @@ describe("agent responsibility evidence", () => {
     })
   })
 
-  it("converts result markers into canonical responsibility evidence", () => {
+  it("converts result markers into canonical capability evidence", () => {
     expect(
-      agentResponsibilityResultToEvidence(
+      capabilityResultToEvidence(
         {
           version: 1,
           status: "pass",
@@ -61,7 +61,7 @@ describe("agent responsibility evidence", () => {
 
   it("ignores result markers that explicitly target non-goal owners", () => {
     expect(
-      agentResponsibilityResultToEvidence(
+      capabilityResultToEvidence(
         {
           version: 1,
           target: { type: "task", id: "123" },
@@ -80,7 +80,7 @@ describe("agent responsibility evidence", () => {
 
   it("does not attach legacy explicit evidence when result declares evidence values", () => {
     expect(
-      agentResponsibilityResultToEvidence(
+      capabilityResultToEvidence(
         {
           version: 1,
           target: { type: "goal", id: "release-aguy" },
@@ -110,12 +110,12 @@ describe("agent responsibility evidence", () => {
   })
 
   it("merges matching report and result evidence into one item", () => {
-    const merged = mergeResponsibilityEvidence([
+    const merged = mergeCapabilityEvidence([
       {
         version: 1,
         target: { type: "goal", id: "release-aguy" },
         status: "changed",
-        summary: "responsibility reported goal evidence",
+        summary: "capability reported goal evidence",
         evidence: { releasePrExists: true },
         facts: { releasePr: 123 },
         artifacts: [],
@@ -148,7 +148,7 @@ describe("agent responsibility evidence", () => {
     ])
   })
 
-  it("applies responsibility evidence to goal progress state", () => {
+  it("applies capability evidence to goal progress state", () => {
     const state: GoalState = {
       state: "active",
       extra: {
@@ -157,7 +157,7 @@ describe("agent responsibility evidence", () => {
       },
     }
 
-    const next = applyAgentResponsibilityEvidenceToGoalState(state, {
+    const next = applyCapabilityEvidenceToGoalState(state, {
       version: 1,
       target: { type: "goal", id: "release-aguy" },
       status: "pass",
@@ -182,11 +182,11 @@ describe("agent responsibility evidence", () => {
       },
     }
 
-    const next = applyAgentResponsibilityEvidenceToGoalState(state, {
+    const next = applyCapabilityEvidenceToGoalState(state, {
       version: 1,
       target: { type: "goal", id: "release-aguy" },
       status: "changed",
-      summary: "responsibility reported goal evidence",
+      summary: "capability reported goal evidence",
       evidence: { releasePrExists: true },
       facts: {},
       artifacts: [],
@@ -206,7 +206,7 @@ describe("agent responsibility evidence", () => {
       },
     }
 
-    const next = applyAgentResponsibilityEvidenceToGoalState(state, {
+    const next = applyCapabilityEvidenceToGoalState(state, {
       version: 1,
       target: { type: "goal", id: "release-aguy" },
       status: "pass",

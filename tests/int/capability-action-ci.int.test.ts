@@ -13,11 +13,11 @@ afterEach(() => {
 })
 
 function makeRepo(opts: { sameName?: boolean } = {}): { root: string; eventPath: string } {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-agent-responsibility-action-ci-"))
-  const dutyName = opts.sameName ? "noop" : "noop-agent-responsibility"
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-action-ci-"))
+  const dutyName = opts.sameName ? "noop" : "noop-capability"
   const exeName = opts.sameName ? "noop" : "noop-impl"
-  fs.mkdirSync(path.join(root, ".kody", "agent-responsibilities"), { recursive: true })
-  fs.mkdirSync(path.join(root, ".kody", "agent-actions", exeName), { recursive: true })
+  fs.mkdirSync(path.join(root, ".kody", "capabilities"), { recursive: true })
+  fs.mkdirSync(path.join(root, ".kody", "executables", exeName), { recursive: true })
   fs.writeFileSync(
     path.join(root, "kody.config.json"),
     JSON.stringify(
@@ -31,19 +31,19 @@ function makeRepo(opts: { sameName?: boolean } = {}): { root: string; eventPath:
       2,
     ),
   )
-  fs.mkdirSync(path.join(root, ".kody", "agent-responsibilities", dutyName), { recursive: true })
+  fs.mkdirSync(path.join(root, ".kody", "capabilities", dutyName), { recursive: true })
   fs.writeFileSync(
-    path.join(root, ".kody", "agent-responsibilities", dutyName, "profile.json"),
-    JSON.stringify({ name: dutyName, action: "noop", agentAction: exeName, agent: "kody" }),
+    path.join(root, ".kody", "capabilities", dutyName, "profile.json"),
+    JSON.stringify({ name: dutyName, action: "noop", capabilityKind: "act", executable: exeName, agent: "kody" }),
   )
-  fs.writeFileSync(path.join(root, ".kody", "agent-responsibilities", dutyName, "agent-responsibility.md"), "# Noop\n")
+  fs.writeFileSync(path.join(root, ".kody", "capabilities", dutyName, "capability.md"), "# Noop\n")
   fs.writeFileSync(
-    path.join(root, ".kody", "agent-actions", exeName, "profile.json"),
+    path.join(root, ".kody", "executables", exeName, "profile.json"),
     JSON.stringify(
       {
         name: exeName,
         role: "utility",
-        describe: "offline agentResponsibility-action integration fixture",
+        describe: "offline capability-action integration fixture",
         kind: "oneshot",
         inputs: [{ name: "issue", flag: "--issue", type: "int", required: true, describe: "issue" }],
         claudeCode: {
@@ -78,8 +78,8 @@ function makeRepo(opts: { sameName?: boolean } = {}): { root: string; eventPath:
   return { root, eventPath }
 }
 
-describe("ci agentResponsibility action route", () => {
-  it("runs a public agentResponsibility action and lowers it to its implementation agentAction", async () => {
+describe("ci capability action route", () => {
+  it("runs a public capability action and lowers it to its implementation executable", async () => {
     prevCwd = process.cwd()
     const { root, eventPath } = makeRepo()
     process.chdir(root)
@@ -92,7 +92,7 @@ describe("ci agentResponsibility action route", () => {
     expect(code).toBe(0)
   })
 
-  it("supports a agentResponsibility and implementation agentAction with the same slug", async () => {
+  it("supports a capability and implementation executable with the same slug", async () => {
     prevCwd = process.cwd()
     const { root, eventPath } = makeRepo({ sameName: true })
     process.chdir(root)

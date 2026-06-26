@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest"
-import { runAgentResponsibilityFallbackTick } from "../../src/pool/agent-responsibility-fallback-tick.js"
+import { runCapabilityFallbackTick } from "../../src/pool/capability-fallback-tick.js"
 
 const logs: string[] = []
 const log = (m: string) => logs.push(m)
 
-describe("runAgentResponsibilityFallbackTick", () => {
+describe("runCapabilityFallbackTick", () => {
   it("does nothing when GitHub Actions is healthy (defers to GitHub cron)", async () => {
     const claim = vi.fn()
-    const out = await runAgentResponsibilityFallbackTick({
+    const out = await runCapabilityFallbackTick({
       isDegraded: async () => false,
       activeRepos: () => ["acme/widgets"],
       claim,
@@ -19,7 +19,7 @@ describe("runAgentResponsibilityFallbackTick", () => {
 
   it("claims a scheduled runner for each active repo when GitHub is degraded", async () => {
     const claim = vi.fn(async () => ({ ok: true, machineId: "m-1" }))
-    const out = await runAgentResponsibilityFallbackTick({
+    const out = await runCapabilityFallbackTick({
       isDegraded: async () => true,
       activeRepos: () => ["acme/widgets", "acme/gadgets"],
       claim,
@@ -37,7 +37,7 @@ describe("runAgentResponsibilityFallbackTick", () => {
 
   it("ran=true but claimed=0 when degraded with no active pools", async () => {
     const claim = vi.fn()
-    const out = await runAgentResponsibilityFallbackTick({
+    const out = await runCapabilityFallbackTick({
       isDegraded: async () => true,
       activeRepos: () => [],
       claim,
@@ -53,7 +53,7 @@ describe("runAgentResponsibilityFallbackTick", () => {
       .mockResolvedValueOnce({ ok: true, machineId: "m-1" })
       .mockResolvedValueOnce({ ok: false, reason: "empty pool" })
       .mockRejectedValueOnce(new Error("network"))
-    const out = await runAgentResponsibilityFallbackTick({
+    const out = await runCapabilityFallbackTick({
       isDegraded: async () => true,
       activeRepos: () => ["a/one", "a/two", "a/three"],
       claim,

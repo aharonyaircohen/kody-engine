@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
-import type { Context, Profile } from "../../src/agent-actions/types.js"
-import { dispatchAgentResponsibilityFileTicks } from "../../src/scripts/dispatchAgentResponsibilityFileTicks.js"
+import type { Context, Profile } from "../../src/executables/types.js"
+import { dispatchCapabilityFileTicks } from "../../src/scripts/dispatchCapabilityFileTicks.js"
 
 const ghMock = vi.hoisted(() => vi.fn())
 const runJobMock = vi.hoisted(() => vi.fn())
@@ -32,11 +32,11 @@ function ctxFor(): Context {
   } as unknown as Context
 }
 
-describe("dispatchAgentResponsibilityFileTicks multi-agentAction compatibility", () => {
-  it("does not create task issues because flat responsibility fan-out is retired", async () => {
+describe("dispatchCapabilityFileTicks multi-executable compatibility", () => {
+  it("does not create task issues because flat capability fan-out is retired", async () => {
     const ctx = ctxFor()
 
-    await dispatchAgentResponsibilityFileTicks(ctx, PROFILE, {})
+    await dispatchCapabilityFileTicks(ctx, PROFILE, {})
 
     expect(ghMock).not.toHaveBeenCalled()
     expect(runJobMock).not.toHaveBeenCalled()

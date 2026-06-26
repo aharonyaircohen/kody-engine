@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 // Mock the gh() shell wrapper so we exercise the pure dedup/classification
-// logic of the new agentResponsibility primitives without touching a real repo.
+// logic of the new capability primitives without touching a real repo.
 vi.mock("../../src/issue.js", () => ({
   gh: vi.fn(),
 }))
 
-import { dispatchWorkflow, ensureComment, ensureIssue, readCheckRuns } from "../../src/agent-responsibilityMcp.js"
+import { dispatchWorkflow, ensureComment, ensureIssue, readCheckRuns } from "../../src/capabilityMcp.js"
 import { gh } from "../../src/issue.js"
 
 const REPO = "owner/repo"
@@ -120,7 +120,7 @@ describe("dispatchWorkflow — target kind guard", () => {
       "run",
       "kody.yml",
       "-f",
-      "agentResponsibility=sync",
+      "capability=sync",
       "-f",
       "issue_number=413",
     ])
@@ -183,7 +183,7 @@ describe("readCheckRuns — branch CI classification", () => {
       ].join("\n"),
     )
 
-    const r = readCheckRuns(REPO, "dev", ["run", "kody", "agent-responsibility-tick"])
+    const r = readCheckRuns(REPO, "dev", ["run", "kody", "capability-tick"])
 
     expect(r.state).toBe("RED")
     expect(r.sha).toBe(sha)

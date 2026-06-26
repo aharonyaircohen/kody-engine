@@ -1,10 +1,10 @@
-# Release flow refactor: 4 agentActions → 1
+# Release flow refactor: 4 executables → 1
 
-Status: the merged `release/` agentAction now lives in `kody-store` as a company-store asset, not under `src/agent-actions/release`.
+Status: the merged `release/` executable now lives in `kody-store` as a company-store asset, not under `src/executables/release`.
 
 ## Goal
 
-Replace the comment-driven release orchestrator (5 GHA runs, comment-as-state-machine) with a **single agentAction** that runs the entire release flow inside one GHA job. Identical user-facing behaviour; vastly simpler internals.
+Replace the comment-driven release orchestrator (5 GHA runs, comment-as-state-machine) with a **single executable** that runs the entire release flow inside one GHA job. Identical user-facing behaviour; vastly simpler internals.
 
 **Success criteria:** firing `@kody release` on the Tester repo produces a deploy PR (dev → main) whose body contains the matching CHANGELOG section. End-to-end in one workflow run.
 
@@ -25,7 +25,7 @@ Replace the comment-driven release orchestrator (5 GHA runs, comment-as-state-ma
 
 ### After
 ```
-@kody release  →  release (single agentAction)
+@kody release  →  release (single executable)
                   └─ release.sh: prepare → wait CI → merge → publish → deploy → notify
                      all in one bash script, one workflow run, ~20 min total
 ```
@@ -33,7 +33,7 @@ Replace the comment-driven release orchestrator (5 GHA runs, comment-as-state-ma
 ## File layout
 
 ### New (kept inside `release/`)
-- `release/profile.json` — utility agentAction, single shell entry, minimal postflight.
+- `release/profile.json` — utility executable, single shell entry, minimal postflight.
 - `release/release.sh` — top-level driver. ~50 lines. Sources the helpers and orchestrates.
 - `release/prepare.sh` — function library: `bump_version`, `generate_changelog`, `format_changelog`, `prepend_changelog`, `open_prepare_pr`, `set_kody_release_pr_marker`.
 - `release/wait.sh` — function library: `wait_for_ci <pr_number> <timeout_min>`. Polls `gh pr checks` until CLEAN/UNSTABLE clears, returns 0/1.
@@ -43,15 +43,15 @@ Replace the comment-driven release orchestrator (5 GHA runs, comment-as-state-ma
 All `.sh` files in `release/` use `function name() { ... }` form — no top-level execution.
 
 ### Deleted
-- `src/agent-actions/release-prepare/` (entire dir)
-- `src/agent-actions/release-publish/` (entire dir)
-- `src/agent-actions/release-deploy/` (entire dir)
+- `src/executables/release-prepare/` (entire dir)
+- `src/executables/release-publish/` (entire dir)
+- `src/executables/release-deploy/` (entire dir)
 - `src/scripts/mergeReleasePr.ts` (only used by the orchestrator postflight, gone)
 - Reference removed from `src/scripts/index.ts`
 
 ### Untouched
 - `startFlow.ts`, `advanceFlow.ts` — used by other orchestrators (bug, feature, plan, …). Stay.
-- `waitForCi.ts` — still used by `fix-ci`. Stay. (`release/wait.sh` is a small bash port for the merged agentAction; we don't reuse the TS one.)
+- `waitForCi.ts` — still used by `fix-ci`. Stay. (`release/wait.sh` is a small bash port for the merged executable; we don't reuse the TS one.)
 - `setLifecycleLabel`, `loadIssueContext`, `loadTaskState`, `saveTaskState`, `recordOutcome`, `notifyTerminal`, `finishFlow`, `persistFlowState`. All survive in the new profile's preflight/postflight.
 - A-Guy's `kody.config.json` — unchanged (same `releaseBranch`, `notifyCommand`, etc.).
 - A-Guy's `kody.yml` — unchanged.
@@ -186,7 +186,7 @@ echo "KODY_SKIP_AGENT=true"
    - Write `release.sh` driver.
    - Write `wait.sh` (small bash port of `waitForCi.ts` — uses `gh pr checks <N>`).
 2. **Replace `release/profile.json`** with the utility-style profile.
-3. **Run `pnpm vitest run tests/unit`.** Should pass; tests don't reference the old release agentActions in a way that breaks.
+3. **Run `pnpm vitest run tests/unit`.** Should pass; tests don't reference the old release executables in a way that breaks.
 4. **`pnpm build`** to bundle.
 5. **`npm publish --tag beta --access public`** — note `--tag beta`, NOT `@latest`. A-Guy stays on whatever `@latest` resolves to.
 6. **Pin Tester's `kody.yml`** to the exact version: `npx -y -p @kody-ade/kody-engine@<X.Y.Z> kody-engine`. Push.
@@ -202,11 +202,11 @@ echo "KODY_SKIP_AGENT=true"
     - Issue labelled `kody:done`.
 11. **If any step fails**, read run log → patch → bump version → re-publish to `@beta` → re-pin Tester → re-fire. Loop until success.
 12. **On success: promote to `@latest`** with `npm dist-tag add @kody-ade/kody-engine@<X.Y.Z> latest`. A-Guy now picks it up on next workflow.
-13. **Delete old agentActions and `mergeReleasePr.ts`** in a follow-up commit. Bump again, publish.
+13. **Delete old executables and `mergeReleasePr.ts`** in a follow-up commit. Bump again, publish.
 
 ## Rollback
 
-If the new merged agentAction misbehaves after `@latest` promotion:
+If the new merged executable misbehaves after `@latest` promotion:
 
 ```bash
 npm dist-tag add @kody-ade/kody-engine@0.3.69 latest
