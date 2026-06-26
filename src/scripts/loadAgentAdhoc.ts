@@ -1,11 +1,11 @@
 /**
  * Preflight for `agent-ask`: load an agent identity and an inline message
- * for a stateless, ad-hoc tick. No agentResponsibility folder, no job state, no commit.
+ * for a stateless, ad-hoc tick. No capability folder, no job state, no commit.
  *
  * This is the engine half of the dashboard's "@mention an agent in a
  * message" feature: an agent is a stateless agent, so an ad-hoc
  * request is just that agent answering one inline prompt — there is no
- * `.kody/agent-responsibilities/<slug>/`, no cadence, and nothing to persist.
+ * `.kody/capabilities/<slug>/`, no cadence, and nothing to persist.
  *
  * Message resolution (production vs. CLI):
  *   1. The dispatching `issue_comment` body (GITHUB_EVENT_PATH), with the
@@ -27,7 +27,7 @@
  */
 
 import * as fs from "node:fs"
-import type { PreflightScript } from "../agent-actions/types.js"
+import type { PreflightScript } from "../executables/types.js"
 import { resolveAgentFile } from "../agents.js"
 
 export const loadAgentAdhoc: PreflightScript = async (ctx, _profile, args) => {

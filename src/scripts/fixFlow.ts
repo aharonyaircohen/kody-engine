@@ -1,10 +1,10 @@
 /**
- * Flow script for the `fix` agentAction.
+ * Flow script for the `fix` executable.
  * Loads the PR, checks it out, reads the PR's latest review (or --feedback),
  * posts a "started" comment on the PR.
  */
 
-import type { PreflightScript } from "../agent-actions/types.js"
+import type { PreflightScript } from "../executables/types.js"
 import { checkoutPrBranch, getCurrentBranch } from "../branch.js"
 import { getRunUrl } from "../gha.js"
 import { getPr, getPrDiff, getPrLatestReviewBody, postPrReviewComment, truncate } from "../issue.js"

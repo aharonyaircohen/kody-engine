@@ -1,8 +1,8 @@
 /**
- * Postflight (added to every child agentAction's tail): if a flow is in
+ * Postflight (added to every child executable's tail): if a flow is in
  * progress, re-trigger the flow orchestrator IN-PROCESS via
  * `ctx.output.nextDispatch` (kody-cli runs it). `state.flow.name` is the
- * agentAction name of the orchestrator itself (e.g. "bug", "feature", "spec",
+ * executable name of the orchestrator itself (e.g. "bug", "feature", "spec",
  * "chore") per the semantic-naming convention.
  *
  * Why in-process instead of an `@kody <flow.name>` comment: when Kody runs as
@@ -27,7 +27,7 @@
  */
 
 import { execFileSync } from "node:child_process"
-import type { PostflightScript } from "../agent-actions/types.js"
+import type { PostflightScript } from "../executables/types.js"
 import { type Action, readTaskState, reduce, type TaskState, writeTaskState } from "../state.js"
 import { jobMetaFromData } from "./saveTaskState.js"
 

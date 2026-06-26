@@ -18,7 +18,7 @@ vi.mock("node:child_process", async (importOriginal) => {
   }
 })
 
-import type { Context, Profile } from "../../src/agent-actions/types.js"
+import type { Context, Profile } from "../../src/executables/types.js"
 import { mergeReleasePr } from "../../src/scripts/mergeReleasePr.js"
 import { type Action, emptyState, type TaskState } from "../../src/state.js"
 

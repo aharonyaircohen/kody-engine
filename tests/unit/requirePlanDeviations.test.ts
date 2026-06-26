@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { Profile } from "../../src/agent-actions/types.js"
+import type { Profile } from "../../src/executables/types.js"
 import { isNoneSentinel, requirePlanDeviations } from "../../src/scripts/requirePlanDeviations.js"
 
 const runProfile = { name: "run" } as Profile

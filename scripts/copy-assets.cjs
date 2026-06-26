@@ -4,15 +4,18 @@ const path = require("node:path")
 const ROOT = path.resolve(__dirname, "..")
 
 const LEGACY_ASSET_DIRS = [
+  "agent-actions",
+  "agent-responsibilities",
   "duties",
   "executables",
+  "capabilities",
   path.join("scripts", "preview-build-templates"),
 ]
 for (const name of LEGACY_ASSET_DIRS) {
   fs.rmSync(path.join(ROOT, "dist", name), { recursive: true, force: true })
 }
 
-const ASSET_DIRS = ["agent-actions", "jobs", "agent-responsibilities", "plugins"]
+const ASSET_DIRS = ["executables", "capabilities", "jobs", "plugins"]
 
 for (const name of ASSET_DIRS) {
   const src = path.join(ROOT, "src", name)
@@ -24,7 +27,7 @@ for (const name of ASSET_DIRS) {
 }
 
 // Bundled Dockerfile templates consumed at runtime by the
-// preview-build scripted agentAction. tsup bundles every TS file in
+// preview-build scripted executable. tsup bundles every TS file in
 // src/ into the SAME `dist/bin/kody.js`, so import.meta.url lands in
 // dist/bin/. The templates must sit next to that bundle for the
 // runtime path lookup (path.join(__dirname, "preview-build-templates",

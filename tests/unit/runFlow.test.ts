@@ -16,7 +16,7 @@ vi.mock("../../src/issue.js", () => ({
   postIssueComment: vi.fn(),
 }))
 
-import type { Context } from "../../src/agent-actions/types.js"
+import type { Context } from "../../src/executables/types.js"
 import { ensureFeatureBranch } from "../../src/branch.js"
 import { getIssue, postIssueComment } from "../../src/issue.js"
 import { runFlow } from "../../src/scripts/runFlow.js"

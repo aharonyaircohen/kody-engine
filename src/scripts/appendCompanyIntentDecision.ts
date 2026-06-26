@@ -1,4 +1,4 @@
-import type { PostflightScript } from "../agent-actions/types.js"
+import type { PostflightScript } from "../executables/types.js"
 import {
   logAppliedCompanyManagerActions,
   type AppliedCompanyManagerAction,

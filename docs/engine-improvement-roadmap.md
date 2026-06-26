@@ -45,7 +45,7 @@ What we need to see:
 
 | Metric | Why |
 |---|---|
-| Mean wall-clock per agentAction (run, plan, fix-ci) | Phase 5 scoping |
+| Mean wall-clock per executable (run, plan, fix-ci) | Phase 5 scoping |
 | Ratio of (GHA bootstrap time) ÷ (Claude active time) | Validates the "infra dominates" hypothesis |
 | `fix-ci` invocation count per 100 feature tasks | Phase 3 ROI |
 | Stalled-watchdog hits | Phase 1 effectiveness |
@@ -122,7 +122,7 @@ consolidating context loading.
 - **`excludeDynamicSections` breaks agent behaviour.** The re-injected
   user message must include the stripped content (cwd, git status,
   auto-memory) so the agent doesn't degrade. Verify each opt-in
-  agentAction behaves identically on a tester smoke run before merging.
+  executable behaves identically on a tester smoke run before merging.
 
 ### Tests
 
@@ -162,10 +162,10 @@ real signal up to a bounded budget.
 - `src/scripts/verify.ts` — refactor: the heavy lifting is already
   here, extract the verifier into a reusable function callable from
   both the postflight ratifier and the tool.
-- `src/agent-actions/run/prompt.md` and `src/agent-actions/fix/prompt.md`
+- `src/executables/run/prompt.md` and `src/executables/fix/prompt.md`
   updated: instruct the agent to call `verify()` before declaring
   DONE, iterate up to N times on failure.
-- `src/agent-actions/run/profile.json` and `fix/profile.json` declare
+- `src/executables/run/profile.json` and `fix/profile.json` declare
   the new tool + a `maxVerifyAttempts` knob in `claudeCode` or in
   config.
 - Per-iteration output truncation — only failing test names + first
@@ -246,14 +246,14 @@ real signal up to a bounded budget.
 ## Phase 4 — consolidation + draft-first UX
 
 **Goal.** Reduce architectural sprawl (three near-identical fix
-agentActions, comment-parsing-as-state, late PR creation) without
+executables, comment-parsing-as-state, late PR creation) without
 changing the agent loop. Most-bang-per-buck UX improvements.
 
 ### Sub-tasks
 
 #### 4a. **QW15 — consolidate `fix` + `fix-ci` + `resolve` → `refine`** (medium)
 
-- New `src/agent-actions/refine/` with `profile.json` declaring a
+- New `src/executables/refine/` with `profile.json` declaring a
   required `--mode` input enum: `feedback | ci | conflicts`.
 - Three prompt files in the same dir: `prompt.feedback.md`,
   `prompt.ci.md`, `prompt.conflicts.md`. `composePrompt` selects by
@@ -263,7 +263,7 @@ changing the agent loop. Most-bang-per-buck UX improvements.
   `apply-prefer.sh`.
 - Dispatch aliases updated so `@kody fix` and `@kody fix-ci` and
   `@kody resolve` all route to `refine` with the correct mode.
-- Old agentActions deleted; the `\b…\b` ordering hazard in
+- Old executables deleted; the `\b…\b` ordering hazard in
   `src/dispatch.ts` disappears.
 - **Effort:** 3–4 days.
 
@@ -295,7 +295,7 @@ changing the agent loop. Most-bang-per-buck UX improvements.
 - `src/scripts/acquireLock.ts` / `releaseLock.ts` use a GH commit-on-
   branch as a mutex (`refs/kody/locks/<slug>`). If acquire fails the
   tick exits clean — next wake will retry.
-- Wire into `goal-manager` and `agent-responsibility-tick` preflight.
+- Wire into `goal-manager` and `capability-tick` preflight.
 - **Effort:** 2 days.
 
 #### 4e. **QW8 — container reset opt-in** (low)
@@ -316,7 +316,7 @@ changing the agent loop. Most-bang-per-buck UX improvements.
 
 #### 4g. **QW5 — profile JSON schema validation** (low)
 
-- Author `src/agent-actions/profile.schema.json` from the TS types.
+- Author `src/executables/profile.schema.json` from the TS types.
 - `loadProfile` validates against it; unknown top-level keys raise an
   error (was silently dropping today).
 - **Effort:** 1 day.
@@ -330,7 +330,7 @@ changing the agent loop. Most-bang-per-buck UX improvements.
 ### Risks + mitigations
 
 - **Refine consolidation breaks consumer aliases.** Mitigation: keep
-  the old agentAction names as aliases routing into refine for one
+  the old executable names as aliases routing into refine for one
   release cycle.
 - **State.json + comment dual-write drift.** Mitigation: comment
   becomes a one-way mirror written by a single postflight; nobody
@@ -368,7 +368,7 @@ roadmap. Highest risk.
 
 - `src/executor.ts` — container loop gains an `inProcess: true`
   branch. When set, `__runChild` defaults to a direct
-  `runAgentAction(...)` call (already the case today!) but we also
+  `runExecutable(...)` call (already the case today!) but we also
   pass an opaque `taskContext` blob in `ctx.data` so children skip
   redundant GH round-trips.
 - A new opt-in mode for consumer workflows: in `templates/kody.yml`,
@@ -519,7 +519,7 @@ shipped version on npm + live-tested on the tester repo.
    tokens on stuck agents.
 3. **Phase 4a refine collapse.** Do we deprecate `@kody fix`
    immediately or keep the alias forever? Alias forever is friendlier.
-4. **Phase 5 pilot duration.** I proposed 1 week per agentAction
+4. **Phase 5 pilot duration.** I proposed 1 week per executable
    (`chore`, then `bug`, then `feature`). Acceptable cadence?
 5. **Phase 6 backend.** Pinecone (managed, per project memory) or
    sqlite-vec (local, zero infra)? My take: sqlite-vec because the

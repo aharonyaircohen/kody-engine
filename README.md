@@ -78,27 +78,27 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 │   src/executor.ts — runs capability implementations         │
 │   .kody/capabilities/<slug>/                                │
 │     profile.json · capability.md · optional skills/scripts  │
-│   .kody/agent-responsibilities/<slug>/                      │
-│     legacy fallback: profile.json · agent-responsibility.md │
-│   .kody/agent-actions/<name>/                               │
+│   .kody/capabilities/<slug>/                      │
+│     legacy fallback: profile.json · capability.md │
+│   .kody/executables/<name>/                               │
 │     legacy fallback: profile.json · prompt.md · *.sh        │
 │   src/scripts/*.ts — cross-cutting catalog  │
 └─────────────────────────────────────────────┘
 ```
 
 Every top-level command is an auto-discovered capability action. The router has
-**zero agentAction names hardcoded** - comment dispatch resolves the first token
+**zero executable names hardcoded** - comment dispatch resolves the first token
 after `@kody` through `config.aliases`, then falls back to the legacy-named
-`config.defaultAgentAction` / `config.defaultPrAgentAction` fields as default
+`config.defaultExecutable` / `config.defaultPrExecutable` fields as default
 capability actions. Drop a new `.kody/capabilities/<slug>/` directory with
-`profile.json` + `capability.md`; legacy `.kody/agent-responsibilities/` and
-`.kody/agent-actions/` roots still load while repos migrate.
+`profile.json` + `capability.md`; legacy `.kody/capabilities/` and
+`.kody/executables/` roots still load while repos migrate.
 
-Legacy AgentAction directories are private implementation units and contain
+Legacy Executable directories are private implementation units and contain
 **only** three kinds of files: `profile.json` (declaration), `prompt.md` (agent
 instructions), and `.sh` scripts (mechanical side-effect work). Cross-cutting
 TypeScript lives in [src/scripts/](src/scripts/); it can't import from
-`src/agent-actions/` and can't branch on `profile.name`.
+`src/executables/` and can't branch on `profile.name`.
 
 ## Install in a consumer repo
 
@@ -139,9 +139,9 @@ kody-engine release-deploy    --issue <N> [--dry-run]
 kody-engine npm-publish       [--tag latest] [--access public] [--dry-run]
 
 # scheduled capabilities and goals
-kody-engine agent-responsibility-scheduler                                    # fan out due .kody/capabilities/<slug>/ folders plus legacy fallbacks
-kody-engine agent-responsibility-tick          --agentResponsibility <slug> [--force]        # one agent tick for one capability
-kody-engine agent-responsibility-tick-scripted --agentResponsibility <slug> [--force]        # one deterministic tickScript capability tick
+kody-engine capability-scheduler                                    # fan out due .kody/capabilities/<slug>/ folders plus legacy fallbacks
+kody-engine capability-tick          --capability <slug> [--force]        # one agent tick for one capability
+kody-engine capability-tick-scripted --capability <slug> [--force]        # one deterministic tickScript capability tick
 kody-engine goal-scheduler                                    # fan out active goal instances in configured state repo
 kody-engine goal-manager      --goal <id>                     # advance one managed goal instance
 
@@ -163,8 +163,8 @@ A **capability** is a folder at `.kody/capabilities/<slug>/` with
 `profile.json` metadata (`action`, `capabilityKind`, `agent`, `every`, and
 related fields) plus human-owned prose in `capability.md`. The scheduler wakes
 on cron, finds due capabilities, and dispatches either
-`agent-responsibility-tick` for an agent tick or
-`agent-responsibility-tick-scripted` for a deterministic `tickScript`
+`capability-tick` for an agent tick or
+`capability-tick-scripted` for a deterministic `tickScript`
 capability. The CLI names are still legacy during migration.
 
 Locked-toolbox capabilities can declare `"tools": [...]` in `profile.json` to
@@ -179,7 +179,7 @@ without `tools` keep the legacy Bash/gh toolbox.
 
 A profile is declarative JSON plus an adjacent markdown body. New public work
 should live under `.kody/capabilities/<slug>/` with `capability.md`; legacy
-implementations under [src/agent-actions/](src/agent-actions/) still show the
+implementations under [src/executables/](src/executables/) still show the
 older split profile + prompt shape. Adding a new capability should not require
 executor, entry, or dispatch changes.
 

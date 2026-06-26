@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { Context, Profile } from "../../src/agent-actions/types.js"
+import type { Context, Profile } from "../../src/executables/types.js"
 import { loadPriorArt } from "../../src/scripts/loadPriorArt.js"
 import type { TaskState } from "../../src/state.js"
 

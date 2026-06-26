@@ -4,15 +4,15 @@ Goals are the company layer's **what**.
 
 A goal names an outcome and owns the manager loop that moves toward that
 outcome. It tracks the evidence required to prove the outcome, chooses the next
-missing evidence, dispatches the responsible agentResponsibility or agentAction, and stops when
+missing evidence, dispatches the responsible capability or executable, and stops when
 the outcome is done or blocked.
 
-A goal may use agentResponsibilities, but it is not a agentResponsibility. A agentResponsibility is a standing
-responsibility. A goal is a temporary agentGoal.
+A goal may use capabilities, but it is not a capability. A capability is a standing
+capability. A goal is a temporary agentGoal.
 
-Goals are the normal home for long-term progress routing. AgentResponsibilities stay reusable
-capabilities: `observe`, `act`, or `verify`. A goal may compose many agentResponsibilities,
-but a agentResponsibility should not secretly become the goal's manager loop.
+Goals are the normal home for long-term progress routing. Capabilities stay reusable
+capabilities: `observe`, `act`, or `verify`. A goal may compose many capabilities,
+but a capability should not secretly become the goal's manager loop.
 
 ## Canonical Shape
 
@@ -71,19 +71,19 @@ Required managed-goal shape:
     "outcome": "Version 1.2.3 is published and verified.",
     "evidence": ["releasePrExists", "qaPassed", "packagePublished"]
   },
-  "agent-responsibilities": ["release", "qa-goal", "npm-publish"],
+  "capabilities": ["release", "qa-goal", "npm-publish"],
   "route": [
     {
       "stage": "prepare",
       "evidence": "releasePrExists",
-      "agentResponsibility": "release",
-      "agentAction": "release-prepare"
+      "capability": "release",
+      "executable": "release-prepare"
     },
     {
       "stage": "qa",
       "evidence": "qaPassed",
-      "agentResponsibility": "qa-goal",
-      "agentAction": "qa-goal",
+      "capability": "qa-goal",
+      "executable": "qa-goal",
       "args": {
         "issue": { "fact": "issue" }
       }
@@ -91,8 +91,8 @@ Required managed-goal shape:
     {
       "stage": "publish",
       "evidence": "packagePublished",
-      "agentResponsibility": "npm-publish",
-      "agentAction": "npm-publish"
+      "capability": "npm-publish",
+      "executable": "npm-publish"
     }
   ],
   "stage": "prepare",
@@ -110,15 +110,15 @@ Required managed-goal shape:
 | `type` | yes | Goal category, such as `release`, `qa`, or `migration`. |
 | `destination.outcome` | yes | Human-readable finish line. This is the goal's what. |
 | `destination.evidence` | yes | Ordered evidence names. The goal is done only when every listed key is true in `facts`. |
-| `agentResponsibilities` | yes | Allowlist of agentResponsibility slugs this goal may route to. |
+| `capabilities` | yes | Allowlist of capability slugs this goal may route to. |
 | `route` | yes | Ordered routing table. Each evidence item should have one route step. |
 | `route[].stage` | yes | Stage name used while the route step is active. |
 | `route[].evidence` | yes | Evidence key the route step is responsible for producing. |
-| `route[].agentResponsibility` | yes | AgentResponsibility responsible for the evidence. Must be listed in `agentResponsibilities`. |
-| `route[].agentAction` | optional | Concrete agentAction to run. Omit only when the agentResponsibility profile already selects the agentAction. |
-| `route[].args` | optional | CLI args for the agentAction. Values may reference earlier facts. |
+| `route[].capability` | yes | Capability responsible for the evidence. Must be listed in `capabilities`. |
+| `route[].executable` | optional | Concrete executable to run. Omit only when the capability profile already selects the executable. |
+| `route[].args` | optional | CLI args for the executable. Values may reference earlier facts. |
 | `stage` | optional | Current stage. `goal-manager` updates it to the active route step or `done`. |
-| `facts` | yes | Observed evidence and runtime values reported by agentResponsibilities. |
+| `facts` | yes | Observed evidence and runtime values reported by capabilities. |
 | `blockers` | yes | Reasons the manager loop cannot safely dispatch the next step. |
 
 Route args may reference earlier facts:
@@ -143,22 +143,22 @@ instead of dispatching bad input.
 3. Find the first evidence key that is not `true` in `facts`.
 4. If that evidence is already `facts.pendingEvidence`, wait.
 5. Find the matching `route` step.
-6. Verify the route step's `agentResponsibility` is attached to the goal.
+6. Verify the route step's `capability` is attached to the goal.
 7. Resolve `route.args`, including `{ "fact": "<name>" }` references.
-8. Dispatch the agentResponsibility or agentAction for that evidence.
+8. Dispatch the capability or executable for that evidence.
 9. Set `facts.pendingEvidence`.
 10. When all evidence is true, set `state: "done"`.
 
-The route step should name evidence a agentResponsibility can produce, not a private phase
-inside the agentResponsibility. For example, a web release route composes separate Act agentResponsibilities:
+The route step should name evidence a capability can produce, not a private phase
+inside the capability. For example, a web release route composes separate Act capabilities:
 
-| Evidence | AgentResponsibility | Meaning |
+| Evidence | Capability | Meaning |
 | --- | --- | --- |
 | `releasePrExists` | `release-prepare` | Create or reuse the release PR. |
 | `mainMerged` | `release-merge` | Merge the prepared PR after checks pass. |
 | `productionDeployed` | `vercel-production-deploy` | Deploy main to production and report the URL. |
 
-Do not replace that with one `release` agentResponsibility that owns prepare, merge, deploy,
+Do not replace that with one `release` capability that owns prepare, merge, deploy,
 and completion internally.
 
 Implementation anchors:
@@ -168,27 +168,27 @@ Implementation anchors:
 - `src/scripts/saveManagedGoalState.ts`
 - `tests/unit/goal/manager.test.ts`
 
-## Responsibility Evidence
+## Capability Evidence
 
-AgentResponsibilities and agentActions return structured evidence for the goal to apply:
+Capabilities and executables return structured evidence for the goal to apply:
 
 ```text
-KODY_AGENT_RESPONSIBILITY_RESULT={"version":1,"target":{"type":"goal","id":"release-aguy"},"status":"pass","summary":"Release PR exists.","evidence":{"releasePrExists":true},"facts":{"releasePr":123},"artifacts":[],"missingEvidence":[],"blockers":[]}
+KODY_CAPABILITY_RESULT={"version":1,"target":{"type":"goal","id":"release-aguy"},"status":"pass","summary":"Release PR exists.","evidence":{"releasePrExists":true},"facts":{"releasePr":123},"artifacts":[],"missingEvidence":[],"blockers":[]}
 ```
 
 Older actions may still report observed facts with this compatibility line:
 
 ```text
-KODY_AGENT_RESPONSIBILITY_REPORT={"target":{"type":"goal","id":"release-aguy"},"evidence":{"releasePrExists":true},"facts":{"releasePr":123}}
+KODY_CAPABILITY_REPORT={"target":{"type":"goal","id":"release-aguy"},"evidence":{"releasePrExists":true},"facts":{"releasePr":123}}
 ```
 
 Rules:
 
 - Reports may set evidence truth and factual values under `facts`.
-- Reports must not set `destination`, `agentResponsibilities`, `route`, `stage`, `blockers`, or `state`.
-- New responsibilities should use `KODY_AGENT_RESPONSIBILITY_RESULT` with `target` and `evidence`.
+- Reports must not set `destination`, `capabilities`, `route`, `stage`, `blockers`, or `state`.
+- New capabilities should use `KODY_CAPABILITY_RESULT` with `target` and `evidence`.
 - Do not emit both marker types for the same evidence in new code. Existing mixed output is merged before the goal writes its log.
-- Profiles that emit responsibility evidence should include `applyAgentResponsibilityReports` in postflight.
+- Profiles that emit capability evidence should include `applyCapabilityReports` in postflight.
 - `saveReport` refreshes Dashboard markdown from the goal/loop decision path, after state persistence succeeds.
 
 ## Creating A Managed Goal
@@ -197,9 +197,9 @@ Use this checklist:
 
 1. Name the outcome in one sentence.
 2. Choose the minimum evidence keys that prove the outcome.
-3. Attach only agentResponsibilities that are allowed to advance the goal.
+3. Attach only capabilities that are allowed to advance the goal.
 4. Add one route step per evidence key.
-5. Prefer existing agentResponsibilities and agentActions from `kody-store`.
+5. Prefer existing capabilities and executables from `kody-store`.
 6. Use fact references for values discovered by earlier steps.
 7. Start with `state: "active"`, `facts: {}`, and `blockers: []`.
 8. Store shared goal templates in `kody-store`; store live runtime instances under `<statePath>/goals/instances` in `stateRepo`.
@@ -209,13 +209,13 @@ Use this checklist:
 Legacy goal-state files are not a second model. They should be handled in one of two ways:
 
 1. **Stale runtime state**: close or archive it so the scheduler ignores it.
-2. **Real active agentGoal**: rewrite it as a managed goal with `destination`, `evidence`, `agentResponsibilities`, `route`, `facts`, and `blockers`.
+2. **Real active agentGoal**: rewrite it as a managed goal with `destination`, `evidence`, `capabilities`, `route`, `facts`, and `blockers`.
 
 New goals must use the managed-goal contract and `goal-manager`.
 
 ## Do Not
 
-- Do not model a goal as a agentResponsibility.
-- Do not put standing responsibility in `destination.outcome`.
-- Do not dispatch arbitrary agentActions outside the attached `agentResponsibilities` allowlist.
+- Do not model a goal as a capability.
+- Do not put standing capability in `destination.outcome`.
+- Do not dispatch arbitrary executables outside the attached `capabilities` allowlist.
 - Do not use a goal for a one-shot task that should be a normal issue job.

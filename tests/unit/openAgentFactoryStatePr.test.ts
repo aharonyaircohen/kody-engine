@@ -5,7 +5,7 @@ vi.mock("../../src/issue.js", () => ({
 }))
 
 import type { AgentResult } from "../../src/agent.js"
-import type { Context, Profile } from "../../src/agent-actions/types.js"
+import type { Context, Profile } from "../../src/executables/types.js"
 import { gh as ghMock } from "../../src/issue.js"
 import { openAgentFactoryStatePr, parseAgentFactoryBundle } from "../../src/scripts/openAgentFactoryStatePr.js"
 
@@ -40,10 +40,10 @@ function makeCtx(prSummary: string): Context {
 function bundle(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
     title: "Add example agent",
-    summary: "Creates a small example agentAction for review.",
+    summary: "Creates a small example executable for review.",
     files: [
       {
-        path: "agent-actions/example/profile.json",
+        path: "executables/example/profile.json",
         content: "{\n  \"name\": \"example\"\n}\n",
       },
     ],
@@ -101,7 +101,7 @@ describe("openAgentFactoryStatePr", () => {
     const tree = inputForPath("/git/trees") as { tree: Array<{ path: string; content: string }> }
     expect(tree.tree).toEqual([
       {
-        path: "app-state/agent-actions/example/profile.json",
+        path: "app-state/executables/example/profile.json",
         mode: "100644",
         type: "blob",
         content: "{\n  \"name\": \"example\"\n}\n",
@@ -133,7 +133,7 @@ describe("openAgentFactoryStatePr", () => {
     await openAgentFactoryStatePr(
       makeCtx(
         bundle({
-          files: [{ path: ".kody/agent-actions/example/profile.json", content: "{}\n" }],
+          files: [{ path: ".kody/executables/example/profile.json", content: "{}\n" }],
         }),
       ),
       profile,
@@ -141,6 +141,6 @@ describe("openAgentFactoryStatePr", () => {
     )
 
     const tree = inputForPath("/git/trees") as { tree: Array<{ path: string; content: string }> }
-    expect(tree.tree[0]?.path).toBe("app-state/agent-actions/example/profile.json")
+    expect(tree.tree[0]?.path).toBe("app-state/executables/example/profile.json")
   })
 })

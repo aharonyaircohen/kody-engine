@@ -104,7 +104,7 @@ ${qualityLines.join("\n")}
 - Stay on the current branch (\`${featureBranch}\`). It is already checked out for you.
 - Do NOT modify files under: \`.kody/\`, \`.kody-engine/\`, \`.kody-lean/\`, \`node_modules/\`, \`dist/\`, \`build/\`, \`.env\`, or any \`*.log\`.
 - Do NOT post issue comments — the wrapper handles that.
-- Pre-existing quality-gate failures: assume they are NOT your responsibility unless your edits touched related code. If quality gates are red but your edits are unrelated, output \`DONE\` with a COMMIT_MSG describing only what you actually changed.
+- Pre-existing quality-gate failures: assume they are NOT yours unless your edits touched related code. If quality gates are red but your edits are unrelated, output \`DONE\` with a COMMIT_MSG describing only what you actually changed.
 - Keep the plan and reasoning concise. Long monologues waste turns.`
 }
 
@@ -161,7 +161,7 @@ export interface ParsedAgentResult {
   planDeviations: string
   /**
    * Optional JSON payload following a `PRIOR_ART:` marker. Generic channel
-   * for any agentAction that wants to flag "here is structured data downstream
+   * for any executable that wants to flag "here is structured data downstream
    * consumers may want." Research uses it to list closed/merged PRs whose
    * diffs should be loaded by a later `loadPriorArt` preflight. The parser
    * does NOT validate the shape — it just captures the trimmed string so

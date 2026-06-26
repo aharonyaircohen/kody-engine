@@ -17,11 +17,13 @@ describe("package asset copying", () => {
 
   it("removes legacy dist asset folders before copying current agent assets", () => {
     copyAssetScript(tmp)
-    writeFile("src/agent-actions/run/profile.json", "{}")
+    writeFile("src/executables/run/profile.json", "{}")
     writeFile("src/jobs/.keep", "")
-    writeFile("src/agent-responsibilities/run/profile.json", "{}")
+    writeFile("src/capabilities/run/profile.json", "{}")
     writeFile("src/plugins/skills/probe/SKILL.md", "# Probe\n")
     writeFile("src/scripts/preview-build-templates/default-Dockerfile.preview.dev", "FROM node\n")
+    writeFile("dist/agent-actions/stale/profile.json", "{}")
+    writeFile("dist/agent-responsibilities/stale/profile.json", "{}")
     writeFile("dist/duties/stale/profile.json", "{}")
     writeFile("dist/executables/stale/profile.json", "{}")
     writeFile("dist/scripts/preview-build-templates/stale", "stale")
@@ -31,10 +33,12 @@ describe("package asset copying", () => {
       stdio: "pipe",
     })
 
+    expect(fs.existsSync(path.join(tmp, "dist", "agent-actions"))).toBe(false)
+    expect(fs.existsSync(path.join(tmp, "dist", "agent-responsibilities"))).toBe(false)
     expect(fs.existsSync(path.join(tmp, "dist", "duties"))).toBe(false)
-    expect(fs.existsSync(path.join(tmp, "dist", "executables"))).toBe(false)
+    expect(fs.existsSync(path.join(tmp, "dist", "executables", "stale"))).toBe(false)
     expect(fs.existsSync(path.join(tmp, "dist", "scripts", "preview-build-templates"))).toBe(false)
-    expect(fs.existsSync(path.join(tmp, "dist", "agent-actions", "run", "profile.json"))).toBe(true)
+    expect(fs.existsSync(path.join(tmp, "dist", "executables", "run", "profile.json"))).toBe(true)
     expect(
       fs.existsSync(path.join(tmp, "dist", "bin", "preview-build-templates", "default-Dockerfile.preview.dev")),
     ).toBe(true)

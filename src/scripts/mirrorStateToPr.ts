@@ -1,7 +1,7 @@
 /**
  * Postflight: if this run produced (or already had) a PR, mirror the issue's
  * current task state onto the PR so subsequent PR-targeted
- * agentActions (review, fix) and the orchestrator can read the same flow
+ * executables (review, fix) and the orchestrator can read the same flow
  * context from either place.
  *
  * Idempotent: writeTaskState upserts the PR state file. No-op when no PR
@@ -11,7 +11,7 @@
  * AFTER ensurePr (which materializes prUrl).
  */
 
-import type { PostflightScript } from "../agent-actions/types.js"
+import type { PostflightScript } from "../executables/types.js"
 import { readTaskState, type TaskState, writeTaskState } from "../state.js"
 
 export const mirrorStateToPr: PostflightScript = async (ctx) => {

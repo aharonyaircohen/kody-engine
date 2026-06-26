@@ -1,5 +1,5 @@
 /**
- * Flow script for the `resolve` agentAction.
+ * Flow script for the `resolve` executable.
  *
  * GitHub's `mergeable` field is the authoritative source of truth for
  * "is there a conflict?" We consult it FIRST. The local `git merge` is
@@ -21,7 +21,7 @@
  */
 
 import { execFileSync } from "node:child_process"
-import type { PreflightScript } from "../agent-actions/types.js"
+import type { PreflightScript } from "../executables/types.js"
 import { checkoutPrBranch, getCurrentBranch, mergeBase } from "../branch.js"
 import { getRunUrl } from "../gha.js"
 import { getPr, postPrReviewComment } from "../issue.js"

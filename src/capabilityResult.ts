@@ -1,160 +1,197 @@
-import type {
-  ActResult,
-  CapabilityAlert,
-  CapabilityEvidenceItem,
-  CapabilityKind,
-  CapabilityResourceRef,
-  CapabilityResult,
-  CapabilitySuggestedAction,
-  ObserveResult,
-  VerifyResult,
-} from "./agent-actions/types.js"
+import {
+  type CapabilityReportTarget,
+  parseCapabilityReportEvidence,
+  parseCapabilityReportTarget,
+} from "./capabilityReport.js"
+import type { GoalState } from "./goal/state.js"
 
-const ACT_STATUSES = new Set(["created", "changed", "triggered", "skipped", "failed"])
-const ALERT_LEVELS = new Set(["info", "warning", "error"])
+export const CAPABILITY_RESULT_MARKER = "KODY_CAPABILITY_RESULT"
 
-export class CapabilityResultError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = "CapabilityResultError"
-  }
+export type CapabilityResultStatus = "pass" | "fail" | "blocked" | "changed" | "noop"
+
+export interface CapabilityResultArtifact {
+  label: string
+  url?: string
+  path?: string
 }
 
-export function parseCapabilityResult(raw: unknown, expectedKind?: CapabilityKind): CapabilityResult {
-  const obj = asRecord(raw, "capability result")
-  const kind = obj.kind
-  if (kind !== "observe" && kind !== "act" && kind !== "verify") {
-    throw new CapabilityResultError('"kind" must be one of: observe | act | verify')
-  }
-  if (expectedKind && kind !== expectedKind) {
-    throw new CapabilityResultError(`capability result kind mismatch: expected ${expectedKind}, got ${kind}`)
-  }
-  if (kind === "observe") return parseObserveResult(obj)
-  if (kind === "act") return parseActResult(obj)
-  return parseVerifyResult(obj)
+export interface CapabilityResult {
+  version: 1
+  target?: CapabilityReportTarget
+  status: CapabilityResultStatus
+  summary: string
+  evidence?: Record<string, boolean>
+  facts: Record<string, unknown>
+  artifacts: CapabilityResultArtifact[]
+  missingEvidence: string[]
+  blockers: string[]
 }
 
-function parseObserveResult(obj: Record<string, unknown>): ObserveResult {
-  const result: ObserveResult = { kind: "observe" }
-  const facts = optionalRecord(obj.facts, "facts")
-  const evidence = optionalRecord(obj.evidence, "evidence")
-  const alerts = optionalArray(obj.alerts, "alerts", parseAlert)
-  const suggestedActions = optionalArray(obj.suggestedActions, "suggestedActions", parseSuggestedAction)
-  if (facts) result.facts = facts
-  if (evidence) result.evidence = evidence
-  if (alerts) result.alerts = alerts
-  if (suggestedActions) result.suggestedActions = suggestedActions
-  if (!facts && !evidence && !alerts && !suggestedActions) {
-    throw new CapabilityResultError("observe result must include facts, alerts, suggestedActions, or evidence")
-  }
-  return result
-}
+const RESULT_LINE = /^KODY_(?:CAPABILITY|CAPABILITY)_RESULT=(.+)$/gm
+const STATUSES = new Set<CapabilityResultStatus>(["pass", "fail", "blocked", "changed", "noop"])
+const CONTROL_FACT_KEYS = new Set(["blockers", "destination", "capabilities", "route", "stage", "state"])
 
-function parseActResult(obj: Record<string, unknown>): ActResult {
-  if (typeof obj.status !== "string" || !ACT_STATUSES.has(obj.status)) {
-    throw new CapabilityResultError('"status" must be one of: created | changed | triggered | skipped | failed')
-  }
-  const result: ActResult = { kind: "act", status: obj.status as ActResult["status"] }
-  const changedResources = optionalArray(obj.changedResources, "changedResources", parseResourceRef)
-  const createdResources = optionalArray(obj.createdResources, "createdResources", parseResourceRef)
-  const actionResult = optionalRecord(obj.actionResult, "actionResult")
-  const evidence = optionalRecord(obj.evidence, "evidence")
-  if (changedResources) result.changedResources = changedResources
-  if (createdResources) result.createdResources = createdResources
-  if (actionResult) result.actionResult = actionResult
-  if (evidence) result.evidence = evidence
-  return result
-}
-
-function parseVerifyResult(obj: Record<string, unknown>): VerifyResult {
-  if (typeof obj.passed !== "boolean") {
-    throw new CapabilityResultError('"passed" must be boolean')
-  }
-  const result: VerifyResult = { kind: "verify", passed: obj.passed }
-  const evidence = optionalArray(obj.evidence, "evidence", parseEvidenceItem)
-  const blockers = optionalStringArray(obj.blockers, "blockers")
-  const facts = optionalRecord(obj.facts, "facts")
-  if (evidence) result.evidence = evidence
-  if (blockers) result.blockers = blockers
-  if (facts) result.facts = facts
-  return result
-}
-
-function parseAlert(raw: unknown, path: string): CapabilityAlert {
-  const obj = asRecord(raw, path)
-  if (obj.level !== undefined && (typeof obj.level !== "string" || !ALERT_LEVELS.has(obj.level))) {
-    throw new CapabilityResultError(`${path}.level must be one of: info | warning | error`)
-  }
-  return {
-    ...(obj.level ? { level: obj.level as CapabilityAlert["level"] } : {}),
-    message: requiredString(obj.message, `${path}.message`),
-  }
-}
-
-function parseSuggestedAction(raw: unknown, path: string): CapabilitySuggestedAction {
-  const obj = asRecord(raw, path)
-  const args = optionalRecord(obj.args, `${path}.args`)
-  return {
-    action: requiredString(obj.action, `${path}.action`),
-    ...(args ? { args } : {}),
-    ...(obj.reason !== undefined ? { reason: requiredString(obj.reason, `${path}.reason`) } : {}),
-  }
-}
-
-function parseResourceRef(raw: unknown, path: string): CapabilityResourceRef {
-  const obj = asRecord(raw, path)
-  const ref: CapabilityResourceRef = { type: requiredString(obj.type, `${path}.type`) }
-  if (obj.id !== undefined) {
-    if (typeof obj.id !== "string" && typeof obj.id !== "number") {
-      throw new CapabilityResultError(`${path}.id must be string or number`)
+export function parseCapabilityResultsFromText(text: string): CapabilityResult[] {
+  const results: CapabilityResult[] = []
+  for (const match of text.matchAll(RESULT_LINE)) {
+    const raw = match[1]?.trim()
+    if (!raw) continue
+    try {
+      const parsed = parseCapabilityResult(JSON.parse(raw))
+      if (parsed) results.push(parsed)
+    } catch {
+      // Capability results are an optional side channel; malformed lines are ignored.
     }
-    ref.id = obj.id
   }
-  if (obj.number !== undefined) {
-    if (typeof obj.number !== "number") throw new CapabilityResultError(`${path}.number must be number`)
-    ref.number = obj.number
-  }
-  if (obj.url !== undefined) ref.url = requiredString(obj.url, `${path}.url`)
-  if (obj.name !== undefined) ref.name = requiredString(obj.name, `${path}.name`)
-  return ref
+  return results
 }
 
-function parseEvidenceItem(raw: unknown, path: string): CapabilityEvidenceItem {
-  const obj = asRecord(raw, path)
+export function parseCapabilityResult(raw: unknown): CapabilityResult | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
+  const obj = raw as Record<string, unknown>
+
+  if (obj.version !== 1) return null
+  if (!isCapabilityResultStatus(obj.status)) return null
+
+  const summary = typeof obj.summary === "string" ? obj.summary.trim() : ""
+  if (!summary) return null
+
+  const target = obj.target === undefined ? undefined : parseCapabilityReportTarget(obj.target)
+  if (obj.target !== undefined && !target) return null
+  const evidence = obj.evidence === undefined ? undefined : parseCapabilityReportEvidence(obj.evidence)
+  if (obj.evidence !== undefined && !evidence) return null
+
+  const facts = parseFacts(obj.facts)
+  if (!facts) return null
+
+  const artifacts = parseArtifacts(obj.artifacts)
+  if (!artifacts) return null
+  const missingEvidence = parseOptionalStringArray(obj.missingEvidence)
+  if (!missingEvidence) return null
+  const blockers = parseOptionalStringArray(obj.blockers)
+  if (!blockers) return null
+
   return {
-    ...(obj.source !== undefined ? { source: requiredString(obj.source, `${path}.source`) } : {}),
-    message: requiredString(obj.message, `${path}.message`),
-    ...(obj.url !== undefined ? { url: requiredString(obj.url, `${path}.url`) } : {}),
+    version: 1,
+    ...(target ? { target } : {}),
+    status: obj.status,
+    summary,
+    ...(evidence ? { evidence } : {}),
+    facts,
+    artifacts,
+    missingEvidence,
+    blockers,
   }
 }
 
-function optionalArray<T>(raw: unknown, path: string, parseItem: (raw: unknown, path: string) => T): T[] | undefined {
-  if (raw === undefined || raw === null) return undefined
-  if (!Array.isArray(raw)) throw new CapabilityResultError(`${path} must be an array`)
-  return raw.map((item, index) => parseItem(item, `${path}[${index}]`))
-}
-
-function optionalStringArray(raw: unknown, path: string): string[] | undefined {
-  if (raw === undefined || raw === null) return undefined
-  if (!Array.isArray(raw)) throw new CapabilityResultError(`${path} must be an array`)
-  return raw.map((item, index) => requiredString(item, `${path}[${index}]`))
-}
-
-function optionalRecord(raw: unknown, path: string): Record<string, unknown> | undefined {
-  if (raw === undefined || raw === null) return undefined
-  return asRecord(raw, path)
-}
-
-function asRecord(raw: unknown, path: string): Record<string, unknown> {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    throw new CapabilityResultError(`${path} must be an object`)
+export function applyCapabilityResultToObjectiveState(
+  state: GoalState,
+  result: CapabilityResult,
+  evidenceOverride?: string,
+): GoalState {
+  const priorFacts = parseFacts(state.extra.facts) ?? {}
+  const nextFacts: Record<string, unknown> = { ...priorFacts }
+  for (const [key, value] of Object.entries(result.facts)) {
+    if (CONTROL_FACT_KEYS.has(key)) continue
+    nextFacts[key] = value
   }
-  return raw as Record<string, unknown>
+  for (const [key, value] of Object.entries(result.evidence ?? {})) {
+    nextFacts[key] = value
+  }
+
+  const evidence = evidenceOverride || (typeof nextFacts.pendingEvidence === "string" ? nextFacts.pendingEvidence : "")
+  const resultIncludesEvidence = evidence ? Object.hasOwn(result.evidence ?? {}, evidence) : false
+  const terminalStatus = result.status === "pass" || result.status === "fail" || result.status === "blocked"
+  if (evidence && !resultIncludesEvidence) {
+    if (result.status === "pass") nextFacts[evidence] = true
+    if (result.status === "fail" || result.status === "blocked") nextFacts[evidence] = false
+  }
+  if (evidence) {
+    if (nextFacts.pendingEvidence === evidence && (resultIncludesEvidence || terminalStatus)) {
+      delete nextFacts.pendingEvidence
+    }
+  }
+
+  const blockers = parseStringArray(state.extra.blockers) ?? []
+  const resultBlockers =
+    result.blockers.length > 0 || (result.status !== "fail" && result.status !== "blocked")
+      ? result.blockers
+      : [result.summary]
+  for (const blocker of resultBlockers) {
+    if (!blockers.includes(blocker)) blockers.push(blocker)
+  }
+
+  return {
+    ...state,
+    extra: {
+      ...state.extra,
+      facts: nextFacts,
+      blockers,
+      lastCapabilityResult: {
+        target: result.target,
+        status: result.status,
+        summary: result.summary,
+        evidence: result.evidence,
+        facts: result.facts,
+        artifacts: result.artifacts,
+        missingEvidence: result.missingEvidence,
+        blockers: result.blockers,
+      },
+    },
+  }
 }
 
-function requiredString(raw: unknown, path: string): string {
-  if (typeof raw !== "string" || raw.length === 0) {
-    throw new CapabilityResultError(`${path} must be a non-empty string`)
+function isCapabilityResultStatus(value: unknown): value is CapabilityResultStatus {
+  return typeof value === "string" && STATUSES.has(value as CapabilityResultStatus)
+}
+
+function parseFacts(raw: unknown): Record<string, unknown> | null {
+  if (raw === undefined) return {}
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
+
+  const facts: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!key.trim()) return null
+    if (CONTROL_FACT_KEYS.has(key)) continue
+    facts[key] = value
   }
-  return raw
+  return facts
+}
+
+function parseStringArray(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null
+  const out: string[] = []
+  for (const item of raw) {
+    if (typeof item !== "string") return null
+    out.push(item)
+  }
+  return out
+}
+
+function parseOptionalStringArray(raw: unknown): string[] | null {
+  if (raw === undefined) return []
+  return parseStringArray(raw)
+}
+
+function parseArtifacts(raw: unknown): CapabilityResultArtifact[] | null {
+  if (raw === undefined) return []
+  if (!Array.isArray(raw)) return null
+
+  const artifacts: CapabilityResultArtifact[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null
+    const rawArtifact = item as Record<string, unknown>
+    const label = typeof rawArtifact.label === "string" ? rawArtifact.label.trim() : ""
+    const url = typeof rawArtifact.url === "string" ? rawArtifact.url.trim() : ""
+    const artifactPath = typeof rawArtifact.path === "string" ? rawArtifact.path.trim() : ""
+
+    if (!label || (!url && !artifactPath)) return null
+
+    artifacts.push({
+      label,
+      ...(url ? { url } : {}),
+      ...(artifactPath ? { path: artifactPath } : {}),
+    })
+  }
+  return artifacts
 }

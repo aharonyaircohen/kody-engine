@@ -53,11 +53,11 @@ function resetWorkingTree(cwd?: string): void {
   }
   try {
     // `-e .kody` excludes kody's own directory from the clean. Consumer
-    // agentActions live at `.kody/agent-actions/<name>/` and are TRACKED, but the
+    // executables live at `.kody/executables/<name>/` and are TRACKED, but the
     // consumer repo's `.gitignore` ignores `.kody/*` and re-includes them via a
-    // negation (`!.kody/agent-actions/**`). On the CI runner, `git clean -fd`'s
+    // negation (`!.kody/executables/**`). On the CI runner, `git clean -fd`'s
     // directory walk over that negated-ignore pattern removes the whole
-    // `.kody/agent-actions/<name>` directory — so the next preflight (composePrompt)
+    // `.kody/executables/<name>` directory — so the next preflight (composePrompt)
     // crashes with "no prompt template found" (readdir ENOENT). Excluding `.kody`
     // keeps the engine's tracked assets intact; the ephemeral runtime state under
     // `.kody/` is gitignored bookkeeping that's safe to leave on an ephemeral runner.
@@ -75,7 +75,7 @@ function resetWorkingTree(cwd?: string): void {
  * is ephemeral and may carry build artifacts written by earlier steps
  * (e.g. payload's `importMap.js` regenerated during `pnpm install`); these
  * would otherwise make `gh pr checkout` refuse with "Your local changes
- * would be overwritten by checkout" and crash the agentAction.
+ * would be overwritten by checkout" and crash the executable.
  *
  * Discarding is safe because nothing the engine cares about lives in the
  * runner's pre-checkout working tree — the PR's branch contents are the
@@ -99,8 +99,8 @@ export function checkoutPrBranch(prNumber: number, cwd?: string): string {
   }
   try {
     // Exclude `.kody` for the same reason as resetWorkingTree: `git clean -fd`
-    // otherwise removes the tracked-but-ignore-negated `.kody/agent-actions/<name>`
-    // dirs on the CI runner, breaking PR-driven agentActions (fix/fix-ci/resolve).
+    // otherwise removes the tracked-but-ignore-negated `.kody/executables/<name>`
+    // dirs on the CI runner, breaking PR-driven executables (fix/fix-ci/resolve).
     execFileSync("git", ["clean", "-fd", "-e", ".kody"], {
       cwd,
       env,
@@ -118,7 +118,7 @@ export function checkoutPrBranch(prNumber: number, cwd?: string): string {
   })
   // The checkout can drop kody's tracked-but-ignore-negated `.kody/` assets;
   // restore them from the checked-out branch's HEAD tree (no-op if that branch
-  // predates the agentActions — those PRs would need a rebase regardless).
+  // predates the executables — those PRs would need a rebase regardless).
   restoreKodyAssets(cwd)
   return getCurrentBranch(cwd)
 }
@@ -154,11 +154,11 @@ export function mergeBase(baseBranch: string, cwd?: string): "clean" | "conflict
 }
 
 /**
- * Force-restore legacy kody-owned tracked assets (`.kody/agent-actions`, `.kody/missions`,
+ * Force-restore legacy kody-owned tracked assets (`.kody/executables`, `.kody/missions`,
  * …) into the working tree from the current HEAD tree. A branch checkout on the
  * CI runner can drop these: they're tracked, but the consumer repo's `.gitignore`
  * ignores `.kody/*` and re-includes them via a negation, and git's working-tree
- * update over that pattern removes the `.kody/agent-actions/<name>` directory —
+ * update over that pattern removes the `.kody/executables/<name>` directory —
  * which makes the next preflight (composePrompt) crash with readdir ENOENT.
  * `git checkout HEAD -- .kody` rematerialises whatever the branch dance dropped.
  * Best-effort: repos that don't track `.kody` just no-op (the checkout errors).

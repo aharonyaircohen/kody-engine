@@ -14,11 +14,11 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { resolveAgentAction } from "../../src/registry.js"
+import { resolveExecutable } from "../../src/registry.js"
 
 function schedulerPath(): string {
-  const resolved = resolveAgentAction("goal-scheduler")
-  if (!resolved) throw new Error("goal-scheduler agentAction not found")
+  const resolved = resolveExecutable("goal-scheduler")
+  if (!resolved) throw new Error("goal-scheduler executable not found")
   return path.join(path.dirname(resolved), "scheduler.sh")
 }
 
@@ -30,8 +30,8 @@ function managedGoalExtra(): Record<string, unknown> {
   return {
     type: "release",
     destination: { outcome: "publish", evidence: ["releasePrExists"] },
-    agentResponsibilities: ["release-prepare"],
-    route: [{ evidence: "releasePrExists", stage: "prepare", agentResponsibility: "release-prepare" }],
+    capabilities: ["release-prepare"],
+    route: [{ evidence: "releasePrExists", stage: "prepare", capability: "release-prepare" }],
     stage: "prepare",
     facts: {},
     blockers: [],

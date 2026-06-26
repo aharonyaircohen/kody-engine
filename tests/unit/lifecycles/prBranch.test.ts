@@ -309,7 +309,7 @@ describe("live profiles using pr-branch lifecycle", () => {
   const repoRoot = path.resolve(__dirname, "../../..")
 
   it("run expands with sync:false, contextExtras=resolveArtifacts, mirrorState:true", () => {
-    const profile = loadProfile(path.join(repoRoot, "src/agent-actions/run/profile.json"))
+    const profile = loadProfile(path.join(repoRoot, "src/executables/run/profile.json"))
     expect(profile.lifecycle).toBe("pr-branch")
     const pre = profile.scripts.preflight.map((e) => e.script)
     expect(pre).not.toContain("syncFlow")

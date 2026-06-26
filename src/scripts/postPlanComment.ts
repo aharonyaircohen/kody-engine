@@ -1,8 +1,8 @@
 /**
- * Postflight for the `plan` agentAction. Posts the plan body as a clearly
+ * Postflight for the `plan` executable. Posts the plan body as a clearly
  * labeled issue comment, separate from the machine-readable task-state block
  * (which `saveTaskState` writes elsewhere). The plan comment is what a human
- * reader sees; the state block is what the next agentAction (`run`) reads.
+ * reader sees; the state block is what the next executable (`run`) reads.
  *
  * No-op when the agent did not complete or produced no plan body.
  *
@@ -12,7 +12,7 @@
  * inert code (`kody run`, no @) and instruct the reader to add the @.
  */
 
-import type { PostflightScript } from "../agent-actions/types.js"
+import type { PostflightScript } from "../executables/types.js"
 import type { TaskState } from "../state.js"
 import { postAgentSummaryComment } from "./postAgentSummaryComment.js"
 

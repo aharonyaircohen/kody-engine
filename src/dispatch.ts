@@ -1,46 +1,46 @@
 /**
- * Route a GitHub event / CLI invocation to a agentResponsibility action.
+ * Route a GitHub event / CLI invocation to a capability action.
  *
- * Dispatch contains ZERO hardcoded implementation agentAction names. What to
+ * Dispatch contains ZERO hardcoded implementation executable names. What to
  * route where comes from:
  *   - the comment body (first token after `@kody`),
- *   - the matched agentResponsibility action's implementation profile `inputs[]`,
+ *   - the matched capability action's implementation profile `inputs[]`,
  *   - `config.aliases` (typed word → action name),
- *   - legacy `config.defaultAgentAction` / `config.defaultPrAgentAction`
+ *   - legacy `config.defaultExecutable` / `config.defaultPrExecutable`
  *     fields, now interpreted as default action names.
  *
- * Adding a public command = add a agentResponsibility action. The agentAction remains the
- * implementation detail selected by that agentResponsibility.
+ * Adding a public command = add a capability action. The executable remains the
+ * implementation detail selected by that capability.
  */
 
 import * as fs from "node:fs"
-import type { InputSpec } from "./agent-actions/types.js"
+import type { InputSpec } from "./executables/types.js"
 import { BUILTIN_ALIASES, type KodyConfig } from "./config.js"
 import { cronMatchesInWindow } from "./cron-match.js"
 import {
-  type DiscoveredAgentResponsibilityAction,
+  type DiscoveredCapabilityAction,
   getProfileInputs,
-  listAgentActions,
-  listAgentResponsibilityActions,
-  resolveAgentResponsibilityAction,
+  listExecutables,
+  listCapabilityActions,
+  resolveCapabilityAction,
 } from "./registry.js"
 
 /**
  * Lowercased natural-language lead-ins that should NOT be treated as a
  * subcommand attempt. With the firstToken set to one of these words,
- * dispatch falls through to the default agentResponsibility action instead of surfacing
+ * dispatch falls through to the default capability action instead of surfacing
  * the comment as an unrecognized-command error. Keep this small and
  * conservative — every entry weakens the "typo'd command" detection.
  */
 const POLITE_WORDS = new Set<string>(["please", "kindly", "hi", "hey", "hello", "thanks", "thank", "plz", "pls", "yo"])
 
 export interface DispatchResult {
-  /** Public action resolved from the agentResponsibility layer. */
+  /** Public action resolved from the capability layer. */
   action: string
-  /** AgentResponsibility slug that owns the action. */
-  agentResponsibility: string
-  /** Implementation agentAction selected by the agentResponsibility. */
-  agentAction: string
+  /** Capability slug that owns the action. */
+  capability: string
+  /** Implementation executable selected by the capability. */
+  executable: string
   cliArgs: Record<string, unknown>
   target: number
   /**
@@ -55,47 +55,47 @@ export interface DispatchResult {
 }
 
 /**
- * Look up an agentAction's primary numeric input name from its profile.
+ * Look up an executable's primary numeric input name from its profile.
  * Returns the first required `int` input's `name` (e.g. "issue" for `run`,
  * "pr" for `resolve`/`sync`/`fix-ci`). Returns null when the profile is
  * missing or declares no required int — caller decides the fallback.
  *
  * Why: workflow_dispatch carries a generic `issue_number` numeric input.
- * Each agentAction's profile declares which flag it actually accepts; binding
+ * Each executable's profile declares which flag it actually accepts; binding
  * the dispatched number under that declared name keeps the router free of
  * a per-verb list and works automatically for any future PR/issue primitive.
  */
-function primaryNumericInputName(agentAction: string): string | null {
-  const inputs = getProfileInputs(agentAction)
+function primaryNumericInputName(executable: string): string | null {
+  const inputs = getProfileInputs(executable)
   if (!inputs) return null
   const intInput = inputs.find((i) => i.type === "int" && i.required)
   return intInput?.name ?? null
 }
 
-function resolveOperatorAction(action: string): DiscoveredAgentResponsibilityAction | null {
-  return resolveAgentResponsibilityAction(action)
+function resolveOperatorAction(action: string): DiscoveredCapabilityAction | null {
+  return resolveCapabilityAction(action)
 }
 
-function resolveConfiguredAction(action: string): DiscoveredAgentResponsibilityAction | null {
-  return resolveAgentResponsibilityAction(action)
+function resolveConfiguredAction(action: string): DiscoveredCapabilityAction | null {
+  return resolveCapabilityAction(action)
 }
 
-function requiredRoute(action: string): DiscoveredAgentResponsibilityAction {
+function requiredRoute(action: string): DiscoveredCapabilityAction {
   const route = resolveConfiguredAction(action)
-  if (!route) throw new Error(`required agentResponsibility action not found: ${action}`)
+  if (!route) throw new Error(`required capability action not found: ${action}`)
   return route
 }
 
 function routeResult(
-  route: DiscoveredAgentResponsibilityAction,
+  route: DiscoveredCapabilityAction,
   cliArgs: Record<string, unknown>,
   target: number,
   why?: string,
 ): DispatchResult {
   const result: DispatchResult = {
     action: route.action,
-    agentResponsibility: route.agentResponsibility,
-    agentAction: route.agentAction,
+    capability: route.capability,
+    executable: route.executable,
     cliArgs: { ...route.cliArgs, ...cliArgs },
     target,
   }
@@ -111,8 +111,8 @@ function routeResult(
  * kody did nothing, no record was left.
  *
  * Variants:
- *   - route: dispatch resolved an agentAction; run it.
- *   - unrecognized: comment had `@kody <token>` but no agentResponsibility action was
+ *   - route: dispatch resolved an executable; run it.
+ *   - unrecognized: comment had `@kody <token>` but no capability action was
  *     found. The user should be told. Carries the token + the available
  *     options so the comment can suggest alternatives.
  *   - silent: comment was not addressed to kody (no @kody, bot author,
@@ -124,7 +124,7 @@ export type DispatchOutcome =
   | { kind: "silent"; reason: string }
 
 /**
- * Explicit CLI override (legacy --issue flag): route to the `run` agentAction.
+ * Explicit CLI override (legacy --issue flag): route to the `run` executable.
  * Intentionally the one hardcoded path — it exists to support the historical
  * `kody --issue N` shorthand and has no comment-dispatch analogue.
  */
@@ -152,31 +152,31 @@ export function autoDispatch(opts?: {
     const inputs = objectValue(event.inputs)
     const n = parseInt(String(inputs?.issue_number ?? ""), 10)
     if (!Number.isNaN(n) && n > 0) {
-      // `agentResponsibility` + `base` inputs let dispatched runs pick a agentResponsibility action
+      // `capability` + `base` inputs let dispatched runs pick a capability action
       // and optional safe branch base without posting bot-authored comments.
       // manual dispatch with just an issue number.
-      const actionName = String(inputs?.agentResponsibility ?? inputs?.agentAction ?? "").trim() || "run"
+      const actionName = String(inputs?.capability ?? "").trim() || "run"
       const route = resolveConfiguredAction(actionName)
       if (!route) return null
       const base = String(inputs?.base ?? "").trim()
       // The `issue_number` input is a generic numeric target, not literally an
-      // issue. Bind `n` under the resolved agentAction's declared int input name
+      // issue. Bind `n` under the resolved executable's declared int input name
       // (`run` → `issue`, `resolve`/`sync`/`fix-ci` → `pr`). Hardcoding `issue`
       // here used to make PR primitives reject the dispatched run with
       // "unknown arg: --issue", silently breaking pr-health auto-runs.
-      const targetKey = primaryNumericInputName(route.agentAction) ?? "issue"
+      const targetKey = primaryNumericInputName(route.executable) ?? "issue"
       const cliArgs: Record<string, unknown> = { [targetKey]: n }
       if (base) cliArgs.base = base
       return routeResult(route, cliArgs, n)
     }
-    // No issue_number input → manual force-fire of all watch agentActions.
+    // No issue_number input → manual force-fire of all watch executables.
     // The CLI handles this the same way as a schedule event but with the
     // cron filter bypassed (humans want to test "now"). Returning null
     // signals "fan out via dispatchScheduledWatches({ force: true })".
     return null
   }
 
-  // Cron-driven wakes are not handled here — they fire many agentActions
+  // Cron-driven wakes are not handled here — they fire many executables
   // (every watch whose `schedule` matches the wake window), not one. The
   // CLI calls dispatchScheduledWatches() instead and iterates the result.
   if (eventName === "schedule") return null
@@ -187,9 +187,9 @@ export function autoDispatch(opts?: {
   // doesn't auto-finalize; they'd run `kody release-publish` directly or
   // re-trigger `@kody release` on the originating issue.
   //
-  // Opt-in routing: when `config.onPullRequest` names an agentAction and the
+  // Opt-in routing: when `config.onPullRequest` names an executable and the
   // action is opened/synchronize/reopened, route the PR there (e.g.
-  // "preview-build" rebuilds a per-PR preview on every push). The agentAction
+  // "preview-build" rebuilds a per-PR preview on every push). The executable
   // name lives in config, never here. closed/merged stay null (see above).
   if (eventName === "pull_request") {
     const actionName = opts?.config?.onPullRequest?.trim()
@@ -203,7 +203,7 @@ export function autoDispatch(opts?: {
         // Bind the PR number under the target's first required int input
         // (preview-build → `pr`); falls back to `pr` if the profile is
         // missing, mirroring the workflow_dispatch numeric-input binding.
-        const targetKey = primaryNumericInputName(route.agentAction) ?? "pr"
+        const targetKey = primaryNumericInputName(route.executable) ?? "pr"
         return routeResult(route, { [targetKey]: prNum }, prNum)
       }
     }
@@ -223,7 +223,7 @@ export function autoDispatch(opts?: {
   const authorType = String(user?.type ?? "")
   if (!hasKodyMention(rawBody)) return null
   // Bot-authored comments: do NOT blanket-drop. Kody runs as a bot in repos
-  // whose token is a GitHub App (e.g. `kodyade[bot]`), so agentResponsibilities, slash
+  // whose token is a GitHub App (e.g. `kodyade[bot]`), so capabilities, slash
   // commands, and multi-step flows self-dispatch by posting `@kody <command>`
   // — blanket-dropping bots silently kills all of that. Instead we defer the
   // decision: a bot is honored ONLY when it issues an explicit, resolved
@@ -244,18 +244,18 @@ export function autoDispatch(opts?: {
   const afterTag = extractAfterTag(body)
   const firstTokenRaw = extractSubcommand(afterTag)
   // Politeness/natural-language words: skip them so "@kody please fix X"
-  // routes to the default agentResponsibility action instead of surfacing as unrecognized.
+  // routes to the default capability action instead of surfacing as unrecognized.
   // Anything not in this small set is assumed to be a command attempt —
   // typo'd or otherwise — and will surface for user feedback.
   const firstToken = firstTokenRaw && POLITE_WORDS.has(firstTokenRaw) ? null : firstTokenRaw
 
   // Resolve first token via aliases → registry. No match → fall back to the
-  // default agentResponsibility action for this event shape (issue vs PR). Alias map comes
+  // default capability action for this event shape (issue vs PR). Alias map comes
   // from config; BUILTIN_ALIASES covers callers that don't pass a config.
   const aliases = opts?.config?.aliases ?? BUILTIN_ALIASES
   const aliased = firstToken ? (aliases[firstToken] ?? firstToken) : null
 
-  let route: DiscoveredAgentResponsibilityAction | null = null
+  let route: DiscoveredCapabilityAction | null = null
   let consumedFirstToken = false
   if (aliased) {
     route = resolveOperatorAction(aliased)
@@ -263,40 +263,40 @@ export function autoDispatch(opts?: {
       consumedFirstToken = true
     } else if (firstToken && aliases[firstToken] && aliases[firstToken] === aliased) {
       // The user (or BUILTIN_ALIASES) configured an alias whose target
-      // doesn't exist — likely a deleted/renamed agentResponsibility action. Surface this
+      // doesn't exist — likely a deleted/renamed capability action. Surface this
       // loudly so operators can spot the misconfig in GHA logs.
       // We deliberately only warn for *aliased* targets, not arbitrary
       // typed tokens, so natural language like "@kody please fix X" stays
       // silent (the politeness words get stripped downstream into feedback).
       process.stderr.write(
-        `[kody] dispatch: alias '${firstToken}' → '${aliased}' has no matching agentResponsibility action; falling back to default\n`,
+        `[kody] dispatch: alias '${firstToken}' → '${aliased}' has no matching capability action; falling back to default\n`,
       )
     }
   }
   // Fall through to default ONLY when the user did not type a specific
   // subcommand token. If they typed something that didn't resolve (e.g.
-  // a typo, a renamed agentResponsibility action), bail with no route so the typed
+  // a typo, a renamed capability action), bail with no route so the typed
   // wrapper can surface the unrecognized comment back to the user. The
   // POLITE_WORDS filter above lets natural-language phrasings through to
   // the default — the "no firstToken" condition here is what gates them.
   if (!route && !firstToken) {
     const defaultAction = isPr
-      ? (opts?.config?.defaultPrAgentAction ?? null)
-      : (opts?.config?.defaultAgentAction ?? null)
+      ? (opts?.config?.defaultPrExecutable ?? null)
+      : (opts?.config?.defaultExecutable ?? null)
     route = defaultAction ? resolveConfiguredAction(defaultAction) : null
   }
   // Bot self-dispatch gate: a bot-authored comment may ONLY proceed when it
   // resolved to an explicit command (`consumedFirstToken`). It must never fall
-  // through to the default agentResponsibility action or run on chatter — that's the loop
+  // through to the default capability action or run on chatter — that's the loop
   // surface. Humans keep the default-fallback behavior.
   //
-  // Scope of this gate: the @-mention comment path only. The agentResponsibility MCP tool
+  // Scope of this gate: the @-mention comment path only. The capability MCP tool
   // `dispatch_workflow` bypasses this entirely (it uses workflow_dispatch,
-  // not a bot-authored @kody comment), so a agentResponsibility in ASK mode can still
+  // not a bot-authored @kody comment), so a capability in ASK mode can still
   // invoke qa-engineer / ui-review via that tool — see GATE_EXEMPT_DUTIES
-  // in agentResponsibilityMcp.ts. A future maintainer reading this gate should not
+  // in capabilityMcp.ts. A future maintainer reading this gate should not
   // "fix" it by also gating the tool path; the two surfaces are
-  // independent and the tool path is the one the agentResponsibility contract relies on.
+  // independent and the tool path is the one the capability contract relies on.
   if (isBotAuthor && !consumedFirstToken) {
     process.stderr.write(
       `[kody] dispatch: ignoring bot comment without an explicit command ` +
@@ -308,15 +308,15 @@ export function autoDispatch(opts?: {
     if (!firstToken) return null
     // Surface why dispatch gave up — currently the consumer just sees
     // "no action for event issue_comment" and has no way to tell whether
-    // the agentResponsibility action wasn't found, the alias was missing, or there's no
+    // the capability action wasn't found, the alias was missing, or there's no
     // default. This breadcrumb makes the gate observable without changing
     // behavior.
     const profileMissing = aliased ? resolveOperatorAction(aliased) === null : true
     process.stderr.write(
-      `[kody] dispatch: no agentResponsibility action resolved for issue_comment ` +
+      `[kody] dispatch: no capability action resolved for issue_comment ` +
         `(firstToken=${firstToken ?? "<none>"}, aliased=${aliased ?? "<none>"}, ` +
-        `actionFound=${!profileMissing}, defaultAgentAction=${opts?.config?.defaultAgentAction ?? "<unset>"}, ` +
-        `defaultPrAgentAction=${opts?.config?.defaultPrAgentAction ?? "<unset>"})\n`,
+        `actionFound=${!profileMissing}, defaultExecutable=${opts?.config?.defaultExecutable ?? "<unset>"}, ` +
+        `defaultPrExecutable=${opts?.config?.defaultPrExecutable ?? "<unset>"})\n`,
     )
     return null
   }
@@ -324,7 +324,7 @@ export function autoDispatch(opts?: {
   // Inputs drive arg parsing and injection. If the profile isn't registered
   // (e.g. a consumer-configured default pointing at something not bundled),
   // fall back to event-shape injection so context isn't silently dropped.
-  const inputs = getProfileInputs(route.agentAction)
+  const inputs = getProfileInputs(route.executable)
   const effectiveInputs = inputs ?? []
   const unknownProfile = inputs === null
   const rest = extractCommentRest(afterTag, consumedFirstToken ? firstToken : null)
@@ -339,7 +339,7 @@ export function autoDispatch(opts?: {
   const restInput = effectiveInputs.find((s) => s.bindsCommentRest === true)
   let why: string | undefined
   if (restInput && leftover.length > 0 && args[restInput.name] === undefined) {
-    // A declared input captures the free text — the agentAction owns it; don't
+    // A declared input captures the free text — the executable owns it; don't
     // also surface it as `why` (that would double the same words).
     args[restInput.name] = leftover
   } else if (leftover.length > 0) {
@@ -358,7 +358,7 @@ export function autoDispatch(opts?: {
  * Typed-outcome variant of autoDispatch. Instead of "null = anything that
  * didn't route," returns a discriminated union the caller MUST handle
  * exhaustively. The `unrecognized` variant carries the token the user
- * typed and the list of available agentResponsibility actions — kody-cli posts a feedback
+ * typed and the list of available capability actions — kody-cli posts a feedback
  * comment in that case so the user gets a clear "I don't know `<token>`"
  * message instead of silent no-op.
  */
@@ -373,7 +373,7 @@ export function autoDispatchTyped(opts?: {
   if (legacy) return { kind: "route", ...legacy }
 
   // Re-derive comment context to distinguish "no @kody mention" (silent)
-  // from "@kody <token> but no agentResponsibility action" (unrecognized → user feedback).
+  // from "@kody <token> but no capability action" (unrecognized → user feedback).
   const eventName = process.env.GITHUB_EVENT_NAME
   const eventPath = process.env.GITHUB_EVENT_PATH
   if (!eventName || !eventPath || !fs.existsSync(eventPath)) {
@@ -423,12 +423,12 @@ export function autoDispatchTyped(opts?: {
     return {
       kind: "silent",
       reason: tokenRaw
-        ? `polite-word lead-in '${tokenRaw}', no default agentResponsibility action configured`
-        : "no subcommand token, no default agentResponsibility action configured",
+        ? `polite-word lead-in '${tokenRaw}', no default capability action configured`
+        : "no subcommand token, no default capability action configured",
     }
   }
 
-  const available = listAgentResponsibilityActions()
+  const available = listCapabilityActions()
     .map((e) => e.action)
     .filter((n) => !n.startsWith("goal-") && !n.startsWith("job-"))
     .sort()
@@ -437,7 +437,7 @@ export function autoDispatchTyped(opts?: {
 }
 
 /**
- * Fan-out for scheduled wakes. Returns a DispatchResult per watch agentResponsibility action
+ * Fan-out for scheduled wakes. Returns a DispatchResult per watch capability action
  * (`role: "watch"`, `kind: "scheduled"`) whose `schedule` cron matched any
  * minute in the wake window `(now - windowSec, now]`. With `force: true`
  * the cron filter is skipped — used when a human runs workflow_dispatch
@@ -455,7 +455,7 @@ export function dispatchScheduledWatches(opts?: { now?: Date; windowSec?: number
   const envWindow = Number(process.env.KODY_SCHEDULE_WINDOW_SEC)
   const windowSec = opts?.windowSec ?? (Number.isFinite(envWindow) && envWindow > 0 ? envWindow : 300)
   const out: DispatchResult[] = []
-  for (const exe of listAgentActions()) {
+  for (const exe of listExecutables()) {
     let raw: string
     try {
       raw = fs.readFileSync(exe.profilePath, "utf-8")
@@ -492,8 +492,8 @@ export function dispatchScheduledWatches(opts?: { now?: Date; windowSec?: number
         ? { ...route, cliArgs: route.cliArgs, target: 0 }
         : {
             action: exe.name,
-            agentResponsibility: exe.name,
-            agentAction: exe.name,
+            capability: exe.name,
+            executable: exe.name,
             cliArgs: {},
             target: 0,
           },

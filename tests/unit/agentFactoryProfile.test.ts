@@ -1,12 +1,12 @@
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
 import { loadProfile, validateScriptReferences } from "../../src/profile.js"
-import { resolveAgentResponsibilityAction } from "../../src/registry.js"
+import { resolveCapabilityAction } from "../../src/registry.js"
 import { allScriptNames } from "../../src/scripts/index.js"
 
 describe("agent-factory profile", () => {
-  it("loads the agentAction and validates script references", () => {
-    const profile = loadProfile(path.resolve(__dirname, "../../src/agent-actions/agent-factory/profile.json"))
+  it("loads the executable and validates script references", () => {
+    const profile = loadProfile(path.resolve(__dirname, "../../src/executables/agent-factory/profile.json"))
 
     expect(profile.name).toBe("agent-factory")
     expect(profile.action).toBe("agent-factory")
@@ -25,14 +25,14 @@ describe("agent-factory profile", () => {
     expect(validateScriptReferences(profile, allScriptNames)).toEqual([])
 })
 
-  it("loads the built-in public responsibility", () => {
-    const profile = loadProfile(path.resolve(__dirname, "../../src/agent-responsibilities/agent-factory/profile.json"))
+  it("loads the built-in public capability", () => {
+    const profile = loadProfile(path.resolve(__dirname, "../../src/capabilities/agent-factory/profile.json"))
 
     expect(profile.name).toBe("agent-factory")
     expect(profile.action).toBe("agent-factory")
-    expect(profile.agentAction).toBe("agent-factory")
+    expect(profile.executable).toBe("agent-factory")
     expect(profile.capabilityKind).toBe("act")
 
-    expect(resolveAgentResponsibilityAction("agent-factory")?.capabilityKind).toBe("act")
+    expect(resolveCapabilityAction("agent-factory")?.capabilityKind).toBe("act")
   })
 })
