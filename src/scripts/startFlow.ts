@@ -1,14 +1,14 @@
 /**
  * Postflight (orchestrator-only): seed `state.flow` if not already set, then
- * dispatch the first child agentAction. Idempotent — if a flow is already in
+ * dispatch the first child executable. Idempotent — if a flow is already in
  * progress for this issue, no-op.
  *
  * Args (from profile entry's `with` object):
- *   - entry: name of the first child agentAction to invoke (e.g. "plan")
+ *   - entry: name of the first child executable to invoke (e.g. "plan")
  *   - target: "issue" | "pr" — where to post the @kody comment
  *
  * Reads:
- *   - profile.name       — orchestrator's own agentAction name, which IS
+ *   - profile.name       — orchestrator's own executable name, which IS
  *                           the flow name (e.g. "bug", "feature", "spec")
  *   - ctx.args.issue     — orchestrator's --issue input
  *   - ctx.data.taskState — loaded by `loadTaskState` preflight
@@ -22,7 +22,7 @@
  * ignores it, stalling the flow before it starts.
  */
 
-import type { PostflightScript, ScriptArgs } from "../agent-actions/types.js"
+import type { PostflightScript, ScriptArgs } from "../executables/types.js"
 import { parsePrNumber } from "../issue.js"
 import type { TaskState } from "../state.js"
 
@@ -34,7 +34,7 @@ export const startFlow: PostflightScript = async (ctx, profile, _agentResult, ar
   }
   const target = (args?.target as string | undefined) ?? "issue"
 
-  // Flow name = orchestrator's own agentAction name. This is what advanceFlow
+  // Flow name = orchestrator's own executable name. This is what advanceFlow
   // posts back (`@kody <flow-name>`) to retrigger the same sub-orchestrator.
   const flowName = profile.name
   const issueNumber = ctx.args.issue as number | undefined

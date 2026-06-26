@@ -3,7 +3,7 @@
  * The composePrompt and checkCoverageWithRetry scripts consume ctx.data.coverageRules.
  */
 
-import type { PreflightScript } from "../agent-actions/types.js"
+import type { PreflightScript } from "../executables/types.js"
 
 export const loadCoverageRules: PreflightScript = async (ctx) => {
   // Phase 5 fast path: container handed us pre-loaded rules.

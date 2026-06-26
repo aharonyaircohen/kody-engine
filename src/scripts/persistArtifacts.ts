@@ -11,7 +11,7 @@
  * producer failures are already surfaced through parseAgentResult's action.
  */
 
-import type { PostflightScript } from "../agent-actions/types.js"
+import type { PostflightScript } from "../executables/types.js"
 import { emptyState, setArtifact, type TaskState } from "../state.js"
 
 export const persistArtifacts: PostflightScript = async (ctx, profile) => {

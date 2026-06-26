@@ -12,7 +12,7 @@
  *   ctx.data.previewUrlSource — "flag" | "env" | "deployment" | "default"  (for diagnostics)
  */
 
-import type { PreflightScript } from "../agent-actions/types.js"
+import type { PreflightScript } from "../executables/types.js"
 import { findPreviewDeploymentUrl } from "../deployments.js"
 
 export const DEFAULT_PREVIEW_URL = "http://localhost:3000"

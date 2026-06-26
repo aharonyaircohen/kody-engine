@@ -1,4 +1,4 @@
-import type { PreflightScript } from "../agent-actions/types.js"
+import type { PreflightScript } from "../executables/types.js"
 import {
   applySimpleGoalTaskSummary,
   isSimpleGoal,
@@ -13,12 +13,12 @@ import { serializeGoalState } from "../goal/state.js"
 import { expandManagedGoalState } from "../goal/typeDefinitions.js"
 import { gh } from "../issue.js"
 import {
-  type GoalAgentResponsibilityScheduleState,
-  isAgentResponsibilityCadenceGoal,
+  type GoalCapabilityScheduleState,
+  isCapabilityCadenceGoal,
   isGoalTargetLoop,
-  planGoalAgentResponsibilitySchedule,
+  planGoalCapabilitySchedule,
   planGoalTargetLoopSchedule,
-} from "./goalAgentResponsibilityScheduling.js"
+} from "./goalCapabilityScheduling.js"
 import type { GoalCtx } from "./goalCtx.js"
 
 export const advanceManagedGoal: PreflightScript = async (ctx) => {
@@ -96,7 +96,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     const beforeSnapshot = goalRunLogSnapshot(goal.id, goal.state, managed)
     const previousScheduleState =
       goal.raw.extra.scheduleState && typeof goal.raw.extra.scheduleState === "object"
-        ? (goal.raw.extra.scheduleState as GoalAgentResponsibilityScheduleState)
+        ? (goal.raw.extra.scheduleState as GoalCapabilityScheduleState)
         : undefined
     const decision = planGoalTargetLoopSchedule({ goal: managed, previousScheduleState })
     restoreGoalIdFact()
@@ -106,7 +106,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     if (decision.kind === "dispatch" && decision.dispatch) {
       ctx.output.nextDispatch = {
         action: decision.dispatch.action,
-        agentAction: decision.dispatch.agentAction,
+        executable: decision.dispatch.executable,
         cliArgs: decision.dispatch.cliArgs,
       }
     }
@@ -147,13 +147,13 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     return
   }
 
-  if (isAgentResponsibilityCadenceGoal(managed, goal.raw.extra)) {
+  if (isCapabilityCadenceGoal(managed, goal.raw.extra)) {
     const beforeSnapshot = goalRunLogSnapshot(goal.id, goal.state, managed)
     const previousScheduleState =
       goal.raw.extra.scheduleState && typeof goal.raw.extra.scheduleState === "object"
-        ? (goal.raw.extra.scheduleState as GoalAgentResponsibilityScheduleState)
+        ? (goal.raw.extra.scheduleState as GoalCapabilityScheduleState)
         : undefined
-    const decision = await planGoalAgentResponsibilitySchedule({
+    const decision = await planGoalCapabilitySchedule({
       goal: managed,
       cwd: ctx.cwd,
       config: ctx.config,
@@ -165,8 +165,8 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     ctx.data.managedGoalDecision = decision
     if (decision.kind === "dispatch" && decision.dispatch) {
       ctx.output.nextDispatch = {
-        agentResponsibility: decision.dispatch.agentResponsibility,
-        agentAction: decision.dispatch.agentAction,
+        capability: decision.dispatch.capability,
+        executable: decision.dispatch.executable,
         cliArgs: decision.dispatch.cliArgs,
         ...(goal.raw.extra.saveReport === true ? { saveReport: true } : {}),
       }
@@ -182,7 +182,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
       dispatch: decision.dispatch,
       goal: goalRunLogSnapshot(goal.id, goal.state, managed),
       inspection: {
-        agentResponsibilities: decision.scheduleState.agentResponsibilities,
+        capabilities: decision.scheduleState.capabilities,
         previousScheduleState,
         scheduleState: decision.scheduleState,
       },
@@ -238,12 +238,12 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
   }
 
   ctx.output.nextDispatch = {
-    agentResponsibility: decision.agentResponsibility,
-    agentAction: decision.agentAction,
+    capability: decision.capability,
+    executable: decision.executable,
     cliArgs: decision.cliArgs,
     ...(decision.saveReport === true ? { saveReport: true } : {}),
   }
-  ctx.output.reason = `dispatch ${decision.agentResponsibility} for ${decision.evidence}`
+  ctx.output.reason = `dispatch ${decision.capability} for ${decision.evidence}`
 }
 
 function stageManagedGoalDecision(
@@ -268,8 +268,8 @@ function stageManagedGoalDecision(
       evidence: decision.evidence,
       status: decision.kind,
       dispatch: {
-        agentResponsibility: decision.agentResponsibility,
-        agentAction: decision.agentAction,
+        capability: decision.capability,
+        executable: decision.executable,
         cliArgs: decision.cliArgs,
       },
       goal: details.goalSnapshot,
@@ -278,8 +278,8 @@ function stageManagedGoalDecision(
         kind: decision.kind,
         evidence: decision.evidence,
         stage: decision.stage,
-        agentResponsibility: decision.agentResponsibility,
-        agentAction: decision.agentAction,
+        capability: decision.capability,
+        executable: decision.executable,
         cliArgs: decision.cliArgs,
       },
       change: details.change,
@@ -400,7 +400,7 @@ function createGoalIssue(goal: ManagedGoal, goalId: string, cwd?: string): numbe
     "",
     `Finish line: ${outcome}`,
     "",
-    "This issue was created by Kody so goal agentResponsibilities that require an issue can run end to end.",
+    "This issue was created by Kody so goal capabilities that require an issue can run end to end.",
     "",
     goalIssueMarker(goalId),
   ].join("\n")

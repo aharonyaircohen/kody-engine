@@ -1,4 +1,4 @@
-import type { PostflightScript } from "../agent-actions/types.js"
+import type { PostflightScript } from "../executables/types.js"
 import {
   buildAgentLoopState,
   buildManagedGoalState,
@@ -77,7 +77,7 @@ function applyAction(config: Parameters<PostflightScript>[0]["config"], cwd: str
       portfolio: {
         goals: mergeUnique(record.intent.portfolio.goals, action.goals ?? []),
         loops: mergeUnique(record.intent.portfolio.loops, action.loops ?? []),
-        responsibilities: mergeUnique(record.intent.portfolio.responsibilities, action.responsibilities ?? []),
+        capabilities: mergeUnique(record.intent.portfolio.capabilities, action.capabilities ?? []),
       },
       updatedAt: nowIso(),
     }

@@ -7,7 +7,7 @@
  * `next` map ("done" / "abort" / another child name).
  *
  * Children are mocked via the `__runChild` test seam — these tests never
- * spin up real agentActions. A matching `__readTaskState` stub feeds the
+ * spin up real executables. A matching `__readTaskState` stub feeds the
  * "what did the child just write" lookup.
  */
 
@@ -16,7 +16,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import type { ExecutorInput, ExecutorOutput } from "../../src/executor.js"
-import { runAgentAction } from "../../src/executor.js"
+import { runExecutable } from "../../src/executor.js"
 import { loadProfile } from "../../src/profile.js"
 import { type Action, emptyState, type TaskState, type TaskTarget } from "../../src/state.js"
 
@@ -37,7 +37,7 @@ function makeContainerFixture(opts: {
   children: Array<{ exec: string; target: "issue" | "pr"; next: Record<string, string> }>
 }): string {
   const root = tmpDir("kody-container")
-  const exeDir = path.join(root, ".kody", "agent-actions", opts.containerName)
+  const exeDir = path.join(root, ".kody", "capabilities", opts.containerName)
   fs.mkdirSync(exeDir, { recursive: true })
   const profile = {
     name: opts.containerName,
@@ -113,10 +113,10 @@ function makeMockEnvironment(
     if (a) {
       state.core.lastOutcome = a
       state.core.attempts[name] = (state.core.attempts[name] ?? 0) + 1
-      state.agentActions[name] = { lastAction: a }
+      state.executables[name] = { lastAction: a }
       state.history.push({
         timestamp: a.timestamp,
-        agentAction: name,
+        executable: name,
         action: a.type,
       })
     }
@@ -158,7 +158,7 @@ describe("container: profile loading", () => {
         { exec: "run", target: "issue", next: { RUN_COMPLETED: "done", "*": "abort" } },
       ],
     })
-    const profile = loadProfile(path.join(root, ".kody", "agent-actions", "demo", "profile.json"))
+    const profile = loadProfile(path.join(root, ".kody", "capabilities", "demo", "profile.json"))
     expect(profile.role).toBe("container")
     expect(profile.children).toHaveLength(2)
     expect(profile.children?.[0]?.exec).toBe("plan")
@@ -167,7 +167,7 @@ describe("container: profile loading", () => {
 
   it("rejects a container profile with no children", () => {
     const root = makeContainerFixture({ containerName: "demo", children: [] })
-    expect(() => loadProfile(path.join(root, ".kody", "agent-actions", "demo", "profile.json"))).toThrow(
+    expect(() => loadProfile(path.join(root, ".kody", "capabilities", "demo", "profile.json"))).toThrow(
       /role: "container" requires a non-empty "children" array/,
     )
   })
@@ -177,14 +177,14 @@ describe("container: profile loading", () => {
       containerName: "demo",
       children: [{ exec: "plan", target: "bogus" as "issue", next: { "*": "done" } }],
     })
-    expect(() => loadProfile(path.join(root, ".kody", "agent-actions", "demo", "profile.json"))).toThrow(
+    expect(() => loadProfile(path.join(root, ".kody", "capabilities", "demo", "profile.json"))).toThrow(
       /target must be "issue" or "pr"/,
     )
   })
 
   it("rejects children on a non-container role", () => {
     const root = tmpDir("kody-container-bad-role")
-    const exeDir = path.join(root, ".kody", "agent-actions", "bad")
+    const exeDir = path.join(root, ".kody", "capabilities", "bad")
     fs.mkdirSync(exeDir, { recursive: true })
     const profile = {
       name: "bad",
@@ -232,7 +232,7 @@ describe("container: routing through children", () => {
     ])
 
     process.chdir(root)
-    const result = await runAgentAction("plan-run", {
+    const result = await runExecutable("plan-run", {
       cliArgs: { issue: 42 },
       cwd: root,
       skipConfig: true,
@@ -263,7 +263,7 @@ describe("container: routing through children", () => {
     ])
 
     process.chdir(root)
-    const result = await runAgentAction("plan-abort", {
+    const result = await runExecutable("plan-abort", {
       cliArgs: { issue: 42 },
       cwd: root,
       skipConfig: true,
@@ -284,7 +284,7 @@ describe("container: routing through children", () => {
     const env = makeMockEnvironment([{ exec: "plan", onInvoke: () => action("PLAN_FAILED") }])
 
     process.chdir(root)
-    const result = await runAgentAction("no-route", {
+    const result = await runExecutable("no-route", {
       cliArgs: { issue: 1 },
       cwd: root,
       skipConfig: true,
@@ -313,11 +313,11 @@ describe("container: idempotency", () => {
     ])
     // Pre-seed plan as already completed.
     const seeded = action("PLAN_COMPLETED")
-    env.state.agentActions.plan = { lastAction: seeded }
+    env.state.executables.plan = { lastAction: seeded }
     env.state.core.lastOutcome = seeded
 
     process.chdir(root)
-    const result = await runAgentAction("resume", {
+    const result = await runExecutable("resume", {
       cliArgs: { issue: 7 },
       cwd: root,
       skipConfig: true,
@@ -346,7 +346,7 @@ describe("container: PR target resolution", () => {
     ])
 
     process.chdir(root)
-    const result = await runAgentAction("pr-target", {
+    const result = await runExecutable("pr-target", {
       cliArgs: { issue: 99 },
       cwd: root,
       skipConfig: true,
@@ -383,7 +383,7 @@ describe("container: PR target resolution", () => {
     ])
 
     process.chdir(root)
-    const result = await runAgentAction("pr-ok", {
+    const result = await runExecutable("pr-ok", {
       cliArgs: { issue: 7 },
       cwd: root,
       skipConfig: true,
@@ -417,7 +417,7 @@ describe("container: target-aware state reads", () => {
         const a = action("PLAN_COMPLETED")
         issueState.core.lastOutcome = a
         issueState.core.attempts.plan = (issueState.core.attempts.plan ?? 0) + 1
-        issueState.agentActions.plan = { lastAction: a }
+        issueState.executables.plan = { lastAction: a }
         issueState.core.prUrl = "https://github.com/o/r/pull/42"
         return { exitCode: 0 }
       }
@@ -425,7 +425,7 @@ describe("container: target-aware state reads", () => {
         const a = action("REVIEW_PASS")
         prState.core.lastOutcome = a
         prState.core.attempts.review = (prState.core.attempts.review ?? 0) + 1
-        prState.agentActions.review = { lastAction: a }
+        prState.executables.review = { lastAction: a }
         // issueState.lastOutcome stays at PLAN_COMPLETED — the bug case.
         return { exitCode: 0 }
       }
@@ -446,7 +446,7 @@ describe("container: target-aware state reads", () => {
     })
 
     process.chdir(root)
-    const result = await runAgentAction("tgt-pr", {
+    const result = await runExecutable("tgt-pr", {
       cliArgs: { issue: 7 },
       cwd: root,
       skipConfig: true,
@@ -472,7 +472,7 @@ describe("container: target-aware state reads", () => {
         const a = action("RUN_COMPLETED")
         issueState.core.lastOutcome = a
         issueState.core.attempts.again = (issueState.core.attempts.again ?? 0) + 1
-        issueState.agentActions.again = { lastAction: a }
+        issueState.executables.again = { lastAction: a }
         return { exitCode: 0 }
       }
       return { exitCode: 99 }
@@ -489,7 +489,7 @@ describe("container: target-aware state reads", () => {
     })
 
     process.chdir(root)
-    const result = await runAgentAction("tgt-issue", {
+    const result = await runExecutable("tgt-issue", {
       cliArgs: { issue: 7 },
       cwd: root,
       skipConfig: true,
@@ -532,7 +532,7 @@ describe("container: failure-shape regression suite", () => {
     ])
 
     process.chdir(root)
-    const result = await runAgentAction("noop-bail", {
+    const result = await runExecutable("noop-bail", {
       cliArgs: { issue: 7 },
       cwd: root,
       skipConfig: true,
@@ -549,7 +549,7 @@ describe("container: failure-shape regression suite", () => {
 
   it("synthesizes <EXEC>_COMPLETED when child exits 0 without writing a new action", async () => {
     // Mirror of the above for the success path. If a child legitimately
-    // exits 0 without saveTaskState (e.g. a no-op agentAction), the
+    // exits 0 without saveTaskState (e.g. a no-op executable), the
     // container should synthesize <EXEC>_COMPLETED so routing keys match.
     const root = makeContainerFixture({
       containerName: "noop-ok",
@@ -559,7 +559,7 @@ describe("container: failure-shape regression suite", () => {
     const env = makeMockEnvironment([{ exec: "noop", onInvoke: () => null, exitCode: 0 }])
 
     process.chdir(root)
-    const result = await runAgentAction("noop-ok", {
+    const result = await runExecutable("noop-ok", {
       cliArgs: { issue: 7 },
       cwd: root,
       skipConfig: true,
@@ -575,7 +575,7 @@ describe("container: failure-shape regression suite", () => {
     // finishFlow) read core.lastOutcome.type via runWhen and need to see
     // the child's actual failure, not the prior child's success.
     //
-    // We can't observe ctx.data directly from runAgentAction, but we can
+    // We can't observe ctx.data directly from runExecutable, but we can
     // verify via the routing decision in the abort reason — if the abort
     // route was taken because of RUN_FAILED, the runWhen system would also
     // see RUN_FAILED.
@@ -596,7 +596,7 @@ describe("container: failure-shape regression suite", () => {
     ])
 
     process.chdir(root)
-    const result = await runAgentAction("lastoutcome-check", {
+    const result = await runExecutable("lastoutcome-check", {
       cliArgs: { issue: 7 },
       cwd: root,
       skipConfig: true,
@@ -629,7 +629,7 @@ describe("container: iteration cap", () => {
     ])
 
     process.chdir(root)
-    const result = await runAgentAction("loop", {
+    const result = await runExecutable("loop", {
       cliArgs: { issue: 1 },
       cwd: root,
       skipConfig: true,

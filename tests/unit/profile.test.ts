@@ -3,6 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
 import { loadProfile, ProfileError, validateScriptReferences } from "../../src/profile.js"
+import { resolveExecutable } from "../../src/registry.js"
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-profile-"))
@@ -47,7 +48,7 @@ describe("profile: loadProfile", () => {
     expect(profile.scripts.preflight[0]!.script).toBe("composePrompt")
   })
 
-  it("parses claudeCode.reasoningEffort on agentAction profiles", () => {
+  it("parses claudeCode.reasoningEffort on executable profiles", () => {
     const dir = tmpDir()
     const profile = loadProfile(
       writeProfile(dir, { ...VALID_MIN, claudeCode: { ...VALID_MIN.claudeCode, reasoningEffort: "high" } }),
@@ -55,7 +56,7 @@ describe("profile: loadProfile", () => {
     expect(profile.claudeCode.reasoningEffort).toBe("high")
   })
 
-  it("parses optional capabilityKind on agentAction profiles", () => {
+  it("parses optional capabilityKind on executable profiles", () => {
     const dir = tmpDir()
     const profile = loadProfile(writeProfile(dir, { ...VALID_MIN, capabilityKind: "observe" }))
 
@@ -69,7 +70,7 @@ describe("profile: loadProfile", () => {
     expect(() => loadProfile(p)).toThrow(/capabilityKind/)
   })
 
-  it("parses agent and ignores legacy every on agentResponsibility fields", () => {
+  it("parses agent and ignores legacy every on capability fields", () => {
     const dir = tmpDir()
     const profile = loadProfile(writeProfile(dir, { ...VALID_MIN, agent: "kody", every: "1h" }))
     expect(profile.agent).toBe("kody")
@@ -80,16 +81,16 @@ describe("profile: loadProfile", () => {
     expect((blanks as unknown as Record<string, unknown>).every).toBeUndefined()
   })
 
-  it("rejects agentResponsibilityTools not in the kody-agentResponsibility palette (fail-fast at load)", () => {
+  it("rejects capabilityTools not in the kody-capability palette (fail-fast at load)", () => {
     const dir = tmpDir()
-    const p = writeProfile(dir, { ...VALID_MIN, agentResponsibilityTools: ["read_check_runs", "not_a_real_tool"] })
-    expect(() => loadProfile(p)).toThrow(/agentResponsibilityTools not in the kody-agentResponsibility palette/)
+    const p = writeProfile(dir, { ...VALID_MIN, capabilityTools: ["read_check_runs", "not_a_real_tool"] })
+    expect(() => loadProfile(p)).toThrow(/capabilityTools not in the kody-capability palette/)
   })
 
-  it("accepts agentResponsibilityTools that are all in the palette", () => {
+  it("accepts capabilityTools that are all in the palette", () => {
     const dir = tmpDir()
-    const p = writeProfile(dir, { ...VALID_MIN, agentResponsibilityTools: ["read_check_runs", "ensure_issue"] })
-    expect(loadProfile(p).agentResponsibilityTools).toEqual(["read_check_runs", "ensure_issue"])
+    const p = writeProfile(dir, { ...VALID_MIN, capabilityTools: ["read_check_runs", "ensure_issue"] })
+    expect(loadProfile(p).capabilityTools).toEqual(["read_check_runs", "ensure_issue"])
   })
 
   it("rejects writeJobStateFile postflight without a state loader preflight", () => {
@@ -101,71 +102,74 @@ describe("profile: loadProfile", () => {
     expect(() => loadProfile(p)).toThrow(/no state loader/)
   })
 
-  it("accepts the state postflights when loadAgentResponsibilityState is in preflight", () => {
+  it("accepts the state postflights when loadCapabilityState is in preflight", () => {
     const dir = tmpDir()
     const p = writeProfile(dir, {
       ...VALID_MIN,
       scripts: {
-        preflight: [{ script: "loadAgentResponsibilityState" }, { script: "composePrompt" }],
+        preflight: [{ script: "loadCapabilityState" }, { script: "composePrompt" }],
         postflight: [{ script: "parseJobStateFromAgentResult" }, { script: "writeJobStateFile" }],
       },
     })
     expect(() => loadProfile(p)).not.toThrow()
   })
 
-  it("accepts state postflights when runScheduledAgentActionTick is in preflight", () => {
+  it("accepts state postflights when runScheduledExecutableTick is in preflight", () => {
     const dir = tmpDir()
     const p = writeProfile(dir, {
       ...VALID_MIN,
       scripts: {
-        preflight: [{ script: "runScheduledAgentActionTick" }],
+        preflight: [{ script: "runScheduledExecutableTick" }],
         postflight: [{ script: "writeJobStateFile" }],
       },
     })
     expect(() => loadProfile(p)).not.toThrow()
   })
 
-  it("resolves a agentResponsibility that references an agentAction (how) + overlays who/when/tools", () => {
-    // A thin agentResponsibility: references the engine's `merge` agentAction (the HOW), adds
+  it("resolves a capability that references an executable (how) + overlays who/when/tools", () => {
+    // A thin capability: references the engine's `merge` executable (the HOW), adds
     // its own name + agent (WHO). No claudeCode of its own.
     const dir = tmpDir()
     const p = writeProfile(dir, {
       name: "merge-daily",
-      agentAction: "merge",
+      executable: "merge",
       agent: "cto",
       every: "1d",
-      agentResponsibilityTools: ["ensure_issue"],
+      capabilityTools: ["ensure_issue"],
     })
     const profile = loadProfile(p)
-    expect(profile.name).toBe("merge-daily") // agentResponsibility identity
-    expect(profile.agentAction).toBe("merge") // how (preserved for prompt/job reference)
+    expect(profile.name).toBe("merge-daily") // capability identity
+    expect(profile.executable).toBe("merge") // how (preserved for prompt/job reference)
     expect(profile.agent).toBe("cto") // who (overlaid)
     expect((profile as unknown as Record<string, unknown>).every).toBeUndefined() // legacy cadence ignored
-    expect(profile.agentResponsibilityTools).toEqual(["ensure_issue"]) // toolbox (overlaid)
-    // how came from the referenced agentAction: dir + claudeCode are merge's.
-    expect(profile.dir.endsWith(path.join("agent-actions", "merge"))).toBe(true)
+    expect(profile.capabilityTools).toEqual(["ensure_issue"]) // toolbox (overlaid)
+    // how came from the referenced implementation profile: canonical
+    // capabilities resolve before legacy executables during migration.
+    const resolvedMerge = resolveExecutable("merge")
+    expect(resolvedMerge).toBeTruthy()
+    expect(profile.dir).toBe(path.dirname(resolvedMerge!))
     expect(profile.claudeCode).toBeTruthy()
   })
 
-  it("overlays capabilityKind on thin agentResponsibility references", () => {
+  it("overlays capabilityKind on thin capability references", () => {
     const dir = tmpDir()
     const p = writeProfile(dir, {
       name: "merge-ready-check",
-      agentAction: "merge",
+      executable: "merge",
       capabilityKind: "verify",
     })
 
     const profile = loadProfile(p)
 
     expect(profile.name).toBe("merge-ready-check")
-    expect(profile.agentAction).toBe("merge")
+    expect(profile.executable).toBe("merge")
     expect(profile.capabilityKind).toBe("verify")
   })
 
-  it("throws when a agentResponsibility references an unknown agentAction", () => {
+  it("throws when a capability references an unknown executable", () => {
     const dir = tmpDir()
-    const p = writeProfile(dir, { name: "x", agentAction: "no-such-agentAction-xyz" })
-    expect(() => loadProfile(p)).toThrow(/references unknown agentAction/)
+    const p = writeProfile(dir, { name: "x", executable: "no-such-executable-xyz" })
+    expect(() => loadProfile(p)).toThrow(/references unknown executable/)
   })
 
   it("throws on missing file", () => {
@@ -215,7 +219,7 @@ describe("profile: loadProfile", () => {
     expect(() => loadProfile(p)).toThrow(/permissionMode must be one of/)
   })
 
-  it("accepts empty tools (configless agentActions like init/release)", () => {
+  it("accepts empty tools (configless executables like init/release)", () => {
     const dir = tmpDir()
     const good = { ...VALID_MIN, claudeCode: { ...VALID_MIN.claudeCode, tools: [] } }
     const p = writeProfile(dir, good)

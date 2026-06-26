@@ -10,7 +10,7 @@
  */
 
 import type { AgentResult } from "../agent.js"
-import type { Context, PostflightScript } from "../agent-actions/types.js"
+import type { Context, PostflightScript } from "../executables/types.js"
 import { checkCoverage, formatMissesForFeedback, getAddedFiles } from "../coverage.js"
 import { parseAgentResult } from "../prompt.js"
 

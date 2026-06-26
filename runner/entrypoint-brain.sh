@@ -361,8 +361,8 @@ mcp_servers:
     enabled: true
     headers:
       Authorization: "Bearer ${BRAIN_API_KEY}"
-  kody-agentResponsibility:
-    url: http://127.0.0.1:${MCP_PORT}/mcp/agentResponsibility
+  kody-capability:
+    url: http://127.0.0.1:${MCP_PORT}/mcp/capability
     transport: streamable-http
     enabled: true
     headers:

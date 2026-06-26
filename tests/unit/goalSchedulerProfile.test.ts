@@ -7,10 +7,10 @@
 
 import * as fs from "node:fs"
 import { describe, expect, it } from "vitest"
-import { resolveAgentAction } from "../../src/registry.js"
+import { resolveExecutable } from "../../src/registry.js"
 
-const profilePath = resolveAgentAction("goal-scheduler")
-if (!profilePath) throw new Error("goal-scheduler agentAction not found")
+const profilePath = resolveExecutable("goal-scheduler")
+if (!profilePath) throw new Error("goal-scheduler executable not found")
 
 describe("goal-scheduler profile", () => {
   const profile = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as {

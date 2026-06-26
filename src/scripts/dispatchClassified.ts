@@ -17,7 +17,7 @@
  *   without relying on a GitHub comment as a storage layer.
  */
 
-import type { PostflightScript } from "../agent-actions/types.js"
+import type { PostflightScript } from "../executables/types.js"
 import { getProfileInputs } from "../registry.js"
 import { type Action, emptyState, reduce, renderStateComment, type TaskState, writeTaskState } from "../state.js"
 import { jobMetaFromData } from "./saveTaskState.js"

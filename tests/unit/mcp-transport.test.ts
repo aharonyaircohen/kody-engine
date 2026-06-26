@@ -6,10 +6,10 @@
 
 import { afterEach, describe, expect, it } from "vitest"
 import {
-  AGENT_RESPONSIBILITY_MCP_TOOL_NAMES,
-  agentResponsibilityToolDefinitions,
-  buildAgentResponsibilityMcpServer,
-} from "../../src/agent-responsibilityMcp.js"
+  CAPABILITY_MCP_TOOL_NAMES,
+  capabilityToolDefinitions,
+  buildCapabilityMcpServer,
+} from "../../src/capabilityMcp.js"
 import { buildFetchRepoMcpServer, fetchRepoToolDefinition } from "../../src/fetchRepoMcp.js"
 import { buildMcpHttpServer, listenMcpHttpServer, type McpRouteConfig } from "../../src/servers/mcpHttpServer.js"
 import { buildSubmitMcpServer, submitStateToolDefinition } from "../../src/submitMcp.js"
@@ -51,7 +51,7 @@ describe("transport parity: verify", () => {
         agent: { model: "claude/claude-sonnet-4" },
       },
       cwd: "/tmp/parity",
-      agentAction: "test",
+      executable: "test",
     })
     expect(def.name).toBe("verify")
     expect(def.description).toBeTruthy()
@@ -66,7 +66,7 @@ describe("transport parity: verify", () => {
         agent: { model: "claude/claude-sonnet-4" },
       },
       cwd: "/tmp/parity",
-      agentAction: "test",
+      executable: "test",
     })
     expect(server.name).toBe("kody-verify")
   })
@@ -90,26 +90,26 @@ describe("transport parity: submit_state", () => {
 })
 
 // ────────────────────────────────────────────────────────────────────────────
-// agentResponsibility
+// capability
 // ────────────────────────────────────────────────────────────────────────────
 
-describe("transport parity: agentResponsibility", () => {
+describe("transport parity: capability", () => {
   it("exposes the same tool list via the transport-agnostic definition", () => {
-    const defs = agentResponsibilityToolDefinitions({
+    const defs = capabilityToolDefinitions({
       repoSlug: "owner/repo",
       operatorMention: "@user",
     })
     const names = defs.map((d) => d.name).sort()
-    const expected = [...AGENT_RESPONSIBILITY_MCP_TOOL_NAMES].sort()
+    const expected = [...CAPABILITY_MCP_TOOL_NAMES].sort()
     expect(names).toEqual(expected)
   })
 
-  it("buildAgentResponsibilityMcpServer returns the in-process adapter with the same name", () => {
-    const server = buildAgentResponsibilityMcpServer({
+  it("buildCapabilityMcpServer returns the in-process adapter with the same name", () => {
+    const server = buildCapabilityMcpServer({
       repoSlug: "owner/repo",
       operatorMention: "@user",
     })
-    expect(server.server.name).toBe("kody-agentResponsibility")
+    expect(server.server.name).toBe("kody-capability")
   })
 })
 
@@ -127,13 +127,13 @@ describe("transport parity: HTTP server advertises the same tool list as in-proc
     }
   })
 
-  it("exposes the same names for the agentResponsibility tool list", async () => {
+  it("exposes the same names for the capability tool list", async () => {
     const routes: McpRouteConfig[] = [
       {
-        path: "/mcp/agentResponsibility",
-        name: "kody-agentResponsibility",
+        path: "/mcp/capability",
+        name: "kody-capability",
         version: "0.1.0",
-        tools: agentResponsibilityToolDefinitions({ repoSlug: "owner/repo", operatorMention: "@user" }),
+        tools: capabilityToolDefinitions({ repoSlug: "owner/repo", operatorMention: "@user" }),
       },
     ]
     const mcp = buildMcpHttpServer({ port: 0, host: "127.0.0.1", routes })
@@ -141,7 +141,7 @@ describe("transport parity: HTTP server advertises the same tool list as in-proc
     const url = `http://127.0.0.1:${mcp.port}`
 
     // initialize
-    const initRes = await fetch(`${url}/mcp/agentResponsibility`, {
+    const initRes = await fetch(`${url}/mcp/capability`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
       body: JSON.stringify({
@@ -154,7 +154,7 @@ describe("transport parity: HTTP server advertises the same tool list as in-proc
     const sessionId = initRes.headers.get("mcp-session-id")
 
     // tools/list
-    const listRes = await fetch(`${url}/mcp/agentResponsibility`, {
+    const listRes = await fetch(`${url}/mcp/capability`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -181,7 +181,7 @@ describe("transport parity: HTTP server advertises the same tool list as in-proc
       listedNames = (parsed.result?.tools ?? []).map((t) => t.name)
     }
 
-    const expected = [...AGENT_RESPONSIBILITY_MCP_TOOL_NAMES].sort()
+    const expected = [...CAPABILITY_MCP_TOOL_NAMES].sort()
     expect(listedNames.sort()).toEqual(expected)
 
     await mcp.stop()

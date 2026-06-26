@@ -1,5 +1,5 @@
 import type { AgentResult } from "../agent.js"
-import type { Context, PostflightScript, Profile } from "../agent-actions/types.js"
+import type { Context, PostflightScript, Profile } from "../executables/types.js"
 import { readStateText, upsertStateText } from "../stateRepo.js"
 
 const REPORT_SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/

@@ -2,7 +2,7 @@
  * Postflight (orchestrator-only): write `ctx.data.taskState` back to the
  * issue's state-comment WITHOUT applying any reducer action. Used by the
  * orchestrator profile in place of `saveTaskState`, so that orchestrator
- * runs (which legitimately have no agent action of their own) don't pollute
+ * runs (which legitimately have no executable run of their own) don't pollute
  * `state.core.lastOutcome` with a synthesized RUN_COMPLETED that would
  * misroute the next transition.
  *
@@ -14,7 +14,7 @@
  *   - issue state-comment via writeTaskState.
  */
 
-import type { PostflightScript } from "../agent-actions/types.js"
+import type { PostflightScript } from "../executables/types.js"
 import { type TaskState, writeTaskState } from "../state.js"
 
 export const persistFlowState: PostflightScript = async (ctx) => {

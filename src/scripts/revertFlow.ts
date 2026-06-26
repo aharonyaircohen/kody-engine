@@ -1,5 +1,5 @@
 /**
- * Flow script for the `revert` agentAction.
+ * Flow script for the `revert` executable.
  * Loads the PR, checks it out, validates each requested commit SHA is
  * reachable from the PR branch's HEAD, and stages metadata for the
  * downstream `revert.sh` (does the revert) + commitAndPush (commits & pushes).
@@ -8,7 +8,7 @@
  */
 
 import { execFileSync } from "node:child_process"
-import type { PreflightScript } from "../agent-actions/types.js"
+import type { PreflightScript } from "../executables/types.js"
 import { checkoutPrBranch, getCurrentBranch } from "../branch.js"
 import { getRunUrl } from "../gha.js"
 import { getPr, postPrReviewComment } from "../issue.js"

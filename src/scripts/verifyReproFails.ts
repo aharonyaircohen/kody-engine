@@ -2,7 +2,7 @@
  * Postflight (reproduce-only): run the project's test command and assert
  * that the new repro test fails for the right reason.
  *
- * The reproduce agentAction's contract is the OPPOSITE of the standard
+ * The reproduce executable's contract is the OPPOSITE of the standard
  * `verify` postflight: a passing test suite means the repro didn't actually
  * reproduce the bug. We therefore replace `verify` in the reproduce flow
  * with this script.
@@ -23,7 +23,7 @@
  */
 
 import { spawn } from "node:child_process"
-import type { PostflightScript } from "../agent-actions/types.js"
+import type { PostflightScript } from "../executables/types.js"
 import type { Action } from "../state.js"
 import type { ReproFailureSignature } from "./parseReproOutput.js"
 

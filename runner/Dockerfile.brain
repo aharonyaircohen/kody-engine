@@ -30,7 +30,7 @@ RUN python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir 'litellm[proxy]' 'hermes-agent'
 ENV PATH="/opt/venv/bin:${PATH}"
 
-# Install from git so unreleased changes (e.g. the brain-serve agentAction
+# Install from git so unreleased changes (e.g. the brain-serve executable
 # itself) are available before the next npm publish. Pin via KODY_ENGINE_REF
 # for reproducibility. We build inside the image because `npm install
 # git+...` does NOT trigger the package's `prepublishOnly` hook, so dist/

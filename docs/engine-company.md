@@ -10,9 +10,9 @@ route, verify, and explain engine work.
 
 Company layer coordinates. Engine runtime executes.
 
-The engine package keeps only the minimal built-in `run` surface. Shared agentResponsibilities,
-agentActions, and agent live in `kody-store`; company agentActions should inspect,
-decide, report, or dispatch those store-backed responsibilities.
+The engine package keeps only the minimal built-in `run` surface. Shared capabilities,
+executables, and agent live in `kody-store`; company executables should inspect,
+decide, report, or dispatch those store-backed capabilities.
 
 ## Concept Map
 
@@ -29,9 +29,9 @@ The canonical model is:
 
 Current storage names are compatibility names:
 
-- **AgentResponsibility = capability contract** — public action, kind, owner,
+- **Capability = capability contract** — public action, kind, owner,
   cadence, safety, inputs, outputs, and implementation link.
-- **AgentAction = capability implementation** — one concrete implementation unit
+- **Executable = capability implementation** — one concrete implementation unit
   with prompts, tools, skills, scripts, and executor profile.
 
 Intent selects and prioritizes goals and agentLoops. It is not another execution
@@ -39,7 +39,7 @@ chain; goals and agentLoops still own their own runtime state.
 
 ## CTO company manager
 
-The first company manager is `cto`, running the `company-manager` responsibility.
+The first company manager is `cto`, running the `company-manager` capability.
 It reads active intent files under `<statePath>/intents/<id>/intent.json`,
 compares them with current goal/loop state, and applies validated portfolio
 actions. This is portfolio orchestration: creating, linking, pausing, or
@@ -51,17 +51,17 @@ v1; they tell CTO how intent should be judged.
 Canonical noun docs:
 
 - [Goals](goals.md)
-- [AgentResponsibilities](agent-responsibilities.md)
+- [Capabilities](capabilities.md)
 - [Agent](agents.md)
-- [AgentActions](agent-actions.md)
+- [Executables](executables.md)
 
-Store agentResponsibilities and goals are a catalog. Consumer repos activate the shared company
+Store capabilities and goals are a catalog. Consumer repos activate the shared company
 model they want in `kody.config.json`:
 
 ```json
 {
   "company": {
-    "activeAgentResponsibilities": ["release"],
+    "activeCapabilities": ["release"],
     "activeGoals": ["web-release"]
   }
 }
@@ -74,8 +74,8 @@ See [Company Activation](company-activation.md) for the full activation contract
 | Piece | Path | Purpose |
 | --- | --- | --- |
 | Agent | `.kody/agents/<slug>.md` | Who is acting. Identity only. |
-| AgentResponsibilities | `.kody/agent-responsibilities/<slug>/` | Capability contracts: public action, kind, cadence, owner, and output contract. |
-| Company agentActions | `.kody/agent-actions/<slug>/` | Capability implementations for inspection, reports, triage, and dispatch. |
+| Capabilities | `.kody/capabilities/<slug>/` | Capability contracts: public action, kind, cadence, owner, and output contract. |
+| Company executables | `.kody/executables/<slug>/` | Capability implementations for inspection, reports, triage, and dispatch. |
 | Reports | `<statePath>/reports/*.md` in `stateRepo` | Goal/loop-owned state findings for Dashboard display. |
 | Context | `.kody/context/*.md` | Short background and vocabulary. Not hard rules. |
 | Goal templates | `.kody/goals/templates/<slug>/state.json` | Reusable managed agentGoal definitions. |
@@ -97,8 +97,8 @@ KODY_COMPANY_STORE_REF=stable
 
 Resolution order:
 
-1. Repo-local `.kody/agent-responsibilities`, `.kody/agent-actions`, `.kody/agents`
-2. Company store `.kody/agent-responsibilities`, `.kody/agent-actions`, `.kody/agents`
+1. Repo-local `.kody/capabilities`, `.kody/executables`, `.kody/agents`
+2. Company store `.kody/capabilities`, `.kody/executables`, `.kody/agents`
 3. Engine built-ins (`run` only)
 
 Local repo assets are overrides. Store assets are shared defaults. `stable`
@@ -111,10 +111,10 @@ local or use explicit names.
 - `docs/engine-company.md`: this operating model.
 - `.kody/context/*.md`: short orientation for company agents.
 - `.kody/agents/*.md`: identity only.
-- `.kody/agent-responsibilities/<slug>/agent-responsibility.md`: recurring intent.
-- `.kody/agent-actions/<slug>/skills/*/SKILL.md`: exact method and allowed actions.
+- `.kody/capabilities/<slug>/capability.md`: recurring intent.
+- `.kody/executables/<slug>/skills/*/SKILL.md`: exact method and allowed actions.
 
-`.kody/context` is not loaded by every engine agentAction. Treat it as background
+`.kody/context` is not loaded by every engine executable. Treat it as background
 for company coordination, not as execution policy.
 
 ## Recommended Agent
@@ -123,9 +123,9 @@ for company coordination, not as execution policy.
 - `cto`: architecture, invariants, PR safety, release safety.
 - `qa`: live verification and regression checks.
 - `tech-writer`: docs drift and terminology clarity.
-- `kody`: implementation through store-backed responsibilities and the engine `run` primitive.
+- `kody`: implementation through store-backed capabilities and the engine `run` primitive.
 
-## Recommended Company AgentActions
+## Recommended Company Executables
 
 Start small:
 
@@ -145,15 +145,15 @@ Add later:
 The engine is healthy when:
 
 - CI is green.
-- Core agentActions work end to end.
-- AgentResponsibilities dispatch safely.
+- Core executables work end to end.
+- Capabilities dispatch safely.
 - Releases are verified live.
 - Docs match implemented behavior.
 - Engine invariants stay intact.
 
 ## Design Bias
 
-Prefer small company agentActions with clear authority. A good company agentAction
+Prefer small company executables with clear authority. A good company executable
 does one of four things:
 
 - inspect

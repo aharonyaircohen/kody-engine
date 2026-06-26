@@ -6,10 +6,10 @@
  * Depends on loadTaskState having populated ctx.data.taskState.
  *
  * If a required artifact is missing, we set ctx.skipAgent + a failure reason
- * so the agentAction fails fast instead of invoking the agent without context.
+ * so the executable fails fast instead of invoking the agent without context.
  */
 
-import type { PreflightScript } from "../agent-actions/types.js"
+import type { PreflightScript } from "../executables/types.js"
 import type { TaskState } from "../state.js"
 
 export const resolveArtifacts: PreflightScript = async (ctx, profile) => {

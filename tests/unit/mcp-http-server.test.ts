@@ -2,7 +2,7 @@
  * Tests for the HTTP MCP server.
  *
  * The HTTP MCP server exposes kody's MCP tools (fetch_repo, verify,
- * submit_state, agentResponsibility) over HTTP transport. Hermes Agent connects to it as an
+ * submit_state, capability) over HTTP transport. Hermes Agent connects to it as an
  * MCP client. These tests exercise the JSON-RPC + SSE handshake the same way
  * the official MCP SDK client would.
  */

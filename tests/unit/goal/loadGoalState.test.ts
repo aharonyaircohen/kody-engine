@@ -4,7 +4,7 @@ vi.mock("../../../src/goal/stateStore.js", () => ({
   fetchGoalState: vi.fn(),
 }))
 
-import type { Context, Profile } from "../../../src/agent-actions/types.js"
+import type { Context, Profile } from "../../../src/executables/types.js"
 import type { GoalState } from "../../../src/goal/state.js"
 import { fetchGoalState } from "../../../src/goal/stateStore.js"
 import { loadGoalState } from "../../../src/scripts/loadGoalState.js"
@@ -15,7 +15,7 @@ function goalState(): GoalState {
     extra: {
       type: "release",
       destination: { outcome: "ship", evidence: ["ready"] },
-      agentResponsibilities: ["release-prepare"],
+      capabilities: ["release-prepare"],
       route: [],
       facts: {},
       blockers: [],

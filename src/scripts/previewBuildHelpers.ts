@@ -1,5 +1,5 @@
 /**
- * Pure helpers for the `preview-build` scripted agentAction. Kept
+ * Pure helpers for the `preview-build` scripted executable. Kept
  * separate from runPreviewBuild.ts so they're unit-testable without
  * touching docker / Fly / GitHub APIs.
  *

@@ -19,12 +19,12 @@ export interface CreateManagedGoalAction {
   outcome: string
   goalType?: string
   evidence: string[]
-  agentResponsibilities: string[]
+  capabilities: string[]
   route: Array<{
     stage: string
     evidence: string
-    agentResponsibility: string
-    agentAction?: string
+    capability: string
+    executable?: string
     args?: Record<string, unknown>
   }>
   facts?: Record<string, unknown>
@@ -37,7 +37,7 @@ export interface CreateAgentLoopAction {
   id: string
   outcome: string
   every: "manual" | "1h" | "1d" | "7d" | "30d"
-  agentResponsibilities: string[]
+  capabilities: string[]
   reason: string
 }
 
@@ -54,7 +54,7 @@ export interface UpdateIntentPortfolioAction {
   intentId: string
   goals?: string[]
   loops?: string[]
-  responsibilities?: string[]
+  capabilities?: string[]
   reason: string
 }
 
@@ -89,7 +89,7 @@ export function buildManagedGoalState(action: CreateManagedGoalAction): GoalStat
     extra: {
       type: action.goalType ?? "release",
       destination: { outcome: action.outcome, evidence: action.evidence },
-      agentResponsibilities: action.agentResponsibilities,
+      capabilities: action.capabilities,
       route: action.route,
       facts: action.facts ?? {},
       blockers: [],
@@ -110,7 +110,7 @@ export function buildAgentLoopState(action: CreateAgentLoopAction): GoalState {
       scheduleMode: "agentLoop",
       schedule: action.every,
       destination: { outcome: action.outcome, evidence: [] },
-      agentResponsibilities: action.agentResponsibilities,
+      capabilities: action.capabilities,
       route: [],
       facts: {},
       blockers: [],
@@ -154,7 +154,7 @@ function parseCreateManagedGoal(input: Record<string, unknown>): CreateManagedGo
     outcome: requiredString(input.outcome, "outcome"),
     goalType: typeof input.goalType === "string" && input.goalType.trim() ? input.goalType.trim() : undefined,
     evidence,
-    agentResponsibilities: nonEmptyStringArray(input.agentResponsibilities, "agentResponsibilities"),
+    capabilities: nonEmptyStringArray(input.capabilities, "capabilities"),
     route,
     facts: record(input.facts) ?? {},
     reason: requiredString(input.reason, "reason"),
@@ -168,7 +168,7 @@ function parseCreateAgentLoop(input: Record<string, unknown>): CreateAgentLoopAc
     id: slug(input.id, "id"),
     outcome: requiredString(input.outcome, "outcome"),
     every: oneOf(input.every, ["manual", "1h", "1d", "7d", "30d"] as const, "1d"),
-    agentResponsibilities: nonEmptyStringArray(input.agentResponsibilities, "agentResponsibilities"),
+    capabilities: nonEmptyStringArray(input.capabilities, "capabilities"),
     reason: requiredString(input.reason, "reason"),
   }
 }
@@ -189,7 +189,7 @@ function parseUpdateIntentPortfolio(input: Record<string, unknown>): UpdateInten
     intentId: slug(input.intentId, "intentId"),
     goals: stringArray(input.goals).filter(isSlug),
     loops: stringArray(input.loops).filter(isSlug),
-    responsibilities: stringArray(input.responsibilities).filter(isSlug),
+    capabilities: stringArray(input.capabilities).filter(isSlug),
     reason: requiredString(input.reason, "reason"),
   }
 }
@@ -208,8 +208,8 @@ function parseRouteStep(value: unknown): CreateManagedGoalAction["route"][number
   return {
     stage: requiredString(input.stage, "route.stage"),
     evidence: requiredString(input.evidence, "route.evidence"),
-    agentResponsibility: slug(input.agentResponsibility, "route.agentResponsibility"),
-    ...(typeof input.agentAction === "string" && input.agentAction.trim() ? { agentAction: input.agentAction.trim() } : {}),
+    capability: slug(input.capability, "route.capability"),
+    ...(typeof input.executable === "string" && input.executable.trim() ? { executable: input.executable.trim() } : {}),
     ...(record(input.args) ? { args: record(input.args)! } : {}),
   }
 }

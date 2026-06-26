@@ -52,8 +52,8 @@ describe("goal run logs", () => {
       jobId: "job 1",
       jobKey: "goal-manager:weekly",
       jobFlavor: "instant",
-      jobAgentResponsibility: "goal-manager",
-      jobAgentAction: "goal-manager",
+      jobCapability: "goal-manager",
+      jobExecutable: "goal-manager",
       jobWhy: "manual live audit test",
     }
 
@@ -71,8 +71,8 @@ describe("goal run logs", () => {
         },
         evidence: "releasePrExists",
         dispatch: {
-          agentResponsibility: "release-prepare",
-          agentAction: "release-prepare",
+          capability: "release-prepare",
+          executable: "release-prepare",
           cliArgs: { goal: "web-release" },
         },
       },
@@ -123,8 +123,8 @@ describe("goal run logs", () => {
         id: "job 1",
         key: "goal-manager:weekly",
         flavor: "instant",
-        agentResponsibility: "goal-manager",
-        agentAction: "goal-manager",
+        capability: "goal-manager",
+        executable: "goal-manager",
         why: "manual live audit test",
       },
       links: {
@@ -148,13 +148,13 @@ describe("goal run logs", () => {
     const before = goalRunLogSnapshot("release", "active", {
       type: "release",
       destination: { outcome: "ship prod", evidence: ["releasePrExists", "productionDeployed"] },
-      agentResponsibilities: ["release-prepare"],
+      capabilities: ["release-prepare"],
       route: [
         {
           evidence: "releasePrExists",
           stage: "prepare",
-          agentResponsibility: "release-prepare",
-          agentAction: "release-prepare",
+          capability: "release-prepare",
+          executable: "release-prepare",
           args: { goal: "release" },
         },
       ],
@@ -165,7 +165,7 @@ describe("goal run logs", () => {
     const after = goalRunLogSnapshot("release", "done", {
       type: "release",
       destination: { outcome: "ship prod", evidence: ["releasePrExists", "productionDeployed"] },
-      agentResponsibilities: ["release-prepare"],
+      capabilities: ["release-prepare"],
       route: [],
       stage: "done",
       facts: { releasePrExists: true, productionDeployed: true },

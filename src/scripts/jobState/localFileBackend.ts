@@ -20,7 +20,7 @@ import { isStateUnchanged, type JobStateBackend, type LoadedJobState, stateFileP
 export interface LocalFileBackendOptions {
   /** Absolute path to the consumer repo working tree. */
   cwd: string
-  /** AgentResponsibility directory relative to cwd (e.g. ".kody/agent-responsibilities"). */
+  /** Capability directory relative to cwd (e.g. ".kody/capabilities"). */
   jobsDir: string
   /** Owner/repo are used as cache key components for cross-repo isolation. */
   owner: string

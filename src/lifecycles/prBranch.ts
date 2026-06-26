@@ -2,7 +2,7 @@
  * `lifecycle: "pr-branch"` expander.
  *
  * Wraps the profile's `scripts.preflight` and `scripts.postflight` with the
- * canonical chain that PR-branch agentActions run.
+ * canonical chain that PR-branch executables run.
  *
  * Layout (with all defaults — knobs documented below):
  *   preflight:
@@ -40,14 +40,14 @@
  *   finalize:       boolean                        (default false)
  *
  * Why these specific knobs (not a free-form config):
- * - `sync`: not all PR-branch agentActions fast-forward the local branch
+ * - `sync`: not all PR-branch executables fast-forward the local branch
  *   before working (run/resolve/revert don't).
  * - `verify`: merge-only operations (resolve) skip the quality-gate chain.
  * - `advance`: terminal stages (fix-ci, resolve, revert) don't re-trigger
  *   the orchestrator.
  * - `mirrorState`: only the issue-driven `run` mirrors task state into the
  *   PR body — fix and friends already have the PR.
- * - `finalize`: single-session agentActions (feature, bug — no orchestrator)
+ * - `finalize`: single-session executables (feature, bug — no orchestrator)
  *   stamp their own terminal kody:done/kody:failed label + phase. Container
  *   children leave it false; their orchestrator's finishFlow does it.
  * - `context`: pre-set bundles for task work (full) vs CI-fix (lean) vs
@@ -56,7 +56,7 @@
  * Anything more variant than this belongs in a different lifecycle.
  */
 
-import type { Profile, ScriptEntry } from "../agent-actions/types.js"
+import type { Profile, ScriptEntry } from "../executables/types.js"
 import { ProfileError } from "../profile-error.js"
 
 const VALID_CONTEXTS = new Set(["task", "ci-fix", "minimal"])
@@ -116,7 +116,7 @@ export function prBranchLifecycle(profile: Profile, profilePath: string): void {
   ]
   if (cfg.mirrorState) tail.push({ script: "mirrorStateToPr" })
   if (cfg.advance) tail.push({ script: "advanceFlow" })
-  // Single-session agentActions (no orchestrator) stamp their own terminal
+  // Single-session executables (no orchestrator) stamp their own terminal
   // label + phase here, after the PR exists and state is saved. Always
   // last so it reads the authoritative post-saveTaskState state.
   if (cfg.finalize) tail.push({ script: "finalizeTerminal" })

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("../../src/issue.js", () => ({ gh: vi.fn() }))
 
-import { readThread } from "../../src/agent-responsibilityMcp.js"
+import { readThread } from "../../src/capabilityMcp.js"
 import { gh } from "../../src/issue.js"
 
 beforeEach(() => vi.clearAllMocks())

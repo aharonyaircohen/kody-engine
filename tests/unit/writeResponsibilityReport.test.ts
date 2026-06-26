@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { Context, Profile } from "../../src/agent-actions/types.js"
+import type { Context, Profile } from "../../src/executables/types.js"
 import { writeResponsibilityReport } from "../../src/scripts/writeResponsibilityReport.js"
 import { readStateText, upsertStateText } from "../../src/stateRepo.js"
 
