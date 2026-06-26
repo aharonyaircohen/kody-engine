@@ -149,6 +149,22 @@ export function jobReferenceBlock(
         ? data.jobAgent
         : null
   const description = profile.describe.trim()
+  const workflow =
+    typeof data.workflowCapability === "string" && data.workflowCapability.length > 0
+      ? data.workflowCapability
+      : null
+  const workflowStep =
+    typeof data.workflowStep === "string" && data.workflowStep.length > 0
+      ? data.workflowStep
+      : null
+  const workflowStepIndex =
+    typeof data.workflowStepIndex === "number" && Number.isFinite(data.workflowStepIndex)
+      ? data.workflowStepIndex
+      : null
+  const workflowStepCount =
+    typeof data.workflowStepCount === "number" && Number.isFinite(data.workflowStepCount)
+      ? data.workflowStepCount
+      : null
 
   const lines = [
     "## Job reference",
@@ -162,6 +178,10 @@ export function jobReferenceBlock(
     `- Executable: ${executable}`,
     `- Agent: ${agent ?? "(none)"}`,
     `- Description: ${description || "(none)"}`,
+    ...(workflow ? [`- Workflow: ${workflow}`] : []),
+    ...(workflowStep
+      ? [`- Workflow step: ${workflowStepIndex ?? "?"}/${workflowStepCount ?? "?"} ${workflowStep}`]
+      : []),
   ]
   return lines.join("\n")
 }

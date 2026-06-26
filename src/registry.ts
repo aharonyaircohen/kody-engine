@@ -289,6 +289,10 @@ export function resolveCapabilityExecution(capability: CapabilityFolder): {
   executable: string
   cliArgs: Record<string, unknown>
 } {
+  const firstWorkflowStep = capability.config.workflow?.steps[0]
+  if (firstWorkflowStep) {
+    return { executable: firstWorkflowStep.executable ?? firstWorkflowStep.capability, cliArgs: {} }
+  }
   const executable =
     capability.config.implementation ??
     capability.config.executable ??

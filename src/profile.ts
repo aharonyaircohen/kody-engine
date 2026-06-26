@@ -56,6 +56,7 @@ const KNOWN_PROFILE_KEYS = new Set([
   "stage",
   "readsFrom",
   "writesTo",
+  "workflow",
   "describe",
   "role",
   "kind",

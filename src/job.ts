@@ -12,15 +12,21 @@
 
 import * as path from "node:path"
 import type { Job, JobFlavor } from "./executables/types.js"
+import type { CapabilityFolder, CapabilityWorkflowConfig, CapabilityWorkflowStepConfig } from "./capabilityFolders.js"
 import type { KodyConfig } from "./config.js"
 import type { DispatchResult } from "./dispatch.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
 import { runExecutable, runExecutableChain } from "./executor.js"
-import { resolveCapabilityAction, resolveCapabilityFolder } from "./registry.js"
+import {
+  type DiscoveredCapabilityAction,
+  getCapabilityActionInputs,
+  resolveCapabilityAction,
+  resolveCapabilityFolder,
+} from "./registry.js"
 
 export { stableJobKey } from "./jobIdentity.js"
 
-import { stableJobKey } from "./jobIdentity.js"
+import { stableJobKey, targetFromCliArgs } from "./jobIdentity.js"
 
 /** Default agent identity for instant `@kody` jobs (the agreed starting point). */
 export const DEFAULT_INSTANT_AGENT = "kody"
@@ -134,18 +140,60 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   if (!resolvedCapability && !capabilityContext && !explicitExecutableOnly) {
     throw new InvalidJobError(`job capability not found: ${action ?? valid.capability ?? "<none>"}`)
   }
+
+  const workflow = capabilityContext?.config.workflow
   const capabilitySelectedExecutable =
     resolvedCapability?.executable ??
     capabilityContext?.config.executable ??
     capabilityContext?.config.executables?.[0] ??
     (capabilityContext?.config.tickScript ? "capability-tick-scripted" : undefined)
   const profileName = valid.executable ?? capabilitySelectedExecutable
+  if (workflow && shouldRunCapabilityWorkflow(valid, workflow, capabilityIdentity, capabilitySelectedExecutable, base)) {
+    return runCapabilityWorkflow(valid, workflow, capabilityContext!, base)
+  }
+
   if (!profileName) {
     throw new InvalidJobError(
       `job capability resolves to no executable: ${capabilityIdentity ?? action}`,
     )
   }
 
+  return runDefaultCapabilityWorkflow(
+    valid,
+    profileName,
+    capabilityIdentity,
+    capabilityContext,
+    resolvedCapability,
+    base,
+  )
+}
+
+async function runDefaultCapabilityWorkflow(
+  job: Job,
+  profileName: string,
+  capabilityIdentity: string | undefined,
+  capabilityContext: CapabilityFolder | null,
+  resolvedCapability: DiscoveredCapabilityAction | null,
+  base: RunJobBase,
+): Promise<ExecutorOutput> {
+  return runCapabilityImplementationStep(
+    job,
+    profileName,
+    capabilityIdentity,
+    capabilityContext,
+    resolvedCapability,
+    base,
+  )
+}
+
+async function runCapabilityImplementationStep(
+  valid: Job,
+  profileName: string,
+  capabilityIdentity: string | undefined,
+  capabilityContext: CapabilityFolder | null,
+  resolvedCapability: DiscoveredCapabilityAction | null,
+  base: RunJobBase,
+): Promise<ExecutorOutput> {
   const preloadedData: Record<string, unknown> = { ...(base.preloadedData ?? {}) }
   // Stamp both identities: jobKey is stable required work on the task; jobId is
   // this execution attempt.
@@ -156,9 +204,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   if (valid.action !== undefined && valid.action.length > 0) preloadedData.jobAction = valid.action
   if (capabilityIdentity !== undefined && capabilityIdentity.length > 0)
     preloadedData.jobCapability = capabilityIdentity
-  const executableIdentity = profileName
-  if (executableIdentity !== undefined && executableIdentity.length > 0)
-    preloadedData.jobExecutable = executableIdentity
+  preloadedData.jobExecutable = profileName
   // The job carries *when*: a scheduled job's cadence, recorded in the ledger.
   if (valid.schedule !== undefined && valid.schedule.length > 0) preloadedData.jobSchedule = valid.schedule
   if (valid.saveReport === true) preloadedData.jobSaveReport = true
@@ -202,6 +248,115 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
 
   const run = base.chain === false ? runExecutable : runExecutableChain
   return run(profileName, input)
+}
+
+function shouldRunCapabilityWorkflow(
+  job: Job,
+  workflow: CapabilityWorkflowConfig,
+  capabilityIdentity: string | undefined,
+  selectedExecutable: string | undefined,
+  base: RunJobBase,
+): boolean {
+  if (workflow.steps.length === 0) return false
+  if (!capabilityIdentity) return false
+  const stack = Array.isArray(base.preloadedData?.workflowStack)
+    ? (base.preloadedData.workflowStack as unknown[]).filter((entry): entry is string => typeof entry === "string")
+    : []
+  if (stack.includes(capabilityIdentity)) return false
+  if (!job.executable) return true
+  return job.executable === selectedExecutable || job.executable === capabilityIdentity || job.executable === job.action
+}
+
+async function runCapabilityWorkflow(
+  parent: Job,
+  workflow: CapabilityWorkflowConfig,
+  capability: CapabilityFolder,
+  base: RunJobBase,
+): Promise<ExecutorOutput> {
+  let chainData: Record<string, unknown> = {
+    ...(base.preloadedData ?? {}),
+    workflowCapability: capability.slug,
+    workflowTitle: capability.title,
+    workflowStepCount: workflow.steps.length,
+    workflowStack: [
+      ...(Array.isArray(base.preloadedData?.workflowStack)
+        ? (base.preloadedData.workflowStack as unknown[]).filter((entry): entry is string => typeof entry === "string")
+        : []),
+      capability.slug,
+    ],
+  }
+  let result: ExecutorOutput = { exitCode: 0 }
+
+  for (let index = 0; index < workflow.steps.length; index++) {
+    const step = workflow.steps[index]!
+    const child = workflowStepToJob(step, parent)
+    const label = step.action ?? step.capability
+    process.stdout.write(
+      `→ kody: workflow ${capability.slug} step ${index + 1}/${workflow.steps.length} → ${label}\n\n`,
+    )
+    result = await runJob(child, {
+      ...base,
+      preloadedData: {
+        ...chainData,
+        workflowStep: label,
+        workflowStepIndex: index + 1,
+        workflowStepReason: step.reason,
+      },
+    })
+    chainData = {
+      ...chainData,
+      ...(result.taskState ? { taskState: result.taskState } : {}),
+    }
+    if (result.exitCode !== 0) {
+      return {
+        ...result,
+        reason: result.reason ?? `workflow ${capability.slug} stopped at step ${index + 1}/${workflow.steps.length}: ${label}`,
+      }
+    }
+  }
+
+  return result
+}
+
+function workflowStepToJob(step: CapabilityWorkflowStepConfig, parent: Job): Job {
+  const action = step.action ?? step.capability
+  const cliArgs = filterCliArgsForStep(action, {
+    ...parent.cliArgs,
+    ...(step.cliArgs ?? {}),
+  })
+  const target = typeof parent.target === "number" ? parent.target : targetFromCliArgs(cliArgs)
+  return {
+    action,
+    capability: step.capability,
+    ...(step.executable ? { executable: step.executable } : {}),
+    ...(composeStepWhy(parent.why, step) ? { why: composeStepWhy(parent.why, step) } : {}),
+    ...(step.agent ?? parent.agent ? { agent: step.agent ?? parent.agent } : {}),
+    ...(parent.schedule ? { schedule: parent.schedule } : {}),
+    ...(typeof target === "number" ? { target } : {}),
+    cliArgs,
+    flavor: parent.flavor,
+    force: parent.force,
+    saveReport: step.saveReport === true || parent.saveReport === true,
+  }
+}
+
+function filterCliArgsForStep(action: string, raw: Record<string, unknown>): Record<string, unknown> {
+  const inputs = getCapabilityActionInputs(action)
+  if (!inputs) return raw
+  const allowed = new Set<string>(["_", "cwd", "verbose", "quiet"])
+  for (const input of inputs) {
+    const flagKey = input.flag.replace(/^--/, "")
+    allowed.add(input.name)
+    allowed.add(flagKey)
+    if (flagKey.includes("-")) allowed.add(flagKey.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase()))
+  }
+  return Object.fromEntries(Object.entries(raw).filter(([key]) => allowed.has(key)))
+}
+
+function composeStepWhy(parentWhy: string | undefined, step: CapabilityWorkflowStepConfig): string {
+  return [parentWhy?.trim(), step.reason ? `Workflow step: ${step.reason}` : ""]
+    .filter((part): part is string => Boolean(part))
+    .join("\n\n")
 }
 
 function loadCapabilityContext(

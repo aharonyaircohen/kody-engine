@@ -12,9 +12,8 @@ Both remain readable as compatibility fallbacks while repos migrate.
 A capability explains what reusable capability exists, who normally
 owns it, when it may run, what kind of result it promises, and which executable
 implements it. Intent owns why the company cares. Goal owns what outcome should
-become true. A capability should not own a full process. It should
-receive input, do one kind of work, and return structured output or report
-evidence that another layer can consume.
+become true. A normal capability should receive input, do one kind of work, and
+return structured output or report evidence that another layer can consume.
 
 ```text
 input -> run -> structured output
@@ -36,11 +35,12 @@ promise and selects the result shape expected from that capability.
 
 ## What Capabilities Are Not
 
-A capability is not a goal, manager loop, or hidden workflow.
+A capability is not a goal or manager loop. A capability may name a workflow
+when the public action needs ordered capability steps.
 
 Do not put long-term progress ownership inside a capability. If work needs multiple
-steps, routing, waiting, or business completion decisions, model that above the
-capability:
+steps, put step order in a workflow. If it needs waiting or business completion
+decisions, model that above the capability:
 
 | Capability | Correct home |
 | --- | --- |
@@ -48,6 +48,7 @@ capability:
 | Choose next missing evidence | Goal manager |
 | Track required issue/PR work and attempts | Task/job/run state |
 | Do one reusable inspect/change/confirm capability | Capability contract plus executable implementation |
+| Chain reusable capabilities for one run | Workflow on the public capability |
 | Structure evidence and write progress audit logs | Goal/loop decision and persistence path |
 
 The important boundary is:
@@ -55,6 +56,7 @@ The important boundary is:
 ```text
 Goal decides what is needed.
 Capability provides how the agency can produce the result.
+Workflow composes capabilities for one run.
 Legacy Capability stores old capability contracts.
 Legacy Executable stores old concrete implementations.
 ```
@@ -114,6 +116,7 @@ Example:
 | `action` | optional | Public action name. If absent, defaults to capability name. |
 | `executable` | usually | Implementation executable for this capability. |
 | `executables` | optional | Ordered executable list for split task work. Use sparingly. |
+| `workflow` | optional | Ordered capability steps for one engine run. |
 | `agent` | optional | Agent identity, the who. |
 | `every` | optional | Scheduler cadence. Use `manual` for on-demand capabilities. |
 | `mentions` | optional | GitHub logins to mention in capability output. |
@@ -264,7 +267,7 @@ normal PR auto-close syntax, but the goal still owns release progress.
 Use this checklist:
 
 1. Ask whether the capability already exists.
-2. Name the capability contract by the one capability it provides, not the whole process.
+2. Name the capability contract by the public action it provides.
 3. Choose exactly one `capabilityKind`: `observe`, `act`, or `verify`.
 4. Put the concrete work in an executable.
 5. Add `agent` only when a specific agent matters.
@@ -277,7 +280,7 @@ Use this checklist:
 
 - Do not create a capability contract for a one-off issue comment.
 - Do not put concrete implementation logic in `capability.md`.
-- Do not hide observe plus act plus verify inside one capability.
+- Do not hide observe plus act plus verify inside one prompt; make it an explicit workflow.
 - Do not let a capability own long-term progress or decide business completion.
 - Do not let capabilities dispatch by bot-authored `@kody` comments; use workflow dispatch or in-process dispatch.
 - Do not duplicate an existing store capability without a project-specific reason.

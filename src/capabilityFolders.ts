@@ -21,6 +21,21 @@ export interface CapabilityFolderConfig {
   stage?: string
   readsFrom?: string[]
   writesTo?: string[]
+  workflow?: CapabilityWorkflowConfig
+}
+
+export interface CapabilityWorkflowConfig {
+  steps: CapabilityWorkflowStepConfig[]
+}
+
+export interface CapabilityWorkflowStepConfig {
+  capability: string
+  action?: string
+  executable?: string
+  reason?: string
+  agent?: string
+  cliArgs?: Record<string, unknown>
+  saveReport?: boolean
 }
 
 export interface CapabilityFolder {
@@ -103,6 +118,7 @@ export function parseCapabilityConfig(raw: Record<string, unknown>): CapabilityF
     stage: stringField(raw.stage),
     readsFrom: stringList(raw.readsFrom ?? raw.reads_from),
     writesTo: stringList(raw.writesTo ?? raw.writes_to),
+    workflow: parseWorkflow(raw.workflow),
   }
 }
 
@@ -149,4 +165,45 @@ function stringList(value: unknown): string[] {
       .filter(Boolean)
   }
   return []
+}
+
+function parseWorkflow(value: unknown): CapabilityWorkflowConfig | undefined {
+  const stepsRaw = Array.isArray(value)
+    ? value
+    : value && typeof value === "object" && Array.isArray((value as { steps?: unknown }).steps)
+      ? ((value as { steps: unknown[] }).steps)
+      : []
+  const steps = stepsRaw.map(parseWorkflowStep).filter((step): step is CapabilityWorkflowStepConfig => step !== null)
+  return steps.length > 0 ? { steps } : undefined
+}
+
+function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null {
+  if (typeof value === "string") {
+    const capability = value.trim()
+    return isSafeSlug(capability) ? { capability } : null
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
+  const raw = value as Record<string, unknown>
+  const capability = stringField(raw.capability ?? raw.action)
+  if (!capability || !isSafeSlug(capability)) return null
+  const executable = stringField(raw.executable ?? raw.implementation)
+  const action = stringField(raw.action)
+  const agent = stringField(raw.agent)
+  const reason = stringField(raw.reason)
+  const cliArgs = raw.cliArgs
+  return {
+    capability,
+    ...(action && isSafeSlug(action) ? { action } : {}),
+    ...(executable && isSafeSlug(executable) ? { executable } : {}),
+    ...(agent && isSafeSlug(agent) ? { agent } : {}),
+    ...(reason ? { reason } : {}),
+    ...(cliArgs && typeof cliArgs === "object" && !Array.isArray(cliArgs)
+      ? { cliArgs: cliArgs as Record<string, unknown> }
+      : {}),
+    ...(raw.saveReport === true ? { saveReport: true } : {}),
+  }
+}
+
+function isSafeSlug(value: string): boolean {
+  return /^[a-z][a-z0-9-]*$/.test(value) && !value.includes("..")
 }
