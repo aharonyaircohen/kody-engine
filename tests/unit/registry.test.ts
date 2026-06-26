@@ -125,7 +125,7 @@ describe("registry: capability/executable separation", () => {
     fs.rmSync(root, { recursive: true, force: true })
   })
 
-  it("resolves project executables but keeps thin capability contracts out of executable discovery", () => {
+  it("resolves project executables while keeping capability folders as public actions", () => {
     const dutyDir = path.join(root, ".kody", "capabilities", "feature")
     const exeDir = path.join(root, ".kody", "executables", "feature")
     fs.mkdirSync(dutyDir, { recursive: true })
@@ -143,7 +143,12 @@ describe("registry: capability/executable separation", () => {
     expect(fs.realpathSync(listExecutables().find((exe) => exe.name === "feature")!.profilePath)).toBe(
       fs.realpathSync(path.join(exeDir, "profile.json")),
     )
-    expect(resolveCapabilityAction("feature")).toBeNull()
+    expect(resolveCapabilityAction("feature")).toMatchObject({
+      action: "feature",
+      capability: "feature",
+      executable: "feature",
+      source: "project-folder",
+    })
   })
 })
 
@@ -176,7 +181,6 @@ describe("registry: capabilities root", () => {
       JSON.stringify({
         name: "triage",
         action: "triage",
-        capabilityKind: "observe",
         implementation: "triage",
         describe: "Triage incoming work.",
       }),
@@ -188,7 +192,6 @@ describe("registry: capabilities root", () => {
       capability: "triage",
       executable: "triage",
       source: "project-folder",
-      capabilityKind: "observe",
     })
     expect(fs.realpathSync(resolveCapabilityFolder("triage")!.bodyPath)).toBe(
       fs.realpathSync(path.join(capabilityDir, "capability.md")),
@@ -203,7 +206,6 @@ describe("registry: capabilities root", () => {
       JSON.stringify({
         name: "ship",
         action: "ship",
-        capabilityKind: "act",
         role: "primitive",
         describe: "Ship requested work.",
         inputs: [{ name: "issue", flag: "--issue", type: "int", required: true }],
@@ -216,7 +218,6 @@ describe("registry: capabilities root", () => {
       capability: "ship",
       executable: "ship",
       source: "project-folder",
-      capabilityKind: "act",
     })
   })
 
@@ -250,7 +251,6 @@ describe("registry: capabilities root", () => {
       JSON.stringify({
         name: "ship",
         action: "ship",
-        capabilityKind: "act",
         implementation: "ship",
         describe: "Public shipping contract.",
       }),
@@ -263,7 +263,6 @@ describe("registry: capabilities root", () => {
       capability: "ship",
       executable: "ship",
       source: "project-folder",
-      capabilityKind: "act",
     })
     expect(fs.realpathSync(resolveExecutable("ship")!)).toBe(
       fs.realpathSync(path.join(executableDir, "profile.json")),
@@ -280,7 +279,7 @@ describe("registry: capabilities root", () => {
     fs.mkdirSync(legacyDir, { recursive: true })
     fs.writeFileSync(
       path.join(legacyDir, "profile.json"),
-      JSON.stringify({ name: "audit", action: "audit", capabilityKind: "verify" }),
+      JSON.stringify({ name: "audit", action: "audit" }),
     )
     fs.writeFileSync(path.join(legacyDir, oldBody), "# Audit\n\nLegacy body.\n")
 

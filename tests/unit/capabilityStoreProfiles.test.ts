@@ -8,7 +8,6 @@ import { listCapabilityActions, resolveExecutable } from "../../src/registry.js"
 const STORE_ROOT = process.env.KODY_STORE_PATH ?? path.resolve(process.cwd(), "..", "kody-store")
 const STORE_DUTIES_ROOT = path.join(STORE_ROOT, ".kody", "capabilities")
 const STORE_EXECUTABLES_ROOT = path.join(STORE_ROOT, ".kody", "executables")
-const CAPABILITY_KINDS = new Set(["observe", "act", "verify"])
 const CHAT_CAPABILITY_ALIASES = new Set(["kody-analyzer", "kody-mem", "kody-operator", "kody-vibe"])
 const MIGRATED_FULL_CAPABILITY_ACTIONS = ["classify", "qa-engineer", "spec", "agent-ask"]
 const INTERNAL_EXECUTABLE_ONLY_PROFILES = [
@@ -40,24 +39,24 @@ afterEach(() => {
   resetCompanyStoreCacheForTests()
 })
 
-describe("kody-store capabilityKind profiles", () => {
-  it("keeps every remaining store capability profile typed", () => {
+describe("kody-store capability profiles", () => {
+  it("keeps every remaining store capability profile named", () => {
     if (!fs.existsSync(STORE_DUTIES_ROOT)) return
 
-    const missingOrInvalid: string[] = []
+    const missingName: string[] = []
     for (const slug of fs.readdirSync(STORE_DUTIES_ROOT).sort()) {
       const profilePath = path.join(STORE_DUTIES_ROOT, slug, "profile.json")
       if (!fs.existsSync(profilePath)) continue
-      const raw = JSON.parse(fs.readFileSync(profilePath, "utf8")) as { capabilityKind?: unknown }
-      if (typeof raw.capabilityKind !== "string" || !CAPABILITY_KINDS.has(raw.capabilityKind)) {
-        missingOrInvalid.push(slug)
+      const raw = JSON.parse(fs.readFileSync(profilePath, "utf8")) as { name?: unknown }
+      if (typeof raw.name !== "string" || !raw.name.trim()) {
+        missingName.push(slug)
       }
     }
 
-    expect(missingOrInvalid).toEqual([])
+    expect(missingName).toEqual([])
   })
 
-  it("keeps full store capability action profiles typed and loadable", () => {
+  it("keeps full store capability action profiles loadable", () => {
     if (!fs.existsSync(STORE_DUTIES_ROOT)) return
 
     const invalid: string[] = []
@@ -68,17 +67,11 @@ describe("kody-store capabilityKind profiles", () => {
       if (!fs.existsSync(profilePath)) continue
       const raw = JSON.parse(fs.readFileSync(profilePath, "utf8")) as {
         action?: unknown
-        capabilityKind?: unknown
         role?: unknown
       }
       if (typeof raw.action !== "string" || !raw.action.trim() || typeof raw.role !== "string") continue
 
       actionSlugs.push(slug)
-      if (typeof raw.capabilityKind !== "string" || !CAPABILITY_KINDS.has(raw.capabilityKind)) {
-        invalid.push(`${slug}: capabilityKind`)
-        continue
-      }
-
       try {
         loadProfile(profilePath)
       } catch (error) {

@@ -24,7 +24,6 @@ function writeLocalReleaseAsset(root: string): void {
     JSON.stringify({
       name: "release",
       action: "release",
-      capabilityKind: "act",
       role: "primitive",
       describe: "Run release flow.",
       inputs: [
@@ -346,7 +345,6 @@ describe("dispatch: issue_comment on issue", () => {
         JSON.stringify({
           name: "remember",
           action: "remember",
-          capabilityKind: "act",
           implementation: "custom-impl",
           agent: "kody",
         }),
@@ -357,7 +355,6 @@ describe("dispatch: issue_comment on issue", () => {
         JSON.stringify({
           name: "custom-impl",
           role: "utility",
-          capabilityKind: "act",
           describe: "Custom implementation.",
           inputs: [{ name: "issue", flag: "--issue", type: "int", required: true }],
         }),

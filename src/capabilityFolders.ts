@@ -1,6 +1,5 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { CapabilityKind } from "./executables/types.js"
 
 export const CAPABILITY_PROFILE_FILE = "profile.json"
 export const CAPABILITY_BODY_FILE = "capability.md"
@@ -17,7 +16,6 @@ export interface CapabilityFolderConfig {
   capabilityTools?: string[]
   implementations?: string[]
   executables?: string[]
-  capabilityKind?: CapabilityKind
   role?: string
   describe?: string
   stage?: string
@@ -100,7 +98,6 @@ export function parseCapabilityConfig(raw: Record<string, unknown>): CapabilityF
     capabilityTools: tools,
     implementations,
     executables: stringList(raw.executables),
-    capabilityKind: capabilityKindField(raw.capabilityKind),
     role: stringField(raw.role),
     describe: stringField(raw.describe),
     stage: stringField(raw.stage),
@@ -152,9 +149,4 @@ function stringList(value: unknown): string[] {
       .filter(Boolean)
   }
   return []
-}
-
-function capabilityKindField(value: unknown): CapabilityKind | undefined {
-  if (value === "observe" || value === "act" || value === "verify") return value
-  return undefined
 }

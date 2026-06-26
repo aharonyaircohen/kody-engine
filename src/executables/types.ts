@@ -15,8 +15,6 @@ import type { Phase } from "../state.js"
 // Profile shape (mirrors the JSON on disk).
 // ────────────────────────────────────────────────────────────────────────────
 
-export type CapabilityKind = "observe" | "act" | "verify"
-
 export interface Profile {
   name: string
   /**
@@ -35,11 +33,6 @@ export interface Profile {
    */
   agent?: string
   describe: string
-  /**
-   * Author-facing capability promise for a capability/executable. This classifies the
-   * shape of result it should return; it does not change executor control flow.
-   */
-  capabilityKind?: CapabilityKind
   /**
    * Semantic role — what this executable IS, not when it runs.
    *   - primitive:    single-step agent executor (flow → agent → verify → commit → PR).
@@ -388,58 +381,6 @@ export interface OutputContract {
     onFailure?: string[]
   }
 }
-
-export interface CapabilityAlert {
-  level?: "info" | "warning" | "error"
-  message: string
-}
-
-export interface CapabilitySuggestedAction {
-  action: string
-  args?: Record<string, unknown>
-  reason?: string
-}
-
-export interface CapabilityResourceRef {
-  type: string
-  id?: string | number
-  number?: number
-  url?: string
-  name?: string
-}
-
-export interface CapabilityEvidenceItem {
-  source?: string
-  message: string
-  url?: string
-}
-
-export interface ObserveResult {
-  kind: "observe"
-  facts?: Record<string, unknown>
-  alerts?: CapabilityAlert[]
-  suggestedActions?: CapabilitySuggestedAction[]
-  evidence?: Record<string, unknown>
-}
-
-export interface ActResult {
-  kind: "act"
-  status: "created" | "changed" | "triggered" | "skipped" | "failed"
-  changedResources?: CapabilityResourceRef[]
-  createdResources?: CapabilityResourceRef[]
-  actionResult?: Record<string, unknown>
-  evidence?: Record<string, unknown>
-}
-
-export interface VerifyResult {
-  kind: "verify"
-  passed: boolean
-  evidence?: CapabilityEvidenceItem[]
-  blockers?: string[]
-  facts?: Record<string, unknown>
-}
-
-export type CapabilityResult = ObserveResult | ActResult | VerifyResult
 
 // ────────────────────────────────────────────────────────────────────────────
 // Run-time context passed to every script.

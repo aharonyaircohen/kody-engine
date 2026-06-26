@@ -53,12 +53,10 @@ describe("company store resolution", () => {
     writeCapability(path.join(consumer, ".kody", "capabilities"), "store-exe", {
       name: "store-exe",
       role: "utility",
-      capabilityKind: "act",
       inputs: [],
     })
     writeCapability(path.join(consumer, ".kody", "capabilities"), "store-capability", {
       name: "store-capability",
-      capabilityKind: "act",
       action: "store-capability",
       implementation: "store-exe",
       body: "# Local Store Capability\n",
@@ -90,12 +88,10 @@ function createStoreRepo(): string {
   writeCapability(path.join(repo, ".kody", "capabilities"), "store-exe", {
     name: "store-exe",
     role: "utility",
-    capabilityKind: "act",
     inputs: [],
   })
   writeCapability(path.join(repo, ".kody", "capabilities"), "store-capability", {
     name: "store-capability",
-    capabilityKind: "act",
     action: "store-capability",
     implementation: "store-exe",
     every: "manual",
