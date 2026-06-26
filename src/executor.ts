@@ -12,15 +12,15 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { AgentResult } from "./agent.js"
 import { runAgent } from "./agent.js"
-import type { Context, InputSpec, Job, Profile, ScriptEntry } from "./executables/types.js"
+import { frameAgentIdentity, loadAgentIdentity } from "./agents.js"
 import { parseCapabilityReportsFromText } from "./capabilityReport.js"
 import { parseCapabilityResultsFromText } from "./capabilityResult.js"
-import { frameAgentIdentity, loadAgentIdentity } from "./agents.js"
 import type { KodyConfig } from "./config.js"
 import { loadConfig, parseProviderModel } from "./config.js"
 import { runContainerLoop } from "./container.js"
 import { DISCIPLINE } from "./discipline.js"
 import { emitEvent } from "./events.js"
+import type { Context, InputSpec, Job, Profile, ScriptEntry } from "./executables/types.js"
 import { KODY_NAMESPACE, removeLabel } from "./lifecycleLabels.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
@@ -126,9 +126,7 @@ export function jobReferenceBlock(
   const jobId = typeof data.jobId === "string" && data.jobId.length > 0 ? data.jobId : null
   const flavor = typeof data.jobFlavor === "string" && data.jobFlavor.length > 0 ? data.jobFlavor : null
   const schedule = typeof data.jobSchedule === "string" && data.jobSchedule.length > 0 ? data.jobSchedule : null
-  const isJob = Boolean(
-    jobId || flavor || schedule || data.jobCapability || data.jobExecutable || data.jobWhy,
-  )
+  const isJob = Boolean(jobId || flavor || schedule || data.jobCapability || data.jobExecutable || data.jobWhy)
   if (!isJob) return null
 
   const capability =
@@ -378,7 +376,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
         })()
       : null
 
-const ndjsonDir = agentRunDir(input.cwd)
+  const ndjsonDir = agentRunDir(input.cwd)
   // Agent binding: run *as* an agent, injected into the system-prompt append
   // (after DISCIPLINE, before the profile's own append) so identity leads task
   // instructions. Two sources, in priority order:
@@ -465,8 +463,7 @@ const ndjsonDir = agentRunDir(input.cwd)
       // when a capability declares `tools` in profile.json. The executor doesn't need
       // to know the palette — it just forwards the flag so agent.ts can spin
       // up the in-process `kody-capability` MCP server with the right context.
-      enableCapabilityTool:
-        Array.isArray(ctx.data.capabilityTools) && ctx.data.capabilityTools.length > 0,
+      enableCapabilityTool: Array.isArray(ctx.data.capabilityTools) && ctx.data.capabilityTools.length > 0,
       capabilityOperatorMention:
         typeof ctx.data.capabilityOperatorMention === "string"
           ? (ctx.data.capabilityOperatorMention as string)
@@ -849,10 +846,7 @@ export async function runExecutableChain(profileName: string, input: ExecutorInp
   }
   if (result.nextDispatch || result.nextJob) {
     const pending =
-      result.nextDispatch?.executable ??
-      result.nextJob?.executable ??
-      result.nextJob?.capability ??
-      "unknown"
+      result.nextDispatch?.executable ?? result.nextJob?.executable ?? result.nextJob?.capability ?? "unknown"
     process.stderr.write(`[kody] in-process hand-off cap (${MAX_CHAIN_HOPS}) reached; not running ${pending}\n`)
   }
   return result

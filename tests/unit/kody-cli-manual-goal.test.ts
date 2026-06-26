@@ -143,7 +143,7 @@ describe("kody-cli manual goal dispatch", () => {
       force: true,
     })
   })
-it("chains scheduled goal-scheduler ticks from schedule events", async () => {
+  it("chains scheduled goal-scheduler ticks from schedule events", async () => {
     const dir = tmpDir()
     writeConfig(dir)
     writeScheduledExecutable(dir, "goal-scheduler")

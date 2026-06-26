@@ -2,7 +2,7 @@ import * as path from "node:path"
 import type { CapabilityFolder } from "../capabilityFolders.js"
 import type { KodyConfig } from "../config.js"
 import type { ManagedGoal } from "../goal/manager.js"
-import { resolveCapabilityExecution, resolveCapabilityFolder } from "../registry.js"
+import { getExecutableRoots, resolveCapabilityExecution, resolveCapabilityFolder } from "../registry.js"
 import { resolveBackend } from "./jobState/index.js"
 
 export interface GoalCapabilityScheduleStatus {
@@ -50,6 +50,7 @@ interface PlanGoalCapabilityScheduleOptions {
   jobsDir?: string
   now?: Date
   previousScheduleState?: GoalCapabilityScheduleState
+  executableRoots?: string | string[]
 }
 
 export function isCapabilityCadenceGoal(goal: ManagedGoal, extra: Record<string, unknown>): boolean {
@@ -111,6 +112,7 @@ export async function planGoalCapabilitySchedule(
   const now = opts.now ?? new Date()
   const at = now.toISOString()
   const backend = resolveBackend({ config: opts.config, cwd: opts.cwd, jobsDir })
+  const executableRoots = opts.executableRoots ?? getExecutableRoots()
   const statuses: Record<string, GoalCapabilityScheduleStatus> = {}
   const blockers: string[] = []
 
@@ -133,9 +135,7 @@ export async function planGoalCapabilitySchedule(
 
   if (!due) {
     const reason =
-      blockers.length > 0
-        ? "no runnable capability; blocked capabilities need attention"
-        : "no runnable capability"
+      blockers.length > 0 ? "no runnable capability; blocked capabilities need attention" : "no runnable capability"
     const kind = blockers.length > 0 ? "blocked" : "idle"
     return {
       kind,
@@ -164,7 +164,7 @@ export async function planGoalCapabilitySchedule(
     }
   }
 
-  const dispatch = dutyDispatch(capability)
+  const dispatch = dutyDispatch(capability, executableRoots)
   statuses[due.slug] = markCapabilitySelected(statuses[due.slug]!, now)
 
   return {
@@ -235,19 +235,19 @@ async function describeCapabilitySchedule(
   }
 }
 
-function dutyDispatch(capability: CapabilityFolder): {
+function dutyDispatch(
+  capability: CapabilityFolder,
+  executableRoots: string | string[] = getExecutableRoots(),
+): {
   capability: string
   executable: string
   cliArgs: Record<string, unknown>
 } {
-  const { executable, cliArgs } = resolveCapabilityExecution(capability)
+  const { executable, cliArgs } = resolveCapabilityExecution(capability, executableRoots)
   return { capability: capability.slug, executable, cliArgs }
 }
 
-function compareOldestLastFired(
-  a: GoalCapabilityScheduleStatus,
-  b: GoalCapabilityScheduleStatus,
-): number {
+function compareOldestLastFired(a: GoalCapabilityScheduleStatus, b: GoalCapabilityScheduleStatus): number {
   const aTime = validIso(a.lastFiredAt) ? Date.parse(a.lastFiredAt) : Number.NEGATIVE_INFINITY
   const bTime = validIso(b.lastFiredAt) ? Date.parse(b.lastFiredAt) : Number.NEGATIVE_INFINITY
   return aTime - bTime
@@ -257,18 +257,11 @@ function validIso(value: string | undefined): value is string {
   return typeof value === "string" && !Number.isNaN(Date.parse(value))
 }
 
-function markCapabilitySelected(
-  status: GoalCapabilityScheduleStatus,
-  now: Date,
-): GoalCapabilityScheduleStatus {
+function markCapabilitySelected(status: GoalCapabilityScheduleStatus, now: Date): GoalCapabilityScheduleStatus {
   return { ...status, lastFiredAt: now.toISOString() }
 }
 
-function targetLoopDecision(
-  kind: "idle" | "blocked",
-  reason: string,
-  at: string,
-): GoalCapabilityScheduleDecision {
+function targetLoopDecision(kind: "idle" | "blocked", reason: string, at: string): GoalCapabilityScheduleDecision {
   return {
     kind,
     reason,

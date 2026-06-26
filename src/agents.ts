@@ -30,7 +30,7 @@ function stripFrontmatter(raw: string): string {
  * Read the agent identity body for `slug`.
  *
  * Resolution order:
-* 1. Hydrated local file `<cwd>/<agentsDir>/<slug>.md` (non-empty) — always wins.
+ * 1. Hydrated local file `<cwd>/<agentsDir>/<slug>.md` (non-empty) — always wins.
  * 2. Company store agent file.
  * 3. Otherwise throw — declared agent with no source must not run.
  */

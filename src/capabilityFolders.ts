@@ -53,10 +53,7 @@ export function listCapabilityFolderSlugs(absDir: string): string[] {
 }
 
 export function isCapabilityFolder(dir: string): boolean {
-  return (
-    fs.existsSync(path.join(dir, CAPABILITY_PROFILE_FILE)) &&
-    fs.existsSync(path.join(dir, CAPABILITY_BODY_FILE))
-  )
+  return fs.existsSync(path.join(dir, CAPABILITY_PROFILE_FILE)) && fs.existsSync(path.join(dir, CAPABILITY_BODY_FILE))
 }
 
 export function readCapabilityFolder(root: string, slug: string): CapabilityFolder | null {

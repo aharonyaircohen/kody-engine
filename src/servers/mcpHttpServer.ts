@@ -34,9 +34,7 @@ export interface McpRouteConfig {
   /** MCP server version. */
   version: string
   /** Tool definitions to register. */
-  tools: Array<
-    FetchRepoToolDefinition | VerifyToolDefinition | SubmitStateToolDefinition | CapabilityToolDefinition
-  >
+  tools: Array<FetchRepoToolDefinition | VerifyToolDefinition | SubmitStateToolDefinition | CapabilityToolDefinition>
 }
 
 export interface McpHttpServerOptions {

@@ -181,9 +181,7 @@ export function detectPackageManager(cwd: string): PackageManager {
 
 function shouldChainScheduledWatch(match: DispatchResult): boolean {
   return (
-    match.action === "goal-scheduler" ||
-    match.capability === "goal-scheduler" ||
-    match.executable === "goal-scheduler"
+    match.action === "goal-scheduler" || match.capability === "goal-scheduler" || match.executable === "goal-scheduler"
   )
 }
 
@@ -378,7 +376,7 @@ export async function runCi(argv: string[]): Promise<number> {
     const scheduledWatchRoute =
       manualGoalManager || dutyRoute
         ? undefined
-        : dispatchScheduledWatches({ force: true }).find(
+        : dispatchScheduledWatches({ force: true, cwd }).find(
             (match) => match.action === forceRunAction || match.executable === forceRunAction,
           )
     const route = manualGoalManager
@@ -548,9 +546,7 @@ export async function runCi(argv: string[]): Promise<number> {
     const buildOnly = dispatch.executable === "preview-build"
 
     if (args.skipInstall || buildOnly) {
-      process.stdout.write(
-        `→ kody: skipping dep install (${buildOnly ? "build-only executable" : "--skip-install"})\n`,
-      )
+      process.stdout.write(`→ kody: skipping dep install (${buildOnly ? "build-only executable" : "--skip-install"})\n`)
     } else {
       const code = installDeps(pm, cwd)
       if (code !== 0) {
@@ -619,7 +615,7 @@ export async function runCi(argv: string[]): Promise<number> {
  * Aggregate exit code: 0 iff every watch returned 0.
  */
 async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: boolean }): Promise<number> {
-  const matches: DispatchResult[] = dispatchScheduledWatches({ force: opts.force })
+  const matches: DispatchResult[] = dispatchScheduledWatches({ force: opts.force, cwd })
   if (matches.length === 0) {
     process.stdout.write(
       `→ kody: scheduled wake — no watches matched ${opts.force ? "(force mode, no watches discovered)" : "(window)"}, exiting cleanly\n`,
@@ -669,9 +665,7 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
   // restore the legacy behaviour while the new mode bakes in.
   const serial = process.env.KODY_SERIAL_WATCHES === "1"
   const runWatch = async (match: DispatchResult): Promise<number> => {
-    process.stdout.write(
-      `\n→ kody: running watch capability \`${match.capability}\` (${match.executable})\n`,
-    )
+    process.stdout.write(`\n→ kody: running watch capability \`${match.capability}\` (${match.executable})\n`)
     try {
       const result = await runJob(
         mintScheduledJob({
@@ -680,7 +674,7 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
           executable: match.executable,
           cliArgs: match.cliArgs,
         }),
-{
+        {
           cwd,
           config,
           verbose: args.verbose,

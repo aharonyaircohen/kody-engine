@@ -3,7 +3,7 @@
  * executables from dashboard-managed, per-repo stores. Replaces the legacy
  * committed `.kody/qa-guide.md` mechanism.
  *
-*   - scenarios / notes → the state-repo `context/*.md` entries
+ *   - scenarios / notes → the state-repo `context/*.md` entries
  *     (only entries whose `agent` list includes `qa-engineer`)
  *   - login username     → state-repo variables file `variables.json`, key LOGIN_USER
  *   - password           → secret LOGIN_PASSWORD, read from process.env

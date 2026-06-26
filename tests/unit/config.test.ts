@@ -193,7 +193,7 @@ describe("config: loadConfig", () => {
     expect(cfg.quality).toEqual({ typecheck: "tc", testUnit: "tu", lint: "ln", format: "" })
   })
 
-it("rejects local-file job state storage in kody.config.json", () => {
+  it("rejects local-file job state storage in kody.config.json", () => {
     const dir = tmpDir()
     writeConfig(dir, {
       github: { owner: "o", repo: "r" },

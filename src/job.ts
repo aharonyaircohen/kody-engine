@@ -11,9 +11,9 @@
  */
 
 import * as path from "node:path"
-import type { Job, JobFlavor } from "./executables/types.js"
 import type { KodyConfig } from "./config.js"
 import type { DispatchResult } from "./dispatch.js"
+import type { Job, JobFlavor } from "./executables/types.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
 import { runExecutable, runExecutableChain } from "./executor.js"
 import { resolveCapabilityAction, resolveCapabilityFolder } from "./registry.js"
@@ -122,9 +122,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   const valid = validateJob(job)
   const action = valid.action ?? valid.capability
   const projectCapabilitiesRoot = path.join(base.cwd, ".kody", "capabilities")
-  const resolvedCapability = action
-    ? resolveCapabilityAction(action, projectCapabilitiesRoot)
-    : null
+  const resolvedCapability = action ? resolveCapabilityAction(action, projectCapabilitiesRoot) : null
   const capabilityIdentity = valid.capability ?? resolvedCapability?.capability
   const capabilityContext = loadCapabilityContext(capabilityIdentity, base.cwd)
   const explicitExecutableOnly =
@@ -141,9 +139,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     (capabilityContext?.config.tickScript ? "capability-tick-scripted" : undefined)
   const profileName = valid.executable ?? capabilitySelectedExecutable
   if (!profileName) {
-    throw new InvalidJobError(
-      `job capability resolves to no executable: ${capabilityIdentity ?? action}`,
-    )
+    throw new InvalidJobError(`job capability resolves to no executable: ${capabilityIdentity ?? action}`)
   }
 
   const preloadedData: Record<string, unknown> = { ...(base.preloadedData ?? {}) }
@@ -167,9 +163,16 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     preloadedData.capabilityTitle = capabilityContext.title
     preloadedData.dutyIntent = capabilityContext.body
     preloadedData.jobIntent = capabilityContext.body
-    if (preloadedData.jobCapability === undefined)
-      preloadedData.jobCapability = capabilityContext.slug
-    if (capabilityContext.config.agent && preloadedData.jobAgent === undefined) {
+    if (preloadedData.jobCapability === undefined) preloadedData.jobCapability = capabilityContext.slug
+    // Instant jobs inherit the capability's declared agent when the operator
+    // didn't name one. Scheduled jobs (capability-tick) always set agent
+    // explicitly on the minted Job — see `mintScheduledJob` callers — so
+    // seeding here would clobber the deliberate "no default agent" choice.
+    if (
+      valid.flavor === "instant" &&
+      capabilityContext.config.agent &&
+      preloadedData.jobAgent === undefined
+    ) {
       preloadedData.jobAgent = capabilityContext.config.agent
     }
     if (capabilityContext.config.mentions && capabilityContext.config.mentions.length > 0) {
@@ -193,9 +196,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     preloadedData: Object.keys(preloadedData).length > 0 ? preloadedData : undefined,
   }
   const shouldApplyResolvedCapabilityArgs =
-    valid.executable === undefined &&
-    resolvedCapability &&
-    profileName === resolvedCapability.executable
+    valid.executable === undefined && resolvedCapability && profileName === resolvedCapability.executable
   input.cliArgs = shouldApplyResolvedCapabilityArgs
     ? { ...resolvedCapability.cliArgs, ...input.cliArgs }
     : input.cliArgs
@@ -204,10 +205,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   return run(profileName, input)
 }
 
-function loadCapabilityContext(
-  slug: string | undefined,
-  cwd: string,
-): ReturnType<typeof resolveCapabilityFolder> {
+function loadCapabilityContext(slug: string | undefined, cwd: string): ReturnType<typeof resolveCapabilityFolder> {
   if (!slug) return null
   return resolveCapabilityFolder(slug, path.join(cwd, ".kody", "capabilities"))
 }
@@ -253,7 +251,7 @@ export interface ScheduledJobInput {
   agent?: string
   /** Args handed to the tick executable (e.g. `{ job: slug }` for `.md` capabilities). */
   cliArgs?: Record<string, unknown>
-/** Ask the owning goal/loop to refresh reports/<goal-or-loop>.md after its persisted decision. */
+  /** Ask the owning goal/loop to refresh reports/<goal-or-loop>.md after its persisted decision. */
   saveReport?: boolean
 }
 

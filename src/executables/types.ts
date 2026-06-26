@@ -469,7 +469,7 @@ export interface Context {
      * `@kody <next>` comment, which is silently ignored when Kody comments as
      * a GitHub App (bot author), stalling the pipeline at classify.
      */
-nextDispatch?: {
+    nextDispatch?: {
       action?: string
       capability?: string
       executable?: string
@@ -553,6 +553,6 @@ export interface Job {
   flavor: JobFlavor
   /** Manual force-run (bypass cadence) for a scheduled job. */
   force?: boolean
-/** Ask the owning goal/loop to refresh reports/<goal-or-loop>.md after its persisted decision. */
+  /** Ask the owning goal/loop to refresh reports/<goal-or-loop>.md after its persisted decision. */
   saveReport?: boolean
 }

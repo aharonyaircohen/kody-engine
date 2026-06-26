@@ -14,14 +14,16 @@
  */
 
 import * as fs from "node:fs"
-import type { InputSpec } from "./executables/types.js"
+import * as path from "node:path"
 import { BUILTIN_ALIASES, type KodyConfig } from "./config.js"
 import { cronMatchesInWindow } from "./cron-match.js"
+import type { InputSpec } from "./executables/types.js"
 import {
   type DiscoveredCapabilityAction,
+  getExecutableRoots,
   getProfileInputs,
-  listExecutables,
   listCapabilityActions,
+  listExecutables,
   resolveCapabilityAction,
 } from "./registry.js"
 
@@ -280,9 +282,7 @@ export function autoDispatch(opts?: {
   // POLITE_WORDS filter above lets natural-language phrasings through to
   // the default — the "no firstToken" condition here is what gates them.
   if (!route && !firstToken) {
-    const defaultAction = isPr
-      ? (opts?.config?.defaultPrExecutable ?? null)
-      : (opts?.config?.defaultExecutable ?? null)
+    const defaultAction = isPr ? (opts?.config?.defaultPrExecutable ?? null) : (opts?.config?.defaultExecutable ?? null)
     route = defaultAction ? resolveConfiguredAction(defaultAction) : null
   }
   // Bot self-dispatch gate: a bot-authored comment may ONLY proceed when it
@@ -450,12 +450,12 @@ export function autoDispatchTyped(opts?: {
  * The list is sorted by name for deterministic ordering. The CLI runs each
  * sequentially; per-watch failures don't stop the rest.
  */
-export function dispatchScheduledWatches(opts?: { now?: Date; windowSec?: number; force?: boolean }): DispatchResult[] {
+export function dispatchScheduledWatches(opts?: { now?: Date; windowSec?: number; force?: boolean; cwd?: string }): DispatchResult[] {
   const now = opts?.now ?? new Date()
   const envWindow = Number(process.env.KODY_SCHEDULE_WINDOW_SEC)
   const windowSec = opts?.windowSec ?? (Number.isFinite(envWindow) && envWindow > 0 ? envWindow : 300)
   const out: DispatchResult[] = []
-  for (const exe of listExecutables()) {
+  for (const exe of listExecutables(getExecutableRoots(opts?.cwd))) {
     let raw: string
     try {
       raw = fs.readFileSync(exe.profilePath, "utf-8")

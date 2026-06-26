@@ -271,7 +271,7 @@ describe("goal-scheduler live wiring", () => {
     expect(after.stdout).toContain("created goal instance web-release-2026-06-24")
   })
 
-it("continues ticking unfinished scheduled instances from earlier buckets", () => {
+  it("continues ticking unfinished scheduled instances from earlier buckets", () => {
     writeTemplate("web-release", managedGoalExtra())
     writeGoal("web-release-2026-06-24", "active", {
       ...managedGoalExtra(),

@@ -23,7 +23,7 @@ describe("agent-factory profile", () => {
     expect(profile.claudeCode.tools).not.toContain("Write")
     expect(profile.claudeCode.tools).not.toContain("Edit")
     expect(validateScriptReferences(profile, allScriptNames)).toEqual([])
-})
+  })
 
   it("loads the built-in public capability", () => {
     const profile = loadProfile(path.resolve(__dirname, "../../src/capabilities/agent-factory/profile.json"))
