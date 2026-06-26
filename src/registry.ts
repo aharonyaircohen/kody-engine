@@ -235,10 +235,9 @@ export function hasAgentAction(name: string, roots: string | string[] = getAgent
 }
 
 /**
- * List public agentResponsibility actions. AgentResponsibilities own the operator-facing action name; an
- * agentAction is only the selected implementation. Ordering is intentional:
- * project folder agentResponsibilities override company store agentResponsibilities, which override
- * engine built-ins.
+ * List public capability actions. The legacy function name stays until the
+ * compatibility layer is removed. Ordering is intentional: project
+ * capabilities override company-store capabilities, then legacy fallbacks.
  */
 export function listAgentResponsibilityActions(
   projectAgentResponsibilitiesRoot: string = getProjectAgentResponsibilitiesRoot(),
