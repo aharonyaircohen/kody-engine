@@ -5,7 +5,7 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { loadAgentIdentity } from "../../src/agents.js"
 import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
-import { listExecutables, listCapabilityActions, resolveExecutable } from "../../src/registry.js"
+import { listCapabilityActions, listExecutables, resolveExecutable } from "../../src/registry.js"
 
 let tmp: string
 let cwdBefore: string
@@ -71,9 +71,7 @@ describe("company store resolution", () => {
     expect(fs.realpathSync(resolveExecutable("store-exe")!)).toBe(
       fs.realpathSync(path.join(consumer, ".kody", "capabilities", "store-exe", "profile.json")),
     )
-    expect(listCapabilityActions().find((item) => item.action === "store-capability")?.source).toBe(
-      "project-folder",
-    )
+    expect(listCapabilityActions().find((item) => item.action === "store-capability")?.source).toBe("project-folder")
     expect(loadAgentIdentity(consumer, "cto")).toBe("Local CTO agent.")
   })
 })

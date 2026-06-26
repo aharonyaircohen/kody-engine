@@ -25,9 +25,7 @@ export function getCompanyStoreRoot(): string | null {
   return root
 }
 
-export function getCompanyStoreAssetRoot(
-  kind: "capabilities" | "executables" | "goals" | "agents",
-): string | null {
+export function getCompanyStoreAssetRoot(kind: "capabilities" | "executables" | "goals" | "agents"): string | null {
   const root = getCompanyStoreRoot()
   if (!root) return null
   const folderByKind: Record<typeof kind, string> = {

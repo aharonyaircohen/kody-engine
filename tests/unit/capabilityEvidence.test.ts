@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  applyCapabilityEvidenceToGoalState,
   capabilityReportToEvidence,
   capabilityResultToEvidence,
-  applyCapabilityEvidenceToGoalState,
   mergeCapabilityEvidence,
 } from "../../src/capabilityEvidence.js"
 import type { GoalState } from "../../src/goal/state.js"

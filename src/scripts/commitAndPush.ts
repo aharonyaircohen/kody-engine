@@ -15,7 +15,6 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { PostflightScript } from "../executables/types.js"
 import {
   commitAndPush as doCommitAndPush,
   hasCommitsAhead,
@@ -24,6 +23,7 @@ import {
   listFilesInCommit,
 } from "../commit.js"
 import { resolveRunId } from "../events.js"
+import type { PostflightScript } from "../executables/types.js"
 import { runtimeStatePath } from "../runtimePaths.js"
 
 const DEFAULT_COMMIT_MESSAGE = "chore: kody changes"

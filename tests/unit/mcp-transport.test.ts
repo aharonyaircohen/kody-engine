@@ -6,9 +6,9 @@
 
 import { afterEach, describe, expect, it } from "vitest"
 import {
+  buildCapabilityMcpServer,
   CAPABILITY_MCP_TOOL_NAMES,
   capabilityToolDefinitions,
-  buildCapabilityMcpServer,
 } from "../../src/capabilityMcp.js"
 import { buildFetchRepoMcpServer, fetchRepoToolDefinition } from "../../src/fetchRepoMcp.js"
 import { buildMcpHttpServer, listenMcpHttpServer, type McpRouteConfig } from "../../src/servers/mcpHttpServer.js"
