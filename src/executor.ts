@@ -148,13 +148,8 @@ export function jobReferenceBlock(
         : null
   const description = profile.describe.trim()
   const workflow =
-    typeof data.workflowCapability === "string" && data.workflowCapability.length > 0
-      ? data.workflowCapability
-      : null
-  const workflowStep =
-    typeof data.workflowStep === "string" && data.workflowStep.length > 0
-      ? data.workflowStep
-      : null
+    typeof data.workflowCapability === "string" && data.workflowCapability.length > 0 ? data.workflowCapability : null
+  const workflowStep = typeof data.workflowStep === "string" && data.workflowStep.length > 0 ? data.workflowStep : null
   const workflowStepIndex =
     typeof data.workflowStepIndex === "number" && Number.isFinite(data.workflowStepIndex)
       ? data.workflowStepIndex
