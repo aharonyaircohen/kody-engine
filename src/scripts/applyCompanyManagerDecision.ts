@@ -1,4 +1,3 @@
-import type { PostflightScript } from "../executables/types.js"
 import {
   appendCompanyIntentDecision,
   readCompanyIntent,
@@ -11,6 +10,7 @@ import {
   type CompanyManagerAction,
   type CompanyManagerDecision,
 } from "../companyManagerDecision.js"
+import type { PostflightScript } from "../executables/types.js"
 import { nowIso } from "../goal/state.js"
 import { fetchGoalState } from "../goal/stateStore.js"
 

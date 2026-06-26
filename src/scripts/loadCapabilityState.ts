@@ -23,8 +23,8 @@
  * run with no memory — the same one capability shape, statefulness opted in by config.
  */
 
-import type { PreflightScript } from "../executables/types.js"
 import { CAPABILITY_MCP_TOOL_NAMES } from "../capabilityMcp.js"
+import type { PreflightScript } from "../executables/types.js"
 import { resolveBackend } from "./jobState/index.js"
 
 const CAPABILITY_TOOL_PALETTE: ReadonlySet<string> = new Set(CAPABILITY_MCP_TOOL_NAMES)

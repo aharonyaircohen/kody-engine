@@ -163,9 +163,7 @@ export async function poolServe(): Promise<number> {
           activeRepos: () => registry.activeRepos(),
           claim: (owner, repo, req) => registry.claim(owner, repo, req),
           log,
-        }).catch((err) =>
-          log(`capability fallback tick failed: ${err instanceof Error ? err.message : String(err)}`),
-        )
+        }).catch((err) => log(`capability fallback tick failed: ${err instanceof Error ? err.message : String(err)}`))
       }, dutyTickMs)
     : null
 

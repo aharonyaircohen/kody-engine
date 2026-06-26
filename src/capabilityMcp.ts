@@ -185,9 +185,7 @@ function postRecommendation(
   capabilitySlug?: string,
 ): { ok: true } | { ok: false; error: string } {
   const mentioned = mention ? `${mention} ${message}` : message
-  const body = capabilitySlug
-    ? `${mentioned}\n\n<!-- kody-capability: ${capabilitySlug} -->`
-    : mentioned
+  const body = capabilitySlug ? `${mentioned}\n\n<!-- kody-capability: ${capabilitySlug} -->` : mentioned
   try {
     gh(["pr", "comment", String(prNumber), "--body", body])
     return { ok: true }
@@ -237,10 +235,7 @@ function readLedger(label: string): LedgerResult {
 export type CapabilityTrustMode = "ask" | "auto"
 const TRUST_FILE_PATH = "state/trust.json"
 
-export function parseCapabilityTrustMode(
-  rawJson: string,
-  capabilitySlug: string,
-): CapabilityTrustMode {
+export function parseCapabilityTrustMode(rawJson: string, capabilitySlug: string): CapabilityTrustMode {
   try {
     const parsed = JSON.parse(rawJson) as { capabilities?: Record<string, { mode?: string }> }
     return parsed?.capabilities?.[capabilitySlug]?.mode === "auto" ? "auto" : "ask"
@@ -254,10 +249,7 @@ function defaultStateForRepoSlug(repoSlug: string): StateRepoConfig["state"] {
   return { repo: `${owner}/kody-state`, path: repo ?? repoSlug }
 }
 
-export function readCapabilityTrustMode(
-  repoSlug: string,
-  capabilitySlug?: string,
-): CapabilityTrustMode
+export function readCapabilityTrustMode(repoSlug: string, capabilitySlug?: string): CapabilityTrustMode
 export function readCapabilityTrustMode(
   state: StateRepoConfig["state"] | undefined,
   repoSlug: string,
@@ -270,8 +262,7 @@ export function readCapabilityTrustMode(
 ): CapabilityTrustMode {
   const state = typeof stateOrRepoSlug === "string" ? undefined : stateOrRepoSlug
   const repoSlug = typeof stateOrRepoSlug === "string" ? stateOrRepoSlug : (repoSlugOrCapabilitySlug ?? "")
-  const capabilitySlug =
-    typeof stateOrRepoSlug === "string" ? repoSlugOrCapabilitySlug : maybeCapabilitySlug
+  const capabilitySlug = typeof stateOrRepoSlug === "string" ? repoSlugOrCapabilitySlug : maybeCapabilitySlug
   if (!capabilitySlug) return "ask"
   try {
     const loaded = readStateText({ state: state ?? defaultStateForRepoSlug(repoSlug) }, undefined, TRUST_FILE_PATH)
@@ -428,15 +419,7 @@ export function dispatchWorkflow(
   }
 
   try {
-    gh([
-      "workflow",
-      "run",
-      workflowFile,
-      "-f",
-      `capability=${capability}`,
-      "-f",
-      `issue_number=${issueNumber}`,
-    ])
+    gh(["workflow", "run", workflowFile, "-f", `capability=${capability}`, "-f", `issue_number=${issueNumber}`])
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -475,10 +458,7 @@ function readDispatchTargetKind(
 
 const GATE_EXEMPT_DUTIES: ReadonlySet<string> = new Set(["qa-engineer", "ui-review"])
 
-export function isDispatchGated(
-  capability: string | null | undefined,
-  mode: CapabilityTrustMode,
-): boolean {
+export function isDispatchGated(capability: string | null | undefined, mode: CapabilityTrustMode): boolean {
   if (mode === "auto") return false
   if (capability && GATE_EXEMPT_DUTIES.has(capability)) return false
   return true
@@ -500,9 +480,7 @@ function trustRefusal(capabilitySlug?: string): string {
 /**
  * Build all capability tool definitions. Used by both adapters.
  */
-export function capabilityToolDefinitions(
-  opts: CapabilityMcpOptions,
-): CapabilityToolDefinition[] {
+export function capabilityToolDefinitions(opts: CapabilityMcpOptions): CapabilityToolDefinition[] {
   const workflowFile = opts.workflowFile ?? "kody.yml"
 
   const listTool: CapabilityToolDefinition = {
@@ -531,9 +509,7 @@ export function capabilityToolDefinitions(
     },
     handler: async (args) => {
       const pr = Number(args.pr)
-      if (
-        isDispatchGated(verb, readCapabilityTrustMode(opts.state, opts.repoSlug, opts.capabilitySlug))
-      ) {
+      if (isDispatchGated(verb, readCapabilityTrustMode(opts.state, opts.repoSlug, opts.capabilitySlug))) {
         return { content: [{ type: "text", text: trustRefusal(opts.capabilitySlug) }] }
       }
       const result = dispatchVerb(workflowFile, opts.repoSlug, verb, pr)
@@ -683,12 +659,7 @@ export function capabilityToolDefinitions(
     handler: async (args) => {
       const capability = String(args.capability ?? args.executable ?? "")
       const issueNumber = Number(args.issueNumber)
-      if (
-        isDispatchGated(
-          capability,
-          readCapabilityTrustMode(opts.state, opts.repoSlug, opts.capabilitySlug),
-        )
-      ) {
+      if (isDispatchGated(capability, readCapabilityTrustMode(opts.state, opts.repoSlug, opts.capabilitySlug))) {
         return { content: [{ type: "text", text: trustRefusal(opts.capabilitySlug) }] }
       }
       const result = dispatchWorkflow(workflowFile, capability, issueNumber, opts.repoSlug)

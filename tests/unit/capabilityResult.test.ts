@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import {
-  parseCapabilityResult,
-  parseCapabilityResultsFromText,
-} from "../../src/capabilityResult.js"
+import { parseCapabilityResult, parseCapabilityResultsFromText } from "../../src/capabilityResult.js"
 import { collectShellSideChannels } from "../../src/executor.js"
 
 describe("parseCapabilityResult", () => {
@@ -122,9 +119,7 @@ describe("parseCapabilityResultsFromText", () => {
 
   it("ignores malformed marker lines", () => {
     expect(parseCapabilityResultsFromText("KODY_CAPABILITY_RESULT={not json}\n")).toEqual([])
-    expect(
-      parseCapabilityResultsFromText('KODY_CAPABILITY_RESULT={"version":1,"status":"pass"}\n'),
-    ).toEqual([])
+    expect(parseCapabilityResultsFromText('KODY_CAPABILITY_RESULT={"version":1,"status":"pass"}\n')).toEqual([])
   })
 })
 
