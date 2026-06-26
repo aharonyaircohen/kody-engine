@@ -18,7 +18,7 @@ export interface GoalRouteStep {
 }
 
 export interface ManagedLoopTarget {
-  type: "goal" | "capability"
+  type: "goal" | "capability" | "workflow"
   id: string
 }
 
@@ -211,11 +211,7 @@ function asRoute(value: unknown): GoalRouteStep[] | null {
   for (const item of value) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return null
     const raw = item as Record<string, unknown>
-    if (
-      typeof raw.evidence !== "string" ||
-      typeof raw.stage !== "string" ||
-      typeof raw.capability !== "string"
-    ) {
+    if (typeof raw.evidence !== "string" || typeof raw.stage !== "string" || typeof raw.capability !== "string") {
       return null
     }
     const args = raw.args === undefined ? undefined : asRecord(raw.args)
@@ -243,7 +239,7 @@ function asPreferredRunTime(value: unknown): ManagedGoalPreferredRunTime | undef
 function asLoopTarget(value: unknown): ManagedLoopTarget | undefined {
   const raw = asRecord(value)
   if (!raw) return undefined
-  if (raw.type !== "goal" && raw.type !== "capability") return undefined
+  if (raw.type !== "goal" && raw.type !== "capability" && raw.type !== "workflow") return undefined
   if (typeof raw.id !== "string" || raw.id.trim().length === 0) return undefined
   return { type: raw.type, id: raw.id }
 }

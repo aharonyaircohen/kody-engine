@@ -413,6 +413,7 @@ export interface Context {
     nextDispatch?: {
       action?: string
       capability?: string
+      workflow?: string
       executable?: string
       cliArgs: Record<string, unknown>
       saveReport?: boolean
@@ -423,6 +424,7 @@ export interface Context {
     afterNextJob?: {
       action?: string
       capability?: string
+      workflow?: string
       executable?: string
       cliArgs: Record<string, unknown>
       saveReport?: boolean
@@ -479,6 +481,8 @@ export interface Job {
   executable?: string
   /** Why (referenced): a capability slug whose intent drives the run. */
   capability?: string
+  /** Why (referenced): a stored workflow definition to run as an ordered capability chain. */
+  workflow?: string
   /** Why (inline): free-text intent, e.g. an `@kody` comment body. Untrusted —
    *  fenced where it enters a prompt, not here. */
   why?: string

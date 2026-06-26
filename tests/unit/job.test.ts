@@ -5,8 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // Hoist-safe mock of the executor so runJob is tested in isolation (no real
 // executable spins up). Mirrors tests/unit/dispatchCapabilityFileTicks.routing.test.ts.
-const { runExecutableChain } = vi.hoisted(() => ({ runExecutableChain: vi.fn() }))
+const { gh, runExecutableChain } = vi.hoisted(() => ({
+  gh: vi.fn(),
+  runExecutableChain: vi.fn(),
+}))
 vi.mock("../../src/executor.js", () => ({ runExecutableChain }))
+vi.mock("../../src/issue.js", () => ({ gh }))
 
 import {
   DEFAULT_INSTANT_AGENT,
@@ -22,6 +26,10 @@ describe("runJob (Phase 1 seam)", () => {
   beforeEach(() => {
     runExecutableChain.mockReset()
     runExecutableChain.mockResolvedValue({ exitCode: 0 })
+    gh.mockReset()
+    gh.mockImplementation(() => {
+      throw new Error("HTTP 404 Not Found")
+    })
   })
 
   afterEach(() => {
@@ -215,7 +223,7 @@ describe("runJob (Phase 1 seam)", () => {
 
   it("rejects an executable-only job", () => {
     expect(() => validateJob({ executable: "run", cliArgs: {}, flavor: "instant" })).toThrow(
-      /capability action or capability/,
+      /capability action, capability, or workflow/,
     )
   })
 
@@ -227,6 +235,12 @@ describe("runJob (Phase 1 seam)", () => {
 
   it("defaults cliArgs to an empty object when omitted", () => {
     const j = validateJob({ capability: "run", executable: "run", flavor: "instant" })
+    expect(j.cliArgs).toEqual({})
+  })
+
+  it("accepts a workflow-only job", () => {
+    const j = validateJob({ workflow: "bug-flow", flavor: "instant" })
+    expect(j.workflow).toBe("bug-flow")
     expect(j.cliArgs).toEqual({})
   })
 
@@ -286,6 +300,87 @@ describe("runJob (Phase 1 seam)", () => {
         workflowStepCount: 2,
         jobCapability: "run",
         jobExecutable: "run",
+      })
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("runs a stored workflow definition as ordered child capability jobs", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-definition-job-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "reproduce", {
+        name: "reproduce",
+        action: "reproduce",
+        implementation: "reproduce",
+      })
+      writeCapability(cwd, "run", {
+        name: "run",
+        action: "run",
+        implementation: "run",
+      })
+      writeCapability(cwd, "bug-flow", {
+        name: "bug-flow",
+        action: "bug-flow",
+        implementation: "bug-flow",
+      })
+      const workflow = {
+        version: 1,
+        name: "Bug workflow",
+        instructions: "Reproduce before fixing.",
+        capabilities: ["reproduce", "run"],
+        createdAt: "2026-06-27T00:00:00Z",
+        updatedAt: "2026-06-27T00:00:00Z",
+      }
+      gh.mockReturnValue(
+        JSON.stringify({
+          type: "file",
+          encoding: "base64",
+          content: Buffer.from(JSON.stringify(workflow), "utf8").toString("base64"),
+          sha: "workflow-sha",
+        }),
+      )
+      process.chdir(cwd)
+
+      await runJob(
+        {
+          workflow: "bug-flow",
+          cliArgs: { issue: 42 },
+          flavor: "instant",
+        },
+        {
+          cwd,
+          config: {
+            quality: { typecheck: "", lint: "", testUnit: "", format: "" },
+            git: { defaultBranch: "main" },
+            github: { owner: "o", repo: "r" },
+            agent: { model: "anthropic/claude-haiku-4-5-20251001" },
+            state: { repo: "o/kody-state", path: "r" },
+          },
+        },
+      )
+
+      expect(gh).toHaveBeenCalledWith(["api", "/repos/o/kody-state/contents/r/workflows/bug-flow/workflow.json"], {
+        cwd,
+      })
+      expect(runExecutableChain).toHaveBeenCalledTimes(2)
+      expect(runExecutableChain.mock.calls[0]![0]).toBe("reproduce")
+      expect(runExecutableChain.mock.calls[0]![1].preloadedData).toMatchObject({
+        workflowCapability: "bug-flow",
+        workflowTitle: "Bug workflow",
+        workflowStep: "reproduce",
+        workflowStepIndex: 1,
+        workflowStepCount: 2,
+        jobWhy: "Reproduce before fixing.",
+      })
+      expect(runExecutableChain.mock.calls[1]![0]).toBe("run")
+      expect(runExecutableChain.mock.calls[1]![1].preloadedData).toMatchObject({
+        workflowCapability: "bug-flow",
+        workflowStep: "run",
+        workflowStepIndex: 2,
+        workflowStepCount: 2,
       })
     } finally {
       process.chdir(originalCwd)

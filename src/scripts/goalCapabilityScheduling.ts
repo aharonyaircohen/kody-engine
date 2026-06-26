@@ -20,9 +20,12 @@ export interface GoalCapabilityScheduleState {
     | { kind: "dispatch"; capability: string; executable: string; reason: string; at: string }
     | {
         kind: "dispatch"
-        targetType: "goal"
+        targetType: "goal" | "workflow"
         targetId: string
-        executable: "goal-manager"
+        action?: string
+        capability?: string
+        workflow?: string
+        executable?: string
         reason: string
         at: string
       }
@@ -38,6 +41,7 @@ export interface GoalCapabilityScheduleDecision {
   dispatch?: {
     action?: string
     capability?: string
+    workflow?: string
     executable?: string
     cliArgs: Record<string, unknown>
   }
@@ -64,16 +68,25 @@ export function isGoalTargetLoop(goal: ManagedGoal): boolean {
   return goal.type === "agentLoop" && goal.loopTarget?.type === "goal" && goal.loopTarget.id.trim().length > 0
 }
 
-export function planGoalTargetLoopSchedule(opts: {
+export function isWorkflowTargetLoop(goal: ManagedGoal): boolean {
+  return goal.type === "agentLoop" && goal.loopTarget?.type === "workflow" && goal.loopTarget.id.trim().length > 0
+}
+
+export function planTargetLoopSchedule(opts: {
   goal: ManagedGoal
   now?: Date
   previousScheduleState?: GoalCapabilityScheduleState
 }): GoalCapabilityScheduleDecision {
   const now = opts.now ?? new Date()
   const at = now.toISOString()
-  const targetId = opts.goal.loopTarget?.type === "goal" ? opts.goal.loopTarget.id.trim() : ""
+  const target = opts.goal.loopTarget
+  const targetId = target?.id.trim() ?? ""
   if (!targetId) {
-    const reason = "goal target loop missing target goal"
+    const reason = "loop missing target"
+    return targetLoopDecision("blocked", reason, at)
+  }
+  if (target?.type !== "goal" && target?.type !== "workflow") {
+    const reason = `unsupported loop target: ${String(target?.type ?? "missing")}`
     return targetLoopDecision("blocked", reason, at)
   }
 
@@ -83,18 +96,26 @@ export function planGoalTargetLoopSchedule(opts: {
     if (!gate.ok) return targetLoopDecision("idle", gate.reason, at)
   }
 
+  const dispatch: NonNullable<GoalCapabilityScheduleDecision["dispatch"]> =
+    target.type === "goal"
+      ? { action: "goal-manager", executable: "goal-manager", cliArgs: { goal: targetId } }
+      : { workflow: targetId, cliArgs: {} }
+
   return {
     kind: "dispatch",
-    reason: `dispatch goal ${targetId}`,
-    dispatch: { action: "goal-manager", executable: "goal-manager", cliArgs: { goal: targetId } },
+    reason: `dispatch ${target.type} ${targetId}`,
+    dispatch,
     scheduleState: {
       mode: "agentLoop",
       lastGoalTickAt: at,
       lastDecision: {
         kind: "dispatch",
-        targetType: "goal",
+        targetType: target.type,
         targetId,
-        executable: "goal-manager",
+        ...(dispatch.action ? { action: dispatch.action } : {}),
+        ...(dispatch.capability ? { capability: dispatch.capability } : {}),
+        ...(dispatch.workflow ? { workflow: dispatch.workflow } : {}),
+        ...(dispatch.executable ? { executable: dispatch.executable } : {}),
         reason: preferred ? `preferred time ${preferred.time} ${preferred.timezone}` : "ready target loop tick",
         at,
       },
@@ -133,9 +154,7 @@ export async function planGoalCapabilitySchedule(
 
   if (!due) {
     const reason =
-      blockers.length > 0
-        ? "no runnable capability; blocked capabilities need attention"
-        : "no runnable capability"
+      blockers.length > 0 ? "no runnable capability; blocked capabilities need attention" : "no runnable capability"
     const kind = blockers.length > 0 ? "blocked" : "idle"
     return {
       kind,
@@ -244,10 +263,7 @@ function dutyDispatch(capability: CapabilityFolder): {
   return { capability: capability.slug, executable, cliArgs }
 }
 
-function compareOldestLastFired(
-  a: GoalCapabilityScheduleStatus,
-  b: GoalCapabilityScheduleStatus,
-): number {
+function compareOldestLastFired(a: GoalCapabilityScheduleStatus, b: GoalCapabilityScheduleStatus): number {
   const aTime = validIso(a.lastFiredAt) ? Date.parse(a.lastFiredAt) : Number.NEGATIVE_INFINITY
   const bTime = validIso(b.lastFiredAt) ? Date.parse(b.lastFiredAt) : Number.NEGATIVE_INFINITY
   return aTime - bTime
@@ -257,18 +273,11 @@ function validIso(value: string | undefined): value is string {
   return typeof value === "string" && !Number.isNaN(Date.parse(value))
 }
 
-function markCapabilitySelected(
-  status: GoalCapabilityScheduleStatus,
-  now: Date,
-): GoalCapabilityScheduleStatus {
+function markCapabilitySelected(status: GoalCapabilityScheduleStatus, now: Date): GoalCapabilityScheduleStatus {
   return { ...status, lastFiredAt: now.toISOString() }
 }
 
-function targetLoopDecision(
-  kind: "idle" | "blocked",
-  reason: string,
-  at: string,
-): GoalCapabilityScheduleDecision {
+function targetLoopDecision(kind: "idle" | "blocked", reason: string, at: string): GoalCapabilityScheduleDecision {
   return {
     kind,
     reason,

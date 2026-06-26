@@ -24,6 +24,11 @@ import {
   resolveCapabilityFolder,
 } from "./registry.js"
 import type { Action } from "./state.js"
+import {
+  isWorkflowDefinitionId,
+  readWorkflowDefinition,
+  workflowDefinitionToCapabilityFolder,
+} from "./workflowDefinitions.js"
 
 export { stableJobKey } from "./jobIdentity.js"
 
@@ -66,8 +71,8 @@ export function validateJob(input: unknown): Job {
     throw new InvalidJobError("job must be an object")
   }
   const j = input as Record<string, unknown>
-  if (typeof j.capability !== "string" && typeof j.action !== "string") {
-    throw new InvalidJobError("job must reference a capability action or capability")
+  if (typeof j.capability !== "string" && typeof j.action !== "string" && typeof j.workflow !== "string") {
+    throw new InvalidJobError("job must reference a capability action, capability, or workflow")
   }
   if (j.flavor !== "instant" && j.flavor !== "scheduled") {
     throw new InvalidJobError(`job.flavor must be "instant" or "scheduled" (got ${String(j.flavor)})`)
@@ -79,6 +84,7 @@ export function validateJob(input: unknown): Job {
     action: typeof j.action === "string" ? j.action : undefined,
     executable: typeof j.executable === "string" ? j.executable : undefined,
     capability: typeof j.capability === "string" ? j.capability : undefined,
+    workflow: typeof j.workflow === "string" ? j.workflow : undefined,
     why: typeof j.why === "string" ? j.why : undefined,
     agent: typeof j.agent === "string" ? j.agent : undefined,
     schedule: typeof j.schedule === "string" ? j.schedule : undefined,
@@ -129,29 +135,36 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   const valid = validateJob(job)
   const action = valid.action ?? valid.capability
   const projectCapabilitiesRoot = path.join(base.cwd, ".kody", "capabilities")
-  const resolvedCapability = action ? resolveCapabilityAction(action, projectCapabilitiesRoot) : null
+  const resolvedCapability = !valid.workflow && action ? resolveCapabilityAction(action, projectCapabilitiesRoot) : null
   const capabilityIdentity = valid.capability ?? resolvedCapability?.capability
-  const capabilityContext = loadCapabilityContext(capabilityIdentity, base.cwd)
+  const capabilityContext = valid.workflow ? null : loadCapabilityContext(capabilityIdentity, base.cwd)
+  const workflowContext = valid.workflow
+    ? loadWorkflowContext(valid.workflow, base)
+    : !capabilityContext && !resolvedCapability
+      ? loadWorkflowContext(capabilityIdentity ?? action, base)
+      : null
   const explicitExecutableOnly =
     valid.executable !== undefined &&
     (valid.action === undefined || valid.action === valid.executable) &&
     (valid.capability === undefined || valid.capability === valid.executable)
-  if (!resolvedCapability && !capabilityContext && !explicitExecutableOnly) {
-    throw new InvalidJobError(`job capability not found: ${action ?? valid.capability ?? "<none>"}`)
+  if (!resolvedCapability && !capabilityContext && !workflowContext && !explicitExecutableOnly) {
+    throw new InvalidJobError(
+      `job capability/workflow not found: ${valid.workflow ?? action ?? valid.capability ?? "<none>"}`,
+    )
   }
 
-  const workflow = capabilityContext?.config.workflow
+  const workflow = capabilityContext?.config.workflow ?? workflowContext?.config.workflow
+  const workflowIdentity = valid.workflow ?? capabilityIdentity ?? workflowContext?.slug
   const capabilitySelectedExecutable =
     resolvedCapability?.executable ??
     capabilityContext?.config.executable ??
     capabilityContext?.config.executables?.[0] ??
     (capabilityContext?.config.tickScript ? "capability-tick-scripted" : undefined)
   const profileName = valid.executable ?? capabilitySelectedExecutable
-  if (
-    workflow &&
-    shouldRunCapabilityWorkflow(valid, workflow, capabilityIdentity, capabilitySelectedExecutable, base)
-  ) {
-    return runCapabilityWorkflow(valid, workflow, capabilityContext!, base)
+  if (workflow && shouldRunCapabilityWorkflow(valid, workflow, workflowIdentity, capabilitySelectedExecutable, base)) {
+    const workflowCapability = capabilityContext ?? workflowContext!
+    const workflowJob = workflowContext && !valid.why ? { ...valid, why: workflowContext.body } : valid
+    return runCapabilityWorkflow(workflowJob, workflow, workflowCapability, base)
   }
 
   if (!profileName) {
@@ -468,6 +481,12 @@ function composeStepWhy(parentWhy: string | undefined, step: CapabilityWorkflowS
 function loadCapabilityContext(slug: string | undefined, cwd: string): ReturnType<typeof resolveCapabilityFolder> {
   if (!slug) return null
   return resolveCapabilityFolder(slug, path.join(cwd, ".kody", "capabilities"))
+}
+
+function loadWorkflowContext(slug: string | undefined, base: RunJobBase): CapabilityFolder | null {
+  if (!slug || !base.config || !isWorkflowDefinitionId(slug)) return null
+  const workflow = readWorkflowDefinition(base.config, base.cwd, slug)
+  return workflow ? workflowDefinitionToCapabilityFolder(slug, workflow) : null
 }
 
 // ────────────────────────────────────────────────────────────────────────────
