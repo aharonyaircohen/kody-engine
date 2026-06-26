@@ -213,9 +213,7 @@ describe("registry: capabilities root", () => {
     fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Ship\n")
     fs.writeFileSync(path.join(legacyDir, "profile.json"), JSON.stringify({ name: "legacy-ship" }))
 
-    expect(fs.realpathSync(resolveAgentAction("ship")!)).toBe(
-      fs.realpathSync(path.join(capabilityDir, "profile.json")),
-    )
+    expect(fs.realpathSync(resolveAgentAction("ship")!)).toBe(fs.realpathSync(path.join(capabilityDir, "profile.json")))
     expect(fs.realpathSync(listAgentActions().find((item) => item.name === "ship")!.profilePath)).toBe(
       fs.realpathSync(path.join(capabilityDir, "profile.json")),
     )
@@ -246,9 +244,7 @@ describe("registry: capabilities root", () => {
       source: "project-folder",
       capabilityKind: "act",
     })
-    expect(fs.realpathSync(resolveAgentAction("ship")!)).toBe(
-      fs.realpathSync(path.join(legacyDir, "profile.json")),
-    )
+    expect(fs.realpathSync(resolveAgentAction("ship")!)).toBe(fs.realpathSync(path.join(legacyDir, "profile.json")))
     expect(fs.realpathSync(listAgentActions().find((item) => item.name === "ship")!.profilePath)).toBe(
       fs.realpathSync(path.join(legacyDir, "profile.json")),
     )
