@@ -1,0 +1,6 @@
+{
+  "name": "fix-ci",
+  "action": "fix-ci",
+  "implementation": "fix-ci",
+  "describe": "Fix the latest failing CI run on a PR."
+}

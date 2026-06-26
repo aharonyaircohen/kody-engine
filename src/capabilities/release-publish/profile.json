@@ -1,0 +1,6 @@
+{
+  "name": "release-publish",
+  "action": "release-publish",
+  "implementation": "release-publish",
+  "describe": "Tag, publish to npm, open GitHub release."
+}

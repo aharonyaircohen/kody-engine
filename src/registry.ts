@@ -109,8 +109,12 @@ export function getBuiltinCapabilitiesRoot(): string {
  * implementation units under state-repo `executables/<name>/`.
  */
 export function getExecutableRoots(): string[] {
-  const projectCapabilitiesRoot = getProjectCapabilitiesRoot()
-  const projectExecutablesRoot = getProjectExecutablesRoot()
+  return getExecutableRootsForCwd(process.cwd())
+}
+
+export function getExecutableRootsForCwd(cwd: string): string[] {
+  const projectCapabilitiesRoot = path.join(cwd, ".kody", "capabilities")
+  const projectExecutablesRoot = path.join(cwd, ".kody", "executables")
   const storeCapabilitiesRoot = getCompanyStoreCapabilitiesRoot()
   const storeExecutablesRoot = getCompanyStoreExecutablesRoot()
   return [
@@ -285,7 +289,10 @@ export function getCapabilityActionInputs(action: string): InputSpec[] | null {
   return getProfileInputs(resolved.executable)
 }
 
-export function resolveCapabilityExecution(capability: CapabilityFolder): {
+export function resolveCapabilityExecution(
+  capability: CapabilityFolder,
+  cwd: string = process.cwd(),
+): {
   executable: string
   cliArgs: Record<string, unknown>
 } {
@@ -300,14 +307,12 @@ export function resolveCapabilityExecution(capability: CapabilityFolder): {
     capability.config.executables?.[0] ??
     (capability.config.role ? capability.slug : undefined) ??
     (capability.config.tickScript ? "capability-tick-scripted" : "capability-tick")
-  const cliArgs = executableDeclaresInput(executable, "capability")
-    ? { capability: capability.slug }
-    : {}
+  const cliArgs = executableDeclaresInput(executable, "capability", cwd) ? { capability: capability.slug } : {}
   return { executable, cliArgs }
 }
 
-function executableDeclaresInput(executable: string, inputName: string): boolean {
-  const profilePath = resolveExecutable(executable)
+function executableDeclaresInput(executable: string, inputName: string, cwd: string = process.cwd()): boolean {
+  const profilePath = resolveExecutable(executable, getExecutableRootsForCwd(cwd))
   if (!profilePath) return false
   try {
     const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as { inputs?: unknown }

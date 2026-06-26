@@ -1,12 +1,33 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { loadProfile, ProfileError, validateScriptReferences } from "../../src/profile.js"
 import { resolveExecutable } from "../../src/registry.js"
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-profile-"))
+}
+
+let prevCwd: string
+let stubRoot: string
+
+beforeEach(() => {
+  prevCwd = process.cwd()
+  stubRoot = fs.mkdtempSync(path.join(os.tmpdir(), "kody-profile-stub-"))
+})
+
+afterEach(() => {
+  process.chdir(prevCwd)
+  fs.rmSync(stubRoot, { recursive: true, force: true })
+})
+
+function stubExecutable(slug: string, profile: Record<string, unknown>): string {
+  const dir = path.join(stubRoot, ".kody", "executables", slug)
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
+  process.chdir(stubRoot)
+  return dir
 }
 
 function writeProfile(dir: string, profile: unknown): string {
@@ -115,6 +136,26 @@ describe("profile: loadProfile", () => {
   it("resolves a capability that references an executable (how) + overlays who/when/tools", () => {
     // A thin capability: references the engine's `merge` executable (the HOW), adds
     // its own name + agent (WHO). No claudeCode of its own.
+    stubExecutable("merge", {
+      role: "primitive",
+      kind: "oneshot",
+      inputs: [{ name: "pr", flag: "--pr", type: "int", describe: "PR to merge" }],
+      claudeCode: {
+        model: "inherit",
+        permissionMode: "acceptEdits",
+        maxTurns: null,
+        maxThinkingTokens: null,
+        systemPromptAppend: null,
+        tools: [],
+        hooks: [],
+        skills: [],
+        commands: [],
+        subagents: [],
+        plugins: [],
+        mcpServers: [],
+      },
+      scripts: { preflight: [{ script: "composePrompt" }], postflight: [] },
+    })
     const dir = tmpDir()
     const p = writeProfile(dir, {
       name: "merge-daily",

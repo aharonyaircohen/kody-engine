@@ -1,0 +1,44 @@
+{
+  "name": "merge",
+  "role": "primitive",
+  "describe": "Self-gating squash merge of a PR.",
+  "inputs": [
+    {
+      "name": "pr",
+      "flag": "--pr",
+      "type": "int",
+      "required": true,
+      "describe": "PR number to merge."
+    },
+    {
+      "name": "why",
+      "flag": "--why",
+      "type": "string",
+      "required": false,
+      "describe": "Reason for the merge."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": null,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": ["Bash"],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "scripts": {
+    "preflight": [
+      { "script": "setLifecycleLabel" }
+    ],
+    "postflight": [
+      { "script": "markFlowSuccess" }
+    ]
+  }
+}
