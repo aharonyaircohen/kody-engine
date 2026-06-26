@@ -104,10 +104,10 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     goal.raw.extra.scheduleState = decision.scheduleState
     ctx.data.managedGoalDecision = decision
     if (decision.kind === "dispatch" && decision.dispatch) {
-      ctx.output.nextDispatch = {
-        action: decision.dispatch.action,
-        executable: decision.dispatch.executable,
-        cliArgs: decision.dispatch.cliArgs,
+    ctx.output.nextDispatch = {
+      action: decision.dispatch.action,
+      executable: decision.dispatch.executable,
+      cliArgs: decision.dispatch.cliArgs,
       }
     }
     stageGoalRunLogEvent(ctx.data, goal.id, {
@@ -164,10 +164,10 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     goal.raw.extra.scheduleState = decision.scheduleState
     ctx.data.managedGoalDecision = decision
     if (decision.kind === "dispatch" && decision.dispatch) {
-      ctx.output.nextDispatch = {
-        capability: decision.dispatch.capability,
-        executable: decision.dispatch.executable,
-        cliArgs: decision.dispatch.cliArgs,
+    ctx.output.nextDispatch = {
+      capability: decision.dispatch.capability,
+      executable: decision.dispatch.executable,
+      cliArgs: decision.dispatch.cliArgs,
         ...(goal.raw.extra.saveReport === true ? { saveReport: true } : {}),
       }
     }
@@ -239,8 +239,8 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
 
   ctx.output.nextDispatch = {
     capability: decision.capability,
-    executable: decision.executable,
     cliArgs: decision.cliArgs,
+    ...(decision.executable ? { executable: decision.executable } : {}),
     ...(decision.saveReport === true ? { saveReport: true } : {}),
   }
   ctx.output.reason = `dispatch ${decision.capability} for ${decision.evidence}`
@@ -269,8 +269,8 @@ function stageManagedGoalDecision(
       status: decision.kind,
       dispatch: {
         capability: decision.capability,
-        executable: decision.executable,
         cliArgs: decision.cliArgs,
+        ...(decision.executable ? { executable: decision.executable } : {}),
       },
       goal: details.goalSnapshot,
       inspection: details.inspection,
@@ -279,8 +279,8 @@ function stageManagedGoalDecision(
         evidence: decision.evidence,
         stage: decision.stage,
         capability: decision.capability,
-        executable: decision.executable,
         cliArgs: decision.cliArgs,
+        ...(decision.executable ? { executable: decision.executable } : {}),
       },
       change: details.change,
     })

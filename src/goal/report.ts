@@ -109,6 +109,9 @@ function goalReportBody(
     `- Missing evidence: ${listOrNone(missingEvidence)}`,
     `- Blockers: ${listOrNone(blockers)}`,
     "",
+    "## Dispatch",
+    ...dispatchContextMarkdown(latestEvent),
+    "",
     "## Capability Evidence",
     ...capabilityEvidenceMarkdown(outputs),
     "",
@@ -154,6 +157,31 @@ function evidenceOutputMarkdown(index: number, output: Record<string, unknown>):
     `- Blockers: ${listOrNone(stringArrayField(output, "blockers"))}`,
     "",
   ]
+}
+
+function dispatchContextMarkdown(latestEvent: Record<string, unknown> | undefined): string[] {
+  const context = recordField(latestEvent, "dispatchContext")
+  if (!context) return ["- none"]
+  const githubActor = stringField(context, "githubActor")
+  const githubActorRole = stringField(context, "githubActorRole")
+  const target = dispatchTargetLabel(recordField(context, "target"))
+  return [
+    `- Triggered by: ${stringField(context, "triggeredBy") ?? "unknown"}`,
+    `- Mode: ${stringField(context, "dispatchMode") ?? "unknown"}`,
+    `- GitHub actor: ${
+      githubActor ? `${githubActor}${githubActorRole ? ` (${githubActorRole})` : ""}` : "none"
+    }`,
+    `- Decided by: ${stringField(context, "decidedBy") ?? "unknown"}`,
+    `- Dispatched by: ${stringField(context, "dispatchedBy") ?? "unknown"}`,
+    `- Target: ${target ?? "none"}`,
+  ]
+}
+
+function dispatchTargetLabel(target: Record<string, unknown> | undefined): string | undefined {
+  const type = stringField(target, "type")
+  const id = stringField(target, "id")
+  if (type && id) return `${type} ${id}`
+  return id ?? type
 }
 
 function artifactMarkdown(artifacts: CapabilityEvidence["artifacts"]): string[] {
