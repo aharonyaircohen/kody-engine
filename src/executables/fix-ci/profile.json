@@ -1,0 +1,42 @@
+{
+  "name": "fix-ci",
+  "role": "primitive",
+  "describe": "Fix the latest failing CI run on a PR.",
+  "inputs": [
+    {
+      "name": "pr",
+      "flag": "--pr",
+      "type": "int",
+      "required": true,
+      "describe": "PR number to fix CI for."
+    },
+    {
+      "name": "runId",
+      "flag": "--run-id",
+      "type": "string",
+      "required": false,
+      "describe": "Specific CI run id to fix."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": null,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": ["Bash"],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "scripts": {
+    "preflight": [
+      { "script": "setLifecycleLabel" }
+    ],
+    "postflight": []
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "name": "fix",
+  "role": "primitive",
+  "describe": "Apply PR review feedback via an agent run.",
+  "inputs": [
+    {
+      "name": "pr",
+      "flag": "--pr",
+      "type": "int",
+      "required": true,
+      "describe": "PR number to fix."
+    },
+    {
+      "name": "feedback",
+      "flag": "--feedback",
+      "type": "string",
+      "required": false,
+      "bindsCommentRest": true,
+      "describe": "Inline reviewer feedback to address."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": null,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": ["Bash"],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "scripts": {
+    "preflight": [
+      { "script": "setLifecycleLabel" }
+    ],
+    "postflight": []
+  }
+}

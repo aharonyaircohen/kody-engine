@@ -1,0 +1,58 @@
+{
+  "name": "release-prepare",
+  "role": "primitive",
+  "describe": "Bump version, update changelog, open release PR.",
+  "inputs": [
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": true,
+      "describe": "Release tracking issue."
+    },
+    {
+      "name": "bump",
+      "flag": "--bump",
+      "type": "enum",
+      "values": ["patch", "minor", "major"],
+      "required": false,
+      "describe": "Version bump."
+    },
+    {
+      "name": "prefer",
+      "flag": "--prefer",
+      "type": "enum",
+      "values": ["ours", "theirs"],
+      "required": false,
+      "describe": "Preferred side for conflict resolution."
+    },
+    {
+      "name": "dry-run",
+      "flag": "--dry-run",
+      "type": "bool",
+      "required": false,
+      "describe": "Dry-run mode."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": null,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": ["Bash"],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "scripts": {
+    "preflight": [
+      { "script": "setLifecycleLabel" }
+    ],
+    "postflight": []
+  }
+}

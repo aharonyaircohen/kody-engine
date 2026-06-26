@@ -31,13 +31,13 @@ describe("registry: builtin executables", () => {
     const names = builtinExecutableNames()
     // a sample of known engine builtins
     expect(names.has("run")).toBe(true)
-    expect(names.has("merge")).toBe(false)
+    expect(names.has("merge")).toBe(true)
     expect(names.has("capability-scheduler")).toBe(false)
   })
 
   it("isBuiltinExecutable is true for builtins, false for custom names", () => {
     expect(isBuiltinExecutable("run")).toBe(true)
-    expect(isBuiltinExecutable("merge")).toBe(false)
+    expect(isBuiltinExecutable("merge")).toBe(true)
     expect(isBuiltinExecutable("a-custom-consumer-capability-xyz")).toBe(false)
   })
 })
