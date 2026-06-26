@@ -46,12 +46,28 @@ function hydrateDirectory(config: StateRepoConfig, cwd: string, stateDir: string
 }
 
 export function hydrateStateWorkspace(config: StateRepoConfig, cwd: string): void {
+  // Best-effort: state hydration is an optimisation that pulls consumer-side
+  // runtime files (executables, capabilities, agents, …) from the configured
+  // state repo into a local `.kody` cache. Failures (no GH_TOKEN, 404, network
+  // blip) must NOT take down the executable — without the cache the consumer
+  // repo's own `.kody/` files still resolve and the run proceeds. Logged once
+  // per failure so operators can see why hydration is skipped.
   for (const mapping of DIR_MAPPINGS) {
-    hydrateDirectory(config, cwd, mapping.stateDir, mapping.localDir)
+    try {
+      hydrateDirectory(config, cwd, mapping.stateDir, mapping.localDir)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[kody] state hydration skipped for ${mapping.stateDir}: ${msg}\n`)
+    }
   }
 
   for (const mapping of FILE_MAPPINGS) {
-    const file = readStateText(config, cwd, mapping.statePath)
-    if (file) writeLocalFile(cwd, mapping.localPath, file.content)
+    try {
+      const file = readStateText(config, cwd, mapping.statePath)
+      if (file) writeLocalFile(cwd, mapping.localPath, file.content)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[kody] state hydration skipped for ${mapping.statePath}: ${msg}\n`)
+    }
   }
 }
