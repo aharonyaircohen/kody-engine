@@ -35,9 +35,13 @@ shape.
 
 The current documented model says:
 
+- Intent = why this agency should care.
 - Goal = what outcome should become true.
-- AgentResponsibility = why/when a standing responsibility exists.
-- AgentAction = how work runs.
+- AgentLoop = when to check or wake work.
+- Agent = who runs.
+- Capability = how the agency can produce a result.
+- AgentResponsibility = current storage for a capability contract.
+- AgentAction = current storage for a capability implementation.
 - Job = required work on a task.
 - Run = one attempt.
 
@@ -57,10 +61,10 @@ what those results mean.
 
 This investigation is grounded in these current contracts:
 
-- `docs/jobs-model.md`: defines goal, agentResponsibility, agentAction, job, and run, and
-  states that a job points to one agentAction.
-- `docs/agent-responsibilities.md`: defines agentResponsibilities as standing responsibility, intent,
-  metadata, routing, cadence, and allowed outputs.
+- `docs/jobs-model.md`: defines intent, goal, loop, agent, capability, current
+  storage names, job, and run, and states that a job points to one agentAction.
+- `docs/agent-responsibilities.md`: defines agentResponsibilities as current
+  storage for capability contracts: metadata, routing, cadence, and allowed outputs.
 - `docs/agent-actions.md`: defines agentActions as concrete runnable actions and
   documents agentResponsibility reports.
 - `docs/goals.md`: defines managed goals as outcome managers that route missing

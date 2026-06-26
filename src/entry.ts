@@ -53,9 +53,9 @@ Usage:
   kody-engine help
   kody-engine version
 
-Top-level work commands are agentResponsibility actions. A agentResponsibility owns the public action name
-and selects an implementation agentAction. Use exec only for internal agentAction
-profiles such as scheduled helpers.
+Top-level work commands are capabilities. A capability owns the public command name
+and resolves the implementation that runs it. Use exec only for internal implementation
+profiles and legacy scheduled helpers.
 
 Exit codes:
   0   success (PR opened, verify passed — or resolve produced a merge commit)
@@ -128,7 +128,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return result
   }
 
-  // Public top-level work commands are agentResponsibility actions.
+  // Public top-level work commands are capabilities. The legacy resolver name stays
+  // until the compatibility layer is removed.
   if (hasAgentResponsibilityAction(cmd)) {
     result.command = "__agent_responsibility__"
     result.actionName = cmd
