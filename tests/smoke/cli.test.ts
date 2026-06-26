@@ -66,6 +66,7 @@ describe("smoke: CLI boots and validates args", () => {
       JSON.stringify({
         name: "smoke-capability",
         action: "smoke-action",
+        capabilityKind: "act",
         executable: "smoke-impl",
         agent: "kody",
       }),
