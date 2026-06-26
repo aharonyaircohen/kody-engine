@@ -7,8 +7,8 @@
  * (e.g. resolve, which needs it to produce a merge commit) should NOT use this.
  */
 
-import type { PostflightScript } from "../executables/types.js"
 import { abortUnfinishedGitOps as doAbort } from "../commit.js"
+import type { PostflightScript } from "../executables/types.js"
 
 export const abortUnfinishedGitOps: PostflightScript = async (ctx) => {
   if (ctx.data.agentDone === false) return

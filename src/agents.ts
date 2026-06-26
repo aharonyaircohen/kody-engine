@@ -17,8 +17,23 @@ import { getCompanyStoreAssetRoot } from "./companyStore.js"
 
 const DEFAULT_AGENT_DIR = ".kody/agents"
 
-/** Agent identitys live in the hydrated local `.kody/agents` cache or the configured company store. */
-export const BUILTIN_AGENTS: Record<string, string> = {}
+/**
+ * Engine-default agent identities that resolve without a hydrated file.
+ *
+ * Used as a last-resort fallback when a profile declares `agent: kody` and
+ * neither the local `.kody/agents/kody.md` nor the company store supplies one.
+ * Without this, a consumer that has not authored an agent file would crash on
+ * every kody-routed run. A consumer-authored file (even one in the company
+ * store) always wins over the built-in.
+ */
+export const BUILTIN_AGENTS: Record<string, string> = {
+  kody: [
+    "# Kody",
+    "",
+    "You are Kody, the autonomous development engine that runs this executable.",
+    "Stay terse, prefer the smallest correct change, and surface blockers instead of papering over them.",
+  ].join("\n"),
+}
 
 /** Strip a leading `---\n…\n---\n` frontmatter block; return the body. */
 function stripFrontmatter(raw: string): string {
@@ -41,10 +56,6 @@ export function loadAgentIdentity(cwd: string, slug: string, agentsDir: string =
   if (fs.existsSync(agentPath)) {
     const body = stripFrontmatter(fs.readFileSync(agentPath, "utf-8"))
     if (body) return body
-    // File present but empty: fall back to a built-in if one exists, else
-    // preserve the legacy "body is empty" error.
-    const builtinForEmpty = BUILTIN_AGENTS[trimmed]
-    if (builtinForEmpty) return builtinForEmpty
     throw new Error(`loadAgentIdentity: agent '${trimmed}' agent identity body is empty (${agentPath})`)
   }
   const builtin = BUILTIN_AGENTS[trimmed]

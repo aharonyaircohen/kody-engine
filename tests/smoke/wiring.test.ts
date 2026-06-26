@@ -24,7 +24,21 @@ const INPUT_TYPES = new Set(["string", "int", "bool", "enum"])
 describe("smoke: system wiring", () => {
   it("every shipped executable profile loads and validates with well-formed inputs", () => {
     // Keep this list explicit so newly bundled executables are reviewed.
-    expect(executables.map((exe) => exe.name)).toEqual(["agent-factory", "run"])
+    expect(executables.map((exe) => exe.name)).toEqual([
+      "agent-factory",
+      "ci-check",
+      "fix",
+      "fix-ci",
+      "goal-scheduler",
+      "merge",
+      "preview-build",
+      "release-deploy",
+      "release-prepare",
+      "release-publish",
+      "resolve",
+      "run",
+      "sync",
+    ])
     const failures: string[] = []
     for (const exe of executables) {
       try {

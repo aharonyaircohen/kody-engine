@@ -133,9 +133,7 @@ export async function planGoalCapabilitySchedule(
 
   if (!due) {
     const reason =
-      blockers.length > 0
-        ? "no runnable capability; blocked capabilities need attention"
-        : "no runnable capability"
+      blockers.length > 0 ? "no runnable capability; blocked capabilities need attention" : "no runnable capability"
     const kind = blockers.length > 0 ? "blocked" : "idle"
     return {
       kind,
@@ -164,7 +162,7 @@ export async function planGoalCapabilitySchedule(
     }
   }
 
-  const dispatch = dutyDispatch(capability)
+  const dispatch = dutyDispatch(capability, opts.cwd)
   statuses[due.slug] = markCapabilitySelected(statuses[due.slug]!, now)
 
   return {
@@ -235,19 +233,19 @@ async function describeCapabilitySchedule(
   }
 }
 
-function dutyDispatch(capability: CapabilityFolder): {
+function dutyDispatch(
+  capability: CapabilityFolder,
+  cwd?: string,
+): {
   capability: string
   executable: string
   cliArgs: Record<string, unknown>
 } {
-  const { executable, cliArgs } = resolveCapabilityExecution(capability)
+  const { executable, cliArgs } = resolveCapabilityExecution(capability, cwd)
   return { capability: capability.slug, executable, cliArgs }
 }
 
-function compareOldestLastFired(
-  a: GoalCapabilityScheduleStatus,
-  b: GoalCapabilityScheduleStatus,
-): number {
+function compareOldestLastFired(a: GoalCapabilityScheduleStatus, b: GoalCapabilityScheduleStatus): number {
   const aTime = validIso(a.lastFiredAt) ? Date.parse(a.lastFiredAt) : Number.NEGATIVE_INFINITY
   const bTime = validIso(b.lastFiredAt) ? Date.parse(b.lastFiredAt) : Number.NEGATIVE_INFINITY
   return aTime - bTime
@@ -257,18 +255,11 @@ function validIso(value: string | undefined): value is string {
   return typeof value === "string" && !Number.isNaN(Date.parse(value))
 }
 
-function markCapabilitySelected(
-  status: GoalCapabilityScheduleStatus,
-  now: Date,
-): GoalCapabilityScheduleStatus {
+function markCapabilitySelected(status: GoalCapabilityScheduleStatus, now: Date): GoalCapabilityScheduleStatus {
   return { ...status, lastFiredAt: now.toISOString() }
 }
 
-function targetLoopDecision(
-  kind: "idle" | "blocked",
-  reason: string,
-  at: string,
-): GoalCapabilityScheduleDecision {
+function targetLoopDecision(kind: "idle" | "blocked", reason: string, at: string): GoalCapabilityScheduleDecision {
   return {
     kind,
     reason,

@@ -1,0 +1,44 @@
+{
+  "name": "resolve",
+  "role": "primitive",
+  "describe": "Merge base into PR and resolve conflicts.",
+  "inputs": [
+    {
+      "name": "pr",
+      "flag": "--pr",
+      "type": "int",
+      "required": true,
+      "describe": "PR number to resolve."
+    },
+    {
+      "name": "prefer",
+      "flag": "--prefer",
+      "type": "enum",
+      "values": ["ours", "theirs"],
+      "required": false,
+      "describe": "Preferred side for conflict resolution."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": null,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": ["Bash"],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "scripts": {
+    "preflight": [
+      { "script": "setLifecycleLabel" },
+      { "script": "resolveFlow" }
+    ],
+    "postflight": []
+  }
+}

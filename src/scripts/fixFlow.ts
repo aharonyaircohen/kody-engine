@@ -4,8 +4,8 @@
  * posts a "started" comment on the PR.
  */
 
-import type { PreflightScript } from "../executables/types.js"
 import { checkoutPrBranch, getCurrentBranch } from "../branch.js"
+import type { PreflightScript } from "../executables/types.js"
 import { getRunUrl } from "../gha.js"
 import { getPr, getPrDiff, getPrLatestReviewBody, postPrReviewComment, truncate } from "../issue.js"
 

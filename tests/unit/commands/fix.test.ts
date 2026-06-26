@@ -1,7 +1,44 @@
-import { describe, expect, it } from "vitest"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { parseArgs } from "../../../src/entry.js"
 
 describe("entry: fix args", () => {
+  let tmp: string
+  let prevCwd: string
+
+  beforeEach(() => {
+    // `fix` ships in kody-store, not the engine root. CI clones the store
+    // alongside the repo; locally that clone may be missing, so set up a
+    // stub `.kody/capabilities/fix/` in a temp dir and chdir there so the
+    // registry picks it up regardless of whether the store is present.
+    prevCwd = process.cwd()
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-fix-cmd-"))
+    const dir = path.join(tmp, ".kody", "capabilities", "fix")
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(
+      path.join(dir, "profile.json"),
+      JSON.stringify(
+        {
+          name: "fix",
+          action: "fix",
+          implementation: "fix",
+          describe: "Apply PR review feedback.",
+        },
+        null,
+        2,
+      ),
+    )
+    fs.writeFileSync(path.join(dir, "capability.md"), "# Fix\n\nApply PR review feedback.\n")
+    process.chdir(tmp)
+  })
+
+  afterEach(() => {
+    process.chdir(prevCwd)
+    fs.rmSync(tmp, { recursive: true, force: true })
+  })
+
   it("parses --pr into cliArgs", () => {
     const a = parseArgs(["fix", "--pr", "42"])
     expect(a.command).toBe("__capability__")

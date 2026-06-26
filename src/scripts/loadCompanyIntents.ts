@@ -1,5 +1,5 @@
-import type { PreflightScript } from "../executables/types.js"
 import { listCompanyIntents } from "../companyIntent.js"
+import type { PreflightScript } from "../executables/types.js"
 
 export const loadCompanyIntents: PreflightScript = async (ctx) => {
   const intents = listCompanyIntents(ctx.config, ctx.cwd)

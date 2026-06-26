@@ -53,22 +53,27 @@ export const openAgentFactoryStatePr: PostflightScript = async (ctx, _profile, a
   const baseBranch = "main"
   const branch = buildAgentFactoryBranchName(issueNumber, bundle.title)
 
-  const baseRef = ghJson<GitRefResponse>(["api", `/repos/${stateRepo.owner}/${stateRepo.repo}/git/ref/heads/${baseBranch}`], ctx.cwd)
-  const baseSha = requireString(baseRef.object?.sha, `state repo ${stateRepo.owner}/${stateRepo.repo} ${baseBranch} ref sha`)
+  const baseRef = ghJson<GitRefResponse>(
+    ["api", `/repos/${stateRepo.owner}/${stateRepo.repo}/git/ref/heads/${baseBranch}`],
+    ctx.cwd,
+  )
+  const baseSha = requireString(
+    baseRef.object?.sha,
+    `state repo ${stateRepo.owner}/${stateRepo.repo} ${baseBranch} ref sha`,
+  )
   const baseCommit = ghJson<GitCommitResponse>(
     ["api", `/repos/${stateRepo.owner}/${stateRepo.repo}/git/commits/${baseSha}`],
     ctx.cwd,
   )
-  const baseTreeSha = requireString(baseCommit.tree?.sha, `state repo ${stateRepo.owner}/${stateRepo.repo} base tree sha`)
-
-  ghJson(
-    ["api", "--method", "POST", `/repos/${stateRepo.owner}/${stateRepo.repo}/git/refs`, "--input", "-"],
-    ctx.cwd,
-    {
-      ref: `refs/heads/${branch}`,
-      sha: baseSha,
-    },
+  const baseTreeSha = requireString(
+    baseCommit.tree?.sha,
+    `state repo ${stateRepo.owner}/${stateRepo.repo} base tree sha`,
   )
+
+  ghJson(["api", "--method", "POST", `/repos/${stateRepo.owner}/${stateRepo.repo}/git/refs`, "--input", "-"], ctx.cwd, {
+    ref: `refs/heads/${branch}`,
+    sha: baseSha,
+  })
 
   const tree = ghJson<GitShaResponse>(
     ["api", "--method", "POST", `/repos/${stateRepo.owner}/${stateRepo.repo}/git/trees`, "--input", "-"],
@@ -97,7 +102,14 @@ export const openAgentFactoryStatePr: PostflightScript = async (ctx, _profile, a
   const commitSha = requireString(commit.sha, "created commit sha")
 
   ghJson(
-    ["api", "--method", "PATCH", `/repos/${stateRepo.owner}/${stateRepo.repo}/git/refs/heads/${branch}`, "--input", "-"],
+    [
+      "api",
+      "--method",
+      "PATCH",
+      `/repos/${stateRepo.owner}/${stateRepo.repo}/git/refs/heads/${branch}`,
+      "--input",
+      "-",
+    ],
     ctx.cwd,
     {
       sha: commitSha,
@@ -139,7 +151,9 @@ export function parseAgentFactoryBundle(raw: string): AgentFactoryBundle {
   try {
     parsed = JSON.parse(jsonText)
   } catch (err) {
-    throw new Error(`openAgentFactoryStatePr: PR_SUMMARY must be valid JSON: ${err instanceof Error ? err.message : String(err)}`)
+    throw new Error(
+      `openAgentFactoryStatePr: PR_SUMMARY must be valid JSON: ${err instanceof Error ? err.message : String(err)}`,
+    )
   }
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -177,7 +191,10 @@ export function buildAgentFactoryBranchName(issueNumber: number, title: string, 
   return `agent-factory/issue-${issueNumber}-${now.toString(36)}${suffix}`
 }
 
-function normalizeBundleFiles(ctx: Context, bundle: AgentFactoryBundle): Array<AgentFactoryFile & { targetPath: string }> {
+function normalizeBundleFiles(
+  ctx: Context,
+  bundle: AgentFactoryBundle,
+): Array<AgentFactoryFile & { targetPath: string }> {
   const seen = new Set<string>()
   return bundle.files.map((file, index) => {
     if (file.path.startsWith("/") || file.path.includes("\\")) {
@@ -238,7 +255,9 @@ function ghJson<T>(args: string[], cwd: string, input?: unknown): T {
   try {
     return JSON.parse(raw) as T
   } catch (err) {
-    throw new Error(`openAgentFactoryStatePr: gh api returned invalid JSON: ${err instanceof Error ? err.message : String(err)}`)
+    throw new Error(
+      `openAgentFactoryStatePr: gh api returned invalid JSON: ${err instanceof Error ? err.message : String(err)}`,
+    )
   }
 }
 

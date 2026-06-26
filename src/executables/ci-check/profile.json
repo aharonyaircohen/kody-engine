@@ -1,0 +1,56 @@
+{
+  "name": "ci-check",
+  "role": "primitive",
+  "describe": "Read PR CI checks and emit a capability report.",
+  "inputs": [
+    {
+      "name": "pr",
+      "flag": "--pr",
+      "type": "int",
+      "required": true,
+      "describe": "PR number to inspect."
+    },
+    {
+      "name": "goal",
+      "flag": "--goal",
+      "type": "string",
+      "required": false,
+      "describe": "Goal identifier."
+    },
+    {
+      "name": "evidence",
+      "flag": "--evidence",
+      "type": "string",
+      "required": false,
+      "describe": "Requested evidence name."
+    },
+    {
+      "name": "timeoutSeconds",
+      "flag": "--timeout-seconds",
+      "type": "int",
+      "required": false,
+      "describe": "Timeout in seconds."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": null,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "scripts": {
+    "preflight": [],
+    "postflight": [
+      { "script": "applyCapabilityReports" }
+    ]
+  }
+}
