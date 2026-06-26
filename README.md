@@ -27,7 +27,7 @@ kody:  reads the issue → writes the code → runs your tests → opens a PR
 - **No infrastructure.** Runs on the GitHub Actions you already have. One ~20-line
   workflow file, installed via `npx`. Nothing to deploy or keep online.
 - **Whole PR lifecycle, not just authoring.** `run`, `resolve`, `sync`, `merge`,
-  `revert`, previews, releases, and scheduled agentResponsibilities — one executor, many verbs.
+  `revert`, previews, releases, and scheduled capabilities — one executor, many verbs.
 - **Declarative & extensible.** Every command is a folder of `profile.json` +
   `prompt.md` + shell. Add a command by dropping a folder — no engine changes.
 - **Bring your own model.** Anthropic native, or any provider via the built-in
@@ -74,19 +74,31 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 ┌─────────────────────────────────────────────┐
 │ kody-engine CLI (@kody-ade/kody-engine)    │
 │   bin/kody.ts — entrypoint                  │
-│   src/dispatch.ts — agentResponsibility-driven routing     │
-│   src/executor.ts — runs agentResponsibility implementations│
+│   src/dispatch.ts — capability-driven routing              │
+│   src/executor.ts — runs capability implementations         │
+│   .kody/capabilities/<slug>/                                │
+│     profile.json · capability.md · optional skills/scripts  │
 │   .kody/agent-responsibilities/<slug>/                      │
-│     profile.json · agent-responsibility.md                  │
-│   src/agent-actions/<name>/                   │
-│     profile.json · prompt.md · *.sh         │
+│     legacy fallback: profile.json · agent-responsibility.md │
+│   .kody/agent-actions/<name>/                               │
+│     legacy fallback: profile.json · prompt.md · *.sh        │
 │   src/scripts/*.ts — cross-cutting catalog  │
 └─────────────────────────────────────────────┘
 ```
 
-Every top-level command is an auto-discovered agentResponsibility action. The router has **zero agentAction names hardcoded** — comment dispatch resolves the first token after `@kody` through `config.aliases`, then falls back to the legacy-named `config.defaultAgentAction` / `config.defaultPrAgentAction` fields as default agentResponsibility actions. Drop a new `.kody/agent-responsibilities/<slug>/` directory with `profile.json` + `agent-responsibility.md`; that agentResponsibility chooses its implementation agentAction.
+Every top-level command is an auto-discovered capability action. The router has
+**zero agentAction names hardcoded** - comment dispatch resolves the first token
+after `@kody` through `config.aliases`, then falls back to the legacy-named
+`config.defaultAgentAction` / `config.defaultPrAgentAction` fields as default
+capability actions. Drop a new `.kody/capabilities/<slug>/` directory with
+`profile.json` + `capability.md`; legacy `.kody/agent-responsibilities/` and
+`.kody/agent-actions/` roots still load while repos migrate.
 
-AgentAction directories are private implementation units and contain **only** three kinds of files: `profile.json` (declaration), `prompt.md` (agent instructions), and `.sh` scripts (mechanical side-effect work). Cross-cutting TypeScript lives in [src/scripts/](src/scripts/); it can't import from `src/agent-actions/` and can't branch on `profile.name`.
+Legacy AgentAction directories are private implementation units and contain
+**only** three kinds of files: `profile.json` (declaration), `prompt.md` (agent
+instructions), and `.sh` scripts (mechanical side-effect work). Cross-cutting
+TypeScript lives in [src/scripts/](src/scripts/); it can't import from
+`src/agent-actions/` and can't branch on `profile.name`.
 
 ## Install in a consumer repo
 
@@ -94,7 +106,10 @@ AgentAction directories are private implementation units and contain **only** th
 npx -y -p @kody-ade/kody-engine@latest kody-engine init
 ```
 
-`kody-engine init` scaffolds [kody.config.json](kody.config.schema.json), `.github/workflows/kody.yml` (generated from `WORKFLOW_TEMPLATE` in [src/scripts/initFlow.ts](src/scripts/initFlow.ts)), and per-scheduled-agentResponsibility workflow files. Idempotent — pass `--force` to overwrite.
+`kody-engine init` scaffolds [kody.config.json](kody.config.schema.json),
+`.github/workflows/kody.yml` (generated from `WORKFLOW_TEMPLATE` in
+[src/scripts/initFlow.ts](src/scripts/initFlow.ts)), and scheduled capability
+workflow files. Idempotent — pass `--force` to overwrite.
 
 Required repo secrets: at least one model provider key (e.g. `MINIMAX_API_KEY`, `ANTHROPIC_API_KEY`). Recommended: `KODY_TOKEN` PAT so kody's commits trigger downstream CI and can modify `.github/workflows/*`.
 
@@ -123,10 +138,10 @@ kody-engine release-publish   --issue <N> [--dry-run]
 kody-engine release-deploy    --issue <N> [--dry-run]
 kody-engine npm-publish       [--tag latest] [--access public] [--dry-run]
 
-# scheduled agentResponsibilities and goals
-kody-engine agent-responsibility-scheduler                                    # fan out due .kody/agent-responsibilities/<slug>/ folders
-kody-engine agent-responsibility-tick          --agentResponsibility <slug> [--force]        # one agent tick for one agentResponsibility
-kody-engine agent-responsibility-tick-scripted --agentResponsibility <slug> [--force]        # one deterministic tickScript agentResponsibility tick
+# scheduled capabilities and goals
+kody-engine agent-responsibility-scheduler                                    # fan out due .kody/capabilities/<slug>/ folders plus legacy fallbacks
+kody-engine agent-responsibility-tick          --agentResponsibility <slug> [--force]        # one agent tick for one capability
+kody-engine agent-responsibility-tick-scripted --agentResponsibility <slug> [--force]        # one deterministic tickScript capability tick
 kody-engine goal-scheduler                                    # fan out active goal instances in configured state repo
 kody-engine goal-manager      --goal <id>                     # advance one managed goal instance
 
@@ -142,11 +157,19 @@ kody-engine agent-ask        --agent <slug> --message "..." # ad-hoc agent run
 kody-engine stats                                             # inspect run/event history
 ```
 
-### AgentResponsibilities
+### Capabilities
 
-A **agentResponsibility** is a folder at `.kody/agent-responsibilities/<slug>/` with `profile.json` metadata (`every`, `agent`, `action`, `agentAction`, `stage`, and related fields) plus human-owned prose in `agent-responsibility.md`. `agent-responsibility-scheduler` wakes on cron, finds due agentResponsibilities, and dispatches either `agent-responsibility-tick` for an agent tick or `agent-responsibility-tick-scripted` for a deterministic `tickScript` agentResponsibility. `kody-engine init` copies built-in starter agentResponsibilities and scaffolds `.kody/agents/kody.md`.
+A **capability** is a folder at `.kody/capabilities/<slug>/` with
+`profile.json` metadata (`action`, `capabilityKind`, `agent`, `every`, and
+related fields) plus human-owned prose in `capability.md`. The scheduler wakes
+on cron, finds due capabilities, and dispatches either
+`agent-responsibility-tick` for an agent tick or
+`agent-responsibility-tick-scripted` for a deterministic `tickScript`
+capability. The CLI names are still legacy during migration.
 
-Locked-toolbox agentResponsibilities can declare `"tools": [...]` in `profile.json` to run with only the named high-level MCP intents plus `submit_state`; agentResponsibilities without `tools` keep the legacy Bash/gh toolbox.
+Locked-toolbox capabilities can declare `"tools": [...]` in `profile.json` to
+run with only the named high-level MCP intents plus `submit_state`; capabilities
+without `tools` keep the legacy Bash/gh toolbox.
 
 ### `release`
 
@@ -154,7 +177,11 @@ Locked-toolbox agentResponsibilities can declare `"tools": [...]` in `profile.js
 
 ## Profiles
 
-A profile is declarative JSON + an adjacent `prompt.md`. See any directory under [src/agent-actions/](src/agent-actions/) for examples. Adding a new command = new directory + profile + prompt + any `.sh` scripts + registering any new shared TS utilities under [src/scripts/](src/scripts/). No executor, entry, or dispatch changes.
+A profile is declarative JSON plus an adjacent markdown body. New public work
+should live under `.kody/capabilities/<slug>/` with `capability.md`; legacy
+implementations under [src/agent-actions/](src/agent-actions/) still show the
+older split profile + prompt shape. Adding a new capability should not require
+executor, entry, or dispatch changes.
 
 See [AGENTS.md](AGENTS.md) for the full architectural contract.
 

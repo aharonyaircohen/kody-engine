@@ -8,7 +8,6 @@ import type { GoalState } from "../../../src/goal/state.js"
 import { advanceManagedGoal } from "../../../src/scripts/advanceManagedGoal.js"
 import {
   type GoalAgentResponsibilityScheduleState,
-  planGoalAgentResponsibilitySchedule,
   planGoalTargetLoopSchedule,
 } from "../../../src/scripts/goalAgentResponsibilityScheduling.js"
 import type { GoalCtx } from "../../../src/scripts/goalCtx.js"

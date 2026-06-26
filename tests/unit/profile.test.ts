@@ -3,6 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
 import { loadProfile, ProfileError, validateScriptReferences } from "../../src/profile.js"
+import { resolveAgentAction } from "../../src/registry.js"
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-profile-"))
@@ -142,8 +143,11 @@ describe("profile: loadProfile", () => {
     expect(profile.agent).toBe("cto") // who (overlaid)
     expect((profile as unknown as Record<string, unknown>).every).toBeUndefined() // legacy cadence ignored
     expect(profile.agentResponsibilityTools).toEqual(["ensure_issue"]) // toolbox (overlaid)
-    // how came from the referenced agentAction: dir + claudeCode are merge's.
-    expect(profile.dir.endsWith(path.join("agent-actions", "merge"))).toBe(true)
+    // how came from the referenced implementation profile: canonical
+    // capabilities resolve before legacy agent-actions during migration.
+    const resolvedMerge = resolveAgentAction("merge")
+    expect(resolvedMerge).toBeTruthy()
+    expect(profile.dir).toBe(path.dirname(resolvedMerge!))
     expect(profile.claudeCode).toBeTruthy()
   })
 

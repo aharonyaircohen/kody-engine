@@ -1,21 +1,28 @@
 # Company Activation
 
-The company store is a catalog. Consumer repos decide which shared agentResponsibilities and goals are active in `kody.config.json`.
+The company store is a catalog. Consumer repos decide which shared capabilities
+and goals are active in `kody.config.json`.
 
 ```json
 {
   "company": {
-    "activeAgentResponsibilities": ["release"],
+    "activeCapabilities": ["release"],
     "activeGoals": ["web-release"]
   }
 }
 ```
 
-## AgentResponsibilities
+## Capabilities
 
-Store agentResponsibilities are inactive by default. A store agentResponsibility may declare `every`, `agent`, or `agentAction`, but those fields are only used after the consumer lists the agentResponsibility under `company.activeAgentResponsibilities`.
+Store capabilities are inactive by default. A store capability may declare
+`every`, `agent`, `action`, or implementation wiring, but those fields are only
+used after the consumer lists the capability under `company.activeCapabilities`.
 
-Missing or empty `company.activeAgentResponsibilities` means no store agentResponsibilities auto-run. Local repo agentResponsibilities remain repo-owned.
+Missing or empty `company.activeCapabilities` means no store capabilities
+auto-run. Local repo capabilities remain repo-owned.
+
+`company.activeAgentResponsibilities` remains a legacy compatibility field while
+older repos migrate. Do not use it for new activation.
 
 ## Goals
 
