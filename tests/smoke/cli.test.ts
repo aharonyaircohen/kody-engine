@@ -99,6 +99,13 @@ describe("smoke: CLI boots and validates args", () => {
     )
 
     const r = runCli(["smoke-action"], { cwd: root, env: { KODY_COMPANY_STORE: "off" } })
+    if (r.status !== 0) {
+      // Surface the subprocess crash on the next CI failure — `runCli` swallows
+      // stdout/stderr so a passing assertion is invisible if status flips.
+      process.stderr.write(`[smoke] cli.test.ts:102 subprocess exit=${r.status}\n`)
+      process.stderr.write(`[smoke] stdout:\n${r.stdout}\n`)
+      process.stderr.write(`[smoke] stderr:\n${r.stderr}\n`)
+    }
     expect(r.status).toBe(0)
   })
 })
