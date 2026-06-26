@@ -32,9 +32,12 @@ export interface CapabilityWorkflowStepConfig {
   capability: string
   action?: string
   executable?: string
+  target?: "issue" | "pr"
   reason?: string
   agent?: string
   cliArgs?: Record<string, unknown>
+  runWhen?: Record<string, unknown>
+  continueOn?: string[]
   saveReport?: boolean
 }
 
@@ -66,10 +69,7 @@ export function listCapabilityFolderSlugs(absDir: string): string[] {
 }
 
 export function isCapabilityFolder(dir: string): boolean {
-  return (
-    fs.existsSync(path.join(dir, CAPABILITY_PROFILE_FILE)) &&
-    fs.existsSync(path.join(dir, CAPABILITY_BODY_FILE))
-  )
+  return fs.existsSync(path.join(dir, CAPABILITY_PROFILE_FILE)) && fs.existsSync(path.join(dir, CAPABILITY_BODY_FILE))
 }
 
 export function readCapabilityFolder(root: string, slug: string): CapabilityFolder | null {
@@ -171,7 +171,7 @@ function parseWorkflow(value: unknown): CapabilityWorkflowConfig | undefined {
   const stepsRaw = Array.isArray(value)
     ? value
     : value && typeof value === "object" && Array.isArray((value as { steps?: unknown }).steps)
-      ? ((value as { steps: unknown[] }).steps)
+      ? (value as { steps: unknown[] }).steps
       : []
   const steps = stepsRaw.map(parseWorkflowStep).filter((step): step is CapabilityWorkflowStepConfig => step !== null)
   return steps.length > 0 ? { steps } : undefined
@@ -190,18 +190,28 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
   const action = stringField(raw.action)
   const agent = stringField(raw.agent)
   const reason = stringField(raw.reason)
+  const target = stringField(raw.target)
   const cliArgs = raw.cliArgs
   return {
     capability,
     ...(action && isSafeSlug(action) ? { action } : {}),
     ...(executable && isSafeSlug(executable) ? { executable } : {}),
+    ...(target === "issue" || target === "pr" ? { target } : {}),
     ...(agent && isSafeSlug(agent) ? { agent } : {}),
     ...(reason ? { reason } : {}),
     ...(cliArgs && typeof cliArgs === "object" && !Array.isArray(cliArgs)
       ? { cliArgs: cliArgs as Record<string, unknown> }
       : {}),
+    ...(isPlainObject(raw.runWhen) ? { runWhen: raw.runWhen as Record<string, unknown> } : {}),
+    ...(stringList(raw.continueOn ?? raw.continue_on).length > 0
+      ? { continueOn: stringList(raw.continueOn ?? raw.continue_on) }
+      : {}),
     ...(raw.saveReport === true ? { saveReport: true } : {}),
   }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
 
 function isSafeSlug(value: string): boolean {

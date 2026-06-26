@@ -11,10 +11,10 @@
  */
 
 import * as path from "node:path"
-import type { Job, JobFlavor } from "./executables/types.js"
 import type { CapabilityFolder, CapabilityWorkflowConfig, CapabilityWorkflowStepConfig } from "./capabilityFolders.js"
 import type { KodyConfig } from "./config.js"
 import type { DispatchResult } from "./dispatch.js"
+import type { Job, JobFlavor } from "./executables/types.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
 import { runExecutable, runExecutableChain } from "./executor.js"
 import {
@@ -23,6 +23,7 @@ import {
   resolveCapabilityAction,
   resolveCapabilityFolder,
 } from "./registry.js"
+import type { Action } from "./state.js"
 
 export { stableJobKey } from "./jobIdentity.js"
 
@@ -128,9 +129,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   const valid = validateJob(job)
   const action = valid.action ?? valid.capability
   const projectCapabilitiesRoot = path.join(base.cwd, ".kody", "capabilities")
-  const resolvedCapability = action
-    ? resolveCapabilityAction(action, projectCapabilitiesRoot)
-    : null
+  const resolvedCapability = action ? resolveCapabilityAction(action, projectCapabilitiesRoot) : null
   const capabilityIdentity = valid.capability ?? resolvedCapability?.capability
   const capabilityContext = loadCapabilityContext(capabilityIdentity, base.cwd)
   const explicitExecutableOnly =
@@ -148,14 +147,15 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     capabilityContext?.config.executables?.[0] ??
     (capabilityContext?.config.tickScript ? "capability-tick-scripted" : undefined)
   const profileName = valid.executable ?? capabilitySelectedExecutable
-  if (workflow && shouldRunCapabilityWorkflow(valid, workflow, capabilityIdentity, capabilitySelectedExecutable, base)) {
+  if (
+    workflow &&
+    shouldRunCapabilityWorkflow(valid, workflow, capabilityIdentity, capabilitySelectedExecutable, base)
+  ) {
     return runCapabilityWorkflow(valid, workflow, capabilityContext!, base)
   }
 
   if (!profileName) {
-    throw new InvalidJobError(
-      `job capability resolves to no executable: ${capabilityIdentity ?? action}`,
-    )
+    throw new InvalidJobError(`job capability resolves to no executable: ${capabilityIdentity ?? action}`)
   }
 
   return runDefaultCapabilityWorkflow(
@@ -213,8 +213,7 @@ async function runCapabilityImplementationStep(
     preloadedData.capabilityTitle = capabilityContext.title
     preloadedData.dutyIntent = capabilityContext.body
     preloadedData.jobIntent = capabilityContext.body
-    if (preloadedData.jobCapability === undefined)
-      preloadedData.jobCapability = capabilityContext.slug
+    if (preloadedData.jobCapability === undefined) preloadedData.jobCapability = capabilityContext.slug
     if (capabilityContext.config.agent && preloadedData.jobAgent === undefined) {
       preloadedData.jobAgent = capabilityContext.config.agent
     }
@@ -239,9 +238,7 @@ async function runCapabilityImplementationStep(
     preloadedData: Object.keys(preloadedData).length > 0 ? preloadedData : undefined,
   }
   const shouldApplyResolvedCapabilityArgs =
-    valid.executable === undefined &&
-    resolvedCapability &&
-    profileName === resolvedCapability.executable
+    valid.executable === undefined && resolvedCapability && profileName === resolvedCapability.executable
   input.cliArgs = shouldApplyResolvedCapabilityArgs
     ? { ...resolvedCapability.cliArgs, ...input.cliArgs }
     : input.cliArgs
@@ -278,6 +275,7 @@ async function runCapabilityWorkflow(
     workflowCapability: capability.slug,
     workflowTitle: capability.title,
     workflowStepCount: workflow.steps.length,
+    workflowIssueNumber: workflowIssueNumber(parent),
     workflowStack: [
       ...(Array.isArray(base.preloadedData?.workflowStack)
         ? (base.preloadedData.workflowStack as unknown[]).filter((entry): entry is string => typeof entry === "string")
@@ -289,8 +287,14 @@ async function runCapabilityWorkflow(
 
   for (let index = 0; index < workflow.steps.length; index++) {
     const step = workflow.steps[index]!
-    const child = workflowStepToJob(step, parent)
     const label = step.action ?? step.capability
+    if (!shouldRunWorkflowStep(step, chainData)) {
+      process.stdout.write(
+        `→ kody: workflow ${capability.slug} step ${index + 1}/${workflow.steps.length} → ${label} (skipped)\n\n`,
+      )
+      continue
+    }
+    const child = workflowStepToJob(step, parent, chainData)
     process.stdout.write(
       `→ kody: workflow ${capability.slug} step ${index + 1}/${workflow.steps.length} → ${label}\n\n`,
     )
@@ -303,14 +307,23 @@ async function runCapabilityWorkflow(
         workflowStepReason: step.reason,
       },
     })
+    const outcome = workflowOutcome(result)
+    const prUrl =
+      result.taskState?.core.prUrl ??
+      (typeof chainData.workflowPrUrl === "string" ? chainData.workflowPrUrl : undefined)
     chainData = {
       ...chainData,
       ...(result.taskState ? { taskState: result.taskState } : {}),
+      ...(outcome ? { workflowLastOutcome: outcome } : {}),
+      ...(prUrl ? { workflowPrUrl: prUrl } : {}),
+      ...(parsePrNumber(prUrl) ? { workflowPrNumber: parsePrNumber(prUrl) } : {}),
     }
-    if (result.exitCode !== 0) {
+    if (result.exitCode !== 0 && !canContinueWorkflow(step, outcome)) {
       return {
         ...result,
-        reason: result.reason ?? `workflow ${capability.slug} stopped at step ${index + 1}/${workflow.steps.length}: ${label}`,
+        reason:
+          result.reason ??
+          `workflow ${capability.slug} stopped at step ${index + 1}/${workflow.steps.length}: ${label}`,
       }
     }
   }
@@ -318,19 +331,34 @@ async function runCapabilityWorkflow(
   return result
 }
 
-function workflowStepToJob(step: CapabilityWorkflowStepConfig, parent: Job): Job {
+function workflowStepToJob(step: CapabilityWorkflowStepConfig, parent: Job, chainData: Record<string, unknown>): Job {
   const action = step.action ?? step.capability
-  const cliArgs = filterCliArgsForStep(action, {
+  const rawArgs = {
     ...parent.cliArgs,
     ...(step.cliArgs ?? {}),
-  })
-  const target = typeof parent.target === "number" ? parent.target : targetFromCliArgs(cliArgs)
+  }
+  const targetNumber = workflowStepTargetNumber(step, parent, chainData)
+  if (step.target === "pr") {
+    if (typeof targetNumber !== "number") {
+      throw new InvalidJobError(`workflow step ${action} needs a PR target but no prior PR URL is available`)
+    }
+    rawArgs.pr = targetNumber
+  } else if (step.target === "issue" && typeof targetNumber === "number") {
+    rawArgs.issue = targetNumber
+  }
+  const cliArgs = filterCliArgsForStep(action, rawArgs)
+  const target =
+    typeof targetNumber === "number"
+      ? targetNumber
+      : typeof parent.target === "number"
+        ? parent.target
+        : targetFromCliArgs(cliArgs)
   return {
     action,
     capability: step.capability,
     ...(step.executable ? { executable: step.executable } : {}),
     ...(composeStepWhy(parent.why, step) ? { why: composeStepWhy(parent.why, step) } : {}),
-    ...(step.agent ?? parent.agent ? { agent: step.agent ?? parent.agent } : {}),
+    ...((step.agent ?? parent.agent) ? { agent: step.agent ?? parent.agent } : {}),
     ...(parent.schedule ? { schedule: parent.schedule } : {}),
     ...(typeof target === "number" ? { target } : {}),
     cliArgs,
@@ -338,6 +366,84 @@ function workflowStepToJob(step: CapabilityWorkflowStepConfig, parent: Job): Job
     force: parent.force,
     saveReport: step.saveReport === true || parent.saveReport === true,
   }
+}
+
+function shouldRunWorkflowStep(step: CapabilityWorkflowStepConfig, data: Record<string, unknown>): boolean {
+  if (!step.runWhen) return true
+  const context = workflowConditionContext(data)
+  return Object.entries(step.runWhen).every(([path, expected]) =>
+    valueMatches(resolveDottedPath(context, path), expected),
+  )
+}
+
+function canContinueWorkflow(step: CapabilityWorkflowStepConfig, outcome: Action | null): boolean {
+  if (!outcome || !step.continueOn || step.continueOn.length === 0) return false
+  return step.continueOn.includes(outcome.type)
+}
+
+function workflowOutcome(result: ExecutorOutput): Action | null {
+  return result.taskState?.core.lastOutcome ?? null
+}
+
+function workflowConditionContext(data: Record<string, unknown>): Record<string, unknown> {
+  const lastOutcome = data.workflowLastOutcome
+  return {
+    ...data,
+    workflow: {
+      lastOutcome,
+      issueNumber: data.workflowIssueNumber,
+      prNumber: data.workflowPrNumber,
+      prUrl: data.workflowPrUrl,
+    },
+    lastOutcome,
+  }
+}
+
+function resolveDottedPath(root: unknown, dotted: string): unknown {
+  return dotted.split(".").reduce<unknown>((cur, part) => {
+    if (!cur || typeof cur !== "object") return undefined
+    return (cur as Record<string, unknown>)[part]
+  }, root)
+}
+
+function valueMatches(actual: unknown, expected: unknown): boolean {
+  if (Array.isArray(expected)) return expected.some((entry) => valueMatches(actual, entry))
+  return actual === expected
+}
+
+function workflowStepTargetNumber(
+  step: CapabilityWorkflowStepConfig,
+  parent: Job,
+  chainData: Record<string, unknown>,
+): number | undefined {
+  if (step.target === "pr") return workflowPrNumber(chainData) ?? targetFromCliArgs(step.cliArgs ?? {})
+  if (step.target === "issue") return workflowIssueNumber(parent)
+  return typeof parent.target === "number"
+    ? parent.target
+    : targetFromCliArgs({ ...parent.cliArgs, ...(step.cliArgs ?? {}) })
+}
+
+function workflowIssueNumber(parent: Job): number | undefined {
+  return typeof parent.target === "number" ? parent.target : targetFromCliArgs(parent.cliArgs)
+}
+
+function workflowPrNumber(data: Record<string, unknown>): number | undefined {
+  if (typeof data.workflowPrNumber === "number" && Number.isFinite(data.workflowPrNumber)) return data.workflowPrNumber
+  const prUrl =
+    typeof data.workflowPrUrl === "string"
+      ? data.workflowPrUrl
+      : typeof (data.taskState as { core?: { prUrl?: unknown } } | undefined)?.core?.prUrl === "string"
+        ? (data.taskState as { core: { prUrl: string } }).core.prUrl
+        : undefined
+  return parsePrNumber(prUrl) ?? undefined
+}
+
+function parsePrNumber(url: string | undefined): number | null {
+  if (!url) return null
+  const m = url.match(/\/pull\/(\d+)(?:[/?#]|$)/)
+  if (!m) return null
+  const n = parseInt(m[1]!, 10)
+  return Number.isFinite(n) ? n : null
 }
 
 function filterCliArgsForStep(action: string, raw: Record<string, unknown>): Record<string, unknown> {
@@ -359,10 +465,7 @@ function composeStepWhy(parentWhy: string | undefined, step: CapabilityWorkflowS
     .join("\n\n")
 }
 
-function loadCapabilityContext(
-  slug: string | undefined,
-  cwd: string,
-): ReturnType<typeof resolveCapabilityFolder> {
+function loadCapabilityContext(slug: string | undefined, cwd: string): ReturnType<typeof resolveCapabilityFolder> {
   if (!slug) return null
   return resolveCapabilityFolder(slug, path.join(cwd, ".kody", "capabilities"))
 }
