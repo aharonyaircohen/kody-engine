@@ -67,6 +67,7 @@ describe("smoke: CLI boots and validates args", () => {
         name: "smoke-capability",
         action: "smoke-action",
         executable: "smoke-impl",
+        capabilityKind: "act",
         agent: "kody",
       }),
     )
