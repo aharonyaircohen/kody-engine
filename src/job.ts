@@ -333,11 +333,11 @@ async function runCapabilityWorkflow(
 
 function workflowStepToJob(step: CapabilityWorkflowStepConfig, parent: Job, chainData: Record<string, unknown>): Job {
   const action = step.action ?? step.capability
-  const rawArgs = {
+  const targetNumber = workflowStepTargetNumber(step, parent, chainData)
+  const rawArgs: Record<string, unknown> = {
     ...parent.cliArgs,
     ...(step.cliArgs ?? {}),
   }
-  const targetNumber = workflowStepTargetNumber(step, parent, chainData)
   if (step.target === "pr") {
     if (typeof targetNumber !== "number") {
       throw new InvalidJobError(`workflow step ${action} needs a PR target but no prior PR URL is available`)
@@ -448,13 +448,17 @@ function parsePrNumber(url: string | undefined): number | null {
 
 function filterCliArgsForStep(action: string, raw: Record<string, unknown>): Record<string, unknown> {
   const inputs = getCapabilityActionInputs(action)
-  if (!inputs) return raw
-  const allowed = new Set<string>(["_", "cwd", "verbose", "quiet"])
-  for (const input of inputs) {
-    const flagKey = input.flag.replace(/^--/, "")
-    allowed.add(input.name)
-    allowed.add(flagKey)
-    if (flagKey.includes("-")) allowed.add(flagKey.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase()))
+  let allowed: Set<string>
+  if (inputs) {
+    allowed = new Set<string>(["_", "cwd", "verbose", "quiet"])
+    for (const input of inputs) {
+      const flagKey = input.flag.replace(/^--/, "")
+      allowed.add(input.name)
+      allowed.add(flagKey)
+      if (flagKey.includes("-")) allowed.add(flagKey.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase()))
+    }
+  } else {
+    allowed = new Set<string>(["_", "cwd", "verbose", "quiet", "issue", "pr"])
   }
   return Object.fromEntries(Object.entries(raw).filter(([key]) => allowed.has(key)))
 }
