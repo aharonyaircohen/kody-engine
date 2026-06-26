@@ -68,6 +68,7 @@ describe("smoke: CLI boots and validates args", () => {
         action: "smoke-action",
         executable: "smoke-impl",
         agent: "kody",
+        capabilityKind: "act",
       }),
     )
     fs.writeFileSync(path.join(root, ".kody", "capabilities", "smoke-capability", "capability.md"), "# Smoke\n")

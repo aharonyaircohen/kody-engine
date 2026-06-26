@@ -99,9 +99,14 @@ describe("runJob (Phase 1 seam)", () => {
   })
 
   it("seeds inline why into preloadedData.jobWhy", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-fix-job-"))
+    const fixDir = path.join(cwd, ".kody", "capabilities", "fix")
+    fs.mkdirSync(fixDir, { recursive: true })
+    fs.writeFileSync(path.join(fixDir, "profile.json"), JSON.stringify({ name: "fix", agent: "kody" }))
+    fs.writeFileSync(path.join(fixDir, "capability.md"), "# Fix\n\nApply review feedback from PR comments.")
     await runJob(
       { capability: "fix", executable: "fix", why: "fix the flaky test", cliArgs: {}, flavor: "instant" },
-      { cwd: "/x" },
+      { cwd },
     )
     const [, input] = runExecutableChain.mock.calls[0]!
     expect(input.preloadedData?.jobWhy).toBe("fix the flaky test")

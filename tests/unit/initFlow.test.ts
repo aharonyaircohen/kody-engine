@@ -19,12 +19,54 @@ function mkRepo(opts: { lockFile?: "pnpm-lock.yaml" | "yarn.lock" | "bun.lockb";
 
 describe("initFlow: performInit", () => {
   let dir: string
+  let prevCwd: string
   afterEach(() => {
+    if (prevCwd) {
+      try {
+        process.chdir(prevCwd)
+      } catch {
+        /* cwd already gone — fine */
+      }
+      prevCwd = ""
+    }
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
   it("writes core files + scheduled workflows on a clean repo", () => {
     dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
+    // Provide at least one scheduled executable in the project root so the
+    // "every scheduled executable gets its own workflow file" branch can be
+    // exercised. Without this fixture the engine root ships no scheduled
+    // executables and the test would only ever observe zero scheduled
+    // workflows — which is true but vacuous.
+    const schedDir = path.join(dir, ".kody", "executables", "demo-scheduler")
+    fs.mkdirSync(schedDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(schedDir, "profile.json"),
+      JSON.stringify({
+        name: "demo-scheduler",
+        role: "watch",
+        kind: "scheduled",
+        schedule: "*/5 * * * *",
+        inputs: [],
+        claudeCode: {
+          model: "inherit",
+          permissionMode: "default",
+          tools: [],
+          hooks: [],
+          skills: [],
+          commands: [],
+          subagents: [],
+          plugins: [],
+          mcpServers: [],
+        },
+        scripts: { preflight: [], postflight: [] },
+      }),
+    )
+    // listExecutables reads process.cwd()/.kody/executables, so chdir into the
+    // temp repo for the duration of the call.
+    prevCwd = process.cwd()
+    process.chdir(dir)
     const result = performInit(dir, false)
     expect(result.wrote).toContain("kody.config.json")
     expect(result.wrote).toContain(".github/workflows/kody.yml")
