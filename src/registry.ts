@@ -15,14 +15,10 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { InputSpec } from "./executables/types.js"
 import type { CapabilityFolder } from "./capabilityFolders.js"
-import {
-  CAPABILITY_PROFILE_FILE,
-  listCapabilityFolderSlugs,
-  readCapabilityFolder,
-} from "./capabilityFolders.js"
+import { CAPABILITY_PROFILE_FILE, listCapabilityFolderSlugs, readCapabilityFolder } from "./capabilityFolders.js"
 import { getCompanyStoreAssetRoot } from "./companyStore.js"
+import type { InputSpec } from "./executables/types.js"
 
 const PUBLIC_EXECUTABLE_ROLES = new Set(["primitive", "orchestrator", "container", "watch", "utility"])
 
@@ -239,8 +235,7 @@ export function listCapabilityActions(
   const projectExecutableRoots = [getProjectExecutablesRoot()]
   const storeExecutableRoot = getCompanyStoreExecutablesRoot()
   const storeExecutableRoots = storeExecutableRoot ? [storeExecutableRoot] : []
-  for (const action of listFolderCapabilityActions(projectCapabilitiesRoot, "project-folder"))
-    add(action)
+  for (const action of listFolderCapabilityActions(projectCapabilitiesRoot, "project-folder")) add(action)
   for (const root of projectExecutableRoots) {
     for (const action of listExecutableCapabilityActions(root, "project-executable")) add(action)
   }
@@ -404,9 +399,7 @@ function listFolderCapabilityActions(
   return out.sort((a, b) => a.action.localeCompare(b.action))
 }
 
-function listBuiltinCapabilityActions(
-  root: string = getBuiltinCapabilitiesRoot(),
-): DiscoveredCapabilityAction[] {
+function listBuiltinCapabilityActions(root: string = getBuiltinCapabilitiesRoot()): DiscoveredCapabilityAction[] {
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
   const out: DiscoveredCapabilityAction[] = []
   for (const slug of listCapabilityFolderSlugs(root)) {

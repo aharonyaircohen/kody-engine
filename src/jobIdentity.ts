@@ -4,13 +4,10 @@ import type { Job } from "./executables/types.js"
 export function stableJobKey(job: Job): string {
   const capability = job.capability ?? job.action
   const executable = job.executable ?? capability ?? "unknown"
-  if (job.flavor === "scheduled" && job.capability)
-    return `scheduled:${job.capability}:${executable}`
+  if (job.flavor === "scheduled" && job.capability) return `scheduled:${job.capability}:${executable}`
   const target = typeof job.target === "number" ? job.target : targetFromCliArgs(job.cliArgs)
   const work =
-    capability && executable && executable !== capability
-      ? `${capability}:${executable}`
-      : (capability ?? executable)
+    capability && executable && executable !== capability ? `${capability}:${executable}` : (capability ?? executable)
   return target === undefined ? `${job.flavor}:${work}` : `${job.flavor}:${work}:${target}`
 }
 

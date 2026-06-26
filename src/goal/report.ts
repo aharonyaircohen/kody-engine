@@ -219,9 +219,7 @@ function isArtifact(value: unknown): value is CapabilityEvidence["artifacts"][nu
   )
 }
 
-function uniqueArtifacts(
-  artifacts: CapabilityEvidence["artifacts"],
-): CapabilityEvidence["artifacts"] {
+function uniqueArtifacts(artifacts: CapabilityEvidence["artifacts"]): CapabilityEvidence["artifacts"] {
   const seen = new Set<string>()
   const out: CapabilityEvidence["artifacts"] = []
   for (const artifact of artifacts) {
@@ -277,7 +275,9 @@ function latestGoalRunLogEvent(data: Record<string, unknown>, goalId: string): R
   const events = (log as Record<string, unknown>).events
   if (!Array.isArray(events)) return undefined
   const latest = events.at(-1)
-  return latest && typeof latest === "object" && !Array.isArray(latest) ? (latest as Record<string, unknown>) : undefined
+  return latest && typeof latest === "object" && !Array.isArray(latest)
+    ? (latest as Record<string, unknown>)
+    : undefined
 }
 
 function recordGoalReport(data: Record<string, unknown>, report: GoalDashboardReportWrite): void {

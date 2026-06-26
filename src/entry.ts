@@ -9,8 +9,8 @@ import {
   hasCapabilityAction,
   listCapabilityActions,
   parseGenericFlags,
-  resolveExecutable,
   resolveCapabilityAction,
+  resolveExecutable,
 } from "./registry.js"
 import { brainServe } from "./servers/brain-serve.js"
 import { poolServe } from "./servers/pool-serve.js"

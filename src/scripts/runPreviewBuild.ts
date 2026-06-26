@@ -32,6 +32,7 @@ import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 
 import type { PreflightScript } from "../executables/types.js"
+import { readGithubStateText } from "../stateRepoGithub.js"
 import {
   basePreviewAppName,
   buildEnvFromVault,
@@ -43,7 +44,6 @@ import {
 } from "./previewBuildHelpers.js"
 import { setupNamespaceBuilder } from "./previewBuildNamespace.js"
 import { runCmd } from "./previewBuildRun.js"
-import { readGithubStateText } from "../stateRepoGithub.js"
 
 const FLY_MACHINES = "https://api.machines.dev/v1"
 const FLY_GRAPHQL = "https://api.fly.io/graphql"
