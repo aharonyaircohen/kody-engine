@@ -3,18 +3,6 @@ const path = require("node:path")
 
 const ROOT = path.resolve(__dirname, "..")
 
-const LEGACY_ASSET_DIRS = [
-  "agent-actions",
-  "agent-responsibilities",
-  "duties",
-  "executables",
-  "capabilities",
-  path.join("scripts", "preview-build-templates"),
-]
-for (const name of LEGACY_ASSET_DIRS) {
-  fs.rmSync(path.join(ROOT, "dist", name), { recursive: true, force: true })
-}
-
 const ASSET_DIRS = ["executables", "capabilities", "jobs", "plugins"]
 
 for (const name of ASSET_DIRS) {
