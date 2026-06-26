@@ -16,16 +16,23 @@ decide, report, or dispatch those store-backed responsibilities.
 
 ## Concept Map
 
-- **Intent = for** — what company is for, or what it is optimizing toward.
-- **Company / agent = who** — people or agents acting.
-- **AgentResponsibility = standing responsibility / why** — recurring ownership and judgment.
-- **Goal = outcome + manager loop / what** — a temporary agentGoal with
-  destination evidence, attached agentResponsibilities, route, facts, and blockers. It chooses
-  the next missing evidence and dispatches the right responsibility until done or
+The canonical model is:
+
+- **Intent = why** — company direction, priority, posture, scope, and success signals.
+- **Goal = what** — durable outcome state with destination evidence, route, facts, and blockers. It chooses
+  the next missing evidence and dispatches the right capability until done or
   blocked.
-- **AgentLoop = cadence / when** — recurring heartbeat that wakes a goal or responsibility.
-- **AgentAction = concrete action / how** — one mechanical unit of work.
+- **AgentLoop = when** — recurring heartbeat that wakes a goal or capability.
+- **Agent = who** — reusable identity and judgment style.
+- **Capability = how** — reusable ability the agency can use.
 - **Job / run = execution record** — durable required work and its attempts.
+
+Current storage names are compatibility names:
+
+- **AgentResponsibility = capability contract** — public action, kind, owner,
+  cadence, safety, inputs, outputs, and implementation link.
+- **AgentAction = capability implementation** — one concrete implementation unit
+  with prompts, tools, skills, scripts, and executor profile.
 
 Intent selects and prioritizes goals and agentLoops. It is not another execution
 chain; goals and agentLoops still own their own runtime state.
@@ -44,9 +51,9 @@ v1; they tell CTO how intent should be judged.
 Canonical noun docs:
 
 - [Goals](goals.md)
-- [AgentResponsibilities](agentResponsibilities.md)
-- [Agent](agent.md)
-- [AgentActions](agentActions.md)
+- [AgentResponsibilities](agent-responsibilities.md)
+- [Agent](agents.md)
+- [AgentActions](agent-actions.md)
 
 Store agentResponsibilities and goals are a catalog. Consumer repos activate the shared company
 model they want in `kody.config.json`:
@@ -67,8 +74,8 @@ See [Company Activation](company-activation.md) for the full activation contract
 | Piece | Path | Purpose |
 | --- | --- | --- |
 | Agent | `.kody/agents/<slug>.md` | Who is acting. Identity only. |
-| AgentResponsibilities | `.kody/agent-responsibilities/<slug>/` | Recurring responsibility: cadence, owner, intent. |
-| Company agentActions | `.kody/agent-actions/<slug>/` | Repo-local actions for inspection, reports, triage, and dispatch. |
+| AgentResponsibilities | `.kody/agent-responsibilities/<slug>/` | Capability contracts: public action, kind, cadence, owner, and output contract. |
+| Company agentActions | `.kody/agent-actions/<slug>/` | Capability implementations for inspection, reports, triage, and dispatch. |
 | Reports | `<statePath>/reports/*.md` in `stateRepo` | Goal/loop-owned state findings for Dashboard display. |
 | Context | `.kody/context/*.md` | Short background and vocabulary. Not hard rules. |
 | Goal templates | `.kody/goals/templates/<slug>/state.json` | Reusable managed agentGoal definitions. |
