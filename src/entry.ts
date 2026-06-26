@@ -6,11 +6,11 @@ import { loadConfig } from "./config.js"
 import { runJob } from "./job.js"
 import { runCi } from "./kody-cli.js"
 import {
-  hasAgentResponsibilityAction,
-  listAgentResponsibilityActions,
+  hasCapabilityAction,
+  listCapabilityActions,
   parseGenericFlags,
-  resolveAgentAction,
-  resolveAgentResponsibilityAction,
+  resolveExecutable,
+  resolveCapabilityAction,
 } from "./registry.js"
 import { brainServe } from "./servers/brain-serve.js"
 import { poolServe } from "./servers/pool-serve.js"
@@ -19,9 +19,9 @@ import { serve } from "./servers/serve.js"
 import { runStats } from "./stats.js"
 
 interface ParsedArgs {
-  command: "ci" | "chat" | "help" | "version" | "stats" | "server" | "__agent_responsibility__" | "__exec__"
+  command: "ci" | "chat" | "help" | "version" | "stats" | "server" | "__capability__" | "__exec__"
   actionName?: string
-  agentActionName?: string
+  executableName?: string
   serverName?: "serve" | "pool-serve" | "runner-serve" | "brain-serve" | "brain-proxy" | "mcp-http-server"
   serverArgs?: string[]
   cliArgs?: Record<string, unknown>
@@ -46,7 +46,7 @@ Usage:
   kody-engine release --issue <N>                    [--cwd <path>] [--verbose|--quiet]
   kody-engine init                                   [--cwd <path>] [--verbose|--quiet]
   kody-engine <action>                               [--cwd <path>] [--verbose|--quiet]
-  kody-engine exec <agentAction>                      [--cwd <path>] [--verbose|--quiet]
+  kody-engine exec <executable>                      [--cwd <path>] [--verbose|--quiet]
   kody-engine ci      [preflight flags — see: kody-engine ci --help]
   kody-engine chat    [chat flags — see: kody-engine chat --help]
   kody-engine stats   [--since 7d|--run <id>|--json|--cwd <path>]
@@ -95,17 +95,17 @@ export function parseArgs(argv: string[]): ParsedArgs {
   }
 
   if (cmd === "exec") {
-    const agentActionName = argv[1]
-    if (!agentActionName || agentActionName.startsWith("-")) {
-      result.errors.push("exec requires an agentAction name")
+    const executableName = argv[1]
+    if (!executableName || executableName.startsWith("-")) {
+      result.errors.push("exec requires an executable name")
       return result
     }
-    if (!resolveAgentAction(agentActionName)) {
-      result.errors.push(`unknown agentAction: ${agentActionName}`)
+    if (!resolveExecutable(executableName)) {
+      result.errors.push(`unknown executable: ${executableName}`)
       return result
     }
     result.command = "__exec__"
-    result.agentActionName = agentActionName
+    result.executableName = executableName
     result.cliArgs = parseGenericFlags(argv.slice(2))
     if (typeof result.cliArgs.cwd === "string") result.cwd = result.cliArgs.cwd
     if (result.cliArgs.verbose === true) result.verbose = true
@@ -115,7 +115,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
   // Long-running servers are engine plumbing, not user work-verbs. They route
   // to src/servers/ as hardcoded CLI verbs (like ci/help/version), so the
-  // agentAction registry never lists them and dispatch never treats them as verbs.
+  // executable registry never lists them and dispatch never treats them as verbs.
   const SERVER_VERBS = new Set(["serve", "pool-serve", "runner-serve", "brain-serve", "brain-proxy", "mcp-http-server"])
   if (SERVER_VERBS.has(cmd)) {
     result.command = "server"
@@ -128,10 +128,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return result
   }
 
-  // Public top-level work commands are capabilities. The legacy resolver name stays
-  // until the compatibility layer is removed.
-  if (hasAgentResponsibilityAction(cmd)) {
-    result.command = "__agent_responsibility__"
+// Public top-level work commands are capabilities.
+  if (hasCapabilityAction(cmd)) {
+    result.command = "__capability__"
     result.actionName = cmd
     result.cliArgs = parseGenericFlags(argv.slice(1))
     if (typeof result.cliArgs.cwd === "string") result.cwd = result.cliArgs.cwd
@@ -140,7 +139,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return result
   }
 
-  const discoveredActions = listAgentResponsibilityActions().map((e) => e.action)
+  const discoveredActions = listCapabilityActions().map((e) => e.action)
   const available = ["ci", "chat", "stats", "exec", "help", "version", ...discoveredActions]
   result.errors.push(`unknown command: ${cmd} (available: ${available.join(", ")})`)
   return result
@@ -227,20 +226,20 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   // - init runs BEFORE kody.config.json exists.
   const configlessCommands = new Set(["init"])
 
-  if (args.command === "__agent_responsibility__") {
-    const route = resolveAgentResponsibilityAction(args.actionName!)
+  if (args.command === "__capability__") {
+    const route = resolveCapabilityAction(args.actionName!)
     if (!route) {
-      process.stderr.write(`error: unknown agentResponsibility action '${args.actionName}'\n`)
+      process.stderr.write(`error: unknown capability action '${args.actionName}'\n`)
       return 64
     }
     const cliArgs = { ...route.cliArgs, ...(args.cliArgs ?? {}) }
-    const skipConfig = configlessCommands.has(route.agentAction)
+    const skipConfig = configlessCommands.has(route.executable)
     try {
       const result = await runJob(
         {
           action: route.action,
-          agentResponsibility: route.agentResponsibility,
-          agentAction: route.agentAction,
+          capability: route.capability,
+          executable: route.executable,
           cliArgs,
           target: numericTarget(cliArgs),
           flavor: "instant",
@@ -266,15 +265,15 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   }
 
   if (args.command === "__exec__") {
-    const agentAction = args.agentActionName!
+    const executable = args.executableName!
     const cliArgs = args.cliArgs ?? {}
-    const skipConfig = configlessCommands.has(agentAction)
+    const skipConfig = configlessCommands.has(executable)
     try {
       const result = await runJob(
         {
-          action: agentAction,
-          agentResponsibility: agentAction,
-          agentAction,
+          action: executable,
+          capability: executable,
+          executable,
           cliArgs,
           target: numericTarget(cliArgs),
           flavor: "instant",
@@ -292,14 +291,14 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       return result.exitCode
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`[kody] ${agentAction} crashed: ${msg}\n`)
+      process.stderr.write(`[kody] ${executable} crashed: ${msg}\n`)
       if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`)
-      process.stdout.write(`PR_URL=FAILED: ${agentAction} crashed: ${msg}\n`)
+      process.stdout.write(`PR_URL=FAILED: ${executable} crashed: ${msg}\n`)
       return 99
     }
   }
 
-  process.stderr.write("error: command did not resolve to a agentResponsibility or agentAction\n")
+  process.stderr.write("error: command did not resolve to a capability or executable\n")
   return 64
 }
 

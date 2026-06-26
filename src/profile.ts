@@ -1,7 +1,7 @@
 /**
  * Profile loader + validator.
  *
- * Reads an agentAction profile.json from disk, applies permissive defaults,
+ * Reads an executable profile.json from disk, applies permissive defaults,
  * and checks invariants (every referenced script exists in the registry,
  * every input spec is well-formed, etc.). The executor treats a loaded
  * Profile as trustworthy.
@@ -19,12 +19,12 @@ import type {
   OutputArtifactSpec,
   Profile,
   ScriptEntry,
-} from "./agent-actions/types.js"
-import { AGENT_RESPONSIBILITY_MCP_TOOL_NAMES } from "./agent-responsibilityMcp.js"
+} from "./executables/types.js"
+import { CAPABILITY_MCP_TOOL_NAMES } from "./capabilityMcp.js"
 import { parseReasoningEffort } from "./config.js"
 import { applyLifecycle } from "./lifecycles/index.js"
 import { ProfileError } from "./profile-error.js"
-import { resolveAgentAction } from "./registry.js"
+import { resolveExecutable } from "./registry.js"
 import { captureSubagentTemplates } from "./subagents.js"
 
 export { ProfileError } from "./profile-error.js"
@@ -45,10 +45,14 @@ const VALID_CAPABILITY_KINDS = new Set(["observe", "act", "verify"])
 const KNOWN_PROFILE_KEYS = new Set([
   "name",
   "action",
-  "agentAction",
+  "implementation",
+  "implementations",
+  "executable",
+  "executables",
   "agent",
   "every",
-  "agentResponsibilityTools",
+  "capabilityTools",
+  "capabilityTools",
   "tools",
   "mentions",
   "capabilityKind",
@@ -107,29 +111,35 @@ export function loadProfile(profilePath: string): Profile {
     )
   }
 
-  // AgentResponsibility-as-reference: an agentResponsibility stores a capability
-  // contract and names the agentAction implementation instead of embedding it.
-  // Resolve that agentAction's full profile and overlay this contract's identity
-  // (name) + agent (who) + mentions. The agentResponsibility folder then stays a
+// Capability-as-reference: an capability stores a capability
+  // contract and names the executable implementation instead of embedding it.
+  // Resolve that executable's full profile and overlay this contract's identity
+  // (name) + agent (who) + mentions. The capability folder then stays a
   // thin binding — no claudeCode/prompt/scripts of its own.
-  // Intent = why, agent = who, capability = how, agentAction = implementation.
-  const execRef = typeof r.agentAction === "string" ? r.agentAction.trim() : ""
+  // Intent = why, agent = who, capability = how, executable = implementation.
+  const execRef =
+    typeof r.implementation === "string" && r.implementation.trim()
+      ? r.implementation.trim()
+      : typeof r.executable === "string"
+        ? r.executable.trim()
+        : ""
   if (execRef) {
-    const refPath = resolveAgentAction(execRef)
+    const refPath = resolveExecutable(execRef)
     if (!refPath) {
-      throw new ProfileError(profilePath, `agentResponsibility references unknown agentAction '${execRef}'`)
+      throw new ProfileError(profilePath, `capability references unknown executable '${execRef}'`)
     }
     const base = loadProfile(refPath)
     return {
       ...base,
       name: requireString(profilePath, r, "name"),
       action: typeof r.action === "string" && r.action.trim() ? r.action.trim() : undefined,
-      agentAction: execRef,
+      implementation: execRef,
+      executable: execRef,
       describe: typeof r.describe === "string" ? r.describe : base.describe,
       capabilityKind: parseCapabilityKind(profilePath, r.capabilityKind) ?? base.capabilityKind,
       agent: typeof r.agent === "string" && r.agent.trim() ? r.agent.trim() : base.agent,
-      agentResponsibilityTools:
-        parseStringArray(r.agentResponsibilityTools ?? r.tools) ?? base.agentResponsibilityTools,
+      capabilityTools:
+        parseStringArray(r.capabilityTools ?? r.capabilityTools ?? r.tools) ?? base.capabilityTools,
       mentions: Array.isArray(r.mentions)
         ? (r.mentions as string[]).map((m) => String(m).trim()).filter(Boolean)
         : base.mentions,
@@ -179,13 +189,14 @@ export function loadProfile(profilePath: string): Profile {
   const profile: Profile = {
     name: requireString(profilePath, r, "name"),
     action: typeof r.action === "string" && r.action.trim() ? r.action.trim() : undefined,
-    agentAction: undefined,
+    implementation: undefined,
+    executable: undefined,
     describe: typeof r.describe === "string" ? r.describe : "",
     capabilityKind: parseCapabilityKind(profilePath, r.capabilityKind),
     // Optional agent to run as. Empty/blank string → undefined (no agent).
     agent: typeof r.agent === "string" && r.agent.trim() ? r.agent.trim() : undefined,
-    // Locked-toolbox palette + mentions from folder-agentResponsibility profile metadata.
-    agentResponsibilityTools: parseStringArray(r.agentResponsibilityTools ?? r.tools),
+    // Locked-toolbox palette + mentions from folder-capability profile metadata.
+    capabilityTools: parseStringArray(r.capabilityTools ?? r.capabilityTools ?? r.tools),
     mentions: Array.isArray(r.mentions)
       ? (r.mentions as string[]).map((m) => String(m).trim()).filter(Boolean)
       : undefined,
@@ -219,33 +230,33 @@ export function loadProfile(profilePath: string): Profile {
   }
 
   // Fail-fast at load (profile.json is static):
-  // a agentResponsibilityTools typo should be caught here, not at the agentResponsibility's first run.
-  if (profile.agentResponsibilityTools && profile.agentResponsibilityTools.length > 0) {
-    const palette = new Set<string>(AGENT_RESPONSIBILITY_MCP_TOOL_NAMES)
-    const unknown = profile.agentResponsibilityTools.filter((t) => !palette.has(t))
+  // a capabilityTools typo should be caught here, not at the capability's first run.
+  if (profile.capabilityTools && profile.capabilityTools.length > 0) {
+    const palette = new Set<string>(CAPABILITY_MCP_TOOL_NAMES)
+    const unknown = profile.capabilityTools.filter((t) => !palette.has(t))
     if (unknown.length > 0) {
       throw new ProfileError(
         profilePath,
-        `agentResponsibilityTools not in the kody-agentResponsibility palette: ${unknown.join(", ")}. Available: ${[...AGENT_RESPONSIBILITY_MCP_TOOL_NAMES].join(", ")}`,
+        `capabilityTools not in the kody-capability palette: ${unknown.join(", ")}. Available: ${[...CAPABILITY_MCP_TOOL_NAMES].join(", ")}`,
       )
     }
   }
 
   // State-script pairing: writeJobStateFile/parseJobStateFromAgentResult read
-  // ctx.data.jobState, which only a state loader (loadAgentResponsibilityState or
+  // ctx.data.jobState, which only a state loader (loadCapabilityState or
   // loadJobFromFile) sets. Declaring the save half without the load half throws
   // at run time — catch the misconfig at load instead.
   const preNames = new Set(profile.scripts.preflight.map((e) => e.script).filter(Boolean))
   const postNames = profile.scripts.postflight.map((e) => e.script).filter(Boolean)
   const needsState = postNames.includes("writeJobStateFile") || postNames.includes("parseJobStateFromAgentResult")
-  // Any of these preflights populate ctx.data.jobState: loadAgentResponsibilityState (folder
-  // agentResponsibility), loadJobFromFile (markdown agentResponsibility via agent-responsibility-tick), runTickScript (scripted
-  // agentResponsibility via agent-responsibility-tick-scripted).
+  // Any of these preflights populate ctx.data.jobState: loadCapabilityState (folder
+  // capability), loadJobFromFile (markdown capability via capability-tick), runTickScript (scripted
+  // capability via capability-tick-scripted).
   const STATE_LOADERS = [
-    "loadAgentResponsibilityState",
+    "loadCapabilityState",
     "loadJobFromFile",
     "runTickScript",
-    "runScheduledAgentActionTick",
+    "runScheduledExecutableTick",
   ]
   if (needsState && !STATE_LOADERS.some((s) => preNames.has(s))) {
     throw new ProfileError(
@@ -255,7 +266,7 @@ export function loadProfile(profilePath: string): Profile {
   }
 
   // Snapshot declared subagents now, on the default checkout, so they survive a
-  // later task-branch switch that may drop the agentResponsibility's agents/ dir.
+  // later task-branch switch that may drop the capability's agents/ dir.
   profile.subagentTemplates = captureSubagentTemplates(profile)
 
   return profile
@@ -263,7 +274,7 @@ export function loadProfile(profilePath: string): Profile {
 
 /**
  * Capture a profile's prompt template files at load time — `prompt.md`,
- * folder-agentResponsibility `agent-responsibility.md`, and any `prompts/*.md` — keyed by absolute path.
+ * folder-capability `capability.md`, and any `prompts/*.md` — keyed by absolute path.
  * Done here (alongside reading profile.json, before any preflight) so the
  * templates are safe from working-tree churn later in the run
  * (see Profile.promptTemplates). Best-effort: missing files are simply absent.
@@ -278,7 +289,8 @@ function readPromptTemplates(dir: string): Record<string, string> {
     }
   }
   read(path.join(dir, "prompt.md"))
-  read(path.join(dir, "agent-responsibility.md"))
+  read(path.join(dir, "capability.md"))
+  read(path.join(dir, "capability.md"))
   try {
     const promptsDir = path.join(dir, "prompts")
     for (const ent of fs.readdirSync(promptsDir)) {
@@ -377,8 +389,8 @@ function parseClaudeCode(p: string, raw: unknown): ClaudeCodeSpec {
   }
 
   const tools = Array.isArray(r.tools) ? (r.tools as string[]) : []
-  // An empty tools array is permitted for configless / agentless agentActions
-  // (e.g. `init`, `release`). Such agentActions must set ctx.skipAgent in a
+  // An empty tools array is permitted for configless / agentless executables
+  // (e.g. `init`, `release`). Such executables must set ctx.skipAgent in a
   // preflight script — the executor refuses to invoke the agent without tools
   // and without skipAgent, surfacing the misconfiguration loudly.
 
@@ -569,7 +581,7 @@ function parseScriptList(p: string, key: string, raw: unknown): ScriptEntry[] {
     if (!hasScript && !hasShell) {
       throw new ProfileError(
         p,
-        `scripts.${key}[${i}] must set "script" (registered TS function) or "shell" (filename in agentAction dir)`,
+        `scripts.${key}[${i}] must set "script" (registered TS function) or "shell" (filename in executable dir)`,
       )
     }
     const entry: ScriptEntry = {}

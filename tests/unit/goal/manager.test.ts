@@ -16,26 +16,26 @@ function releaseGoal(overrides: Partial<ManagedGoal> = {}): ManagedGoal {
       outcome: "version 1.2.3 is published and verified",
       evidence: ["releasePrExists", "qaPassed", "packagePublished"],
     },
-    agentResponsibilities: ["release-prepare", "qa-goal", "npm-publish"],
+    capabilities: ["release-prepare", "qa-goal", "npm-publish"],
     route: [
       {
         evidence: "releasePrExists",
         stage: "prepare",
-        agentResponsibility: "release-prepare",
-        agentAction: "release-prepare",
+        capability: "release-prepare",
+        executable: "release-prepare",
       },
       {
         evidence: "qaPassed",
         stage: "qa",
-        agentResponsibility: "qa-goal",
-        agentAction: "qa-goal",
+        capability: "qa-goal",
+        executable: "qa-goal",
         args: { issue: 123 },
       },
       {
         evidence: "packagePublished",
         stage: "publish",
-        agentResponsibility: "npm-publish",
-        agentAction: "npm-publish",
+        capability: "npm-publish",
+        executable: "npm-publish",
       },
     ],
     stage: "prepare",
@@ -52,7 +52,7 @@ function simpleGoal(overrides: Partial<ManagedGoal> = {}): ManagedGoal {
       outcome: "all labelled tasks are complete",
       evidence: [SIMPLE_GOAL_EVIDENCE],
     },
-    agentResponsibilities: [],
+    capabilities: [],
     route: [],
     stage: "legacy",
     facts: {},
@@ -62,7 +62,7 @@ function simpleGoal(overrides: Partial<ManagedGoal> = {}): ManagedGoal {
 }
 
 describe("planManagedGoalTick", () => {
-  it("dispatches the first missing evidence through an attached agentResponsibility", () => {
+  it("dispatches the first missing evidence through an attached capability", () => {
     const goal = releaseGoal()
 
     const decision = planManagedGoalTick(goal)
@@ -71,8 +71,8 @@ describe("planManagedGoalTick", () => {
       kind: "dispatch",
       evidence: "releasePrExists",
       stage: "prepare",
-      agentResponsibility: "release-prepare",
-      agentAction: "release-prepare",
+      capability: "release-prepare",
+      executable: "release-prepare",
       cliArgs: {},
     })
     expect(goal.stage).toBe("prepare")
@@ -89,8 +89,8 @@ describe("planManagedGoalTick", () => {
       kind: "dispatch",
       evidence: "qaPassed",
       stage: "qa",
-      agentResponsibility: "qa-goal",
-      agentAction: "qa-goal",
+      capability: "qa-goal",
+      executable: "qa-goal",
       cliArgs: { issue: 123 },
     })
     expect(goal.stage).toBe("qa")
@@ -104,21 +104,21 @@ describe("planManagedGoalTick", () => {
         {
           evidence: "releasePrExists",
           stage: "prepare",
-          agentResponsibility: "release-prepare",
-          agentAction: "release-prepare",
+          capability: "release-prepare",
+          executable: "release-prepare",
         },
         {
           evidence: "qaPassed",
           stage: "qa",
-          agentResponsibility: "qa-goal",
-          agentAction: "qa-goal",
+          capability: "qa-goal",
+          executable: "qa-goal",
           args: { pr: { fact: "deployPr" }, issue: 123 },
         },
         {
           evidence: "packagePublished",
           stage: "publish",
-          agentResponsibility: "npm-publish",
-          agentAction: "npm-publish",
+          capability: "npm-publish",
+          executable: "npm-publish",
         },
       ],
     })
@@ -132,24 +132,24 @@ describe("planManagedGoalTick", () => {
     })
   })
 
-  it("can dispatch a agentResponsibility without naming its agentAction", () => {
+  it("can dispatch a capability without naming its executable", () => {
     const goal = releaseGoal({
       destination: {
         outcome: "release PR is green",
         evidence: ["releasePrExists", "mainDeployPrGreen"],
       },
-      agentResponsibilities: ["release-prepare", "ci-health"],
+      capabilities: ["release-prepare", "ci-health"],
       route: [
         {
           evidence: "releasePrExists",
           stage: "prepare",
-          agentResponsibility: "release-prepare",
-          agentAction: "release-prepare",
+          capability: "release-prepare",
+          executable: "release-prepare",
         },
         {
           evidence: "mainDeployPrGreen",
           stage: "wait-ci",
-          agentResponsibility: "ci-health",
+          capability: "ci-health",
           args: { pr: { fact: "releasePr" }, evidence: "mainDeployPrGreen" },
         },
       ],
@@ -162,8 +162,8 @@ describe("planManagedGoalTick", () => {
       kind: "dispatch",
       evidence: "mainDeployPrGreen",
       stage: "wait-ci",
-      agentResponsibility: "ci-health",
-      agentAction: undefined,
+      capability: "ci-health",
+      executable: undefined,
       cliArgs: { pr: 456, evidence: "mainDeployPrGreen" },
     })
   })
@@ -175,21 +175,21 @@ describe("planManagedGoalTick", () => {
         {
           evidence: "releasePrExists",
           stage: "prepare",
-          agentResponsibility: "release-prepare",
-          agentAction: "release-prepare",
+          capability: "release-prepare",
+          executable: "release-prepare",
         },
         {
           evidence: "qaPassed",
           stage: "qa",
-          agentResponsibility: "qa-goal",
-          agentAction: "qa-goal",
+          capability: "qa-goal",
+          executable: "qa-goal",
           args: { pr: { fact: "deployPr" } },
         },
         {
           evidence: "packagePublished",
           stage: "publish",
-          agentResponsibility: "npm-publish",
-          agentAction: "npm-publish",
+          capability: "npm-publish",
+          executable: "npm-publish",
         },
       ],
     })
@@ -230,8 +230,8 @@ describe("planManagedGoalTick", () => {
     expect(goal.facts.pendingEvidence).toBeUndefined()
   })
 
-  it("blocks when the route requires a agentResponsibility not attached to the goal", () => {
-    const goal = releaseGoal({ agentResponsibilities: ["qa-goal", "npm-publish"] })
+  it("blocks when the route requires a capability not attached to the goal", () => {
+    const goal = releaseGoal({ capabilities: ["qa-goal", "npm-publish"] })
 
     const decision = planManagedGoalTick(goal)
 
@@ -239,10 +239,10 @@ describe("planManagedGoalTick", () => {
       kind: "blocked",
       evidence: "releasePrExists",
       stage: "prepare",
-      reason: "route agentResponsibility release-prepare is not attached to this goal",
+      reason: "route capability release-prepare is not attached to this goal",
     })
     expect(goal.stage).toBe("blocked")
-    expect(goal.blockers).toEqual(["route agentResponsibility release-prepare is not attached to this goal"])
+    expect(goal.blockers).toEqual(["route capability release-prepare is not attached to this goal"])
   })
   it("waits for simple goal labelled tasks instead of blocking", () => {
     const goal = simpleGoal()

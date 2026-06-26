@@ -21,7 +21,7 @@
  *         ctx.data.nextStateParseError (string) if the envelope was missing or invalid
  */
 
-import type { PostflightScript } from "../agent-actions/types.js"
+import type { PostflightScript } from "../executables/types.js"
 import type { LoadedStateComment } from "./issueStateComment.js"
 import { extractNextStateFromText } from "./stateEnvelope.js"
 

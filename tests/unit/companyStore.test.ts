@@ -5,7 +5,7 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { loadAgentIdentity } from "../../src/agents.js"
 import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
-import { listAgentActions, listAgentResponsibilityActions, resolveAgentAction } from "../../src/registry.js"
+import { listExecutables, listCapabilityActions, resolveExecutable } from "../../src/registry.js"
 
 let tmp: string
 let cwdBefore: string
@@ -30,19 +30,19 @@ afterEach(() => {
 })
 
 describe("company store resolution", () => {
-  it("loads agentActions, agentResponsibility actions, and agent from a remote git ref", () => {
+  it("loads capabilities and agents from a remote git ref", () => {
     const remote = createStoreRepo()
     const consumer = path.join(tmp, "consumer")
     fs.mkdirSync(consumer, { recursive: true })
     process.chdir(consumer)
     configureStore(remote)
 
-    expect(resolveAgentAction("store-exe")).toMatch(/store-exe\/profile\.json$/)
-    expect(listAgentActions().some((exe) => exe.name === "store-exe")).toBe(true)
+    expect(resolveExecutable("store-exe")).toMatch(/store-exe\/profile\.json$/)
+    expect(listExecutables().some((exe) => exe.name === "store-exe")).toBe(true)
 
-    const action = listAgentResponsibilityActions().find((item) => item.action === "store-agent-responsibility")
+    const action = listCapabilityActions().find((item) => item.action === "store-capability")
     expect(action?.source).toBe("company-store")
-    expect(action?.agentAction).toBe("store-exe")
+    expect(action?.executable).toBe("store-exe")
 
     expect(loadAgentIdentity(consumer, "cto")).toBe("Store CTO agent.")
   })
@@ -50,20 +50,28 @@ describe("company store resolution", () => {
   it("keeps local assets ahead of company store assets", () => {
     const remote = createStoreRepo()
     const consumer = path.join(tmp, "consumer")
-    writeAgentAction(path.join(consumer, ".kody", "agent-actions"), "store-exe", { name: "local" })
-    writeAgentResponsibility(path.join(consumer, ".kody", "agent-responsibilities"), "store-agent-responsibility", {
-      profile: { action: "store-agent-responsibility", agentAction: "store-exe" },
-      body: "# Local Store AgentResponsibility\n",
+    writeCapability(path.join(consumer, ".kody", "capabilities"), "store-exe", {
+      name: "store-exe",
+      role: "utility",
+      capabilityKind: "act",
+      inputs: [],
+    })
+    writeCapability(path.join(consumer, ".kody", "capabilities"), "store-capability", {
+      name: "store-capability",
+      capabilityKind: "act",
+      action: "store-capability",
+      implementation: "store-exe",
+      body: "# Local Store Capability\n",
     })
     fs.mkdirSync(path.join(consumer, ".kody", "agents"), { recursive: true })
     fs.writeFileSync(path.join(consumer, ".kody", "agents", "cto.md"), "Local CTO agent.")
     process.chdir(consumer)
     configureStore(remote)
 
-    expect(fs.realpathSync(resolveAgentAction("store-exe")!)).toBe(
-      fs.realpathSync(path.join(consumer, ".kody", "agent-actions", "store-exe", "profile.json")),
+    expect(fs.realpathSync(resolveExecutable("store-exe")!)).toBe(
+      fs.realpathSync(path.join(consumer, ".kody", "capabilities", "store-exe", "profile.json")),
     )
-    expect(listAgentResponsibilityActions().find((item) => item.action === "store-agent-responsibility")?.source).toBe(
+    expect(listCapabilityActions().find((item) => item.action === "store-capability")?.source).toBe(
       "project-folder",
     )
     expect(loadAgentIdentity(consumer, "cto")).toBe("Local CTO agent.")
@@ -79,10 +87,20 @@ function configureStore(remote: string): void {
 
 function createStoreRepo(): string {
   const repo = path.join(tmp, "store")
-  writeAgentAction(path.join(repo, ".kody", "agent-actions"), "store-exe", { name: "store-exe" })
-  writeAgentResponsibility(path.join(repo, ".kody", "agent-responsibilities"), "store-agent-responsibility", {
-    profile: { action: "store-agent-responsibility", agentAction: "store-exe", every: "manual", agent: "cto" },
-    body: "# Store AgentResponsibility\nShared agentResponsibility body.\n",
+  writeCapability(path.join(repo, ".kody", "capabilities"), "store-exe", {
+    name: "store-exe",
+    role: "utility",
+    capabilityKind: "act",
+    inputs: [],
+  })
+  writeCapability(path.join(repo, ".kody", "capabilities"), "store-capability", {
+    name: "store-capability",
+    capabilityKind: "act",
+    action: "store-capability",
+    implementation: "store-exe",
+    every: "manual",
+    agent: "cto",
+    body: "# Store Capability\nShared capability body.\n",
   })
   fs.mkdirSync(path.join(repo, ".kody", "agents"), { recursive: true })
   fs.writeFileSync(path.join(repo, ".kody", "agents", "cto.md"), "Store CTO agent.")
@@ -93,21 +111,12 @@ function createStoreRepo(): string {
   return repo
 }
 
-function writeAgentAction(root: string, slug: string, profile: Record<string, unknown>): void {
+function writeCapability(root: string, slug: string, input: Record<string, unknown> & { body?: string }): void {
   const dir = path.join(root, slug)
   fs.mkdirSync(dir, { recursive: true })
+  const { body, ...profile } = input
   fs.writeFileSync(path.join(dir, "profile.json"), `${JSON.stringify(profile)}\n`)
-}
-
-function writeAgentResponsibility(
-  root: string,
-  slug: string,
-  input: { profile: Record<string, unknown>; body: string },
-): void {
-  const dir = path.join(root, slug)
-  fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(path.join(dir, "profile.json"), `${JSON.stringify(input.profile)}\n`)
-  fs.writeFileSync(path.join(dir, "agent-responsibility.md"), input.body)
+  fs.writeFileSync(path.join(dir, "capability.md"), body ?? `# ${slug}\n`)
 }
 
 function git(cwd: string, args: string[]): void {

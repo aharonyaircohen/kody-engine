@@ -23,7 +23,7 @@ export type EventKind =
 export interface RunEvent {
   ts: string
   runId: string
-  agentAction: string
+  executable: string
   kind: EventKind
   /** Script name for preflight/postflight, child name for container_child. */
   name?: string

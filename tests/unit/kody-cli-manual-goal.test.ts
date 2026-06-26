@@ -17,12 +17,12 @@ vi.mock("../../src/registry.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../src/registry.js")>()
   return {
     ...actual,
-    resolveAgentResponsibilityAction: vi.fn((action: string) =>
+    resolveCapabilityAction: vi.fn((action: string) =>
       action === "goal-manager"
         ? {
             action: "goal-manager",
-            agentResponsibility: "goal-manager",
-            agentAction: "goal-manager",
+            capability: "goal-manager",
+            executable: "goal-manager",
             cliArgs: {},
             source: "builtin",
           }
@@ -58,8 +58,8 @@ function writeConfig(dir: string): void {
   )
 }
 
-function writeScheduledAgentAction(dir: string, name: string): void {
-  const executableDir = path.join(dir, ".kody", "agent-actions", name)
+function writeScheduledExecutable(dir: string, name: string): void {
+  const executableDir = path.join(dir, ".kody", "executables", name)
   fs.mkdirSync(executableDir, { recursive: true })
   fs.writeFileSync(
     path.join(executableDir, "profile.json"),
@@ -111,7 +111,7 @@ describe("kody-cli manual goal dispatch", () => {
     previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      inputs: { agentAction: "goal-manager", message: "weekly-docs" },
+      inputs: { executable: "goal-manager", message: "weekly-docs" },
     })
 
     await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
@@ -119,8 +119,8 @@ describe("kody-cli manual goal dispatch", () => {
     expect(mocks.runJob).toHaveBeenCalledTimes(1)
     expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
       action: "goal-manager",
-      agentResponsibility: "goal-manager",
-      agentAction: "goal-manager",
+      capability: "goal-manager",
+      executable: "goal-manager",
       cliArgs: { goal: "weekly-docs" },
       flavor: "instant",
       force: true,
@@ -134,23 +134,23 @@ describe("kody-cli manual goal dispatch", () => {
     previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      inputs: { agentAction: "goal-manager" },
+      inputs: { executable: "goal-manager" },
     })
 
     await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(64)
     expect(mocks.runJob).not.toHaveBeenCalled()
   })
 
-  it("runs scheduled watch agentActions from manual workflow dispatch", async () => {
+  it("runs scheduled watch executables from manual workflow dispatch", async () => {
     const dir = tmpDir()
     writeConfig(dir)
-    writeScheduledAgentAction(dir, "goal-scheduler")
+    writeScheduledExecutable(dir, "goal-scheduler")
     chdirTo(dir)
     previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
     previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      inputs: { agentAction: "goal-scheduler" },
+      inputs: { executable: "goal-scheduler" },
     })
 
     await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
@@ -158,8 +158,8 @@ describe("kody-cli manual goal dispatch", () => {
     expect(mocks.runJob).toHaveBeenCalledTimes(1)
     expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
       action: "goal-scheduler",
-      agentResponsibility: "goal-scheduler",
-      agentAction: "goal-scheduler",
+      capability: "goal-scheduler",
+      executable: "goal-scheduler",
       cliArgs: {},
       flavor: "instant",
       force: true,
@@ -169,7 +169,7 @@ describe("kody-cli manual goal dispatch", () => {
   it("chains scheduled goal-scheduler ticks from schedule events", async () => {
     const dir = tmpDir()
     writeConfig(dir)
-    writeScheduledAgentAction(dir, "goal-scheduler")
+    writeScheduledExecutable(dir, "goal-scheduler")
     chdirTo(dir)
     previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
     previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
@@ -182,8 +182,8 @@ describe("kody-cli manual goal dispatch", () => {
     expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
       dispatch: {
         action: "goal-scheduler",
-        agentResponsibility: "goal-scheduler",
-        agentAction: "goal-scheduler",
+        capability: "goal-scheduler",
+        executable: "goal-scheduler",
         cliArgs: {},
       },
     })
@@ -196,7 +196,7 @@ describe("kody-cli manual goal dispatch", () => {
   it("checks scheduled watches when workflow event has no direct action", async () => {
     const dir = tmpDir()
     writeConfig(dir)
-    writeScheduledAgentAction(dir, "goal-scheduler")
+    writeScheduledExecutable(dir, "goal-scheduler")
     chdirTo(dir)
     previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
     previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
@@ -212,8 +212,8 @@ describe("kody-cli manual goal dispatch", () => {
     expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
       dispatch: {
         action: "goal-scheduler",
-        agentResponsibility: "goal-scheduler",
-        agentAction: "goal-scheduler",
+        capability: "goal-scheduler",
+        executable: "goal-scheduler",
         cliArgs: {},
       },
     })

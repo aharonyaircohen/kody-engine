@@ -21,7 +21,7 @@ used after the consumer lists the capability under `company.activeCapabilities`.
 Missing or empty `company.activeCapabilities` means no store capabilities
 auto-run. Local repo capabilities remain repo-owned.
 
-`company.activeAgentResponsibilities` remains a legacy compatibility field while
+`company.activeCapabilities` remains a legacy compatibility field while
 older repos migrate. Do not use it for new activation.
 
 ## Goals

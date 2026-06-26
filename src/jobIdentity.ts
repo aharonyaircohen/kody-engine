@@ -1,16 +1,16 @@
-import type { Job } from "./agent-actions/types.js"
+import type { Job } from "./executables/types.js"
 
 /** Stable key for the required work on a task; retries keep this value. */
 export function stableJobKey(job: Job): string {
-  const agentResponsibility = job.agentResponsibility ?? job.action
-  const agentAction = job.agentAction ?? agentResponsibility ?? "unknown"
-  if (job.flavor === "scheduled" && job.agentResponsibility)
-    return `scheduled:${job.agentResponsibility}:${agentAction}`
+  const capability = job.capability ?? job.action
+  const executable = job.executable ?? capability ?? "unknown"
+  if (job.flavor === "scheduled" && job.capability)
+    return `scheduled:${job.capability}:${executable}`
   const target = typeof job.target === "number" ? job.target : targetFromCliArgs(job.cliArgs)
   const work =
-    agentResponsibility && agentAction && agentAction !== agentResponsibility
-      ? `${agentResponsibility}:${agentAction}`
-      : (agentResponsibility ?? agentAction)
+    capability && executable && executable !== capability
+      ? `${capability}:${executable}`
+      : (capability ?? executable)
   return target === undefined ? `${job.flavor}:${work}` : `${job.flavor}:${work}:${target}`
 }
 

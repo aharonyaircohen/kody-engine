@@ -16,7 +16,7 @@ set -euo pipefail
 
 : "${RUNNER_API_KEY:?RUNNER_API_KEY is required}"
 
-# The engine refuses to boot any agentAction without a kody.config.json in cwd.
+# The engine refuses to boot any executable without a kody.config.json in cwd.
 # In serve mode we idle in /workspace with no repo yet, so write a minimal
 # placeholder. (Per-job runs clone into /workspace/repo and use the repo's
 # real config — this file is only for the idle runner-serve process itself.)

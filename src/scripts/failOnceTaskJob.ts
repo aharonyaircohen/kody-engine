@@ -1,4 +1,4 @@
-import type { Job, PostflightScript } from "../agent-actions/types.js"
+import type { Job, PostflightScript } from "../executables/types.js"
 import { stableJobKey } from "../jobIdentity.js"
 import type { TaskState } from "../state.js"
 
@@ -7,8 +7,8 @@ export const failOnceTaskJob: PostflightScript = async (ctx, profile) => {
 
   const issue = typeof ctx.args.issue === "number" ? ctx.args.issue : undefined
   const fallbackJob: Job = {
-    agentResponsibility: profile.action ?? profile.name,
-    agentAction: profile.name,
+    capability: profile.action ?? profile.name,
+    executable: profile.name,
     flavor: "instant",
     ...(typeof issue === "number" ? { target: issue, cliArgs: { issue } } : { cliArgs: {} }),
   }

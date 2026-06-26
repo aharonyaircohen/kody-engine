@@ -42,7 +42,7 @@ describe("entry: resolve args", () => {
 
   it("parses --pr into cliArgs", () => {
     const a = parseArgs(["resolve", "--pr", "42"])
-    expect(a.command).toBe("__agent_responsibility__")
+    expect(a.command).toBe("__capability__")
     expect(a.actionName).toBe("resolve")
     expect(a.cliArgs).toEqual({ pr: "42" })
     expect(a.errors).toEqual([])
@@ -50,7 +50,7 @@ describe("entry: resolve args", () => {
 
   it("parses --pr and --prefer into cliArgs", () => {
     const a = parseArgs(["resolve", "--pr", "42", "--prefer", "theirs"])
-    expect(a.command).toBe("__agent_responsibility__")
+    expect(a.command).toBe("__capability__")
     expect(a.actionName).toBe("resolve")
     expect(a.cliArgs).toEqual({ pr: "42", prefer: "theirs" })
     expect(a.errors).toEqual([])

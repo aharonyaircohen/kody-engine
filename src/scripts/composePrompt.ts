@@ -1,6 +1,6 @@
 /**
  * Shared preflight: assemble the final prompt string from:
- *   - profile.dir/prompt.md, or profile.dir/agent-responsibility.md for folder agentResponsibilities
+ *   - profile.dir/prompt.md, or profile.dir/capability.md for folder capabilities
  *     (template with {{mustache}} tokens)
  *   - context data populated by the flow script (issue, pr, feedback, diff, …)
  *   - conventions
@@ -11,24 +11,24 @@
  * looked up in ctx.data or ctx.args. Missing tokens render as an empty
  * string (fail-soft).
  *
- * Tokens specific to the agentResponsibility pipeline (set by loadJobFromFile /
- * loadAgentResponsibilityState; see also the legacy `{{jobSlug}}` / `{{agentSlug}}` /
+ * Tokens specific to the capability pipeline (set by loadJobFromFile /
+ * loadCapabilityState; see also the legacy `{{jobSlug}}` / `{{agentSlug}}` /
  * `{{jobSchedule}}` aliases which remain populated for back-compat):
- *   - {{agentResponsibilityReference}}    full "AgentResponsibility reference" block: slug + title +
- *                           agentAction + agent + runtime cadence when present (one block)
- *   - {{agentResponsibilitySlug}}         the agentResponsibility slug (alias of {{jobSlug}})
- *   - {{agentResponsibilityTitle}}        the agentResponsibility title (alias of {{jobTitle}})
- *   - {{agentActionSlug}}   the agentAction doing the tick (profile.name)
+ *   - {{capabilityReference}}    full "Capability reference" block: slug + title +
+ *                           executable + agent + runtime cadence when present (one block)
+ *   - {{capabilitySlug}}         the capability slug (alias of {{jobSlug}})
+ *   - {{capabilityTitle}}        the capability title (alias of {{jobTitle}})
+ *   - {{executableSlug}}   the executable doing the tick (profile.name)
  *   - {{agentSlug}}        the agent (alias of {{agentSlug}})
  *   - {{agentTitle}}       the agent file H1 (alias of {{agentTitle}})
- *   - {{agentResponsibilitySchedule}}     runtime goal/loop/job cadence, or "" when absent
+ *   - {{capabilitySchedule}}     runtime goal/loop/job cadence, or "" when absent
  *                           on-demand (alias of {{jobSchedule}} for the
- *                           agent-responsibility-tick-scripted path)
+ *                           capability-tick-scripted path)
  */
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { PreflightScript, Profile } from "../agent-actions/types.js"
+import type { PreflightScript, Profile } from "../executables/types.js"
 import type { LoadedConvention } from "../prompt.js"
 
 const MUSTACHE = /\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g
@@ -65,15 +65,15 @@ export const composePrompt: PreflightScript = async (ctx, profile) => {
   // Resolution order:
   //   1. ctx.data.promptTemplate (flow script override)
   //   2. profile.dir/prompts/<mode>.md  (per-mode file)
-  //   3. profile.dir/prompt.md          (standard agentAction template)
-  //   4. profile.dir/agent-responsibility.md            (folder-agentResponsibility body/template)
+  //   3. profile.dir/prompt.md          (standard executable template)
+  //   4. profile.dir/capability.md            (folder-capability body/template)
   const explicit = ctx.data.promptTemplate as string | undefined
   const mode = ctx.args.mode as string | undefined
   const candidates = [
     explicit ? path.join(profile.dir, explicit) : null,
     mode ? path.join(profile.dir, "prompts", `${mode}.md`) : null,
     path.join(profile.dir, "prompt.md"),
-    path.join(profile.dir, "agent-responsibility.md"),
+    path.join(profile.dir, "capability.md"),
   ].filter(Boolean) as string[]
 
   // Read-or-fail instead of existsSync-then-read: one syscall, no
@@ -86,7 +86,7 @@ export const composePrompt: PreflightScript = async (ctx, profile) => {
   for (const c of candidates) {
     // Prefer the template captured at profile-load time (before any preflight).
     // runFlow's branch setup can drop the tracked-but-ignore-negated
-    // `.kody/agent-actions/<name>/` dir on the CI runner, so a fresh disk read
+    // `.kody/executables/<name>/` dir on the CI runner, so a fresh disk read
     // here would fail (ENOENT) even though the file was present at load. Fall
     // back to disk for runtime overrides (ctx.data.promptTemplate) not captured
     // at load time.
@@ -131,18 +131,18 @@ export const composePrompt: PreflightScript = async (ctx, profile) => {
     repoName: ctx.config.github.repo,
     defaultBranch: ctx.config.git.defaultBranch,
     branch: (ctx.data.branch as string) ?? "",
-    // The `{{agentResponsibilityReference}}` block is built from ctx.data.* (with legacy
-    // jobSlug/jobTitle/agentSlug/jobSchedule fallbacks) so a agentResponsibility prompt can
+    // The `{{capabilityReference}}` block is built from ctx.data.* (with legacy
+    // jobSlug/jobTitle/agentSlug/jobSchedule fallbacks) so a capability prompt can
     // place a labeled summary at the top. The five underlying tokens are
     // also exposed individually so a template can compose them differently
-    // (e.g. put the agentAction slug inline in a header).
-    agentResponsibilityReference: formatAgentResponsibilityReference(ctx.data, profile.name),
-    agentResponsibilitySlug: pickToken(ctx.data, "agentResponsibilitySlug", "jobSlug"),
-    agentResponsibilityTitle: pickToken(ctx.data, "agentResponsibilityTitle", "jobTitle"),
-    agentActionSlug: pickToken(ctx.data, "agentActionSlug") || profile.name,
+    // (e.g. put the executable slug inline in a header).
+    capabilityReference: formatCapabilityReference(ctx.data, profile.name),
+    capabilitySlug: pickToken(ctx.data, "capabilitySlug", "jobSlug"),
+    capabilityTitle: pickToken(ctx.data, "capabilityTitle", "jobTitle"),
+    executableSlug: pickToken(ctx.data, "executableSlug") || profile.name,
     agentSlug: pickToken(ctx.data, "agentSlug", "agentSlug"),
     agentTitle: pickToken(ctx.data, "agentTitle", "agentTitle"),
-    agentResponsibilitySchedule: pickToken(ctx.data, "agentResponsibilitySchedule", "jobSchedule"),
+    capabilitySchedule: pickToken(ctx.data, "capabilitySchedule", "jobSchedule"),
   }
 
   ctx.data.prompt = template.replace(MUSTACHE, (_, key) => {
@@ -242,38 +242,38 @@ function formatToolsUsage(profile: Profile): string {
 }
 
 /**
- * Render the `{{agentResponsibilityReference}}` token — a single labeled block at the top of
- * a agentResponsibility tick's prompt that names the agentResponsibility, the agentAction doing the tick,
+ * Render the `{{capabilityReference}}` token — a single labeled block at the top of
+ * a capability tick's prompt that names the capability, the executable doing the tick,
  * the assigned agent, and the cadence. The five underlying tokens
- * (`{{agentResponsibilitySlug}}`, `{{agentResponsibilityTitle}}`, `{{agentActionSlug}}`, `{{agentSlug}}`,
- * `{{agentResponsibilitySchedule}}`) are also exposed individually so templates can place
+ * (`{{capabilitySlug}}`, `{{capabilityTitle}}`, `{{executableSlug}}`, `{{agentSlug}}`,
+ * `{{capabilitySchedule}}`) are also exposed individually so templates can place
  * them in different spots.
  *
  * Fields fall back to legacy ctx.data.* (jobSlug / jobTitle / agentSlug /
- * jobSchedule) so a agentResponsibility prompt that hasn't been re-mapped still produces a
+ * jobSchedule) so a capability prompt that hasn't been re-mapped still produces a
  * coherent block. Each field renders as a bulleted line; missing/empty
  * fields are omitted rather than rendered as blank "Foo: ".
  */
-function formatAgentResponsibilityReference(data: Record<string, unknown>, profileName: string): string {
-  const agentResponsibilitySlug = pickToken(data, "agentResponsibilitySlug", "jobSlug")
-  const agentResponsibilityTitle = pickToken(data, "agentResponsibilityTitle", "jobTitle")
-  // The agentAction doing the tick — `ctx.data.agentActionSlug` is set by
-  // loadJobFromFile/loadAgentResponsibilityState; fall back to the profile name resolved at
+function formatCapabilityReference(data: Record<string, unknown>, profileName: string): string {
+  const capabilitySlug = pickToken(data, "capabilitySlug", "jobSlug")
+  const capabilityTitle = pickToken(data, "capabilityTitle", "jobTitle")
+  // The executable doing the tick — `ctx.data.executableSlug` is set by
+  // loadJobFromFile/loadCapabilityState; fall back to the profile name resolved at
   // compose-time so a bare profile that never ran the loader still renders
   // something coherent.
-  const agentActionSlug = pickToken(data, "agentActionSlug") || profileName
+  const executableSlug = pickToken(data, "executableSlug") || profileName
   const agentSlug = pickToken(data, "agentSlug", "agentSlug")
   const agentTitle = pickToken(data, "agentTitle", "agentTitle")
-  const agentResponsibilitySchedule = pickToken(data, "agentResponsibilitySchedule", "jobSchedule")
+  const capabilitySchedule = pickToken(data, "capabilitySchedule", "jobSchedule")
 
-  const lines = ["# AgentResponsibility reference", ""]
-  if (agentResponsibilitySlug) {
+  const lines = ["# Capability reference", ""]
+  if (capabilitySlug) {
     lines.push(
-      `- AgentResponsibility: \`${agentResponsibilitySlug}\`${agentResponsibilityTitle ? ` — *${agentResponsibilityTitle}*` : ""}`,
+      `- Capability: \`${capabilitySlug}\`${capabilityTitle ? ` — *${capabilityTitle}*` : ""}`,
     )
   }
-  if (agentActionSlug) {
-    lines.push(`- AgentAction: \`${agentActionSlug}\``)
+  if (executableSlug) {
+    lines.push(`- Executable: \`${executableSlug}\``)
   }
   const agentLine = agentSlug
     ? `\`${agentSlug}\`${agentTitle && agentTitle !== agentSlug ? ` — *${agentTitle}*` : ""}`
@@ -281,16 +281,16 @@ function formatAgentResponsibilityReference(data: Record<string, unknown>, profi
   if (agentLine) {
     lines.push(`- Agent: ${agentLine}`)
   }
-  if (agentResponsibilitySchedule) {
-    lines.push(`- Cadence: \`${agentResponsibilitySchedule}\``)
+  if (capabilitySchedule) {
+    lines.push(`- Cadence: \`${capabilitySchedule}\``)
   }
-  const agentResponsibilityBody = pickToken(data, "dutyIntent", "jobIntent")
-  if (agentResponsibilityBody) {
-    lines.push("", "## AgentResponsibility body", "", agentResponsibilityBody)
+  const capabilityBody = pickToken(data, "dutyIntent", "jobIntent")
+  if (capabilityBody) {
+    lines.push("", "## Capability body", "", capabilityBody)
   }
   if (lines.length === 2) {
-    // No fields present (e.g. a non-agent-responsibility-tick run that still references
-    // {{agentResponsibilityReference}}). Render an empty block rather than a bare heading.
+    // No fields present (e.g. a non-capability-tick run that still references
+    // {{capabilityReference}}). Render an empty block rather than a bare heading.
     return ""
   }
   return lines.join("\n")
@@ -298,7 +298,7 @@ function formatAgentResponsibilityReference(data: Record<string, unknown>, profi
 
 /**
  * Resolve a token by trying a list of ctx.data keys in order — the first
- * non-empty string wins. Used to keep the agentResponsibility-noun aliases (`{{agentResponsibilitySlug}}`)
+ * non-empty string wins. Used to keep the capability-noun aliases (`{{capabilitySlug}}`)
  * and the legacy `{{jobSlug}}` token reading the same ctx.data when only one
  * loader has run (e.g. a profile that runs through both loaders, or a test
  * that populates the new field but not the old).

@@ -1,13 +1,13 @@
 import * as fs from "node:fs"
-import type { AgentResponsibilityResultArtifact } from "../agent-responsibilityResult.js"
+import type { CapabilityResultArtifact } from "../capabilityResult.js"
 import { appendStateLine, parseStateRepoSlug, resolveStateRepoConfig, type StateRepoConfig } from "../stateRepo.js"
 import type { GoalRouteStep, ManagedGoal } from "./manager.js"
 import { nowIso } from "./state.js"
 
 export interface GoalRunLogDispatch {
   action?: string
-  agentResponsibility?: string
-  agentAction?: string
+  capability?: string
+  executable?: string
   cliArgs?: Record<string, unknown>
 }
 
@@ -27,7 +27,7 @@ export interface GoalRunLogEvent {
   target?: { type: string; id: string }
   facts?: Record<string, unknown>
   evidenceValues?: Record<string, boolean>
-  artifacts?: AgentResponsibilityResultArtifact[]
+  artifacts?: CapabilityResultArtifact[]
   goal?: Record<string, unknown>
   inspection?: Record<string, unknown>
   decision?: Record<string, unknown>
@@ -112,7 +112,7 @@ export function goalRunLogSnapshot(goalId: string, goalState: string, goal: Mana
     failedEvidence: requiredEvidence.filter((evidence) => goal.facts[evidence] === false),
     missingEvidence: requiredEvidence.filter((evidence) => goal.facts[evidence] !== true),
     pendingEvidence,
-    agentResponsibilities: [...goal.agentResponsibilities],
+    capabilities: [...goal.capabilities],
     route: goal.route.map(routeStepForLog),
     schedule: goal.schedule,
     preferredRunTime: goal.preferredRunTime,
@@ -266,7 +266,7 @@ function triggerContext(): Record<string, unknown> {
     comment: numberValue(recordValue(event?.comment)?.id),
     schedule: stringValue(event?.schedule),
     inputs: inputs
-      ? pickRecord(inputs, ["issue_number", "sessionId", "message", "model", "title", "agentAction", "base"])
+      ? pickRecord(inputs, ["issue_number", "sessionId", "message", "model", "title", "executable", "base"])
       : undefined,
   })
 }
@@ -277,8 +277,8 @@ function jobContext(data: Record<string, unknown>): Record<string, unknown> | un
     key: stringValue(data.jobKey),
     flavor: stringValue(data.jobFlavor),
     action: stringValue(data.jobAction),
-    agentResponsibility: stringValue(data.jobAgentResponsibility),
-    agentAction: stringValue(data.jobAgentAction),
+    capability: stringValue(data.jobCapability),
+    executable: stringValue(data.jobExecutable),
     agent: stringValue(data.jobAgent),
     schedule: stringValue(data.jobSchedule),
     target: data.jobTarget,
@@ -316,8 +316,8 @@ function routeStepForLog(step: GoalRouteStep): Record<string, unknown> {
   return pruneUndefined({
     evidence: step.evidence,
     stage: step.stage,
-    agentResponsibility: step.agentResponsibility,
-    agentAction: step.agentAction,
+    capability: step.capability,
+    executable: step.executable,
     args: step.args,
     saveReport: step.saveReport === true ? true : undefined,
   })

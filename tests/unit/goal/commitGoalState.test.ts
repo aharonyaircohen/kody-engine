@@ -19,7 +19,7 @@ vi.mock("../../../src/stateRepo.js", async () => {
   }
 })
 
-import type { Context, Profile } from "../../../src/agent-actions/types.js"
+import type { Context, Profile } from "../../../src/executables/types.js"
 import { flushGoalRunLogEvents, stageGoalRunLogEvent } from "../../../src/goal/runLog.js"
 import type { GoalState } from "../../../src/goal/state.js"
 import { putGoalState } from "../../../src/goal/stateStore.js"
@@ -39,13 +39,13 @@ function goalState(overrides: Partial<GoalState["extra"]> = {}): GoalState {
     extra: {
       type: "release",
       destination: { outcome: "publish and verify", evidence: ["releasePrExists"] },
-      agentResponsibilities: ["release-prepare"],
+      capabilities: ["release-prepare"],
       route: [
         {
           evidence: "releasePrExists",
           stage: "prepare",
-          agentResponsibility: "release-prepare",
-          agentAction: "release-prepare",
+          capability: "release-prepare",
+          executable: "release-prepare",
         },
       ],
       stage: "prepare",
@@ -147,7 +147,7 @@ describe("commitGoalState report refresh", () => {
     expect(body).toContain("- Event: goal.tick.wait")
     expect(body).toContain("- Next step: wait")
     expect(body).toContain("- Reason: waiting for evidence: releasePrExists")
-    expect(body).toContain("## Responsibility Evidence\n- none")
+    expect(body).toContain("## Capability Evidence\n- none")
     expect(flushGoalRunLogEventsMock).toHaveBeenCalledOnce()
   })
 

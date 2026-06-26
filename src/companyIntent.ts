@@ -40,12 +40,12 @@ export interface CompanyIntent {
   portfolio: {
     goals: string[]
     loops: string[]
-    responsibilities: string[]
+    capabilities: string[]
   }
   manager: {
     agent: "cto"
     loop: "company-manager-loop"
-    responsibility: "company-manager"
+    capability: "company-manager"
     reviewEvery: "1d" | "1w"
     lastReviewedAt?: string
   }
@@ -64,7 +64,7 @@ export interface CompanyPortfolioGoal {
   state: GoalState["state"]
   type?: string
   outcome?: string
-  agentResponsibilities: string[]
+  capabilities: string[]
   isLoop: boolean
   updatedAt?: string
 }
@@ -130,7 +130,7 @@ export function normalizeCompanyIntent(path: string, raw: unknown): CompanyInten
     portfolio: {
       goals: stringArray(recordField(input.portfolio)?.goals).filter(isCompanyIntentId),
       loops: stringArray(recordField(input.portfolio)?.loops).filter(isCompanyIntentId),
-      responsibilities: stringArray(recordField(input.portfolio)?.responsibilities).filter(isCompanyIntentId),
+      capabilities: stringArray(recordField(input.portfolio)?.capabilities).filter(isCompanyIntentId),
     },
     manager: normalizeManager(recordField(input.manager)),
     createdAt,
@@ -205,7 +205,7 @@ export function listCompanyPortfolio(config: StateRepoConfig, cwd?: string): Com
       state: state.state,
       type: stringField(state.extra.type) || undefined,
       outcome: stringField(destination?.outcome) || undefined,
-      agentResponsibilities: stringArray(state.extra.agentResponsibilities),
+      capabilities: stringArray(state.extra.capabilities),
       isLoop: state.extra.scheduleMode === "agentLoop" || state.extra.type === "agentLoop",
       updatedAt: state.updatedAt,
     })
@@ -279,7 +279,7 @@ function normalizeManager(raw: Record<string, unknown> | null): CompanyIntent["m
   return {
     agent: "cto",
     loop: "company-manager-loop",
-    responsibility: "company-manager",
+    capability: "company-manager",
     reviewEvery: oneOf(raw?.reviewEvery, ["1d", "1w"] as const, "1d"),
     ...(typeof raw?.lastReviewedAt === "string" ? { lastReviewedAt: raw.lastReviewedAt } : {}),
   }

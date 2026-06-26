@@ -8,8 +8,8 @@ import * as path from "node:path"
 import { listStateDirectory, readStateText, type StateRepoConfig } from "./stateRepo.js"
 
 const DIR_MAPPINGS: Array<{ stateDir: string; localDir: string }> = [
-  { stateDir: "agent-actions", localDir: path.join(".kody", "agent-actions") },
-  { stateDir: "agent-responsibilities", localDir: path.join(".kody", "agent-responsibilities") },
+  { stateDir: "executables", localDir: path.join(".kody", "executables") },
+  { stateDir: "capabilities", localDir: path.join(".kody", "capabilities") },
   { stateDir: "agents", localDir: path.join(".kody", "agents") },
   { stateDir: "context", localDir: path.join(".kody", "context") },
   { stateDir: "memory", localDir: path.join(".kody", "memory") },

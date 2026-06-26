@@ -3,10 +3,10 @@
  * commit result on ctx.data.commitResult for downstream postflights
  * (ensurePr, postIssueComment) to consume.
  *
- * Staging and pre-commit cleanup are the responsibility of earlier
+ * Staging and pre-commit cleanup are handled by earlier
  * postflight entries (e.g. abortUnfinishedGitOps for normal flows,
  * stageMergeConflicts for merge flows). This script does not branch on
- * agentAction identity.
+ * executable identity.
  *
  * Commit message source (in priority order):
  *   1. ctx.data.commitMessage (agent's COMMIT_MSG line, parsed by parseAgentResult)
@@ -15,7 +15,7 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { PostflightScript } from "../agent-actions/types.js"
+import type { PostflightScript } from "../executables/types.js"
 import {
   commitAndPush as doCommitAndPush,
   hasCommitsAhead,
@@ -50,7 +50,7 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
   }
 
   // Idempotency sentinel — short-circuit if this commitAndPush has
-  // already run successfully for the same (runId, agentAction) tuple.
+  // already run successfully for the same (runId, executable) tuple.
   const idempotencyEnabled = process.env.KODY_COMMIT_IDEMPOTENCY !== "0"
   const sentinel = idempotencyEnabled ? sentinelPathForStage(ctx.cwd, profile.name) : null
   if (sentinel && fs.existsSync(sentinel)) {

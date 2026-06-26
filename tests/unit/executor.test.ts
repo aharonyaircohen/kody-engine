@@ -12,9 +12,9 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { jobReferenceBlock, operatorRequestBlock, runAgentAction } from "../../src/executor.js"
+import { jobReferenceBlock, operatorRequestBlock, runExecutable } from "../../src/executor.js"
 import { loadProfile } from "../../src/profile.js"
-import { resolveAgentAction } from "../../src/registry.js"
+import { resolveExecutable } from "../../src/registry.js"
 import { runtimeStatePath } from "../../src/runtimePaths.js"
 import * as taskArtifacts from "../../src/task-artifacts.js"
 
@@ -106,16 +106,16 @@ describe("executor: jobReferenceBlock", () => {
       "live-job-wiring",
       {
         name: "live-job-wiring",
-        agentAction: "job-live-verify",
+        executable: "job-live-verify",
         agent: "live-verifier",
-        describe: "Live agentResponsibility description",
+        describe: "Live capability description",
       },
       {
         jobId: "scheduled-1",
         jobFlavor: "scheduled",
         jobSchedule: "manual",
-        jobAgentResponsibility: "live-job-wiring",
-        jobAgentAction: "live-job-wiring",
+        jobCapability: "live-job-wiring",
+        jobExecutable: "live-job-wiring",
       },
     )
 
@@ -123,19 +123,19 @@ describe("executor: jobReferenceBlock", () => {
     expect(block).toContain("Job id: scheduled-1")
     expect(block).toContain("Flavor: scheduled")
     expect(block).toContain("Schedule: manual")
-    expect(block).toContain("AgentResponsibility: live-job-wiring")
-    expect(block).toContain("AgentAction: job-live-verify")
+    expect(block).toContain("Capability: live-job-wiring")
+    expect(block).toContain("Executable: job-live-verify")
     expect(block).toContain("Agent: live-verifier")
-    expect(block).toContain("Description: Live agentResponsibility description")
+    expect(block).toContain("Description: Live capability description")
   })
 
-  it("does not render for legacy direct agentAction calls without job metadata", () => {
+  it("does not render for legacy direct executable calls without job metadata", () => {
     expect(jobReferenceBlock("run", { name: "run", describe: "", agent: undefined }, {})).toBeNull()
   })
 })
 
 describe("executor: split pipeline profiles are loadable + valid", () => {
-  const EXE_ROOT = path.resolve(__dirname, "../../src/agent-actions")
+  const EXE_ROOT = path.resolve(__dirname, "../../src/executables")
 
   it("run profile loads cleanly with the expected shape", () => {
     const profile = loadProfile(path.join(EXE_ROOT, "run/profile.json"))
@@ -158,8 +158,8 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
   })
 
   it("resolve profile skips verify + checkCoverageWithRetry (merge op)", () => {
-    const resolveProfile = resolveAgentAction("resolve")
-    if (!resolveProfile) throw new Error("resolve agentAction not found")
+    const resolveProfile = resolveExecutable("resolve")
+    if (!resolveProfile) throw new Error("resolve executable not found")
     const profile = loadProfile(resolveProfile)
     expect(profile.name).toBe("resolve")
     expect(profile.inputs.map((i) => i.name)).toEqual(["pr", "prefer"])
@@ -204,7 +204,7 @@ describe("executor: per-task artifacts prepare for args.pr", () => {
     // already prepared before that preflight ran. We only care about
     // the artifacts-dir preparation here.
     try {
-      await runAgentAction("resolve", {
+      await runExecutable("resolve", {
         cliArgs: { pr: 42 },
         cwd: dir,
         skipConfig: true,

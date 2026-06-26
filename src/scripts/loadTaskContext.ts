@@ -14,7 +14,7 @@
  * TaskContext just has `priorArt: ""`.
  */
 
-import type { PreflightScript } from "../agent-actions/types.js"
+import type { PreflightScript } from "../executables/types.js"
 import type { TestRequirement } from "../config.js"
 import { resolveRunId } from "../events.js"
 import type { IssueData } from "../issue.js"

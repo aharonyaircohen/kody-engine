@@ -8,7 +8,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import type { Context, Profile } from "../../src/agent-actions/types.js"
+import type { Context, Profile } from "../../src/executables/types.js"
 import { composePrompt } from "../../src/scripts/composePrompt.js"
 
 function makeProfile(dir: string): Profile {
@@ -95,7 +95,7 @@ describe("composePrompt", () => {
   })
 
   it("uses the load-time cached template even when the working-tree file is gone", async () => {
-    // Simulates the CI bug: runFlow's branch setup drops .kody/agent-actions/<name>/
+    // Simulates the CI bug: runFlow's branch setup drops .kody/executables/<name>/
     // after load. No prompt.md on disk, but it was captured at profile-load time.
     const f = path.join(dir, "prompt.md")
     const profile = makeProfile(dir)
@@ -128,10 +128,10 @@ describe("composePrompt", () => {
   })
 })
 
-describe("composePrompt: agentResponsibility-pipeline tokens (Phase 1 agent-responsibility-tick rename)", () => {
+describe("composePrompt: capability-pipeline tokens (Phase 1 capability-tick rename)", () => {
   let dir: string
   beforeEach(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-composeprompt-agentResponsibility-"))
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-composeprompt-capability-"))
   })
   afterEach(() => fs.rmSync(dir, { recursive: true, force: true }))
 
@@ -139,45 +139,45 @@ describe("composePrompt: agentResponsibility-pipeline tokens (Phase 1 agent-resp
     return makeCtx(dir, data)
   }
 
-  it("renders {{agentResponsibilityReference}} as a single AgentResponsibility reference block", async () => {
-    fs.writeFileSync(path.join(dir, "prompt.md"), "{{agentResponsibilityReference}}\n--\nbody")
+  it("renders {{capabilityReference}} as a single Capability reference block", async () => {
+    fs.writeFileSync(path.join(dir, "prompt.md"), "{{capabilityReference}}\n--\nbody")
     const ctx = ctxFor({
-      agentResponsibilitySlug: "stale-prs",
-      agentResponsibilityTitle: "Stale PR Watcher",
-      agentActionSlug: "agent-responsibility-tick",
+      capabilitySlug: "stale-prs",
+      capabilityTitle: "Stale PR Watcher",
+      executableSlug: "capability-tick",
       agentSlug: "kody",
       agentTitle: "Kody",
-      agentResponsibilitySchedule: "*/5 * * * *",
+      capabilitySchedule: "*/5 * * * *",
     })
     await composePrompt(ctx, makeProfile(dir))
     const out = ctx.data.prompt as string
-    expect(out).toContain("# AgentResponsibility reference")
-    expect(out).toContain("- AgentResponsibility: `stale-prs` — *Stale PR Watcher*")
-    expect(out).toContain("- AgentAction: `agent-responsibility-tick`")
+    expect(out).toContain("# Capability reference")
+    expect(out).toContain("- Capability: `stale-prs` — *Stale PR Watcher*")
+    expect(out).toContain("- Executable: `capability-tick`")
     expect(out).toContain("- Agent: `kody` — *Kody*")
     expect(out).toContain("- Cadence: `*/5 * * * *`")
   })
 
-  it("renders the {{agentResponsibilitySlug}}, {{agentResponsibilityTitle}}, {{agentActionSlug}}, {{agentSlug}}, {{agentResponsibilitySchedule}} aliases individually", async () => {
+  it("renders the {{capabilitySlug}}, {{capabilityTitle}}, {{executableSlug}}, {{agentSlug}}, {{capabilitySchedule}} aliases individually", async () => {
     fs.writeFileSync(
       path.join(dir, "prompt.md"),
-      "{{agentResponsibilitySlug}}|{{agentResponsibilityTitle}}|{{agentActionSlug}}|{{agentSlug}}|{{agentResponsibilitySchedule}}",
+      "{{capabilitySlug}}|{{capabilityTitle}}|{{executableSlug}}|{{agentSlug}}|{{capabilitySchedule}}",
     )
     const ctx = ctxFor({
-      agentResponsibilitySlug: "stale-prs",
-      agentResponsibilityTitle: "Stale PR Watcher",
-      agentActionSlug: "agent-responsibility-tick",
+      capabilitySlug: "stale-prs",
+      capabilityTitle: "Stale PR Watcher",
+      executableSlug: "capability-tick",
       agentSlug: "kody",
-      agentResponsibilitySchedule: "15m",
+      capabilitySchedule: "15m",
     })
     await composePrompt(ctx, makeProfile(dir))
-    expect(ctx.data.prompt).toBe("stale-prs|Stale PR Watcher|agent-responsibility-tick|kody|15m")
+    expect(ctx.data.prompt).toBe("stale-prs|Stale PR Watcher|capability-tick|kody|15m")
   })
 
-  it("falls back to legacy ctx.data.jobSlug/jobTitle/agentSlug/jobSchedule when agentResponsibility-* are absent", async () => {
+  it("falls back to legacy ctx.data.jobSlug/jobTitle/agentSlug/jobSchedule when capability-* are absent", async () => {
     // Backwards compat: a prompt template written before the rename still
-    // gets a coherent {{agentResponsibilityReference}} block from the legacy ctx.data.*.
-    fs.writeFileSync(path.join(dir, "prompt.md"), "{{agentResponsibilityReference}}")
+    // gets a coherent {{capabilityReference}} block from the legacy ctx.data.*.
+    fs.writeFileSync(path.join(dir, "prompt.md"), "{{capabilityReference}}")
     const ctx = ctxFor({
       jobSlug: "stale-prs",
       jobTitle: "Stale PR Watcher",
@@ -185,30 +185,30 @@ describe("composePrompt: agentResponsibility-pipeline tokens (Phase 1 agent-resp
       jobSchedule: "*/5 * * * *",
     })
     const profile = makeProfile(dir)
-    profile.name = "agent-responsibility-tick"
+    profile.name = "capability-tick"
     await composePrompt(ctx, profile)
     const out = ctx.data.prompt as string
-    expect(out).toContain("- AgentResponsibility: `stale-prs` — *Stale PR Watcher*")
+    expect(out).toContain("- Capability: `stale-prs` — *Stale PR Watcher*")
     expect(out).toContain("- Agent: `kody`")
     expect(out).toContain("- Cadence: `*/5 * * * *`")
   })
 
-  it("prefers agentResponsibility-* aliases over legacy job* when both are present", async () => {
-    fs.writeFileSync(path.join(dir, "prompt.md"), "{{agentResponsibilityReference}}")
+  it("prefers capability-* aliases over legacy job* when both are present", async () => {
+    fs.writeFileSync(path.join(dir, "prompt.md"), "{{capabilityReference}}")
     const ctx = ctxFor({
       // Legacy fields (older loader)
       jobSlug: "legacy-slug",
       jobTitle: "Legacy Title",
-      // New agentResponsibility-* aliases (newer loader)
-      agentResponsibilitySlug: "new-slug",
-      agentResponsibilityTitle: "New Title",
+      // New capability-* aliases (newer loader)
+      capabilitySlug: "new-slug",
+      capabilityTitle: "New Title",
       agentSlug: "new-agent",
     })
     const profile = makeProfile(dir)
-    profile.name = "agent-responsibility-tick"
+    profile.name = "capability-tick"
     await composePrompt(ctx, profile)
     const out = ctx.data.prompt as string
-    expect(out).toContain("- AgentResponsibility: `new-slug` — *New Title*")
+    expect(out).toContain("- Capability: `new-slug` — *New Title*")
     expect(out).toContain("- Agent: `new-agent`")
     expect(out).not.toContain("legacy-slug")
     expect(out).not.toContain("Legacy Title")
@@ -227,42 +227,42 @@ describe("composePrompt: agentResponsibility-pipeline tokens (Phase 1 agent-resp
     expect(ctx.data.prompt).toBe("job=stale-prs agent=kody sched=15m")
   })
 
-  it("omits optional lines in {{agentResponsibilityReference}} (no agent, no cadence)", async () => {
-    fs.writeFileSync(path.join(dir, "prompt.md"), "{{agentResponsibilityReference}}")
+  it("omits optional lines in {{capabilityReference}} (no agent, no cadence)", async () => {
+    fs.writeFileSync(path.join(dir, "prompt.md"), "{{capabilityReference}}")
     const ctx = ctxFor({
-      agentResponsibilitySlug: "ad-hoc",
-      agentResponsibilityTitle: "Ad Hoc AgentResponsibility",
-      agentActionSlug: "agent-responsibility-tick",
-      // No agentSlug, no agentResponsibilitySchedule — on-demand run.
+      capabilitySlug: "ad-hoc",
+      capabilityTitle: "Ad Hoc Capability",
+      executableSlug: "capability-tick",
+      // No agentSlug, no capabilitySchedule — on-demand run.
     })
     await composePrompt(ctx, makeProfile(dir))
     const out = ctx.data.prompt as string
-    expect(out).toContain("- AgentResponsibility: `ad-hoc` — *Ad Hoc AgentResponsibility*")
-    expect(out).toContain("- AgentAction: `agent-responsibility-tick`")
+    expect(out).toContain("- Capability: `ad-hoc` — *Ad Hoc Capability*")
+    expect(out).toContain("- Executable: `capability-tick`")
     expect(out).not.toContain("- Agent:")
     expect(out).not.toContain("- Cadence:")
   })
 
-  it("renders an empty {{agentResponsibilityReference}} when no agentResponsibility fields are present (no bare heading)", async () => {
-    // A non-agent-responsibility-tick profile that nonetheless references the token (e.g.
+  it("renders an empty {{capabilityReference}} when no capability fields are present (no bare heading)", async () => {
+    // A non-capability-tick profile that nonetheless references the token (e.g.
     // a future shared prompt) shouldn't render a misleading heading.
-    fs.writeFileSync(path.join(dir, "prompt.md"), "before{{agentResponsibilityReference}}after")
-    const ctx = ctxFor({}) // no agentResponsibility fields
+    fs.writeFileSync(path.join(dir, "prompt.md"), "before{{capabilityReference}}after")
+    const ctx = ctxFor({}) // no capability fields
     const profile = makeProfile(dir)
-    profile.name = "" // suppress the agentActionSlug fallback
+    profile.name = "" // suppress the executableSlug fallback
     await composePrompt(ctx, profile)
     expect(ctx.data.prompt).toBe("beforeafter")
   })
 
-  it("falls back to the profile name for {{agentActionSlug}} when ctx.data is silent", async () => {
-    // The loader (loadJobFromFile) sets ctx.data.agentActionSlug from
+  it("falls back to the profile name for {{executableSlug}} when ctx.data is silent", async () => {
+    // The loader (loadJobFromFile) sets ctx.data.executableSlug from
     // profile.name. composePrompt's fallback uses the profile's own name so
     // a bare profile still renders something coherent.
-    fs.writeFileSync(path.join(dir, "prompt.md"), "exe={{agentActionSlug}}")
+    fs.writeFileSync(path.join(dir, "prompt.md"), "exe={{executableSlug}}")
     const profile = makeProfile(dir)
-    profile.name = "agent-responsibility-tick"
+    profile.name = "capability-tick"
     const ctx = ctxFor({})
     await composePrompt(ctx, profile)
-    expect(ctx.data.prompt).toBe("exe=agent-responsibility-tick")
+    expect(ctx.data.prompt).toBe("exe=capability-tick")
   })
 })

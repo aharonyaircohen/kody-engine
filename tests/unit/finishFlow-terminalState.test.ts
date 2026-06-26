@@ -19,7 +19,7 @@ vi.mock("../../src/state.js", async (importOriginal) => {
   }
 })
 
-import type { Context, Profile } from "../../src/agent-actions/types.js"
+import type { Context, Profile } from "../../src/executables/types.js"
 import { finishFlow } from "../../src/scripts/finishFlow.js"
 
 function makeState() {
@@ -28,11 +28,11 @@ function makeState() {
     core: {
       phase: "reviewing",
       status: "running",
-      currentAgentAction: "review",
+      currentExecutable: "review",
       lastOutcome: { type: "REVIEW_PASS", payload: {}, timestamp: "x" },
       attempts: {},
     },
-    agentActions: {},
+    executables: {},
     artifacts: {},
     history: [],
   }
@@ -64,7 +64,7 @@ describe("finishFlow: terminal state-mirror update", () => {
     const written = writeTaskStateSpy.mock.calls[0]![2] as ReturnType<typeof makeState>
     expect(written.core.phase).toBe("shipped")
     expect(written.core.status).toBe("succeeded")
-    expect(written.core.currentAgentAction).toBeNull()
+    expect(written.core.currentExecutable).toBeNull()
   })
 
   it("flips to 'shipped'/'succeeded' on fix-applied as well", async () => {

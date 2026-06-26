@@ -35,12 +35,8 @@ on:
         description: "Initial chat message (optional)"
         type: string
         default: ""
-      agentResponsibility:
-        description: "AgentResponsibility action to run (default: run)"
-        type: string
-        default: ""
-      agentAction:
-        description: "Legacy alias for agentResponsibility action"
+      capability:
+        description: "Capability to run (default: run)"
         type: string
         default: ""
       model:
@@ -56,8 +52,8 @@ on:
   pull_request:
     types: [closed]
   schedule:
-    # Wakes every 30 minutes; kody fans out to whichever scheduled agentActions
-    # (agent-responsibility-scheduler, memorize, watch-stale-prs, …) match this tick.
+    # Wakes every 30 minutes; kody fans out to whichever scheduled capabilities
+    # match this tick.
     #
     # `memorize` writes to `.kody/vault/` and opens a daily PR. If your
     # `.gitignore` ignores `.kody/*`, add `!.kody/vault/` and `!.kody/vault/**`

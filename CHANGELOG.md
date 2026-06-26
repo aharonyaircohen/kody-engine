@@ -21,13 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.211] — restore fix-ci command
 
 ### Fixed
-- Restored the shipped `fix-ci` agentAction so `kody-engine fix-ci --pr <N>`
+- Restored the shipped `fix-ci` executable so `kody-engine fix-ci --pr <N>`
   and `@kody fix-ci` on PR comments resolve again.
 
 ## [0.4.210] — restore fix command
 
 ### Fixed
-- Restored the shipped `fix` agentAction so `kody-engine fix --pr <N>` and
+- Restored the shipped `fix` executable so `kody-engine fix --pr <N>` and
   `@kody fix` on PR comments resolve again.
 - **Hollow "success" detection via a backend health probe.** When the LiteLLM
   proxy crashes mid-request, the Claude Agent SDK can still emit a `success`
@@ -64,7 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `CONTRIBUTING.md` — contributor onboarding, invariants, and a "add an
-  agentAction" walkthrough.
+  executable" walkthrough.
 - `CHANGELOG.md` — this file.
 
 ## [0.4.110] — warm-pool runner
@@ -92,7 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.106] — subagent wiring
 
 ### Added
-- Subagent wiring across agentActions with delivery-ROI improvements.
+- Subagent wiring across executables with delivery-ROI improvements.
 
 ## [0.4.99] — task artifacts
 
@@ -102,7 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.96] — agent-ask
 
 ### Added
-- `agent-ask` ad-hoc agentAction.
+- `agent-ask` ad-hoc executable.
 
 ## [0.4.77] — bin rename
 
@@ -112,7 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.76] — chat catalog
 
 ### Added
-- Chat catalog of agentActions.
+- Chat catalog of executables.
 
 ## [0.4.75] — template pin
 
@@ -123,7 +123,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Typed outcome surfaces unrecognized `@kody` tokens back to the user instead of
-  silently routing to the default agentAction.
+  silently routing to the default executable.
 
 ### Fixed
 - Verify reruns on flake to catch non-deterministic test failures.
