@@ -103,7 +103,7 @@ describe("kody-store capabilityKind profiles", () => {
           action,
           agentResponsibility: action,
           agentAction: action,
-          source: "company-store-agentAction",
+          source: "company-store",
         }),
       )
     }

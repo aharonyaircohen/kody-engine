@@ -103,8 +103,8 @@ export interface RunJobBase {
  * Execute a Job by lowering it onto the existing executor.
  *
  * Mapping:
- *   - agentResponsibility/action resolves first             (the public work unit / "why")
- *   - profile = job.agentAction ?? agentResponsibility.agentAction (the implementation / "how")
+ *   - agentResponsibility/action resolves first             (the public capability contract)
+ *   - profile = job.agentAction ?? agentResponsibility.agentAction (the implementation)
  *   - cliArgs = job.cliArgs                   (target already bound by the minter)
  *   - agentResponsibility/agentAction → preloadedData          (seeded so the executor can
  *                                              expose the job references to
@@ -243,7 +243,7 @@ export function mintInstantJob(dispatch: DispatchResult, opts?: { why?: string; 
 export interface ScheduledJobInput {
   /** Public action for this scheduled agentResponsibility, when distinct from the slug. */
   action?: string
-  /** The agentResponsibility slug (its "why" lives in `.kody/agent-responsibilities/<slug>/agent-responsibility.md`). */
+  /** The agentResponsibility slug (its capability contract body lives in `.kody/agent-responsibilities/<slug>/agent-responsibility.md`). */
   agentResponsibility: string
   /** The agentAction that ticks it (agent-responsibility-tick / agent-responsibility-tick-scripted, or a folder-agentResponsibility slug). */
   agentAction: string

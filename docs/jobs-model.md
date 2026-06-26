@@ -17,19 +17,23 @@ Retries stay under the same job instead of becoming new work.
 
 | Concept | Answers | What it is |
 |---|---|---|
-| **intent** | for | company-level purpose; what the company is optimizing toward, used to choose and prioritize goals and agentLoops |
+| **intent** | why | company-level reason, priority, posture, scope, and success signals |
+| **goal** | what | durable outcome + manager loop; stores destination evidence, route, facts, blockers, and progress |
+| **agentLoop** | when | stateful heartbeat wrapper; stores schedule/cursor and wakes another target such as a goal or capability |
 | **agent** | who | reusable executor identity (`.kody/agents/<slug>.md`, usually from project or company store) |
-| **agentResponsibility** | why | reusable responsibility/capability contract - `profile.json` metadata plus the prose body of `.kody/agent-responsibilities/<slug>/agent-responsibility.md` |
-| **agentAction** | how | reusable unit of work (`run`, `fix`, a agentResponsibility's `profile.json`, …) |
+| **capability** | how | reusable ability the agency can use; currently stored as an agentResponsibility contract plus an agentAction implementation |
 | **issue** | what | a GitHub **issue or PR** — the work-item a task is about |
 | **task** | task state | one issue/PR, its required jobs, outputs, and rolled-up state |
 | **job** | required work | one planned unit of work on the task; points to exactly one agentAction |
 | **run** | attempt | one execution attempt for a job; retries create more runs |
-| **goal** | what | outcome + manager loop; managed goals store destination evidence, attached agentResponsibilities, route, facts, blockers |
-| **agentLoop** | when | stateful heartbeat wrapper; stores schedule/cursor and wakes another target such as a goal |
+| **agentResponsibility** | storage | current storage name for a capability contract: public action, kind, agent, cadence, safety, inputs, outputs, and implementation link |
+| **agentAction** | storage | current storage name for a capability implementation: prompt glue, scripts, skills, tools, and executor profile |
 
-Compact mapping: **intent = for**, **agent = who**, **agentResponsibility = why**,
-**agentAction = how**, **agentLoop = when**, **goal = what**.
+Compact mapping: **intent = why**, **goal = what**, **agentLoop = when**,
+**agent = who**, **capability = how**.
+
+Current storage mapping: **agentResponsibility = capability contract** and
+**agentAction = capability implementation**.
 
 The CTO `company-manager` loop reads intent and performs portfolio
 orchestration. It may create or adjust goals and agentLoops, but goal-manager
@@ -48,9 +52,9 @@ cursor/dedup state; it must not own goal progress or decide completion.
 Canonical creation docs:
 
 - [Goals](goals.md)
-- [AgentResponsibilities](agentResponsibilities.md)
-- [Agent](agent.md)
-- [AgentActions](agentActions.md)
+- [AgentResponsibilities](agent-responsibilities.md)
+- [Agent](agents.md)
+- [AgentActions](agent-actions.md)
 
 ## Trigger vs engine (two vocabularies)
 
@@ -70,10 +74,11 @@ four nouns plus its target and args. In task state, the durable job is stored in
 `TaskState.jobs`; its runs are stored on `TaskJob.agentRuns`.
 
 - **who** — `agent` (an agent slug; instant jobs default to `kody`)
-- **why** — `agentResponsibility` (a reusable intent slug) **or** `why` (the operator's inline
-  free-text request)
+- **why** — `why` (the operator's inline free-text request, intent, or goal context)
 - **when** — `schedule` (a scheduled job's cadence; absent for instant)
-- **how** — `agentAction` (the profile to run; 0–1)
+- **how** — a capability implementation, stored as `agentAction` (the profile to run; 0–1)
+- **capability contract** — optional `agentResponsibility`, the storage record that minted or
+  authorized the job
 - plus `target` (issue/PR number), `cliArgs`, and `flavor` (`instant` | `scheduled`).
 
 `runJob(job, base)` lowers a job onto the generic executor. It seeds a stable
@@ -91,8 +96,9 @@ persist the run without the executor knowing task-state details.
   **fenced, untrusted** "operator request" block in the system prompt, so the
   comment's wording shapes any agentAction's run — no per-prompt token needed.
   Structured comments (`resolve --prefer ours`) leave no free text → no `why`.
-- **why (agentResponsibility) →** the agentResponsibility's prose body is the intent; the scheduled tick path
-  surfaces it via the `{{jobIntent}}` prompt token.
+- **capability contract (agentResponsibility) →** the agentResponsibility's prose body is the
+  capability purpose and output contract; the scheduled tick path surfaces it via
+  the compatibility `{{jobIntent}}` prompt token.
 - **when →** recorded on the task job and its run attempt so a scheduled job's
   cadence is visible in the task state.
 - **how →** `runJob` dispatches exactly that one agentAction.
@@ -113,7 +119,7 @@ PR/run URLs) is the task's summary state.
 
 A task can explicitly carry a small hidden plan that says "run these
 agentActions as slices of this one task." The UI does not need to expose the word
-**job**: a dashboard can present this as a agentResponsibility with multiple executors, then
+**job**: a dashboard can present this as a capability with multiple implementations, then
 write the task data onto the issue:
 
 ```md
@@ -138,8 +144,8 @@ can declare the agentAction list directly:
 }
 ```
 
-The matching `agent-responsibility.md` body explains why the agentResponsibility exists and what outcome it
-should maintain.
+The matching `agent-responsibility.md` body explains what capability exists and
+what output or evidence it should return.
 
 When that agentResponsibility is due, `agent-responsibility-scheduler` creates one GitHub issue with the hidden
 task data above, records the issue number in the agentResponsibility state, and runs
@@ -174,14 +180,14 @@ moving to later pending jobs, so failed work is not skipped.
 ## The goal = outcome + manager loop
 
 A goal is durable **what**. It names a destination and owns the manager loop that
-moves toward that destination. It is above agentResponsibilities in meaning: agentResponsibilities are
-responsibilities the goal may use, not the goal itself.
+moves toward that destination. It is above capabilities in meaning: capabilities
+are reusable abilities the goal may use, not the goal itself.
 
 The new company goal model is the **managed goal** contract stored in
 `<statePath>/goals/instances/<id>/state.json` in `stateRepo`. The contract is:
 
 - `destination` — outcome text plus ordered evidence names that define done.
-- `agentResponsibilities` — agentResponsibilities this goal is allowed to use.
+- `agentResponsibilities` — capability contracts this goal is allowed to use.
 - `route` — one step per evidence item; each step names stage, agentResponsibility, optional
   agentAction, and optional args.
 - `facts` — observed evidence and values reported by agentResponsibilities.
@@ -208,9 +214,11 @@ All structural items are implemented:
 2. ✅ **Run** — one execution attempt. `runJob` seeds stable `jobKey` plus
    per-run `jobId`; `saveTaskState` appends the attempt under the task job and
    to `history`.
-3. ✅ **AgentResponsibility = pure why** — the agentResponsibility's prose body is the intent; the job carries
-   when/who/how, sourced from the agentResponsibility folder's `profile.json` at mint time.
-   `agent-responsibility.md` stays prose-only; metadata belongs in `profile.json`.
+3. ✅ **Capability contract storage** — the agentResponsibility's prose body is
+   the capability purpose and output contract; the job carries why/when/who/how,
+   sourced from the operator request, goal/intent context, and the
+   agentResponsibility folder's `profile.json` at mint time. `agent-responsibility.md`
+   stays prose-only; metadata belongs in `profile.json`.
 4. ✅ **`@kody` mints an instant job** — the comment/manual route mints via
    `mintInstantJob` and runs through `runJob`. Agent (`kody`) and inline `why`
    are both consumed.
