@@ -3,18 +3,18 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import { loadProfile } from "../../src/profile.js"
-import { listAgentResponsibilityActions, resolveAgentAction } from "../../src/registry.js"
+import { listCapabilityActions, resolveExecutable } from "../../src/registry.js"
 
 const STORE_ROOT = process.env.KODY_STORE_PATH ?? path.resolve(process.cwd(), "..", "kody-store")
-const STORE_DUTIES_ROOT = path.join(STORE_ROOT, ".kody", "agent-responsibilities")
-const STORE_EXECUTABLES_ROOT = path.join(STORE_ROOT, ".kody", "agent-actions")
+const STORE_DUTIES_ROOT = path.join(STORE_ROOT, ".kody", "capabilities")
+const STORE_EXECUTABLES_ROOT = path.join(STORE_ROOT, ".kody", "executables")
 const CAPABILITY_KINDS = new Set(["observe", "act", "verify"])
-const CHAT_AGENT_RESPONSIBILITY_ALIASES = new Set(["kody-analyzer", "kody-mem", "kody-operator", "kody-vibe"])
-const MIGRATED_EXECUTABLE_ACTIONS = ["classify", "qa-engineer", "spec", "agent-ask"]
+const CHAT_CAPABILITY_ALIASES = new Set(["kody-analyzer", "kody-mem", "kody-operator", "kody-vibe"])
+const MIGRATED_FULL_CAPABILITY_ACTIONS = ["classify", "qa-engineer", "spec", "agent-ask"]
 const INTERNAL_EXECUTABLE_ONLY_PROFILES = [
-  "agent-responsibility-scheduler",
-  "agent-responsibility-tick",
-  "agent-responsibility-tick-scripted",
+  "capability-scheduler",
+  "capability-tick",
+  "capability-tick-scripted",
   "goal-manager",
   "goal-scheduler",
   "release",
@@ -41,7 +41,7 @@ afterEach(() => {
 })
 
 describe("kody-store capabilityKind profiles", () => {
-  it("keeps every remaining store agentResponsibility profile typed", () => {
+  it("keeps every remaining store capability profile typed", () => {
     if (!fs.existsSync(STORE_DUTIES_ROOT)) return
 
     const missingOrInvalid: string[] = []
@@ -57,20 +57,21 @@ describe("kody-store capabilityKind profiles", () => {
     expect(missingOrInvalid).toEqual([])
   })
 
-  it("keeps direct store agentAction actions typed and loadable", () => {
-    if (!fs.existsSync(STORE_EXECUTABLES_ROOT)) return
+  it("keeps full store capability action profiles typed and loadable", () => {
+    if (!fs.existsSync(STORE_DUTIES_ROOT)) return
 
     const invalid: string[] = []
     const actionSlugs: string[] = []
 
-    for (const slug of fs.readdirSync(STORE_EXECUTABLES_ROOT).sort()) {
-      const profilePath = path.join(STORE_EXECUTABLES_ROOT, slug, "profile.json")
+    for (const slug of fs.readdirSync(STORE_DUTIES_ROOT).sort()) {
+      const profilePath = path.join(STORE_DUTIES_ROOT, slug, "profile.json")
       if (!fs.existsSync(profilePath)) continue
       const raw = JSON.parse(fs.readFileSync(profilePath, "utf8")) as {
         action?: unknown
         capabilityKind?: unknown
+        role?: unknown
       }
-      if (typeof raw.action !== "string" || !raw.action.trim()) continue
+      if (typeof raw.action !== "string" || !raw.action.trim() || typeof raw.role !== "string") continue
 
       actionSlugs.push(slug)
       if (typeof raw.capabilityKind !== "string" || !CAPABILITY_KINDS.has(raw.capabilityKind)) {
@@ -86,85 +87,75 @@ describe("kody-store capabilityKind profiles", () => {
     }
 
     expect(invalid).toEqual([])
-    expect(actionSlugs).toEqual(expect.arrayContaining(MIGRATED_EXECUTABLE_ACTIONS))
+    expect(actionSlugs).toEqual(expect.arrayContaining(MIGRATED_FULL_CAPABILITY_ACTIONS))
   })
 
-  it("resolves migrated store direct agentAction actions", () => {
+  it("resolves migrated store direct executable actions", () => {
     if (!fs.existsSync(STORE_ROOT)) return
 
     process.env.KODY_COMPANY_STORE = STORE_ROOT
     process.env.KODY_COMPANY_STORE_REF = "stable"
     resetCompanyStoreCacheForTests()
 
-    const actions = listAgentResponsibilityActions()
-    for (const action of MIGRATED_EXECUTABLE_ACTIONS) {
+    const actions = listCapabilityActions()
+    for (const action of MIGRATED_FULL_CAPABILITY_ACTIONS) {
       expect(actions).toContainEqual(
         expect.objectContaining({
           action,
-          agentResponsibility: action,
-          agentAction: action,
+          capability: action,
+          executable: action,
           source: "company-store",
         }),
       )
     }
   })
 
-  it("keeps internal store agentAction helpers out of public agentResponsibility actions", () => {
+  it("keeps internal store executable helpers out of public capability actions", () => {
     if (!fs.existsSync(STORE_ROOT)) return
     process.env.KODY_COMPANY_STORE = STORE_ROOT
     process.env.KODY_COMPANY_STORE_REF = "stable"
     resetCompanyStoreCacheForTests()
 
-    const actionNames = listAgentResponsibilityActions().map((action) => action.action)
-    for (const agentAction of INTERNAL_EXECUTABLE_ONLY_PROFILES) {
-      expect(resolveAgentAction(agentAction)).toBeTruthy()
-      expect(actionNames).not.toContain(agentAction)
+    const actionNames = listCapabilityActions().map((action) => action.action)
+    for (const executable of INTERNAL_EXECUTABLE_ONLY_PROFILES) {
+      expect(resolveExecutable(executable)).toBeTruthy()
+      expect(actionNames).not.toContain(executable)
     }
   })
 
-  it("does not route explicit store actions through generic agentResponsibility tick wrappers", () => {
+  it("does not route explicit store actions through generic capability tick wrappers", () => {
     if (!fs.existsSync(STORE_ROOT)) return
 
     process.env.KODY_COMPANY_STORE = STORE_ROOT
     process.env.KODY_COMPANY_STORE_REF = "stable"
     resetCompanyStoreCacheForTests()
 
-    const genericWrappers = listAgentResponsibilityActions()
+    const genericWrappers = listCapabilityActions()
       .filter((action) => action.source === "company-store")
       .filter(
         (action) =>
-          action.agentAction === "agent-responsibility-tick" ||
-          action.agentAction === "agent-responsibility-tick-scripted",
+          action.executable === "capability-tick" ||
+          action.executable === "capability-tick-scripted",
       )
       .map((action) => action.action)
 
     expect(genericWrappers).toEqual([])
   })
 
-  it("names the remaining non-engine chat agentResponsibility aliases explicitly", () => {
+  it("routes chat capability aliases through the kody-chat executable", () => {
     if (!fs.existsSync(STORE_DUTIES_ROOT)) return
 
     process.env.KODY_COMPANY_STORE = STORE_ROOT
     process.env.KODY_COMPANY_STORE_REF = "stable"
     resetCompanyStoreCacheForTests()
 
-    const nonEngineAliases: string[] = []
-    for (const slug of fs.readdirSync(STORE_DUTIES_ROOT).sort()) {
-      const profilePath = path.join(STORE_DUTIES_ROOT, slug, "profile.json")
-      if (!fs.existsSync(profilePath)) continue
-      const raw = JSON.parse(fs.readFileSync(profilePath, "utf8")) as { action?: unknown; agentAction?: unknown }
-      if (typeof raw.action !== "string" || typeof raw.agentAction !== "string") continue
+    const actions = listCapabilityActions()
+    const aliasRoutes = actions
+      .filter((action) => CHAT_CAPABILITY_ALIASES.has(action.action))
+      .map((action) => [action.action, action.executable])
+      .sort(([a], [b]) => a.localeCompare(b))
 
-      const executablePath = resolveAgentAction(raw.agentAction)
-      if (!executablePath) continue
-
-      try {
-        loadProfile(executablePath)
-      } catch {
-        nonEngineAliases.push(slug)
-      }
-    }
-
-    expect(nonEngineAliases).toEqual([...CHAT_AGENT_RESPONSIBILITY_ALIASES].sort())
+    expect(aliasRoutes).toEqual([...CHAT_CAPABILITY_ALIASES].sort().map((alias) => [alias, "kody-chat"]))
+    expect(resolveExecutable("kody-chat")).toBeTruthy()
   })
 })

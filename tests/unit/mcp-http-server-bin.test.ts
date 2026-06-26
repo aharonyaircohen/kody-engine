@@ -92,7 +92,7 @@ describe("bin/mcp-http-server: env validation", () => {
     expect(opts.apiKey).toBe("secret-key")
   })
 
-  it("registers all 4 expected MCP routes (single-tool routes vs. agentResponsibility palette)", async () => {
+  it("registers all 4 expected MCP routes (single-tool routes vs. capability palette)", async () => {
     process.env.GITHUB_TOKEN = "gh-test"
     await Promise.race([mcpHttpServer(), new Promise((resolve) => setTimeout(resolve, 50))])
     const opts = buildMcpHttpServer.mock.calls[0]?.[0] as {
@@ -102,19 +102,19 @@ describe("bin/mcp-http-server: env validation", () => {
     expect(paths).toContain("/mcp/fetch-repo")
     expect(paths).toContain("/mcp/verify")
     expect(paths).toContain("/mcp/submit-state")
-    expect(paths).toContain("/mcp/agentResponsibility")
+    expect(paths).toContain("/mcp/capability")
     // The fetch-repo / verify / submit-state routes each carry exactly
-    // one tool. The agentResponsibility route is a palette (11 tools) — it would be
+    // one tool. The capability route is a palette (11 tools) — it would be
     // a bug to flatten it into separate routes since each tool calls
-    // into the same locked-agentResponsibility trust gate (see agentResponsibilityMcp.ts).
-    const singleToolRoutes = opts.routes.filter((r) => r.path !== "/mcp/agentResponsibility")
+    // into the same locked-capability trust gate (see capabilityMcp.ts).
+    const singleToolRoutes = opts.routes.filter((r) => r.path !== "/mcp/capability")
     for (const r of singleToolRoutes) {
       expect(r.tools).toHaveLength(1)
     }
-    expect(opts.routes.find((r) => r.path === "/mcp/agentResponsibility")?.tools.length).toBeGreaterThan(1)
+    expect(opts.routes.find((r) => r.path === "/mcp/capability")?.tools.length).toBeGreaterThan(1)
   })
 
-  it("forwards GITHUB_REPOSITORY + OPERATOR_MENTION env to the agentResponsibility route", async () => {
+  it("forwards GITHUB_REPOSITORY + OPERATOR_MENTION env to the capability route", async () => {
     process.env.GITHUB_TOKEN = "gh-test"
     process.env.GITHUB_REPOSITORY = "owner/repo"
     process.env.OPERATOR_MENTION = "@alice"
@@ -122,12 +122,12 @@ describe("bin/mcp-http-server: env validation", () => {
     const opts = buildMcpHttpServer.mock.calls[0]?.[0] as {
       routes: Array<{ path: string; tools: Array<{ name: string }> }>
     }
-    // The agentResponsibility tool's handler was constructed with the env-derived
+    // The capability tool's handler was constructed with the env-derived
     // repoSlug. We can't read the closure from here, but we can assert
     // the route + tool were registered with the expected identity so a
-    // future maintainer reading this test sees what env feeds the agentResponsibility
-    // route's agentResponsibilityOperatorMention / dutyRepoSlug fields.
-    const dutyRoute = opts.routes.find((r) => r.path === "/mcp/agentResponsibility")
+    // future maintainer reading this test sees what env feeds the capability
+    // route's capabilityOperatorMention / dutyRepoSlug fields.
+    const dutyRoute = opts.routes.find((r) => r.path === "/mcp/capability")
     expect(dutyRoute).toBeDefined()
     expect(dutyRoute?.tools[0]?.name).toBeTruthy()
   })

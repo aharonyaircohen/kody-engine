@@ -12,7 +12,7 @@
  *   issueArg  optional — name of the CLI input holding the issue number (default "issue")
  */
 
-import type { PostflightScript } from "../agent-actions/types.js"
+import type { PostflightScript } from "../executables/types.js"
 import {
   createStateComment,
   type LoadedStateComment,

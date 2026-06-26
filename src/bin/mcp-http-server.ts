@@ -15,14 +15,14 @@
  * Routes exposed:
  *   POST /mcp/fetch-repo       — clone a repo into KODY_MCP_REPOS_ROOT
  *   POST /mcp/verify           — run the project's quality gates
- *   POST /mcp/submit-state     — capture a agentResponsibility's next state
- *   POST /mcp/agentResponsibility             — agentResponsibility primitives (list_prs_to_repair, sync_pr, …)
+ *   POST /mcp/submit-state     — capture a capability's next state
+ *   POST /mcp/capability             — capability primitives (list_prs_to_repair, sync_pr, …)
  *   GET  /healthz              — liveness check
  *
  * When invoked, this is what Hermes connects to as an MCP client.
  */
 
-import { agentResponsibilityToolDefinitions } from "../agent-responsibilityMcp.js"
+import { capabilityToolDefinitions } from "../capabilityMcp.js"
 import { type KodyConfig, loadConfig } from "../config.js"
 import { fetchRepoToolDefinition } from "../fetchRepoMcp.js"
 import { buildMcpHttpServer, listenMcpHttpServer, type McpRouteConfig } from "../servers/mcpHttpServer.js"
@@ -59,7 +59,7 @@ export async function mcpHttpServer(): Promise<number> {
         verifyToolDefinition({
           config,
           cwd: process.cwd(),
-          agentAction: "mcp-http",
+          executable: "mcp-http",
         }),
       ],
     },
@@ -70,10 +70,10 @@ export async function mcpHttpServer(): Promise<number> {
       tools: [submitStateToolDefinition({ setSubmitted: () => {} })],
     },
     {
-      path: "/mcp/agentResponsibility",
-      name: "kody-agentResponsibility",
+      path: "/mcp/capability",
+      name: "kody-capability",
       version: "0.1.0",
-      tools: agentResponsibilityToolDefinitions({
+      tools: capabilityToolDefinitions({
         repoSlug: process.env.GITHUB_REPOSITORY ?? "owner/repo",
         state: config.state,
         operatorMention: process.env.OPERATOR_MENTION ?? "",

@@ -6,11 +6,11 @@
  *      install.installCommand is set, run that and re-check.
  *   2. Run `verify` (e.g. `gh auth status`). Failure aborts the run.
  *   3. If the tool is `install.required: false` and still missing after
- *      install, leave it absent (the agentAction tolerates its absence).
+ *      install, leave it absent (the executable tolerates its absence).
  */
 
 import { execFileSync } from "node:child_process"
-import type { CliToolSpec } from "./agent-actions/types.js"
+import type { CliToolSpec } from "./executables/types.js"
 
 export interface ToolCheckResult {
   name: string

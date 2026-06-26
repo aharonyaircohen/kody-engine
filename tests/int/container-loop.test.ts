@@ -2,7 +2,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import type { Context, Profile } from "../../src/agent-actions/types.js"
+import type { Context, Profile } from "../../src/executables/types.js"
 import { runContainerLoop } from "../../src/container.js"
 import type { ExecutorInput, ExecutorOutput } from "../../src/executor.js"
 import type { TaskState } from "../../src/state.js"
@@ -14,7 +14,7 @@ import type { TaskState } from "../../src/state.js"
  * seams — `__runChild` (stub the child invocation) and `__readTaskState`
  * (stub the state each child "wrote") — so routing, idempotency, failure
  * synthesis, and the abort guards are exercised without spawning real
- * agentActions or touching GitHub.
+ * executables or touching GitHub.
  */
 
 function state(opts: {
@@ -22,9 +22,9 @@ function state(opts: {
   lastAction?: { exec: string; type: string }
   prUrl?: string
 }): TaskState {
-  const agentActions: Record<string, unknown> = {}
+  const executables: Record<string, unknown> = {}
   if (opts.lastAction) {
-    agentActions[opts.lastAction.exec] = {
+    executables[opts.lastAction.exec] = {
       lastAction: { type: opts.lastAction.type, payload: {}, timestamp: "2026-01-01T00:00:00Z" },
     }
   }
@@ -33,12 +33,12 @@ function state(opts: {
     core: {
       phase: "idle",
       status: "pending",
-      currentAgentAction: null,
+      currentExecutable: null,
       lastOutcome: null,
       attempts: opts.attempts ?? {},
       ...(opts.prUrl ? { prUrl: opts.prUrl } : {}),
     },
-    agentActions,
+    executables,
     artifacts: {},
     history: [],
   } as unknown as TaskState

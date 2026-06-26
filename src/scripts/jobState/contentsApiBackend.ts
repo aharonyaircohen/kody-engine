@@ -1,7 +1,7 @@
 /**
  * Contents-API backend: durable job state in the configured Kody state repo.
  *
- * One file per agent responsibility at:
+ * One file per capability at:
  *
  *   <statePath>/<jobsDir without .kody>/<slug>/state.json
  *

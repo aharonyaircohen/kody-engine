@@ -1,122 +1,154 @@
 import { describe, expect, it } from "vitest"
-import { CapabilityResultError, parseCapabilityResult } from "../../src/capabilityResult.js"
+
+import {
+  parseCapabilityResult,
+  parseCapabilityResultsFromText,
+} from "../../src/capabilityResult.js"
+import { collectShellSideChannels } from "../../src/executor.js"
 
 describe("parseCapabilityResult", () => {
-  it("parses observe results with facts, alerts, and suggested actions", () => {
+  it("accepts the minimal valid capability result", () => {
     expect(
-      parseCapabilityResult(
-        {
-          kind: "observe",
-          facts: { ciState: "failed" },
-          alerts: [{ level: "warning", message: "CI failed." }],
-          suggestedActions: [{ action: "fix-ci", args: { pr: 123 }, reason: "Tests failed." }],
-        },
-        "observe",
-      ),
+      parseCapabilityResult({
+        version: 1,
+        status: "pass",
+        summary: "CI is green.",
+      }),
     ).toEqual({
-      kind: "observe",
-      facts: { ciState: "failed" },
-      alerts: [{ level: "warning", message: "CI failed." }],
-      suggestedActions: [{ action: "fix-ci", args: { pr: 123 }, reason: "Tests failed." }],
+      version: 1,
+      status: "pass",
+      summary: "CI is green.",
+      facts: {},
+      artifacts: [],
+      missingEvidence: [],
+      blockers: [],
     })
   })
 
-  it("rejects empty observe results", () => {
-    expect(() => parseCapabilityResult({ kind: "observe" })).toThrow(CapabilityResultError)
-  })
-
-  it("parses act results with changed and created resources", () => {
+  it("accepts facts, artifacts, missing evidence, and blockers", () => {
     expect(
-      parseCapabilityResult(
-        {
-          kind: "act",
-          status: "created",
-          createdResources: [{ type: "pr", number: 456, url: "https://github.com/a/b/pull/456" }],
-          evidence: { releasePrExists: true },
-        },
-        "act",
-      ),
-    ).toEqual({
-      kind: "act",
-      status: "created",
-      createdResources: [{ type: "pr", number: 456, url: "https://github.com/a/b/pull/456" }],
-      evidence: { releasePrExists: true },
-    })
-  })
-
-  it("rejects act results without a valid status", () => {
-    expect(() => parseCapabilityResult({ kind: "act", status: "done" })).toThrow(CapabilityResultError)
-  })
-
-  it("parses verify results with pass/fail evidence", () => {
-    expect(
-      parseCapabilityResult(
-        {
-          kind: "verify",
-          passed: false,
-          evidence: [{ source: "preview", message: "Button missing." }],
-          blockers: ["Preview does not satisfy acceptance check."],
-        },
-        "verify",
-      ),
-    ).toEqual({
-      kind: "verify",
-      passed: false,
-      evidence: [{ source: "preview", message: "Button missing." }],
-      blockers: ["Preview does not satisfy acceptance check."],
-    })
-  })
-
-  it("rejects verify results without a boolean verdict", () => {
-    expect(() => parseCapabilityResult({ kind: "verify", passed: "yes" })).toThrow(CapabilityResultError)
-  })
-
-  it("rejects kind mismatches against the declared capability kind", () => {
-    expect(() => parseCapabilityResult({ kind: "act", status: "changed" }, "observe")).toThrow(/expected observe/)
-  })
-
-  it("accepts realistic observe output for release state discovery", () => {
-    const result = parseCapabilityResult(
-      {
-        kind: "observe",
-        facts: {
-          currentVersion: "1.2.3",
-          releasePr: null,
-          ciState: "green",
-        },
-        suggestedActions: [{ action: "release-prepare", args: { issue: 123 } }],
-      },
-      "observe",
-    )
-
-    expect(result.kind).toBe("observe")
-  })
-
-  it("accepts realistic act output for release preparation", () => {
-    const result = parseCapabilityResult(
-      {
-        kind: "act",
-        status: "created",
-        createdResources: [{ type: "pr", number: 456, url: "https://github.com/a/b/pull/456" }],
+      parseCapabilityResult({
+        version: 1,
+        target: { type: "goal", id: "release-aguy" },
+        status: "changed",
+        summary: "Release PR created.",
         evidence: { releasePrExists: true },
-      },
-      "act",
-    )
-
-    expect(result.kind).toBe("act")
+        facts: { pr: 123, headSha: "abc123" },
+        artifacts: [{ label: "Pull request", url: "https://github.com/example/repo/pull/123" }],
+        missingEvidence: ["productionDeployed"],
+        blockers: ["production deploy is waiting for CI"],
+      }),
+    ).toEqual({
+      version: 1,
+      target: { type: "goal", id: "release-aguy" },
+      status: "changed",
+      summary: "Release PR created.",
+      evidence: { releasePrExists: true },
+      facts: { pr: 123, headSha: "abc123" },
+      artifacts: [{ label: "Pull request", url: "https://github.com/example/repo/pull/123" }],
+      missingEvidence: ["productionDeployed"],
+      blockers: ["production deploy is waiting for CI"],
+    })
   })
 
-  it("accepts realistic verify output for release PR readiness", () => {
-    const result = parseCapabilityResult(
-      {
-        kind: "verify",
-        passed: true,
-        evidence: [{ source: "checks", message: "All required checks passed." }],
-        facts: { releasePrReady: true },
-      },
-      "verify",
+  it("rejects invalid statuses and empty summaries", () => {
+    expect(parseCapabilityResult({ version: 1, status: "ok", summary: "Done." })).toBeNull()
+    expect(parseCapabilityResult({ version: 1, status: "pass", summary: " " })).toBeNull()
+  })
+
+  it("rejects malformed facts and artifacts", () => {
+    expect(parseCapabilityResult({ version: 1, status: "pass", summary: "Done.", facts: [] })).toBeNull()
+    expect(
+      parseCapabilityResult({
+        version: 1,
+        status: "pass",
+        summary: "Done.",
+        artifacts: [{ label: "CI" }],
+      }),
+    ).toBeNull()
+    expect(
+      parseCapabilityResult({
+        version: 1,
+        status: "pass",
+        summary: "Done.",
+        target: { type: "unknown", id: "release-aguy" },
+      }),
+    ).toBeNull()
+    expect(
+      parseCapabilityResult({
+        version: 1,
+        status: "pass",
+        summary: "Done.",
+        evidence: { releasePrExists: "yes" },
+      }),
+    ).toBeNull()
+    expect(
+      parseCapabilityResult({
+        version: 1,
+        status: "pass",
+        summary: "Done.",
+        missingEvidence: "releasePrExists",
+      }),
+    ).toBeNull()
+    expect(
+      parseCapabilityResult({
+        version: 1,
+        status: "pass",
+        summary: "Done.",
+        blockers: [123],
+      }),
+    ).toBeNull()
+  })
+})
+
+describe("parseCapabilityResultsFromText", () => {
+  it("parses KODY_CAPABILITY_RESULT json markers", () => {
+    const results = parseCapabilityResultsFromText(
+      'before\nKODY_CAPABILITY_RESULT={"version":1,"status":"fail","summary":"CI failed.","facts":{"check":"test"}}\nafter\n',
     )
 
-    expect(result.kind).toBe("verify")
+    expect(results).toEqual([
+      {
+        version: 1,
+        status: "fail",
+        summary: "CI failed.",
+        facts: { check: "test" },
+        artifacts: [],
+        missingEvidence: [],
+        blockers: [],
+      },
+    ])
+  })
+
+  it("ignores malformed marker lines", () => {
+    expect(parseCapabilityResultsFromText("KODY_CAPABILITY_RESULT={not json}\n")).toEqual([])
+    expect(
+      parseCapabilityResultsFromText('KODY_CAPABILITY_RESULT={"version":1,"status":"pass"}\n'),
+    ).toEqual([])
+  })
+})
+
+describe("collectShellSideChannels", () => {
+  it("collects capability results from shell output", () => {
+    const ctx = { data: {}, output: { exitCode: 0 } }
+
+    collectShellSideChannels(
+      ctx,
+      'KODY_CAPABILITY_RESULT={"version":1,"status":"pass","summary":"CI is green.","facts":{"pr":123}}\n',
+    )
+
+    expect(ctx.data).toEqual({
+      dutyResults: [
+        {
+          version: 1,
+          status: "pass",
+          summary: "CI is green.",
+          facts: { pr: 123 },
+          artifacts: [],
+          missingEvidence: [],
+          blockers: [],
+        },
+      ],
+    })
   })
 })

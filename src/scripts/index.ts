@@ -4,13 +4,13 @@
  * here. Any profile referencing an unregistered script name fails at load.
  */
 
-import type { PostflightScript, PreflightScript } from "../agent-actions/types.js"
+import type { PostflightScript, PreflightScript } from "../executables/types.js"
 import { abortUnfinishedGitOps } from "./abortUnfinishedGitOps.js"
 import { advanceFlow } from "./advanceFlow.js"
 import { advanceManagedGoal } from "./advanceManagedGoal.js"
 import { appendCompanyActivity } from "./appendCompanyActivity.js"
 import { appendCompanyIntentDecision } from "./appendCompanyIntentDecision.js"
-import { applyAgentResponsibilityReports } from "./applyAgentResponsibilityReports.js"
+import { applyCapabilityReports } from "./applyCapabilityReports.js"
 import { applyCompanyManagerDecision } from "./applyCompanyManagerDecision.js"
 import { buildSyntheticPlugin } from "./buildSyntheticPlugin.js"
 import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
@@ -23,8 +23,8 @@ import { deriveQaScopeFromIssue } from "./deriveQaScopeFromIssue.js"
 import { diagMcp } from "./diagMcp.js"
 import { discoverQaContext } from "./discoverQaContext.js"
 import { dispatch } from "./dispatch.js"
-import { dispatchAgentResponsibilityFileTicks } from "./dispatchAgentResponsibilityFileTicks.js"
-import { dispatchAgentResponsibilityTicks } from "./dispatchAgentResponsibilityTicks.js"
+import { dispatchCapabilityFileTicks } from "./dispatchCapabilityFileTicks.js"
+import { dispatchCapabilityTicks } from "./dispatchCapabilityTicks.js"
 import { dispatchClassified } from "./dispatchClassified.js"
 import { dispatchNextTaskJob } from "./dispatchNextTaskJob.js"
 import { ensurePr } from "./ensurePr.js"
@@ -35,7 +35,7 @@ import { fixCiFlow } from "./fixCiFlow.js"
 import { fixFlow } from "./fixFlow.js"
 import { initFlow } from "./initFlow.js"
 import { loadAgentAdhoc } from "./loadAgentAdhoc.js"
-import { loadAgentResponsibilityState } from "./loadAgentResponsibilityState.js"
+import { loadCapabilityState } from "./loadCapabilityState.js"
 import { loadCompanyIntents } from "./loadCompanyIntents.js"
 import { loadCompanyPortfolio } from "./loadCompanyPortfolio.js"
 import { loadConventions } from "./loadConventions.js"
@@ -83,7 +83,7 @@ import { revertFlow } from "./revertFlow.js"
 import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
 import { runPreviewBuild } from "./runPreviewBuild.js"
-import { runScheduledAgentActionTick } from "./runScheduledAgentActionTick.js"
+import { runScheduledExecutableTick } from "./runScheduledExecutableTick.js"
 import { runTickScript } from "./runTickScript.js"
 import { saveManagedGoalState } from "./saveManagedGoalState.js"
 import { saveTaskState } from "./saveTaskState.js"
@@ -117,7 +117,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   loadIssueContext,
   loadIssueStateComment,
   loadJobFromFile,
-  loadAgentResponsibilityState,
+  loadCapabilityState,
   loadCompanyIntents,
   loadCompanyPortfolio,
   loadAgentAdhoc,
@@ -141,11 +141,11 @@ export const preflightScripts: Record<string, PreflightScript> = {
   classifyByLabel,
   diagMcp,
   warmupMcp,
-  dispatchAgentResponsibilityTicks,
-  dispatchAgentResponsibilityFileTicks,
+  dispatchCapabilityTicks,
+  dispatchCapabilityFileTicks,
   planTaskJobs,
   dispatchNextTaskJob,
-  runScheduledAgentActionTick,
+  runScheduledExecutableTick,
   runTickScript,
   runPreviewBuild,
   advanceManagedGoal,
@@ -189,7 +189,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   finalizeTerminal,
   advanceFlow,
   persistFlowState,
-  applyAgentResponsibilityReports,
+  applyCapabilityReports,
   recordClassification,
   dispatchClassified,
   notifyTerminal,

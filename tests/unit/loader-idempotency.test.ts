@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import type { Context, Profile } from "../../src/agent-actions/types.js"
+import type { Context, Profile } from "../../src/executables/types.js"
 
 // Mock the issue.ts gh fetch so loadIssueContext's slow path is observable.
 const getIssueSpy = vi.fn()

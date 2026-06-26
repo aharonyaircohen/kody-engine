@@ -17,19 +17,19 @@ function releaseGoal(overrides: Partial<ManagedGoal> = {}): ManagedGoal {
   return {
     type: "release",
     destination: { outcome: "publish and verify", evidence: ["releasePrExists", "qaPassed"] },
-    agentResponsibilities: ["release-prepare", "qa-goal"],
+    capabilities: ["release-prepare", "qa-goal"],
     route: [
       {
         evidence: "releasePrExists",
         stage: "prepare",
-        agentResponsibility: "release-prepare",
-        agentAction: "release-prepare",
+        capability: "release-prepare",
+        executable: "release-prepare",
       },
       {
         evidence: "qaPassed",
         stage: "qa",
-        agentResponsibility: "qa-goal",
-        agentAction: "qa-goal",
+        capability: "qa-goal",
+        executable: "qa-goal",
         args: { issue: 55 },
       },
     ],
@@ -79,14 +79,14 @@ describe("advanceManagedGoal", () => {
     ghMock.mockReset()
   })
 
-  it("sets an in-process agentResponsibility handoff for first missing evidence", async () => {
+  it("sets an in-process capability handoff for first missing evidence", async () => {
     const ctx = fakeCtx(state(goalExtra()))
 
     await advanceManagedGoal(ctx, fakeProfile())
 
     expect(ctx.output.nextDispatch).toEqual({
-      agentResponsibility: "release-prepare",
-      agentAction: "release-prepare",
+      capability: "release-prepare",
+      executable: "release-prepare",
       cliArgs: {},
     })
     const raw = ((ctx.data.goal as GoalCtx).raw as GoalState).extra
@@ -102,8 +102,8 @@ describe("advanceManagedGoal", () => {
             {
               evidence: "releasePrExists",
               stage: "prepare",
-              agentResponsibility: "release-prepare",
-              agentAction: "release-prepare",
+              capability: "release-prepare",
+              executable: "release-prepare",
               args: { goal: { fact: "goalId" } },
             },
           ],
@@ -114,8 +114,8 @@ describe("advanceManagedGoal", () => {
     await advanceManagedGoal(ctx, fakeProfile())
 
     expect(ctx.output.nextDispatch).toEqual({
-      agentResponsibility: "release-prepare",
-      agentAction: "release-prepare",
+      capability: "release-prepare",
+      executable: "release-prepare",
       cliArgs: { goal: "release-v1-2-3" },
     })
   })
@@ -133,8 +133,8 @@ describe("advanceManagedGoal", () => {
     await advanceManagedGoal(ctx, fakeProfile())
 
     expect(ctx.output.nextDispatch).toEqual({
-      agentResponsibility: "release",
-      agentAction: "release-prepare",
+      capability: "release",
+      executable: "release-prepare",
       cliArgs: { issue: 321, goal: "release-v1-2-3" },
     })
     expect(((ctx.data.goal as GoalCtx).raw as GoalState).extra.facts).toMatchObject({
@@ -176,8 +176,8 @@ describe("advanceManagedGoal", () => {
     await advanceManagedGoal(ctx, fakeProfile())
 
     expect(ctx.output.nextDispatch).toEqual({
-      agentResponsibility: "release",
-      agentAction: "release-prepare",
+      capability: "release",
+      executable: "release-prepare",
       cliArgs: { issue: 654, goal: "release-v1-2-3" },
     })
     expect(ghMock).toHaveBeenCalledTimes(1)

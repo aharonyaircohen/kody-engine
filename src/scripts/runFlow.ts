@@ -1,10 +1,10 @@
 /**
- * Flow script for the `run` agentAction.
+ * Flow script for the `run` executable.
  * Loads the issue, creates/checks out a feature branch, posts the "started"
  * comment. Issue number lives in `ctx.args.issue`.
  */
 
-import type { PreflightScript } from "../agent-actions/types.js"
+import type { PreflightScript } from "../executables/types.js"
 import { ensureFeatureBranch } from "../branch.js"
 import { getRunUrl } from "../gha.js"
 import {

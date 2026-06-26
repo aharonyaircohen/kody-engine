@@ -12,7 +12,7 @@ import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import type { PreflightScript } from "../agent-actions/types.js"
+import type { PreflightScript } from "../executables/types.js"
 
 export const diagMcp: PreflightScript = async (_ctx) => {
   const home = os.homedir()

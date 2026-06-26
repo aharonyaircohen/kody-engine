@@ -1,6 +1,6 @@
 import * as childProcess from "node:child_process"
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest"
-import type { Context, Profile } from "../../src/agent-actions/types.js"
+import type { Context, Profile } from "../../src/executables/types.js"
 import { setKodyLabel } from "../../src/lifecycleLabels.js"
 import { advanceFlow } from "../../src/scripts/advanceFlow.js"
 import { dispatch } from "../../src/scripts/dispatch.js"
@@ -368,7 +368,7 @@ describe("finalizeTerminal", () => {
     const putState = JSON.parse(putStateJson) as TaskState
     expect(putState.core.phase).toBe("shipped")
     expect(putState.core.status).toBe("succeeded")
-    expect(putState.core.currentAgentAction).toBeNull()
+    expect(putState.core.currentExecutable).toBeNull()
   })
 
   it("does not mirror when target=issue (the existing write already targets the issue)", async () => {

@@ -1,7 +1,7 @@
 /**
  * `kody stats` — rollup of structured run events for measuring stability
  * and velocity. Reads runtime event files written by
- * the executor (see src/events.ts) and prints per-agentAction success
+ * the executor (see src/events.ts) and prints per-executable success
  * rate, latency distribution, and token usage.
  *
  * Usage:
@@ -20,8 +20,8 @@ interface StatsOptions {
   runId?: string
 }
 
-interface AgentActionRollup {
-  agentAction: string
+interface ExecutableRollup {
+  executable: string
   agentRuns: number
   ok: number
   failed: number
@@ -39,7 +39,7 @@ interface RunSummary {
   startedAt: string
   endedAt: string
   durationMs: number
-  agentActions: string[]
+  executables: string[]
   exitCode: number | null
   ok: boolean
   totalInputTokens: number
@@ -94,7 +94,7 @@ export function summarizeRun(events: RunEvent[]): RunSummary | null {
   const durationMs = new Date(endedAt).getTime() - new Date(startedAt).getTime()
   const exitCodeRaw = lastEnd?.meta?.exitCode
   const exitCode = typeof exitCodeRaw === "number" ? exitCodeRaw : null
-  const agentActions = Array.from(new Set(sorted.map((e) => e.agentAction)))
+  const executables = Array.from(new Set(sorted.map((e) => e.executable)))
   let tIn = 0
   let tOut = 0
   let tCacheR = 0
@@ -112,7 +112,7 @@ export function summarizeRun(events: RunEvent[]): RunSummary | null {
     startedAt,
     endedAt,
     durationMs,
-    agentActions,
+    executables,
     exitCode,
     ok: exitCode === 0,
     totalInputTokens: tIn,
@@ -121,15 +121,15 @@ export function summarizeRun(events: RunEvent[]): RunSummary | null {
   }
 }
 
-export function rollupByAgentAction(events: RunEvent[]): AgentActionRollup[] {
+export function rollupByExecutable(events: RunEvent[]): ExecutableRollup[] {
   const byExec = new Map<string, RunEvent[]>()
   for (const ev of events) {
     if (ev.kind !== "stage_end") continue
-    if (!byExec.has(ev.agentAction)) byExec.set(ev.agentAction, [])
-    byExec.get(ev.agentAction)!.push(ev)
+    if (!byExec.has(ev.executable)) byExec.set(ev.executable, [])
+    byExec.get(ev.executable)!.push(ev)
   }
-  const rollups: AgentActionRollup[] = []
-  for (const [agentAction, stageEnds] of byExec) {
+  const rollups: ExecutableRollup[] = []
+  for (const [executable, stageEnds] of byExec) {
     const durations = stageEnds
       .map((e) => e.durationMs ?? 0)
       .filter((d) => d > 0)
@@ -142,7 +142,7 @@ export function rollupByAgentAction(events: RunEvent[]): AgentActionRollup[] {
     let tCacheC = 0
     for (const ev of events) {
       if (ev.kind !== "agent_end") continue
-      if (ev.agentAction !== agentAction) continue
+      if (ev.executable !== executable) continue
       const tokens = ev.meta?.tokens as
         | { input?: number; output?: number; cacheRead?: number; cacheCreate?: number }
         | undefined
@@ -155,7 +155,7 @@ export function rollupByAgentAction(events: RunEvent[]): AgentActionRollup[] {
     }
     const mean = durations.length > 0 ? durations.reduce((s, n) => s + n, 0) / durations.length : 0
     rollups.push({
-      agentAction,
+      executable,
       agentRuns: stageEnds.length,
       ok,
       failed,
@@ -195,16 +195,16 @@ export async function runStats(argv: string[]): Promise<number> {
     process.stdout.write("no runs in the requested window\n")
     return 0
   }
-  const byExec = rollupByAgentAction(allEvents)
+  const byExec = rollupByExecutable(allEvents)
   if (opts.asJson) {
-    process.stdout.write(`${JSON.stringify({ agentRuns: runSummaries, byAgentAction: byExec }, null, 2)}\n`)
+    process.stdout.write(`${JSON.stringify({ agentRuns: runSummaries, byExecutable: byExec }, null, 2)}\n`)
     return 0
   }
   printReport(runSummaries, byExec)
   return 0
 }
 
-function printReport(agentRuns: RunSummary[], rollups: AgentActionRollup[]): void {
+function printReport(agentRuns: RunSummary[], rollups: ExecutableRollup[]): void {
   const totalRuns = agentRuns.length
   const okRuns = agentRuns.filter((r) => r.ok).length
   const okPct = totalRuns > 0 ? ((okRuns / totalRuns) * 100).toFixed(1) : "—"
@@ -222,14 +222,14 @@ function printReport(agentRuns: RunSummary[], rollups: AgentActionRollup[]): voi
     `  total tokens     : ${totalIn.toLocaleString()} in / ${totalOut.toLocaleString()} out / ${totalCacheR.toLocaleString()} cache-read\n`,
   )
 
-  process.stdout.write(`\nPer-agentAction (stage_end events)\n`)
-  const headers = ["agentAction", "runs", "ok", "failed", "p50", "p95", "mean", "tok-in", "tok-out", "cache-r"]
+  process.stdout.write(`\nPer-executable (stage_end events)\n`)
+  const headers = ["executable", "runs", "ok", "failed", "p50", "p95", "mean", "tok-in", "tok-out", "cache-r"]
   const widths = [22, 6, 6, 7, 9, 9, 9, 10, 10, 10]
   process.stdout.write(`${headers.map((h, i) => h.padEnd(widths[i]!)).join("")}\n`)
   process.stdout.write(`${widths.map((w) => `${"-".repeat(w - 1)} `).join("")}\n`)
   for (const r of rollups) {
     const row = [
-      r.agentAction,
+      r.executable,
       String(r.agentRuns),
       String(r.ok),
       String(r.failed),

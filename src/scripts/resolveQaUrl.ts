@@ -20,7 +20,7 @@
  *   ctx.data.previewUrlSource — string, where it came from (for the prompt)
  */
 import { execFileSync } from "node:child_process"
-import type { PreflightScript } from "../agent-actions/types.js"
+import type { PreflightScript } from "../executables/types.js"
 import { readKodyVariables } from "./kodyVariables.js"
 
 interface DeploymentRow {
