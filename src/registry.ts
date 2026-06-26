@@ -76,7 +76,15 @@ export function getProjectAgentActionsRoot(): string {
 }
 
 /**
-* Resolve the hydrated local agentResponsibilities root (`.kody/agent-responsibilities/`). A agentResponsibility is a public
+ * Resolve the canonical hydrated capabilities root. Capabilities are the new
+ * public model and may also carry implementation profile data during migration.
+ */
+export function getProjectCapabilitiesRoot(): string {
+  return path.join(process.cwd(), ".kody", "capabilities")
+}
+
+/**
+ * Resolve the hydrated local agentResponsibilities root (`.kody/agent-responsibilities/`). A agentResponsibility is a public
  * work unit: it owns action/purpose and selects an implementation agentAction.
  * Returns the path even if it doesn't exist; callers must check.
  */
@@ -86,6 +94,10 @@ export function getProjectAgentResponsibilitiesRoot(): string {
 
 export function getCompanyStoreAgentActionsRoot(): string | null {
   return getCompanyStoreAssetRoot("agentActions")
+}
+
+export function getCompanyStoreCapabilitiesRoot(): string | null {
+  return getCompanyStoreAssetRoot("capabilities")
 }
 
 export function getCompanyStoreAgentResponsibilitiesRoot(): string | null {
@@ -112,15 +124,31 @@ export function getBuiltinAgentResponsibilitiesRoot(): string {
  * implementation units under state-repo `agent-actions/<name>/`.
  */
 export function getAgentActionRoots(): string[] {
+  const projectCapabilitiesRoot = getProjectCapabilitiesRoot()
+  const storeCapabilitiesRoot = getCompanyStoreCapabilitiesRoot()
   const storeRoot = getCompanyStoreAgentActionsRoot()
-  return [getProjectAgentActionsRoot(), ...(storeRoot ? [storeRoot] : []), getAgentActionsRoot()]
+  return [
+    projectCapabilitiesRoot,
+    getProjectAgentActionsRoot(),
+    ...(storeCapabilitiesRoot ? [storeCapabilitiesRoot] : []),
+    ...(storeRoot ? [storeRoot] : []),
+    getAgentActionsRoot(),
+  ]
 }
 
 export function getAgentResponsibilityRoots(
   projectAgentResponsibilitiesRoot: string = getProjectAgentResponsibilitiesRoot(),
 ): string[] {
+  const projectCapabilitiesRoot = getProjectCapabilitiesRoot()
+  const storeCapabilitiesRoot = getCompanyStoreCapabilitiesRoot()
   const storeRoot = getCompanyStoreAgentResponsibilitiesRoot()
-  return [projectAgentResponsibilitiesRoot, ...(storeRoot ? [storeRoot] : []), getBuiltinAgentResponsibilitiesRoot()]
+  return [
+    projectCapabilitiesRoot,
+    projectAgentResponsibilitiesRoot,
+    ...(storeCapabilitiesRoot ? [storeCapabilitiesRoot] : []),
+    ...(storeRoot ? [storeRoot] : []),
+    getBuiltinAgentResponsibilitiesRoot(),
+  ]
 }
 
 /**
@@ -162,12 +190,17 @@ export function listAgentActions(roots: string | string[] = getAgentActionRoots(
   const out: DiscoveredAgentAction[] = []
   for (const root of rootList) {
     if (!fs.existsSync(root)) continue
+    const requireImplementationProfile = isCapabilityRoot(root)
     const entries = fs.readdirSync(root, { withFileTypes: true })
     for (const ent of entries) {
       if (!ent.isDirectory()) continue
       if (seen.has(ent.name)) continue // earlier root wins
       const profilePath = path.join(root, ent.name, AGENT_RESPONSIBILITY_PROFILE_FILE)
-      if (fs.existsSync(profilePath) && fs.statSync(profilePath).isFile()) {
+      if (
+        fs.existsSync(profilePath) &&
+        fs.statSync(profilePath).isFile() &&
+        isImplementationProfile(profilePath, requireImplementationProfile)
+      ) {
         out.push({ name: ent.name, profilePath })
         seen.add(ent.name)
       }
@@ -185,7 +218,11 @@ export function resolveAgentAction(name: string, roots: string | string[] = getA
   const rootList = typeof roots === "string" ? [roots] : roots
   for (const root of rootList) {
     const profilePath = path.join(root, name, "profile.json")
-    if (fs.existsSync(profilePath) && fs.statSync(profilePath).isFile()) {
+    if (
+      fs.existsSync(profilePath) &&
+      fs.statSync(profilePath).isFile() &&
+      isImplementationProfile(profilePath, isCapabilityRoot(root))
+    ) {
       return profilePath
     }
   }
@@ -198,10 +235,9 @@ export function hasAgentAction(name: string, roots: string | string[] = getAgent
 }
 
 /**
- * List public agentResponsibility actions. AgentResponsibilities own the operator-facing action name; an
- * agentAction is only the selected implementation. Ordering is intentional:
- * project folder agentResponsibilities override company store agentResponsibilities, which override
- * engine built-ins.
+ * List public capability actions. The legacy function name stays until the
+ * compatibility layer is removed. Ordering is intentional: project
+ * capabilities override company-store capabilities, then legacy fallbacks.
  */
 export function listAgentResponsibilityActions(
   projectAgentResponsibilitiesRoot: string = getProjectAgentResponsibilitiesRoot(),
@@ -215,18 +251,29 @@ export function listAgentResponsibilityActions(
     out.push(action)
   }
 
-  const roots = getAgentResponsibilityRoots(projectAgentResponsibilitiesRoot)
   const executableRoots = getAgentActionRoots()
-  for (const action of listFolderAgentResponsibilityActions(roots[0]!, "project-folder")) add(action)
-  for (const action of listAgentActionResponsibilityActions(executableRoots[0]!, "project-agentAction")) add(action)
-  if (roots.length === 3) {
-    for (const action of listFolderAgentResponsibilityActions(roots[1]!, "company-store")) add(action)
-    for (const action of listAgentActionResponsibilityActions(executableRoots[1]!, "company-store-agentAction"))
-      add(action)
-    for (const action of listBuiltinAgentResponsibilityActions(roots[2]!)) add(action)
-  } else {
-    for (const action of listBuiltinAgentResponsibilityActions(roots[1]!)) add(action)
+  const projectCapabilitiesRoot = getProjectCapabilitiesRoot()
+  const projectLegacyRoot = projectAgentResponsibilitiesRoot
+  const storeCapabilitiesRoot = getCompanyStoreCapabilitiesRoot()
+  const storeLegacyRoot = getCompanyStoreAgentResponsibilitiesRoot()
+  const projectExecutableRoots = executableRoots.slice(0, 2)
+  const storeExecutableRoots = executableRoots.slice(2, -1)
+  for (const action of listFolderAgentResponsibilityActions(projectCapabilitiesRoot, "project-folder", true))
+    add(action)
+  for (const action of listFolderAgentResponsibilityActions(projectLegacyRoot, "project-folder")) add(action)
+  for (const root of projectExecutableRoots) {
+    for (const action of listAgentActionResponsibilityActions(root, "project-agentAction")) add(action)
   }
+  if (storeCapabilitiesRoot) {
+    for (const action of listFolderAgentResponsibilityActions(storeCapabilitiesRoot, "company-store", true)) add(action)
+  }
+  if (storeLegacyRoot) {
+    for (const action of listFolderAgentResponsibilityActions(storeLegacyRoot, "company-store")) add(action)
+  }
+  for (const root of storeExecutableRoots) {
+    for (const action of listAgentActionResponsibilityActions(root, "company-store-agentAction")) add(action)
+  }
+  for (const action of listBuiltinAgentResponsibilityActions(getBuiltinAgentResponsibilitiesRoot())) add(action)
   return out.sort((a, b) => a.action.localeCompare(b.action))
 }
 
@@ -272,6 +319,7 @@ export function resolveAgentResponsibilityExecution(agentResponsibility: AgentRe
   const agentAction =
     agentResponsibility.config.agentAction ??
     agentResponsibility.config.agentActions?.[0] ??
+    (agentResponsibility.config.role ? agentResponsibility.slug : undefined) ??
     (agentResponsibility.config.tickScript ? "agent-responsibility-tick-scripted" : "agent-responsibility-tick")
   const cliArgs = agentActionDeclaresInput(agentAction, "agentResponsibility")
     ? { agentResponsibility: agentResponsibility.slug }
@@ -298,6 +346,21 @@ function agentActionDeclaresInput(agentAction: string, inputName: string): boole
 /** AgentAction names: lowercase letters, digits, and dashes. Rejects traversal. */
 export function isSafeName(name: string): boolean {
   return /^[a-z][a-z0-9-]*$/.test(name) && !name.includes("..")
+}
+
+function isCapabilityRoot(root: string): boolean {
+  const normalized = path.normalize(root)
+  return path.basename(normalized) === "capabilities" && path.basename(path.dirname(normalized)) === ".kody"
+}
+
+function isImplementationProfile(profilePath: string, requireImplementationProfile: boolean): boolean {
+  if (!requireImplementationProfile) return true
+  try {
+    const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as { role?: unknown }
+    return typeof raw.role === "string" && PUBLIC_AGENT_ACTION_ACTION_ROLES.has(raw.role)
+  } catch {
+    return false
+  }
 }
 
 function listAgentActionResponsibilityActions(
@@ -334,6 +397,7 @@ function listAgentActionResponsibilityActions(
 function listFolderAgentResponsibilityActions(
   root: string,
   source: "project-folder" | "company-store",
+  requireCapabilityKind = false,
 ): DiscoveredAgentResponsibilityAction[] {
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
   const out: DiscoveredAgentResponsibilityAction[] = []
@@ -341,6 +405,7 @@ function listFolderAgentResponsibilityActions(
     if (!isSafeName(slug)) continue
     const agentResponsibility = readAgentResponsibilityFolder(root, slug)
     if (!agentResponsibility) continue
+    if (requireCapabilityKind && !agentResponsibility.config.capabilityKind) continue
     const action = agentResponsibility.config.action ?? slug
     const { agentAction, cliArgs } = resolveAgentResponsibilityExecution(agentResponsibility)
     out.push({

@@ -22,10 +22,16 @@ Design the smallest Kody model structure that satisfies the request. You may cre
 
 Use the current Kody vocabulary:
 
+- intent: why the agency should care
+- goal: what should become true
+- loop: when to check or wake work
 - agent: who runs
-- agentResponsibility: why/when and public action ownership
-- agentAction: how work runs
-- goal: related task list/state
+- capability: how the agency can produce a result
+
+Use current storage names when producing files:
+
+- agentResponsibility: capability contract, public action ownership, kind, agent, cadence, and output contract
+- agentAction: capability implementation
 
 # Boundaries
 

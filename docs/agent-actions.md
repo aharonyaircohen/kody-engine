@@ -1,18 +1,39 @@
-# AgentActions
+# Capabilities and legacy AgentActions
 
-AgentActions are the company layer's **how**.
+A **Capability** is the company layer's public **how**. The new project/store
+asset root is:
+
+```text
+.kody/capabilities/<slug>/
+  profile.json
+  capability.md
+```
+
+An **AgentAction** is the legacy implementation storage behind a capability.
+The engine still reads `.kody/agent-actions/<slug>/` for compatibility, but
+capabilities are resolved before legacy agentActions.
 
 An agentAction is one concrete action the generic executor can run. It may be
 mechanical and no-agent, or it may invoke an agent with a prompt, tools, hooks,
 skills, and postflight checks.
 
-An agentAction is not a agentResponsibility and not a goal. AgentResponsibilities explain why or when work
-should run. Goals choose which agentResponsibility or evidence comes next. AgentActions perform
-the action.
+An agentAction is not a agentResponsibility and not a goal. AgentResponsibilities
+store capability contracts: public action, kind, owner, cadence, and output
+contract. Goals choose which capability or evidence comes next. AgentActions
+perform the implementation.
 
 ## Canonical Shape
 
-Shared agentActions live in `kody-store`:
+Shared capabilities live in `kody-store`:
+
+```text
+.kody/capabilities/<slug>/
+  profile.json
+  capability.md
+  *.sh           # optional mechanical helpers
+```
+
+Legacy shared agentActions may still live in `kody-store`:
 
 ```text
 .kody/agent-actions/<slug>/

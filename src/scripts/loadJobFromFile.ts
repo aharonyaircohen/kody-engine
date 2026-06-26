@@ -10,7 +10,7 @@
  *                            the kody-job-next-state fence label and existing
  *                            prompt templates)
  *   ctx.data.jobTitle        first H1 of the body, or slug formatted
- *   ctx.data.jobIntent       the agentResponsibility body
+ *   ctx.data.jobIntent       the agentResponsibility body (compatibility token for the capability contract)
  *   ctx.data.jobStateJson    rendered prior state, or seed on first run
  *   ctx.data.jobState        LoadedJobState (path, handle, state, created)
  *   ctx.data.agentSlug      the assigned agent slug (or "" if none)
@@ -23,7 +23,7 @@
  *   ctx.data.agentResponsibilityTitle       alias of jobTitle
  *   ctx.data.agentSlug       alias of agentSlug — the agent (who)
  *   ctx.data.agentTitle      alias of agentTitle
- *   ctx.data.agentActionSlug  profile.name — the agentAction doing the tick (how)
+ *   ctx.data.agentActionSlug  profile.name — the agentAction implementation doing the tick
  *
  * The agent is *who* the tick runs as: a agentResponsibility names exactly one
  * agent via `profile.json`; its agent is injected ahead of the agentResponsibility

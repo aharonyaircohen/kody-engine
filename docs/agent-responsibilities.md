@@ -1,11 +1,20 @@
-# AgentResponsibilities
+# Capabilities And Legacy AgentResponsibilities
 
-AgentResponsibilities are reusable capability contracts.
+A **Capability** is how the agency can produce a result.
 
-A agentResponsibility explains why a capability exists, who normally owns it, when it may run,
-and which agentAction implements it. A agentResponsibility should not own a full process. It
-should receive input, do one kind of work, and return structured output or agentResponsibility
-report evidence that another layer can consume.
+The canonical storage root is now `.kody/capabilities/<slug>/` with
+`profile.json` and `capability.md`.
+
+The legacy storage name for a capability contract is **AgentResponsibility**.
+The legacy storage name for a capability implementation is **AgentAction**.
+Both remain readable as compatibility fallbacks while repos migrate.
+
+A agentResponsibility explains what reusable capability exists, who normally
+owns it, when it may run, what kind of result it promises, and which agentAction
+implements it. Intent owns why the company cares. Goal owns what outcome should
+become true. A agentResponsibility should not own a full process. It should
+receive input, do one kind of work, and return structured output or report
+evidence that another layer can consume.
 
 ```text
 input -> run -> structured output
@@ -21,9 +30,9 @@ Each normal agentResponsibility should mainly do one type of work:
 | `act` | change | Create, modify, trigger, publish, merge, deploy, or otherwise perform a requested action. |
 | `verify` | confirm | Decide whether a specific claim passed or failed, with evidence and blockers. |
 
-These are not three top-level models. The top-level model remains `AgentResponsibility`.
-`capabilityKind` classifies the agentResponsibility's capability promise and selects the result
-shape expected from that capability.
+These are not three top-level models. The top-level public model is
+`Capability`. `capabilityKind` classifies the agentResponsibility's capability
+promise and selects the result shape expected from that capability.
 
 ## What AgentResponsibilities Are Not
 
@@ -38,7 +47,7 @@ agentResponsibility:
 | Decide what outcome is complete | Goal |
 | Choose next missing evidence | Goal manager |
 | Track required issue/PR work and attempts | Task/job/run state |
-| Do one reusable inspect/change/confirm action | AgentResponsibility plus agentAction |
+| Do one reusable inspect/change/confirm capability | AgentResponsibility contract plus agentAction implementation |
 | Persist factual evidence back to a goal | AgentResponsibility report via `applyAgentResponsibilityReports` |
 | Structure evidence and write progress audit logs | Goal/loop decision and persistence path |
 
@@ -46,8 +55,9 @@ The important boundary is:
 
 ```text
 Goal decides what is needed.
-AgentResponsibility provides one reusable capability.
-AgentAction performs the concrete work.
+Capability provides how the agency can produce the result.
+Legacy AgentResponsibility stores old capability contracts.
+Legacy AgentAction stores old concrete implementations.
 ```
 
 ## State Boundary
@@ -55,7 +65,7 @@ AgentAction performs the concrete work.
 AgentActions and agentResponsibilities are reusable definitions. They can run many times with new inputs, but they should not remember long-term business progress.
 
 - `agentAction`: concrete execution; emits output or reports for this run.
-- `agentResponsibility`: capability contract; explains why/when/who/how and maps to one action or a small ordered action list.
+- `agentResponsibility`: capability contract; explains what kind of capability exists, who owns it, when it may run, and which action or ordered action list implements it.
 - `goal`: durable outcome state; owns destination evidence, stage, facts, and blockers.
 - `agentLoop`: durable cadence state; owns heartbeat/cursor data and the target it wakes.
 
@@ -63,7 +73,16 @@ A scheduled agentResponsibility may have an operational ledger for cursors or de
 
 ## Canonical Shape
 
-AgentResponsibilities live in project `.kody/agent-responsibilities/` or in the company store:
+Capabilities live in project `.kody/capabilities/` or in the company store:
+
+```text
+.kody/capabilities/<slug>/
+  profile.json
+  capability.md
+```
+
+Legacy AgentResponsibilities live in project `.kody/agent-responsibilities/`
+or in the company store:
 
 ```text
 .kody/agent-responsibilities/<slug>/
@@ -71,7 +90,8 @@ AgentResponsibilities live in project `.kody/agent-responsibilities/` or in the 
   agent-responsibility.md
 ```
 
-`profile.json` is metadata and routing. `agent-responsibility.md` is human-owned intent.
+`profile.json` is metadata and routing. `agent-responsibility.md` is the
+human-owned capability contract body.
 
 Example:
 
@@ -90,10 +110,10 @@ Example:
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `name` | yes | AgentResponsibility slug. Must match the folder name. |
-| `describe` | yes | Short responsibility summary. |
+| `describe` | yes | Short capability summary. |
 | `capabilityKind` | recommended | Capability promise: `observe`, `act`, or `verify`. |
 | `action` | optional | Public action name. If absent, defaults to agentResponsibility name. |
-| `agentAction` | usually | Implementation agentAction, the concrete how. |
+| `agentAction` | usually | Implementation agentAction for this capability. |
 | `agentActions` | optional | Ordered agentAction list for split task work. Use sparingly. |
 | `agent` | optional | Agent identity, the who. |
 | `every` | optional | Scheduler cadence. Use `manual` for on-demand agentResponsibilities. |
@@ -240,23 +260,23 @@ The goal decides the next missing evidence. Each agentResponsibility performs on
 capability and reports evidence. GitHub may close the release issue through
 normal PR auto-close syntax, but the goal still owns release progress.
 
-## Creating A AgentResponsibility
+## Creating A Capability Contract
 
 Use this checklist:
 
 1. Ask whether the capability already exists.
-2. Name the agentResponsibility by the one capability it provides, not the whole process.
+2. Name the capability contract by the one capability it provides, not the whole process.
 3. Choose exactly one `capabilityKind`: `observe`, `act`, or `verify`.
 4. Put the concrete work in an agentAction.
 5. Add `agent` only when a specific agent matters.
-6. Add `every` only when the agentResponsibility is scheduled.
+6. Add `every` only when the capability is scheduled.
 7. Write `agent-responsibility.md` with purpose, inputs, outputs, allowed actions, and restrictions.
 8. Emit `KODY_AGENT_RESPONSIBILITY_RESULT` with status, summary, facts, artifacts, missing evidence, blockers, and goal evidence when relevant.
 9. Let the goal or loop apply that evidence, decide the next step, and write the progress log.
 
 ## Do Not
 
-- Do not create a agentResponsibility for a one-off issue comment.
+- Do not create a capability contract for a one-off issue comment.
 - Do not put concrete implementation logic in `agent-responsibility.md`.
 - Do not hide observe plus act plus verify inside one agentResponsibility.
 - Do not let a agentResponsibility own long-term progress or decide business completion.

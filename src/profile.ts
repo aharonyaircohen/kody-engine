@@ -107,11 +107,12 @@ export function loadProfile(profilePath: string): Profile {
     )
   }
 
-  // AgentResponsibility-as-reference: a agentResponsibility names an agentAction (the HOW) instead of embedding
-  // it. Resolve that agentAction's full profile and overlay this agentResponsibility's identity
-  // (name) + agent (WHO) + mentions. The agentResponsibility folder then
+  // AgentResponsibility-as-reference: an agentResponsibility stores a capability
+  // contract and names the agentAction implementation instead of embedding it.
+  // Resolve that agentAction's full profile and overlay this contract's identity
+  // (name) + agent (who) + mentions. The agentResponsibility folder then stays a
   // thin binding — no claudeCode/prompt/scripts of its own.
-  // agentAction = how, agent = who, agentResponsibility = why.
+  // Intent = why, agent = who, capability = how, agentAction = implementation.
   const execRef = typeof r.agentAction === "string" ? r.agentAction.trim() : ""
   if (execRef) {
     const refPath = resolveAgentAction(execRef)

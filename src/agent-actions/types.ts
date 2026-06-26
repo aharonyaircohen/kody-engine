@@ -56,11 +56,12 @@ export interface Profile {
    */
   role: "primitive" | "orchestrator" | "container" | "watch" | "utility"
   /**
-   * A agentResponsibility is the WHY layer: it references an agentAction (the HOW) by name
-   * rather than embedding it. When set, loader resolves the agentAction's
-   * full profile (claudeCode/scripts/prompt/agents) and overlays agentResponsibility's
-   * name + agent (WHO) + mentions. Absent -> this profile IS an
-   * agentAction (defines its own how). agentAction = how, agent = who, agentResponsibility = why.
+   * A agentResponsibility is the capability contract storage layer: it references
+   * an agentAction implementation by name rather than embedding it. When set,
+   * loader resolves the agentAction's full profile (claudeCode/scripts/prompt/agents)
+   * and overlays agentResponsibility name + agent (who) + mentions. Absent -> this
+   * profile IS an agentAction implementation. Intent = why, agent = who,
+   * capability = how, agentAction = implementation.
    */
   agentAction?: string
   /**
@@ -517,8 +518,9 @@ export type AnyScript = PreflightScript | PostflightScript
 // Job — the unified work request (task-state jobs collect run attempts).
 //
 // A Job is the required work the engine tries to execute, regardless of how it
-// was triggered. It must reference a agentResponsibility/action (why). The agentAction is only
-// the agentResponsibility-selected implementation detail (how), never a standalone request.
+// was triggered. It must reference an agentResponsibility/action capability
+// contract. The agentAction is only the selected implementation detail, never a
+// standalone request.
 // Task state stores this durable job separately from individual run attempts.
 // Two flavors:
 //   - "instant"   — run once now (an `@kody <verb>` comment or a manual dispatch)

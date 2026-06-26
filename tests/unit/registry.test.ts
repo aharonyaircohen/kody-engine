@@ -8,8 +8,11 @@ import {
   isBuiltinAgentAction,
   isSafeName,
   listAgentActions,
+  listAgentResponsibilityActions,
   parseGenericFlags,
   resolveAgentAction,
+  resolveAgentResponsibilityAction,
+  resolveAgentResponsibilityFolder,
 } from "../../src/registry.js"
 
 function mkFixture(): string {
@@ -129,6 +132,146 @@ describe("registry: agentResponsibility/agentAction separation", () => {
     const expected = fs.realpathSync(path.join(exeDir, "profile.json"))
     expect(fs.realpathSync(resolveAgentAction("feature")!)).toBe(expected)
     expect(fs.realpathSync(listAgentActions().find((exe) => exe.name === "feature")!.profilePath)).toBe(expected)
+  })
+})
+
+describe("registry: capabilities root", () => {
+  let root: string
+  const prevCwd = process.cwd()
+
+  beforeEach(() => {
+    root = mkFixture()
+    process.chdir(root)
+  })
+
+  afterEach(() => {
+    process.chdir(prevCwd)
+    fs.rmSync(root, { recursive: true, force: true })
+  })
+
+  it("discovers .kody/capabilities folders as public capability actions", () => {
+    const capabilityDir = path.join(root, ".kody", "capabilities", "triage")
+    fs.mkdirSync(capabilityDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(capabilityDir, "profile.json"),
+      JSON.stringify({
+        name: "triage",
+        action: "triage",
+        capabilityKind: "observe",
+        agentAction: "triage",
+        describe: "Triage incoming work.",
+      }),
+    )
+    fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Triage\n\nWatch incoming work.\n")
+
+    expect(resolveAgentResponsibilityAction("triage")).toMatchObject({
+      action: "triage",
+      agentResponsibility: "triage",
+      agentAction: "triage",
+      source: "project-folder",
+      capabilityKind: "observe",
+    })
+    expect(fs.realpathSync(resolveAgentResponsibilityFolder("triage")!.bodyPath)).toBe(
+      fs.realpathSync(path.join(capabilityDir, "capability.md")),
+    )
+  })
+
+  it("uses a full .kody/capabilities profile as its own implementation", () => {
+    const capabilityDir = path.join(root, ".kody", "capabilities", "ship")
+    fs.mkdirSync(capabilityDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(capabilityDir, "profile.json"),
+      JSON.stringify({
+        name: "ship",
+        action: "ship",
+        capabilityKind: "act",
+        role: "primitive",
+        describe: "Ship requested work.",
+        inputs: [{ name: "issue", flag: "--issue", type: "int", required: true }],
+      }),
+    )
+    fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Ship\n\nShip requested work.\n")
+
+    expect(resolveAgentResponsibilityAction("ship")).toMatchObject({
+      action: "ship",
+      agentResponsibility: "ship",
+      agentAction: "ship",
+      source: "project-folder",
+      capabilityKind: "act",
+    })
+  })
+
+  it("resolves .kody/capabilities profiles as implementation profiles before legacy agent-actions", () => {
+    const capabilityDir = path.join(root, ".kody", "capabilities", "ship")
+    const legacyDir = path.join(root, ".kody", "agent-actions", "ship")
+    fs.mkdirSync(capabilityDir, { recursive: true })
+    fs.mkdirSync(legacyDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(capabilityDir, "profile.json"),
+      JSON.stringify({ name: "capability-ship", role: "primitive" }),
+    )
+    fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Ship\n")
+    fs.writeFileSync(path.join(legacyDir, "profile.json"), JSON.stringify({ name: "legacy-ship" }))
+
+    expect(fs.realpathSync(resolveAgentAction("ship")!)).toBe(
+      fs.realpathSync(path.join(capabilityDir, "profile.json")),
+    )
+    expect(fs.realpathSync(listAgentActions().find((item) => item.name === "ship")!.profilePath)).toBe(
+      fs.realpathSync(path.join(capabilityDir, "profile.json")),
+    )
+  })
+
+  it("does not treat thin .kody/capabilities contracts as implementation profiles", () => {
+    const capabilityDir = path.join(root, ".kody", "capabilities", "ship")
+    const legacyDir = path.join(root, ".kody", "agent-actions", "ship")
+    fs.mkdirSync(capabilityDir, { recursive: true })
+    fs.mkdirSync(legacyDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(capabilityDir, "profile.json"),
+      JSON.stringify({
+        name: "ship",
+        action: "ship",
+        capabilityKind: "act",
+        agentAction: "ship",
+        describe: "Public shipping contract.",
+      }),
+    )
+    fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Ship\n")
+    fs.writeFileSync(path.join(legacyDir, "profile.json"), JSON.stringify({ name: "legacy-ship" }))
+
+    expect(resolveAgentResponsibilityAction("ship")).toMatchObject({
+      action: "ship",
+      agentResponsibility: "ship",
+      agentAction: "ship",
+      source: "project-folder",
+      capabilityKind: "act",
+    })
+    expect(fs.realpathSync(resolveAgentAction("ship")!)).toBe(
+      fs.realpathSync(path.join(legacyDir, "profile.json")),
+    )
+    expect(fs.realpathSync(listAgentActions().find((item) => item.name === "ship")!.profilePath)).toBe(
+      fs.realpathSync(path.join(legacyDir, "profile.json")),
+    )
+  })
+
+  it("keeps legacy agent-responsibilities readable as fallback after capabilities", () => {
+    const legacyDir = path.join(root, ".kody", "agent-responsibilities", "audit")
+    fs.mkdirSync(legacyDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(legacyDir, "profile.json"),
+      JSON.stringify({ name: "audit", action: "audit", capabilityKind: "verify" }),
+    )
+    fs.writeFileSync(path.join(legacyDir, "agent-responsibility.md"), "# Audit\n\nLegacy body.\n")
+
+    expect(listAgentResponsibilityActions().find((item) => item.action === "audit")).toMatchObject({
+      action: "audit",
+      agentResponsibility: "audit",
+      source: "project-folder",
+      capabilityKind: "verify",
+    })
+    expect(fs.realpathSync(resolveAgentResponsibilityFolder("audit")!.bodyPath)).toBe(
+      fs.realpathSync(path.join(legacyDir, "agent-responsibility.md")),
+    )
   })
 })
 

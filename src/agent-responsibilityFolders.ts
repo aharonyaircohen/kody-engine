@@ -4,6 +4,7 @@ import type { CapabilityKind } from "./agent-actions/types.js"
 
 export const AGENT_RESPONSIBILITY_PROFILE_FILE = "profile.json"
 export const AGENT_RESPONSIBILITY_BODY_FILE = "agent-responsibility.md"
+export const CAPABILITY_BODY_FILE = "capability.md"
 
 export interface AgentResponsibilityFolderConfig {
   action?: string
@@ -15,6 +16,7 @@ export interface AgentResponsibilityFolderConfig {
   tools?: string[]
   agentActions?: string[]
   capabilityKind?: CapabilityKind
+  role?: string
   describe?: string
   stage?: string
   readsFrom?: string[]
@@ -51,14 +53,17 @@ export function listAgentResponsibilityFolderSlugs(absDir: string): string[] {
 export function isAgentResponsibilityFolder(dir: string): boolean {
   return (
     fs.existsSync(path.join(dir, AGENT_RESPONSIBILITY_PROFILE_FILE)) &&
-    fs.existsSync(path.join(dir, AGENT_RESPONSIBILITY_BODY_FILE))
+    (fs.existsSync(path.join(dir, CAPABILITY_BODY_FILE)) ||
+      fs.existsSync(path.join(dir, AGENT_RESPONSIBILITY_BODY_FILE)))
   )
 }
 
 export function readAgentResponsibilityFolder(root: string, slug: string): AgentResponsibilityFolder | null {
   const dir = path.join(root, slug)
   const profilePath = path.join(dir, AGENT_RESPONSIBILITY_PROFILE_FILE)
-  const bodyPath = path.join(dir, AGENT_RESPONSIBILITY_BODY_FILE)
+  const capabilityBodyPath = path.join(dir, CAPABILITY_BODY_FILE)
+  const legacyBodyPath = path.join(dir, AGENT_RESPONSIBILITY_BODY_FILE)
+  const bodyPath = fs.existsSync(capabilityBodyPath) ? capabilityBodyPath : legacyBodyPath
   if (!fs.existsSync(profilePath) || !fs.statSync(profilePath).isFile()) return null
   if (!fs.existsSync(bodyPath) || !fs.statSync(bodyPath).isFile()) return null
   try {
@@ -93,6 +98,7 @@ export function parseAgentResponsibilityConfig(raw: Record<string, unknown>): Ag
     tools,
     agentActions: stringList(raw.agentActions),
     capabilityKind: capabilityKindField(raw.capabilityKind),
+    role: stringField(raw.role),
     describe: stringField(raw.describe),
     stage: stringField(raw.stage),
     readsFrom: stringList(raw.readsFrom ?? raw.reads_from),
