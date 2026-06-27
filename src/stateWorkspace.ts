@@ -31,12 +31,12 @@ function hydrateDirectory(config: StateRepoConfig, cwd: string, stateDir: string
   const entries = listStateDirectory(config, cwd, stateDir)
   if (entries.length === 0) return
 
-  fs.rmSync(path.join(cwd, localDir), { recursive: true, force: true })
   for (const entry of entries) {
     if (!entry.name || !entry.type) continue
     const childState = path.posix.join(stateDir, entry.name)
     const childLocal = path.join(localDir, entry.name)
     if (entry.type === "dir") {
+      fs.rmSync(path.join(cwd, childLocal), { recursive: true, force: true })
       hydrateDirectory(config, cwd, childState, childLocal)
     } else if (entry.type === "file") {
       const file = readStateText(config, cwd, childState)
