@@ -13,9 +13,9 @@ import {
 } from "./issue.js"
 import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
 import { resolveCapabilityAction } from "./registry.js"
+import { type RunRequest, readRunRequestFromEnv } from "./run-request.js"
 import { lastRunLogPath } from "./runtimePaths.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
-import { readRunRequestFromEnv, type RunRequest } from "./run-request.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 

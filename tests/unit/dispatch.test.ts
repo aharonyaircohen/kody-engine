@@ -17,10 +17,34 @@ function testConfig(config: Partial<KodyConfig>): KodyConfig {
 }
 
 function writeLocalReleaseAsset(root: string): void {
-  const executableDir = path.join(root, ".kody", "capabilities", "release")
-  fs.mkdirSync(executableDir, { recursive: true })
+  const baseInputs = {
+    claudeCode: {
+      model: "inherit",
+      permissionMode: "acceptEdits",
+      maxTurns: null,
+      maxThinkingTokens: null,
+      systemPromptAppend: null,
+      tools: [],
+      hooks: [],
+      skills: [],
+      commands: [],
+      subagents: [],
+      plugins: [],
+      mcpServers: [],
+    },
+    cliTools: [],
+    scripts: { preflight: [], postflight: [] },
+  }
+
+  // Orchestrator: `@kody release` (the four-stage container). Routes to
+  // release-prepare / release-merge / release-publish / release-deploy in
+  // sequence via the container executor. Sibling primitives below are
+  // individually addressable from `@kody release-prepare` etc. for the
+  // case where the operator wants to resume a stage by hand.
+  const releaseDir = path.join(root, ".kody", "capabilities", "release")
+  fs.mkdirSync(releaseDir, { recursive: true })
   fs.writeFileSync(
-    path.join(executableDir, "profile.json"),
+    path.join(releaseDir, "profile.json"),
     JSON.stringify({
       name: "release",
       action: "release",
@@ -30,25 +54,53 @@ function writeLocalReleaseAsset(root: string): void {
         { name: "issue", flag: "--issue", type: "int", required: true, describe: "Release issue number." },
         { name: "bump", flag: "--bump", type: "enum", values: ["patch", "minor", "major"], describe: "Version bump." },
       ],
-      claudeCode: {
-        model: "inherit",
-        permissionMode: "acceptEdits",
-        maxTurns: null,
-        maxThinkingTokens: null,
-        systemPromptAppend: null,
-        tools: [],
-        hooks: [],
-        skills: [],
-        commands: [],
-        subagents: [],
-        plugins: [],
-        mcpServers: [],
-      },
-      cliTools: [],
-      scripts: { preflight: [], postflight: [] },
+      ...baseInputs,
     }),
   )
-  fs.writeFileSync(path.join(executableDir, "capability.md"), "# Release\n\nRun release flow.\n")
+  fs.writeFileSync(path.join(releaseDir, "capability.md"), "# Release\n\nRun release flow.\n")
+
+  // Sibling primitive: `@kody release-prepare`. Declares the same flags the
+  // comment parser is expected to fill in for a hand-driven rerun of the
+  // first stage (`bump`, `prefer`, `dry-run`). Listing them here is what
+  // lets the dispatch tests assert on the parsed cliArgs.
+  const prepareDir = path.join(root, ".kody", "capabilities", "release-prepare")
+  fs.mkdirSync(prepareDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(prepareDir, "profile.json"),
+    JSON.stringify({
+      name: "release-prepare",
+      action: "release-prepare",
+      role: "primitive",
+      describe: "Stage 1: prepare release.",
+      inputs: [
+        { name: "issue", flag: "--issue", type: "int", required: true, describe: "Release issue number." },
+        { name: "bump", flag: "--bump", type: "enum", values: ["patch", "minor", "major"], describe: "Version bump." },
+        { name: "prefer", flag: "--prefer", type: "enum", values: ["ours", "theirs"], describe: "Conflict resolution." },
+        { name: "dry-run", flag: "--dry-run", type: "bool", describe: "Run without making changes." },
+      ],
+      ...baseInputs,
+    }),
+  )
+  fs.writeFileSync(path.join(prepareDir, "capability.md"), "# Release Prepare\n\nStage 1 of the release flow.\n")
+
+  // Sibling primitives: `@kody release-publish` and `@kody release-promote`.
+  // The dispatch tests assert only `issue` lands in cliArgs for these.
+  for (const slug of ["release-publish", "release-promote"]) {
+    const dir = path.join(root, ".kody", "capabilities", slug)
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(
+      path.join(dir, "profile.json"),
+      JSON.stringify({
+        name: slug,
+        action: slug,
+        role: "primitive",
+        describe: `Stage: ${slug}.`,
+        inputs: [{ name: "issue", flag: "--issue", type: "int", required: true, describe: "Release issue number." }],
+        ...baseInputs,
+      }),
+    )
+    fs.writeFileSync(path.join(dir, "capability.md"), `# ${slug}\n`)
+  }
 }
 
 describe("dispatch: explicit override", () => {

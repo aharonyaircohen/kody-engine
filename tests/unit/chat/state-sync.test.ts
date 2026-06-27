@@ -338,8 +338,11 @@ describe("chat/state-sync: composite helpers", () => {
     vi.mocked(gh).mockImplementation((args: string[]) => {
       if (!isReadCall(args)) return ""
       const target = (args as string[]).find((a) => a.includes("/contents/")) ?? ""
-      if (target.endsWith(sessionStatePath(SESSION_ID))) return apiReadResponse(sessionLine)
-      if (target.endsWith(eventsStatePath(SESSION_ID))) return apiReadResponse(eventsLine)
+      // branchApiPath appends `?ref=<branch>` to the contents URL; strip the
+      // query before matching so the test is independent of that detail.
+      const pathOnly = target.split("?", 1)[0]
+      if (pathOnly.endsWith(sessionStatePath(SESSION_ID))) return apiReadResponse(sessionLine)
+      if (pathOnly.endsWith(eventsStatePath(SESSION_ID))) return apiReadResponse(eventsLine)
       throw new Error(`unexpected path: ${target}`)
     })
 
