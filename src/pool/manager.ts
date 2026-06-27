@@ -14,6 +14,7 @@
  *   refill keeps free-count at `min`.
  */
 
+import type { RunRequest } from "../run-request.js"
 import { FlyClient, type FlyGuest, type FlyMachine } from "./fly.js"
 
 /** Max free machines a single claim will try before falling back to create-fresh. */
@@ -37,9 +38,8 @@ export interface PoolJob {
   jobId: string
   repo: string
   githubToken: string
-  /** "issue" (one-shot run) | "interactive" (long-lived chat session)
-   * | "scheduled" (capability/goal fan-out — Fly fallback for GitHub cron). */
-  mode?: "issue" | "interactive" | "scheduled"
+  /** Canonical target/intent contract forwarded to runner-serve. */
+  runRequest: RunRequest
   /** Required for issue mode. */
   issueNumber?: number
   /** Required for interactive mode. */

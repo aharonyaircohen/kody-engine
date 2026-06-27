@@ -13,6 +13,7 @@ import {
 } from "./issue.js"
 import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
 import { resolveCapabilityAction } from "./registry.js"
+import { readRunRequestFromEnv, type RunRequest } from "./run-request.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -86,6 +87,40 @@ export function parseCiArgs(argv: string[]): CiArgs {
     result.errors.push("--issue <N> is required")
   }
   return result
+}
+
+type RunRequestRoute =
+  | { kind: "action"; action: string; cliArgs: Record<string, unknown> }
+  | { kind: "fanout"; force: boolean }
+  | { kind: "ignore" }
+  | { kind: "error"; error: string }
+
+function routeRunRequest(request: RunRequest): RunRequestRoute {
+  const { target, intent } = request
+  if (target.type === "chat" || target.type === "issue") return { kind: "ignore" }
+
+  if (target.type === "goal") {
+    if (intent !== "manage" && intent !== "run" && intent !== "tick") {
+      return { kind: "error", error: `goal target does not support intent '${intent}'` }
+    }
+    return {
+      kind: "action",
+      action: "goal-manager",
+      cliArgs: { goal: target.id },
+    }
+  }
+
+  if (target.type === "workflow") {
+    if (target.id === "scheduled-fanout") {
+      return { kind: "fanout", force: intent === "run" }
+    }
+    if (intent !== "run" && intent !== "tick") {
+      return { kind: "error", error: `workflow target does not support intent '${intent}'` }
+    }
+    return { kind: "action", action: target.id, cliArgs: {} }
+  }
+
+  return { kind: "error", error: "unsupported run request target" }
 }
 
 export function unpackAllSecrets(env: NodeJS.ProcessEnv = process.env): number {
@@ -330,9 +365,40 @@ export async function runCi(argv: string[]): Promise<number> {
   let manualWorkflowDispatch = false
   let forceRunAction: string | null = null
   let forceRunCliArgs: Record<string, unknown> = {}
+  let runRequestFanOut = false
+  let runRequestFanOutForce = false
+  const parsedRunRequest = readRunRequestFromEnv()
+  if (parsedRunRequest && "error" in parsedRunRequest) {
+    process.stderr.write(`[kody] ${parsedRunRequest.error}\n`)
+    return 64
+  }
+  if (!args.issueNumber && !autoFallback && parsedRunRequest && "request" in parsedRunRequest) {
+    const route = routeRunRequest(parsedRunRequest.request)
+    if (route.kind === "error") {
+      process.stderr.write(`[kody] ${route.error}\n`)
+      return 64
+    }
+    if (route.kind === "fanout") {
+      runRequestFanOut = true
+      runRequestFanOutForce = route.force
+    } else if (route.kind === "action") {
+      forceRunAction = route.action
+      forceRunCliArgs = route.cliArgs
+    }
+  }
+  const envForceAction = (process.env.KODY_FORCE_ACTION ?? "").trim()
+  const envForceMessage = (process.env.KODY_FORCE_MESSAGE ?? "").trim()
+  if (!args.issueNumber && !autoFallback && !forceRunAction && !runRequestFanOut && envForceAction) {
+    forceRunAction = envForceAction
+    if (envForceAction === "goal-manager" && envForceMessage) {
+      forceRunCliArgs = { goal: envForceMessage }
+    }
+  }
   if (
     !args.issueNumber &&
     !autoFallback &&
+    !forceRunAction &&
+    !runRequestFanOut &&
     eventName === "workflow_dispatch" &&
     dispatchEventPath &&
     fs.existsSync(dispatchEventPath)
@@ -432,6 +498,9 @@ export async function runCi(argv: string[]): Promise<number> {
     )
     const ec = result.exitCode
     return ec === 0 || ec === 1 || ec === 2 ? ec : 99
+  }
+  if (!args.issueNumber && !autoFallback && runRequestFanOut) {
+    return runScheduledFanOut(cwd, args, { force: runRequestFanOutForce })
   }
   if (!args.issueNumber && !autoFallback && (eventName === "schedule" || manualWorkflowDispatch)) {
     return runScheduledFanOut(cwd, args, { force: manualWorkflowDispatch })

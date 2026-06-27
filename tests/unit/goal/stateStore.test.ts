@@ -6,6 +6,7 @@ vi.mock("../../../src/issue.js", () => ({
 
 import { fetchGoalState, putGoalState } from "../../../src/goal/stateStore.js"
 import { gh } from "../../../src/issue.js"
+import { STATE_BRANCH } from "../../../src/stateBranch.js"
 
 const config = {
   state: { repo: "acme/kody-state", path: "widgets" },
@@ -54,18 +55,28 @@ describe("goal state store", () => {
     expect(state?.extra.type).toBe("release")
     expect(vi.mocked(gh).mock.calls[0]?.[0]).toEqual([
       "api",
-      "/repos/acme/kody-state/contents/widgets/goals/instances/release/state.json",
+      `/repos/acme/kody-state/contents/widgets/goals/instances/release/state.json?ref=${STATE_BRANCH}`,
     ])
   })
 
   it("writes goal state with current file sha", () => {
-    vi.mocked(gh).mockImplementation((args, _opts) => {
-      const apiPath = args.find(
-        (arg) => arg === "/repos/acme/kody-state/contents/widgets/goals/instances/release/state.json",
-      )
-      if (apiPath) {
-        if (args.includes("--method")) return ""
+    vi.mocked(gh).mockImplementation((args, opts) => {
+      const command = args.join(" ")
+      if (command === `api /repos/acme/kody-state/git/ref/heads/${STATE_BRANCH}`) {
+        return JSON.stringify({ object: { sha: "state-branch-sha" } })
+      }
+      if (
+        command === `api /repos/acme/kody-state/contents/widgets/goals/instances/release/state.json?ref=${STATE_BRANCH}`
+      ) {
         return JSON.stringify({ sha: "old", type: "file", encoding: "base64", content: b64("{}") })
+      }
+      if (
+        command ===
+        "api --method PUT /repos/acme/kody-state/contents/widgets/goals/instances/release/state.json --input -"
+      ) {
+        const payload = JSON.parse(String(opts?.input ?? "{}")) as Record<string, unknown>
+        expect(payload.branch).toBe(STATE_BRANCH)
+        return ""
       }
       throw new Error(`unexpected gh call: ${args.join(" ")}`)
     })
