@@ -121,7 +121,9 @@ describe("commitGoalState report refresh", () => {
       if (value === undefined) delete process.env[key]
       else process.env[key] = value
     }
-    Object.keys(savedEnv).forEach((k) => delete (savedEnv as Record<string, unknown>)[k])
+    Object.keys(savedEnv).forEach((k) => {
+      delete (savedEnv as Record<string, unknown>)[k]
+    })
   })
 
   it("writes the goal dashboard report after changed goal state is persisted", async () => {
