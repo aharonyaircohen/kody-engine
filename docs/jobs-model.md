@@ -1,9 +1,8 @@
 # Jobs Model — Reference
 
 > **Status: IMPLEMENTED.** A task stores durable **jobs**: the required work for
-> that issue/PR. Each job points to one executable and accumulates **runs**:
-> execution attempts. Every trigger — an `@kody` comment, a cron wake, an
-> orchestrator hand-off — still enters through `runJob` in
+> that issue/PR. Each job runs a workflow and accumulates **runs**: execution
+> attempts. Every trigger — an `@kody` comment, a cron wake, an orchestrator hand-off — still enters through `runJob` in
 > [`src/job.ts`](../src/job.ts), but the stable task key is `jobKey`; the
 > per-attempt id is `jobId`.
 
@@ -22,15 +21,16 @@ Retries stay under the same job instead of becoming new work.
 | **agentLoop** | when | stateful heartbeat wrapper; stores schedule/cursor and wakes another target such as a goal or capability |
 | **agent** | who | reusable executor identity (`.kody/agents/<slug>.md`, usually from project or company store) |
 | **capability** | how | reusable ability the agency can use; currently stored as an capability contract plus an executable implementation |
+| **workflow** | how, composed | ordered capability steps for one engine run; default workflow is one capability |
 | **issue** | what | a GitHub **issue or PR** — the work-item a task is about |
 | **task** | task state | one issue/PR, its required jobs, outputs, and rolled-up state |
-| **job** | required work | one planned unit of work on the task; points to exactly one executable |
+| **job** | required work | one planned unit of work on the task; runs the default one-step workflow or an explicit workflow |
 | **run** | attempt | one execution attempt for a job; retries create more runs |
 | **capability** | storage | current storage name for a capability contract: public action, kind, agent, cadence, safety, inputs, outputs, and implementation link |
 | **executable** | storage | current storage name for a capability implementation: prompt glue, scripts, skills, tools, and executor profile |
 
 Compact mapping: **intent = why**, **goal = what**, **agentLoop = when**,
-**agent = who**, **capability = how**.
+**agent = who**, **capability/workflow = how**.
 
 Current storage mapping: **capability = capability contract** and
 **executable = capability implementation**.
@@ -67,6 +67,33 @@ Canonical creation docs:
 A comment, a cron wake, and an orchestrator hand-off all funnel into **one
 runner** that executes a job attempt.
 
+## The workflow
+
+A workflow is the run shape around capabilities:
+
+```text
+input -> capability steps -> final output
+```
+
+Every job effectively runs a workflow. For normal capabilities, the default
+workflow has one step. A capability may also declare an explicit workflow:
+
+```json
+{
+  "name": "bug",
+  "action": "bug",
+  "workflow": {
+    "steps": [
+      { "capability": "reproduce", "reason": "capture the failing test" },
+      { "capability": "run", "reason": "fix the bug using the repro artifact" }
+    ]
+  }
+}
+```
+
+The workflow owns only step order, shared step results, and the final run
+output. It does not own intent, goal progress, schedule, or agent identity.
+
 ## The job
 
 A `Job` ([`src/executables/types.ts`](../src/executables/types.ts)) binds the
@@ -76,7 +103,7 @@ four nouns plus its target and args. In task state, the durable job is stored in
 - **who** — `agent` (an agent slug; instant jobs default to `kody`)
 - **why** — `why` (the operator's inline free-text request, intent, or goal context)
 - **when** — `schedule` (a scheduled job's cadence; absent for instant)
-- **how** — a capability implementation, stored as `executable` (the profile to run; 0–1)
+- **how** — a workflow; default is one capability implementation, stored as `executable`
 - **capability contract** — optional `capability`, the storage record that minted or
   authorized the job
 - plus `target` (issue/PR number), `cliArgs`, and `flavor` (`instant` | `scheduled`).
@@ -101,7 +128,8 @@ persist the run without the executor knowing task-state details.
   the compatibility `{{jobIntent}}` prompt token.
 - **when →** recorded on the task job and its run attempt so a scheduled job's
   cadence is visible in the task state.
-- **how →** `runJob` dispatches exactly that one executable.
+- **how →** `runJob` executes the capability workflow. The default workflow
+  dispatches one executable; an explicit workflow runs ordered capability steps.
 
 ## The task = jobs + run history
 

@@ -1,3 +1,6 @@
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("../../../src/stateRepo.js", async (importOriginal) => ({
@@ -37,6 +40,7 @@ describe("goal run logs", () => {
     delete process.env.GITHUB_JOB
     delete process.env.GITHUB_EVENT_NAME
     delete process.env.GITHUB_ACTOR
+    delete process.env.GITHUB_EVENT_PATH
   })
 
   it("writes staged goal events as JSONL under the state repo path", () => {
@@ -116,8 +120,22 @@ describe("goal run logs", () => {
         goalStatePath: "r/goals/instances/web-release/state.json",
       },
       trigger: {
+        source: "github-actions",
+        kind: "manual-workflow-dispatch",
         eventName: "workflow_dispatch",
         actor: "alice",
+        githubActor: "alice",
+        actorRole: "manual workflow dispatcher",
+      },
+      dispatchContext: {
+        triggeredBy: "manual workflow dispatch",
+        triggerKind: "manual-workflow-dispatch",
+        dispatchMode: "manual",
+        githubActor: "alice",
+        githubActorRole: "manual workflow dispatcher",
+        decidedBy: "goal-manager",
+        dispatchedBy: "goal-manager",
+        capability: "release-prepare",
       },
       job: {
         id: "job 1",
@@ -142,6 +160,75 @@ describe("goal run logs", () => {
     expect((event.links as Record<string, unknown>).log).toMatch(
       /^https:\/\/github\.com\/o\/kody-state\/blob\/main\/r\/logs\/goals\/web-release\/runs\/.+-job-1\.jsonl$/,
     )
+  })
+
+  it("separates a scheduled workflow actor from the actual goal dispatcher", () => {
+    const eventDir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-run-log-"))
+    const eventPath = path.join(eventDir, "event.json")
+    fs.writeFileSync(eventPath, JSON.stringify({ schedule: "*/15 * * * *" }))
+    process.env.GITHUB_RUN_ID = "456"
+    process.env.GITHUB_RUN_ATTEMPT = "1"
+    process.env.GITHUB_REPOSITORY = "o/r"
+    process.env.GITHUB_WORKFLOW = "kody"
+    process.env.GITHUB_JOB = "run"
+    process.env.GITHUB_EVENT_NAME = "schedule"
+    process.env.GITHUB_ACTOR = "aguyaharonyair"
+    process.env.GITHUB_EVENT_PATH = eventPath
+    const data: Record<string, unknown> = {
+      jobId: "gh-456-1",
+      jobKey: "instant:goal-manager",
+      jobFlavor: "instant",
+      jobAction: "goal-manager",
+      jobCapability: "goal-manager",
+      jobExecutable: "goal-manager",
+    }
+
+    stageGoalRunLogEvent(
+      data,
+      "daily-web-release-loop",
+      {
+        source: "goal-manager",
+        event: "loop.tick.dispatch",
+        goalType: "agentLoop",
+        status: "dispatch",
+        reason: "dispatch goal web-release",
+        target: { type: "goal", id: "web-release" },
+        dispatch: {
+          action: "goal-manager",
+          executable: "goal-manager",
+          cliArgs: { goal: "web-release" },
+        },
+      },
+      "2026-06-26T15:21:27Z",
+    )
+
+    flushGoalRunLogEvents(config, "/repo", data)
+
+    const line = appendStateLineMock.mock.calls[0]![3] as string
+    const event = JSON.parse(line.trim()) as Record<string, unknown>
+    expect(event).toMatchObject({
+      trigger: {
+        source: "github-actions",
+        kind: "schedule",
+        eventName: "schedule",
+        actor: "aguyaharonyair",
+        githubActor: "aguyaharonyair",
+        actorRole: "github workflow run actor; not the manual dispatcher",
+        schedule: "*/15 * * * *",
+      },
+      dispatchContext: {
+        triggeredBy: "GitHub schedule",
+        triggerKind: "schedule",
+        dispatchMode: "automated",
+        githubActor: "aguyaharonyair",
+        githubActorRole: "github workflow run actor; not the manual dispatcher",
+        decidedBy: "goal-manager",
+        dispatchedBy: "goal-manager",
+        target: { type: "goal", id: "web-release" },
+        action: "goal-manager",
+        reason: "dispatch goal web-release",
+      },
+    })
   })
 
   it("summarizes goal snapshots and changes for audit readers", () => {

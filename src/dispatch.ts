@@ -185,7 +185,7 @@ export function autoDispatch(opts?: {
 
   // PR-merge events are not routed here for release: the `release`
   // orchestrator merges its own PR via `mergeReleasePr` and then dispatches
-  // release-publish + release-deploy. A human merging a release PR manually
+  // release-publish + release-promote + production deploy. A human merging a release PR manually
   // doesn't auto-finalize; they'd run `kody release-publish` directly or
   // re-trigger `@kody release` on the originating issue.
   //

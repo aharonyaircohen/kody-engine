@@ -25,7 +25,9 @@ export function getCompanyStoreRoot(): string | null {
   return root
 }
 
-export function getCompanyStoreAssetRoot(kind: "capabilities" | "executables" | "goals" | "agents"): string | null {
+export function getCompanyStoreAssetRoot(
+  kind: "capabilities" | "executables" | "goals" | "agents" | "workflows",
+): string | null {
   const root = getCompanyStoreRoot()
   if (!root) return null
   const folderByKind: Record<typeof kind, string> = {
@@ -33,6 +35,7 @@ export function getCompanyStoreAssetRoot(kind: "capabilities" | "executables" | 
     executables: "executables",
     goals: "goals",
     agents: "agents",
+    workflows: "workflows",
   }
   return path.join(root, ".kody", folderByKind[kind])
 }

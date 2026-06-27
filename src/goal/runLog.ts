@@ -31,6 +31,7 @@ export interface GoalRunLogEvent {
   goal?: Record<string, unknown>
   inspection?: Record<string, unknown>
   decision?: Record<string, unknown>
+  dispatchContext?: Record<string, unknown>
   change?: Record<string, unknown>
   run?: Record<string, unknown>
   repo?: Record<string, unknown>
@@ -62,12 +63,7 @@ export function stageGoalRunLogEvent(
     path,
     events: [
       ...(existing?.events ?? []),
-      {
-        version: 1,
-        time: at,
-        goalId,
-        ...event,
-      },
+      buildGoalRunLogEvent(data, goalId, event, at),
     ],
   }
 }
@@ -189,6 +185,27 @@ function githubRunId(): string | null {
   return attempt ? `gh-${runId}-${attempt}` : `gh-${runId}`
 }
 
+function buildGoalRunLogEvent(
+  data: Record<string, unknown>,
+  goalId: string,
+  event: Omit<GoalRunLogEvent, "version" | "time" | "goalId">,
+  at: string,
+): GoalRunLogEvent {
+  const trigger = event.trigger ?? triggerContext()
+  const job = event.job ?? jobContext(data)
+  const base: GoalRunLogEvent = {
+    version: 1,
+    time: at,
+    goalId,
+    ...event,
+  }
+  if (trigger !== undefined) base.trigger = trigger
+  if (job !== undefined) base.job = job
+  const context = event.dispatchContext ?? dispatchContext(base, trigger, job)
+  if (context !== undefined) base.dispatchContext = context
+  return base
+}
+
 function enrichGoalRunLogEvent(
   config: StateRepoConfig,
   data: Record<string, unknown>,
@@ -196,13 +213,16 @@ function enrichGoalRunLogEvent(
   event: GoalRunLogEvent,
 ): GoalRunLogEvent {
   const stateRepo = stateRepoContext(config, event.goalId, logPath)
+  const trigger = event.trigger ?? triggerContext()
+  const job = event.job ?? jobContext(data)
   return pruneUndefined({
     ...event,
     run: event.run ?? runContext(data),
     repo: event.repo ?? repoContext(config),
     stateRepo: event.stateRepo ?? stateRepo,
-    trigger: event.trigger ?? triggerContext(),
-    job: event.job ?? jobContext(data),
+    trigger,
+    job,
+    dispatchContext: event.dispatchContext ?? dispatchContext(event, trigger, job),
     links: event.links ?? linkContext(stateRepo),
   }) as GoalRunLogEvent
 }
@@ -254,12 +274,19 @@ function stateRepoContext(
   }
 }
 
-function triggerContext(): Record<string, unknown> {
+function triggerContext(): Record<string, unknown> | undefined {
   const event = readGithubEvent()
   const inputs = recordValue(event?.inputs)
-  return pruneUndefined({
-    eventName: process.env.GITHUB_EVENT_NAME?.trim() || undefined,
-    actor: process.env.GITHUB_ACTOR?.trim() || undefined,
+  const eventName = process.env.GITHUB_EVENT_NAME?.trim() || undefined
+  const githubActor = process.env.GITHUB_ACTOR?.trim() || undefined
+  if (!eventName && !githubActor && !process.env.GITHUB_EVENT_PATH) return undefined
+  const trigger = pruneUndefined({
+    source: eventName ? "github-actions" : "local",
+    kind: triggerKind(eventName),
+    eventName,
+    actor: githubActor,
+    githubActor,
+    actorRole: triggerActorRole(eventName),
     eventPath: process.env.GITHUB_EVENT_PATH?.trim() || undefined,
     issue: numberValue(recordValue(event?.issue)?.number),
     pullRequest: numberValue(recordValue(event?.pull_request)?.number),
@@ -269,23 +296,79 @@ function triggerContext(): Record<string, unknown> {
       ? pickRecord(inputs, ["issue_number", "sessionId", "message", "model", "title", "executable", "base"])
       : undefined,
   })
+  return Object.keys(trigger).length > 0 ? trigger : undefined
+}
+
+function triggerKind(eventName: string | undefined): string {
+  if (!eventName) return "local"
+  if (eventName === "schedule") return "schedule"
+  if (eventName === "workflow_dispatch") return "manual-workflow-dispatch"
+  return eventName
+}
+
+function triggerActorRole(eventName: string | undefined): string | undefined {
+  if (!eventName) return undefined
+  if (eventName === "schedule") return "github workflow run actor; not the manual dispatcher"
+  if (eventName === "workflow_dispatch") return "manual workflow dispatcher"
+  return "github event actor"
 }
 
 function jobContext(data: Record<string, unknown>): Record<string, unknown> | undefined {
   const job = pruneUndefined({
-    id: stringValue(data.jobId),
-    key: stringValue(data.jobKey),
-    flavor: stringValue(data.jobFlavor),
-    action: stringValue(data.jobAction),
-    capability: stringValue(data.jobCapability),
-    executable: stringValue(data.jobExecutable),
-    agent: stringValue(data.jobAgent),
-    schedule: stringValue(data.jobSchedule),
-    target: data.jobTarget,
+    id: stringValue(data.jobId) ?? undefined,
+    key: stringValue(data.jobKey) ?? undefined,
+    flavor: stringValue(data.jobFlavor) ?? undefined,
+    action: stringValue(data.jobAction) ?? undefined,
+    capability: stringValue(data.jobCapability) ?? undefined,
+    executable: stringValue(data.jobExecutable) ?? undefined,
+    agent: stringValue(data.jobAgent) ?? undefined,
+    schedule: stringValue(data.jobSchedule) ?? undefined,
+    target: data.jobTarget ?? undefined,
     why: truncateString(stringValue(data.jobWhy), 1000),
     saveReport: data.jobSaveReport === true ? true : undefined,
   })
   return Object.keys(job).length > 0 ? job : undefined
+}
+
+function dispatchContext(
+  event: GoalRunLogEvent,
+  trigger: Record<string, unknown> | undefined,
+  job: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!event.dispatch && event.status !== "dispatch") return undefined
+  const dispatch = event.dispatch ?? {}
+  const context = pruneUndefined({
+    triggeredBy: triggerLabel(trigger),
+    triggerKind: stringValue(trigger?.kind),
+    dispatchMode: dispatchMode(trigger),
+    githubActor: stringValue(trigger?.githubActor) ?? stringValue(trigger?.actor),
+    githubActorRole: stringValue(trigger?.actorRole),
+    decidedBy: event.source,
+    dispatchedBy: event.source,
+    target: event.target,
+    action: dispatch.action ?? stringValue(job?.action),
+    capability: dispatch.capability ?? stringValue(job?.capability),
+    reason: event.reason,
+  })
+  return Object.keys(context).length > 0 ? context : undefined
+}
+
+function triggerLabel(trigger: Record<string, unknown> | undefined): string {
+  const kind = stringValue(trigger?.kind)
+  if (kind === "schedule") return "GitHub schedule"
+  if (kind === "manual-workflow-dispatch") return "manual workflow dispatch"
+  if (kind === "issue_comment") return "GitHub issue comment"
+  if (kind === "pull_request") return "GitHub pull request"
+  if (kind) return `GitHub ${kind}`
+  return "local run"
+}
+
+function dispatchMode(trigger: Record<string, unknown> | undefined): string {
+  const kind = stringValue(trigger?.kind)
+  if (kind === "schedule") return "automated"
+  if (kind === "manual-workflow-dispatch") return "manual"
+  if (kind) return "event-driven"
+  return "local"
 }
 
 function linkContext(stateRepo: Record<string, unknown> | undefined): Record<string, unknown> | undefined {

@@ -4,7 +4,7 @@
  * finishFlow on success.
  *
  * Resolves the PR number from `state.core.prUrl` (the most recently produced
- * PR — e.g. the deploy PR after release-deploy). Polls `gh pr checks <N>`
+ * PR — e.g. the promotion PR after release-promote). Polls `gh pr checks <N>`
  * with a bounded timeout. Emits one of:
  *
  *   CI_PASSED   — every check is pass/skipping

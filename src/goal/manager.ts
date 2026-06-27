@@ -18,7 +18,7 @@ export interface GoalRouteStep {
 }
 
 export interface ManagedLoopTarget {
-  type: "goal" | "capability"
+  type: "goal" | "capability" | "workflow"
   id: string
 }
 
@@ -239,7 +239,7 @@ function asPreferredRunTime(value: unknown): ManagedGoalPreferredRunTime | undef
 function asLoopTarget(value: unknown): ManagedLoopTarget | undefined {
   const raw = asRecord(value)
   if (!raw) return undefined
-  if (raw.type !== "goal" && raw.type !== "capability") return undefined
+  if (raw.type !== "goal" && raw.type !== "capability" && raw.type !== "workflow") return undefined
   if (typeof raw.id !== "string" || raw.id.trim().length === 0) return undefined
   return { type: raw.type, id: raw.id }
 }
