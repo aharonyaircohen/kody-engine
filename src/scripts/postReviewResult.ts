@@ -25,6 +25,9 @@ function inferVerdictFromReviewText(body: string): ReviewVerdict {
   if (
     /\b(actionable item|suggestions?|worth clarifying|worth checking|minor note|non-blocking|deserves a comment)\b/i.test(
       body,
+    ) ||
+    /\b(improvement opportunit(?:y|ies)|more useful if|would be more useful|would be better|incomplete as standalone|leaving a gap)\b/i.test(
+      body,
     )
   ) {
     return "CONCERNS"

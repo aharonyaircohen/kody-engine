@@ -39,6 +39,18 @@ describe("postReviewResult: detectVerdict", () => {
       ),
     ).toBe("CONCERNS")
   })
+  it("infers CONCERNS from a prose verdict that names an improvement opportunity", () => {
+    expect(
+      detectVerdict(
+        [
+          "### Verdict",
+          "",
+          "The change is factually correct and follows existing formatting.",
+          "The improvement opportunity is that the new sentence would be more useful if paired with the command that runs integration tests.",
+        ].join("\n"),
+      ),
+    ).toBe("CONCERNS")
+  })
   it("infers FAIL from blocking review language without a verdict heading", () => {
     expect(detectVerdict("This introduces a regression and should not merge until fixed.")).toBe("FAIL")
   })
