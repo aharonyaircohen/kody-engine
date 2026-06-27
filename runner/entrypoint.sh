@@ -5,12 +5,13 @@ set -euo pipefail
 #   REPO            owner/name of the repo to operate on (required)
 #   REF             branch/sha to checkout (default: default branch)
 #   GITHUB_TOKEN    PAT or installation token with repo scope (required)
-#   SESSION_ID      chat session id (chat mode)
+#   KODY_RUN_REQUEST_JSON canonical target/intent request
+#   SESSION_ID      legacy chat session id
 #   INIT_MESSAGE    initial chat message (chat mode)
 #   MODEL           model override (optional, e.g. "gemini/gemini-2.5-flash")
 #   DASHBOARD_URL   event ingest URL with inline ?token=... (chat mode)
 #   ALL_SECRETS     JSON blob of secrets the engine reads (mirrors Actions toJSON(secrets))
-#   ISSUE_NUMBER    issue number (agent mode)
+#   ISSUE_NUMBER    legacy issue number
 
 : "${REPO:?REPO is required (owner/name)}"
 : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
@@ -164,8 +165,10 @@ export ISSUE_NUMBER="${ISSUE_NUMBER:-}"
 # Contents API. GH_TOKEN auths gh.
 export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$REPO}"
 export GH_TOKEN="${GH_TOKEN:-$GITHUB_TOKEN}"
+export KODY_RUN_REQUEST_JSON="${KODY_RUN_REQUEST_JSON:-}"
 export KODY_RUN_MODE="${KODY_RUN_MODE:-}"
 
+# Legacy fallback only: new dashboard/pool calls set KODY_RUN_REQUEST_JSON.
 if [ -z "$KODY_RUN_MODE" ]; then
   if [ -n "$ISSUE_NUMBER" ]; then
     KODY_RUN_MODE="issue"

@@ -5,7 +5,7 @@
  * 15 min. When GitHub Actions is DOWN that cron never fires, so capabilities stall.
  * This tick is the fallback: while the always-on pool machine is awake, it
  * checks GitHub health and — only when GitHub is degraded — runs the scheduled
- * fan-out on a Fly runner (mode "scheduled") for each active repo.
+ * fan-out target on a Fly runner for each active repo.
  *
  * GitHub stays the default: we do nothing while it's healthy. And the engine's
  * per-capability cadence guard (`lastFiredAt` vs `every:`) means that even if GitHub
@@ -30,7 +30,15 @@ export interface CapabilityFallbackDeps {
   claim: (
     owner: string,
     repo: string,
-    req: { jobId: string; repo: string; mode: "scheduled" },
+    req: {
+      jobId: string
+      repo: string
+      runRequest: {
+        target: { type: "workflow"; id: "scheduled-fanout" }
+        intent: "tick"
+        source: "schedule"
+      }
+    },
   ) => Promise<CapabilityTickClaimResult>
   log: (msg: string) => void
   /** Injectable clock for deterministic jobIds in tests. */
@@ -66,7 +74,11 @@ export async function runCapabilityFallbackTick(
       const res = await deps.claim(owner, repo, {
         jobId: `sched-${owner}-${repo}-${clock()}`,
         repo: tag,
-        mode: "scheduled",
+        runRequest: {
+          target: { type: "workflow", id: "scheduled-fanout" },
+          intent: "tick",
+          source: "schedule",
+        },
       })
       if (res.ok) {
         claimed++

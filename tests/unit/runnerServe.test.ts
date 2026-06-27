@@ -68,7 +68,10 @@ describe("runnerServe: parseJob", () => {
     })
     expect("job" in out).toBe(true)
     if ("job" in out) {
-      expect(out.job.mode).toBe("interactive")
+      expect(out.job.runRequest).toMatchObject({
+        target: { type: "chat", id: "sess-1" },
+        intent: "continue",
+      })
       expect(out.job.sessionId).toBe("sess-1")
       expect(out.job.idleExitMs).toBe(600000)
     }
@@ -84,12 +87,16 @@ describe("runnerServe: parseJob", () => {
     const out = parseJob({ jobId: "j1", repo: "o/r", githubToken: "ghp_x", mode: "scheduled" })
     expect("job" in out).toBe(true)
     if ("job" in out) {
-      expect(out.job.mode).toBe("scheduled")
+      expect(out.job.runRequest).toMatchObject({
+        target: { type: "workflow", id: "scheduled-fanout" },
+        intent: "tick",
+        source: "schedule",
+      })
       expect(out.job.issueNumber).toBeUndefined()
     }
   })
 
-  it("accepts a forced scheduled action payload", () => {
+  it("normalizes a legacy forced scheduled action payload to a goal target", () => {
     const out = parseJob({
       jobId: "j1",
       repo: "o/r",
@@ -101,10 +108,32 @@ describe("runnerServe: parseJob", () => {
     })
     expect("job" in out).toBe(true)
     if ("job" in out) {
-      expect(out.job.mode).toBe("scheduled")
-      expect(out.job.action).toBe("goal-manager")
-      expect(out.job.message).toBe("weekly-docs")
+      expect(out.job.runRequest).toMatchObject({
+        target: { type: "goal", id: "weekly-docs" },
+        intent: "manage",
+        source: "dashboard",
+      })
       expect(out.job.reasoningEffort).toBe("low")
+    }
+  })
+
+  it("accepts a canonical run request payload", () => {
+    const out = parseJob({
+      jobId: "j1",
+      repo: "o/r",
+      githubToken: "ghp_x",
+      runRequest: {
+        target: { type: "workflow", id: "cms-content-editor" },
+        intent: "run",
+        source: "dashboard",
+      },
+    })
+    expect("job" in out).toBe(true)
+    if ("job" in out) {
+      expect(out.job.runRequest).toMatchObject({
+        target: { type: "workflow", id: "cms-content-editor" },
+        intent: "run",
+      })
     }
   })
 })

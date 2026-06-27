@@ -32,6 +32,7 @@ import {
 } from "./config.js"
 import { configureGitIdentity, installLitellmIfNeeded, resolveAuthToken, unpackAllSecrets } from "./kody-cli.js"
 import { startLitellmIfNeeded } from "./litellm.js"
+import { readRunRequestFromEnv } from "./run-request.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
 
 const DEFAULT_MODEL = "claude/claude-haiku-4-5-20251001"
@@ -86,7 +87,15 @@ export function parseChatArgs(argv: string[], env: NodeJS.ProcessEnv = process.e
     else if (arg) result.errors.push(`unexpected positional: ${arg}`)
   }
 
+  const runRequest = readRunRequestFromEnv(env)
+  if (runRequest && "error" in runRequest) result.errors.push(runRequest.error)
+  const chatTarget =
+    runRequest && "request" in runRequest && runRequest.request.target.type === "chat"
+      ? runRequest.request.target.id
+      : undefined
+
   // Env fallback — CLI wins.
+  result.sessionId = result.sessionId ?? chatTarget
   result.sessionId = result.sessionId ?? env.SESSION_ID ?? undefined
   result.initMessage = result.initMessage ?? env.INIT_MESSAGE ?? undefined
   result.model = result.model ?? env.MODEL ?? undefined

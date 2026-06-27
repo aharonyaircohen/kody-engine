@@ -15,6 +15,7 @@
 import { FlyClient } from "./fly.js"
 import { type ClaimResult, type PoolJob, PoolManager } from "./manager.js"
 import { readRepoSecret, readRepoSecrets } from "./vault.js"
+import type { RunRequest } from "../run-request.js"
 
 /** Vault key the dashboard writes to size a repo's warm pool. */
 const POOL_MIN_VAULT_KEY = "POOL_MIN"
@@ -40,9 +41,8 @@ export interface ClaimRequest {
   jobId: string
   /** owner/name */
   repo: string
-  /** "issue" (default, one-shot run) | "interactive" (long-lived chat session)
-   * | "scheduled" (run the capability/goal fan-out — Fly fallback for GitHub cron). */
-  mode?: "issue" | "interactive" | "scheduled"
+  /** Canonical target/intent contract. Legacy mode fields are normalized by pool-serve. */
+  runRequest: RunRequest
   /** Required for issue mode. */
   issueNumber?: number
   /** Required for interactive mode. */
@@ -201,7 +201,7 @@ export class PoolRegistry {
       jobId: req.jobId,
       repo: `${owner}/${repo}`,
       githubToken: this.cfg.githubToken,
-      mode: req.mode ?? "issue",
+      runRequest: req.runRequest,
       issueNumber: req.issueNumber,
       sessionId: req.sessionId,
       idleExitMs: req.idleExitMs,

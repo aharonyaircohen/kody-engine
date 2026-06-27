@@ -10,6 +10,7 @@ describe("entry: parseArgs", () => {
     vi.stubEnv("GITHUB_EVENT_NAME", "")
     vi.stubEnv("SESSION_ID", "")
     vi.stubEnv("KODY_RUN_MODE", "")
+    vi.stubEnv("KODY_RUN_REQUEST_JSON", "")
     vi.stubEnv("ISSUE_NUMBER", "")
   })
   afterEach(() => {
@@ -86,6 +87,54 @@ describe("entry: parseArgs", () => {
 
     expect(a.command).toBe("ci")
     expect(a.ciArgv).toEqual(["--issue", "42"])
+  })
+
+  it("routes bare runner issue requests through ci preflight", () => {
+    vi.stubEnv(
+      "KODY_RUN_REQUEST_JSON",
+      JSON.stringify({
+        target: { type: "issue", id: 42 },
+        intent: "run",
+        source: "dashboard",
+      }),
+    )
+
+    const a = parseArgs([])
+
+    expect(a.command).toBe("ci")
+    expect(a.ciArgv).toEqual(["--issue", "42"])
+  })
+
+  it("routes bare runner chat requests to chat", () => {
+    vi.stubEnv(
+      "KODY_RUN_REQUEST_JSON",
+      JSON.stringify({
+        target: { type: "chat", id: "sess-1" },
+        intent: "continue",
+        source: "dashboard",
+      }),
+    )
+
+    const a = parseArgs([])
+
+    expect(a.command).toBe("chat")
+    expect(a.chatArgv).toEqual([])
+  })
+
+  it("routes bare runner goal requests to ci", () => {
+    vi.stubEnv(
+      "KODY_RUN_REQUEST_JSON",
+      JSON.stringify({
+        target: { type: "goal", id: "weekly-docs" },
+        intent: "manage",
+        source: "dashboard",
+      }),
+    )
+
+    const a = parseArgs([])
+
+    expect(a.command).toBe("ci")
+    expect(a.ciArgv).toEqual([])
   })
 
   it("routes bare runner interactive mode to chat", () => {

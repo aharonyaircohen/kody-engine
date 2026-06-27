@@ -6,9 +6,28 @@ describe("poolServe: parseClaimRequest", () => {
     const out = parseClaimRequest({ jobId: "s1", repo: "acme/widgets", mode: "scheduled" })
     expect("req" in out).toBe(true)
     if ("req" in out) {
-      expect(out.req.mode).toBe("scheduled")
+      expect(out.req.runRequest).toMatchObject({
+        target: { type: "workflow", id: "scheduled-fanout" },
+        intent: "tick",
+      })
       expect(out.req.issueNumber).toBeUndefined()
       expect(out.req.sessionId).toBeUndefined()
+    }
+  })
+
+  it("accepts a canonical run request", () => {
+    const out = parseClaimRequest({
+      jobId: "s1",
+      repo: "acme/widgets",
+      runRequest: {
+        target: { type: "goal", id: "weekly-docs" },
+        intent: "manage",
+        source: "dashboard",
+      },
+    })
+    expect("req" in out).toBe(true)
+    if ("req" in out) {
+      expect(out.req.runRequest.target).toEqual({ type: "goal", id: "weekly-docs" })
     }
   })
 

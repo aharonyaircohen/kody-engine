@@ -27,6 +27,7 @@ import { runCapabilityFallbackTick } from "../pool/capability-fallback-tick.js"
 import type { FlyGuest } from "../pool/fly.js"
 import { bearerOk, derivePoolApiKey, deriveRunnerApiKey, masterKeyBytes } from "../pool/keys.js"
 import { type ClaimRequest, PoolRegistry } from "../pool/registry.js"
+import { parseRunRequest, type RunRequest } from "../run-request.js"
 
 const PERF_GUEST: Record<string, FlyGuest> = {
   low: { cpu_kind: "shared", cpus: 2, memory_mb: 2048 },
@@ -79,24 +80,87 @@ export function parseClaimRequest(body: unknown): { req: ClaimRequest } | { erro
   if (!/^[^/\s]+\/[^/\s]+$/.test(repo)) return { error: "repo must be 'owner/name'" }
 
   const mode = b.mode === "interactive" ? "interactive" : b.mode === "scheduled" ? "scheduled" : "issue"
-  const req: ClaimRequest = { jobId, repo, mode }
-  if (mode === "issue") {
-    const issueNumber = Number(b.issueNumber)
-    if (!Number.isInteger(issueNumber) || issueNumber <= 0) return { error: "issueNumber required for issue mode" }
-    req.issueNumber = issueNumber
-  } else if (mode === "interactive") {
-    const sessionId = typeof b.sessionId === "string" ? b.sessionId.trim() : ""
-    if (!sessionId) return { error: "sessionId required for interactive mode" }
-    req.sessionId = sessionId
+  const action = typeof b.action === "string" && b.action.trim() ? b.action.trim() : undefined
+  const message = typeof b.message === "string" && b.message.trim() ? b.message.trim() : undefined
+  const runRequest =
+    b.runRequest !== undefined
+      ? parseRunRequest(b.runRequest)
+      : synthesizeLegacyClaimRequest({
+          mode,
+          issueNumber: b.issueNumber,
+          sessionId: b.sessionId,
+          action,
+          message,
+        })
+  if ("error" in runRequest) return { error: runRequest.error }
+  const req: ClaimRequest = { jobId, repo, runRequest: runRequest.request }
+  if (req.runRequest.target.type === "issue") {
+    req.issueNumber = req.runRequest.target.id
+  } else if (req.runRequest.target.type === "chat") {
+    req.sessionId = req.runRequest.target.id
     if (Number.isFinite(Number(b.idleExitMs))) req.idleExitMs = Number(b.idleExitMs)
     if (Number.isFinite(Number(b.hardCapMs))) req.hardCapMs = Number(b.hardCapMs)
   }
-  // mode "scheduled" needs no extra fields — runs the whole capability/goal fan-out.
   if (typeof b.ref === "string" && b.ref.trim()) req.ref = b.ref.trim()
   if (typeof b.model === "string" && b.model.trim()) req.model = b.model.trim()
-  if (typeof b.sessionId === "string" && b.sessionId.trim()) req.sessionId = b.sessionId.trim()
   if (typeof b.dashboardUrl === "string" && b.dashboardUrl.trim()) req.dashboardUrl = b.dashboardUrl.trim()
   return { req }
+}
+
+function synthesizeLegacyClaimRequest(input: {
+  mode: "issue" | "interactive" | "scheduled"
+  issueNumber: unknown
+  sessionId: unknown
+  action?: string
+  message?: string
+}): { request: RunRequest } | { error: string } {
+  if (input.mode === "issue") {
+    const issueNumber = Number(input.issueNumber)
+    if (!Number.isInteger(issueNumber) || issueNumber <= 0) return { error: "issueNumber required for issue mode" }
+    return {
+      request: {
+        target: { type: "issue", id: issueNumber },
+        intent: "run",
+        source: "dashboard",
+      },
+    }
+  }
+  if (input.mode === "interactive") {
+    const sessionId = typeof input.sessionId === "string" ? input.sessionId.trim() : ""
+    if (!sessionId) return { error: "sessionId required for interactive mode" }
+    return {
+      request: {
+        target: { type: "chat", id: sessionId },
+        intent: "continue",
+        source: "dashboard",
+      },
+    }
+  }
+  if (input.action === "goal-manager" && input.message) {
+    return {
+      request: {
+        target: { type: "goal", id: input.message },
+        intent: "manage",
+        source: "dashboard",
+      },
+    }
+  }
+  if (input.action) {
+    return {
+      request: {
+        target: { type: "workflow", id: input.action },
+        intent: "run",
+        source: "dashboard",
+      },
+    }
+  }
+  return {
+    request: {
+      target: { type: "workflow", id: "scheduled-fanout" },
+      intent: "tick",
+      source: "schedule",
+    },
+  }
 }
 
 export async function poolServe(): Promise<number> {
