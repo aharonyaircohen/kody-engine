@@ -40,7 +40,10 @@ export interface PrMergeInfo {
 
 export function prMergeStatus(prNumber: number, cwd?: string): PrMergeInfo {
   try {
-    const out = gh(["pr", "view", String(prNumber), "--json", "mergeable,mergeStateStatus"], { cwd })
+    const out = gh(["pr", "view", String(prNumber), "--json", "mergeable,mergeStateStatus"], {
+      cwd,
+      preferRepoToken: true,
+    })
     const parsed = JSON.parse(out) as { mergeable?: string; mergeStateStatus?: string }
     const mergeable = parsed.mergeable ?? "UNKNOWN"
     const mergeStateStatus = parsed.mergeStateStatus ?? "UNKNOWN"
@@ -175,7 +178,7 @@ export function findExistingPr(branch: string, cwd?: string): { number: number; 
   try {
     const output = gh(
       ["pr", "list", "--head", branch, "--state", "open", "--json", "number,url,body", "--limit", "1"],
-      { cwd },
+      { cwd, preferRepoToken: true },
     )
     const arr = JSON.parse(output)
     const first = Array.isArray(arr) ? arr[0] : null
@@ -255,7 +258,10 @@ function updateExistingPr(
   const stripped = existing.url.replace(/^https:\/\/github\.com\//, "")
   const [owner, repo] = stripped.split("/")
   try {
-    gh(["api", "--method", "PATCH", `repos/${owner}/${repo}/pulls/${existing.number}`, "-f", `body=${body}`], { cwd })
+    gh(["api", "--method", "PATCH", `repos/${owner}/${repo}/pulls/${existing.number}`, "-f", `body=${body}`], {
+      cwd,
+      preferRepoToken: true,
+    })
   } catch (err) {
     // Surface the failure — the ensurePr script wraps this in try/catch and
     // reports it via ctx.output.reason. Swallowing it once masked a successful
@@ -271,7 +277,7 @@ function createPr(branch: string, base: string, title: string, body: string, dra
   if (draft) args.push("--draft")
   // Goal-task PRs (base = goal-<id>) are merged into the goal branch by
   // goal-manager on a subsequent tick — we don't enable GitHub auto-merge here.
-  const url = gh(args, { input: body, cwd }).trim()
+  const url = gh(args, { input: body, cwd, preferRepoToken: true }).trim()
   const match = url.match(/\/pull\/(\d+)$/)
   const number = match ? parseInt(match[1], 10) : 0
   return { url, number, draft, action: "created" }
