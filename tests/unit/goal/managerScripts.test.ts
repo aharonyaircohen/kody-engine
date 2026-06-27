@@ -94,6 +94,29 @@ describe("advanceManagedGoal", () => {
     expect(raw.facts).toEqual({ pendingEvidence: "releasePrExists" })
   })
 
+  it("dispatches capability-only route steps without leaking implementation names", async () => {
+    const ctx = fakeCtx(
+      state(
+        goalExtra({
+          route: [
+            {
+              evidence: "releasePrExists",
+              stage: "prepare",
+              capability: "release-prepare",
+            },
+          ],
+        }),
+      ),
+    )
+
+    await advanceManagedGoal(ctx, fakeProfile())
+
+    expect(ctx.output.nextDispatch).toEqual({
+      capability: "release-prepare",
+      cliArgs: {},
+    })
+  })
+
   it("lets route args reference the active goal id", async () => {
     const ctx = fakeCtx(
       state(

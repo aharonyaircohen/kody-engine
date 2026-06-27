@@ -10,7 +10,6 @@ describe("agent-factory profile", () => {
 
     expect(profile.name).toBe("agent-factory")
     expect(profile.action).toBe("agent-factory")
-    expect(profile.capabilityKind).toBe("act")
     expect(profile.lifecycle).toBeUndefined()
     expect(profile.scripts.preflight.map((entry) => entry.script)).toEqual(["loadIssueContext", "composePrompt"])
     expect(profile.scripts.postflight.map((entry) => entry.script)).toEqual([
@@ -31,8 +30,11 @@ describe("agent-factory profile", () => {
     expect(profile.name).toBe("agent-factory")
     expect(profile.action).toBe("agent-factory")
     expect(profile.executable).toBe("agent-factory")
-    expect(profile.capabilityKind).toBe("act")
 
-    expect(resolveCapabilityAction("agent-factory")?.capabilityKind).toBe("act")
+    expect(resolveCapabilityAction("agent-factory")).toMatchObject({
+      action: "agent-factory",
+      capability: "agent-factory",
+      executable: "agent-factory",
+    })
   })
 })

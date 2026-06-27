@@ -64,7 +64,6 @@ function writeProfile(root: string, name: string, preflight: unknown[], postflig
       {
         name,
         action: name,
-        capabilityKind: "act",
         role: "utility",
         describe: "",
         inputs: [{ name: "issue", flag: "--issue", type: "int", required: true, describe: "" }],

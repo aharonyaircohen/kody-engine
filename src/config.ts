@@ -129,11 +129,13 @@ export interface KodyConfig {
     publishCommand?: string
     notifyCommand?: string
     e2eCommand?: string
+    productionUrl?: string
+    smokeCommand?: string
     draftRelease?: boolean
     /**
-     * Production target. release-deploy opens a PR
+     * Production target. release-promote opens a PR
      * `git.defaultBranch → releaseBranch` and stops. Unset (or equal to
-     * `git.defaultBranch`) → deploy is a no-op success (single-branch repos
+     * `git.defaultBranch`) → promotion is a no-op success (single-branch repos
      * have nothing to promote).
      */
     releaseBranch?: string
@@ -574,6 +576,8 @@ function parseReleaseConfig(raw: unknown): KodyConfig["release"] {
   if (typeof r.publishCommand === "string") out.publishCommand = r.publishCommand
   if (typeof r.notifyCommand === "string") out.notifyCommand = r.notifyCommand
   if (typeof r.e2eCommand === "string") out.e2eCommand = r.e2eCommand
+  if (typeof r.productionUrl === "string") out.productionUrl = r.productionUrl
+  if (typeof r.smokeCommand === "string") out.smokeCommand = r.smokeCommand
   if (typeof r.draftRelease === "boolean") out.draftRelease = r.draftRelease
   if (typeof r.releaseBranch === "string") out.releaseBranch = r.releaseBranch
   if (typeof r.timeoutMs === "number" && r.timeoutMs > 0) out.timeoutMs = Math.floor(r.timeoutMs)
