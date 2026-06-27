@@ -1,5 +1,5 @@
 import type { CapabilityEvidence } from "../capabilityEvidence.js"
-import { readStateText, type StateRepoConfig, upsertStateText } from "../stateRepo.js"
+import { type StateRepoConfig, writeStateText } from "../stateRepo.js"
 import { managedGoalFromState } from "./manager.js"
 import { goalRunLogSnapshot } from "./runLog.js"
 import type { GoalState } from "./state.js"
@@ -33,7 +33,7 @@ export function refreshGoalDashboardReport(input: GoalDashboardReportInput): Goa
     throw new Error(`goal report: invalid goal id "${input.goalId}"`)
   }
 
-  const filePath = `reports/${input.goalId}.md`
+  const filePath = goalDashboardReportRunPath(input.goalId)
   const body = goalReportBody(
     input.goalId,
     input.state,
@@ -41,17 +41,19 @@ export function refreshGoalDashboardReport(input: GoalDashboardReportInput): Goa
     latestGoalRunLogEvent(input.data, input.goalId),
     evidenceItems,
   )
-  const current = readStateText(input.config, input.cwd, filePath)
-  if (current?.content === body) {
-    const report = { slug: input.goalId, path: current.path, changed: false }
-    recordGoalReport(input.data, report)
-    return report
-  }
 
-  upsertStateText(input.config, input.cwd, filePath, body, `chore(reports): refresh ${input.goalId}`)
+  writeStateText(input.config, input.cwd, filePath, body, `chore(reports): add ${input.goalId} run`)
   const report = { slug: input.goalId, path: filePath, changed: true }
   recordGoalReport(input.data, report)
   return report
+}
+
+export function goalDashboardReportRunPath(goalId: string, now = new Date()): string {
+  const runId = now
+    .toISOString()
+    .replace(/\.\d{3}Z$/, "Z")
+    .replace(/:/g, "-")
+  return `reports/${goalId}/runs/${runId}.md`
 }
 
 export function capabilityEvidenceOutput(evidence: CapabilityEvidence): Record<string, unknown> {
@@ -168,9 +170,7 @@ function dispatchContextMarkdown(latestEvent: Record<string, unknown> | undefine
   return [
     `- Triggered by: ${stringField(context, "triggeredBy") ?? "unknown"}`,
     `- Mode: ${stringField(context, "dispatchMode") ?? "unknown"}`,
-    `- GitHub actor: ${
-      githubActor ? `${githubActor}${githubActorRole ? ` (${githubActorRole})` : ""}` : "none"
-    }`,
+    `- GitHub actor: ${githubActor ? `${githubActor}${githubActorRole ? ` (${githubActorRole})` : ""}` : "none"}`,
     `- Decided by: ${stringField(context, "decidedBy") ?? "unknown"}`,
     `- Dispatched by: ${stringField(context, "dispatchedBy") ?? "unknown"}`,
     `- Target: ${target ?? "none"}`,
@@ -247,9 +247,7 @@ function isArtifact(value: unknown): value is CapabilityEvidence["artifacts"][nu
   )
 }
 
-function uniqueArtifacts(
-  artifacts: CapabilityEvidence["artifacts"],
-): CapabilityEvidence["artifacts"] {
+function uniqueArtifacts(artifacts: CapabilityEvidence["artifacts"]): CapabilityEvidence["artifacts"] {
   const seen = new Set<string>()
   const out: CapabilityEvidence["artifacts"] = []
   for (const artifact of artifacts) {
@@ -305,7 +303,9 @@ function latestGoalRunLogEvent(data: Record<string, unknown>, goalId: string): R
   const events = (log as Record<string, unknown>).events
   if (!Array.isArray(events)) return undefined
   const latest = events.at(-1)
-  return latest && typeof latest === "object" && !Array.isArray(latest) ? (latest as Record<string, unknown>) : undefined
+  return latest && typeof latest === "object" && !Array.isArray(latest)
+    ? (latest as Record<string, unknown>)
+    : undefined
 }
 
 function recordGoalReport(data: Record<string, unknown>, report: GoalDashboardReportWrite): void {

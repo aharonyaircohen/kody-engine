@@ -76,7 +76,7 @@ See [Company Activation](company-activation.md) for the full activation contract
 | Agent | `.kody/agents/<slug>.md` | Who is acting. Identity only. |
 | Capabilities | `.kody/capabilities/<slug>/` | Capability contracts: public action, kind, cadence, owner, and output contract. |
 | Company executables | `.kody/executables/<slug>/` | Capability implementations for inspection, reports, triage, and dispatch. |
-| Reports | `<statePath>/reports/*.md` in `stateRepo` | Goal/loop-owned state findings for Dashboard display. |
+| Reports | `<statePath>/reports/<slug>/runs/*.md` in `stateRepo` | Goal/loop-owned state findings for Dashboard display. |
 | Context | `.kody/context/*.md` | Short background and vocabulary. Not hard rules. |
 | Goal templates | `.kody/goals/templates/<slug>/state.json` | Reusable managed agentGoal definitions. |
 | Goal instances | `<statePath>/goals/instances/<id>/state.json` in `stateRepo` | Live managed agentGoal runs with facts and progress. |
