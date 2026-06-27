@@ -13,7 +13,7 @@ import {
 } from "./issue.js"
 import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
 import { resolveCapabilityAction } from "./registry.js"
-import { readRunRequestFromEnv, type RunRequest } from "./run-request.js"
+import { type RunRequest, readRunRequestFromEnv } from "./run-request.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
