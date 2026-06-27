@@ -98,13 +98,18 @@ for (let i = 1; i < args.length; i += 1) {
   }
 }
 
+if (apiPath.endsWith("/git/ref/heads/kody-state")) {
+  process.stdout.write(JSON.stringify({ object: { sha: "state-branch-sha" } }))
+  process.exit(0)
+}
+
 const marker = "/contents/"
 const markerIndex = apiPath.indexOf(marker)
 if (markerIndex < 0) {
   fail("unsupported gh api path " + apiPath)
 }
 
-const relative = decodeURIComponent(apiPath.slice(markerIndex + marker.length))
+const relative = decodeURIComponent(apiPath.slice(markerIndex + marker.length).replace(/\\?.*$/, ""))
 const filePath = path.join(root, relative)
 
 if (method === "PUT") {

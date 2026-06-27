@@ -191,6 +191,10 @@ describe("dispatchClassified", () => {
   it("hands the next stage to the orchestrator in-process and persists state to the state repo", async () => {
     execFileSync.mockImplementation((cmd: string, args: string[]) => {
       if (cmd === "gh" && Array.isArray(args) && args[0] === "api") {
+        const apiPath = args.find((arg) => arg.startsWith("/repos/")) ?? ""
+        if (apiPath.endsWith("/git/ref/heads/kody-state")) {
+          return JSON.stringify({ object: { sha: "state-branch-sha" } })
+        }
         if (args.includes("--method") && args.includes("PUT")) return "{}"
         throw new Error("HTTP 404 Not Found")
       }
@@ -214,7 +218,11 @@ describe("dispatchClassified", () => {
     expect(puts.length).toBe(1)
     const args = puts[0]![1] as string[]
     expect(args).toContain("/repos/o/kody-state/contents/r/tasks/issues/99/state.json")
-    const payload = JSON.parse((puts[0]![2] as { input?: string }).input ?? "{}") as { content?: string }
+    const payload = JSON.parse((puts[0]![2] as { input?: string }).input ?? "{}") as {
+      branch?: string
+      content?: string
+    }
+    expect(payload.branch).toBe("kody-state")
     const stateJson = Buffer.from(payload.content ?? "", "base64").toString("utf-8")
     expect(stateJson).toContain("CLASSIFIED_AS_BUG")
     expect(stateJson).not.toContain("@kody")
