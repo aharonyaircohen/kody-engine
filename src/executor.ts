@@ -843,7 +843,7 @@ export async function runExecutableChain(profileName: string, input: ExecutorInp
   }
   if (result.nextDispatch || result.nextJob) {
     const pending =
-result.nextDispatch?.executable ??
+      result.nextDispatch?.executable ??
       result.nextDispatch?.workflow ??
       result.nextJob?.executable ??
       result.nextJob?.workflow ??
