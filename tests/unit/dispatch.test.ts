@@ -1,7 +1,7 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import type { KodyConfig } from "../../src/config.js"
 import { autoDispatch, dispatchScheduledWatches } from "../../src/dispatch.js"
 
@@ -15,6 +15,73 @@ function writeEvent(body: unknown): string {
 function testConfig(config: Partial<KodyConfig>): KodyConfig {
   return config as KodyConfig
 }
+
+let fixtureRoot: string
+let prevCwd: string
+
+beforeAll(() => {
+  // sync/resolve/merge/fix-ci/fix/preview-build ship in kody-store, not the
+  // engine root. CI clones the store alongside the repo; locally that clone
+  // may be missing, so write minimal stub capability folders and chdir into
+  // the fixture so the registry picks them up regardless of whether the
+  // store is present. Each stub declares the inputs the dispatch tests
+  // expect (pr/runId/prefer/feedback) so the dispatch parser extracts them
+  // from the issue context / comment text.
+  const stubs: Record<string, { inputs: unknown[] }> = {
+    sync: { inputs: [{ name: "pr", flag: "--pr", type: "int", required: true }] },
+    resolve: {
+      inputs: [
+        { name: "pr", flag: "--pr", type: "int", required: true },
+        { name: "prefer", flag: "--prefer", type: "enum", values: ["ours", "theirs"] },
+      ],
+    },
+    merge: { inputs: [{ name: "pr", flag: "--pr", type: "int", required: true }] },
+    "fix-ci": {
+      inputs: [
+        { name: "pr", flag: "--pr", type: "int", required: true },
+        { name: "runId", flag: "--run-id", type: "string" },
+      ],
+    },
+    fix: {
+      inputs: [
+        { name: "pr", flag: "--pr", type: "int", required: true },
+        { name: "feedback", flag: "--feedback", type: "string", bindsCommentRest: true },
+      ],
+    },
+    "preview-build": { inputs: [{ name: "pr", flag: "--pr", type: "int", required: true }] },
+  }
+  prevCwd = process.cwd()
+  fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "kody-dispatch-fixtures-"))
+  for (const [slug, stub] of Object.entries(stubs)) {
+    const dir = path.join(fixtureRoot, ".kody", "capabilities", slug)
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(
+      path.join(dir, "profile.json"),
+      JSON.stringify({
+        name: slug,
+        action: slug,
+        agentAction: slug,
+        capabilityKind: "act",
+        role: "primitive",
+        describe: `Stub ${slug} capability for dispatch tests.`,
+        inputs: stub.inputs,
+      }),
+    )
+    fs.writeFileSync(path.join(dir, "capability.md"), `# ${slug}\n`)
+  }
+  process.chdir(fixtureRoot)
+})
+
+afterAll(() => {
+  if (prevCwd) {
+    try {
+      process.chdir(prevCwd)
+    } catch {
+      /* cwd already gone — fine */
+    }
+  }
+  if (fixtureRoot) fs.rmSync(fixtureRoot, { recursive: true, force: true })
+})
 
 function writeLocalReleaseAsset(root: string): void {
   const baseInputs = {
@@ -75,7 +142,13 @@ function writeLocalReleaseAsset(root: string): void {
       inputs: [
         { name: "issue", flag: "--issue", type: "int", required: true, describe: "Release issue number." },
         { name: "bump", flag: "--bump", type: "enum", values: ["patch", "minor", "major"], describe: "Version bump." },
-        { name: "prefer", flag: "--prefer", type: "enum", values: ["ours", "theirs"], describe: "Conflict resolution." },
+        {
+          name: "prefer",
+          flag: "--prefer",
+          type: "enum",
+          values: ["ours", "theirs"],
+          describe: "Conflict resolution.",
+        },
         { name: "dry-run", flag: "--dry-run", type: "bool", describe: "Run without making changes." },
       ],
       ...baseInputs,

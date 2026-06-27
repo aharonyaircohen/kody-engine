@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 
 // Mock the gh() shell wrapper so we exercise the pure dedup/classification
 // logic of the new capability primitives without touching a real repo.
@@ -10,6 +13,47 @@ import { dispatchWorkflow, ensureComment, ensureIssue, readCheckRuns } from "../
 import { gh } from "../../src/issue.js"
 
 const REPO = "owner/repo"
+
+// `sync` ships in kody-store, not the engine root. CI clones the store
+// alongside the repo; locally that clone may be missing, so set up a stub
+// `sync` capability folder in a temp cwd so the registry resolves it
+// regardless of whether the store is present. The stub declares `pr` as a
+// required int input so `expectedDispatchTarget` recognises it as
+// PR-targeted.
+let fixtureRoot: string
+let prevCwd: string
+
+beforeAll(() => {
+  prevCwd = process.cwd()
+  fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-mcp-dedup-"))
+  const dir = path.join(fixtureRoot, ".kody", "capabilities", "sync")
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(
+    path.join(dir, "profile.json"),
+    JSON.stringify({
+      name: "sync",
+      action: "sync",
+      agentAction: "sync",
+      capabilityKind: "act",
+      role: "primitive",
+      describe: "Stub sync capability for capabilityMcpDedup tests.",
+      inputs: [{ name: "pr", flag: "--pr", type: "int", required: true }],
+    }),
+  )
+  fs.writeFileSync(path.join(dir, "capability.md"), "# Sync\n")
+  process.chdir(fixtureRoot)
+})
+
+afterAll(() => {
+  if (prevCwd) {
+    try {
+      process.chdir(prevCwd)
+    } catch {
+      /* cwd already gone — fine */
+    }
+  }
+  if (fixtureRoot) fs.rmSync(fixtureRoot, { recursive: true, force: true })
+})
 
 beforeEach(() => {
   vi.clearAllMocks()
