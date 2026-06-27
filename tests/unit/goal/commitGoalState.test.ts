@@ -92,6 +92,21 @@ describe("commitGoalState report refresh", () => {
     readStateTextMock.mockReset()
     upsertStateTextMock.mockReset()
     readStateTextMock.mockReturnValue(null)
+    // triggerContext() reads GITHUB_EVENT_NAME / GITHUB_ACTOR /
+    // GITHUB_EVENT_PATH and uses them to label the report's
+    // `Triggered by` line. The CI runner exports GITHUB_EVENT_NAME,
+    // which would otherwise flip the expected "local run" into
+    // "GitHub issue comment". Match runLog.test.ts and clear the
+    // vars so each case starts from the same local-run baseline.
+    delete process.env.GITHUB_EVENT_NAME
+    delete process.env.GITHUB_ACTOR
+    delete process.env.GITHUB_EVENT_PATH
+    delete process.env.GITHUB_RUN_ID
+    delete process.env.GITHUB_RUN_ATTEMPT
+    delete process.env.GITHUB_REPOSITORY
+    delete process.env.GITHUB_SERVER_URL
+    delete process.env.GITHUB_WORKFLOW
+    delete process.env.GITHUB_JOB
   })
 
   it("writes the goal dashboard report after changed goal state is persisted", async () => {

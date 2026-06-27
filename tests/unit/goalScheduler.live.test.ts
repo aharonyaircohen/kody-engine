@@ -8,6 +8,11 @@
  * - skips paused, done, missing-state, and legacy-shaped goal files
  * - keeps going when one managed tick fails
  * - invokes the published bin name `kody-engine`, never bare `kody`
+ *
+ * goal-scheduler ships in kody-store, not the engine root. The test
+ * skips when the store is unavailable (local dev without a clone)
+ * so the suite still loads — a missing store is not a scheduler
+ * regression.
  */
 import { spawnSync } from "node:child_process"
 import * as fs from "node:fs"
@@ -15,6 +20,8 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { resolveExecutable } from "../../src/registry.js"
+
+const SCHEDULER_AVAILABLE = resolveExecutable("goal-scheduler") !== null
 
 function schedulerPath(): string {
   const resolved = resolveExecutable("goal-scheduler")
@@ -145,6 +152,11 @@ afterEach(() => {
 })
 
 describe("goal-scheduler live wiring", () => {
+  if (!SCHEDULER_AVAILABLE) {
+    it.skip("goal-scheduler executable not available (kody-store not cloned locally)", () => {})
+    return
+  }
+
   it("ticks an active managed goal once via real kody-engine bin", () => {
     writeGoal("release-v1-2-3", "active", managedGoalExtra())
     activateGoals("release-v1-2-3")

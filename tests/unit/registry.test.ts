@@ -277,10 +277,7 @@ describe("registry: capabilities root", () => {
     const oldBody = ["agent", "respon", "sibility.md"].join("-")
     const legacyDir = path.join(root, ".kody", oldRoot, "audit")
     fs.mkdirSync(legacyDir, { recursive: true })
-    fs.writeFileSync(
-      path.join(legacyDir, "profile.json"),
-      JSON.stringify({ name: "audit", action: "audit" }),
-    )
+    fs.writeFileSync(path.join(legacyDir, "profile.json"), JSON.stringify({ name: "audit", action: "audit" }))
     fs.writeFileSync(path.join(legacyDir, oldBody), "# Audit\n\nLegacy body.\n")
 
     expect(listCapabilityActions().find((item) => item.action === "audit")).toBeUndefined()

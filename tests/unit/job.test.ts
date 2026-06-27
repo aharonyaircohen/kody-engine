@@ -267,6 +267,8 @@ describe("runJob (Phase 1 seam)", () => {
         name: "reproduce",
         action: "reproduce",
         implementation: "reproduce",
+        role: "primitive",
+        inputs: [{ name: "issue", flag: "--issue", type: "int", required: true }],
       })
       process.chdir(cwd)
 
