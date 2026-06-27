@@ -9,6 +9,8 @@ describe("entry: parseArgs", () => {
   beforeEach(() => {
     vi.stubEnv("GITHUB_EVENT_NAME", "")
     vi.stubEnv("SESSION_ID", "")
+    vi.stubEnv("KODY_RUN_MODE", "")
+    vi.stubEnv("ISSUE_NUMBER", "")
   })
   afterEach(() => {
     vi.unstubAllEnvs()
@@ -74,5 +76,33 @@ describe("entry: parseArgs", () => {
     const a = parseArgs(["ci", "--issue", "1"])
     expect(a.command).toBe("ci")
     expect(a.ciArgv).toEqual(["--issue", "1"])
+  })
+
+  it("routes bare runner issue mode through ci preflight", () => {
+    vi.stubEnv("KODY_RUN_MODE", "issue")
+    vi.stubEnv("ISSUE_NUMBER", "42")
+
+    const a = parseArgs([])
+
+    expect(a.command).toBe("ci")
+    expect(a.ciArgv).toEqual(["--issue", "42"])
+  })
+
+  it("routes bare runner interactive mode to chat", () => {
+    vi.stubEnv("KODY_RUN_MODE", "interactive")
+
+    const a = parseArgs([])
+
+    expect(a.command).toBe("chat")
+    expect(a.chatArgv).toEqual([])
+  })
+
+  it("routes bare runner scheduled mode to ci", () => {
+    vi.stubEnv("KODY_RUN_MODE", "scheduled")
+
+    const a = parseArgs([])
+
+    expect(a.command).toBe("ci")
+    expect(a.ciArgv).toEqual([])
   })
 })

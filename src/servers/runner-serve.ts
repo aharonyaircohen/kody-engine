@@ -4,9 +4,9 @@
  * Idle HTTP server for a WARM-POOL one-shot runner. A pooled machine boots
  * into this mode with NO issue baked in, starts the listener, and is then
  * frozen (Fly suspend) by the pool owner. On claim the owner wakes it (~1s)
- * and POSTs a single job; the server clones the repo and spawns the existing
- * `kody run --issue N` path, then exits so Fly's auto_destroy tears the
- * machine down. The pool owner refills.
+ * and POSTs a single job; the server clones the repo and spawns bare `kody`
+ * with KODY_RUN_MODE set, then exits so Fly's auto_destroy tears the machine
+ * down. The pool owner refills.
  *
  * This exists because a frozen machine's boot env can't change — so the
  * issue/repo/token must arrive AFTER wake, over HTTP, instead of at boot.
@@ -39,7 +39,7 @@ export interface RunnerJob {
   repo: string
   githubToken: string
   /**
-   * "issue" (default): one-shot `kody run --issue N` → branch → PR → exit.
+   * "issue" (default): one-shot issue work → branch → PR → exit.
    * "interactive": boot a long-lived `kody` chat session (the Vibe runner) —
    * emits chat.ready, takes turns via the dashboard's append/event path.
    * "scheduled": run the scheduled fan-out (`GITHUB_EVENT_NAME=schedule`) —
@@ -58,6 +58,11 @@ export interface RunnerJob {
   /** Provider keys etc. (mirrors GH Actions toJSON(secrets)). Object or JSON string. */
   allSecrets?: Record<string, string> | string
   model?: string
+  reasoningEffort?: string
+  /** Force a single action, e.g. goal-manager, instead of normal scheduled fan-out. */
+  action?: string
+  /** Optional message/target for the forced action. goal-manager reads this as the goal id. */
+  message?: string
   /** Event-ingest URL with inline ?token=... (engine streams events here). */
   dashboardUrl?: string
 }
@@ -142,6 +147,9 @@ export function parseJob(body: unknown): { job: RunnerJob } | { error: string } 
 
   if (typeof b.ref === "string" && b.ref.trim()) job.ref = b.ref.trim()
   if (typeof b.model === "string" && b.model.trim()) job.model = b.model.trim()
+  if (typeof b.reasoningEffort === "string" && b.reasoningEffort.trim()) job.reasoningEffort = b.reasoningEffort.trim()
+  if (typeof b.action === "string" && b.action.trim()) job.action = b.action.trim()
+  if (typeof b.message === "string" && b.message.trim()) job.message = b.message.trim()
   if (typeof b.sessionId === "string" && b.sessionId.trim()) job.sessionId = b.sessionId.trim()
   if (typeof b.dashboardUrl === "string" && b.dashboardUrl.trim()) job.dashboardUrl = b.dashboardUrl.trim()
   if (b.allSecrets && (typeof b.allSecrets === "object" || typeof b.allSecrets === "string")) {
@@ -151,8 +159,8 @@ export function parseJob(body: unknown): { job: RunnerJob } | { error: string } 
 }
 
 /**
- * Default job runner: clone the repo, spawn `kody run --issue N`, and exit
- * the process with the child's code so Fly auto_destroy reclaims the machine.
+ * Default job runner: clone the repo, spawn bare `kody`, and exit the process
+ * with the child's code so Fly auto_destroy reclaims the machine.
  * Replaceable in tests via buildServer({ runJob }).
  */
 async function defaultRunJob(job: RunnerJob): Promise<void> {
@@ -167,14 +175,18 @@ async function defaultRunJob(job: RunnerJob): Promise<void> {
 
   const interactive = job.mode === "interactive"
   const scheduled = job.mode === "scheduled"
+  const runMode = interactive ? "interactive" : scheduled ? "scheduled" : "issue"
   const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
     REPO: job.repo,
     REF: branch,
     GITHUB_TOKEN: job.githubToken,
+    KODY_RUN_MODE: runMode,
     // Scheduled mode drives the engine down the same path GitHub Actions' cron
     // takes (runScheduledFanOut → due capabilities/goals). Bare `kody` routes on this.
     ...(scheduled ? { GITHUB_EVENT_NAME: "schedule" } : {}),
+    ...(job.action ? { KODY_FORCE_ACTION: job.action } : {}),
+    ...(job.message ? { KODY_FORCE_MESSAGE: job.message } : {}),
     // GITHUB_REPOSITORY + GH_TOKEN are normally injected by GitHub Actions.
     // The engine's interactive mode needs GITHUB_REPOSITORY to resolve the
     // configured state repo and persist chat.ready / events (the durable signal
@@ -182,13 +194,14 @@ async function defaultRunJob(job: RunnerJob): Promise<void> {
     // and the session never appears "ready". GH_TOKEN auths the `gh` CLI.
     GITHUB_REPOSITORY: job.repo,
     GH_TOKEN: job.githubToken,
-    // Issue mode bakes ISSUE_NUMBER → `kody run --issue N`. Interactive mode
-    // leaves it empty and sets SESSION_ID so the engine boots a chat session.
+    // Issue mode carries ISSUE_NUMBER. Interactive mode leaves it empty and
+    // sets SESSION_ID so the engine boots a chat session.
     ISSUE_NUMBER: interactive || scheduled ? "" : String(job.issueNumber),
     ALL_SECRETS: allSecrets,
     SESSION_ID: job.sessionId ?? "",
     DASHBOARD_URL: job.dashboardUrl ?? "",
     MODEL: job.model ?? "",
+    REASONING_EFFORT: job.reasoningEffort ?? "",
     ...(interactive && job.idleExitMs ? { KODY_IDLE_EXIT_MS: String(job.idleExitMs) } : {}),
     ...(interactive && job.hardCapMs ? { KODY_HARD_CAP_MS: String(job.hardCapMs) } : {}),
   }
@@ -220,17 +233,14 @@ async function defaultRunJob(job: RunnerJob): Promise<void> {
   await run("git", ["config", "user.name", authorName], workdir)
   await run("git", ["config", "user.email", authorEmail], workdir)
 
-  // Issue mode: one-shot `kody run --issue N`. Interactive + scheduled modes:
-  // bare `kody`, routed by env — SESSION_ID → chat session (Vibe runner), or
-  // GITHUB_EVENT_NAME=schedule → the scheduled capability/goal fan-out.
-  const runArgs = interactive || scheduled ? [] : ["run", "--issue", String(job.issueNumber)]
+  // Every runner mode now invokes bare `kody`; KODY_RUN_MODE selects the job type.
   const jobDesc = interactive
     ? `interactive session ${job.sessionId}`
     : scheduled
       ? "scheduled fan-out"
       : `running issue #${job.issueNumber}`
   process.stdout.write(`[runner-serve] job ${job.jobId}: ${jobDesc}\n`)
-  const runCode = await run("kody", runArgs, workdir)
+  const runCode = await run("kody", [], workdir)
   process.stdout.write(`[runner-serve] job ${job.jobId}: finished (exit ${runCode})\n`)
   process.exit(runCode)
 }

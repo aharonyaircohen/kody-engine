@@ -341,9 +341,18 @@ export async function runCi(argv: string[]): Promise<number> {
   let manualWorkflowDispatch = false
   let forceRunAction: string | null = null
   let forceRunCliArgs: Record<string, unknown> = {}
+  const envForceAction = (process.env.KODY_FORCE_ACTION ?? "").trim()
+  const envForceMessage = (process.env.KODY_FORCE_MESSAGE ?? "").trim()
+  if (!args.issueNumber && !autoFallback && envForceAction) {
+    forceRunAction = envForceAction
+    if (envForceAction === "goal-manager" && envForceMessage) {
+      forceRunCliArgs = { goal: envForceMessage }
+    }
+  }
   if (
     !args.issueNumber &&
     !autoFallback &&
+    !forceRunAction &&
     eventName === "workflow_dispatch" &&
     dispatchEventPath &&
     fs.existsSync(dispatchEventPath)

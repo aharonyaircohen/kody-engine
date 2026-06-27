@@ -34,6 +34,28 @@ interface ParsedArgs {
   statsArgv?: string[]
 }
 
+function envRunMode(env: NodeJS.ProcessEnv = process.env): ParsedArgs | null {
+  const result: ParsedArgs = { command: "help", errors: [] }
+  const mode = (env.KODY_RUN_MODE ?? "").trim().toLowerCase()
+  if (!mode) return null
+
+  if (mode === "chat" || mode === "interactive") {
+    return { ...result, command: "chat", chatArgv: [] }
+  }
+  if (mode === "ci" || mode === "scheduled" || mode === "manual") {
+    return { ...result, command: "ci", ciArgv: [] }
+  }
+  if (mode === "issue") {
+    const issue = (env.ISSUE_NUMBER ?? "").trim()
+    if (!issue) {
+      return { ...result, errors: ["KODY_RUN_MODE=issue requires ISSUE_NUMBER"] }
+    }
+    return { ...result, command: "ci", ciArgv: ["--issue", issue] }
+  }
+
+  return { ...result, errors: [`unknown KODY_RUN_MODE: ${mode}`] }
+}
+
 const HELP_TEXT = `kody-engine — single-session autonomous engineer
 
 Usage:
@@ -71,11 +93,12 @@ Exit codes:
 export function parseArgs(argv: string[]): ParsedArgs {
   const result: ParsedArgs = { command: "help", errors: [] }
 
-  // No verb: auto-route by env so the consumer workflow can invoke a bare
-  // `kody` instead of branching in shell. SESSION_ID is the chat signal
-  // (wired from the dashboard's workflow_dispatch input); otherwise fall
-  // through to ci for agent/job/pull_request/schedule triggers.
+  // No verb: auto-route by env so every runner can invoke bare `kody`.
+  // KODY_RUN_MODE is the explicit contract. The legacy SESSION_ID /
+  // GITHUB_EVENT_NAME probes stay as compatibility fallbacks.
   if (argv.length === 0) {
+    const mode = envRunMode()
+    if (mode) return mode
     if (process.env.SESSION_ID) return { ...result, command: "chat", chatArgv: [] }
     if (process.env.GITHUB_EVENT_NAME) return { ...result, command: "ci", ciArgv: [] }
     return result

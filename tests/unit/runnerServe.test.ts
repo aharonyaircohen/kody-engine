@@ -88,6 +88,25 @@ describe("runnerServe: parseJob", () => {
       expect(out.job.issueNumber).toBeUndefined()
     }
   })
+
+  it("accepts a forced scheduled action payload", () => {
+    const out = parseJob({
+      jobId: "j1",
+      repo: "o/r",
+      githubToken: "ghp_x",
+      mode: "scheduled",
+      action: "goal-manager",
+      message: "weekly-docs",
+      reasoningEffort: "low",
+    })
+    expect("job" in out).toBe(true)
+    if ("job" in out) {
+      expect(out.job.mode).toBe("scheduled")
+      expect(out.job.action).toBe("goal-manager")
+      expect(out.job.message).toBe("weekly-docs")
+      expect(out.job.reasoningEffort).toBe("low")
+    }
+  })
 })
 
 // ── authOk ──────────────────────────────────────────────────────────────────

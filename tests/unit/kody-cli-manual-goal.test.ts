@@ -106,6 +106,27 @@ describe("kody-cli manual goal dispatch", () => {
     })
   })
 
+  it("passes env message as goal id for runner-forced goal-manager runs", async () => {
+    const dir = tmpDir()
+    writeConfig(dir)
+    previousEnv.KODY_FORCE_ACTION = process.env.KODY_FORCE_ACTION
+    previousEnv.KODY_FORCE_MESSAGE = process.env.KODY_FORCE_MESSAGE
+    process.env.KODY_FORCE_ACTION = "goal-manager"
+    process.env.KODY_FORCE_MESSAGE = "weekly-docs"
+
+    await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
+
+    expect(mocks.runJob).toHaveBeenCalledTimes(1)
+    expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
+      action: "goal-manager",
+      capability: "goal-manager",
+      executable: "goal-manager",
+      cliArgs: { goal: "weekly-docs" },
+      flavor: "instant",
+      force: true,
+    })
+  })
+
   it("rejects goal-manager one-shot runs without a message goal id", async () => {
     const dir = tmpDir()
     writeConfig(dir)
