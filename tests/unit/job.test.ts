@@ -369,9 +369,12 @@ describe("runJob (Phase 1 seam)", () => {
         },
       )
 
-      expect(gh).toHaveBeenCalledWith(["api", "/repos/o/kody-state/contents/r/workflows/bug-flow/workflow.json"], {
-        cwd,
-      })
+      expect(gh).toHaveBeenCalledWith(
+        ["api", "/repos/o/kody-state/contents/r/workflows/bug-flow/workflow.json?ref=kody-state"],
+        {
+          cwd,
+        },
+      )
       expect(runExecutableChain).toHaveBeenCalledTimes(2)
       expect(runExecutableChain.mock.calls[0]![0]).toBe("reproduce")
       expect(runExecutableChain.mock.calls[0]![1].preloadedData).toMatchObject({

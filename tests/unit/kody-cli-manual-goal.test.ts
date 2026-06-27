@@ -127,6 +127,50 @@ describe("kody-cli manual goal dispatch", () => {
     })
   })
 
+  it("passes run request target id for runner goal-manager runs", async () => {
+    const dir = tmpDir()
+    writeConfig(dir)
+    previousEnv.KODY_RUN_REQUEST_JSON = process.env.KODY_RUN_REQUEST_JSON
+    process.env.KODY_RUN_REQUEST_JSON = JSON.stringify({
+      target: { type: "goal", id: "weekly-docs" },
+      intent: "manage",
+      source: "dashboard",
+    })
+
+    await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
+
+    expect(mocks.runJob).toHaveBeenCalledTimes(1)
+    expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
+      action: "goal-manager",
+      capability: "goal-manager",
+      executable: "goal-manager",
+      cliArgs: { goal: "weekly-docs" },
+      flavor: "instant",
+      force: true,
+    })
+  })
+
+  it("keeps legacy env action/message as a compatibility fallback", async () => {
+    const dir = tmpDir()
+    writeConfig(dir)
+    previousEnv.KODY_FORCE_ACTION = process.env.KODY_FORCE_ACTION
+    previousEnv.KODY_FORCE_MESSAGE = process.env.KODY_FORCE_MESSAGE
+    process.env.KODY_FORCE_ACTION = "goal-manager"
+    process.env.KODY_FORCE_MESSAGE = "weekly-docs"
+
+    await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
+
+    expect(mocks.runJob).toHaveBeenCalledTimes(1)
+    expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
+      action: "goal-manager",
+      capability: "goal-manager",
+      executable: "goal-manager",
+      cliArgs: { goal: "weekly-docs" },
+      flavor: "instant",
+      force: true,
+    })
+  })
+
   it("rejects goal-manager one-shot runs without a message goal id", async () => {
     const dir = tmpDir()
     writeConfig(dir)

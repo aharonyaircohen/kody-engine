@@ -498,6 +498,6 @@ export interface Job {
   flavor: JobFlavor
   /** Manual force-run (bypass cadence) for a scheduled job. */
   force?: boolean
-  /** Ask the owning goal/loop to refresh reports/<goal-or-loop>.md after its persisted decision. */
+  /** Ask the owning goal/loop to write a report run after its persisted decision. */
   saveReport?: boolean
 }

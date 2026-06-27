@@ -164,7 +164,7 @@ Rules:
 - New capabilities should prefer `KODY_CAPABILITY_RESULT` with `target` and `evidence`.
 - Do not emit both marker types for the same evidence in new code. The engine merges both only for compatibility with existing actions.
 - Profiles that emit capability evidence should include `applyCapabilityReports` in postflight.
-- `saveReport` refreshes Dashboard markdown from the goal/loop decision path, after state persistence succeeds.
+- `saveReport` writes Dashboard markdown under `reports/<goal-or-loop>/runs/` from the goal/loop decision path, after state persistence succeeds.
 - Route args can read reported facts with `{ "fact": "<name>" }`.
 
 Capability output is how a reusable capability hands evidence back to a goal. It is

@@ -15,8 +15,7 @@ vi.mock("../../src/stateRepo.js", async () => {
   const actual = await vi.importActual<typeof import("../../src/stateRepo.js")>("../../src/stateRepo.js")
   return {
     ...actual,
-    readStateText: vi.fn(),
-    upsertStateText: vi.fn(),
+    writeStateText: vi.fn(),
   }
 })
 
@@ -26,13 +25,12 @@ import { flushGoalRunLogEvents } from "../../src/goal/runLog.js"
 import { type GoalState, serializeGoalState } from "../../src/goal/state.js"
 import { fetchGoalState, putGoalState } from "../../src/goal/stateStore.js"
 import { applyCapabilityReports } from "../../src/scripts/applyCapabilityReports.js"
-import { readStateText, upsertStateText } from "../../src/stateRepo.js"
+import { writeStateText } from "../../src/stateRepo.js"
 
 const fetchGoalStateMock = vi.mocked(fetchGoalState)
 const putGoalStateMock = vi.mocked(putGoalState)
 const flushGoalRunLogEventsMock = vi.mocked(flushGoalRunLogEvents)
-const readStateTextMock = vi.mocked(readStateText)
-const upsertStateTextMock = vi.mocked(upsertStateText)
+const writeStateTextMock = vi.mocked(writeStateText)
 
 function fakeCtx(data: Record<string, unknown>, args: Record<string, unknown> = {}): Context {
   return {
@@ -79,9 +77,7 @@ describe("applyCapabilityReports", () => {
     fetchGoalStateMock.mockReset()
     putGoalStateMock.mockReset()
     flushGoalRunLogEventsMock.mockReset()
-    readStateTextMock.mockReset()
-    upsertStateTextMock.mockReset()
-    readStateTextMock.mockReturnValue(null)
+    writeStateTextMock.mockReset()
   })
 
   it("applies shell-collected goal reports to kody-state", async () => {
@@ -298,17 +294,17 @@ describe("applyCapabilityReports", () => {
       null,
     )
 
-    expect(upsertStateTextMock).toHaveBeenCalledOnce()
-    const [, , path, body, message] = upsertStateTextMock.mock.calls[0]!
-    expect(path).toBe("reports/release-aguy.md")
-    expect(message).toBe("chore(reports): refresh release-aguy")
+    expect(writeStateTextMock).toHaveBeenCalledOnce()
+    const [, , path, body, message] = writeStateTextMock.mock.calls[0]!
+    expect(path).toMatch(/^reports\/release-aguy\/runs\/\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z\.md$/)
+    expect(message).toBe("chore(reports): add release-aguy run")
     expect(body).toContain("# release-aguy")
     expect(body).toContain("- Next step: done")
     expect(body).toContain("- Summary: Release PR exists.")
     expect(body).toContain('"releasePr": 123')
     expect(body).toContain("[PR](https://github.com/o/r/pull/123)")
-    expect(data.goalReports).toEqual([{ slug: "release-aguy", path: "reports/release-aguy.md", changed: true }])
-    expect(putGoalStateMock.mock.invocationCallOrder[0]).toBeLessThan(upsertStateTextMock.mock.invocationCallOrder[0]!)
+    expect(data.goalReports).toEqual([{ slug: "release-aguy", path, changed: true }])
+    expect(putGoalStateMock.mock.invocationCallOrder[0]).toBeLessThan(writeStateTextMock.mock.invocationCallOrder[0]!)
   })
 
   it("does not write a dashboard report when goal state persistence fails", async () => {
@@ -341,7 +337,7 @@ describe("applyCapabilityReports", () => {
       ),
     ).rejects.toThrow("state write failed")
 
-    expect(upsertStateTextMock).not.toHaveBeenCalled()
+    expect(writeStateTextMock).not.toHaveBeenCalled()
     expect(flushGoalRunLogEventsMock).toHaveBeenCalledOnce()
   })
 
@@ -369,7 +365,7 @@ describe("applyCapabilityReports", () => {
       null,
     )
 
-    expect(upsertStateTextMock).not.toHaveBeenCalled()
+    expect(writeStateTextMock).not.toHaveBeenCalled()
   })
 
   it("marks managed goal done when result satisfies final destination evidence", async () => {
