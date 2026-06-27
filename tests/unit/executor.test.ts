@@ -11,12 +11,13 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
+import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import { jobReferenceBlock, operatorRequestBlock, runExecutable } from "../../src/executor.js"
 import { loadProfile } from "../../src/profile.js"
 import { resolveExecutable } from "../../src/registry.js"
-import { runtimeStatePath } from "../../src/runtimePaths.js"
 import * as taskArtifacts from "../../src/task-artifacts.js"
+import { type CompanyStoreFixture, setupCompanyStoreFixture } from "./_helpers/companyStoreFixture.js"
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-exec-"))
@@ -53,6 +54,20 @@ const BASE = {
     postflight: [],
   },
 }
+
+// `resolve` ships via the company store (engine bundles only minimal
+// built-ins). Stand up a temp store with the same shape so this test file
+// is self-sufficient and doesn't depend on a sibling kody-store checkout.
+// The fixture is shared across every describe block in this file.
+let resolveFixture: CompanyStoreFixture
+beforeAll(() => {
+  resolveFixture = setupCompanyStoreFixture({ capabilities: ["resolve"] })
+  resetCompanyStoreCacheForTests()
+})
+afterAll(() => {
+  resolveFixture.cleanup()
+  resetCompanyStoreCacheForTests()
+})
 
 describe("executor: profile input schema", () => {
   it("loads inputs with requiredWhen intact", () => {

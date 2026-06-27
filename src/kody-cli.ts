@@ -177,12 +177,6 @@ export function detectPackageManager(cwd: string): PackageManager {
   return "npm"
 }
 
-function shouldChainScheduledWatch(match: DispatchResult): boolean {
-  return (
-    match.action === "goal-scheduler" || match.capability === "goal-scheduler" || match.executable === "goal-scheduler"
-  )
-}
-
 function shellOut(cmd: string, args: string[], cwd: string, stream = true): number {
   try {
     execFileSync(cmd, args, {

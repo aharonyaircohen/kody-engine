@@ -2,8 +2,10 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
+import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import { loadProfile, ProfileError, validateScriptReferences } from "../../src/profile.js"
 import { resolveExecutable } from "../../src/registry.js"
+import { setupCompanyStoreFixture } from "./_helpers/companyStoreFixture.js"
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-profile-"))
@@ -113,28 +115,38 @@ describe("profile: loadProfile", () => {
   })
 
   it("resolves a capability that references an executable (how) + overlays who/when/tools", () => {
-    // A thin capability: references the engine's `merge` executable (the HOW), adds
-    // its own name + agent (WHO). No claudeCode of its own.
-    const dir = tmpDir()
-    const p = writeProfile(dir, {
-      name: "merge-daily",
-      executable: "merge",
-      agent: "cto",
-      every: "1d",
-      capabilityTools: ["ensure_issue"],
-    })
-    const profile = loadProfile(p)
-    expect(profile.name).toBe("merge-daily") // capability identity
-    expect(profile.executable).toBe("merge") // how (preserved for prompt/job reference)
-    expect(profile.agent).toBe("cto") // who (overlaid)
-    expect((profile as unknown as Record<string, unknown>).every).toBeUndefined() // legacy cadence ignored
-    expect(profile.capabilityTools).toEqual(["ensure_issue"]) // toolbox (overlaid)
-    // how came from the referenced implementation profile: canonical
-    // capabilities resolve before legacy executables during migration.
-    const resolvedMerge = resolveExecutable("merge")
-    expect(resolvedMerge).toBeTruthy()
-    expect(profile.dir).toBe(path.dirname(resolvedMerge!))
-    expect(profile.claudeCode).toBeTruthy()
+    // The referenced `merge` executable is provided by the company-store fixture
+    // so the test is self-sufficient — it doesn't rely on a sibling kody-store
+    // repo being checked out next to this one.
+    const fixture = setupCompanyStoreFixture({ capabilities: ["merge"] })
+    try {
+      resetCompanyStoreCacheForTests()
+      // A thin capability: references the engine's `merge` executable (the HOW), adds
+      // its own name + agent (WHO). No claudeCode of its own.
+      const dir = tmpDir()
+      const p = writeProfile(dir, {
+        name: "merge-daily",
+        executable: "merge",
+        agent: "cto",
+        every: "1d",
+        capabilityTools: ["ensure_issue"],
+      })
+      const profile = loadProfile(p)
+      expect(profile.name).toBe("merge-daily") // capability identity
+      expect(profile.executable).toBe("merge") // how (preserved for prompt/job reference)
+      expect(profile.agent).toBe("cto") // who (overlaid)
+      expect((profile as unknown as Record<string, unknown>).every).toBeUndefined() // legacy cadence ignored
+      expect(profile.capabilityTools).toEqual(["ensure_issue"]) // toolbox (overlaid)
+      // how came from the referenced implementation profile: canonical
+      // capabilities resolve before legacy executables during migration.
+      const resolvedMerge = resolveExecutable("merge")
+      expect(resolvedMerge).toBeTruthy()
+      expect(profile.dir).toBe(path.dirname(resolvedMerge!))
+      expect(profile.claudeCode).toBeTruthy()
+    } finally {
+      fixture.cleanup()
+      resetCompanyStoreCacheForTests()
+    }
   })
 
   it("throws when a capability references an unknown executable", () => {

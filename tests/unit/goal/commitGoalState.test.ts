@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("../../../src/goal/stateStore.js", () => ({
   putGoalState: vi.fn(),
@@ -86,12 +86,46 @@ function fakeProfile(): Profile {
 }
 
 describe("commitGoalState report refresh", () => {
+  // When the runner hosts GHA env vars (GITHUB_EVENT_NAME=issue_comment here),
+  // triggerContext() emits a GitHub-flavoured trigger and the report shows
+  // "Triggered by: GitHub issue comment". The unit tests assert the opposite
+  // shape ("Triggered by: local run"), so we scrub the vars for the duration of
+  // the suite and restore them in afterEach.
+  const githubEnvKeys = [
+    "GITHUB_EVENT_NAME",
+    "GITHUB_EVENT_PATH",
+    "GITHUB_ACTOR",
+    "GITHUB_ACTOR_ID",
+    "GITHUB_RUN_ID",
+    "GITHUB_RUN_ATTEMPT",
+    "GITHUB_REPOSITORY",
+    "GITHUB_SERVER_URL",
+    "GITHUB_WORKFLOW",
+    "GITHUB_JOB",
+    "GITHUB_REF",
+    "GITHUB_SHA",
+  ] as const
+  let savedGithubEnv: Record<string, string | undefined>
+
   beforeEach(() => {
     putGoalStateMock.mockReset()
     flushGoalRunLogEventsMock.mockReset()
     readStateTextMock.mockReset()
     upsertStateTextMock.mockReset()
     readStateTextMock.mockReturnValue(null)
+    savedGithubEnv = {}
+    for (const key of githubEnvKeys) {
+      savedGithubEnv[key] = process.env[key]
+      delete process.env[key]
+    }
+  })
+
+  afterEach(() => {
+    for (const key of githubEnvKeys) {
+      const value = savedGithubEnv[key]
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
   })
 
   it("writes the goal dashboard report after changed goal state is persisted", async () => {
