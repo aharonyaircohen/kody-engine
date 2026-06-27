@@ -322,7 +322,15 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
   }
 
   if (!input.skipConfig && config.github.owner && config.github.repo) {
-    hydrateStateWorkspace(config, input.cwd)
+    try {
+      hydrateStateWorkspace(config, input.cwd)
+    } catch (err) {
+      // State repo hydration is best-effort: if the GitHub API is
+      // unreachable (auth, network, rate limit) the engine should still run.
+      process.stderr.write(
+        `[kody] state workspace hydration failed: ${err instanceof Error ? err.message : String(err)}\n`,
+      )
+    }
   }
 
   // Resolve model. Precedence:
