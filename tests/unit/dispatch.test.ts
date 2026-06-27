@@ -24,7 +24,6 @@ function writeLocalReleaseAsset(root: string): void {
     JSON.stringify({
       name: "release",
       action: "release",
-      capabilityKind: "act",
       role: "primitive",
       describe: "Run release flow.",
       inputs: [
@@ -346,7 +345,6 @@ describe("dispatch: issue_comment on issue", () => {
         JSON.stringify({
           name: "remember",
           action: "remember",
-          capabilityKind: "act",
           implementation: "custom-impl",
           agent: "kody",
         }),
@@ -357,7 +355,6 @@ describe("dispatch: issue_comment on issue", () => {
         JSON.stringify({
           name: "custom-impl",
           role: "utility",
-          capabilityKind: "act",
           describe: "Custom implementation.",
           inputs: [{ name: "issue", flag: "--issue", type: "int", required: true }],
         }),
@@ -784,15 +781,15 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     })
   })
 
-  it("'@kody release-deploy' routes to release-deploy with the triggering issue", () => {
+  it("'@kody release-promote' routes to release-promote with the triggering issue", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody release-deploy" },
+      comment: { body: "@kody release-promote" },
       issue: { number: 51 },
     })
     expect(autoDispatch()).toEqual({
-      action: "release-deploy",
-      capability: "release-deploy",
-      executable: "release-deploy",
+      action: "release-promote",
+      capability: "release-promote",
+      executable: "release-promote",
       cliArgs: { issue: 51 },
       target: 51,
     })

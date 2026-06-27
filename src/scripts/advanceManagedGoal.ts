@@ -16,8 +16,9 @@ import {
   type GoalCapabilityScheduleState,
   isCapabilityCadenceGoal,
   isGoalTargetLoop,
+  isWorkflowTargetLoop,
   planGoalCapabilitySchedule,
-  planGoalTargetLoopSchedule,
+  planTargetLoopSchedule,
 } from "./goalCapabilityScheduling.js"
 import type { GoalCtx } from "./goalCtx.js"
 
@@ -92,21 +93,23 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     return
   }
 
-  if (isGoalTargetLoop(managed)) {
+  if (isGoalTargetLoop(managed) || isWorkflowTargetLoop(managed)) {
     const beforeSnapshot = goalRunLogSnapshot(goal.id, goal.state, managed)
     const previousScheduleState =
       goal.raw.extra.scheduleState && typeof goal.raw.extra.scheduleState === "object"
         ? (goal.raw.extra.scheduleState as GoalCapabilityScheduleState)
         : undefined
-    const decision = planGoalTargetLoopSchedule({ goal: managed, previousScheduleState })
+    const decision = planTargetLoopSchedule({ goal: managed, previousScheduleState })
     restoreGoalIdFact()
     goal.raw = writeManagedGoalToState({ ...goal.raw, state: goal.state }, managed)
     goal.raw.extra.scheduleState = decision.scheduleState
     ctx.data.managedGoalDecision = decision
     if (decision.kind === "dispatch" && decision.dispatch) {
       ctx.output.nextDispatch = {
-        action: decision.dispatch.action,
-        executable: decision.dispatch.executable,
+        ...(decision.dispatch.action ? { action: decision.dispatch.action } : {}),
+        ...(decision.dispatch.capability ? { capability: decision.dispatch.capability } : {}),
+        ...(decision.dispatch.workflow ? { workflow: decision.dispatch.workflow } : {}),
+        ...(decision.dispatch.executable ? { executable: decision.dispatch.executable } : {}),
         cliArgs: decision.dispatch.cliArgs,
       }
     }
@@ -239,8 +242,8 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
 
   ctx.output.nextDispatch = {
     capability: decision.capability,
-    executable: decision.executable,
     cliArgs: decision.cliArgs,
+    ...(decision.executable ? { executable: decision.executable } : {}),
     ...(decision.saveReport === true ? { saveReport: true } : {}),
   }
   ctx.output.reason = `dispatch ${decision.capability} for ${decision.evidence}`
@@ -269,8 +272,8 @@ function stageManagedGoalDecision(
       status: decision.kind,
       dispatch: {
         capability: decision.capability,
-        executable: decision.executable,
         cliArgs: decision.cliArgs,
+        ...(decision.executable ? { executable: decision.executable } : {}),
       },
       goal: details.goalSnapshot,
       inspection: details.inspection,
@@ -279,8 +282,8 @@ function stageManagedGoalDecision(
         evidence: decision.evidence,
         stage: decision.stage,
         capability: decision.capability,
-        executable: decision.executable,
         cliArgs: decision.cliArgs,
+        ...(decision.executable ? { executable: decision.executable } : {}),
       },
       change: details.change,
     })

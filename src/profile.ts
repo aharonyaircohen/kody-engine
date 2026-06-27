@@ -12,7 +12,6 @@ import * as path from "node:path"
 import { CAPABILITY_MCP_TOOL_NAMES } from "./capabilityMcp.js"
 import { parseReasoningEffort } from "./config.js"
 import type {
-  CapabilityKind,
   ClaudeCodeSpec,
   CliToolSpec,
   ContainerChild,
@@ -34,7 +33,6 @@ const VALID_PERMISSION_MODES = new Set(["default", "acceptEdits", "plan", "bypas
 const VALID_ROLES = new Set(["primitive", "orchestrator", "container", "watch", "utility"])
 const VALID_CONTAINER_CHILD_TARGETS = new Set(["issue", "pr"])
 const VALID_PHASES = new Set(["research", "planning", "implementing", "reviewing", "shipped", "failed", "idle"])
-const VALID_CAPABILITY_KINDS = new Set(["observe", "act", "verify"])
 
 /**
  * Top-level profile keys that the loader understands. Unknown keys are
@@ -55,10 +53,10 @@ const KNOWN_PROFILE_KEYS = new Set([
   "capabilityTools",
   "tools",
   "mentions",
-  "capabilityKind",
   "stage",
   "readsFrom",
   "writesTo",
+  "workflow",
   "describe",
   "role",
   "kind",
@@ -136,7 +134,6 @@ export function loadProfile(profilePath: string): Profile {
       implementation: execRef,
       executable: execRef,
       describe: typeof r.describe === "string" ? r.describe : base.describe,
-      capabilityKind: parseCapabilityKind(profilePath, r.capabilityKind) ?? base.capabilityKind,
       agent: typeof r.agent === "string" && r.agent.trim() ? r.agent.trim() : base.agent,
       capabilityTools: parseStringArray(r.capabilityTools ?? r.capabilityTools ?? r.tools) ?? base.capabilityTools,
       mentions: Array.isArray(r.mentions)
@@ -191,7 +188,6 @@ export function loadProfile(profilePath: string): Profile {
     implementation: undefined,
     executable: undefined,
     describe: typeof r.describe === "string" ? r.describe : "",
-    capabilityKind: parseCapabilityKind(profilePath, r.capabilityKind),
     // Optional agent to run as. Empty/blank string → undefined (no agent).
     agent: typeof r.agent === "string" && r.agent.trim() ? r.agent.trim() : undefined,
     // Locked-toolbox palette + mentions from folder-capability profile metadata.
@@ -317,14 +313,6 @@ function requireString(p: string, r: Record<string, unknown>, key: string): stri
     throw new ProfileError(p, `"${key}" must be a non-empty string`)
   }
   return v
-}
-
-function parseCapabilityKind(p: string, raw: unknown): CapabilityKind | undefined {
-  if (raw === undefined || raw === null || raw === "") return undefined
-  if (typeof raw !== "string" || !VALID_CAPABILITY_KINDS.has(raw)) {
-    throw new ProfileError(p, `"capabilityKind" must be one of: observe | act | verify`)
-  }
-  return raw as CapabilityKind
 }
 
 function parseStringArray(raw: unknown): string[] | undefined {

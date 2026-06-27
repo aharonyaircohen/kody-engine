@@ -52,7 +52,7 @@ beforeEach(() => {
   fs.mkdirSync(execDir, { recursive: true })
   fs.writeFileSync(
     path.join(tmp, ".kody", "capabilities", "demo", "profile.json"),
-    JSON.stringify({ name: "demo", capabilityKind: "observe", agent: "kody", implementation: "demo-watch" }),
+    JSON.stringify({ name: "demo", agent: "kody", implementation: "demo-watch" }),
   )
   fs.writeFileSync(path.join(tmp, ".kody", "capabilities", "demo", "capability.md"), "# Demo\n")
 })
@@ -123,7 +123,6 @@ describe("runScheduledExecutableTick", () => {
       path.join(storeCapabilityDir, "profile.json"),
       JSON.stringify({
         name: "demo",
-        capabilityKind: "observe",
         every: "15m",
         agent: "kody",
         implementation: "demo-watch",

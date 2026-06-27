@@ -3,14 +3,18 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import { loadProfile } from "../../src/profile.js"
-import { listCapabilityActions, resolveExecutable } from "../../src/registry.js"
+import { listCapabilityActions, resolveCapabilityFolder, resolveExecutable } from "../../src/registry.js"
 
 const STORE_ROOT = process.env.KODY_STORE_PATH ?? path.resolve(process.cwd(), "..", "kody-store")
-const STORE_DUTIES_ROOT = path.join(STORE_ROOT, ".kody", "capabilities")
-const STORE_EXECUTABLES_ROOT = path.join(STORE_ROOT, ".kody", "executables")
-const CAPABILITY_KINDS = new Set(["observe", "act", "verify"])
+const STORE_CAPABILITIES_ROOT = path.join(STORE_ROOT, ".kody", "capabilities")
 const CHAT_CAPABILITY_ALIASES = new Set(["kody-analyzer", "kody-mem", "kody-operator", "kody-vibe"])
-const MIGRATED_FULL_CAPABILITY_ACTIONS = ["classify", "qa-engineer", "spec", "agent-ask"]
+const MIGRATED_FULL_CAPABILITY_ACTIONS = ["classify", "qa-engineer", "agent-ask"]
+const WORKFLOW_CAPABILITY_ACTIONS = new Map([
+  ["bug", "reproduce"],
+  ["feature", "research"],
+  ["chore", "run"],
+  ["spec", "research"],
+])
 const INTERNAL_EXECUTABLE_ONLY_PROFILES = [
   "capability-scheduler",
   "capability-tick",
@@ -40,45 +44,39 @@ afterEach(() => {
   resetCompanyStoreCacheForTests()
 })
 
-describe("kody-store capabilityKind profiles", () => {
-  it("keeps every remaining store capability profile typed", () => {
-    if (!fs.existsSync(STORE_DUTIES_ROOT)) return
+describe("kody-store capability profiles", () => {
+  it("keeps every remaining store capability profile named", () => {
+    if (!fs.existsSync(STORE_CAPABILITIES_ROOT)) return
 
-    const missingOrInvalid: string[] = []
-    for (const slug of fs.readdirSync(STORE_DUTIES_ROOT).sort()) {
-      const profilePath = path.join(STORE_DUTIES_ROOT, slug, "profile.json")
+    const missingName: string[] = []
+    for (const slug of fs.readdirSync(STORE_CAPABILITIES_ROOT).sort()) {
+      const profilePath = path.join(STORE_CAPABILITIES_ROOT, slug, "profile.json")
       if (!fs.existsSync(profilePath)) continue
-      const raw = JSON.parse(fs.readFileSync(profilePath, "utf8")) as { capabilityKind?: unknown }
-      if (typeof raw.capabilityKind !== "string" || !CAPABILITY_KINDS.has(raw.capabilityKind)) {
-        missingOrInvalid.push(slug)
+      const raw = JSON.parse(fs.readFileSync(profilePath, "utf8")) as { name?: unknown }
+      if (typeof raw.name !== "string" || !raw.name.trim()) {
+        missingName.push(slug)
       }
     }
 
-    expect(missingOrInvalid).toEqual([])
+    expect(missingName).toEqual([])
   })
 
-  it("keeps full store capability action profiles typed and loadable", () => {
-    if (!fs.existsSync(STORE_DUTIES_ROOT)) return
+  it("keeps full store capability action profiles loadable", () => {
+    if (!fs.existsSync(STORE_CAPABILITIES_ROOT)) return
 
     const invalid: string[] = []
     const actionSlugs: string[] = []
 
-    for (const slug of fs.readdirSync(STORE_DUTIES_ROOT).sort()) {
-      const profilePath = path.join(STORE_DUTIES_ROOT, slug, "profile.json")
+    for (const slug of fs.readdirSync(STORE_CAPABILITIES_ROOT).sort()) {
+      const profilePath = path.join(STORE_CAPABILITIES_ROOT, slug, "profile.json")
       if (!fs.existsSync(profilePath)) continue
       const raw = JSON.parse(fs.readFileSync(profilePath, "utf8")) as {
         action?: unknown
-        capabilityKind?: unknown
         role?: unknown
       }
       if (typeof raw.action !== "string" || !raw.action.trim() || typeof raw.role !== "string") continue
 
       actionSlugs.push(slug)
-      if (typeof raw.capabilityKind !== "string" || !CAPABILITY_KINDS.has(raw.capabilityKind)) {
-        invalid.push(`${slug}: capabilityKind`)
-        continue
-      }
-
       try {
         loadProfile(profilePath)
       } catch (error) {
@@ -110,6 +108,35 @@ describe("kody-store capabilityKind profiles", () => {
     }
   })
 
+  it("resolves migrated store workflow actions", () => {
+    if (!fs.existsSync(STORE_ROOT)) return
+
+    process.env.KODY_COMPANY_STORE = STORE_ROOT
+    process.env.KODY_COMPANY_STORE_REF = "stable"
+    resetCompanyStoreCacheForTests()
+
+    const actions = listCapabilityActions()
+    for (const [action, firstStep] of WORKFLOW_CAPABILITY_ACTIONS) {
+      expect(actions).toContainEqual(
+        expect.objectContaining({
+          action,
+          capability: action,
+          executable: firstStep,
+          source: "company-store",
+        }),
+      )
+      expect(resolveCapabilityFolder(action)?.config.workflow?.steps[0]?.capability).toBe(firstStep)
+    }
+
+    expect(resolveCapabilityFolder("bug")?.config.workflow?.steps).toMatchObject([
+      { capability: "reproduce", target: "issue" },
+      { capability: "plan", target: "issue" },
+      { capability: "run", target: "issue" },
+      { capability: "review", target: "pr", continueOn: ["REVIEW_FAIL"] },
+      { capability: "fix", target: "pr", runWhen: { "lastOutcome.type": ["REVIEW_CONCERNS", "REVIEW_FAIL"] } },
+    ])
+  })
+
   it("keeps internal store executable helpers out of public capability actions", () => {
     if (!fs.existsSync(STORE_ROOT)) return
     process.env.KODY_COMPANY_STORE = STORE_ROOT
@@ -139,7 +166,7 @@ describe("kody-store capabilityKind profiles", () => {
   })
 
   it("routes chat capability aliases through the kody-chat executable", () => {
-    if (!fs.existsSync(STORE_DUTIES_ROOT)) return
+    if (!fs.existsSync(STORE_CAPABILITIES_ROOT)) return
 
     process.env.KODY_COMPANY_STORE = STORE_ROOT
     process.env.KODY_COMPANY_STORE_REF = "stable"

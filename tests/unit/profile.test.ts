@@ -56,20 +56,6 @@ describe("profile: loadProfile", () => {
     expect(profile.claudeCode.reasoningEffort).toBe("high")
   })
 
-  it("parses optional capabilityKind on executable profiles", () => {
-    const dir = tmpDir()
-    const profile = loadProfile(writeProfile(dir, { ...VALID_MIN, capabilityKind: "observe" }))
-
-    expect(profile.capabilityKind).toBe("observe")
-  })
-
-  it("rejects invalid capabilityKind values", () => {
-    const dir = tmpDir()
-    const p = writeProfile(dir, { ...VALID_MIN, capabilityKind: "manager" })
-
-    expect(() => loadProfile(p)).toThrow(/capabilityKind/)
-  })
-
   it("parses agent and ignores legacy every on capability fields", () => {
     const dir = tmpDir()
     const profile = loadProfile(writeProfile(dir, { ...VALID_MIN, agent: "kody", every: "1h" }))
@@ -149,21 +135,6 @@ describe("profile: loadProfile", () => {
     expect(resolvedMerge).toBeTruthy()
     expect(profile.dir).toBe(path.dirname(resolvedMerge!))
     expect(profile.claudeCode).toBeTruthy()
-  })
-
-  it("overlays capabilityKind on thin capability references", () => {
-    const dir = tmpDir()
-    const p = writeProfile(dir, {
-      name: "merge-ready-check",
-      executable: "merge",
-      capabilityKind: "verify",
-    })
-
-    const profile = loadProfile(p)
-
-    expect(profile.name).toBe("merge-ready-check")
-    expect(profile.executable).toBe("merge")
-    expect(profile.capabilityKind).toBe("verify")
   })
 
   it("throws when a capability references an unknown executable", () => {
