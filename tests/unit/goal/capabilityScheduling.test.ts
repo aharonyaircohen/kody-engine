@@ -265,6 +265,31 @@ describe("standing goal capability scheduling", () => {
     })
   })
 
+  it("hands workflow target loops to workflow capability chain", async () => {
+    const raw = goalState([])
+    raw.extra.type = "agentLoop"
+    raw.extra.loopTarget = { type: "workflow", id: "release-hygiene" }
+    const ctx = fakeCtx(raw)
+
+    await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+
+    expect(ctx.output.nextDispatch).toEqual({
+      workflow: "release-hygiene",
+      cliArgs: {},
+    })
+    const updatedGoal = ctx.data.goal as GoalCtx
+    expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
+      mode: "agentLoop",
+      lastDecision: {
+        kind: "dispatch",
+        targetType: "workflow",
+        targetId: "release-hygiene",
+        workflow: "release-hygiene",
+      },
+      capabilities: {},
+    })
+  })
+
   it("dispatches runnable capability and records goal scheduling decision", async () => {
     writeCapability("ci-health", { agent: "kody", executable: "ci-check" })
     const raw = goalState()
