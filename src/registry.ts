@@ -231,8 +231,7 @@ export function listCapabilityActions(
   const projectExecutableRoots = [getProjectExecutablesRoot()]
   const storeExecutableRoot = getCompanyStoreExecutablesRoot()
   const storeExecutableRoots = storeExecutableRoot ? [storeExecutableRoot] : []
-  for (const action of listFolderCapabilityActions(projectCapabilitiesRoot, "project-folder"))
-    add(action)
+  for (const action of listFolderCapabilityActions(projectCapabilitiesRoot, "project-folder")) add(action)
   for (const root of projectExecutableRoots) {
     for (const action of listExecutableCapabilityActions(root, "project-executable")) add(action)
   }

@@ -14,7 +14,6 @@
  */
 
 import * as fs from "node:fs"
-import * as path from "node:path"
 import { BUILTIN_ALIASES, type KodyConfig } from "./config.js"
 import { cronMatchesInWindow } from "./cron-match.js"
 import type { InputSpec } from "./executables/types.js"
@@ -450,7 +449,12 @@ export function autoDispatchTyped(opts?: {
  * The list is sorted by name for deterministic ordering. The CLI runs each
  * sequentially; per-watch failures don't stop the rest.
  */
-export function dispatchScheduledWatches(opts?: { now?: Date; windowSec?: number; force?: boolean; cwd?: string }): DispatchResult[] {
+export function dispatchScheduledWatches(opts?: {
+  now?: Date
+  windowSec?: number
+  force?: boolean
+  cwd?: string
+}): DispatchResult[] {
   const now = opts?.now ?? new Date()
   const envWindow = Number(process.env.KODY_SCHEDULE_WINDOW_SEC)
   const windowSec = opts?.windowSec ?? (Number.isFinite(envWindow) && envWindow > 0 ? envWindow : 300)

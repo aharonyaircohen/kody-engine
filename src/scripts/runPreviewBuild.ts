@@ -74,21 +74,6 @@ function flyHeaders(token: string): HeadersInit {
   }
 }
 
-async function ghJSON<T>(url: string, token: string): Promise<T> {
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-    signal: AbortSignal.timeout(REQ_TIMEOUT_MS),
-  })
-  if (!res.ok) {
-    throw new Error(`GitHub ${url}: ${res.status} ${res.statusText}`)
-  }
-  return (await res.json()) as T
-}
-
 async function fetchVaultDoc(repo: string, ghToken: string, masterKey: string): Promise<VaultDoc> {
   const [owner, name] = repo.split("/", 2)
   if (!owner || !name) throw new Error(`invalid GITHUB_REPOSITORY "${repo}"`)

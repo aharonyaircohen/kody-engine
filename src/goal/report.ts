@@ -168,9 +168,7 @@ function dispatchContextMarkdown(latestEvent: Record<string, unknown> | undefine
   return [
     `- Triggered by: ${stringField(context, "triggeredBy") ?? "unknown"}`,
     `- Mode: ${stringField(context, "dispatchMode") ?? "unknown"}`,
-    `- GitHub actor: ${
-      githubActor ? `${githubActor}${githubActorRole ? ` (${githubActorRole})` : ""}` : "none"
-    }`,
+    `- GitHub actor: ${githubActor ? `${githubActor}${githubActorRole ? ` (${githubActorRole})` : ""}` : "none"}`,
     `- Decided by: ${stringField(context, "decidedBy") ?? "unknown"}`,
     `- Dispatched by: ${stringField(context, "dispatchedBy") ?? "unknown"}`,
     `- Target: ${target ?? "none"}`,
