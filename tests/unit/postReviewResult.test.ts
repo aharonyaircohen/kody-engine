@@ -28,6 +28,23 @@ describe("postReviewResult: detectVerdict", () => {
   it("treats no changes required in a verdict section as PASS", () => {
     expect(detectVerdict("## Verdict\n\nThe implementation is correct. No changes required.")).toBe("PASS")
   })
+  it("infers CONCERNS from an actionable review without a verdict heading", () => {
+    expect(
+      detectVerdict(
+        [
+          "### Summary",
+          "",
+          "Good PR. The main actionable item is clarifying in the docstring that unicode is preserved.",
+        ].join("\n"),
+      ),
+    ).toBe("CONCERNS")
+  })
+  it("infers FAIL from blocking review language without a verdict heading", () => {
+    expect(detectVerdict("This introduces a regression and should not merge until fixed.")).toBe("FAIL")
+  })
+  it("infers PASS from a clean LGTM review without a verdict heading", () => {
+    expect(detectVerdict("LGTM. The implementation is correct and no changes required.")).toBe("PASS")
+  })
   it("returns UNKNOWN when no header present", () => {
     expect(detectVerdict("just a body, no verdict header")).toBe("UNKNOWN")
   })

@@ -20,6 +20,29 @@ import type { Action } from "../state.js"
 
 export type ReviewVerdict = "PASS" | "CONCERNS" | "FAIL" | "UNKNOWN"
 
+function inferVerdictFromReviewText(body: string): ReviewVerdict {
+  if (/\b(blocking|blocker|must fix|should not merge|regression|breaks|security risk)\b/i.test(body)) return "FAIL"
+  if (
+    /\b(actionable item|suggestions?|worth clarifying|worth checking|minor note|non-blocking|deserves a comment)\b/i.test(
+      body,
+    )
+  ) {
+    return "CONCERNS"
+  }
+  if (
+    /\bLGTM\b/i.test(body) ||
+    /\blooks good\b/i.test(body) ||
+    /\bgood PR\b/i.test(body) ||
+    /\bno changes required\b/i.test(body) ||
+    /\bno findings\b/i.test(body) ||
+    /\ball checks pass\b/i.test(body) ||
+    /\bimplementation is correct\b/i.test(body)
+  ) {
+    return "PASS"
+  }
+  return "UNKNOWN"
+}
+
 function extractVerdictSection(body: string): string | null {
   const heading = body.match(/(^|\n)\s*#{1,6}\s*Verdict\b\s*:?\s*/i)
   if (!heading || heading.index === undefined) return null
@@ -35,16 +58,15 @@ export function detectVerdict(body: string): ReviewVerdict {
   if (exact) return exact[2]!.toUpperCase() as ReviewVerdict
 
   const section = extractVerdictSection(body)
-  if (!section) return "UNKNOWN"
+  if (!section) return inferVerdictFromReviewText(body)
 
   const explicit = section.match(/\b(PASS|CONCERNS|FAIL)\b/i)
   if (explicit) return explicit[1]!.toUpperCase() as ReviewVerdict
 
-  if (/\bLGTM\b/i.test(section) || /\blooks good\b/i.test(section) || /\bno changes required\b/i.test(section)) {
-    return "PASS"
-  }
+  const sectionVerdict = inferVerdictFromReviewText(section)
+  if (sectionVerdict !== "UNKNOWN") return sectionVerdict
 
-  return "UNKNOWN"
+  return inferVerdictFromReviewText(body)
 }
 
 function reviewAction(verdict: ReviewVerdict, payload: Record<string, unknown>): Action {
