@@ -2,6 +2,5 @@
   "name": "agent-factory",
   "action": "agent-factory",
   "implementation": "agent-factory",
-  "capabilityKind": "act",
   "describe": "Create or assemble Kody agency model definitions from an operator request."
 }

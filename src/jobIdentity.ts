@@ -2,7 +2,7 @@ import type { Job } from "./executables/types.js"
 
 /** Stable key for the required work on a task; retries keep this value. */
 export function stableJobKey(job: Job): string {
-  const capability = job.capability ?? job.action
+  const capability = job.workflow ?? job.capability ?? job.action
   const executable = job.executable ?? capability ?? "unknown"
   if (job.flavor === "scheduled" && job.capability) return `scheduled:${job.capability}:${executable}`
   const target = typeof job.target === "number" ? job.target : targetFromCliArgs(job.cliArgs)

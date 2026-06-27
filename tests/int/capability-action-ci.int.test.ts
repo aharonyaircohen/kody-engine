@@ -34,7 +34,7 @@ function makeRepo(opts: { sameName?: boolean } = {}): { root: string; eventPath:
   fs.mkdirSync(path.join(root, ".kody", "capabilities", dutyName), { recursive: true })
   fs.writeFileSync(
     path.join(root, ".kody", "capabilities", dutyName, "profile.json"),
-    JSON.stringify({ name: dutyName, action: "noop", capabilityKind: "act", executable: exeName, agent: "kody" }),
+    JSON.stringify({ name: dutyName, action: "noop", executable: exeName, agent: "kody" }),
   )
   fs.writeFileSync(path.join(root, ".kody", "capabilities", dutyName, "capability.md"), "# Noop\n")
   fs.writeFileSync(

@@ -147,6 +147,17 @@ export function jobReferenceBlock(
         ? data.jobAgent
         : null
   const description = profile.describe.trim()
+  const workflow =
+    typeof data.workflowCapability === "string" && data.workflowCapability.length > 0 ? data.workflowCapability : null
+  const workflowStep = typeof data.workflowStep === "string" && data.workflowStep.length > 0 ? data.workflowStep : null
+  const workflowStepIndex =
+    typeof data.workflowStepIndex === "number" && Number.isFinite(data.workflowStepIndex)
+      ? data.workflowStepIndex
+      : null
+  const workflowStepCount =
+    typeof data.workflowStepCount === "number" && Number.isFinite(data.workflowStepCount)
+      ? data.workflowStepCount
+      : null
 
   const lines = [
     "## Job reference",
@@ -160,6 +171,10 @@ export function jobReferenceBlock(
     `- Executable: ${executable}`,
     `- Agent: ${agent ?? "(none)"}`,
     `- Description: ${description || "(none)"}`,
+    ...(workflow ? [`- Workflow: ${workflow}`] : []),
+    ...(workflowStep
+      ? [`- Workflow step: ${workflowStepIndex ?? "?"}/${workflowStepCount ?? "?"} ${workflowStep}`]
+      : []),
   ]
   return lines.join("\n")
 }
@@ -217,6 +232,7 @@ export interface ExecutorOutput {
   nextDispatch?: {
     action?: string
     capability?: string
+    workflow?: string
     executable?: string
     cliArgs: Record<string, unknown>
     saveReport?: boolean
@@ -227,6 +243,7 @@ export interface ExecutorOutput {
   afterNextJob?: {
     action?: string
     capability?: string
+    workflow?: string
     executable?: string
     cliArgs: Record<string, unknown>
     saveReport?: boolean
@@ -794,7 +811,7 @@ export async function runExecutableChain(profileName: string, input: ExecutorInp
           }
         }
         process.stdout.write(
-          `→ kody: in-process return → ${afterJob.action ?? afterJob.capability} (hop ${hops}/${MAX_CHAIN_HOPS})\n\n`,
+          `→ kody: in-process return → ${afterJob.action ?? afterJob.capability ?? afterJob.workflow} (hop ${hops}/${MAX_CHAIN_HOPS})\n\n`,
         )
         const { runJob } = await import("./job.js")
         result = await runJob(afterJob, {
@@ -826,7 +843,7 @@ export async function runExecutableChain(profileName: string, input: ExecutorInp
       }
     }
     process.stdout.write(
-      `→ kody: in-process hand-off → ${nextJob.action ?? nextJob.capability} (hop ${hops}/${MAX_CHAIN_HOPS})\n\n`,
+      `→ kody: in-process hand-off → ${nextJob.action ?? nextJob.capability ?? nextJob.workflow} (hop ${hops}/${MAX_CHAIN_HOPS})\n\n`,
     )
     const { runJob } = await import("./job.js")
     result = await runJob(nextJob, {
@@ -843,7 +860,12 @@ export async function runExecutableChain(profileName: string, input: ExecutorInp
   }
   if (result.nextDispatch || result.nextJob) {
     const pending =
-      result.nextDispatch?.executable ?? result.nextJob?.executable ?? result.nextJob?.capability ?? "unknown"
+      result.nextDispatch?.executable ??
+      result.nextDispatch?.workflow ??
+      result.nextJob?.executable ??
+      result.nextJob?.workflow ??
+      result.nextJob?.capability ??
+      "unknown"
     process.stderr.write(`[kody] in-process hand-off cap (${MAX_CHAIN_HOPS}) reached; not running ${pending}\n`)
   }
   return result
@@ -852,15 +874,17 @@ export async function runExecutableChain(profileName: string, input: ExecutorInp
 function handoffToJob(handoff: {
   action?: string
   capability?: string
+  workflow?: string
   executable?: string
   cliArgs: Record<string, unknown>
   saveReport?: boolean
 }): Job | null {
-  const dutyOrAction = handoff.action ?? handoff.capability
+  const dutyOrAction = handoff.workflow ?? handoff.action ?? handoff.capability
   if (!dutyOrAction) return null
   return {
     action: handoff.action ?? handoff.capability,
     capability: handoff.capability,
+    workflow: handoff.workflow,
     executable: handoff.executable,
     cliArgs: handoff.cliArgs,
     flavor: "instant",

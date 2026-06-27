@@ -15,7 +15,6 @@ beforeEach(() => {
     JSON.stringify({
       name: "impl",
       role: "utility",
-      capabilityKind: "act",
       kind: "oneshot",
       describe: "Implementation fixture.",
       inputs: [],
@@ -33,7 +32,7 @@ function writeFolderCapability(slug: string, profile: Record<string, unknown>): 
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(
     path.join(dir, "profile.json"),
-    JSON.stringify({ name: slug, capabilityKind: "act", ...profile }, null, 2),
+    JSON.stringify({ name: slug, ...profile }, null, 2),
   )
   fs.writeFileSync(path.join(dir, "capability.md"), `# ${slug}\n`)
 }
@@ -110,7 +109,6 @@ describe("capability actions", () => {
     writeExecutable("direct-ship", {
       action: "ship",
       role: "utility",
-      capabilityKind: "act",
       kind: "oneshot",
       describe: "Ship directly.",
     })
@@ -128,7 +126,6 @@ describe("capability actions", () => {
     writeExecutable("direct-ship", {
       action: "ship",
       role: "utility",
-      capabilityKind: "act",
       kind: "oneshot",
       describe: "Ship directly.",
     })
@@ -143,9 +140,9 @@ describe("capability actions", () => {
 
   it("ignores direct executable actions that are not typed engine profiles", () => {
     process.chdir(root)
-    writeExecutable("chatty", { action: "chatty", role: "chat", capabilityKind: "act" })
+    writeExecutable("chatty", { action: "chatty", role: "chat" })
     writeExecutable("untyped", { action: "untyped", role: "utility" })
-    writeExecutable("floating", { action: "floating", role: "utility", capabilityKind: "act", inputs: undefined })
+    writeExecutable("floating", { action: "floating", role: "utility", inputs: undefined })
 
     expect(resolveCapabilityAction("chatty")).toBeNull()
     expect(resolveCapabilityAction("untyped")).toBeNull()

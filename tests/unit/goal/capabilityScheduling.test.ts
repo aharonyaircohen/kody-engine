@@ -8,7 +8,7 @@ import type { GoalState } from "../../../src/goal/state.js"
 import { advanceManagedGoal } from "../../../src/scripts/advanceManagedGoal.js"
 import {
   type GoalCapabilityScheduleState,
-  planGoalTargetLoopSchedule,
+  planTargetLoopSchedule,
 } from "../../../src/scripts/goalCapabilityScheduling.js"
 import type { GoalCtx } from "../../../src/scripts/goalCtx.js"
 
@@ -92,6 +92,19 @@ function goalTargetLoop(): ManagedGoal {
   }
 }
 
+function workflowTargetLoop(): ManagedGoal {
+  return {
+    type: "agentLoop",
+    destination: { outcome: "daily release hygiene", evidence: [] },
+    capabilities: [],
+    route: [],
+    facts: {},
+    blockers: [],
+    loopTarget: { type: "workflow", id: "release-hygiene" },
+    preferredRunTime: { time: "10:00", timezone: "Asia/Jerusalem" },
+  }
+}
+
 function fakeCtx(raw: GoalState): Context {
   return {
     args: { goal: "prs-stay-mergeable" },
@@ -117,7 +130,7 @@ function fakeCtx(raw: GoalState): Context {
 
 describe("standing goal capability scheduling", () => {
   it("waits before a goal target loop preferred time", () => {
-    const decision = planGoalTargetLoopSchedule({
+    const decision = planTargetLoopSchedule({
       goal: goalTargetLoop(),
       now: new Date("2026-06-24T06:59:00Z"),
     })
@@ -128,7 +141,7 @@ describe("standing goal capability scheduling", () => {
   })
 
   it("dispatches a goal target loop after preferred time once per local day", () => {
-    const decision = planGoalTargetLoopSchedule({
+    const decision = planTargetLoopSchedule({
       goal: goalTargetLoop(),
       now: new Date("2026-06-24T07:01:00Z"),
     })
@@ -150,7 +163,7 @@ describe("standing goal capability scheduling", () => {
       },
     })
 
-    const secondDecision = planGoalTargetLoopSchedule({
+    const secondDecision = planTargetLoopSchedule({
       goal: goalTargetLoop(),
       now: new Date("2026-06-24T07:15:00Z"),
       previousScheduleState: decision.scheduleState,
@@ -158,6 +171,29 @@ describe("standing goal capability scheduling", () => {
 
     expect(secondDecision.kind).toBe("idle")
     expect(secondDecision.reason).toBe("already dispatched today at preferred time 10:00 Asia/Jerusalem")
+  })
+
+  it("dispatches a workflow target loop after preferred time", () => {
+    const decision = planTargetLoopSchedule({
+      goal: workflowTargetLoop(),
+      now: new Date("2026-06-24T07:01:00Z"),
+    })
+
+    expect(decision).toMatchObject({
+      kind: "dispatch",
+      dispatch: {
+        workflow: "release-hygiene",
+        cliArgs: {},
+      },
+      scheduleState: {
+        lastDecision: {
+          kind: "dispatch",
+          targetType: "workflow",
+          targetId: "release-hygiene",
+          workflow: "release-hygiene",
+        },
+      },
+    })
   })
 
   it("hands goal target loops to goal-manager", async () => {
@@ -181,6 +217,31 @@ describe("standing goal capability scheduling", () => {
         targetType: "goal",
         targetId: "web-release",
         executable: "goal-manager",
+      },
+      capabilities: {},
+    })
+  })
+
+  it("hands workflow target loops to workflow capability chain", async () => {
+    const raw = goalState([])
+    raw.extra.type = "agentLoop"
+    raw.extra.loopTarget = { type: "workflow", id: "release-hygiene" }
+    const ctx = fakeCtx(raw)
+
+    await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+
+    expect(ctx.output.nextDispatch).toEqual({
+      workflow: "release-hygiene",
+      cliArgs: {},
+    })
+    const updatedGoal = ctx.data.goal as GoalCtx
+    expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
+      mode: "agentLoop",
+      lastDecision: {
+        kind: "dispatch",
+        targetType: "workflow",
+        targetId: "release-hygiene",
+        workflow: "release-hygiene",
       },
       capabilities: {},
     })

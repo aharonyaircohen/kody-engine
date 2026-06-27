@@ -233,6 +233,25 @@ describe("config: loadConfig", () => {
     ])
   })
 
+  it("preserves generic release production verification config", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "m/x" },
+      release: {
+        releaseBranch: "main",
+        productionUrl: "https://www.example.com",
+        smokeCommand: "pnpm smoke",
+      },
+    })
+
+    expect(loadConfig(dir).release).toMatchObject({
+      releaseBranch: "main",
+      productionUrl: "https://www.example.com",
+      smokeCommand: "pnpm smoke",
+    })
+  })
+
   it("rejects invalid scheduled goal intervals", () => {
     const dir = tmpDir()
     writeConfig(dir, {

@@ -18,10 +18,9 @@ import * as path from "node:path"
 import type { CapabilityFolder } from "./capabilityFolders.js"
 import { CAPABILITY_PROFILE_FILE, listCapabilityFolderSlugs, readCapabilityFolder } from "./capabilityFolders.js"
 import { getCompanyStoreAssetRoot } from "./companyStore.js"
-import type { CapabilityKind, InputSpec } from "./executables/types.js"
+import type { InputSpec } from "./executables/types.js"
 
 const PUBLIC_EXECUTABLE_ROLES = new Set(["primitive", "orchestrator", "container", "watch", "utility"])
-const PUBLIC_EXECUTABLE_CAPABILITY_KINDS = new Set(["observe", "act", "verify"])
 
 export interface DiscoveredExecutable {
   name: string
@@ -39,7 +38,6 @@ export interface DiscoveredCapabilityAction {
   cliArgs: Record<string, unknown>
   source: "project-folder" | "project-executable" | "company-store" | "company-store-executable" | "builtin"
   describe?: string
-  capabilityKind?: CapabilityKind
   profilePath?: string
   bodyPath?: string
 }
@@ -233,12 +231,13 @@ export function listCapabilityActions(
   const projectExecutableRoots = [getProjectExecutablesRoot()]
   const storeExecutableRoot = getCompanyStoreExecutablesRoot()
   const storeExecutableRoots = storeExecutableRoot ? [storeExecutableRoot] : []
-  for (const action of listFolderCapabilityActions(projectCapabilitiesRoot, "project-folder", true)) add(action)
+for (const action of listFolderCapabilityActions(projectCapabilitiesRoot, "project-folder"))
+    add(action)
   for (const root of projectExecutableRoots) {
     for (const action of listExecutableCapabilityActions(root, "project-executable")) add(action)
   }
   if (storeCapabilitiesRoot) {
-    for (const action of listFolderCapabilityActions(storeCapabilitiesRoot, "company-store", true)) add(action)
+    for (const action of listFolderCapabilityActions(storeCapabilitiesRoot, "company-store")) add(action)
   }
   for (const root of storeExecutableRoots) {
     for (const action of listExecutableCapabilityActions(root, "company-store-executable")) add(action)
@@ -286,6 +285,10 @@ export function resolveCapabilityExecution(capability: CapabilityFolder): {
   executable: string
   cliArgs: Record<string, unknown>
 } {
+  const firstWorkflowStep = capability.config.workflow?.steps[0]
+  if (firstWorkflowStep) {
+    return { executable: firstWorkflowStep.executable ?? firstWorkflowStep.capability, cliArgs: {} }
+  }
   const executable =
     capability.config.implementation ??
     capability.config.executable ??
@@ -348,7 +351,7 @@ function listExecutableCapabilityActions(
       const action = typeof raw.action === "string" && raw.action.trim() ? raw.action.trim() : ""
       if (!action) continue
       if (!PUBLIC_EXECUTABLE_ROLES.has(String(raw.role))) continue
-      if (!PUBLIC_EXECUTABLE_CAPABILITY_KINDS.has(String(raw.capabilityKind))) continue
+      if (typeof raw.kind !== "string" || !raw.kind.trim()) continue
       if (!Array.isArray(raw.inputs)) continue
       out.push({
         action,
@@ -367,7 +370,6 @@ function listExecutableCapabilityActions(
 function listFolderCapabilityActions(
   root: string,
   source: "project-folder" | "company-store",
-  requireCapabilityKind = false,
 ): DiscoveredCapabilityAction[] {
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
   const out: DiscoveredCapabilityAction[] = []
@@ -375,7 +377,6 @@ function listFolderCapabilityActions(
     if (!isSafeName(slug)) continue
     const capability = readCapabilityFolder(root, slug)
     if (!capability) continue
-    if (requireCapabilityKind && !capability.config.capabilityKind) continue
     const action = capability.config.action ?? slug
     const { executable, cliArgs } = resolveCapabilityExecution(capability)
     out.push({
@@ -385,7 +386,6 @@ function listFolderCapabilityActions(
       cliArgs,
       source,
       describe: capability.config.describe ?? capability.title,
-      capabilityKind: capability.config.capabilityKind,
       profilePath: capability.profilePath,
       bodyPath: capability.bodyPath,
     })
@@ -409,7 +409,6 @@ function listBuiltinCapabilityActions(root: string = getBuiltinCapabilitiesRoot(
       cliArgs: {},
       source: "builtin",
       describe: capability.config.describe ?? capability.title,
-      capabilityKind: capability.config.capabilityKind,
       profilePath: capability.profilePath,
       bodyPath: capability.bodyPath,
     })

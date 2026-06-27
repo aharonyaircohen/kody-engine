@@ -5,8 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // Hoist-safe mock of the executor so runJob is tested in isolation (no real
 // executable spins up). Mirrors tests/unit/dispatchCapabilityFileTicks.routing.test.ts.
-const { runExecutableChain } = vi.hoisted(() => ({ runExecutableChain: vi.fn() }))
+const { gh, runExecutableChain } = vi.hoisted(() => ({
+  gh: vi.fn(),
+  runExecutableChain: vi.fn(),
+}))
 vi.mock("../../src/executor.js", () => ({ runExecutableChain }))
+vi.mock("../../src/issue.js", () => ({ gh }))
 
 import {
   DEFAULT_INSTANT_AGENT,
@@ -22,6 +26,10 @@ describe("runJob (Phase 1 seam)", () => {
   beforeEach(() => {
     runExecutableChain.mockReset()
     runExecutableChain.mockResolvedValue({ exitCode: 0 })
+    gh.mockReset()
+    gh.mockImplementation(() => {
+      throw new Error("HTTP 404 Not Found")
+    })
   })
 
   afterEach(() => {
@@ -220,7 +228,7 @@ describe("runJob (Phase 1 seam)", () => {
 
   it("rejects an executable-only job", () => {
     expect(() => validateJob({ executable: "run", cliArgs: {}, flavor: "instant" })).toThrow(
-      /capability action or capability/,
+      /capability action, capability, or workflow/,
     )
   })
 
@@ -234,7 +242,404 @@ describe("runJob (Phase 1 seam)", () => {
     const j = validateJob({ capability: "run", executable: "run", flavor: "instant" })
     expect(j.cliArgs).toEqual({})
   })
+
+  it("accepts a workflow-only job", () => {
+    const j = validateJob({ workflow: "bug-flow", flavor: "instant" })
+    expect(j.workflow).toBe("bug-flow")
+    expect(j.cliArgs).toEqual({})
+  })
+
+  it("runs a workflow capability as ordered child capability jobs", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-job-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "bug", {
+        name: "bug",
+        action: "bug",
+        workflow: {
+          steps: [
+            { capability: "reproduce", reason: "capture the failing test" },
+            { capability: "run", reason: "fix the bug using the repro artifact" },
+          ],
+        },
+      })
+      writeCapability(cwd, "reproduce", {
+        name: "reproduce",
+        action: "reproduce",
+        implementation: "reproduce",
+      })
+      process.chdir(cwd)
+
+      await runJob(
+        {
+          action: "bug",
+          capability: "bug",
+          cliArgs: { issue: 42, base: "feature/base" },
+          target: 42,
+          why: "operator note",
+          flavor: "instant",
+        },
+        { cwd },
+      )
+
+      expect(runExecutableChain).toHaveBeenCalledTimes(2)
+      expect(runExecutableChain.mock.calls[0]![0]).toBe("reproduce")
+      expect(runExecutableChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42 })
+      expect(runExecutableChain.mock.calls[0]![1].preloadedData).toMatchObject({
+        workflowCapability: "bug",
+        workflowStep: "reproduce",
+        workflowStepIndex: 1,
+        workflowStepCount: 2,
+        jobCapability: "reproduce",
+        jobExecutable: "reproduce",
+      })
+      expect(runExecutableChain.mock.calls[0]![1].preloadedData?.jobWhy).toContain("operator note")
+      expect(runExecutableChain.mock.calls[0]![1].preloadedData?.jobWhy).toContain("capture the failing test")
+
+      expect(runExecutableChain.mock.calls[1]![0]).toBe("run")
+      expect(runExecutableChain.mock.calls[1]![1].cliArgs).toEqual({ issue: 42, base: "feature/base" })
+      expect(runExecutableChain.mock.calls[1]![1].preloadedData).toMatchObject({
+        workflowCapability: "bug",
+        workflowStep: "run",
+        workflowStepIndex: 2,
+        workflowStepCount: 2,
+        jobCapability: "run",
+        jobExecutable: "run",
+      })
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("runs a stored workflow definition as ordered child capability jobs", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-definition-job-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "reproduce", {
+        name: "reproduce",
+        action: "reproduce",
+        implementation: "reproduce",
+      })
+      writeCapability(cwd, "run", {
+        name: "run",
+        action: "run",
+        implementation: "run",
+      })
+      writeCapability(cwd, "bug-flow", {
+        name: "bug-flow",
+        action: "bug-flow",
+        implementation: "bug-flow",
+      })
+      const workflow = {
+        version: 1,
+        name: "Bug workflow",
+        instructions: "Reproduce before fixing.",
+        capabilities: ["reproduce", "run"],
+        createdAt: "2026-06-27T00:00:00Z",
+        updatedAt: "2026-06-27T00:00:00Z",
+      }
+      gh.mockReturnValue(
+        JSON.stringify({
+          type: "file",
+          encoding: "base64",
+          content: Buffer.from(JSON.stringify(workflow), "utf8").toString("base64"),
+          sha: "workflow-sha",
+        }),
+      )
+      process.chdir(cwd)
+
+      await runJob(
+        {
+          workflow: "bug-flow",
+          cliArgs: { issue: 42 },
+          flavor: "instant",
+        },
+        {
+          cwd,
+          config: {
+            quality: { typecheck: "", lint: "", testUnit: "", format: "" },
+            git: { defaultBranch: "main" },
+            github: { owner: "o", repo: "r" },
+            agent: { model: "anthropic/claude-haiku-4-5-20251001" },
+            state: { repo: "o/kody-state", path: "r" },
+          },
+        },
+      )
+
+      expect(gh).toHaveBeenCalledWith(["api", "/repos/o/kody-state/contents/r/workflows/bug-flow/workflow.json"], {
+        cwd,
+      })
+      expect(runExecutableChain).toHaveBeenCalledTimes(2)
+      expect(runExecutableChain.mock.calls[0]![0]).toBe("reproduce")
+      expect(runExecutableChain.mock.calls[0]![1].preloadedData).toMatchObject({
+        workflowCapability: "bug-flow",
+        workflowTitle: "Bug workflow",
+        workflowStep: "reproduce",
+        workflowStepIndex: 1,
+        workflowStepCount: 2,
+        jobWhy: "Reproduce before fixing.",
+      })
+      expect(runExecutableChain.mock.calls[1]![0]).toBe("run")
+      expect(runExecutableChain.mock.calls[1]![1].preloadedData).toMatchObject({
+        workflowCapability: "bug-flow",
+        workflowStep: "run",
+        workflowStepIndex: 2,
+        workflowStepCount: 2,
+      })
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("runs a workflow when the public route includes the selected executable", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-route-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "bug", {
+        name: "bug",
+        action: "bug",
+        workflow: { steps: ["reproduce", "run"] },
+      })
+      writeCapability(cwd, "reproduce", {
+        name: "reproduce",
+        action: "reproduce",
+        implementation: "reproduce",
+      })
+      process.chdir(cwd)
+
+      await runJob(
+        {
+          action: "bug",
+          capability: "bug",
+          executable: "reproduce",
+          cliArgs: { issue: 42 },
+          target: 42,
+          flavor: "instant",
+        },
+        { cwd },
+      )
+
+      expect(runExecutableChain).toHaveBeenCalledTimes(2)
+      expect(runExecutableChain.mock.calls[0]![0]).toBe("reproduce")
+      expect(runExecutableChain.mock.calls[1]![0]).toBe("run")
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("passes workflow issue and PR targets to matching steps", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-targets-"))
+    const originalCwd = process.cwd()
+    try {
+      writeWorkflowStages(cwd)
+      writeCapability(cwd, "feature", {
+        name: "feature",
+        action: "feature",
+        workflow: {
+          steps: [
+            { capability: "run", target: "issue" },
+            { capability: "review", target: "pr" },
+            {
+              capability: "fix",
+              target: "pr",
+              runWhen: { "lastOutcome.type": ["REVIEW_CONCERNS", "REVIEW_FAIL"] },
+            },
+          ],
+        },
+      })
+      process.chdir(cwd)
+      runExecutableChain
+        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("RUN_COMPLETED", "https://github.com/o/r/pull/99") })
+        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("REVIEW_CONCERNS") })
+        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("FIX_COMPLETED") })
+
+      await runJob(
+        {
+          action: "feature",
+          capability: "feature",
+          cliArgs: { issue: 42, base: "feature/base" },
+          target: 42,
+          flavor: "instant",
+        },
+        { cwd },
+      )
+
+      expect(runExecutableChain).toHaveBeenCalledTimes(3)
+      expect(runExecutableChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42, base: "feature/base" })
+      expect(runExecutableChain.mock.calls[1]![1].cliArgs).toEqual({ pr: 99 })
+      expect(runExecutableChain.mock.calls[2]![1].cliArgs).toEqual({ pr: 99 })
+      expect(runExecutableChain.mock.calls[1]![1].preloadedData?.workflowStep).toBe("review")
+      expect(runExecutableChain.mock.calls[2]![1].preloadedData?.workflowStep).toBe("fix")
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("skips conditional workflow steps when runWhen does not match", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-skip-"))
+    const originalCwd = process.cwd()
+    try {
+      writeWorkflowStages(cwd)
+      writeCapability(cwd, "feature", {
+        name: "feature",
+        action: "feature",
+        workflow: {
+          steps: [
+            { capability: "run", target: "issue" },
+            { capability: "review", target: "pr" },
+            {
+              capability: "fix",
+              target: "pr",
+              runWhen: { "lastOutcome.type": ["REVIEW_CONCERNS", "REVIEW_FAIL"] },
+            },
+          ],
+        },
+      })
+      process.chdir(cwd)
+      runExecutableChain
+        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("RUN_COMPLETED", "https://github.com/o/r/pull/99") })
+        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("REVIEW_PASS") })
+
+      await runJob(
+        { action: "feature", capability: "feature", cliArgs: { issue: 42 }, target: 42, flavor: "instant" },
+        { cwd },
+      )
+
+      expect(runExecutableChain).toHaveBeenCalledTimes(2)
+      expect(runExecutableChain.mock.calls[0]![0]).toBe("run")
+      expect(runExecutableChain.mock.calls[1]![0]).toBe("review")
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("can continue a workflow after an allowed non-zero action outcome", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-continue-"))
+    const originalCwd = process.cwd()
+    try {
+      writeWorkflowStages(cwd)
+      writeCapability(cwd, "feature", {
+        name: "feature",
+        action: "feature",
+        workflow: {
+          steps: [
+            { capability: "run", target: "issue" },
+            { capability: "review", target: "pr", continueOn: ["REVIEW_FAIL"] },
+            {
+              capability: "fix",
+              target: "pr",
+              runWhen: { "lastOutcome.type": ["REVIEW_CONCERNS", "REVIEW_FAIL"] },
+            },
+          ],
+        },
+      })
+      process.chdir(cwd)
+      runExecutableChain
+        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("RUN_COMPLETED", "https://github.com/o/r/pull/99") })
+        .mockResolvedValueOnce({ exitCode: 1, reason: "blocking review", taskState: taskState("REVIEW_FAIL") })
+        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("FIX_COMPLETED") })
+
+      const result = await runJob(
+        { action: "feature", capability: "feature", cliArgs: { issue: 42 }, target: 42, flavor: "instant" },
+        { cwd },
+      )
+
+      expect(result).toMatchObject({ exitCode: 0 })
+      expect(runExecutableChain).toHaveBeenCalledTimes(3)
+      expect(runExecutableChain.mock.calls[2]![0]).toBe("fix")
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("stops a workflow when a child capability fails", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-fail-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "bug", {
+        name: "bug",
+        action: "bug",
+        workflow: { steps: ["reproduce", "run"] },
+      })
+      writeCapability(cwd, "reproduce", {
+        name: "reproduce",
+        action: "reproduce",
+        implementation: "reproduce",
+      })
+      process.chdir(cwd)
+      runExecutableChain.mockResolvedValueOnce({ exitCode: 1, reason: "repro failed" })
+
+      const result = await runJob(
+        { action: "bug", capability: "bug", cliArgs: { issue: 42 }, target: 42, flavor: "instant" },
+        { cwd },
+      )
+
+      expect(result).toMatchObject({ exitCode: 1, reason: "repro failed" })
+      expect(runExecutableChain).toHaveBeenCalledTimes(1)
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
 })
+
+function writeCapability(cwd: string, slug: string, profile: Record<string, unknown>): void {
+  const dir = path.join(cwd, ".kody", "capabilities", slug)
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify(profile))
+  fs.writeFileSync(path.join(dir, "capability.md"), `# ${slug}\n`)
+}
+
+function writeWorkflowStages(cwd: string): void {
+  writeCapability(cwd, "run", {
+    name: "run",
+    action: "run",
+    role: "primitive",
+    inputs: [
+      { name: "issue", flag: "--issue", type: "int", required: true },
+      { name: "base", flag: "--base", type: "string", required: false },
+    ],
+  })
+  writeCapability(cwd, "review", {
+    name: "review",
+    action: "review",
+    role: "primitive",
+    inputs: [{ name: "pr", flag: "--pr", type: "int", required: true }],
+  })
+  writeCapability(cwd, "fix", {
+    name: "fix",
+    action: "fix",
+    role: "primitive",
+    inputs: [
+      { name: "pr", flag: "--pr", type: "int", required: true },
+      { name: "feedback", flag: "--feedback", type: "string", required: false },
+    ],
+  })
+}
+
+function taskState(type: string, prUrl?: string): Record<string, unknown> {
+  return {
+    schemaVersion: 1,
+    core: {
+      phase: "idle",
+      status: "succeeded",
+      currentExecutable: null,
+      attempts: {},
+      lastOutcome: { type, payload: {}, timestamp: "2026-06-26T00:00:00.000Z" },
+      ...(prUrl ? { prUrl } : {}),
+    },
+    executables: {},
+    artifacts: {},
+    jobs: {},
+    history: [],
+  }
+}
 
 describe("mintInstantJob (Phase 2)", () => {
   const dispatch = { action: "fix", capability: "fix", executable: "fix", cliArgs: { pr: 7 }, target: 7 }
