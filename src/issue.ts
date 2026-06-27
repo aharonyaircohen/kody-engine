@@ -52,7 +52,10 @@ export function gh(args: string[], options?: GhOptions): string {
 }
 
 export function getIssue(issueNumber: number, cwd?: string): IssueData {
-  const output = gh(["issue", "view", String(issueNumber), "--json", "number,title,body,comments,labels,url"], { cwd })
+  const output = gh(["issue", "view", String(issueNumber), "--json", "number,title,body,comments,labels,url"], {
+    cwd,
+    preferRepoToken: true,
+  })
   const parsed = JSON.parse(output)
   if (typeof parsed?.title !== "string") {
     throw new Error(`Issue #${issueNumber}: unexpected response shape`)
@@ -146,7 +149,11 @@ export function postIssueComment(issueNumber: number, body: string, cwd?: string
     if (slug) throw new BotDispatchCommentError(slug)
   }
   try {
-    gh(["issue", "comment", String(issueNumber), "--body-file", "-"], { input: stripKodyMentions(body), cwd })
+    gh(["issue", "comment", String(issueNumber), "--body-file", "-"], {
+      input: stripKodyMentions(body),
+      cwd,
+      preferRepoToken: true,
+    })
   } catch (err) {
     process.stderr.write(
       `[kody] failed to post comment on #${issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
@@ -200,6 +207,7 @@ export interface PrData {
 export function getPr(prNumber: number, cwd?: string): PrData {
   const output = gh(["pr", "view", String(prNumber), "--json", "number,title,body,headRefName,baseRefName,state"], {
     cwd,
+    preferRepoToken: true,
   })
   const parsed = JSON.parse(output)
   if (typeof parsed?.title !== "string") {
@@ -217,7 +225,7 @@ export function getPr(prNumber: number, cwd?: string): PrData {
 
 export function getPrDiff(prNumber: number, cwd?: string): string {
   try {
-    return gh(["pr", "diff", String(prNumber)], { cwd })
+    return gh(["pr", "diff", String(prNumber)], { cwd, preferRepoToken: true })
   } catch (err) {
     process.stderr.write(
       `[kody] failed to fetch diff for PR #${prNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
@@ -235,7 +243,10 @@ export interface PrReview {
 
 export function getPrReviews(prNumber: number, cwd?: string): PrReview[] {
   try {
-    const output = gh(["pr", "view", String(prNumber), "--json", "reviews"], { cwd })
+    const output = gh(["pr", "view", String(prNumber), "--json", "reviews"], {
+      cwd,
+      preferRepoToken: true,
+    })
     const parsed = JSON.parse(output)
     if (!Array.isArray(parsed?.reviews)) return []
     return parsed.reviews.map(
@@ -263,7 +274,10 @@ export interface PrComment {
  */
 export function getPrComments(prNumber: number, cwd?: string): PrComment[] {
   try {
-    const output = gh(["pr", "view", String(prNumber), "--json", "comments"], { cwd })
+    const output = gh(["pr", "view", String(prNumber), "--json", "comments"], {
+      cwd,
+      preferRepoToken: true,
+    })
     const parsed = JSON.parse(output)
     if (!Array.isArray(parsed?.comments)) return []
     return parsed.comments
@@ -283,7 +297,7 @@ export function getPrComments(prNumber: number, cwd?: string): PrComment[] {
  * structured human-written review. The review prompt requires a verdict
  * heading; a body without it is a trigger/status/state comment, not a review.
  */
-const VERDICT_HEADING = /(^|\n)\s*#{1,6}\s*Verdict\s*:/i
+const VERDICT_HEADING = /(^|\n)\s*#{1,6}\s*Verdict\b\s*:?/i
 
 /**
  * Whether a PR comment body is shaped like a review. True iff the body
@@ -330,7 +344,11 @@ export function postPrReviewComment(prNumber: number, body: string, cwd?: string
     if (slug) throw new BotDispatchCommentError(slug)
   }
   try {
-    gh(["pr", "comment", String(prNumber), "--body-file", "-"], { input: stripKodyMentions(body), cwd })
+    gh(["pr", "comment", String(prNumber), "--body-file", "-"], {
+      input: stripKodyMentions(body),
+      cwd,
+      preferRepoToken: true,
+    })
   } catch (err) {
     process.stderr.write(
       `[kody] failed to post review comment on PR #${prNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
