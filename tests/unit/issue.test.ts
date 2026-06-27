@@ -72,6 +72,10 @@ describe("issue: isReviewShaped", () => {
     expect(isReviewShaped("### Verdict: CONCERNS")).toBe(true)
   })
 
+  it("accepts a verdict heading without a colon", () => {
+    expect(isReviewShaped("### Verdict\n\nLGTM.")).toBe(true)
+  })
+
   it("accepts a verdict heading that appears after leading content", () => {
     expect(isReviewShaped("Now I have everything needed.\n\n## Verdict: FAIL")).toBe(true)
   })
