@@ -17,6 +17,17 @@ describe("postReviewResult: detectVerdict", () => {
   it("tolerates whitespace around the colon", () => {
     expect(detectVerdict("## Verdict   :   CONCERNS")).toBe("CONCERNS")
   })
+  it("parses a verdict heading followed by a standalone explicit verdict", () => {
+    expect(detectVerdict("### Verdict\n\nPASS\n\nNo issues.")).toBe("PASS")
+  })
+  it("treats LGTM in a verdict section as PASS", () => {
+    expect(
+      detectVerdict("### Verdict\n\n**LGTM.** The implementation is correct, well-tested, and follows conventions."),
+    ).toBe("PASS")
+  })
+  it("treats no changes required in a verdict section as PASS", () => {
+    expect(detectVerdict("## Verdict\n\nThe implementation is correct. No changes required.")).toBe("PASS")
+  })
   it("returns UNKNOWN when no header present", () => {
     expect(detectVerdict("just a body, no verdict header")).toBe("UNKNOWN")
   })

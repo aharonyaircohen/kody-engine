@@ -297,7 +297,7 @@ export function getPrComments(prNumber: number, cwd?: string): PrComment[] {
  * structured human-written review. The review prompt requires a verdict
  * heading; a body without it is a trigger/status/state comment, not a review.
  */
-const VERDICT_HEADING = /(^|\n)\s*#{1,6}\s*Verdict\s*:/i
+const VERDICT_HEADING = /(^|\n)\s*#{1,6}\s*Verdict\b\s*:?/i
 
 /**
  * Whether a PR comment body is shaped like a review. True iff the body

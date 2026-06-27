@@ -20,10 +20,31 @@ import type { Action } from "../state.js"
 
 export type ReviewVerdict = "PASS" | "CONCERNS" | "FAIL" | "UNKNOWN"
 
+function extractVerdictSection(body: string): string | null {
+  const heading = body.match(/(^|\n)\s*#{1,6}\s*Verdict\b\s*:?\s*/i)
+  if (!heading || heading.index === undefined) return null
+
+  const start = heading.index + heading[0].length
+  const rest = body.slice(start)
+  const nextHeading = rest.search(/\n\s*#{1,6}\s+\S/)
+  return nextHeading >= 0 ? rest.slice(0, nextHeading) : rest
+}
+
 export function detectVerdict(body: string): ReviewVerdict {
-  const m = body.match(/##\s*Verdict\s*:\s*(PASS|CONCERNS|FAIL)\b/i)
-  if (!m) return "UNKNOWN"
-  return m[1]!.toUpperCase() as ReviewVerdict
+  const exact = body.match(/(^|\n)\s*#{1,6}\s*Verdict\s*:?\s*(PASS|CONCERNS|FAIL)\b/i)
+  if (exact) return exact[2]!.toUpperCase() as ReviewVerdict
+
+  const section = extractVerdictSection(body)
+  if (!section) return "UNKNOWN"
+
+  const explicit = section.match(/\b(PASS|CONCERNS|FAIL)\b/i)
+  if (explicit) return explicit[1]!.toUpperCase() as ReviewVerdict
+
+  if (/\bLGTM\b/i.test(section) || /\blooks good\b/i.test(section) || /\bno changes required\b/i.test(section)) {
+    return "PASS"
+  }
+
+  return "UNKNOWN"
 }
 
 function reviewAction(verdict: ReviewVerdict, payload: Record<string, unknown>): Action {
