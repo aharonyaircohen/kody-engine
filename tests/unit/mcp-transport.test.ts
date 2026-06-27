@@ -4,7 +4,7 @@
  * (in-process) reach the same tool implementations.
  */
 
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   buildCapabilityMcpServer,
   CAPABILITY_MCP_TOOL_NAMES,
@@ -94,6 +94,12 @@ describe("transport parity: submit_state", () => {
 // ────────────────────────────────────────────────────────────────────────────
 
 describe("transport parity: capability", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    delete process.env.KODY_CMS_DASHBOARD_URL
+    delete process.env.KODY_CMS_TOKEN
+  })
+
   it("exposes the same tool list via the transport-agnostic definition", () => {
     const defs = capabilityToolDefinitions({
       repoSlug: "owner/repo",
@@ -110,6 +116,61 @@ describe("transport parity: capability", () => {
       operatorMention: "@user",
     })
     expect(server.server.name).toBe("kody-capability")
+  })
+
+  it("calls the Dashboard CMS API with repo auth headers", async () => {
+    process.env.KODY_CMS_DASHBOARD_URL = "https://dashboard.example.test/cms"
+    process.env.KODY_CMS_TOKEN = "test-token"
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ docs: [], total: 0 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const tool = capabilityToolDefinitions({
+      repoSlug: "owner/repo",
+      operatorMention: "@user",
+    }).find((def) => def.name === "cms_list_documents")
+    if (!tool) throw new Error("cms_list_documents missing")
+
+    const result = await tool.handler({
+      collection: "lessons",
+      q: "intro",
+      limit: 5,
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe("https://dashboard.example.test/api/kody/cms/lessons?q=intro&limit=5")
+    expect(init.headers).toMatchObject({
+      "x-kody-token": "test-token",
+      "x-kody-owner": "owner",
+      "x-kody-repo": "repo",
+    })
+  })
+
+  it("refuses CMS writes while the capability is in ask mode", async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    const tool = capabilityToolDefinitions({
+      repoSlug: "owner/repo",
+      operatorMention: "@user",
+      capabilitySlug: "cms-content-editor",
+    }).find((def) => def.name === "cms_update_document")
+    if (!tool) throw new Error("cms_update_document missing")
+
+    const result = await tool.handler({
+      collection: "lessons",
+      id: "1",
+      data: { title: "New title" },
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(result.content[0]?.text).toContain("ASK mode")
   })
 })
 

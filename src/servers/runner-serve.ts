@@ -4,9 +4,9 @@
  * Idle HTTP server for a WARM-POOL one-shot runner. A pooled machine boots
  * into this mode with NO issue baked in, starts the listener, and is then
  * frozen (Fly suspend) by the pool owner. On claim the owner wakes it (~1s)
- * and POSTs a single job; the server clones the repo and spawns the existing
- * `kody run --issue N` path, then exits so Fly's auto_destroy tears the
- * machine down. The pool owner refills.
+ * and POSTs a single job; the server clones the repo and spawns bare `kody`
+ * with KODY_RUN_REQUEST_JSON set, then exits so Fly's auto_destroy tears the machine
+ * down. The pool owner refills.
  *
  * This exists because a frozen machine's boot env can't change — so the
  * issue/repo/token must arrive AFTER wake, over HTTP, instead of at boot.
@@ -30,6 +30,7 @@
 import { spawn } from "node:child_process"
 import * as fs from "node:fs"
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
+import { parseRunRequest, RUN_REQUEST_ENV, type RunRequest } from "../run-request.js"
 
 export const DEFAULT_PORT = 8080
 const DEFAULT_WORKDIR = "/workspace/repo"
@@ -38,18 +39,11 @@ export interface RunnerJob {
   jobId: string
   repo: string
   githubToken: string
-  /**
-   * "issue" (default): one-shot `kody run --issue N` → branch → PR → exit.
-   * "interactive": boot a long-lived `kody` chat session (the Vibe runner) —
-   * emits chat.ready, takes turns via the dashboard's append/event path.
-   * "scheduled": run the scheduled fan-out (`GITHUB_EVENT_NAME=schedule`) —
-   * the same capability/goal tick GitHub Actions' cron triggers, used as the Fly
-   * fallback when GitHub Actions is down. No issueNumber/sessionId needed.
-   */
-  mode?: "issue" | "interactive" | "scheduled"
-  /** Required for mode "issue". */
+  /** Canonical work request. Legacy mode/action fields are normalized into this. */
+  runRequest: RunRequest
+  /** Legacy mirror for old tests/callers; issue target id is canonical. */
   issueNumber?: number
-  /** Required for mode "interactive" — the chat session id. */
+  /** Legacy mirror for old tests/callers; chat target id is canonical. */
   sessionId?: string
   /** Interactive idle/hard-cap (ms) — mirrors spawnRunner. */
   idleExitMs?: number
@@ -58,6 +52,7 @@ export interface RunnerJob {
   /** Provider keys etc. (mirrors GH Actions toJSON(secrets)). Object or JSON string. */
   allSecrets?: Record<string, string> | string
   model?: string
+  reasoningEffort?: string
   /** Event-ingest URL with inline ?token=... (engine streams events here). */
   dashboardUrl?: string
 }
@@ -122,27 +117,33 @@ export function parseJob(body: unknown): { job: RunnerJob } | { error: string } 
   const githubToken = typeof b.githubToken === "string" ? b.githubToken.trim() : ""
   if (!githubToken) return { error: "githubToken required" }
 
+  const action = typeof b.action === "string" && b.action.trim() ? b.action.trim() : undefined
+  const message = typeof b.message === "string" && b.message.trim() ? b.message.trim() : undefined
   const mode = b.mode === "interactive" ? "interactive" : b.mode === "scheduled" ? "scheduled" : "issue"
-  const job: RunnerJob = { jobId, repo, githubToken, mode }
+  const runRequest =
+    b.runRequest !== undefined
+      ? parseRunRequest(b.runRequest)
+      : synthesizeLegacyRunRequest({
+          mode,
+          issueNumber: b.issueNumber,
+          sessionId: b.sessionId,
+          action,
+          message,
+        })
+  if ("error" in runRequest) return { error: runRequest.error }
+  const job: RunnerJob = { jobId, repo, githubToken, runRequest: runRequest.request }
 
-  if (mode === "issue") {
-    const issueNumber = Number(b.issueNumber)
-    if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
-      return { error: "issueNumber (positive integer) required for issue mode" }
-    }
-    job.issueNumber = issueNumber
-  } else if (mode === "interactive") {
-    const sessionId = typeof b.sessionId === "string" ? b.sessionId.trim() : ""
-    if (!sessionId) return { error: "sessionId required for interactive mode" }
-    job.sessionId = sessionId
+  if (job.runRequest.target.type === "issue") {
+    job.issueNumber = job.runRequest.target.id
+  } else if (job.runRequest.target.type === "chat") {
+    job.sessionId = job.runRequest.target.id
     if (Number.isFinite(Number(b.idleExitMs))) job.idleExitMs = Number(b.idleExitMs)
     if (Number.isFinite(Number(b.hardCapMs))) job.hardCapMs = Number(b.hardCapMs)
   }
-  // mode "scheduled" needs no extra fields — it runs the whole fan-out.
 
   if (typeof b.ref === "string" && b.ref.trim()) job.ref = b.ref.trim()
   if (typeof b.model === "string" && b.model.trim()) job.model = b.model.trim()
-  if (typeof b.sessionId === "string" && b.sessionId.trim()) job.sessionId = b.sessionId.trim()
+  if (typeof b.reasoningEffort === "string" && b.reasoningEffort.trim()) job.reasoningEffort = b.reasoningEffort.trim()
   if (typeof b.dashboardUrl === "string" && b.dashboardUrl.trim()) job.dashboardUrl = b.dashboardUrl.trim()
   if (b.allSecrets && (typeof b.allSecrets === "object" || typeof b.allSecrets === "string")) {
     job.allSecrets = b.allSecrets as Record<string, string> | string
@@ -150,9 +151,69 @@ export function parseJob(body: unknown): { job: RunnerJob } | { error: string } 
   return { job }
 }
 
+function synthesizeLegacyRunRequest(input: {
+  mode: "issue" | "interactive" | "scheduled"
+  issueNumber: unknown
+  sessionId: unknown
+  action?: string
+  message?: string
+}): { request: RunRequest } | { error: string } {
+  if (input.mode === "issue") {
+    const issueNumber = Number(input.issueNumber)
+    if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
+      return { error: "issueNumber (positive integer) required for issue mode" }
+    }
+    return {
+      request: {
+        target: { type: "issue", id: issueNumber },
+        intent: "run",
+        source: "dashboard",
+      },
+    }
+  }
+
+  if (input.mode === "interactive") {
+    const sessionId = typeof input.sessionId === "string" ? input.sessionId.trim() : ""
+    if (!sessionId) return { error: "sessionId required for interactive mode" }
+    return {
+      request: {
+        target: { type: "chat", id: sessionId },
+        intent: "continue",
+        source: "dashboard",
+      },
+    }
+  }
+
+  if (input.action === "goal-manager" && input.message) {
+    return {
+      request: {
+        target: { type: "goal", id: input.message },
+        intent: "manage",
+        source: "dashboard",
+      },
+    }
+  }
+  if (input.action) {
+    return {
+      request: {
+        target: { type: "workflow", id: input.action },
+        intent: "run",
+        source: "dashboard",
+      },
+    }
+  }
+  return {
+    request: {
+      target: { type: "workflow", id: "scheduled-fanout" },
+      intent: "tick",
+      source: "schedule",
+    },
+  }
+}
+
 /**
- * Default job runner: clone the repo, spawn `kody run --issue N`, and exit
- * the process with the child's code so Fly auto_destroy reclaims the machine.
+ * Default job runner: clone the repo, spawn bare `kody`, and exit the process
+ * with the child's code so Fly auto_destroy reclaims the machine.
  * Replaceable in tests via buildServer({ runJob }).
  */
 async function defaultRunJob(job: RunnerJob): Promise<void> {
@@ -165,16 +226,17 @@ async function defaultRunJob(job: RunnerJob): Promise<void> {
 
   const allSecrets = typeof job.allSecrets === "string" ? job.allSecrets : JSON.stringify(job.allSecrets ?? {})
 
-  const interactive = job.mode === "interactive"
-  const scheduled = job.mode === "scheduled"
+  const target = job.runRequest.target
+  const interactive = target.type === "chat"
+  const scheduled = target.type === "goal" || target.type === "workflow"
+  const issueNumber = target.type === "issue" ? target.id : undefined
+  const sessionId = target.type === "chat" ? target.id : undefined
   const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
     REPO: job.repo,
     REF: branch,
     GITHUB_TOKEN: job.githubToken,
-    // Scheduled mode drives the engine down the same path GitHub Actions' cron
-    // takes (runScheduledFanOut → due capabilities/goals). Bare `kody` routes on this.
-    ...(scheduled ? { GITHUB_EVENT_NAME: "schedule" } : {}),
+    [RUN_REQUEST_ENV]: JSON.stringify(job.runRequest),
     // GITHUB_REPOSITORY + GH_TOKEN are normally injected by GitHub Actions.
     // The engine's interactive mode needs GITHUB_REPOSITORY to resolve the
     // configured state repo and persist chat.ready / events (the durable signal
@@ -182,13 +244,12 @@ async function defaultRunJob(job: RunnerJob): Promise<void> {
     // and the session never appears "ready". GH_TOKEN auths the `gh` CLI.
     GITHUB_REPOSITORY: job.repo,
     GH_TOKEN: job.githubToken,
-    // Issue mode bakes ISSUE_NUMBER → `kody run --issue N`. Interactive mode
-    // leaves it empty and sets SESSION_ID so the engine boots a chat session.
-    ISSUE_NUMBER: interactive || scheduled ? "" : String(job.issueNumber),
+    ISSUE_NUMBER: issueNumber ? String(issueNumber) : "",
     ALL_SECRETS: allSecrets,
-    SESSION_ID: job.sessionId ?? "",
+    SESSION_ID: sessionId ?? "",
     DASHBOARD_URL: job.dashboardUrl ?? "",
     MODEL: job.model ?? "",
+    REASONING_EFFORT: job.reasoningEffort ?? "",
     ...(interactive && job.idleExitMs ? { KODY_IDLE_EXIT_MS: String(job.idleExitMs) } : {}),
     ...(interactive && job.hardCapMs ? { KODY_HARD_CAP_MS: String(job.hardCapMs) } : {}),
   }
@@ -220,17 +281,14 @@ async function defaultRunJob(job: RunnerJob): Promise<void> {
   await run("git", ["config", "user.name", authorName], workdir)
   await run("git", ["config", "user.email", authorEmail], workdir)
 
-  // Issue mode: one-shot `kody run --issue N`. Interactive + scheduled modes:
-  // bare `kody`, routed by env — SESSION_ID → chat session (Vibe runner), or
-  // GITHUB_EVENT_NAME=schedule → the scheduled capability/goal fan-out.
-  const runArgs = interactive || scheduled ? [] : ["run", "--issue", String(job.issueNumber)]
+  // Every runner invokes bare `kody`; KODY_RUN_REQUEST_JSON selects the target.
   const jobDesc = interactive
-    ? `interactive session ${job.sessionId}`
+    ? `chat session ${sessionId}`
     : scheduled
-      ? "scheduled fan-out"
-      : `running issue #${job.issueNumber}`
+      ? `${target.type} ${target.id}`
+      : `issue #${issueNumber}`
   process.stdout.write(`[runner-serve] job ${job.jobId}: ${jobDesc}\n`)
-  const runCode = await run("kody", runArgs, workdir)
+  const runCode = await run("kody", [], workdir)
   process.stdout.write(`[runner-serve] job ${job.jobId}: finished (exit ${runCode})\n`)
   process.exit(runCode)
 }

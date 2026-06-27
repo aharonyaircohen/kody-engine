@@ -76,6 +76,7 @@ export function planTargetLoopSchedule(opts: {
   goal: ManagedGoal
   now?: Date
   previousScheduleState?: GoalCapabilityScheduleState
+  resolvedGoalTargetId?: string
 }): GoalCapabilityScheduleDecision {
   const now = opts.now ?? new Date()
   const at = now.toISOString()
@@ -96,14 +97,16 @@ export function planTargetLoopSchedule(opts: {
     if (!gate.ok) return targetLoopDecision("idle", gate.reason, at)
   }
 
+  const dispatchTargetId =
+    target.type === "goal" && opts.resolvedGoalTargetId?.trim() ? opts.resolvedGoalTargetId.trim() : targetId
   const dispatch: NonNullable<GoalCapabilityScheduleDecision["dispatch"]> =
     target.type === "goal"
-      ? { action: "goal-manager", executable: "goal-manager", cliArgs: { goal: targetId } }
+      ? { action: "goal-manager", executable: "goal-manager", cliArgs: { goal: dispatchTargetId } }
       : { workflow: targetId, cliArgs: {} }
 
   return {
     kind: "dispatch",
-    reason: `dispatch ${target.type} ${targetId}`,
+    reason: `dispatch ${target.type} ${target.type === "goal" ? dispatchTargetId : targetId}`,
     dispatch,
     scheduleState: {
       mode: "agentLoop",
@@ -111,7 +114,7 @@ export function planTargetLoopSchedule(opts: {
       lastDecision: {
         kind: "dispatch",
         targetType: target.type,
-        targetId,
+        targetId: target.type === "goal" ? dispatchTargetId : targetId,
         ...(dispatch.action ? { action: dispatch.action } : {}),
         ...(dispatch.capability ? { capability: dispatch.capability } : {}),
         ...(dispatch.workflow ? { workflow: dispatch.workflow } : {}),
