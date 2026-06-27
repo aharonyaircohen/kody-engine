@@ -28,7 +28,18 @@ function writeLocalFile(cwd: string, relativePath: string, content: string): voi
 }
 
 function hydrateDirectory(config: StateRepoConfig, cwd: string, stateDir: string, localDir: string): void {
-  const entries = listStateDirectory(config, cwd, stateDir)
+  let entries: ReturnType<typeof listStateDirectory>
+  try {
+    entries = listStateDirectory(config, cwd, stateDir)
+  } catch (err) {
+    // Best-effort hydration. A non-404 error (rate limit, auth failure, network)
+    // must not crash the run — the executor should still proceed with whatever
+    // is already on disk.
+    process.stderr.write(
+      `[state-workspace] list ${stateDir} failed: ${err instanceof Error ? err.message : String(err)}\n`,
+    )
+    return
+  }
   if (entries.length === 0) return
 
   for (const entry of entries) {
@@ -51,7 +62,17 @@ export function hydrateStateWorkspace(config: StateRepoConfig, cwd: string): voi
   }
 
   for (const mapping of FILE_MAPPINGS) {
-    const file = readStateText(config, cwd, mapping.statePath)
+    let file: ReturnType<typeof readStateText>
+    try {
+      file = readStateText(config, cwd, mapping.statePath)
+    } catch (err) {
+      // Best-effort hydration. Mirror the directory branch: a transient API
+      // failure must not crash the run.
+      process.stderr.write(
+        `[state-workspace] read ${mapping.statePath} failed: ${err instanceof Error ? err.message : String(err)}\n`,
+      )
+      continue
+    }
     if (file) writeLocalFile(cwd, mapping.localPath, file.content)
   }
 }
