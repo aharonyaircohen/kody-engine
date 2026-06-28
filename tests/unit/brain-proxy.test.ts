@@ -158,6 +158,41 @@ describe("brain-proxy: brain-serve backend (passthrough)", () => {
     expect(headers["X-Api-Key"]).toBe(KEY)
   })
 
+  it("forwards dashboardUrl to the brain-serve backend", async () => {
+    const upstream = makeUpstream([
+      {
+        ok: true,
+        status: 200,
+        sseChunks: ['data: {"type":"chat","chatId":"c1"}\n\n', 'data: {"type":"done","chatId":"c1"}\n\n'],
+      },
+    ])
+    proxy = await startBrainProxy({ apiKey: KEY, backend: "brain-serve", __fetch: upstream.fetch })
+    const res = await fetch(`${proxy.url}/chats/c1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": KEY },
+      body: JSON.stringify({
+        message: "hi",
+        repo: "owner/repo",
+        repoToken: "repo-token",
+        dashboardUrl: "https://dashboard.example.test",
+        storeRepoUrl: "https://github.com/acme/kody-store",
+        storeRef: "stable",
+      }),
+    })
+
+    expect(res.status).toBe(200)
+    await readSseBody(res)
+    const body = JSON.parse(upstream.calls[0]!.init?.body as string) as Record<string, unknown>
+    expect(body).toMatchObject({
+      message: "hi",
+      repo: "owner/repo",
+      repoToken: "repo-token",
+      dashboardUrl: "https://dashboard.example.test",
+      storeRepoUrl: "https://github.com/acme/kody-store",
+      storeRef: "stable",
+    })
+  })
+
   it("forwards GET /chats/:id/stream?since=N to brain-serve", async () => {
     const upstream = makeUpstream([{ ok: true, status: 200, sseChunks: ['data: {"type":"chat","chatId":"c1"}\n\n'] }])
     proxy = await startBrainProxy({ apiKey: KEY, backend: "brain-serve", __fetch: upstream.fetch })

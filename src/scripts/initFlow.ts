@@ -111,11 +111,6 @@ on:
         required: false
         type: string
         default: ""
-      executable:
-        description: "Legacy alias for capability action"
-        required: false
-        type: string
-        default: ""
   issue_comment:
     types: [created]
 

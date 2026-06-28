@@ -188,6 +188,21 @@ export interface AgentOptions {
    */
   capabilitySlug?: string
   /**
+   * Opt-in (chat/Brain): expose CMS tools backed by the Dashboard CMS REST API.
+   * This keeps CMS data access behind one Dashboard-owned boundary.
+   */
+  enableDashboardCmsTool?: boolean
+  /** Dashboard origin used by the CMS MCP tool. Falls back to env when omitted. */
+  cmsDashboardUrl?: string
+  /** Repo slug "owner/name" forwarded to Dashboard CMS auth headers. */
+  cmsRepoSlug?: string
+  /** Dashboard auth token forwarded as x-kody-token. Falls back to env when omitted. */
+  cmsToken?: string
+  /** Dashboard store repo URL forwarded to CMS routes for adapter loading. */
+  cmsStoreRepoUrl?: string
+  /** Dashboard store ref forwarded to CMS routes for adapter loading. */
+  cmsStoreRef?: string
+  /**
    * Opt-in (chat/Brain): build an in-process MCP server exposing a
    * `fetch_repo` tool so the agent can clone and work on repos other than the
    * one it was handed. Requires `reposRoot`; grants the agent read access to
@@ -494,6 +509,23 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
           ...(opts.capabilitySlug ? { capabilitySlug: opts.capabilitySlug } : {}),
         })
         mcpEntries.push(["kody-capability", dutyHandle.server as unknown as Record<string, unknown>])
+      }
+      if (opts.enableDashboardCmsTool) {
+        const { buildDashboardCmsMcpServer, DASHBOARD_CMS_MCP_TOOL_NAMES } = await import("./dashboardCmsMcp.js")
+        if (!opts.cmsRepoSlug) {
+          throw new Error("enableDashboardCmsTool requires cmsRepoSlug (owner/name)")
+        }
+        const cmsHandle = buildDashboardCmsMcpServer({
+          repoSlug: opts.cmsRepoSlug,
+          dashboardUrl: opts.cmsDashboardUrl,
+          token: opts.cmsToken,
+          storeRepoUrl: opts.cmsStoreRepoUrl,
+          storeRef: opts.cmsStoreRef,
+        })
+        mcpEntries.push(["kody-cms", cmsHandle.server as unknown as Record<string, unknown>])
+        for (const toolName of DASHBOARD_CMS_MCP_TOOL_NAMES) {
+          ;(queryOptions.allowedTools as string[]).push(`mcp__kody-cms__${toolName}`)
+        }
       }
       if (opts.enableFetchRepoTool && opts.reposRoot) {
         // Lazy import — keeps the SDK MCP machinery off the cold path for the

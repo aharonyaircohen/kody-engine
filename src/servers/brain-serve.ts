@@ -134,6 +134,28 @@ function emitSse(res: ServerResponse, event: BrainEvent): void {
   res.write(`data: ${JSON.stringify(event)}\n\n`)
 }
 
+function envGithubToken(): string {
+  return (process.env.KODY_TOKEN ?? process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? process.env.GH_PAT ?? "").trim()
+}
+
+function parseRepoSlug(repo: string | undefined): { owner: string; repo: string } | null {
+  if (!repo) return null
+  const [owner, name] = repo.split("/", 2)
+  if (!owner || !name) return null
+  return { owner, repo: name }
+}
+
+function streamStartupError(res: ServerResponse, dir: string, chatId: string, err: unknown): void {
+  const sinceFloor = getLastSeq(dir, chatId)
+  const emitToLog = beginTurn(dir, chatId)
+  emitToLog({
+    type: "error",
+    chatId,
+    error: err instanceof Error ? err.message : String(err),
+  })
+  streamToRes(res, dir, chatId, sinceFloor)
+}
+
 /**
  * Pure translation: kody ChatEvent → Brain SSE event, or null when the event
  * has no Brain-protocol equivalent (chat.thinking / chat.ready / chat.exit,
@@ -310,6 +332,11 @@ async function handleChatTurn(
   // forwarded by the dashboard's brain-proxy; absent for a single-repo Brain.
   const repo = strField(body, "repo")
   const repoToken = strField(body, "repoToken")
+  const dashboardUrl = strField(body, "dashboardUrl")
+  const storeRepoUrl = strField(body, "storeRepoUrl")
+  const storeRef = strField(body, "storeRef")
+
+  const stateToken = repoToken || envGithubToken()
 
   const sessionFile = sessionFilePath(opts.cwd, chatId)
   fs.mkdirSync(path.dirname(sessionFile), { recursive: true })
@@ -349,6 +376,15 @@ async function handleChatTurn(
         // Let the agent clone + work on OTHER repos via the fetch_repo tool.
         reposRoot: opts.reposRoot,
         repoToken,
+        ...(dashboardUrl && repo && stateToken
+          ? {
+              cmsDashboardUrl: dashboardUrl,
+              cmsRepoSlug: repo,
+              cmsToken: stateToken,
+              cmsStoreRepoUrl: storeRepoUrl,
+              cmsStoreRef: storeRef,
+            }
+          : {}),
       })
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err)
