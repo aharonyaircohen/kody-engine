@@ -33,6 +33,7 @@
 import { createSdkMcpServer, type McpSdkServerConfigWithInstance, tool } from "@anthropic-ai/claude-agent-sdk"
 import type { ZodRawShape } from "zod"
 import { z } from "zod"
+import { DASHBOARD_CMS_MCP_TOOL_NAMES, dashboardCmsToolDefinitions } from "./dashboardCmsMcp.js"
 import { gh } from "./issue.js"
 import { getProfileInputs, resolveCapabilityAction } from "./registry.js"
 import { readStateText, type StateRepoConfig } from "./stateRepo.js"
@@ -63,22 +64,6 @@ interface CapabilityMcpOptions {
    */
   capabilitySlug?: string
 }
-
-type CmsToolResult =
-  | {
-      ok: true
-      status?: number
-      data?: unknown
-    }
-  | {
-      ok: false
-      status?: number
-      data?: unknown
-      error?: string
-      message?: string
-    }
-
-type CmsHeaderResult = { ok: true; headers: Record<string, string> } | Extract<CmsToolResult, { ok: false }>
 
 // ────────────────────────────────────────────────────────────────────────────
 // Tool definition shape (transport-agnostic).
@@ -489,222 +474,11 @@ function trustRefusal(capabilitySlug?: string): string {
   )
 }
 
-// ---------------------------------------------------------------------------
-// CMS primitives.
-// ---------------------------------------------------------------------------
-
-function dashboardBaseUrl(): string | null {
-  const raw =
-    process.env.KODY_CMS_DASHBOARD_URL?.trim() ||
-    process.env.KODY_DASHBOARD_URL?.trim() ||
-    process.env.DASHBOARD_URL?.trim() ||
-    ""
-  if (!raw) return null
-  try {
-    const parsed = new URL(raw)
-    return parsed.origin
-  } catch {
-    return null
-  }
-}
-
-function dashboardCmsToken(): string | null {
-  return (
-    process.env.KODY_CMS_TOKEN?.trim() ||
-    process.env.KODY_DASHBOARD_TOKEN?.trim() ||
-    process.env.KODY_TOKEN?.trim() ||
-    process.env.GH_TOKEN?.trim() ||
-    process.env.GITHUB_TOKEN?.trim() ||
-    process.env.GH_PAT?.trim() ||
-    null
-  )
-}
-
-function cmsHeaders(opts: CapabilityMcpOptions): CmsHeaderResult {
-  const token = dashboardCmsToken()
-  const [owner, repo] = opts.repoSlug.split("/")
-  if (!token) {
-    return {
-      ok: false,
-      error: "missing_cms_token",
-      message: "Set KODY_CMS_TOKEN, KODY_DASHBOARD_TOKEN, KODY_TOKEN, GH_TOKEN, GITHUB_TOKEN, or GH_PAT.",
-    }
-  }
-  if (!owner || !repo) {
-    return { ok: false, error: "invalid_repo", message: `Invalid repo slug: ${opts.repoSlug}` }
-  }
-  return {
-    ok: true,
-    headers: {
-      "Content-Type": "application/json",
-      "x-kody-token": token,
-      "x-kody-owner": owner,
-      "x-kody-repo": repo,
-    },
-  }
-}
-
-async function callDashboardCms(
-  opts: CapabilityMcpOptions,
-  path: string,
-  init: RequestInit = {},
-): Promise<CmsToolResult> {
-  const baseUrl = dashboardBaseUrl()
-  if (!baseUrl) {
-    return {
-      ok: false,
-      error: "missing_dashboard_url",
-      message: "Set KODY_CMS_DASHBOARD_URL or KODY_DASHBOARD_URL to the Dashboard origin.",
-    }
-  }
-  const headerResult = cmsHeaders(opts)
-  if (!headerResult.ok) return headerResult
-
-  try {
-    const res = await fetch(`${baseUrl}${path}`, {
-      ...init,
-      headers: {
-        ...headerResult.headers,
-        ...(init.headers as Record<string, string> | undefined),
-      },
-    })
-    const contentType = res.headers.get("content-type") ?? ""
-    const data = contentType.includes("application/json")
-      ? ((await res.json().catch(() => null)) as unknown)
-      : await res.text().catch(() => "")
-    if (!res.ok) {
-      return {
-        ok: false,
-        status: res.status,
-        error: stringFieldFromRecord(data, "error") ?? "cms_request_failed",
-        message: stringFieldFromRecord(data, "message") ?? `Dashboard CMS request failed with ${res.status}.`,
-        data,
-      }
-    }
-    return { ok: true, status: res.status, data }
-  } catch (err) {
-    return {
-      ok: false,
-      error: "cms_request_error",
-      message: err instanceof Error ? err.message : String(err),
-    }
-  }
-}
-
-function cmsToolResponse(result: CmsToolResult): Awaited<ReturnType<ToolHandler>> {
-  return {
-    content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-    ...(result.ok ? {} : { isError: true }),
-  }
-}
-
 function assertCmsWriteAllowed(opts: CapabilityMcpOptions): string | null {
   if (isDispatchGated(opts.capabilitySlug, readCapabilityTrustMode(opts.state, opts.repoSlug, opts.capabilitySlug))) {
     return trustRefusal(opts.capabilitySlug)
   }
   return null
-}
-
-function cmsQuery(args: Record<string, unknown>): string {
-  const params = new URLSearchParams()
-  const q = stringArg(args.q)
-  if (q) params.set("q", q)
-  const limit = numberArg(args.limit)
-  if (limit !== undefined) params.set("limit", String(limit))
-  const offset = numberArg(args.offset)
-  if (offset !== undefined) params.set("offset", String(offset))
-  if (args.filters && typeof args.filters === "object" && !Array.isArray(args.filters)) {
-    params.set("filters", JSON.stringify(args.filters))
-  }
-  if (Array.isArray(args.sort)) {
-    const sort = args.sort
-      .flatMap((entry) => {
-        if (!entry || typeof entry !== "object") return []
-        const field = stringArg((entry as Record<string, unknown>).field)
-        if (!field) return []
-        const direction = (entry as Record<string, unknown>).direction === "asc" ? "asc" : "desc"
-        return [`${field}:${direction}`]
-      })
-      .join(",")
-    if (sort) params.set("sort", sort)
-  }
-  const value = params.toString()
-  return value ? `?${value}` : ""
-}
-
-function stringArg(value: unknown): string {
-  return typeof value === "string" ? value.trim() : ""
-}
-
-function numberArg(value: unknown): number | undefined {
-  if (value === undefined || value === null || value === "") return undefined
-  const n = Number(value)
-  return Number.isFinite(n) ? n : undefined
-}
-
-function documentArg(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
-  return value as Record<string, unknown>
-}
-
-function normalizeCmsDocumentIdInput(input: string): string {
-  const trimmed = stripWrappingQuotes(input.trim())
-  const withoutQuery = trimmed.split(/[?#]/, 1)[0] ?? trimmed
-  const path = parseDocumentPath(withoutQuery)
-  return path ?? parseDocumentIdSegment(withoutQuery) ?? withoutQuery
-}
-
-function stripWrappingQuotes(value: string): string {
-  let current = value
-  for (;;) {
-    const next = current.replace(/^[`'"]+|[`'"]+$/g, "").trim()
-    if (next === current) return current
-    current = next
-  }
-}
-
-function parseDocumentPath(value: string): string | null {
-  const path = value.startsWith("http://") || value.startsWith("https://") ? urlPathname(value) : value
-  if (!path?.includes("/content/entries/")) return null
-
-  const parts = path.split("/").filter(Boolean).map(decodePathPart)
-  const entriesIndex = parts.findIndex((part, index) => part === "content" && parts[index + 1] === "entries")
-  const idPart = parts[entriesIndex + 3]
-  if (!idPart || idPart === "new") return null
-  return idPart === "edit" ? (parts[entriesIndex + 2] ?? null) : idPart
-}
-
-function parseDocumentIdSegment(value: string): string | null {
-  const parts = value.split("/").filter(Boolean).map(decodePathPart)
-  if (parts.length < 2) return null
-  const lastPart = parts[parts.length - 1]
-  if (!lastPart || lastPart === "new") return null
-  return lastPart === "edit" ? (parts[parts.length - 2] ?? null) : lastPart
-}
-
-function urlPathname(value: string): string | null {
-  try {
-    return new URL(value).pathname
-  } catch {
-    return null
-  }
-}
-
-function decodePathPart(value: string): string {
-  try {
-    return decodeURIComponent(value)
-  } catch {
-    return value
-  }
-}
-
-function stringFieldFromRecord(value: unknown, field: string): string | undefined {
-  return value &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    typeof (value as Record<string, unknown>)[field] === "string"
-    ? String((value as Record<string, unknown>)[field])
-    : undefined
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -904,94 +678,10 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     },
   }
 
-  const cmsListCollectionsTool: CapabilityToolDefinition = {
-    name: "cms_list_collections",
-    description: "List configured Dashboard CMS collections and their supported operations. Read-only.",
-    inputSchema: {},
-    handler: async () => cmsToolResponse(await callDashboardCms(opts, "/api/kody/cms")),
-  }
-
-  const cmsListDocumentsTool: CapabilityToolDefinition = {
-    name: "cms_list_documents",
-    description: "List or search Dashboard CMS documents from one configured collection. Read-only.",
-    inputSchema: {
-      collection: z.string().min(1).describe("CMS collection name."),
-      q: z.string().optional().describe("Optional search query."),
-      filters: z.record(z.string(), z.unknown()).optional().describe("Optional filter object keyed by field."),
-      sort: z
-        .array(
-          z.object({
-            field: z.string().min(1),
-            direction: z.enum(["asc", "desc"]).default("desc"),
-          }),
-        )
-        .optional(),
-      limit: z.number().int().min(1).max(100).optional(),
-      offset: z.number().int().min(0).optional(),
-    },
-    handler: async (args) => {
-      const collection = encodeURIComponent(stringArg(args.collection))
-      return cmsToolResponse(await callDashboardCms(opts, `/api/kody/cms/${collection}${cmsQuery(args)}`))
-    },
-  }
-
-  const cmsGetDocumentTool: CapabilityToolDefinition = {
-    name: "cms_get_document",
-    description: "Get one Dashboard CMS document by collection and id. Read-only.",
-    inputSchema: {
-      collection: z.string().min(1).describe("CMS collection name."),
-      id: z.string().min(1).describe("Document id."),
-    },
-    handler: async (args) => {
-      const collection = encodeURIComponent(stringArg(args.collection))
-      const id = encodeURIComponent(normalizeCmsDocumentIdInput(stringArg(args.id)))
-      return cmsToolResponse(await callDashboardCms(opts, `/api/kody/cms/${collection}/${id}`))
-    },
-  }
-
-  const cmsCreateDocumentTool: CapabilityToolDefinition = {
-    name: "cms_create_document",
-    description:
-      "Create one Dashboard CMS document when the capability is trusted and the CMS collection allows create.",
-    inputSchema: {
-      collection: z.string().min(1).describe("CMS collection name."),
-      data: z.record(z.string(), z.unknown()).describe("Document fields to create."),
-    },
-    handler: async (args) => {
-      const refusal = assertCmsWriteAllowed(opts)
-      if (refusal) return { content: [{ type: "text", text: refusal }] }
-      const collection = encodeURIComponent(stringArg(args.collection))
-      return cmsToolResponse(
-        await callDashboardCms(opts, `/api/kody/cms/${collection}`, {
-          method: "POST",
-          body: JSON.stringify(documentArg(args.data)),
-        }),
-      )
-    },
-  }
-
-  const cmsUpdateDocumentTool: CapabilityToolDefinition = {
-    name: "cms_update_document",
-    description:
-      "Update one Dashboard CMS document when the capability is trusted and the CMS collection allows update.",
-    inputSchema: {
-      collection: z.string().min(1).describe("CMS collection name."),
-      id: z.string().min(1).describe("Document id."),
-      data: z.record(z.string(), z.unknown()).describe("Partial document fields to update."),
-    },
-    handler: async (args) => {
-      const refusal = assertCmsWriteAllowed(opts)
-      if (refusal) return { content: [{ type: "text", text: refusal }] }
-      const collection = encodeURIComponent(stringArg(args.collection))
-      const id = encodeURIComponent(normalizeCmsDocumentIdInput(stringArg(args.id)))
-      return cmsToolResponse(
-        await callDashboardCms(opts, `/api/kody/cms/${collection}/${id}`, {
-          method: "PATCH",
-          body: JSON.stringify(documentArg(args.data)),
-        }),
-      )
-    },
-  }
+  const cmsTools = dashboardCmsToolDefinitions({
+    repoSlug: opts.repoSlug,
+    assertWriteAllowed: () => assertCmsWriteAllowed(opts),
+  })
 
   return [
     listTool,
@@ -1005,11 +695,7 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     ensureIssueTool,
     ensureCommentTool,
     dispatchTool,
-    cmsListCollectionsTool,
-    cmsListDocumentsTool,
-    cmsGetDocumentTool,
-    cmsCreateDocumentTool,
-    cmsUpdateDocumentTool,
+    ...cmsTools,
   ]
 }
 
@@ -1049,9 +735,5 @@ export const CAPABILITY_MCP_TOOL_NAMES = [
   "ensure_issue",
   "ensure_comment",
   "dispatch_workflow",
-  "cms_list_collections",
-  "cms_list_documents",
-  "cms_get_document",
-  "cms_create_document",
-  "cms_update_document",
+  ...DASHBOARD_CMS_MCP_TOOL_NAMES,
 ] as const

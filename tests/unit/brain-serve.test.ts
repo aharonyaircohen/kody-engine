@@ -700,6 +700,54 @@ describe("buildServer multi-repo", () => {
     expect(observedSessionFile).toBe(path.join(reposRoot, "acme/widgets", ".kody", "sessions", "c1.jsonl"))
   })
 
+  it("passes Dashboard CMS settings from the request into the chat turn", async () => {
+    let observed: ChatTurnOptions | null = null
+    booted = await boot(
+      async (opts) => {
+        observed = opts
+        await opts.sink.emit(makeEvent("chat.done", {}))
+        return { exitCode: 0 }
+      },
+      tmp,
+      {
+        reposRoot: path.join(tmp, "repos"),
+        cloneRepo: async (_repo, _token, dir) => {
+          fs.mkdirSync(path.join(dir, ".git"), { recursive: true })
+        },
+      },
+    )
+
+    const res = await fetch(`${booted.url}/chats/c1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": KEY },
+      body: JSON.stringify({
+        message: "show course",
+        repo: "acme/widgets",
+        repoToken: "repo-token",
+        dashboardUrl: "https://dashboard.example.test",
+        storeRepoUrl: "https://github.com/acme/kody-store",
+        storeRef: "stable",
+      }),
+    })
+
+    expect(res.status).toBe(200)
+    await readSseBody(res)
+    const cms = observed as
+      | (ChatTurnOptions & {
+          cmsDashboardUrl?: string
+          cmsRepoSlug?: string
+          cmsToken?: string
+          cmsStoreRepoUrl?: string
+          cmsStoreRef?: string
+        })
+      | null
+    expect(cms?.cmsDashboardUrl).toBe("https://dashboard.example.test")
+    expect(cms?.cmsRepoSlug).toBe("acme/widgets")
+    expect(cms?.cmsToken).toBe("repo-token")
+    expect(cms?.cmsStoreRepoUrl).toBe("https://github.com/acme/kody-store")
+    expect(cms?.cmsStoreRef).toBe("stable")
+  })
+
   it("runs in the boot cwd when no repo is sent (single-repo behavior preserved)", async () => {
     let observedCwd = ""
     booted = await boot(

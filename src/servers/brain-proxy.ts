@@ -119,7 +119,14 @@ export function buildBrainProxy(opts: BrainProxyOptions): {
       // Read the request body.
       const chunks: Buffer[] = []
       for await (const chunk of req) chunks.push(chunk as Buffer)
-      let body: { message?: string; repo?: string; repoToken?: string } = {}
+      let body: {
+        message?: string
+        repo?: string
+        repoToken?: string
+        dashboardUrl?: string
+        storeRepoUrl?: string
+        storeRef?: string
+      } = {}
       try {
         const raw = Buffer.concat(chunks).toString("utf-8")
         if (raw) body = JSON.parse(raw)
@@ -193,7 +200,14 @@ interface ProxyToBrainServeArgs {
   brainServeUrl: string
   apiKey: string
   chatId: string
-  body: { message?: string; repo?: string; repoToken?: string }
+  body: {
+    message?: string
+    repo?: string
+    repoToken?: string
+    dashboardUrl?: string
+    storeRepoUrl?: string
+    storeRef?: string
+  }
   doFetch: typeof fetch
 }
 
@@ -209,6 +223,9 @@ async function proxyToBrainServe(args: ProxyToBrainServeArgs): Promise<void> {
       message: args.body.message,
       ...(args.body.repo ? { repo: args.body.repo } : {}),
       ...(args.body.repoToken ? { repoToken: args.body.repoToken } : {}),
+      ...(args.body.dashboardUrl ? { dashboardUrl: args.body.dashboardUrl } : {}),
+      ...(args.body.storeRepoUrl ? { storeRepoUrl: args.body.storeRepoUrl } : {}),
+      ...(args.body.storeRef ? { storeRef: args.body.storeRef } : {}),
     }),
   })
 
