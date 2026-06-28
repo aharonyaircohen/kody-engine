@@ -4,7 +4,14 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { detectPackageManager, parseCiArgs, resolveAuthToken, runCi, unpackAllSecrets } from "../../src/kody-cli.js"
+import {
+  detectPackageManager,
+  parseCiArgs,
+  resolveAuthToken,
+  runCi,
+  shouldPostRunFailureTail,
+  unpackAllSecrets,
+} from "../../src/kody-cli.js"
 
 const { privateKey: appPrivateKey } = generateKeyPairSync("rsa", {
   modulusLength: 2048,
@@ -230,6 +237,17 @@ describe("kody-cli: detectPackageManager", () => {
     fs.writeFileSync(path.join(d, "pnpm-lock.yaml"), "")
     fs.writeFileSync(path.join(d, "yarn.lock"), "")
     expect(detectPackageManager(d)).toBe("pnpm")
+  })
+})
+
+describe("kody-cli: run exit reporting", () => {
+  it("treats no-commit exit 3 as already reported, not as a raw-tail crash", () => {
+    expect(shouldPostRunFailureTail(3)).toBe(false)
+  })
+
+  it("still posts raw tails for wrapper/crash class exits", () => {
+    expect(shouldPostRunFailureTail(4)).toBe(true)
+    expect(shouldPostRunFailureTail(99)).toBe(true)
   })
 })
 

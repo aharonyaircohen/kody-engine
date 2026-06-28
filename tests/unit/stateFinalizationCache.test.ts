@@ -95,6 +95,19 @@ describe("task state finalization caching", () => {
     expect(written.core.currentExecutable).toBeNull()
   })
 
+  it("saveTaskState writes terminal shipped state when no delivery is needed", async () => {
+    const c = ctx(state(), { output: { exitCode: 0 } })
+    c.data.deliveryOutcome = { kind: "not_required", reason: "work already satisfied; no PR needed" }
+
+    await saveTaskState(c, runProfile, null)
+
+    expect(mocks.writeTaskState).toHaveBeenCalledOnce()
+    const written = mocks.writeTaskState.mock.calls[0]![2] as TaskState
+    expect(written.core.phase).toBe("shipped")
+    expect(written.core.status).toBe("succeeded")
+    expect(written.core.currentExecutable).toBeNull()
+  })
+
   it("saveTaskState does not terminalize child flow runs", async () => {
     const taskState = state({
       flow: {
@@ -205,6 +218,20 @@ describe("task state finalization caching", () => {
     expect(written.core.status).toBe("failed")
     expect(written.core.currentExecutable).toBeNull()
     expect(c.data.taskState).toBe(written)
+  })
+
+  it("finalizeTerminal stamps done when no delivery is needed", async () => {
+    const c = ctx(state(), { output: { exitCode: 0 } })
+    c.data.deliveryOutcome = { kind: "not_required", reason: "work already satisfied; no PR needed" }
+
+    await finalizeTerminal(c, runProfile, null)
+
+    expect(mocks.setKodyLabel).toHaveBeenCalledWith(42, expect.objectContaining({ label: "kody:done" }), "/tmp/repo")
+    expect(mocks.writeTaskState).toHaveBeenCalledOnce()
+    const written = mocks.writeTaskState.mock.calls[0]![2] as TaskState
+    expect(written.core.phase).toBe("shipped")
+    expect(written.core.status).toBe("succeeded")
+    expect(written.core.currentExecutable).toBeNull()
   })
 
   it("finalizeTerminal falls back to reading task state when no cached state exists", async () => {
