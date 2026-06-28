@@ -6,9 +6,9 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
+  buildCapabilityMcpServer,
   CAPABILITY_MCP_TOOL_NAMES,
   capabilityToolDefinitions,
-  buildCapabilityMcpServer,
 } from "../../src/capabilityMcp.js"
 import { buildFetchRepoMcpServer, fetchRepoToolDefinition } from "../../src/fetchRepoMcp.js"
 import { buildMcpHttpServer, listenMcpHttpServer, type McpRouteConfig } from "../../src/servers/mcpHttpServer.js"
@@ -151,6 +151,35 @@ describe("transport parity: capability", () => {
       "x-kody-owner": "owner",
       "x-kody-repo": "repo",
     })
+  })
+
+  it("normalizes Dashboard content-entry URLs before CMS document get calls", async () => {
+    process.env.KODY_CMS_DASHBOARD_URL = "https://dashboard.example.test"
+    process.env.KODY_CMS_TOKEN = "test-token"
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ document: { _id: "6a408b5d4a2dd57df6b116ea" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const tool = capabilityToolDefinitions({
+      repoSlug: "owner/repo",
+      operatorMention: "@user",
+    }).find((def) => def.name === "cms_get_document")
+    if (!tool) throw new Error("cms_get_document missing")
+
+    const result = await tool.handler({
+      collection: "courses",
+      id: "https://dashboard.example.test/content/entries/courses/6a408b5d4a2dd57df6b116ea/edit?collectionSearch=course",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe("https://dashboard.example.test/api/kody/cms/courses/6a408b5d4a2dd57df6b116ea")
   })
 
   it("refuses CMS writes while the capability is in ask mode", async () => {

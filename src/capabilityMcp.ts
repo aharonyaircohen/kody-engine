@@ -647,6 +647,57 @@ function documentArg(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
+function normalizeCmsDocumentIdInput(input: string): string {
+  const trimmed = stripWrappingQuotes(input.trim())
+  const withoutQuery = trimmed.split(/[?#]/, 1)[0] ?? trimmed
+  const path = parseDocumentPath(withoutQuery)
+  return path ?? parseDocumentIdSegment(withoutQuery) ?? withoutQuery
+}
+
+function stripWrappingQuotes(value: string): string {
+  let current = value
+  for (;;) {
+    const next = current.replace(/^[`'"]+|[`'"]+$/g, "").trim()
+    if (next === current) return current
+    current = next
+  }
+}
+
+function parseDocumentPath(value: string): string | null {
+  const path = value.startsWith("http://") || value.startsWith("https://") ? urlPathname(value) : value
+  if (!path?.includes("/content/entries/")) return null
+
+  const parts = path.split("/").filter(Boolean).map(decodePathPart)
+  const entriesIndex = parts.findIndex((part, index) => part === "content" && parts[index + 1] === "entries")
+  const idPart = parts[entriesIndex + 3]
+  if (!idPart || idPart === "new") return null
+  return idPart === "edit" ? (parts[entriesIndex + 2] ?? null) : idPart
+}
+
+function parseDocumentIdSegment(value: string): string | null {
+  const parts = value.split("/").filter(Boolean).map(decodePathPart)
+  if (parts.length < 2) return null
+  const lastPart = parts[parts.length - 1]
+  if (!lastPart || lastPart === "new") return null
+  return lastPart === "edit" ? (parts[parts.length - 2] ?? null) : lastPart
+}
+
+function urlPathname(value: string): string | null {
+  try {
+    return new URL(value).pathname
+  } catch {
+    return null
+  }
+}
+
+function decodePathPart(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
 function stringFieldFromRecord(value: unknown, field: string): string | undefined {
   return value &&
     typeof value === "object" &&
@@ -893,7 +944,7 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     },
     handler: async (args) => {
       const collection = encodeURIComponent(stringArg(args.collection))
-      const id = encodeURIComponent(stringArg(args.id))
+      const id = encodeURIComponent(normalizeCmsDocumentIdInput(stringArg(args.id)))
       return cmsToolResponse(await callDashboardCms(opts, `/api/kody/cms/${collection}/${id}`))
     },
   }
@@ -932,7 +983,7 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
       const refusal = assertCmsWriteAllowed(opts)
       if (refusal) return { content: [{ type: "text", text: refusal }] }
       const collection = encodeURIComponent(stringArg(args.collection))
-      const id = encodeURIComponent(stringArg(args.id))
+      const id = encodeURIComponent(normalizeCmsDocumentIdInput(stringArg(args.id)))
       return cmsToolResponse(
         await callDashboardCms(opts, `/api/kody/cms/${collection}/${id}`, {
           method: "PATCH",
