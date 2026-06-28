@@ -41,6 +41,8 @@ interface ContentsEntry {
   type?: string
 }
 
+const ensuredStateBranches = new Set<string>()
+
 function is404(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err)
   return /HTTP 404/i.test(msg) || /Not Found/i.test(msg)
@@ -139,8 +141,12 @@ function branchApiPath(config: StateRepoConfig, targetPath: string): string {
 
 export function ensureStateBranch(config: StateRepoConfig, cwd?: string): void {
   const parsed = parseStateRepo(config)
+  const cacheKey = `${parsed.owner}/${parsed.repo}:${STATE_BRANCH}`
+  if (ensuredStateBranches.has(cacheKey)) return
+
   try {
     gh(["api", `/repos/${parsed.owner}/${parsed.repo}/git/ref/heads/${STATE_BRANCH}`], { cwd })
+    ensuredStateBranches.add(cacheKey)
     return
   } catch (err) {
     if (!is404(err)) throw err
@@ -162,6 +168,11 @@ export function ensureStateBranch(config: StateRepoConfig, cwd?: string): void {
   } catch (err) {
     if (!isAlreadyExists(err)) throw err
   }
+  ensuredStateBranches.add(cacheKey)
+}
+
+export function clearStateRepoRuntimeCacheForTests(): void {
+  ensuredStateBranches.clear()
 }
 
 export function readStateText(

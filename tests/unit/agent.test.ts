@@ -9,6 +9,7 @@ const querySpy = vi.fn()
 let queryMessages: unknown[] = [{ type: "result", subtype: "success", result: "DONE" }]
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
+  createSdkMcpServer: (config: Record<string, unknown>) => config,
   query: (args: unknown) => {
     querySpy(args)
     const msgs = queryMessages
@@ -17,6 +18,12 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
     }
     return gen()
   },
+  tool: (name: string, description: string, inputSchema: unknown, handler: unknown) => ({
+    name,
+    description,
+    inputSchema,
+    handler,
+  }),
 }))
 
 import { runAgent } from "../../src/agent.js"
@@ -193,5 +200,31 @@ describe("runAgent: finalText collection", () => {
     ]
     const out = await runAgent(baseOpts())
     expect(out.finalText).toBe("DONE")
+  })
+})
+
+describe("runAgent: Dashboard CMS MCP wiring", () => {
+  beforeEach(() => {
+    querySpy.mockClear()
+  })
+  afterEach(() => {
+    querySpy.mockClear()
+  })
+
+  it("registers the Dashboard CMS server and allowlist when explicitly enabled", async () => {
+    await runAgent({
+      ...baseOpts(),
+      enableDashboardCmsTool: true,
+      cmsDashboardUrl: "https://dashboard.example.test",
+      cmsRepoSlug: "owner/repo",
+      cmsToken: "test-token",
+    })
+
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    const mcpServers = args.options.mcpServers as Record<string, { name?: string }>
+    const allowedTools = args.options.allowedTools as string[]
+    expect(mcpServers["kody-cms"]).toMatchObject({ name: "kody-cms" })
+    expect(allowedTools).toContain("mcp__kody-cms__cms_list_documents")
+    expect(allowedTools).toContain("mcp__kody-cms__cms_get_document")
   })
 })

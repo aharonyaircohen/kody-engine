@@ -1,6 +1,9 @@
 import { execFileSync } from "node:child_process"
 
 const API_TIMEOUT_MS = 30_000
+const DEFAULT_RATE_LIMIT_RETRIES = 2
+const DEFAULT_RATE_LIMIT_BASE_DELAY_MS = 1_000
+const DEFAULT_RATE_LIMIT_MAX_WAIT_MS = 65 * 60 * 1_000
 
 export interface IssueComment {
   body: string
@@ -41,14 +44,104 @@ function ghToken(preferRepoToken = false): string | undefined {
 export function gh(args: string[], options?: GhOptions): string {
   const token = ghToken(options?.preferRepoToken)
   const env: NodeJS.ProcessEnv = token ? { ...process.env, GH_TOKEN: token } : { ...process.env }
-  return execFileSync("gh", args, {
-    encoding: "utf-8",
-    timeout: API_TIMEOUT_MS,
-    cwd: options?.cwd,
-    env,
-    input: options?.input,
-    stdio: options?.input ? ["pipe", "pipe", "pipe"] : ["inherit", "pipe", "pipe"],
-  }).trim()
+  const maxRetries = envInt("KODY_GH_RATE_LIMIT_MAX_RETRIES", DEFAULT_RATE_LIMIT_RETRIES)
+  const maxWaitMs = envInt("KODY_GH_RATE_LIMIT_MAX_WAIT_MS", DEFAULT_RATE_LIMIT_MAX_WAIT_MS)
+
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return execFileSync("gh", args, {
+        encoding: "utf-8",
+        timeout: API_TIMEOUT_MS,
+        cwd: options?.cwd,
+        env,
+        input: options?.input,
+        stdio: options?.input ? ["pipe", "pipe", "pipe"] : ["inherit", "pipe", "pipe"],
+      }).trim()
+    } catch (err) {
+      if (!isRateLimitError(err) || attempt >= maxRetries) throw err
+
+      const waitMs = rateLimitWaitMs(token, options?.cwd, attempt + 1)
+      if (waitMs > maxWaitMs) {
+        process.stderr.write(
+          `[kody gh] rate limit on ${formatGhArgs(args)}; reset wait ${formatDuration(waitMs)} exceeds max ${formatDuration(maxWaitMs)}\n`,
+        )
+        throw err
+      }
+
+      process.stderr.write(
+        `[kody gh] rate limit on ${formatGhArgs(args)}; retry ${attempt + 1}/${maxRetries} after ${formatDuration(waitMs)}\n`,
+      )
+      sleepSync(waitMs)
+    }
+  }
+}
+
+function envInt(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim()
+  if (!raw) return fallback
+  const value = Number(raw)
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback
+}
+
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    const stderr = (err as { stderr?: unknown }).stderr
+    if (Buffer.isBuffer(stderr)) return `${err.message}\n${stderr.toString("utf-8")}`
+    if (typeof stderr === "string") return `${err.message}\n${stderr}`
+    return err.message
+  }
+  return String(err)
+}
+
+function isRateLimitError(err: unknown): boolean {
+  const msg = errorMessage(err)
+  return /rate limit exceeded|secondary rate limit|abuse detection/i.test(msg) && /HTTP 403|rate limit/i.test(msg)
+}
+
+function rateLimitWaitMs(token: string | undefined, cwd: string | undefined, retryNumber: number): number {
+  const resetMs = readCoreRateLimitResetMs(token, cwd)
+  if (typeof resetMs === "number") {
+    return Math.max(0, resetMs - Date.now() + 1_000)
+  }
+  const base = envInt("KODY_GH_RATE_LIMIT_BASE_DELAY_MS", DEFAULT_RATE_LIMIT_BASE_DELAY_MS)
+  return base * 2 ** Math.max(0, retryNumber - 1)
+}
+
+function readCoreRateLimitResetMs(token: string | undefined, cwd: string | undefined): number | null {
+  try {
+    const env: NodeJS.ProcessEnv = token ? { ...process.env, GH_TOKEN: token } : { ...process.env }
+    const raw = execFileSync("gh", ["api", "rate_limit", "--jq", ".resources.core.reset"], {
+      encoding: "utf-8",
+      timeout: API_TIMEOUT_MS,
+      cwd,
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim()
+    const seconds = Number(raw)
+    return Number.isFinite(seconds) && seconds > 0 ? seconds * 1_000 : null
+  } catch {
+    return null
+  }
+}
+
+function sleepSync(ms: number): void {
+  if (ms <= 0) return
+  const buffer = new SharedArrayBuffer(4)
+  const view = new Int32Array(buffer)
+  Atomics.wait(view, 0, 0, ms)
+}
+
+function formatGhArgs(args: string[]): string {
+  return `gh ${args.slice(0, 4).join(" ")}${args.length > 4 ? " ..." : ""}`
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1_000) return `${ms}ms`
+  const seconds = Math.ceil(ms / 1_000)
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const rest = seconds % 60
+  return rest ? `${minutes}m${rest}s` : `${minutes}m`
 }
 
 export function getIssue(issueNumber: number, cwd?: string): IssueData {

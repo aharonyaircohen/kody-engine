@@ -10,6 +10,11 @@ import {
   CAPABILITY_MCP_TOOL_NAMES,
   capabilityToolDefinitions,
 } from "../../src/capabilityMcp.js"
+import {
+  buildDashboardCmsMcpServer,
+  DASHBOARD_CMS_MCP_TOOL_NAMES,
+  dashboardCmsToolDefinitions,
+} from "../../src/dashboardCmsMcp.js"
 import { buildFetchRepoMcpServer, fetchRepoToolDefinition } from "../../src/fetchRepoMcp.js"
 import { buildMcpHttpServer, listenMcpHttpServer, type McpRouteConfig } from "../../src/servers/mcpHttpServer.js"
 import { buildSubmitMcpServer, submitStateToolDefinition } from "../../src/submitMcp.js"
@@ -153,6 +158,35 @@ describe("transport parity: capability", () => {
     })
   })
 
+  it("normalizes Dashboard content-entry URLs before CMS document get calls", async () => {
+    process.env.KODY_CMS_DASHBOARD_URL = "https://dashboard.example.test"
+    process.env.KODY_CMS_TOKEN = "test-token"
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ document: { _id: "6a408b5d4a2dd57df6b116ea" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const tool = capabilityToolDefinitions({
+      repoSlug: "owner/repo",
+      operatorMention: "@user",
+    }).find((def) => def.name === "cms_get_document")
+    if (!tool) throw new Error("cms_get_document missing")
+
+    const result = await tool.handler({
+      collection: "courses",
+      id: "https://dashboard.example.test/content/entries/courses/6a408b5d4a2dd57df6b116ea/edit?collectionSearch=course",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe("https://dashboard.example.test/api/kody/cms/courses/6a408b5d4a2dd57df6b116ea")
+  })
+
   it("refuses CMS writes while the capability is in ask mode", async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal("fetch", fetchMock)
@@ -171,6 +205,116 @@ describe("transport parity: capability", () => {
 
     expect(fetchMock).not.toHaveBeenCalled()
     expect(result.content[0]?.text).toContain("ASK mode")
+  })
+})
+
+describe("transport parity: dashboard CMS", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("exposes the dedicated Dashboard CMS tool list", () => {
+    const defs = dashboardCmsToolDefinitions({
+      repoSlug: "owner/repo",
+      dashboardUrl: "https://dashboard.example.test",
+      token: "test-token",
+    })
+    expect(defs.map((d) => d.name).sort()).toEqual([...DASHBOARD_CMS_MCP_TOOL_NAMES].sort())
+  })
+
+  it("buildDashboardCmsMcpServer returns the in-process adapter", () => {
+    const handle = buildDashboardCmsMcpServer({
+      repoSlug: "owner/repo",
+      dashboardUrl: "https://dashboard.example.test",
+      token: "test-token",
+    })
+    expect(handle.server.name).toBe("kody-cms")
+  })
+
+  it("calls the provided Dashboard CMS origin and token instead of ambient env", async () => {
+    process.env.KODY_CMS_DASHBOARD_URL = "https://wrong.example.test"
+    process.env.KODY_CMS_TOKEN = "wrong-token"
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ docs: [], total: 0 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const tool = dashboardCmsToolDefinitions({
+      repoSlug: "owner/repo",
+      dashboardUrl: "https://dashboard.example.test/cms",
+      token: "test-token",
+      storeRepoUrl: "https://github.com/acme/kody-store",
+      storeRef: "stable",
+    }).find((def) => def.name === "cms_list_documents")
+    if (!tool) throw new Error("cms_list_documents missing")
+
+    const result = await tool.handler({
+      collection: "courses",
+      q: "intro",
+      limit: 5,
+    })
+
+    expect(result.isError).toBeUndefined()
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe("https://dashboard.example.test/api/kody/cms/courses?q=intro&limit=5")
+    expect(init.headers).toMatchObject({
+      "x-kody-token": "test-token",
+      "x-kody-owner": "owner",
+      "x-kody-repo": "repo",
+      "x-kody-store-repo-url": "https://github.com/acme/kody-store",
+      "x-kody-store-ref": "stable",
+    })
+  })
+
+  it("normalizes Dashboard content-entry URLs before document get calls", async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ document: { _id: "6a408b5d4a2dd57df6b116ea" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const tool = dashboardCmsToolDefinitions({
+      repoSlug: "owner/repo",
+      dashboardUrl: "https://dashboard.example.test",
+      token: "test-token",
+    }).find((def) => def.name === "cms_get_document")
+    if (!tool) throw new Error("cms_get_document missing")
+
+    await tool.handler({
+      collection: "courses",
+      id: "https://dashboard.example.test/content/entries/courses/6a408b5d4a2dd57df6b116ea/edit?collectionSearch=course",
+    })
+
+    const [url] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe("https://dashboard.example.test/api/kody/cms/courses/6a408b5d4a2dd57df6b116ea")
+  })
+
+  it("lets callers own write authorization policy", async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    const tool = dashboardCmsToolDefinitions({
+      repoSlug: "owner/repo",
+      dashboardUrl: "https://dashboard.example.test",
+      token: "test-token",
+      assertWriteAllowed: () => "write blocked by test policy",
+    }).find((def) => def.name === "cms_update_document")
+    if (!tool) throw new Error("cms_update_document missing")
+
+    const result = await tool.handler({
+      collection: "courses",
+      id: "1",
+      data: { title: "new" },
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(result.content[0]?.text).toBe("write blocked by test policy")
   })
 })
 

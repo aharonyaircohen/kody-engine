@@ -19,19 +19,24 @@ export const mirrorStateToPr: PostflightScript = async (ctx) => {
   const issueTarget = ctx.data.commentTargetType as string | undefined
   if (!issueNumber || issueTarget !== "issue") return
 
-  const prUrl = ctx.output.prUrl ?? (ctx.data.prResult as { url?: string } | undefined)?.url
+  let state = ctx.data.taskState as TaskState | undefined
+  const prUrl = ctx.output.prUrl ?? (ctx.data.prResult as { url?: string } | undefined)?.url ?? state?.core.prUrl
   if (!prUrl) return
 
   const prNumber = parsePrNumber(prUrl)
   if (!prNumber) return
 
-  let state: TaskState
-  try {
-    state = readTaskState("issue", issueNumber, ctx.cwd, ctx.config)
-  } catch {
-    return
+  if (!state) {
+    try {
+      state = readTaskState("issue", issueNumber, ctx.cwd, ctx.config)
+    } catch {
+      return
+    }
   }
-  if (prUrl && !state.core.prUrl) state.core.prUrl = prUrl
+  if (prUrl && !state.core.prUrl) {
+    state = { ...state, core: { ...state.core, prUrl } }
+    ctx.data.taskState = state
+  }
 
   try {
     writeTaskState("pr", prNumber, state, ctx.cwd, ctx.config)
