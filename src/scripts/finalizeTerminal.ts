@@ -56,7 +56,26 @@ export const finalizeTerminal: PostflightScript = async (ctx) => {
 
   const cachedState = ctx.data.taskState as TaskState | undefined
   let state = cachedState
-  const prUrl = cachedState?.core.prUrl ?? ctx.output.prUrl ?? (ctx.data.prResult as { url?: string } | undefined)?.url
+  let prUrl = cachedState?.core.prUrl ?? ctx.output.prUrl ?? (ctx.data.prResult as { url?: string } | undefined)?.url
+
+  // Fall back to the on-disk state file when neither the cached state nor the
+  // in-flight output carry prUrl. saveTaskState writes prUrl to the target's
+  // state file before finalizeTerminal runs, so the file is the next-best
+  // source — needed when ctx.data.taskState hasn't been refreshed (e.g. a
+  // retry against a stale in-memory snapshot, or a child run that didn't
+  // touch ctx.output.prUrl). Without this fallback, a successful PR run with
+  // no cached prUrl would be mis-classified as failed and the mirror below
+  // would leave the issue frozen at the previous failed status. Skipped when
+  // exitCode !== 0 because prUrl is irrelevant to delivered when the run
+  // already exited non-zero.
+  if (!prUrl && ctx.output.exitCode === 0 && targetNumber) {
+    try {
+      const fileState = readTaskState(target, targetNumber, ctx.cwd, ctx.config)
+      if (fileState?.core.prUrl) prUrl = fileState.core.prUrl
+    } catch {
+      // best-effort — keep going with what we have
+    }
+  }
 
   const delivered = ctx.output.exitCode === 0 && !!prUrl
   const spec = delivered ? DONE : FAILED
