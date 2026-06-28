@@ -13,9 +13,9 @@ import {
 } from "./issue.js"
 import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
 import { resolveCapabilityAction } from "./registry.js"
+import { type RunRequest, readRunRequestFromEnv } from "./run-request.js"
 import { lastRunLogPath } from "./runtimePaths.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
-import { readRunRequestFromEnv, type RunRequest } from "./run-request.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -342,6 +342,10 @@ function postFailureTail(issueNumber: number | undefined, cwd: string, reason: s
   }
 }
 
+export function shouldPostRunFailureTail(exitCode: number): boolean {
+  return exitCode !== 0 && exitCode !== 1 && exitCode !== 2 && exitCode !== 3
+}
+
 export async function runCi(argv: string[]): Promise<number> {
   if (argv.includes("--help") || argv.includes("-h")) {
     process.stdout.write(CI_HELP)
@@ -663,7 +667,7 @@ export async function runCi(argv: string[]): Promise<number> {
       quiet: args.quiet,
     })
 
-    if (result.exitCode !== 0 && result.exitCode !== 1 && result.exitCode !== 2) {
+    if (shouldPostRunFailureTail(result.exitCode)) {
       // Only post tail on non-draft-PR failures; draft PRs already carry the failure body.
       postFailureTail(issueNumber, cwd, result.reason || `exit ${result.exitCode}`)
     }

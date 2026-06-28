@@ -17,6 +17,7 @@ import {
   type TaskTarget,
   writeTaskState,
 } from "../state.js"
+import { isDeliveryNotRequired } from "./deliveryOutcome.js"
 
 /** Read the current run's job identity (seeded by runJob) from ctx.data. */
 export function jobMetaFromData(data: Record<string, unknown>): JobMeta {
@@ -66,7 +67,7 @@ function applyStandaloneTerminalState(
 ) {
   if (profile.lifecycleConfig?.finalize !== true || state.flow?.issueNumber) return
 
-  const delivered = ctx.output.exitCode === 0 && !!state.core.prUrl
+  const delivered = ctx.output.exitCode === 0 && (!!state.core.prUrl || isDeliveryNotRequired(ctx.data))
   state.core.phase = delivered ? "shipped" : "failed"
   state.core.status = delivered ? "succeeded" : "failed"
   state.core.currentExecutable = null

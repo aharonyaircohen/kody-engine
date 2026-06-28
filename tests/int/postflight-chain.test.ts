@@ -275,4 +275,21 @@ describe("postflight chain: run profile, success path", () => {
     expect(lastBody).not.toContain("no changes to commit")
     expect(ctx.output.exitCode).toBe(3)
   })
+
+  it("no commits + agent done → reports no delivery needed instead of failing", async () => {
+    mocks.doCommitAndPush.mockReturnValueOnce({ committed: false, pushed: false })
+    mocks.hasCommitsAhead.mockReturnValue(false)
+    const ctx = makeCtx()
+    const agent = makeAgentResult("DONE\nCOMMIT_MSG: chore: no-op")
+    await runPostflights(ctx, agent, "run")
+    const lastBody = String(mocks.gh.mock.calls.at(-1)?.[1] ?? "")
+    expect(lastBody).toBe("ℹ️ kody made no changes — work already satisfied; no PR needed")
+    expect(ctx.data.deliveryOutcome).toMatchObject({ kind: "not_required" })
+    expect(ctx.output.exitCode).toBe(0)
+    expect(mocks.setKodyLabel).toHaveBeenCalledWith(
+      42,
+      expect.objectContaining({ label: "kody:done" }),
+      "/tmp/fake-repo",
+    )
+  })
 })
