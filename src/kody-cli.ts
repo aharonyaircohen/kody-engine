@@ -13,9 +13,9 @@ import {
 } from "./issue.js"
 import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
 import { resolveCapabilityAction } from "./registry.js"
+import { type RunRequest, readRunRequestFromEnv } from "./run-request.js"
 import { lastRunLogPath } from "./runtimePaths.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
-import { readRunRequestFromEnv, type RunRequest } from "./run-request.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -216,9 +216,7 @@ export function detectPackageManager(cwd: string): PackageManager {
 
 function shouldChainScheduledWatch(match: DispatchResult): boolean {
   return (
-    match.action === "goal-scheduler" ||
-    match.capability === "goal-scheduler" ||
-    match.executable === "goal-scheduler"
+    match.action === "goal-scheduler" || match.capability === "goal-scheduler" || match.executable === "goal-scheduler"
   )
 }
 
@@ -342,6 +340,10 @@ function postFailureTail(issueNumber: number | undefined, cwd: string, reason: s
   } catch {
     /* best effort */
   }
+}
+
+export function shouldPostRunFailureTail(exitCode: number): boolean {
+  return exitCode !== 0 && exitCode !== 1 && exitCode !== 2 && exitCode !== 3
 }
 
 export async function runCi(argv: string[]): Promise<number> {
@@ -617,9 +619,7 @@ export async function runCi(argv: string[]): Promise<number> {
     const buildOnly = dispatch.executable === "preview-build"
 
     if (args.skipInstall || buildOnly) {
-      process.stdout.write(
-        `→ kody: skipping dep install (${buildOnly ? "build-only executable" : "--skip-install"})\n`,
-      )
+      process.stdout.write(`→ kody: skipping dep install (${buildOnly ? "build-only executable" : "--skip-install"})\n`)
     } else {
       const code = installDeps(pm, cwd)
       if (code !== 0) {
@@ -667,7 +667,7 @@ export async function runCi(argv: string[]): Promise<number> {
       quiet: args.quiet,
     })
 
-    if (result.exitCode !== 0 && result.exitCode !== 1 && result.exitCode !== 2) {
+    if (shouldPostRunFailureTail(result.exitCode)) {
       // Only post tail on non-draft-PR failures; draft PRs already carry the failure body.
       postFailureTail(issueNumber, cwd, result.reason || `exit ${result.exitCode}`)
     }
@@ -738,9 +738,7 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
   // restore the legacy behaviour while the new mode bakes in.
   const serial = process.env.KODY_SERIAL_WATCHES === "1"
   const runWatch = async (match: DispatchResult): Promise<number> => {
-    process.stdout.write(
-      `\n→ kody: running watch capability \`${match.capability}\` (${match.executable})\n`,
-    )
+    process.stdout.write(`\n→ kody: running watch capability \`${match.capability}\` (${match.executable})\n`)
     try {
       const result = await runJob(
         mintScheduledJob({
