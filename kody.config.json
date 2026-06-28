@@ -23,8 +23,5 @@
       "ci-health",
       "prs-stay-mergeable"
     ]
-  },
-  "watch": {
-    "enabled": true
   }
 }
