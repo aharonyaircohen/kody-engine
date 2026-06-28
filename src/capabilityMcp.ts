@@ -33,6 +33,7 @@
 import { createSdkMcpServer, type McpSdkServerConfigWithInstance, tool } from "@anthropic-ai/claude-agent-sdk"
 import type { ZodRawShape } from "zod"
 import { z } from "zod"
+import { DASHBOARD_CMS_MCP_TOOL_NAMES, dashboardCmsToolDefinitions } from "./dashboardCmsMcp.js"
 import { gh } from "./issue.js"
 import { getProfileInputs, resolveCapabilityAction } from "./registry.js"
 import { readStateText, type StateRepoConfig } from "./stateRepo.js"
@@ -473,6 +474,13 @@ function trustRefusal(capabilitySlug?: string): string {
   )
 }
 
+function assertCmsWriteAllowed(opts: CapabilityMcpOptions): string | null {
+  if (isDispatchGated(opts.capabilitySlug, readCapabilityTrustMode(opts.state, opts.repoSlug, opts.capabilitySlug))) {
+    return trustRefusal(opts.capabilitySlug)
+  }
+  return null
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Tool definitions (transport-agnostic).
 // ────────────────────────────────────────────────────────────────────────────
@@ -670,6 +678,11 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     },
   }
 
+  const cmsTools = dashboardCmsToolDefinitions({
+    repoSlug: opts.repoSlug,
+    assertWriteAllowed: () => assertCmsWriteAllowed(opts),
+  })
+
   return [
     listTool,
     syncTool,
@@ -682,6 +695,7 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     ensureIssueTool,
     ensureCommentTool,
     dispatchTool,
+    ...cmsTools,
   ]
 }
 
@@ -721,4 +735,5 @@ export const CAPABILITY_MCP_TOOL_NAMES = [
   "ensure_issue",
   "ensure_comment",
   "dispatch_workflow",
+  ...DASHBOARD_CMS_MCP_TOOL_NAMES,
 ] as const

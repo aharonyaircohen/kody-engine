@@ -189,7 +189,7 @@ Rules:
 - New capabilities should use `KODY_CAPABILITY_RESULT` with `target` and `evidence`.
 - Do not emit both marker types for the same evidence in new code. Existing mixed output is merged before the goal writes its log.
 - Profiles that emit capability evidence should include `applyCapabilityReports` in postflight.
-- `saveReport` refreshes Dashboard markdown from the goal/loop decision path, after state persistence succeeds.
+- `saveReport` writes Dashboard markdown under `reports/<goal-or-loop>/runs/` from the goal/loop decision path, after state persistence succeeds.
 
 ## Creating A Managed Goal
 

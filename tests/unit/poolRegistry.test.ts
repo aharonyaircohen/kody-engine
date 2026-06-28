@@ -74,7 +74,16 @@ function baseConfig(overrides: Partial<RegistryConfig> = {}): RegistryConfig {
 }
 
 function makeReq(over: Partial<ClaimRequest> = {}): ClaimRequest {
-  return { jobId: "job-1", repo: "o/r", ...over }
+  return {
+    jobId: "job-1",
+    repo: "o/r",
+    runRequest: {
+      target: { type: "issue", id: 1 },
+      intent: "run",
+      source: "dashboard",
+    },
+    ...over,
+  }
 }
 
 beforeEach(() => {
@@ -103,7 +112,18 @@ describe("PoolRegistry.claim — happy path with injected resolvers", () => {
       }),
     )
 
-    const res = await reg.claim("Owner", "Repo", makeReq({ issueNumber: 9 }))
+    const res = await reg.claim(
+      "Owner",
+      "Repo",
+      makeReq({
+        issueNumber: 9,
+        runRequest: {
+          target: { type: "issue", id: 9 },
+          intent: "run",
+          source: "dashboard",
+        },
+      }),
+    )
 
     expect(res).toEqual({ ok: true, machineId: "m-1" })
     // FlyClient constructed with the resolved token + base app.
@@ -120,11 +140,11 @@ describe("PoolRegistry.claim — happy path with injected resolvers", () => {
     const job = (pm.claim.mock.calls[0] as unknown[])?.[0] as {
       allSecrets: Record<string, string>
       repo: string
-      mode: string
+      runRequest: ClaimRequest["runRequest"]
     }
     expect(job.allSecrets).toEqual({ ANTHROPIC_API_KEY: "sk-1", OPENAI_API_KEY: "sk-2" })
     expect(job.repo).toBe("Owner/Repo")
-    expect(job.mode).toBe("issue")
+    expect(job.runRequest.target).toEqual({ type: "issue", id: 9 })
   })
 
   it("forwards all request fields onto the PoolJob, defaulting mode to issue", async () => {
@@ -136,7 +156,11 @@ describe("PoolRegistry.claim — happy path with injected resolvers", () => {
     await reg.claim("o", "r", {
       jobId: "j2",
       repo: "o/r",
-      mode: "interactive",
+      runRequest: {
+        target: { type: "chat", id: "sess-1" },
+        intent: "continue",
+        source: "dashboard",
+      },
       sessionId: "sess-1",
       idleExitMs: 1000,
       hardCapMs: 2000,
@@ -148,7 +172,11 @@ describe("PoolRegistry.claim — happy path with injected resolvers", () => {
     const job = (pm.claim.mock.calls[0] as unknown[])?.[0] as Record<string, unknown>
     expect(job).toMatchObject({
       jobId: "j2",
-      mode: "interactive",
+      runRequest: {
+        target: { type: "chat", id: "sess-1" },
+        intent: "continue",
+        source: "dashboard",
+      },
       sessionId: "sess-1",
       idleExitMs: 1000,
       hardCapMs: 2000,

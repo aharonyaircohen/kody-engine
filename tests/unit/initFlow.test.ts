@@ -36,6 +36,9 @@ describe("initFlow: performInit", () => {
     expect(fs.existsSync(path.join(dir, "kody.config.json"))).toBe(true)
     expect(fs.existsSync(path.join(dir, ".github/workflows/kody.yml"))).toBe(true)
     expect(fs.existsSync(path.join(dir, ".kody/agents/kody.md"))).toBe(true)
+    const workflow = fs.readFileSync(path.join(dir, ".github/workflows/kody.yml"), "utf-8")
+    expect(workflow).toContain("      capability:")
+    expect(workflow).not.toContain("      executable:")
 
     expect(result.wrote.some((file) => file.startsWith(".kody/capabilities/"))).toBe(false)
     expect(fs.existsSync(path.join(dir, ".kody/capabilities"))).toBe(false)

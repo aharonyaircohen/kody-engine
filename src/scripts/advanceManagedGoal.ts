@@ -11,6 +11,7 @@ import {
 } from "../goal/manager.js"
 import { goalRunLogChange, goalRunLogSnapshot, stageGoalRunLogEvent } from "../goal/runLog.js"
 import { serializeGoalState } from "../goal/state.js"
+import { type GoalLoopTargetResolution, goalLoopNow, resolveGoalLoopTarget } from "../goal/targetLoopResolution.js"
 import { expandManagedGoalState } from "../goal/typeDefinitions.js"
 import { gh } from "../issue.js"
 import { getExecutableRoots } from "../registry.js"
@@ -101,7 +102,18 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
       goal.raw.extra.scheduleState && typeof goal.raw.extra.scheduleState === "object"
         ? (goal.raw.extra.scheduleState as GoalCapabilityScheduleState)
         : undefined
-    const decision = planTargetLoopSchedule({ goal: managed, previousScheduleState })
+    const now = goalLoopNow()
+    let decision = planTargetLoopSchedule({ goal: managed, previousScheduleState, now })
+    let targetResolution: GoalLoopTargetResolution | undefined
+    if (decision.kind === "dispatch" && decision.dispatch && isGoalTargetLoop(managed)) {
+      targetResolution = resolveGoalLoopTarget(ctx.config, ctx.cwd, goal.id, managed, now)
+      decision = planTargetLoopSchedule({
+        goal: managed,
+        previousScheduleState,
+        now,
+        resolvedGoalTargetId: targetResolution.targetId,
+      })
+    }
     restoreGoalIdFact()
     goal.raw = writeManagedGoalToState({ ...goal.raw, state: goal.state }, managed)
     goal.raw.extra.scheduleState = decision.scheduleState
@@ -131,6 +143,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
       goal: goalRunLogSnapshot(goal.id, goal.state, managed),
       inspection: {
         loopTarget: managed.loopTarget,
+        ...(targetResolution ? { targetResolution } : {}),
         preferredRunTime: managed.preferredRunTime,
         previousScheduleState,
         scheduleState: decision.scheduleState,

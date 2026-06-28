@@ -44,6 +44,105 @@ function writeCapabilityState(slug: string, lastFiredAt: string): void {
   )
 }
 
+function writeRepoGoal(stateRoot: string, goalId: string, state: Record<string, unknown>): void {
+  const file = path.join(stateRoot, "state", "goals", "instances", goalId, "state.json")
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, JSON.stringify(state, null, 2))
+}
+
+function readRepoGoal(stateRoot: string, goalId: string): Record<string, unknown> {
+  return JSON.parse(
+    fs.readFileSync(path.join(stateRoot, "state", "goals", "instances", goalId, "state.json"), "utf8"),
+  ) as Record<string, unknown>
+}
+
+function writeLocalGoalTemplate(goalId: string, state: Record<string, unknown>): void {
+  const file = path.join(tmp, ".kody", "goals", "templates", goalId, "state.json")
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, JSON.stringify(state, null, 2))
+}
+
+function installStateRepoGhStub(): string {
+  const bin = path.join(tmp, "bin")
+  fs.mkdirSync(bin, { recursive: true })
+  const gh = path.join(bin, "gh")
+  fs.writeFileSync(
+    gh,
+    `#!/usr/bin/env node
+const fs = require("node:fs")
+const path = require("node:path")
+
+const root = process.env.KODY_TEST_STATE_ROOT
+const args = process.argv.slice(2)
+
+function fail(message) {
+  process.stderr.write(message + "\\n")
+  process.exit(1)
+}
+
+if (!root || args[0] !== "api") {
+  fail("unsupported gh stub call")
+}
+
+let method = "GET"
+let apiPath = ""
+for (let i = 1; i < args.length; i += 1) {
+  const arg = args[i]
+  if (arg === "--method") {
+    method = args[i + 1] || "GET"
+    i += 1
+    continue
+  }
+  if (arg.startsWith("/repos/")) {
+    apiPath = arg
+  }
+}
+
+if (apiPath.endsWith("/git/ref/heads/kody-state")) {
+  process.stdout.write(JSON.stringify({ object: { sha: "state-branch-sha" } }))
+  process.exit(0)
+}
+
+const marker = "/contents/"
+const markerIndex = apiPath.indexOf(marker)
+if (markerIndex < 0) {
+  fail("unsupported gh api path " + apiPath)
+}
+
+const relative = decodeURIComponent(apiPath.slice(markerIndex + marker.length).replace(/\\?.*$/, ""))
+const filePath = path.join(root, relative)
+
+if (method === "PUT") {
+  let body = ""
+  process.stdin.setEncoding("utf8")
+  process.stdin.on("data", (chunk) => {
+    body += chunk
+  })
+  process.stdin.on("end", () => {
+    const payload = JSON.parse(body || "{}")
+    fs.mkdirSync(path.dirname(filePath), { recursive: true })
+    fs.writeFileSync(filePath, Buffer.from(String(payload.content || ""), "base64"))
+    process.stdout.write(JSON.stringify({ content: { path: relative, sha: "stub-sha" } }))
+  })
+} else if (fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()) {
+  const entries = fs.readdirSync(filePath, { withFileTypes: true }).map((entry) => ({
+    name: entry.name,
+    path: path.posix.join(relative.split(path.sep).join("/"), entry.name),
+    type: entry.isDirectory() ? "dir" : "file",
+  }))
+  process.stdout.write(JSON.stringify(entries))
+} else if (fs.existsSync(filePath)) {
+  const content = fs.readFileSync(filePath).toString("base64")
+  process.stdout.write(JSON.stringify({ type: "file", encoding: "base64", content, sha: "stub-sha", path: relative }))
+} else {
+  fail("gh: Not Found (HTTP 404)")
+}
+`,
+  )
+  fs.chmodSync(gh, 0o755)
+  return bin
+}
+
 function goalState(capabilities: string[] = ["ci-health"]): GoalState {
   return {
     state: "active",
@@ -89,9 +188,9 @@ function workflowTargetLoop(): ManagedGoal {
   }
 }
 
-function fakeCtx(raw: GoalState): Context {
+function fakeCtx(raw: GoalState, id = "prs-stay-mergeable"): Context {
   return {
-    args: { goal: "prs-stay-mergeable" },
+    args: { goal: id },
     cwd: tmp,
     config: {
       quality: { typecheck: "", lint: "", testUnit: "", format: "" },
@@ -102,7 +201,7 @@ function fakeCtx(raw: GoalState): Context {
     },
     data: {
       goal: {
-        id: "prs-stay-mergeable",
+        id,
         state: raw.state,
         defaultBranch: "main",
         raw,
@@ -204,6 +303,134 @@ describe("standing goal capability scheduling", () => {
       },
       capabilities: {},
     })
+  })
+
+  it("resolves goal target loops to an active target instance", async () => {
+    const stateRoot = path.join(tmp, "state-repo")
+    writeRepoGoal(stateRoot, "web-release", {
+      state: "done",
+      createdAt: "2026-06-24T00:00:00.000Z",
+      updatedAt: "2026-06-24T01:00:00.000Z",
+      type: "web-release",
+      facts: {},
+      blockers: [],
+    })
+    writeRepoGoal(stateRoot, "web-release-2026-06-26", {
+      state: "active",
+      createdAt: "2026-06-26T05:00:00.000Z",
+      updatedAt: "2026-06-26T05:00:00.000Z",
+      kind: "instance",
+      template: "web-release",
+      sourceTemplate: "web-release",
+      templateId: "web-release",
+      type: "web-release",
+      facts: {},
+      blockers: [],
+    })
+    const oldPath = process.env.PATH
+    const oldStateRoot = process.env.KODY_TEST_STATE_ROOT
+    process.env.PATH = `${installStateRepoGhStub()}${path.delimiter}${oldPath || ""}`
+    process.env.KODY_TEST_STATE_ROOT = stateRoot
+
+    try {
+      const raw = goalState([])
+      raw.extra.type = "agentLoop"
+      raw.extra.loopTarget = { type: "goal", id: "web-release" }
+      const ctx = fakeCtx(raw, "daily-web-release-loop")
+      ;(ctx.config as unknown as Record<string, unknown>).state = { repo: "o/r", path: "state" }
+
+      await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+
+      expect(ctx.output.nextDispatch).toEqual({
+        action: "goal-manager",
+        executable: "goal-manager",
+        cliArgs: { goal: "web-release-2026-06-26" },
+      })
+      const updatedGoal = ctx.data.goal as GoalCtx
+      expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
+        lastDecision: {
+          kind: "dispatch",
+          targetType: "goal",
+          targetId: "web-release-2026-06-26",
+          executable: "goal-manager",
+        },
+      })
+    } finally {
+      process.env.PATH = oldPath
+      if (oldStateRoot === undefined) {
+        delete process.env.KODY_TEST_STATE_ROOT
+      } else {
+        process.env.KODY_TEST_STATE_ROOT = oldStateRoot
+      }
+    }
+  })
+
+  it("creates a new goal target instance when no active instance exists", async () => {
+    const stateRoot = path.join(tmp, "state-repo")
+    writeRepoGoal(stateRoot, "web-release", {
+      state: "done",
+      createdAt: "2026-06-24T00:00:00.000Z",
+      updatedAt: "2026-06-24T01:00:00.000Z",
+      type: "web-release",
+      facts: { version: "v0.1.0" },
+      blockers: [],
+    })
+    writeLocalGoalTemplate("web-release", {
+      state: "template",
+      kind: "template",
+      templateId: "web-release",
+      type: "web-release",
+      destination: { outcome: "Ship a production release", evidence: [] },
+      capabilities: ["release-flow"],
+      route: [],
+      facts: {},
+      blockers: [],
+    })
+    const oldPath = process.env.PATH
+    const oldStateRoot = process.env.KODY_TEST_STATE_ROOT
+    const oldNow = process.env.KODY_GOAL_LOOP_NOW
+    process.env.PATH = `${installStateRepoGhStub()}${path.delimiter}${oldPath || ""}`
+    process.env.KODY_TEST_STATE_ROOT = stateRoot
+    process.env.KODY_GOAL_LOOP_NOW = "2026-06-27T09:30:00.000Z"
+
+    try {
+      const raw = goalState([])
+      raw.extra.type = "agentLoop"
+      raw.extra.loopTarget = { type: "goal", id: "web-release" }
+      raw.extra.preferredRunTime = { time: "08:30", timezone: "Asia/Jerusalem" }
+      const ctx = fakeCtx(raw, "daily-web-release-loop")
+      ;(ctx.config as unknown as Record<string, unknown>).state = { repo: "o/r", path: "state" }
+
+      await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+
+      expect(ctx.output.nextDispatch).toEqual({
+        action: "goal-manager",
+        executable: "goal-manager",
+        cliArgs: { goal: "web-release-2026-06-27" },
+      })
+      expect(readRepoGoal(stateRoot, "web-release-2026-06-27")).toMatchObject({
+        state: "active",
+        kind: "instance",
+        template: "web-release",
+        sourceTemplate: "web-release",
+        templateId: "web-release",
+        type: "web-release",
+        facts: {},
+        blockers: [],
+      })
+    } finally {
+      process.env.PATH = oldPath
+      if (oldStateRoot === undefined) {
+        delete process.env.KODY_TEST_STATE_ROOT
+      } else {
+        process.env.KODY_TEST_STATE_ROOT = oldStateRoot
+      }
+      if (oldNow === undefined) {
+        delete process.env.KODY_GOAL_LOOP_NOW
+      } else {
+        process.env.KODY_GOAL_LOOP_NOW = oldNow
+      }
+    }
   })
 
   it("hands workflow target loops to workflow capability chain", async () => {

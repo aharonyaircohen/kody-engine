@@ -12,6 +12,7 @@ import {
   resolveCapabilityAction,
   resolveExecutable,
 } from "./registry.js"
+import { readRunRequestFromEnv } from "./run-request.js"
 import { brainServe } from "./servers/brain-serve.js"
 import { poolServe } from "./servers/pool-serve.js"
 import { runnerServe } from "./servers/runner-serve.js"
@@ -32,6 +33,42 @@ interface ParsedArgs {
   ciArgv?: string[]
   chatArgv?: string[]
   statsArgv?: string[]
+}
+
+function envRunMode(env: NodeJS.ProcessEnv = process.env): ParsedArgs | null {
+  const result: ParsedArgs = { command: "help", errors: [] }
+  const mode = (env.KODY_RUN_MODE ?? "").trim().toLowerCase()
+  if (!mode) return null
+
+  if (mode === "chat" || mode === "interactive") {
+    return { ...result, command: "chat", chatArgv: [] }
+  }
+  if (mode === "ci" || mode === "scheduled" || mode === "manual") {
+    return { ...result, command: "ci", ciArgv: [] }
+  }
+  if (mode === "issue") {
+    const issue = (env.ISSUE_NUMBER ?? "").trim()
+    if (!issue) {
+      return { ...result, errors: ["KODY_RUN_MODE=issue requires ISSUE_NUMBER"] }
+    }
+    return { ...result, command: "ci", ciArgv: ["--issue", issue] }
+  }
+
+  return { ...result, errors: [`unknown KODY_RUN_MODE: ${mode}`] }
+}
+
+function envRunRequest(env: NodeJS.ProcessEnv = process.env): ParsedArgs | null {
+  const result: ParsedArgs = { command: "help", errors: [] }
+  const parsed = readRunRequestFromEnv(env)
+  if (!parsed) return null
+  if ("error" in parsed) return { ...result, errors: [parsed.error] }
+
+  const { target } = parsed.request
+  if (target.type === "chat") return { ...result, command: "chat", chatArgv: [] }
+  if (target.type === "issue") return { ...result, command: "ci", ciArgv: ["--issue", String(target.id)] }
+  if (target.type === "goal" || target.type === "workflow") return { ...result, command: "ci", ciArgv: [] }
+
+  return { ...result, errors: [`unsupported runRequest target: ${(target as { type?: string }).type ?? "unknown"}`] }
 }
 
 const HELP_TEXT = `kody-engine — single-session autonomous engineer
@@ -71,11 +108,14 @@ Exit codes:
 export function parseArgs(argv: string[]): ParsedArgs {
   const result: ParsedArgs = { command: "help", errors: [] }
 
-  // No verb: auto-route by env so the consumer workflow can invoke a bare
-  // `kody` instead of branching in shell. SESSION_ID is the chat signal
-  // (wired from the dashboard's workflow_dispatch input); otherwise fall
-  // through to ci for agent/job/pull_request/schedule triggers.
+  // No verb: auto-route by env so every runner can invoke bare `kody`.
+  // KODY_RUN_REQUEST_JSON is the canonical contract. KODY_RUN_MODE,
+  // SESSION_ID, and GITHUB_EVENT_NAME stay as compatibility fallbacks.
   if (argv.length === 0) {
+    const runRequest = envRunRequest()
+    if (runRequest) return runRequest
+    const mode = envRunMode()
+    if (mode) return mode
     if (process.env.SESSION_ID) return { ...result, command: "chat", chatArgv: [] }
     if (process.env.GITHUB_EVENT_NAME) return { ...result, command: "ci", ciArgv: [] }
     return result

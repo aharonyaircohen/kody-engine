@@ -1,5 +1,6 @@
 import path from "node:path"
 import { gh } from "./issue.js"
+import { STATE_BRANCH } from "./stateBranch.js"
 
 export interface StateRepoState {
   repo: string
@@ -40,9 +41,16 @@ interface ContentsEntry {
   type?: string
 }
 
+const ensuredStateBranches = new Set<string>()
+
 function is404(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err)
   return /HTTP 404/i.test(msg) || /Not Found/i.test(msg)
+}
+
+function isAlreadyExists(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return /HTTP 422/i.test(msg) || /Reference already exists/i.test(msg)
 }
 
 export function parseStateRepoSlug(slug: string, field = "stateRepo"): { owner: string; repo: string } {
@@ -127,6 +135,46 @@ function apiPath(config: StateRepoConfig, targetPath: string): string {
   return `/repos/${parsed.owner}/${parsed.repo}/contents/${targetPath}`
 }
 
+function branchApiPath(config: StateRepoConfig, targetPath: string): string {
+  return `${apiPath(config, targetPath)}?ref=${encodeURIComponent(STATE_BRANCH)}`
+}
+
+export function ensureStateBranch(config: StateRepoConfig, cwd?: string): void {
+  const parsed = parseStateRepo(config)
+  const cacheKey = `${parsed.owner}/${parsed.repo}:${STATE_BRANCH}`
+  if (ensuredStateBranches.has(cacheKey)) return
+
+  try {
+    gh(["api", `/repos/${parsed.owner}/${parsed.repo}/git/ref/heads/${STATE_BRANCH}`], { cwd })
+    ensuredStateBranches.add(cacheKey)
+    return
+  } catch (err) {
+    if (!is404(err)) throw err
+  }
+
+  const repoRaw = gh(["api", `/repos/${parsed.owner}/${parsed.repo}`], { cwd })
+  const defaultBranch = String((JSON.parse(repoRaw) as { default_branch?: unknown }).default_branch ?? "").trim()
+  if (!defaultBranch) throw new Error(`stateRepo: ${parsed.owner}/${parsed.repo} default branch missing`)
+
+  const refRaw = gh(["api", `/repos/${parsed.owner}/${parsed.repo}/git/ref/heads/${defaultBranch}`], { cwd })
+  const sha = String((JSON.parse(refRaw) as { object?: { sha?: unknown } }).object?.sha ?? "").trim()
+  if (!sha) throw new Error(`stateRepo: ${parsed.owner}/${parsed.repo} ${defaultBranch} ref sha missing`)
+
+  try {
+    gh(["api", "--method", "POST", `/repos/${parsed.owner}/${parsed.repo}/git/refs`, "--input", "-"], {
+      cwd,
+      input: JSON.stringify({ ref: `refs/heads/${STATE_BRANCH}`, sha }),
+    })
+  } catch (err) {
+    if (!isAlreadyExists(err)) throw err
+  }
+  ensuredStateBranches.add(cacheKey)
+}
+
+export function clearStateRepoRuntimeCacheForTests(): void {
+  ensuredStateBranches.clear()
+}
+
 export function readStateText(
   config: StateRepoConfig,
   cwd: string | undefined,
@@ -135,7 +183,7 @@ export function readStateText(
   const targetPath = stateRepoPath(config, filePath)
   let raw = ""
   try {
-    raw = gh(["api", apiPath(config, targetPath)], { cwd })
+    raw = gh(["api", branchApiPath(config, targetPath)], { cwd })
   } catch (err) {
     if (is404(err)) return null
     throw err
@@ -170,9 +218,11 @@ export function writeStateText(
   sha?: string,
 ): void {
   const targetPath = stateRepoPath(config, filePath)
+  ensureStateBranch(config, cwd)
   const payload: Record<string, unknown> = {
     message,
     content: Buffer.from(content, "utf-8").toString("base64"),
+    branch: STATE_BRANCH,
   }
   if (sha) payload.sha = sha
 
@@ -218,7 +268,7 @@ export function listStateDirectory(config: StateRepoConfig, cwd: string | undefi
   const targetPath = stateRepoPath(config, dirPath)
   let raw = ""
   try {
-    raw = gh(["api", apiPath(config, targetPath)], { cwd })
+    raw = gh(["api", branchApiPath(config, targetPath)], { cwd })
   } catch (err) {
     if (is404(err)) return []
     throw err

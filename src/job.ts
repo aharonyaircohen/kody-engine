@@ -534,7 +534,7 @@ export interface ScheduledJobInput {
   agent?: string
   /** Args handed to the tick executable (e.g. `{ job: slug }` for `.md` capabilities). */
   cliArgs?: Record<string, unknown>
-  /** Ask the owning goal/loop to refresh reports/<goal-or-loop>.md after its persisted decision. */
+  /** Ask the owning goal/loop to write a report run after its persisted decision. */
   saveReport?: boolean
 }
 

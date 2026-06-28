@@ -31,7 +31,11 @@ describe("runCapabilityFallbackTick", () => {
     expect(claim).toHaveBeenCalledWith("acme", "widgets", {
       jobId: "sched-acme-widgets-999",
       repo: "acme/widgets",
-      mode: "scheduled",
+      runRequest: {
+        target: { type: "workflow", id: "scheduled-fanout" },
+        intent: "tick",
+        source: "schedule",
+      },
     })
   })
 
