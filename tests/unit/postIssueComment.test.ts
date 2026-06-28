@@ -127,10 +127,7 @@ describe("postIssueComment message wording", () => {
     expect(body).not.toContain("draft PR")
   })
 
-  it("no commits + agent finished cleanly: falls back to 'no changes to commit'", async () => {
-    // agentDone=true with no diff is the rare case: e.g. all the agent's
-    // edits were in forbidden paths. Generic message is appropriate here
-    // because there is no more specific failure to surface.
+  it("no commits + agent finished cleanly: reports no-delivery success", async () => {
     const ctx = makeCtx({
       commitResult: { committed: false },
       hasCommitsAhead: false,
@@ -138,8 +135,13 @@ describe("postIssueComment message wording", () => {
       agentDone: true,
     })
     await postIssueComment(ctx, profile, null)
-    expect(lastPrBody()).toBe("⚠️ kody FAILED: no changes to commit")
-    expect(ctx.output.exitCode).toBe(3)
+    expect(lastPrBody()).toBe("ℹ️ kody made no changes — work already satisfied; no PR needed")
+    expect(ctx.output.exitCode).toBe(0)
+    expect(ctx.data.deliveryOutcome).toMatchObject({
+      kind: "not_required",
+      reason: "work already satisfied; no PR needed",
+    })
+    expect(vi.mocked(setKodyLabel)).not.toHaveBeenCalled()
   })
 
   // Regression: previously this branch always reported "no changes to commit"
@@ -200,11 +202,13 @@ describe("postIssueComment lifecycle label cleanup on failure", () => {
     vi.mocked(setKodyLabel).mockClear()
   })
 
-  it("no commits → flips kody:running to kody:failed on the issue and PR", async () => {
+  it("no commits + agent failure → flips kody:running to kody:failed on the issue and PR", async () => {
     const ctx = makeCtx({
       commitResult: { committed: false },
       hasCommitsAhead: false,
       prAction: "updated",
+      agentDone: false,
+      agentFailureReason: "agent could not validate the fix",
       issue: 1155,
       target: "pr",
       targetNumber: 1200,

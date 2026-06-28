@@ -14,6 +14,7 @@ import {
 import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
 import { resolveCapabilityAction } from "./registry.js"
 import { type RunRequest, readRunRequestFromEnv } from "./run-request.js"
+import { hydrateStateWorkspace } from "./stateWorkspace.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -212,6 +213,12 @@ export function detectPackageManager(cwd: string): PackageManager {
   return "npm"
 }
 
+function shouldChainScheduledWatch(match: DispatchResult): boolean {
+  return (
+    match.action === "goal-scheduler" || match.capability === "goal-scheduler" || match.executable === "goal-scheduler"
+  )
+}
+
 function shellOut(cmd: string, args: string[], cwd: string, stream = true): number {
   try {
     execFileSync(cmd, args, {
@@ -332,6 +339,10 @@ function postFailureTail(issueNumber: number | undefined, cwd: string, reason: s
   } catch {
     /* best effort */
   }
+}
+
+export function shouldPostRunFailureTail(exitCode: number): boolean {
+  return exitCode !== 0 && exitCode !== 1 && exitCode !== 2 && exitCode !== 3
 }
 
 export async function runCi(argv: string[]): Promise<number> {
@@ -654,7 +665,7 @@ export async function runCi(argv: string[]): Promise<number> {
       quiet: args.quiet,
     })
 
-    if (result.exitCode !== 0 && result.exitCode !== 1 && result.exitCode !== 2) {
+    if (shouldPostRunFailureTail(result.exitCode)) {
       // Only post tail on non-draft-PR failures; draft PRs already carry the failure body.
       postFailureTail(issueNumber, cwd, result.reason || `exit ${result.exitCode}`)
     }
