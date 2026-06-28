@@ -11,6 +11,7 @@ import {
   truncate,
 } from "../issue.js"
 import { setKodyLabel } from "../lifecycleLabels.js"
+import { setDeliveryNotRequired } from "./deliveryOutcome.js"
 import { type PrOutcome, readPrOutcome } from "./prOutcome.js"
 
 const FAILED_LABEL_SPEC = {
@@ -37,7 +38,14 @@ export const postIssueComment: PostflightScript = async (ctx, profile) => {
     // when the agent has no failure to report — e.g. all edits in forbidden
     // paths.
     const specific = computeFailureReason(ctx)
-    const reason = specific.length > 0 ? specific : "no changes to commit"
+    if (specific.length === 0) {
+      const reason = "work already satisfied; no PR needed"
+      setDeliveryNotRequired(ctx.data, reason)
+      postWith(targetType, targetNumber, `ℹ️ kody made no changes — ${reason}`, ctx.cwd)
+      ctx.output.exitCode = 0
+      return
+    }
+    const reason = specific
     // When this primitive is running as a container child, the parent's
     // `next` routing table — not the child — owns the terminal status.
     // Posting a ⚠️ "kody FAILED" comment here misleads users watching the

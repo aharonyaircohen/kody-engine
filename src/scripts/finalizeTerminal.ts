@@ -27,6 +27,7 @@ import type { PostflightScript } from "../executables/types.js"
 import { parsePrNumber } from "../issue.js"
 import { type KodyLabelSpec, setKodyLabel } from "../lifecycleLabels.js"
 import { type Phase, readTaskState, type Status, type TaskState, type TaskTarget, writeTaskState } from "../state.js"
+import { isDeliveryNotRequired } from "./deliveryOutcome.js"
 
 const DONE: KodyLabelSpec = {
   label: "kody:done",
@@ -58,7 +59,7 @@ export const finalizeTerminal: PostflightScript = async (ctx) => {
   let state = cachedState
   const prUrl = cachedState?.core.prUrl ?? ctx.output.prUrl ?? (ctx.data.prResult as { url?: string } | undefined)?.url
 
-  const delivered = ctx.output.exitCode === 0 && !!prUrl
+  const delivered = ctx.output.exitCode === 0 && (!!prUrl || isDeliveryNotRequired(ctx.data))
   const spec = delivered ? DONE : FAILED
   const phase: Phase = delivered ? "shipped" : "failed"
   const status: Status = delivered ? "succeeded" : "failed"
