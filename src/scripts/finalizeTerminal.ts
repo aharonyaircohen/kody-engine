@@ -9,8 +9,8 @@
  * and goal-phase derivation don't show it stuck in "building" forever.
  *
  * Runs LAST in the pr-branch tail (after saveTaskState), gated by
- * `lifecycleConfig.finalize: true`. It re-reads the just-written state
- * file (saveTaskState is authoritative) and decides:
+ * `lifecycleConfig.finalize: true`. It uses the just-written cached state
+ * when available (saveTaskState is authoritative) and decides:
  *
  *   - success  := agent exited 0 AND a PR was created  → kody:done,
  *                 phase "shipped", status "succeeded".
@@ -54,15 +54,9 @@ export const finalizeTerminal: PostflightScript = async (ctx) => {
   const targetNumber = (ctx.data.commentTargetNumber as number | undefined) ?? issueNumber
   if (!targetNumber) return
 
-  // saveTaskState already wrote the authoritative state; re-read it rather
-  // than trust the in-memory ctx.data.taskState (which saveTaskState does
-  // not reassign after reducing).
-  let prUrl: string | undefined
-  try {
-    prUrl = readTaskState(target, targetNumber, ctx.cwd, ctx.config).core.prUrl
-  } catch {
-    prUrl = undefined
-  }
+  const cachedState = ctx.data.taskState as TaskState | undefined
+  let state = cachedState
+  const prUrl = cachedState?.core.prUrl ?? ctx.output.prUrl ?? (ctx.data.prResult as { url?: string } | undefined)?.url
 
   const delivered = ctx.output.exitCode === 0 && !!prUrl
   const spec = delivered ? DONE : FAILED
@@ -75,16 +69,35 @@ export const finalizeTerminal: PostflightScript = async (ctx) => {
   const prNumber = prUrl ? parsePrNumber(prUrl) : null
   if (prNumber && prNumber !== issueNumber) setKodyLabel(prNumber, spec, ctx.cwd)
 
-  // Flip the state file to the terminal phase/status so the dashboard
-  // reads a real terminus instead of the last mid-run "implementing".
+  if (!state) {
+    try {
+      state = readTaskState(target, targetNumber, ctx.cwd, ctx.config)
+    } catch {
+      state = undefined
+    }
+  }
+
+  if (!state) return
+
+  const alreadyTerminal =
+    state.core.phase === phase && state.core.status === status && state.core.currentExecutable === null
+  if (alreadyTerminal) return
+
+  const next: TaskState = {
+    ...state,
+    core: {
+      ...state.core,
+      phase,
+      status,
+      currentExecutable: null,
+    },
+  }
+  ctx.data.taskState = next
+
   // Best-effort: a failed write is logged, not thrown — the user-visible
   // label is already in place.
   try {
-    const state = readTaskState(target, targetNumber, ctx.cwd, ctx.config)
-    state.core.phase = phase
-    state.core.status = status
-    state.core.currentExecutable = null
-    writeTaskState(target, targetNumber, state, ctx.cwd, ctx.config)
+    writeTaskState(target, targetNumber, next, ctx.cwd, ctx.config)
   } catch (err) {
     process.stderr.write(
       `[kody finalizeTerminal] failed to write terminal state on ${target} #${targetNumber}: ${err instanceof Error ? err.message : String(err)}\n`,

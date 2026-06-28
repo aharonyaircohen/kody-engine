@@ -125,6 +125,13 @@ export const CROSS_REPO_PROMPT = [
   "fetch it instead of saying you are scoped to a single repo.",
 ].join("\n")
 
+export const DASHBOARD_CMS_PROMPT = [
+  "# Dashboard CMS",
+  "Use Dashboard CMS tools for CMS content. The Dashboard is the source of truth.",
+  "Do not query Mongo directly for CMS content and do not infer CMS data from repository files.",
+  "Use cms_list_documents first when you need to find content, then pass the raw id or cmsDocumentId to cms_get_document.",
+].join("\n")
+
 /**
  * Discover engine + project executables and render a markdown catalog the
  * chat agent can read. Rebuilt each call so a freshly-added `<name>/profile.json`
@@ -182,6 +189,16 @@ export interface ChatTurnOptions {
   reposRoot?: string
   /** GitHub token fetch_repo uses to clone private repos (the user's PAT). */
   repoToken?: string
+  /** Dashboard origin used by Dashboard-backed CMS tools. */
+  cmsDashboardUrl?: string
+  /** Repo slug "owner/name" forwarded to Dashboard CMS tools. */
+  cmsRepoSlug?: string
+  /** Dashboard auth token forwarded to Dashboard CMS tools. */
+  cmsToken?: string
+  /** Dashboard store repo URL forwarded to Dashboard CMS routes. */
+  cmsStoreRepoUrl?: string
+  /** Dashboard store ref forwarded to Dashboard CMS routes. */
+  cmsStoreRef?: string
   /** Override for the system prompt (tests). */
   systemPrompt?: string
   /**
@@ -243,6 +260,8 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   // operational requirements the agent must not override.
   // Advertise the fetch_repo tool only when it's actually wired (reposRoot set).
   const crossRepoBlock = opts.reposRoot ? CROSS_REPO_PROMPT : null
+  const dashboardCmsEnabled = Boolean(opts.cmsDashboardUrl && opts.cmsRepoSlug && opts.cmsToken)
+  const dashboardCmsBlock = dashboardCmsEnabled ? DASHBOARD_CMS_PROMPT : null
   // When the current turn carries images, tell the agent it CAN see them —
   // they're real files on disk that its Read tool renders into the model view.
   const imageBlock =
@@ -262,6 +281,7 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
     memoryBlock,
     instructionsBlock,
     crossRepoBlock,
+    dashboardCmsBlock,
     imageBlock,
     catalog,
     artifactAddendum,
@@ -298,6 +318,16 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
               enableFetchRepoTool: true,
               reposRoot: opts.reposRoot,
               repoToken: opts.repoToken,
+            }
+          : {}),
+        ...(dashboardCmsEnabled
+          ? {
+              enableDashboardCmsTool: true,
+              cmsDashboardUrl: opts.cmsDashboardUrl,
+              cmsRepoSlug: opts.cmsRepoSlug,
+              cmsToken: opts.cmsToken,
+              cmsStoreRepoUrl: opts.cmsStoreRepoUrl,
+              cmsStoreRef: opts.cmsStoreRef,
             }
           : {}),
         onProgress: async (ev) => {
