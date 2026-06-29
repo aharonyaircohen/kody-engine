@@ -1,6 +1,12 @@
 import { type GoalState, nowIso } from "./goal/state.js"
 import { fetchGoalState, listGoalStateIds, putGoalState } from "./goal/stateStore.js"
-import { readStateText, listStateDirectory, upsertStateText, appendStateLine, type StateRepoConfig } from "./stateRepo.js"
+import {
+  appendStateLine,
+  listStateDirectory,
+  readStateText,
+  type StateRepoConfig,
+  upsertStateText,
+} from "./stateRepo.js"
 
 export type CompanyIntentStatus = "active" | "paused" | "archived"
 export type CompanyIntentPosture = "confidence" | "speed" | "stability-recovery" | "maintenance" | "balanced"

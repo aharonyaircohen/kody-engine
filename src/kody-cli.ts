@@ -14,7 +14,6 @@ import {
 import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
 import { resolveCapabilityAction } from "./registry.js"
 import { type RunRequest, readRunRequestFromEnv } from "./run-request.js"
-import { hydrateStateWorkspace } from "./stateWorkspace.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -211,12 +210,6 @@ export function detectPackageManager(cwd: string): PackageManager {
   if (fs.existsSync(path.join(cwd, "yarn.lock"))) return "yarn"
   if (fs.existsSync(path.join(cwd, "bun.lockb"))) return "bun"
   return "npm"
-}
-
-function shouldChainScheduledWatch(match: DispatchResult): boolean {
-  return (
-    match.action === "goal-scheduler" || match.capability === "goal-scheduler" || match.executable === "goal-scheduler"
-  )
 }
 
 function shellOut(cmd: string, args: string[], cwd: string, stream = true): number {
