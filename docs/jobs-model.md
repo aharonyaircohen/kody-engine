@@ -227,7 +227,8 @@ wants through `company.activeGoals` in `kody.config.json`.
 `goal-scheduler` wakes active goal files. If the file has the managed-goal
 contract, it routes the tick to `goal-manager`. `goal-manager` finds the first
 missing destination evidence, resolves route args from `facts`, dispatches the
-responsible capability/executable, and records `facts.pendingEvidence`. Later capability
+responsible capability/executable, and records `facts.pendingEvidence`. A later
+tick retries that same route step if the evidence is still missing; capability
 reports set evidence facts true. When every destination evidence item is true,
 the goal becomes `state: "done"`.
 

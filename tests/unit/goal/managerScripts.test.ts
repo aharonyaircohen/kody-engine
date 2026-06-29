@@ -94,6 +94,21 @@ describe("advanceManagedGoal", () => {
     expect(raw.facts).toEqual({ pendingEvidence: "releasePrExists" })
   })
 
+  it("retries the active pending evidence instead of waiting forever", async () => {
+    const ctx = fakeCtx(state(goalExtra({ stage: "prepare", facts: { pendingEvidence: "releasePrExists" } })))
+
+    await advanceManagedGoal(ctx, fakeProfile())
+
+    expect(ctx.output.nextDispatch).toEqual({
+      capability: "release-prepare",
+      executable: "release-prepare",
+      cliArgs: {},
+    })
+    const raw = ((ctx.data.goal as GoalCtx).raw as GoalState).extra
+    expect(raw.stage).toBe("prepare")
+    expect(raw.facts).toEqual({ pendingEvidence: "releasePrExists" })
+  })
+
   it("dispatches capability-only route steps without leaking implementation names", async () => {
     const ctx = fakeCtx(
       state(
