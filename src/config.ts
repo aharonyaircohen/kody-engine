@@ -403,10 +403,7 @@ function parseCompanyConfig(raw: unknown): KodyConfig["company"] {
   const r = raw as Record<string, unknown>
   const out: NonNullable<KodyConfig["company"]> = {}
   if (r.activeCapabilities !== undefined)
-    out.activeCapabilities = parseSlugArray(
-      r.activeCapabilities,
-      "company.activeCapabilities",
-    )
+    out.activeCapabilities = parseSlugArray(r.activeCapabilities, "company.activeCapabilities")
   if (r.activeGoals !== undefined) out.activeGoals = parseGoalActivations(r.activeGoals)
   return Object.keys(out).length > 0 ? out : undefined
 }

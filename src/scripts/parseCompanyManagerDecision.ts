@@ -1,5 +1,5 @@
-import type { PostflightScript } from "../executables/types.js"
 import { parseCompanyManagerDecisionText } from "../companyManagerDecision.js"
+import type { PostflightScript } from "../executables/types.js"
 import type { Action } from "../state.js"
 
 export const parseCompanyManagerDecision: PostflightScript = async (ctx, _profile, agentResult) => {

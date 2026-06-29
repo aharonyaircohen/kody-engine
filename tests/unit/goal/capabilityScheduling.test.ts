@@ -13,13 +13,29 @@ import {
 import type { GoalCtx } from "../../../src/scripts/goalCtx.js"
 
 let tmp: string
+let prevCwd: string
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "goal-capability-schedule-"))
+  // `resolveCapabilityExecution` looks up the executable at
+  // `process.cwd()/.kody/executables/<name>/profile.json`. The capability
+  // folder is found via `ctx.cwd`, but the executable lookup is global —
+  // chdir into the temp dir so the fixture we wrote is the one the
+  // resolver reads.
+  prevCwd = process.cwd()
+  process.chdir(tmp)
 })
 
 afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true })
+  if (prevCwd) {
+    try {
+      process.chdir(prevCwd)
+    } catch {
+      /* cwd already gone — fine */
+    }
+    prevCwd = ""
+  }
 })
 
 function writeCapability(slug: string, profile: Record<string, unknown>): void {

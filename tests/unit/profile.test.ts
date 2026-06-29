@@ -113,27 +113,27 @@ describe("profile: loadProfile", () => {
   })
 
   it("resolves a capability that references an executable (how) + overlays who/when/tools", () => {
-    // A thin capability: references the engine's `merge` executable (the HOW), adds
+    // A thin capability: references the engine's `run` executable (the HOW), adds
     // its own name + agent (WHO). No claudeCode of its own.
     const dir = tmpDir()
     const p = writeProfile(dir, {
       name: "merge-daily",
-      executable: "merge",
+      executable: "run",
       agent: "cto",
       every: "1d",
       capabilityTools: ["ensure_issue"],
     })
     const profile = loadProfile(p)
     expect(profile.name).toBe("merge-daily") // capability identity
-    expect(profile.executable).toBe("merge") // how (preserved for prompt/job reference)
+    expect(profile.executable).toBe("run") // how (preserved for prompt/job reference)
     expect(profile.agent).toBe("cto") // who (overlaid)
     expect((profile as unknown as Record<string, unknown>).every).toBeUndefined() // legacy cadence ignored
     expect(profile.capabilityTools).toEqual(["ensure_issue"]) // toolbox (overlaid)
     // how came from the referenced implementation profile: canonical
     // capabilities resolve before legacy executables during migration.
-    const resolvedMerge = resolveExecutable("merge")
-    expect(resolvedMerge).toBeTruthy()
-    expect(profile.dir).toBe(path.dirname(resolvedMerge!))
+    const resolvedRun = resolveExecutable("run")
+    expect(resolvedRun).toBeTruthy()
+    expect(profile.dir).toBe(path.dirname(resolvedRun!))
     expect(profile.claudeCode).toBeTruthy()
   })
 

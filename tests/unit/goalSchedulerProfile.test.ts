@@ -3,6 +3,10 @@
  * dependency must be declared in the profile so the executor verifies/installs
  * it during preflight cliTool validation — otherwise a runner without python3
  * silently reads every goal as inactive and ticks nothing.
+ *
+ * goal-scheduler ships in kody-store, not the engine root. Skip the test
+ * gracefully when the store is unavailable (local dev without a clone) so
+ * the suite still loads — a missing store is not a profile regression.
  */
 
 import * as fs from "node:fs"
@@ -10,9 +14,14 @@ import { describe, expect, it } from "vitest"
 import { resolveExecutable } from "../../src/registry.js"
 
 const profilePath = resolveExecutable("goal-scheduler")
-if (!profilePath) throw new Error("goal-scheduler executable not found")
 
 describe("goal-scheduler profile", () => {
+  if (!profilePath) {
+    it.skip("declares python3 as a required cliTool (goal-scheduler not available)", () => {})
+    it.skip("does not require gh to enumerate managed goals (goal-scheduler not available)", () => {})
+    return
+  }
+
   const profile = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as {
     cliTools: Array<{ name: string; install?: { required?: boolean } }>
   }

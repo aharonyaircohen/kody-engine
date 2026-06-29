@@ -36,8 +36,8 @@ vi.mock("../../src/prompt.js", async () => {
 
 describe("Phase 5 wire-up: preloadContext on container profiles", () => {
   it("non-container profiles default to preloadContext: false", () => {
-    const resolveProfile = resolveExecutable("resolve")
-    if (!resolveProfile) throw new Error("resolve executable not found")
+    const resolveProfile = resolveExecutable("run")
+    if (!resolveProfile) throw new Error("run executable not found")
     const profile = loadProfile(resolveProfile)
     expect(profile.preloadContext).toBe(false)
   })

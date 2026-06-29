@@ -78,9 +78,9 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 │   src/executor.ts — runs capability implementations         │
 │   .kody/capabilities/<slug>/                                │
 │     profile.json · capability.md · optional skills/scripts  │
-│   .kody/capabilities/<slug>/                      │
-│     legacy fallback: profile.json · capability.md │
-│   .kody/executables/<name>/                               │
+│   .kody/capabilities/<slug>/                                │
+│     legacy fallback: profile.json · capability.md           │
+│   .kody/executables/<name>/                                 │
 │     legacy fallback: profile.json · prompt.md · *.sh        │
 │   src/scripts/*.ts — cross-cutting catalog  │
 └─────────────────────────────────────────────┘

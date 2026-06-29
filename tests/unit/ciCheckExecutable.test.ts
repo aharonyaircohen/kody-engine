@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest"
 import { loadProfile } from "../../src/profile.js"
 import { resolveExecutable } from "../../src/registry.js"
 
+const CI_CHECK_AVAILABLE = resolveExecutable("ci-check") !== null
+
 function ciCheckProfilePath(): string {
   const resolved = resolveExecutable("ci-check")
   if (!resolved) throw new Error("ci-check executable not found")
@@ -58,6 +60,14 @@ function runCiCheck(checks: unknown): string {
 }
 
 describe("ci-check executable", () => {
+  if (!CI_CHECK_AVAILABLE) {
+    // ci-check ships in kody-store, not the engine root. Skip when the
+    // store isn't cloned (local dev) so the suite still loads — a
+    // missing store is not a ci-check regression.
+    it.skip("ci-check executable not available (kody-store not cloned locally)", () => {})
+    return
+  }
+
   it("loads the executable profile", () => {
     const executable = loadProfile(ciCheckProfilePath())
 

@@ -1,8 +1,22 @@
 import { execFileSync } from "node:child_process"
+import { gh } from "./issue.js"
 
 export interface BranchResult {
   branch: string
   created: boolean
+}
+
+const RERUN_PR_COMMENT = "Superseded by rerun."
+
+/**
+ * Result of rerun cleanup. The branch side of the work is local to the
+ * runner; the PR-closing step is best-effort and may fail without network
+ * access or the `gh` CLI — callers decide what to do with the report.
+ */
+export interface RerunCleanupResult {
+  closedPrs: number
+  remoteBranchDeleted: boolean
+  localBranchDeleted: boolean
 }
 
 function git(args: string[], cwd?: string): string {
@@ -175,6 +189,86 @@ function restoreKodyAssets(cwd?: string): void {
   }
 }
 
+/**
+ * Rerun cleanup: close every open PR whose head ref matches `branchName`
+ * with the "Superseded by rerun." comment, then delete the remote branch
+ * (ignore not-found) and the local branch ref. Called by
+ * `ensureFeatureBranch` when an existing remote branch is about to be
+ * reused for a rerun — the new run starts from `origin/<defaultBranch>`
+ * and must not carry any history from the old branch.
+ *
+ * All steps are best-effort: a missing `gh` token, no open PRs, or a
+ * remote branch that's already gone must not abort the rerun. Returns
+ * a summary so callers can decide whether to surface partial-failure
+ * information to the operator.
+ */
+export function cleanupExistingBranchForRerun(branchName: string, cwd?: string): RerunCleanupResult {
+  let closedPrs = 0
+  let remoteBranchDeleted = false
+  let localBranchDeleted = false
+
+  // Close open PRs that point at this branch. `gh pr list` returns JSON
+  // with `headRefName`/`number` — we filter client-side so the gh call
+  // stays a single round trip and works for any number of matching PRs.
+  // A `gh` failure here is non-fatal: the dashboard's Rerun contract
+  // already warns the user that a re-rerun is idempotent, and an
+  // unclosed PR from the prior run doesn't block the new one.
+  try {
+    const out = gh(["pr", "list", "--state", "open", "--head", branchName, "--json", "number", "--limit", "100"], {
+      cwd,
+    })
+    const parsed = JSON.parse(out) as { number?: number }[]
+    for (const pr of parsed) {
+      if (typeof pr.number !== "number") continue
+      try {
+        gh(["pr", "close", String(pr.number), "--comment", RERUN_PR_COMMENT, "--delete-branch"], { cwd })
+        closedPrs++
+      } catch {
+        /* one PR failing must not block the rest of the cleanup */
+      }
+    }
+  } catch {
+    /* `gh` unavailable, no auth, or no open PRs — proceed to branch delete */
+  }
+
+  // Remote branch delete: ignore not-found (the user may have already
+  // closed the PR manually) and permission errors (the dashboard's
+  // Rerun may run under a token that can close but not delete). The
+  // subsequent local checkout will surface any "still exists" state.
+  try {
+    git(["push", "origin", "--delete", branchName], cwd)
+    remoteBranchDeleted = true
+  } catch {
+    /* not found / no permission — fall through */
+  }
+  // Drop the local tracking ref so the create path below doesn't see
+  // a stale `refs/remotes/origin/<name>` and short-circuit into a
+  // checkout instead of a fresh `git checkout -b`.
+  try {
+    git(["update-ref", "-d", `refs/remotes/origin/${branchName}`], cwd)
+  } catch {
+    /* best effort */
+  }
+  // `git branch -D` refuses when the current branch is the one being
+  // deleted. Detach HEAD first so the deletion is unconditional — the
+  // caller (ensureFeatureBranch) follows up with a `git checkout -b`
+  // from origin/<default>, so leaving HEAD detached here is safe.
+  try {
+    git(["checkout", "--detach", "HEAD"], cwd)
+  } catch {
+    /* nothing to detach from — fine, the -D below will surface the real error */
+  }
+  // Drop the local branch ref — checkout -b would otherwise fail.
+  try {
+    git(["branch", "-D", branchName], cwd)
+    localBranchDeleted = true
+  } catch {
+    /* probably no local branch — fine */
+  }
+
+  return { closedPrs, remoteBranchDeleted, localBranchDeleted }
+}
+
 export function ensureFeatureBranch(
   issueNumber: number,
   title: string,
@@ -283,38 +377,48 @@ function ensureFeatureBranchInner(
   }
 
   if (originBranchExists) {
-    git(["checkout", branchName], cwd)
-    try {
-      git(["pull", "origin", branchName], cwd)
-    } catch {
-      /* best effort */
-    }
-
-    // Stale-branch guard: a feature branch left over from a prior session
-    // may be hundreds of commits behind origin/<defaultBranch>. Resuming on
-    // that tip causes the PR to surface every drift commit as a "change"
-    // and triggers spurious merge conflicts at PR time. Merge the current
-    // default branch in now so the resume continues from an up-to-date base.
+    // Rerun path: an existing feature branch + open PR means a prior run
+    // already produced a draft. Resume-as-rerun used to merge origin/<default>
+    // into the stale branch, which left the new PR contaminated with every
+    // drift commit from the prior session. The dashboard's Rerun action
+    // now expects a fresh start (close prior PRs, delete the branch, fork
+    // again from default) so the new PR carries only the new work.
     //
     // Skipped when a caller-supplied `baseBranch` is in play (goal flow):
     // those branches are intentionally forked from a non-default base and
-    // the earlier descends-from-base guard already handled corruption.
+    // the earlier descends-from-base guard already handled corruption —
+    // rerun cleanup would clobber a goal-stack PR.
     if (!baseBranch || baseBranch === defaultBranch) {
       try {
-        git(["merge", "--no-edit", `origin/${defaultBranch}`], cwd)
-      } catch {
-        try {
-          git(["merge", "--abort"], cwd)
-        } catch {
-          /* best effort */
-        }
-        throw new Error(
-          `Branch '${branchName}' has merge conflicts with 'origin/${defaultBranch}'. ` +
-            "Resolve manually or delete the branch to start fresh.",
-        )
+        cleanupExistingBranchForRerun(branchName, cwd)
+      } catch (err) {
+        // Cleanup is best-effort: a missing `gh` token or no open PRs is
+        // not fatal. Surface the error to stderr so the operator can see
+        // it in the GHA log, then fall through and let the create path
+        // try — at worst we recreate the branch on top of stale tip.
+        const msg = err instanceof Error ? err.message : String(err)
+        process.stderr.write(`[kody branch] rerun cleanup failed for '${branchName}': ${msg}\n`)
       }
+      originBranchExists = false
+      // Also drop the local branch ref so the create path below doesn't
+      // find it via `git rev-parse --verify refs/heads/<name>` and fall
+      // through to the bare `checkout` (which would just reattach HEAD).
+      try {
+        git(["branch", "-D", branchName], cwd)
+      } catch {
+        /* probably no local branch — fine */
+      }
+    } else {
+      // Goal-tick path: keep the original "reuse + merge default" behavior
+      // (the descends-from-base check earlier already enforced freshness).
+      git(["checkout", branchName], cwd)
+      try {
+        git(["pull", "origin", branchName], cwd)
+      } catch {
+        /* best effort */
+      }
+      return { branch: branchName, created: false }
     }
-    return { branch: branchName, created: false }
   }
 
   // Only treat this as "local branch already exists" if an actual local

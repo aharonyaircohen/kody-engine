@@ -61,10 +61,7 @@ export function stageGoalRunLogEvent(
   const path = existing?.path ?? goalRunLogPath(goalId, data)
   logs[goalId] = {
     path,
-    events: [
-      ...(existing?.events ?? []),
-      buildGoalRunLogEvent(data, goalId, event, at),
-    ],
+    events: [...(existing?.events ?? []), buildGoalRunLogEvent(data, goalId, event, at)],
   }
 }
 

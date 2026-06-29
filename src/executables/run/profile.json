@@ -15,7 +15,22 @@
       "flag": "--base",
       "type": "string",
       "required": false,
-      "describe": "Optional safe base branch override for manual branch targeting (see resolveBaseOverride in runFlow.ts)."
+      "describe": "Optional base branch override. Used by goal-tick's stacked-PR dispatch so each task PR forks from the previous task's head ref. Accepts any safe git ref (see resolveBaseOverride in runFlow.ts)."
+    },
+    {
+      "name": "feedback",
+      "flag": "--feedback",
+      "type": "string",
+      "required": false,
+      "bindsCommentRest": true,
+      "describe": "Inline override carried into the run's plan context. The dashboard's Rerun action forwards its `Rerun.feedback` through this input so a re-triggered run inherits the operator's intent. Free-text leftover from comment dispatch (e.g. `@kody run please also add X`) lands here verbatim."
+    },
+    {
+      "name": "fromStage",
+      "flag": "--from-stage",
+      "type": "string",
+      "required": false,
+      "describe": "ACCEPTED BUT UNSUPPORTED. The dashboard's Rerun contract carries a `fromStage` hint (intended to restart the run from a specific flow stage), but the engine does not yet implement staged resume — providing this input has no effect beyond being preserved in the run's inputs. Documented here so a future change can wire it up without touching the dashboard contract."
     }
   ],
   "claudeCode": {

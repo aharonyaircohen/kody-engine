@@ -3,8 +3,8 @@
  * Loads PR, checks it out, fetches the failing workflow run + log tail.
  */
 
-import type { PreflightScript } from "../executables/types.js"
 import { checkoutPrBranch, getCurrentBranch } from "../branch.js"
+import type { PreflightScript } from "../executables/types.js"
 import { getRunUrl } from "../gha.js"
 import { getPr, getPrDiff, postPrReviewComment } from "../issue.js"
 import { getFailedRunLogTail, pickFailedRunForFixCi } from "../workflow.js"

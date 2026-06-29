@@ -1,7 +1,7 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import type { KodyConfig } from "../../src/config.js"
 import { autoDispatch, dispatchScheduledWatches } from "../../src/dispatch.js"
 
@@ -16,11 +16,102 @@ function testConfig(config: Partial<KodyConfig>): KodyConfig {
   return config as KodyConfig
 }
 
+let fixtureRoot: string
+let prevCwd: string
+
+beforeAll(() => {
+  // sync/resolve/merge/fix-ci/fix/preview-build ship in kody-store, not the
+  // engine root. CI clones the store alongside the repo; locally that clone
+  // may be missing, so write minimal stub capability folders and chdir into
+  // the fixture so the registry picks them up regardless of whether the
+  // store is present. Each stub declares the inputs the dispatch tests
+  // expect (pr/runId/prefer/feedback) so the dispatch parser extracts them
+  // from the issue context / comment text.
+  const stubs: Record<string, { inputs: unknown[] }> = {
+    sync: { inputs: [{ name: "pr", flag: "--pr", type: "int", required: true }] },
+    resolve: {
+      inputs: [
+        { name: "pr", flag: "--pr", type: "int", required: true },
+        { name: "prefer", flag: "--prefer", type: "enum", values: ["ours", "theirs"] },
+      ],
+    },
+    merge: { inputs: [{ name: "pr", flag: "--pr", type: "int", required: true }] },
+    "fix-ci": {
+      inputs: [
+        { name: "pr", flag: "--pr", type: "int", required: true },
+        { name: "runId", flag: "--run-id", type: "string" },
+      ],
+    },
+    fix: {
+      inputs: [
+        { name: "pr", flag: "--pr", type: "int", required: true },
+        { name: "feedback", flag: "--feedback", type: "string", bindsCommentRest: true },
+      ],
+    },
+    "preview-build": { inputs: [{ name: "pr", flag: "--pr", type: "int", required: true }] },
+  }
+  prevCwd = process.cwd()
+  fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "kody-dispatch-fixtures-"))
+  for (const [slug, stub] of Object.entries(stubs)) {
+    const dir = path.join(fixtureRoot, ".kody", "capabilities", slug)
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(
+      path.join(dir, "profile.json"),
+      JSON.stringify({
+        name: slug,
+        action: slug,
+        agentAction: slug,
+        capabilityKind: "act",
+        role: "primitive",
+        describe: `Stub ${slug} capability for dispatch tests.`,
+        inputs: stub.inputs,
+      }),
+    )
+    fs.writeFileSync(path.join(dir, "capability.md"), `# ${slug}\n`)
+  }
+  process.chdir(fixtureRoot)
+})
+
+afterAll(() => {
+  if (prevCwd) {
+    try {
+      process.chdir(prevCwd)
+    } catch {
+      /* cwd already gone — fine */
+    }
+  }
+  if (fixtureRoot) fs.rmSync(fixtureRoot, { recursive: true, force: true })
+})
+
 function writeLocalReleaseAsset(root: string): void {
-  const executableDir = path.join(root, ".kody", "capabilities", "release")
-  fs.mkdirSync(executableDir, { recursive: true })
+  const baseInputs = {
+    claudeCode: {
+      model: "inherit",
+      permissionMode: "acceptEdits",
+      maxTurns: null,
+      maxThinkingTokens: null,
+      systemPromptAppend: null,
+      tools: [],
+      hooks: [],
+      skills: [],
+      commands: [],
+      subagents: [],
+      plugins: [],
+      mcpServers: [],
+    },
+    cliTools: [],
+    scripts: { preflight: [], postflight: [] },
+  }
+
+  // Orchestrator: `@kody release` (the four-stage container). Routes to
+  // release-prepare / release-merge / release-publish / release-deploy in
+  // sequence via the container executor. Sibling primitives below are
+  // individually addressable from `@kody release-prepare` etc. for the
+  // case where the operator wants to resume a stage by hand.
+  const releaseDir = path.join(root, ".kody", "capabilities", "release")
+  fs.mkdirSync(releaseDir, { recursive: true })
   fs.writeFileSync(
-    path.join(executableDir, "profile.json"),
+    path.join(releaseDir, "profile.json"),
     JSON.stringify({
       name: "release",
       action: "release",
@@ -30,25 +121,59 @@ function writeLocalReleaseAsset(root: string): void {
         { name: "issue", flag: "--issue", type: "int", required: true, describe: "Release issue number." },
         { name: "bump", flag: "--bump", type: "enum", values: ["patch", "minor", "major"], describe: "Version bump." },
       ],
-      claudeCode: {
-        model: "inherit",
-        permissionMode: "acceptEdits",
-        maxTurns: null,
-        maxThinkingTokens: null,
-        systemPromptAppend: null,
-        tools: [],
-        hooks: [],
-        skills: [],
-        commands: [],
-        subagents: [],
-        plugins: [],
-        mcpServers: [],
-      },
-      cliTools: [],
-      scripts: { preflight: [], postflight: [] },
+      ...baseInputs,
     }),
   )
-  fs.writeFileSync(path.join(executableDir, "capability.md"), "# Release\n\nRun release flow.\n")
+  fs.writeFileSync(path.join(releaseDir, "capability.md"), "# Release\n\nRun release flow.\n")
+
+  // Sibling primitive: `@kody release-prepare`. Declares the same flags the
+  // comment parser is expected to fill in for a hand-driven rerun of the
+  // first stage (`bump`, `prefer`, `dry-run`). Listing them here is what
+  // lets the dispatch tests assert on the parsed cliArgs.
+  const prepareDir = path.join(root, ".kody", "capabilities", "release-prepare")
+  fs.mkdirSync(prepareDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(prepareDir, "profile.json"),
+    JSON.stringify({
+      name: "release-prepare",
+      action: "release-prepare",
+      role: "primitive",
+      describe: "Stage 1: prepare release.",
+      inputs: [
+        { name: "issue", flag: "--issue", type: "int", required: true, describe: "Release issue number." },
+        { name: "bump", flag: "--bump", type: "enum", values: ["patch", "minor", "major"], describe: "Version bump." },
+        {
+          name: "prefer",
+          flag: "--prefer",
+          type: "enum",
+          values: ["ours", "theirs"],
+          describe: "Conflict resolution.",
+        },
+        { name: "dry-run", flag: "--dry-run", type: "bool", describe: "Run without making changes." },
+      ],
+      ...baseInputs,
+    }),
+  )
+  fs.writeFileSync(path.join(prepareDir, "capability.md"), "# Release Prepare\n\nStage 1 of the release flow.\n")
+
+  // Sibling primitives: `@kody release-publish` and `@kody release-promote`.
+  // The dispatch tests assert only `issue` lands in cliArgs for these.
+  for (const slug of ["release-publish", "release-promote"]) {
+    const dir = path.join(root, ".kody", "capabilities", slug)
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(
+      path.join(dir, "profile.json"),
+      JSON.stringify({
+        name: slug,
+        action: slug,
+        role: "primitive",
+        describe: `Stage: ${slug}.`,
+        inputs: [{ name: "issue", flag: "--issue", type: "int", required: true, describe: "Release issue number." }],
+        ...baseInputs,
+      }),
+    )
+    fs.writeFileSync(path.join(dir, "capability.md"), `# ${slug}\n`)
+  }
 }
 
 describe("dispatch: explicit override", () => {
@@ -322,14 +447,15 @@ describe("dispatch: issue_comment on issue", () => {
       comment: { body: "please @kody run this now" },
       issue: { number: 9 },
     })
-    // "this now" is free text no input captured → carried as the job's `why`.
+    // issue #39: `run` declares `feedback` with `bindsCommentRest: true`, so
+    // the leftover text lands in `cliArgs.feedback` (the run's plan-context
+    // feedback) instead of being carried as the job's free-text `why`.
     expect(autoDispatch()).toEqual({
       action: "run",
       capability: "run",
       executable: "run",
-      cliArgs: { issue: 9 },
+      cliArgs: { issue: 9, feedback: "this now" },
       target: 9,
-      why: "this now",
     })
   })
 
@@ -465,10 +591,12 @@ describe("dispatch: issue_comment on issue", () => {
       action: "run",
       capability: "run",
       executable: "run",
-      cliArgs: { issue: 11 },
+      cliArgs: { issue: 11, feedback: "fix the failing test" },
       target: 11,
-      // The natural-language remainder (politeness stripped) becomes `why`.
-      why: "fix the failing test",
+      // issue #39: `run` declares `feedback` with `bindsCommentRest: true`,
+      // so the politeness-stripped remainder lands in `cliArgs.feedback`
+      // (the run's plan-context feedback) instead of being carried as the
+      // job's free-text `why`.
     })
   })
 

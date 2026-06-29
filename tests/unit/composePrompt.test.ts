@@ -106,6 +106,26 @@ describe("composePrompt", () => {
     // And the disk file genuinely doesn't exist.
     expect(fs.existsSync(f)).toBe(false)
   })
+
+  it("emits a fenced feedback block when ctx.data.feedback is set (rerun path, issue #39)", async () => {
+    fs.writeFileSync(path.join(dir, "prompt.md"), "{{feedbackBlock}}")
+    const ctx = makeCtx(dir, { feedback: "please also add a CLI flag" })
+    await composePrompt(ctx, makeProfile(dir))
+    const out = ctx.data.prompt as string
+    expect(out).toContain("Rerun feedback")
+    expect(out).toContain("BEGIN UNTRUSTED INPUT")
+    expect(out).toContain("please also add a CLI flag")
+    expect(out).toContain("END UNTRUSTED INPUT")
+  })
+
+  it("omits the feedback block entirely when ctx.data.feedback is unset (regular run)", async () => {
+    fs.writeFileSync(path.join(dir, "prompt.md"), "before\n{{feedbackBlock}}\nafter")
+    const ctx = makeCtx(dir)
+    await composePrompt(ctx, makeProfile(dir))
+    const out = ctx.data.prompt as string
+    expect(out).toBe("before\n\nafter")
+    expect(out).not.toContain("Rerun feedback")
+  })
 })
 
 describe("composePrompt: capability-pipeline tokens (Phase 1 capability-tick rename)", () => {

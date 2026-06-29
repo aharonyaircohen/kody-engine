@@ -1,7 +1,7 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import type { KodyConfig } from "../../src/config.js"
 import { autoDispatchTyped } from "../../src/dispatch.js"
 
@@ -17,6 +17,46 @@ function testConfig(config: Partial<KodyConfig>): KodyConfig {
 }
 
 const prev: Record<string, string | undefined> = {}
+
+let fixtureRoot: string
+let prevCwd: string
+
+beforeAll(() => {
+  // sync/resolve/merge/fix-ci ship in kody-store, not the engine root. CI
+  // clones the store alongside the repo; locally that clone may be missing,
+  // so write minimal stub capability folders and chdir into the fixture so
+  // the registry picks them up regardless of whether the store is present.
+  prevCwd = process.cwd()
+  fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "kody-dispatch-typed-fixtures-"))
+  for (const slug of ["sync", "resolve", "merge", "fix-ci"]) {
+    const dir = path.join(fixtureRoot, ".kody", "capabilities", slug)
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(
+      path.join(dir, "profile.json"),
+      JSON.stringify({
+        name: slug,
+        action: slug,
+        agentAction: slug,
+        capabilityKind: "act",
+        role: "primitive",
+        describe: `Stub ${slug} capability for dispatchTyped tests.`,
+      }),
+    )
+    fs.writeFileSync(path.join(dir, "capability.md"), `# ${slug}\n`)
+  }
+  process.chdir(fixtureRoot)
+})
+
+afterAll(() => {
+  if (prevCwd) {
+    try {
+      process.chdir(prevCwd)
+    } catch {
+      /* cwd already gone — fine */
+    }
+  }
+  if (fixtureRoot) fs.rmSync(fixtureRoot, { recursive: true, force: true })
+})
 
 beforeEach(() => {
   prev.EVENT_NAME = process.env.GITHUB_EVENT_NAME

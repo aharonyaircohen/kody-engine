@@ -82,6 +82,27 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+// The watch profiles live at `<dir>/.kody/agent-actions/...`, but the
+// dispatch resolver reads `process.cwd()/.kody/agent-actions`. Tests that
+// need dispatchScheduledWatches to actually find a profile chdir into `dir`
+// for the duration of the test; restore here so the next test (or the next
+// file) starts from a known cwd.
+let prevCwd = ""
+function chdirTo(dir: string): void {
+  prevCwd = process.cwd()
+  process.chdir(dir)
+}
+afterEach(() => {
+  if (prevCwd) {
+    try {
+      process.chdir(prevCwd)
+    } catch {
+      /* cwd already gone — fine */
+    }
+    prevCwd = ""
+  }
+})
+
 describe("kody-cli manual goal dispatch", () => {
   it("passes workflow message as goal id for goal-manager one-shot runs", async () => {
     const dir = tmpDir()
@@ -168,6 +189,7 @@ describe("kody-cli manual goal dispatch", () => {
     const dir = tmpDir()
     writeConfig(dir)
     writeScheduledExecutable(dir, "goal-scheduler")
+    chdirTo(dir)
     previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
     previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
@@ -192,6 +214,7 @@ describe("kody-cli manual goal dispatch", () => {
     const dir = tmpDir()
     writeConfig(dir)
     writeScheduledExecutable(dir, "goal-scheduler")
+    chdirTo(dir)
     previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
     previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
     process.env.GITHUB_EVENT_NAME = "schedule"
@@ -218,6 +241,7 @@ describe("kody-cli manual goal dispatch", () => {
     const dir = tmpDir()
     writeConfig(dir)
     writeScheduledExecutable(dir, "goal-scheduler")
+    chdirTo(dir)
     previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
     previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
     process.env.GITHUB_EVENT_NAME = "issue_comment"

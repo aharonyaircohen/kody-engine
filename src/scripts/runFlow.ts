@@ -4,8 +4,8 @@
  * comment. Issue number lives in `ctx.args.issue`.
  */
 
-import type { PreflightScript } from "../executables/types.js"
 import { ensureFeatureBranch } from "../branch.js"
+import type { PreflightScript } from "../executables/types.js"
 import { getRunUrl } from "../gha.js"
 import {
   DEFAULT_COMMENT_LIMIT,
@@ -50,6 +50,16 @@ export const runFlow: PreflightScript = async (ctx) => {
   if (base) {
     ctx.data.baseBranch = base
     process.stderr.write(`[kody runFlow] resolved base branch: ${base} (from --base)\n`)
+  }
+
+  // Rerun feedback: when the dashboard's Rerun action passes `Rerun.feedback`,
+  // it lands here via the `feedback` input (either as an explicit `--feedback`
+  // CLI flag or as comment-rest bound by `bindsCommentRest: true` in
+  // profile.json). Surface it as `{{feedback}}` in the prompt so the agent
+  // inherits the operator's intent on a re-triggered run.
+  const feedbackRaw = ctx.args.feedback as string | undefined
+  if (feedbackRaw && feedbackRaw.trim().length > 0) {
+    ctx.data.feedback = feedbackRaw
   }
 
   const branchInfo = ensureFeatureBranch(

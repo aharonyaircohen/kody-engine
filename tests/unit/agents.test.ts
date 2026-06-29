@@ -10,6 +10,11 @@ let cwd: string
 beforeEach(() => {
   cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-agent-"))
   fs.mkdirSync(path.join(cwd, ".kody", "agents"), { recursive: true })
+  // `kody` ships in kody-store, not the engine root. CI clones the store
+  // alongside the repo; locally that clone may be missing, so seed a stub
+  // agent file so `loadAgentIdentity(cwd, "kody")` resolves without the
+  // store being present. The local file wins over the store anyway.
+  fs.writeFileSync(path.join(cwd, ".kody", "agents", "kody.md"), "You are Kody.\n")
 })
 
 afterEach(() => {
