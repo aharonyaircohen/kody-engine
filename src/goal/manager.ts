@@ -142,12 +142,6 @@ export function planManagedGoalTick(goal: ManagedGoal): ManagedGoalDecision {
     return { kind: "done" }
   }
 
-  const pending = goal.facts.pendingEvidence
-  if (pending === missing) {
-    const stage = typeof goal.stage === "string" ? goal.stage : "waiting"
-    return { kind: "wait", evidence: missing, stage, reason: `waiting for evidence: ${missing}` }
-  }
-
   const step = goal.route.find((candidate) => candidate.evidence === missing)
   if (!step) {
     if (isSimpleGoal(goal) && missing === SIMPLE_GOAL_EVIDENCE) {

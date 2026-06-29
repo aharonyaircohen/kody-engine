@@ -141,13 +141,16 @@ instead of dispatching bad input.
 1. Load `<statePath>/goals/instances/<id>/state.json`.
 2. Read `destination.evidence`.
 3. Find the first evidence key that is not `true` in `facts`.
-4. If that evidence is already `facts.pendingEvidence`, wait.
-5. Find the matching `route` step.
-6. Verify the route step's `capability` is attached to the goal.
-7. Resolve `route.args`, including `{ "fact": "<name>" }` references.
-8. Dispatch the capability or executable for that evidence.
-9. Set `facts.pendingEvidence`.
-10. When all evidence is true, set `state: "done"`.
+4. Find the matching `route` step, even when that evidence is already `facts.pendingEvidence`.
+5. Verify the route step's `capability` is attached to the goal.
+6. Resolve `route.args`, including `{ "fact": "<name>" }` references.
+7. Dispatch or retry the capability or executable for that evidence.
+8. Set or keep `facts.pendingEvidence`.
+9. When all evidence is true, set `state: "done"`.
+
+`facts.pendingEvidence` is the current missing evidence being pursued. It does
+not suppress retries; the responsible route step should be idempotent and should
+either report the evidence or a clear blocker.
 
 The route step should name evidence a capability can produce, not a private phase
 inside the capability. For example, a web release route composes separate Act capabilities:

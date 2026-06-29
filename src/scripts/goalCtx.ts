@@ -4,10 +4,10 @@ import type { GoalLifecycleState, GoalState } from "../goal/state.js"
 export interface GoalCtx {
   /** Goal id (`KODY_ARG_GOAL`). */
   id: string
-  /** Lifecycle state from state.json. */
+  /** Lifecycle state from the managed goal state file. */
   state: GoalLifecycleState
   /** Default branch from kody.config.json. */
   defaultBranch: string
-  /** Cached parsed state.json so managed goal scripts can preserve extra fields. */
+  /** Cached parsed state so managed goal scripts can preserve extra fields. */
   raw?: GoalState
 }
