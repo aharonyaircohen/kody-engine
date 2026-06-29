@@ -1,10 +1,10 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { getCompanyStoreAssetRoot } from "../companyStore.js"
-import { listStateDirectory, type StateRepoConfig } from "../stateRepo.js"
+import { type StateRepoConfig } from "../stateRepo.js"
 import type { ManagedGoal } from "./manager.js"
 import type { GoalState } from "./state.js"
-import { fetchGoalState, putGoalState } from "./stateStore.js"
+import { fetchGoalState, listGoalStateIds, putGoalState } from "./stateStore.js"
 
 export interface GoalLoopTargetResolution {
   targetId: string
@@ -85,11 +85,10 @@ function findActiveTargetInstance(
   loopGoalId: string,
   targetId: string,
 ): { id: string; state: GoalState } | null {
-  const entries = listStateDirectory(config, cwd, "goals/instances")
   const candidates: Array<{ id: string; state: GoalState }> = []
 
-  for (const entry of entries) {
-    const id = typeof entry.name === "string" ? entry.name.trim() : ""
+  for (const entryId of listGoalStateIds(config, cwd)) {
+    const id = entryId.trim()
     if (!id || id === loopGoalId || id === targetId || !id.startsWith(`${targetId}-`)) continue
     assertSafeGoalId(id, "goal instance")
     const state = fetchGoalState(config, id, cwd)

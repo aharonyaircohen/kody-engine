@@ -1,4 +1,5 @@
-import { type GoalState, nowIso, parseGoalState, serializeGoalState } from "./goal/state.js"
+import { type GoalState, nowIso } from "./goal/state.js"
+import { fetchGoalState, listGoalStateIds, putGoalState } from "./goal/stateStore.js"
 import { readStateText, listStateDirectory, upsertStateText, appendStateLine, type StateRepoConfig } from "./stateRepo.js"
 
 export type CompanyIntentStatus = "active" | "paused" | "archived"
@@ -176,16 +177,14 @@ export function appendCompanyIntentDecision(
 }
 
 export function listCompanyPortfolio(config: StateRepoConfig, cwd?: string): CompanyPortfolio {
-  const entries = listStateDirectory(config, cwd, "goals/instances")
   const goals: CompanyPortfolioGoal[] = []
-  for (const entry of entries) {
-    if (entry.type !== "dir" || !entry.name || !isCompanyIntentId(entry.name)) continue
-    const file = readStateText(config, cwd, `goals/instances/${entry.name}/state.json`)
-    if (!file) continue
-    const state = parseGoalState(file.path, JSON.parse(file.content))
+  for (const id of listGoalStateIds(config, cwd)) {
+    if (!isCompanyIntentId(id)) continue
+    const state = fetchGoalState(config, id, cwd)
+    if (!state) continue
     const destination = recordField(state.extra.destination)
     goals.push({
-      id: entry.name,
+      id,
       state: state.state,
       type: stringField(state.extra.type) || undefined,
       outcome: stringField(destination?.outcome) || undefined,
@@ -205,7 +204,7 @@ export function writeCompanyGoalState(
   message: string,
 ): void {
   assertIntentId(id)
-  upsertStateText(config, cwd, `goals/instances/${id}/state.json`, serializeGoalState(state), message)
+  putGoalState(config, id, state, message, cwd)
 }
 
 function assertIntentId(id: string): void {

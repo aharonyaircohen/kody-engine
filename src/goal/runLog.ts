@@ -91,7 +91,7 @@ export function goalRunLogPath(goalId: string, data: Record<string, unknown>): s
 }
 
 export function goalStateLogPath(goalId: string): string {
-  return `goals/instances/${safePathSegment(goalId)}/state.json`
+  return `todos/${safePathSegment(goalId)}.md`
 }
 
 export function goalRunLogSnapshot(goalId: string, goalState: string, goal: ManagedGoal): Record<string, unknown> {
