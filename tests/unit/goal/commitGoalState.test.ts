@@ -103,6 +103,7 @@ describe("commitGoalState report refresh", () => {
       stage: "prepare",
       status: "dispatch",
       reason: "dispatch release-prepare for releasePrExists",
+      trigger: {},
       goal: { stage: "prepare", requiredEvidence: ["releasePrExists"], missingEvidence: ["releasePrExists"] },
       decision: { kind: "dispatch", reason: "dispatch release-prepare for releasePrExists" },
     })
@@ -133,7 +134,11 @@ describe("commitGoalState report refresh", () => {
       stage: "waiting",
       status: "wait",
       reason: "waiting for labelled tasks",
-      goal: { stage: "waiting", requiredEvidence: ["labelledTasksComplete"], missingEvidence: ["labelledTasksComplete"] },
+      goal: {
+        stage: "waiting",
+        requiredEvidence: ["labelledTasksComplete"],
+        missingEvidence: ["labelledTasksComplete"],
+      },
       decision: { kind: "wait", reason: "waiting for labelled tasks" },
     })
 

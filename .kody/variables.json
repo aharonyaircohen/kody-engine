@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "variables": {
+    "LLM_MODELS": {
+      "value": "[{\"id\":\"minimax/MiniMax-M3\",\"label\":\"MiniMax-M3\",\"provider\":\"anthropic\",\"protocol\":\"openai\",\"baseURL\":\"https://api.minimax.io/v1\",\"modelName\":\"MiniMax-M3\",\"apiKeySecret\":\"MINIMAX_API_KEY\",\"enabled\":true,\"default\":true,\"engineDefault\":false,\"maxSteps\":200}]",
+      "updatedAt": "2026-06-06T15:37:50.753Z",
+      "updatedBy": "aharonyaircohen"
+    }
+  }
+}

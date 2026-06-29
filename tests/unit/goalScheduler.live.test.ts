@@ -456,7 +456,6 @@ describe("goal-scheduler live wiring", () => {
     expect(stdout).toContain("skip web-release: active scheduled instance already running (web-release-2026-06-24)")
     expect(stdout).not.toContain("-> tick web-release-2026-06-25 (goal-manager)")
   })
-
   it("scheduled goal activation does not tick stale singleton instances from the same template", () => {
     writeTemplate("web-release", managedGoalExtra())
     writeGoal("web-release", "active", {

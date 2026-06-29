@@ -1,24 +1,16 @@
 import type { AgentResult } from "../agent.js"
-import type { PostflightScript } from "../executables/types.js"
 import {
+  applyCapabilityEvidenceToGoalState,
   type CapabilityEvidence,
   capabilityReportToEvidence,
   capabilityResultToEvidence,
-  applyCapabilityEvidenceToGoalState,
   mergeCapabilityEvidence,
 } from "../capabilityEvidence.js"
-import {
-  type CapabilityReport,
-  parseCapabilityReport,
-  parseCapabilityReportsFromText,
-} from "../capabilityReport.js"
-import {
-  type CapabilityResult,
-  parseCapabilityResult,
-  parseCapabilityResultsFromText,
-} from "../capabilityResult.js"
+import { type CapabilityReport, parseCapabilityReport, parseCapabilityReportsFromText } from "../capabilityReport.js"
+import { type CapabilityResult, parseCapabilityResult, parseCapabilityResultsFromText } from "../capabilityResult.js"
+import type { PostflightScript } from "../executables/types.js"
 import { managedGoalFromState, planManagedGoalTick, writeManagedGoalToState } from "../goal/manager.js"
-import { refreshGoalDashboardReport, capabilityEvidenceOutput } from "../goal/report.js"
+import { capabilityEvidenceOutput, refreshGoalDashboardReport } from "../goal/report.js"
 import { flushGoalRunLogEvents, goalRunLogChange, goalRunLogSnapshot, stageGoalRunLogEvent } from "../goal/runLog.js"
 import { type GoalState, nowIso, serializeGoalState } from "../goal/state.js"
 import { fetchGoalState, putGoalState } from "../goal/stateStore.js"

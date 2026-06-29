@@ -36,15 +36,15 @@ export const dispatchCapabilityTicks: PreflightScript = async (ctx, _profile, ar
   ctx.data.jobIssueCount = issues.length
 
   if (issues.length === 0) {
-    process.stdout.write(`[jobs] no open issues with label "${label}"\n`)
+    process.stdout.write(`[duties] no open issues with label "${label}"\n`)
     return
   }
 
-  process.stdout.write(`[jobs] ticking ${issues.length} issue(s) via ${targetExecutable}\n`)
+  process.stdout.write(`[duties] ticking ${issues.length} issue(s) via ${targetExecutable}\n`)
 
   const results: Array<{ issue: number; exitCode: number; reason?: string }> = []
   for (const issue of issues) {
-    process.stdout.write(`[jobs] → tick #${issue.number}: ${issue.title}\n`)
+    process.stdout.write(`[duties] → tick #${issue.number}: ${issue.title}\n`)
     try {
       const out = await runJob(
         mintScheduledJob({
@@ -56,11 +56,11 @@ export const dispatchCapabilityTicks: PreflightScript = async (ctx, _profile, ar
       )
       results.push({ issue: issue.number, exitCode: out.exitCode, reason: out.reason })
       if (out.exitCode !== 0) {
-        process.stderr.write(`[jobs] tick #${issue.number} failed (exit ${out.exitCode}): ${out.reason ?? ""}\n`)
+        process.stderr.write(`[duties] tick #${issue.number} failed (exit ${out.exitCode}): ${out.reason ?? ""}\n`)
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`[jobs] tick #${issue.number} crashed: ${msg}\n`)
+      process.stderr.write(`[duties] tick #${issue.number} crashed: ${msg}\n`)
       results.push({ issue: issue.number, exitCode: 99, reason: msg })
     }
   }

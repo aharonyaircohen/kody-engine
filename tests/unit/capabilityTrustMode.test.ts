@@ -4,11 +4,7 @@ vi.mock("../../src/issue.js", () => ({
   gh: vi.fn(),
 }))
 
-import {
-  isDispatchGated,
-  parseCapabilityTrustMode,
-  readCapabilityTrustMode,
-} from "../../src/capabilityMcp.js"
+import { isDispatchGated, parseCapabilityTrustMode, readCapabilityTrustMode } from "../../src/capabilityMcp.js"
 import { gh } from "../../src/issue.js"
 
 const b64 = (s: string) => Buffer.from(s, "utf-8").toString("base64")

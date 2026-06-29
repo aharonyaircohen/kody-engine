@@ -227,7 +227,11 @@ async function runCapabilityImplementationStep(
     preloadedData.dutyIntent = capabilityContext.body
     preloadedData.jobIntent = capabilityContext.body
     if (preloadedData.jobCapability === undefined) preloadedData.jobCapability = capabilityContext.slug
-    if (capabilityContext.config.agent && preloadedData.jobAgent === undefined) {
+    // Instant jobs inherit the capability's declared agent when the operator
+    // didn't name one. Scheduled jobs (capability-tick) always set agent
+    // explicitly on the minted Job — see `mintScheduledJob` callers — so
+    // seeding here would clobber the deliberate "no default agent" choice.
+    if (valid.flavor === "instant" && capabilityContext.config.agent && preloadedData.jobAgent === undefined) {
       preloadedData.jobAgent = capabilityContext.config.agent
     }
     if (capabilityContext.config.mentions && capabilityContext.config.mentions.length > 0) {

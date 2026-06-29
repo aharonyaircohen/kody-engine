@@ -231,7 +231,10 @@ function requiredString(value: unknown, field: string): string {
 
 function stringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return []
-  return value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean)
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 function nonEmptyStringArray(value: unknown, field: string): string[] {

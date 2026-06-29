@@ -27,6 +27,7 @@ import { loadProfile, validateScriptReferences } from "./profile.js"
 import { resolveExecutable } from "./registry.js"
 import { agentRunDir } from "./runtimePaths.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
+import { writeResponsibilityReport } from "./scripts/writeResponsibilityReport.js"
 import type { TaskState, TaskTarget } from "./state.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
 import { loadSubagents } from "./subagents.js"
@@ -321,7 +322,15 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
   }
 
   if (!input.skipConfig && config.github.owner && config.github.repo) {
-    hydrateStateWorkspace(config, input.cwd)
+    try {
+      hydrateStateWorkspace(config, input.cwd)
+    } catch (err) {
+      // State repo hydration is best-effort: if the GitHub API is
+      // unreachable (auth, network, rate limit) the engine should still run.
+      process.stderr.write(
+        `[kody] state workspace hydration failed: ${err instanceof Error ? err.message : String(err)}\n`,
+      )
+    }
   }
 
   // Resolve model. Precedence:
@@ -713,6 +722,8 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
         outcome: postOutcome,
       })
     }
+
+    await writeResponsibilityReport(ctx, profile, agentResult)
 
     return finishAndEnd({
       exitCode: ctx.output.exitCode ?? 0,

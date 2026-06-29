@@ -1,3 +1,4 @@
+import * as path from "node:path"
 import type { PreflightScript } from "../executables/types.js"
 import {
   applySimpleGoalTaskSummary,
@@ -13,6 +14,7 @@ import { serializeGoalState } from "../goal/state.js"
 import { type GoalLoopTargetResolution, goalLoopNow, resolveGoalLoopTarget } from "../goal/targetLoopResolution.js"
 import { expandManagedGoalState } from "../goal/typeDefinitions.js"
 import { gh } from "../issue.js"
+import { getExecutableRoots } from "../registry.js"
 import {
   type GoalCapabilityScheduleState,
   isCapabilityCadenceGoal,
@@ -174,6 +176,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
       cwd: ctx.cwd,
       config: ctx.config,
       previousScheduleState,
+      executableRoots: [path.join(ctx.cwd, ".kody", "executables"), ...getExecutableRoots()],
     })
     restoreGoalIdFact()
     goal.raw = writeManagedGoalToState({ ...goal.raw, state: goal.state }, managed)

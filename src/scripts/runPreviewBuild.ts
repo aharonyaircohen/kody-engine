@@ -32,6 +32,7 @@ import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 
 import type { PreflightScript } from "../executables/types.js"
+import { readGithubStateText } from "../stateRepoGithub.js"
 import {
   basePreviewAppName,
   buildEnvFromVault,
@@ -43,7 +44,6 @@ import {
 } from "./previewBuildHelpers.js"
 import { setupNamespaceBuilder } from "./previewBuildNamespace.js"
 import { runCmd } from "./previewBuildRun.js"
-import { readGithubStateText } from "../stateRepoGithub.js"
 
 const FLY_MACHINES = "https://api.machines.dev/v1"
 const FLY_GRAPHQL = "https://api.fly.io/graphql"
@@ -72,21 +72,6 @@ function flyHeaders(token: string): HeadersInit {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
   }
-}
-
-async function ghJSON<T>(url: string, token: string): Promise<T> {
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-    signal: AbortSignal.timeout(REQ_TIMEOUT_MS),
-  })
-  if (!res.ok) {
-    throw new Error(`GitHub ${url}: ${res.status} ${res.statusText}`)
-  }
-  return (await res.json()) as T
 }
 
 async function fetchVaultDoc(repo: string, ghToken: string, masterKey: string): Promise<VaultDoc> {

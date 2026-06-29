@@ -11,7 +11,5 @@ export const dispatchCapabilityFileTicks: PreflightScript = async (ctx) => {
   ctx.data.jobTickResults = []
   ctx.output.exitCode = 0
   ctx.output.reason = "capability scheduling is owned by goals and loops"
-  process.stdout.write(
-    "[jobs] no flat capability fan-out; goals and loops own scheduled capability decisions\n",
-  )
+  process.stdout.write("[jobs] no flat capability fan-out; goals and loops own scheduled capability decisions\n")
 }

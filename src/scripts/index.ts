@@ -101,6 +101,7 @@ import { warmupMcp } from "./warmupMcp.js"
 import { writeAgentRunSummary } from "./writeAgentRunSummary.js"
 import { writeIssueStateComment } from "./writeIssueStateComment.js"
 import { writeJobStateFile } from "./writeJobStateFile.js"
+import { writeResponsibilityReport } from "./writeResponsibilityReport.js"
 
 export const preflightScripts: Record<string, PreflightScript> = {
   runFlow,
@@ -181,6 +182,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   postReviewResult,
   persistArtifacts,
   writeAgentRunSummary,
+  writeResponsibilityReport,
   saveTaskState,
   mirrorStateToPr,
   startFlow,

@@ -146,6 +146,13 @@ jobs:
         run: npx -y -p @kody-ade/kody-engine@latest kody-engine ci
 `
 
+const DEFAULT_AGENT_IDENTITY = `# Kody
+
+You are Kody, the default maintenance agent for scheduled agentResponsibilities.
+
+Keep actions narrow, prefer read-only inspection, and only use the tools or commands named by the agentResponsibility.
+When a agentResponsibility writes a report or dispatches work, keep the output factual and concise.
+`
 function defaultBranchFromGit(cwd: string): string {
   try {
     const ref = execFileSync("git", ["symbolic-ref", "refs/remotes/origin/HEAD"], {
@@ -204,7 +211,18 @@ export function performInit(cwd: string, force: boolean): InitResult {
     wrote.push(".github/workflows/kody.yml")
   }
 
-  // 3. .github/workflows/kody-<name>.yml for every discovered scheduled executable profile.
+  // 3. .kody/agents/kody.md — default agent for Store/builtin actions.
+  const agentsDir = path.join(cwd, ".kody", "agents")
+  const agentPath = path.join(agentsDir, "kody.md")
+  if (fs.existsSync(agentPath) && !force) {
+    skipped.push(".kody/agents/kody.md")
+  } else {
+    fs.mkdirSync(agentsDir, { recursive: true })
+    fs.writeFileSync(agentPath, DEFAULT_AGENT_IDENTITY)
+    wrote.push(".kody/agents/kody.md")
+  }
+
+  // 4. .github/workflows/kody-<name>.yml for every discovered scheduled executable profile.
   for (const exe of listExecutables()) {
     let profile: ReturnType<typeof loadProfile>
     try {
@@ -233,7 +251,8 @@ export function performInit(cwd: string, force: boolean): InitResult {
     labels = undefined
   }
 
-  return { wrote, skipped, labels }
+  const result: InitResult = { wrote, skipped, labels }
+  return result
 }
 
 export function renderScheduledWorkflow(name: string, cron: string): string {

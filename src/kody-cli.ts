@@ -446,7 +446,7 @@ export async function runCi(argv: string[]): Promise<number> {
     const scheduledWatchRoute =
       manualGoalManager || dutyRoute
         ? undefined
-        : dispatchScheduledWatches({ force: true }).find(
+        : dispatchScheduledWatches({ force: true, cwd }).find(
             (match) => match.action === forceRunAction || match.executable === forceRunAction,
           )
     const route = manualGoalManager
@@ -688,7 +688,7 @@ export async function runCi(argv: string[]): Promise<number> {
  * Aggregate exit code: 0 iff every watch returned 0.
  */
 async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: boolean }): Promise<number> {
-  const matches: DispatchResult[] = dispatchScheduledWatches({ force: opts.force })
+  const matches: DispatchResult[] = dispatchScheduledWatches({ force: opts.force, cwd })
   if (matches.length === 0) {
     process.stdout.write(
       `→ kody: scheduled wake — no watches matched ${opts.force ? "(force mode, no watches discovered)" : "(window)"}, exiting cleanly\n`,
