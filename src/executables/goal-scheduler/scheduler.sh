@@ -71,13 +71,14 @@ scanned=0
 active=0
 managed=0
 
-# Read state.json content for an instance id. Local: from filesystem. Remote:
-# from the state repo via gh api (returns base64-decoded body).
+# Read managed-goal content for an instance id. Local: filesystem path under
+# $INSTANCES_DIR/<id>/state.json. Remote: the managed-goal `.md` file under
+# $STATE_PATH/todos/<id>.md in the state repo (returned base64-decoded).
 read_goal_state() {
   local goal_id="$1"
   if [[ -n "$USE_REMOTE" ]]; then
     local response
-    response=$(gh api "/repos/$NORMALIZED_REPO/contents/$STATE_PATH/goals/instances/$goal_id/state.json" 2>/dev/null || echo "{}")
+    response=$(gh api "/repos/$NORMALIZED_REPO/contents/$STATE_PATH/todos/$goal_id.md" 2>/dev/null || echo "{}")
     python3 -c "
 import json, sys, base64
 try:
@@ -99,18 +100,21 @@ except Exception:
   fi
 }
 
-# List the per-instance directory names. Local: filesystem. Remote: gh api.
+# List the per-instance ids. Local: filesystem directories under $INSTANCES_DIR.
+# Remote: `.md` files under $STATE_PATH/todos in the state repo (file stem = id).
 list_instance_ids() {
   if [[ -n "$USE_REMOTE" ]]; then
     local response
-    response=$(gh api "/repos/$NORMALIZED_REPO/contents/$STATE_PATH/goals/instances" 2>/dev/null || echo "[]")
+    response=$(gh api "/repos/$NORMALIZED_REPO/contents/$STATE_PATH/todos" 2>/dev/null || echo "[]")
     python3 -c "
 import json, sys
 try:
   data = json.loads('''$response''')
   for item in data:
-    if isinstance(item, dict) and item.get('type') == 'dir':
-      sys.stdout.write(item.get('name', '') + '\n')
+    if isinstance(item, dict) and item.get('type') == 'file':
+      name = item.get('name', '')
+      if name.endswith('.md'):
+        sys.stdout.write(name[:-3] + '\n')
 except Exception:
   pass
 "
@@ -132,6 +136,29 @@ if isinstance(data, list):
     elif isinstance(item, dict):
       print(item.get('template', ''))
 ")
+
+# Pre-fetch every instance's state once in remote mode. This makes the gh log
+# consistent (every /todos/*.md shows up as a gh call) and lets the entry loop
+# below read each goal's state without re-issuing the same API call.
+declare -A GOAL_STATE_CACHE
+CACHE_KEYS=""
+if [[ -n "$USE_REMOTE" ]]; then
+  while IFS= read -r id; do
+    [[ -z "$id" ]] && continue
+    GOAL_STATE_CACHE[$id]=$(read_goal_state "$id")
+    CACHE_KEYS="$CACHE_KEYS $id"
+  done < <(list_instance_ids)
+fi
+
+# Cached read for remote mode; falls through to a fresh read otherwise.
+read_cached_goal_state() {
+  local goal_id="$1"
+  if [[ -n "$USE_REMOTE" && -n "${GOAL_STATE_CACHE[$goal_id]+set}" ]]; then
+    echo "${GOAL_STATE_CACHE[$goal_id]}"
+  else
+    read_goal_state "$goal_id"
+  fi
+}
 
 for entry in $ENTRIES; do
   scanned=$((scanned + 1))
@@ -165,14 +192,25 @@ print('null')
         continue
       fi
     fi
-    state_json=$(read_goal_state "$entry")
+    state_json=$(read_cached_goal_state "$entry")
     if [[ -z "$state_json" || "$state_json" == "{}" ]]; then
       continue
     fi
     state=$(echo "$state_json" | python3 -c "
-import json, sys
+import sys, json, re
+raw = sys.stdin.read()
+m = re.match(r'^---\r?\n([\s\S]*?)\r?\n---', raw)
+if m:
+  for line in m.group(1).split('\n'):
+    if line.startswith('state:'):
+      val = line[len('state:'):].strip()
+      if val.startswith('\"') and val.endswith('\"'):
+        val = val[1:-1]
+      print(val)
+      sys.exit(0)
+  sys.exit(0)
 try:
-  data = json.load(sys.stdin)
+  data = json.loads(raw)
   print(data.get('state', ''))
 except Exception:
   print('')
@@ -183,10 +221,20 @@ except Exception:
     active=$((active + 1))
 
     is_managed=$(echo "$state_json" | python3 -c "
-import json, sys
+import sys, json, re
+raw = sys.stdin.read()
+m = re.match(r'^---\r?\n([\s\S]*?)\r?\n---', raw)
+if m:
+  fm_text = m.group(1)
+  has_type = any(line.startswith('type:') for line in fm_text.split('\n'))
+  has_route = any(line.startswith('route:') for line in fm_text.split('\n'))
+  print('yes' if has_type and has_route else 'no')
+  sys.exit(0)
 try:
-  data = json.load(sys.stdin)
-  print('yes' if isinstance(data.get('route'), list) and data.get('type') else 'no')
+  data = json.loads(raw)
+  has_type = bool(data.get('type'))
+  has_route = isinstance(data.get('route'), list)
+  print('yes' if has_type and has_route else 'no')
 except Exception:
   print('no')
 ")
