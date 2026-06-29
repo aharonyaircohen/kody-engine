@@ -1,10 +1,10 @@
 /**
  * Chat event emission — file JSONL + optional HTTP push, composed via Tee.
  *
- * Events are what the Kody-Dashboard SSE stream consumes. The FileSink writes a
- * local cache that chat runners sync to the configured state repo, so the
- * dashboard's poll path can rehydrate a session on reconnect; the HttpSink gives
- * real-time push when the dashboard URL + inline token are provided.
+ * Events are what the Kody-Dashboard SSE stream consumes. The FileSink makes
+ * them durable (committed back via git) so the dashboard's GitHub-poll path
+ * can rehydrate a session on reconnect; the HttpSink gives real-time push
+ * when the dashboard URL + inline token are provided.
  */
 
 import * as fs from "node:fs"
@@ -53,7 +53,7 @@ export class FileSink implements EventSink {
  * the endpoint can route events to the right SSE stream.
  *
  * Best-effort: swallowed errors won't fail the chat turn. The FileSink still
- * writes the event for state-repo sync and the dashboard poll path picks it up.
+ * persists the event and the dashboard's GitHub-poll picks it up.
  */
 export class HttpSink implements EventSink {
   constructor(

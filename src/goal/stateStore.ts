@@ -7,8 +7,8 @@
  *   <statePath>/todos/<id>.md
  */
 import { listStateDirectory, readStateText, type StateRepoConfig, upsertStateText } from "../stateRepo.js"
-import { type GoalState, parseGoalState } from "./state.js"
 import { isManagedTodoRaw, parseTodoGoalState, serializeTodoGoalState } from "./managedTodoState.js"
+import { type GoalState, parseGoalState } from "./state.js"
 
 export function goalStatePath(goalId: string): string {
   return `todos/${goalId}.md`

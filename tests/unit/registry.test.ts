@@ -8,12 +8,12 @@ import {
   hasExecutable,
   isBuiltinExecutable,
   isSafeName,
-  listExecutables,
   listCapabilityActions,
+  listExecutables,
   parseGenericFlags,
-  resolveExecutable,
   resolveCapabilityAction,
   resolveCapabilityFolder,
+  resolveExecutable,
 } from "../../src/registry.js"
 
 function mkFixture(): string {
@@ -137,9 +137,7 @@ describe("registry: capability/executable separation", () => {
     fs.writeFileSync(path.join(dutyDir, "capability.md"), "# Feature\n")
     fs.writeFileSync(path.join(exeDir, "profile.json"), JSON.stringify({ name: "feature", role: "primitive" }))
 
-    expect(fs.realpathSync(resolveExecutable("feature")!)).toBe(
-      fs.realpathSync(path.join(exeDir, "profile.json")),
-    )
+    expect(fs.realpathSync(resolveExecutable("feature")!)).toBe(fs.realpathSync(path.join(exeDir, "profile.json")))
     expect(fs.realpathSync(listExecutables().find((exe) => exe.name === "feature")!.profilePath)).toBe(
       fs.realpathSync(path.join(exeDir, "profile.json")),
     )
@@ -231,11 +229,12 @@ describe("registry: capabilities root", () => {
       JSON.stringify({ name: "capability-ship", role: "primitive" }),
     )
     fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Ship\n")
-    fs.writeFileSync(path.join(executableDir, "profile.json"), JSON.stringify({ name: "executable-ship", role: "primitive" }))
-
-    expect(fs.realpathSync(resolveExecutable("ship")!)).toBe(
-      fs.realpathSync(path.join(capabilityDir, "profile.json")),
+    fs.writeFileSync(
+      path.join(executableDir, "profile.json"),
+      JSON.stringify({ name: "executable-ship", role: "primitive" }),
     )
+
+    expect(fs.realpathSync(resolveExecutable("ship")!)).toBe(fs.realpathSync(path.join(capabilityDir, "profile.json")))
     expect(fs.realpathSync(listExecutables().find((item) => item.name === "ship")!.profilePath)).toBe(
       fs.realpathSync(path.join(capabilityDir, "profile.json")),
     )
@@ -256,7 +255,10 @@ describe("registry: capabilities root", () => {
       }),
     )
     fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Ship\n")
-    fs.writeFileSync(path.join(executableDir, "profile.json"), JSON.stringify({ name: "executable-ship", role: "primitive" }))
+    fs.writeFileSync(
+      path.join(executableDir, "profile.json"),
+      JSON.stringify({ name: "executable-ship", role: "primitive" }),
+    )
 
     expect(resolveCapabilityAction("ship")).toMatchObject({
       action: "ship",
@@ -264,9 +266,7 @@ describe("registry: capabilities root", () => {
       executable: "ship",
       source: "project-folder",
     })
-    expect(fs.realpathSync(resolveExecutable("ship")!)).toBe(
-      fs.realpathSync(path.join(executableDir, "profile.json")),
-    )
+    expect(fs.realpathSync(resolveExecutable("ship")!)).toBe(fs.realpathSync(path.join(executableDir, "profile.json")))
     expect(fs.realpathSync(listExecutables().find((item) => item.name === "ship")!.profilePath)).toBe(
       fs.realpathSync(path.join(executableDir, "profile.json")),
     )
@@ -277,10 +277,7 @@ describe("registry: capabilities root", () => {
     const oldBody = ["agent", "respon", "sibility.md"].join("-")
     const legacyDir = path.join(root, ".kody", oldRoot, "audit")
     fs.mkdirSync(legacyDir, { recursive: true })
-    fs.writeFileSync(
-      path.join(legacyDir, "profile.json"),
-      JSON.stringify({ name: "audit", action: "audit" }),
-    )
+    fs.writeFileSync(path.join(legacyDir, "profile.json"), JSON.stringify({ name: "audit", action: "audit" }))
     fs.writeFileSync(path.join(legacyDir, oldBody), "# Audit\n\nLegacy body.\n")
 
     expect(listCapabilityActions().find((item) => item.action === "audit")).toBeUndefined()

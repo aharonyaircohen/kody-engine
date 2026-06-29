@@ -1,7 +1,7 @@
 /**
- * Preflight: surface the project's state-repo memory markdown wiki into the
- * agent's prompt as `{{memoryContext}}`. Engine runs hydrate it into the local
- * `.kody/memory/` compatibility cache before this loader runs.
+ * Preflight: surface the project's `.kody/memory/` markdown wiki into the
+ * agent's prompt as `{{memoryContext}}`. Cross-cutting — any agentAction can
+ * opt in by listing this in its preflight.
  *
  * Strategy:
  *   - Walk the memory dir, take at most MAX_PAGES pages.
@@ -147,7 +147,7 @@ function sortByRecency(pages: MemoryPage[]): MemoryPage[] {
 function formatBlock(pages: MemoryPage[]): string {
   if (pages.length === 0) return ""
   const lines: string[] = [
-    "# Project memory (state repo `memory/`)",
+    "# Project memory (`.kody/memory/`)",
     "",
     "Pages from prior memorize ticks. Treat as advisory context — confirm against the codebase before acting.",
     "",

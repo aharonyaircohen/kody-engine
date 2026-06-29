@@ -14,8 +14,6 @@ import {
 import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
 import { resolveCapabilityAction } from "./registry.js"
 import { type RunRequest, readRunRequestFromEnv } from "./run-request.js"
-import { lastRunLogPath } from "./runtimePaths.js"
-import { hydrateStateWorkspace } from "./stateWorkspace.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -214,12 +212,6 @@ export function detectPackageManager(cwd: string): PackageManager {
   return "npm"
 }
 
-function shouldChainScheduledWatch(match: DispatchResult): boolean {
-  return (
-    match.action === "goal-scheduler" || match.capability === "goal-scheduler" || match.executable === "goal-scheduler"
-  )
-}
-
 function shellOut(cmd: string, args: string[], cwd: string, stream = true): number {
   try {
     execFileSync(cmd, args, {
@@ -322,7 +314,7 @@ export function configureGitIdentity(cwd: string): void {
 
 function postFailureTail(issueNumber: number | undefined, cwd: string, reason: string): void {
   if (!issueNumber) return
-  const logPath = lastRunLogPath(cwd)
+  const logPath = path.join(cwd, ".kody", "last-run.jsonl")
   let tail = ""
   try {
     if (fs.existsSync(logPath)) {
@@ -359,7 +351,6 @@ export async function runCi(argv: string[]): Promise<number> {
   let earlyConfigError: Error | undefined
   try {
     earlyConfig = loadConfig(cwd)
-    hydrateStateWorkspace(earlyConfig, cwd)
   } catch (err) {
     earlyConfigError = err instanceof Error ? err : new Error(String(err))
   }
@@ -569,8 +560,8 @@ export async function runCi(argv: string[]): Promise<number> {
       process.stderr.write(`[kody] config error: ${earlyConfigError.message}\n`)
       return 64
     }
-    process.stdout.write(`→ kody: no action for event ${process.env.GITHUB_EVENT_NAME} — checking scheduled watches\n`)
-    return runScheduledFanOut(cwd, args, { force: false })
+    process.stdout.write(`→ kody: no action for event ${process.env.GITHUB_EVENT_NAME} — exiting cleanly\n`)
+    return 0
   }
 
   if (!args.issueNumber && !autoFallback) {
@@ -747,13 +738,7 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
           executable: match.executable,
           cliArgs: match.cliArgs,
         }),
-        {
-          cwd,
-          config,
-          verbose: args.verbose,
-          quiet: args.quiet,
-          chain: shouldChainScheduledWatch(match),
-        },
+        { cwd, config, verbose: args.verbose, quiet: args.quiet, chain: false },
       )
       if (result.exitCode !== 0) {
         process.stderr.write(

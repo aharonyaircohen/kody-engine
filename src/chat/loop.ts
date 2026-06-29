@@ -12,13 +12,7 @@ import type { AgentResult } from "../agent.js"
 import { runAgent } from "../agent.js"
 import type { ProviderModel, ReasoningEffort } from "../config.js"
 import { listExecutables } from "../registry.js"
-import type { StateRepoConfig } from "../stateRepo.js"
-import {
-  persistTaskArtifactsToState,
-  prepareTaskArtifactsDir,
-  taskArtifactsPromptAddendum,
-  verifyTaskArtifacts,
-} from "../task-artifacts.js"
+import { prepareTaskArtifactsDir, taskArtifactsPromptAddendum, verifyTaskArtifacts } from "../task-artifacts.js"
 import { prepareAttachments } from "./attachments.js"
 import type { ChatEvent, EventSink } from "./events.js"
 import { makeRunId } from "./events.js"
@@ -209,8 +203,6 @@ export interface ChatTurnOptions {
   reasoningEffort?: ReasoningEffort | null
   /** Seam for tests — defaults to real runAgent. */
   invokeAgent?: (prompt: string) => Promise<AgentResult>
-  /** Configured external state repo for durable task artifacts. */
-  stateConfig?: StateRepoConfig | null
 }
 
 export interface ChatTurnResult {
@@ -242,7 +234,7 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   const catalog = buildExecutableCatalog()
   // Per-task artifacts contract appended to every chat session so the
   // agent writes context.json / memory-recs.json / followups.json /
-  // handoff-notes.md to a local temp dir before its final reply.
+  // handoff-notes.md to .kody/tasks/<sessionId>/ before its final reply.
   const taskArtifactsPaths = prepareTaskArtifactsDir(opts.cwd, opts.sessionId)
   const artifactAddendum = taskArtifactsPromptAddendum({
     taskId: taskArtifactsPaths.taskId,
@@ -304,10 +296,6 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
         litellmUrl: opts.litellmUrl,
         verbose: opts.verbose,
         quiet: opts.quiet,
-        additionalDirectories: [
-          taskArtifactsPaths.absDir,
-          ...Array.from(new Set(imagePaths.map((p) => path.dirname(p)))),
-        ],
         systemPromptAppend: systemPrompt,
         ...(opts.reasoningEffort ? { reasoningEffort: opts.reasoningEffort } : {}),
         // Let the agent clone + work on OTHER repos mid-conversation (a
@@ -406,13 +394,8 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
         `[task-artifacts] chat session ${taskArtifactsPaths.taskId} missing: ${missing.join(", ")}\n`,
       )
     }
-    if (opts.stateConfig) persistTaskArtifactsToState(opts.stateConfig, opts.cwd, taskArtifactsPaths)
-  } catch (err) {
-    process.stderr.write(
-      `[task-artifacts] chat session ${taskArtifactsPaths.taskId} persist failed: ${
-        err instanceof Error ? err.message : String(err)
-      }\n`,
-    )
+  } catch {
+    /* best effort */
   }
 
   return { exitCode: 0, reply }
@@ -445,9 +428,9 @@ async function emit(
 }
 
 /**
- * Read the state-repo memory index from the hydrated local cache and wrap it
- * for inclusion in the chat session's system prompt. Returns "" when there is
- * no memory folder or the index is empty — memory is advisory, not required.
+ * Read `.kody/memory/INDEX.md` (if present) and wrap it for inclusion in
+ * the chat session's system prompt. Returns "" when there is no memory
+ * folder or the index is empty — memory is advisory, not required.
  *
  * Capped at MAX_INDEX_BYTES to protect the prompt budget. Truncation
  * appends a short note so the agent knows there is more on disk.
@@ -470,7 +453,7 @@ function readMemoryIndexBlock(cwd: string): string {
       ? `${trimmed.slice(0, MAX_INDEX_BYTES)}\n\n_… (memory index truncated; use recall_search to read more)_`
       : trimmed
   return [
-    "# Project memory index (state repo `memory/INDEX.md`)",
+    "# Project memory index (`.kody/memory/INDEX.md`)",
     "",
     "These are the lessons, decisions, and preferences already captured for this repo. Skim before acting; read individual files only if a line looks relevant to the current task.",
     "",
@@ -479,10 +462,10 @@ function readMemoryIndexBlock(cwd: string): string {
 }
 
 /**
- * Concatenate every state-repo `context/*.md` file from the hydrated local
- * cache into one context block for the chat system prompt, each file under a
- * `### <slug>` heading. Returns "" when the directory is absent or holds no
- * readable markdown — context is advisory background, not required.
+ * Concatenate every `.kody/context/*.md` file into one context block for
+ * the chat system prompt, each file under a `### <slug>` heading. Returns ""
+ * when the directory is absent or holds no readable markdown — context is
+ * advisory background, not required.
  *
  * Capped at MAX_CONTEXT_BYTES to protect the prompt budget.
  */
@@ -513,10 +496,10 @@ function readContextBlock(cwd: string): string {
   if (!joined) return ""
   const body =
     joined.length > MAX_CONTEXT_BYTES
-      ? `${joined.slice(0, MAX_CONTEXT_BYTES)}\n\n_… (context truncated; use the state repo context files for the full text)_`
+      ? `${joined.slice(0, MAX_CONTEXT_BYTES)}\n\n_… (context truncated; see \`.kody/context/\` for the full text)_`
       : joined
   return [
-    "# Context (state repo `context/`) — your default frame",
+    "# Context (`.kody/context/`) — your default frame",
     "",
     "You are this company's in-house assistant, not a general-purpose chatbot. The text below describes who the company is, what it builds, its domain, customers, and vocabulary. This is your DEFAULT and PRIMARY frame: if a question matches or could refer to the company, its product, this repo, or its domain — even a single bare word or name, any casing or spacing — answer about THAT directly from this context. Such a question is NOT ambiguous: do NOT lead with or also mention the generic/dictionary meaning, and do NOT ask the user 'which one did you mean?'. Just answer about the company's thing. Give a general-knowledge answer only when the question is plainly unrelated to the company, and keep it brief.",
     "",
@@ -525,10 +508,10 @@ function readContextBlock(cwd: string): string {
 }
 
 /**
- * Read state-repo `instructions.md` from the hydrated local cache and wrap it
- * for the chat system prompt. These are the user's behavioral preferences
- * (tone, length, formatting) and override the base style — but never the hard
- * operational rules. Returns "" when absent or empty.
+ * Read `.kody/instructions.md` (if present) and wrap it for the chat system
+ * prompt. These are the user's behavioral preferences (tone, length,
+ * formatting) and override the base style — but never the hard operational
+ * rules. Returns "" when absent or empty.
  *
  * Capped at MAX_INSTRUCTIONS_BYTES to protect the prompt budget.
  */
@@ -550,7 +533,7 @@ function readInstructionsBlock(cwd: string): string {
       ? `${trimmed.slice(0, MAX_INSTRUCTIONS_BYTES)}\n\n_… (instructions truncated)_`
       : trimmed
   return [
-    "# User instructions for this repo (state repo `instructions.md`)",
+    "# User instructions for this repo (`.kody/instructions.md`)",
     "",
     "The user's explicit preferences for how you should behave — tone, length, formatting. Apply them automatically; they override the default style. If one conflicts with a hard rule above, the hard rule still wins.",
     "",

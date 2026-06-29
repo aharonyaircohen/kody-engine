@@ -15,14 +15,10 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { InputSpec } from "./executables/types.js"
 import type { CapabilityFolder } from "./capabilityFolders.js"
-import {
-  CAPABILITY_PROFILE_FILE,
-  listCapabilityFolderSlugs,
-  readCapabilityFolder,
-} from "./capabilityFolders.js"
+import { CAPABILITY_PROFILE_FILE, listCapabilityFolderSlugs, readCapabilityFolder } from "./capabilityFolders.js"
 import { getCompanyStoreAssetRoot } from "./companyStore.js"
+import type { InputSpec } from "./executables/types.js"
 
 const PUBLIC_EXECUTABLE_ROLES = new Set(["primitive", "orchestrator", "container", "watch", "utility"])
 
@@ -235,8 +231,7 @@ export function listCapabilityActions(
   const projectExecutableRoots = [getProjectExecutablesRoot()]
   const storeExecutableRoot = getCompanyStoreExecutablesRoot()
   const storeExecutableRoots = storeExecutableRoot ? [storeExecutableRoot] : []
-  for (const action of listFolderCapabilityActions(projectCapabilitiesRoot, "project-folder"))
-    add(action)
+  for (const action of listFolderCapabilityActions(projectCapabilitiesRoot, "project-folder")) add(action)
   for (const root of projectExecutableRoots) {
     for (const action of listExecutableCapabilityActions(root, "project-executable")) add(action)
   }
@@ -300,14 +295,26 @@ export function resolveCapabilityExecution(capability: CapabilityFolder): {
     capability.config.executables?.[0] ??
     (capability.config.role ? capability.slug : undefined) ??
     (capability.config.tickScript ? "capability-tick-scripted" : "capability-tick")
-  const cliArgs = executableDeclaresInput(executable, "capability")
-    ? { capability: capability.slug }
-    : {}
+  const extraRoots = capabilityExecutablesRoots(capability.dir)
+  const cliArgs = executableDeclaresInput(executable, "capability", extraRoots) ? { capability: capability.slug } : {}
   return { executable, cliArgs }
 }
 
-function executableDeclaresInput(executable: string, inputName: string): boolean {
-  const profilePath = resolveExecutable(executable)
+/**
+ * Convention: `.kody/capabilities/<slug>/` and `.kody/executables/<slug>/` sit
+ * side by side under the same project root. When `resolveExecutable` is asked
+ * from outside the test/dev process cwd (e.g. a temp dir in tests, or a
+ * relocated capability folder), look there too so capability ↔ executable
+ * resolution doesn't depend on `process.cwd()`.
+ */
+function capabilityExecutablesRoots(capabilityDir: string): string[] {
+  const candidates = [path.resolve(capabilityDir, "..", "..", "executables")]
+  return candidates.filter((root) => fs.existsSync(root) && fs.statSync(root).isDirectory())
+}
+
+function executableDeclaresInput(executable: string, inputName: string, extraRoots: string[] = []): boolean {
+  const roots = extraRoots.length > 0 ? [...extraRoots, ...getExecutableRoots()] : undefined
+  const profilePath = resolveExecutable(executable, roots)
   if (!profilePath) return false
   try {
     const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as { inputs?: unknown }
@@ -399,9 +406,7 @@ function listFolderCapabilityActions(
   return out.sort((a, b) => a.action.localeCompare(b.action))
 }
 
-function listBuiltinCapabilityActions(
-  root: string = getBuiltinCapabilitiesRoot(),
-): DiscoveredCapabilityAction[] {
+function listBuiltinCapabilityActions(root: string = getBuiltinCapabilitiesRoot()): DiscoveredCapabilityAction[] {
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
   const out: DiscoveredCapabilityAction[] = []
   for (const slug of listCapabilityFolderSlugs(root)) {

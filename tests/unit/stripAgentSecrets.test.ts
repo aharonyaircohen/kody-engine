@@ -7,7 +7,6 @@ describe("stripAgentSecrets", () => {
       PATH: "/usr/bin",
       HOME: "/root",
       ANTHROPIC_API_KEY: "sk-keep",
-      CLAUDE_CODE_OAUTH_TOKEN: "oauth-keep",
       GH_TOKEN: "gh-keep",
       GITHUB_TOKEN: "ghs-keep",
       NPM_TOKEN: "npm-strip",
@@ -20,7 +19,6 @@ describe("stripAgentSecrets", () => {
         FLY_IO_TOKEN: "fly-strip",
         QA_GH_PAT: "pat-strip",
         ANTHROPIC_API_KEY: "sk-keep",
-        CLAUDE_CODE_OAUTH_TOKEN: "oauth-keep",
         GH_TOKEN: "gh-keep",
       }),
     }
@@ -38,7 +36,6 @@ describe("stripAgentSecrets", () => {
     expect(out.PATH).toBe("/usr/bin")
     expect(out.HOME).toBe("/root")
     expect(out.ANTHROPIC_API_KEY).toBe("sk-keep")
-    expect(out.CLAUDE_CODE_OAUTH_TOKEN).toBe("oauth-keep")
     expect(out.GH_TOKEN).toBe("gh-keep")
     expect(out.GITHUB_TOKEN).toBe("ghs-keep")
   })

@@ -32,31 +32,11 @@ describe("pool vault: decryptVault", () => {
 })
 
 describe("pool vault: readRepoSecret", () => {
-  function contentResponse(content: string): Response {
-    return new Response(
-      JSON.stringify({
-        type: "file",
-        content: Buffer.from(content, "utf8").toString("base64"),
-        encoding: "base64",
-        sha: "sha",
-      }),
-      { status: 200 },
-    )
-  }
-
-  function mockFetch(blob: string | null, calls: string[] = []): typeof fetch {
-    return (async (url: string) => {
-      calls.push(String(url))
-      if (String(url).endsWith("/contents/kody.config.json")) {
-        return contentResponse(
-          JSON.stringify({
-            github: { owner: "o", repo: "r" },
-            state: { repo: "https://github.com/o/kody-state", path: "r" },
-          }),
-        )
-      }
+  function mockFetch(blob: string | null): typeof fetch {
+    return (async (_url: string) => {
       if (blob === null) return new Response("not found", { status: 404 })
-      return contentResponse(blob)
+      const content = Buffer.from(blob, "utf8").toString("base64")
+      return new Response(JSON.stringify({ content, encoding: "base64" }), { status: 200 })
     }) as unknown as typeof fetch
   }
 
@@ -65,20 +45,15 @@ describe("pool vault: readRepoSecret", () => {
       version: 1,
       secrets: { FLY_API_TOKEN: { value: "fly-abc" }, ANTHROPIC_API_KEY: { value: "sk-x" } },
     })
-    const calls: string[] = []
     const out = await readRepoSecret({
       githubToken: "ghp_op",
       masterKey: MASTER,
       owner: "o",
       repo: "r-readsecret",
       name: "FLY_API_TOKEN",
-      fetchImpl: mockFetch(dashboardEncrypt(doc, MASTER), calls),
+      fetchImpl: mockFetch(dashboardEncrypt(doc, MASTER)),
     })
     expect(out).toBe("fly-abc")
-    expect(calls).toEqual([
-      "https://api.github.com/repos/o/r-readsecret/contents/kody.config.json",
-      "https://api.github.com/repos/o/kody-state/contents/r/secrets.enc",
-    ])
   })
 
   it("returns null when the repo has no vault (404)", async () => {

@@ -1,9 +1,9 @@
 /**
  * Job state backend resolver.
  *
- * Picks an implementation based on `config.jobs.stateBackend`.
- * Runtime config accepts only "contents-api"; "local-file" remains as an
- * internal test seam for unit tests that construct KodyConfig directly.
+ * Picks an implementation based on `config.jobs.stateBackend`:
+ *   "contents-api" (default) — durable in tracked files via GitHub Contents API
+ *   "local-file"             — on-disk files, snapshotted to GitHub Actions cache
  *
  * Adding a backend: implement `JobStateBackend`, drop the file in this
  * directory, register a case below. Job-tick scripts (loadJobFromFile,

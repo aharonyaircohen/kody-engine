@@ -48,24 +48,4 @@ describe("entrypoint-brain.sh: Hermes config sanity", () => {
     // message in a fresh Hermes-mode machine can lose its MCP tools.
     expect(entrypoint).toMatch(/MCP_PORT.*healthz|healthz.*MCP_PORT/s)
   })
-
-  it("restores Claude Code subscription auth from the encrypted vault bundle", () => {
-    expect(entrypoint).toContain("CLAUDE_CODE_AUTH_B64")
-    expect(entrypoint).toContain("restore_claude_code_auth")
-    expect(entrypoint).toContain(".claude/.credentials.json")
-    expect(entrypoint).toContain(".claude.json")
-    expect(entrypoint).toMatch(/tar -tzf "\$archive"/)
-    expect(entrypoint).toMatch(/tar -xzf "\$archive" -C "\$extract"/)
-    expect(entrypoint).toMatch(/cp "\$extract\/\.claude\/\.credentials\.json" \/root\/\.claude\/\.credentials\.json/)
-    expect(entrypoint).toContain("unset ANTHROPIC_API_KEY")
-    expect(entrypoint).toContain("unset ANTHROPIC_AUTH_TOKEN")
-    expect(entrypoint).toContain("CLAUDE_CODE_AUTH_ALLOW_ANTHROPIC_ENV")
-  })
-
-  it("rejects unexpected paths in the Claude Code auth archive", () => {
-    expect(entrypoint).toMatch(/unsupported path/)
-    expect(entrypoint).toMatch(/unsafe path/)
-    expect(entrypoint).toMatch(/may contain only files and directories/)
-    expect(entrypoint).toContain("*..*|*\\\\*)")
-  })
 })

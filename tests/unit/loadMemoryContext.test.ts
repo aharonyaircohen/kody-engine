@@ -66,7 +66,7 @@ describe("loadMemoryContext", () => {
     const ctx = makeCtx(tmp)
     await loadMemoryContext(ctx, profile)
     const block = ctx.data.memoryContext as string
-    expect(block).toContain("# Project memory (state repo `memory/`)")
+    expect(block).toContain("# Project memory (`.kody/memory/`)")
     expect(block).toContain("## Lesson One — `lesson.md`")
     expect(block).toContain("Body about caching.")
   })

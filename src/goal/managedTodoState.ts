@@ -19,7 +19,10 @@ export interface TodoItemState {
 
 export function parseTodoGoalState(goalId: string, filePath: string, raw: string): GoalState {
   const frontmatter = parseFrontmatter(raw)
-  const description = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "").replace(itemsBlockRe(), "").trim()
+  const description = raw
+    .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "")
+    .replace(itemsBlockRe(), "")
+    .trim()
   const items = parseItems(raw)
   const destination = recordField(frontmatter.destination)
   const evidence =
@@ -30,7 +33,9 @@ export function parseTodoGoalState(goalId: string, filePath: string, raw: string
         : items.map((item) => stringField(recordField(item.meta).evidence) || item.id).filter(Boolean)
   const facts = {
     ...recordField(frontmatter.facts),
-    ...Object.fromEntries(items.map((item) => [stringField(recordField(item.meta).evidence) || item.id, item.completed])),
+    ...Object.fromEntries(
+      items.map((item) => [stringField(recordField(item.meta).evidence) || item.id, item.completed]),
+    ),
   }
 
   return parseGoalState(filePath, {
@@ -69,7 +74,9 @@ export function serializeTodoGoalState(goalId: string, state: GoalState, previou
   const previousItems = new Map(parseItems(previousRaw ?? "").map((item) => [item.id, item] as const))
   const items =
     evidence.length > 0
-      ? evidence.map((key) => itemFromEvidence(key, routeByEvidence.get(key), facts, createdAt, now, previousItems.get(key)))
+      ? evidence.map((key) =>
+          itemFromEvidence(key, routeByEvidence.get(key), facts, createdAt, now, previousItems.get(key)),
+        )
       : stringArray(raw.capabilities).map((capability) =>
           itemFromCapability(capability, createdAt, previousItems.get(capability)),
         )
@@ -159,7 +166,15 @@ function routeFromItems(items: TodoItemState[]): Record<string, unknown>[] {
     const stage = stringField(meta.stage)
     const capability = stringField(meta.capability)
     if (!evidence || !stage || !capability) return []
-    return [{ evidence, stage, capability, ...(meta.args ? { args: meta.args } : {}), ...(meta.saveReport === true ? { saveReport: true } : {}) }]
+    return [
+      {
+        evidence,
+        stage,
+        capability,
+        ...(meta.args ? { args: meta.args } : {}),
+        ...(meta.saveReport === true ? { saveReport: true } : {}),
+      },
+    ]
   })
 }
 

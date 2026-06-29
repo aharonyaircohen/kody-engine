@@ -1,7 +1,7 @@
 /**
  * Minimal read-only vault accessor for the warm-pool owner.
  *
- * The dashboard stores each repo's secrets in its configured Kody state repo as `secrets.enc` — a single
+ * The dashboard stores each repo's secrets in `.kody/secrets.enc` — a single
  * AES-256-GCM blob ("v1:<iv_b64>:<ct_b64>:<tag_b64>") of a JSON document
  * `{ version:1, secrets:{ NAME:{ value,... } } }`, keyed off KODY_MASTER_KEY.
  * The pool owner reads a repo's FLY_API_TOKEN from there so each repo's pool
@@ -12,9 +12,9 @@
  */
 
 import { createDecipheriv } from "node:crypto"
-import { readGithubStateText } from "../stateRepoGithub.js"
 
-const VAULT_PATH = "secrets.enc"
+const GITHUB_API = "https://api.github.com"
+const VAULT_PATH = ".kody/secrets.enc"
 const CACHE_TTL_MS = 60_000
 
 interface VaultDocument {
@@ -60,18 +60,32 @@ async function readVaultSecrets(opts: {
   const hit = cache.get(key)
   if (hit && hit.expiresAt > Date.now()) return hit.secrets
 
-  const file = await readGithubStateText({
-    owner: opts.owner,
-    repo: opts.repo,
-    filePath: VAULT_PATH,
-    githubToken: opts.githubToken,
-    fetchImpl: opts.fetchImpl,
-  })
-  if (!file) {
+  const doFetch = opts.fetchImpl ?? fetch
+  const res = await doFetch(
+    `${GITHUB_API}/repos/${encodeURIComponent(opts.owner)}/${encodeURIComponent(opts.repo)}/contents/${VAULT_PATH}`,
+    {
+      headers: {
+        Authorization: `Bearer ${opts.githubToken}`,
+        Accept: "application/vnd.github+json",
+        "User-Agent": "kody-pool-serve",
+      },
+    },
+  )
+  if (res.status === 404) {
     cache.set(key, { secrets: {}, expiresAt: Date.now() + CACHE_TTL_MS })
     return {}
   }
-  const ciphertext = file.content.trim()
+  if (!res.ok) {
+    throw new Error(`vault read ${res.status} for ${key}: ${(await res.text().catch(() => "")).slice(0, 160)}`)
+  }
+  const body = (await res.json()) as { content?: string; encoding?: string }
+  if (!body.content) {
+    cache.set(key, { secrets: {}, expiresAt: Date.now() + CACHE_TTL_MS })
+    return {}
+  }
+  const ciphertext = Buffer.from(body.content, (body.encoding ?? "base64") as BufferEncoding)
+    .toString("utf8")
+    .trim()
   const doc = JSON.parse(decryptVault(ciphertext, opts.masterKey)) as VaultDocument
   const flat: Record<string, string> = {}
   for (const [name, entry] of Object.entries(doc.secrets ?? {})) {

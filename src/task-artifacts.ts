@@ -1,9 +1,8 @@
 /**
  * Per-task artifacts: at the end of every task (issue/agent mode and
- * chat mode alike), the agent that ran the task writes four local temp files.
- * The engine then copies them into the configured Kody state repo at
- * `tasks/<taskId>/`. These are knowledge attached to the task itself —
- * separate from the long-lived memory under `memory/`.
+ * chat mode alike), the agent that ran the task writes four files into
+ * `.kody/tasks/<taskId>/`. These are knowledge attached to the task
+ * itself — separate from the long-lived memory under `.kody/memory/`.
  *
  *   1. context.json      — task header (id, type, target, outcome,
  *                          filesTouched, sessionLog, timestamps)
@@ -23,9 +22,6 @@
 
 import fs from "node:fs"
 import path from "node:path"
-import posixPath from "node:path/posix"
-import { runtimeStatePath } from "./runtimePaths.js"
-import { upsertStateText, type StateRepoConfig } from "./stateRepo.js"
 
 export const TASK_ARTIFACT_FILES = ["context.json", "memory-recs.json", "followups.json", "handoff-notes.md"] as const
 
@@ -38,15 +34,14 @@ export interface TaskArtifactPaths {
 }
 
 /**
- * Resolve and create the task artifacts directory. Returns both the absolute
- * path (for filesystem ops) and the path shown to the agent in the prompt.
- * The directory is runtime scratch outside the consumer repo; runAgent grants
- * it explicitly through additionalDirectories.
+ * Resolve and create the task artifacts directory. Returns both the
+ * absolute path (for filesystem ops) and the repo-relative path (for
+ * passing to the agent in the prompt — the agent works in `cwd`).
  */
 export function prepareTaskArtifactsDir(cwd: string, taskId: string | number): TaskArtifactPaths {
   const safeId = String(taskId).replace(/[^a-zA-Z0-9._-]/g, "_")
-  const absDir = runtimeStatePath(cwd, "task-artifacts", safeId)
-  const relDir = absDir
+  const relDir = path.join(".kody", "tasks", safeId)
+  const absDir = path.join(cwd, relDir)
   fs.mkdirSync(absDir, { recursive: true })
   return { taskId: safeId, absDir, relDir }
 }
@@ -69,27 +64,6 @@ export function verifyTaskArtifacts(absDir: string): TaskArtifactFile[] {
   return missing
 }
 
-export function taskArtifactStatePath(taskId: string, file: TaskArtifactFile): string {
-  return posixPath.join("tasks", taskId, file)
-}
-
-export function persistTaskArtifactsToState(config: StateRepoConfig, cwd: string, artifacts: TaskArtifactPaths): void {
-  for (const file of TASK_ARTIFACT_FILES) {
-    const full = path.join(artifacts.absDir, file)
-    if (!fs.existsSync(full)) continue
-    const stat = fs.statSync(full)
-    if (!stat.isFile() || stat.size === 0) continue
-    const content = fs.readFileSync(full, "utf-8")
-    upsertStateText(
-      config,
-      cwd,
-      taskArtifactStatePath(artifacts.taskId, file),
-      content,
-      `task artifacts: ${artifacts.taskId}`,
-    )
-  }
-}
-
 /**
  * The prose contract the agent reads as part of its system prompt.
  * Kept terse: the agent is already context-saturated; it does not need
@@ -104,7 +78,7 @@ export function taskArtifactsPromptAddendum(opts: {
   return [
     "## Per-task artifacts (REQUIRED before your final response)",
     "",
-    `Before you finish, write these four local temp files into \`${opts.relDir}/\`:`,
+    `Before you finish, write these four files into \`${opts.relDir}/\`:`,
     "",
     `1. **context.json** — task header. Shape:`,
     "   ```json",
@@ -118,14 +92,14 @@ export function taskArtifactsPromptAddendum(opts: {
     `     "prUrl": "<url or null>",`,
     `     "runUrl": "<url or null>",`,
     `     "filesTouched": ["path/from/repo/root.ts", ...],`,
-    `     "sessionLog": "sessions/<id>.jsonl",`,
+    `     "sessionLog": ".kody/sessions/<id>.jsonl",`,
     `     "startedAt": "<ISO>",`,
     `     "finishedAt": "<ISO>"`,
     "   }",
     "   ```",
     "",
     `2. **memory-recs.json** — array of sticky-note candidates worth promoting`,
-    `   to long-term state-repo \`memory/\`. Each item:`,
+    `   to long-term \`.kody/memory/\`. Each item:`,
     "   ```json",
     "   {",
     `     "type": "preference" | "decision" | "lesson",`,

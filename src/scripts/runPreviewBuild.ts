@@ -43,7 +43,6 @@ import {
 } from "./previewBuildHelpers.js"
 import { setupNamespaceBuilder } from "./previewBuildNamespace.js"
 import { runCmd } from "./previewBuildRun.js"
-import { readGithubStateText } from "../stateRepoGithub.js"
 
 const FLY_MACHINES = "https://api.machines.dev/v1"
 const FLY_GRAPHQL = "https://api.fly.io/graphql"
@@ -90,16 +89,11 @@ async function ghJSON<T>(url: string, token: string): Promise<T> {
 }
 
 async function fetchVaultDoc(repo: string, ghToken: string, masterKey: string): Promise<VaultDoc> {
-  const [owner, name] = repo.split("/", 2)
-  if (!owner || !name) throw new Error(`invalid GITHUB_REPOSITORY "${repo}"`)
-  const meta = await readGithubStateText({
-    owner,
-    repo: name,
-    filePath: "secrets.enc",
-    githubToken: ghToken,
-  })
-  if (!meta) throw new Error("state repo has no secrets.enc — save secrets from the dashboard first")
-  const payload = meta.content
+  const meta = await ghJSON<{ content: string }>(
+    `https://api.github.com/repos/${repo}/contents/.kody/secrets.enc`,
+    ghToken,
+  )
+  const payload = Buffer.from(meta.content, "base64").toString("utf8")
   const plaintext = decryptVaultPayload(payload, masterKey)
   return JSON.parse(plaintext) as VaultDoc
 }

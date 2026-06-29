@@ -19,7 +19,6 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { runtimeStatePath } from "../runtimePaths.js"
 import type { ChatTurn } from "./session.js"
 
 /**
@@ -53,7 +52,10 @@ function extFor(mime: string): string {
 }
 
 function attachmentsDir(cwd: string, sessionId: string): string {
-  return runtimeStatePath(cwd, "attachments", sessionId)
+  // Under .kody/tmp so it's clearly transient; the runner workspace is
+  // ephemeral (or, for the live runner, never committed) so these files
+  // never reach the repo.
+  return path.join(cwd, ".kody", "tmp", "attachments", sessionId)
 }
 
 /**

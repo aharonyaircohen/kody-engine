@@ -1,9 +1,5 @@
 import type { CapabilityReport } from "./capabilityReport.js"
-import type {
-  CapabilityResult,
-  CapabilityResultArtifact,
-  CapabilityResultStatus,
-} from "./capabilityResult.js"
+import type { CapabilityResult, CapabilityResultArtifact, CapabilityResultStatus } from "./capabilityResult.js"
 import type { GoalState } from "./goal/state.js"
 
 export type CapabilityEvidenceSource = "report" | "result"
@@ -24,9 +20,7 @@ export interface CapabilityEvidence {
 
 const CONTROL_FACT_KEYS = new Set(["blockers", "destination", "capabilities", "route", "stage", "state"])
 
-export function capabilityReportToEvidence(
-  report: CapabilityReport,
-): CapabilityEvidence | null {
+export function capabilityReportToEvidence(report: CapabilityReport): CapabilityEvidence | null {
   if (report.target.type !== "goal") return null
   const evidence = report.evidence ?? {}
   const values = Object.values(evidence)
@@ -97,10 +91,7 @@ export function mergeCapabilityEvidence(items: CapabilityEvidence[]): Capability
   return merged
 }
 
-export function applyCapabilityEvidenceToGoalState(
-  state: GoalState,
-  evidence: CapabilityEvidence,
-): GoalState {
+export function applyCapabilityEvidenceToGoalState(state: GoalState, evidence: CapabilityEvidence): GoalState {
   const priorFacts = parseFacts(state.extra.facts) ?? {}
   const nextFacts: Record<string, unknown> = { ...priorFacts }
 
@@ -169,10 +160,7 @@ function evidenceMatches(
   )
 }
 
-function mergeReportAndResult(
-  report: CapabilityEvidence,
-  result: CapabilityEvidence,
-): CapabilityEvidence {
+function mergeReportAndResult(report: CapabilityEvidence, result: CapabilityEvidence): CapabilityEvidence {
   return {
     ...result,
     evidence: mergeOptionalRecords(report.evidence, result.evidence),

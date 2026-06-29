@@ -1,9 +1,10 @@
 /**
  * Session-file inbox: poll for new user messages appended by the dashboard.
  *
- * The dashboard writes user messages to `sessions/<id>.jsonl` in the state
- * repo. Inside a runner, we see those writes only after a state sync. This
- * primitive owns the sync + diff loop so mode orchestrators stay declarative.
+ * The dashboard writes user messages to `.kody/sessions/<id>.jsonl` via the
+ * GitHub Contents API. Inside an Actions runner, we see those writes only
+ * after a `git pull`. This primitive owns the pull + diff loop so mode
+ * orchestrators stay declarative.
  *
  * Single-writer rule: the dashboard appends user turns, the runner appends
  * assistant turns. They never write to the same line, so concurrent commits
@@ -27,8 +28,6 @@ export interface InboxOptions {
   pollIntervalMs?: number
   /** Optional logger; defaults to stderr. */
   logger?: { warn: (msg: string) => void; debug?: (msg: string) => void }
-  /** Optional state-repo sync hook; when present it replaces git pull. */
-  sync?: () => void
   /** Test seam: skip the actual git pull. */
   skipPull?: boolean
 }
@@ -61,14 +60,7 @@ export async function waitForNextUserMessage(opts: InboxOptions): Promise<InboxR
     if (now >= opts.deadlineMs) return { kind: "deadline" }
     if (now - idleStart >= opts.idleTimeoutMs) return { kind: "idle-timeout" }
 
-    if (opts.sync && !opts.skipPull) {
-      try {
-        opts.sync()
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        logger.warn(`state sync failed (will retry): ${msg}`)
-      }
-    } else if (!opts.skipPull) {
+    if (!opts.skipPull) {
       try {
         // Resolve the current branch; fall back to detached HEAD's tracked
         // ref when checkout left us on a SHA. `git pull origin HEAD` is the

@@ -11,12 +11,13 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
+import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import { jobReferenceBlock, operatorRequestBlock, runExecutable } from "../../src/executor.js"
 import { loadProfile } from "../../src/profile.js"
 import { resolveExecutable } from "../../src/registry.js"
-import { runtimeStatePath } from "../../src/runtimePaths.js"
 import * as taskArtifacts from "../../src/task-artifacts.js"
+import { type CompanyStoreFixture, setupCompanyStoreFixture } from "./_helpers/companyStoreFixture.js"
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-exec-"))
@@ -53,6 +54,20 @@ const BASE = {
     postflight: [],
   },
 }
+
+// `resolve` ships via the company store (engine bundles only minimal
+// built-ins). Stand up a temp store with the same shape so this test file
+// is self-sufficient and doesn't depend on a sibling kody-store checkout.
+// The fixture is shared across every describe block in this file.
+let resolveFixture: CompanyStoreFixture
+beforeAll(() => {
+  resolveFixture = setupCompanyStoreFixture({ capabilities: ["resolve"] })
+  resetCompanyStoreCacheForTests()
+})
+afterAll(() => {
+  resolveFixture.cleanup()
+  resetCompanyStoreCacheForTests()
+})
 
 describe("executor: profile input schema", () => {
   it("loads inputs with requiredWhen intact", () => {
@@ -173,8 +188,8 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
 // `args.issue ?? args.pr` to derive the task target — a `fix` / `fix-ci`
 // / `resolve` run has no `args.issue`, only `args.pr`, and the artifacts
 // contract still applies (the agent should leave context.json /
-// memory-recs.json / followups.json / handoff-notes.md in the temp artifact
-// dir). Without the pr branch, the agent runs no
+// memory-recs.json / followups.json / handoff-notes.md in
+// `.kody/tasks/<pr>/`). Without the pr branch, the agent runs no
 // artifacts at all and the dashboard loses the audit trail.
 describe("executor: per-task artifacts prepare for args.pr", () => {
   let tmp: string
@@ -183,7 +198,7 @@ describe("executor: per-task artifacts prepare for args.pr", () => {
     if (tmp && fs.existsSync(tmp)) fs.rmSync(tmp, { recursive: true, force: true })
   })
 
-  it("prepares a temp task artifact directory when args.pr is set", async () => {
+  it("prepares .kody/tasks/<pr>/ when args.pr is set", async () => {
     // Use the real `resolve` profile (registered in the engine), which
     // takes --pr as its primary numeric input. The executor prepares the
     // task-artifacts dir BEFORE preflights run, so we can assert on the
@@ -217,13 +232,11 @@ describe("executor: per-task artifacts prepare for args.pr", () => {
     const [cwdArg, taskIdArg] = spy.mock.calls[0] ?? []
     expect(cwdArg).toBe(dir)
     expect(String(taskIdArg)).toBe("42")
-    expect(fs.existsSync(runtimeStatePath(dir, "task-artifacts", "42"))).toBe(true)
+    expect(fs.existsSync(path.join(dir, ".kody", "tasks", "42"))).toBe(true)
     spy.mockRestore()
   })
 
   it("uses 'issue' taskType for args.issue, 'pr' taskType for args.pr (addendum text differs)", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "executor-artifacts-"))
-    tmp = dir
     // The prompt addendum (`taskArtifactsPromptAddendum`) embeds the
     // taskType into the agent's system prompt. A misclassification
     // (e.g. tagging a pr-run as "issue") would tell the agent to
@@ -231,12 +244,12 @@ describe("executor: per-task artifacts prepare for args.pr", () => {
     const prAddendum = taskArtifacts.taskArtifactsPromptAddendum({
       taskId: "42",
       taskType: "pr",
-      relDir: runtimeStatePath(dir, "task-artifacts", "42"),
+      relDir: ".kody/tasks/42",
     })
     const issueAddendum = taskArtifacts.taskArtifactsPromptAddendum({
       taskId: "42",
       taskType: "issue",
-      relDir: runtimeStatePath(dir, "task-artifacts", "42"),
+      relDir: ".kody/tasks/42",
     })
     expect(prAddendum).toContain('"taskType": "pr"')
     expect(issueAddendum).toContain('"taskType": "issue"')

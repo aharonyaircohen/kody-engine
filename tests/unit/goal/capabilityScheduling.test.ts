@@ -1,7 +1,7 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Context, Profile } from "../../../src/executables/types.js"
 import type { ManagedGoal } from "../../../src/goal/manager.js"
 import type { GoalState } from "../../../src/goal/state.js"
@@ -312,26 +312,85 @@ describe("standing goal capability scheduling", () => {
   })
 
   it("hands goal target loops to goal-manager", async () => {
+    // Pin the clock past the preferred run time in Asia/Jerusalem so the
+    // time-gate inside planGoalTargetLoopSchedule opens deterministically.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-06-24T07:01:00Z"))
+    try {
+      const raw = goalState([])
+      raw.extra.type = "agentLoop"
+      raw.extra.loopTarget = { type: "goal", id: "web-release" }
+      raw.extra.preferredRunTime = { time: "10:00", timezone: "Asia/Jerusalem" }
+      const ctx = fakeCtx(raw)
+
+      await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+
+      expect(ctx.output.nextDispatch).toEqual({
+        action: "goal-manager",
+        executable: "goal-manager",
+        cliArgs: { goal: "web-release" },
+      })
+      const updatedGoal = ctx.data.goal as GoalCtx
+      expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
+        mode: "agentLoop",
+        lastDecision: {
+          kind: "dispatch",
+          targetType: "goal",
+          targetId: "web-release",
+          executable: "goal-manager",
+        },
+        capabilities: {},
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("hands workflow target loops to workflow capability chain", async () => {
     const raw = goalState([])
     raw.extra.type = "agentLoop"
-    raw.extra.loopTarget = { type: "goal", id: "web-release" }
+    raw.extra.loopTarget = { type: "workflow", id: "release-hygiene" }
     const ctx = fakeCtx(raw)
 
     await advanceManagedGoal(ctx, {} as unknown as Profile, {})
 
     expect(ctx.output.nextDispatch).toEqual({
-      action: "goal-manager",
-      executable: "goal-manager",
-      cliArgs: { goal: "web-release" },
+      workflow: "release-hygiene",
+      cliArgs: {},
     })
     const updatedGoal = ctx.data.goal as GoalCtx
     expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
       mode: "agentLoop",
       lastDecision: {
         kind: "dispatch",
-        targetType: "goal",
-        targetId: "web-release",
-        executable: "goal-manager",
+        targetType: "workflow",
+        targetId: "release-hygiene",
+        workflow: "release-hygiene",
+      },
+      capabilities: {},
+    })
+  })
+
+  it("hands workflow target loops to workflow capability chain", async () => {
+    const raw = goalState([])
+    raw.extra.type = "agentLoop"
+    raw.extra.loopTarget = { type: "workflow", id: "release-hygiene" }
+    const ctx = fakeCtx(raw)
+
+    await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+
+    expect(ctx.output.nextDispatch).toEqual({
+      workflow: "release-hygiene",
+      cliArgs: {},
+    })
+    const updatedGoal = ctx.data.goal as GoalCtx
+    expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
+      mode: "agentLoop",
+      lastDecision: {
+        kind: "dispatch",
+        targetType: "workflow",
+        targetId: "release-hygiene",
+        workflow: "release-hygiene",
       },
       capabilities: {},
     })

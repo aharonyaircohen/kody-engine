@@ -12,10 +12,10 @@
  * ok:false and the dashboard falls back to create-fresh / GitHub Actions.
  */
 
+import type { RunRequest } from "../run-request.js"
 import { FlyClient } from "./fly.js"
 import { type ClaimResult, type PoolJob, PoolManager } from "./manager.js"
 import { readRepoSecret, readRepoSecrets } from "./vault.js"
-import type { RunRequest } from "../run-request.js"
 
 /** Vault key the dashboard writes to size a repo's warm pool. */
 const POOL_MIN_VAULT_KEY = "POOL_MIN"
@@ -55,7 +55,7 @@ export interface ClaimRequest {
 }
 
 export interface RegistryConfig {
-  /** Operator GitHub token used to read each repo's state-repo secrets.enc. */
+  /** Operator GitHub token used to read each repo's .kody/secrets.enc. */
   githubToken: string
   /** KODY_MASTER_KEY bytes — decrypts the vault. */
   masterKey: Buffer

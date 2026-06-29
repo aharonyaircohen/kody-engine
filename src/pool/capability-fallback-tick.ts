@@ -52,9 +52,7 @@ export interface CapabilityTickResult {
   claimed: number
 }
 
-export async function runCapabilityFallbackTick(
-  deps: CapabilityFallbackDeps,
-): Promise<CapabilityTickResult> {
+export async function runCapabilityFallbackTick(deps: CapabilityFallbackDeps): Promise<CapabilityTickResult> {
   if (!(await deps.isDegraded())) {
     return { ran: false, claimed: 0 }
   }

@@ -104,11 +104,8 @@ function normalizeSpec(input: unknown, index: number): TaskJobSpec {
   }
   return {
     executable,
-    ...(typeof raw.capability === "string" && raw.capability.trim()
-      ? { capability: raw.capability.trim() }
-      : {}),
+    ...(typeof raw.capability === "string" && raw.capability.trim() ? { capability: raw.capability.trim() } : {}),
     ...(typeof raw.reason === "string" && raw.reason.trim() ? { reason: raw.reason.trim() } : {}),
-    ...(typeof raw.agent === "string" && raw.agent.trim() ? { agent: raw.agent.trim() } : {}),
     ...(typeof raw.agent === "string" && raw.agent.trim() ? { agent: raw.agent.trim() } : {}),
     ...(cliArgs ? { cliArgs: cliArgs as Record<string, unknown> } : {}),
     ...(typeof raw.target === "number" && Number.isFinite(raw.target) ? { target: raw.target } : {}),

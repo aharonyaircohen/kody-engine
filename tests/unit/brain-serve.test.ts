@@ -174,7 +174,6 @@ async function boot(
     model: MODEL,
     litellmUrl: null,
     runTurn,
-    stateFetch: (async () => new Response("not found", { status: 404 })) as typeof fetch,
     ...extra,
   })
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()))
@@ -665,7 +664,7 @@ describe("buildServer multi-repo", () => {
     fs.rmSync(tmp, { recursive: true, force: true })
   })
 
-  it("runs the turn in the per-repo clone and stores the session cache under that clone", async () => {
+  it("runs the turn in the per-repo clone and stores the session under the boot cwd", async () => {
     const reposRoot = path.join(tmp, "repos")
     const clones: string[] = []
     let observedCwd = ""
@@ -696,8 +695,8 @@ describe("buildServer multi-repo", () => {
     // Agent runs in the per-repo clone…
     expect(observedCwd).toBe(path.join(reposRoot, "acme/widgets"))
     expect(clones).toEqual(["acme/widgets"])
-    // …and the session cache follows that repo; the state repo is the durable cross-machine source.
-    expect(observedSessionFile).toBe(path.join(reposRoot, "acme/widgets", ".kody", "sessions", "c1.jsonl"))
+    // …but the session JSONL stays under the boot cwd so resume needs no repo.
+    expect(observedSessionFile).toBe(path.join(tmp, ".kody", "sessions", "c1.jsonl"))
   })
 
   it("passes Dashboard CMS settings from the request into the chat turn", async () => {

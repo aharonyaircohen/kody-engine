@@ -238,9 +238,9 @@ async function defaultRunJob(job: RunnerJob): Promise<void> {
     GITHUB_TOKEN: job.githubToken,
     [RUN_REQUEST_ENV]: JSON.stringify(job.runRequest),
     // GITHUB_REPOSITORY + GH_TOKEN are normally injected by GitHub Actions.
-    // The engine's interactive mode needs GITHUB_REPOSITORY to resolve the
-    // configured state repo and persist chat.ready / events (the durable signal
-    // the dashboard polls for readiness) — without it commitTurn bails
+    // The engine's interactive mode needs GITHUB_REPOSITORY to persist
+    // chat.ready / events to .kody/events via the Contents API (the durable
+    // signal the dashboard polls for readiness) — without it commitTurn bails
     // and the session never appears "ready". GH_TOKEN auths the `gh` CLI.
     GITHUB_REPOSITORY: job.repo,
     GH_TOKEN: job.githubToken,

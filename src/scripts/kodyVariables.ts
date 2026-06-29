@@ -1,7 +1,5 @@
 /**
- * Read the dashboard-managed per-repo variables file. The durable copy lives at
- * `variables.json` in the configured state repo; engine runs hydrate it into
- * `.kody/variables.json` as a local compatibility cache.
+ * Read the dashboard-managed per-repo variables file `.kody/variables.json`.
  *
  * On-disk shape:
  *   { "version": 1, "variables": { "NAME": { "value": "...", "updatedAt": "...", "updatedBy": "..." } } }
