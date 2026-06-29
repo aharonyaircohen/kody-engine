@@ -130,11 +130,11 @@ describe("commitGoalState report refresh", () => {
       source: "goal-manager",
       event: "goal.tick.wait",
       goalState: "active",
-      stage: "prepare",
+      stage: "waiting",
       status: "wait",
-      reason: "waiting for evidence: releasePrExists",
-      goal: { stage: "prepare", requiredEvidence: ["releasePrExists"], missingEvidence: ["releasePrExists"] },
-      decision: { kind: "wait", reason: "waiting for evidence: releasePrExists" },
+      reason: "waiting for labelled tasks",
+      goal: { stage: "waiting", requiredEvidence: ["labelledTasksComplete"], missingEvidence: ["labelledTasksComplete"] },
+      decision: { kind: "wait", reason: "waiting for labelled tasks" },
     })
 
     await commitGoalState(ctx, fakeProfile(), null)
@@ -145,7 +145,7 @@ describe("commitGoalState report refresh", () => {
     expect(path).toMatch(/^reports\/release-v1-2-3\/runs\/\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z\.md$/)
     expect(body).toContain("- Event: goal.tick.wait")
     expect(body).toContain("- Next step: wait")
-    expect(body).toContain("- Reason: waiting for evidence: releasePrExists")
+    expect(body).toContain("- Reason: waiting for labelled tasks")
     expect(body).toContain("## Capability Evidence\n- none")
     expect(flushGoalRunLogEventsMock).toHaveBeenCalledOnce()
   })

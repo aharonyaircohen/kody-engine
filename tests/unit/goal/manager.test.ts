@@ -205,17 +205,21 @@ describe("planManagedGoalTick", () => {
     expect(goal.blockers).toEqual(["route arg pr needs missing fact deployPr"])
   })
 
-  it("waits instead of redispatching while evidence is pending", () => {
+  it("redispatches pending evidence when it is still missing", () => {
     const goal = releaseGoal({ stage: "prepare", facts: { pendingEvidence: "releasePrExists" } })
 
     const decision = planManagedGoalTick(goal)
 
     expect(decision).toEqual({
-      kind: "wait",
+      kind: "dispatch",
       evidence: "releasePrExists",
       stage: "prepare",
-      reason: "waiting for evidence: releasePrExists",
+      capability: "release-prepare",
+      executable: "release-prepare",
+      cliArgs: {},
     })
+    expect(goal.facts.pendingEvidence).toBe("releasePrExists")
+    expect(goal.blockers).toEqual([])
   })
 
   it("marks the goal complete when every destination evidence item is present", () => {
