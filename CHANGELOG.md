@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Agent loops can now dispatch a target goal after their preferred local runtime, once per local day.
 
+### Fixed
+
+- Managed goals retry still-missing pending evidence instead of waiting forever after the first dispatch.
+
 ## [0.4.211] — restore fix-ci command
 
 ### Fixed

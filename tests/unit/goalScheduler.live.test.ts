@@ -45,6 +45,79 @@ function managedGoalExtra(): Record<string, unknown> {
   }
 }
 
+function managedGoalTodo(id: string): string {
+  const extra = managedGoalExtra()
+  return [
+    "---",
+    `title: "${id}"`,
+    `id: "${id}"`,
+    "managed: true",
+    'managedModel: "agentGoal"',
+    'state: "active"',
+    'type: "release"',
+    'evidence: "[\\"releasePrExists\\"]"',
+    'capabilities: "[\\"release-prepare\\"]"',
+    'route: "[{\\"evidence\\":\\"releasePrExists\\",\\"stage\\":\\"prepare\\",\\"capability\\":\\"release-prepare\\"}]"',
+    'facts: "{}"',
+    'blockers: "[]"',
+    "---",
+    "",
+    String((extra.destination as { outcome: string }).outcome),
+    "",
+    "<!-- kody-todo-items-json",
+    JSON.stringify(
+      [
+        {
+          id: "releasePrExists",
+          title: "prepare",
+          body: "",
+          assignee: null,
+          completed: false,
+          createdAt: "2026-06-20T12:00:00.000Z",
+          completedAt: null,
+          meta: {
+            evidence: "releasePrExists",
+            stage: "prepare",
+            capability: "release-prepare",
+          },
+        },
+      ],
+      null,
+      2,
+    ),
+    "-->",
+    "",
+  ].join("\n")
+}
+
+function regularTodoList(): string {
+  return [
+    "---",
+    'title: "Regular todo"',
+    'createdAt: "2026-06-28T00:00:00.000Z"',
+    "---",
+    "",
+    "<!-- kody-todo-items-json",
+    JSON.stringify(
+      [
+        {
+          id: "item-1",
+          title: "Should not tick",
+          body: "",
+          assignee: null,
+          completed: false,
+          createdAt: "2026-06-28T00:00:00.000Z",
+          completedAt: null,
+        },
+      ],
+      null,
+      2,
+    ),
+    "-->",
+    "",
+  ].join("\n")
+}
+
 function writeGoal(id: string, state: string | null, extra: Record<string, unknown> = {}): void {
   const dir = path.join(tmp, ".kody", "goals", "instances", id)
   fs.mkdirSync(dir, { recursive: true })
@@ -97,12 +170,20 @@ function installGhStub(binDir: string): void {
     [
       "#!/usr/bin/env bash",
       'echo "gh $*" >> "$KODY_GH_LOG"',
-      'if [ "$1" = "api" ] && [ "$2" = "/repos/A-Guy-educ/kody-state/contents/A-Guy-Web/goals/instances" ]; then',
-      '  printf \'[{"name":"web-release","type":"dir"}]\\n\'',
+      'if [ "$1" = "api" ] && [ "$2" = "/repos/A-Guy-educ/kody-state/contents/A-Guy-Web/todos" ]; then',
+      '  printf \'[{"name":"web-release.md","type":"file"},{"name":"todo-list-1.md","type":"file"}]\\n\'',
       "  exit 0",
       "fi",
-      'if [ "$1" = "api" ] && [ "$2" = "/repos/A-Guy-educ/kody-state/contents/A-Guy-Web/goals/instances/web-release/state.json" ]; then',
-      '  printf \'{"type":"file","encoding":"base64","content":"%s"}\\n\' "$(printf \'%s\' "$KODY_REMOTE_GOAL_JSON" | base64 | tr -d \'\\n\')"',
+      'if [ "$1" = "api" ] && [ "$2" = "/repos/A-Guy-educ/kody-state/contents/A-Guy-Web/goals/instances" ]; then',
+      "  printf '[]\\n'",
+      "  exit 0",
+      "fi",
+      'if [ "$1" = "api" ] && [ "$2" = "/repos/A-Guy-educ/kody-state/contents/A-Guy-Web/todos/web-release.md" ]; then',
+      '  printf \'{"type":"file","encoding":"base64","sha":"todo-sha","content":"%s"}\\n\' "$(printf \'%s\' "$KODY_REMOTE_GOAL_MD" | base64 | tr -d \'\\n\')"',
+      "  exit 0",
+      "fi",
+      'if [ "$1" = "api" ] && [ "$2" = "/repos/A-Guy-educ/kody-state/contents/A-Guy-Web/todos/todo-list-1.md" ]; then',
+      '  printf \'{"type":"file","encoding":"base64","sha":"regular-todo-sha","content":"%s"}\\n\' "$(printf \'%s\' "$KODY_REMOTE_REGULAR_TODO_MD" | base64 | tr -d \'\\n\')"',
       "  exit 0",
       "fi",
       'echo "unexpected gh call: $*" >&2',
@@ -131,7 +212,10 @@ function runScheduler(options: { remote?: boolean; now?: string } = {}): {
       KODY_GH_LOG: ghLogFile,
       KODY_GOAL_SCHEDULER_NOW: options.now ?? "2026-06-20T12:00:00Z",
       ...(options.remote
-        ? { KODY_REMOTE_GOAL_JSON: JSON.stringify({ version: 1, state: "active", ...managedGoalExtra() }) }
+        ? {
+            KODY_REMOTE_GOAL_MD: managedGoalTodo("web-release"),
+            KODY_REMOTE_REGULAR_TODO_MD: regularTodoList(),
+          }
         : { KODY_GOAL_SCHEDULER_SKIP_PERSIST: "1" }),
     },
     encoding: "utf-8",
@@ -204,10 +288,9 @@ describe("goal-scheduler live wiring", () => {
     const { status, stderr, calls, ghCalls } = runScheduler({ remote: true })
 
     expect(status, stderr).toBe(0)
-    expect(ghCalls).toContain("gh api /repos/A-Guy-educ/kody-state/contents/A-Guy-Web/goals/instances")
-    expect(ghCalls).toContain(
-      "gh api /repos/A-Guy-educ/kody-state/contents/A-Guy-Web/goals/instances/web-release/state.json",
-    )
+    expect(ghCalls.join("\n")).toContain("/contents/A-Guy-Web/todos")
+    expect(ghCalls.join("\n")).toContain("/contents/A-Guy-Web/todos/web-release.md")
+    expect(ghCalls.join("\n")).toContain("/contents/A-Guy-Web/todos/todo-list-1.md")
     expect(ghCalls.some((call) => call.includes("/repos/https://github.com"))).toBe(false)
     expect(calls).toEqual(["kody-engine exec goal-manager --goal web-release"])
   })
