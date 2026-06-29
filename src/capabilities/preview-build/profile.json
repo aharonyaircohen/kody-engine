@@ -1,0 +1,6 @@
+{
+  "name": "preview-build",
+  "action": "preview-build",
+  "implementation": "preview-build",
+  "describe": "Build a per-PR preview."
+}

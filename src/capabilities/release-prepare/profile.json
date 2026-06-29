@@ -1,0 +1,6 @@
+{
+  "name": "release-prepare",
+  "action": "release-prepare",
+  "implementation": "release-prepare",
+  "describe": "Bump version, update changelog, open release PR."
+}

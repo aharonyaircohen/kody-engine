@@ -1,0 +1,6 @@
+{
+  "name": "fix",
+  "action": "fix",
+  "implementation": "fix",
+  "describe": "Apply PR review feedback via an agent run."
+}

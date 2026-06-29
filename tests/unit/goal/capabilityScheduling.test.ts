@@ -1,7 +1,7 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Context, Profile } from "../../../src/executables/types.js"
 import type { ManagedGoal } from "../../../src/goal/manager.js"
 import type { GoalState } from "../../../src/goal/state.js"
@@ -13,12 +13,15 @@ import {
 import type { GoalCtx } from "../../../src/scripts/goalCtx.js"
 
 let tmp: string
+let cwdSpy: ReturnType<typeof vi.spyOn>
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "goal-capability-schedule-"))
+  cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(tmp)
 })
 
 afterEach(() => {
+  cwdSpy.mockRestore()
   fs.rmSync(tmp, { recursive: true, force: true })
 })
 

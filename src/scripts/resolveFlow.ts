@@ -21,8 +21,8 @@
  */
 
 import { execFileSync } from "node:child_process"
-import type { PreflightScript } from "../executables/types.js"
 import { checkoutPrBranch, getCurrentBranch, mergeBase } from "../branch.js"
+import type { PreflightScript } from "../executables/types.js"
 import { getRunUrl } from "../gha.js"
 import { getPr, postPrReviewComment } from "../issue.js"
 import { prMergeStatus } from "../pr.js"

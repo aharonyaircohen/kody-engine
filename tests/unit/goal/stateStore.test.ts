@@ -125,8 +125,7 @@ describe("goal state store", () => {
         throw new Error("HTTP 404 Not Found")
       }
       if (
-        command ===
-        `api /repos/acme/kody-state/contents/widgets/goals/instances/release/state.json?ref=${STATE_BRANCH}`
+        command === `api /repos/acme/kody-state/contents/widgets/goals/instances/release/state.json?ref=${STATE_BRANCH}`
       ) {
         return JSON.stringify({
           sha: "abc",
@@ -208,7 +207,10 @@ describe("goal state store", () => {
         })
       }
       if (command === `api /repos/acme/kody-state/contents/widgets/goals/instances?ref=${STATE_BRANCH}`) {
-        return JSON.stringify([{ name: "legacy-release", type: "dir" }, { name: "todo-list-1", type: "dir" }])
+        return JSON.stringify([
+          { name: "legacy-release", type: "dir" },
+          { name: "todo-list-1", type: "dir" },
+        ])
       }
       throw new Error(`unexpected gh call: ${args.join(" ")}`)
     })

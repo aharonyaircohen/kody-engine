@@ -1,0 +1,6 @@
+{
+  "name": "release-deploy",
+  "action": "release-deploy",
+  "implementation": "release-deploy",
+  "describe": "Deploy and notify after publish."
+}

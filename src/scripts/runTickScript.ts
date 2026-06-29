@@ -29,8 +29,8 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { PreflightScript } from "../executables/types.js"
 import { readCapabilityFolder } from "../capabilityFolders.js"
+import type { PreflightScript } from "../executables/types.js"
 import { resolveBackend } from "./jobState/index.js"
 import { runTickShellAndParse } from "./tickShellRunner.js"
 

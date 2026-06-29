@@ -49,6 +49,40 @@ function writeLocalReleaseAsset(root: string): void {
     }),
   )
   fs.writeFileSync(path.join(executableDir, "capability.md"), "# Release\n\nRun release flow.\n")
+
+  // The '@kody release-promote' dispatch test needs this capability to
+  // resolve from the local asset tree. Production installs ship it from
+  // kody-store; the local fixture mirrors that surface so dispatch tests
+  // stay focused on routing rather than company-store hydration.
+  const promoteDir = path.join(root, ".kody", "capabilities", "release-promote")
+  fs.mkdirSync(promoteDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(promoteDir, "profile.json"),
+    JSON.stringify({
+      name: "release-promote",
+      action: "release-promote",
+      role: "primitive",
+      describe: "Promote a release branch.",
+      inputs: [{ name: "issue", flag: "--issue", type: "int", required: true, describe: "Release tracking issue." }],
+      claudeCode: {
+        model: "inherit",
+        permissionMode: "default",
+        maxTurns: null,
+        maxThinkingTokens: null,
+        systemPromptAppend: null,
+        tools: [],
+        hooks: [],
+        skills: [],
+        commands: [],
+        subagents: [],
+        plugins: [],
+        mcpServers: [],
+      },
+      cliTools: [],
+      scripts: { preflight: [], postflight: [] },
+    }),
+  )
+  fs.writeFileSync(path.join(promoteDir, "capability.md"), "# Release Promote\n\nPromote a release branch.\n")
 }
 
 describe("dispatch: explicit override", () => {

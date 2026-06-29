@@ -263,6 +263,21 @@ describe("runJob (Phase 1 seam)", () => {
         action: "reproduce",
         implementation: "reproduce",
       })
+      // Workflow-step cliArgs are filtered to the step's declared inputs
+      // (filterCliArgsForStep in src/job.ts). The capability alone does not
+      // expose its inputs — the registry reads from the executable folder,
+      // so the test needs an executable for reproduce whose inputs omit
+      // `base` to keep the inherited base from leaking into step 1.
+      const reproduceExeDir = path.join(cwd, ".kody", "executables", "reproduce")
+      fs.mkdirSync(reproduceExeDir, { recursive: true })
+      fs.writeFileSync(
+        path.join(reproduceExeDir, "profile.json"),
+        JSON.stringify({
+          name: "reproduce",
+          role: "primitive",
+          inputs: [{ name: "issue", flag: "--issue", type: "int", required: true, describe: "Issue to reproduce." }],
+        }),
+      )
       process.chdir(cwd)
 
       await runJob(

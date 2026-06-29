@@ -66,14 +66,12 @@ describe("smoke: CLI boots and validates args", () => {
       JSON.stringify({
         name: "smoke-capability",
         action: "smoke-action",
+        capabilityKind: "act",
         executable: "smoke-impl",
         agent: "kody",
       }),
     )
-    fs.writeFileSync(
-      path.join(root, ".kody", "capabilities", "smoke-capability", "capability.md"),
-      "# Smoke\n",
-    )
+    fs.writeFileSync(path.join(root, ".kody", "capabilities", "smoke-capability", "capability.md"), "# Smoke\n")
     fs.writeFileSync(
       path.join(root, ".kody", "executables", "smoke-impl", "profile.json"),
       JSON.stringify({

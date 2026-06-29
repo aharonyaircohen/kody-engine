@@ -9,8 +9,8 @@
  * See docs/architecture/state-reducer-pattern.md for the full concept.
  */
 
-import type { JobFlavor } from "./executables/types.js"
 import { loadConfig } from "./config.js"
+import type { JobFlavor } from "./executables/types.js"
 import { readStateText, type StateRepoConfig, upsertStateText } from "./stateRepo.js"
 
 export const STATE_BEGIN = "<!-- kody:state:v1:begin -->"
@@ -348,9 +348,7 @@ export function upsertTaskJobs(state: TaskState, planned: PlannedTaskJob[], time
     jobs[plan.id] = {
       id: plan.id,
       executable: plan.executable,
-      ...((plan.capability ?? prior?.capability)
-        ? { capability: plan.capability ?? prior?.capability }
-        : {}),
+      ...((plan.capability ?? prior?.capability) ? { capability: plan.capability ?? prior?.capability } : {}),
       ...((plan.agent ?? prior?.agent) ? { agent: plan.agent ?? prior?.agent } : {}),
       ...((plan.flavor ?? prior?.flavor) ? { flavor: plan.flavor ?? prior?.flavor } : {}),
       ...((plan.schedule ?? prior?.schedule) ? { schedule: plan.schedule ?? prior?.schedule } : {}),
@@ -408,9 +406,7 @@ function reduceJobs(
   const next: TaskJob = {
     id,
     executable: job?.executable ?? prior?.executable ?? executable,
-    ...((job?.capability ?? prior?.capability)
-      ? { capability: job?.capability ?? prior?.capability }
-      : {}),
+    ...((job?.capability ?? prior?.capability) ? { capability: job?.capability ?? prior?.capability } : {}),
     ...((ranAsAgent ?? prior?.agent) ? { agent: ranAsAgent ?? prior?.agent } : {}),
     ...((job?.flavor ?? prior?.flavor) ? { flavor: job?.flavor ?? prior?.flavor } : {}),
     ...((job?.schedule ?? prior?.schedule) ? { schedule: job?.schedule ?? prior?.schedule } : {}),

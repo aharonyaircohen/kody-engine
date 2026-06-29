@@ -1,0 +1,6 @@
+{
+  "name": "sync",
+  "action": "sync",
+  "implementation": "sync",
+  "describe": "Update PR branch from base."
+}

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("../../../src/goal/stateStore.js", () => ({
   putGoalState: vi.fn(),
@@ -84,10 +84,42 @@ function fakeProfile(): Profile {
 }
 
 describe("commitGoalState report refresh", () => {
+  const savedEnv: Record<string, string | undefined> = {}
+
   beforeEach(() => {
     putGoalStateMock.mockReset()
     flushGoalRunLogEventsMock.mockReset()
     writeStateTextMock.mockReset()
+    // The dashboard report derives the "Triggered by" line from the GitHub
+    // event trigger context. In CI, GITHUB_EVENT_NAME etc. are inherited
+    // from the runner, so triggerContext() returns a real trigger and the
+    // dispatchContext label reads "GitHub issue comment" instead of "local
+    // run". Wipe them so the test exercises the local-run branch the
+    // expectations assert against.
+    for (const key of [
+      "GITHUB_RUN_ID",
+      "GITHUB_RUN_ATTEMPT",
+      "GITHUB_REPOSITORY",
+      "GITHUB_SERVER_URL",
+      "GITHUB_WORKFLOW",
+      "GITHUB_JOB",
+      "GITHUB_EVENT_NAME",
+      "GITHUB_ACTOR",
+      "GITHUB_EVENT_PATH",
+    ]) {
+      savedEnv[key] = process.env[key]
+      delete process.env[key]
+    }
+  })
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(savedEnv)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+    Object.keys(savedEnv).forEach((k) => {
+      delete (savedEnv as Record<string, unknown>)[k]
+    })
   })
 
   it("writes the goal dashboard report after changed goal state is persisted", async () => {
@@ -133,7 +165,11 @@ describe("commitGoalState report refresh", () => {
       stage: "waiting",
       status: "wait",
       reason: "waiting for labelled tasks",
-      goal: { stage: "waiting", requiredEvidence: ["labelledTasksComplete"], missingEvidence: ["labelledTasksComplete"] },
+      goal: {
+        stage: "waiting",
+        requiredEvidence: ["labelledTasksComplete"],
+        missingEvidence: ["labelledTasksComplete"],
+      },
       decision: { kind: "wait", reason: "waiting for labelled tasks" },
     })
 

@@ -1,0 +1,6 @@
+{
+  "name": "resolve",
+  "action": "resolve",
+  "implementation": "resolve",
+  "describe": "Merge base into PR and resolve conflicts."
+}

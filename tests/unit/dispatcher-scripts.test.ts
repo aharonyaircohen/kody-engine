@@ -313,4 +313,168 @@ describe("finalizeTerminal", () => {
     expect(setKodyLabelMock).not.toHaveBeenCalled()
     expect(execFileSync).not.toHaveBeenCalled()
   })
+
+  it("mirrors the terminal state to the issue when target=pr and issue differs from PR", async () => {
+    // The PR's state file carries the freshly-saved prUrl. The issue has
+    // its own state file that still shows the previous failed run — that's
+    // the bug we are fixing: it should be flipped to terminal.
+    const prStateWithUrl: TaskState = {
+      ...emptyState(),
+      core: { ...emptyState().core, prUrl: "https://github.com/o/r/pull/99" },
+    }
+    const prStateB64 = Buffer.from(JSON.stringify(prStateWithUrl), "utf-8").toString("base64")
+    const issueState: TaskState = {
+      ...emptyState(),
+      core: { ...emptyState().core, status: "failed", phase: "failed" },
+    }
+    const issueStateB64 = Buffer.from(JSON.stringify(issueState), "utf-8").toString("base64")
+    execFileSync.mockImplementation((_cmd, args: unknown) => {
+      const a = (args as string[]) ?? []
+      // GET contents API for PR 99's state file.
+      if (
+        a[0] === "api" &&
+        !a.includes("PUT") &&
+        a.some((arg) => typeof arg === "string" && arg.includes("/tasks/prs/99/"))
+      ) {
+        return JSON.stringify({ type: "file", encoding: "base64", content: prStateB64, sha: "pr-sha" })
+      }
+      // GET/PUT contents API for issue 42's state file.
+      if (a[0] === "api" && a.some((arg) => typeof arg === "string" && arg.includes("/tasks/issues/42/"))) {
+        if (a.includes("PUT")) return "{}"
+        return JSON.stringify({ type: "file", encoding: "base64", content: issueStateB64, sha: "issue-sha" })
+      }
+      return ""
+    })
+    const state: TaskState = { ...emptyState() }
+    const c = ctx({
+      args: { issue: 42 },
+      data: { taskState: state, commentTargetType: "pr", commentTargetNumber: 99 },
+      output: { exitCode: 0 },
+    })
+    await finalizeTerminal(c, profile("fix"), null)
+    // Find the PUT issued against the issue's state file.
+    const putCall = execFileSync.mock.calls.find(
+      (x) =>
+        (x[1] as string[])?.[0] === "api" &&
+        (x[1] as string[])?.includes("PUT") &&
+        (x[1] as string[])?.some((arg) => typeof arg === "string" && arg.includes("/tasks/issues/42/")),
+    )
+    expect(putCall).toBeDefined()
+    // The body passed to the PUT (via stdin) must be the rendered state
+    // with the terminal phase+status flipped and currentAgentAction cleared.
+    const stdinBody = (putCall?.[2] as { input?: string } | undefined)?.input ?? ""
+    const putPayload = JSON.parse(stdinBody) as { content?: string }
+    const putStateJson = Buffer.from(putPayload.content ?? "", "base64").toString("utf-8")
+    const putState = JSON.parse(putStateJson) as TaskState
+    expect(putState.core.phase).toBe("shipped")
+    expect(putState.core.status).toBe("succeeded")
+    expect(putState.core.currentExecutable).toBeNull()
+  })
+
+  it("does not mirror when target=issue (the existing write already targets the issue)", async () => {
+    const issueState: TaskState = {
+      ...emptyState(),
+      core: { ...emptyState().core, prUrl: "https://github.com/o/r/pull/50" },
+    }
+    const issueStateB64 = Buffer.from(JSON.stringify(issueState), "utf-8").toString("base64")
+    execFileSync.mockImplementation((_cmd, args: unknown) => {
+      const a = (args as string[]) ?? []
+      if (a[0] === "api" && a.some((arg) => typeof arg === "string" && arg.includes("/tasks/issues/42/"))) {
+        if (a.includes("PUT")) return "{}"
+        return JSON.stringify({ type: "file", encoding: "base64", content: issueStateB64, sha: "issue-sha" })
+      }
+      return ""
+    })
+    const state: TaskState = { ...emptyState() }
+    const c = ctx({
+      args: { issue: 42 },
+      data: { taskState: state, commentTargetType: "issue", commentTargetNumber: 42 },
+      output: { exitCode: 0 },
+    })
+    await finalizeTerminal(c, profile("run"), null)
+    // The original write is one PUT to the issue's state file; the mirror
+    // must NOT add a second write targeting the same file.
+    const calls = execFileSync.mock.calls.map((x) => (x[1] as string[]) ?? [])
+    const putCalls = calls.filter(
+      (a) =>
+        a[0] === "api" &&
+        a.includes("PUT") &&
+        a.some((arg) => typeof arg === "string" && arg.includes("/tasks/issues/42/")),
+    )
+    expect(putCalls).toHaveLength(1)
+  })
+
+  it("does not mirror when issueNumber === targetNumber (same number, would be a no-op re-write)", async () => {
+    const sameState: TaskState = {
+      ...emptyState(),
+      core: { ...emptyState().core, prUrl: "https://github.com/o/r/pull/42" },
+    }
+    const sameStateB64 = Buffer.from(JSON.stringify(sameState), "utf-8").toString("base64")
+    execFileSync.mockImplementation((_cmd, args: unknown) => {
+      const a = (args as string[]) ?? []
+      if (a[0] === "api" && a.some((arg) => typeof arg === "string" && arg.includes("/tasks/prs/42/"))) {
+        if (a.includes("PUT")) return "{}"
+        return JSON.stringify({ type: "file", encoding: "base64", content: sameStateB64, sha: "pr-sha" })
+      }
+      return ""
+    })
+    const state: TaskState = { ...emptyState() }
+    // commentTargetType=pr with targetNumber === issueNumber is a
+    // degenerate case (the PR URL happens to use the same number) — the
+    // mirror self-skip guarantees we don't double-write the same file.
+    const c = ctx({
+      args: { issue: 42 },
+      data: { taskState: state, commentTargetType: "pr", commentTargetNumber: 42 },
+      output: { exitCode: 0 },
+    })
+    await finalizeTerminal(c, profile("fix"), null)
+    const calls = execFileSync.mock.calls.map((x) => (x[1] as string[]) ?? [])
+    const putCalls = calls.filter(
+      (a) =>
+        a[0] === "api" &&
+        a.includes("PUT") &&
+        a.some((arg) => typeof arg === "string" && arg.includes("/tasks/prs/42/")),
+    )
+    expect(putCalls).toHaveLength(1)
+  })
+
+  it("logs and does not throw when the issue state mirror read fails", async () => {
+    // PR-side read succeeds (with prUrl → delivered=true). The issue's
+    // state file is missing, which makes readStateText return null and
+    // readTaskState fall back to emptyState — but emptyState is JSON
+    // stringifiable, so the write succeeds. The mirror path's try/catch
+    // must still swallow any unexpected error and log to stderr; the
+    // parent call must resolve to undefined.
+    const prState: TaskState = {
+      ...emptyState(),
+      core: { ...emptyState().core, prUrl: "https://github.com/o/r/pull/77" },
+    }
+    const prStateB64 = Buffer.from(JSON.stringify(prState), "utf-8").toString("base64")
+    execFileSync.mockImplementation((_cmd, args: unknown) => {
+      const a = (args as string[]) ?? []
+      if (
+        a[0] === "api" &&
+        !a.includes("PUT") &&
+        a.some((arg) => typeof arg === "string" && arg.includes("/tasks/prs/77/"))
+      ) {
+        return JSON.stringify({ type: "file", encoding: "base64", content: prStateB64, sha: "pr-sha" })
+      }
+      // Issue 42's state file is missing → 404 → readStateText returns null
+      // → readTaskState returns emptyState. The write still succeeds.
+      if (a[0] === "api" && a.some((arg) => typeof arg === "string" && arg.includes("/tasks/issues/42/"))) {
+        if (a.includes("PUT")) return "{}"
+        throw new Error("HTTP 404 Not Found")
+      }
+      return ""
+    })
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true)
+    const state: TaskState = { ...emptyState() }
+    const c = ctx({
+      args: { issue: 42 },
+      data: { taskState: state, commentTargetType: "pr", commentTargetNumber: 77 },
+      output: { exitCode: 0 },
+    })
+    await expect(finalizeTerminal(c, profile("fix"), null)).resolves.toBeUndefined()
+    stderrSpy.mockRestore()
+  })
 })

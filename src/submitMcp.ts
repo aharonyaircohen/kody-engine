@@ -61,9 +61,7 @@ const INPUT_SCHEMA: ZodRawShape = {
     .describe("The next `data` object. Carry forward prior data and mutate only what you acted on this tick."),
   done: z
     .boolean()
-    .describe(
-      "true only if this capability is permanently finished; evergreen capabilities stay false.",
-    ),
+    .describe("true only if this capability is permanently finished; evergreen capabilities stay false."),
 }
 
 /**
