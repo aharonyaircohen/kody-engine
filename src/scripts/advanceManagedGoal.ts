@@ -10,7 +10,12 @@ import {
 } from "../goal/manager.js"
 import { goalRunLogChange, goalRunLogSnapshot, stageGoalRunLogEvent } from "../goal/runLog.js"
 import { serializeGoalState } from "../goal/state.js"
-import { type GoalLoopTargetResolution, goalLoopNow, resolveGoalLoopTarget } from "../goal/targetLoopResolution.js"
+import {
+  type GoalLoopTargetResolution,
+  goalLoopNow,
+  resolveActiveGoalLoopTarget,
+  resolveGoalLoopTarget,
+} from "../goal/targetLoopResolution.js"
 import { expandManagedGoalState } from "../goal/typeDefinitions.js"
 import { gh } from "../issue.js"
 import {
@@ -101,7 +106,17 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
         ? (goal.raw.extra.scheduleState as GoalCapabilityScheduleState)
         : undefined
     const now = goalLoopNow()
-    let decision = planTargetLoopSchedule({ goal: managed, previousScheduleState, now })
+    const activeTarget = isGoalTargetLoop(managed)
+      ? resolveActiveGoalLoopTarget(ctx.config, ctx.cwd, goal.id, managed)
+      : null
+    const allowRepeatAfterCompletedTarget =
+      isGoalTargetLoop(managed) && !activeTarget && previousDispatchWasTargetInstance(managed, previousScheduleState)
+    let decision = planTargetLoopSchedule({
+      goal: managed,
+      previousScheduleState,
+      now,
+      allowRepeatAfterCompletedTarget,
+    })
     let targetResolution: GoalLoopTargetResolution | undefined
     if (decision.kind === "dispatch" && decision.dispatch && isGoalTargetLoop(managed)) {
       targetResolution = resolveGoalLoopTarget(ctx.config, ctx.cwd, goal.id, managed, now)
@@ -110,6 +125,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
         previousScheduleState,
         now,
         resolvedGoalTargetId: targetResolution.targetId,
+        allowRepeatAfterCompletedTarget,
       })
     }
     restoreGoalIdFact()
@@ -367,6 +383,18 @@ function readSimpleGoalTaskSummary(goalId: string, cwd?: string): { total: numbe
   const total = issues.length
   const open = issues.filter((issue) => String(issue.state ?? "").toLowerCase() === "open").length
   return { total, open }
+}
+
+function previousDispatchWasTargetInstance(
+  managed: ManagedGoal,
+  previousScheduleState: GoalCapabilityScheduleState | undefined,
+): boolean {
+  const targetId = managed.loopTarget?.id.trim()
+  const previous = previousScheduleState?.lastDecision
+  if (!targetId || previous?.kind !== "dispatch" || !("targetType" in previous) || previous.targetType !== "goal") {
+    return false
+  }
+  return previous.targetId === targetId || previous.targetId.startsWith(`${targetId}-`)
 }
 
 function ensureIssueFactIfNeeded(goal: ManagedGoal, goalId: string, cwd?: string): void {

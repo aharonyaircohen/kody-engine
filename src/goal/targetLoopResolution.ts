@@ -13,18 +13,21 @@ export interface GoalLoopTargetResolution {
   created?: boolean
 }
 
-export function resolveGoalLoopTarget(
+export interface ActiveGoalLoopTarget {
+  targetId: string
+  templateId: string
+  reason: string
+}
+
+export function resolveActiveGoalLoopTarget(
   config: StateRepoConfig,
   cwd: string,
   loopGoalId: string,
   loopGoal: ManagedGoal,
-  now: Date,
-): GoalLoopTargetResolution {
+): ActiveGoalLoopTarget | null {
   const targetId = loopGoal.loopTarget?.id.trim() ?? ""
   assertSafeGoalId(targetId, "loop target")
-  if (!hasExplicitStateRepo(config)) {
-    return { targetId, templateId: targetId, reason: "literal target; state repo not configured" }
-  }
+  if (!hasExplicitStateRepo(config)) return null
 
   const activeInstance = findActiveTargetInstance(config, cwd, loopGoalId, targetId)
   if (activeInstance) {
@@ -40,6 +43,26 @@ export function resolveGoalLoopTarget(
     return { targetId, templateId: targetId, reason: "active target goal" }
   }
 
+  return null
+}
+
+export function resolveGoalLoopTarget(
+  config: StateRepoConfig,
+  cwd: string,
+  loopGoalId: string,
+  loopGoal: ManagedGoal,
+  now: Date,
+): GoalLoopTargetResolution {
+  const targetId = loopGoal.loopTarget?.id.trim() ?? ""
+  assertSafeGoalId(targetId, "loop target")
+  if (!hasExplicitStateRepo(config)) {
+    return { targetId, templateId: targetId, reason: "literal target; state repo not configured" }
+  }
+
+  const activeTarget = resolveActiveGoalLoopTarget(config, cwd, loopGoalId, loopGoal)
+  if (activeTarget) return activeTarget
+
+  const directTarget = fetchGoalState(config, targetId, cwd)
   const template = loadGoalTemplate(cwd, targetId)
   if (!template) {
     if (directTarget) {
