@@ -179,17 +179,74 @@ function dispatchVerb(
   return dispatchWorkflow(workflowFile, capability, prNumber, repoSlug)
 }
 
+type RecommendationPostResult = { ok: true; posted: boolean } | { ok: false; error: string }
+
+function capabilityMarker(slug: string): string {
+  return `<!-- kody-capability: ${slug} -->`
+}
+
+function normalizeRecommendationIntent(body: string): string | null {
+  const marker = body.match(/<!--\s*kody-intent:\s*([\s\S]*?)-->/i)
+  if (marker?.[1]) return marker[1].trim().replace(/\s+/g, " ").toLowerCase()
+
+  const legacy = body.match(/(?:^|\n)\s*(?:kody-cmd:\s*|@kody\s+)([a-z][\w-]*(?:\s+--pr\s+\d+)?)/i)
+  if (legacy?.[1]) return legacy[1].trim().replace(/\s+/g, " ").toLowerCase()
+
+  return null
+}
+
+function containsExecutableKodyCommand(body: string): boolean {
+  return /@kody\b/i.test(body) || /\bkody-cmd\s*:/i.test(body)
+}
+
+function recommendationAlreadyExists(
+  repoSlug: string,
+  prNumber: number,
+  body: string,
+  capabilitySlug?: string,
+): boolean {
+  const requestedIntent = normalizeRecommendationIntent(body)
+  const requestedText = body.trim().replace(/\s+/g, " ")
+  const raw = gh(["issue", "view", String(prNumber), "-R", repoSlug, "--json", "comments"])
+  const parsed = JSON.parse(raw) as { comments?: Array<{ body?: string }> }
+
+  return (parsed.comments ?? []).some((comment) => {
+    const existing = comment.body ?? ""
+    if (capabilitySlug && !existing.includes(capabilityMarker(capabilitySlug))) return false
+
+    const existingIntent = normalizeRecommendationIntent(existing)
+    if (requestedIntent && existingIntent) return requestedIntent === existingIntent
+
+    // A capability recommendation is one operator ask per PR. If an older comment
+    // lacks an intent marker, do not create a second ask for the same capability.
+    if (capabilitySlug && requestedIntent) return true
+
+    return existing.trim().replace(/\s+/g, " ").includes(requestedText)
+  })
+}
+
 function postRecommendation(
+  repoSlug: string,
   prNumber: number,
   mention: string,
   message: string,
   capabilitySlug?: string,
-): { ok: true } | { ok: false; error: string } {
+): RecommendationPostResult {
+  if (containsExecutableKodyCommand(message)) {
+    return {
+      ok: false,
+      error: "recommendation body contains executable Kody command text; use inert kody-intent metadata",
+    }
+  }
+
   const mentioned = mention ? `${mention} ${message}` : message
-  const body = capabilitySlug ? `${mentioned}\n\n<!-- kody-capability: ${capabilitySlug} -->` : mentioned
+  const body = capabilitySlug ? `${mentioned}\n\n${capabilityMarker(capabilitySlug)}` : mentioned
   try {
-    gh(["pr", "comment", String(prNumber), "--body", body])
-    return { ok: true }
+    if (recommendationAlreadyExists(repoSlug, prNumber, body, capabilitySlug)) {
+      return { ok: true, posted: false }
+    }
+    gh(["issue", "comment", String(prNumber), "-R", repoSlug, "--body-file", "-"], { input: body })
+    return { ok: true, posted: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
@@ -555,9 +612,11 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     handler: async (args) => {
       const pr = Number(args.pr)
       const body = String(args.body ?? "")
-      const result = postRecommendation(pr, opts.operatorMention, body, opts.capabilitySlug)
+      const result = postRecommendation(opts.repoSlug, pr, opts.operatorMention, body, opts.capabilitySlug)
       const text = result.ok
-        ? `Recommendation posted on PR #${pr}.`
+        ? result.posted
+          ? `Recommendation posted on PR #${pr}.`
+          : `Recommendation already exists on PR #${pr}; skipped.`
         : `Recommendation failed on PR #${pr}: ${result.error}`
       return { content: [{ type: "text", text }] }
     },

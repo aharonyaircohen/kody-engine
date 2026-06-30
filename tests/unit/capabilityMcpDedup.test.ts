@@ -6,7 +6,13 @@ vi.mock("../../src/issue.js", () => ({
   gh: vi.fn(),
 }))
 
-import { dispatchWorkflow, ensureComment, ensureIssue, readCheckRuns } from "../../src/capabilityMcp.js"
+import {
+  capabilityToolDefinitions,
+  dispatchWorkflow,
+  ensureComment,
+  ensureIssue,
+  readCheckRuns,
+} from "../../src/capabilityMcp.js"
 import { gh } from "../../src/issue.js"
 
 const REPO = "owner/repo"
@@ -84,6 +90,112 @@ describe("ensureComment — idempotent comment by marker", () => {
     expect(result).toEqual({ posted: true })
     const commentCall = vi.mocked(gh).mock.calls.find((c) => (c[0] as string[])[1] === "comment")
     expect((commentCall![1] as { input?: string })?.input).toContain("<!-- kody-track-comment:dispatched -->")
+  })
+})
+
+describe("recommend_to_operator — inert and idempotent recommendations", () => {
+  function recommendTool() {
+    const tool = capabilityToolDefinitions({
+      repoSlug: REPO,
+      operatorMention: "@operator",
+      capabilitySlug: "pr-health-triage",
+    }).find((t) => t.name === "recommend_to_operator")
+    if (!tool) throw new Error("recommend_to_operator tool missing")
+    return tool
+  }
+
+  it("rejects literal @kody commands and does not touch GitHub", async () => {
+    const result = await recommendTool().handler({ pr: 28, body: "Please run @kody sync --pr 28" })
+
+    expect(result.content[0]?.text).toContain("contains executable Kody command text")
+    expect(vi.mocked(gh)).not.toHaveBeenCalled()
+  })
+
+  it("rejects kody-cmd comments and does not touch GitHub", async () => {
+    const result = await recommendTool().handler({ pr: 28, body: "kody-cmd: sync --pr 28" })
+
+    expect(result.content[0]?.text).toContain("contains executable Kody command text")
+    expect(vi.mocked(gh)).not.toHaveBeenCalled()
+  })
+
+  it("does not post when the same inert capability recommendation already exists", async () => {
+    vi.mocked(gh).mockImplementation((args: string[]) => {
+      if (args[0] === "issue" && args[1] === "view") {
+        return JSON.stringify({
+          comments: [
+            {
+              body: [
+                "@operator Please sync this PR.",
+                "",
+                "<!-- kody-intent: sync --pr 28 -->",
+                "<!-- kody-capability: pr-health-triage -->",
+              ].join("\n"),
+            },
+          ],
+        })
+      }
+      throw new Error(`unexpected gh call: ${args.join(" ")}`)
+    })
+
+    const result = await recommendTool().handler({
+      pr: 28,
+      body: "Please sync this PR.\n\n<!-- kody-intent: sync --pr 28 -->",
+    })
+
+    expect(result.content[0]?.text).toBe("Recommendation already exists on PR #28; skipped.")
+    const calls = vi.mocked(gh).mock.calls.map((c) => (c[0] as string[]).join(" "))
+    expect(calls.some((c) => c.includes("issue comment"))).toBe(false)
+  })
+
+  it("treats legacy capability command comments as duplicates of inert intents", async () => {
+    vi.mocked(gh).mockImplementation((args: string[]) => {
+      if (args[0] === "issue" && args[1] === "view") {
+        return JSON.stringify({
+          comments: [
+            {
+              body: [
+                "@operator Please sync this PR.",
+                "",
+                "kody-cmd: sync --pr 28",
+                "<!-- kody-capability: pr-health-triage -->",
+              ].join("\n"),
+            },
+          ],
+        })
+      }
+      throw new Error(`unexpected gh call: ${args.join(" ")}`)
+    })
+
+    const result = await recommendTool().handler({
+      pr: 28,
+      body: "Please sync this PR.\n\n<!-- kody-intent: sync --pr 28 -->",
+    })
+
+    expect(result.content[0]?.text).toBe("Recommendation already exists on PR #28; skipped.")
+    const calls = vi.mocked(gh).mock.calls.map((c) => (c[0] as string[]).join(" "))
+    expect(calls.some((c) => c.includes("issue comment"))).toBe(false)
+  })
+
+  it("posts with operator mention and capability marker when no matching recommendation exists", async () => {
+    vi.mocked(gh).mockImplementation((args: string[]) => {
+      if (args[0] === "issue" && args[1] === "view") return JSON.stringify({ comments: [] })
+      if (args[0] === "issue" && args[1] === "comment") return ""
+      throw new Error(`unexpected gh call: ${args.join(" ")}`)
+    })
+
+    const result = await recommendTool().handler({
+      pr: 28,
+      body: "Please sync this PR.\n\n<!-- kody-intent: sync --pr 28 -->",
+    })
+
+    expect(result.content[0]?.text).toBe("Recommendation posted on PR #28.")
+    const commentCall = vi.mocked(gh).mock.calls.find((c) => (c[0] as string[])[1] === "comment")
+    expect(commentCall).toBeDefined()
+    expect(commentCall![0] as string[]).toEqual(["issue", "comment", "28", "-R", REPO, "--body-file", "-"])
+    const input = (commentCall![1] as { input?: string })?.input ?? ""
+    expect(input).toContain("@operator Please sync this PR.")
+    expect(input).toContain("<!-- kody-intent: sync --pr 28 -->")
+    expect(input).toContain("<!-- kody-capability: pr-health-triage -->")
   })
 })
 
