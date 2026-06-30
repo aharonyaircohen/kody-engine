@@ -49,6 +49,14 @@ describe("entrypoint-brain.sh: Hermes config sanity", () => {
     expect(entrypoint).toMatch(/MCP_PORT.*healthz|healthz.*MCP_PORT/s)
   })
 
+  it("pre-warms LiteLLM from KODY_MODEL_CONFIG when Dashboard supplies one", () => {
+    expect(entrypoint).toContain("KODY_MODEL_CONFIG")
+    expect(entrypoint).toContain("modelName")
+    expect(entrypoint).toContain("apiKeyEnvVar")
+    expect(entrypoint).toContain("api_base")
+    expect(entrypoint).toMatch(/protocol.*openai|openai.*protocol/s)
+  })
+
   it("restores Claude Code subscription auth from the encrypted vault bundle", () => {
     expect(entrypoint).toContain("CLAUDE_CODE_AUTH_B64")
     expect(entrypoint).toContain("restore_claude_code_auth")

@@ -187,6 +187,43 @@ prewarm_litellm() {
   printf 'model_list:\n' >>"$cfg"
 
   providersAdded=0
+  if [ -n "${KODY_MODEL_CONFIG:-}" ]; then
+    modelName="$(printf '%s' "$KODY_MODEL_CONFIG" | jq -r '.modelName // empty' 2>/dev/null || true)"
+    protocol="$(printf '%s' "$KODY_MODEL_CONFIG" | jq -r '.protocol // empty' 2>/dev/null || true)"
+    provider="$(printf '%s' "$KODY_MODEL_CONFIG" | jq -r '.provider // empty' 2>/dev/null || true)"
+    baseURL="$(printf '%s' "$KODY_MODEL_CONFIG" | jq -r '.baseURL // empty' 2>/dev/null || true)"
+    apiKeyVar="$(printf '%s' "$KODY_MODEL_CONFIG" | jq -r '.apiKeyEnvVar // empty' 2>/dev/null || true)"
+    if [ -z "$modelName" ] || [ -z "$apiKeyVar" ]; then
+      echo "→ brain: pre-warm skipped (KODY_MODEL_CONFIG missing modelName/apiKeyEnvVar)"
+      return 0
+    fi
+    apiKey="$(printf '%s' "$ALL_SECRETS" | jq -r --arg k "$apiKeyVar" '.[$k] // empty' 2>/dev/null || true)"
+    if [ -z "$apiKey" ]; then
+      echo "→ brain: pre-warm skipped ($apiKeyVar missing in ALL_SECRETS)"
+      return 0
+    fi
+    export "$apiKeyVar=$apiKey"
+    litellmProvider="$provider"
+    if [ "$protocol" = "openai" ]; then
+      litellmProvider="openai"
+    fi
+    if [ -z "$litellmProvider" ]; then
+      echo "→ brain: pre-warm skipped (KODY_MODEL_CONFIG missing provider)"
+      return 0
+    fi
+    cat >>"$cfg" <<EOF
+  - model_name: "${modelName}"
+    litellm_params:
+      model: "${litellmProvider}/${modelName}"
+      api_key: os.environ/${apiKeyVar}
+EOF
+    if [ -n "$baseURL" ]; then
+      printf '      api_base: "%s"\n' "$baseURL" >>"$cfg"
+    fi
+    providersAdded=1
+  fi
+
+  if [ "$providersAdded" -eq 0 ]; then
   for entry in $LITELLM_PROVIDERS; do
     provider="${entry%:*}"
     apiKeyVar="${entry#*:}"
@@ -203,6 +240,7 @@ prewarm_litellm() {
 EOF
     providersAdded=$((providersAdded + 1))
   done
+  fi
 
   if [ "$providersAdded" -eq 0 ]; then
     echo "→ brain: pre-warm skipped (no provider keys in ALL_SECRETS)"

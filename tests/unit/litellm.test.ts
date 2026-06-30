@@ -50,10 +50,22 @@ describe("litellm: generateLitellmConfigYaml", () => {
     expect(yaml).toMatch(/api_key: os\.environ\/MINIMAX_API_KEY/)
   })
 
-  it("routes MiniMax through the Anthropic-compatible API base", () => {
-    const yaml = generateLitellmConfigYaml({ provider: "minimax", model: "MiniMax-M2.7-highspeed" })
+  it("routes OpenAI-compatible dashboard models through their configured base URL", () => {
+    const yaml = generateLitellmConfigYaml({
+      provider: "custom",
+      model: "MiniMax-M3",
+      protocol: "openai",
+      baseURL: "https://api.minimax.io/v1",
+      apiKeyEnvVar: "MINIMAX_API_KEY",
+      litellmProvider: "openai",
+      spec: "minimax/MiniMax-M3",
+    })
 
-    expect(yaml).toMatch(/api_base: https:\/\/api\.minimax\.io\/anthropic\/v1\/messages/)
+    expect(yaml).toMatch(/model_name: MiniMax-M3/)
+    expect(yaml).toMatch(/model: openai\/MiniMax-M3/)
+    expect(yaml).toMatch(/api_key: os\.environ\/MINIMAX_API_KEY/)
+    expect(yaml).toMatch(/api_base: https:\/\/api\.minimax\.io\/v1/)
+    expect(yaml).not.toMatch(/anthropic\/v1\/messages/)
   })
 
   it("includes drop_params: true to silence non-anthropic warnings", () => {
@@ -66,7 +78,7 @@ describe("litellm: generateLitellmConfigYaml", () => {
     expect(yaml).toMatch(/api_key: os\.environ\/OPENAI_API_KEY/)
   })
 
-  it("does not add a MiniMax API base to other providers", () => {
+  it("does not add an API base unless the model config supplies one", () => {
     const yaml = generateLitellmConfigYaml({ provider: "openai", model: "gpt-4o" })
     expect(yaml).not.toMatch(/api_base:/)
   })

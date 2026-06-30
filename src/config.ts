@@ -182,6 +182,11 @@ export interface KodyConfig {
 export interface ProviderModel {
   provider: string
   model: string
+  protocol?: string
+  baseURL?: string
+  apiKeyEnvVar?: string
+  litellmProvider?: string
+  spec?: string
 }
 
 /**
@@ -235,12 +240,57 @@ export function parseProviderModel(s: string): ProviderModel {
   return { provider: s.slice(0, slash), model: s.slice(slash + 1) }
 }
 
+function optionalRuntimeString(raw: Record<string, unknown>, key: string): string | undefined {
+  const value = raw[key]
+  return typeof value === "string" && value.trim() ? value.trim() : undefined
+}
+
+export function parseModelRuntimeConfig(modelSpec: string, rawConfig: string | undefined): ProviderModel {
+  const fallback = parseProviderModel(modelSpec)
+  const raw = rawConfig?.trim()
+  if (!raw) return fallback
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(`KODY_MODEL_CONFIG is invalid JSON: ${msg}`)
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("KODY_MODEL_CONFIG must be a JSON object")
+  }
+
+  const record = parsed as Record<string, unknown>
+  const modelName = optionalRuntimeString(record, "modelName")
+  if (!modelName) {
+    throw new Error("KODY_MODEL_CONFIG.modelName is required")
+  }
+  const protocol = optionalRuntimeString(record, "protocol")
+  const baseURL = optionalRuntimeString(record, "baseURL")
+  const apiKeyEnvVar = optionalRuntimeString(record, "apiKeyEnvVar")
+  const spec = optionalRuntimeString(record, "spec")
+  const provider = optionalRuntimeString(record, "provider") ?? fallback.provider
+
+  const out: ProviderModel = {
+    provider,
+    model: modelName,
+  }
+  if (protocol) out.protocol = protocol
+  if (baseURL) out.baseURL = baseURL
+  if (apiKeyEnvVar) out.apiKeyEnvVar = apiKeyEnvVar
+  if (spec) out.spec = spec
+  if (protocol === "openai") out.litellmProvider = "openai"
+  return out
+}
+
 export function providerApiKeyEnvVar(provider: string): string {
   if (provider === "anthropic" || provider === "claude") return "ANTHROPIC_API_KEY"
   return `${provider.toUpperCase()}_API_KEY`
 }
 
 export function needsLitellmProxy(model: ProviderModel): boolean {
+  if (model.protocol === "anthropic") return false
   return model.provider !== "claude" && model.provider !== "anthropic"
 }
 

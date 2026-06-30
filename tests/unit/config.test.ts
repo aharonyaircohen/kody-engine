@@ -2,7 +2,13 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
-import { loadConfig, needsLitellmProxy, parseProviderModel, providerApiKeyEnvVar } from "../../src/config.js"
+import {
+  loadConfig,
+  needsLitellmProxy,
+  parseModelRuntimeConfig,
+  parseProviderModel,
+  providerApiKeyEnvVar,
+} from "../../src/config.js"
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-test-"))
@@ -30,6 +36,45 @@ describe("config: parseProviderModel", () => {
 
   it("preserves slashes inside model name", () => {
     expect(parseProviderModel("a/b/c")).toEqual({ provider: "a", model: "b/c" })
+  })
+})
+
+describe("config: parseModelRuntimeConfig", () => {
+  it("uses MODEL as the legacy fallback when no runtime config is supplied", () => {
+    expect(parseModelRuntimeConfig("minimax/MiniMax-M3", undefined)).toEqual({
+      provider: "minimax",
+      model: "MiniMax-M3",
+    })
+  })
+
+  it("uses the dashboard model config for OpenAI-compatible endpoints", () => {
+    expect(
+      parseModelRuntimeConfig(
+        "minimax/MiniMax-M3",
+        JSON.stringify({
+          spec: "minimax/MiniMax-M3",
+          provider: "custom",
+          protocol: "openai",
+          baseURL: "https://api.minimax.io/v1",
+          modelName: "MiniMax-M3",
+          apiKeyEnvVar: "MINIMAX_API_KEY",
+        }),
+      ),
+    ).toEqual({
+      provider: "custom",
+      model: "MiniMax-M3",
+      protocol: "openai",
+      baseURL: "https://api.minimax.io/v1",
+      apiKeyEnvVar: "MINIMAX_API_KEY",
+      litellmProvider: "openai",
+      spec: "minimax/MiniMax-M3",
+    })
+  })
+
+  it("throws a clear error for invalid dashboard model config JSON", () => {
+    expect(() => parseModelRuntimeConfig("minimax/MiniMax-M3", "{")).toThrow(
+      /KODY_MODEL_CONFIG is invalid JSON/,
+    )
   })
 })
 

@@ -34,7 +34,7 @@ import * as path from "node:path"
 import type { ChatEvent, EventSink } from "../chat/events.js"
 import { type ChatTurnOptions, type ChatTurnResult, runChatTurn } from "../chat/loop.js"
 import { appendTurn, sessionFilePath, sessionStatePath } from "../chat/session.js"
-import { LITELLM_DEFAULT_URL, needsLitellmProxy, parseProviderModel } from "../config.js"
+import { LITELLM_DEFAULT_URL, needsLitellmProxy, parseModelRuntimeConfig, type ProviderModel } from "../config.js"
 import { unpackAllSecrets } from "../kody-cli.js"
 import { type LitellmHandle, startLitellmIfNeeded } from "../litellm.js"
 import { type CloneRepoFn, defaultCloneRepo, ensureRepoCwd } from "../repoWorkspace.js"
@@ -297,7 +297,7 @@ export { ensureRepoCwd }
 export interface BuildServerOptions {
   apiKey: string
   cwd: string
-  model: ReturnType<typeof parseProviderModel>
+  model: ProviderModel
   litellmUrl: string | null
   /**
    * Root under which per-repo clones live (`<reposRoot>/<owner>/<name>`).
@@ -321,7 +321,7 @@ async function handleChatTurn(
     cwd: string
     reposRoot: string
     cloneRepo: CloneRepoFn
-    model: ReturnType<typeof parseProviderModel>
+    model: ProviderModel
     litellmUrl: string | null
     runTurn: (opts: ChatTurnOptions) => Promise<ChatTurnResult>
     stateFetch?: typeof fetch
@@ -576,7 +576,10 @@ export async function brainServe(opts: { cwd: string }): Promise<number> {
   // brain-serve runs config-free (it serves many repos cloned per message), so
   // its model comes from the MODEL env var — same fallback the executor used
   // for this formerly-configless executable.
-  const model = parseProviderModel(process.env.MODEL?.trim() || "claude/claude-haiku-4-5-20251001")
+  const model = parseModelRuntimeConfig(
+    process.env.MODEL?.trim() || "claude/claude-haiku-4-5-20251001",
+    process.env.KODY_MODEL_CONFIG,
+  )
   const usesProxy = needsLitellmProxy(model)
 
   let handle: LitellmHandle | null = null
