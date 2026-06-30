@@ -61,10 +61,7 @@ export function stageGoalRunLogEvent(
   const path = existing?.path ?? goalRunLogPath(goalId, data)
   logs[goalId] = {
     path,
-    events: [
-      ...(existing?.events ?? []),
-      buildGoalRunLogEvent(data, goalId, event, at),
-    ],
+    events: [...(existing?.events ?? []), buildGoalRunLogEvent(data, goalId, event, at)],
   }
 }
 
@@ -91,7 +88,7 @@ export function goalRunLogPath(goalId: string, data: Record<string, unknown>): s
 }
 
 export function goalStateLogPath(goalId: string): string {
-  return `todos/${safePathSegment(goalId)}.md`
+  return `todos/${safePathSegment(goalId)}.json`
 }
 
 export function goalRunLogSnapshot(goalId: string, goalState: string, goal: ManagedGoal): Record<string, unknown> {

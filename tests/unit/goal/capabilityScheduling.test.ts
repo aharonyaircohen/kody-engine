@@ -45,47 +45,32 @@ function writeCapabilityState(slug: string, lastFiredAt: string): void {
 }
 
 function writeRepoGoal(stateRoot: string, goalId: string, state: Record<string, unknown>): void {
-  const file = path.join(stateRoot, "state", "goals", "instances", goalId, "state.json")
+  const file = path.join(stateRoot, "state", "todos", `${goalId}.json`)
   fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, JSON.stringify(state, null, 2))
+  fs.writeFileSync(
+    file,
+    JSON.stringify(
+      {
+        version: 1,
+        title: goalId,
+        description:
+          typeof (state.destination as { outcome?: unknown } | undefined)?.outcome === "string"
+            ? (state.destination as { outcome: string }).outcome
+            : "",
+        managed: true,
+        managedModel: state.scheduleMode === "agentLoop" || state.type === "agentLoop" ? "agentLoop" : "agentGoal",
+        items: [],
+        ...state,
+      },
+      null,
+      2,
+    ),
+  )
 }
 
 function readRepoGoal(stateRoot: string, goalId: string): Record<string, unknown> {
-  const todoFile = path.join(stateRoot, "state", "todos", `${goalId}.md`)
-  if (fs.existsSync(todoFile)) return readTodoGoal(todoFile)
-  return JSON.parse(
-    fs.readFileSync(path.join(stateRoot, "state", "goals", "instances", goalId, "state.json"), "utf8"),
-  ) as Record<string, unknown>
-}
-
-function readTodoGoal(file: string): Record<string, unknown> {
-  const raw = fs.readFileSync(file, "utf8")
-  const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(raw)
-  const parsed: Record<string, unknown> = {}
-  for (const line of (match?.[1] ?? "").split(/\r?\n/)) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    const colon = trimmed.indexOf(":")
-    if (colon === -1) continue
-    parsed[trimmed.slice(0, colon).trim()] = parseTodoFrontmatterValue(trimmed.slice(colon + 1).trim())
-  }
-  return parsed
-}
-
-function parseTodoFrontmatterValue(raw: string): unknown {
-  let value = raw
-  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-    value = value.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, "\\")
-  }
-  if (value === "true") return true
-  if (value === "false") return false
-  if (value === "null") return null
-  if (value.startsWith("{") || value.startsWith("[") || /^-?\d+(\.\d+)?$/.test(value)) {
-    try {
-      return JSON.parse(value)
-    } catch {}
-  }
-  return value
+  const todoFile = path.join(stateRoot, "state", "todos", `${goalId}.json`)
+  return JSON.parse(fs.readFileSync(todoFile, "utf8")) as Record<string, unknown>
 }
 
 function writeLocalGoalTemplate(goalId: string, state: Record<string, unknown>): void {

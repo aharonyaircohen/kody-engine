@@ -10,7 +10,7 @@
  *   3. Append the new goal to the `kody:goals-manifest` issue's embedded
  *      JSON (creating the manifest issue if absent). The dashboard reads
  *      this to render the goal in its UI.
- *   4. Write `<statePath>/todos/<id>.md` (`state: "active"`) in the
+ *   4. Write `<statePath>/todos/<id>.json` (`state: "active"`) in the
  *      configured state repo.
  *   5. Open N task issues — one per finding — each labelled
  *      `goal:<id>`, `severity:P{n}`, `kody:qa-finding`. The issue body
@@ -401,7 +401,7 @@ export const createQaGoal: PostflightScript = async (ctx, _profile, agentResult:
 /**
  * Turn a QA report (markdown + `<!-- KODY_QA_REPORT_JSON ... -->`) into a kody
  * goal: append to the goals manifest, open one fix-ticket per finding, and
- * write `<statePath>/todos/<id>.md` in the state repo so goal-scheduler ticks
+ * write `<statePath>/todos/<id>.json` in the state repo so goal-scheduler ticks
  * it. This is the operator-gated half of QA — invoked by the standalone
  * qa-engineer path and by the `qa-goal` verb (which approve posts). PASS /
  * no-findings reports open a single record issue instead.

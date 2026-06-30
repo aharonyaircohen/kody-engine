@@ -1,5 +1,5 @@
 /**
- * goal-scheduler depends on python3 to parse each goal's state.json. That
+ * goal-scheduler depends on python3 to parse each goal's todo JSON. That
  * dependency must be declared in the profile so the executor verifies/installs
  * it during preflight cliTool validation — otherwise a runner without python3
  * silently reads every goal as inactive and ticks nothing.

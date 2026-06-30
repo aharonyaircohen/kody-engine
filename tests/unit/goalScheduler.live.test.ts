@@ -2,10 +2,10 @@
  * Live wiring test for the goal-scheduler shell preflight.
  *
  * Runs the real goal-scheduler/scheduler.sh against fixture
- * goal instance state files, with a stub engine binary on PATH.
+ * goal todo JSON files, with a stub engine binary on PATH.
  * Proves the scheduler:
  * - ticks every active managed goal exactly once via `goal-manager --goal <id>`
- * - skips paused, done, missing-state, and legacy-shaped goal files
+ * - skips paused, done, missing-state, and unmanaged todo files
  * - keeps going when one managed tick fails
  * - invokes the published bin name `kody-engine`, never bare `kody`
  */
@@ -40,26 +40,18 @@ function managedGoalExtra(): Record<string, unknown> {
 
 function managedGoalTodo(id: string): string {
   const extra = managedGoalExtra()
-  return [
-    "---",
-    `title: "${id}"`,
-    `id: "${id}"`,
-    "managed: true",
-    'managedModel: "agentGoal"',
-    'state: "active"',
-    'type: "release"',
-    'evidence: "[\\"releasePrExists\\"]"',
-    'capabilities: "[\\"release-prepare\\"]"',
-    'route: "[{\\"evidence\\":\\"releasePrExists\\",\\"stage\\":\\"prepare\\",\\"capability\\":\\"release-prepare\\"}]"',
-    'facts: "{}"',
-    'blockers: "[]"',
-    "---",
-    "",
-    String((extra.destination as { outcome: string }).outcome),
-    "",
-    "<!-- kody-todo-items-json",
-    JSON.stringify(
-      [
+  return `${JSON.stringify(
+    {
+      version: 1,
+      title: id,
+      id,
+      description: String((extra.destination as { outcome: string }).outcome),
+      managed: true,
+      managedModel: "agentGoal",
+      state: "active",
+      ...extra,
+      evidence: ["releasePrExists"],
+      items: [
         {
           id: "releasePrExists",
           title: "prepare",
@@ -75,24 +67,20 @@ function managedGoalTodo(id: string): string {
           },
         },
       ],
-      null,
-      2,
-    ),
-    "-->",
-    "",
-  ].join("\n")
+    },
+    null,
+    2,
+  )}\n`
 }
 
 function regularTodoList(): string {
-  return [
-    "---",
-    'title: "Regular todo"',
-    'createdAt: "2026-06-28T00:00:00.000Z"',
-    "---",
-    "",
-    "<!-- kody-todo-items-json",
-    JSON.stringify(
-      [
+  return `${JSON.stringify(
+    {
+      version: 1,
+      title: "Regular todo",
+      description: "",
+      createdAt: "2026-06-28T00:00:00.000Z",
+      items: [
         {
           id: "item-1",
           title: "Should not tick",
@@ -103,20 +91,56 @@ function regularTodoList(): string {
           completedAt: null,
         },
       ],
-      null,
-      2,
-    ),
-    "-->",
-    "",
-  ].join("\n")
+    },
+    null,
+    2,
+  )}\n`
 }
 
 function writeGoal(id: string, state: string | null, extra: Record<string, unknown> = {}): void {
-  const dir = path.join(tmp, ".kody", "goals", "instances", id)
-  fs.mkdirSync(dir, { recursive: true })
+  const file = path.join(tmp, ".kody", "todos", `${id}.json`)
+  fs.mkdirSync(path.dirname(file), { recursive: true })
   if (state !== null) {
-    fs.writeFileSync(path.join(dir, "state.json"), JSON.stringify({ version: 1, state, ...extra }, null, 2))
+    fs.writeFileSync(
+      file,
+      JSON.stringify(
+        {
+          version: 1,
+          title: id,
+          description:
+            typeof (extra.destination as { outcome?: unknown } | undefined)?.outcome === "string"
+              ? (extra.destination as { outcome: string }).outcome
+              : "",
+          managed: true,
+          managedModel: extra.scheduleMode === "agentLoop" || extra.type === "agentLoop" ? "agentLoop" : "agentGoal",
+          items: [],
+          state,
+          ...extra,
+        },
+        null,
+        2,
+      ),
+    )
   }
+}
+
+function writeRegularTodo(id: string): void {
+  const file = path.join(tmp, ".kody", "todos", `${id}.json`)
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(
+    file,
+    JSON.stringify(
+      {
+        version: 1,
+        title: id,
+        description: "",
+        items: [],
+        state: "active",
+      },
+      null,
+      2,
+    ),
+  )
 }
 
 function writeConfig(config: Record<string, unknown>): void {
@@ -164,18 +188,14 @@ function installGhStub(binDir: string): void {
       "#!/usr/bin/env bash",
       'echo "gh $*" >> "$KODY_GH_LOG"',
       'if [ "$1" = "api" ] && [ "$2" = "/repos/A-Guy-educ/kody-state/contents/A-Guy-Web/todos" ]; then',
-      '  printf \'[{"name":"web-release.md","type":"file"},{"name":"todo-list-1.md","type":"file"}]\\n\'',
+      '  printf \'[{"name":"web-release.json","type":"file"},{"name":"todo-list-1.json","type":"file"}]\\n\'',
       "  exit 0",
       "fi",
-      'if [ "$1" = "api" ] && [ "$2" = "/repos/A-Guy-educ/kody-state/contents/A-Guy-Web/goals/instances" ]; then',
-      "  printf '[]\\n'",
-      "  exit 0",
-      "fi",
-      'if [ "$1" = "api" ] && [ "$2" = "/repos/A-Guy-educ/kody-state/contents/A-Guy-Web/todos/web-release.md" ]; then',
+      'if [ "$1" = "api" ] && [ "$2" = "/repos/A-Guy-educ/kody-state/contents/A-Guy-Web/todos/web-release.json" ]; then',
       '  printf \'{"type":"file","encoding":"base64","sha":"todo-sha","content":"%s"}\\n\' "$(printf \'%s\' "$KODY_REMOTE_GOAL_MD" | base64 | tr -d \'\\n\')"',
       "  exit 0",
       "fi",
-      'if [ "$1" = "api" ] && [ "$2" = "/repos/A-Guy-educ/kody-state/contents/A-Guy-Web/todos/todo-list-1.md" ]; then',
+      'if [ "$1" = "api" ] && [ "$2" = "/repos/A-Guy-educ/kody-state/contents/A-Guy-Web/todos/todo-list-1.json" ]; then',
       '  printf \'{"type":"file","encoding":"base64","sha":"regular-todo-sha","content":"%s"}\\n\' "$(printf \'%s\' "$KODY_REMOTE_REGULAR_TODO_MD" | base64 | tr -d \'\\n\')"',
       "  exit 0",
       "fi",
@@ -242,16 +262,15 @@ describe("goal-scheduler live wiring", () => {
     expect(stdout).toContain("KODY_SKIP_AGENT=true")
   })
 
-  it("skips active legacy-shaped goals", () => {
-    writeGoal("legacy", "active")
+  it("ignores active unmanaged todo files", () => {
+    writeRegularTodo("regular")
     writeGoal("managed", "active", managedGoalExtra())
-    activateGoals("legacy", "managed")
+    activateGoals("regular", "managed")
 
     const { status, stdout, calls } = runScheduler()
 
     expect(status).toBe(0)
     expect(calls).toEqual(["kody-engine exec goal-manager --goal managed"])
-    expect(stdout).toContain("skip legacy: legacy goal files are not managed-goal instances")
     expect(stdout).toContain("-> tick managed (goal-manager)")
   })
 
@@ -277,8 +296,8 @@ describe("goal-scheduler live wiring", () => {
 
     expect(status, stderr).toBe(0)
     expect(ghCalls.join("\n")).toContain("/contents/A-Guy-Web/todos")
-    expect(ghCalls.join("\n")).toContain("/contents/A-Guy-Web/todos/web-release.md")
-    expect(ghCalls.join("\n")).toContain("/contents/A-Guy-Web/todos/todo-list-1.md")
+    expect(ghCalls.join("\n")).toContain("/contents/A-Guy-Web/todos/web-release.json")
+    expect(ghCalls.join("\n")).toContain("/contents/A-Guy-Web/todos/todo-list-1.json")
     expect(ghCalls.some((call) => call.includes("/repos/https://github.com"))).toBe(false)
     expect(calls).toEqual(["kody-engine exec goal-manager --goal web-release"])
   })
@@ -318,7 +337,7 @@ describe("goal-scheduler live wiring", () => {
 
     const { status, stdout, calls } = runScheduler()
 
-    const instanceFile = path.join(tmp, ".kody", "goals", "instances", "weekly-release-2026-W25", "state.json")
+    const instanceFile = path.join(tmp, ".kody", "todos", "weekly-release-2026-W25.json")
     const instance = JSON.parse(fs.readFileSync(instanceFile, "utf-8"))
     expect(status).toBe(0)
     expect(instance).toMatchObject({
@@ -346,7 +365,7 @@ describe("goal-scheduler live wiring", () => {
     expect(before.status).toBe(0)
     expect(before.calls).toEqual([])
     expect(before.stdout).toContain("skip web-release: waiting preferred time 10:00 Asia/Jerusalem")
-    expect(fs.existsSync(path.join(tmp, ".kody", "goals", "instances", "web-release-2026-06-24"))).toBe(false)
+    expect(fs.existsSync(path.join(tmp, ".kody", "todos", "web-release-2026-06-24.json"))).toBe(false)
 
     const after = runScheduler({ now: "2026-06-24T07:01:00Z" })
     expect(after.status).toBe(0)
@@ -412,7 +431,7 @@ describe("goal-scheduler live wiring", () => {
 
     expect(status).toBe(0)
     expect(calls).toEqual(["kody-engine exec goal-manager --goal web-release-2026-06-24"])
-    expect(fs.existsSync(path.join(tmp, ".kody", "goals", "instances", "web-release-2026-06-25"))).toBe(false)
+    expect(fs.existsSync(path.join(tmp, ".kody", "todos", "web-release-2026-06-25.json"))).toBe(false)
     expect(stdout).toContain("skip web-release: active scheduled instance already running (web-release-2026-06-24)")
   })
 

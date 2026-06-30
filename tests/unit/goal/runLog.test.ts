@@ -117,7 +117,7 @@ describe("goal run logs", () => {
       stateRepo: {
         repo: "o/kody-state",
         path: "r",
-        goalStatePath: "r/todos/web-release.md",
+        goalStatePath: "r/todos/web-release.json",
       },
       trigger: {
         source: "github-actions",
@@ -147,7 +147,7 @@ describe("goal run logs", () => {
       },
       links: {
         workflowRun: "https://github.com/o/r/actions/runs/123",
-        goalState: "https://github.com/o/kody-state/blob/main/r/todos/web-release.md",
+        goalState: "https://github.com/o/kody-state/blob/main/r/todos/web-release.json",
       },
       decision: {
         kind: "dispatch",
