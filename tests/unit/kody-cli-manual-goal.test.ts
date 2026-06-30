@@ -214,7 +214,7 @@ describe("kody-cli manual goal dispatch", () => {
     })
   })
 
-  it("checks scheduled watches when workflow event has no direct action", async () => {
+  it("does not check scheduled watches for issue comments with no direct action", async () => {
     const dir = tmpDir()
     writeConfig(dir)
     writeScheduledExecutable(dir, "goal-scheduler")
@@ -228,18 +228,6 @@ describe("kody-cli manual goal dispatch", () => {
 
     await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
 
-    expect(mocks.runJob).toHaveBeenCalledTimes(1)
-    expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
-      dispatch: {
-        action: "goal-scheduler",
-        capability: "goal-scheduler",
-        executable: "goal-scheduler",
-        cliArgs: {},
-      },
-    })
-    expect(mocks.runJob.mock.calls[0]?.[1]).toMatchObject({
-      cwd: dir,
-      chain: true,
-    })
+    expect(mocks.runJob).not.toHaveBeenCalled()
   })
 })

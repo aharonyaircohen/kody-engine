@@ -569,6 +569,10 @@ export async function runCi(argv: string[]): Promise<number> {
       process.stderr.write(`[kody] config error: ${earlyConfigError.message}\n`)
       return 64
     }
+    if (process.env.GITHUB_EVENT_NAME === "issue_comment") {
+      process.stdout.write("→ kody: no action for event issue_comment — exiting cleanly\n")
+      return 0
+    }
     process.stdout.write(`→ kody: no action for event ${process.env.GITHUB_EVENT_NAME} — checking scheduled watches\n`)
     return runScheduledFanOut(cwd, args, { force: false })
   }
