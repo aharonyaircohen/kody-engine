@@ -48,6 +48,12 @@ describe("stateRepo branch", () => {
   const config = {
     state: { repo: "https://github.com/o/kody-state", path: "widgets" },
   }
+  const configuredBranchConfig = {
+    state: { repo: "https://github.com/o/kody-state", path: "widgets", branch: "main" },
+  }
+  const legacyBranchConfig = {
+    state: { repo: "https://github.com/o/kody-state", path: "widgets", branch: "kody-state" },
+  }
 
   it("reads runtime state from the dedicated state branch", () => {
     ghMock.mockReturnValue(
@@ -68,11 +74,29 @@ describe("stateRepo branch", () => {
     )
   })
 
-  it("creates the state branch on first write and writes to it", () => {
+  it("reads runtime state from the configured state branch", () => {
+    ghMock.mockReturnValue(
+      JSON.stringify({
+        type: "file",
+        encoding: "base64",
+        content: b64("hello"),
+        sha: "file-sha",
+      }),
+    )
+
+    readStateText(configuredBranchConfig, "/repo", "reports/check.md")
+
+    expect(ghMock).toHaveBeenCalledWith(
+      ["api", "/repos/o/kody-state/contents/widgets/reports/check.md?ref=main"],
+      { cwd: "/repo" },
+    )
+  })
+
+  it("creates a configured state branch on first write and writes to it", () => {
     let payload: Record<string, unknown> | null = null
     ghMock.mockImplementation((args: string[], opts?: { input?: string }) => {
       const command = args.join(" ")
-      if (command === `api /repos/o/kody-state/git/ref/heads/${STATE_BRANCH}`) {
+      if (command === "api /repos/o/kody-state/git/ref/heads/kody-state") {
         throw new Error("HTTP 404 Not Found")
       }
       if (command === "api /repos/o/kody-state") {
@@ -91,15 +115,38 @@ describe("stateRepo branch", () => {
       throw new Error(`unexpected gh call: ${command}`)
     })
 
-    writeStateText(config, "/repo", "reports/check.md", "hello", "save report")
+    writeStateText(legacyBranchConfig, "/repo", "reports/check.md", "hello", "save report")
 
     expect(ghMock).toHaveBeenCalledWith(["api", "--method", "POST", "/repos/o/kody-state/git/refs", "--input", "-"], {
       cwd: "/repo",
-      input: JSON.stringify({ ref: `refs/heads/${STATE_BRANCH}`, sha: "main-sha" }),
+      input: JSON.stringify({ ref: "refs/heads/kody-state", sha: "main-sha" }),
     })
     expect(payload).toMatchObject({
       message: "save report",
-      branch: STATE_BRANCH,
+      branch: "kody-state",
+      content: b64("hello"),
+    })
+  })
+
+  it("writes runtime state to the configured state branch", () => {
+    let payload: Record<string, unknown> | null = null
+    ghMock.mockImplementation((args: string[], opts?: { input?: string }) => {
+      const command = args.join(" ")
+      if (command === "api /repos/o/kody-state/git/ref/heads/main") {
+        return JSON.stringify({ object: { sha: "main-sha" } })
+      }
+      if (command === "api --method PUT /repos/o/kody-state/contents/widgets/reports/check.md --input -") {
+        payload = JSON.parse(String(opts?.input ?? "{}")) as Record<string, unknown>
+        return ""
+      }
+      throw new Error(`unexpected gh call: ${command}`)
+    })
+
+    writeStateText(configuredBranchConfig, "/repo", "reports/check.md", "hello", "save report")
+
+    expect(payload).toMatchObject({
+      message: "save report",
+      branch: "main",
       content: b64("hello"),
     })
   })

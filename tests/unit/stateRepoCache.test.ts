@@ -16,14 +16,14 @@ describe("stateRepo runtime cache", () => {
     gh.mockReturnValue("{}")
   })
 
-  it("checks that the kody-state branch exists only once per process/repo", () => {
+  it("checks that the state branch exists only once per process/repo", () => {
     const config = { state: { repo: "acme/kody-state", path: "widgets" } }
 
     writeStateText(config, "/tmp/repo", "tasks/issues/1/state.json", "{}\n", "first")
     writeStateText(config, "/tmp/repo", "tasks/issues/1/state.json", "{}\n", "second")
 
     const branchChecks = gh.mock.calls.filter((call) =>
-      ((call[0] as string[]) ?? []).includes("/repos/acme/kody-state/git/ref/heads/kody-state"),
+      ((call[0] as string[]) ?? []).includes("/repos/acme/kody-state/git/ref/heads/main"),
     )
     const puts = gh.mock.calls.filter((call) => ((call[0] as string[]) ?? []).includes("PUT"))
 
@@ -48,10 +48,10 @@ describe("stateRepo runtime cache", () => {
     )
 
     const acmeChecks = gh.mock.calls.filter((call) =>
-      ((call[0] as string[]) ?? []).includes("/repos/acme/kody-state/git/ref/heads/kody-state"),
+      ((call[0] as string[]) ?? []).includes("/repos/acme/kody-state/git/ref/heads/main"),
     )
     const betaChecks = gh.mock.calls.filter((call) =>
-      ((call[0] as string[]) ?? []).includes("/repos/beta/kody-state/git/ref/heads/kody-state"),
+      ((call[0] as string[]) ?? []).includes("/repos/beta/kody-state/git/ref/heads/main"),
     )
 
     expect(acmeChecks).toHaveLength(1)
@@ -59,7 +59,7 @@ describe("stateRepo runtime cache", () => {
   })
 
   it("caches the branch after creating it", () => {
-    const config = { state: { repo: "acme/kody-state", path: "widgets" } }
+    const config = { state: { repo: "acme/kody-state", path: "widgets", branch: "kody-state" } }
     let branchChecks = 0
 
     gh.mockImplementation((args) => {
@@ -87,7 +87,7 @@ describe("stateRepo runtime cache", () => {
   })
 
   it("caches the branch when creation races with another writer", () => {
-    const config = { state: { repo: "acme/kody-state", path: "widgets" } }
+    const config = { state: { repo: "acme/kody-state", path: "widgets", branch: "kody-state" } }
     let branchChecks = 0
 
     gh.mockImplementation((args) => {
@@ -128,7 +128,7 @@ describe("stateRepo runtime cache", () => {
     writeStateText(config, "/tmp/repo", "tasks/issues/1/state.json", "{}\n", "second")
 
     const branchChecks = gh.mock.calls.filter((call) =>
-      ((call[0] as string[]) ?? []).includes("/repos/acme/kody-state/git/ref/heads/kody-state"),
+      ((call[0] as string[]) ?? []).includes("/repos/acme/kody-state/git/ref/heads/main"),
     )
     const puts = gh.mock.calls.filter((call) => ((call[0] as string[]) ?? []).includes("PUT"))
 

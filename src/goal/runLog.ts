@@ -1,6 +1,5 @@
 import * as fs from "node:fs"
 import type { CapabilityResultArtifact } from "../capabilityResult.js"
-import { STATE_BRANCH } from "../stateBranch.js"
 import { appendStateLine, parseStateRepoSlug, resolveStateRepoConfig, type StateRepoConfig } from "../stateRepo.js"
 import type { GoalRouteStep, ManagedGoal } from "./manager.js"
 import { nowIso } from "./state.js"
@@ -264,6 +263,7 @@ function stateRepoContext(
     return {
       repo: state.repo,
       path: state.path,
+      branch: state.branch,
       goalStatePath: `${state.path}/${goalStateLogPath(goalId)}`,
       logPath: `${state.path}/${logPath}`,
     }
@@ -377,17 +377,18 @@ function linkContext(stateRepo: Record<string, unknown> | undefined): Record<str
   if (runId && repository) links.workflowRun = `${server}/${repository}/actions/runs/${runId}`
 
   const repo = stringValue(stateRepo?.repo)
+  const branch = stringValue(stateRepo?.branch)
   const goalStatePath = stringValue(stateRepo?.goalStatePath)
   const logPath = stringValue(stateRepo?.logPath)
-  if (repo && goalStatePath) links.goalState = githubBlobUrl(repo, goalStatePath)
-  if (repo && logPath) links.log = githubBlobUrl(repo, logPath)
+  if (repo && branch && goalStatePath) links.goalState = githubBlobUrl(repo, branch, goalStatePath)
+  if (repo && branch && logPath) links.log = githubBlobUrl(repo, branch, logPath)
   return Object.keys(links).length > 0 ? links : undefined
 }
 
-function githubBlobUrl(repo: string, filePath: string): string | undefined {
+function githubBlobUrl(repo: string, branch: string, filePath: string): string | undefined {
   try {
     const parsed = parseStateRepoSlug(repo)
-    return `https://github.com/${parsed.owner}/${parsed.repo}/blob/${STATE_BRANCH}/${filePath}`
+    return `https://github.com/${parsed.owner}/${parsed.repo}/blob/${encodeURIComponent(branch)}/${filePath}`
   } catch {
     return undefined
   }

@@ -117,6 +117,7 @@ describe("goal run logs", () => {
       stateRepo: {
         repo: "o/kody-state",
         path: "r",
+        branch: "main",
         goalStatePath: "r/todos/web-release.json",
       },
       trigger: {
@@ -147,7 +148,7 @@ describe("goal run logs", () => {
       },
       links: {
         workflowRun: "https://github.com/o/r/actions/runs/123",
-        goalState: "https://github.com/o/kody-state/blob/kody-state/r/todos/web-release.json",
+        goalState: "https://github.com/o/kody-state/blob/main/r/todos/web-release.json",
       },
       decision: {
         kind: "dispatch",
@@ -158,7 +159,7 @@ describe("goal run logs", () => {
       /^r\/logs\/goals\/web-release\/runs\/.+-job-1\.jsonl$/,
     )
     expect((event.links as Record<string, unknown>).log).toMatch(
-      /^https:\/\/github\.com\/o\/kody-state\/blob\/kody-state\/r\/logs\/goals\/web-release\/runs\/.+-job-1\.jsonl$/,
+      /^https:\/\/github\.com\/o\/kody-state\/blob\/main\/r\/logs\/goals\/web-release\/runs\/.+-job-1\.jsonl$/,
     )
   })
 

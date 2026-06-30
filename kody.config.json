@@ -9,7 +9,8 @@
   },
   "state": {
     "repo": "https://github.com/aharonyaircohen/kody-state",
-    "path": "kody-engine"
+    "path": "kody-engine",
+    "branch": "main"
   },
   "git": {
     "defaultBranch": "main"

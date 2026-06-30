@@ -8,7 +8,6 @@ import * as crypto from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { STATE_BRANCH } from "./stateBranch.js"
 import { type ParsedStateRepo, parseStateRepo, type StateRepoConfig } from "./stateRepo.js"
 
 const DIR_MAPPINGS: Array<{ stateDir: string; localDir: string }> = [
@@ -57,7 +56,7 @@ export function hydrateStateWorkspace(config: StateRepoConfig, cwd: string): voi
   if (process.env.VITEST && process.env[TEST_FETCH_ENV] !== "1") return
 
   const parsed = parseStateRepo(config)
-  const hydrateKey = `${path.resolve(cwd)}|${parsed.owner}/${parsed.repo}|${parsed.basePath}|${STATE_BRANCH}`
+  const hydrateKey = `${path.resolve(cwd)}|${parsed.owner}/${parsed.repo}|${parsed.basePath}|${parsed.branch}`
   if (hydratedWorkspaces.has(hydrateKey)) return
 
   const snapshotRoot = fetchStateSnapshot(parsed)
@@ -92,7 +91,7 @@ function fetchStateSnapshot(parsed: ParsedStateRepo): string {
     }
 
     runGit(["-C", cacheDir, "remote", "set-url", "origin", url])
-    runGit(["-C", cacheDir, "fetch", "--depth=1", "origin", STATE_BRANCH])
+    runGit(["-C", cacheDir, "fetch", "--depth=1", "origin", parsed.branch])
     runGit(["-C", cacheDir, "sparse-checkout", "init", "--cone"])
     runGit(["-C", cacheDir, "sparse-checkout", "set", parsed.basePath])
     runGit(["-C", cacheDir, "checkout", "--force", "--detach", "FETCH_HEAD"])
@@ -100,7 +99,7 @@ function fetchStateSnapshot(parsed: ParsedStateRepo): string {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     throw new Error(
-      `stateWorkspace: failed to fetch ${parsed.owner}/${parsed.repo}:${parsed.basePath}@${STATE_BRANCH}: ${msg}`,
+      `stateWorkspace: failed to fetch ${parsed.owner}/${parsed.repo}:${parsed.basePath}@${parsed.branch}: ${msg}`,
     )
   }
 
@@ -114,7 +113,7 @@ function cacheRoot(): string {
 function cacheKey(parsed: ParsedStateRepo): string {
   return crypto
     .createHash("sha256")
-    .update(`${parsed.owner}/${parsed.repo}#${STATE_BRANCH}#${parsed.basePath}`)
+    .update(`${parsed.owner}/${parsed.repo}#${parsed.branch}#${parsed.basePath}`)
     .digest("hex")
     .slice(0, 24)
 }

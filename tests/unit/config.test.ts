@@ -62,7 +62,7 @@ describe("config: loadConfig", () => {
     expect(cfg.github.owner).toBe("o")
     expect(cfg.agent.model).toBe("minimax/m")
     expect(cfg.git.defaultBranch).toBe("main")
-    expect(cfg.state).toEqual({ repo: "https://github.com/o/kody-state", path: "r" })
+    expect(cfg.state).toEqual({ repo: "https://github.com/o/kody-state", path: "r", branch: "main" })
   })
 
   it("accepts full GitHub URL for state repo", () => {
@@ -72,7 +72,7 @@ describe("config: loadConfig", () => {
       agent: { model: "minimax/m" },
       state: { repo: "https://github.com/o/kody-state", path: "r" },
     })
-    expect(loadConfig(dir).state).toEqual({ repo: "https://github.com/o/kody-state", path: "r" })
+    expect(loadConfig(dir).state).toEqual({ repo: "https://github.com/o/kody-state", path: "r", branch: "main" })
   })
 
   it("keeps legacy owner/repo state repo references readable", () => {
@@ -82,7 +82,17 @@ describe("config: loadConfig", () => {
       agent: { model: "minimax/m" },
       state: { repo: "o/kody-state", path: "r" },
     })
-    expect(loadConfig(dir).state).toEqual({ repo: "o/kody-state", path: "r" })
+    expect(loadConfig(dir).state).toEqual({ repo: "o/kody-state", path: "r", branch: "main" })
+  })
+
+  it("loads configured state repo branch", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "minimax/m" },
+      state: { repo: "o/kody-state", path: "r", branch: "state-main" },
+    })
+    expect(loadConfig(dir).state).toEqual({ repo: "o/kody-state", path: "r", branch: "state-main" })
   })
 
   it("parses scheduled goal preferred runtime", () => {

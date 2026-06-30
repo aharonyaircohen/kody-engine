@@ -115,7 +115,7 @@ for (let i = 1; i < args.length; i += 1) {
   }
 }
 
-if (apiPath.endsWith("/git/ref/heads/kody-state")) {
+if (apiPath.endsWith("/git/ref/heads/main")) {
   process.stdout.write(JSON.stringify({ object: { sha: "state-branch-sha" } }))
   process.exit(0)
 }

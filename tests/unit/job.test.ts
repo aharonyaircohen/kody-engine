@@ -363,7 +363,7 @@ describe("runJob (Phase 1 seam)", () => {
       )
 
       expect(gh).toHaveBeenCalledWith(
-        ["api", "/repos/o/kody-state/contents/r/workflows/bug-flow/workflow.json?ref=kody-state"],
+        ["api", "/repos/o/kody-state/contents/r/workflows/bug-flow/workflow.json?ref=main"],
         {
           cwd,
         },

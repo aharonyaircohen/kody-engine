@@ -5,6 +5,13 @@ import { STATE_BRANCH } from "./stateBranch.js"
 export interface StateRepoState {
   repo: string
   path: string
+  branch?: string
+}
+
+export interface ResolvedStateRepoState {
+  repo: string
+  path: string
+  branch: string
 }
 
 export interface StateRepoConfig {
@@ -19,6 +26,7 @@ export interface ParsedStateRepo {
   owner: string
   repo: string
   basePath: string
+  branch: string
 }
 
 export interface LoadedStateFile {
@@ -99,12 +107,35 @@ export function normalizeStatePath(raw: string, field = "statePath"): string {
   return parts.join("/")
 }
 
-export function resolveStateRepoConfig(config: StateRepoConfig): StateRepoState {
+export function normalizeStateBranch(raw: string | undefined, field = "state.branch"): string {
+  const value = raw?.trim() || STATE_BRANCH
+  if (!value) throw new Error(`kody.config.json: ${field} must not be empty`)
+  if (
+    value.startsWith("/") ||
+    value.endsWith("/") ||
+    value.includes("\\") ||
+    value.includes("..") ||
+    value.includes("@{") ||
+    /[\x00-\x20\x7f~^:?*\[]/.test(value)
+  ) {
+    throw new Error(`kody.config.json: ${field} contains an invalid branch`)
+  }
+
+  for (const part of value.split("/")) {
+    if (!part || part === "." || part === ".." || part.startsWith(".") || part.endsWith(".lock")) {
+      throw new Error(`kody.config.json: ${field} contains an invalid branch`)
+    }
+  }
+  return value
+}
+
+export function resolveStateRepoConfig(config: StateRepoConfig): ResolvedStateRepoState {
   if (config.state?.repo && config.state?.path) {
     parseStateRepoSlug(config.state.repo)
     return {
       repo: config.state.repo,
       path: normalizeStatePath(config.state.path),
+      branch: normalizeStateBranch(config.state.branch),
     }
   }
 
@@ -112,6 +143,7 @@ export function resolveStateRepoConfig(config: StateRepoConfig): StateRepoState 
     return {
       repo: `${config.github.owner}/kody-state`,
       path: normalizeStatePath(config.github.repo),
+      branch: normalizeStateBranch(undefined),
     }
   }
 
@@ -121,7 +153,7 @@ export function resolveStateRepoConfig(config: StateRepoConfig): StateRepoState 
 export function parseStateRepo(config: StateRepoConfig): ParsedStateRepo {
   const state = resolveStateRepoConfig(config)
   const parsed = parseStateRepoSlug(state.repo)
-  return { ...parsed, basePath: state.path }
+  return { ...parsed, basePath: state.path, branch: state.branch }
 }
 
 export function stateRepoPath(config: StateRepoConfig, filePath: string): string {
@@ -136,16 +168,17 @@ function apiPath(config: StateRepoConfig, targetPath: string): string {
 }
 
 function branchApiPath(config: StateRepoConfig, targetPath: string): string {
-  return `${apiPath(config, targetPath)}?ref=${encodeURIComponent(STATE_BRANCH)}`
+  const state = resolveStateRepoConfig(config)
+  return `${apiPath(config, targetPath)}?ref=${encodeURIComponent(state.branch)}`
 }
 
 export function ensureStateBranch(config: StateRepoConfig, cwd?: string): void {
   const parsed = parseStateRepo(config)
-  const cacheKey = `${parsed.owner}/${parsed.repo}:${STATE_BRANCH}`
+  const cacheKey = `${parsed.owner}/${parsed.repo}:${parsed.branch}`
   if (ensuredStateBranches.has(cacheKey)) return
 
   try {
-    gh(["api", `/repos/${parsed.owner}/${parsed.repo}/git/ref/heads/${STATE_BRANCH}`], { cwd })
+    gh(["api", `/repos/${parsed.owner}/${parsed.repo}/git/ref/heads/${parsed.branch}`], { cwd })
     ensuredStateBranches.add(cacheKey)
     return
   } catch (err) {
@@ -163,7 +196,7 @@ export function ensureStateBranch(config: StateRepoConfig, cwd?: string): void {
   try {
     gh(["api", "--method", "POST", `/repos/${parsed.owner}/${parsed.repo}/git/refs`, "--input", "-"], {
       cwd,
-      input: JSON.stringify({ ref: `refs/heads/${STATE_BRANCH}`, sha }),
+      input: JSON.stringify({ ref: `refs/heads/${parsed.branch}`, sha }),
     })
   } catch (err) {
     if (!isAlreadyExists(err)) throw err
@@ -222,7 +255,7 @@ export function writeStateText(
   const payload: Record<string, unknown> = {
     message,
     content: Buffer.from(content, "utf-8").toString("base64"),
-    branch: STATE_BRANCH,
+    branch: resolveStateRepoConfig(config).branch,
   }
   if (sha) payload.sha = sha
 

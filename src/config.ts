@@ -1,6 +1,6 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { normalizeStatePath, parseStateRepoSlug } from "./stateRepo.js"
+import { normalizeStateBranch, normalizeStatePath, parseStateRepoSlug } from "./stateRepo.js"
 
 export interface TestRequirement {
   pattern: string
@@ -36,6 +36,8 @@ export interface KodyConfig {
     repo: string
     /** Folder inside `state.repo` that belongs to this consumer repo. */
     path: string
+    /** Branch inside `state.repo` that stores active runtime state. */
+    branch?: string
   }
   agent: {
     model: string
@@ -312,6 +314,7 @@ function parseStateConfig(raw: Record<string, unknown>, github: Record<string, u
   const nested = recordValue(raw.state) ?? {}
   const repoRaw = typeof raw.stateRepo === "string" ? raw.stateRepo : nested.repo
   const pathRaw = typeof raw.statePath === "string" ? raw.statePath : nested.path
+  const branchRaw = typeof raw.stateBranch === "string" ? raw.stateBranch : nested.branch
   const stateRepo =
     typeof repoRaw === "string" && repoRaw.trim().length > 0
       ? repoRaw.trim()
@@ -321,6 +324,10 @@ function parseStateConfig(raw: Record<string, unknown>, github: Record<string, u
   return {
     repo: stateRepo,
     path: normalizeStatePath(statePath),
+    branch:
+      typeof branchRaw === "string" && branchRaw.trim().length > 0
+        ? normalizeStateBranch(branchRaw)
+        : normalizeStateBranch(undefined),
   }
 }
 

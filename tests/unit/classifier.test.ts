@@ -192,7 +192,7 @@ describe("dispatchClassified", () => {
     execFileSync.mockImplementation((cmd: string, args: string[]) => {
       if (cmd === "gh" && Array.isArray(args) && args[0] === "api") {
         const apiPath = args.find((arg) => arg.startsWith("/repos/")) ?? ""
-        if (apiPath.endsWith("/git/ref/heads/kody-state")) {
+        if (apiPath.endsWith("/git/ref/heads/main")) {
           return JSON.stringify({ object: { sha: "state-branch-sha" } })
         }
         if (args.includes("--method") && args.includes("PUT")) return "{}"
@@ -222,7 +222,7 @@ describe("dispatchClassified", () => {
       branch?: string
       content?: string
     }
-    expect(payload.branch).toBe("kody-state")
+    expect(payload.branch).toBe("main")
     const stateJson = Buffer.from(payload.content ?? "", "base64").toString("utf-8")
     expect(stateJson).toContain("CLASSIFIED_AS_BUG")
     expect(stateJson).not.toContain("@kody")
