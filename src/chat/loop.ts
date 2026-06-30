@@ -109,6 +109,17 @@ export const CHAT_SYSTEM_PROMPT = [
   "cite something concrete, you must have just read or run it in this session.",
 ].join("\n")
 
+export const OPENAI_CHAT_SYSTEM_PROMPT = [
+  "You are Kody, an AI assistant for the Kody Operations Dashboard. Reply to the",
+  "user's latest message using the full conversation below as context. Keep replies",
+  "short and simple. Use plain terms, not jargon.",
+  "",
+  "This chat is running through an OpenAI-compatible model endpoint. Answer directly",
+  "from the conversation and provided context. Do not claim to run shell commands,",
+  "edit files, inspect the repository, or use tools unless the user has supplied",
+  "the relevant content in the chat.",
+].join("\n")
+
 /**
  * Appended to the chat prompt ONLY when the agent has the `fetch_repo` tool
  * (a repo-less Brain that can serve many repos). Kept out of the base prompt
@@ -209,6 +220,8 @@ export interface ChatTurnOptions {
   reasoningEffort?: ReasoningEffort | null
   /** Seam for tests — defaults to real runAgent. */
   invokeAgent?: (prompt: string) => Promise<AgentResult>
+  /** Seam for tests — defaults to global fetch. */
+  fetchImpl?: typeof fetch
   /** Configured external state repo for durable task artifacts. */
   stateConfig?: StateRepoConfig | null
 }
@@ -238,7 +251,8 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   // (the model sees a flat string otherwise, so a data URL is unreadable).
   const { turns: promptTurns, imagePaths } = prepareAttachments(turns, opts.cwd, opts.sessionId)
 
-  const basePrompt = opts.systemPrompt ?? CHAT_SYSTEM_PROMPT
+  const basePrompt =
+    opts.systemPrompt ?? (opts.model.protocol === "openai" ? OPENAI_CHAT_SYSTEM_PROMPT : CHAT_SYSTEM_PROMPT)
   const catalog = buildExecutableCatalog()
   // Per-task artifacts contract appended to every chat session so the
   // agent writes context.json / memory-recs.json / followups.json /
@@ -289,6 +303,15 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
     .filter((s): s is string => typeof s === "string" && s.length > 0)
     .join("\n\n")
   const prompt = buildPrompt(promptTurns)
+
+  if (opts.model.protocol === "openai" && opts.litellmUrl) {
+    return runOpenAIChatTurn({
+      opts,
+      turns: promptTurns,
+      systemPrompt,
+      sessionFile: opts.sessionFile,
+    })
+  }
 
   // Sequence counter for deterministic ordering of progress events on the
   // dashboard. Same sessionId across multiple events, so the existing
@@ -416,6 +439,91 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   }
 
   return { exitCode: 0, reply }
+}
+
+async function runOpenAIChatTurn(args: {
+  opts: ChatTurnOptions
+  turns: ChatTurn[]
+  systemPrompt: string
+  sessionFile: string
+}): Promise<ChatTurnResult> {
+  const { opts, turns, systemPrompt, sessionFile } = args
+  const doFetch = opts.fetchImpl ?? fetch
+  const url = `${opts.litellmUrl!.replace(/\/+$/, "")}/v1/chat/completions`
+  try {
+    const response = await doFetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: opts.model.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...turns.map((turn) => ({
+            role: turn.role,
+            content: turn.content,
+          })),
+        ],
+        stream: false,
+      }),
+    })
+    if (!response.ok) {
+      const text = await response.text().catch(() => "")
+      const error = `OpenAI-compatible model request failed ${response.status}${text ? `: ${text.slice(0, 500)}` : ""}`
+      await emit(opts.sink, "chat.error", opts.sessionId, "error", { error })
+      return { exitCode: 99, error }
+    }
+
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: unknown } }>
+      error?: { message?: unknown }
+    }
+    const reply = extractOpenAIReply(payload).trim()
+    if (!reply) {
+      const error =
+        typeof payload.error?.message === "string"
+          ? payload.error.message
+          : "OpenAI-compatible model completed without producing a reply"
+      await emit(opts.sink, "chat.error", opts.sessionId, "error", { error })
+      return { exitCode: 99, error }
+    }
+
+    const now = new Date().toISOString()
+    appendTurn(sessionFile, {
+      role: "assistant",
+      content: reply,
+      timestamp: now,
+    })
+    await emit(opts.sink, "chat.message", opts.sessionId, "message", {
+      sessionId: opts.sessionId,
+      role: "assistant",
+      content: reply,
+      timestamp: now,
+    })
+    await emit(opts.sink, "chat.done", opts.sessionId, "done", { sessionId: opts.sessionId })
+    return { exitCode: 0, reply }
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err)
+    await emit(opts.sink, "chat.error", opts.sessionId, "error", { error })
+    return { exitCode: 99, error }
+  }
+}
+
+function extractOpenAIReply(payload: { choices?: Array<{ message?: { content?: unknown } }> }): string {
+  const content = payload.choices?.[0]?.message?.content
+  if (typeof content === "string") return content
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === "string") return part
+        if (part && typeof part === "object" && "text" in part) {
+          const text = (part as { text?: unknown }).text
+          return typeof text === "string" ? text : ""
+        }
+        return ""
+      })
+      .join("")
+  }
+  return ""
 }
 
 /**

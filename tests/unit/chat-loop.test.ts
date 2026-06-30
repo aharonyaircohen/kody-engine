@@ -104,6 +104,40 @@ describe("chat/loop", () => {
     expect(sink.events[0]?.payload.content).toBe("hello back")
   })
 
+  it("routes OpenAI-protocol Brain turns through LiteLLM chat completions", async () => {
+    const sessionFile = path.join(tmp, "s.jsonl")
+    appendTurn(sessionFile, { role: "user", content: "hi", timestamp: "t1" })
+    const sink = new MemSink()
+    const calls: Array<{ url: string; body: Record<string, unknown> }> = []
+    const res = await runChatTurn({
+      sessionId: "s1",
+      sessionFile,
+      cwd: tmp,
+      model: { provider: "custom", model: "MiniMax-M3", protocol: "openai" },
+      litellmUrl: "http://localhost:4000",
+      sink,
+      fetchImpl: async (url, init) => {
+        calls.push({
+          url: String(url),
+          body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+        })
+        return new Response(JSON.stringify({ choices: [{ message: { content: "  OK  " } }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      },
+      invokeAgent: async () => {
+        throw new Error("openai protocol should not use Claude agent")
+      },
+    })
+    expect(res.exitCode).toBe(0)
+    expect(res.reply).toBe("OK")
+    expect(calls[0]?.url).toBe("http://localhost:4000/v1/chat/completions")
+    expect(calls[0]?.body.model).toBe("MiniMax-M3")
+    expect(sink.events.map((e) => e.event)).toEqual(["chat.message", "chat.done"])
+    expect(readSession(sessionFile)[1]?.content).toBe("OK")
+  })
+
   it("emits chat.error and returns 99 when agent throws", async () => {
     const sessionFile = path.join(tmp, "s.jsonl")
     appendTurn(sessionFile, { role: "user", content: "hi", timestamp: "t1" })
