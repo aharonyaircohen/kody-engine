@@ -1,5 +1,6 @@
 import * as fs from "node:fs"
 import type { CapabilityResultArtifact } from "../capabilityResult.js"
+import { STATE_BRANCH } from "../stateBranch.js"
 import { appendStateLine, parseStateRepoSlug, resolveStateRepoConfig, type StateRepoConfig } from "../stateRepo.js"
 import type { GoalRouteStep, ManagedGoal } from "./manager.js"
 import { nowIso } from "./state.js"
@@ -386,7 +387,7 @@ function linkContext(stateRepo: Record<string, unknown> | undefined): Record<str
 function githubBlobUrl(repo: string, filePath: string): string | undefined {
   try {
     const parsed = parseStateRepoSlug(repo)
-    return `https://github.com/${parsed.owner}/${parsed.repo}/blob/main/${filePath}`
+    return `https://github.com/${parsed.owner}/${parsed.repo}/blob/${STATE_BRANCH}/${filePath}`
   } catch {
     return undefined
   }
