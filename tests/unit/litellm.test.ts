@@ -50,6 +50,12 @@ describe("litellm: generateLitellmConfigYaml", () => {
     expect(yaml).toMatch(/api_key: os\.environ\/MINIMAX_API_KEY/)
   })
 
+  it("routes MiniMax through the Anthropic-compatible API base", () => {
+    const yaml = generateLitellmConfigYaml({ provider: "minimax", model: "MiniMax-M2.7-highspeed" })
+
+    expect(yaml).toMatch(/api_base: https:\/\/api\.minimax\.io\/anthropic\/v1\/messages/)
+  })
+
   it("includes drop_params: true to silence non-anthropic warnings", () => {
     const yaml = generateLitellmConfigYaml({ provider: "openai", model: "gpt-4o" })
     expect(yaml).toMatch(/drop_params: true/)
@@ -58,6 +64,11 @@ describe("litellm: generateLitellmConfigYaml", () => {
   it("derives api_key env var from provider name", () => {
     const yaml = generateLitellmConfigYaml({ provider: "openai", model: "gpt-4o" })
     expect(yaml).toMatch(/api_key: os\.environ\/OPENAI_API_KEY/)
+  })
+
+  it("does not add a MiniMax API base to other providers", () => {
+    const yaml = generateLitellmConfigYaml({ provider: "openai", model: "gpt-4o" })
+    expect(yaml).not.toMatch(/api_base:/)
   })
 })
 

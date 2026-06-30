@@ -36,17 +36,29 @@ function resolveLitellmTimeoutMs(): number {
 
 export function generateLitellmConfigYaml(model: ProviderModel): string {
   const apiKeyVar = providerApiKeyEnvVar(model.provider)
+  const providerParams = providerLitellmParams(model.provider)
   return [
     "model_list:",
     `  - model_name: ${model.model}`,
     `    litellm_params:`,
     `      model: ${model.provider}/${model.model}`,
     `      api_key: os.environ/${apiKeyVar}`,
+    ...providerParams.map(([key, value]) => `      ${key}: ${value}`),
     "",
     "litellm_settings:",
     "  drop_params: true",
     "",
   ].join("\n")
+}
+
+function providerLitellmParams(provider: string): Array<[string, string]> {
+  if (provider !== "minimax") return []
+  return [
+    [
+      "api_base",
+      process.env.MINIMAX_API_BASE?.trim() || "https://api.minimax.io/anthropic/v1/messages",
+    ],
+  ]
 }
 
 export interface LitellmHandle {
