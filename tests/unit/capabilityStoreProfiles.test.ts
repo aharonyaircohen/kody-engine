@@ -6,7 +6,7 @@ import { loadProfile } from "../../src/profile.js"
 import { listCapabilityActions, resolveCapabilityFolder, resolveExecutable } from "../../src/registry.js"
 
 const STORE_ROOT = process.env.KODY_STORE_PATH ?? path.resolve(process.cwd(), "..", "kody-store")
-const STORE_CAPABILITIES_ROOT = path.join(STORE_ROOT, ".kody", "capabilities")
+const STORE_CAPABILITIES_ROOT = resolveStoreAssetRoot("capabilities")
 const CHAT_CAPABILITY_ALIASES = new Set(["kody-analyzer", "kody-mem", "kody-operator", "kody-vibe"])
 const MIGRATED_FULL_CAPABILITY_ACTIONS = ["classify", "qa-engineer", "agent-ask"]
 const WORKFLOW_CAPABILITY_ACTIONS = new Map([
@@ -150,7 +150,7 @@ describe("kody-store capability profiles", () => {
     for (const capability of REQUIRED_INTERNAL_CAPABILITY_PROFILES) {
       const profilePath = resolveExecutable(capability)
       expect(profilePath).toBeTruthy()
-      expect(profilePath).toContain(`${path.sep}.kody${path.sep}capabilities${path.sep}${capability}${path.sep}`)
+      expect(fs.realpathSync(profilePath!)).toContain(fs.realpathSync(path.join(STORE_CAPABILITIES_ROOT, capability)))
       expect(actionNames).not.toContain(capability)
     }
   })
@@ -187,3 +187,17 @@ describe("kody-store capability profiles", () => {
     expect(resolveExecutable("kody-chat")).toBeTruthy()
   })
 })
+
+function resolveStoreAssetRoot(kind: "capabilities"): string {
+  const manifestPath = path.join(STORE_ROOT, "kody-store.json")
+  if (fs.existsSync(manifestPath)) {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
+      assetRoots?: Record<string, unknown>
+    }
+    const configured = manifest.assetRoots?.[kind]
+    if (typeof configured === "string" && configured.trim()) {
+      return path.resolve(STORE_ROOT, configured)
+    }
+  }
+  return path.join(STORE_ROOT, ".kody", kind)
+}

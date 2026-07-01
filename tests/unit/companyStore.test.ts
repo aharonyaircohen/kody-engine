@@ -5,7 +5,7 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { loadAgentIdentity } from "../../src/agents.js"
 import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
-import { listExecutables, listCapabilityActions, resolveExecutable } from "../../src/registry.js"
+import { listCapabilityActions, listExecutables, resolveExecutable } from "../../src/registry.js"
 
 let tmp: string
 let cwdBefore: string
@@ -49,6 +49,29 @@ describe("company store resolution", () => {
     expect(loadAgentIdentity(consumer, "cto")).toBe("Store CTO agent.")
   })
 
+  it("loads root-layout stores declared by kody-store.json", () => {
+    const remote = createRootLayoutStoreRepo()
+    const consumer = path.join(tmp, "consumer")
+    fs.mkdirSync(consumer, { recursive: true })
+    process.chdir(consumer)
+    configureStore(remote)
+
+    expect(resolveExecutable("store-exe")).toMatch(/store-exe\/profile\.json$/)
+    expect(listExecutables().some((exe) => exe.name === "store-exe")).toBe(true)
+    expect(resolveExecutable("store-capability")).toBeNull()
+    expect(listExecutables().some((exe) => exe.name === "store-capability")).toBe(false)
+
+    const action = listCapabilityActions().find((item) => item.action === "store-capability")
+    expect(action).toMatchObject({
+      action: "store-capability",
+      capability: "store-capability",
+      executable: "store-exe",
+      source: "company-store",
+    })
+
+    expect(loadAgentIdentity(consumer, "cto")).toBe("Root-layout Store CTO agent.")
+  })
+
   it("keeps local assets ahead of company store assets", () => {
     const remote = createStoreRepo()
     const consumer = path.join(tmp, "consumer")
@@ -71,9 +94,7 @@ describe("company store resolution", () => {
     expect(fs.realpathSync(resolveExecutable("store-exe")!)).toBe(
       fs.realpathSync(path.join(consumer, ".kody", "capabilities", "store-exe", "profile.json")),
     )
-    expect(listCapabilityActions().find((item) => item.action === "store-capability")?.source).toBe(
-      "project-folder",
-    )
+    expect(listCapabilityActions().find((item) => item.action === "store-capability")?.source).toBe("project-folder")
     expect(loadAgentIdentity(consumer, "cto")).toBe("Local CTO agent.")
   })
 })
@@ -107,6 +128,46 @@ function createStoreRepo(): string {
     path.join(repo, ".kody", "executables", "legacy-store-exe", "profile.json"),
     '{"name":"legacy-store-exe","role":"utility","inputs":[]}\n',
   )
+
+  git(repo, ["init", "-b", "stable"])
+  git(repo, ["add", "."])
+  git(repo, ["-c", "user.name=Kody Test", "-c", "user.email=kody@example.invalid", "commit", "-m", "store"])
+  return repo
+}
+
+function createRootLayoutStoreRepo(): string {
+  const repo = path.join(tmp, "root-layout-store")
+  fs.mkdirSync(repo, { recursive: true })
+  fs.writeFileSync(
+    path.join(repo, "kody-store.json"),
+    `${JSON.stringify(
+      {
+        name: "test-store",
+        layoutVersion: 1,
+        assetRoots: {
+          capabilities: "capabilities",
+          agent: "agents",
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  )
+  writeCapability(path.join(repo, "capabilities"), "store-exe", {
+    name: "store-exe",
+    role: "utility",
+    inputs: [],
+  })
+  writeCapability(path.join(repo, "capabilities"), "store-capability", {
+    name: "store-capability",
+    action: "store-capability",
+    implementation: "store-exe",
+    every: "manual",
+    agent: "cto",
+    body: "# Store Capability\nShared root-layout capability body.\n",
+  })
+  fs.mkdirSync(path.join(repo, "agents"), { recursive: true })
+  fs.writeFileSync(path.join(repo, "agents", "cto.md"), "Root-layout Store CTO agent.")
 
   git(repo, ["init", "-b", "stable"])
   git(repo, ["add", "."])

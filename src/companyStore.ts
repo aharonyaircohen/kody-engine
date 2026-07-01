@@ -10,6 +10,9 @@ export const DEFAULT_COMPANY_STORE_REF = "stable"
 const STORE_ENV = "KODY_COMPANY_STORE"
 const REF_ENV = "KODY_COMPANY_STORE_REF"
 const CACHE_ENV = "KODY_COMPANY_STORE_CACHE"
+const STORE_MANIFEST = "kody-store.json"
+
+type CompanyStoreAssetKind = "capabilities" | "goals" | "agents" | "workflows"
 
 let memo: { key: string; root: string | null } | null = null
 
@@ -25,17 +28,23 @@ export function getCompanyStoreRoot(): string | null {
   return root
 }
 
-export function getCompanyStoreAssetRoot(
-  kind: "capabilities" | "goals" | "agents" | "workflows",
-): string | null {
+export function getCompanyStoreAssetRoot(kind: CompanyStoreAssetKind): string | null {
   const root = getCompanyStoreRoot()
   if (!root) return null
-  const folderByKind: Record<typeof kind, string> = {
+
+  const manifestRoot = resolveManifestAssetRoot(root, kind)
+  if (manifestRoot) return manifestRoot
+
+  const folderByKind: Record<CompanyStoreAssetKind, string> = {
     capabilities: "capabilities",
     goals: "goals",
     agents: "agents",
     workflows: "workflows",
   }
+
+  const rootLayoutPath = path.join(root, folderByKind[kind])
+  if (fs.existsSync(rootLayoutPath)) return rootLayoutPath
+
   return path.join(root, ".kody", folderByKind[kind])
 }
 
@@ -89,8 +98,30 @@ function fetchCompanyStore(repo: string, ref: string): string | null {
 function localStoreRoot(repo: string): string | null {
   if (!path.isAbsolute(repo) && !repo.startsWith(".")) return null
   const root = path.resolve(repo)
-  if (!fs.existsSync(path.join(root, ".kody"))) return null
+  if (!fs.existsSync(path.join(root, ".kody")) && !fs.existsSync(path.join(root, STORE_MANIFEST))) return null
   return root
+}
+
+function resolveManifestAssetRoot(root: string, kind: CompanyStoreAssetKind): string | null {
+  const manifestPath = path.join(root, STORE_MANIFEST)
+  if (!fs.existsSync(manifestPath)) return null
+
+  try {
+    const raw = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
+      assetRoots?: Record<string, unknown>
+    }
+    const candidates = kind === "agents" ? ["agents", "agent"] : [kind]
+    for (const key of candidates) {
+      const value = raw.assetRoots?.[key]
+      if (typeof value !== "string" || !value.trim()) continue
+      return path.resolve(root, value)
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    process.stderr.write(`[company-store] failed to read ${manifestPath}: ${msg}\n`)
+  }
+
+  return null
 }
 
 function repoToGitUrl(repo: string): string {

@@ -16,14 +16,10 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { InputSpec } from "./executables/types.js"
 import type { CapabilityFolder } from "./capabilityFolders.js"
-import {
-  CAPABILITY_PROFILE_FILE,
-  listCapabilityFolderSlugs,
-  readCapabilityFolder,
-} from "./capabilityFolders.js"
+import { CAPABILITY_PROFILE_FILE, listCapabilityFolderSlugs, readCapabilityFolder } from "./capabilityFolders.js"
 import { getCompanyStoreAssetRoot } from "./companyStore.js"
+import type { InputSpec } from "./executables/types.js"
 
 const PUBLIC_EXECUTABLE_ROLES = new Set(["primitive", "orchestrator", "container", "watch", "utility"])
 
@@ -97,11 +93,7 @@ export function getBuiltinCapabilitiesRoot(): string {
 export function getExecutableRoots(): string[] {
   const projectCapabilitiesRoot = getProjectCapabilitiesRoot()
   const storeCapabilitiesRoot = getCompanyStoreCapabilitiesRoot()
-  return [
-    projectCapabilitiesRoot,
-    ...(storeCapabilitiesRoot ? [storeCapabilitiesRoot] : []),
-    getExecutablesRoot(),
-  ]
+  return [projectCapabilitiesRoot, ...(storeCapabilitiesRoot ? [storeCapabilitiesRoot] : []), getExecutablesRoot()]
 }
 
 export function getCapabilityRoots(projectCapabilitiesRoot: string = getProjectCapabilitiesRoot()): string[] {
@@ -213,8 +205,7 @@ export function listCapabilityActions(
     out.push(action)
   }
 
-  for (const action of listFolderCapabilityActions(projectCapabilitiesRoot, "project-folder"))
-    add(action)
+  for (const action of listFolderCapabilityActions(projectCapabilitiesRoot, "project-folder")) add(action)
   const storeCapabilitiesRoot = getCompanyStoreCapabilitiesRoot()
   if (storeCapabilitiesRoot) {
     for (const action of listFolderCapabilityActions(storeCapabilitiesRoot, "company-store")) add(action)
@@ -273,9 +264,7 @@ export function resolveCapabilityExecution(capability: CapabilityFolder): {
     capability.config.executables?.[0] ??
     (capability.config.role ? capability.slug : undefined) ??
     (capability.config.tickScript ? "capability-tick-scripted" : "capability-tick")
-  const cliArgs = executableDeclaresInput(executable, "capability")
-    ? { capability: capability.slug }
-    : {}
+  const cliArgs = executableDeclaresInput(executable, "capability") ? { capability: capability.slug } : {}
   return { executable, cliArgs }
 }
 
@@ -302,7 +291,10 @@ export function isSafeName(name: string): boolean {
 
 function isCapabilityRoot(root: string): boolean {
   const normalized = path.normalize(root)
-  return path.basename(normalized) === "capabilities" && path.basename(path.dirname(normalized)) === ".kody"
+  if (path.basename(normalized) === "capabilities") return true
+
+  const knownRoots = [getProjectCapabilitiesRoot(), getCompanyStoreCapabilitiesRoot(), getBuiltinCapabilitiesRoot()]
+  return knownRoots.some((candidate) => candidate && path.normalize(candidate) === normalized)
 }
 
 function isImplementationProfile(profilePath: string, requireImplementationProfile: boolean): boolean {
@@ -342,9 +334,7 @@ function listFolderCapabilityActions(
   return out.sort((a, b) => a.action.localeCompare(b.action))
 }
 
-function listBuiltinCapabilityActions(
-  root: string = getBuiltinCapabilitiesRoot(),
-): DiscoveredCapabilityAction[] {
+function listBuiltinCapabilityActions(root: string = getBuiltinCapabilitiesRoot()): DiscoveredCapabilityAction[] {
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
   const out: DiscoveredCapabilityAction[] = []
   for (const slug of listCapabilityFolderSlugs(root)) {
