@@ -73,7 +73,7 @@ describe("classifyByLabel", () => {
   it("is case-insensitive on the label name", async () => {
     const c = ctx({ data: { issue: { labels: ["Enhancement"] } } })
     await classifyByLabel(c, profile())
-    expect(c.data.classification).toBe("bug") // 'enhancement' maps to 'bug'
+    expect(c.data.classification).toBe("feature") // 'enhancement' maps to 'feature'
     expect(c.skipAgent).toBe(true)
   })
 
@@ -120,7 +120,7 @@ describe("defaultLabelMap", () => {
   it("maps the canonical GitHub labels into flow names", () => {
     const map = defaultLabelMap()
     expect(map.bug).toBe("bug")
-    expect(map.enhancement).toBe("bug")
+    expect(map.enhancement).toBe("feature")
     expect(map.refactor).toBe("feature")
     expect(map.rfc).toBe("spec")
     expect(map.docs).toBe("chore")

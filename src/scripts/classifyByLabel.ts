@@ -14,7 +14,7 @@
  *   "classify": {
  *     "labelMap": {
  *       "bug": "bug",
- *       "enhancement": "bug",
+ *       "enhancement": "feature",
  *       "refactor": "feature",
  *       "rfc": "spec",
  *       "design": "spec",
@@ -51,7 +51,7 @@ export const classifyByLabel: PreflightScript = async (ctx) => {
 export function defaultLabelMap(): Record<string, string> {
   return {
     bug: "bug",
-    enhancement: "bug",
+    enhancement: "feature",
     refactor: "feature",
     feature: "feature",
     performance: "feature",
