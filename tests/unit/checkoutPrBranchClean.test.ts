@@ -35,7 +35,7 @@ describe("checkoutPrBranch: clears working-tree state before checkout", () => {
     const order = calls.map((c) => `${c.cmd} ${c.args.join(" ")}`)
     const resetIdx = order.indexOf("git reset --hard HEAD")
     // `.kody` MUST be excluded so the clean doesn't wipe the tracked-but-
-    // ignore-negated consumer executables under .kody/executables/.
+    // ignore-negated consumer capability profiles under .kody/capabilities/.
     const cleanIdx = order.indexOf("git clean -fd -e .kody")
     const checkoutIdx = order.indexOf("gh pr checkout 1556")
     expect(resetIdx).toBeGreaterThanOrEqual(0)
@@ -46,7 +46,7 @@ describe("checkoutPrBranch: clears working-tree state before checkout", () => {
     // Guard against regression to a bare `git clean -fd` (no .kody exclusion).
     expect(order).not.toContain("git clean -fd")
     // After the checkout, kody's tracked assets are force-restored — a branch
-    // checkout can drop the ignore-negated .kody/executables/ dirs on CI.
+    // checkout can drop the ignore-negated .kody/capabilities/ dirs on CI.
     const restoreIdx = order.indexOf("git checkout HEAD -- .kody")
     expect(restoreIdx).toBeGreaterThan(checkoutIdx)
   })

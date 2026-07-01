@@ -910,10 +910,8 @@ function clearStampedLifecycleLabels(profile: Profile, ctx: Context): void {
 // ────────────────────────────────────────────────────────────────────────────
 
 export function resolveProfilePath(profileName: string): string {
-  // Delegate to the registry, which knows about both the hydrated state-repo
-  // root (`.kody/executables/`) and the engine-bundled root. Hydrated roots
-  // win on name conflict, letting repos override engine executables or add
-  // new ones without forking.
+  // Delegate to the registry, which knows about hydrated capability
+  // implementation profiles and the engine-bundled fallback root.
   const found = resolveExecutable(profileName)
   if (found) return found
   // Fall back to the legacy engine-only search so the error surface (file

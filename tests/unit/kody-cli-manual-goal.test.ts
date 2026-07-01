@@ -59,18 +59,20 @@ function writeConfig(dir: string): void {
 }
 
 function writeScheduledExecutable(dir: string, name: string): void {
-  const executableDir = path.join(dir, ".kody", "executables", name)
+  const executableDir = path.join(dir, ".kody", "capabilities", name)
   fs.mkdirSync(executableDir, { recursive: true })
   fs.writeFileSync(
     path.join(executableDir, "profile.json"),
     JSON.stringify({
       name,
+      internal: true,
       role: "watch",
       kind: "scheduled",
       schedule: "*/5 * * * *",
       scripts: { preflight: [], postflight: [] },
     }),
   )
+  fs.writeFileSync(path.join(executableDir, "capability.md"), `# ${name}\n`)
 }
 
 afterEach(() => {

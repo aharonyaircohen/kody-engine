@@ -178,23 +178,25 @@ describe("dispatch: schedule event", () => {
     expect(autoDispatch()).toBeNull()
   })
 
-  it("fans out scheduled watch executables even without capability actions", () => {
+  it("fans out internal scheduled watch capabilities even without public actions", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-scheduled-watch-"))
     const prevCwd = process.cwd()
     try {
       process.chdir(tmp)
-      const dir = path.join(tmp, ".kody", "executables", "goal-scheduler")
+      const dir = path.join(tmp, ".kody", "capabilities", "goal-scheduler")
       fs.mkdirSync(dir, { recursive: true })
       fs.writeFileSync(
         path.join(dir, "profile.json"),
         JSON.stringify({
           name: "goal-scheduler",
+          internal: true,
           role: "watch",
           kind: "scheduled",
           schedule: "*/5 * * * *",
           scripts: { preflight: [], postflight: [] },
         }),
       )
+      fs.writeFileSync(path.join(dir, "capability.md"), "# Goal scheduler\n")
 
       const matches = dispatchScheduledWatches({
         now: new Date("2026-06-22T07:00:30Z"),

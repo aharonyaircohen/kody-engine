@@ -60,10 +60,10 @@ describe("hydrateStateWorkspace", () => {
 
   it("hydrates each state workspace only once per process", () => {
     mockStateRepoSnapshot("repo", (root) => {
-      const executableDir = path.join(root, "executables", "review")
-      fs.mkdirSync(executableDir, { recursive: true })
-      fs.writeFileSync(path.join(executableDir, "profile.json"), '{"name":"review"}')
-      fs.writeFileSync(path.join(executableDir, "prompt.md"), "review")
+      const capabilityDir = path.join(root, "capabilities", "review")
+      fs.mkdirSync(capabilityDir, { recursive: true })
+      fs.writeFileSync(path.join(capabilityDir, "profile.json"), '{"name":"review"}')
+      fs.writeFileSync(path.join(capabilityDir, "capability.md"), "review")
     })
 
     const config = { state: { repo: "https://github.com/acme/state", path: "repo" } }
@@ -74,7 +74,7 @@ describe("hydrateStateWorkspace", () => {
 
     expect(execFileSync).toHaveBeenCalled()
     expect(execFileSync.mock.calls.length).toBe(callsAfterFirstHydrate)
-    expect(fs.readFileSync(path.join(cwd, ".kody", "executables", "review", "prompt.md"), "utf8")).toBe("review")
+    expect(fs.readFileSync(path.join(cwd, ".kody", "capabilities", "review", "capability.md"), "utf8")).toBe("review")
   })
 
   function mockStateRepoSnapshot(basePath: string, writeSnapshot: (root: string) => void): void {

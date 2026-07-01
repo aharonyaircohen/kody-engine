@@ -78,10 +78,6 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 │   src/executor.ts — runs capability implementations         │
 │   .kody/capabilities/<slug>/                                │
 │     profile.json · capability.md · optional skills/scripts  │
-│   .kody/capabilities/<slug>/                      │
-│     legacy fallback: profile.json · capability.md │
-│   .kody/executables/<name>/                               │
-│     legacy fallback: profile.json · prompt.md · *.sh        │
 │   src/scripts/*.ts — cross-cutting catalog  │
 └─────────────────────────────────────────────┘
 ```
@@ -91,10 +87,10 @@ Every top-level command is an auto-discovered capability action. The router has
 after `@kody` through `config.aliases`, then falls back to the legacy-named
 `config.defaultExecutable` / `config.defaultPrExecutable` fields as default
 capability actions. Drop a new `.kody/capabilities/<slug>/` directory with
-`profile.json` + `capability.md`; legacy `.kody/capabilities/` and
-`.kody/executables/` roots still load while repos migrate.
+`profile.json` + `capability.md`. Project/store `.kody/executables/` folders
+are obsolete and are not resolver sources.
 
-Legacy Executable directories are private implementation units and contain
+Capability implementation profiles are private implementation units and contain
 **only** three kinds of files: `profile.json` (declaration), `prompt.md` (agent
 instructions), and `.sh` scripts (mechanical side-effect work). Cross-cutting
 TypeScript lives in [src/scripts/](src/scripts/); it can't import from

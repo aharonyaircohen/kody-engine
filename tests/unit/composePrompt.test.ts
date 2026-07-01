@@ -95,7 +95,7 @@ describe("composePrompt", () => {
   })
 
   it("uses the load-time cached template even when the working-tree file is gone", async () => {
-    // Simulates the CI bug: runFlow's branch setup drops .kody/executables/<name>/
+    // Simulates the CI bug: runFlow's branch setup drops .kody/capabilities/<name>/
     // after load. No prompt.md on disk, but it was captured at profile-load time.
     const f = path.join(dir, "prompt.md")
     const profile = makeProfile(dir)

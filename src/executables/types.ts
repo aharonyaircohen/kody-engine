@@ -56,6 +56,18 @@ export interface Profile {
   executable?: string
   implementations?: string[]
   executables?: string[]
+  /** Hide a capability implementation profile from public action discovery. */
+  internal?: boolean
+  /** Explicit public-action flag for capability profiles. */
+  public?: boolean
+  /** Public capability output class when the profile also serves as a capability contract. */
+  capabilityKind?: "observe" | "act" | "verify"
+  /** Optional dashboard-facing capability metadata. The executor does not act on these fields. */
+  slug?: string
+  title?: string
+  skills?: string[]
+  prompt?: string
+  chatTools?: string[]
   /**
    * Execution model — orthogonal to `role`.
    * `oneshot` (default): single invocation on demand.
@@ -160,7 +172,7 @@ export interface Profile {
    * preflight runs. composePrompt prefers these over a fresh disk read so the
    * template survives working-tree churn from runFlow's branch setup — on the CI
    * runner a branch checkout can drop the tracked-but-ignore-negated
-   * `.kody/executables/<name>/` dir, and reading prompt.md afterwards fails with
+   * `.kody/capabilities/<name>/` dir, and reading prompt.md afterwards fails with
    * ENOENT even though profile.json (read here, earlier) loaded fine.
    */
   promptTemplates?: Record<string, string>

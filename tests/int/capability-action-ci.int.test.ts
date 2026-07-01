@@ -17,7 +17,6 @@ function makeRepo(opts: { sameName?: boolean } = {}): { root: string; eventPath:
   const dutyName = opts.sameName ? "noop" : "noop-capability"
   const exeName = opts.sameName ? "noop" : "noop-impl"
   fs.mkdirSync(path.join(root, ".kody", "capabilities"), { recursive: true })
-  fs.mkdirSync(path.join(root, ".kody", "executables", exeName), { recursive: true })
   fs.writeFileSync(
     path.join(root, "kody.config.json"),
     JSON.stringify(
@@ -31,42 +30,56 @@ function makeRepo(opts: { sameName?: boolean } = {}): { root: string; eventPath:
       2,
     ),
   )
-  fs.mkdirSync(path.join(root, ".kody", "capabilities", dutyName), { recursive: true })
+  const implementationProfile = {
+    role: "utility",
+    describe: "offline capability-action integration fixture",
+    kind: "oneshot",
+    inputs: [{ name: "issue", flag: "--issue", type: "int", required: true, describe: "issue" }],
+    claudeCode: {
+      model: "inherit",
+      permissionMode: "default",
+      maxTurns: 0,
+      maxThinkingTokens: null,
+      systemPromptAppend: null,
+      tools: [],
+      hooks: [],
+      skills: [],
+      commands: [],
+      subagents: [],
+      plugins: [],
+      mcpServers: [],
+    },
+    cliTools: [],
+    scripts: { preflight: [{ script: "skipAgent" }], postflight: [] },
+  }
+
+  const dutyDir = path.join(root, ".kody", "capabilities", dutyName)
+  fs.mkdirSync(dutyDir, { recursive: true })
   fs.writeFileSync(
-    path.join(root, ".kody", "capabilities", dutyName, "profile.json"),
-    JSON.stringify({ name: dutyName, action: "noop", executable: exeName, agent: "kody" }),
-  )
-  fs.writeFileSync(path.join(root, ".kody", "capabilities", dutyName, "capability.md"), "# Noop\n")
-  fs.writeFileSync(
-    path.join(root, ".kody", "executables", exeName, "profile.json"),
+    path.join(dutyDir, "profile.json"),
     JSON.stringify(
       {
-        name: exeName,
-        role: "utility",
-        describe: "offline capability-action integration fixture",
-        kind: "oneshot",
-        inputs: [{ name: "issue", flag: "--issue", type: "int", required: true, describe: "issue" }],
-        claudeCode: {
-          model: "inherit",
-          permissionMode: "default",
-          maxTurns: 0,
-          maxThinkingTokens: null,
-          systemPromptAppend: null,
-          tools: [],
-          hooks: [],
-          skills: [],
-          commands: [],
-          subagents: [],
-          plugins: [],
-          mcpServers: [],
-        },
-        cliTools: [],
-        scripts: { preflight: [{ script: "skipAgent" }], postflight: [] },
+        name: dutyName,
+        action: "noop",
+        executable: exeName,
+        agent: "kody",
+        ...(opts.sameName ? implementationProfile : {}),
       },
       null,
       2,
     ),
   )
+  fs.writeFileSync(path.join(dutyDir, "capability.md"), "# Noop\n")
+
+  if (!opts.sameName) {
+    const implementationDir = path.join(root, ".kody", "capabilities", exeName)
+    fs.mkdirSync(implementationDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(implementationDir, "profile.json"),
+      JSON.stringify({ name: exeName, internal: true, ...implementationProfile }, null, 2),
+    )
+    fs.writeFileSync(path.join(implementationDir, "capability.md"), "# Noop implementation\n")
+  }
   const eventPath = path.join(root, "event.json")
   fs.writeFileSync(
     eventPath,

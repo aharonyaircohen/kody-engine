@@ -29,12 +29,6 @@ function writeCapability(slug: string, profile: Record<string, unknown>): void {
   fs.writeFileSync(path.join(dir, "capability.md"), `# ${slug}\n\nKeep ${slug} healthy.\n`)
 }
 
-function writeExecutable(slug: string, profile: Record<string, unknown>): void {
-  const dir = path.join(tmp, ".kody", "executables", slug)
-  fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
-}
-
 function writeCapabilityState(slug: string, lastFiredAt: string): void {
   const file = path.join(tmp, ".kody", "capabilities", slug, "state.json")
   fs.mkdirSync(path.dirname(file), { recursive: true })
@@ -623,8 +617,10 @@ describe("standing goal capability scheduling", () => {
   })
 
   it("passes capability slug when executable inputs declare capability", async () => {
-    writeCapability("auto-fix-ci", { agent: "kody", executable: "auto-fix-ci" })
-    writeExecutable("auto-fix-ci", {
+    writeCapability("auto-fix-ci", {
+      agent: "kody",
+      executable: "auto-fix-ci",
+      role: "utility",
       inputs: [{ name: "capability", flag: "--capability", type: "string", required: true }],
     })
     const raw = goalState(["auto-fix-ci"])

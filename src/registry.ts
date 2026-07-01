@@ -1,13 +1,14 @@
 /**
  * Engine asset auto-discovery.
  *
- * Two asset families live alongside each other:
+ * Capabilities are the project/store model:
+ * - public actions are capability folders unless marked internal
+ * - implementation profiles also live in capability folders when they declare
+ *   an engine role
  *
- * - **Executables** (`.kody/executables/<name>/profile.json` in the hydrated local cache/store,
- *   plus minimal engine built-ins) implementation units selected by capabilities.
- *   - **Capabilities** (`.kody/capabilities/<slug>/profile.json` + `capability.md`) — public
- *     work units and operator-facing actions. Capability discovery is handled by
- *     `listCapabilityActions()`, not by executable resolution.
+ * The engine package still has minimal built-in implementation profiles under
+ * `src/executables`, but project and company-store `.kody/executables` roots
+ * are no longer registry sources.
  *
  * Both follow the same dev/built path-resolution pattern so `src/` and
  * `dist/` layouts work identically.
@@ -40,7 +41,7 @@ export interface DiscoveredCapabilityAction {
   executable: string
   /** Extra args required to lower the capability to its implementation. */
   cliArgs: Record<string, unknown>
-  source: "project-folder" | "project-executable" | "company-store" | "company-store-executable" | "builtin"
+  source: "project-folder" | "company-store" | "builtin"
   describe?: string
   profilePath?: string
   bodyPath?: string
@@ -64,25 +65,11 @@ export function getExecutablesRoot(): string {
 }
 
 /**
- * Resolve the hydrated local executables root. Looks for `.kody/executables/`
- * relative to the current working directory after state-repo hydration.
- * Returns the path even if it doesn't exist;
- * callers must check.
- */
-export function getProjectExecutablesRoot(): string {
-  return path.join(process.cwd(), ".kody", "executables")
-}
-
-/**
  * Resolve the canonical hydrated capabilities root. Capabilities are the new
  * public model and may also carry implementation profile data during migration.
  */
 export function getProjectCapabilitiesRoot(): string {
   return path.join(process.cwd(), ".kody", "capabilities")
-}
-
-export function getCompanyStoreExecutablesRoot(): string | null {
-  return getCompanyStoreAssetRoot("executables")
 }
 
 export function getCompanyStoreCapabilitiesRoot(): string | null {
@@ -103,21 +90,16 @@ export function getBuiltinCapabilitiesRoot(): string {
 }
 
 /**
- * Ordered list of executable roots, project first, engine second. Project
- * roots override engine roots on name conflict — hydrated state-repo assets
- * win. Engine ships a stdlib; projects can override or add private
- * implementation units under state-repo `executables/<name>/`.
+ * Ordered list of implementation-profile roots. Capability folders are the
+ * external source; the engine-bundled executable root is only the internal
+ * stdlib fallback.
  */
 export function getExecutableRoots(): string[] {
   const projectCapabilitiesRoot = getProjectCapabilitiesRoot()
-  const projectExecutablesRoot = getProjectExecutablesRoot()
   const storeCapabilitiesRoot = getCompanyStoreCapabilitiesRoot()
-  const storeExecutablesRoot = getCompanyStoreExecutablesRoot()
   return [
     projectCapabilitiesRoot,
-    projectExecutablesRoot,
     ...(storeCapabilitiesRoot ? [storeCapabilitiesRoot] : []),
-    ...(storeExecutablesRoot ? [storeExecutablesRoot] : []),
     getExecutablesRoot(),
   ]
 }
@@ -159,10 +141,10 @@ export function isBuiltinExecutable(name: string): boolean {
 }
 
 /**
- * List every discovered executable across executable roots. On name conflict
- * the first root wins, so hydrated state-repo `executables/chat/`
- * shadows the engine's `chat`. Each needs a directory containing a readable
- * `profile.json`. Directories without one are silently skipped.
+ * List every discovered implementation profile. On name conflict the first
+ * root wins, so repo/store capabilities can override engine built-ins. Each
+ * directory needs a readable `profile.json`; capability roots also require an
+ * implementation `role`.
  */
 export function listExecutables(roots: string | string[] = getExecutableRoots()): DiscoveredExecutable[] {
   const rootList = typeof roots === "string" ? [roots] : roots
@@ -190,8 +172,8 @@ export function listExecutables(roots: string | string[] = getExecutableRoots())
 }
 
 /**
- * Resolve a single executable by name across all roots. Returns the first
- * matching `profile.json` path, or null if nothing matches.
+ * Resolve a single implementation profile by name across all roots. Returns
+ * the first matching `profile.json` path, or null if nothing matches.
  */
 export function resolveExecutable(name: string, roots: string | string[] = getExecutableRoots()): string | null {
   if (!isSafeName(name)) return null
@@ -217,7 +199,7 @@ export function hasExecutable(name: string, roots: string | string[] = getExecut
 /**
  * List public capability actions. The legacy function name stays until the
  * compatibility layer is removed. Ordering is intentional: project
- * capabilities override company-store capabilities, then legacy fallbacks.
+ * capabilities override company-store capabilities, then engine built-ins.
  */
 export function listCapabilityActions(
   projectCapabilitiesRoot: string = getProjectCapabilitiesRoot(),
@@ -231,20 +213,11 @@ export function listCapabilityActions(
     out.push(action)
   }
 
-  const storeCapabilitiesRoot = getCompanyStoreCapabilitiesRoot()
-  const projectExecutableRoots = [getProjectExecutablesRoot()]
-  const storeExecutableRoot = getCompanyStoreExecutablesRoot()
-  const storeExecutableRoots = storeExecutableRoot ? [storeExecutableRoot] : []
   for (const action of listFolderCapabilityActions(projectCapabilitiesRoot, "project-folder"))
     add(action)
-  for (const root of projectExecutableRoots) {
-    for (const action of listExecutableCapabilityActions(root, "project-executable")) add(action)
-  }
+  const storeCapabilitiesRoot = getCompanyStoreCapabilitiesRoot()
   if (storeCapabilitiesRoot) {
     for (const action of listFolderCapabilityActions(storeCapabilitiesRoot, "company-store")) add(action)
-  }
-  for (const root of storeExecutableRoots) {
-    for (const action of listExecutableCapabilityActions(root, "company-store-executable")) add(action)
   }
   for (const action of listBuiltinCapabilityActions(getBuiltinCapabilitiesRoot())) add(action)
   return out.sort((a, b) => a.action.localeCompare(b.action))
@@ -342,37 +315,6 @@ function isImplementationProfile(profilePath: string, requireImplementationProfi
   }
 }
 
-function listExecutableCapabilityActions(
-  root: string,
-  source: "project-executable" | "company-store-executable",
-): DiscoveredCapabilityAction[] {
-  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
-  const out: DiscoveredCapabilityAction[] = []
-  for (const ent of fs.readdirSync(root, { withFileTypes: true })) {
-    if (!ent.isDirectory() || !isSafeName(ent.name)) continue
-    const profilePath = path.join(root, ent.name, CAPABILITY_PROFILE_FILE)
-    if (!fs.existsSync(profilePath) || !fs.statSync(profilePath).isFile()) continue
-    try {
-      const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as Record<string, unknown>
-      const action = typeof raw.action === "string" && raw.action.trim() ? raw.action.trim() : ""
-      if (!action) continue
-      if (!PUBLIC_EXECUTABLE_ROLES.has(String(raw.role))) continue
-      if (typeof raw.kind !== "string" || !raw.kind.trim()) continue
-      if (!Array.isArray(raw.inputs)) continue
-      out.push({
-        action,
-        capability: ent.name,
-        executable: ent.name,
-        cliArgs: {},
-        source,
-        describe: typeof raw.describe === "string" ? raw.describe : undefined,
-        profilePath,
-      })
-    } catch {}
-  }
-  return out.sort((a, b) => a.action.localeCompare(b.action))
-}
-
 function listFolderCapabilityActions(
   root: string,
   source: "project-folder" | "company-store",
@@ -383,6 +325,7 @@ function listFolderCapabilityActions(
     if (!isSafeName(slug)) continue
     const capability = readCapabilityFolder(root, slug)
     if (!capability) continue
+    if (capability.config.internal === true || capability.config.public === false) continue
     const action = capability.config.action ?? slug
     const { executable, cliArgs } = resolveCapabilityExecution(capability)
     out.push({

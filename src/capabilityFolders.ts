@@ -10,6 +10,8 @@ export interface CapabilityFolderConfig {
   executable?: string
   tickScript?: string
   disabled?: boolean
+  internal?: boolean
+  public?: boolean
   agent?: string
   mentions?: string[]
   tools?: string[]
@@ -107,6 +109,8 @@ export function parseCapabilityConfig(raw: Record<string, unknown>): CapabilityF
     executable: stringField(raw.executable),
     tickScript: stringField(raw.tickScript),
     disabled: typeof raw.disabled === "boolean" ? raw.disabled : undefined,
+    internal: typeof raw.internal === "boolean" ? raw.internal : undefined,
+    public: typeof raw.public === "boolean" ? raw.public : undefined,
     agent: stringField(raw.agent),
     mentions: stringList(raw.mentions).map((m) => m.replace(/^@/, "")),
     tools,

@@ -39,6 +39,8 @@ describe("company store resolution", () => {
 
     expect(resolveExecutable("store-exe")).toMatch(/store-exe\/profile\.json$/)
     expect(listExecutables().some((exe) => exe.name === "store-exe")).toBe(true)
+    expect(resolveExecutable("legacy-store-exe")).toBeNull()
+    expect(listExecutables().some((exe) => exe.name === "legacy-store-exe")).toBe(false)
 
     const action = listCapabilityActions().find((item) => item.action === "store-capability")
     expect(action?.source).toBe("company-store")
@@ -100,6 +102,11 @@ function createStoreRepo(): string {
   })
   fs.mkdirSync(path.join(repo, ".kody", "agents"), { recursive: true })
   fs.writeFileSync(path.join(repo, ".kody", "agents", "cto.md"), "Store CTO agent.")
+  fs.mkdirSync(path.join(repo, ".kody", "executables", "legacy-store-exe"), { recursive: true })
+  fs.writeFileSync(
+    path.join(repo, ".kody", "executables", "legacy-store-exe", "profile.json"),
+    '{"name":"legacy-store-exe","role":"utility","inputs":[]}\n',
+  )
 
   git(repo, ["init", "-b", "stable"])
   git(repo, ["add", "."])

@@ -47,6 +47,14 @@ const KNOWN_PROFILE_KEYS = new Set([
   "implementations",
   "executable",
   "executables",
+  "internal",
+  "public",
+  "capabilityKind",
+  "slug",
+  "title",
+  "skills",
+  "prompt",
+  "chatTools",
   "agent",
   "every",
   "capabilityTools",
@@ -126,20 +134,34 @@ export function loadProfile(profilePath: string): Profile {
     if (!refPath) {
       throw new ProfileError(profilePath, `capability references unknown executable '${execRef}'`)
     }
-    const base = loadProfile(refPath)
-    return {
-      ...base,
-      name: requireString(profilePath, r, "name"),
-      action: typeof r.action === "string" && r.action.trim() ? r.action.trim() : undefined,
-      implementation: execRef,
-      executable: execRef,
-      describe: typeof r.describe === "string" ? r.describe : base.describe,
-      agent: typeof r.agent === "string" && r.agent.trim() ? r.agent.trim() : base.agent,
-      capabilityTools:
-        parseStringArray(r.capabilityTools ?? r.capabilityTools ?? r.tools) ?? base.capabilityTools,
-      mentions: Array.isArray(r.mentions)
-        ? (r.mentions as string[]).map((m) => String(m).trim()).filter(Boolean)
-        : base.mentions,
+    if (path.resolve(refPath) === path.resolve(profilePath)) {
+      // A capability folder can be both the public contract and the runnable
+      // implementation profile. In that case, keep parsing this file instead
+      // of recursively loading itself as a contract overlay.
+    } else {
+      const base = loadProfile(refPath)
+      return {
+        ...base,
+        name: requireString(profilePath, r, "name"),
+        action: typeof r.action === "string" && r.action.trim() ? r.action.trim() : undefined,
+        implementation: execRef,
+        executable: execRef,
+        internal: typeof r.internal === "boolean" ? r.internal : base.internal,
+        public: typeof r.public === "boolean" ? r.public : base.public,
+        capabilityKind: parseCapabilityKind(r.capabilityKind) ?? base.capabilityKind,
+        slug: typeof r.slug === "string" && r.slug.trim() ? r.slug.trim() : base.slug,
+        title: typeof r.title === "string" && r.title.trim() ? r.title.trim() : base.title,
+        skills: parseStringArray(r.skills) ?? base.skills,
+        prompt: typeof r.prompt === "string" && r.prompt.trim() ? r.prompt.trim() : base.prompt,
+        chatTools: parseStringArray(r.chatTools) ?? base.chatTools,
+        describe: typeof r.describe === "string" ? r.describe : base.describe,
+        agent: typeof r.agent === "string" && r.agent.trim() ? r.agent.trim() : base.agent,
+        capabilityTools:
+          parseStringArray(r.capabilityTools ?? r.capabilityTools ?? r.tools) ?? base.capabilityTools,
+        mentions: Array.isArray(r.mentions)
+          ? (r.mentions as string[]).map((m) => String(m).trim()).filter(Boolean)
+          : base.mentions,
+      }
     }
   }
 
@@ -188,6 +210,14 @@ export function loadProfile(profilePath: string): Profile {
     action: typeof r.action === "string" && r.action.trim() ? r.action.trim() : undefined,
     implementation: undefined,
     executable: undefined,
+    internal: typeof r.internal === "boolean" ? r.internal : undefined,
+    public: typeof r.public === "boolean" ? r.public : undefined,
+    capabilityKind: parseCapabilityKind(r.capabilityKind),
+    slug: typeof r.slug === "string" && r.slug.trim() ? r.slug.trim() : undefined,
+    title: typeof r.title === "string" && r.title.trim() ? r.title.trim() : undefined,
+    skills: parseStringArray(r.skills),
+    prompt: typeof r.prompt === "string" && r.prompt.trim() ? r.prompt.trim() : undefined,
+    chatTools: parseStringArray(r.chatTools),
     describe: typeof r.describe === "string" ? r.describe : "",
     // Optional agent to run as. Empty/blank string → undefined (no agent).
     agent: typeof r.agent === "string" && r.agent.trim() ? r.agent.trim() : undefined,
@@ -325,6 +355,10 @@ function parseStringArray(raw: unknown): string[] | undefined {
   if (!Array.isArray(raw)) return undefined
   const values = raw.map((t) => String(t).trim()).filter(Boolean)
   return values.length > 0 ? values : undefined
+}
+
+function parseCapabilityKind(raw: unknown): Profile["capabilityKind"] | undefined {
+  return raw === "observe" || raw === "act" || raw === "verify" ? raw : undefined
 }
 
 function parseInputs(p: string, raw: unknown): InputSpec[] {

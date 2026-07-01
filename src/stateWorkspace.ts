@@ -11,7 +11,6 @@ import * as path from "node:path"
 import { type ParsedStateRepo, parseStateRepo, type StateRepoConfig } from "./stateRepo.js"
 
 const DIR_MAPPINGS: Array<{ stateDir: string; localDir: string }> = [
-  { stateDir: "executables", localDir: path.join(".kody", "executables") },
   { stateDir: "capabilities", localDir: path.join(".kody", "capabilities") },
   { stateDir: "agents", localDir: path.join(".kody", "agents") },
   { stateDir: "context", localDir: path.join(".kody", "context") },

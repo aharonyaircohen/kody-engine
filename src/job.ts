@@ -159,6 +159,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     resolvedCapability?.executable ??
     capabilityContext?.config.executable ??
     capabilityContext?.config.executables?.[0] ??
+    (capabilityContext?.config.role ? capabilityContext.slug : undefined) ??
     (capabilityContext?.config.tickScript ? "capability-tick-scripted" : undefined)
   const profileName = valid.executable ?? capabilitySelectedExecutable
   if (workflow && shouldRunCapabilityWorkflow(valid, workflow, workflowIdentity, capabilitySelectedExecutable, base)) {

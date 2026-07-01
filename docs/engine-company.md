@@ -11,8 +11,8 @@ route, verify, and explain engine work.
 Company layer coordinates. Engine runtime executes.
 
 The engine package keeps only the minimal built-in `run` surface. Shared capabilities,
-executables, and agent live in `kody-store`; company executables should inspect,
-decide, report, or dispatch those store-backed capabilities.
+implementation profiles, and agents live in `kody-store`; company implementations
+should inspect, decide, report, or dispatch those store-backed capabilities.
 
 ## Concept Map
 
@@ -27,12 +27,12 @@ The canonical model is:
 - **Capability = how** — reusable ability the agency can use.
 - **Job / run = execution record** — durable required work and its attempts.
 
-Current storage names are compatibility names:
+Current storage names:
 
 - **Capability = capability contract** — public action, kind, owner,
   cadence, safety, inputs, outputs, and implementation link.
-- **Executable = capability implementation** — one concrete implementation unit
-  with prompts, tools, skills, scripts, and executor profile.
+- **Implementation profile = capability implementation** — one concrete runnable unit
+  with prompts, tools, skills, scripts, and executor profile, stored in a capability folder.
 
 Intent selects and prioritizes goals and agentLoops. It is not another execution
 chain; goals and agentLoops still own their own runtime state.
@@ -53,7 +53,7 @@ Canonical noun docs:
 - [Goals](goals.md)
 - [Capabilities](capabilities.md)
 - [Agent](agents.md)
-- [Executables](executables.md)
+- [Implementation Profiles](executables.md)
 
 Store capabilities and goals are a catalog. Consumer repos activate the shared company
 model they want in `kody.config.json`:
@@ -75,7 +75,7 @@ See [Company Activation](company-activation.md) for the full activation contract
 | --- | --- | --- |
 | Agent | `.kody/agents/<slug>.md` | Who is acting. Identity only. |
 | Capabilities | `.kody/capabilities/<slug>/` | Capability contracts: public action, kind, cadence, owner, and output contract. |
-| Company executables | `.kody/executables/<slug>/` | Capability implementations for inspection, reports, triage, and dispatch. |
+| Capability implementations | `.kody/capabilities/<slug>/` with `role` | Capability implementations for inspection, reports, triage, and dispatch. |
 | Reports | `<statePath>/reports/<slug>/runs/*.md` in `stateRepo` | Goal/loop-owned state findings for Dashboard display. |
 | Context | `.kody/context/*.md` | Short background and vocabulary. Not hard rules. |
 | Goal templates | `.kody/goals/templates/<slug>/state.json` | Reusable managed agentGoal definitions. |
@@ -97,8 +97,8 @@ KODY_COMPANY_STORE_REF=stable
 
 Resolution order:
 
-1. Repo-local `.kody/capabilities`, `.kody/executables`, `.kody/agents`
-2. Company store `.kody/capabilities`, `.kody/executables`, `.kody/agents`
+1. Repo-local `.kody/capabilities`, `.kody/agents`
+2. Company store `.kody/capabilities`, `.kody/agents`
 3. Engine built-ins (`run` only)
 
 Local repo assets are overrides. Store assets are shared defaults. `stable`
@@ -112,9 +112,9 @@ local or use explicit names.
 - `.kody/context/*.md`: short orientation for company agents.
 - `.kody/agents/*.md`: identity only.
 - `.kody/capabilities/<slug>/capability.md`: recurring intent.
-- `.kody/executables/<slug>/skills/*/SKILL.md`: exact method and allowed actions.
+- `.kody/capabilities/<slug>/skills/*/SKILL.md`: exact method and allowed actions.
 
-`.kody/context` is not loaded by every engine executable. Treat it as background
+`.kody/context` is not loaded by every engine implementation. Treat it as background
 for company coordination, not as execution policy.
 
 ## Recommended Agent
@@ -125,7 +125,7 @@ for company coordination, not as execution policy.
 - `tech-writer`: docs drift and terminology clarity.
 - `kody`: implementation through store-backed capabilities and the engine `run` primitive.
 
-## Recommended Company Executables
+## Recommended Company Implementations
 
 Start small:
 
@@ -153,7 +153,7 @@ The engine is healthy when:
 
 ## Design Bias
 
-Prefer small company executables with clear authority. A good company executable
+Prefer small company implementations with clear authority. A good company implementation
 does one of four things:
 
 - inspect

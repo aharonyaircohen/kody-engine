@@ -104,7 +104,7 @@ describe("registry: listExecutables", () => {
   })
 })
 
-describe("registry: capability/executable separation", () => {
+describe("registry: obsolete project executables", () => {
   let root: string
   let previousStore: string | undefined
   const prevCwd = process.cwd()
@@ -125,7 +125,7 @@ describe("registry: capability/executable separation", () => {
     fs.rmSync(root, { recursive: true, force: true })
   })
 
-  it("resolves project executables while keeping capability folders as public actions", () => {
+  it("ignores project .kody/executables roots", () => {
     const dutyDir = path.join(root, ".kody", "capabilities", "feature")
     const exeDir = path.join(root, ".kody", "executables", "feature")
     fs.mkdirSync(dutyDir, { recursive: true })
@@ -137,12 +137,8 @@ describe("registry: capability/executable separation", () => {
     fs.writeFileSync(path.join(dutyDir, "capability.md"), "# Feature\n")
     fs.writeFileSync(path.join(exeDir, "profile.json"), JSON.stringify({ name: "feature", role: "primitive" }))
 
-    expect(fs.realpathSync(resolveExecutable("feature")!)).toBe(
-      fs.realpathSync(path.join(exeDir, "profile.json")),
-    )
-    expect(fs.realpathSync(listExecutables().find((exe) => exe.name === "feature")!.profilePath)).toBe(
-      fs.realpathSync(path.join(exeDir, "profile.json")),
-    )
+    expect(resolveExecutable("feature")).toBeNull()
+    expect(listExecutables().find((exe) => exe.name === "feature")).toBeUndefined()
     expect(resolveCapabilityAction("feature")).toMatchObject({
       action: "feature",
       capability: "feature",
@@ -221,7 +217,7 @@ describe("registry: capabilities root", () => {
     })
   })
 
-  it("prefers full .kody/capabilities implementation profiles over project executables", () => {
+  it("uses full .kody/capabilities implementation profiles and ignores project executables", () => {
     const capabilityDir = path.join(root, ".kody", "capabilities", "ship")
     const executableDir = path.join(root, ".kody", "executables", "ship")
     fs.mkdirSync(capabilityDir, { recursive: true })
@@ -241,7 +237,7 @@ describe("registry: capabilities root", () => {
     )
   })
 
-  it("does not treat thin .kody/capabilities contracts as implementation profiles", () => {
+  it("does not treat thin .kody/capabilities contracts or obsolete executables as implementation profiles", () => {
     const capabilityDir = path.join(root, ".kody", "capabilities", "ship")
     const executableDir = path.join(root, ".kody", "executables", "ship")
     fs.mkdirSync(capabilityDir, { recursive: true })
@@ -264,12 +260,8 @@ describe("registry: capabilities root", () => {
       executable: "ship",
       source: "project-folder",
     })
-    expect(fs.realpathSync(resolveExecutable("ship")!)).toBe(
-      fs.realpathSync(path.join(executableDir, "profile.json")),
-    )
-    expect(fs.realpathSync(listExecutables().find((item) => item.name === "ship")!.profilePath)).toBe(
-      fs.realpathSync(path.join(executableDir, "profile.json")),
-    )
+    expect(resolveExecutable("ship")).toBeNull()
+    expect(listExecutables().find((item) => item.name === "ship")).toBeUndefined()
   })
 
   it("does not read removed capabilities roots as capability fallbacks", () => {

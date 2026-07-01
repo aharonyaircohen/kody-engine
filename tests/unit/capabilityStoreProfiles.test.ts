@@ -15,12 +15,15 @@ const WORKFLOW_CAPABILITY_ACTIONS = new Map([
   ["chore", "run"],
   ["spec", "research"],
 ])
-const INTERNAL_EXECUTABLE_ONLY_PROFILES = [
+const REQUIRED_INTERNAL_CAPABILITY_PROFILES = [
   "capability-scheduler",
   "capability-tick",
   "capability-tick-scripted",
+  "ci-check",
+  "compact-memory",
   "goal-manager",
   "goal-scheduler",
+  "kody-chat",
   "release",
   "task-job-fail-once",
   "task-jobs",
@@ -137,16 +140,18 @@ describe("kody-store capability profiles", () => {
     ])
   })
 
-  it("keeps internal store executable helpers out of public capability actions", () => {
+  it("keeps internal store capability helpers out of public capability actions", () => {
     if (!fs.existsSync(STORE_ROOT)) return
     process.env.KODY_COMPANY_STORE = STORE_ROOT
     process.env.KODY_COMPANY_STORE_REF = "stable"
     resetCompanyStoreCacheForTests()
 
     const actionNames = listCapabilityActions().map((action) => action.action)
-    for (const executable of INTERNAL_EXECUTABLE_ONLY_PROFILES) {
-      expect(resolveExecutable(executable)).toBeTruthy()
-      expect(actionNames).not.toContain(executable)
+    for (const capability of REQUIRED_INTERNAL_CAPABILITY_PROFILES) {
+      const profilePath = resolveExecutable(capability)
+      expect(profilePath).toBeTruthy()
+      expect(profilePath).toContain(`${path.sep}.kody${path.sep}capabilities${path.sep}${capability}${path.sep}`)
+      expect(actionNames).not.toContain(capability)
     }
   })
 

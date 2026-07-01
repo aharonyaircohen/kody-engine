@@ -188,6 +188,11 @@ function normalizeBundleFiles(ctx: Context, bundle: AgentFactoryBundle): Array<A
     if (!relativePath) {
       throw new Error(`openAgentFactoryStatePr: files[${index}].path must point to a state repo file`)
     }
+    if (relativePath === "executables" || relativePath.startsWith("executables/")) {
+      throw new Error(
+        `openAgentFactoryStatePr: files[${index}].path uses obsolete executables storage; use capabilities/<slug>/ instead`,
+      )
+    }
     if (seen.has(relativePath)) {
       throw new Error(`openAgentFactoryStatePr: duplicate generated file path: ${relativePath}`)
     }

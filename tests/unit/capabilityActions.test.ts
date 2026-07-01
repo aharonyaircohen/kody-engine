@@ -92,6 +92,20 @@ describe("capability actions", () => {
     })
   })
 
+  it("keeps internal capability implementation profiles out of public actions", () => {
+    process.chdir(root)
+    writeFolderCapability("goal-scheduler", {
+      internal: true,
+      role: "watch",
+      kind: "scheduled",
+      schedule: "*/5 * * * *",
+      inputs: [],
+    })
+
+    expect(resolveCapabilityAction("goal-scheduler")).toBeNull()
+    expect(listCapabilityActions().map((action) => action.action)).not.toContain("goal-scheduler")
+  })
+
   it("ignores legacy single-file markdown capabilities", () => {
     process.chdir(root)
     fs.mkdirSync(path.join(root, ".kody", "capabilities"), { recursive: true })
@@ -121,7 +135,7 @@ describe("capability actions", () => {
     })
   })
 
-  it("resolves public action declared directly on a typed executable profile", () => {
+  it("does not resolve public actions declared directly on obsolete executable profiles", () => {
     process.chdir(root)
     writeExecutable("direct-ship", {
       action: "ship",
@@ -130,20 +144,22 @@ describe("capability actions", () => {
       describe: "Ship directly.",
     })
 
-    expect(resolveCapabilityAction("ship")).toMatchObject({
-      action: "ship",
-      capability: "direct-ship",
-      executable: "direct-ship",
-      source: "project-executable",
-    })
+    expect(resolveCapabilityAction("ship")).toBeNull()
   })
 
-  it("ignores direct executable actions that are not typed engine profiles", () => {
+  it("ignores all direct executable actions", () => {
     process.chdir(root)
+    writeExecutable("direct-ship", {
+      action: "ship",
+      role: "utility",
+      kind: "oneshot",
+      describe: "Ship directly.",
+    })
     writeExecutable("chatty", { action: "chatty", role: "chat" })
     writeExecutable("untyped", { action: "untyped", role: "utility" })
     writeExecutable("floating", { action: "floating", role: "utility", inputs: undefined })
 
+    expect(resolveCapabilityAction("ship")).toBeNull()
     expect(resolveCapabilityAction("chatty")).toBeNull()
     expect(resolveCapabilityAction("untyped")).toBeNull()
     expect(resolveCapabilityAction("floating")).toBeNull()

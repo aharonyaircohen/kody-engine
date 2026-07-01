@@ -86,7 +86,7 @@ export const composePrompt: PreflightScript = async (ctx, profile) => {
   for (const c of candidates) {
     // Prefer the template captured at profile-load time (before any preflight).
     // runFlow's branch setup can drop the tracked-but-ignore-negated
-    // `.kody/executables/<name>/` dir on the CI runner, so a fresh disk read
+    // `.kody/capabilities/<name>/` dir on the CI runner, so a fresh disk read
     // here would fail (ENOENT) even though the file was present at load. Fall
     // back to disk for runtime overrides (ctx.data.promptTemplate) not captured
     // at load time.

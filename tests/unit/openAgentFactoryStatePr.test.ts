@@ -40,10 +40,10 @@ function makeCtx(prSummary: string): Context {
 function bundle(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
     title: "Add example agent",
-    summary: "Creates a small example executable for review.",
+    summary: "Creates a small example capability for review.",
     files: [
       {
-        path: "executables/example/profile.json",
+        path: "capabilities/example/profile.json",
         content: "{\n  \"name\": \"example\"\n}\n",
       },
     ],
@@ -101,7 +101,7 @@ describe("openAgentFactoryStatePr", () => {
     const tree = inputForPath("/git/trees") as { tree: Array<{ path: string; content: string }> }
     expect(tree.tree).toEqual([
       {
-        path: "app-state/executables/example/profile.json",
+        path: "app-state/capabilities/example/profile.json",
         mode: "100644",
         type: "blob",
         content: "{\n  \"name\": \"example\"\n}\n",
@@ -127,13 +127,13 @@ describe("openAgentFactoryStatePr", () => {
     ).rejects.toThrow(/relative path/)
   })
 
-  it("strips legacy .kody prefixes from generated paths", async () => {
+  it("strips .kody prefixes from generated paths", async () => {
     mockSuccessfulGh()
 
     await openAgentFactoryStatePr(
       makeCtx(
         bundle({
-          files: [{ path: ".kody/executables/example/profile.json", content: "{}\n" }],
+          files: [{ path: ".kody/capabilities/example/profile.json", content: "{}\n" }],
         }),
       ),
       profile,
@@ -141,6 +141,20 @@ describe("openAgentFactoryStatePr", () => {
     )
 
     const tree = inputForPath("/git/trees") as { tree: Array<{ path: string; content: string }> }
-    expect(tree.tree[0]?.path).toBe("app-state/executables/example/profile.json")
+    expect(tree.tree[0]?.path).toBe("app-state/capabilities/example/profile.json")
+  })
+
+  it("rejects obsolete executable paths", async () => {
+    await expect(
+      openAgentFactoryStatePr(
+        makeCtx(
+          bundle({
+            files: [{ path: "executables/example/profile.json", content: "{}\n" }],
+          }),
+        ),
+        profile,
+        agentResult,
+      ),
+    ).rejects.toThrow(/obsolete executables storage/)
   })
 })
