@@ -63,4 +63,8 @@ describe("postReviewResult: detectVerdict", () => {
   it("returns UNKNOWN for an invalid verdict value", () => {
     expect(detectVerdict("## Verdict: MAYBE")).toBe("UNKNOWN")
   })
+  it("treats partial QA verdicts with findings as CONCERNS", () => {
+    expect(detectVerdict('{"verdict":"partial","findings":[{"severity":"high"}]}')).toBe("CONCERNS")
+    expect(detectVerdict("## Verdict\n\nPartial — 3 findings and 1 auth gap.")).toBe("CONCERNS")
+  })
 })

@@ -56,6 +56,8 @@ interface ReportJson {
   findings: ParsedFinding[]
 }
 
+type RawFallbackFinding = Record<string, unknown>
+
 interface ManifestGoal {
   id: string
   name: string
@@ -121,6 +123,8 @@ function buildGoalName(scope: string | undefined, verdict: ReviewVerdict): strin
 export function splitReport(text: string): { markdown: string; data: ReportJson | null; jsonError?: string } {
   const open = text.indexOf(REPORT_JSON_OPEN)
   if (open < 0) {
+    const fallback = parseFallbackFindingsJson(text)
+    if (fallback) return fallback
     return { markdown: text.trim(), data: null, jsonError: "no JSON block marker" }
   }
   const closeRel = text.slice(open + REPORT_JSON_OPEN.length).indexOf(REPORT_JSON_CLOSE)
@@ -148,6 +152,82 @@ export function splitReport(text: string): { markdown: string; data: ReportJson 
 
   const markdown = text.slice(0, open).trim()
   return { markdown, data: parsed, jsonError: parseError }
+}
+
+function parseFallbackFindingsJson(text: string): { markdown: string; data: ReportJson | null; jsonError?: string } | null {
+  const fences = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi)]
+  for (let i = fences.length - 1; i >= 0; i--) {
+    const match = fences[i]!
+    const raw = match[1]?.trim()
+    if (!raw || !/"findings"\s*:/.test(raw)) continue
+    try {
+      const parsed = JSON.parse(raw) as { findings?: unknown }
+      if (!parsed || !Array.isArray(parsed.findings)) {
+        return { markdown: removeFence(text, match).trim(), data: null, jsonError: "fallback JSON missing 'findings' array" }
+      }
+      return {
+        markdown: removeFence(text, match).trim(),
+        data: { findings: parsed.findings.map((f, idx) => normalizeFallbackFinding(f, idx)) },
+      }
+    } catch (err) {
+      return {
+        markdown: removeFence(text, match).trim(),
+        data: null,
+        jsonError: err instanceof Error ? err.message : String(err),
+      }
+    }
+  }
+  return null
+}
+
+function removeFence(text: string, match: RegExpMatchArray): string {
+  const start = match.index ?? -1
+  if (start < 0) return text
+  return `${text.slice(0, start)}${text.slice(start + match[0].length)}`
+}
+
+function normalizeFallbackFinding(raw: unknown, idx: number): ParsedFinding {
+  const finding = raw && typeof raw === "object" ? (raw as RawFallbackFinding) : {}
+  const title = firstString(finding.title, finding.summary, finding.issue, finding.name) || `QA finding ${idx + 1}`
+  const route = firstString(finding.route, finding.url, finding.path)
+  const expected = firstString(finding.expected) || "Expected behavior described in QA report."
+  const actual = firstString(finding.actual, finding.summary, finding.observed) || "Observed behavior described in QA report."
+  return {
+    severity: normalizeSeverity(firstString(finding.severity, finding.priority)),
+    title,
+    ...(route ? { route } : {}),
+    steps: firstString(finding.steps, finding.repro, finding.reproduction) || "See QA report.",
+    expected,
+    actual,
+    evidence: evidenceString(finding.evidence),
+  }
+}
+
+function firstString(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim()
+  }
+  return ""
+}
+
+function evidenceString(value: unknown): string | undefined {
+  if (typeof value === "string" && value.trim()) return value.trim()
+  if (Array.isArray(value)) {
+    const parts = value
+      .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+      .map((v) => v.trim())
+    return parts.length > 0 ? parts.join(", ") : undefined
+  }
+  return undefined
+}
+
+function normalizeSeverity(value: string): ParsedFinding["severity"] {
+  const v = value.trim().toUpperCase()
+  if (v === "P0" || v === "CRITICAL") return "P0"
+  if (v === "P1" || v === "HIGH" || v === "BLOCKER") return "P1"
+  if (v === "P2" || v === "MEDIUM") return "P2"
+  if (v === "P3" || v === "LOW" || v === "POLISH") return "P3"
+  return "P2"
 }
 
 function loadManifest(cwd: string): { number: number | null; manifest: ManifestBody } {

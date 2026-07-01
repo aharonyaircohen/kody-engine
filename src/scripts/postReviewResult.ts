@@ -21,6 +21,14 @@ import type { Action } from "../state.js"
 export type ReviewVerdict = "PASS" | "CONCERNS" | "FAIL" | "UNKNOWN"
 
 function inferVerdictFromReviewText(body: string): ReviewVerdict {
+  const structuredVerdict = body.match(/"verdict"\s*:\s*"(pass|concerns|fail|partial)"/i)
+  if (structuredVerdict) {
+    const value = structuredVerdict[1]!.toUpperCase()
+    return value === "PARTIAL" ? "CONCERNS" : (value as ReviewVerdict)
+  }
+  if (/\bpartial\b/i.test(body) && /\b(finding|gap|unverified|unverifiable|blocker|issue)s?\b/i.test(body)) {
+    return "CONCERNS"
+  }
   if (/\b(blocking|blocker|must fix|should not merge|regression|breaks|security risk)\b/i.test(body)) return "FAIL"
   if (
     /\b(actionable item|suggestions?|worth clarifying|worth checking|minor note|non-blocking|deserves a comment)\b/i.test(

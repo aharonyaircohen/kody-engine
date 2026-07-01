@@ -89,6 +89,46 @@ describe("createQaGoal: splitReport", () => {
     expect(data).toBeNull()
     expect(jsonError).toBe("JSON block not terminated")
   })
+
+  it("normalizes plain fenced findings JSON when the marker is missing", () => {
+    const text = `# QA Report
+
+## Findings
+
+\`\`\`json
+{
+  "verdict": "partial",
+  "findings": [
+    {
+      "severity": "high",
+      "route": "/login",
+      "summary": "Raw i18n key is visible",
+      "repro": "Open /login",
+      "evidence": ["qa-login.png"]
+    },
+    {
+      "severity": "low",
+      "route": "/api-status",
+      "summary": "Secondary text says unknown (unknown)"
+    }
+  ]
+}
+\`\`\`
+`
+    const { markdown, data, jsonError } = splitReport(text)
+    expect(jsonError).toBeUndefined()
+    expect(markdown).not.toContain('"findings"')
+    expect(data?.findings).toHaveLength(2)
+    expect(data?.findings[0]).toMatchObject({
+      severity: "P1",
+      title: "Raw i18n key is visible",
+      route: "/login",
+      steps: "Open /login",
+      actual: "Raw i18n key is visible",
+      evidence: "qa-login.png",
+    })
+    expect(data?.findings[1].severity).toBe("P3")
+  })
 })
 
 describe("createQaGoal: manifest body roundtrip", () => {
