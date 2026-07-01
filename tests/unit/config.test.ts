@@ -3,6 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
 import {
+  litellmModelGroup,
   loadConfig,
   needsLitellmProxy,
   parseModelRuntimeConfig,
@@ -48,19 +49,19 @@ describe("config: parseModelRuntimeConfig", () => {
   })
 
   it("uses the dashboard model config for OpenAI-compatible endpoints", () => {
-    expect(
-      parseModelRuntimeConfig(
-        "minimax/MiniMax-M3",
-        JSON.stringify({
-          spec: "minimax/MiniMax-M3",
-          provider: "custom",
-          protocol: "openai",
-          baseURL: "https://api.minimax.io/v1",
-          modelName: "MiniMax-M3",
-          apiKeyEnvVar: "MINIMAX_API_KEY",
-        }),
-      ),
-    ).toEqual({
+    const model = parseModelRuntimeConfig(
+      "minimax/MiniMax-M3",
+      JSON.stringify({
+        spec: "minimax/MiniMax-M3",
+        provider: "custom",
+        protocol: "openai",
+        baseURL: "https://api.minimax.io/v1",
+        modelName: "MiniMax-M3",
+        apiKeyEnvVar: "MINIMAX_API_KEY",
+      }),
+    )
+
+    expect(model).toEqual({
       provider: "custom",
       model: "MiniMax-M3",
       protocol: "openai",
@@ -69,12 +70,11 @@ describe("config: parseModelRuntimeConfig", () => {
       litellmProvider: "openai",
       spec: "minimax/MiniMax-M3",
     })
+    expect(litellmModelGroup(model)).toBe("minimax/MiniMax-M3")
   })
 
   it("throws a clear error for invalid dashboard model config JSON", () => {
-    expect(() => parseModelRuntimeConfig("minimax/MiniMax-M3", "{")).toThrow(
-      /KODY_MODEL_CONFIG is invalid JSON/,
-    )
+    expect(() => parseModelRuntimeConfig("minimax/MiniMax-M3", "{")).toThrow(/KODY_MODEL_CONFIG is invalid JSON/)
   })
 })
 

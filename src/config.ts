@@ -284,6 +284,10 @@ export function parseModelRuntimeConfig(modelSpec: string, rawConfig: string | u
   return out
 }
 
+export function litellmModelGroup(model: ProviderModel): string {
+  return model.spec?.trim() || model.model
+}
+
 export function providerApiKeyEnvVar(provider: string): string {
   if (provider === "anthropic" || provider === "claude") return "ANTHROPIC_API_KEY"
   return `${provider.toUpperCase()}_API_KEY`
@@ -460,10 +464,7 @@ function parseCompanyConfig(raw: unknown): KodyConfig["company"] {
   const r = raw as Record<string, unknown>
   const out: NonNullable<KodyConfig["company"]> = {}
   if (r.activeCapabilities !== undefined)
-    out.activeCapabilities = parseSlugArray(
-      r.activeCapabilities,
-      "company.activeCapabilities",
-    )
+    out.activeCapabilities = parseSlugArray(r.activeCapabilities, "company.activeCapabilities")
   if (r.activeGoals !== undefined) out.activeGoals = parseGoalActivations(r.activeGoals)
   return Object.keys(out).length > 0 ? out : undefined
 }

@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process"
-import { beforeEach, describe, expect, it, vi } from "vitest"
-import { generateLitellmConfigYaml, resolveLitellmCommand } from "../../src/litellm.js"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { generateLitellmConfigYaml, litellmServesModel, resolveLitellmCommand } from "../../src/litellm.js"
 
 vi.mock("node:child_process", () => ({ execFileSync: vi.fn(), spawn: vi.fn() }))
 
@@ -61,7 +61,7 @@ describe("litellm: generateLitellmConfigYaml", () => {
       spec: "minimax/MiniMax-M3",
     })
 
-    expect(yaml).toMatch(/model_name: MiniMax-M3/)
+    expect(yaml).toMatch(/model_name: minimax\/MiniMax-M3/)
     expect(yaml).toMatch(/model: openai\/MiniMax-M3/)
     expect(yaml).toMatch(/api_key: os\.environ\/MINIMAX_API_KEY/)
     expect(yaml).toMatch(/api_base: https:\/\/api\.minimax\.io\/v1/)
@@ -81,6 +81,36 @@ describe("litellm: generateLitellmConfigYaml", () => {
   it("does not add an API base unless the model config supplies one", () => {
     const yaml = generateLitellmConfigYaml({ provider: "openai", model: "gpt-4o" })
     expect(yaml).not.toMatch(/api_base:/)
+  })
+})
+
+describe("litellm: model group reuse checks", () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("detects when an existing LiteLLM proxy serves the requested model group", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          data: [{ id: "minimax/MiniMax-M3" }],
+        }),
+      ),
+    )
+
+    await expect(litellmServesModel("http://localhost:4000", "minimax/MiniMax-M3")).resolves.toBe(true)
+  })
+
+  it("does not treat a healthy proxy for another model group as reusable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          data: [{ id: "minimax/MiniMax-M2.7-highspeed" }],
+        }),
+      ),
+    )
+
+    await expect(litellmServesModel("http://localhost:4000", "minimax/MiniMax-M3")).resolves.toBe(false)
   })
 })
 

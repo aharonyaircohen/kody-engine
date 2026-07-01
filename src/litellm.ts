@@ -1,8 +1,15 @@
 import { execFileSync, spawn } from "node:child_process"
 import * as fs from "node:fs"
+import * as net from "node:net"
 import * as os from "node:os"
 import * as path from "node:path"
-import { LITELLM_DEFAULT_URL, needsLitellmProxy, type ProviderModel, providerApiKeyEnvVar } from "./config.js"
+import {
+  LITELLM_DEFAULT_URL,
+  litellmModelGroup,
+  needsLitellmProxy,
+  type ProviderModel,
+  providerApiKeyEnvVar,
+} from "./config.js"
 
 export async function checkLitellmHealth(url: string): Promise<boolean> {
   try {
@@ -37,10 +44,11 @@ function resolveLitellmTimeoutMs(): number {
 export function generateLitellmConfigYaml(model: ProviderModel): string {
   const apiKeyVar = model.apiKeyEnvVar ?? providerApiKeyEnvVar(model.provider)
   const litellmProvider = model.litellmProvider ?? model.provider
+  const modelGroup = litellmModelGroup(model)
   const providerParams: Array<[string, string]> = model.baseURL ? [["api_base", model.baseURL]] : []
   return [
     "model_list:",
-    `  - model_name: ${model.model}`,
+    `  - model_name: ${modelGroup}`,
     `    litellm_params:`,
     `      model: ${litellmProvider}/${model.model}`,
     `      api_key: os.environ/${apiKeyVar}`,
@@ -50,6 +58,17 @@ export function generateLitellmConfigYaml(model: ProviderModel): string {
     "  drop_params: true",
     "",
   ].join("\n")
+}
+
+export async function litellmServesModel(url: string, modelGroup: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${url.replace(/\/+$/, "")}/v1/models`, { signal: AbortSignal.timeout(3000) })
+    if (!response.ok) return false
+    const payload = (await response.json()) as { data?: Array<{ id?: unknown }> }
+    return (payload.data ?? []).some((entry) => entry.id === modelGroup)
+  } catch {
+    return false
+  }
 }
 
 export interface LitellmHandle {
@@ -149,8 +168,8 @@ export async function startLitellmIfNeeded(
   if (!needsLitellmProxy(model)) return null
 
   const cmd = resolveLitellmCommand()
-  const portMatch = url.match(/:(\d+)/)
-  const port = portMatch ? portMatch[1] : "4000"
+  let activeUrl = url.replace(/\/+$/, "")
+  const modelGroup = litellmModelGroup(model)
   const childEnv = stripBlockingEnv({ ...process.env, ...readDotenvApiKeys(projectDir) })
 
   // Mutable handle state. `ensureHealthy` can replace `child` when it respawns
@@ -161,6 +180,8 @@ export async function startLitellmIfNeeded(
   let logPath: string | undefined
 
   const spawnProxy = (): void => {
+    const portMatch = activeUrl.match(/:(\d+)/)
+    const port = portMatch ? portMatch[1] : "4000"
     const configPath = path.join(os.tmpdir(), `kody-local-litellm-${Date.now()}.yaml`)
     fs.writeFileSync(configPath, generateLitellmConfigYaml(model))
     // `cmd` is always a runnable litellm CLI (the bare command or an absolute
@@ -177,7 +198,7 @@ export async function startLitellmIfNeeded(
     const deadline = Date.now() + resolveLitellmTimeoutMs()
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, LITELLM_HEALTH_POLL_INTERVAL_MS))
-      if (await checkLitellmHealth(url)) return true
+      if (await checkLitellmHealth(activeUrl)) return true
     }
     return false
   }
@@ -218,7 +239,7 @@ export async function startLitellmIfNeeded(
   }
 
   const ensureHealthy = async (): Promise<boolean> => {
-    if (await checkLitellmHealth(url)) return true
+    if (await checkLitellmHealth(activeUrl)) return true
     const tail = readLogTail()
     process.stderr.write(
       `[kody litellm] proxy unreachable mid-run; restarting.${tail ? ` Last log:\n${tail}\n` : "\n"}`,
@@ -228,11 +249,18 @@ export async function startLitellmIfNeeded(
     return waitForHealth()
   }
 
-  const isHealthy = (): Promise<boolean> => checkLitellmHealth(url)
+  const isHealthy = (): Promise<boolean> => checkLitellmHealth(activeUrl)
 
   // Reuse a proxy already serving this url (started by an earlier task).
-  if (await checkLitellmHealth(url)) {
-    return { url, kill: killChild, isHealthy, ensureHealthy }
+  if (await checkLitellmHealth(activeUrl)) {
+    if (await litellmServesModel(activeUrl, modelGroup)) {
+      return { url: activeUrl, kill: killChild, isHealthy, ensureHealthy }
+    }
+    const staleUrl = activeUrl
+    activeUrl = await nextAvailableLitellmUrl(activeUrl)
+    process.stderr.write(
+      `[kody litellm] existing proxy at ${staleUrl} does not serve ${modelGroup}; starting a separate proxy at ${activeUrl}\n`,
+    )
   }
 
   spawnProxy()
@@ -244,7 +272,32 @@ export async function startLitellmIfNeeded(
       `LiteLLM proxy failed to start within ${seconds}s (KODY_LITELLM_TIMEOUT_SEC overrides). Log tail:\n${tail}`,
     )
   }
-  return { url, kill: killChild, isHealthy, ensureHealthy }
+  return { url: activeUrl, kill: killChild, isHealthy, ensureHealthy }
+}
+
+async function nextAvailableLitellmUrl(url: string): Promise<string> {
+  const parsed = new URL(url)
+  const startPort = Number(parsed.port || "4000")
+  const host = parsed.hostname === "localhost" ? "127.0.0.1" : parsed.hostname
+  for (let offset = 1; offset <= 50; offset++) {
+    const port = startPort + offset
+    if (await canListen(port, host)) {
+      parsed.port = String(port)
+      return parsed.origin
+    }
+  }
+  throw new Error(`no free LiteLLM port found after ${startPort}`)
+}
+
+function canListen(port: number, host: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = net.createServer()
+    server.once("error", () => resolve(false))
+    server.once("listening", () => {
+      server.close(() => resolve(true))
+    })
+    server.listen(port, host)
+  })
 }
 
 function readDotenvApiKeys(projectDir: string): Record<string, string> {

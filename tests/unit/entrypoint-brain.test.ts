@@ -52,8 +52,11 @@ describe("entrypoint-brain.sh: Hermes config sanity", () => {
   it("pre-warms LiteLLM from KODY_MODEL_CONFIG when Dashboard supplies one", () => {
     expect(entrypoint).toContain("KODY_MODEL_CONFIG")
     expect(entrypoint).toContain("modelName")
+    expect(entrypoint).toContain("modelSpec")
+    expect(entrypoint).toContain("modelGroup")
     expect(entrypoint).toContain("apiKeyEnvVar")
     expect(entrypoint).toContain("api_base")
+    expect(entrypoint).toMatch(/modelGroup="\$modelSpec"|modelGroup="\$[{]modelSpec[}]"/)
     expect(entrypoint).toMatch(/protocol.*openai|openai.*protocol/s)
   })
 

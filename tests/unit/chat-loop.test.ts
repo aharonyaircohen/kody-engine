@@ -113,7 +113,7 @@ describe("chat/loop", () => {
       sessionId: "s1",
       sessionFile,
       cwd: tmp,
-      model: { provider: "custom", model: "MiniMax-M3", protocol: "openai" },
+      model: { provider: "custom", model: "MiniMax-M3", protocol: "openai", spec: "minimax/MiniMax-M3" },
       litellmUrl: "http://localhost:4000",
       sink,
       fetchImpl: async (url, init) => {
@@ -133,7 +133,7 @@ describe("chat/loop", () => {
     expect(res.exitCode).toBe(0)
     expect(res.reply).toBe("OK")
     expect(calls[0]?.url).toBe("http://localhost:4000/v1/chat/completions")
-    expect(calls[0]?.body.model).toBe("MiniMax-M3")
+    expect(calls[0]?.body.model).toBe("minimax/MiniMax-M3")
     expect(sink.events.map((e) => e.event)).toEqual(["chat.message", "chat.done"])
     expect(readSession(sessionFile)[1]?.content).toBe("OK")
   })

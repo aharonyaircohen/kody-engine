@@ -189,6 +189,7 @@ prewarm_litellm() {
   providersAdded=0
   if [ -n "${KODY_MODEL_CONFIG:-}" ]; then
     modelName="$(printf '%s' "$KODY_MODEL_CONFIG" | jq -r '.modelName // empty' 2>/dev/null || true)"
+    modelSpec="$(printf '%s' "$KODY_MODEL_CONFIG" | jq -r '.spec // empty' 2>/dev/null || true)"
     protocol="$(printf '%s' "$KODY_MODEL_CONFIG" | jq -r '.protocol // empty' 2>/dev/null || true)"
     provider="$(printf '%s' "$KODY_MODEL_CONFIG" | jq -r '.provider // empty' 2>/dev/null || true)"
     baseURL="$(printf '%s' "$KODY_MODEL_CONFIG" | jq -r '.baseURL // empty' 2>/dev/null || true)"
@@ -211,8 +212,12 @@ prewarm_litellm() {
       echo "→ brain: pre-warm skipped (KODY_MODEL_CONFIG missing provider)"
       return 0
     fi
+    modelGroup="$modelName"
+    if [ -n "$modelSpec" ]; then
+      modelGroup="$modelSpec"
+    fi
     cat >>"$cfg" <<EOF
-  - model_name: "${modelName}"
+  - model_name: "${modelGroup}"
     litellm_params:
       model: "${litellmProvider}/${modelName}"
       api_key: os.environ/${apiKeyVar}

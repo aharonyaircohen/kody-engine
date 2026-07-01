@@ -11,6 +11,7 @@ import * as path from "node:path"
 import type { AgentResult } from "../agent.js"
 import { runAgent } from "../agent.js"
 import type { ProviderModel, ReasoningEffort } from "../config.js"
+import { litellmModelGroup } from "../config.js"
 import { listExecutables } from "../registry.js"
 import type { StateRepoConfig } from "../stateRepo.js"
 import {
@@ -455,7 +456,7 @@ async function runOpenAIChatTurn(args: {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: opts.model.model,
+        model: litellmModelGroup(opts.model),
         messages: [
           { role: "system", content: systemPrompt },
           ...turns.map((turn) => ({

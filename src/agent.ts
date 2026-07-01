@@ -5,6 +5,7 @@ import { ensureStableClaudeBinary } from "./claudeBinary.js"
 import {
   getAnthropicApiKeyOrDummy,
   type KodyConfig,
+  litellmModelGroup,
   type ProviderModel,
   REASONING_BUDGETS,
   type ReasoningEffort,
@@ -458,7 +459,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
 
     try {
       const queryOptions: Record<string, unknown> = {
-        model: opts.model.model,
+        model: opts.litellmUrl ? litellmModelGroup(opts.model) : opts.model.model,
         cwd: opts.cwd,
         // Fresh array (never mutate the shared DEFAULT_ALLOWED_TOOLS const) so
         // opt-in tools like fetch_repo can be appended below.
