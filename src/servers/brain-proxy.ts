@@ -127,6 +127,7 @@ export function buildBrainProxy(opts: BrainProxyOptions): {
         storeRepoUrl?: string
         storeRef?: string
         allowCrossRepo?: boolean
+        agentIdentity?: { slug?: string; body?: string }
       } = {}
       try {
         const raw = Buffer.concat(chunks).toString("utf-8")
@@ -209,6 +210,7 @@ interface ProxyToBrainServeArgs {
     storeRepoUrl?: string
     storeRef?: string
     allowCrossRepo?: boolean
+    agentIdentity?: { slug?: string; body?: string }
   }
   doFetch: typeof fetch
 }
@@ -229,6 +231,7 @@ async function proxyToBrainServe(args: ProxyToBrainServeArgs): Promise<void> {
       ...(args.body.storeRepoUrl ? { storeRepoUrl: args.body.storeRepoUrl } : {}),
       ...(args.body.storeRef ? { storeRef: args.body.storeRef } : {}),
       ...(args.body.allowCrossRepo === true ? { allowCrossRepo: true } : {}),
+      ...(args.body.agentIdentity ? { agentIdentity: args.body.agentIdentity } : {}),
     }),
   })
 

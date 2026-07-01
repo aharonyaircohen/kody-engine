@@ -10,6 +10,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { AgentResult } from "../agent.js"
 import { runAgent } from "../agent.js"
+import { frameAgentIdentity, loadAgentIdentity } from "../agents.js"
 import type { ProviderModel, ReasoningEffort } from "../config.js"
 import { litellmModelGroup } from "../config.js"
 import { listExecutables } from "../registry.js"
@@ -214,6 +215,15 @@ export interface ChatTurnOptions {
   cmsStoreRepoUrl?: string
   /** Dashboard store ref forwarded to Dashboard CMS routes. */
   cmsStoreRef?: string
+  /**
+   * Agent identity selected by an upstream caller such as Repo Brain. When
+   * omitted, chat keeps the legacy Kody identity. `body` is preferred because
+   * Brain Fly already resolved the state-repo file with the user's token.
+   */
+  agentIdentity?: {
+    slug: string
+    body?: string
+  }
   /** Override for the system prompt (tests). */
   systemPrompt?: string
   /**
@@ -257,6 +267,7 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
 
   const basePrompt =
     opts.systemPrompt ?? (opts.model.protocol === "openai" ? OPENAI_CHAT_SYSTEM_PROMPT : CHAT_SYSTEM_PROMPT)
+  const agentIdentityBlock = readAgentIdentityBlock(opts.cwd, opts.agentIdentity)
   const catalog = buildExecutableCatalog()
   // Per-task artifacts contract appended to every chat session so the
   // agent writes context.json / memory-recs.json / followups.json /
@@ -296,6 +307,7 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
       : null
   const systemPrompt = [
     basePrompt,
+    agentIdentityBlock,
     contextBlock,
     memoryBlock,
     instructionsBlock,
@@ -444,6 +456,16 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   }
 
   return { exitCode: 0, reply }
+}
+
+function readAgentIdentityBlock(
+  cwd: string,
+  agentIdentity: ChatTurnOptions["agentIdentity"] | undefined,
+): string | null {
+  const slug = agentIdentity?.slug?.trim()
+  if (!slug) return null
+  const body = agentIdentity?.body?.trim() || loadAgentIdentity(cwd, slug)
+  return frameAgentIdentity(slug, body)
 }
 
 async function runOpenAIChatTurn(args: {

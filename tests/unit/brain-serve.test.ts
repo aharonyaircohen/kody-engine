@@ -748,6 +748,45 @@ describe("buildServer multi-repo", () => {
     expect(cms?.cmsStoreRef).toBe("stable")
   })
 
+  it("passes a selected agent identity into the chat turn", async () => {
+    const observed: ChatTurnOptions[] = []
+    booted = await boot(
+      async (opts) => {
+        observed.push(opts)
+        await opts.sink.emit(makeEvent("chat.done", {}))
+        return { exitCode: 0 }
+      },
+      tmp,
+      {
+        reposRoot: path.join(tmp, "repos"),
+        cloneRepo: async (_repo, _token, dir) => {
+          fs.mkdirSync(path.join(dir, ".git"), { recursive: true })
+        },
+      },
+    )
+
+    const res = await fetch(`${booted.url}/chats/c1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": KEY },
+      body: JSON.stringify({
+        message: "who are you?",
+        repo: "acme/widgets",
+        repoToken: "repo-token",
+        agentIdentity: {
+          slug: "repo-brain",
+          body: "You are Repo Brain.",
+        },
+      }),
+    })
+
+    expect(res.status).toBe(200)
+    await readSseBody(res)
+    expect(observed[0]?.agentIdentity).toEqual({
+      slug: "repo-brain",
+      body: "You are Repo Brain.",
+    })
+  })
+
   it("does not expose fetch_repo to normal Repo Brain turns", async () => {
     const observed: ChatTurnOptions[] = []
     booted = await boot(

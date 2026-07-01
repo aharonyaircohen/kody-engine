@@ -133,6 +133,17 @@ function boolField(body: unknown, key: string): boolean {
   return typeof body === "object" && body !== null && (body as Record<string, unknown>)[key] === true
 }
 
+function agentIdentityField(body: unknown): ChatTurnOptions["agentIdentity"] | undefined {
+  if (typeof body !== "object" || body === null || !("agentIdentity" in body)) return undefined
+  const value = (body as Record<string, unknown>).agentIdentity
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  const slug = typeof record.slug === "string" ? record.slug.trim() : ""
+  const bodyText = typeof record.body === "string" ? record.body.trim() : ""
+  if (!slug || !bodyText) return undefined
+  return { slug, body: bodyText }
+}
+
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json" })
   res.end(JSON.stringify(body))
@@ -356,6 +367,7 @@ async function handleChatTurn(
   const storeRepoUrl = strField(body, "storeRepoUrl")
   const storeRef = strField(body, "storeRef")
   const allowCrossRepo = boolField(body, "allowCrossRepo")
+  const agentIdentity = agentIdentityField(body)
 
   let agentCwd: string
   try {
@@ -446,6 +458,7 @@ async function handleChatTurn(
         // coordinator flows can opt into fetch_repo explicitly.
         ...(allowCrossRepo ? { enableFetchRepoTool: true } : {}),
         repoToken,
+        ...(agentIdentity ? { agentIdentity } : {}),
         ...(dashboardUrl && repo && stateToken
           ? {
               cmsDashboardUrl: dashboardUrl,

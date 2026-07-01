@@ -138,6 +138,40 @@ describe("chat/loop", () => {
     expect(readSession(sessionFile)[1]?.content).toBe("OK")
   })
 
+  it("injects a selected agent identity into Brain chat prompts", async () => {
+    const sessionFile = path.join(tmp, "s.jsonl")
+    appendTurn(sessionFile, { role: "user", content: "who are you?", timestamp: "t1" })
+    const sink = new MemSink()
+    const calls: Array<{ body: Record<string, unknown> }> = []
+    const res = await runChatTurn({
+      sessionId: "s1",
+      sessionFile,
+      cwd: tmp,
+      model: { provider: "custom", model: "MiniMax-M3", protocol: "openai", spec: "minimax/MiniMax-M3" },
+      litellmUrl: "http://localhost:4000",
+      sink,
+      agentIdentity: {
+        slug: "repo-brain",
+        body: "You are the Repo Brain. Stay inside the selected repository.",
+      },
+      fetchImpl: async (_url, init) => {
+        calls.push({
+          body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+        })
+        return new Response(JSON.stringify({ choices: [{ message: { content: "  OK  " } }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      },
+    })
+
+    expect(res.exitCode).toBe(0)
+    const body = calls[0]?.body as { messages?: Array<{ role?: string; content?: string }> } | undefined
+    const system = body?.messages?.find((m) => m.role === "system")?.content ?? ""
+    expect(system).toContain("agent `repo-brain`")
+    expect(system).toContain("You are the Repo Brain. Stay inside the selected repository.")
+  })
+
   it("does not advertise cross-repo tools just because reposRoot is present", async () => {
     const sessionFile = path.join(tmp, "s.jsonl")
     appendTurn(sessionFile, { role: "user", content: "which repos can you access?", timestamp: "t1" })

@@ -178,6 +178,10 @@ describe("brain-proxy: brain-serve backend (passthrough)", () => {
         storeRepoUrl: "https://github.com/acme/kody-store",
         storeRef: "stable",
         allowCrossRepo: true,
+        agentIdentity: {
+          slug: "repo-brain",
+          body: "You are Repo Brain.",
+        },
       }),
     })
 
@@ -192,6 +196,10 @@ describe("brain-proxy: brain-serve backend (passthrough)", () => {
       storeRepoUrl: "https://github.com/acme/kody-store",
       storeRef: "stable",
       allowCrossRepo: true,
+      agentIdentity: {
+        slug: "repo-brain",
+        body: "You are Repo Brain.",
+      },
     })
   })
 
