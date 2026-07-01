@@ -24,7 +24,7 @@ import type { Context, InputSpec, Job, Profile, ScriptEntry } from "./executable
 import { KODY_NAMESPACE, removeLabel } from "./lifecycleLabels.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
-import { resolveExecutable } from "./registry.js"
+import { resolveExecutable, resolveExecutableCandidates } from "./registry.js"
 import { agentRunDir } from "./runtimePaths.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
 import type { TaskState, TaskTarget } from "./state.js"
@@ -277,10 +277,8 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     return out
   }
 
-  const profilePath = resolveProfilePath(profileName)
-  const profile = loadProfile(profilePath)
-
-  const missing = validateScriptReferences(profile, allScriptNames)
+  const resolved = loadRunnableProfile(profileName)
+  const { profilePath, profile, missing } = resolved
   if (missing.length > 0) {
     return finishAndEnd({
       exitCode: 99,
@@ -937,6 +935,26 @@ export function resolveProfilePath(profileName: string): string {
     if (fs.existsSync(c)) return c
   }
   return candidates[0]!
+}
+
+function loadRunnableProfile(profileName: string): { profilePath: string; profile: Profile; missing: string[] } {
+  const candidates = resolveExecutableCandidates(profileName)
+  const skipped: string[] = []
+
+  for (const profilePath of candidates) {
+    const profile = loadProfile(profilePath)
+    const missing = validateScriptReferences(profile, allScriptNames)
+    if (missing.length === 0) return { profilePath, profile, missing }
+    skipped.push(`${profilePath}: ${missing.join(", ")}`)
+  }
+
+  if (skipped.length > 0) {
+    process.stderr.write(`[kody] skipping invalid profile override(s): ${skipped.join("; ")}\n`)
+  }
+
+  const profilePath = resolveProfilePath(profileName)
+  const profile = loadProfile(profilePath)
+  return { profilePath, profile, missing: validateScriptReferences(profile, allScriptNames) }
 }
 
 function validateInputs(specs: InputSpec[], raw: Record<string, unknown>): Record<string, unknown> {

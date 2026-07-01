@@ -11,7 +11,8 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import { jobReferenceBlock, operatorRequestBlock, runExecutable } from "../../src/executor.js"
 import { loadProfile } from "../../src/profile.js"
 import { resolveExecutable } from "../../src/registry.js"
@@ -20,6 +21,38 @@ import * as taskArtifacts from "../../src/task-artifacts.js"
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-exec-"))
+}
+
+function writeSkipAgentProfile(file: string, scripts: { preflight?: object[]; postflight?: object[] } = {}): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(
+    file,
+    JSON.stringify({
+      name: path.basename(path.dirname(file)),
+      role: "utility",
+      describe: "Test profile.",
+      inputs: [{ name: "issue", flag: "--issue", type: "int", required: true, describe: "Issue number." }],
+      claudeCode: {
+        model: "inherit",
+        permissionMode: "default",
+        maxTurns: 0,
+        maxThinkingTokens: null,
+        systemPromptAppend: null,
+        tools: [],
+        hooks: [],
+        skills: [],
+        commands: [],
+        subagents: [],
+        plugins: [],
+        mcpServers: [],
+      },
+      cliTools: [],
+      scripts: {
+        preflight: scripts.preflight ?? [{ script: "skipAgent" }],
+        postflight: scripts.postflight ?? [],
+      },
+    }),
+  )
 }
 
 const BASE = {
@@ -166,6 +199,53 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
     const postScripts = profile.scripts.postflight.map((s) => s.script)
     expect(postScripts).not.toContain("verify")
     expect(postScripts).not.toContain("checkCoverageWithRetry")
+  })
+})
+
+describe("executor: stale hydrated capability overrides", () => {
+  let tmp = ""
+  let previousStore: string | undefined
+  const previousCwd = process.cwd()
+
+  beforeEach(() => {
+    previousStore = process.env.KODY_COMPANY_STORE
+  })
+
+  afterEach(() => {
+    process.chdir(previousCwd)
+    if (previousStore === undefined) delete process.env.KODY_COMPANY_STORE
+    else process.env.KODY_COMPANY_STORE = previousStore
+    resetCompanyStoreCacheForTests()
+    if (tmp) fs.rmSync(tmp, { recursive: true, force: true })
+    tmp = ""
+  })
+
+  it("skips a stale local capability profile with removed scripts and uses the store profile", async () => {
+    tmp = tmpDir()
+    const consumer = path.join(tmp, "consumer")
+    const store = path.join(tmp, "store")
+    fs.mkdirSync(consumer, { recursive: true })
+    fs.mkdirSync(store, { recursive: true })
+    fs.writeFileSync(path.join(store, "kody-store.json"), JSON.stringify({ assetRoots: { capabilities: "capabilities" } }))
+
+    writeSkipAgentProfile(path.join(consumer, ".kody", "capabilities", "classify", "profile.json"), {
+      postflight: [{ script: "writeRunSummary" }],
+    })
+    writeSkipAgentProfile(path.join(store, "capabilities", "classify", "profile.json"))
+
+    previousStore = process.env.KODY_COMPANY_STORE
+    process.env.KODY_COMPANY_STORE = store
+    resetCompanyStoreCacheForTests()
+    process.chdir(consumer)
+
+    const out = await runExecutable("classify", {
+      cwd: consumer,
+      cliArgs: { issue: 651 },
+      skipConfig: true,
+    })
+
+    expect(out.exitCode).toBe(0)
+    expect(out.reason).toBeUndefined()
   })
 })
 

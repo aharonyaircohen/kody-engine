@@ -304,10 +304,10 @@ describe("consumer-library scripts (kept in engine, owned by moved executables)"
   })
 })
 
-describe("script catalog: deprecated external-profile aliases", () => {
-  it("keeps writeRunSummary as an alias for older store/state profiles", async () => {
+describe("script catalog: removed executable-era names", () => {
+  it("does not keep writeRunSummary as a script alias", async () => {
     const scripts = await import("../../src/scripts/index.js")
-    expect(scripts.postflightScripts.writeRunSummary).toBe(scripts.postflightScripts.writeAgentRunSummary)
-    expect(scripts.allScriptNames.has("writeRunSummary")).toBe(true)
+    expect(scripts.postflightScripts).not.toHaveProperty("writeRunSummary")
+    expect(scripts.allScriptNames.has("writeRunSummary")).toBe(false)
   })
 })

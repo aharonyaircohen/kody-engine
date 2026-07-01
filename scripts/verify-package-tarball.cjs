@@ -118,11 +118,16 @@ try {
     scripts: { preflight: [{ script: "skipAgent" }], postflight: [] },
   })
   writeFile(path.join(store, "capabilities", "noop", "capability.md"), "# Noop\n")
-  writeJson(path.join(store, "capabilities", "legacy-summary", "profile.json"), {
-    name: "legacy-summary",
-    action: "legacy-summary",
+  writeJson(path.join(consumer, "kody.config.json"), {
+    quality: { typecheck: "", lint: "", format: "", testUnit: "" },
+    git: { defaultBranch: "main" },
+    github: { owner: "o", repo: "r" },
+    agent: { model: "anthropic/claude-haiku-4-5-20251001" },
+  })
+  writeJson(path.join(consumer, ".kody", "capabilities", "classify", "profile.json"), {
+    name: "classify",
     role: "utility",
-    describe: "Legacy writeRunSummary package verification fixture.",
+    describe: "Removed-script override package verification fixture.",
     inputs: [{ name: "issue", flag: "--issue", type: "int", required: true, describe: "Issue number." }],
     claudeCode: {
       model: "inherit",
@@ -141,19 +146,6 @@ try {
     cliTools: [],
     scripts: { preflight: [{ script: "skipAgent" }], postflight: [{ script: "writeRunSummary" }] },
   })
-  writeFile(path.join(store, "capabilities", "legacy-summary", "capability.md"), "# Legacy Summary\n")
-
-  writeJson(path.join(consumer, "kody.config.json"), {
-    quality: { typecheck: "", lint: "", format: "", testUnit: "" },
-    git: { defaultBranch: "main" },
-    github: { owner: "o", repo: "r" },
-    agent: { model: "anthropic/claude-haiku-4-5-20251001" },
-  })
-  writeJson(path.join(consumer, ".kody", "capabilities", "classify", "profile.json"), {
-    name: "classify",
-    action: "classify",
-    implementation: "feature",
-  })
   writeFile(path.join(consumer, ".kody", "capabilities", "classify", "capability.md"), "# Stale Classify\n")
   writeJson(path.join(consumer, ".kody", "capabilities", "feature", "profile.json"), {
     name: "feature",
@@ -169,21 +161,16 @@ try {
     env: { KODY_COMPANY_STORE: store, VITEST: "1" },
   })
   assert(!classifyOutput.includes("Invalid profile"), "fresh tarball install hit an Invalid profile error")
+  assert(
+    !classifyOutput.includes("profile references unknown scripts"),
+    "fresh tarball install let a removed-script capability override shadow the store",
+  )
 
   const featureOutput = run(bin, ["feature", "--issue", "1", "--cwd", consumer], {
     cwd: consumer,
     env: { KODY_COMPANY_STORE: store, VITEST: "1" },
   })
   assert(!featureOutput.includes("Invalid profile"), "fresh tarball install could not start feature workflow")
-
-  const legacyOutput = run(bin, ["legacy-summary", "--issue", "1", "--cwd", consumer], {
-    cwd: consumer,
-    env: { KODY_COMPANY_STORE: store, VITEST: "1" },
-  })
-  assert(
-    !legacyOutput.includes("profile references unknown scripts"),
-    "fresh tarball install rejected legacy writeRunSummary profiles",
-  )
 
   process.stdout.write("package tarball verification passed\n")
 } finally {

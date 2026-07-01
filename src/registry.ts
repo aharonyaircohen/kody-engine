@@ -168,8 +168,19 @@ export function listExecutables(roots: string | string[] = getExecutableRoots())
  * the first matching `profile.json` path, or null if nothing matches.
  */
 export function resolveExecutable(name: string, roots: string | string[] = getExecutableRoots()): string | null {
-  if (!isSafeName(name)) return null
+  return resolveExecutableCandidates(name, roots)[0] ?? null
+}
+
+/**
+ * Resolve all matching implementation profile candidates in source order.
+ * The executor uses this to skip stale hydrated overrides that no longer
+ * validate against the current engine and continue to the company-store
+ * profile instead.
+ */
+export function resolveExecutableCandidates(name: string, roots: string | string[] = getExecutableRoots()): string[] {
+  if (!isSafeName(name)) return []
   const rootList = typeof roots === "string" ? [roots] : roots
+  const out: string[] = []
   for (const root of rootList) {
     const profilePath = path.join(root, name, "profile.json")
     if (
@@ -177,10 +188,10 @@ export function resolveExecutable(name: string, roots: string | string[] = getEx
       fs.statSync(profilePath).isFile() &&
       isImplementationProfile(profilePath, isCapabilityRoot(root))
     ) {
-      return profilePath
+      out.push(profilePath)
     }
   }
-  return null
+  return out
 }
 
 /** Convenience: true iff `<name>/profile.json` exists in any root. */

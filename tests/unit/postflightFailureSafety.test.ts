@@ -24,7 +24,6 @@ describe("postflight failure-safety: which scripts are state-mutating", () => {
     for (const safe of [
       "postIssueComment",
       "writeAgentRunSummary",
-      "writeRunSummary",
       "recordOutcome",
       "saveTaskState",
       "notifyTerminal",
@@ -43,10 +42,6 @@ describe("postflight failure-safety: which scripts are state-mutating", () => {
     for (const name of ["commitAndPush", "ensurePr", "applyCapabilityReports", "openAgentFactoryStatePr"]) {
       expect(Object.keys(postflightScripts)).toContain(name)
     }
-  })
-
-  it("keeps the deprecated writeRunSummary name wired to the current summary writer", () => {
-    expect(postflightScripts.writeRunSummary).toBe(postflightScripts.writeAgentRunSummary)
   })
 })
 
