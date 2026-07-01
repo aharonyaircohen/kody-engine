@@ -14,6 +14,10 @@ Goals are the normal home for long-term progress routing. Capabilities stay reus
 capabilities: `observe`, `act`, or `verify`. A goal may compose many capabilities,
 but a capability should not secretly become the goal's manager loop.
 
+A goal may know which capability it is dispatching. A normal capability should
+not need to know which goal instance dispatched it. The goal runner owns the
+parent context and attaches capability results to goal evidence.
+
 ## Canonical Shape
 
 Goal templates and instances are physically separate:
@@ -152,6 +156,11 @@ instead of dispatching bad input.
 not suppress retries; the responsible route step should be idempotent and should
 either report the evidence or a clear blocker.
 
+Route args should pass domain inputs needed for the work, not the parent goal id
+or route state. Passing `--goal` into a capability is compatibility behavior for
+older Store actions; the clean model is for `goal-manager` to attach neutral
+capability output to the current goal.
+
 The route step should name evidence a capability can produce, not a private phase
 inside the capability. For example, a web release route composes separate Act capabilities:
 
@@ -176,7 +185,7 @@ Implementation anchors:
 Capabilities and executables return structured evidence for the goal to apply:
 
 ```text
-KODY_CAPABILITY_RESULT={"version":1,"target":{"type":"goal","id":"release-aguy"},"status":"pass","summary":"Release PR exists.","evidence":{"releasePrExists":true},"facts":{"releasePr":123},"artifacts":[],"missingEvidence":[],"blockers":[]}
+KODY_CAPABILITY_RESULT={"version":1,"status":"pass","summary":"Release PR exists.","evidence":{"releasePrExists":true},"facts":{"releasePr":123},"artifacts":[],"missingEvidence":[],"blockers":[]}
 ```
 
 Older actions may still report observed facts with this compatibility line:
@@ -189,7 +198,10 @@ Rules:
 
 - Reports may set evidence truth and factual values under `facts`.
 - Reports must not set `destination`, `capabilities`, `route`, `stage`, `blockers`, or `state`.
-- New capabilities should use `KODY_CAPABILITY_RESULT` with `target` and `evidence`.
+- New capabilities should use neutral `KODY_CAPABILITY_RESULT` output; the goal
+  runner should attach it to the active goal.
+- Target-bearing output and `--goal` inputs are compatibility paths, not the
+  preferred architecture for new capabilities.
 - Do not emit both marker types for the same evidence in new code. Existing mixed output is merged before the goal writes its log.
 - Profiles that emit capability evidence should include `applyCapabilityReports` in postflight.
 - `saveReport` writes Dashboard markdown under `reports/<goal-or-loop>/runs/` from the goal/loop decision path, after state persistence succeeds.
@@ -220,5 +232,6 @@ New goals must use the managed-goal contract and `goal-manager`.
 
 - Do not model a goal as a capability.
 - Do not put standing capability in `destination.outcome`.
+- Do not require a normal capability to know its parent goal.
 - Do not dispatch arbitrary executables outside the attached `capabilities` allowlist.
 - Do not use a goal for a one-shot task that should be a normal issue job.

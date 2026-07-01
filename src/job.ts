@@ -14,7 +14,7 @@ import * as path from "node:path"
 import type { CapabilityFolder, CapabilityWorkflowConfig, CapabilityWorkflowStepConfig } from "./capabilityFolders.js"
 import type { KodyConfig } from "./config.js"
 import type { DispatchResult } from "./dispatch.js"
-import type { Job, JobFlavor } from "./executables/types.js"
+import type { CapabilityResultTarget, Job, JobFlavor } from "./executables/types.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
 import { runExecutable, runExecutableChain } from "./executor.js"
 import {
@@ -93,6 +93,21 @@ export function validateJob(input: unknown): Job {
     flavor: j.flavor,
     force: j.force === true,
     saveReport: j.saveReport === true,
+    resultTarget: parseCapabilityResultTarget(j.resultTarget),
+  }
+}
+
+function parseCapabilityResultTarget(raw: unknown): CapabilityResultTarget | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined
+  const target = raw as Record<string, unknown>
+  if (target.type !== "goal") return undefined
+  if (typeof target.id !== "string" || target.id.trim().length === 0) return undefined
+  const evidence =
+    typeof target.evidence === "string" && target.evidence.trim().length > 0 ? target.evidence.trim() : undefined
+  return {
+    type: "goal",
+    id: target.id.trim(),
+    ...(evidence ? { evidence } : {}),
   }
 }
 
@@ -222,6 +237,7 @@ async function runCapabilityImplementationStep(
   // The job carries *when*: a scheduled job's cadence, recorded in the ledger.
   if (valid.schedule !== undefined && valid.schedule.length > 0) preloadedData.jobSchedule = valid.schedule
   if (valid.saveReport === true) preloadedData.jobSaveReport = true
+  if (valid.resultTarget) preloadedData.capabilityResultTarget = valid.resultTarget
   if (capabilityContext) {
     preloadedData.capabilitySlug = capabilityContext.slug
     preloadedData.capabilityTitle = capabilityContext.title

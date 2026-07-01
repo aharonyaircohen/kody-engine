@@ -274,6 +274,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     cliArgs: decision.cliArgs,
     ...(decision.executable ? { executable: decision.executable } : {}),
     ...(decision.saveReport === true ? { saveReport: true } : {}),
+    resultTarget: { type: "goal", id: goal.id, evidence: decision.evidence },
   }
   ctx.output.reason = `dispatch ${decision.capability} for ${decision.evidence}`
 }

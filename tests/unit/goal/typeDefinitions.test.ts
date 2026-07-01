@@ -44,7 +44,6 @@ describe("expandManagedGoalState", () => {
           evidence: "productionDeployed",
           capability: "vercel-production-deploy",
           executable: "vercel-production-deploy",
-          args: { goal: { fact: "goalId" } },
         },
       ],
       facts: {},

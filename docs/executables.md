@@ -113,6 +113,16 @@ chooses the first missing destination evidence, dispatches the matching
 capability route step, and records pending evidence. It is the only
 canonical goal runner.
 
+Implementation profiles must not become mini goal managers. A profile may accept
+domain inputs required for the concrete work, but it should not require the
+parent goal id, route, stage, or destination outcome as part of its normal
+contract. The runner that invoked the profile owns that parent context and
+attaches the result to the active goal or loop.
+
+Existing profiles that still accept `--goal` are compatibility cases. Do not use
+that pattern for new capability implementations unless the goal runner cannot
+yet attach neutral result output.
+
 Implementation anchors:
 
 - `src/goal/manager.ts`
@@ -125,16 +135,17 @@ Implementation anchors:
 Capability implementations should return one machine-readable result when they finish:
 
 ```text
-KODY_CAPABILITY_RESULT={"version":1,"target":{"type":"goal","id":"web-release"},"status":"pass","summary":"CI is green.","evidence":{"ciGreen":true},"facts":{"pr":123},"artifacts":[],"missingEvidence":[],"blockers":[]}
+KODY_CAPABILITY_RESULT={"version":1,"status":"pass","summary":"CI is green.","evidence":{"ciGreen":true},"facts":{"pr":123},"artifacts":[],"missingEvidence":[],"blockers":[]}
 ```
 
 Rules:
 
-- `target` names the goal or loop that should consume this evidence when known.
+- Omit `target` when the invoking runner owns the goal or loop context.
+- `target` is accepted for compatibility or explicit cross-parent reporting.
 - `status` must be `pass`, `fail`, `blocked`, `changed`, or `noop`.
 - `summary` is required and should be short.
-- `evidence` is optional boolean proof for named goal/loop evidence.
-- `facts` is machine data for the parent agentGoal or agentLoop.
+- `evidence` is optional boolean proof the parent may map to goal/loop evidence.
+- `facts` is machine data for the parent goal or loop.
 - `artifacts` is optional links or paths.
 - `missingEvidence` names expected evidence still not proven.
 - `blockers` names concrete blockers the parent should recover from or stop on.
@@ -153,7 +164,8 @@ Rules:
 - Reports are factual only.
 - Reports do not set goal `stage`, `route`, `capabilities`, `destination`, `blockers`, or `state`.
 - Goal evidence is stored under goal `facts`.
-- New capabilities should prefer `KODY_CAPABILITY_RESULT` with `target` and `evidence`.
+- New capabilities should prefer neutral `KODY_CAPABILITY_RESULT` output and let
+  the invoking runner attach it to the active goal or loop.
 - Do not emit both marker types for the same evidence in new code. The engine merges both only for compatibility with existing actions.
 - Profiles that emit capability evidence should include `applyCapabilityReports` in postflight.
 - `saveReport` writes Dashboard markdown under `reports/<goal-or-loop>/runs/` from the goal/loop decision path, after state persistence succeeds.
@@ -191,6 +203,7 @@ Use this checklist:
 
 - Do not encode why or when in an implementation profile; that belongs in a capability or goal.
 - Do not encode the destination/outcome manager loop in an implementation profile; that belongs in a goal.
+- Do not make parent goal id a required input for reusable implementation profiles.
 - Do not branch shared scripts on implementation names.
 - Do not change consumer workflow YAML for normal new capabilities.
 - Do not read `.kody/secrets.enc` from capability shell scripts; read injected environment variables.

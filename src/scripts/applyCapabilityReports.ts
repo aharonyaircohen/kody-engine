@@ -1,24 +1,16 @@
 import type { AgentResult } from "../agent.js"
-import type { PostflightScript } from "../executables/types.js"
 import {
+  applyCapabilityEvidenceToGoalState,
   type CapabilityEvidence,
   capabilityReportToEvidence,
   capabilityResultToEvidence,
-  applyCapabilityEvidenceToGoalState,
   mergeCapabilityEvidence,
 } from "../capabilityEvidence.js"
-import {
-  type CapabilityReport,
-  parseCapabilityReport,
-  parseCapabilityReportsFromText,
-} from "../capabilityReport.js"
-import {
-  type CapabilityResult,
-  parseCapabilityResult,
-  parseCapabilityResultsFromText,
-} from "../capabilityResult.js"
+import { type CapabilityReport, parseCapabilityReport, parseCapabilityReportsFromText } from "../capabilityReport.js"
+import { type CapabilityResult, parseCapabilityResult, parseCapabilityResultsFromText } from "../capabilityResult.js"
+import type { PostflightScript } from "../executables/types.js"
 import { managedGoalFromState, planManagedGoalTick, writeManagedGoalToState } from "../goal/manager.js"
-import { refreshGoalDashboardReport, capabilityEvidenceOutput } from "../goal/report.js"
+import { capabilityEvidenceOutput, refreshGoalDashboardReport } from "../goal/report.js"
 import { flushGoalRunLogEvents, goalRunLogChange, goalRunLogSnapshot, stageGoalRunLogEvent } from "../goal/runLog.js"
 import { type GoalState, nowIso, serializeGoalState } from "../goal/state.js"
 import { fetchGoalState, putGoalState } from "../goal/stateStore.js"
@@ -26,9 +18,12 @@ import { fetchGoalState, putGoalState } from "../goal/stateStore.js"
 export const applyCapabilityReports: PostflightScript = async (ctx, _profile, agentResult) => {
   const reports = collectReports(ctx.data.capabilityReports, agentResult)
   const results = collectResults(ctx.data.capabilityResults ?? ctx.data.dutyResults, agentResult)
-  const resultGoalId = typeof ctx.args.goal === "string" && ctx.args.goal.length > 0 ? ctx.args.goal : null
+  const resultTarget = parseResultTarget(ctx.data.capabilityResultTarget)
+  const resultGoalId =
+    resultTarget?.id ?? (typeof ctx.args.goal === "string" && ctx.args.goal.length > 0 ? ctx.args.goal : null)
   const explicitEvidence =
-    typeof ctx.args.evidence === "string" && ctx.args.evidence.length > 0 ? ctx.args.evidence : undefined
+    resultTarget?.evidence ??
+    (typeof ctx.args.evidence === "string" && ctx.args.evidence.length > 0 ? ctx.args.evidence : undefined)
   const evidenceItems = collectGoalCapabilityEvidence(reports, results, resultGoalId, explicitEvidence)
   if (evidenceItems.length === 0) return
 
@@ -178,6 +173,20 @@ function collectResults(raw: unknown, agentResult: AgentResult | null): Capabili
   }
   if (agentResult?.finalText) out.push(...parseCapabilityResultsFromText(agentResult.finalText))
   return out
+}
+
+function parseResultTarget(raw: unknown): { type: "goal"; id: string; evidence?: string } | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
+  const target = raw as Record<string, unknown>
+  if (target.type !== "goal") return null
+  if (typeof target.id !== "string" || target.id.trim().length === 0) return null
+  const evidence =
+    typeof target.evidence === "string" && target.evidence.trim().length > 0 ? target.evidence.trim() : undefined
+  return {
+    type: "goal",
+    id: target.id.trim(),
+    ...(evidence ? { evidence } : {}),
+  }
 }
 
 function collectGoalCapabilityEvidence(

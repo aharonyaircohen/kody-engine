@@ -26,6 +26,21 @@ The consumer workflow stays small: `.github/workflows/kody.yml` triggers on
 `@kody` or `workflow_dispatch` and runs
 `npx @kody-ade/kody-engine@latest kody-engine ci`.
 
+## Goal/Capability Boundary
+
+Keep parent ownership out of reusable capabilities.
+
+- A goal or loop owns durable progress, destination evidence, route, stage, and
+  the decision about what is done.
+- A capability or implementation profile owns one reusable action: observe,
+  act, or verify.
+- The goal/loop runner owns the current parent id and attaches capability output
+  to that parent.
+- A normal capability should not require `--goal`, parent route data, stage, or
+  destination outcome as part of its contract.
+- Existing `--goal` inputs and target-bearing capability reports are
+  compatibility paths only. Do not spread that pattern to new capabilities.
+
 ## Rule Sources
 
 - `CLAUDE.md` / `AGENTS.md`: hard constraints and conventions: architecture

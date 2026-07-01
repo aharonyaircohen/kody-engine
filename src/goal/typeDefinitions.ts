@@ -65,7 +65,6 @@ const GOAL_TYPE_DEFINITIONS: Record<ManagedGoalTypeId, ManagedGoalTypeDefinition
         evidence: "productionDeployed",
         capability: "vercel-production-deploy",
         executable: "vercel-production-deploy",
-        args: { goal: { fact: "goalId" } },
       },
     ],
   },
@@ -104,11 +103,7 @@ function routeArray(value: unknown): GoalRouteStep[] | null {
   for (const item of value) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return null
     const raw = item as Record<string, unknown>
-    if (
-      typeof raw.stage !== "string" ||
-      typeof raw.evidence !== "string" ||
-      typeof raw.capability !== "string"
-    )
+    if (typeof raw.stage !== "string" || typeof raw.evidence !== "string" || typeof raw.capability !== "string")
       return null
     route.push({
       stage: raw.stage,
@@ -157,10 +152,7 @@ export function expandManagedGoalState(state: GoalState): GoalState {
         outcome,
         evidence: evidence && evidence.length > 0 ? evidence : [...definition.evidence],
       },
-      capabilities:
-        capabilities && capabilities.length > 0
-          ? capabilities
-          : [...definition.capabilities],
+      capabilities: capabilities && capabilities.length > 0 ? capabilities : [...definition.capabilities],
       route: route && route.length > 0 ? route : cloneRoute(definition.route),
       facts,
       blockers: blockers ?? [],

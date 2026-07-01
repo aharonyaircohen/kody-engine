@@ -883,6 +883,7 @@ function handoffToJob(handoff: {
   executable?: string
   cliArgs: Record<string, unknown>
   saveReport?: boolean
+  resultTarget?: Job["resultTarget"]
 }): Job | null {
   const dutyOrAction = handoff.workflow ?? handoff.action ?? handoff.capability
   if (!dutyOrAction) return null
@@ -894,6 +895,7 @@ function handoffToJob(handoff: {
     cliArgs: handoff.cliArgs,
     flavor: "instant",
     saveReport: handoff.saveReport === true,
+    resultTarget: handoff.resultTarget,
   }
 }
 

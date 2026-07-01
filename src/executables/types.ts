@@ -394,6 +394,12 @@ export interface OutputContract {
   }
 }
 
+export interface CapabilityResultTarget {
+  type: "goal"
+  id: string
+  evidence?: string
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Run-time context passed to every script.
 // ────────────────────────────────────────────────────────────────────────────
@@ -429,6 +435,7 @@ export interface Context {
       executable?: string
       cliArgs: Record<string, unknown>
       saveReport?: boolean
+      resultTarget?: CapabilityResultTarget
     }
     /** In-process hand-off to a full Job, preserving job identity in task state. */
     nextJob?: Job
@@ -440,6 +447,7 @@ export interface Context {
       executable?: string
       cliArgs: Record<string, unknown>
       saveReport?: boolean
+      resultTarget?: CapabilityResultTarget
     }
   }
   /**
@@ -512,4 +520,6 @@ export interface Job {
   force?: boolean
   /** Ask the owning goal/loop to write a report run after its persisted decision. */
   saveReport?: boolean
+  /** Internal parent context used by postflights to attach neutral capability output. */
+  resultTarget?: CapabilityResultTarget
 }

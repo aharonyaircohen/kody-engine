@@ -19,6 +19,30 @@ return structured output or report evidence that another layer can consume.
 input -> run -> structured output
 ```
 
+## Parent Boundary
+
+A capability does not own its parent goal, loop, route, or stage. It should not
+need to know which managed goal dispatched it in order to do its work.
+
+The clean flow is:
+
+```text
+goal/loop runner owns parent context
+runner dispatches capability with domain inputs
+capability returns run-local result facts
+runner attaches that result to the goal/loop evidence model
+```
+
+Do not make a normal capability require `--goal`, `--loop`, route stage, or
+destination outcome as part of its core contract. Those values belong to the
+orchestration layer. A capability may receive domain inputs such as `--pr`,
+`--branch`, `--url`, `--version`, or `--evidence` when the requested work needs
+them.
+
+Some older Store capabilities still accept `--goal` or emit a target-bearing
+report. Treat that as compatibility plumbing while the engine migrates to
+parent-owned result attachment. Do not spread it to new capability contracts.
+
 ## Core Rule
 
 Each normal capability should mainly do one type of work:
@@ -57,6 +81,7 @@ The important boundary is:
 Goal decides what is needed.
 Capability provides how the agency can produce the result.
 Workflow composes capabilities for one run.
+Runner attaches capability output to the active goal or loop.
 Legacy Capability stores old capability contracts.
 Legacy Executable stores old concrete implementations.
 ```
@@ -214,16 +239,17 @@ and blockers so another layer can choose the next Act capability.
 Capabilities return one standard machine result:
 
 ```text
-KODY_CAPABILITY_RESULT={"version":1,"target":{"type":"goal","id":"web-release"},"status":"pass","summary":"CI is green.","evidence":{"ciGreen":true},"facts":{"pr":123},"artifacts":[],"missingEvidence":[],"blockers":[]}
+KODY_CAPABILITY_RESULT={"version":1,"status":"pass","summary":"CI is green.","evidence":{"ciGreen":true},"facts":{"pr":123},"artifacts":[],"missingEvidence":[],"blockers":[]}
 ```
 
 Rules:
 
-- `target` names the goal or loop that should consume this evidence when known.
+- Omit `target` when the parent runner already knows the current goal or loop.
+- `target` is accepted only for compatibility or explicit cross-parent reporting.
 - `status` must be `pass`, `fail`, `blocked`, `changed`, or `noop`.
 - `summary` is required and should be short.
-- `evidence` is optional boolean proof for named goal/loop evidence.
-- `facts` is machine data for the parent agentGoal or agentLoop.
+- `evidence` is optional boolean proof the parent may map to goal/loop evidence.
+- `facts` is machine data for the parent goal or loop to consume.
 - `artifacts` is optional links or paths.
 - `missingEvidence` names expected evidence still not proven.
 - `blockers` names concrete blockers the parent should recover from or stop on.
@@ -240,10 +266,13 @@ KODY_CAPABILITY_REPORT={"target":{"type":"goal","id":"web-release"},"evidence":{
 
 Rules:
 
+- Reports are compatibility output for older actions that cannot yet rely on the
+  parent runner attaching neutral results.
 - Reports are factual.
 - Reports may set evidence and facts.
 - Reports must not set `state`, `stage`, `route`, `capabilities`, `destination`, or `blockers`.
-- New capabilities should prefer `KODY_CAPABILITY_RESULT` with `target` and `evidence`.
+- New capabilities should prefer neutral `KODY_CAPABILITY_RESULT` output and let
+  the parent runner attach it to the active goal or loop.
 - Do not emit both marker types for the same evidence in new code. The engine merges both only for compatibility with existing actions.
 - Profiles that emit reports should include `applyCapabilityReports` in postflight so the goal can apply the evidence.
 - `saveReport` writes Dashboard markdown under `reports/<goal-or-loop>/runs/` from the goal/loop decision path, after state persistence succeeds.
@@ -273,7 +302,7 @@ Use this checklist:
 5. Add `agent` only when a specific agent matters.
 6. Add `every` only when the capability is scheduled.
 7. Write `capability.md` with purpose, inputs, outputs, allowed actions, and restrictions.
-8. Emit `KODY_CAPABILITY_RESULT` with status, summary, facts, artifacts, missing evidence, blockers, and goal evidence when relevant.
+8. Emit `KODY_CAPABILITY_RESULT` with status, summary, facts, artifacts, missing evidence, blockers, and evidence when relevant.
 9. Let the goal or loop apply that evidence, decide the next step, and write the progress log.
 
 ## Do Not
@@ -282,5 +311,6 @@ Use this checklist:
 - Do not put concrete implementation logic in `capability.md`.
 - Do not hide observe plus act plus verify inside one prompt; make it an explicit workflow.
 - Do not let a capability own long-term progress or decide business completion.
+- Do not make a normal capability require its parent goal id, loop id, route, stage, or destination.
 - Do not let capabilities dispatch by bot-authored `@kody` comments; use workflow dispatch or in-process dispatch.
 - Do not duplicate an existing store capability without a project-specific reason.

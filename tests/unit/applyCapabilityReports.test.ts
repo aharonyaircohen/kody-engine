@@ -419,22 +419,20 @@ describe("applyCapabilityReports", () => {
     })
 
     await applyCapabilityReports(
-      fakeCtx(
-        {
-          capabilityResults: [
-            {
-              version: 1,
-              status: "pass",
-              summary: "Production deployed.",
-              facts: { productionDeploymentUrl: "https://example.com" },
-              artifacts: [],
-              missingEvidence: [],
-              blockers: [],
-            },
-          ],
-        },
-        { goal: "release-aguy", evidence: "productionDeployed" },
-      ),
+      fakeCtx({
+        capabilityResultTarget: { type: "goal", id: "release-aguy", evidence: "productionDeployed" },
+        capabilityResults: [
+          {
+            version: 1,
+            status: "pass",
+            summary: "Production deployed.",
+            facts: { productionDeploymentUrl: "https://example.com" },
+            artifacts: [],
+            missingEvidence: [],
+            blockers: [],
+          },
+        ],
+      }),
       fakeProfile(),
       null,
     )

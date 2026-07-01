@@ -49,6 +49,27 @@ describe("runJob (Phase 1 seam)", () => {
     expect(input.preloadedData?.jobCapability).toBe("run")
   })
 
+  it("seeds result target as internal postflight context, not CLI args", async () => {
+    await runJob(
+      {
+        capability: "vercel-production-deploy",
+        executable: "vercel-production-deploy",
+        cliArgs: {},
+        flavor: "instant",
+        resultTarget: { type: "goal", id: "web-release-2026-07-01", evidence: "productionDeployed" },
+      },
+      { cwd: "/x" },
+    )
+
+    const [, input] = runExecutableChain.mock.calls[0]!
+    expect(input.cliArgs).toEqual({})
+    expect(input.preloadedData?.capabilityResultTarget).toEqual({
+      type: "goal",
+      id: "web-release-2026-07-01",
+      evidence: "productionDeployed",
+    })
+  })
+
   it("lowers an action-only instant job through the capability action registry", async () => {
     await runJob({ action: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" }, { cwd: "/x" })
     const [profile, input] = runExecutableChain.mock.calls[0]!
