@@ -126,6 +126,7 @@ function computeFailureReason(ctx: { data: Record<string, unknown> }): string {
       (ctx.data.agentFailureReason as string) ||
       (ctx.data.agentError as string) ||
       (ctx.data.commitCrash as string) ||
+      actionFailureReason(ctx.data.action) ||
       "agent did not emit DONE"
     )
   }
@@ -133,6 +134,14 @@ function computeFailureReason(ctx: { data: Record<string, unknown> }): string {
   if (ctx.data.verifyOk === false) return (ctx.data.verifyReason as string) || "verify failed"
 
   return ""
+}
+
+function actionFailureReason(action: unknown): string {
+  if (!action || typeof action !== "object" || Array.isArray(action)) return ""
+  const payload = (action as { payload?: unknown }).payload
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return ""
+  const reason = (payload as { reason?: unknown }).reason
+  return typeof reason === "string" ? reason : ""
 }
 
 /**

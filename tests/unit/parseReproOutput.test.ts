@@ -63,6 +63,31 @@ describe("parseReproOutput", () => {
     expect(JSON.parse(ctx.data.reproFailureSignature as string)).toEqual(SIGNATURE)
   })
 
+  it("extracts signature JSON when the final format has nested markdown fences", async () => {
+    const ctx = makeCtx({ agentDone: true })
+    const msg = [
+      "```",
+      "DONE",
+      "TEST_PATH: tests/repro-issue-42.test.ts",
+      "FAILURE_SIGNATURE:",
+      "```",
+      "",
+      "```json",
+      JSON.stringify(SIGNATURE, null, 2),
+      "```",
+      "",
+      "```",
+      "COMMIT_MSG: test: x",
+      "PR_SUMMARY:",
+      "- y",
+      "```",
+    ].join("\n")
+    await parseReproOutput(ctx, profile, makeResult(msg))
+    expect(ctx.data.reproTestPath).toBe("tests/repro-issue-42.test.ts")
+    expect(JSON.parse(ctx.data.reproFailureSignature as string)).toEqual(SIGNATURE)
+    expect(ctx.data.agentDone).toBe(true)
+  })
+
   it("defaults stackContains to empty string when omitted", async () => {
     const ctx = makeCtx({ agentDone: true })
     const sig = JSON.stringify({ errorType: "TypeError", messageContains: "boom" })
@@ -96,6 +121,7 @@ describe("parseReproOutput", () => {
     await parseReproOutput(ctx, profile, makeResult(reproMessage("tests/x.test.ts", "{not json")))
     expect((ctx.data.action as { type: string }).type).toBe("REPRODUCE_FAILED")
     expect(ctx.data.agentDone).toBe(false)
+    expect(ctx.data.agentFailureReason).toContain("FAILURE_SIGNATURE")
   })
 
   it("downgrades when the signature lacks required fields", async () => {

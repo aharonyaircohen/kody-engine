@@ -99,9 +99,51 @@ function extractFailureSignatureBlock(text: string): string {
   let block = stopIdx === -1 ? afterMarker : afterMarker.slice(0, stopIdx)
   block = block.trim()
 
-  // Strip a leading/trailing fence if present.
-  block = block.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "")
-  return block.trim()
+  return normalizeFailureSignatureBlock(block)
+}
+
+function normalizeFailureSignatureBlock(block: string): string {
+  let s = block.trim()
+  while (/^```(?:json)?\s*/i.test(s) && /```\s*$/i.test(s)) {
+    const next = s.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim()
+    if (next === s) break
+    s = next
+  }
+
+  const jsonObject = extractFirstJsonObject(s)
+  return jsonObject || s
+}
+
+function extractFirstJsonObject(text: string): string {
+  const start = text.indexOf("{")
+  if (start === -1) return ""
+
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i]
+    if (inString) {
+      if (escaped) {
+        escaped = false
+      } else if (ch === "\\") {
+        escaped = true
+      } else if (ch === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (ch === '"') {
+      inString = true
+    } else if (ch === "{") {
+      depth++
+    } else if (ch === "}") {
+      depth--
+      if (depth === 0) return text.slice(start, i + 1).trim()
+    }
+  }
+  return ""
 }
 
 function stripMarkdownEmphasis(s: string): string {
@@ -120,5 +162,6 @@ function downgrade(ctx: { data: Record<string, unknown> }, reason: string): void
       timestamp: new Date().toISOString(),
     }
   }
+  ctx.data.agentFailureReason = reason
   ctx.data.agentDone = false
 }

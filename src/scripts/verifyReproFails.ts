@@ -166,5 +166,6 @@ function downgrade(ctx: { data: Record<string, unknown> }, reason: string): void
       timestamp: new Date().toISOString(),
     }
   }
+  ctx.data.agentFailureReason = reason
   ctx.data.agentDone = false
 }

@@ -122,6 +122,7 @@ describe("verifyReproFails", () => {
     expect(ctx.data.reproVerifyExitCode).toBe(0)
     expect(ctx.data.agentDone).toBe(false)
     expect((ctx.data.action as { payload: { reason: string } }).payload.reason).toContain("exited 0")
+    expect(ctx.data.agentFailureReason).toContain("exited 0")
   })
 
   it("verifies success when exit is non-zero and signature matches", async () => {
@@ -145,6 +146,7 @@ describe("verifyReproFails", () => {
     expect(ctx.data.agentDone).toBe(false)
     const reason = (ctx.data.action as { payload: { reason: string } }).payload.reason
     expect(reason).toContain("messageContains")
+    expect(ctx.data.agentFailureReason).toContain("messageContains")
   })
 
   it("downgrades when the errorType substring is absent", async () => {

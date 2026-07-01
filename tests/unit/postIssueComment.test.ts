@@ -36,6 +36,7 @@ function makeCtx(overrides: {
   exitCode?: number
   prCrashReason?: string
   commitCrash?: string
+  action?: unknown
 }): Context {
   const {
     commitResult = { committed: true },
@@ -52,6 +53,7 @@ function makeCtx(overrides: {
     exitCode = 0,
     prCrashReason,
     commitCrash,
+    action,
   } = overrides
 
   return {
@@ -74,6 +76,7 @@ function makeCtx(overrides: {
       ...(verifyReason ? { verifyReason } : {}),
       ...(prCrashReason ? { prCrashReason } : {}),
       ...(commitCrash ? { commitCrash } : {}),
+      ...(action ? { action } : {}),
     },
     output: { exitCode, prUrl },
   }
@@ -162,6 +165,25 @@ describe("postIssueComment message wording", () => {
     expect(body).toContain("no DONE or FAILED marker")
     expect(body).toContain("29 tests pass")
     expect(body).not.toBe("⚠️ kody FAILED: no changes to commit")
+    expect(ctx.output.exitCode).toBe(3)
+  })
+
+  it("no commits + agent failed: falls back to action payload reason", async () => {
+    const ctx = makeCtx({
+      commitResult: { committed: false },
+      hasCommitsAhead: false,
+      prAction: "updated",
+      agentDone: false,
+      action: {
+        type: "REPRODUCE_FAILED",
+        payload: { reason: "reproduce missing or malformed FAILURE_SIGNATURE JSON" },
+        timestamp: "",
+      },
+    })
+    await postIssueComment(ctx, profile, null)
+    const body = lastPrBody()
+    expect(body).toContain("malformed FAILURE_SIGNATURE")
+    expect(body).not.toContain("agent did not emit DONE")
     expect(ctx.output.exitCode).toBe(3)
   })
 
