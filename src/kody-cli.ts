@@ -420,16 +420,16 @@ export async function runCi(argv: string[]): Promise<number> {
       const evt = JSON.parse(fs.readFileSync(dispatchEventPath, "utf-8"))
       const issueInput = parseInt(String(evt?.inputs?.issue_number ?? ""), 10)
       const sessionInput = String(evt?.inputs?.sessionId ?? "")
-      const dutyInput = String(evt?.inputs?.capability ?? evt?.inputs?.executable ?? "").trim()
+      const capabilityInput = String(evt?.inputs?.capability ?? evt?.inputs?.executable ?? "").trim()
       const messageInput = String(evt?.inputs?.message ?? "").trim()
       const noTarget = !sessionInput && !(Number.isFinite(issueInput) && issueInput > 0)
       // Explicit `capability` + no target → manual one-shot "Run now" of that
       // single capability (a scheduled / no-target folder-capability), bypassing the
       // cadence guard. A bare dispatch (no capability) still fans out to every
       // watch capability (capability-scheduler et al.).
-      if (noTarget && dutyInput) {
-        forceRunAction = dutyInput
-        if (dutyInput === "goal-manager" && messageInput) {
+      if (noTarget && capabilityInput) {
+        forceRunAction = capabilityInput
+        if (capabilityInput === "goal-manager" && messageInput) {
           forceRunCliArgs = { goal: messageInput }
         }
       } else {
@@ -442,9 +442,9 @@ export async function runCi(argv: string[]): Promise<number> {
   if (forceRunAction) {
     const config = earlyConfig ?? loadConfig(cwd)
     const manualGoalManager = forceRunAction === "goal-manager"
-    const dutyRoute = manualGoalManager ? null : resolveCapabilityAction(forceRunAction)
+    const capabilityRoute = manualGoalManager ? null : resolveCapabilityAction(forceRunAction)
     const scheduledWatchRoute =
-      manualGoalManager || dutyRoute
+      manualGoalManager || capabilityRoute
         ? undefined
         : dispatchScheduledWatches({ force: true }).find(
             (match) => match.action === forceRunAction || match.executable === forceRunAction,
@@ -456,7 +456,7 @@ export async function runCi(argv: string[]): Promise<number> {
           executable: "goal-manager",
           cliArgs: forceRunCliArgs,
         }
-      : (dutyRoute ?? scheduledWatchRoute)
+      : (capabilityRoute ?? scheduledWatchRoute)
     if (!route) {
       process.stderr.write(`[kody] manual one-shot action '${forceRunAction}' has no capability action\n`)
       return 64

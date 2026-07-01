@@ -25,7 +25,7 @@ import { fetchGoalState, putGoalState } from "../goal/stateStore.js"
 
 export const applyCapabilityReports: PostflightScript = async (ctx, _profile, agentResult) => {
   const reports = collectReports(ctx.data.capabilityReports, agentResult)
-  const results = collectResults(ctx.data.dutyResults, agentResult)
+  const results = collectResults(ctx.data.capabilityResults ?? ctx.data.dutyResults, agentResult)
   const resultGoalId = typeof ctx.args.goal === "string" && ctx.args.goal.length > 0 ? ctx.args.goal : null
   const explicitEvidence =
     typeof ctx.args.evidence === "string" && ctx.args.evidence.length > 0 ? ctx.args.evidence : undefined

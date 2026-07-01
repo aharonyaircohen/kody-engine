@@ -126,9 +126,9 @@ describe("bin/mcp-http-server: env validation", () => {
     // repoSlug. We can't read the closure from here, but we can assert
     // the route + tool were registered with the expected identity so a
     // future maintainer reading this test sees what env feeds the capability
-    // route's capabilityOperatorMention / dutyRepoSlug fields.
-    const dutyRoute = opts.routes.find((r) => r.path === "/mcp/capability")
-    expect(dutyRoute).toBeDefined()
-    expect(dutyRoute?.tools[0]?.name).toBeTruthy()
+    // route's capabilityOperatorMention / capabilityRepoSlug fields.
+    const capabilityRoute = opts.routes.find((r) => r.path === "/mcp/capability")
+    expect(capabilityRoute).toBeDefined()
+    expect(capabilityRoute?.tools[0]?.name).toBeTruthy()
   })
 })

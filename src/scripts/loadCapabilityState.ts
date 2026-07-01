@@ -40,7 +40,7 @@ export const loadCapabilityState: PreflightScript = async (ctx, profile, args) =
   ctx.data.jobStateJson = JSON.stringify(loaded.state, null, 2)
 
   // Capability-noun aliases. A folder-capability's body is the profile's own `capability.md`
-  // (rendered by composePrompt via the `{{jobIntent}}` / new `{{dutyIntent}}`
+  // (rendered by composePrompt via the `{{jobIntent}}` / `{{capabilityIntent}}`
   // token path is not relevant here — the folder capability's body comes from the
   // resolved executable, not the capability). It still has a slug, a title (the
   // profile.describe), and a (resolved) executable slug — all required for the

@@ -82,10 +82,15 @@ export function collectShellSideChannels(ctx: Pick<Context, "data" | "output" | 
     const prior = Array.isArray(ctx.data.capabilityReports) ? ctx.data.capabilityReports : []
     ctx.data.capabilityReports = [...prior, ...capabilityReports]
   }
-  const dutyResults = parseCapabilityResultsFromText(stdout)
-  if (dutyResults.length > 0) {
-    const prior = Array.isArray(ctx.data.dutyResults) ? ctx.data.dutyResults : []
-    ctx.data.dutyResults = [...prior, ...dutyResults]
+  const capabilityResults = parseCapabilityResultsFromText(stdout)
+  if (capabilityResults.length > 0) {
+    const prior = Array.isArray(ctx.data.capabilityResults)
+      ? ctx.data.capabilityResults
+      : Array.isArray(ctx.data.dutyResults)
+        ? ctx.data.dutyResults
+        : []
+    ctx.data.capabilityResults = [...prior, ...capabilityResults]
+    ctx.data.dutyResults = ctx.data.capabilityResults
   }
 }
 
@@ -491,7 +496,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       // owner/repo from kody.config.json; envelope falls back to GITHUB_REPOSITORY
       // for tester repos that don't set config.github (the file isn't always
       // checked in). Either way, capabilityMcp needs "owner/name" to hit the compare API.
-      dutyRepoSlug:
+      capabilityRepoSlug:
         config.github?.owner && config.github?.repo
           ? `${config.github.owner}/${config.github.repo}`
           : process.env.GITHUB_REPOSITORY?.trim() || undefined,

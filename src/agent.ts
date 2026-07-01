@@ -179,7 +179,7 @@ export interface AgentOptions {
    * Falls back from kody.config.json → GITHUB_REPOSITORY. Ignored when
    * `enableCapabilityTool` is false.
    */
-  dutyRepoSlug?: string
+  capabilityRepoSlug?: string
   /** Canonical Kody state location used by locked capability tools. */
   capabilityState?: KodyConfig["state"]
   /**
@@ -502,18 +502,18 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       if (opts.enableCapabilityTool) {
         // Lazy import — only capabilities in locked-toolbox mode pay for this.
         const { buildCapabilityMcpServer } = await import("./capabilityMcp.js")
-        if (!opts.dutyRepoSlug) {
+        if (!opts.capabilityRepoSlug) {
           throw new Error(
-            "enableCapabilityTool requires dutyRepoSlug (owner/name) — set kody.config.json github.{owner,repo} or GITHUB_REPOSITORY env var",
+            "enableCapabilityTool requires capabilityRepoSlug (owner/name) — set kody.config.json github.{owner,repo} or GITHUB_REPOSITORY env var",
           )
         }
-        const dutyHandle = buildCapabilityMcpServer({
-          repoSlug: opts.dutyRepoSlug,
+        const capabilityHandle = buildCapabilityMcpServer({
+          repoSlug: opts.capabilityRepoSlug,
           state: opts.capabilityState,
           operatorMention: opts.capabilityOperatorMention ?? "",
           ...(opts.capabilitySlug ? { capabilitySlug: opts.capabilitySlug } : {}),
         })
-        mcpEntries.push(["kody-capability", dutyHandle.server as unknown as Record<string, unknown>])
+        mcpEntries.push(["kody-capability", capabilityHandle.server as unknown as Record<string, unknown>])
       }
       if (opts.enableDashboardCmsTool) {
         const { buildDashboardCmsMcpServer, DASHBOARD_CMS_MCP_TOOL_NAMES } = await import("./dashboardCmsMcp.js")

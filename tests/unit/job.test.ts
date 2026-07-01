@@ -61,13 +61,13 @@ describe("runJob (Phase 1 seam)", () => {
 
   it("resolves a capability-only job to the capability-selected executable", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-job-"))
-    const dutyDir = path.join(cwd, ".kody", "capabilities", "ci-health")
-    fs.mkdirSync(dutyDir, { recursive: true })
+    const capabilityDir = path.join(cwd, ".kody", "capabilities", "ci-health")
+    fs.mkdirSync(capabilityDir, { recursive: true })
     fs.writeFileSync(
-      path.join(dutyDir, "profile.json"),
+      path.join(capabilityDir, "profile.json"),
       JSON.stringify({ name: "ci-health", action: "ci-health", executable: "ci-check", agent: "kody" }),
     )
-    fs.writeFileSync(path.join(dutyDir, "capability.md"), "# CI Health\n")
+    fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# CI Health\n")
 
     await runJob(
       {
@@ -86,10 +86,10 @@ describe("runJob (Phase 1 seam)", () => {
   })
   it("preserves capability identity without injecting capability args when executable is explicit", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-goal-handoff-"))
-    const dutyDir = path.join(cwd, ".kody", "capabilities", "company-graph")
-    fs.mkdirSync(dutyDir, { recursive: true })
-    fs.writeFileSync(path.join(dutyDir, "profile.json"), JSON.stringify({ name: "company-graph" }))
-    fs.writeFileSync(path.join(dutyDir, "capability.md"), "# Company Graph\n")
+    const capabilityDir = path.join(cwd, ".kody", "capabilities", "company-graph")
+    fs.mkdirSync(capabilityDir, { recursive: true })
+    fs.writeFileSync(path.join(capabilityDir, "profile.json"), JSON.stringify({ name: "company-graph" }))
+    fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Company Graph\n")
     await runJob(
       {
         capability: "company-graph",

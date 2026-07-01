@@ -144,7 +144,7 @@ export const DASHBOARD_CMS_PROMPT = [
 ].join("\n")
 
 /**
- * Discover engine + project executables and render a markdown catalog the
+ * Discover engine + project capability implementations and render a markdown catalog the
  * chat agent can read. Rebuilt each call so a freshly-added `<name>/profile.json`
  * is picked up without a restart. Failures degrade silently (empty string)
  * because the rest of the chat loop must not depend on this list being present.
@@ -170,11 +170,11 @@ export function buildExecutableCatalog(): string {
   if (entries.length === 0) return ""
   const lines = [
     "",
-    "# Available executables",
+    "# Available capability implementations",
     "These run inside the engine, NOT inside this chat. You cannot invoke them",
-    "directly — to run one, tell the user to post `@kody <name>` (with any flags)",
+    "directly — to run one, tell the user to post the matching `@kody <action>`",
     "as a comment on the relevant issue or PR. The dispatcher binds the issue/PR",
-    "number to the executable's inputs automatically.",
+    "number to the implementation inputs automatically.",
     "",
   ]
   for (const e of entries) {

@@ -225,6 +225,7 @@ async function runCapabilityImplementationStep(
   if (capabilityContext) {
     preloadedData.capabilitySlug = capabilityContext.slug
     preloadedData.capabilityTitle = capabilityContext.title
+    preloadedData.capabilityIntent = capabilityContext.body
     preloadedData.dutyIntent = capabilityContext.body
     preloadedData.jobIntent = capabilityContext.body
     if (preloadedData.jobCapability === undefined) preloadedData.jobCapability = capabilityContext.slug

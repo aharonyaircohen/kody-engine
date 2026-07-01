@@ -118,7 +118,7 @@ export function checkoutPrBranch(prNumber: number, cwd?: string): string {
   })
   // The checkout can drop kody's tracked-but-ignore-negated `.kody/` assets;
   // restore them from the checked-out branch's HEAD tree (no-op if that branch
-  // predates the executables — those PRs would need a rebase regardless).
+  // predates the capabilities — those PRs would need a rebase regardless).
   restoreKodyAssets(cwd)
   return getCurrentBranch(cwd)
 }
@@ -154,7 +154,7 @@ export function mergeBase(baseBranch: string, cwd?: string): "clean" | "conflict
 }
 
 /**
- * Force-restore kody-owned tracked assets (`.kody/capabilities`, `.kody/missions`,
+ * Force-restore kody-owned tracked assets (`.kody/capabilities`,
  * …) into the working tree from the current HEAD tree. A branch checkout on the
  * CI runner can drop these: they're tracked, but the consumer repo's `.gitignore`
  * ignores `.kody/*` and re-includes them via a negation, and git's working-tree

@@ -90,10 +90,10 @@ describe("initFlow: performInit", () => {
 
   it("does not manage local capability folders", () => {
     dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
-    const dutyDir = path.join(dir, ".kody/capabilities/local-only")
-    fs.mkdirSync(dutyDir, { recursive: true })
-    const profilePath = path.join(dutyDir, "profile.json")
-    const bodyPath = path.join(dutyDir, "capability.md")
+    const capabilityDir = path.join(dir, ".kody/capabilities/local-only")
+    fs.mkdirSync(capabilityDir, { recursive: true })
+    const profilePath = path.join(capabilityDir, "profile.json")
+    const bodyPath = path.join(capabilityDir, "capability.md")
     fs.writeFileSync(profilePath, `{"user-edit":"keep me on profile"}`)
     fs.writeFileSync(bodyPath, `# user-edited capability - do not clobber\n`)
 

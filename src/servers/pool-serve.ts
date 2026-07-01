@@ -218,9 +218,9 @@ export async function poolServe(): Promise<number> {
   // degraded — run the fan-out on a Fly runner per active repo. GitHub stays
   // the default; the engine's per-capability cadence guard prevents double-runs.
   // Set POOL_CAPABILITY_TICK=0 to disable.
-  const dutyTickEnabled = (process.env.POOL_CAPABILITY_TICK ?? "1") !== "0"
-  const dutyTickMs = envInt("POOL_CAPABILITY_TICK_MS", 15 * 60_000)
-  const dutyTick = dutyTickEnabled
+  const capabilityTickEnabled = (process.env.POOL_CAPABILITY_TICK ?? "1") !== "0"
+  const capabilityTickMs = envInt("POOL_CAPABILITY_TICK_MS", 15 * 60_000)
+  const capabilityTick = capabilityTickEnabled
     ? setInterval(() => {
         runCapabilityFallbackTick({
           isDegraded: () => gitHubActionsDegraded(),
@@ -230,7 +230,7 @@ export async function poolServe(): Promise<number> {
         }).catch((err) =>
           log(`capability fallback tick failed: ${err instanceof Error ? err.message : String(err)}`),
         )
-      }, dutyTickMs)
+      }, capabilityTickMs)
     : null
 
   const server = createServer(async (req, res) => {
@@ -302,7 +302,7 @@ export async function poolServe(): Promise<number> {
   const shutdown = (signal: string) => {
     log(`${signal} — shutting down`)
     clearInterval(tick)
-    if (dutyTick) clearInterval(dutyTick)
+    if (capabilityTick) clearInterval(capabilityTick)
     server.close(() => process.exit(0))
   }
   process.once("SIGINT", () => shutdown("SIGINT"))

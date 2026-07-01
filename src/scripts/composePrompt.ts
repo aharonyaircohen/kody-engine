@@ -255,7 +255,7 @@ function formatCapabilityReference(data: Record<string, unknown>, profileName: s
   if (capabilitySchedule) {
     lines.push(`- Cadence: \`${capabilitySchedule}\``)
   }
-  const capabilityBody = pickToken(data, "dutyIntent", "jobIntent")
+  const capabilityBody = pickToken(data, "capabilityIntent", "jobIntent", "dutyIntent")
   if (capabilityBody) {
     lines.push("", "## Capability body", "", capabilityBody)
   }

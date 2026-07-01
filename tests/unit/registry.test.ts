@@ -126,15 +126,15 @@ describe("registry: obsolete project executables", () => {
   })
 
   it("ignores project .kody/executables roots", () => {
-    const dutyDir = path.join(root, ".kody", "capabilities", "feature")
+    const capabilityDir = path.join(root, ".kody", "capabilities", "feature")
     const exeDir = path.join(root, ".kody", "executables", "feature")
-    fs.mkdirSync(dutyDir, { recursive: true })
+    fs.mkdirSync(capabilityDir, { recursive: true })
     fs.mkdirSync(exeDir, { recursive: true })
     fs.writeFileSync(
-      path.join(dutyDir, "profile.json"),
+      path.join(capabilityDir, "profile.json"),
       JSON.stringify({ name: "feature", action: "feature", executable: "feature" }),
     )
-    fs.writeFileSync(path.join(dutyDir, "capability.md"), "# Feature\n")
+    fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Feature\n")
     fs.writeFileSync(path.join(exeDir, "profile.json"), JSON.stringify({ name: "feature", role: "primitive" }))
 
     expect(resolveExecutable("feature")).toBeNull()

@@ -145,7 +145,7 @@ describe("applyCapabilityReports", () => {
     await applyCapabilityReports(
       fakeCtx(
         {
-          dutyResults: [
+          capabilityResults: [
             {
               version: 1,
               status: "pass",
@@ -169,6 +169,35 @@ describe("applyCapabilityReports", () => {
     expect((next as GoalState).extra.lastCapabilityResult).toBeUndefined()
   })
 
+  it("accepts legacy dutyResults as a compatibility alias", async () => {
+    fetchGoalStateMock.mockReturnValueOnce(goalState())
+
+    await applyCapabilityReports(
+      fakeCtx(
+        {
+          dutyResults: [
+            {
+              version: 1,
+              status: "pass",
+              summary: "Release PR exists.",
+              facts: { releasePr: 123 },
+              artifacts: [],
+              missingEvidence: [],
+              blockers: [],
+            },
+          ],
+        },
+        { goal: "release-aguy" },
+      ),
+      fakeProfile(),
+      null,
+    )
+
+    const [, goalId, next] = putGoalStateMock.mock.calls[0]!
+    expect(goalId).toBe("release-aguy")
+    expect((next as GoalState).extra.facts).toEqual({ releasePrExists: true, releasePr: 123 })
+  })
+
   it("merges report and result output before writing one goal evidence event", async () => {
     fetchGoalStateMock.mockReturnValueOnce(goalState())
     const data: Record<string, unknown> = {
@@ -179,7 +208,7 @@ describe("applyCapabilityReports", () => {
           facts: { releasePr: 123 },
         },
       ],
-      dutyResults: [
+      capabilityResults: [
         {
           version: 1,
           status: "pass",
@@ -230,7 +259,7 @@ describe("applyCapabilityReports", () => {
   it("does not apply legacy --evidence when a result declares its own evidence", async () => {
     fetchGoalStateMock.mockReturnValueOnce(goalState())
     const data = {
-      dutyResults: [
+      capabilityResults: [
         {
           version: 1,
           target: { type: "goal", id: "release-aguy" },
@@ -275,7 +304,7 @@ describe("applyCapabilityReports", () => {
     fetchGoalStateMock.mockReturnValueOnce(goalState())
     const data: Record<string, unknown> = {
       jobSaveReport: true,
-      dutyResults: [
+      capabilityResults: [
         {
           version: 1,
           status: "pass",
@@ -318,7 +347,7 @@ describe("applyCapabilityReports", () => {
         fakeCtx(
           {
             jobSaveReport: true,
-            dutyResults: [
+            capabilityResults: [
               {
                 version: 1,
                 status: "pass",
@@ -347,7 +376,7 @@ describe("applyCapabilityReports", () => {
     await applyCapabilityReports(
       fakeCtx(
         {
-          dutyResults: [
+          capabilityResults: [
             {
               version: 1,
               status: "pass",
@@ -392,7 +421,7 @@ describe("applyCapabilityReports", () => {
     await applyCapabilityReports(
       fakeCtx(
         {
-          dutyResults: [
+          capabilityResults: [
             {
               version: 1,
               status: "pass",
@@ -427,7 +456,7 @@ describe("applyCapabilityReports", () => {
     await applyCapabilityReports(
       fakeCtx(
         {
-          dutyResults: [
+          capabilityResults: [
             {
               version: 1,
               status: "fail",

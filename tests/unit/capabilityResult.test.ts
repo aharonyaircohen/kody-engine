@@ -138,6 +138,17 @@ describe("collectShellSideChannels", () => {
     )
 
     expect(ctx.data).toEqual({
+      capabilityResults: [
+        {
+          version: 1,
+          status: "pass",
+          summary: "CI is green.",
+          facts: { pr: 123 },
+          artifacts: [],
+          missingEvidence: [],
+          blockers: [],
+        },
+      ],
       dutyResults: [
         {
           version: 1,
