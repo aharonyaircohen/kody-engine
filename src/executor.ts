@@ -282,7 +282,10 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
 
   const missing = validateScriptReferences(profile, allScriptNames)
   if (missing.length > 0) {
-    return finishAndEnd({ exitCode: 99, reason: `profile references unknown scripts: ${missing.join(", ")}` })
+    return finishAndEnd({
+      exitCode: 99,
+      reason: `profile references unknown scripts: ${missing.join(", ")} (profile: ${profilePath})`,
+    })
   }
 
   // Validate and coerce CLI args — BEFORE config load so arg errors surface

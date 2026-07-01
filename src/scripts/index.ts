@@ -181,6 +181,9 @@ export const postflightScripts: Record<string, PostflightScript> = {
   postReviewResult,
   persistArtifacts,
   writeAgentRunSummary,
+  // Deprecated profile compatibility. Older external capability profiles used
+  // this name before the summary writer was made agent-result specific.
+  writeRunSummary: writeAgentRunSummary,
   saveTaskState,
   mirrorStateToPr,
   startFlow,
