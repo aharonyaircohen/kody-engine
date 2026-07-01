@@ -12,12 +12,19 @@ import {
   truncate,
 } from "./issue.js"
 import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
+import { setKodyLabel } from "./lifecycleLabels.js"
 import { resolveCapabilityAction } from "./registry.js"
 import { type RunRequest, readRunRequestFromEnv } from "./run-request.js"
 import { lastRunLogPath } from "./runtimePaths.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
+
+const REJECTED_DISPATCH_LABEL = {
+  label: "kody:failed",
+  color: "e11d21",
+  description: "Kody failed or rejected the run",
+}
 
 export interface CiArgs {
   /** Explicit issue number (legacy flag). If omitted, autoDispatch reads the GHA event. */
@@ -527,6 +534,32 @@ export async function runCi(argv: string[]): Promise<number> {
   // into an observable, actionable signal.
   if (!args.issueNumber && !autoFallback && process.env.GITHUB_EVENT_NAME) {
     const outcome = autoDispatchTyped({ config: earlyConfig })
+    if (outcome.kind === "rejected") {
+      try {
+        unpackAllSecrets()
+        await resolveAuthToken()
+      } catch {
+        /* best-effort — gh calls below will log if auth is unusable */
+      }
+      const body = [
+        `⚠️ kody rejected this trigger: bot-authored \`@kody ${outcome.token}\` comments cannot dispatch work.`,
+        "",
+        "Use workflow_dispatch or runExecutableChain for engine-owned continuation instead.",
+      ].join("\n")
+      try {
+        if (outcome.isPr) ghPostPrReviewComment(outcome.target, body, cwd)
+        else ghPostIssueComment(outcome.target, body, cwd)
+      } catch (err) {
+        process.stderr.write(
+          `[kody] dispatch: failed to post rejected-trigger feedback: ${err instanceof Error ? err.message : String(err)}\n`,
+        )
+      }
+      setKodyLabel(outcome.target, REJECTED_DISPATCH_LABEL, cwd)
+      process.stderr.write(
+        `[kody] dispatch: rejected bot self-dispatch by ${outcome.author} on #${outcome.target} (${outcome.token})\n`,
+      )
+      return 64
+    }
     if (outcome.kind === "unrecognized") {
       // Unpack secrets and resolve GH_TOKEN before calling `gh` — the
       // routed-dispatch path does this later inside the executable

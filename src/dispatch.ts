@@ -115,12 +115,22 @@ function routeResult(
  *   - unrecognized: comment had `@kody <token>` but no capability action was
  *     found. The user should be told. Carries the token + the available
  *     options so the comment can suggest alternatives.
- *   - silent: comment was not addressed to kody (no @kody, bot author,
- *     non-issue_comment event with no work to do). Exit cleanly, no log.
+ *   - rejected: comment was addressed to kody but the trigger surface is
+ *     invalid, e.g. bot-authored self-dispatch via `@kody <command>`.
+ *   - silent: comment was not addressed to kody (no @kody, non-issue_comment
+ *     event with no work to do). Exit cleanly, no log.
  */
 export type DispatchOutcome =
   | ({ kind: "route" } & DispatchResult)
   | { kind: "unrecognized"; token: string; target: number; isPr: boolean; available: string[] }
+  | {
+      kind: "rejected"
+      reason: "bot_self_dispatch"
+      token: string
+      target: number
+      isPr: boolean
+      author: string
+    }
   | { kind: "silent"; reason: string }
 
 /**
@@ -222,15 +232,6 @@ export function autoDispatch(opts?: {
   const authorLogin = String(user?.login ?? "")
   const authorType = String(user?.type ?? "")
   if (!hasKodyMention(rawBody)) return null
-  // Bot-authored comments: do NOT blanket-drop. Kody runs as a bot in repos
-  // whose token is a GitHub App (e.g. `kodyade[bot]`), so capabilities, slash
-  // commands, and multi-step flows self-dispatch by posting `@kody <command>`
-  // — blanket-dropping bots silently kills all of that. Instead we defer the
-  // decision: a bot is honored ONLY when it issues an explicit, resolved
-  // `@kody <command>` (see `isBotAuthor` guard after resolution below). Its
-  // ordinary status/progress chatter has no resolvable command and is dropped
-  // there, so nothing can self-retrigger. The flow hop cap (advanceFlow) is
-  // the hard ceiling against a buggy flow that never terminates.
   const isBotAuthor = authorLogin === "kody-bot" || authorType === "Bot"
   // Membership gate: when configured, only commenters whose GitHub
   // author_association is allowlisted may trigger kody. Unset → anyone.
@@ -248,6 +249,19 @@ export function autoDispatch(opts?: {
   // Anything not in this small set is assumed to be a command attempt —
   // typo'd or otherwise — and will surface for user feedback.
   const firstToken = firstTokenRaw && POLITE_WORDS.has(firstTokenRaw) ? null : firstTokenRaw
+
+  // Bot-authored `@kody <command>` comments are an invalid trigger surface.
+  // Bot-to-bot continuation must use workflow_dispatch/runExecutableChain so
+  // the engine can report the transition explicitly. Returning null here keeps
+  // the legacy resolver from routing it; autoDispatchTyped reclassifies the
+  // same event as `rejected` so the CLI can mark the target terminal.
+  if (isBotAuthor && firstToken) {
+    process.stderr.write(
+      `[kody] dispatch: rejecting bot self-dispatch comment ` +
+        `(author=${authorLogin || authorType}, firstToken=${firstToken})\n`,
+    )
+    return null
+  }
 
   // Resolve first token via aliases → registry. No match → fall back to the
   // default capability action for this event shape (issue vs PR). Alias map comes
@@ -285,18 +299,6 @@ export function autoDispatch(opts?: {
       : (opts?.config?.defaultExecutable ?? null)
     route = defaultAction ? resolveConfiguredAction(defaultAction) : null
   }
-  // Bot self-dispatch gate: a bot-authored comment may ONLY proceed when it
-  // resolved to an explicit command (`consumedFirstToken`). It must never fall
-  // through to the default capability action or run on chatter — that's the loop
-  // surface. Humans keep the default-fallback behavior.
-  //
-  // Scope of this gate: the @-mention comment path only. The capability MCP tool
-  // `dispatch_workflow` bypasses this entirely (it uses workflow_dispatch,
-  // not a bot-authored @kody comment), so a capability in ASK mode can still
-  // invoke qa-engineer / ui-review via that tool — see GATE_EXEMPT_DUTIES
-  // in capabilityMcp.ts. A future maintainer reading this gate should not
-  // "fix" it by also gating the tool path; the two surfaces are
-  // independent and the tool path is the one the capability contract relies on.
   if (isBotAuthor && !consumedFirstToken) {
     process.stderr.write(
       `[kody] dispatch: ignoring bot comment without an explicit command ` +
@@ -397,16 +399,6 @@ export function autoDispatchTyped(opts?: {
   if (!hasKodyMention(rawBody)) {
     return { kind: "silent", reason: "comment does not mention @kody" }
   }
-  if (authorLogin === "kody-bot" || authorType === "Bot") {
-    return { kind: "silent", reason: `bot-authored comment (${authorLogin || authorType})` }
-  }
-  // Membership gate (see autoDispatch). Classify a blocked commenter as
-  // silent — not unrecognized — so a non-member typing a real subcommand
-  // (e.g. "@kody fix") gets no "I don't know that command" feedback.
-  if (!associationAllowed(event, opts?.config)) {
-    const assoc = String(comment?.author_association ?? "").toUpperCase() || "<none>"
-    return { kind: "silent", reason: `commenter association '${assoc}' not in access.allowedAssociations` }
-  }
   const targetNum = Number(issue?.number ?? 0)
   const isPr = !!issue?.pull_request
   if (!targetNum) {
@@ -414,6 +406,28 @@ export function autoDispatchTyped(opts?: {
   }
   const afterTag = extractAfterTag(rawBody.toLowerCase())
   const tokenRaw = extractSubcommand(afterTag) ?? ""
+  if ((authorLogin === "kody-bot" || authorType === "Bot") && tokenRaw && !POLITE_WORDS.has(tokenRaw)) {
+    return {
+      kind: "rejected",
+      reason: "bot_self_dispatch",
+      token: tokenRaw,
+      target: targetNum,
+      isPr,
+      author: authorLogin || authorType,
+    }
+  }
+  if (authorLogin === "kody-bot" || authorType === "Bot") {
+    return { kind: "silent", reason: `bot-authored comment (${authorLogin || authorType})` }
+  }
+  // Membership gate (see autoDispatch). Classify a blocked commenter as
+  // silent — not unrecognized — so a non-member typing a real subcommand
+  // (e.g. "@kody fix") gets no "I don't know that command" feedback. This
+  // intentionally runs after bot self-dispatch classification: Kody's own
+  // invalid trigger should be terminal and visible, not hidden as access noise.
+  if (!associationAllowed(event, opts?.config)) {
+    const assoc = String(comment?.author_association ?? "").toUpperCase() || "<none>"
+    return { kind: "silent", reason: `commenter association '${assoc}' not in access.allowedAssociations` }
+  }
   // If firstToken is a politeness word, dispatch fell through to default —
   // the legacy null wasn't from "user typo'd a command" but from "no
   // default configured." That's an operator misconfig, not a user error;

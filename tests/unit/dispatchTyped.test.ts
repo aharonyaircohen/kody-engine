@@ -104,26 +104,47 @@ describe("autoDispatchTyped: silent variants (legitimate no-op)", () => {
     expect(autoDispatchTyped().kind).toBe("silent")
   })
 
-  it("routes an explicit @kody command even from a bot (self-dispatch)", () => {
-    // Kody runs as a bot when the repo token is a GitHub App; capabilities and
-    // flows self-dispatch by posting `@kody <command>`. An explicit, resolved
-    // command must be honored, not dropped as "bot chatter".
+  it("rejects an explicit @kody command from a bot (self-dispatch)", () => {
     process.env.GITHUB_EVENT_NAME = "issue_comment"
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody run", user: { login: "kodyade[bot]", type: "Bot" } },
       issue: { number: 7, pull_request: {} },
     })
     const out = autoDispatchTyped()
-    expect(out.kind).toBe("route")
-    if (out.kind === "route") expect(out.executable).toBe("run")
+    expect(out.kind).toBe("rejected")
+    if (out.kind === "rejected") {
+      expect(out.reason).toBe("bot_self_dispatch")
+      expect(out.token).toBe("run")
+      expect(out.target).toBe(7)
+      expect(out.isPr).toBe(true)
+    }
+  })
+
+  it("rejects the #674 bot-authored implement comment shape", () => {
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: {
+        body: "**Kody**\n\n@kody implement issue 674",
+        user: { login: "kodyade[bot]", type: "Bot" },
+      },
+      issue: { number: 674 },
+    })
+    const out = autoDispatchTyped()
+    expect(out.kind).toBe("rejected")
+    if (out.kind === "rejected") {
+      expect(out.reason).toBe("bot_self_dispatch")
+      expect(out.token).toBe("implement")
+      expect(out.target).toBe(674)
+      expect(out.isPr).toBe(false)
+    }
   })
 
   it("returns silent for bot chatter without an explicit command", () => {
-    // A bot comment that doesn't resolve to a command (status/progress text)
-    // is still dropped — that's the loop guard for Kody's own comments.
+    // A bot comment without a command token is still dropped — that's the loop
+    // guard for Kody's ordinary status/progress chatter.
     process.env.GITHUB_EVENT_NAME = "issue_comment"
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      comment: { body: "@kody looks good, shipping now", user: { login: "kodyade[bot]", type: "Bot" } },
+      comment: { body: "@kody", user: { login: "kodyade[bot]", type: "Bot" } },
       issue: { number: 7 },
     })
     const out = autoDispatchTyped()
