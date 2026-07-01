@@ -138,6 +138,69 @@ describe("chat/loop", () => {
     expect(readSession(sessionFile)[1]?.content).toBe("OK")
   })
 
+  it("does not advertise cross-repo tools just because reposRoot is present", async () => {
+    const sessionFile = path.join(tmp, "s.jsonl")
+    appendTurn(sessionFile, { role: "user", content: "which repos can you access?", timestamp: "t1" })
+    const sink = new MemSink()
+    const calls: Array<{ body: Record<string, unknown> }> = []
+    const res = await runChatTurn({
+      sessionId: "s1",
+      sessionFile,
+      cwd: tmp,
+      model: { provider: "custom", model: "MiniMax-M3", protocol: "openai", spec: "minimax/MiniMax-M3" },
+      litellmUrl: "http://localhost:4000",
+      sink,
+      reposRoot: path.join(tmp, "repos"),
+      fetchImpl: async (_url, init) => {
+        calls.push({
+          body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+        })
+        return new Response(JSON.stringify({ choices: [{ message: { content: "  OK  " } }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      },
+    })
+
+    expect(res.exitCode).toBe(0)
+    const body = calls[0]?.body as { messages?: Array<{ role?: string; content?: string }> } | undefined
+    const system = body?.messages?.find((m) => m.role === "system")?.content ?? ""
+    expect(system).not.toContain("Working across repositories")
+    expect(system).not.toContain("fetch_repo")
+  })
+
+  it("advertises cross-repo tools only when explicitly enabled", async () => {
+    const sessionFile = path.join(tmp, "s.jsonl")
+    appendTurn(sessionFile, { role: "user", content: "compare repos", timestamp: "t1" })
+    const sink = new MemSink()
+    const calls: Array<{ body: Record<string, unknown> }> = []
+    const res = await runChatTurn({
+      sessionId: "s1",
+      sessionFile,
+      cwd: tmp,
+      model: { provider: "custom", model: "MiniMax-M3", protocol: "openai", spec: "minimax/MiniMax-M3" },
+      litellmUrl: "http://localhost:4000",
+      sink,
+      reposRoot: path.join(tmp, "repos"),
+      enableFetchRepoTool: true,
+      fetchImpl: async (_url, init) => {
+        calls.push({
+          body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+        })
+        return new Response(JSON.stringify({ choices: [{ message: { content: "  OK  " } }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      },
+    })
+
+    expect(res.exitCode).toBe(0)
+    const body = calls[0]?.body as { messages?: Array<{ role?: string; content?: string }> } | undefined
+    const system = body?.messages?.find((m) => m.role === "system")?.content ?? ""
+    expect(system).toContain("Working across repositories")
+    expect(system).toContain("fetch_repo")
+  })
+
   it("emits chat.error and returns 99 when agent throws", async () => {
     const sessionFile = path.join(tmp, "s.jsonl")
     appendTurn(sessionFile, { role: "user", content: "hi", timestamp: "t1" })

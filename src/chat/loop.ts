@@ -122,10 +122,9 @@ export const OPENAI_CHAT_SYSTEM_PROMPT = [
 ].join("\n")
 
 /**
- * Appended to the chat prompt ONLY when the agent has the `fetch_repo` tool
- * (a repo-less Brain that can serve many repos). Kept out of the base prompt
- * so single-repo runtimes (e.g. a GitHub Actions chat) don't advertise a tool
- * they don't have.
+ * Appended to the chat prompt ONLY when the agent has explicitly been given
+ * the `fetch_repo` tool. Kept out of the base prompt so Repo Brain stays
+ * focused on the selected repo by default.
  */
 export const CROSS_REPO_PROMPT = [
   "# Working across repositories",
@@ -194,11 +193,15 @@ export interface ChatTurnOptions {
   verbose?: boolean
   quiet?: boolean
   /**
-   * Root under which other repos are cloned (`<reposRoot>/<owner>/<name>`).
-   * When set, the agent gets the `fetch_repo` tool + read access to this root
-   * so it can work across repos. Omit for a single-repo runtime.
+   * Root under which repo clones live (`<reposRoot>/<owner>/<name>`). This is
+   * also used by `fetch_repo` when `enableFetchRepoTool` is true.
    */
   reposRoot?: string
+  /**
+   * Opt-in only: expose `fetch_repo` so the agent can clone repos other than
+   * the selected repo. Normal Repo Brain turns leave this false.
+   */
+  enableFetchRepoTool?: boolean
   /** GitHub token fetch_repo uses to clone private repos (the user's PAT). */
   repoToken?: string
   /** Dashboard origin used by Dashboard-backed CMS tools. */
@@ -273,8 +276,9 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   // the context blocks so they win on tone/style by recency, but still
   // ahead of the executable catalog + artifact contract, which are hard
   // operational requirements the agent must not override.
-  // Advertise the fetch_repo tool only when it's actually wired (reposRoot set).
-  const crossRepoBlock = opts.reposRoot ? CROSS_REPO_PROMPT : null
+  const fetchRepoEnabled = Boolean(opts.enableFetchRepoTool && opts.reposRoot)
+  // Advertise the fetch_repo tool only when it is explicitly wired.
+  const crossRepoBlock = fetchRepoEnabled ? CROSS_REPO_PROMPT : null
   const dashboardCmsEnabled = Boolean(opts.cmsDashboardUrl && opts.cmsRepoSlug && opts.cmsToken)
   const dashboardCmsBlock = dashboardCmsEnabled ? DASHBOARD_CMS_PROMPT : null
   // When the current turn carries images, tell the agent it CAN see them —
@@ -334,10 +338,10 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
         ],
         systemPromptAppend: systemPrompt,
         ...(opts.reasoningEffort ? { reasoningEffort: opts.reasoningEffort } : {}),
-        // Let the agent clone + work on OTHER repos mid-conversation (a
-        // repo-less Brain serves many). Enabled whenever we know where repos
-        // live; grants read access to that root via additionalDirectories.
-        ...(opts.reposRoot
+        // Cross-repo work is opt-in. Repo Brain's default path remains focused
+        // on the selected repo even though the server stores clones under
+        // reposRoot.
+        ...(fetchRepoEnabled
           ? {
               enableFetchRepoTool: true,
               reposRoot: opts.reposRoot,

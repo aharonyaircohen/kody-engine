@@ -34,7 +34,7 @@ import * as path from "node:path"
 import type { ChatEvent, EventSink } from "../chat/events.js"
 import { type ChatTurnOptions, type ChatTurnResult, runChatTurn } from "../chat/loop.js"
 import { appendTurn, sessionFilePath, sessionStatePath } from "../chat/session.js"
-import { LITELLM_DEFAULT_URL, needsLitellmProxy, parseModelRuntimeConfig, type ProviderModel } from "../config.js"
+import { LITELLM_DEFAULT_URL, needsLitellmProxy, type ProviderModel, parseModelRuntimeConfig } from "../config.js"
 import { unpackAllSecrets } from "../kody-cli.js"
 import { type LitellmHandle, startLitellmIfNeeded } from "../litellm.js"
 import { type CloneRepoFn, defaultCloneRepo, ensureRepoCwd } from "../repoWorkspace.js"
@@ -126,6 +126,11 @@ function strField(body: unknown, key: string): string | undefined {
     if (typeof v === "string" && v.trim()) return v.trim()
   }
   return undefined
+}
+
+/** Pull a boolean field from a parsed JSON body, else false. */
+function boolField(body: unknown, key: string): boolean {
+  return typeof body === "object" && body !== null && (body as Record<string, unknown>)[key] === true
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -350,6 +355,7 @@ async function handleChatTurn(
   const dashboardUrl = strField(body, "dashboardUrl")
   const storeRepoUrl = strField(body, "storeRepoUrl")
   const storeRef = strField(body, "storeRef")
+  const allowCrossRepo = boolField(body, "allowCrossRepo")
 
   let agentCwd: string
   try {
@@ -435,8 +441,10 @@ async function handleChatTurn(
         model: opts.model,
         litellmUrl: opts.litellmUrl,
         sink,
-        // Let the agent clone + work on OTHER repos via the fetch_repo tool.
         reposRoot: opts.reposRoot,
+        // Repo Brain is selected-repo focused by default. Higher-level
+        // coordinator flows can opt into fetch_repo explicitly.
+        ...(allowCrossRepo ? { enableFetchRepoTool: true } : {}),
         repoToken,
         ...(dashboardUrl && repo && stateToken
           ? {
