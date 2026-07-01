@@ -20,7 +20,7 @@ import { hydrateStateWorkspace } from "./stateWorkspace.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
-const REJECTED_DISPATCH_LABEL = {
+const FAILED_DISPATCH_LABEL = {
   label: "kody:failed",
   color: "e11d21",
   description: "Kody failed or rejected the run",
@@ -347,6 +347,7 @@ function postFailureTail(issueNumber: number | undefined, cwd: string, reason: s
   } catch {
     /* best effort */
   }
+  setKodyLabel(issueNumber, FAILED_DISPATCH_LABEL, cwd)
 }
 
 export function shouldPostRunFailureTail(exitCode: number): boolean {
@@ -554,7 +555,7 @@ export async function runCi(argv: string[]): Promise<number> {
           `[kody] dispatch: failed to post rejected-trigger feedback: ${err instanceof Error ? err.message : String(err)}\n`,
         )
       }
-      setKodyLabel(outcome.target, REJECTED_DISPATCH_LABEL, cwd)
+      setKodyLabel(outcome.target, FAILED_DISPATCH_LABEL, cwd)
       process.stderr.write(
         `[kody] dispatch: rejected bot self-dispatch by ${outcome.author} on #${outcome.target} (${outcome.token})\n`,
       )

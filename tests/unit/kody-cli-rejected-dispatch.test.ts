@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   postIssueComment: vi.fn(),
   postPrReviewComment: vi.fn(),
   setKodyLabel: vi.fn(),
+  reactToTriggerComment: vi.fn(),
+  runJob: vi.fn(),
 }))
 
 vi.mock("../../src/issue.js", () => ({
@@ -18,6 +20,18 @@ vi.mock("../../src/issue.js", () => ({
 vi.mock("../../src/lifecycleLabels.js", () => ({
   setKodyLabel: mocks.setKodyLabel,
 }))
+
+vi.mock("../../src/gha.js", () => ({
+  reactToTriggerComment: mocks.reactToTriggerComment,
+}))
+
+vi.mock("../../src/job.js", async () => {
+  const actual = await vi.importActual<typeof import("../../src/job.js")>("../../src/job.js")
+  return {
+    ...actual,
+    runJob: mocks.runJob,
+  }
+})
 
 import { runCi } from "../../src/kody-cli.js"
 
@@ -38,6 +52,8 @@ beforeEach(() => {
   mocks.postIssueComment.mockReset()
   mocks.postPrReviewComment.mockReset()
   mocks.setKodyLabel.mockReset()
+  mocks.reactToTriggerComment.mockReset()
+  mocks.runJob.mockReset()
 })
 
 afterEach(() => {
@@ -67,6 +83,35 @@ describe("kody-cli: rejected dispatch", () => {
     expect(mocks.postPrReviewComment).not.toHaveBeenCalled()
     expect(mocks.setKodyLabel).toHaveBeenCalledWith(
       674,
+      expect.objectContaining({ label: "kody:failed" }),
+      process.cwd(),
+    )
+  })
+})
+
+describe("kody-cli: early run failures", () => {
+  it("marks crash-class run failures as failed so Dashboard does not return them to backlog", async () => {
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: {
+        body: "@kody run",
+        user: { login: "aguyaharonyair", type: "User" },
+        author_association: "OWNER",
+      },
+      issue: { number: 673 },
+    })
+    mocks.runJob.mockResolvedValueOnce({
+      exitCode: 99,
+      reason: "loadSubagents: agent 'research-scout' not found",
+    })
+
+    await expect(runCi(["--cwd", process.cwd(), "--skip-install", "--skip-litellm"])).resolves.toBe(99)
+
+    expect(mocks.postIssueComment).toHaveBeenCalledTimes(1)
+    expect(mocks.postIssueComment.mock.calls[0]?.[0]).toBe(673)
+    expect(String(mocks.postIssueComment.mock.calls[0]?.[1])).toContain("loadSubagents")
+    expect(mocks.setKodyLabel).toHaveBeenCalledWith(
+      673,
       expect.objectContaining({ label: "kody:failed" }),
       process.cwd(),
     )
