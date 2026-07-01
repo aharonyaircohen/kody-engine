@@ -8,6 +8,7 @@ import type { Context, PostflightScript } from "../executables/types.js"
 import {
   postIssueComment as ghPostIssueComment,
   postPrReviewComment as ghPostPrReviewComment,
+  parsePrNumber,
   truncate,
 } from "../issue.js"
 import { setKodyLabel } from "../lifecycleLabels.js"
@@ -18,6 +19,12 @@ const FAILED_LABEL_SPEC = {
   label: "kody:failed",
   color: "e11d21",
   description: "kody: flow failed",
+}
+
+const REVIEWING_LABEL_SPEC = {
+  label: "kody:reviewing",
+  color: "d93f0b",
+  description: "kody: PR ready for human review",
 }
 
 export const postIssueComment: PostflightScript = async (ctx, profile) => {
@@ -111,6 +118,10 @@ export const postIssueComment: PostflightScript = async (ctx, profile) => {
   })
   postWith(targetType, targetNumber, msg, ctx.cwd)
 
+  if (!isFailure) {
+    markPrReadyForReview(ctx, prResult)
+  }
+
   let exitCode = 0
   const agentDone = Boolean(ctx.data.agentDone)
   const verifyOk = ctx.data.verifyOk !== false
@@ -142,6 +153,26 @@ function markRunFailed(ctx: Context): void {
   const targetNumber = Number(ctx.data.commentTargetNumber ?? 0)
   if (targetType === "pr" && targetNumber > 0 && targetNumber !== issueNumber) {
     setKodyLabel(targetNumber, FAILED_LABEL_SPEC, ctx.cwd)
+  }
+}
+
+function markPrReadyForReview(ctx: Context, prResult: PrOutcome | null): void {
+  if (prResult?.kind !== "created" && prResult?.kind !== "updated") return
+
+  const targets = new Set<number>()
+  const issueNumber = ctx.args.issue as number | undefined
+  if (typeof issueNumber === "number" && Number.isFinite(issueNumber)) {
+    targets.add(issueNumber)
+  }
+
+  const targetNumber = Number(ctx.data.commentTargetNumber ?? 0)
+  if (targetNumber > 0) targets.add(targetNumber)
+
+  const prNumber = prResult.number ?? parsePrNumber(prResult.url)
+  if (prNumber) targets.add(prNumber)
+
+  for (const target of targets) {
+    setKodyLabel(target, REVIEWING_LABEL_SPEC, ctx.cwd)
   }
 }
 

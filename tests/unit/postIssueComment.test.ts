@@ -217,7 +217,7 @@ describe("postIssueComment message wording", () => {
 // Regression: terminal failure paths used to leave `kody:running` stamped on
 // the issue, which the dashboard interprets as "still building". Failure
 // terminus must flip the label to `kody:failed`.
-describe("postIssueComment lifecycle label cleanup on failure", () => {
+describe("postIssueComment lifecycle label cleanup", () => {
   beforeEach(() => {
     vi.mocked(ghPostIssueComment).mockClear()
     vi.mocked(ghPostPrReviewComment).mockClear()
@@ -292,12 +292,67 @@ describe("postIssueComment lifecycle label cleanup on failure", () => {
     expect(calls.some((c) => c[0] === 1155 && (c[1] as { label: string }).label === "kody:failed")).toBe(true)
   })
 
-  it("success path → does not stamp kody:failed (orchestrator owns it)", async () => {
+  it("success + created PR → stamps kody:reviewing on the issue and PR", async () => {
     const ctx = makeCtx({
       issue: 1155,
       target: "pr",
       targetNumber: 1200,
       prAction: "created",
+    })
+    await postIssueComment(ctx, profile, null)
+    const calls = vi.mocked(setKodyLabel).mock.calls
+    expect(calls).toEqual([
+      [
+        1155,
+        {
+          label: "kody:reviewing",
+          color: "d93f0b",
+          description: "kody: PR ready for human review",
+        },
+        "/tmp",
+      ],
+      [
+        1200,
+        {
+          label: "kody:reviewing",
+          color: "d93f0b",
+          description: "kody: PR ready for human review",
+        },
+        "/tmp",
+      ],
+    ])
+  })
+
+  it("success + updated PR with no new commit → still stamps kody:reviewing", async () => {
+    const ctx = makeCtx({
+      issue: 1155,
+      target: "pr",
+      targetNumber: 1200,
+      commitResult: { committed: false },
+      hasCommitsAhead: true,
+      prAction: "updated",
+    })
+    await postIssueComment(ctx, profile, null)
+    expect(vi.mocked(setKodyLabel)).toHaveBeenCalledWith(
+      1155,
+      expect.objectContaining({ label: "kody:reviewing" }),
+      "/tmp",
+    )
+    expect(vi.mocked(setKodyLabel)).toHaveBeenCalledWith(
+      1200,
+      expect.objectContaining({ label: "kody:reviewing" }),
+      "/tmp",
+    )
+  })
+
+  it("no-PR success path → does not stamp kody:reviewing", async () => {
+    const ctx = makeCtx({
+      issue: 1155,
+      target: "issue",
+      targetNumber: 1155,
+      commitResult: { committed: false },
+      hasCommitsAhead: false,
+      agentDone: true,
     })
     await postIssueComment(ctx, profile, null)
     expect(vi.mocked(setKodyLabel)).not.toHaveBeenCalled()
