@@ -608,6 +608,7 @@ describe("runJob (Phase 1 seam)", () => {
 
       expect(result).toMatchObject({ exitCode: 0 })
       expect(runExecutableChain).toHaveBeenCalledTimes(3)
+      expect(runExecutableChain.mock.calls[1]![1].preloadedData?.workflowContinueOn).toEqual(["REVIEW_FAIL"])
       expect(runExecutableChain.mock.calls[2]![0]).toBe("fix")
     } finally {
       process.chdir(originalCwd)

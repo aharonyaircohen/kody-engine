@@ -46,25 +46,18 @@ export const postIssueComment: PostflightScript = async (ctx, profile) => {
       return
     }
     const reason = specific
-    // When this primitive is running as a container child, the parent's
-    // `next` routing table — not the child — owns the terminal status.
-    // Posting a ⚠️ "kody FAILED" comment here misleads users watching the
-    // issue thread (A-Guy #1568: reproduce returned REPRODUCE_FAILED, which
-    // the bug container is designed to route forward to plan; the alarming
-    // comment + kody:failed label made the in-progress flow look dead).
-    // Container children emit a softer informational comment and leave the
-    // terminal label/comment to the container's `finishFlow` postflight.
-    const containerParent = process.env.KODY_CONTAINER_PARENT
-    if (containerParent) {
+    // When this primitive is running as a child that the parent explicitly
+    // continues from, the parent owns the terminal status. Emit a softer
+    // informational comment so the issue thread shows progress, not a dead
+    // task, while preserving the child's non-zero exit for routing.
+    const continuableParent = continuableParentLabel(ctx)
+    if (continuableParent) {
       postWith(
         targetType,
         targetNumber,
-        `ℹ️ kody ${profile.name}: ${truncate(reason, 1200)} — ${containerParent} container will route to the next stage`,
+        `ℹ️ kody ${profile.name}: ${truncate(reason, 1200)} — ${continuableParent} will route to the next stage`,
         ctx.cwd,
       )
-      // Still report a non-zero exit so the container's action-type fallback
-      // synthesises <EXEC>_FAILED when the child didn't write a fresh state
-      // action. Routing logic stays unchanged.
       ctx.output.exitCode = 3
       ctx.output.reason = reason
       return
@@ -241,6 +234,29 @@ function actionFailureReason(action: unknown): string {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return ""
   const reason = (payload as { reason?: unknown }).reason
   return typeof reason === "string" ? reason : ""
+}
+
+function actionType(action: unknown): string {
+  if (!action || typeof action !== "object" || Array.isArray(action)) return ""
+  const type = (action as { type?: unknown }).type
+  return typeof type === "string" ? type : ""
+}
+
+function continuableParentLabel(ctx: Context): string {
+  const workflowCapability =
+    typeof ctx.data.workflowCapability === "string" && ctx.data.workflowCapability.trim()
+      ? ctx.data.workflowCapability.trim()
+      : ""
+  const workflowContinueOn = Array.isArray(ctx.data.workflowContinueOn)
+    ? ctx.data.workflowContinueOn.filter((entry): entry is string => typeof entry === "string")
+    : []
+  const currentActionType = actionType(ctx.data.action)
+  if (workflowCapability && currentActionType && workflowContinueOn.includes(currentActionType)) {
+    return `${workflowCapability} workflow`
+  }
+
+  const containerParent = process.env.KODY_CONTAINER_PARENT
+  return containerParent ? `${containerParent} container` : ""
 }
 
 function postWith(type: "issue" | "pr", n: number, body: string, cwd?: string): void {

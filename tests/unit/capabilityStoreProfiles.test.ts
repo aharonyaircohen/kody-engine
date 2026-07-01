@@ -132,7 +132,7 @@ describe("kody-store capability profiles", () => {
     }
 
     expect(resolveCapabilityFolder("bug")?.config.workflow?.steps).toMatchObject([
-      { capability: "reproduce", target: "issue" },
+      { capability: "reproduce", target: "issue", continueOn: ["REPRODUCE_FAILED"] },
       { capability: "plan", target: "issue" },
       { capability: "run", target: "issue" },
       { capability: "review", target: "pr", continueOn: ["REVIEW_FAIL"] },

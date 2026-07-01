@@ -336,6 +336,7 @@ async function runCapabilityWorkflow(
         workflowStep: label,
         workflowStepIndex: index + 1,
         workflowStepReason: step.reason,
+        workflowContinueOn: step.continueOn ?? [],
       },
     })
     const outcome = workflowOutcome(result)
