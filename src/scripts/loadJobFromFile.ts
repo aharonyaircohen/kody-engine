@@ -38,9 +38,9 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { PreflightScript } from "../executables/types.js"
-import { CAPABILITY_MCP_TOOL_NAMES } from "../capabilityMcp.js"
 import { resolveAgentFile } from "../agents.js"
+import { CAPABILITY_MCP_TOOL_NAMES } from "../capabilityMcp.js"
+import type { PreflightScript } from "../executables/types.js"
 import { resolveCapabilityFolder } from "../registry.js"
 import { resolveBackend } from "./jobState/index.js"
 
@@ -57,9 +57,7 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
 
   const capability = resolveCapabilityFolder(slug, path.join(ctx.cwd, jobsDir))
   if (!capability) {
-    throw new Error(
-      `loadJobFromFile: capability folder not found or incomplete: ${path.join(ctx.cwd, jobsDir, slug)}`,
-    )
+    throw new Error(`loadJobFromFile: capability folder not found or incomplete: ${path.join(ctx.cwd, jobsDir, slug)}`)
   }
   const { title, body, config } = capability
 
@@ -107,9 +105,7 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
   // as plain comments (e.g. the QA capabilities) need this — the engine only
   // auto-stamps recs sent via the `recommend_to_operator` tool. The dashboard
   // reads the stamp to key trust per capability instead of per agent.
-  ctx.data.jobIntent = body
-    .replace(/\{\{\s*mentions\s*\}\}/g, mentions)
-    .replace(/\{\{\s*capability\s*\}\}/g, slug)
+  ctx.data.jobIntent = body.replace(/\{\{\s*mentions\s*\}\}/g, mentions).replace(/\{\{\s*capability\s*\}\}/g, slug)
   ctx.data.jobState = loaded
   ctx.data.jobStateJson = JSON.stringify(loaded.state, null, 2)
   ctx.data.agentSlug = agentSlug
@@ -131,10 +127,11 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
   ctx.data.executableSlug = profile.name
   ctx.data.capabilitySchedule = String(ctx.data.jobSchedule ?? "")
 
-  // Locked-toolbox mode (`tools` in profile.json). When declared, the capability body
-  // is pure intent — the LLM picks tools by name from the kody-capability palette
-  // and never sees Bash/Read/gh. This closes the long-running bug class where
-  // capability scripts post `@kody <verb>` comments the engine then silently drops.
+  // Capability MCP tools (`tools` / `capabilityTools` in profile.json). Default
+  // `lock` mode is pure intent — the LLM picks tools by name from the
+  // kody-capability palette and never sees Bash/Read/gh. `append` mode keeps the
+  // normal toolbox and adds selected engine primitives for coordinator jobs that
+  // still own repo-state shell edits.
   //
   // Mutate the profile in place so the executor's runAgent invocation picks up
   // the locked allowedTools + mcpServer flag without needing a side-channel.
@@ -147,16 +144,22 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
           `Available: ${[...CAPABILITY_MCP_TOOL_NAMES].join(", ")}`,
       )
     }
-    // Revoke shell + Read; keep submit_state (state persistence). The LLM can
-    // now only call mcp__kody-capability__<tool> + mcp__kody-submit__submit_state.
     const mcpToolNames = declaredTools.map((name: string) => `mcp__kody-capability__${name}`)
-    profile.claudeCode.tools = [...mcpToolNames, "mcp__kody-submit__submit_state"]
+    const mode = config.capabilityToolMode ?? "lock"
+    if (mode === "append") {
+      profile.claudeCode.tools = [...new Set([...(profile.claudeCode.tools ?? []), ...mcpToolNames])]
+    } else {
+      // Revoke shell + Read; keep submit_state (state persistence). The LLM can
+      // now only call mcp__kody-capability__<tool> + mcp__kody-submit__submit_state.
+      profile.claudeCode.tools = [...mcpToolNames, "mcp__kody-submit__submit_state"]
+      // Switch the prompt template: composePrompt picks `prompts/<mode>.md` when
+      // ctx.data.promptTemplate is set. The locked template assumes no shell —
+      // its instructions reference the capability MCP tools by name, not `gh`.
+      ctx.data.promptTemplate = "prompts/locked.md"
+    }
     ctx.data.capabilityTools = declaredTools
+    ctx.data.capabilityToolMode = mode
     ctx.data.capabilityOperatorMention = mentions
-    // Switch the prompt template: composePrompt picks `prompts/<mode>.md` when
-    // ctx.data.promptTemplate is set. The locked template assumes no shell —
-    // its instructions reference the capability MCP tools by name, not `gh`.
-    ctx.data.promptTemplate = "prompts/locked.md"
     // Render the tool palette as a tight, bulletable list for the prompt.
     ctx.data.capabilityToolsList = declaredTools.map((name: string) => `- \`${name}\``).join("\n")
   }

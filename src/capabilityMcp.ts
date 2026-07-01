@@ -484,6 +484,15 @@ export function dispatchWorkflow(
   }
 }
 
+export function startCapability(
+  workflowFile: string,
+  name: string,
+  issue: number,
+  repoSlug?: string,
+): { ok: true } | { ok: false; error: string } {
+  return dispatchWorkflow(workflowFile, name, issue, repoSlug)
+}
+
 function expectedDispatchTarget(capability: string): "issue" | "pr" | null {
   const route = resolveCapabilityAction(capability)
   if (!route) return null
@@ -714,10 +723,36 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     },
   }
 
+  const startCapabilityTool: CapabilityToolDefinition = {
+    name: "start_capability",
+    description:
+      "Start a known Kody capability on an issue or PR through workflow_dispatch. Use this instead of shelling out to `gh workflow run` or posting bot-authored `@kody` command comments. E.g. start_capability({name:'qa-engineer', issue:<n>}). Returns {ok} or {ok:false,error}.",
+    inputSchema: {
+      name: z.string().min(1).describe("Capability action to start (e.g. 'qa-engineer', 'run', 'sync')."),
+      issue: z.number().int().positive().optional().describe("Issue or PR number forwarded as issue_number."),
+      issueNumber: z.number().int().positive().optional().describe("Deprecated alias for issue."),
+    },
+    handler: async (args) => {
+      const name = String(args.name ?? "")
+      const issue = Number(args.issue ?? args.issueNumber)
+      if (!Number.isFinite(issue) || issue <= 0) {
+        return { content: [{ type: "text", text: "Start failed: `issue` is required and must be a positive number." }] }
+      }
+      if (isDispatchGated(name, readCapabilityTrustMode(opts.state, opts.repoSlug, opts.capabilitySlug))) {
+        return { content: [{ type: "text", text: trustRefusal(opts.capabilitySlug) }] }
+      }
+      const result = startCapability(workflowFile, name, issue, opts.repoSlug)
+      const text = result.ok
+        ? `Started capability \`${name}\` on #${issue} via workflow_dispatch.`
+        : `Start failed for capability \`${name}\` on #${issue}: ${result.error}`
+      return { content: [{ type: "text", text }] }
+    },
+  }
+
   const dispatchTool: CapabilityToolDefinition = {
     name: "dispatch_workflow",
     description:
-      "Dispatch a kody.yml workflow_dispatch run for a capability action against an issue (the cross-run bot→engine path; a bot `@kody` comment would be dropped). E.g. dispatch_workflow({capability:'run', issueNumber:<n>}) opens a fix PR from a tracking issue. Returns {ok} or {ok:false,error}.",
+      "Legacy alias for start_capability. Dispatches a kody.yml workflow_dispatch run for a capability action against an issue. Prefer start_capability({name:'run', issue:<n>}). Returns {ok} or {ok:false,error}.",
     inputSchema: {
       capability: z.string().min(1).optional().describe("Capability action to run (e.g. 'run')."),
       executable: z.string().min(1).optional().describe("Deprecated alias for capability."),
@@ -729,7 +764,7 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
       if (isDispatchGated(capability, readCapabilityTrustMode(opts.state, opts.repoSlug, opts.capabilitySlug))) {
         return { content: [{ type: "text", text: trustRefusal(opts.capabilitySlug) }] }
       }
-      const result = dispatchWorkflow(workflowFile, capability, issueNumber, opts.repoSlug)
+      const result = startCapability(workflowFile, capability, issueNumber, opts.repoSlug)
       const text = result.ok
         ? `Dispatched capability \`${capability}\` on #${issueNumber} via workflow_dispatch.`
         : `Dispatch failed for capability \`${capability}\` on #${issueNumber}: ${result.error}`
@@ -753,6 +788,7 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     readThreadTool,
     ensureIssueTool,
     ensureCommentTool,
+    startCapabilityTool,
     dispatchTool,
     ...cmsTools,
   ]
@@ -793,6 +829,7 @@ export const CAPABILITY_MCP_TOOL_NAMES = [
   "read_thread",
   "ensure_issue",
   "ensure_comment",
+  "start_capability",
   "dispatch_workflow",
   ...DASHBOARD_CMS_MCP_TOOL_NAMES,
 ] as const

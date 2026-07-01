@@ -12,6 +12,7 @@ import {
   ensureComment,
   ensureIssue,
   readCheckRuns,
+  startCapability,
 } from "../../src/capabilityMcp.js"
 import { gh } from "../../src/issue.js"
 
@@ -253,6 +254,52 @@ describe("dispatchWorkflow — target kind guard", () => {
       error: "refusing to dispatch sync on issue #373; expected a PR target",
     })
     expect(vi.mocked(gh).mock.calls.some((c) => (c[0] as string[]).includes("workflow"))).toBe(false)
+  })
+})
+
+describe("start_capability — public dispatch primitive", () => {
+  it("starts a capability through workflow_dispatch", () => {
+    vi.mocked(gh).mockImplementation((args: string[]) => {
+      if (args[0] === "workflow" && args[1] === "run") return ""
+      throw new Error(`unexpected gh call: ${args.join(" ")}`)
+    })
+
+    expect(startCapability("kody.yml", "qa-engineer", 687)).toEqual({ ok: true })
+    expect(vi.mocked(gh).mock.calls.map((c) => c[0] as string[])).toContainEqual([
+      "workflow",
+      "run",
+      "kody.yml",
+      "-f",
+      "capability=qa-engineer",
+      "-f",
+      "issue_number=687",
+    ])
+  })
+
+  it("exposes start_capability as the preferred MCP tool", async () => {
+    vi.mocked(gh).mockImplementation((args: string[]) => {
+      if (args[0] === "workflow" && args[1] === "run") return ""
+      throw new Error(`unexpected gh call: ${args.join(" ")}`)
+    })
+    const tool = capabilityToolDefinitions({
+      repoSlug: REPO,
+      operatorMention: "@operator",
+      capabilitySlug: "qa",
+    }).find((t) => t.name === "start_capability")
+    if (!tool) throw new Error("start_capability tool missing")
+
+    const result = await tool.handler({ name: "qa-engineer", issue: 687 })
+
+    expect(result.content[0]?.text).toBe("Started capability `qa-engineer` on #687 via workflow_dispatch.")
+    expect(vi.mocked(gh).mock.calls.map((c) => c[0] as string[])).toContainEqual([
+      "workflow",
+      "run",
+      "kody.yml",
+      "-f",
+      "capability=qa-engineer",
+      "-f",
+      "issue_number=687",
+    ])
   })
 })
 

@@ -23,8 +23,8 @@
  * run with no memory — the same one capability shape, statefulness opted in by config.
  */
 
-import type { PreflightScript } from "../executables/types.js"
 import { CAPABILITY_MCP_TOOL_NAMES } from "../capabilityMcp.js"
+import type { PreflightScript } from "../executables/types.js"
 import { resolveBackend } from "./jobState/index.js"
 
 const CAPABILITY_TOOL_PALETTE: ReadonlySet<string> = new Set(CAPABILITY_MCP_TOOL_NAMES)
@@ -58,10 +58,10 @@ export const loadCapabilityState: PreflightScript = async (ctx, profile, args) =
   const mentions = (profile.mentions ?? []).map((l) => `@${l}`).join(" ")
   ctx.data.mentions = mentions
 
-  // Locked-toolbox: a non-empty capabilityTools palette flips the executor's
-  // enableCapabilityTool, so the agent runs against the in-process kody-capability MCP
-  // server. capabilityToolsList feeds a prompt token; capabilityOperatorMention feeds the
-  // MCP server's operator handle.
+  // Capability MCP tools: default `lock` mode replaces the normal toolbox; `append`
+  // mode keeps the normal toolbox and adds the declared MCP tools. Append is for
+  // coordinator capabilities that still need repo-state shell operations but must
+  // use engine primitives for narrow side effects such as dispatch.
   const declaredTools = profile.capabilityTools ?? profile.capabilityTools ?? []
   if (declaredTools.length > 0) {
     const unknown = declaredTools.filter((name) => !CAPABILITY_TOOL_PALETTE.has(name))
@@ -71,13 +71,19 @@ export const loadCapabilityState: PreflightScript = async (ctx, profile, args) =
           `Available: ${[...CAPABILITY_MCP_TOOL_NAMES].join(", ")}`,
       )
     }
+    const mode = profile.capabilityToolMode ?? "lock"
     ctx.data.capabilityTools = declaredTools
+    ctx.data.capabilityToolMode = mode
     ctx.data.capabilityToolsList = declaredTools.map((name) => `- \`${name}\``).join("\n")
     ctx.data.capabilityOperatorMention = mentions
+    const mcpToolNames = declaredTools.map((name) => `mcp__kody-capability__${name}`)
+    if (mode === "append") {
+      profile.claudeCode.tools = [...new Set([...(profile.claudeCode.tools ?? []), ...mcpToolNames])]
+      return
+    }
     // Lock the toolbox: rewrite allowedTools to the capability MCP palette (+ submit),
     // revoking Bash/Read — mirrors loadJobFromFile. Without this the SDK blocks
     // the mcp__kody-capability__* calls for permission and the agent stalls.
-    const mcpToolNames = declaredTools.map((name) => `mcp__kody-capability__${name}`)
     profile.claudeCode.tools = [...mcpToolNames, "mcp__kody-submit__submit_state"]
     // The submit tool is in the allowed list, so its MCP server MUST exist —
     // the executor only spins it up when enableSubmitTool is true. Force it on

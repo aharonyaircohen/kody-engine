@@ -16,6 +16,7 @@ export interface CapabilityFolderConfig {
   mentions?: string[]
   tools?: string[]
   capabilityTools?: string[]
+  capabilityToolMode?: "lock" | "append"
   implementations?: string[]
   executables?: string[]
   role?: string
@@ -115,6 +116,7 @@ export function parseCapabilityConfig(raw: Record<string, unknown>): CapabilityF
     mentions: stringList(raw.mentions).map((m) => m.replace(/^@/, "")),
     tools,
     capabilityTools: tools,
+    capabilityToolMode: parseCapabilityToolMode(raw.capabilityToolMode),
     implementations,
     executables: stringList(raw.executables),
     role: stringField(raw.role),
@@ -124,6 +126,12 @@ export function parseCapabilityConfig(raw: Record<string, unknown>): CapabilityF
     writesTo: stringList(raw.writesTo ?? raw.writes_to),
     workflow: parseWorkflow(raw.workflow),
   }
+}
+
+function parseCapabilityToolMode(raw: unknown): "lock" | "append" | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined
+  if (raw === "lock" || raw === "append") return raw
+  return undefined
 }
 
 export function parseCapabilityBody(raw: string, slug: string): { title: string; body: string } {

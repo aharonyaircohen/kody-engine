@@ -79,6 +79,26 @@ describe("profile: loadProfile", () => {
     expect(loadProfile(p).capabilityTools).toEqual(["read_check_runs", "ensure_issue"])
   })
 
+  it("parses capabilityToolMode append", () => {
+    const dir = tmpDir()
+    const p = writeProfile(dir, {
+      ...VALID_MIN,
+      capabilityTools: ["start_capability"],
+      capabilityToolMode: "append",
+    })
+    expect(loadProfile(p).capabilityToolMode).toBe("append")
+  })
+
+  it("rejects invalid capabilityToolMode values", () => {
+    const dir = tmpDir()
+    const p = writeProfile(dir, {
+      ...VALID_MIN,
+      capabilityTools: ["start_capability"],
+      capabilityToolMode: "mixed",
+    })
+    expect(() => loadProfile(p)).toThrow(/capabilityToolMode/)
+  })
+
   it("rejects writeJobStateFile postflight without a state loader preflight", () => {
     const dir = tmpDir()
     const p = writeProfile(dir, {

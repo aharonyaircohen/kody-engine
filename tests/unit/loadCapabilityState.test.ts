@@ -2,8 +2,8 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import type { Context, Profile } from "../../src/executables/types.js"
 import type { KodyConfig } from "../../src/config.js"
+import type { Context, Profile } from "../../src/executables/types.js"
 import { loadCapabilityState } from "../../src/scripts/loadCapabilityState.js"
 
 let tmp: string
@@ -58,10 +58,7 @@ describe("loadCapabilityState", () => {
 
   it("locks the toolbox + forces enableSubmitTool when capabilityTools declared", async () => {
     const ctx = ctxFor()
-    const profile = profileFor(
-      {},
-      { capabilityTools: ["read_check_runs", "ensure_issue"], mentions: ["alice"] },
-    )
+    const profile = profileFor({}, { capabilityTools: ["read_check_runs", "ensure_issue"], mentions: ["alice"] })
     await loadCapabilityState(ctx, profile, {})
     expect(profile.claudeCode.tools).toEqual([
       "mcp__kody-capability__read_check_runs",
@@ -71,6 +68,24 @@ describe("loadCapabilityState", () => {
     expect(profile.claudeCode.enableSubmitTool).toBe(true)
     expect(ctx.data.capabilityTools).toEqual(["read_check_runs", "ensure_issue"])
     expect(ctx.data.mentions).toBe("@alice")
+    expect(ctx.data.capabilityOperatorMention).toBe("@alice")
+  })
+
+  it("append mode keeps shell tools and adds declared capability MCP tools", async () => {
+    const ctx = ctxFor()
+    const profile = profileFor(
+      { tools: ["Bash", "Read"], enableSubmitTool: false },
+      {
+        capabilityTools: ["start_capability"],
+        capabilityToolMode: "append",
+        mentions: ["alice"],
+      },
+    )
+    await loadCapabilityState(ctx, profile, {})
+    expect(profile.claudeCode.tools).toEqual(["Bash", "Read", "mcp__kody-capability__start_capability"])
+    expect(profile.claudeCode.enableSubmitTool).toBe(false)
+    expect(ctx.data.capabilityTools).toEqual(["start_capability"])
+    expect(ctx.data.capabilityToolMode).toBe("append")
     expect(ctx.data.capabilityOperatorMention).toBe("@alice")
   })
 

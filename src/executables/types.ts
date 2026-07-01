@@ -76,13 +76,20 @@ export interface Profile {
    */
   kind: "oneshot" | "scheduled"
   /**
-   * Locked-toolbox palette (unified successor to a markdown capability's `tools:`
+   * Capability MCP palette (unified successor to a markdown capability's `tools:`
    * metadata). When non-empty, loadCapabilityState sets ctx.data.capabilityTools so the
-   * executor spins up the in-process kody-capability MCP server and the agent runs
-   * MCP-only (Bash/Read revoked unless also in claudeCode.tools). Absent →
-   * normal SDK tools.
+   * executor spins up the in-process kody-capability MCP server. By default this
+   * is locked mode: Bash/Read are revoked and only the declared MCP tools plus
+   * submit_state remain.
    */
   capabilityTools?: string[]
+  /**
+   * `lock` (default) replaces the normal toolbox with capability MCP tools.
+   * `append` keeps the normal toolbox and adds the declared MCP tools. Use append
+   * only for coordinator capabilities that still own repo state edits but must use
+   * an engine primitive for a narrow side effect such as starting another capability.
+   */
+  capabilityToolMode?: "lock" | "append"
   /**
    * GitHub logins (no leading `@`) this capability's output should mention. Rendered
    * to `@a @b` and exposed to the prompt as {{mentions}} (and as the capability-MCP
