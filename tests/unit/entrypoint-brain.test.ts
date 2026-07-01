@@ -57,6 +57,13 @@ describe("entrypoint-brain.sh: Hermes config sanity", () => {
     expect(entrypoint).toMatch(/protocol.*openai|openai.*protocol/s)
   })
 
+  it("pre-warms LiteLLM with the exact MODEL fallback when Dashboard model config is absent", () => {
+    expect(entrypoint).toMatch(/modelProvider="\$[{]MODEL%%\/[*][}]"/)
+    expect(entrypoint).toMatch(/modelNameFromSpec="\$[{]MODEL#[*]\/[}]"/)
+    expect(entrypoint).toMatch(/model_name: "\$[{]modelNameFromSpec[}]"/)
+    expect(entrypoint).toMatch(/model: "\$[{]modelProvider[}]\/\$[{]modelNameFromSpec[}]"/)
+  })
+
   it("restores Claude Code subscription auth from the encrypted vault bundle", () => {
     expect(entrypoint).toContain("CLAUDE_CODE_AUTH_B64")
     expect(entrypoint).toContain("restore_claude_code_auth")

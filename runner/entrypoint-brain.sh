@@ -224,6 +224,37 @@ EOF
   fi
 
   if [ "$providersAdded" -eq 0 ]; then
+  if [ -n "${MODEL:-}" ]; then
+    modelProvider="${MODEL%%/*}"
+    modelNameFromSpec="${MODEL#*/}"
+    if [ "$modelProvider" != "$MODEL" ] && [ -n "$modelProvider" ] && [ -n "$modelNameFromSpec" ]; then
+      modelApiKeyVar=""
+      for entry in $LITELLM_PROVIDERS; do
+        provider="${entry%:*}"
+        apiKeyVar="${entry#*:}"
+        if [ "$provider" = "$modelProvider" ]; then
+          modelApiKeyVar="$apiKeyVar"
+          break
+        fi
+      done
+      if [ -n "$modelApiKeyVar" ]; then
+        apiKey="$(printf '%s' "$ALL_SECRETS" | jq -r --arg k "$modelApiKeyVar" '.[$k] // empty' 2>/dev/null || true)"
+        if [ -n "$apiKey" ]; then
+          export "$modelApiKeyVar=$apiKey"
+          cat >>"$cfg" <<EOF
+  - model_name: "${modelNameFromSpec}"
+    litellm_params:
+      model: "${modelProvider}/${modelNameFromSpec}"
+      api_key: os.environ/${modelApiKeyVar}
+EOF
+          providersAdded=1
+        fi
+      fi
+    fi
+  fi
+  fi
+
+  if [ "$providersAdded" -eq 0 ]; then
   for entry in $LITELLM_PROVIDERS; do
     provider="${entry%:*}"
     apiKeyVar="${entry#*:}"
