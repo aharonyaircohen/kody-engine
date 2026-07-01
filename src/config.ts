@@ -235,7 +235,7 @@ export const LITELLM_DEFAULT_URL = `http://localhost:${LITELLM_DEFAULT_PORT}`
 export function parseProviderModel(s: string): ProviderModel {
   const slash = s.indexOf("/")
   if (slash <= 0 || slash === s.length - 1) {
-    throw new Error(`Invalid model spec '${s}' — expected 'provider/model' (e.g. 'minimax/MiniMax-M2.7-highspeed')`)
+    throw new Error(`Invalid model spec '${s}' — expected 'provider/model' (e.g. 'minimax/MiniMax-M3')`)
   }
   return { provider: s.slice(0, slash), model: s.slice(slash + 1) }
 }
@@ -314,7 +314,7 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
   const agent = recordValue(raw.agent) ?? {}
 
   if (!agent.model || typeof agent.model !== "string") {
-    throw new Error(`kody.config.json: agent.model is required (e.g. "minimax/MiniMax-M2.7-highspeed")`)
+    throw new Error(`kody.config.json: agent.model is required (e.g. "minimax/MiniMax-M3")`)
   }
   if (!github.owner || !github.repo) {
     throw new Error(`kody.config.json: github.owner and github.repo are required`)

@@ -43,10 +43,10 @@ describe("litellm: generateLitellmConfigYaml", () => {
   beforeEach(() => mockExec.mockReset())
 
   it("emits a model_list with provider/model and api_key env var", () => {
-    const yaml = generateLitellmConfigYaml({ provider: "minimax", model: "MiniMax-M2.7-highspeed" })
+    const yaml = generateLitellmConfigYaml({ provider: "minimax", model: "MiniMax-M3" })
     expect(yaml).toMatch(/model_list:/)
-    expect(yaml).toMatch(/model_name: MiniMax-M2\.7-highspeed/)
-    expect(yaml).toMatch(/model: minimax\/MiniMax-M2\.7-highspeed/)
+    expect(yaml).toMatch(/model_name: MiniMax-M3/)
+    expect(yaml).toMatch(/model: minimax\/MiniMax-M3/)
     expect(yaml).toMatch(/api_key: os\.environ\/MINIMAX_API_KEY/)
   })
 

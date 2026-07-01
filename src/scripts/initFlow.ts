@@ -79,7 +79,7 @@ function makeConfig(pm: PackageManager, ownerRepo: OwnerRepo | null, defaultBran
       repo: ownerRepo?.repo ?? "REPO",
     },
     agent: {
-      model: "minimax/MiniMax-M2.7-highspeed",
+      model: "minimax/MiniMax-M3",
     },
   }
 }

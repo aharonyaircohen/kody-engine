@@ -24,7 +24,7 @@ cd /workspace
 if [ ! -f /workspace/kody.config.json ]; then
   cat > /workspace/kody.config.json <<'EOF'
 {
-  "agent": { "model": "minimax/MiniMax-M2.7-highspeed" },
+  "agent": { "model": "minimax/MiniMax-M3" },
   "github": { "owner": "kody-ade", "repo": "pool" }
 }
 EOF

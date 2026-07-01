@@ -20,9 +20,9 @@ function writeConfig(dir: string, contents: unknown): void {
 
 describe("config: parseProviderModel", () => {
   it("parses 'provider/model' correctly", () => {
-    expect(parseProviderModel("minimax/MiniMax-M2.7-highspeed")).toEqual({
+    expect(parseProviderModel("minimax/MiniMax-M3")).toEqual({
       provider: "minimax",
-      model: "MiniMax-M2.7-highspeed",
+      model: "MiniMax-M3",
     })
   })
 
