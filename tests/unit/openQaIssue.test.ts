@@ -90,7 +90,11 @@ describe("openQaIssue: comment on an existing issue", () => {
     await openQaIssue(ctx, profile, makeAgent(PASS))
 
     expect(mocks.postIssueComment).toHaveBeenCalledWith(7, PASS, "/repo")
-    expect(mocks.gh).not.toHaveBeenCalled()
+    expect(mocks.gh).toHaveBeenCalledWith(
+      ["label", "create", "kody:qa-report", "--color", "8b5cf6", "--description", "kody: QA report", "--force"],
+      { cwd: "/repo" },
+    )
+    expect(mocks.gh).toHaveBeenCalledWith(["issue", "edit", "7", "--add-label", "kody:qa-report"], { cwd: "/repo" })
     expect(ctx.data.qaVerdict).toBe("PASS")
     expect(ctx.data.qaReport).toBe(PASS)
     expect(ctx.output.exitCode).toBe(0)

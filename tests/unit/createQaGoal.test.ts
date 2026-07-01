@@ -1,5 +1,37 @@
-import { describe, expect, it } from "vitest"
-import { parseManifestBody, serializeManifestBody, splitReport } from "../../src/scripts/createQaGoal.js"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
+const mocks = vi.hoisted(() => ({
+  gh: vi.fn(),
+  postIssueComment: vi.fn(),
+}))
+
+vi.mock("../../src/issue.js", async (orig) => {
+  const actual = (await orig()) as typeof import("../../src/issue.js")
+  return { ...actual, gh: mocks.gh, postIssueComment: mocks.postIssueComment }
+})
+
+import type { AgentResult } from "../../src/agent.js"
+import type { Context, Profile } from "../../src/executables/types.js"
+import { createQaGoal, parseManifestBody, serializeManifestBody, splitReport } from "../../src/scripts/createQaGoal.js"
+
+function makeCtx(args: Record<string, unknown>): Context {
+  return {
+    args,
+    cwd: "/repo",
+    config: { github: { owner: "acme", repo: "widget" } } as never,
+    data: {},
+    output: { exitCode: 0 },
+  } as Context
+}
+
+function makeAgent(finalText: string): AgentResult {
+  return { outcome: "completed", finalText, ndjsonPath: "/tmp/x.jsonl" } as AgentResult
+}
+
+beforeEach(() => {
+  mocks.gh.mockReset()
+  mocks.postIssueComment.mockReset()
+})
 
 describe("createQaGoal: splitReport", () => {
   it("returns the markdown without a JSON block", () => {
@@ -167,5 +199,22 @@ describe("createQaGoal: manifest body roundtrip", () => {
   it("returns an empty manifest for malformed JSON inside the block", () => {
     const broken = `<!-- kody-goals-start -->\n\n\`\`\`json\n{not valid\n\`\`\`\n\n<!-- kody-goals-end -->`
     expect(parseManifestBody(broken).goals).toHaveLength(0)
+  })
+})
+
+describe("createQaGoal: existing tracking issue", () => {
+  it("posts the report and marks the issue with kody:qa-report", async () => {
+    const ctx = makeCtx({ issue: 687 })
+
+    await createQaGoal(ctx, {} as Profile, makeAgent("## Verdict: PASS\n\nNo findings."))
+
+    expect(mocks.postIssueComment).toHaveBeenCalledWith(687, "## Verdict: PASS\n\nNo findings.", "/repo")
+    expect(mocks.gh).toHaveBeenCalledWith(
+      ["label", "create", "kody:qa-report", "--color", "8b5cf6", "--description", "kody: QA report", "--force"],
+      { cwd: "/repo" },
+    )
+    expect(mocks.gh).toHaveBeenCalledWith(["issue", "edit", "687", "--add-label", "kody:qa-report"], { cwd: "/repo" })
+    expect(ctx.output.exitCode).toBe(0)
+    expect((ctx.data.action as { type: string }).type).toBe("QA_PASS")
   })
 })

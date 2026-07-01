@@ -63,6 +63,14 @@ function ensureLabel(cwd: string): boolean {
   }
 }
 
+function markIssueWithReportLabel(issue: number, cwd: string): void {
+  if (!ensureLabel(cwd)) return
+  try {
+    gh(["issue", "edit", String(issue), "--add-label", QA_LABEL], { cwd })
+  } catch {
+  }
+}
+
 function createQaIssue(title: string, body: string, hasLabel: boolean, cwd: string): { number: number; url: string } {
   const args = ["issue", "create", "--title", title, "--body-file", "-"]
   if (hasLabel) args.push("--label", QA_LABEL)
@@ -107,6 +115,7 @@ export const openQaIssue: PostflightScript = async (ctx, _profile, agentResult: 
   if (typeof existingIssue === "number" && Number.isFinite(existingIssue) && existingIssue > 0) {
     try {
       postIssueComment(existingIssue, reportBody, ctx.cwd)
+      markIssueWithReportLabel(existingIssue, ctx.cwd)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       ctx.output.exitCode = 4

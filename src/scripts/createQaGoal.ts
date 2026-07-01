@@ -39,6 +39,7 @@ const MANIFEST_TITLE = "Kody Goals Manifest"
 const MANIFEST_START = "<!-- kody-goals-start -->"
 const MANIFEST_END = "<!-- kody-goals-end -->"
 const FINDING_LABEL = "kody:qa-finding"
+const QA_REPORT_LABEL = "kody:qa-report"
 const REPORT_JSON_OPEN = "<!-- KODY_QA_REPORT_JSON"
 const REPORT_JSON_CLOSE = "-->"
 
@@ -463,6 +464,11 @@ export const createQaGoal: PostflightScript = async (ctx, _profile, agentResult:
       ctx.output.reason = `failed to comment on issue #${existingIssue}: ${msg}`
       ctx.data.action = failedAction(ctx.output.reason)
       return
+    }
+    try {
+      ensureLabel(QA_REPORT_LABEL, "8b5cf6", "kody: QA report", ctx.cwd)
+      gh(["issue", "edit", String(existingIssue), "--add-label", QA_REPORT_LABEL], { cwd: ctx.cwd })
+    } catch {
     }
     process.stdout.write(
       `\nQA_REPORT_POSTED=https://github.com/${ctx.config.github.owner}/${ctx.config.github.repo}/issues/${existingIssue} (verdict: ${verdict})\n`,
