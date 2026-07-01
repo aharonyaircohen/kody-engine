@@ -328,6 +328,44 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("runs an action-only workflow capability without treating the action as an executable", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-action-workflow-job-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "feature", {
+        name: "feature",
+        action: "feature",
+        workflow: {
+          steps: [{ capability: "run", reason: "implement the feature" }],
+        },
+      })
+      process.chdir(cwd)
+
+      await runJob(
+        {
+          action: "feature",
+          cliArgs: { issue: 42 },
+          target: 42,
+          flavor: "instant",
+        },
+        { cwd },
+      )
+
+      expect(runExecutableChain).toHaveBeenCalledTimes(1)
+      expect(runExecutableChain.mock.calls[0]![0]).toBe("run")
+      expect(runExecutableChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42 })
+      expect(runExecutableChain.mock.calls[0]![1].preloadedData).toMatchObject({
+        workflowCapability: "feature",
+        workflowStep: "run",
+        jobCapability: "run",
+        jobExecutable: "run",
+      })
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it("runs a stored workflow definition as ordered child capability jobs", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-definition-job-"))
     const originalCwd = process.cwd()

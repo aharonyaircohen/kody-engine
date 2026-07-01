@@ -320,6 +320,7 @@ function listFolderCapabilityActions(
     if (capability.config.internal === true || capability.config.public === false) continue
     const action = capability.config.action ?? slug
     const { executable, cliArgs } = resolveCapabilityExecution(capability)
+    if (hasUnresolvedExplicitImplementation(capability, executable)) continue
     out.push({
       action,
       capability: slug,
@@ -332,6 +333,18 @@ function listFolderCapabilityActions(
     })
   }
   return out.sort((a, b) => a.action.localeCompare(b.action))
+}
+
+function hasUnresolvedExplicitImplementation(capability: CapabilityFolder, executable: string): boolean {
+  const config = capability.config
+  const hasExplicitImplementation =
+    Boolean(config.implementation || config.executable) ||
+    (config.implementations?.length ?? 0) > 0 ||
+    (config.executables?.length ?? 0) > 0
+  if (!hasExplicitImplementation) return false
+  if (config.workflow?.steps.length) return false
+  if (config.role && PUBLIC_EXECUTABLE_ROLES.has(config.role)) return false
+  return resolveExecutable(executable) === null
 }
 
 function listBuiltinCapabilityActions(root: string = getBuiltinCapabilitiesRoot()): DiscoveredCapabilityAction[] {

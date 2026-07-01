@@ -1,6 +1,6 @@
 {
   "name": "@kody-ade/kody-engine",
-  "version": "0.4.293",
+  "version": "0.4.294",
   "description": "kody — autonomous development engine. Single-session Claude Code agent behind a generic executor + declarative executable profiles.",
   "license": "MIT",
   "type": "module",
@@ -30,8 +30,9 @@
     "lint": "biome check",
     "lint:fix": "biome check --write",
     "format": "biome format --write",
+    "verify:package": "node scripts/verify-package-tarball.cjs",
     "brain:publish": "docker buildx build --platform linux/amd64 -f runner/Dockerfile.brain -t ghcr.io/${KODY_BRAIN_GHCR_OWNER:-aharonyaircohen}/kody-brain:latest --push runner",
-    "prepublishOnly": "pnpm typecheck && vitest run tests/unit tests/int --no-coverage && pnpm build"
+    "prepublishOnly": "pnpm typecheck && vitest run tests/unit tests/int --no-coverage && pnpm build && pnpm verify:package"
   },
   "dependencies": {
     "@actions/cache": "^6.0.0",

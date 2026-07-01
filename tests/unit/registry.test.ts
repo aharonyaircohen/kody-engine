@@ -8,12 +8,12 @@ import {
   hasExecutable,
   isBuiltinExecutable,
   isSafeName,
-  listExecutables,
   listCapabilityActions,
+  listExecutables,
   parseGenericFlags,
-  resolveExecutable,
   resolveCapabilityAction,
   resolveCapabilityFolder,
+  resolveExecutable,
 } from "../../src/registry.js"
 
 function mkFixture(): string {
@@ -139,12 +139,7 @@ describe("registry: obsolete project executables", () => {
 
     expect(resolveExecutable("feature")).toBeNull()
     expect(listExecutables().find((exe) => exe.name === "feature")).toBeUndefined()
-    expect(resolveCapabilityAction("feature")).toMatchObject({
-      action: "feature",
-      capability: "feature",
-      executable: "feature",
-      source: "project-folder",
-    })
+    expect(resolveCapabilityAction("feature")).toBeNull()
   })
 })
 
@@ -177,7 +172,7 @@ describe("registry: capabilities root", () => {
       JSON.stringify({
         name: "triage",
         action: "triage",
-        implementation: "triage",
+        implementation: "run",
         describe: "Triage incoming work.",
       }),
     )
@@ -186,7 +181,7 @@ describe("registry: capabilities root", () => {
     expect(resolveCapabilityAction("triage")).toMatchObject({
       action: "triage",
       capability: "triage",
-      executable: "triage",
+      executable: "run",
       source: "project-folder",
     })
     expect(fs.realpathSync(resolveCapabilityFolder("triage")!.bodyPath)).toBe(
@@ -227,11 +222,12 @@ describe("registry: capabilities root", () => {
       JSON.stringify({ name: "capability-ship", role: "primitive" }),
     )
     fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Ship\n")
-    fs.writeFileSync(path.join(executableDir, "profile.json"), JSON.stringify({ name: "executable-ship", role: "primitive" }))
-
-    expect(fs.realpathSync(resolveExecutable("ship")!)).toBe(
-      fs.realpathSync(path.join(capabilityDir, "profile.json")),
+    fs.writeFileSync(
+      path.join(executableDir, "profile.json"),
+      JSON.stringify({ name: "executable-ship", role: "primitive" }),
     )
+
+    expect(fs.realpathSync(resolveExecutable("ship")!)).toBe(fs.realpathSync(path.join(capabilityDir, "profile.json")))
     expect(fs.realpathSync(listExecutables().find((item) => item.name === "ship")!.profilePath)).toBe(
       fs.realpathSync(path.join(capabilityDir, "profile.json")),
     )
@@ -252,16 +248,73 @@ describe("registry: capabilities root", () => {
       }),
     )
     fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Ship\n")
-    fs.writeFileSync(path.join(executableDir, "profile.json"), JSON.stringify({ name: "executable-ship", role: "primitive" }))
+    fs.writeFileSync(
+      path.join(executableDir, "profile.json"),
+      JSON.stringify({ name: "executable-ship", role: "primitive" }),
+    )
 
-    expect(resolveCapabilityAction("ship")).toMatchObject({
-      action: "ship",
-      capability: "ship",
-      executable: "ship",
-      source: "project-folder",
-    })
+    expect(resolveCapabilityAction("ship")).toBeNull()
     expect(resolveExecutable("ship")).toBeNull()
     expect(listExecutables().find((item) => item.name === "ship")).toBeUndefined()
+  })
+
+  it("lets store capabilities override stale project capability implementation references", () => {
+    const store = mkFixture()
+    const previousStore = process.env.KODY_COMPANY_STORE
+    try {
+      process.env.KODY_COMPANY_STORE = store
+      resetCompanyStoreCacheForTests()
+      fs.writeFileSync(
+        path.join(store, "kody-store.json"),
+        JSON.stringify({ assetRoots: { capabilities: "capabilities" } }),
+      )
+
+      const projectClassify = path.join(root, ".kody", "capabilities", "classify")
+      fs.mkdirSync(projectClassify, { recursive: true })
+      fs.writeFileSync(
+        path.join(projectClassify, "profile.json"),
+        JSON.stringify({ name: "classify", action: "classify", implementation: "feature" }),
+      )
+      fs.writeFileSync(path.join(projectClassify, "capability.md"), "# Classify\n")
+
+      const storeClassify = path.join(store, "capabilities", "classify")
+      fs.mkdirSync(storeClassify, { recursive: true })
+      fs.writeFileSync(
+        path.join(storeClassify, "profile.json"),
+        JSON.stringify({ name: "classify", action: "classify", role: "primitive" }),
+      )
+      fs.writeFileSync(path.join(storeClassify, "capability.md"), "# Classify\n")
+
+      const storeFeature = path.join(store, "capabilities", "feature")
+      fs.mkdirSync(storeFeature, { recursive: true })
+      fs.writeFileSync(
+        path.join(storeFeature, "profile.json"),
+        JSON.stringify({
+          name: "feature",
+          action: "feature",
+          workflow: { steps: [{ capability: "classify" }] },
+        }),
+      )
+      fs.writeFileSync(path.join(storeFeature, "capability.md"), "# Feature\n")
+
+      expect(resolveCapabilityAction("classify")).toMatchObject({
+        action: "classify",
+        capability: "classify",
+        executable: "classify",
+        source: "company-store",
+      })
+      expect(resolveCapabilityAction("feature")).toMatchObject({
+        action: "feature",
+        capability: "feature",
+        executable: "classify",
+        source: "company-store",
+      })
+    } finally {
+      if (previousStore === undefined) delete process.env.KODY_COMPANY_STORE
+      else process.env.KODY_COMPANY_STORE = previousStore
+      resetCompanyStoreCacheForTests()
+      fs.rmSync(store, { recursive: true, force: true })
+    }
   })
 
   it("does not read removed capabilities roots as capability fallbacks", () => {
@@ -269,10 +322,7 @@ describe("registry: capabilities root", () => {
     const oldBody = ["agent", "respon", "sibility.md"].join("-")
     const legacyDir = path.join(root, ".kody", oldRoot, "audit")
     fs.mkdirSync(legacyDir, { recursive: true })
-    fs.writeFileSync(
-      path.join(legacyDir, "profile.json"),
-      JSON.stringify({ name: "audit", action: "audit" }),
-    )
+    fs.writeFileSync(path.join(legacyDir, "profile.json"), JSON.stringify({ name: "audit", action: "audit" }))
     fs.writeFileSync(path.join(legacyDir, oldBody), "# Audit\n\nLegacy body.\n")
 
     expect(listCapabilityActions().find((item) => item.action === "audit")).toBeUndefined()
