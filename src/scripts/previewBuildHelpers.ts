@@ -7,7 +7,7 @@
  * same outputs, no side effects.
  */
 
-import { createDecipheriv, createHash } from "node:crypto"
+import { createDecipheriv, createHash, hkdfSync } from "node:crypto"
 
 /**
  * Vault secret names that must NEVER be baked into a preview build.
@@ -21,7 +21,13 @@ export const NEVER_PASS_TO_BUILD: ReadonlySet<string> = new Set([
   "KODY_MASTER_KEY",
   // Preview-config knob; consumed by the dispatcher before spawn.
   "KODY_PREVIEW_BUILD_MODE",
+  "KODY_PREVIEW_VERIFY_KEY",
+  "KODY_REPO_CONTEXT",
+  "KODY_PR",
+  "KODY_BRANCH",
 ])
+
+const PREVIEW_KEY_INFO = "kody-preview:v1"
 
 /** Short SHA-256 prefix used in deterministic app naming. */
 function shortHash(s: string): string {
@@ -71,7 +77,7 @@ export function decryptVaultPayload(payload: string, keyRaw: string): string {
     throw new Error("invalid vault payload format")
   }
   const [, ivB64, ctB64, tagB64] = parts
-  const key = /^[0-9a-fA-F]{64}$/.test(keyRaw) ? Buffer.from(keyRaw, "hex") : Buffer.from(keyRaw, "base64")
+  const key = decodeMasterKey(keyRaw)
   if (key.length !== 32) {
     throw new Error("KODY_MASTER_KEY must decode to 32 bytes")
   }
@@ -81,6 +87,33 @@ export function decryptVaultPayload(payload: string, keyRaw: string): string {
   const decipher = createDecipheriv("aes-256-gcm", key, iv)
   decipher.setAuthTag(tag)
   return Buffer.concat([decipher.update(ct), decipher.final()]).toString("utf8")
+}
+
+function decodeMasterKey(keyRaw: string): Buffer {
+  if (/^[0-9a-fA-F]{64}$/.test(keyRaw)) return Buffer.from(keyRaw, "hex")
+  return Buffer.from(keyRaw.replace(/-/g, "+").replace(/_/g, "/"), "base64")
+}
+
+export function derivePreviewVerifyKey(masterKeyRaw: string): string {
+  const masterKey = decodeMasterKey(masterKeyRaw)
+  if (masterKey.length !== 32) {
+    throw new Error("KODY_MASTER_KEY must decode to 32 bytes")
+  }
+  return Buffer.from(hkdfSync("sha256", masterKey, Buffer.alloc(0), PREVIEW_KEY_INFO, 32)).toString("hex")
+}
+
+export function previewRuntimeEnv(args: {
+  buildEnv: Record<string, string>
+  masterKey: string
+  pr: number
+  repo: string
+}): Record<string, string> {
+  return {
+    ...args.buildEnv,
+    KODY_PREVIEW_VERIFY_KEY: derivePreviewVerifyKey(args.masterKey),
+    KODY_REPO_CONTEXT: args.repo,
+    KODY_PR: String(args.pr),
+  }
 }
 
 /**

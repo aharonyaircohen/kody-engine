@@ -7,9 +7,11 @@ import {
   buildEnvFromVault,
   decryptVaultPayload,
   defaultImageTag,
+  derivePreviewVerifyKey,
   formatPreviewComment,
   NEVER_PASS_TO_BUILD,
   previewAppName,
+  previewRuntimeEnv,
   type VaultDoc,
 } from "../../src/scripts/previewBuildHelpers.js"
 
@@ -95,6 +97,10 @@ describe("buildEnvFromVault", () => {
       FLY_ORG_SLUG: { value: "personal" },
       KODY_MASTER_KEY: { value: "dont-leak" },
       KODY_PREVIEW_BUILD_MODE: { value: "dev" },
+      KODY_PREVIEW_VERIFY_KEY: { value: "dont-leak-derived" },
+      KODY_REPO_CONTEXT: { value: "wrong/repo" },
+      KODY_PR: { value: "999" },
+      KODY_BRANCH: { value: "feature" },
       EMPTY_ONE: { value: "" },
     },
   }
@@ -141,6 +147,58 @@ describe("buildEnvFromVault", () => {
     const empty: VaultDoc = { version: 1, secrets: {} }
     expect(buildEnvFromVault(empty).buildEnv).toEqual({})
     expect(buildEnvFromVault(empty).buildMode).toBe("prod")
+  })
+})
+
+describe("derivePreviewVerifyKey", () => {
+  it("matches the dashboard HKDF preview-key derivation", () => {
+    expect(derivePreviewVerifyKey(TEST_KEY_HEX)).toBe(
+      "5f3e59bdb955bf2fd227068a6e221db6ca5c48f3f102aa59f778b2e7cb7a2423",
+    )
+  })
+
+  it("accepts base64-url master keys", () => {
+    const raw = Buffer.from(TEST_KEY_HEX, "hex").toString("base64url")
+    expect(derivePreviewVerifyKey(raw)).toBe(derivePreviewVerifyKey(TEST_KEY_HEX))
+  })
+
+  it("rejects wrong-length keys", () => {
+    expect(() => derivePreviewVerifyKey("abcd")).toThrow(/32 bytes/)
+  })
+})
+
+describe("previewRuntimeEnv", () => {
+  it("adds doorman runtime auth without losing app env", () => {
+    const env = previewRuntimeEnv({
+      buildEnv: { DATABASE_URL: "postgres://example" },
+      masterKey: TEST_KEY_HEX,
+      pr: 678,
+      repo: "A-Guy-educ/A-Guy-Web",
+    })
+
+    expect(env).toMatchObject({
+      DATABASE_URL: "postgres://example",
+      KODY_PREVIEW_VERIFY_KEY: derivePreviewVerifyKey(TEST_KEY_HEX),
+      KODY_REPO_CONTEXT: "A-Guy-educ/A-Guy-Web",
+      KODY_PR: "678",
+    })
+  })
+
+  it("control env wins over vault-provided names", () => {
+    const env = previewRuntimeEnv({
+      buildEnv: {
+        KODY_PREVIEW_VERIFY_KEY: "bad",
+        KODY_REPO_CONTEXT: "wrong/repo",
+        KODY_PR: "1",
+      },
+      masterKey: TEST_KEY_HEX,
+      pr: 678,
+      repo: "A-Guy-educ/A-Guy-Web",
+    })
+
+    expect(env.KODY_PREVIEW_VERIFY_KEY).toBe(derivePreviewVerifyKey(TEST_KEY_HEX))
+    expect(env.KODY_REPO_CONTEXT).toBe("A-Guy-educ/A-Guy-Web")
+    expect(env.KODY_PR).toBe("678")
   })
 })
 
