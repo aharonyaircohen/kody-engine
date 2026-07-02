@@ -248,11 +248,10 @@ export interface AgentOptions {
   ensureBackend?: () => Promise<void>
   /**
    * Pure liveness probe for the model backend (litellm proxy), no side effect.
-   * After a session the SDK reports as "success", we call this: if the proxy is
-   * dead the model never answered — it crashed mid-request and the SDK emitted
-   * a hollow 1-turn / $0 "success". That definitively demotes the run (below),
-   * which then restarts the proxy via `ensureBackend` and retries. Unset for
-   * direct-Anthropic runs.
+   * After a session the SDK reports as "success" without any useful output, we
+   * call this to separate a plain empty answer from a proxy crash. We do not
+   * demote a run that already produced final text, token usage, or submitted
+   * state only because the proxy died after the answer.
    */
   isBackendHealthy?: () => Promise<boolean>
 }
@@ -826,9 +825,9 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     // crash reason surfaces) and retries; on exhaustion it ends `failed`, so
     // commit + ensurePr skip it instead of shipping an empty PR.
     if (outcome === "completed" && !sawMutatingTool) {
-      const backendDead = opts.isBackendHealthy ? !(await opts.isBackendHealthy()) : false
-      const zeroOutput = tokens.output === 0 && finalText === ""
-      if (backendDead || zeroOutput) {
+      const hasUsefulSuccess = tokens.output > 0 || finalText !== "" || Boolean(getSubmitted?.())
+      if (!hasUsefulSuccess) {
+        const backendDead = opts.isBackendHealthy ? !(await opts.isBackendHealthy()) : false
         outcome = "failed"
         outcomeKind = "model_error"
         noWorkSuccess = true
