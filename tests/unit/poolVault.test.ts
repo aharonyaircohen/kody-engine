@@ -1,7 +1,7 @@
 import { createCipheriv, randomBytes } from "node:crypto"
 import { describe, expect, it } from "vitest"
 
-import { decryptVault, readRepoSecret } from "../../src/pool/vault.js"
+import { decryptVault, readRepoSecret } from "../../src/stateRepoVault.js"
 
 const MASTER = Buffer.from("a".repeat(64), "hex") // 32 bytes
 

@@ -1,18 +1,16 @@
 /**
- * Minimal read-only vault accessor for the warm-pool owner.
+ * Read-only accessor for the dashboard-managed repo vault in the configured
+ * Kody state repo.
  *
- * The dashboard stores each repo's secrets in its configured Kody state repo as `secrets.enc` — a single
+ * The dashboard stores each repo's secrets as `secrets.enc`: a single
  * AES-256-GCM blob ("v1:<iv_b64>:<ct_b64>:<tag_b64>") of a JSON document
  * `{ version:1, secrets:{ NAME:{ value,... } } }`, keyed off KODY_MASTER_KEY.
- * The pool owner reads a repo's FLY_API_TOKEN from there so each repo's pool
- * runs in that repo's own Fly account — matching the dashboard's repo-scoped
- * model (nothing global, no token sent over the wire).
  *
  * MUST stay byte-compatible with Kody-Dashboard src/dashboard/lib/vault/crypto.ts.
  */
 
-import { createDecipheriv } from "node:crypto"
-import { readGithubStateText } from "../stateRepoGithub.js"
+import { createDecipheriv, createHash } from "node:crypto"
+import { readGithubStateText } from "./stateRepoGithub.js"
 
 const VAULT_PATH = "secrets.enc"
 const CACHE_TTL_MS = 60_000
@@ -28,6 +26,11 @@ interface CacheEntry {
 }
 
 const cache = new Map<string, CacheEntry>()
+
+function cacheKey(owner: string, repo: string, masterKey: Buffer): string {
+  const keyHash = createHash("sha256").update(masterKey).digest("hex").slice(0, 16)
+  return `${owner}/${repo}:${keyHash}`.toLowerCase()
+}
 
 /** AES-256-GCM decrypt of a "v1:iv:ct:tag" payload. Mirrors vault/crypto.ts decrypt(). */
 export function decryptVault(payload: string, masterKey: Buffer): string {
@@ -56,7 +59,7 @@ async function readVaultSecrets(opts: {
   repo: string
   fetchImpl?: typeof fetch
 }): Promise<Record<string, string>> {
-  const key = `${opts.owner}/${opts.repo}`.toLowerCase()
+  const key = cacheKey(opts.owner, opts.repo, opts.masterKey)
   const hit = cache.get(key)
   if (hit && hit.expiresAt > Date.now()) return hit.secrets
 
@@ -95,7 +98,7 @@ export async function readRepoSecret(opts: {
   return v?.trim() ? v : null
 }
 
-/** Read all of a repo's vault secrets (for forwarding ALL_SECRETS to a job). */
+/** Read all of a repo's vault secrets. */
 export async function readRepoSecrets(opts: {
   githubToken: string
   masterKey: Buffer

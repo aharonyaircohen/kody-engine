@@ -206,4 +206,4 @@ Use this checklist:
 - Do not make parent goal id a required input for reusable implementation profiles.
 - Do not branch shared scripts on implementation names.
 - Do not change consumer workflow YAML for normal new capabilities.
-- Do not read `.kody/secrets.enc` from capability shell scripts; read injected environment variables.
+- Do not read `.kody/secrets.enc` from capability shell scripts; use shared engine secret helpers.

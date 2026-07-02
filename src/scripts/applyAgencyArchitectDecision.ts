@@ -2,9 +2,9 @@ import type { PostflightScript } from "../executables/types.js"
 import {
   buildAgentLoopState,
   buildManagedGoalState,
-  type CompanyManagerAction,
-  type CompanyManagerDecision,
-} from "../companyManagerDecision.js"
+  type AgencyArchitectAction,
+  type AgencyArchitectDecision,
+} from "../agencyArchitectDecision.js"
 import {
   appendCompanyIntentDecision,
   readCompanyIntent,
@@ -14,7 +14,7 @@ import {
 import { fetchGoalState } from "../goal/stateStore.js"
 import { nowIso } from "../goal/state.js"
 
-export interface AppliedCompanyManagerAction {
+export interface AppliedAgencyArchitectAction {
   kind: string
   intentId?: string
   resource?: string
@@ -22,20 +22,20 @@ export interface AppliedCompanyManagerAction {
   reason: string
 }
 
-export const applyCompanyManagerDecision: PostflightScript = async (ctx) => {
-  const decision = ctx.data.companyManagerDecision as CompanyManagerDecision | undefined
+export const applyAgencyArchitectDecision: PostflightScript = async (ctx) => {
+  const decision = ctx.data.agencyArchitectDecision as AgencyArchitectDecision | undefined
   if (!decision || !Array.isArray(decision.actions)) return
   if (ctx.output.exitCode !== 0) return
 
-  const applied: AppliedCompanyManagerAction[] = []
+  const applied: AppliedAgencyArchitectAction[] = []
   for (const action of decision.actions) {
     applied.push(applyAction(ctx.config, ctx.cwd, action))
   }
-  ctx.data.companyManagerApplied = applied
-  ctx.data.companyManagerApplySummary = `company-manager applied ${applied.filter((item) => item.changed).length}/${applied.length} action(s)`
+  ctx.data.agencyArchitectApplied = applied
+  ctx.data.agencyArchitectApplySummary = `agency-architect applied ${applied.filter((item) => item.changed).length}/${applied.length} action(s)`
 }
 
-function applyAction(config: Parameters<PostflightScript>[0]["config"], cwd: string, action: CompanyManagerAction): AppliedCompanyManagerAction {
+function applyAction(config: Parameters<PostflightScript>[0]["config"], cwd: string, action: AgencyArchitectAction): AppliedAgencyArchitectAction {
   if (action.kind === "createManagedGoal") {
     const existing = fetchGoalState(config, action.id, cwd)
     if (existing) return applied(action, false, "goal already exists")
@@ -98,11 +98,11 @@ function applyAction(config: Parameters<PostflightScript>[0]["config"], cwd: str
 }
 
 function applied(
-  action: CompanyManagerAction,
+  action: AgencyArchitectAction,
   changed: boolean,
   reason: string,
   resource?: string,
-): AppliedCompanyManagerAction {
+): AppliedAgencyArchitectAction {
   return {
     kind: action.kind,
     intentId: "intentId" in action ? action.intentId : undefined,
@@ -116,10 +116,10 @@ function mergeUnique(left: string[], right: string[]): string[] {
   return [...new Set([...left, ...right])].sort()
 }
 
-export function logAppliedCompanyManagerActions(
+export function logAppliedAgencyArchitectActions(
   config: Parameters<PostflightScript>[0]["config"],
   cwd: string | undefined,
-  appliedActions: AppliedCompanyManagerAction[],
+  appliedActions: AppliedAgencyArchitectAction[],
 ): void {
   const at = nowIso()
   for (const action of appliedActions) {

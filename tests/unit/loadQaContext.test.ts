@@ -58,13 +58,14 @@ describe("loadQaContext", () => {
     expect(ctx.data.qaAuthBlock).toContain("no `LOGIN_PASSWORD` secret was found")
   })
 
-  it("uses LOGIN_PASSWORD from process.env (mirrored Actions secret) for the full login auth block", async () => {
+  it("uses LOGIN_PASSWORD from process.env as fallback for the full login auth block", async () => {
     writeVariables(tmp, { LOGIN_USER: "qa@example.com" })
     process.env.LOGIN_PASSWORD = "hunter2"
 
     const ctx = makeCtx(tmp)
     await loadQaContext(ctx, dummyProfile)
     expect(ctx.data.qaLogin).toBe("qa@example.com")
+    expect(ctx.data.qaPasswordSource).toBe("env")
     expect(ctx.data.qaAuthBlock).toContain("qa@example.com")
     expect(ctx.data.qaAuthBlock).toContain("hunter2")
     expect(ctx.data.qaAuthBlock).toContain("Re-use the session")

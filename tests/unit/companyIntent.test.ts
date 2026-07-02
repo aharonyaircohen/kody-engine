@@ -7,6 +7,7 @@ describe("company intent model", () => {
       id: "release-confidence",
       status: "active",
       for: "safe, boring releases",
+      description: "Prefer evidence-backed releases and avoid risky shortcuts.",
       priority: 1,
       posture: "confidence",
       scope: { repos: ["Kody-Dashboard"], areas: ["release"] },
@@ -31,7 +32,7 @@ describe("company intent model", () => {
         loops: ["release-health-loop"],
         capabilities: ["ci-health"],
       },
-      manager: { agent: "cto", loop: "company-manager-loop", capability: "company-manager", reviewEvery: "1d" },
+      manager: { agent: "cto", loop: "agency-architect-loop", capability: "agency-architect", reviewEvery: "1d" },
       createdAt: "2026-06-24T00:00:00Z",
       updatedAt: "2026-06-24T00:00:00Z",
     })
@@ -40,9 +41,10 @@ describe("company intent model", () => {
       id: "release-confidence",
       status: "active",
       for: "safe, boring releases",
+      description: "Prefer evidence-backed releases and avoid risky shortcuts.",
       posture: "confidence",
       metrics: ["ciGreen", "previewHealthy"],
-      manager: { agent: "cto", loop: "company-manager-loop", capability: "company-manager" },
+      manager: { agent: "cto", loop: "agency-architect-loop", capability: "agency-architect" },
     })
   })
 

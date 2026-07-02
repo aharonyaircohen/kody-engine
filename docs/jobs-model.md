@@ -16,7 +16,7 @@ Retries stay under the same job instead of becoming new work.
 
 | Concept | Answers | What it is |
 |---|---|---|
-| **intent** | why | company-level reason, priority, posture, scope, and success signals |
+| **intent** | why | company-level reason, optional deeper context, priority, posture, scope, and success signals |
 | **goal** | what | durable outcome + manager loop; stores destination evidence, route, facts, blockers, and progress |
 | **agentLoop** | when | stateful heartbeat wrapper; stores schedule/cursor and wakes another target such as a goal or capability |
 | **agent** | who | reusable executor identity (`.kody/agents/<slug>.md`, usually from project or company store) |
@@ -35,7 +35,7 @@ Compact mapping: **intent = why**, **goal = what**, **agentLoop = when**,
 Current storage mapping: **capability = capability contract** and
 **executable = capability implementation**.
 
-The CTO `company-manager` loop reads intent and performs portfolio
+The CTO `agency-architect` loop reads intent and performs portfolio
 orchestration. It may create or adjust goals and agentLoops, but goal-manager
 still owns step-by-step execution inside each goal.
 

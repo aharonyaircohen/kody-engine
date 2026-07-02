@@ -11,7 +11,7 @@ import { advanceManagedGoal } from "./advanceManagedGoal.js"
 import { appendCompanyActivity } from "./appendCompanyActivity.js"
 import { appendCompanyIntentDecision } from "./appendCompanyIntentDecision.js"
 import { applyCapabilityReports } from "./applyCapabilityReports.js"
-import { applyCompanyManagerDecision } from "./applyCompanyManagerDecision.js"
+import { applyAgencyArchitectDecision } from "./applyAgencyArchitectDecision.js"
 import { buildSyntheticPlugin } from "./buildSyntheticPlugin.js"
 import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
 import { classifyByLabel } from "./classifyByLabel.js"
@@ -58,7 +58,7 @@ import { notifyTerminal } from "./notifyTerminal.js"
 import { openAgentFactoryStatePr } from "./openAgentFactoryStatePr.js"
 import { openQaIssue } from "./openQaIssue.js"
 import { parseAgentResult } from "./parseAgentResult.js"
-import { parseCompanyManagerDecision } from "./parseCompanyManagerDecision.js"
+import { parseAgencyArchitectDecision } from "./parseAgencyArchitectDecision.js"
 import { parseIssueStateFromAgentResult } from "./parseIssueStateFromAgentResult.js"
 import { parseJobStateFromAgentResult } from "./parseJobStateFromAgentResult.js"
 import { parseReproOutput } from "./parseReproOutput.js"
@@ -155,7 +155,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
 
 export const postflightScripts: Record<string, PostflightScript> = {
   parseAgentResult,
-  parseCompanyManagerDecision,
+  parseAgencyArchitectDecision,
   parseIssueStateFromAgentResult,
   parseJobStateFromAgentResult,
   parseReproOutput,
@@ -163,7 +163,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   writeJobStateFile,
   appendCompanyActivity,
   appendCompanyIntentDecision,
-  applyCompanyManagerDecision,
+  applyAgencyArchitectDecision,
   requireFeedbackActions,
   requirePlanDeviations,
   verify,

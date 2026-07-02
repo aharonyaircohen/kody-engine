@@ -18,7 +18,7 @@ should inspect, decide, report, or dispatch those store-backed capabilities.
 
 The canonical model is:
 
-- **Intent = why** — company direction, priority, posture, scope, and success signals.
+- **Intent = why** — company direction, optional deeper context, priority, posture, scope, and success signals.
 - **Goal = what** — durable outcome state with destination evidence, route, facts, and blockers. It chooses
   the next missing evidence and dispatches the right capability until done or
   blocked.
@@ -37,16 +37,17 @@ Current storage names:
 Intent selects and prioritizes goals and agentLoops. It is not another execution
 chain; goals and agentLoops still own their own runtime state.
 
-## CTO company manager
+## CTO agency architect
 
-The first company manager is `cto`, running the `company-manager` capability.
+The first agency architect is `cto`, running the `agency-architect` capability.
 It reads active intent files under `<statePath>/intents/<id>/intent.json`,
 compares them with current goal/loop state, and applies validated portfolio
 actions. This is portfolio orchestration: creating, linking, pausing, or
 resuming goals and agentLoops so the agency serves active intent.
 
-Intent may list lightweight `metrics` names. Metrics are not a separate model in
-v1; they tell CTO how intent should be judged.
+Intent may include a `description` for deeper context and lightweight `metrics`
+names. Description helps CTO interpret the one-line direction; metrics are not
+a separate model in v1 and tell CTO how intent should be judged.
 
 Canonical noun docs:
 

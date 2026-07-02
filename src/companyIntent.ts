@@ -10,6 +10,7 @@ export interface CompanyIntent {
   id: string
   status: CompanyIntentStatus
   for: string
+  description?: string
   priority: number
   posture: CompanyIntentPosture
   scope: {
@@ -39,8 +40,8 @@ export interface CompanyIntent {
   }
   manager: {
     agent: "cto"
-    loop: "company-manager-loop"
-    capability: "company-manager"
+    loop: "agency-architect-loop"
+    capability: "agency-architect"
     reviewEvery: "1d" | "1w"
     lastReviewedAt?: string
   }
@@ -100,12 +101,14 @@ export function normalizeCompanyIntent(path: string, raw: unknown): CompanyInten
 
   const createdAt = stringField(input.createdAt) || nowIso()
   const updatedAt = stringField(input.updatedAt) || createdAt
+  const description = stringField(input.description)
 
   return {
     version: 1,
     id,
     status: oneOf(input.status, ["active", "paused", "archived"] as const, "active"),
     for: stringField(input.for),
+    ...(description ? { description } : {}),
     priority: numberField(input.priority, 100),
     posture: oneOf(
       input.posture,
@@ -254,8 +257,8 @@ function normalizeAutomationPolicy(raw: Record<string, unknown> | null): Company
 function normalizeManager(raw: Record<string, unknown> | null): CompanyIntent["manager"] {
   return {
     agent: "cto",
-    loop: "company-manager-loop",
-    capability: "company-manager",
+    loop: "agency-architect-loop",
+    capability: "agency-architect",
     reviewEvery: oneOf(raw?.reviewEvery, ["1d", "1w"] as const, "1d"),
     ...(typeof raw?.lastReviewedAt === "string" ? { lastReviewedAt: raw.lastReviewedAt } : {}),
   }

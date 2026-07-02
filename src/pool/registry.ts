@@ -14,7 +14,7 @@
 
 import { FlyClient } from "./fly.js"
 import { type ClaimResult, type PoolJob, PoolManager } from "./manager.js"
-import { readRepoSecret, readRepoSecrets } from "./vault.js"
+import { readRepoSecret, readRepoSecrets } from "../stateRepoVault.js"
 import type { RunRequest } from "../run-request.js"
 
 /** Vault key the dashboard writes to size a repo's warm pool. */

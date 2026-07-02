@@ -1,11 +1,11 @@
 import { type GoalState, nowIso } from "./goal/state.js"
 
-export interface CompanyManagerDecision {
+export interface AgencyArchitectDecision {
   summary: string
-  actions: CompanyManagerAction[]
+  actions: AgencyArchitectAction[]
 }
 
-export type CompanyManagerAction =
+export type AgencyArchitectAction =
   | CreateManagedGoalAction
   | CreateAgentLoopAction
   | SetGoalLifecycleAction
@@ -66,11 +66,11 @@ export interface DecisionNoteAction {
 
 const SLUG_RE = /^[a-z][a-z0-9-]{0,63}$/
 
-export function parseCompanyManagerDecisionText(finalText: string): CompanyManagerDecision {
+export function parseAgencyArchitectDecisionText(finalText: string): AgencyArchitectDecision {
   const raw = extractDecisionJson(finalText)
   const parsed = JSON.parse(raw) as unknown
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("company-manager decision must be JSON object")
+    throw new Error("agency-architect decision must be JSON object")
   }
   const input = parsed as Record<string, unknown>
   const actions = Array.isArray(input.actions) ? input.actions.map(parseAction) : []
@@ -121,16 +121,16 @@ export function buildAgentLoopState(action: CreateAgentLoopAction): GoalState {
 }
 
 function extractDecisionJson(finalText: string): string {
-  const fence = finalText.match(/```(?:kody-company-manager-decision|json)\s*([\s\S]*?)```/i)
+  const fence = finalText.match(/```(?:kody-agency-architect-decision|json)\s*([\s\S]*?)```/i)
   if (fence?.[1]) return fence[1].trim()
-  const line = finalText.match(/KODY_COMPANY_MANAGER_DECISION=(\{[\s\S]*\})/)
+  const line = finalText.match(/KODY_AGENCY_ARCHITECT_DECISION=(\{[\s\S]*\})/)
   if (line?.[1]) return line[1].trim()
-  throw new Error("missing kody-company-manager-decision JSON")
+  throw new Error("missing kody-agency-architect-decision JSON")
 }
 
-function parseAction(value: unknown): CompanyManagerAction {
+function parseAction(value: unknown): AgencyArchitectAction {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("company-manager action must be object")
+    throw new Error("agency-architect action must be object")
   }
   const input = value as Record<string, unknown>
   const kind = input.kind
@@ -139,7 +139,7 @@ function parseAction(value: unknown): CompanyManagerAction {
   if (kind === "setGoalLifecycle") return parseSetGoalLifecycle(input)
   if (kind === "updateIntentPortfolio") return parseUpdateIntentPortfolio(input)
   if (kind === "note") return parseNote(input)
-  throw new Error(`unsupported company-manager action kind: ${String(kind)}`)
+  throw new Error(`unsupported agency-architect action kind: ${String(kind)}`)
 }
 
 function parseCreateManagedGoal(input: Record<string, unknown>): CreateManagedGoalAction {

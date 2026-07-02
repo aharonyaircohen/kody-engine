@@ -6,13 +6,8 @@
  *   - scenarios / notes → the state-repo `context/*.md` entries
  *     (only entries whose `agent` list includes `qa-engineer`)
  *   - login username     → state-repo variables file `variables.json`, key LOGIN_USER
- *   - password           → secret LOGIN_PASSWORD, read from process.env
- *
- * The password is a vault secret the dashboard mirrors into the repo's GitHub
- * Actions secrets, so the engine sees it at runtime via `ALL_SECRETS`
- * (unpacked into `process.env`) — the same path as every other secret. We do
- * NOT decrypt state-repo `secrets.enc` here; CI never has KODY_MASTER_KEY (it
- * doesn't need it — secrets are mirrored, not decrypted in CI).
+ *   - password           → secret LOGIN_PASSWORD, read from the repo vault
+ *                          first, then process.env as local/dev fallback.
  *
  * Populates:
  *   ctx.data.qaLogin     — the LOGIN_USER variable ("" if unset)
@@ -28,6 +23,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { PreflightScript } from "../executables/types.js"
 import { readKodyVariables } from "./kodyVariables.js"
+import { resolveRuntimeSecret } from "./runtimeSecrets.js"
 
 const CONTEXT_DIR_REL_PATH = ".kody/context"
 
@@ -160,12 +156,12 @@ function composeAuthBlock(authProfile: string | undefined, login: string, passwo
 export const loadQaContext: PreflightScript = async (ctx) => {
   const vars = readKodyVariables(ctx.cwd)
   const login = vars.LOGIN_USER ?? ""
-  // LOGIN_PASSWORD is a vault secret the dashboard mirrors into the repo's
-  // Actions secrets; the engine unpacks ALL_SECRETS into process.env.
-  const password = process.env.LOGIN_PASSWORD ?? ""
+  const password = await resolveRuntimeSecret("LOGIN_PASSWORD", ctx)
   const authProfile = ctx.args.authProfile as string | undefined
 
   ctx.data.qaLogin = login
+  ctx.data.qaPasswordSource = password.source
+  if (password.warning) ctx.data.qaPasswordWarning = password.warning
   ctx.data.qaProfile = readProfile(ctx.cwd)
-  ctx.data.qaAuthBlock = composeAuthBlock(authProfile, login, password)
+  ctx.data.qaAuthBlock = composeAuthBlock(authProfile, login, password.value)
 }

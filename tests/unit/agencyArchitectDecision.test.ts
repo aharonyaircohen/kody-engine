@@ -2,15 +2,15 @@ import { describe, expect, it } from "vitest"
 import {
   buildAgentLoopState,
   buildManagedGoalState,
-  parseCompanyManagerDecisionText,
-} from "../../src/companyManagerDecision.js"
+  parseAgencyArchitectDecisionText,
+} from "../../src/agencyArchitectDecision.js"
 
-describe("company manager decision", () => {
+describe("agency architect decision", () => {
   it("parses fenced CTO decision JSON", () => {
-    const decision = parseCompanyManagerDecisionText(`
+    const decision = parseAgencyArchitectDecisionText(`
 DONE
 
-\`\`\`kody-company-manager-decision
+\`\`\`kody-agency-architect-decision
 {
   "summary": "Create release portfolio",
   "actions": [
@@ -41,7 +41,7 @@ DONE
   })
 
   it("accepts content alias for note decisions", () => {
-    const decision = parseCompanyManagerDecisionText(`\`\`\`kody-company-manager-decision
+    const decision = parseAgencyArchitectDecisionText(`\`\`\`kody-agency-architect-decision
 {"summary":"No portfolio changes","actions":[{"kind":"note","content":"Live integration test active; no goals or loops created."}]}
 \`\`\``)
 
@@ -55,7 +55,7 @@ DONE
   })
 
   it("builds managed goal state from createManagedGoal action", () => {
-    const decision = parseCompanyManagerDecisionText(`
+    const decision = parseAgencyArchitectDecisionText(`
 \`\`\`json
 {
   "actions": [
@@ -91,8 +91,8 @@ DONE
   })
 
   it("builds agent loop state from createAgentLoop action", () => {
-    const decision = parseCompanyManagerDecisionText(`
-KODY_COMPANY_MANAGER_DECISION={"actions":[{"kind":"createAgentLoop","intentId":"release-confidence","id":"release-health-loop","outcome":"Watch release health","every":"1d","capabilities":["ci-health"],"reason":"release confidence needs health checks"}]}
+    const decision = parseAgencyArchitectDecisionText(`
+KODY_AGENCY_ARCHITECT_DECISION={"actions":[{"kind":"createAgentLoop","intentId":"release-confidence","id":"release-health-loop","outcome":"Watch release health","every":"1d","capabilities":["ci-health"],"reason":"release confidence needs health checks"}]}
 `)
     const action = decision.actions[0]
     if (!action || action.kind !== "createAgentLoop") throw new Error("expected createAgentLoop")

@@ -48,7 +48,7 @@ vi.mock("../../src/pool/manager.js", () => ({
   },
 }))
 
-vi.mock("../../src/pool/vault.js", () => ({
+vi.mock("../../src/stateRepoVault.js", () => ({
   readRepoSecret: mocks.readRepoSecret,
   readRepoSecrets: mocks.readRepoSecrets,
 }))
