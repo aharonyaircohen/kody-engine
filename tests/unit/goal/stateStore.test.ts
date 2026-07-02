@@ -1,3 +1,6 @@
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("../../../src/issue.js", () => ({
@@ -6,6 +9,7 @@ vi.mock("../../../src/issue.js", () => ({
 
 import { fetchGoalState, listGoalStateIds, putGoalState } from "../../../src/goal/stateStore.js"
 import { gh } from "../../../src/issue.js"
+import { resetCompanyStoreCacheForTests } from "../../../src/companyStore.js"
 import { STATE_BRANCH } from "../../../src/stateBranch.js"
 
 const config = {
@@ -77,6 +81,9 @@ function regularTodoJson(title: string): string {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  resetCompanyStoreCacheForTests()
+  delete process.env.KODY_COMPANY_STORE
+  delete process.env.KODY_COMPANY_STORE_REF
 })
 
 describe("goal state store", () => {
@@ -110,6 +117,83 @@ describe("goal state store", () => {
       "api",
       `/repos/acme/kody-state/contents/widgets/todos/release.json?ref=${STATE_BRANCH}`,
     ])
+  })
+
+  it("uses Store template fields for template-backed goal state", () => {
+    const storeRoot = mkdtempSync(join(tmpdir(), "kody-store-"))
+    try {
+      mkdirSync(join(storeRoot, "goals", "templates", "ai-agency-health"), {
+        recursive: true,
+      })
+      writeFileSync(
+        join(storeRoot, "kody-store.json"),
+        JSON.stringify({
+          assetRoots: { goals: "goals" },
+        }),
+      )
+      writeFileSync(
+        join(storeRoot, "goals", "templates", "ai-agency-health", "state.json"),
+        JSON.stringify({
+          version: 1,
+          kind: "template",
+          templateId: "ai-agency-health",
+          state: "inactive",
+          type: "monitor",
+          destination: {
+            outcome: "AI Agency stays healthy.",
+            evidence: ["ai-agency-health-matrix"],
+          },
+          capabilities: ["ai-agency-health-matrix"],
+          route: [],
+          schedule: "15m",
+          scheduleMode: "agentLoop",
+          facts: { "ai-agency-health-matrix": false },
+          blockers: [],
+        }),
+      )
+      process.env.KODY_COMPANY_STORE = storeRoot
+
+      vi.mocked(gh).mockReturnValue(
+        JSON.stringify({
+          sha: "abc",
+          type: "file",
+          encoding: "base64",
+          content: b64(
+            JSON.stringify({
+              version: 1,
+              title: "ai-agency-health",
+              id: "ai-agency-health",
+              description: "Old copied state",
+              managed: true,
+              managedModel: "agentLoop",
+              state: "active",
+              sourceTemplate: "ai-agency-health",
+              type: "monitor",
+              destination: { outcome: "Old copied state", evidence: [] },
+              capabilities: [],
+              route: [],
+              schedule: "1d",
+              scheduleMode: "agentLoop",
+              facts: { "ai-agency-health-matrix": true },
+              blockers: [],
+              items: [],
+            }),
+          ),
+        }),
+      )
+
+      const state = fetchGoalState(config, "ai-agency-health")
+
+      expect(state?.extra.schedule).toBe("15m")
+      expect(state?.extra.destination).toMatchObject({
+        outcome: "AI Agency stays healthy.",
+        evidence: ["ai-agency-health-matrix"],
+      })
+      expect(state?.extra.capabilities).toEqual(["ai-agency-health-matrix"])
+      expect((state?.extra.facts as Record<string, unknown>)["ai-agency-health-matrix"]).toBe(true)
+    } finally {
+      rmSync(storeRoot, { recursive: true, force: true })
+    }
   })
 
   it("ignores regular todo files instead of treating them as goals", () => {

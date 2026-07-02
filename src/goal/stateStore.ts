@@ -9,6 +9,9 @@
 import { listStateDirectory, readStateText, type StateRepoConfig, upsertStateText } from "../stateRepo.js"
 import type { GoalState } from "./state.js"
 import { isManagedTodoRaw, parseTodoGoalState, serializeTodoGoalState } from "./managedTodoState.js"
+import { getCompanyStoreAssetRoot } from "../companyStore.js"
+import * as fs from "node:fs"
+import * as path from "node:path"
 
 export function goalStatePath(goalId: string): string {
   return `todos/${goalId}.json`
@@ -20,7 +23,61 @@ export function fetchGoalState(config: StateRepoConfig, goalId: string, cwd?: st
   const loaded = readStateText(config, cwd, filePath)
   if (!loaded) return null
   if (!isManagedTodoRaw(loaded.content)) return null
-  return parseTodoGoalState(goalId, loaded.path, loaded.content)
+  return resolveStoreBackedGoalState(parseTodoGoalState(goalId, loaded.path, loaded.content))
+}
+
+function resolveStoreBackedGoalState(state: GoalState): GoalState {
+  const templateId = templateIdFromGoalState(state)
+  if (!templateId) return state
+
+  const template = readStoreGoalTemplate(templateId)
+  if (!template) return state
+
+  const nextExtra = { ...state.extra }
+  for (const key of [
+    "type",
+    "destination",
+    "capabilities",
+    "route",
+    "schedule",
+    "scheduleMode",
+    "loopTarget",
+    "preferredRunTime",
+    "saveReport",
+  ]) {
+    if (Object.hasOwn(template, key)) nextExtra[key] = template[key]
+    else if (["schedule", "loopTarget", "preferredRunTime", "saveReport"].includes(key)) delete nextExtra[key]
+  }
+  nextExtra.facts = {
+    ...(recordField(template.facts) ?? {}),
+    ...(recordField(state.extra.facts) ?? {}),
+  }
+  return { ...state, extra: nextExtra }
+}
+
+function templateIdFromGoalState(state: GoalState): string {
+  for (const key of ["sourceTemplate", "templateId", "template"]) {
+    const value = state.extra[key]
+    if (typeof value === "string" && value.trim()) return value.trim()
+  }
+  return ""
+}
+
+function readStoreGoalTemplate(templateId: string): Record<string, unknown> | null {
+  const root = getCompanyStoreAssetRoot("goals")
+  if (!root) return null
+  const file = path.join(root, "templates", templateId, "state.json")
+  if (!fs.existsSync(file)) return null
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as unknown
+    return recordField(parsed)
+  } catch {
+    return null
+  }
+}
+
+function recordField(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null
 }
 
 /** Write one goal state to the configured state repo. */
