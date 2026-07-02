@@ -1,6 +1,12 @@
 import { execFileSync } from "node:child_process"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { generateLitellmConfigYaml, litellmServesModel, resolveLitellmCommand } from "../../src/litellm.js"
+import {
+  generateLitellmConfigYaml,
+  litellmModelGroups,
+  litellmServesModel,
+  litellmServesModels,
+  resolveLitellmCommand,
+} from "../../src/litellm.js"
 
 vi.mock("node:child_process", () => ({ execFileSync: vi.fn(), spawn: vi.fn() }))
 
@@ -50,6 +56,14 @@ describe("litellm: generateLitellmConfigYaml", () => {
     expect(yaml).toMatch(/api_key: os\.environ\/MINIMAX_API_KEY/)
   })
 
+  it("maps Claude Code internal Haiku requests to the selected proxy model", () => {
+    const yaml = generateLitellmConfigYaml({ provider: "minimax", model: "MiniMax-M3" })
+    expect(yaml).toMatch(/model_name: MiniMax-M3/)
+    expect(yaml).toMatch(/model_name: claude-haiku-4-5-20251001/)
+    expect(yaml).toMatch(/model_name: haiku/)
+    expect(yaml.match(/model: minimax\/MiniMax-M3/g)?.length).toBe(3)
+  })
+
   it("routes OpenAI-compatible dashboard models through their configured base URL", () => {
     const yaml = generateLitellmConfigYaml({
       provider: "custom",
@@ -86,6 +100,21 @@ describe("litellm: generateLitellmConfigYaml", () => {
 
 describe("litellm: model group reuse checks", () => {
   afterEach(() => vi.unstubAllGlobals())
+
+  it("requires existing proxies to serve Claude Code aliases too", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          data: [{ id: "MiniMax-M3" }],
+        }),
+      ),
+    )
+
+    await expect(
+      litellmServesModels("http://localhost:4000", litellmModelGroups({ provider: "minimax", model: "MiniMax-M3" })),
+    ).resolves.toBe(false)
+  })
 
   it("detects when an existing LiteLLM proxy serves the requested model group", async () => {
     vi.stubGlobal(

@@ -28,6 +28,7 @@ export async function checkLitellmHealth(url: string): Promise<boolean> {
 // for a slow runner without hanging a genuinely dead proxy for too long.
 const DEFAULT_LITELLM_STARTUP_TIMEOUT_SEC = 150
 const LITELLM_HEALTH_POLL_INTERVAL_MS = 2000
+const CLAUDE_CODE_PROXY_MODEL_ALIASES = ["claude-haiku-4-5-20251001", "haiku"] as const
 
 /**
  * Resolve the LiteLLM startup deadline. Precedence:
@@ -44,28 +45,36 @@ function resolveLitellmTimeoutMs(): number {
 export function generateLitellmConfigYaml(model: ProviderModel): string {
   const apiKeyVar = model.apiKeyEnvVar ?? providerApiKeyEnvVar(model.provider)
   const litellmProvider = model.litellmProvider ?? model.provider
-  const modelGroup = litellmModelGroup(model)
+  const modelGroups = litellmModelGroups(model)
   const providerParams: Array<[string, string]> = model.baseURL ? [["api_base", model.baseURL]] : []
-  return [
-    "model_list:",
+  const modelEntries = modelGroups.flatMap((modelGroup) => [
     `  - model_name: ${modelGroup}`,
     `    litellm_params:`,
     `      model: ${litellmProvider}/${model.model}`,
     `      api_key: os.environ/${apiKeyVar}`,
     ...providerParams.map(([key, value]) => `      ${key}: ${value}`),
-    "",
-    "litellm_settings:",
-    "  drop_params: true",
-    "",
-  ].join("\n")
+  ])
+  return ["model_list:", ...modelEntries, "", "litellm_settings:", "  drop_params: true", ""].join("\n")
+}
+
+export function litellmModelGroups(model: ProviderModel): string[] {
+  const primary = litellmModelGroup(model)
+  return Array.from(new Set([primary, ...CLAUDE_CODE_PROXY_MODEL_ALIASES]))
 }
 
 export async function litellmServesModel(url: string, modelGroup: string): Promise<boolean> {
+  return litellmServesModels(url, [modelGroup])
+}
+
+export async function litellmServesModels(url: string, modelGroups: readonly string[]): Promise<boolean> {
   try {
     const response = await fetch(`${url.replace(/\/+$/, "")}/v1/models`, { signal: AbortSignal.timeout(3000) })
     if (!response.ok) return false
     const payload = (await response.json()) as { data?: Array<{ id?: unknown }> }
-    return (payload.data ?? []).some((entry) => entry.id === modelGroup)
+    const served = new Set(
+      (payload.data ?? []).map((entry) => entry.id).filter((id): id is string => typeof id === "string"),
+    )
+    return modelGroups.every((modelGroup) => served.has(modelGroup))
   } catch {
     return false
   }
@@ -169,7 +178,7 @@ export async function startLitellmIfNeeded(
 
   const cmd = resolveLitellmCommand()
   let activeUrl = url.replace(/\/+$/, "")
-  const modelGroup = litellmModelGroup(model)
+  const modelGroups = litellmModelGroups(model)
   const childEnv = stripBlockingEnv({ ...process.env, ...readDotenvApiKeys(projectDir) })
 
   // Mutable handle state. `ensureHealthy` can replace `child` when it respawns
@@ -253,13 +262,13 @@ export async function startLitellmIfNeeded(
 
   // Reuse a proxy already serving this url (started by an earlier task).
   if (await checkLitellmHealth(activeUrl)) {
-    if (await litellmServesModel(activeUrl, modelGroup)) {
+    if (await litellmServesModels(activeUrl, modelGroups)) {
       return { url: activeUrl, kill: killChild, isHealthy, ensureHealthy }
     }
     const staleUrl = activeUrl
     activeUrl = await nextAvailableLitellmUrl(activeUrl)
     process.stderr.write(
-      `[kody litellm] existing proxy at ${staleUrl} does not serve ${modelGroup}; starting a separate proxy at ${activeUrl}\n`,
+      `[kody litellm] existing proxy at ${staleUrl} does not serve ${modelGroups.join(", ")}; starting a separate proxy at ${activeUrl}\n`,
     )
   }
 
