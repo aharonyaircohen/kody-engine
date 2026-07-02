@@ -206,6 +206,16 @@ describe("postflight chain: run profile, success path", () => {
     const lastBody = String(mocks.gh.mock.calls.at(-1)?.[1] ?? "")
     expect(lastBody).toContain("PR opened")
     expect(lastBody).toContain("https://github.com/o/r/pull/42")
+    expect(mocks.setKodyLabel).toHaveBeenCalledWith(
+      42,
+      expect.objectContaining({ label: "kody:reviewing" }),
+      "/tmp/fake-repo",
+    )
+    expect(mocks.setKodyLabel.mock.calls).not.toContainEqual([
+      42,
+      expect.objectContaining({ label: "kody:done" }),
+      "/tmp/fake-repo",
+    ])
     expect(ctx.output.exitCode).toBe(0)
   })
 

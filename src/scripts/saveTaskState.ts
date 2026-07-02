@@ -53,23 +53,25 @@ export const saveTaskState: PostflightScript = async (ctx, profile) => {
   })
   if (ctx.output.prUrl) next.core.prUrl = ctx.output.prUrl
   if (typeof ctx.data.runUrl === "string") next.core.runUrl = ctx.data.runUrl as string
-  applyStandaloneTerminalState(next, ctx, profile)
+  applyStandaloneFinalState(next, ctx, profile)
 
   writeTaskState(target, number, next, ctx.cwd, ctx.config)
   ctx.data.taskState = next
   ctx.data.taskStateRendered = renderStateComment(next)
 }
 
-function applyStandaloneTerminalState(
+function applyStandaloneFinalState(
   state: TaskState,
   ctx: CtxShape,
   profile: { lifecycleConfig?: Record<string, unknown> },
 ) {
   if (profile.lifecycleConfig?.finalize !== true || state.flow?.issueNumber) return
 
-  const delivered = ctx.output.exitCode === 0 && (!!state.core.prUrl || isDeliveryNotRequired(ctx.data))
-  state.core.phase = delivered ? "shipped" : "failed"
-  state.core.status = delivered ? "succeeded" : "failed"
+  const hasPr = !!state.core.prUrl
+  const noDeliveryNeeded = isDeliveryNotRequired(ctx.data)
+  const succeeded = ctx.output.exitCode === 0 && (hasPr || noDeliveryNeeded)
+  state.core.phase = succeeded ? (hasPr ? "reviewing" : "shipped") : "failed"
+  state.core.status = succeeded ? "succeeded" : "failed"
   state.core.currentExecutable = null
 }
 

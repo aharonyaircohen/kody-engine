@@ -64,7 +64,7 @@ describe("task state finalization caching", () => {
     vi.clearAllMocks()
   })
 
-  it("saveTaskState writes terminal shipped state for standalone finalizing runs", async () => {
+  it("saveTaskState writes reviewing state for standalone PR-producing runs", async () => {
     const taskState = state()
     const c = ctx(taskState, {
       output: {
@@ -77,7 +77,7 @@ describe("task state finalization caching", () => {
 
     expect(mocks.writeTaskState).toHaveBeenCalledOnce()
     const written = mocks.writeTaskState.mock.calls[0]![2] as TaskState
-    expect(written.core.phase).toBe("shipped")
+    expect(written.core.phase).toBe("reviewing")
     expect(written.core.status).toBe("succeeded")
     expect(written.core.currentExecutable).toBeNull()
     expect(c.data.taskState).toBe(written)
@@ -186,11 +186,11 @@ describe("task state finalization caching", () => {
     expect(mocks.writeTaskState).toHaveBeenCalledWith("pr", 88, taskState, "/tmp/repo", expect.any(Object))
   })
 
-  it("finalizeTerminal reuses already-terminal cached state and avoids a second state write", async () => {
+  it("finalizeTerminal reuses already-reviewing cached state and avoids a second state write", async () => {
     const taskState = state({
       core: {
         ...emptyState().core,
-        phase: "shipped",
+        phase: "reviewing",
         status: "succeeded",
         currentExecutable: null,
         prUrl: "https://github.com/acme/widgets/pull/88",
@@ -201,8 +201,16 @@ describe("task state finalization caching", () => {
 
     expect(mocks.readTaskState).not.toHaveBeenCalled()
     expect(mocks.writeTaskState).not.toHaveBeenCalled()
-    expect(mocks.setKodyLabel).toHaveBeenCalledWith(42, expect.objectContaining({ label: "kody:done" }), "/tmp/repo")
-    expect(mocks.setKodyLabel).toHaveBeenCalledWith(88, expect.objectContaining({ label: "kody:done" }), "/tmp/repo")
+    expect(mocks.setKodyLabel).toHaveBeenCalledWith(
+      42,
+      expect.objectContaining({ label: "kody:reviewing" }),
+      "/tmp/repo",
+    )
+    expect(mocks.setKodyLabel).toHaveBeenCalledWith(
+      88,
+      expect.objectContaining({ label: "kody:reviewing" }),
+      "/tmp/repo",
+    )
   })
 
   it("finalizeTerminal writes failed terminal state from cached nonterminal state", async () => {
@@ -253,11 +261,19 @@ describe("task state finalization caching", () => {
     await finalizeTerminal(c, runProfile, null)
 
     expect(mocks.readTaskState).toHaveBeenCalledWith("issue", 42, "/tmp/repo", expect.any(Object))
-    expect(mocks.setKodyLabel).toHaveBeenCalledWith(42, expect.objectContaining({ label: "kody:done" }), "/tmp/repo")
-    expect(mocks.setKodyLabel).toHaveBeenCalledWith(88, expect.objectContaining({ label: "kody:done" }), "/tmp/repo")
+    expect(mocks.setKodyLabel).toHaveBeenCalledWith(
+      42,
+      expect.objectContaining({ label: "kody:reviewing" }),
+      "/tmp/repo",
+    )
+    expect(mocks.setKodyLabel).toHaveBeenCalledWith(
+      88,
+      expect.objectContaining({ label: "kody:reviewing" }),
+      "/tmp/repo",
+    )
     expect(mocks.writeTaskState).toHaveBeenCalledOnce()
     const written = mocks.writeTaskState.mock.calls[0]![2] as TaskState
-    expect(written.core.phase).toBe("shipped")
+    expect(written.core.phase).toBe("reviewing")
     expect(written.core.status).toBe("succeeded")
   })
 

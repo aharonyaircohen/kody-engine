@@ -1,6 +1,6 @@
 /**
- * Postflight (single-session executables): stamp the TERMINAL label +
- * phase/status after the PR exists.
+ * Postflight (single-session executables): settle the run label + phase/status
+ * after delivery is known.
  *
  * This is the orchestration-free replacement for what container profiles
  * did via `finishFlow`. A single-session executable (feature, bug, …) has
@@ -12,8 +12,10 @@
  * `lifecycleConfig.finalize: true`. It uses the just-written cached state
  * when available (saveTaskState is authoritative) and decides:
  *
- *   - success  := agent exited 0 AND a PR was created  → kody:done,
- *                 phase "shipped", status "succeeded".
+ *   - PR success := agent exited 0 AND a PR was created → kody:reviewing,
+ *                   phase "reviewing", status "succeeded".
+ *   - no-delivery success := agent exited 0 AND no PR was needed → kody:done,
+ *                            phase "shipped", status "succeeded".
  *   - failure  := anything else (including "exit 0 but no PR" — that is a
  *                 delivery failure, not success) → kody:failed,
  *                 phase "failed", status "failed".
@@ -32,7 +34,12 @@ import { isDeliveryNotRequired } from "./deliveryOutcome.js"
 const DONE: KodyLabelSpec = {
   label: "kody:done",
   color: "0e8a16",
-  description: "kody: PR ready for human review/merge",
+  description: "kody: work complete",
+}
+const REVIEWING: KodyLabelSpec = {
+  label: "kody:reviewing",
+  color: "d93f0b",
+  description: "kody: PR ready for human review",
 }
 const FAILED: KodyLabelSpec = {
   label: "kody:failed",
@@ -42,11 +49,9 @@ const FAILED: KodyLabelSpec = {
 
 export const finalizeTerminal: PostflightScript = async (ctx) => {
   // If this run is a child of an in-progress flow, the orchestrator owns the
-  // terminal label (it re-triggers via advanceFlow and stamps kody:done in
-  // finishFlow). Self-finalizing here would mark the PR done before the
-  // flow's later stages run. Standalone runs (no flow) fall through and
-  // finalize themselves — this is what restores kody:done after a lone
-  // `@kody fix` / `run` / `fix-ci` instead of leaving the target unlabeled.
+  // final label (it re-triggers via advanceFlow and stamps the terminal state
+  // in finishFlow). Standalone runs (no flow) fall through and settle
+  // themselves so the target is not left with a mid-run label.
   const flow = (ctx.data.taskState as TaskState | undefined)?.flow
   if (flow?.issueNumber) return
 
@@ -59,12 +64,14 @@ export const finalizeTerminal: PostflightScript = async (ctx) => {
   let state = cachedState
   const prUrl = cachedState?.core.prUrl ?? ctx.output.prUrl ?? (ctx.data.prResult as { url?: string } | undefined)?.url
 
-  const delivered = ctx.output.exitCode === 0 && (!!prUrl || isDeliveryNotRequired(ctx.data))
-  const spec = delivered ? DONE : FAILED
-  const phase: Phase = delivered ? "shipped" : "failed"
-  const status: Status = delivered ? "succeeded" : "failed"
+  const hasPr = !!prUrl
+  const noDeliveryNeeded = isDeliveryNotRequired(ctx.data)
+  const succeeded = ctx.output.exitCode === 0 && (hasPr || noDeliveryNeeded)
+  const spec = succeeded ? (hasPr ? REVIEWING : DONE) : FAILED
+  const phase: Phase = succeeded ? (hasPr ? "reviewing" : "shipped") : "failed"
+  const status: Status = succeeded ? "succeeded" : "failed"
 
-  // Apply terminal label to the issue AND the PR (when one exists) so
+  // Apply the resolved label to the issue AND the PR (when one exists) so
   // neither is left stamped with the mid-run `kody:running`.
   if (issueNumber) setKodyLabel(issueNumber, spec, ctx.cwd)
   const prNumber = prUrl ? parsePrNumber(prUrl) : null
