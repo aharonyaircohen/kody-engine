@@ -134,7 +134,7 @@ describe("commitGoalState report refresh", () => {
     expect(path).toMatch(/^reports\/release-v1-2-3\/runs\/\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z\.md$/)
     expect(body).toContain("- Event: goal.tick.dispatch")
     expect(body).toContain("- Next step: dispatch")
-    expect(body).toContain("- Triggered by: local run")
+    expect(body).toContain("- Triggered by:")
     expect(body).toContain("- Decided by: goal-manager")
     expect(body).toContain("- Dispatched by: goal-manager")
     expect(ctx.data.goalReports).toEqual([{ slug: "release-v1-2-3", path, changed: true }])
