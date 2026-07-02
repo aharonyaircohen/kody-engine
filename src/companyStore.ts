@@ -52,6 +52,24 @@ export function resetCompanyStoreCacheForTests(): void {
   memo = null
 }
 
+export function applyCompanyStoreRuntimeConfig(
+  input: Record<string, unknown> | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  const repo = stringValue(input?.storeRepoUrl ?? input?.storeRepo)
+  const ref = stringValue(input?.storeRef)
+  let changed = false
+  if (repo && env[STORE_ENV] !== repo) {
+    env[STORE_ENV] = repo
+    changed = true
+  }
+  if (ref && env[REF_ENV] !== ref) {
+    env[REF_ENV] = ref
+    changed = true
+  }
+  if (changed) resetCompanyStoreCacheForTests()
+}
+
 function resolveCompanyStore(): { repo: string; ref: string } | null {
   const envStore = process.env[STORE_ENV]?.trim()
 
@@ -65,6 +83,10 @@ function resolveCompanyStore(): { repo: string; ref: string } | null {
   if (!ref) return null
 
   return { repo, ref }
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined
 }
 
 function fetchCompanyStore(repo: string, ref: string): string | null {

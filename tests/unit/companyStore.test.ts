@@ -4,7 +4,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { loadAgentIdentity } from "../../src/agents.js"
-import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
+import { applyCompanyStoreRuntimeConfig, resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import { listCapabilityActions, listExecutables, resolveExecutable } from "../../src/registry.js"
 
 let tmp: string
@@ -30,6 +30,16 @@ afterEach(() => {
 })
 
 describe("company store resolution", () => {
+  it("applies Dashboard-provided store target as runtime env", () => {
+    applyCompanyStoreRuntimeConfig({
+      storeRepoUrl: "https://github.com/acme/kody-store",
+      storeRef: "main",
+    })
+
+    expect(process.env.KODY_COMPANY_STORE).toBe("https://github.com/acme/kody-store")
+    expect(process.env.KODY_COMPANY_STORE_REF).toBe("main")
+  })
+
   it("loads capabilities and agents from a remote git ref", () => {
     const remote = createStoreRepo()
     const consumer = path.join(tmp, "consumer")

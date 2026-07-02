@@ -13,6 +13,7 @@ import {
 } from "./issue.js"
 import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
 import { setKodyLabel } from "./lifecycleLabels.js"
+import { applyCompanyStoreRuntimeConfig } from "./companyStore.js"
 import { resolveCapabilityAction } from "./registry.js"
 import { type RunRequest, readRunRequestFromEnv } from "./run-request.js"
 import { lastRunLogPath } from "./runtimePaths.js"
@@ -24,6 +25,10 @@ const FAILED_DISPATCH_LABEL = {
   label: "kody:failed",
   color: "e11d21",
   description: "Kody failed or rejected the run",
+}
+
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : undefined
 }
 
 export interface CiArgs {
@@ -393,6 +398,9 @@ export async function runCi(argv: string[]): Promise<number> {
     process.stderr.write(`[kody] ${parsedRunRequest.error}\n`)
     return 64
   }
+  if (parsedRunRequest && "request" in parsedRunRequest) {
+    applyCompanyStoreRuntimeConfig(parsedRunRequest.request.input)
+  }
   if (!args.issueNumber && !autoFallback && parsedRunRequest && "request" in parsedRunRequest) {
     const route = routeRunRequest(parsedRunRequest.request)
     if (route.kind === "error") {
@@ -426,10 +434,12 @@ export async function runCi(argv: string[]): Promise<number> {
   ) {
     try {
       const evt = JSON.parse(fs.readFileSync(dispatchEventPath, "utf-8"))
-      const issueInput = parseInt(String(evt?.inputs?.issue_number ?? ""), 10)
-      const sessionInput = String(evt?.inputs?.sessionId ?? "")
-      const capabilityInput = String(evt?.inputs?.capability ?? evt?.inputs?.executable ?? "").trim()
-      const messageInput = String(evt?.inputs?.message ?? "").trim()
+      const inputs = objectValue(evt.inputs)
+      applyCompanyStoreRuntimeConfig(inputs)
+      const issueInput = parseInt(String(inputs?.issue_number ?? ""), 10)
+      const sessionInput = String(inputs?.sessionId ?? "")
+      const capabilityInput = String(inputs?.capability ?? inputs?.executable ?? "").trim()
+      const messageInput = String(inputs?.message ?? "").trim()
       const noTarget = !sessionInput && !(Number.isFinite(issueInput) && issueInput > 0)
       // Explicit `capability` + no target → manual one-shot "Run now" of that
       // single capability (a scheduled / no-target folder-capability), bypassing the

@@ -34,6 +34,7 @@ import { configureGitIdentity, installLitellmIfNeeded, resolveAuthToken, unpackA
 import { startLitellmIfNeeded } from "./litellm.js"
 import { readRunRequestFromEnv } from "./run-request.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
+import { applyCompanyStoreRuntimeConfig } from "./companyStore.js"
 
 const DEFAULT_MODEL = "claude/claude-haiku-4-5-20251001"
 
@@ -144,6 +145,10 @@ export async function runChat(argv: string[]): Promise<number> {
 
   const cwd = args.cwd ? path.resolve(args.cwd) : process.cwd()
   const sessionId = args.sessionId!
+  const runRequest = readRunRequestFromEnv()
+  if (runRequest && "request" in runRequest) {
+    applyCompanyStoreRuntimeConfig(runRequest.request.input)
+  }
 
   const unpackedSecrets = unpackAllSecrets()
   if (unpackedSecrets > 0) {
