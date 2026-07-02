@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -7,9 +7,9 @@ vi.mock("../../../src/issue.js", () => ({
   gh: vi.fn(),
 }))
 
+import { resetCompanyStoreCacheForTests } from "../../../src/companyStore.js"
 import { fetchGoalState, listGoalStateIds, putGoalState } from "../../../src/goal/stateStore.js"
 import { gh } from "../../../src/issue.js"
-import { resetCompanyStoreCacheForTests } from "../../../src/companyStore.js"
 import { STATE_BRANCH } from "../../../src/stateBranch.js"
 
 const config = {

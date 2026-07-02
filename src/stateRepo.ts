@@ -110,13 +110,17 @@ export function normalizeStatePath(raw: string, field = "statePath"): string {
 export function normalizeStateBranch(raw: string | undefined, field = "state.branch"): string {
   const value = raw?.trim() || STATE_BRANCH
   if (!value) throw new Error(`kody.config.json: ${field} must not be empty`)
+  const hasInvalidChar = [...value].some((char) => {
+    const code = char.charCodeAt(0)
+    return code <= 0x20 || code === 0x7f || "~^:?*[".includes(char)
+  })
   if (
     value.startsWith("/") ||
     value.endsWith("/") ||
     value.includes("\\") ||
     value.includes("..") ||
     value.includes("@{") ||
-    /[\x00-\x20\x7f~^:?*\[]/.test(value)
+    hasInvalidChar
   ) {
     throw new Error(`kody.config.json: ${field} contains an invalid branch`)
   }

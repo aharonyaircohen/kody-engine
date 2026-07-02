@@ -14,14 +14,14 @@
  */
 
 import * as fs from "node:fs"
-import type { InputSpec } from "./executables/types.js"
 import { BUILTIN_ALIASES, type KodyConfig } from "./config.js"
 import { cronMatchesInWindow } from "./cron-match.js"
+import type { InputSpec } from "./executables/types.js"
 import {
   type DiscoveredCapabilityAction,
   getProfileInputs,
-  listExecutables,
   listCapabilityActions,
+  listExecutables,
   resolveCapabilityAction,
 } from "./registry.js"
 
@@ -294,9 +294,7 @@ export function autoDispatch(opts?: {
   // POLITE_WORDS filter above lets natural-language phrasings through to
   // the default — the "no firstToken" condition here is what gates them.
   if (!route && !firstToken) {
-    const defaultAction = isPr
-      ? (opts?.config?.defaultPrExecutable ?? null)
-      : (opts?.config?.defaultExecutable ?? null)
+    const defaultAction = isPr ? (opts?.config?.defaultPrExecutable ?? null) : (opts?.config?.defaultExecutable ?? null)
     route = defaultAction ? resolveConfiguredAction(defaultAction) : null
   }
   if (isBotAuthor && !consumedFirstToken) {

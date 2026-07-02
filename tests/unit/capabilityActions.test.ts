@@ -30,10 +30,7 @@ afterEach(() => {
 function writeFolderCapability(slug: string, profile: Record<string, unknown>): void {
   const dir = path.join(root, ".kody", "capabilities", slug)
   fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(
-    path.join(dir, "profile.json"),
-    JSON.stringify({ name: slug, ...profile }, null, 2),
-  )
+  fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
   fs.writeFileSync(path.join(dir, "capability.md"), `# ${slug}\n`)
 }
 

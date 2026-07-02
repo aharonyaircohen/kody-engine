@@ -1,5 +1,5 @@
-import type { AgentResult } from "../agent.js"
 import { evaluateAgencyBoundaries } from "../agencyBoundaryEval.js"
+import type { AgentResult } from "../agent.js"
 import { type CapabilityResult, parseCapabilityResult, parseCapabilityResultsFromText } from "../capabilityResult.js"
 import type { PostflightScript } from "../executables/types.js"
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { goalRunTrace, type GoalRunLogEvent } from "../../src/goal/runLog.js"
+import { type GoalRunLogEvent, goalRunTrace } from "../../src/goal/runLog.js"
 
 describe("goal run trace", () => {
   it("summarizes a goal dispatch event into joinable trace fields", () => {

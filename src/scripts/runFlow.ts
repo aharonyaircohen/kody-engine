@@ -4,8 +4,8 @@
  * comment. Issue number lives in `ctx.args.issue`.
  */
 
-import type { PreflightScript } from "../executables/types.js"
 import { ensureFeatureBranch } from "../branch.js"
+import type { PreflightScript } from "../executables/types.js"
 import { getRunUrl } from "../gha.js"
 import {
   DEFAULT_COMMENT_LIMIT,

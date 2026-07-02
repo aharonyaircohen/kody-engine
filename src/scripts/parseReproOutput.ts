@@ -105,7 +105,10 @@ function extractFailureSignatureBlock(text: string): string {
 function normalizeFailureSignatureBlock(block: string): string {
   let s = block.trim()
   while (/^```(?:json)?\s*/i.test(s) && /```\s*$/i.test(s)) {
-    const next = s.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim()
+    const next = s
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/```\s*$/i, "")
+      .trim()
     if (next === s) break
     s = next
   }

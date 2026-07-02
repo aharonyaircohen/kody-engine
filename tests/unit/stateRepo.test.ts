@@ -86,10 +86,9 @@ describe("stateRepo branch", () => {
 
     readStateText(configuredBranchConfig, "/repo", "reports/check.md")
 
-    expect(ghMock).toHaveBeenCalledWith(
-      ["api", "/repos/o/kody-state/contents/widgets/reports/check.md?ref=main"],
-      { cwd: "/repo" },
-    )
+    expect(ghMock).toHaveBeenCalledWith(["api", "/repos/o/kody-state/contents/widgets/reports/check.md?ref=main"], {
+      cwd: "/repo",
+    })
   })
 
   it("creates a configured state branch on first write and writes to it", () => {

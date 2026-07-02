@@ -23,6 +23,7 @@ import { runChatTurn } from "./chat/loop.js"
 import { runInteractiveMode } from "./chat/modes/interactive.js"
 import { readMeta, seedInitialMessage, sessionFilePath } from "./chat/session.js"
 import { persistChatFilesToState, syncChatFilesFromState } from "./chat/state-sync.js"
+import { applyCompanyStoreRuntimeConfig } from "./companyStore.js"
 import {
   loadConfig,
   needsLitellmProxy,
@@ -34,7 +35,6 @@ import { configureGitIdentity, installLitellmIfNeeded, resolveAuthToken, unpackA
 import { startLitellmIfNeeded } from "./litellm.js"
 import { readRunRequestFromEnv } from "./run-request.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
-import { applyCompanyStoreRuntimeConfig } from "./companyStore.js"
 
 const DEFAULT_MODEL = "claude/claude-haiku-4-5-20251001"
 

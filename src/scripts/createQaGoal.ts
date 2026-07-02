@@ -155,7 +155,9 @@ export function splitReport(text: string): { markdown: string; data: ReportJson 
   return { markdown, data: parsed, jsonError: parseError }
 }
 
-function parseFallbackFindingsJson(text: string): { markdown: string; data: ReportJson | null; jsonError?: string } | null {
+function parseFallbackFindingsJson(
+  text: string,
+): { markdown: string; data: ReportJson | null; jsonError?: string } | null {
   const fences = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi)]
   for (let i = fences.length - 1; i >= 0; i--) {
     const match = fences[i]!
@@ -164,7 +166,11 @@ function parseFallbackFindingsJson(text: string): { markdown: string; data: Repo
     try {
       const parsed = JSON.parse(raw) as { findings?: unknown }
       if (!parsed || !Array.isArray(parsed.findings)) {
-        return { markdown: removeFence(text, match).trim(), data: null, jsonError: "fallback JSON missing 'findings' array" }
+        return {
+          markdown: removeFence(text, match).trim(),
+          data: null,
+          jsonError: "fallback JSON missing 'findings' array",
+        }
       }
       return {
         markdown: removeFence(text, match).trim(),
@@ -192,7 +198,8 @@ function normalizeFallbackFinding(raw: unknown, idx: number): ParsedFinding {
   const title = firstString(finding.title, finding.summary, finding.issue, finding.name) || `QA finding ${idx + 1}`
   const route = firstString(finding.route, finding.url, finding.path)
   const expected = firstString(finding.expected) || "Expected behavior described in QA report."
-  const actual = firstString(finding.actual, finding.summary, finding.observed) || "Observed behavior described in QA report."
+  const actual =
+    firstString(finding.actual, finding.summary, finding.observed) || "Observed behavior described in QA report."
   return {
     severity: normalizeSeverity(firstString(finding.severity, finding.priority)),
     title,
@@ -214,9 +221,7 @@ function firstString(...values: unknown[]): string {
 function evidenceString(value: unknown): string | undefined {
   if (typeof value === "string" && value.trim()) return value.trim()
   if (Array.isArray(value)) {
-    const parts = value
-      .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
-      .map((v) => v.trim())
+    const parts = value.filter((v): v is string => typeof v === "string" && v.trim().length > 0).map((v) => v.trim())
     return parts.length > 0 ? parts.join(", ") : undefined
   }
   return undefined
@@ -468,8 +473,7 @@ export const createQaGoal: PostflightScript = async (ctx, _profile, agentResult:
     try {
       ensureLabel(QA_REPORT_LABEL, "8b5cf6", "kody: QA report", ctx.cwd)
       gh(["issue", "edit", String(existingIssue), "--add-label", QA_REPORT_LABEL], { cwd: ctx.cwd })
-    } catch {
-    }
+    } catch {}
     process.stdout.write(
       `\nQA_REPORT_POSTED=https://github.com/${ctx.config.github.owner}/${ctx.config.github.repo}/issues/${existingIssue} (verdict: ${verdict})\n`,
     )

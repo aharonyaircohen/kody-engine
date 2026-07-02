@@ -1,6 +1,12 @@
 import { type GoalState, nowIso } from "./goal/state.js"
 import { fetchGoalState, listGoalStateIds, putGoalState } from "./goal/stateStore.js"
-import { readStateText, listStateDirectory, upsertStateText, appendStateLine, type StateRepoConfig } from "./stateRepo.js"
+import {
+  appendStateLine,
+  listStateDirectory,
+  readStateText,
+  type StateRepoConfig,
+  upsertStateText,
+} from "./stateRepo.js"
 
 export type CompanyIntentStatus = "active" | "paused" | "archived"
 export type CompanyIntentPosture = "confidence" | "speed" | "stability-recovery" | "maintenance" | "balanced"
@@ -153,7 +159,11 @@ export function listCompanyIntents(config: StateRepoConfig, cwd?: string): Compa
   return records.sort((a, b) => a.intent.priority - b.intent.priority || a.id.localeCompare(b.id))
 }
 
-export function readCompanyIntent(config: StateRepoConfig, cwd: string | undefined, id: string): CompanyIntentRecord | null {
+export function readCompanyIntent(
+  config: StateRepoConfig,
+  cwd: string | undefined,
+  id: string,
+): CompanyIntentRecord | null {
   const path = companyIntentPath(id)
   const file = readStateText(config, cwd, path)
   if (!file) return null
@@ -176,7 +186,13 @@ export function appendCompanyIntentDecision(
   entry: CompanyIntentDecisionLog,
 ): void {
   assertIntentId(intentId)
-  appendStateLine(config, cwd, `intents/${intentId}/decisions.jsonl`, JSON.stringify(entry), `chore(intents): log ${intentId} decision`)
+  appendStateLine(
+    config,
+    cwd,
+    `intents/${intentId}/decisions.jsonl`,
+    JSON.stringify(entry),
+    `chore(intents): log ${intentId} decision`,
+  )
 }
 
 export function listCompanyPortfolio(config: StateRepoConfig, cwd?: string): CompanyPortfolio {
@@ -228,7 +244,10 @@ function recordField(value: unknown): Record<string, unknown> | null {
 
 function stringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return []
-  return value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean)
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 function oneOf<const T extends readonly string[]>(value: unknown, allowed: T, fallback: T[number]): T[number] {
@@ -241,7 +260,11 @@ function normalizeReleasePolicy(raw: Record<string, unknown> | null): CompanyInt
     cadence: oneOf(raw.cadence, ["manual", "1d", "1w"] as const, "manual"),
     qaDepth: oneOf(raw.qaDepth, ["light", "standard", "strict"] as const, "standard"),
     blockerLevel: oneOf(raw.blockerLevel, ["low", "standard", "strict"] as const, "standard"),
-    approval: oneOf(raw.approval, ["none", "before-production", "before-risky-actions"] as const, "before-risky-actions"),
+    approval: oneOf(
+      raw.approval,
+      ["none", "before-production", "before-risky-actions"] as const,
+      "before-risky-actions",
+    ),
   }
 }
 

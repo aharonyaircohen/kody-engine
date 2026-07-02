@@ -67,8 +67,7 @@ function markIssueWithReportLabel(issue: number, cwd: string): void {
   if (!ensureLabel(cwd)) return
   try {
     gh(["issue", "edit", String(issue), "--add-label", QA_LABEL], { cwd })
-  } catch {
-  }
+  } catch {}
 }
 
 function createQaIssue(title: string, body: string, hasLabel: boolean, cwd: string): { number: number; url: string } {

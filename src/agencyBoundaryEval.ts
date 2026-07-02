@@ -111,18 +111,10 @@ function resultSummary(result: CapabilityResult): Record<string, unknown> {
   }
 }
 
-function pass(
-  rule: AgencyBoundaryRule,
-  message: string,
-  evidence: Record<string, unknown>,
-): AgencyBoundaryFinding {
+function pass(rule: AgencyBoundaryRule, message: string, evidence: Record<string, unknown>): AgencyBoundaryFinding {
   return { rule, status: "pass", message, evidence }
 }
 
-function fail(
-  rule: AgencyBoundaryRule,
-  message: string,
-  evidence: Record<string, unknown>,
-): AgencyBoundaryFinding {
+function fail(rule: AgencyBoundaryRule, message: string, evidence: Record<string, unknown>): AgencyBoundaryFinding {
   return { rule, status: "fail", message, evidence }
 }

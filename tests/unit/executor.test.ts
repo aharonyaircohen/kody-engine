@@ -226,7 +226,10 @@ describe("executor: stale hydrated capability overrides", () => {
     const store = path.join(tmp, "store")
     fs.mkdirSync(consumer, { recursive: true })
     fs.mkdirSync(store, { recursive: true })
-    fs.writeFileSync(path.join(store, "kody-store.json"), JSON.stringify({ assetRoots: { capabilities: "capabilities" } }))
+    fs.writeFileSync(
+      path.join(store, "kody-store.json"),
+      JSON.stringify({ assetRoots: { capabilities: "capabilities" } }),
+    )
 
     writeSkipAgentProfile(path.join(consumer, ".kody", "capabilities", "classify", "profile.json"), {
       postflight: [{ script: "writeRunSummary" }],

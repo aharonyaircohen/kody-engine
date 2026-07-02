@@ -331,7 +331,7 @@ function goalTraceResult(
   const result = pruneUndefined({
     status: event.status ?? stringValue(capabilityOutput?.status) ?? undefined,
     summary: event.reason ?? stringValue(capabilityOutput?.summary) ?? undefined,
-    blockers: event.inspection ? stringArrayValue(capabilityOutput?.blockers) ?? undefined : undefined,
+    blockers: event.inspection ? (stringArrayValue(capabilityOutput?.blockers) ?? undefined) : undefined,
     artifacts: event.artifacts,
   })
   return Object.keys(result).length > 0 ? result : undefined

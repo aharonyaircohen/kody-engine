@@ -48,7 +48,7 @@ describe("smoke: CLI boots and validates args", () => {
   it("runs a project capability action through its implementation executable", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-cli-smoke-"))
     fs.mkdirSync(path.join(root, ".kody", "capabilities"), { recursive: true })
-    fs.mkdirSync(path.join(root, ".kody", "executables", "smoke-impl"), { recursive: true })
+    fs.mkdirSync(path.join(root, ".kody", "capabilities", "smoke-impl"), { recursive: true })
     fs.mkdirSync(path.join(root, ".kody", "agents"), { recursive: true })
     fs.writeFileSync(
       path.join(root, "kody.config.json"),
@@ -70,12 +70,9 @@ describe("smoke: CLI boots and validates args", () => {
         agent: "kody",
       }),
     )
+    fs.writeFileSync(path.join(root, ".kody", "capabilities", "smoke-capability", "capability.md"), "# Smoke\n")
     fs.writeFileSync(
-      path.join(root, ".kody", "capabilities", "smoke-capability", "capability.md"),
-      "# Smoke\n",
-    )
-    fs.writeFileSync(
-      path.join(root, ".kody", "executables", "smoke-impl", "profile.json"),
+      path.join(root, ".kody", "capabilities", "smoke-impl", "profile.json"),
       JSON.stringify({
         name: "smoke-impl",
         role: "utility",
@@ -100,6 +97,7 @@ describe("smoke: CLI boots and validates args", () => {
         scripts: { preflight: [{ script: "skipAgent" }], postflight: [] },
       }),
     )
+    fs.writeFileSync(path.join(root, ".kody", "capabilities", "smoke-impl", "capability.md"), "# Smoke impl\n")
 
     const r = runCli(["smoke-action"], { cwd: root, env: { KODY_COMPANY_STORE: "off" } })
     expect(r.status).toBe(0)
