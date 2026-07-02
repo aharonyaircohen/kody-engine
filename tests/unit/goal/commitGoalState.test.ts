@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("../../../src/goal/stateStore.js", () => ({
   putGoalState: vi.fn(),
@@ -84,10 +84,28 @@ function fakeProfile(): Profile {
 }
 
 describe("commitGoalState report refresh", () => {
+  const originalGithubEventName = process.env.GITHUB_EVENT_NAME
+  const originalGithubActor = process.env.GITHUB_ACTOR
+
   beforeEach(() => {
     putGoalStateMock.mockReset()
     flushGoalRunLogEventsMock.mockReset()
     writeStateTextMock.mockReset()
+    delete process.env.GITHUB_EVENT_NAME
+    delete process.env.GITHUB_ACTOR
+  })
+
+  afterEach(() => {
+    if (originalGithubEventName === undefined) {
+      delete process.env.GITHUB_EVENT_NAME
+    } else {
+      process.env.GITHUB_EVENT_NAME = originalGithubEventName
+    }
+    if (originalGithubActor === undefined) {
+      delete process.env.GITHUB_ACTOR
+    } else {
+      process.env.GITHUB_ACTOR = originalGithubActor
+    }
   })
 
   it("writes the goal dashboard report after changed goal state is persisted", async () => {
