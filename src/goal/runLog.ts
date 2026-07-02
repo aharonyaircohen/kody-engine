@@ -39,6 +39,39 @@ export interface GoalRunLogEvent {
   trigger?: Record<string, unknown>
   job?: Record<string, unknown>
   links?: Record<string, unknown>
+  trace?: GoalRunTrace
+}
+
+export interface GoalRunTrace {
+  version: 1
+  runId?: string
+  workflowRunId?: string
+  triggerKind?: string
+  source: GoalRunLogEvent["source"]
+  event: string
+  goal: {
+    id: string
+    type?: string
+    state?: string
+    stage?: string
+  }
+  evidence?: {
+    current?: string
+    required?: string[]
+    satisfied?: string[]
+    missing?: string[]
+    pending?: string
+    values?: Record<string, boolean>
+  }
+  capability?: GoalRunLogDispatch
+  result?: {
+    status?: string
+    summary?: string
+    blockers?: string[]
+    artifacts?: CapabilityResultArtifact[]
+  }
+  change?: Record<string, unknown>
+  links?: Record<string, unknown>
 }
 
 interface GoalRunLogBuffer {
@@ -212,16 +245,96 @@ function enrichGoalRunLogEvent(
   const stateRepo = stateRepoContext(config, event.goalId, logPath)
   const trigger = event.trigger ?? triggerContext()
   const job = event.job ?? jobContext(data)
-  return pruneUndefined({
+  const run = event.run ?? runContext(data)
+  const links = event.links ?? linkContext(stateRepo)
+  const enriched = pruneUndefined({
     ...event,
-    run: event.run ?? runContext(data),
+    run,
     repo: event.repo ?? repoContext(config),
     stateRepo: event.stateRepo ?? stateRepo,
     trigger,
     job,
     dispatchContext: event.dispatchContext ?? dispatchContext(event, trigger, job),
-    links: event.links ?? linkContext(stateRepo),
+    links,
   }) as GoalRunLogEvent
+  enriched.trace = event.trace ?? goalRunTrace(enriched)
+  return enriched
+}
+
+export function goalRunTrace(event: GoalRunLogEvent): GoalRunTrace {
+  const run = recordValue(event.run)
+  const trigger = recordValue(event.trigger)
+  const goal = recordValue(event.goal)
+  const inspection = recordValue(event.inspection)
+  const capabilityOutput = recordValue(inspection?.capabilityOutput)
+  return pruneUndefined({
+    version: 1,
+    runId: stringValue(run?.id) ?? undefined,
+    workflowRunId: stringValue(run?.githubRunId) ?? undefined,
+    triggerKind: stringValue(trigger?.kind) ?? undefined,
+    source: event.source,
+    event: event.event,
+    goal: pruneUndefined({
+      id: event.goalId,
+      type: event.goalType ?? stringValue(goal?.type) ?? undefined,
+      state: event.goalState ?? stringValue(goal?.state) ?? undefined,
+      stage: event.stage ?? stringValue(goal?.stage) ?? undefined,
+    }),
+    evidence: goalTraceEvidence(event, goal, inspection),
+    capability: event.dispatch ?? capabilityDispatchFromOutput(capabilityOutput),
+    result: goalTraceResult(event, capabilityOutput),
+    change: event.change,
+    links: event.links,
+  }) as GoalRunTrace
+}
+
+function goalTraceEvidence(
+  event: GoalRunLogEvent,
+  goal: Record<string, unknown> | null,
+  inspection: Record<string, unknown> | null,
+): GoalRunTrace["evidence"] | undefined {
+  const expectedEvidence = recordValue(inspection?.expectedEvidence)
+  const out = pruneUndefined({
+    current: event.evidence,
+    required: stringArrayValue(goal?.requiredEvidence) ?? stringArrayValue(inspection?.requiredEvidence) ?? undefined,
+    satisfied:
+      stringArrayValue(goal?.satisfiedEvidence) ?? stringArrayValue(inspection?.satisfiedEvidence) ?? undefined,
+    missing:
+      stringArrayValue(goal?.missingEvidence) ??
+      stringArrayValue(inspection?.missingEvidence) ??
+      stringArrayValue(expectedEvidence?.missingBefore) ??
+      undefined,
+    pending:
+      stringValue(goal?.pendingEvidence) ??
+      stringValue(inspection?.pendingEvidence) ??
+      stringValue(expectedEvidence?.pendingBefore) ??
+      undefined,
+    values: event.evidenceValues,
+  })
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+function capabilityDispatchFromOutput(output: Record<string, unknown> | null): GoalRunLogDispatch | undefined {
+  if (!output) return undefined
+  const dispatch = pruneUndefined({
+    capability: stringValue(output.capability) ?? undefined,
+    executable: stringValue(output.executable) ?? undefined,
+    action: stringValue(output.action) ?? undefined,
+  })
+  return Object.keys(dispatch).length > 0 ? dispatch : undefined
+}
+
+function goalTraceResult(
+  event: GoalRunLogEvent,
+  capabilityOutput: Record<string, unknown> | null,
+): GoalRunTrace["result"] | undefined {
+  const result = pruneUndefined({
+    status: event.status ?? stringValue(capabilityOutput?.status) ?? undefined,
+    summary: event.reason ?? stringValue(capabilityOutput?.summary) ?? undefined,
+    blockers: event.inspection ? stringArrayValue(capabilityOutput?.blockers) ?? undefined : undefined,
+    artifacts: event.artifacts,
+  })
+  return Object.keys(result).length > 0 ? result : undefined
 }
 
 function runContext(data: Record<string, unknown>): Record<string, unknown> {

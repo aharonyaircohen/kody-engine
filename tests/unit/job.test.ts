@@ -129,7 +129,7 @@ describe("runJob (Phase 1 seam)", () => {
 
   it("seeds inline why into preloadedData.jobWhy", async () => {
     await runJob(
-      { capability: "fix", executable: "fix", why: "fix the flaky test", cliArgs: {}, flavor: "instant" },
+      { capability: "unit-fix", executable: "unit-fix", why: "fix the flaky test", cliArgs: {}, flavor: "instant" },
       { cwd: "/x" },
     )
     const [, input] = runExecutableChain.mock.calls[0]!
@@ -300,7 +300,7 @@ describe("runJob (Phase 1 seam)", () => {
 
       expect(runExecutableChain).toHaveBeenCalledTimes(2)
       expect(runExecutableChain.mock.calls[0]![0]).toBe("reproduce")
-      expect(runExecutableChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42, base: "feature/base" })
+      expect(runExecutableChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42 })
       expect(runExecutableChain.mock.calls[0]![1].preloadedData).toMatchObject({
         workflowCapability: "bug",
         workflowStep: "reproduce",

@@ -28,6 +28,7 @@ import { dispatchCapabilityTicks } from "./dispatchCapabilityTicks.js"
 import { dispatchClassified } from "./dispatchClassified.js"
 import { dispatchNextTaskJob } from "./dispatchNextTaskJob.js"
 import { ensurePr } from "./ensurePr.js"
+import { evaluateAgencyBoundariesScript } from "./evaluateAgencyBoundaries.js"
 import { failOnceTaskJob } from "./failOnceTaskJob.js"
 import { finalizeTerminal } from "./finalizeTerminal.js"
 import { finishFlow } from "./finishFlow.js"
@@ -174,6 +175,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   stageMergeConflicts,
   commitAndPush,
   ensurePr,
+  evaluateAgencyBoundaries: evaluateAgencyBoundariesScript,
   postAgentComment,
   postIssueComment,
   postPlanComment,
