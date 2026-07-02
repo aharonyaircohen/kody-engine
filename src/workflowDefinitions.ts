@@ -7,7 +7,6 @@ import { readStateText, type StateRepoConfig } from "./stateRepo.js"
 export interface WorkflowDefinition {
   version: 1
   name: string
-  instructions: string
   capabilities: string[]
   createdAt?: string
   updatedAt?: string
@@ -31,13 +30,11 @@ export function normalizeWorkflowDefinition(value: unknown): WorkflowDefinition 
   if (!value || typeof value !== "object" || Array.isArray(value)) return null
   const raw = value as Record<string, unknown>
   const name = typeof raw.name === "string" ? raw.name.trim() : ""
-  const instructions = typeof raw.instructions === "string" ? raw.instructions.trim() : ""
   const capabilities = normalizeWorkflowCapabilities(raw.capabilities)
-  if (!name || !instructions || capabilities.length === 0) return null
+  if (!name || capabilities.length === 0) return null
   return {
     version: 1,
     name,
-    instructions,
     capabilities,
     ...(typeof raw.createdAt === "string" ? { createdAt: raw.createdAt } : {}),
     ...(typeof raw.updatedAt === "string" ? { updatedAt: raw.updatedAt } : {}),
@@ -65,13 +62,13 @@ export function workflowDefinitionToCapabilityFolder(
     profilePath: source,
     bodyPath: source,
     title: workflow.name,
-    body: workflow.instructions,
-    rawBody: workflow.instructions,
+    body: "",
+    rawBody: "",
     rawProfile: { name: id, workflow },
     config: {
       action: id,
       workflow: workflowDefinitionToConfig(workflow),
-      describe: workflow.instructions,
+      describe: workflow.name,
     },
   }
 }

@@ -134,7 +134,7 @@ describe("runJob (Phase 1 seam)", () => {
     )
     const [, input] = runExecutableChain.mock.calls[0]!
     expect(input.preloadedData?.jobWhy).toBe("fix the flaky test")
-    expect(input.preloadedData?.jobIntent).toContain("Apply review feedback")
+    expect(input.preloadedData?.jobIntent).toBeUndefined()
   })
 
   it("does not seed jobWhy for an empty why string", async () => {
@@ -300,7 +300,7 @@ describe("runJob (Phase 1 seam)", () => {
 
       expect(runExecutableChain).toHaveBeenCalledTimes(2)
       expect(runExecutableChain.mock.calls[0]![0]).toBe("reproduce")
-      expect(runExecutableChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42 })
+      expect(runExecutableChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42, base: "feature/base" })
       expect(runExecutableChain.mock.calls[0]![1].preloadedData).toMatchObject({
         workflowCapability: "bug",
         workflowStep: "reproduce",
@@ -388,7 +388,6 @@ describe("runJob (Phase 1 seam)", () => {
       const workflow = {
         version: 1,
         name: "Bug workflow",
-        instructions: "Reproduce before fixing.",
         capabilities: ["reproduce", "run"],
         createdAt: "2026-06-27T00:00:00Z",
         updatedAt: "2026-06-27T00:00:00Z",
@@ -435,8 +434,8 @@ describe("runJob (Phase 1 seam)", () => {
         workflowStep: "reproduce",
         workflowStepIndex: 1,
         workflowStepCount: 2,
-        jobWhy: "Reproduce before fixing.",
       })
+      expect(runExecutableChain.mock.calls[0]![1].preloadedData).not.toHaveProperty("jobWhy")
       expect(runExecutableChain.mock.calls[1]![0]).toBe("run")
       expect(runExecutableChain.mock.calls[1]![1].preloadedData).toMatchObject({
         workflowCapability: "bug-flow",

@@ -172,6 +172,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   const workflowIdentity = valid.workflow ?? capabilityIdentity ?? workflowContext?.slug
   const capabilitySelectedExecutable =
     resolvedCapability?.executable ??
+    capabilityContext?.config.implementation ??
     capabilityContext?.config.executable ??
     capabilityContext?.config.executables?.[0] ??
     (capabilityContext?.config.role ? capabilityContext.slug : undefined) ??
