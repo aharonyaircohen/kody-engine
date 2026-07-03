@@ -5,7 +5,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 
 export const DEFAULT_COMPANY_STORE = "aharonyaircohen/kody-company-store"
-export const DEFAULT_COMPANY_STORE_REF = "stable"
+export const DEFAULT_COMPANY_STORE_REF = "main"
 
 const STORE_ENV = "KODY_COMPANY_STORE"
 const REF_ENV = "KODY_COMPANY_STORE_REF"

@@ -4,7 +4,11 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { loadAgentIdentity } from "../../src/agents.js"
-import { applyCompanyStoreRuntimeConfig, resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
+import {
+  DEFAULT_COMPANY_STORE_REF,
+  applyCompanyStoreRuntimeConfig,
+  resetCompanyStoreCacheForTests,
+} from "../../src/companyStore.js"
 import { listCapabilityActions, listExecutables, resolveExecutable } from "../../src/registry.js"
 
 let tmp: string
@@ -30,6 +34,10 @@ afterEach(() => {
 })
 
 describe("company store resolution", () => {
+  it("defaults the shared store to main", () => {
+    expect(DEFAULT_COMPANY_STORE_REF).toBe("main")
+  })
+
   it("applies Dashboard-provided store target as runtime env", () => {
     applyCompanyStoreRuntimeConfig({
       storeRepoUrl: "https://github.com/acme/kody-store",
