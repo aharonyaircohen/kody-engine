@@ -68,4 +68,22 @@ describe("evaluateAgencyBoundaries script", () => {
     expect(ctx.data.agencyBoundaryEval).toMatchObject({ status: "fail" })
     write.mockRestore()
   })
+
+  it("uses job capability metadata when a shared implementation profile runs the work", async () => {
+    const ctx = fakeCtx({
+      jobCapability: "ai-agency-health-matrix",
+      jobCapabilityKind: "observe",
+      capabilityResults: [],
+    })
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
+
+    await evaluateAgencyBoundariesScript(ctx, fakeProfile(undefined), null)
+
+    expect(ctx.data.agencyBoundaryEval).toMatchObject({
+      status: "pass",
+      capability: "ai-agency-health-matrix",
+      capabilityKind: "observe",
+    })
+    write.mockRestore()
+  })
 })

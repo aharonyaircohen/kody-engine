@@ -9,6 +9,7 @@ export interface CapabilityFolderConfig {
   implementation?: string
   executable?: string
   tickScript?: string
+  capabilityKind?: "observe" | "act" | "verify"
   disabled?: boolean
   internal?: boolean
   public?: boolean
@@ -109,6 +110,7 @@ export function parseCapabilityConfig(raw: Record<string, unknown>): CapabilityF
     implementation: stringField(raw.implementation ?? raw.executable),
     executable: stringField(raw.executable),
     tickScript: stringField(raw.tickScript),
+    capabilityKind: parseCapabilityKind(raw.capabilityKind),
     disabled: typeof raw.disabled === "boolean" ? raw.disabled : undefined,
     internal: typeof raw.internal === "boolean" ? raw.internal : undefined,
     public: typeof raw.public === "boolean" ? raw.public : undefined,
@@ -126,6 +128,10 @@ export function parseCapabilityConfig(raw: Record<string, unknown>): CapabilityF
     writesTo: stringList(raw.writesTo ?? raw.writes_to),
     workflow: parseCapabilityWorkflow(raw.workflow),
   }
+}
+
+function parseCapabilityKind(raw: unknown): CapabilityFolderConfig["capabilityKind"] | undefined {
+  return raw === "observe" || raw === "act" || raw === "verify" ? raw : undefined
 }
 
 function parseCapabilityToolMode(raw: unknown): "lock" | "append" | undefined {

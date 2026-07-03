@@ -1,13 +1,15 @@
 import { evaluateAgencyBoundaries } from "../agencyBoundaryEval.js"
 import type { AgentResult } from "../agent.js"
 import { type CapabilityResult, parseCapabilityResult, parseCapabilityResultsFromText } from "../capabilityResult.js"
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript, Profile } from "../executables/types.js"
 
 export const evaluateAgencyBoundariesScript: PostflightScript = async (ctx, profile, agentResult) => {
   const results = collectResults(ctx.data.capabilityResults ?? ctx.data.dutyResults, agentResult)
+  const capabilityKind = agencyBoundaryCapabilityKind(ctx.data, profile)
+  const capability = agencyBoundaryCapability(ctx.data, profile)
   const evalResult = evaluateAgencyBoundaries({
-    capability: profile.name,
-    capabilityKind: profile.capabilityKind,
+    capability,
+    capabilityKind,
     results,
   })
   ctx.data.agencyBoundaryEval = evalResult
@@ -19,6 +21,25 @@ export const evaluateAgencyBoundariesScript: PostflightScript = async (ctx, prof
       ? `${ctx.output.reason}; agency boundary eval failed: ${failed.join(", ")}`
       : `agency boundary eval failed: ${failed.join(", ")}`
   }
+}
+
+export function shouldEvaluateAgencyBoundaries(data: Record<string, unknown>, profile: Profile): boolean {
+  return Boolean(agencyBoundaryCapabilityKind(data, profile))
+}
+
+function agencyBoundaryCapability(data: Record<string, unknown>, profile: Profile): string {
+  if (typeof data.jobCapability === "string" && data.jobCapability.length > 0) return data.jobCapability
+  if (typeof data.capabilitySlug === "string" && data.capabilitySlug.length > 0) return data.capabilitySlug
+  return profile.name
+}
+
+function agencyBoundaryCapabilityKind(
+  data: Record<string, unknown>,
+  profile: Profile,
+): Profile["capabilityKind"] | undefined {
+  const fromJob = data.jobCapabilityKind
+  if (fromJob === "observe" || fromJob === "act" || fromJob === "verify") return fromJob
+  return profile.capabilityKind
 }
 
 function collectResults(raw: unknown, agentResult: AgentResult | null): CapabilityResult[] {

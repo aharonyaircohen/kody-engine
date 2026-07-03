@@ -30,6 +30,7 @@ import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/i
 import type { TaskState, TaskTarget } from "./state.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
 import { loadSubagents } from "./subagents.js"
+import { shouldEvaluateAgencyBoundaries } from "./scripts/evaluateAgencyBoundaries.js"
 import {
   persistTaskArtifactsToState,
   prepareTaskArtifactsDir,
@@ -612,7 +613,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     // This makes failure-safety structural — a new mutating postflight that
     // forgets to self-guard can no longer commit a half-finished tree. The
     // scripts keep their own guards too, as defense-in-depth.
-    for (const entry of profile.scripts.postflight) {
+    for (const entry of postflightEntriesForRun(profile, ctx)) {
       const entryLabel = entry.script ?? entry.shell ?? "<unknown>"
       if (shouldBlockMutatingPostflight(entry.script, ctx.output.exitCode)) {
         // Preserve the downstream contract: consumers read commitResult.pushed /
@@ -758,6 +759,32 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       /* best effort */
     }
   }
+}
+
+function postflightEntriesForRun(profile: Profile, ctx: Context): ScriptEntry[] {
+  const entries = profile.scripts.postflight
+  if (!shouldEvaluateAgencyBoundaries(ctx.data, profile)) return entries
+  if (entries.some((entry) => entry.script === "evaluateAgencyBoundaries")) return entries
+  const evalEntry: ScriptEntry = { script: "evaluateAgencyBoundaries" }
+  const afterParser = lastIndexOfScript(entries, new Set(["parseAgentResult", "parseJobStateFromAgentResult"]))
+  if (afterParser >= 0) {
+    return [...entries.slice(0, afterParser + 1), evalEntry, ...entries.slice(afterParser + 1)]
+  }
+  const beforeStateChange = entries.findIndex(
+    (entry) => isMutatingPostflight(entry.script) || entry.script === "writeJobStateFile" || entry.script === "saveTaskState",
+  )
+  if (beforeStateChange >= 0) {
+    return [...entries.slice(0, beforeStateChange), evalEntry, ...entries.slice(beforeStateChange)]
+  }
+  return [...entries, evalEntry]
+}
+
+function lastIndexOfScript(entries: ScriptEntry[], names: Set<string>): number {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i]
+    if (entry?.script && names.has(entry.script)) return i
+  }
+  return -1
 }
 
 /**

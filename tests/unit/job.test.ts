@@ -105,6 +105,30 @@ describe("runJob (Phase 1 seam)", () => {
     expect(input.preloadedData?.jobCapability).toBe("ci-health")
     expect(input.preloadedData?.jobExecutable).toBe("ci-check")
   })
+
+  it("seeds capabilityKind from capability folders for shared implementation traces", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-kind-job-"))
+    const capabilityDir = path.join(cwd, ".kody", "capabilities", "pr-health")
+    fs.mkdirSync(capabilityDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(capabilityDir, "profile.json"),
+      JSON.stringify({
+        name: "pr-health",
+        action: "pr-health",
+        executable: "capability-tick",
+        agent: "kody",
+        capabilityKind: "observe",
+      }),
+    )
+    fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# PR Health\n")
+
+    await runJob({ capability: "pr-health", cliArgs: {}, flavor: "scheduled" }, { cwd })
+
+    const [, input] = runExecutableChain.mock.calls[0]!
+    expect(input.preloadedData?.jobCapability).toBe("pr-health")
+    expect(input.preloadedData?.jobCapabilityKind).toBe("observe")
+  })
+
   it("preserves capability identity without injecting capability args when executable is explicit", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-goal-handoff-"))
     const capabilityDir = path.join(cwd, ".kody", "capabilities", "company-graph")
@@ -323,6 +347,42 @@ describe("runJob (Phase 1 seam)", () => {
         jobExecutable: "run",
       })
     } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("emits an agency boundary trace for workflow capabilities", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-trace-job-"))
+    const originalCwd = process.cwd()
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
+    try {
+      writeCapability(cwd, "feature", {
+        name: "feature",
+        action: "feature",
+        capabilityKind: "act",
+        workflow: {
+          steps: [{ capability: "run", reason: "implement the feature" }],
+        },
+      })
+      process.chdir(cwd)
+
+      await runJob(
+        {
+          action: "feature",
+          cliArgs: { issue: 42 },
+          target: 42,
+          flavor: "instant",
+        },
+        { cwd },
+      )
+
+      const out = write.mock.calls.map((call) => String(call[0])).join("")
+      expect(out).toContain("KODY_AGENCY_BOUNDARY_EVAL=")
+      expect(out).toContain('"capability":"feature"')
+      expect(out).toContain('"capabilityKind":"act"')
+    } finally {
+      write.mockRestore()
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
     }

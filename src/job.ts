@@ -12,6 +12,7 @@
 
 import * as path from "node:path"
 import type { CapabilityFolder, CapabilityWorkflowConfig, CapabilityWorkflowStepConfig } from "./capabilityFolders.js"
+import { evaluateAgencyBoundaries } from "./agencyBoundaryEval.js"
 import type { KodyConfig } from "./config.js"
 import type { DispatchResult } from "./dispatch.js"
 import type { CapabilityResultTarget, Job, JobFlavor } from "./executables/types.js"
@@ -242,6 +243,7 @@ async function runCapabilityImplementationStep(
   if (capabilityContext) {
     preloadedData.capabilitySlug = capabilityContext.slug
     preloadedData.capabilityTitle = capabilityContext.title
+    if (capabilityContext.config.capabilityKind) preloadedData.jobCapabilityKind = capabilityContext.config.capabilityKind
     preloadedData.capabilityIntent = capabilityContext.body
     preloadedData.dutyIntent = capabilityContext.body
     preloadedData.jobIntent = capabilityContext.body
@@ -353,16 +355,36 @@ async function runCapabilityWorkflow(
       ...(parsePrNumber(prUrl) ? { workflowPrNumber: parsePrNumber(prUrl) } : {}),
     }
     if (result.exitCode !== 0 && !canContinueWorkflow(step, outcome)) {
-      return {
+      return withWorkflowBoundaryEval(capability, {
         ...result,
         reason:
           result.reason ??
           `workflow ${capability.slug} stopped at step ${index + 1}/${workflow.steps.length}: ${label}`,
-      }
+      })
     }
   }
 
-  return result
+  return withWorkflowBoundaryEval(capability, result)
+}
+
+function withWorkflowBoundaryEval(capability: CapabilityFolder, result: ExecutorOutput): ExecutorOutput {
+  const capabilityKind = capability.config.capabilityKind
+  if (!capabilityKind) return result
+  const evalResult = evaluateAgencyBoundaries({
+    capability: capability.slug,
+    capabilityKind,
+    results: [],
+  })
+  process.stdout.write(`KODY_AGENCY_BOUNDARY_EVAL=${JSON.stringify(evalResult)}\n`)
+  if (evalResult.status !== "fail" || result.exitCode !== 0) return result
+  const failed = evalResult.findings.filter((finding) => finding.status === "fail").map((finding) => finding.rule)
+  return {
+    ...result,
+    exitCode: 99,
+    reason: result.reason
+      ? `${result.reason}; agency boundary eval failed: ${failed.join(", ")}`
+      : `agency boundary eval failed: ${failed.join(", ")}`,
+  }
 }
 
 function workflowStepToJob(step: CapabilityWorkflowStepConfig, parent: Job, chainData: Record<string, unknown>): Job {

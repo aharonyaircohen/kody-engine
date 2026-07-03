@@ -23,12 +23,16 @@ function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-exec-"))
 }
 
-function writeSkipAgentProfile(file: string, scripts: { preflight?: object[]; postflight?: object[] } = {}): void {
+function writeSkipAgentProfile(
+  file: string,
+  scripts: { preflight?: object[]; postflight?: object[]; capabilityKind?: "observe" | "act" | "verify" } = {},
+): void {
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(
     file,
     JSON.stringify({
       name: path.basename(path.dirname(file)),
+      capabilityKind: scripts.capabilityKind,
       role: "utility",
       describe: "Test profile.",
       inputs: [{ name: "issue", flag: "--issue", type: "int", required: true, describe: "Issue number." }],
@@ -274,6 +278,35 @@ describe("executor: stale hydrated capability overrides", () => {
       expect(out.exitCode).toBe(0)
       expect(out.reason).toBe("all planned task jobs are complete")
       expect(writes.join("")).not.toContain("PR_URL=FAILED")
+    } finally {
+      stdout.mockRestore()
+    }
+  })
+
+  it("auto-runs agency boundary evaluation for capability-shaped profiles", async () => {
+    tmp = tmpDir()
+    const profilePath = path.join(tmp, ".kody", "capabilities", "ai-agency-health-matrix", "profile.json")
+    writeSkipAgentProfile(profilePath, {
+      capabilityKind: "observe",
+      postflight: [],
+    })
+    process.chdir(tmp)
+    const writes: string[] = []
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation((chunk: string | Uint8Array) => {
+      writes.push(String(chunk))
+      return true
+    })
+
+    try {
+      const out = await runExecutable("ai-agency-health-matrix", {
+        cwd: tmp,
+        cliArgs: { issue: 651 },
+        skipConfig: true,
+      })
+
+      expect(out.exitCode).toBe(0)
+      expect(writes.join("")).toContain("KODY_AGENCY_BOUNDARY_EVAL=")
+      expect(writes.join("")).toContain('"capabilityKind":"observe"')
     } finally {
       stdout.mockRestore()
     }
