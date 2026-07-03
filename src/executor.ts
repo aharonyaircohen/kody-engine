@@ -273,7 +273,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       },
     })
     if (out.prUrl) process.stdout.write(`PR_URL=${out.prUrl}\n`)
-    else if (out.reason) process.stdout.write(`PR_URL=FAILED: ${out.reason}\n`)
+    else if (out.exitCode !== 0 && out.reason) process.stdout.write(`PR_URL=FAILED: ${out.reason}\n`)
     return out
   }
 

@@ -250,6 +250,34 @@ describe("executor: stale hydrated capability overrides", () => {
     expect(out.exitCode).toBe(0)
     expect(out.reason).toBeUndefined()
   })
+
+  it("does not print a failed terminal marker for successful runs with a reason", async () => {
+    tmp = tmpDir()
+    const profilePath = path.join(tmp, ".kody", "capabilities", "no-active-intents", "profile.json")
+    writeSkipAgentProfile(profilePath, {
+      preflight: [{ script: "dispatchNextTaskJob" }],
+    })
+    process.chdir(tmp)
+    const writes: string[] = []
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation((chunk: string | Uint8Array) => {
+      writes.push(String(chunk))
+      return true
+    })
+
+    try {
+      const out = await runExecutable("no-active-intents", {
+        cwd: tmp,
+        cliArgs: { issue: 651 },
+        skipConfig: true,
+      })
+
+      expect(out.exitCode).toBe(0)
+      expect(out.reason).toBe("all planned task jobs are complete")
+      expect(writes.join("")).not.toContain("PR_URL=FAILED")
+    } finally {
+      stdout.mockRestore()
+    }
+  })
 })
 
 // Per-task artifacts prepared for the PR branch. The executor picks
