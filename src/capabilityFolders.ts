@@ -124,7 +124,7 @@ export function parseCapabilityConfig(raw: Record<string, unknown>): CapabilityF
     stage: stringField(raw.stage),
     readsFrom: stringList(raw.readsFrom ?? raw.reads_from),
     writesTo: stringList(raw.writesTo ?? raw.writes_to),
-    workflow: parseWorkflow(raw.workflow),
+    workflow: parseCapabilityWorkflow(raw.workflow),
   }
 }
 
@@ -179,7 +179,7 @@ function stringList(value: unknown): string[] {
   return []
 }
 
-function parseWorkflow(value: unknown): CapabilityWorkflowConfig | undefined {
+export function parseCapabilityWorkflow(value: unknown): CapabilityWorkflowConfig | undefined {
   const stepsRaw = Array.isArray(value)
     ? value
     : value && typeof value === "object" && Array.isArray((value as { steps?: unknown }).steps)

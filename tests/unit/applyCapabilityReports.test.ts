@@ -67,6 +67,34 @@ function goalState(): GoalState {
   }
 }
 
+function multiStepGoalState(): GoalState {
+  return {
+    state: "active",
+    extra: {
+      type: "web-release",
+      destination: { outcome: "release is published", evidence: ["releasePrExists", "defaultBranchMerged"] },
+      capabilities: ["release-prepare", "release-merge"],
+      route: [
+        {
+          stage: "release",
+          evidence: "releasePrExists",
+          capability: "release-prepare",
+          args: { issue: { fact: "issue" }, goal: { fact: "goalId" } },
+        },
+        {
+          stage: "merge-default",
+          evidence: "defaultBranchMerged",
+          capability: "release-merge",
+          args: { pr: { fact: "releasePr" }, issue: { fact: "issue" }, goal: { fact: "goalId" } },
+        },
+      ],
+      stage: "release",
+      facts: { issue: 708, pendingEvidence: "releasePrExists" },
+      blockers: [],
+    },
+  }
+}
+
 function stagedGoalEvents(data: Record<string, unknown>, goalId: string): Array<Record<string, unknown>> {
   const logs = data.__goalRunLogs as Record<string, { events: Array<Record<string, unknown>> }> | undefined
   return logs?.[goalId]?.events ?? []
@@ -167,6 +195,44 @@ describe("applyCapabilityReports", () => {
     expect(goalId).toBe("release-aguy")
     expect((next as GoalState).extra.facts).toEqual({ releasePrExists: true, releasePr: 123 })
     expect((next as GoalState).extra.lastCapabilityResult).toBeUndefined()
+  })
+
+  it("hands an active managed goal back to goal-manager when accepted evidence leaves more steps", async () => {
+    fetchGoalStateMock.mockReturnValueOnce(multiStepGoalState())
+    const ctx = fakeCtx(
+      {
+        capabilityResults: [
+          {
+            version: 1,
+            status: "pass",
+            summary: "Release PR exists.",
+            facts: { releasePr: 709 },
+            artifacts: [],
+            missingEvidence: [],
+            blockers: [],
+          },
+        ],
+      },
+      { goal: "web-release-2026-07-03", evidence: "releasePrExists" },
+    )
+
+    await applyCapabilityReports(ctx, fakeProfile(), null)
+
+    expect(ctx.output.nextDispatch).toEqual({
+      action: "goal-manager",
+      executable: "goal-manager",
+      cliArgs: { goal: "web-release-2026-07-03" },
+    })
+    expect(stagedGoalEvents(ctx.data, "web-release-2026-07-03")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "goal.evidence.applied",
+          decision: expect.objectContaining({
+            nextStep: "dispatch",
+          }),
+        }),
+      ]),
+    )
   })
 
   it("accepts legacy dutyResults as a compatibility alias", async () => {

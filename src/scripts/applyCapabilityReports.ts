@@ -110,6 +110,13 @@ export const applyCapabilityReports: PostflightScript = async (ctx, _profile, ag
         putGoalState(ctx.config, goalId, nextForOutput, describeMessage(goalId, goalEvidence), ctx.cwd)
       }
       refreshReportOrFail(ctx, goalId, nextForOutput, goalEvidence)
+      if (changed && ctx.output.exitCode === 0 && !ctx.output.nextDispatch && shouldResumeManagedGoal(nextForOutput)) {
+        ctx.output.nextDispatch = {
+          action: "goal-manager",
+          executable: "goal-manager",
+          cliArgs: { goal: goalId },
+        }
+      }
     } finally {
       flushLogs(ctx)
     }
@@ -225,6 +232,17 @@ function completeSatisfiedManagedGoal(state: GoalState): GoalState {
   const decision = planManagedGoalTick(managed)
   if (decision.kind !== "done") return state
   return writeManagedGoalToState({ ...state, state: "done" }, managed)
+}
+
+function shouldResumeManagedGoal(state: GoalState): boolean {
+  if (state.state !== "active") return false
+  const managed = managedGoalFromState(state)
+  if (!managed) return false
+  if (managed.blockers.length > 0) return false
+  const missing = managed.destination.evidence.find((evidence) => managed.facts[evidence] !== true)
+  if (!missing) return false
+  const step = managed.route.find((candidate) => candidate.evidence === missing)
+  return Boolean(step && managed.capabilities.includes(step.capability))
 }
 
 function snapshotFromState(goalId: string, state: GoalState): Record<string, unknown> | null {

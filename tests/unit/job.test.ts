@@ -449,6 +449,108 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("preserves stored workflow step order, duplicate capabilities, and PR handoff", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-web-release-workflow-job-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "release-prepare", {
+        name: "release-prepare",
+        action: "release-prepare",
+        implementation: "release-prepare",
+        inputs: [{ name: "issue", flag: "--issue", type: "int", required: false }],
+      })
+      writeCapability(cwd, "release-merge", {
+        name: "release-merge",
+        action: "release-merge",
+        implementation: "release-merge",
+        inputs: [
+          { name: "pr", flag: "--pr", type: "int", required: true },
+          { name: "issue", flag: "--issue", type: "int", required: false },
+        ],
+      })
+      writeCapability(cwd, "release-promote", {
+        name: "release-promote",
+        action: "release-promote",
+        implementation: "release-promote",
+        inputs: [{ name: "issue", flag: "--issue", type: "int", required: false }],
+      })
+      writeCapability(cwd, "vercel-production-deploy", {
+        name: "vercel-production-deploy",
+        action: "vercel-production-deploy",
+        implementation: "vercel-production-deploy",
+        inputs: [],
+      })
+      const workflow = {
+        version: 1,
+        name: "Web release",
+        steps: [
+          { capability: "release-prepare", target: "issue" },
+          { capability: "release-merge", target: "pr" },
+          { capability: "release-promote", target: "issue" },
+          { capability: "release-merge", target: "pr" },
+          { capability: "vercel-production-deploy" },
+        ],
+      }
+      gh.mockReturnValue(
+        JSON.stringify({
+          type: "file",
+          encoding: "base64",
+          content: Buffer.from(JSON.stringify(workflow), "utf8").toString("base64"),
+          sha: "workflow-sha",
+        }),
+      )
+      process.chdir(cwd)
+      runExecutableChain
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          prUrl: "https://github.com/o/r/pull/10",
+        })
+        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("RELEASE_MERGED") })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          prUrl: "https://github.com/o/r/pull/11",
+        })
+        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("RELEASE_BRANCH_MERGED") })
+        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("VERCEL_PRODUCTION_DEPLOY_COMPLETED") })
+
+      await runJob(
+        {
+          workflow: "web-release",
+          cliArgs: { issue: 42 },
+          target: 42,
+          flavor: "instant",
+        },
+        {
+          cwd,
+          config: {
+            quality: { typecheck: "", lint: "", testUnit: "", format: "" },
+            git: { defaultBranch: "main" },
+            github: { owner: "o", repo: "r" },
+            agent: { model: "anthropic/claude-haiku-4-5-20251001" },
+            state: { repo: "o/kody-state", path: "r" },
+          },
+        },
+      )
+
+      expect(runExecutableChain).toHaveBeenCalledTimes(5)
+      expect(runExecutableChain.mock.calls.map((call) => call[0])).toEqual([
+        "release-prepare",
+        "release-merge",
+        "release-promote",
+        "release-merge",
+        "vercel-production-deploy",
+      ])
+      expect(runExecutableChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42 })
+      expect(runExecutableChain.mock.calls[1]![1].cliArgs).toEqual({ issue: 42, pr: 10 })
+      expect(runExecutableChain.mock.calls[2]![1].cliArgs).toEqual({ issue: 42 })
+      expect(runExecutableChain.mock.calls[3]![1].cliArgs).toEqual({ issue: 42, pr: 11 })
+      expect(runExecutableChain.mock.calls[4]![1].cliArgs).toEqual({})
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it("runs a workflow when the public route includes the selected executable", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-route-"))
     const originalCwd = process.cwd()

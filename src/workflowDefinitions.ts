@@ -1,6 +1,7 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { CapabilityFolder, CapabilityWorkflowConfig } from "./capabilityFolders.js"
+import type { CapabilityFolder, CapabilityWorkflowConfig, CapabilityWorkflowStepConfig } from "./capabilityFolders.js"
+import { parseCapabilityWorkflow } from "./capabilityFolders.js"
 import { getCompanyStoreAssetRoot } from "./companyStore.js"
 import { readStateText, type StateRepoConfig } from "./stateRepo.js"
 
@@ -8,6 +9,7 @@ export interface WorkflowDefinition {
   version: 1
   name: string
   capabilities: string[]
+  steps?: CapabilityWorkflowStepConfig[]
   createdAt?: string
   updatedAt?: string
 }
@@ -30,12 +32,15 @@ export function normalizeWorkflowDefinition(value: unknown): WorkflowDefinition 
   if (!value || typeof value !== "object" || Array.isArray(value)) return null
   const raw = value as Record<string, unknown>
   const name = typeof raw.name === "string" ? raw.name.trim() : ""
-  const capabilities = normalizeWorkflowCapabilities(raw.capabilities)
+  const workflow = parseCapabilityWorkflow({ steps: raw.steps })
+  const steps = workflow?.steps
+  const capabilities = steps ? steps.map((step) => step.capability) : normalizeWorkflowCapabilities(raw.capabilities)
   if (!name || capabilities.length === 0) return null
   return {
     version: 1,
     name,
     capabilities,
+    ...(steps ? { steps } : {}),
     ...(typeof raw.createdAt === "string" ? { createdAt: raw.createdAt } : {}),
     ...(typeof raw.updatedAt === "string" ? { updatedAt: raw.updatedAt } : {}),
   }
@@ -89,7 +94,7 @@ function normalizeWorkflowCapabilities(value: unknown): string[] {
 
 function workflowDefinitionToConfig(workflow: WorkflowDefinition): CapabilityWorkflowConfig {
   return {
-    steps: workflow.capabilities.map((capability) => ({ capability })),
+    steps: workflow.steps ?? workflow.capabilities.map((capability) => ({ capability })),
   }
 }
 

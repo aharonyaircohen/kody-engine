@@ -342,6 +342,7 @@ async function runCapabilityWorkflow(
     })
     const outcome = workflowOutcome(result)
     const prUrl =
+      result.prUrl ??
       result.taskState?.core.prUrl ??
       (typeof chainData.workflowPrUrl === "string" ? chainData.workflowPrUrl : undefined)
     chainData = {
