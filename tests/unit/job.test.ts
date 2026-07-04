@@ -21,6 +21,7 @@ import {
   runJob,
   validateJob,
 } from "../../src/job.js"
+import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 
 describe("runJob (Phase 1 seam)", () => {
   beforeEach(() => {
@@ -34,6 +35,7 @@ describe("runJob (Phase 1 seam)", () => {
 
   afterEach(() => {
     vi.unstubAllEnvs()
+    resetCompanyStoreCacheForTests()
   })
 
   it("lowers an instant job onto runExecutableChain with its executable + cliArgs", async () => {
@@ -611,6 +613,77 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("runs a Store-only workflow definition after state repo lookup misses", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-store-workflow-definition-job-"))
+    const store = fs.mkdtempSync(path.join(os.tmpdir(), "kody-store-workflow-definition-store-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "release-prepare", {
+        name: "release-prepare",
+        action: "release-prepare",
+        implementation: "release-prepare",
+        inputs: [{ name: "issue", flag: "--issue", type: "int", required: false }],
+      })
+      writeCapability(cwd, "release-merge", {
+        name: "release-merge",
+        action: "release-merge",
+        implementation: "release-merge",
+        inputs: [{ name: "pr", flag: "--pr", type: "int", required: false }],
+      })
+      writeWorkflowDefinition(store, "web-release", {
+        version: 1,
+        name: "Web release",
+        steps: [
+          { capability: "release-prepare", target: "issue", cliArgs: { prefer: "ours" } },
+          { capability: "release-merge", target: "pr" },
+        ],
+      })
+      fs.writeFileSync(
+        path.join(store, "kody-store.json"),
+        JSON.stringify({ name: "test-store", layoutVersion: 1, assetRoots: { workflows: "workflows" } }),
+      )
+      vi.stubEnv("KODY_COMPANY_STORE", store)
+      vi.stubEnv("KODY_COMPANY_STORE_REF", "main")
+      resetCompanyStoreCacheForTests()
+      process.chdir(cwd)
+      runExecutableChain
+        .mockResolvedValueOnce({ exitCode: 0, prUrl: "https://github.com/o/r/pull/12" })
+        .mockResolvedValueOnce({ exitCode: 0 })
+
+      await runJob(
+        {
+          workflow: "web-release",
+          cliArgs: { issue: 42 },
+          target: 42,
+          flavor: "instant",
+        },
+        {
+          cwd,
+          config: {
+            quality: { typecheck: "", lint: "", testUnit: "", format: "" },
+            git: { defaultBranch: "main" },
+            github: { owner: "o", repo: "r" },
+            agent: { model: "anthropic/claude-haiku-4-5-20251001" },
+            state: { repo: "o/kody-state", path: "r" },
+          },
+        },
+      )
+
+      expect(gh).toHaveBeenCalledWith(["api", "/repos/o/kody-state/contents/r/workflows/web-release/workflow.json?ref=main"], {
+        cwd,
+      })
+      expect(runExecutableChain).toHaveBeenCalledTimes(2)
+      expect(runExecutableChain.mock.calls[0]![0]).toBe("release-prepare")
+      expect(runExecutableChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42, prefer: "ours" })
+      expect(runExecutableChain.mock.calls[1]![0]).toBe("release-merge")
+      expect(runExecutableChain.mock.calls[1]![1].cliArgs).toEqual({ issue: 42, pr: 12 })
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+      fs.rmSync(store, { recursive: true, force: true })
+    }
+  })
+
   it("runs a workflow when the public route includes the selected executable", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-route-"))
     const originalCwd = process.cwd()
@@ -813,6 +886,12 @@ function writeCapability(cwd: string, slug: string, profile: Record<string, unkn
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify(profile))
   fs.writeFileSync(path.join(dir, "capability.md"), `# ${slug}\n`)
+}
+
+function writeWorkflowDefinition(cwd: string, slug: string, workflow: Record<string, unknown>): void {
+  const dir = path.join(cwd, "workflows", slug)
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, "workflow.json"), JSON.stringify(workflow))
 }
 
 function writeWorkflowStages(cwd: string): void {
