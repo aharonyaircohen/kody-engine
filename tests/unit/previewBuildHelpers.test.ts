@@ -212,13 +212,14 @@ describe("formatPreviewComment", () => {
     expect(body).toContain("<!-- kody-fly-preview -->")
   })
 
-  it("includes the URL + short SHA", () => {
+  it("points users to the dashboard instead of the protected raw Fly URL", () => {
     const body = formatPreviewComment({
       appName: "kp-abc-def-pr-7",
       ref: "abcdef0123456789",
       nowIso: "2026-05-30T12:00:00.000Z",
     })
-    expect(body).toContain("https://kp-abc-def-pr-7.fly.dev")
+    expect(body).toContain("open it from the Kody dashboard")
+    expect(body).not.toContain("https://kp-abc-def-pr-7.fly.dev")
     expect(body).toContain("abcdef0")
   })
 })

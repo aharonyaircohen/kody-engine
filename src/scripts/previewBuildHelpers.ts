@@ -157,10 +157,9 @@ export function buildEnvFromVault(doc: VaultDoc): {
  * so a build run by either path appears identically on the PR.
  */
 export function formatPreviewComment(args: { appName: string; ref: string; nowIso: string }): string {
-  const url = `https://${args.appName}.fly.dev`
   return [
     "<!-- kody-fly-preview -->",
-    `✅ **Preview ready:** ${url}`,
+    "✅ **Preview ready** — open it from the Kody dashboard.",
     "",
     `<sub>App: \`${args.appName}\` · Commit: \`${args.ref.slice(0, 7)}\` · Updated: ${args.nowIso}</sub>`,
   ].join("\n")
