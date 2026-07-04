@@ -636,8 +636,8 @@ export async function runCi(argv: string[]): Promise<number> {
       process.stdout.write("→ kody: no action for event issue_comment — exiting cleanly\n")
       return 0
     }
-    process.stdout.write(`→ kody: no action for event ${process.env.GITHUB_EVENT_NAME} — checking scheduled watches\n`)
-    return runScheduledFanOut(cwd, args, { force: false })
+    process.stdout.write(`→ kody: no action for event ${process.env.GITHUB_EVENT_NAME} — exiting cleanly\n`)
+    return 0
   }
 
   if (!args.issueNumber && !autoFallback) {

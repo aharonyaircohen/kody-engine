@@ -264,4 +264,26 @@ describe("kody-cli manual goal dispatch", () => {
 
     expect(mocks.runJob).not.toHaveBeenCalled()
   })
+
+  it("does not check scheduled watches for pull_request events with no direct action", async () => {
+    const dir = tmpDir()
+    writeConfig(dir)
+    writeScheduledExecutable(dir, "goal-scheduler")
+    previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
+    previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
+    process.env.GITHUB_EVENT_NAME = "pull_request"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      action: "closed",
+      pull_request: {
+        number: 738,
+        merged: true,
+        head: { ref: "dev" },
+        base: { ref: "main" },
+      },
+    })
+
+    await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
+
+    expect(mocks.runJob).not.toHaveBeenCalled()
+  })
 })
