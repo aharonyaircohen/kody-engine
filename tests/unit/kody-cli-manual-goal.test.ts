@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   runJob: vi.fn(async (..._args: unknown[]) => ({ exitCode: 0 })),
+  readWorkflowDefinition: vi.fn(),
 }))
 
 vi.mock("../../src/job.js", () => ({
@@ -30,6 +31,10 @@ vi.mock("../../src/registry.js", async (importOriginal) => {
     ),
   }
 })
+
+vi.mock("../../src/workflowDefinitions.js", () => ({
+  readWorkflowDefinition: mocks.readWorkflowDefinition,
+}))
 
 import { runCi } from "../../src/kody-cli.js"
 
@@ -81,6 +86,7 @@ afterEach(() => {
     else process.env[key] = value
   }
   mocks.runJob.mockClear()
+  mocks.readWorkflowDefinition.mockReset()
   vi.clearAllMocks()
 })
 
@@ -184,6 +190,32 @@ describe("kody-cli manual goal dispatch", () => {
       action: "goal-scheduler",
       capability: "goal-scheduler",
       executable: "goal-scheduler",
+      cliArgs: {},
+      flavor: "instant",
+      force: true,
+    })
+  })
+
+  it("runs stored workflows from manual workflow dispatch", async () => {
+    const dir = tmpDir()
+    writeConfig(dir)
+    previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
+    previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
+    process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      inputs: { capability: "web-release" },
+    })
+    mocks.readWorkflowDefinition.mockReturnValue({
+      version: 1,
+      name: "Web release",
+      capabilities: ["release-prepare"],
+    })
+
+    await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
+
+    expect(mocks.runJob).toHaveBeenCalledTimes(1)
+    expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
+      workflow: "web-release",
       cliArgs: {},
       flavor: "instant",
       force: true,

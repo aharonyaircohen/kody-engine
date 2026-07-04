@@ -18,6 +18,7 @@ import { resolveCapabilityAction } from "./registry.js"
 import { type RunRequest, readRunRequestFromEnv } from "./run-request.js"
 import { lastRunLogPath } from "./runtimePaths.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
+import { readWorkflowDefinition } from "./workflowDefinitions.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -25,6 +26,14 @@ const FAILED_DISPATCH_LABEL = {
   label: "kody:failed",
   color: "e11d21",
   description: "Kody failed or rejected the run",
+}
+
+type ManualOneShotRoute = {
+  action?: string
+  capability?: string
+  workflow?: string
+  executable?: string
+  cliArgs: Record<string, unknown>
 }
 
 function objectValue(value: unknown): Record<string, unknown> | undefined {
@@ -461,29 +470,38 @@ export async function runCi(argv: string[]): Promise<number> {
     const config = earlyConfig ?? loadConfig(cwd)
     const manualGoalManager = forceRunAction === "goal-manager"
     const capabilityRoute = manualGoalManager ? null : resolveCapabilityAction(forceRunAction)
+    const workflowRoute =
+      manualGoalManager || capabilityRoute || !readWorkflowDefinition(config, cwd, forceRunAction)
+        ? undefined
+        : {
+            workflow: forceRunAction,
+            cliArgs: {},
+          }
     const scheduledWatchRoute =
-      manualGoalManager || capabilityRoute
+      manualGoalManager || capabilityRoute || workflowRoute
         ? undefined
         : dispatchScheduledWatches({ force: true }).find(
             (match) => match.action === forceRunAction || match.executable === forceRunAction,
           )
-    const route = manualGoalManager
+    const route: ManualOneShotRoute | undefined = manualGoalManager
       ? {
           action: "goal-manager",
           capability: "goal-manager",
           executable: "goal-manager",
           cliArgs: forceRunCliArgs,
         }
-      : (capabilityRoute ?? scheduledWatchRoute)
+      : (capabilityRoute ?? workflowRoute ?? scheduledWatchRoute)
     if (!route) {
-      process.stderr.write(`[kody] manual one-shot action '${forceRunAction}' has no capability action\n`)
+      process.stderr.write(`[kody] manual one-shot action '${forceRunAction}' has no capability action or workflow\n`)
       return 64
     }
     if (route.executable === "goal-manager" && typeof forceRunCliArgs.goal !== "string") {
       process.stderr.write("[kody] manual goal-manager run requires message goal id\n")
       return 64
     }
-    process.stdout.write(`→ kody: manual one-shot run action ${route.action} (${route.capability})\n\n`)
+    process.stdout.write(
+      `→ kody: manual one-shot run ${route.workflow ? `workflow ${route.workflow}` : `action ${route.action} (${route.capability})`}\n\n`,
+    )
     try {
       // Same preflight as the routed path: secrets, auth, deps, LiteLLM, git.
       // Without this the capability's agent has no LiteLLM proxy (non-Anthropic
@@ -515,6 +533,7 @@ export async function runCi(argv: string[]): Promise<number> {
       {
         action: route.action,
         capability: route.capability,
+        workflow: route.workflow,
         executable: route.executable,
         cliArgs: { ...route.cliArgs, ...forceRunCliArgs },
         flavor: "instant",
