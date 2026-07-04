@@ -257,6 +257,15 @@ describe("dispatch: pull_request event", () => {
     })
   })
 
+  it("does not route release PRs to the generic pull_request preview action", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      action: "opened",
+      number: 12,
+      pull_request: { number: 12, head: { ref: "release/v0.26.7" } },
+    })
+    expect(autoDispatch({ config: testConfig({ onPullRequest: "preview-build" }) })).toBeNull()
+  })
+
   it("ignores closed/merged PRs even when onPullRequest is set (release self-manages its merge)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       action: "closed",

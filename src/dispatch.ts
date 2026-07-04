@@ -205,9 +205,10 @@ export function autoDispatch(opts?: {
     const actionName = opts?.config?.onPullRequest?.trim()
     const action = String(event.action ?? "")
     if (actionName && (action === "opened" || action === "synchronize" || action === "reopened")) {
+      const pullRequest = objectValue(event.pull_request)
+      if (isReleasePullRequest(pullRequest)) return null
       const route = resolveConfiguredAction(actionName)
       if (!route) return null
-      const pullRequest = objectValue(event.pull_request)
       const prNum = Number(pullRequest?.number ?? event.number ?? 0)
       if (prNum > 0) {
         // Bind the PR number under the target's first required int input
@@ -535,6 +536,12 @@ function associationAllowed(event: Record<string, unknown>, config?: KodyConfig)
 
 function objectValue(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : undefined
+}
+
+function isReleasePullRequest(pullRequest: Record<string, unknown> | undefined): boolean {
+  const head = objectValue(pullRequest?.head)
+  const ref = typeof head?.ref === "string" ? head.ref : ""
+  return ref.startsWith("release/")
 }
 
 /**
