@@ -206,7 +206,7 @@ export function autoDispatch(opts?: {
     const action = String(event.action ?? "")
     if (actionName && (action === "opened" || action === "synchronize" || action === "reopened")) {
       const pullRequest = objectValue(event.pull_request)
-      if (isReleasePullRequest(pullRequest)) return null
+      if (isReleasePullRequest(pullRequest, opts?.config)) return null
       const route = resolveConfiguredAction(actionName)
       if (!route) return null
       const prNum = Number(pullRequest?.number ?? event.number ?? 0)
@@ -538,10 +538,13 @@ function objectValue(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : undefined
 }
 
-function isReleasePullRequest(pullRequest: Record<string, unknown> | undefined): boolean {
+function isReleasePullRequest(pullRequest: Record<string, unknown> | undefined, config: KodyConfig | undefined): boolean {
   const head = objectValue(pullRequest?.head)
+  const base = objectValue(pullRequest?.base)
   const ref = typeof head?.ref === "string" ? head.ref : ""
-  return ref.startsWith("release/")
+  if (ref.startsWith("release/")) return true
+  const baseRef = typeof base?.ref === "string" ? base.ref : ""
+  return !!config?.release?.releaseBranch && ref === config.git?.defaultBranch && baseRef === config.release.releaseBranch
 }
 
 /**

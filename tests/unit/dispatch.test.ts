@@ -266,6 +266,27 @@ describe("dispatch: pull_request event", () => {
     expect(autoDispatch({ config: testConfig({ onPullRequest: "preview-build" }) })).toBeNull()
   })
 
+  it("does not route release promotion PRs to the generic pull_request preview action", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      action: "synchronize",
+      number: 13,
+      pull_request: {
+        number: 13,
+        head: { ref: "dev" },
+        base: { ref: "main" },
+      },
+    })
+    expect(
+      autoDispatch({
+        config: testConfig({
+          git: { defaultBranch: "dev" },
+          release: { releaseBranch: "main" },
+          onPullRequest: "preview-build",
+        }),
+      }),
+    ).toBeNull()
+  })
+
   it("ignores closed/merged PRs even when onPullRequest is set (release self-manages its merge)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       action: "closed",
