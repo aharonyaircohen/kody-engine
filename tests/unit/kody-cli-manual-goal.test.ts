@@ -201,14 +201,23 @@ describe("kody-cli manual goal dispatch", () => {
     writeConfig(dir)
     previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
     previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
+    previousEnv.ALL_SECRETS = process.env.ALL_SECRETS
+    previousEnv.GH_TOKEN = process.env.GH_TOKEN
+    previousEnv.GH_PAT = process.env.GH_PAT
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
     process.env.GITHUB_EVENT_PATH = writeEvent({
       inputs: { capability: "web-release" },
     })
-    mocks.readWorkflowDefinition.mockReturnValue({
-      version: 1,
-      name: "Web release",
-      capabilities: ["release-prepare"],
+    delete process.env.GH_TOKEN
+    delete process.env.GH_PAT
+    process.env.ALL_SECRETS = JSON.stringify({ GH_PAT: "secret-gh-token" })
+    mocks.readWorkflowDefinition.mockImplementation(() => {
+      expect(process.env.GH_TOKEN).toBe("secret-gh-token")
+      return {
+        version: 1,
+        name: "Web release",
+        capabilities: ["release-prepare"],
+      }
     })
 
     await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)

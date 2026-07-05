@@ -376,6 +376,13 @@ export async function runCi(argv: string[]): Promise<number> {
 
   const args = parseCiArgs(argv)
   const cwd = args.cwd ? path.resolve(args.cwd) : process.cwd()
+  try {
+    const n = unpackAllSecrets()
+    if (n > 0) process.stdout.write(`→ kody: unpacked ${n} secret(s) from ALL_SECRETS\n`)
+    await resolveAuthToken()
+  } catch (err) {
+    process.stderr.write(`[kody] auth setup warning: ${err instanceof Error ? err.message : String(err)}\n`)
+  }
   // Load config early so autoDispatch can consult legacy default capability action keys.
   let earlyConfig: ReturnType<typeof loadConfig> | undefined
   let earlyConfigError: Error | undefined
