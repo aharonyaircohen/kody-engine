@@ -9,11 +9,13 @@ import {
 import { type CapabilityReport, parseCapabilityReport, parseCapabilityReportsFromText } from "../capabilityReport.js"
 import { type CapabilityResult, parseCapabilityResult, parseCapabilityResultsFromText } from "../capabilityResult.js"
 import type { PostflightScript } from "../executables/types.js"
+import { mergeGoalEvidenceProgress, parseGoalEvidenceState } from "../goal/evidenceState.js"
 import { managedGoalFromState, planManagedGoalTick, writeManagedGoalToState } from "../goal/manager.js"
 import { capabilityEvidenceOutput, refreshGoalDashboardReport } from "../goal/report.js"
 import { flushGoalRunLogEvents, goalRunLogChange, goalRunLogSnapshot, stageGoalRunLogEvent } from "../goal/runLog.js"
 import { type GoalState, nowIso, serializeGoalState } from "../goal/state.js"
 import { fetchGoalState, putGoalState } from "../goal/stateStore.js"
+import { gh } from "../issue.js"
 
 export const applyCapabilityReports: PostflightScript = async (ctx, _profile, agentResult) => {
   const reports = collectReports(ctx.data.capabilityReports, agentResult)
@@ -57,6 +59,7 @@ export const applyCapabilityReports: PostflightScript = async (ctx, _profile, ag
     for (const evidence of goalEvidence) {
       const beforeSnapshot = snapshotFromState(goalId, next)
       next = applyCapabilityEvidenceToGoalState(next, evidence)
+      next = ensureNeedsFixIssue(ctx, goalId, next, evidence, evidenceKeyFromOutput(evidence, beforeSnapshot))
       const afterSnapshot = snapshotFromState(goalId, next)
       const change = goalRunLogChange(beforeSnapshot, afterSnapshot)
       const output = capabilityEvidenceOutput(evidence)
@@ -110,7 +113,7 @@ export const applyCapabilityReports: PostflightScript = async (ctx, _profile, ag
         putGoalState(ctx.config, goalId, nextForOutput, describeMessage(goalId, goalEvidence), ctx.cwd)
       }
       refreshReportOrFail(ctx, goalId, nextForOutput, goalEvidence)
-      if (changed && ctx.output.exitCode === 0 && !ctx.output.nextDispatch && shouldResumeManagedGoal(nextForOutput)) {
+      if (changed && ctx.output.exitCode === 0 && !ctx.output.nextDispatch && shouldResumeManagedGoal(goalId, nextForOutput)) {
         ctx.output.nextDispatch = {
           action: "goal-manager",
           executable: "goal-manager",
@@ -121,6 +124,76 @@ export const applyCapabilityReports: PostflightScript = async (ctx, _profile, ag
       flushLogs(ctx)
     }
   }
+}
+
+function ensureNeedsFixIssue(
+  ctx: Parameters<PostflightScript>[0],
+  goalId: string,
+  state: GoalState,
+  evidence: CapabilityEvidence,
+  evidenceKey: string,
+): GoalState {
+  if (evidence.resultClass !== "needsFix" || !evidenceKey) return state
+  const evidenceState = parseGoalEvidenceState(state.extra.evidenceState)
+  const progress = evidenceState[evidenceKey]
+  if (progress?.issue) return state
+
+  const issue = findExistingNeedsFixIssue(goalId, evidenceKey, ctx.cwd) ?? createNeedsFixIssue(goalId, evidenceKey, evidence, ctx.cwd)
+  const nextEvidenceState = mergeGoalEvidenceProgress(evidenceState, evidenceKey, {
+    resultClass: "needsFix",
+    attempts: progress?.attempts ?? 1,
+    reason: evidence.summary,
+    nextAction: `fix issue #${issue}`,
+    issue,
+    updatedAt: nowIso(),
+  })
+  return {
+    ...state,
+    extra: {
+      ...state.extra,
+      evidenceState: nextEvidenceState,
+      reason: evidence.summary,
+      nextAction: `fix issue #${issue}`,
+    },
+  }
+}
+
+function evidenceKeyFromOutput(evidence: CapabilityEvidence, beforeSnapshot: Record<string, unknown> | null): string {
+  if (evidence.explicitEvidence) return evidence.explicitEvidence
+  const keys = Object.keys(evidence.evidence ?? {})
+  if (keys.length === 1) return keys[0]!
+  const pending = beforeSnapshot?.pendingEvidence
+  return typeof pending === "string" ? pending : ""
+}
+
+function needsFixIssueMarker(goalId: string, evidence: string): string {
+  return `<!-- kody-managed-goal-needs-fix: ${goalId}:${evidence} -->`
+}
+
+function findExistingNeedsFixIssue(goalId: string, evidence: string, cwd?: string): number | null {
+  const marker = needsFixIssueMarker(goalId, evidence)
+  const raw = gh(["issue", "list", "--state", "all", "--limit", "100", "--json", "number,body"], { cwd })
+  const issues = JSON.parse(raw) as Array<{ number?: number; body?: string }>
+  const match = issues.find((issue) => typeof issue.number === "number" && issue.body?.includes(marker))
+  return match?.number ?? null
+}
+
+function createNeedsFixIssue(goalId: string, evidence: string, result: CapabilityEvidence, cwd?: string): number {
+  const title = `Goal ${goalId}: fix ${evidence}`.slice(0, 120)
+  const body = [
+    `Managed goal: \`${goalId}\``,
+    `Evidence: \`${evidence}\``,
+    "",
+    `Reason: ${result.summary}`,
+    "",
+    result.blockers.length > 0 ? `Blockers: ${result.blockers.join(", ")}` : "Blockers: none",
+    "",
+    needsFixIssueMarker(goalId, evidence),
+  ].join("\n")
+  const out = gh(["issue", "create", "--title", title, "--body-file", "-"], { input: body, cwd })
+  const match = out.match(/\/issues\/(\d+)(?:[/?#]|$)/)
+  if (!match) throw new Error(`gh issue create returned unexpected output: ${out}`)
+  return Number(match[1])
 }
 
 function flushLogs(ctx: Parameters<PostflightScript>[0]): void {
@@ -234,15 +307,13 @@ function completeSatisfiedManagedGoal(state: GoalState): GoalState {
   return writeManagedGoalToState({ ...state, state: "done" }, managed)
 }
 
-function shouldResumeManagedGoal(state: GoalState): boolean {
+function shouldResumeManagedGoal(goalId: string, state: GoalState): boolean {
   if (state.state !== "active") return false
   const managed = managedGoalFromState(state)
   if (!managed) return false
   if (managed.blockers.length > 0) return false
-  const missing = managed.destination.evidence.find((evidence) => managed.facts[evidence] !== true)
-  if (!missing) return false
-  const step = managed.route.find((candidate) => candidate.evidence === missing)
-  return Boolean(step && managed.capabilities.includes(step.capability))
+  if (managed.facts.goalId === undefined) managed.facts.goalId = goalId
+  return planManagedGoalTick(managed).kind === "dispatch"
 }
 
 function snapshotFromState(goalId: string, state: GoalState): Record<string, unknown> | null {

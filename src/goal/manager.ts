@@ -1,4 +1,5 @@
 import type { GoalState } from "./state.js"
+import { parseGoalEvidenceState, type GoalEvidenceState, type GoalEvidenceResultClass } from "./evidenceState.js"
 
 export const SIMPLE_GOAL_TYPE = "simple"
 export const SIMPLE_GOAL_EVIDENCE = "labelledTasksComplete"
@@ -15,6 +16,16 @@ export interface GoalRouteStep {
   executable?: string
   args?: Record<string, unknown>
   saveReport?: boolean
+  onPending?: GoalRoutePolicy
+  onFailure?: GoalRoutePolicy
+}
+
+export type GoalRoutePolicyAction = "wait" | "retry" | "block" | "issue"
+
+export interface GoalRoutePolicy {
+  action: GoalRoutePolicyAction
+  maxAttempts?: number
+  retryAfterSeconds?: number
 }
 
 export interface ManagedLoopTarget {
@@ -38,6 +49,9 @@ export interface ManagedGoal {
   stage?: string
   facts: Record<string, unknown>
   blockers: string[]
+  evidenceState?: GoalEvidenceState
+  reason?: string
+  nextAction?: string
 }
 
 export interface SimpleGoalTaskSummary {
@@ -139,6 +153,8 @@ export function planManagedGoalTick(goal: ManagedGoal): ManagedGoalDecision {
   if (!missing) {
     goal.stage = "done"
     delete goal.facts.pendingEvidence
+    goal.reason = "destination evidence satisfied"
+    goal.nextAction = "done"
     return { kind: "done" }
   }
 
@@ -149,22 +165,31 @@ export function planManagedGoalTick(goal: ManagedGoal): ManagedGoalDecision {
       delete goal.facts.pendingEvidence
       const total = typeof goal.facts.simpleAttachedTaskCount === "number" ? goal.facts.simpleAttachedTaskCount : 0
       const open = typeof goal.facts.simpleOpenTaskCount === "number" ? goal.facts.simpleOpenTaskCount : 0
+      goal.reason = total === 0 ? "waiting for labelled tasks" : `waiting for ${open} open labelled task(s)`
+      goal.nextAction = "wait"
       return {
         kind: "wait",
         evidence: missing,
         stage: "waiting",
-        reason: total === 0 ? "waiting for labelled tasks" : `waiting for ${open} open labelled task(s)`,
+        reason: goal.reason,
       }
     }
     const reason = `no route step for evidence: ${missing}`
     goal.stage = "blocked"
+    goal.reason = reason
+    goal.nextAction = "fix route"
     pushBlocker(goal, reason)
     return { kind: "blocked", evidence: missing, stage: "blocked", reason }
   }
 
+  const progressDecision = decisionFromEvidenceProgress(goal, step, missing)
+  if (progressDecision) return progressDecision
+
   if (!goal.capabilities.includes(step.capability)) {
     const reason = `route capability ${step.capability} is not attached to this goal`
     goal.stage = "blocked"
+    goal.reason = reason
+    goal.nextAction = "attach capability"
     pushBlocker(goal, reason)
     return { kind: "blocked", evidence: missing, stage: step.stage, reason }
   }
@@ -172,12 +197,16 @@ export function planManagedGoalTick(goal: ManagedGoal): ManagedGoalDecision {
   const resolved = resolveRouteArgs(goal, step)
   if (!resolved.ok) {
     goal.stage = "blocked"
+    goal.reason = resolved.reason
+    goal.nextAction = "fix route args"
     pushBlocker(goal, resolved.reason)
     return { kind: "blocked", evidence: missing, stage: step.stage, reason: resolved.reason }
   }
 
   goal.stage = step.stage
   goal.facts.pendingEvidence = missing
+  goal.reason = `dispatch ${step.capability} for ${missing}`
+  goal.nextAction = "dispatch"
   return {
     kind: "dispatch",
     evidence: missing,
@@ -187,6 +216,90 @@ export function planManagedGoalTick(goal: ManagedGoal): ManagedGoalDecision {
     cliArgs: resolved.cliArgs,
     ...(step.saveReport === true ? { saveReport: true } : {}),
   }
+}
+
+function decisionFromEvidenceProgress(
+  goal: ManagedGoal,
+  step: GoalRouteStep,
+  evidence: string,
+): ManagedGoalDecision | null {
+  const progress = goal.evidenceState?.[evidence]
+  if (!progress) return null
+
+  if (progress.resultClass === "pending") {
+    const policy = step.onPending ?? { action: "wait" as const }
+    if (policy.action === "retry") return null
+    if (policy.action === "block" || policy.action === "issue") {
+      const reason = progress.reason ?? `waiting for ${evidence}`
+      goal.stage = "blocked"
+      goal.reason = reason
+      goal.nextAction = policy.action === "issue" ? "create issue" : "block"
+      pushBlocker(goal, reason)
+      return { kind: "blocked", evidence, stage: step.stage, reason }
+    }
+    const reason = progress.reason ?? `waiting for ${evidence}`
+    goal.stage = step.stage
+    goal.reason = reason
+    goal.nextAction = progress.nextAction ?? "wait"
+    return { kind: "wait", evidence, stage: step.stage, reason }
+  }
+
+  if (progress.resultClass === "retryable") {
+    const policy = step.onFailure ?? { action: "retry" as const }
+    if (policy.action === "block" || policy.action === "issue") {
+      const reason = progress.reason ?? `retryable failure for ${evidence}`
+      goal.stage = "blocked"
+      goal.reason = reason
+      goal.nextAction = policy.action === "issue" ? "create issue" : "block"
+      pushBlocker(goal, reason)
+      return { kind: "blocked", evidence, stage: step.stage, reason }
+    }
+    if (policy.action === "wait") {
+      const reason = progress.reason ?? `waiting to retry ${evidence}`
+      goal.stage = step.stage
+      goal.reason = reason
+      goal.nextAction = progress.nextRetryAt ? `retry after ${progress.nextRetryAt}` : "wait"
+      return { kind: "wait", evidence, stage: step.stage, reason }
+    }
+    if (policy.maxAttempts !== undefined && progress.attempts >= policy.maxAttempts) {
+      const reason = `retry limit reached for ${evidence}`
+      goal.stage = "blocked"
+      goal.reason = reason
+      goal.nextAction = "create issue"
+      pushBlocker(goal, reason)
+      return { kind: "blocked", evidence, stage: step.stage, reason }
+    }
+    if (progress.nextRetryAt && Date.parse(progress.nextRetryAt) > Date.now()) {
+      const reason = progress.reason ?? `retry ${evidence} after ${progress.nextRetryAt}`
+      goal.stage = step.stage
+      goal.reason = reason
+      goal.nextAction = `retry after ${progress.nextRetryAt}`
+      return { kind: "wait", evidence, stage: step.stage, reason }
+    }
+    return null
+  }
+
+  if (progress.resultClass === "needsFix" || progress.resultClass === "fatal") {
+    const policy = step.onFailure ?? defaultFailurePolicy(progress.resultClass)
+    if (policy.action === "retry") return null
+    const reason = progress.reason ?? `${resultClassLabel(progress.resultClass)} for ${evidence}`
+    goal.stage = "blocked"
+    goal.reason = reason
+    goal.nextAction = progress.issue ? `fix issue #${progress.issue}` : policy.action === "issue" ? "create issue" : "block"
+    pushBlocker(goal, reason)
+    return { kind: "blocked", evidence, stage: step.stage, reason }
+  }
+
+  return null
+}
+
+function defaultFailurePolicy(resultClass: GoalEvidenceResultClass): GoalRoutePolicy {
+  return resultClass === "needsFix" ? { action: "issue" } : { action: "block" }
+}
+
+function resultClassLabel(resultClass: GoalEvidenceResultClass): string {
+  if (resultClass === "needsFix") return "needs fix"
+  return resultClass
 }
 
 function asStringArray(value: unknown): string[] | null {
@@ -217,9 +330,36 @@ function asRoute(value: unknown): GoalRouteStep[] | null {
       executable: typeof raw.executable === "string" ? raw.executable : undefined,
       args: args ?? undefined,
       saveReport: raw.saveReport === true,
+      onPending: asRoutePolicy(raw.onPending),
+      onFailure: asRoutePolicy(raw.onFailure),
     })
   }
   return route
+}
+
+function asRoutePolicy(value: unknown): GoalRoutePolicy | undefined {
+  if (typeof value === "string") {
+    return isRoutePolicyAction(value) ? { action: value } : undefined
+  }
+  const raw = asRecord(value)
+  if (!raw || !isRoutePolicyAction(raw.action)) return undefined
+  const maxAttempts =
+    typeof raw.maxAttempts === "number" && Number.isInteger(raw.maxAttempts) && raw.maxAttempts > 0
+      ? raw.maxAttempts
+      : undefined
+  const retryAfterSeconds =
+    typeof raw.retryAfterSeconds === "number" && raw.retryAfterSeconds >= 0
+      ? Math.floor(raw.retryAfterSeconds)
+      : undefined
+  return {
+    action: raw.action,
+    ...(maxAttempts !== undefined ? { maxAttempts } : {}),
+    ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+  }
+}
+
+function isRoutePolicyAction(value: unknown): value is GoalRoutePolicyAction {
+  return value === "wait" || value === "retry" || value === "block" || value === "issue"
 }
 
 function asPreferredRunTime(value: unknown): ManagedGoalPreferredRunTime | undefined {
@@ -271,6 +411,9 @@ export function managedGoalFromState(state: GoalState): ManagedGoal | null {
     stage: typeof extra.stage === "string" ? extra.stage : undefined,
     facts,
     blockers,
+    evidenceState: parseGoalEvidenceState(extra.evidenceState),
+    reason: typeof extra.reason === "string" ? extra.reason : undefined,
+    nextAction: typeof extra.nextAction === "string" ? extra.nextAction : undefined,
   }
 }
 
@@ -286,6 +429,9 @@ export function writeManagedGoalToState(state: GoalState, goal: ManagedGoal): Go
       stage: goal.stage,
       facts: goal.facts,
       blockers: goal.blockers,
+      evidenceState: goal.evidenceState ?? {},
+      reason: goal.reason,
+      nextAction: goal.nextAction,
     },
   }
 }

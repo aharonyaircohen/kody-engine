@@ -266,7 +266,17 @@ describe("goal state store", () => {
             capabilities: ["release"],
             route: [],
             facts: { published: true },
+            evidenceState: {
+              published: {
+                resultClass: "succeeded",
+                attempts: 2,
+                reason: "Published.",
+                nextAction: "continue",
+              },
+            },
             blockers: [],
+            reason: "Published.",
+            nextAction: "continue",
           },
         },
         "update goal",
@@ -290,7 +300,18 @@ describe("goal state store", () => {
         expect(payload.sha).toBe("old")
         const content = Buffer.from(String(payload.content), "base64").toString("utf8")
         const parsed = JSON.parse(content) as Record<string, unknown>
-        expect(parsed.items).toMatchObject([{ id: "published", body: "keep user notes" }])
+        expect(parsed.items).toMatchObject([
+          {
+            id: "published",
+            body: "keep user notes",
+            meta: {
+              resultClass: "succeeded",
+              attempts: 2,
+              reason: "Published.",
+              nextAction: "continue",
+            },
+          },
+        ])
         return ""
       }
       throw new Error(`unexpected gh call: ${args.join(" ")}`)
@@ -307,7 +328,17 @@ describe("goal state store", () => {
           capabilities: ["release"],
           route: [],
           facts: { published: true },
+          evidenceState: {
+            published: {
+              resultClass: "succeeded",
+              attempts: 2,
+              reason: "Published.",
+              nextAction: "continue",
+            },
+          },
           blockers: [],
+          reason: "Published.",
+          nextAction: "continue",
         },
       },
       "update goal",

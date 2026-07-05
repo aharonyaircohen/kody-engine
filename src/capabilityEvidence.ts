@@ -1,6 +1,12 @@
 import type { CapabilityReport } from "./capabilityReport.js"
 import type { CapabilityResult, CapabilityResultArtifact, CapabilityResultStatus } from "./capabilityResult.js"
+import {
+  mergeGoalEvidenceProgress,
+  parseGoalEvidenceState,
+  type GoalEvidenceResultClass,
+} from "./goal/evidenceState.js"
 import type { GoalState } from "./goal/state.js"
+import { nowIso } from "./goal/state.js"
 
 export type CapabilityEvidenceSource = "report" | "result"
 
@@ -8,6 +14,7 @@ export interface CapabilityEvidence {
   version: 1
   target: { type: "goal"; id: string }
   status: CapabilityResultStatus
+  resultClass?: GoalEvidenceResultClass
   summary: string
   evidence?: Record<string, boolean>
   explicitEvidence?: string
@@ -24,7 +31,9 @@ export function capabilityReportToEvidence(report: CapabilityReport): Capability
   if (report.target.type !== "goal") return null
   const evidence = report.evidence ?? {}
   const values = Object.values(evidence)
-  const status = values.some((value) => value === false)
+  const hasFalse = values.some((value) => value === false)
+  const hasTrue = values.some((value) => value === true)
+  const status = hasFalse
     ? "fail"
     : values.length > 0 || report.facts
       ? "changed"
@@ -33,6 +42,7 @@ export function capabilityReportToEvidence(report: CapabilityReport): Capability
     version: 1,
     target: { type: "goal", id: report.target.id },
     status,
+    resultClass: hasFalse ? "needsFix" : hasTrue ? "succeeded" : "pending",
     summary: "capability reported goal evidence",
     evidence,
     facts: report.facts ?? {},
@@ -56,9 +66,10 @@ export function capabilityResultToEvidence(
     version: 1,
     target: { type: "goal", id: targetId },
     status: result.status,
+    resultClass: result.resultClass ?? resultClassFromStatus(result.status),
     summary: result.summary,
-    evidence: result.evidence,
-    explicitEvidence: hasEvidenceValues ? undefined : explicitEvidence,
+    ...(result.evidence ? { evidence: result.evidence } : {}),
+    ...(hasEvidenceValues || !explicitEvidence ? {} : { explicitEvidence }),
     facts: result.facts,
     artifacts: result.artifacts,
     missingEvidence: result.missingEvidence,
@@ -94,6 +105,10 @@ export function mergeCapabilityEvidence(items: CapabilityEvidence[]): Capability
 export function applyCapabilityEvidenceToGoalState(state: GoalState, evidence: CapabilityEvidence): GoalState {
   const priorFacts = parseFacts(state.extra.facts) ?? {}
   const nextFacts: Record<string, unknown> = { ...priorFacts }
+  const changesProgressState =
+    evidence.sources.includes("result") ||
+    Object.entries(evidence.facts).some(([key, value]) => !CONTROL_FACT_KEYS.has(key) && priorFacts[key] !== value) ||
+    Object.entries(evidence.evidence ?? {}).some(([key, value]) => priorFacts[key] !== value)
 
   for (const [key, value] of Object.entries(evidence.facts)) {
     if (CONTROL_FACT_KEYS.has(key)) continue
@@ -106,29 +121,52 @@ export function applyCapabilityEvidenceToGoalState(state: GoalState, evidence: C
   const pending = typeof nextFacts.pendingEvidence === "string" ? nextFacts.pendingEvidence : ""
   const hasEvidenceValues = Object.keys(evidence.evidence ?? {}).length > 0
   const statusEvidence = evidence.explicitEvidence || (hasEvidenceValues ? "" : pending)
+  const progressEvidence = statusEvidence || singleEvidenceKey(evidence.evidence)
+  const resultClass = evidence.resultClass ?? resultClassFromStatus(evidence.status)
   const hasPendingEvidenceValue = pending ? Object.hasOwn(evidence.evidence ?? {}, pending) : false
-  const terminalStatus = evidence.status === "pass" || evidence.status === "fail" || evidence.status === "blocked"
+  const terminalResult = resultClass === "succeeded" || resultClass === "needsFix" || resultClass === "fatal"
   if (statusEvidence && !Object.hasOwn(evidence.evidence ?? {}, statusEvidence)) {
-    if (evidence.status === "pass") nextFacts[statusEvidence] = true
-    if (evidence.status === "fail" || evidence.status === "blocked") nextFacts[statusEvidence] = false
+    if (resultClass === "succeeded") nextFacts[statusEvidence] = true
+    if (resultClass === "needsFix" || resultClass === "fatal") nextFacts[statusEvidence] = false
   }
 
-  if (pending && (hasPendingEvidenceValue || (statusEvidence === pending && terminalStatus))) {
+  if (pending && (hasPendingEvidenceValue || (statusEvidence === pending && terminalResult))) {
     delete nextFacts.pendingEvidence
   }
 
   const blockers = parseStringArray(state.extra.blockers) ?? []
   const evidenceBlockers =
-    evidence.blockers.length > 0 || (evidence.status !== "fail" && evidence.status !== "blocked")
+    evidence.blockers.length > 0 || (resultClass !== "needsFix" && resultClass !== "fatal")
       ? evidence.blockers
       : [evidence.summary]
   for (const blocker of evidenceBlockers) {
     if (!blockers.includes(blocker)) blockers.push(blocker)
   }
 
+  const evidenceState = parseGoalEvidenceState(state.extra.evidenceState)
+  const nextEvidenceState = progressEvidence && changesProgressState
+    ? mergeGoalEvidenceProgress(evidenceState, progressEvidence, {
+        resultClass,
+        attempts: (evidenceState[progressEvidence]?.attempts ?? 0) + 1,
+        reason: evidence.summary,
+        nextAction: nextActionForResultClass(resultClass),
+        nextRetryAt: nextRetryAtFor(state, progressEvidence, resultClass),
+        updatedAt: nowIso(),
+      })
+    : evidenceState
+
   const nextExtra: GoalState["extra"] = {
     ...state.extra,
     facts: nextFacts,
+    ...(changesProgressState
+      ? {
+          reason: evidence.summary,
+          nextAction: progressEvidence ? nextEvidenceState[progressEvidence]?.nextAction : undefined,
+        }
+      : {}),
+  }
+  if (changesProgressState || state.extra.evidenceState !== undefined) {
+    nextExtra.evidenceState = nextEvidenceState
   }
   if (blockers.length > 0 || Array.isArray(state.extra.blockers)) {
     nextExtra.blockers = blockers
@@ -138,6 +176,14 @@ export function applyCapabilityEvidenceToGoalState(state: GoalState, evidence: C
     ...state,
     extra: nextExtra,
   }
+}
+
+export function resultClassFromStatus(status: CapabilityResultStatus): GoalEvidenceResultClass {
+  if (status === "pass") return "succeeded"
+  if (status === "fail") return "needsFix"
+  if (status === "blocked") return "fatal"
+  if (status === "noop") return "pending"
+  return "pending"
 }
 
 function evidenceMatches(
@@ -163,6 +209,7 @@ function evidenceMatches(
 function mergeReportAndResult(report: CapabilityEvidence, result: CapabilityEvidence): CapabilityEvidence {
   return {
     ...result,
+    resultClass: result.resultClass ?? report.resultClass,
     evidence: mergeOptionalRecords(report.evidence, result.evidence),
     facts: { ...report.facts, ...result.facts },
     artifacts: uniqueArtifacts([...report.artifacts, ...result.artifacts]),
@@ -170,6 +217,40 @@ function mergeReportAndResult(report: CapabilityEvidence, result: CapabilityEvid
     blockers: uniqueStrings([...report.blockers, ...result.blockers]),
     sources: uniqueSources([...report.sources, ...result.sources]),
   }
+}
+
+function singleEvidenceKey(evidence: Record<string, boolean> | undefined): string {
+  const keys = Object.keys(evidence ?? {})
+  return keys.length === 1 ? keys[0]! : ""
+}
+
+function nextActionForResultClass(resultClass: GoalEvidenceResultClass): string {
+  if (resultClass === "succeeded") return "continue"
+  if (resultClass === "pending") return "wait"
+  if (resultClass === "retryable") return "retry"
+  if (resultClass === "needsFix") return "create issue"
+  return "block"
+}
+
+function nextRetryAtFor(
+  state: GoalState,
+  evidence: string,
+  resultClass: GoalEvidenceResultClass,
+): string | undefined {
+  if (resultClass !== "retryable") return undefined
+  const delaySeconds = retryAfterSecondsFor(state.extra.route, evidence) ?? 300
+  return new Date(Date.now() + delaySeconds * 1000).toISOString().replace(/\.\d{3}Z$/, "Z")
+}
+
+function retryAfterSecondsFor(route: unknown, evidence: string): number | undefined {
+  if (!Array.isArray(route)) return undefined
+  const step = route.find(
+    (item): item is Record<string, unknown> =>
+      !!item && typeof item === "object" && !Array.isArray(item) && item.evidence === evidence,
+  )
+  const policy = step && recordField(step.onFailure)
+  const retryAfter = typeof policy?.retryAfterSeconds === "number" ? policy.retryAfterSeconds : undefined
+  return retryAfter !== undefined && retryAfter >= 0 ? Math.floor(retryAfter) : undefined
 }
 
 function mergeOptionalRecords(
@@ -223,4 +304,8 @@ function parseStringArray(raw: unknown): string[] | null {
     out.push(item)
   }
   return out
+}
+
+function recordField(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null
 }

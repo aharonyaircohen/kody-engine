@@ -3,6 +3,7 @@ import {
   parseCapabilityReportEvidence,
   parseCapabilityReportTarget,
 } from "./capabilityReport.js"
+import { isGoalEvidenceResultClass, type GoalEvidenceResultClass } from "./goal/evidenceState.js"
 import type { GoalState } from "./goal/state.js"
 
 export const CAPABILITY_RESULT_MARKER = "KODY_CAPABILITY_RESULT"
@@ -19,6 +20,7 @@ export interface CapabilityResult {
   version: 1
   target?: CapabilityReportTarget
   status: CapabilityResultStatus
+  resultClass?: GoalEvidenceResultClass
   summary: string
   evidence?: Record<string, boolean>
   facts: Record<string, unknown>
@@ -75,6 +77,7 @@ export function parseCapabilityResult(raw: unknown): CapabilityResult | null {
     version: 1,
     ...(target ? { target } : {}),
     status: obj.status,
+    ...(isGoalEvidenceResultClass(obj.resultClass) ? { resultClass: obj.resultClass } : {}),
     summary,
     ...(evidence ? { evidence } : {}),
     facts,

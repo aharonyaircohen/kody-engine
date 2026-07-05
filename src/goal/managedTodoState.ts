@@ -68,6 +68,7 @@ export function serializeTodoGoalState(goalId: string, state: GoalState, previou
     stringArray(destination.evidence).length > 0 ? stringArray(destination.evidence) : stringArray(raw.evidence)
   const route = Array.isArray(raw.route) ? (raw.route as Record<string, unknown>[]) : []
   const facts = recordField(raw.facts)
+  const evidenceState = recordField(raw.evidenceState)
   const now = new Date().toISOString()
   const createdAt = stringField(raw.createdAt) || stringField(raw.startedAt) || now
   const routeByEvidence = new Map(route.map((step) => [stringField(step.evidence), step] as const))
@@ -75,7 +76,15 @@ export function serializeTodoGoalState(goalId: string, state: GoalState, previou
   const items =
     evidence.length > 0
       ? evidence.map((key) =>
-          itemFromEvidence(key, routeByEvidence.get(key), facts, createdAt, now, previousItems.get(key)),
+          itemFromEvidence(
+            key,
+            routeByEvidence.get(key),
+            facts,
+            evidenceState,
+            createdAt,
+            now,
+            previousItems.get(key),
+          ),
         )
       : stringArray(raw.capabilities).map((capability) =>
           itemFromCapability(capability, createdAt, previousItems.get(capability)),
@@ -112,11 +121,13 @@ function itemFromEvidence(
   evidence: string,
   step: Record<string, unknown> | undefined,
   facts: Record<string, unknown>,
+  evidenceState: Record<string, unknown>,
   createdAt: string,
   now: string,
   prior?: TodoItemState,
 ): TodoItemState {
   const completed = facts[evidence] === true
+  const progress = recordField(evidenceState[evidence])
   return {
     id: evidence,
     title: (prior?.title ?? stringField(step?.stage)) || evidence,
@@ -128,12 +139,20 @@ function itemFromEvidence(
     meta: {
       ...(prior?.meta ?? {}),
       evidence,
+      ...(stringField(progress?.resultClass) ? { resultClass: stringField(progress?.resultClass) } : {}),
+      ...(typeof progress?.attempts === "number" ? { attempts: progress.attempts } : {}),
+      ...(stringField(progress?.reason) ? { reason: stringField(progress?.reason) } : {}),
+      ...(stringField(progress?.nextAction) ? { nextAction: stringField(progress?.nextAction) } : {}),
+      ...(stringField(progress?.nextRetryAt) ? { nextRetryAt: stringField(progress?.nextRetryAt) } : {}),
+      ...(typeof progress?.issue === "number" ? { issue: progress.issue } : {}),
       ...(step
         ? {
             stage: stringField(step.stage),
             capability: stringField(step.capability),
             ...(step.args && typeof step.args === "object" ? { args: step.args } : {}),
             ...(step.saveReport === true ? { saveReport: true } : {}),
+            ...(step.onPending && typeof step.onPending === "object" ? { onPending: step.onPending } : {}),
+            ...(step.onFailure && typeof step.onFailure === "object" ? { onFailure: step.onFailure } : {}),
           }
         : {}),
     },
@@ -167,6 +186,8 @@ function routeFromItems(items: TodoItemState[]): Record<string, unknown>[] {
         capability,
         ...(meta.args ? { args: meta.args } : {}),
         ...(meta.saveReport === true ? { saveReport: true } : {}),
+        ...(meta.onPending ? { onPending: meta.onPending } : {}),
+        ...(meta.onFailure ? { onFailure: meta.onFailure } : {}),
       },
     ]
   })

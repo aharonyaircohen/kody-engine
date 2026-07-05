@@ -145,6 +145,7 @@ export function goalRunLogSnapshot(goalId: string, goalState: string, goal: Mana
     loopTarget: goal.loopTarget,
     blockers: [...goal.blockers],
     facts: { ...goal.facts },
+    evidenceState: { ...(goal.evidenceState ?? {}) },
   }
 }
 
@@ -175,6 +176,12 @@ export function goalRunLogChange(
   if (beforeSatisfied || afterSatisfied) {
     const evidence = diffStringArrays(beforeSatisfied ?? [], afterSatisfied ?? [])
     if (evidence.added.length > 0 || evidence.removed.length > 0) change.satisfiedEvidence = evidence
+  }
+
+  const beforeEvidenceState = recordValue(before.evidenceState)
+  const afterEvidenceState = recordValue(after.evidenceState)
+  if (beforeEvidenceState || afterEvidenceState) {
+    change.evidenceState = diffRecordKeys(beforeEvidenceState ?? {}, afterEvidenceState ?? {})
   }
 
   return Object.keys(change).length > 0 ? change : undefined

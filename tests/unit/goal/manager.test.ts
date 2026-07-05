@@ -222,6 +222,108 @@ describe("planManagedGoalTick", () => {
     expect(goal.blockers).toEqual([])
   })
 
+  it("waits when the current evidence is pending", () => {
+    const goal = releaseGoal({
+      stage: "prepare",
+      facts: { pendingEvidence: "releasePrExists" },
+      evidenceState: {
+        releasePrExists: {
+          resultClass: "pending",
+          attempts: 1,
+          reason: "Fast Gate is still running.",
+          nextAction: "wait",
+        },
+      },
+    })
+
+    const decision = planManagedGoalTick(goal)
+
+    expect(decision).toEqual({
+      kind: "wait",
+      evidence: "releasePrExists",
+      stage: "prepare",
+      reason: "Fast Gate is still running.",
+    })
+    expect(goal.nextAction).toBe("wait")
+  })
+
+  it("waits until retryable evidence reaches nextRetryAt", () => {
+    const future = new Date(Date.now() + 60_000).toISOString()
+    const goal = releaseGoal({
+      stage: "prepare",
+      facts: { pendingEvidence: "releasePrExists" },
+      evidenceState: {
+        releasePrExists: {
+          resultClass: "retryable",
+          attempts: 1,
+          reason: "GitHub was temporarily unavailable.",
+          nextAction: "retry",
+          nextRetryAt: future,
+        },
+      },
+    })
+
+    const decision = planManagedGoalTick(goal)
+
+    expect(decision).toMatchObject({
+      kind: "wait",
+      evidence: "releasePrExists",
+      stage: "prepare",
+      reason: "GitHub was temporarily unavailable.",
+    })
+    expect(goal.nextAction).toBe(`retry after ${future}`)
+  })
+
+  it("dispatches retryable evidence when retry time has passed", () => {
+    const goal = releaseGoal({
+      stage: "prepare",
+      facts: { pendingEvidence: "releasePrExists" },
+      evidenceState: {
+        releasePrExists: {
+          resultClass: "retryable",
+          attempts: 1,
+          reason: "GitHub was temporarily unavailable.",
+          nextAction: "retry",
+          nextRetryAt: "2020-01-01T00:00:00Z",
+        },
+      },
+    })
+
+    const decision = planManagedGoalTick(goal)
+
+    expect(decision).toMatchObject({
+      kind: "dispatch",
+      evidence: "releasePrExists",
+      capability: "release-prepare",
+    })
+  })
+
+  it("blocks needs-fix evidence with the linked issue as next action", () => {
+    const goal = releaseGoal({
+      stage: "prepare",
+      facts: { releasePrExists: false },
+      evidenceState: {
+        releasePrExists: {
+          resultClass: "needsFix",
+          attempts: 1,
+          reason: "Release PR failed validation.",
+          nextAction: "fix issue #88",
+          issue: 88,
+        },
+      },
+    })
+
+    const decision = planManagedGoalTick(goal)
+
+    expect(decision).toEqual({
+      kind: "blocked",
+      evidence: "releasePrExists",
+      stage: "prepare",
+      reason: "Release PR failed validation.",
+    })
+    expect(goal.nextAction).toBe("fix issue #88")
+  })
+
   it("marks the goal complete when every destination evidence item is present", () => {
     const goal = releaseGoal({
       facts: { releasePrExists: true, qaPassed: true, packagePublished: true, pendingEvidence: "packagePublished" },

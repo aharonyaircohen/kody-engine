@@ -18,12 +18,16 @@ vi.mock("../../src/stateRepo.js", async () => {
     writeStateText: vi.fn(),
   }
 })
+vi.mock("../../src/issue.js", () => ({
+  gh: vi.fn(),
+}))
 
 import type { AgentResult } from "../../src/agent.js"
 import type { Context, Profile } from "../../src/executables/types.js"
 import { flushGoalRunLogEvents } from "../../src/goal/runLog.js"
 import { type GoalState, serializeGoalState } from "../../src/goal/state.js"
 import { fetchGoalState, putGoalState } from "../../src/goal/stateStore.js"
+import { gh } from "../../src/issue.js"
 import { applyCapabilityReports } from "../../src/scripts/applyCapabilityReports.js"
 import { writeStateText } from "../../src/stateRepo.js"
 
@@ -31,6 +35,7 @@ const fetchGoalStateMock = vi.mocked(fetchGoalState)
 const putGoalStateMock = vi.mocked(putGoalState)
 const flushGoalRunLogEventsMock = vi.mocked(flushGoalRunLogEvents)
 const writeStateTextMock = vi.mocked(writeStateText)
+const ghMock = vi.mocked(gh)
 
 function fakeCtx(data: Record<string, unknown>, args: Record<string, unknown> = {}): Context {
   return {
@@ -106,6 +111,7 @@ describe("applyCapabilityReports", () => {
     putGoalStateMock.mockReset()
     flushGoalRunLogEventsMock.mockReset()
     writeStateTextMock.mockReset()
+    ghMock.mockReset()
   })
 
   it("applies shell-collected goal reports to kody-state", async () => {
@@ -516,6 +522,15 @@ describe("applyCapabilityReports", () => {
 
   it("applies capability result failure as agentGoal evidence false plus blocker", async () => {
     fetchGoalStateMock.mockReturnValueOnce(goalState())
+    ghMock.mockImplementation((args, opts) => {
+      const command = args.join(" ")
+      if (command === "issue list --state all --limit 100 --json number,body") return "[]"
+      if (command === "issue create --title Goal release-aguy: fix releasePrExists --body-file -") {
+        expect(String(opts?.input ?? "")).toContain("kody-managed-goal-needs-fix: release-aguy:releasePrExists")
+        return "https://github.com/o/r/issues/88"
+      }
+      throw new Error(`unexpected gh call: ${command}`)
+    })
 
     await applyCapabilityReports(
       fakeCtx(
@@ -541,6 +556,16 @@ describe("applyCapabilityReports", () => {
     const [, , next] = putGoalStateMock.mock.calls[0]!
     expect((next as GoalState).extra.facts).toEqual({ releasePrExists: false, reason: "ci" })
     expect((next as GoalState).extra.blockers).toEqual(["CI is red."])
+    expect((next as GoalState).extra.nextAction).toBe("fix issue #88")
+    expect((next as GoalState).extra.evidenceState).toMatchObject({
+      releasePrExists: {
+        resultClass: "needsFix",
+        attempts: 1,
+        reason: "Release PR failed validation.",
+        nextAction: "fix issue #88",
+        issue: 88,
+      },
+    })
   })
 
   it("logs no-op reports without persisting unchanged goal state", async () => {

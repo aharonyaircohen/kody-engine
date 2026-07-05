@@ -61,6 +61,7 @@ export function capabilityEvidenceOutput(evidence: CapabilityEvidence): Record<s
     kind: "capability-evidence",
     sources: evidence.sources,
     status: evidence.status,
+    resultClass: evidence.resultClass,
     summary: evidence.summary,
     evidence: evidence.evidence ?? {},
     facts: evidence.facts,
