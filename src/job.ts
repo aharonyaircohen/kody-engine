@@ -306,6 +306,10 @@ async function runCapabilityWorkflow(
 ): Promise<ExecutorOutput> {
   let chainData: Record<string, unknown> = {
     ...(base.preloadedData ?? {}),
+    runSubjectType: "workflow",
+    runSubjectId: capability.slug,
+    runSubjectLabel: capability.title,
+    runSubjectWorkflow: capability.slug,
     workflowCapability: capability.slug,
     workflowTitle: capability.title,
     workflowStepCount: workflow.steps.length,

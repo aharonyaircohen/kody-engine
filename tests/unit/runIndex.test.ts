@@ -1,0 +1,196 @@
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
+const stateRepo = vi.hoisted(() => ({
+  readStateText: vi.fn(),
+  writeStateText: vi.fn(),
+}))
+
+vi.mock("../../src/stateRepo.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/stateRepo.js")>()),
+  readStateText: stateRepo.readStateText,
+  writeStateText: stateRepo.writeStateText,
+}))
+
+import {
+  mergeRunIndexRow,
+  runIndexPath,
+  runIndexRowFromGoalEvents,
+  runIndexRowFromJobContext,
+  statusFromExitCode,
+  upsertRunIndexRow,
+} from "../../src/runIndex.js"
+
+const config = {
+  github: { owner: "o", repo: "r" },
+  state: { repo: "o/kody-state", path: "r" },
+}
+
+describe("run index", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env.GITHUB_RUN_ID
+    delete process.env.GITHUB_RUN_ATTEMPT
+    delete process.env.GITHUB_REPOSITORY
+    delete process.env.GITHUB_SERVER_URL
+    delete process.env.GITHUB_EVENT_NAME
+    delete process.env.GITHUB_ACTOR
+  })
+
+  it("keeps a compact newest-first projection by run id", () => {
+    const first = mergeRunIndexRow(null, {
+      version: 1,
+      id: "workflow:ship:run-1",
+      subjectType: "workflow",
+      subjectId: "ship",
+      status: "running",
+      title: "Ship",
+      updatedAt: "2026-07-05T10:00:00.000Z",
+    })
+
+    const second = mergeRunIndexRow(JSON.stringify(first), {
+      version: 1,
+      id: "workflow:ship:run-1",
+      subjectType: "workflow",
+      subjectId: "ship",
+      status: "success",
+      title: "Ship",
+      updatedAt: "2026-07-05T10:02:00.000Z",
+    })
+
+    expect(second.runs).toHaveLength(1)
+    expect(second.runs[0]).toMatchObject({
+      id: "workflow:ship:run-1",
+      status: "success",
+      updatedAt: "2026-07-05T10:02:00.000Z",
+    })
+  })
+
+  it("writes runs/index.json with conflict retry", () => {
+    stateRepo.readStateText
+      .mockReturnValueOnce({
+        content: JSON.stringify({ version: 1, updatedAt: "old", runs: [] }),
+        sha: "sha-1",
+      })
+      .mockReturnValueOnce({
+        content: JSON.stringify({
+          version: 1,
+          updatedAt: "other",
+          runs: [
+            {
+              version: 1,
+              id: "goal:release:run-0",
+              subjectType: "goal",
+              subjectId: "release",
+              status: "success",
+              title: "release",
+              updatedAt: "2026-07-05T09:00:00.000Z",
+            },
+          ],
+        }),
+        sha: "sha-2",
+      })
+    stateRepo.writeStateText.mockImplementationOnce(() => {
+      throw new Error("HTTP 409 Conflict")
+    })
+
+    upsertRunIndexRow(config, "/repo", {
+      version: 1,
+      id: "workflow:ship:run-1",
+      subjectType: "workflow",
+      subjectId: "ship",
+      status: "running",
+      title: "Ship",
+      updatedAt: "2026-07-05T10:00:00.000Z",
+    })
+
+    expect(stateRepo.writeStateText).toHaveBeenCalledTimes(2)
+    const [, , filePath, content, message, sha] = stateRepo.writeStateText.mock.calls[1]!
+    expect(filePath).toBe(runIndexPath())
+    expect(message).toBe("chore(runs): update run index")
+    expect(sha).toBe("sha-2")
+    expect(JSON.parse(String(content)).runs.map((run: { id: string }) => run.id)).toEqual([
+      "workflow:ship:run-1",
+      "goal:release:run-0",
+    ])
+  })
+
+  it("builds workflow rows from runtime job context including model", () => {
+    process.env.GITHUB_RUN_ID = "123"
+    process.env.GITHUB_RUN_ATTEMPT = "2"
+    process.env.GITHUB_REPOSITORY = "o/r"
+    process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
+    process.env.GITHUB_ACTOR = "alice"
+
+    const row = runIndexRowFromJobContext({
+      profileName: "release-prepare",
+      profile: { name: "release-prepare", describe: "Prepare release.", agent: "release" },
+      status: statusFromExitCode(0),
+      startedAt: "2026-07-05T10:00:00.000Z",
+      updatedAt: "2026-07-05T10:01:00.000Z",
+      data: {
+        runSubjectType: "workflow",
+        runSubjectId: "web-release",
+        runSubjectLabel: "Web release",
+        workflowStep: "prepare",
+        jobId: "job-1",
+        jobFlavor: "instant",
+        jobCapability: "release-prepare",
+        jobExecutable: "release-prepare",
+        jobModel: "claude/claude-haiku-4-5-20251001",
+        jobModelProvider: "claude",
+        jobModelName: "claude-haiku-4-5-20251001",
+      },
+    })
+
+    expect(row).toMatchObject({
+      id: "workflow:web-release:job-1",
+      subjectType: "workflow",
+      subjectId: "web-release",
+      status: "success",
+      currentStep: "prepare",
+      model: "claude/claude-haiku-4-5-20251001",
+      modelProvider: "claude",
+      modelName: "claude-haiku-4-5-20251001",
+      githubRunUrl: "https://github.com/o/r/actions/runs/123",
+      triggerMode: "manual",
+      actor: "alice",
+    })
+  })
+
+  it("builds loop rows from goal run log events", () => {
+    const row = runIndexRowFromGoalEvents("ci-health", "logs/goals/ci-health/runs/run.jsonl", [
+      {
+        time: "2026-07-05T10:00:00.000Z",
+        goalId: "ci-health",
+        goalType: "agentLoop",
+        event: "loop.tick.dispatch",
+        status: "dispatch",
+        run: { id: "gh-123-1", githubRunId: "123", githubRunAttempt: "1" },
+        trigger: { kind: "schedule", githubActor: "github-actions" },
+        job: {
+          id: "gh-123-1",
+          capability: "goal-manager",
+          executable: "goal-manager",
+          model: "claude/claude-haiku-4-5-20251001",
+        },
+        links: {
+          workflowRun: "https://github.com/o/r/actions/runs/123",
+          log: "https://github.com/o/kody-state/blob/main/r/logs/goals/ci-health/runs/run.jsonl",
+        },
+        stateRepo: { goalStatePath: "r/todos/ci-health.json" },
+      },
+    ])
+
+    expect(row).toMatchObject({
+      id: "loop:ci-health:gh-123-1",
+      subjectType: "loop",
+      subjectModel: "agentLoop",
+      status: "running",
+      sourceType: "goal-run-log",
+      sourcePath: "logs/goals/ci-health/runs/run.jsonl",
+      detailUrl: "https://github.com/o/kody-state/blob/main/r/logs/goals/ci-health/runs/run.jsonl",
+      model: "claude/claude-haiku-4-5-20251001",
+      triggerMode: "scheduled",
+    })
+  })
+})

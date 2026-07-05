@@ -1,6 +1,7 @@
 import * as fs from "node:fs"
 import type { CapabilityResultArtifact } from "../capabilityResult.js"
 import { appendStateLine, parseStateRepoSlug, resolveStateRepoConfig, type StateRepoConfig } from "../stateRepo.js"
+import { runIndexRowFromGoalEvents, upsertRunIndexRowBestEffort } from "../runIndex.js"
 import type { GoalRouteStep, ManagedGoal } from "./manager.js"
 import { nowIso } from "./state.js"
 
@@ -107,10 +108,14 @@ export function flushGoalRunLogEvents(
   const logs = goalRunLogs(data)
   for (const [goalId, log] of Object.entries(logs)) {
     if (log.events.length === 0) continue
-    const lines = `${log.events
-      .map((event) => JSON.stringify(enrichGoalRunLogEvent(config, data, log.path, event)))
-      .join("\n")}\n`
+    const enrichedEvents = log.events.map((event) => enrichGoalRunLogEvent(config, data, log.path, event))
+    const lines = `${enrichedEvents.map((event) => JSON.stringify(event)).join("\n")}\n`
     appendStateLine(config, cwd, log.path, lines, `chore(goal-logs): append ${goalId}`)
+    upsertRunIndexRowBestEffort(
+      config,
+      cwd,
+      runIndexRowFromGoalEvents(goalId, log.path, enrichedEvents as unknown as Record<string, unknown>[]),
+    )
     log.events = []
   }
 }
@@ -444,6 +449,10 @@ function jobContext(data: Record<string, unknown>): Record<string, unknown> | un
     agent: stringValue(data.jobAgent) ?? undefined,
     schedule: stringValue(data.jobSchedule) ?? undefined,
     target: data.jobTarget ?? undefined,
+    model: stringValue(data.jobModel) ?? undefined,
+    modelProvider: stringValue(data.jobModelProvider) ?? undefined,
+    modelName: stringValue(data.jobModelName) ?? undefined,
+    reasoningEffort: stringValue(data.jobReasoningEffort) ?? undefined,
     why: truncateString(stringValue(data.jobWhy), 1000),
     saveReport: data.jobSaveReport === true ? true : undefined,
   })

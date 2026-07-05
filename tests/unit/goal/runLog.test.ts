@@ -8,15 +8,22 @@ vi.mock("../../../src/stateRepo.js", async (importOriginal) => ({
   appendStateLine: vi.fn(),
 }))
 
+vi.mock("../../../src/runIndex.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/runIndex.js")>()),
+  upsertRunIndexRowBestEffort: vi.fn(),
+}))
+
 import {
   flushGoalRunLogEvents,
   goalRunLogChange,
   goalRunLogSnapshot,
   stageGoalRunLogEvent,
 } from "../../../src/goal/runLog.js"
+import { upsertRunIndexRowBestEffort } from "../../../src/runIndex.js"
 import { appendStateLine } from "../../../src/stateRepo.js"
 
 const appendStateLineMock = vi.mocked(appendStateLine)
+const upsertRunIndexRowBestEffortMock = vi.mocked(upsertRunIndexRowBestEffort)
 
 const config = {
   quality: { typecheck: "", lint: "", testUnit: "", format: "" },
@@ -29,6 +36,7 @@ const config = {
 describe("goal run logs", () => {
   beforeEach(() => {
     appendStateLineMock.mockReset()
+    upsertRunIndexRowBestEffortMock.mockReset()
   })
 
   afterEach(() => {
@@ -160,6 +168,15 @@ describe("goal run logs", () => {
     )
     expect((event.links as Record<string, unknown>).log).toMatch(
       /^https:\/\/github\.com\/o\/kody-state\/blob\/main\/r\/logs\/goals\/web-release\/runs\/.+-job-1\.jsonl$/,
+    )
+    expect(upsertRunIndexRowBestEffortMock).toHaveBeenCalledWith(
+      config,
+      "/repo",
+      expect.objectContaining({
+        subjectType: "goal",
+        subjectId: "web-release",
+        sourceType: "goal-run-log",
+      }),
     )
   })
 

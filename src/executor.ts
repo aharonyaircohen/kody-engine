@@ -25,6 +25,7 @@ import { KODY_NAMESPACE, removeLabel } from "./lifecycleLabels.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
 import { resolveExecutable, resolveExecutableCandidates } from "./registry.js"
+import { runIndexRowFromJobContext, statusFromExitCode, upsertRunIndexRowBestEffort } from "./runIndex.js"
 import { agentRunDir } from "./runtimePaths.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
 import type { TaskState, TaskTarget } from "./state.js"
@@ -260,8 +261,10 @@ export interface ExecutorOutput {
 
 export async function runExecutable(profileName: string, input: ExecutorInput): Promise<ExecutorOutput> {
   const stageStartedAt = Date.now()
+  let finishRunIndex: ((out: ExecutorOutput) => void) | null = null
   emitEvent(input.cwd, { executable: profileName, kind: "stage_start" })
   const finishAndEnd = (out: ExecutorOutput): ExecutorOutput => {
+    finishRunIndex?.(out)
     emitEvent(input.cwd, {
       executable: profileName,
       kind: "stage_end",
@@ -374,6 +377,42 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     // re-fetch. Always-on; preloadedData defaults to {} when unset.
     data: { ...(input.preloadedData ?? {}) },
     output: { exitCode: 0 },
+  }
+  ctx.data.jobModel = modelSpec
+  ctx.data.jobModelProvider = model.provider
+  ctx.data.jobModelName = model.model
+  if (reasoningEffort) ctx.data.jobReasoningEffort = reasoningEffort
+
+  const runIndexStartedAt = new Date(stageStartedAt).toISOString()
+  if (!input.skipConfig) {
+    upsertRunIndexRowBestEffort(
+      config,
+      input.cwd,
+      runIndexRowFromJobContext({
+        data: ctx.data,
+        profileName,
+        profile,
+        status: "running",
+        startedAt: runIndexStartedAt,
+        updatedAt: runIndexStartedAt,
+      }),
+    )
+    finishRunIndex = (out: ExecutorOutput) => {
+      const finishedAt = new Date().toISOString()
+      upsertRunIndexRowBestEffort(
+        config,
+        input.cwd,
+        runIndexRowFromJobContext({
+          data: ctx.data,
+          profileName,
+          profile,
+          status: statusFromExitCode(out.exitCode),
+          startedAt: runIndexStartedAt,
+          updatedAt: finishedAt,
+          reason: out.reason,
+        }),
+      )
+    }
   }
 
   // Per-task artifacts: if this run targets a concrete issue or PR,
