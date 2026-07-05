@@ -14,6 +14,11 @@ Goals are the normal home for long-term progress routing. Capabilities stay reus
 capabilities: `observe`, `act`, or `verify`. A goal may compose many capabilities,
 but a capability should not secretly become the goal's manager loop.
 
+A goal can route directly to capabilities. It can also route to a public
+capability backed by a workflow when one evidence step needs ordered capability
+steps. Use the workflow for step order; keep progress, evidence, retries,
+issues, and blockers on the goal.
+
 A goal may know which capability it is dispatching. A normal capability should
 not need to know which goal instance dispatched it. The goal runner owns the
 parent context and attaches capability results to goal evidence.

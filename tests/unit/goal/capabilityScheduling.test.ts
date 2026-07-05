@@ -616,6 +616,32 @@ describe("standing goal capability scheduling", () => {
     })
   })
 
+  it("dispatches explicit capability target loops without a separate capability list", async () => {
+    writeCapability("ci-health", { agent: "kody", executable: "ci-check" })
+    const raw = goalState([])
+    raw.extra.type = "agentLoop"
+    raw.extra.loopTarget = { type: "capability", id: "ci-health" }
+    const ctx = fakeCtx(raw)
+
+    await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+
+    expect(ctx.output.nextDispatch).toEqual({
+      capability: "ci-health",
+      executable: "ci-check",
+      cliArgs: {},
+    })
+    const updatedGoal = ctx.data.goal as GoalCtx
+    expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
+      mode: "agentLoop",
+      lastDecision: {
+        kind: "dispatch",
+        capability: "ci-health",
+        executable: "ci-check",
+      },
+      capabilities: { "ci-health": { state: "due" } },
+    })
+  })
+
   it("passes capability slug when executable inputs declare capability", async () => {
     writeCapability("auto-fix-ci", {
       agent: "kody",

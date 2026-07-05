@@ -140,8 +140,11 @@ export async function planGoalCapabilitySchedule(
   const backend = resolveBackend({ config: opts.config, cwd: opts.cwd, jobsDir })
   const statuses: Record<string, GoalCapabilityScheduleStatus> = {}
   const blockers: string[] = []
+  const explicitCapabilityTarget =
+    opts.goal.loopTarget?.type === "capability" ? opts.goal.loopTarget.id.trim() : ""
+  const capabilitySlugs = explicitCapabilityTarget ? [explicitCapabilityTarget] : opts.goal.capabilities
 
-  for (const slug of opts.goal.capabilities) {
+  for (const slug of capabilitySlugs) {
     const capability = resolveCapabilityFolder(slug, jobsRoot)
     const status = await describeCapabilitySchedule(
       capability,
@@ -153,7 +156,7 @@ export async function planGoalCapabilitySchedule(
     if (status.state === "blocked") blockers.push(`${slug}: ${status.reason}`)
   }
 
-  const due = opts.goal.capabilities
+  const due = capabilitySlugs
     .map((slug) => statuses[slug])
     .filter((status): status is GoalCapabilityScheduleStatus => status?.state === "due")
     .sort(compareOldestLastFired)[0]

@@ -18,7 +18,7 @@ Retries stay under the same job instead of becoming new work.
 |---|---|---|
 | **intent** | why | company-level reason, optional deeper context, priority, posture, scope, and success signals |
 | **goal** | what | durable outcome + manager loop; stores destination evidence, route, facts, blockers, and progress |
-| **agentLoop** | when | stateful heartbeat wrapper; stores schedule/cursor and wakes another target such as a goal or capability |
+| **agentLoop** | when | stateful heartbeat wrapper; stores schedule/cursor and wakes a goal, workflow, or capability target |
 | **agent** | who | reusable executor identity (`.kody/agents/<slug>.md`, usually from project or company store) |
 | **capability** | how | reusable ability the agency can use; currently stored as an capability contract plus an executable implementation |
 | **workflow** | how, composed | ordered capability steps for one engine run; default workflow is one capability |
@@ -48,6 +48,21 @@ State boundary: executables and capabilities are reusable definitions.
 They should be stateless with respect to business progress. Goals and agentLoops
 are stateful instances. A scheduled capability may keep only operational
 cursor/dedup state; it must not own goal progress or decide completion.
+
+Common valid chains:
+
+```text
+loop -> capability
+loop -> workflow -> capabilities
+loop -> goal -> capabilities
+loop -> goal -> workflow-backed capability -> capabilities
+```
+
+The longer release shape is for work that needs durable progress, evidence,
+issues, retries, and ordered release steps. For example, a web release loop can
+wake a release goal; the goal then routes to a workflow-backed release
+capability, and that workflow runs the concrete release capabilities. Shorter
+chains are still valid when they do not need that goal state.
 
 Canonical creation docs:
 

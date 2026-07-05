@@ -78,6 +78,7 @@ decisions, model that above the capability:
 The important boundary is:
 
 ```text
+Loop decides when to wake a target.
 Goal decides what is needed.
 Capability provides how the agency can produce the result.
 Workflow composes capabilities for one run.
@@ -86,6 +87,11 @@ Legacy Capability stores old capability contracts.
 Legacy Executable stores old concrete implementations.
 ```
 
+Valid chains are intentionally flexible. A loop may wake a capability directly,
+wake a workflow directly, or wake a goal. A goal may then route straight to
+capabilities or to a workflow-backed capability when that evidence step needs
+ordered substeps.
+
 ## State Boundary
 
 Executables and capabilities are reusable definitions. They can run many times with new inputs, but they should not remember long-term business progress.
@@ -93,7 +99,7 @@ Executables and capabilities are reusable definitions. They can run many times w
 - `executable`: concrete execution; emits output or reports for this run.
 - `capability`: capability contract; explains what kind of capability exists, who owns it, when it may run, and which action or ordered action list implements it.
 - `goal`: durable outcome state; owns destination evidence, stage, facts, and blockers.
-- `agentLoop`: durable cadence state; owns heartbeat/cursor data and the target it wakes.
+- `agentLoop`: durable cadence state; owns heartbeat/cursor data and the goal, workflow, or capability target it wakes.
 
 A scheduled capability may have an operational ledger for cursors or deduplication. That ledger is not goal progress. If the system needs to decide what is complete or which step is next, put that in a goal or agentLoop, not in the capability.
 
