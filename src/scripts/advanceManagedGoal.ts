@@ -269,6 +269,17 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     return
   }
 
+  if (decision.kind === "dispatchWorkflow") {
+    ctx.output.nextDispatch = {
+      workflow: decision.workflow,
+      cliArgs: decision.cliArgs,
+      ...(decision.saveReport === true ? { saveReport: true } : {}),
+      resultTarget: { type: "goal", id: goal.id },
+    }
+    ctx.output.reason = `dispatch workflow ${decision.workflow} for ${decision.evidence}`
+    return
+  }
+
   ctx.output.nextDispatch = {
     capability: decision.capability,
     cliArgs: decision.cliArgs,
@@ -291,7 +302,7 @@ function stageManagedGoalDecision(
     change: Record<string, unknown> | undefined
   },
 ): void {
-  if (decision.kind === "dispatch") {
+  if (decision.kind === "dispatch" || decision.kind === "dispatchWorkflow") {
     stageGoalRunLogEvent(data, goalId, {
       source: "goal-manager",
       event: "goal.tick.dispatch",
@@ -300,21 +311,36 @@ function stageManagedGoalDecision(
       stage: decision.stage,
       evidence: decision.evidence,
       status: decision.kind,
-      dispatch: {
-        capability: decision.capability,
-        cliArgs: decision.cliArgs,
-        ...(decision.executable ? { executable: decision.executable } : {}),
-      },
+      dispatch:
+        decision.kind === "dispatchWorkflow"
+          ? {
+              workflow: decision.workflow,
+              cliArgs: decision.cliArgs,
+            }
+          : {
+              capability: decision.capability,
+              cliArgs: decision.cliArgs,
+              ...(decision.executable ? { executable: decision.executable } : {}),
+            },
       goal: details.goalSnapshot,
       inspection: details.inspection,
-      decision: {
-        kind: decision.kind,
-        evidence: decision.evidence,
-        stage: decision.stage,
-        capability: decision.capability,
-        cliArgs: decision.cliArgs,
-        ...(decision.executable ? { executable: decision.executable } : {}),
-      },
+      decision:
+        decision.kind === "dispatchWorkflow"
+          ? {
+              kind: decision.kind,
+              evidence: decision.evidence,
+              stage: decision.stage,
+              workflow: decision.workflow,
+              cliArgs: decision.cliArgs,
+            }
+          : {
+              kind: decision.kind,
+              evidence: decision.evidence,
+              stage: decision.stage,
+              capability: decision.capability,
+              cliArgs: decision.cliArgs,
+              ...(decision.executable ? { executable: decision.executable } : {}),
+            },
       change: details.change,
     })
     return
@@ -399,7 +425,7 @@ function previousDispatchWasTargetInstance(
 }
 
 function ensureIssueFactIfNeeded(goal: ManagedGoal, goalId: string, cwd?: string): void {
-  if (!routeNeedsIssueFact(goal)) return
+  if (!routeNeedsIssueFact(goal) && !workflowNeedsIssueFact(goal)) return
   const existing = normalizeIssueNumber(goal.facts.issue)
   if (existing !== null) {
     goal.facts.issue = existing
@@ -416,6 +442,16 @@ function routeNeedsIssueFact(goal: ManagedGoal): boolean {
       return Object.keys(record).length === 1 && record.fact === "issue"
     }),
   )
+}
+
+function workflowNeedsIssueFact(goal: ManagedGoal): boolean {
+  return Object.values(goal.workflowRef?.args ?? {}).some(isIssueFactReference)
+}
+
+function isIssueFactReference(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  return Object.keys(record).length === 1 && record.fact === "issue"
 }
 
 function normalizeIssueNumber(value: unknown): number | null {

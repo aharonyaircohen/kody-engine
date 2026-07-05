@@ -7,6 +7,7 @@ import { nowIso } from "./state.js"
 export interface GoalRunLogDispatch {
   action?: string
   capability?: string
+  workflow?: string
   executable?: string
   cliArgs?: Record<string, unknown>
 }
@@ -140,6 +141,7 @@ export function goalRunLogSnapshot(goalId: string, goalState: string, goal: Mana
     pendingEvidence,
     capabilities: [...goal.capabilities],
     route: goal.route.map(routeStepForLog),
+    workflowRef: goal.workflowRef,
     schedule: goal.schedule,
     preferredRunTime: goal.preferredRunTime,
     loopTarget: goal.loopTarget,

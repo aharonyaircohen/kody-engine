@@ -563,6 +563,40 @@ describe("standing goal capability scheduling", () => {
     })
   })
 
+  it("hands workflow-backed goals to the referenced workflow", async () => {
+    const raw = goalState([])
+    raw.extra.type = "web-release"
+    delete raw.extra.scheduleMode
+    raw.extra.destination = {
+      outcome: "Release is verified on production",
+      evidence: ["releasePrExists", "productionDeployed"],
+    }
+    raw.extra.workflowRef = {
+      source: "store",
+      id: "web-release",
+      args: {
+        issue: { fact: "issue" },
+        goal: { fact: "goalId" },
+      },
+    }
+    raw.extra.facts = { issue: 42, releasePrExists: false }
+    const ctx = fakeCtx(raw, "web-release-2026-07-05")
+
+    await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+
+    expect(ctx.output.nextDispatch).toEqual({
+      workflow: "web-release",
+      cliArgs: { issue: 42, goal: "web-release-2026-07-05" },
+      resultTarget: { type: "goal", id: "web-release-2026-07-05" },
+    })
+    const updatedGoal = ctx.data.goal as GoalCtx
+    expect(updatedGoal.raw!.extra.stage).toBe("workflow")
+    expect(updatedGoal.raw!.extra.facts).toMatchObject({
+      issue: 42,
+      pendingEvidence: "releasePrExists",
+    })
+  })
+
   it("dispatches runnable capability and records goal scheduling decision", async () => {
     writeCapability("ci-health", { agent: "kody", executable: "ci-check" })
     const raw = goalState()

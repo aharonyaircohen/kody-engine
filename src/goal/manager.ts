@@ -33,6 +33,13 @@ export interface ManagedLoopTarget {
   id: string
 }
 
+export interface ManagedWorkflowRef {
+  id: string
+  source?: string
+  args?: Record<string, unknown>
+  saveReport?: boolean
+}
+
 export interface ManagedGoalPreferredRunTime {
   time: string
   timezone: string
@@ -43,6 +50,7 @@ export interface ManagedGoal {
   destination: GoalDestination
   capabilities: string[]
   route: GoalRouteStep[]
+  workflowRef?: ManagedWorkflowRef
   schedule?: string
   preferredRunTime?: ManagedGoalPreferredRunTime
   loopTarget?: ManagedLoopTarget
@@ -66,6 +74,14 @@ export type ManagedGoalDecision =
       stage: string
       capability: string
       executable?: string
+      cliArgs: Record<string, unknown>
+      saveReport?: boolean
+    }
+  | {
+      kind: "dispatchWorkflow"
+      evidence: string
+      stage: string
+      workflow: string
       cliArgs: Record<string, unknown>
       saveReport?: boolean
     }
@@ -158,6 +174,35 @@ export function planManagedGoalTick(goal: ManagedGoal): ManagedGoalDecision {
     return { kind: "done" }
   }
 
+  const workflow = goal.workflowRef
+  if (workflow) {
+    const workflowStep = { evidence: missing, stage: "workflow", capability: workflow.id }
+    const progressDecision = decisionFromEvidenceProgress(goal, workflowStep, missing)
+    if (progressDecision) return progressDecision
+
+    const resolved = resolveWorkflowRefArgs(goal, workflow)
+    if (!resolved.ok) {
+      goal.stage = "blocked"
+      goal.reason = resolved.reason
+      goal.nextAction = "fix workflow args"
+      pushBlocker(goal, resolved.reason)
+      return { kind: "blocked", evidence: missing, stage: "workflow", reason: resolved.reason }
+    }
+
+    goal.stage = "workflow"
+    goal.facts.pendingEvidence = missing
+    goal.reason = `dispatch workflow ${workflow.id} for ${missing}`
+    goal.nextAction = "dispatch workflow"
+    return {
+      kind: "dispatchWorkflow",
+      evidence: missing,
+      stage: "workflow",
+      workflow: workflow.id,
+      cliArgs: resolved.cliArgs,
+      ...(workflow.saveReport === true ? { saveReport: true } : {}),
+    }
+  }
+
   const step = goal.route.find((candidate) => candidate.evidence === missing)
   if (!step) {
     if (isSimpleGoal(goal) && missing === SIMPLE_GOAL_EVIDENCE) {
@@ -216,6 +261,19 @@ export function planManagedGoalTick(goal: ManagedGoal): ManagedGoalDecision {
     cliArgs: resolved.cliArgs,
     ...(step.saveReport === true ? { saveReport: true } : {}),
   }
+}
+
+function resolveWorkflowRefArgs(
+  goal: ManagedGoal,
+  workflow: ManagedWorkflowRef,
+): { ok: true; cliArgs: Record<string, unknown> } | { ok: false; reason: string } {
+  const step: GoalRouteStep = {
+    evidence: "__workflow__",
+    stage: "workflow",
+    capability: workflow.id,
+    args: workflow.args,
+  }
+  return resolveRouteArgs(goal, step)
 }
 
 function decisionFromEvidenceProgress(
@@ -378,6 +436,20 @@ function asLoopTarget(value: unknown): ManagedLoopTarget | undefined {
   return { type: raw.type, id: raw.id }
 }
 
+function asWorkflowRef(value: unknown): ManagedWorkflowRef | undefined {
+  const raw = asRecord(value)
+  if (!raw) return undefined
+  if (typeof raw.id !== "string" || raw.id.trim().length === 0) return undefined
+  const args = raw.args === undefined ? undefined : asRecord(raw.args)
+  if (raw.args !== undefined && !args) return undefined
+  return {
+    id: raw.id.trim(),
+    ...(typeof raw.source === "string" && raw.source.trim().length > 0 ? { source: raw.source.trim() } : {}),
+    ...(args ? { args } : {}),
+    ...(raw.saveReport === true ? { saveReport: true } : {}),
+  }
+}
+
 export function managedGoalFromState(state: GoalState): ManagedGoal | null {
   const extra = state.extra
   const destination = asRecord(extra.destination)
@@ -405,6 +477,7 @@ export function managedGoalFromState(state: GoalState): ManagedGoal | null {
     destination: { outcome: destination.outcome, evidence },
     capabilities,
     route,
+    workflowRef: asWorkflowRef(extra.workflowRef),
     schedule: typeof extra.schedule === "string" ? extra.schedule : undefined,
     preferredRunTime: asPreferredRunTime(extra.preferredRunTime),
     loopTarget: asLoopTarget(extra.loopTarget),
@@ -426,6 +499,7 @@ export function writeManagedGoalToState(state: GoalState, goal: ManagedGoal): Go
       destination: goal.destination,
       capabilities: goal.capabilities,
       route: goal.route,
+      workflowRef: goal.workflowRef,
       stage: goal.stage,
       facts: goal.facts,
       blockers: goal.blockers,

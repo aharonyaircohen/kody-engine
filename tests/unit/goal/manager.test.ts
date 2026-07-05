@@ -298,6 +298,64 @@ describe("planManagedGoalTick", () => {
     })
   })
 
+  it("dispatches workflow-backed goals through the linked workflow", () => {
+    const goal = releaseGoal({
+      workflowRef: {
+        source: "store",
+        id: "web-release",
+        args: {
+          issue: { fact: "issue" },
+          goal: { fact: "goalId" },
+        },
+      },
+      capabilities: [],
+      route: [],
+      stage: "workflow",
+      facts: { issue: 42, goalId: "web-release-2026-07-05" },
+    })
+
+    const decision = planManagedGoalTick(goal)
+
+    expect(decision).toEqual({
+      kind: "dispatchWorkflow",
+      evidence: "releasePrExists",
+      stage: "workflow",
+      workflow: "web-release",
+      cliArgs: { issue: 42, goal: "web-release-2026-07-05" },
+    })
+    expect(goal.stage).toBe("workflow")
+    expect(goal.facts.pendingEvidence).toBe("releasePrExists")
+    expect(goal.nextAction).toBe("dispatch workflow")
+  })
+
+  it("waits for pending workflow-backed evidence instead of restarting the workflow", () => {
+    const goal = releaseGoal({
+      workflowRef: { source: "store", id: "web-release" },
+      capabilities: [],
+      route: [],
+      stage: "workflow",
+      facts: { pendingEvidence: "releasePrExists" },
+      evidenceState: {
+        releasePrExists: {
+          resultClass: "pending",
+          attempts: 1,
+          reason: "release PR is still open",
+          nextAction: "wait",
+        },
+      },
+    })
+
+    const decision = planManagedGoalTick(goal)
+
+    expect(decision).toEqual({
+      kind: "wait",
+      evidence: "releasePrExists",
+      stage: "workflow",
+      reason: "release PR is still open",
+    })
+    expect(goal.nextAction).toBe("wait")
+  })
+
   it("blocks needs-fix evidence with the linked issue as next action", () => {
     const goal = releaseGoal({
       stage: "prepare",
@@ -390,15 +448,41 @@ describe("managed goal state bridge", () => {
     expect(goal?.facts.releasePrExists).toBe(true)
   })
 
+  it("reads workflowRef from GoalState.extra", () => {
+    const goal = managedGoalFromState({
+      state: "active",
+      extra: releaseGoal({
+        workflowRef: {
+          source: "store",
+          id: "web-release",
+          args: { issue: { fact: "issue" }, goal: { fact: "goalId" } },
+        },
+        capabilities: [],
+        route: [],
+      }) as unknown as Record<string, unknown>,
+    })
+
+    expect(goal?.workflowRef).toEqual({
+      source: "store",
+      id: "web-release",
+      args: { issue: { fact: "issue" }, goal: { fact: "goalId" } },
+    })
+  })
+
   it("writes manager fields back without dropping unrelated extras", () => {
     const state = writeManagedGoalToState(
       { state: "active", extra: { title: "Release 1.2.3" } },
-      releaseGoal({ stage: "qa", facts: { releasePrExists: true } }),
+      releaseGoal({
+        stage: "qa",
+        facts: { releasePrExists: true },
+        workflowRef: { source: "store", id: "web-release" },
+      }),
     )
 
     expect(state.extra.title).toBe("Release 1.2.3")
     expect(state.extra.type).toBe("release")
     expect(state.extra.stage).toBe("qa")
     expect(state.extra.facts).toEqual({ releasePrExists: true })
+    expect(state.extra.workflowRef).toEqual({ source: "store", id: "web-release" })
   })
 })
