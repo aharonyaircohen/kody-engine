@@ -162,6 +162,11 @@ function emitSse(res: ServerResponse, event: BrainEvent): void {
   res.write(`data: ${JSON.stringify(event)}\n\n`)
 }
 
+function openSseStream(res: ServerResponse, chatId: string): void {
+  writeSseHeaders(res)
+  emitSse(res, { type: "chat", chatId })
+}
+
 function envGithubToken(): string {
   return (process.env.KODY_TOKEN ?? process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? process.env.GH_PAT ?? "").trim()
 }
@@ -171,17 +176,6 @@ function parseRepoSlug(repo: string | undefined): { owner: string; repo: string 
   const [owner, name] = repo.split("/", 2)
   if (!owner || !name) return null
   return { owner, repo: name }
-}
-
-function streamStartupError(res: ServerResponse, dir: string, chatId: string, err: unknown): void {
-  const sinceFloor = getLastSeq(dir, chatId)
-  const emitToLog = beginTurn(dir, chatId)
-  emitToLog({
-    type: "error",
-    chatId,
-    error: err instanceof Error ? err.message : String(err),
-  })
-  streamToRes(res, dir, chatId, sinceFloor)
 }
 
 /**
@@ -275,11 +269,17 @@ function enqueue(chatId: string, fn: () => Promise<unknown>): Promise<unknown> {
  * turn keeps running even if this response disconnects. Every event after the
  * handshake carries its `seq` so the client can reconnect from it.
  */
-function streamToRes(res: ServerResponse, dir: string, chatId: string, since: number): void {
-  writeSseHeaders(res)
-  // Unsequenced handshake — confirms the chat id, ignored by cursor tracking.
-  emitSse(res, { type: "chat", chatId })
-
+function streamToRes(
+  res: ServerResponse,
+  dir: string,
+  chatId: string,
+  since: number,
+  opts: { opened?: boolean } = {},
+): void {
+  if (!opts.opened) {
+    // Unsequenced handshake — confirms the chat id, ignored by cursor tracking.
+    openSseStream(res, chatId)
+  }
   let maxSent = since
   const unsubscribe = subscribe(
     dir,
@@ -367,7 +367,21 @@ async function handleChatTurn(
   const storeRepoUrl = strField(body, "storeRepoUrl")
   const storeRef = strField(body, "storeRef")
   const allowCrossRepo = boolField(body, "allowCrossRepo")
+  const firstTurn = boolField(body, "firstTurn")
   const agentIdentity = agentIdentityField(body)
+
+  // Open the stream before repo clone/state restore. First Repo Brain turns can
+  // spend a while preparing the workspace; the browser should not wait for that
+  // before it knows Brain accepted the message.
+  openSseStream(res, chatId)
+  if (repo) {
+    emitSse(res, {
+      type: "tool_use",
+      chatId,
+      name: "prepare_repo",
+      input: { repo },
+    })
+  }
 
   let agentCwd: string
   try {
@@ -379,7 +393,12 @@ async function handleChatTurn(
       cloneRepo: opts.cloneRepo,
     })
   } catch (err) {
-    streamStartupError(res, opts.cwd, chatId, err)
+    emitSse(res, {
+      type: "error",
+      chatId,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    res.end()
     return
   }
 
@@ -403,7 +422,7 @@ async function handleChatTurn(
 
   const sessionFile = sessionFilePath(agentCwd, chatId)
   const brainEventsFile = brainEventsFilePath(agentCwd, chatId)
-  if (stateConfig && stateToken) {
+  if (!firstTurn && stateConfig && stateToken) {
     try {
       await syncJsonlFileFromGithubState({
         config: stateConfig,
@@ -511,7 +530,7 @@ async function handleChatTurn(
     }
   })
 
-  streamToRes(res, agentCwd, chatId, sinceFloor)
+  streamToRes(res, agentCwd, chatId, sinceFloor, { opened: true })
 }
 
 /**

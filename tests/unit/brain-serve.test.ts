@@ -208,6 +208,28 @@ async function readSseBody(res: Response): Promise<WireEvent[]> {
   return events
 }
 
+async function readNextSseEvent(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  decoder: TextDecoder,
+  state: { buf: string },
+): Promise<WireEvent> {
+  while (true) {
+    const boundary = state.buf.indexOf("\n\n")
+    if (boundary >= 0) {
+      const chunk = state.buf.slice(0, boundary)
+      state.buf = state.buf.slice(boundary + 2)
+      for (const line of chunk.split("\n")) {
+        if (line.startsWith("data: ")) {
+          return JSON.parse(line.slice(6)) as WireEvent
+        }
+      }
+    }
+    const { done, value } = await reader.read()
+    if (done) throw new Error("SSE stream ended before next event")
+    state.buf += decoder.decode(value, { stream: true })
+  }
+}
+
 describe("buildServer routes", () => {
   let tmp: string
   let booted: BootedServer | null = null
@@ -293,6 +315,69 @@ describe("buildServer routes", () => {
     expect(events[2]).toMatchObject({ type: "done", chatId: "c1" })
     expect(events[1]!.seq).toBe(1)
     expect(events[2]!.seq).toBe(2)
+  })
+
+  it("opens the stream before repo clone finishes", async () => {
+    let releaseClone!: () => void
+    const cloneGate = new Promise<void>((resolve) => {
+      releaseClone = resolve
+    })
+    let cloneStarted = false
+
+    booted = await boot(
+      async (opts) => {
+        await opts.sink.emit(makeEvent("chat.done", { sessionId: opts.sessionId }))
+        return { exitCode: 0 }
+      },
+      tmp,
+      {
+        reposRoot: path.join(tmp, "repos"),
+        cloneRepo: async (_repo, _token, dir) => {
+          cloneStarted = true
+          await cloneGate
+          fs.mkdirSync(path.join(dir, ".git"), { recursive: true })
+        },
+      },
+    )
+
+    const res = await fetch(`${booted.url}/chats/c1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": KEY },
+      body: JSON.stringify({
+        message: "hi",
+        repo: "acme/widgets",
+        firstTurn: true,
+      }),
+    })
+
+    expect(res.status).toBe(200)
+    expect(cloneStarted).toBe(true)
+    const reader = res.body!.getReader()
+    const decoder = new TextDecoder()
+    const state = { buf: "" }
+    expect(await readNextSseEvent(reader, decoder, state)).toEqual({
+      type: "chat",
+      chatId: "c1",
+    })
+    expect(await readNextSseEvent(reader, decoder, state)).toMatchObject({
+      type: "tool_use",
+      name: "prepare_repo",
+      input: { repo: "acme/widgets" },
+    })
+
+    releaseClone()
+    const events: WireEvent[] = []
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      state.buf += decoder.decode(value, { stream: true })
+    }
+    for (const line of state.buf.split("\n")) {
+      if (line.startsWith("data: ")) {
+        events.push(JSON.parse(line.slice(6)) as WireEvent)
+      }
+    }
+    expect(events[events.length - 1]).toMatchObject({ type: "done" })
   })
 
   it("appends the user message to the session file before invoking the turn", async () => {
