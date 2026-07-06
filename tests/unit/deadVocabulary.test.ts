@@ -53,6 +53,7 @@ const BANNED: Array<string | RegExp> = [
   /\bPersona\b/,
   "worker-ask",
   "loadWorkerAdhoc",
+  "dutyIntent",
 ]
 
 function walk(dir: string): string[] {

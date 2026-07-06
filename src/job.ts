@@ -263,7 +263,6 @@ async function runCapabilityImplementationStep(
     if (capabilityContext.config.capabilityKind)
       preloadedData.jobCapabilityKind = capabilityContext.config.capabilityKind
     preloadedData.capabilityIntent = capabilityContext.body
-    preloadedData.dutyIntent = capabilityContext.body
     preloadedData.jobIntent = capabilityContext.body
     if (preloadedData.jobCapability === undefined) preloadedData.jobCapability = capabilityContext.slug
     if (capabilityContext.config.agent && preloadedData.jobAgent === undefined) {
