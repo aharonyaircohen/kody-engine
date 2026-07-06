@@ -12,7 +12,7 @@ Read and follow these docs before producing the model:
 
 - `docs/capabilities.md`
 - `docs/capability-kind-map.md`
-- `docs/executables.md`
+- `docs/capability-implementations.md`
 
 These docs are contract references. If the consumer repo does not contain them or `Read` fails, continue from the model boundary below and still list the referenced doc paths in `model.docsUsed`.
 
@@ -85,7 +85,7 @@ PR_SUMMARY:
     "slug": "capability-slug",
     "capabilityKind": "observe|act|verify",
     "ability": "one reusable ability",
-    "docsUsed": ["docs/capabilities.md", "docs/capability-kind-map.md", "docs/executables.md"],
+    "docsUsed": ["docs/capabilities.md", "docs/capability-kind-map.md", "docs/capability-implementations.md"],
     "inputs": [],
     "outputs": [],
     "allowedActions": [],

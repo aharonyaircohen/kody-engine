@@ -21,7 +21,7 @@ const FACTORY_PRODUCER = "agent-factory"
 
 const REQUIRED_DOCS: Record<ModelKind, string[]> = {
   agent: ["docs/agents.md"],
-  capability: ["docs/capabilities.md", "docs/capability-kind-map.md", "docs/executables.md"],
+  capability: ["docs/capabilities.md", "docs/capability-kind-map.md", "docs/capability-implementations.md"],
   goal: ["docs/goals.md", "docs/jobs-model.md", "docs/capabilities.md"],
   agentLoop: ["docs/jobs-model.md", "docs/engine-company.md", "docs/ledgers.md"],
   workflow: ["docs/jobs-model.md", "docs/capabilities.md"],
@@ -115,7 +115,7 @@ function validateFilesForKind(
 ): void {
   const paths = files.map((file) => normalizeBundlePath(file.path))
   if (paths.some((filePath) => filePath === "executables" || filePath.startsWith("executables/"))) {
-    failures.push("files must not use obsolete executables storage")
+    failures.push("files must not use obsolete implementation storage")
   }
 
   if (kind === "agent") {

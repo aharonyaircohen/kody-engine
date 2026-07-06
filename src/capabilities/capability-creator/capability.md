@@ -6,7 +6,7 @@ Create one complete Kody Capability model from a focused ability contract.
 
 ## Contract
 
-The input is the ability to provide, its kind, interface, and constraints. The creator must use `docs/capabilities.md`, `docs/capability-kind-map.md`, and `docs/executables.md`; create one `observe`, `act`, or `verify` capability; and return review-ready files under `capabilities/<slug>/`.
+The input is the ability to provide, its kind, interface, and constraints. The creator must use `docs/capabilities.md`, `docs/capability-kind-map.md`, and `docs/capability-implementations.md`; create one `observe`, `act`, or `verify` capability; and return review-ready files under `capabilities/<slug>/`.
 
 ## Boundary
 

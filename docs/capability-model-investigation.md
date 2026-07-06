@@ -27,7 +27,7 @@ Verify  = confirm pass/fail evidence
 ```
 
 This investigation is not asking whether Kody needs goals, tasks, jobs, or runs.
-Those remain separate. It asks whether capability/executable authoring becomes simpler
+Those remain separate. It asks whether capability/profile authoring becomes simpler
 when each reusable capability has one clear promise and one structured output
 shape.
 
@@ -41,15 +41,15 @@ The current documented model says:
 - Agent = who runs.
 - Capability = how the agency can produce a result.
 - Capability = current storage for a capability contract.
-- Executable = current storage for a capability implementation.
+- Implementation = current storage for a capability implementation.
 - Job = required work on a task.
 - Run = one attempt.
 
 The current code already supports this split:
 
-- A job lowers to one selected executable.
+- A job lowers to one selected implementation.
 - A managed goal reads missing evidence, chooses a route step, dispatches a
-  capability/executable, then waits for reported evidence.
+  capability/profile, then waits for reported evidence.
 - Capability reports can add facts/evidence to goal state, but cannot set goal state,
   route, destination, or completion directly.
 
@@ -62,14 +62,14 @@ what those results mean.
 This investigation is grounded in these current contracts:
 
 - `docs/jobs-model.md`: defines intent, goal, loop, agent, capability, current
-  storage names, job, and run, and states that a job points to one executable.
+  storage names, job, and run, and states how a job points to one runnable implementation.
 - `docs/capabilities.md`: defines capabilities as current
   storage for capability contracts: metadata, routing, cadence, and allowed outputs.
-- `docs/executables.md`: defines executables as concrete runnable actions and
-  documents capability reports.
+- `docs/capability-implementations.md`: defines concrete runnable capability
+  implementations and documents capability reports.
 - `docs/goals.md`: defines managed goals as outcome managers that route missing
-  evidence to capabilities/executables.
-- `src/job.ts`: lowers jobs into selected executable runs.
+  evidence to capabilities and workflows.
+- `src/job.ts`: lowers jobs into selected capability runs.
 - `src/goal/manager.ts`: plans one goal tick from missing evidence and route
   facts.
 - `src/scripts/applyCapabilityReports.ts`: applies factual capability reports without
@@ -409,7 +409,7 @@ Run        = one attempt
 ```
 
 In the current repo, `Capability` can be implemented by the existing
-capability/profile/executable system. The user-facing model can simplify before the
+capability/profile/implementation system. The user-facing model can simplify before the
 internal folders fully converge.
 
 ## Recommended Migration
@@ -445,7 +445,7 @@ decides.
 
 ### Phase 3: Classify the catalog
 
-Create a catalog report that lists every capability/executable and one of:
+Create a catalog report that lists every capability/profile and one of:
 
 ```text
 observe

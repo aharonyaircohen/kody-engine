@@ -13,14 +13,13 @@ and opens or updates a PR.
 
 The engine has two layers only:
 
-1. **Generic executor**: [src/executor.ts](src/executor.ts) loads a profile,
+1. **Generic runner**: the engine loads a profile,
    validates args/tools, runs preflight scripts, optionally runs the agent, then
-   runs postflight scripts. It knows no `run`/`fix`/`review` behavior.
-2. **Executable profiles**: the engine package keeps only
-   `src/executables/run`; shared capabilities, executables, and agent live in
-   `kody-store` under `.kody/`. Profiles declare inputs, tools, Claude Code
-   features, CLI contracts, scripts, and optional `runWhen` gates. `prompt.md`
-   sits beside a profile when an agent runs.
+   runs postflight scripts. It knows no product behavior.
+2. **Capability profiles**: shared capabilities and agents live in `kody-store`
+   under `.kody/`. Profiles declare inputs, tools, Claude Code features, CLI
+   contracts, scripts, and optional `runWhen` gates. `prompt.md` sits beside a
+   profile when an agent runs.
 
 The consumer workflow stays small: `.github/workflows/kody.yml` triggers on
 `@kody` or `workflow_dispatch` and runs
@@ -32,8 +31,7 @@ Keep parent ownership out of reusable capabilities.
 
 - A goal or loop owns durable progress, destination evidence, route, stage, and
   the decision about what is done.
-- A capability or implementation profile owns one reusable action: observe,
-  act, or verify.
+- A capability owns one reusable action: observe, act, or verify.
 - The goal/loop runner owns the current parent id and attaches capability output
   to that parent.
 - A normal capability should not require `--goal`, parent route data, stage, or
@@ -48,8 +46,8 @@ Keep parent ownership out of reusable capabilities.
 - [docs/engine-company.md](docs/engine-company.md): operating model for the
   repo-local company layer that maintains this engine.
 - `.kody/context/*.md`: background only: company mission, vocabulary, strategy,
-  product notes, decisions. Do not rely on it for hard rules unless an
-  executable explicitly loads it.
+  product notes, decisions. Do not rely on it for hard rules unless the current
+  capability call explicitly loads it.
 
 ## Vocabulary
 
@@ -58,32 +56,32 @@ different terms, treat it as stale.
 
 | Term | Meaning |
 | --- | --- |
-| `agent` / `agent` | Who agentRuns: reusable identity in project/store `.kody/agents/<slug>.md`. |
-| `capability` | Why/when: recurring intent in `.kody/capabilities/<slug>/` with `profile.json` metadata and `capability.md` prose. |
-| `executable` | How: one command directory under `.kody/executables/<name>/` in project/store, or `src/executables/run` for the minimal engine builtin; the executor's atomic unit. |
+| `agent` | Who runs: reusable identity in project/store `.kody/agents/<slug>.md`. |
+| `capability` | Reusable ability in `.kody/capabilities/<slug>/` with `profile.json` metadata and `capability.md` prose. |
+| `capability call` | One concrete run of a capability with inputs, `targetWorkspace`, and `delivery`. |
+| `workflow` | Ordered capability calls for one run. |
 | `task` | One GitHub issue/PR plus jobs, artifacts, recent history, rolled-up state. |
-| `job` | Required work on a task; points to one executable and records runs. |
+| `job` | Required work on a task; points to one capability call and records runs. |
 | `run` | One execution attempt for a job. Retries add runs under the same job. |
 | `goal` | Related task list/state under `.kody/goals/<id>/state.json`; `goal-tick` advances stacked PRs. |
-| `watch` | Scheduled executable with `role: "watch"` and `kind: "scheduled"`; schedulers run no agent. |
-| `manager` | Legacy prose label for progress ownership. Do not model it as a capability or executable. |
-| `mission` | Dead term. No `mission-*` executable exists. Do not use it. |
+| `loop` | Wake rule for a goal, workflow, or capability. |
+| `manager` | Legacy prose label for progress ownership. Do not model it as a capability. |
+| `mission` | Dead term. Do not use it. |
 
 Naming note: consumer-facing paths and prompt tokens use **capability/agent**:
 `.kody/capabilities/<slug>/`, `capability-scheduler`, `capability-tick`,
 `{{capabilityReference}}`, `{{capabilitySlug}}`, `{{agentSlug}}`,
-`{{executableSlug}}`, `{{capabilitySchedule}}`. Older `job` identifiers remain only
+`{{capabilitySchedule}}`. Older `job` identifiers remain only
 where renaming would break public contracts: `Job` in [src/job.ts](src/job.ts),
 `kody-job-next-state`, `loadJobFromFile`, and `writeJobStateFile`.
 The `deadVocabulary` guard bans retired scheduler/tick dispatch identifiers, but
 not the broad `job` token.
 
-## Engine Commands
+## Capability Calls
 
-Commands are auto-discovered from project `.kody/executables/`, the configured
-company store, then engine built-ins. Engine built-ins are intentionally minimal:
-only `run` remains in `src/executables/`; the shared command catalog lives in
-`kody-store`.
+Commands are capability calls. Public commands are discovered from project
+`.kody/capabilities/`, the configured company store, then minimal engine
+built-ins. The shared command catalog lives in `kody-store`.
 
 | Command | Input | Agent | Trigger / purpose |
 | --- | --- | --- | --- |
@@ -95,25 +93,25 @@ only `run` remains in `src/executables/`; the shared command catalog lives in
 | `revert` | `--pr`, `--shas` | no | Mechanical `git revert` on PR branch. |
 | `merge` | `--pr` | no | Self-gating squash merge; refuses unless PR is CLEAN. |
 | `preview-build` | `--pr` | no | Per-PR preview build from config/manual dispatch. |
-| `exec release` | `--issue`, bump/dry-run/prefer flags | no | Legacy all-in-one release executable; public release work should use split capabilities below. |
+| `release` | `--issue`, bump/dry-run/prefer flags | no | Legacy all-in-one release path; public release work should use split capabilities below. |
 | `release-prepare` | bump/dry-run/prefer/issue | no | Version bump, changelog, release PR. |
 | `release-publish` | dry-run/issue | no | Tag, publish, GitHub release. |
 | `release-deploy` | dry-run/issue | no | Deploy and notify after publish. |
 | `init` | optional `--force` | no | Scaffold consumer config/workflow. |
 | `agent-ask` | `--agent` | yes | Dashboard `@agent` one-shot. |
 | `qa-goal` | `--issue` | no | Operator-approved QA report -> goal/tasks. |
-| `exec capability-scheduler` | optional `--capability` | no | Internal cron/helper fan-out to due capability folders. |
-| `exec capability-tick` | `--capability`, optional `--force` | yes | Internal one-tick runner for a capability. |
-| `exec capability-tick-scripted` | `--capability`, optional `--force` | no | Internal runner for capability `tickScript`. |
-| `exec goal-scheduler` | none | no | Internal cron fan-out to active goals. |
+| `capability-scheduler` | optional `--capability` | no | Internal cron/helper fan-out to due capability folders. |
+| `capability-tick` | `--capability`, optional `--force` | yes | Internal one-tick runner for a capability. |
+| `capability-tick-scripted` | `--capability`, optional `--force` | no | Internal runner for capability `tickScript`. |
+| `goal-scheduler` | none | no | Internal cron fan-out to active goals. |
 | `goal-tick` | `--goal` | no | Deterministic stacked-PR goal tick. |
-| `exec task-jobs` | `--issue` | no | Internal runner for next planned executable in hidden task plan. |
+| `task-jobs` | `--issue` | no | Internal runner for next planned capability call in hidden task plan. |
 | `plan-verify` | `--issue` | yes | Live-test plugin/skill/hook wiring. |
-| `probe-skill` | `--issue` | yes | Live-test executable-local skill resolution. |
+| `probe-skill` | `--issue` | yes | Live-test local skill resolution. |
 | `job-live-verify` | none | yes | Live-test job/agent/locked-tool wiring. |
 
 Long-running CLI-only servers are hardcoded in [src/entry.ts](src/entry.ts), not
-the executable registry: `serve`, `pool-serve`, `runner-serve`, `brain-serve`,
+the capability registry: `serve`, `pool-serve`, `runner-serve`, `brain-serve`,
 `brain-proxy`, `mcp-http-server`. They are not reachable via `@kody <verb>`.
 
 ## Command Notes
@@ -132,7 +130,7 @@ the executable registry: `serve`, `pool-serve`, `runner-serve`, `brain-serve`,
 - `sync`: no-agent clean path of `resolve`.
 - `release`: deterministic, no agent. Stages are also invokable directly.
 - `init`: idempotent scaffold for `kody.config.json`, `kody.yml`, and scheduled
-  executable workflows; `--force` overwrites.
+  capability workflows; `--force` overwrites.
 
 ## Capability Runtime
 
@@ -140,7 +138,7 @@ Capability folders:
 
 ```text
 .kody/capabilities/<slug>/
-  profile.json   # every, agent, action/executable(s), tools, tickScript, mentions, disabled, stage
+  profile.json   # every, agent, action, workflow, tools, tickScript, mentions, disabled, stage
   capability.md        # human-owned intent/prose
 ```
 
@@ -162,8 +160,8 @@ Capability folders:
 
 Dispatch rule: bot-authored `@kody <verb>` comments are banned because bot
 comments are filtered to prevent self-dispatch loops. Capabilities must dispatch
-by `gh workflow run kody.yml -f executable=<name> -f issue_number=<n>` or,
-inside TS, `runExecutableChain(name, opts)`. See
+by `gh workflow run kody.yml -f capability=<name> -f issue_number=<n>` or by
+the in-process capability chain helper. See
 [docs/capability-dispatch.md](docs/capability-dispatch.md).
 
 ## Repo Map
@@ -173,7 +171,7 @@ src/
   executor.ts, profile.ts, tools.ts, dispatch.ts, agent.ts, litellm.ts
   kody-cli.ts, entry.ts, gha.ts
   branch.ts, commit.ts, pr.ts, verify.ts, issue.ts, coverage.ts, prompt.ts, format.ts, config.ts
-  executables/<name>/{profile.json,prompt.md,*.sh,skills/,commands/,agents/,hooks/}
+  capabilities/<name>/{profile.json,capability.md,prompt.md,*.sh,skills/,commands/,agents/,hooks/}
   scripts/*.ts      # shared pre/postflight catalog + registry
   lifecycles/*.ts   # profile lifecycle expanders
 bin/kody.ts
@@ -183,54 +181,53 @@ tests/{unit,int,e2e}
 
 ## Key Invariants
 
-1. **Executor is generic.** `executor.ts` must not mention role-specific
+1. **Runner is generic.** The generic runner must not mention role-specific
    concepts (`run`, `fix`, `review`, `issue`, `pr`). It only knows profile,
    scripts, context, SDK call.
-2. **Executable dirs contain no TypeScript.** Allowed: `profile.json`,
+2. **Capability dirs contain no TypeScript.** Allowed: `profile.json`,
    `prompt.md`, `*.sh`, and optional plugin parts (`skills/`, `commands/`,
-   `agents/`, `hooks/`). Shared TS belongs in `src/scripts/`; executable-specific
+   `agents/`, `hooks/`). Shared TS belongs in `src/scripts/`; capability-specific
    TS is a design smell unless promoted to real shared utility.
 3. **Scripts compose.** Each script does one deterministic thing. `runWhen`
    dotted-path equality is the only conditional primitive.
-4. **Wrapper logic lives in scripts.** No extra wrapper layer between executor
+4. **Wrapper logic lives in scripts.** No extra wrapper layer between runner
    and agent; `verify`, `commitAndPush`, `ensurePr`, `postIssueComment`, etc.
    are scripts.
 5. **Workflow YAML stays minimal.** New capability ships via npm/profile/script,
    not consumer YAML churn.
 6. **Shared scripts stay generic.** No branching on `profile.name`; treat it as
-   an opaque label. Per-executable behavior belongs in profile-declared
+   an opaque label. Per-capability behavior belongs in profile-declared
    scripts/shell. Enforced by [tests/unit/sharedScriptsInvariants.test.ts](tests/unit/sharedScriptsInvariants.test.ts).
-7. **Shared scripts do not import executables.** `src/scripts/*.ts` may import
-   only the shared type contract from `../executables/types.js`.
+7. **Shared scripts do not import capability implementations.** `src/scripts/*.ts`
+   may import only the shared type contract.
 8. **`.kody/` write allowlist.** Agents may write only allowed subtrees in
    [src/commit.ts](src/commit.ts), currently `.kody/memory/` and `.kody/tasks/`.
    Other `.kody/*` writes are blocked during `run`/`fix`/`resolve`. Watches that
 open PRs must require `commitResult.pushed === true`, not only
 `hasCommitsAhead`.
-9. **Executable scripts read secrets from env only.** Repo vault secrets
+9. **Capability scripts read secrets from env only.** Repo vault secrets
 (`.kody/secrets.enc`) are decrypted by Kody runtime/dashboard/pool code and
-loaded into environment variables before executables run. Colocated executable
+loaded into environment variables before capability calls run. Colocated
 shell scripts must not read or decrypt `.kody/secrets.enc` directly.
 
 ## Kody Clean Boundary
 
 Hard constraints:
 
-- **Engine**: runs the requested executable and reports success/failure.
-- **Preview executable/tool**: owns preview behavior and preview-provider details.
+- **Engine**: runs the requested capability call and reports success/failure.
+- **Preview capability/tool**: owns preview behavior and preview-provider details.
 - **Task-leader/release policy**: decides whether a preview result is required
   for a given PR type.
 - **`.github/workflows/kody.yml`**: immutable launcher only; never change this
   file.
 
-## Adding / Changing Executables
+## Adding / Changing Capability Implementations
 
-1. Create `.kody/executables/<name>/` in `kody-store` for shared commands, or
-   in a consumer repo for repo-local commands. Add to engine `src/executables/`
-   only for the minimal built-in runtime surface.
+1. Create `.kody/capabilities/<name>/` in `kody-store` for shared commands, or
+   in a consumer repo for repo-local commands. Add built-ins to the engine only
+   for the minimal bootstrap/runtime surface.
 2. Add `profile.json`; pick `role` and `kind`; see
-   [src/executables/types.ts](src/executables/types.ts) and
-   [docs/executables.md](docs/executables.md).
+   [docs/capability-implementations.md](docs/capability-implementations.md).
 3. Add `prompt.md` if an agent runs.
 4. Add `.sh` for colocated mechanical work.
    If it needs a secret, read the expected env var only; do not access the
@@ -254,7 +251,7 @@ Status: documentation/refactor target; details in
 | `flow-state` | `spec`, `bug`, `feature`, `chore` | Shared shape: `finishFlow`, `persistFlowState`, `loadIssueContext`, `setLifecycleLabel`, `skipAgent`. `startFlow`/`dispatch` in `spec` may collapse into lifecycle. |
 | `goal-chain` | `goal-tick` | Deferred. Its `runWhen` state machine is the lifecycle: `loadGoalState`, `handleAbandonedGoal`, `deriveGoalPhase`, `finalizeGoal`, `dispatchNextTask`, `saveGoalState`, `commitGoalState`. Moving it would just rebadge `goalFlow.ts`. |
 | `release-stage` | `release`, `release-prepare`, `release-deploy`, `release-publish` | Shares `notifyTerminal`, `setCommentTarget`, `recordOutcome`, `skipAgent`, `advanceFlow`. [docs/release-merge-refactor.md](docs/release-merge-refactor.md) may collapse this first. |
-| `init-bootstrap` | `init` | No lifecycle likely; one-shot bootstrap. Treat as residual / possible `src/scripts/executable/init/` relocation. |
+| `init-bootstrap` | `init` | No lifecycle likely; one-shot bootstrap. Treat as residual / possible script relocation. |
 | `dispatch` | `classify`, `capability-scheduler`, partly `spec` | Too few/divergent for abstraction; residual. |
 | residual | `reproduce`, `qa-engineer`/`ui-review`, `research`, `plan`, capability tick variants | Examples: `parseReproOutput`, `verifyReproFails`, `resolvePreviewUrl`, `resolveQaUrl`, `discoverQaContext`, `loadQaContext`, `warmupMcp`, `createQaGoal`, `diagMcp`, `postResearchComment`, `postPlanComment`, `loadJobFromFile`, `runTickScript`. |
 
@@ -296,10 +293,9 @@ are informative rather than scary.
 
 ## New Session Checklist
 
-1. Read relevant `src/` code. Start with [src/executor.ts](src/executor.ts) and
-   the relevant store/project `.kody/executables/<name>/` profile, or `src/executables/run` for the engine builtin.
+1. Read relevant `src/` code and the relevant store/project `.kody/capabilities/<name>/` profile.
 2. Classify the request: existing profile tweak, new profile, script change, or
-   executor change. Most work is profiles/scripts.
+   runner change. Most work is profiles/scripts.
 3. Run `pnpm typecheck && pnpm test && pnpm test:e2e` before commit.
 4. Live-test after publish before declaring success.
 

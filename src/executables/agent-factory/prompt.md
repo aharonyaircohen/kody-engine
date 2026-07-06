@@ -34,7 +34,7 @@ Use these contracts when deciding whether a file belongs in the bundle:
 | Goal | `goal-creator` | `docs/goals.md`, `docs/jobs-model.md`, `docs/capabilities.md` | outcome, evidence, allowed capabilities, route, facts, blockers | capability implementation, agent identity, loop cadence |
 | Loop | `loop-creator` | `docs/jobs-model.md`, `docs/engine-company.md`, `docs/ledgers.md` | cadence, wakeup policy, target, operational cursor/dedup | business completion, goal evidence, workflow order, implementation |
 | Workflow | `workflow-creator` | `docs/jobs-model.md`, `docs/capabilities.md` | ordered capability steps for one run | long-term progress, schedule, goal completion, agent identity, implementation internals |
-| Capability | `capability-creator` | `docs/capabilities.md`, `docs/capability-kind-map.md`, `docs/executables.md` | one reusable `observe`, `act`, or `verify` ability, interface, constraints, implementation | requester identity, caller workflow, parent goal progress, loop cadence, agent identity |
+| Capability | `capability-creator` | `docs/capabilities.md`, `docs/capability-kind-map.md`, `docs/capability-implementations.md` | one reusable `observe`, `act`, or `verify` ability, interface, constraints, implementation | requester identity, caller workflow, parent goal progress, loop cadence, agent identity |
 
 If one generated model needs information from another, reference the other model by slug. Do not copy that model's responsibility into the file.
 
@@ -49,7 +49,7 @@ Use these exact model kinds and required file shapes:
 | `capability` | `capabilities/<slug>/profile.json` and `capabilities/<slug>/capability.md` |
 
 Do not use `kind: "loop"`; the loop model kind is `agentLoop`.
-Do not use `agents/<slug>/identity.json`, `goals/<slug>/goal.json`, `workflows/<slug>/workflow.json`, or `executables/<slug>/...`.
+Do not use `agents/<slug>/identity.json`, `goals/<slug>/goal.json`, `workflows/<slug>/workflow.json`, or old implementation-root paths.
 
 Each `models[]` entry must also carry the creator's canonical model metadata:
 
@@ -82,7 +82,7 @@ Use current storage names when producing files:
 - Do not create a consumer-repo PR.
 - The deterministic postflight will open a review PR in the configured state repo under the configured state path.
 - Put generated file paths relative to the configured state path, for example `capabilities/...`, `agents/...`, `goals/...`, or `memory/...`.
-- Do not create `executables/...` paths. External executables are obsolete; implementation profiles live in capability folders.
+- Do not create old implementation-root paths. Implementation profiles live in capability folders.
 - Produce complete file contents. Do not describe patches.
 - Prefer a small bundle over a broad framework. Include assumptions in the summary.
 
@@ -112,7 +112,7 @@ PR_SUMMARY:
       "slug": "example",
       "capabilityKind": "act",
       "ability": "one reusable ability",
-      "docsUsed": ["docs/capabilities.md", "docs/capability-kind-map.md", "docs/executables.md"],
+      "docsUsed": ["docs/capabilities.md", "docs/capability-kind-map.md", "docs/capability-implementations.md"],
       "inputs": [],
       "outputs": [],
       "allowedActions": [],

@@ -14,7 +14,7 @@ const creators = [
   },
   {
     name: "capability-creator",
-    docs: ["docs/capabilities.md", "docs/capability-kind-map.md", "docs/executables.md"],
+    docs: ["docs/capabilities.md", "docs/capability-kind-map.md", "docs/capability-implementations.md"],
     owns: "ability",
     notOwn: "who requested it",
   },
@@ -38,12 +38,12 @@ const creators = [
   },
 ] as const
 
-const executableRoot = path.resolve(__dirname, "../../src/executables")
+const implementationRoot = path.resolve(__dirname, "../../src/executables")
 
 describe("model creator profiles", () => {
   it("loads every creator as a safe issue-scoped primitive", () => {
     for (const creator of creators) {
-      const profile = loadProfile(path.join(executableRoot, creator.name, "profile.json"))
+      const profile = loadProfile(path.join(implementationRoot, creator.name, "profile.json"))
 
       expect(profile.name).toBe(creator.name)
       expect(profile.action).toBe(creator.name)
@@ -85,7 +85,7 @@ describe("model creator profiles", () => {
 
   it("pins each creator prompt to its model docs and boundary", () => {
     for (const creator of creators) {
-      const prompt = fs.readFileSync(path.join(executableRoot, creator.name, "prompt.md"), "utf-8")
+      const prompt = fs.readFileSync(path.join(implementationRoot, creator.name, "prompt.md"), "utf-8")
 
       for (const doc of creator.docs) expect(prompt).toContain(doc)
       expect(prompt).toContain(creator.owns)
@@ -98,7 +98,7 @@ describe("model creator profiles", () => {
   })
 
   it("keeps agent-factory constrained by the per-model creator contracts", () => {
-    const prompt = fs.readFileSync(path.join(executableRoot, "agent-factory", "prompt.md"), "utf-8")
+    const prompt = fs.readFileSync(path.join(implementationRoot, "agent-factory", "prompt.md"), "utf-8")
 
     for (const creator of creators) {
       expect(prompt).toContain(creator.name)
