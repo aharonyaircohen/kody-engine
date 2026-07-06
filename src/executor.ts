@@ -857,6 +857,12 @@ export const MAX_CHAIN_HOPS = 60
  */
 export async function runExecutableChain(profileName: string, input: ExecutorInput): Promise<ExecutorOutput> {
   let result = await runExecutable(profileName, input)
+  let chainConfig = input.config
+  const configForHandoff = (): KodyConfig | undefined => {
+    if (chainConfig || input.skipConfig) return chainConfig
+    chainConfig = loadConfig(input.cwd)
+    return chainConfig
+  }
   let chainData: Record<string, unknown> = {
     ...(input.preloadedData ?? {}),
     ...(result.taskState ? { taskState: result.taskState } : {}),
@@ -870,7 +876,7 @@ export async function runExecutableChain(profileName: string, input: ExecutorInp
       const { runJob } = await import("./job.js")
       const childResult = await runJob(next, {
         cwd: input.cwd,
-        config: input.config,
+        config: configForHandoff(),
         verbose: input.verbose,
         quiet: input.quiet,
         preloadedData: chainData,
@@ -899,7 +905,7 @@ export async function runExecutableChain(profileName: string, input: ExecutorInp
         const { runJob } = await import("./job.js")
         result = await runJob(afterJob, {
           cwd: input.cwd,
-          config: input.config,
+          config: configForHandoff(),
           verbose: input.verbose,
           quiet: input.quiet,
           preloadedData: chainData,
@@ -931,7 +937,7 @@ export async function runExecutableChain(profileName: string, input: ExecutorInp
     const { runJob } = await import("./job.js")
     result = await runJob(nextJob, {
       cwd: input.cwd,
-      config: input.config,
+      config: configForHandoff(),
       verbose: input.verbose,
       quiet: input.quiet,
       preloadedData: chainData,
