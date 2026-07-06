@@ -224,7 +224,7 @@ function parseRunIndex(raw: string | undefined | null): RunIndexFile {
   try {
     const parsed = JSON.parse(raw) as unknown
     const record = recordValue(parsed)
-    const runs = Array.isArray(record?.runs) ? record.runs.filter(isRunIndexRow) : []
+    const runs = Array.isArray(record?.runs) ? record.runs.filter(isRunIndexRow).map(normalizeRunIndexRow) : []
     return { version: 1, updatedAt: stringValue(record?.updatedAt) ?? new Date().toISOString(), runs }
   } catch {
     return { version: 1, updatedAt: new Date().toISOString(), runs: [] }
@@ -248,6 +248,18 @@ function isRunSubjectType(value: unknown): value is RunIndexSubjectType {
   return value === "goal" || value === "loop" || value === "workflow"
 }
 
+function normalizeRunIndexRow(row: RunIndexRow): RunIndexRow {
+  if (
+    row.status === "running" &&
+    (row.decision?.toLowerCase().startsWith("dispatch") ||
+      row.summary?.toLowerCase().startsWith("dispatch") ||
+      row.currentStep?.toLowerCase().includes("dispatch"))
+  ) {
+    return { ...row, status: "waiting" }
+  }
+  return row
+}
+
 function runSubjectType(data: Record<string, unknown>): RunIndexSubjectType | null {
   const value = data.runSubjectType
   return isRunSubjectType(value) ? value : null
@@ -261,7 +273,8 @@ function statusFromGoalEvent(event: Record<string, unknown>, decision: Record<st
   if (status === "failure" || status === "failed" || eventName.includes("fail")) return "failed"
   if (status === "cancelled") return "cancelled"
   if (decisionKind === "blocked") return "blocked"
-  if (status === "running" || status === "dispatch" || eventName.includes("dispatch")) return "running"
+  if (status === "dispatch" || decisionKind === "dispatch" || eventName.includes("dispatch")) return "waiting"
+  if (status === "running") return "running"
   return "recorded"
 }
 

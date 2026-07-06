@@ -65,6 +65,42 @@ describe("run index", () => {
     })
   })
 
+  it("normalizes legacy dispatch rows that were stored as running", () => {
+    const next = mergeRunIndexRow(
+      JSON.stringify({
+        version: 1,
+        updatedAt: "2026-07-05T10:00:00.000Z",
+        runs: [
+          {
+            version: 1,
+            id: "goal:ci-health:run-0",
+            subjectType: "goal",
+            subjectId: "ci-health",
+            status: "running",
+            title: "ci-health",
+            summary: "dispatch dev-ci-health: ready for loop tick",
+            currentStep: "watching",
+            updatedAt: "2026-07-05T10:00:00.000Z",
+          },
+        ],
+      }),
+      {
+        version: 1,
+        id: "goal:release:run-1",
+        subjectType: "goal",
+        subjectId: "release",
+        status: "success",
+        title: "release",
+        updatedAt: "2026-07-05T11:00:00.000Z",
+      },
+    )
+
+    expect(next.runs[1]).toMatchObject({
+      id: "goal:ci-health:run-0",
+      status: "waiting",
+    })
+  })
+
   it("writes runs/index.json with conflict retry", () => {
     stateRepo.readStateText
       .mockReturnValueOnce({
@@ -157,7 +193,7 @@ describe("run index", () => {
     })
   })
 
-  it("builds loop rows from goal run log events", () => {
+  it("marks dispatch rows as waiting rather than running", () => {
     const row = runIndexRowFromGoalEvents("ci-health", "logs/goals/ci-health/runs/run.jsonl", [
       {
         time: "2026-07-05T10:00:00.000Z",
@@ -185,7 +221,7 @@ describe("run index", () => {
       id: "loop:ci-health:gh-123-1",
       subjectType: "loop",
       subjectModel: "agentLoop",
-      status: "running",
+      status: "waiting",
       sourceType: "goal-run-log",
       sourcePath: "logs/goals/ci-health/runs/run.jsonl",
       detailUrl: "https://github.com/o/kody-state/blob/main/r/logs/goals/ci-health/runs/run.jsonl",
