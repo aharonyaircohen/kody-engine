@@ -1,7 +1,7 @@
 {
-  "name": "agent-factory",
-  "action": "agent-factory",
-  "describe": "Create or assemble Kody agency model definitions from an operator request.",
+  "name": "capability-creator",
+  "action": "capability-creator",
+  "describe": "Create one complete single-responsibility Kody capability from an ability contract.",
   "role": "primitive",
   "kind": "oneshot",
   "inputs": [
@@ -10,7 +10,7 @@
       "flag": "--issue",
       "type": "int",
       "required": true,
-      "describe": "GitHub issue number containing the operator request."
+      "describe": "GitHub issue number containing the focused model creation request."
     }
   ],
   "claudeCode": {
@@ -44,21 +44,21 @@
       }
     ],
     "postflight": [
-    {
-      "script": "parseAgentResult"
-    },
-    {
-      "script": "validateAgentFactoryBundle"
-    },
-    {
-      "script": "openAgentFactoryStatePr"
-    }
+      {
+        "script": "parseAgentResult"
+      },
+      {
+        "script": "validateAgentFactoryBundle"
+      },
+      {
+        "script": "openAgentFactoryStatePr"
+      }
     ]
   },
   "output": {
     "actionTypes": [
-      "AGENT_FACTORY_COMPLETED",
-      "AGENT_FACTORY_FAILED",
+      "CAPABILITY_CREATOR_COMPLETED",
+      "CAPABILITY_CREATOR_FAILED",
       "AGENT_NOT_RUN"
     ]
   }

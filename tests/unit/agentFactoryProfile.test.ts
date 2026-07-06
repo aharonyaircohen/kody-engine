@@ -14,6 +14,7 @@ describe("agent-factory profile", () => {
     expect(profile.scripts.preflight.map((entry) => entry.script)).toEqual(["loadIssueContext", "composePrompt"])
     expect(profile.scripts.postflight.map((entry) => entry.script)).toEqual([
       "parseAgentResult",
+      "validateAgentFactoryBundle",
       "openAgentFactoryStatePr",
     ])
     expect(profile.scripts.postflight.map((entry) => entry.script)).not.toContain("commitAndPush")

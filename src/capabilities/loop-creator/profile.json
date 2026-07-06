@@ -1,0 +1,7 @@
+{
+  "name": "loop-creator",
+  "action": "loop-creator",
+  "implementation": "loop-creator",
+  "capabilityKind": "act",
+  "describe": "Create one Kody agent loop wakeup model from a focused request."
+}

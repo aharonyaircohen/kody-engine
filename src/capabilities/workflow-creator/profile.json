@@ -1,0 +1,7 @@
+{
+  "name": "workflow-creator",
+  "action": "workflow-creator",
+  "implementation": "workflow-creator",
+  "capabilityKind": "act",
+  "describe": "Create one Kody workflow ordered-run model from a focused request."
+}

@@ -11,6 +11,9 @@ interface AgentFactoryBundle {
   title: string
   summary: string
   files: AgentFactoryFile[]
+  model?: unknown
+  models?: unknown
+  modelCreatorContractsUsed?: unknown
 }
 
 interface GitRefResponse {
@@ -176,7 +179,14 @@ export function parseAgentFactoryBundle(raw: string): AgentFactoryBundle {
     }
   })
 
-  return { title, summary, files }
+  return {
+    title,
+    summary,
+    files,
+    model: value.model,
+    models: value.models,
+    modelCreatorContractsUsed: value.modelCreatorContractsUsed,
+  }
 }
 
 export function buildAgentFactoryBranchName(issueNumber: number, title: string, now: number = Date.now()): string {

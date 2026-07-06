@@ -1,0 +1,7 @@
+{
+  "name": "goal-creator",
+  "action": "goal-creator",
+  "implementation": "goal-creator",
+  "capabilityKind": "act",
+  "describe": "Create one Kody goal outcome model from a focused request."
+}

@@ -1,0 +1,7 @@
+{
+  "name": "agent-creator",
+  "action": "agent-creator",
+  "implementation": "agent-creator",
+  "capabilityKind": "act",
+  "describe": "Create one Kody agent identity model from a focused request."
+}

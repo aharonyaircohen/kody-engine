@@ -94,6 +94,7 @@ import { skipAgent } from "./skipAgent.js"
 import { stageMergeConflicts } from "./stageMergeConflicts.js"
 import { startFlow } from "./startFlow.js"
 import { syncFlow } from "./syncFlow.js"
+import { validateAgentFactoryBundle } from "./validateAgentFactoryBundle.js"
 import { verify } from "./verify.js"
 import { verifyReproFails } from "./verifyReproFails.js"
 import { verifyWithRetry } from "./verifyWithRetry.js"
@@ -160,6 +161,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   parseIssueStateFromAgentResult,
   parseJobStateFromAgentResult,
   parseReproOutput,
+  validateAgentFactoryBundle,
   writeIssueStateComment,
   writeJobStateFile,
   appendCompanyActivity,
