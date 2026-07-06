@@ -108,4 +108,22 @@ describe("model creator profiles", () => {
     expect(prompt).toContain("still list the referenced doc paths")
     expect(prompt).toContain("modelCreatorContractsUsed")
   })
+
+  it("keeps capability-creator self-contained on the current profile shape", () => {
+    const prompt = fs.readFileSync(path.join(implementationRoot, "capability-creator", "prompt.md"), "utf-8")
+
+    expect(prompt).toContain('"slug": "<same slug as model.slug>"')
+    expect(prompt).toContain('"capabilityKind": "observe|act|verify"')
+    expect(prompt).toContain('Do not put `kind: "observe"')
+    expect(prompt).toContain("Every generated file path must use exactly the same slug as `model.slug`.")
+  })
+
+  it("keeps workflow-creator self-contained on workflow profile storage", () => {
+    const prompt = fs.readFileSync(path.join(implementationRoot, "workflow-creator", "prompt.md"), "utf-8")
+
+    expect(prompt).toContain('"slug": "<same slug as model.slug>"')
+    expect(prompt).toContain('"workflow"')
+    expect(prompt).toContain("Do not place workflow files under `workflows/`.")
+    expect(prompt).toContain("The generated file path must use exactly the same slug as `model.slug`.")
+  })
 })

@@ -133,7 +133,7 @@ describe("composePrompt: capability-pipeline tokens (Phase 1 capability-tick ren
     const out = ctx.data.prompt as string
     expect(out).toContain("# Capability reference")
     expect(out).toContain("- Capability: `stale-prs` — *Stale PR Watcher*")
-    expect(out).toContain("- Executable: `capability-tick`")
+    expect(out).toContain("- Implementation: `capability-tick`")
     expect(out).toContain("- Agent: `kody` — *Kody*")
     expect(out).toContain("- Cadence: `*/5 * * * *`")
   })
@@ -218,7 +218,7 @@ describe("composePrompt: capability-pipeline tokens (Phase 1 capability-tick ren
     await composePrompt(ctx, makeProfile(dir))
     const out = ctx.data.prompt as string
     expect(out).toContain("- Capability: `ad-hoc` — *Ad Hoc Capability*")
-    expect(out).toContain("- Executable: `capability-tick`")
+    expect(out).toContain("- Implementation: `capability-tick`")
     expect(out).not.toContain("- Agent:")
     expect(out).not.toContain("- Cadence:")
   })

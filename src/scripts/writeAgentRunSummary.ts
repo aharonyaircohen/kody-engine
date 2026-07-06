@@ -11,7 +11,7 @@ export const writeAgentRunSummary: PostflightScript = async (ctx, profile) => {
   const summaryPath = process.env.GITHUB_STEP_SUMMARY
   if (!summaryPath) return
 
-  const executable = profile.name
+  const implementation = profile.name
   const issue = ctx.args.issue as number | undefined
   const pr = ctx.args.pr as number | undefined
   const target = issue ? `issue #${issue}` : pr ? `PR #${pr}` : "(unknown)"
@@ -21,9 +21,9 @@ export const writeAgentRunSummary: PostflightScript = async (ctx, profile) => {
   const status = exitCode === 0 ? "✅ success" : exitCode === 3 ? "⏭️ no-op" : "⚠️ failed"
 
   const lines: string[] = []
-  lines.push(`## kody ${executable} — ${status}`)
+  lines.push(`## kody ${implementation} — ${status}`)
   lines.push("")
-  lines.push(`- **Executable:** \`${executable}\``)
+  lines.push(`- **Implementation:** \`${implementation}\``)
   lines.push(`- **Target:** ${target}`)
   if (prUrl) lines.push(`- **PR:** ${prUrl}`)
   lines.push(`- **Exit code:** ${exitCode}`)

@@ -43,7 +43,7 @@ describe("writeAgentRunSummary", () => {
     await writeAgentRunSummary(ctx, fakeProfile("run"), null)
     const written = fs.readFileSync(summaryFile, "utf-8")
     expect(written).toMatch(/success/)
-    expect(written).toMatch(/\*\*Executable:\*\* `run`/)
+    expect(written).toMatch(/\*\*Implementation:\*\* `run`/)
     expect(written).toMatch(/issue #42/)
     expect(written).toMatch(/pull\/99/)
     expect(written).toMatch(/Exit code:\*\* 0/)

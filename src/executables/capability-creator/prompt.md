@@ -65,6 +65,19 @@ Required files:
 
 In `profile.json`, include `"slug": "<slug>"`. The `"name"` field may be a display name, but if `slug` is absent then `name` must equal the slug.
 
+The profile is part of the Capability contract. It must use the same slug as `model.slug` and must declare the current capability kind field:
+
+```json
+{
+  "slug": "<same slug as model.slug>",
+  "name": "Display Name",
+  "capabilityKind": "observe|act|verify"
+}
+```
+
+Do not put `kind: "observe"`, `kind: "act"`, or `kind: "verify"` in the profile. `kind` is not the capability kind field.
+Every generated file path must use exactly the same slug as `model.slug`.
+
 Add colocated prompt/scripts only if the capability needs a new implementation. Reuse existing capabilities, implementation profiles, skills, or scripts when they fit.
 
 # Final Output Contract
@@ -95,7 +108,7 @@ PR_SUMMARY:
   "files": [
     {
       "path": "capabilities/example/profile.json",
-      "content": "{\n  \"name\": \"example\"\n}\n"
+      "content": "{\n  \"slug\": \"example\",\n  \"name\": \"Example\",\n  \"capabilityKind\": \"observe\"\n}\n"
     },
     {
       "path": "capabilities/example/capability.md",

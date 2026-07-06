@@ -52,6 +52,27 @@ Prefer placing workflow steps on the public capability that owns the composed ac
 
 Put the workflow contract in `capabilities/<slug>/profile.json`. Prefer a `workflow` object with `steps`; top-level `steps` are only for existing profiles that already use that shape.
 
+The workflow profile is stored as a capability profile because workflows are composed capability runs. The generated file path must use exactly the same slug as `model.slug`.
+
+Minimum profile shape:
+
+```json
+{
+  "slug": "<same slug as model.slug>",
+  "name": "Display Name",
+  "workflow": {
+    "steps": [
+      {
+        "capability": "capability-slug",
+        "reason": "why this step exists"
+      }
+    ]
+  }
+}
+```
+
+Do not place workflow files under `workflows/`. Do not use a different profile slug than `model.slug`.
+
 # Final Output Contract
 
 If the request is too ambiguous to produce one review-ready Workflow model, output one line:
@@ -80,7 +101,7 @@ PR_SUMMARY:
   "files": [
     {
       "path": "capabilities/example/profile.json",
-      "content": "{\n  \"workflow\": { \"steps\": [] }\n}\n"
+      "content": "{\n  \"slug\": \"example\",\n  \"name\": \"Example Workflow\",\n  \"workflow\": { \"steps\": [{ \"capability\": \"example-capability\", \"reason\": \"run the composed capability\" }] }\n}\n"
     }
   ]
 }

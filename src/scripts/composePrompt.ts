@@ -214,7 +214,7 @@ function formatToolsUsage(profile: Profile): string {
 
 /**
  * Render the `{{capabilityReference}}` token — a single labeled block at the top of
- * a capability tick's prompt that names the capability, the executable doing the tick,
+ * a capability tick's prompt that names the capability, the implementation doing the tick,
  * the assigned agent, and the cadence. The five underlying tokens
  * (`{{capabilitySlug}}`, `{{capabilityTitle}}`, `{{executableSlug}}`, `{{agentSlug}}`,
  * `{{capabilitySchedule}}`) are also exposed individually so templates can place
@@ -228,7 +228,7 @@ function formatToolsUsage(profile: Profile): string {
 function formatCapabilityReference(data: Record<string, unknown>, profileName: string): string {
   const capabilitySlug = pickToken(data, "capabilitySlug", "jobSlug")
   const capabilityTitle = pickToken(data, "capabilityTitle", "jobTitle")
-  // The executable doing the tick — `ctx.data.executableSlug` is set by
+  // The implementation doing the tick — `ctx.data.executableSlug` is set by
   // loadJobFromFile/loadCapabilityState; fall back to the profile name resolved at
   // compose-time so a bare profile that never ran the loader still renders
   // something coherent.
@@ -242,7 +242,7 @@ function formatCapabilityReference(data: Record<string, unknown>, profileName: s
     lines.push(`- Capability: \`${capabilitySlug}\`${capabilityTitle ? ` — *${capabilityTitle}*` : ""}`)
   }
   if (executableSlug) {
-    lines.push(`- Executable: \`${executableSlug}\``)
+    lines.push(`- Implementation: \`${executableSlug}\``)
   }
   const agentLine = agentSlug
     ? `\`${agentSlug}\`${agentTitle && agentTitle !== agentSlug ? ` — *${agentTitle}*` : ""}`
