@@ -65,7 +65,7 @@ describe("goal run logs", () => {
       jobKey: "goal-manager:weekly",
       jobFlavor: "instant",
       jobCapability: "goal-manager",
-      jobExecutable: "goal-manager",
+      jobImplementation: "goal-manager",
       jobWhy: "manual live audit test",
     }
 
@@ -151,7 +151,6 @@ describe("goal run logs", () => {
         key: "goal-manager:weekly",
         flavor: "instant",
         capability: "goal-manager",
-        executable: "goal-manager",
         why: "manual live audit test",
       },
       links: {
@@ -198,7 +197,7 @@ describe("goal run logs", () => {
       jobFlavor: "instant",
       jobAction: "goal-manager",
       jobCapability: "goal-manager",
-      jobExecutable: "goal-manager",
+      jobImplementation: "goal-manager",
     }
 
     stageGoalRunLogEvent(

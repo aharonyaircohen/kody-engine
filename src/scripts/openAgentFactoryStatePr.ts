@@ -276,9 +276,8 @@ function requireString(value: unknown, label: string): string {
 function creatorSourceLabel(ctx: Context, profileName: string | undefined): string {
   const capability = typeof ctx.data.jobCapability === "string" ? ctx.data.jobCapability.trim() : ""
   const implementation = typeof ctx.data.jobImplementation === "string" ? ctx.data.jobImplementation.trim() : ""
-  const executable = typeof ctx.data.jobExecutable === "string" ? ctx.data.jobExecutable.trim() : ""
   const profile = typeof profileName === "string" ? profileName.trim() : ""
-  return capability || implementation || executable || profile || "agent-factory"
+  return capability || implementation || profile || "agent-factory"
 }
 
 function ghJson<T>(args: string[], cwd: string, input?: unknown): T {

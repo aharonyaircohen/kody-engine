@@ -551,7 +551,6 @@ export async function runCi(argv: string[]): Promise<number> {
         capability: route.capability,
         workflow: route.workflow,
         implementation: route.implementation ?? route.executable,
-        executable: route.executable,
         cliArgs: { ...route.cliArgs, ...forceRunCliArgs },
         flavor: "instant",
         force: true,
@@ -828,8 +827,7 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
         mintScheduledJob({
           action: match.action,
           capability: match.capability,
-          implementation: match.implementation,
-          executable: match.executable,
+          implementation: match.implementation ?? match.executable,
           cliArgs: match.cliArgs,
         }),
         {

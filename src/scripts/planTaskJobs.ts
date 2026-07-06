@@ -43,7 +43,6 @@ export function taskJobSpecToJob(spec: TaskJobSpec, issueNumber: number): Job {
   return {
     capability: spec.capability ?? spec.implementation,
     implementation: spec.implementation,
-    executable: spec.implementation,
     why: spec.reason,
     agent: spec.agent,
     schedule: spec.schedule,
@@ -92,11 +91,7 @@ function normalizeSpec(input: unknown, index: number): TaskJobSpec {
   }
   const raw = input as Record<string, unknown>
   const implementation =
-    typeof raw.implementation === "string"
-      ? raw.implementation.trim()
-      : typeof raw.executable === "string"
-        ? raw.executable.trim()
-        : ""
+    typeof raw.implementation === "string" ? raw.implementation.trim() : ""
   if (!/^[a-z][a-z0-9-]*$/.test(implementation)) {
     throw new Error(`task job plan entry ${index} must have a valid implementation`)
   }
@@ -122,11 +117,11 @@ function normalizeSpec(input: unknown, index: number): TaskJobSpec {
 }
 
 function jobToPlannedTaskJob(job: Job): PlannedTaskJob {
-  const implementation = job.implementation ?? job.executable ?? job.capability ?? "unknown"
+  const implementation = job.implementation ?? job.capability ?? "unknown"
   return {
     id: stableJobKey(job),
     implementation,
-    capability: job.capability ?? job.action ?? job.executable ?? "unknown",
+    capability: job.capability ?? job.action ?? "unknown",
     ...(job.agent ? { agent: job.agent } : {}),
     ...(job.flavor ? { flavor: job.flavor } : {}),
     ...(job.schedule ? { schedule: job.schedule } : {}),

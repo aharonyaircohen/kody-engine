@@ -23,7 +23,7 @@ vi.mock("../../src/registry.js", async (importOriginal) => {
         ? {
             action: "goal-manager",
             capability: "goal-manager",
-            executable: "goal-manager",
+
             cliArgs: {},
             source: "builtin",
           }
@@ -107,7 +107,7 @@ describe("kody-cli manual goal dispatch", () => {
     expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
       action: "goal-manager",
       capability: "goal-manager",
-      executable: "goal-manager",
+
       cliArgs: { goal: "weekly-docs" },
       flavor: "instant",
       force: true,
@@ -130,7 +130,7 @@ describe("kody-cli manual goal dispatch", () => {
     expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
       action: "goal-manager",
       capability: "goal-manager",
-      executable: "goal-manager",
+
       cliArgs: { goal: "weekly-docs" },
       flavor: "instant",
       force: true,
@@ -151,7 +151,7 @@ describe("kody-cli manual goal dispatch", () => {
     expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
       action: "goal-manager",
       capability: "goal-manager",
-      executable: "goal-manager",
+
       cliArgs: { goal: "weekly-docs" },
       flavor: "instant",
       force: true,
@@ -189,7 +189,7 @@ describe("kody-cli manual goal dispatch", () => {
     expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
       action: "goal-scheduler",
       capability: "goal-scheduler",
-      executable: "goal-scheduler",
+
       cliArgs: {},
       flavor: "instant",
       force: true,
@@ -247,7 +247,7 @@ describe("kody-cli manual goal dispatch", () => {
       dispatch: {
         action: "goal-scheduler",
         capability: "goal-scheduler",
-        executable: "goal-scheduler",
+
         cliArgs: {},
       },
     })

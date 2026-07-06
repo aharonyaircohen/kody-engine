@@ -40,7 +40,7 @@ describe("runJob (Phase 1 seam)", () => {
 
   it("lowers an instant job onto runExecutableChain with its executable + cliArgs", async () => {
     await runJob(
-      { capability: "run", executable: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" },
+      { capability: "run", implementation: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" },
       { cwd: "/x" },
     )
     expect(runExecutableChain).toHaveBeenCalledTimes(1)
@@ -55,7 +55,7 @@ describe("runJob (Phase 1 seam)", () => {
     await runJob(
       {
         capability: "vercel-production-deploy",
-        executable: "vercel-production-deploy",
+        implementation: "vercel-production-deploy",
         cliArgs: {},
         flavor: "instant",
         resultTarget: { type: "goal", id: "web-release-2026-07-01", evidence: "productionDeployed" },
@@ -80,7 +80,7 @@ describe("runJob (Phase 1 seam)", () => {
     expect(input.preloadedData?.jobAction).toBe("run")
     expect(input.preloadedData?.jobCapability).toBe("run")
     expect(input.preloadedData?.jobImplementation).toBe("run")
-    expect(input.preloadedData?.jobExecutable).toBe("run")
+    expect(input.preloadedData?.jobImplementation).toBe("run")
   })
 
   it("accepts implementation as the selected profile and writes both metadata fields", async () => {
@@ -91,7 +91,7 @@ describe("runJob (Phase 1 seam)", () => {
     const [profile, input] = runExecutableChain.mock.calls[0]!
     expect(profile).toBe("run")
     expect(input.preloadedData?.jobImplementation).toBe("run")
-    expect(input.preloadedData?.jobExecutable).toBe("run")
+    expect(input.preloadedData?.jobImplementation).toBe("run")
   })
 
   it("resolves a capability-only job to the capability-selected executable", async () => {
@@ -100,7 +100,7 @@ describe("runJob (Phase 1 seam)", () => {
     fs.mkdirSync(capabilityDir, { recursive: true })
     fs.writeFileSync(
       path.join(capabilityDir, "profile.json"),
-      JSON.stringify({ name: "ci-health", action: "ci-health", executable: "ci-check", agent: "kody" }),
+      JSON.stringify({ name: "ci-health", action: "ci-health", implementation: "ci-check", agent: "kody" }),
     )
     fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# CI Health\n")
 
@@ -118,7 +118,7 @@ describe("runJob (Phase 1 seam)", () => {
     expect(input.cliArgs).toEqual({ pr: 456, goal: "release-aguy", evidence: "mainDeployPrGreen" })
     expect(input.preloadedData?.jobCapability).toBe("ci-health")
     expect(input.preloadedData?.jobImplementation).toBe("ci-check")
-    expect(input.preloadedData?.jobExecutable).toBe("ci-check")
+    expect(input.preloadedData?.jobImplementation).toBe("ci-check")
   })
 
   it("seeds capabilityKind from capability folders for shared implementation traces", async () => {
@@ -130,7 +130,7 @@ describe("runJob (Phase 1 seam)", () => {
       JSON.stringify({
         name: "pr-health",
         action: "pr-health",
-        executable: "capability-tick",
+        implementation: "capability-tick",
         agent: "kody",
         capabilityKind: "observe",
       }),
@@ -153,7 +153,7 @@ describe("runJob (Phase 1 seam)", () => {
     await runJob(
       {
         capability: "company-graph",
-        executable: "company-graph",
+        implementation: "company-graph",
         cliArgs: { goal: "hourly-monitor-goal-smoke" },
         flavor: "instant",
       },
@@ -163,12 +163,12 @@ describe("runJob (Phase 1 seam)", () => {
     expect(profile).toBe("company-graph")
     expect(input.cliArgs).toEqual({ goal: "hourly-monitor-goal-smoke" })
     expect(input.preloadedData?.jobCapability).toBe("company-graph")
-    expect(input.preloadedData?.jobExecutable).toBe("company-graph")
+    expect(input.preloadedData?.jobImplementation).toBe("company-graph")
   })
 
   it("seeds inline why into preloadedData.jobWhy", async () => {
     await runJob(
-      { capability: "unit-fix", executable: "unit-fix", why: "fix the flaky test", cliArgs: {}, flavor: "instant" },
+      { capability: "unit-fix", implementation: "unit-fix", why: "fix the flaky test", cliArgs: {}, flavor: "instant" },
       { cwd: "/x" },
     )
     const [, input] = runExecutableChain.mock.calls[0]!
@@ -177,14 +177,14 @@ describe("runJob (Phase 1 seam)", () => {
   })
 
   it("does not seed jobWhy for an empty why string", async () => {
-    await runJob({ capability: "run", executable: "run", why: "", cliArgs: {}, flavor: "instant" }, { cwd: "/x" })
+    await runJob({ capability: "run", implementation: "run", why: "", cliArgs: {}, flavor: "instant" }, { cwd: "/x" })
     const [, input] = runExecutableChain.mock.calls[0]!
     expect(input.preloadedData?.jobWhy).toBeUndefined()
   })
 
   it("always seeds a jobId + flavor so the run can be recorded in the task ledger", async () => {
     await runJob(
-      { capability: "run", executable: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" },
+      { capability: "run", implementation: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" },
       { cwd: "/x" },
     )
     const [, input] = runExecutableChain.mock.calls[0]!
@@ -192,17 +192,17 @@ describe("runJob (Phase 1 seam)", () => {
     expect(input.preloadedData?.jobKey).toBe("instant:run:42")
     expect(input.preloadedData?.jobFlavor).toBe("instant")
     expect(input.preloadedData?.jobImplementation).toBe("run")
-    expect(input.preloadedData?.jobExecutable).toBe("run")
+    expect(input.preloadedData?.jobImplementation).toBe("run")
     expect(input.preloadedData?.jobTarget).toBe(42)
   })
 
   it("keeps the same stable job key for retries of the same target + executable", async () => {
     await runJob(
-      { capability: "run", executable: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" },
+      { capability: "run", implementation: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" },
       { cwd: "/x" },
     )
     await runJob(
-      { capability: "run", executable: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" },
+      { capability: "run", implementation: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" },
       { cwd: "/x" },
     )
 
@@ -230,6 +230,7 @@ describe("runJob (Phase 1 seam)", () => {
       mintInstantJob({
         action: "run",
         capability: "run",
+        implementation: "run",
         executable: "run",
         cliArgs: { issue: 5 },
         target: 5,
@@ -254,7 +255,7 @@ describe("runJob (Phase 1 seam)", () => {
     await runJob(
       {
         capability: "capability-tick",
-        executable: "capability-tick",
+        implementation: "capability-tick",
         schedule: "*/5 * * * *",
         cliArgs: {},
         flavor: "scheduled",
@@ -283,19 +284,19 @@ describe("runJob (Phase 1 seam)", () => {
   })
 
   it("rejects an executable-only job", () => {
-    expect(() => validateJob({ executable: "run", cliArgs: {}, flavor: "instant" })).toThrow(
+    expect(() => validateJob({ implementation: "run", cliArgs: {}, flavor: "instant" })).toThrow(
       /capability action, capability, or workflow/,
     )
   })
 
   it("rejects an unknown flavor", () => {
-    expect(() => validateJob({ capability: "run", executable: "run", cliArgs: {}, flavor: "bogus" })).toThrow(
+    expect(() => validateJob({ capability: "run", implementation: "run", cliArgs: {}, flavor: "bogus" })).toThrow(
       InvalidJobError,
     )
   })
 
   it("defaults cliArgs to an empty object when omitted", () => {
-    const j = validateJob({ capability: "run", executable: "run", flavor: "instant" })
+    const j = validateJob({ capability: "run", implementation: "run", flavor: "instant" })
     expect(j.cliArgs).toEqual({})
   })
 
@@ -348,7 +349,6 @@ describe("runJob (Phase 1 seam)", () => {
         workflowStepCount: 2,
         jobCapability: "reproduce",
         jobImplementation: "reproduce",
-        jobExecutable: "reproduce",
       })
       expect(runExecutableChain.mock.calls[0]![1].preloadedData?.jobWhy).toContain("operator note")
       expect(runExecutableChain.mock.calls[0]![1].preloadedData?.jobWhy).toContain("capture the failing test")
@@ -362,7 +362,6 @@ describe("runJob (Phase 1 seam)", () => {
         workflowStepCount: 2,
         jobCapability: "run",
         jobImplementation: "run",
-        jobExecutable: "run",
       })
     } finally {
       process.chdir(originalCwd)
@@ -437,7 +436,6 @@ describe("runJob (Phase 1 seam)", () => {
         workflowStep: "run",
         jobCapability: "run",
         jobImplementation: "run",
-        jobExecutable: "run",
       })
     } finally {
       process.chdir(originalCwd)
@@ -724,7 +722,7 @@ describe("runJob (Phase 1 seam)", () => {
         {
           action: "bug",
           capability: "bug",
-          executable: "reproduce",
+          implementation: "reproduce",
           cliArgs: { issue: 42 },
           target: 42,
           flavor: "instant",
@@ -972,7 +970,6 @@ describe("mintInstantJob (Phase 2)", () => {
   it("maps a DispatchResult to an instant job", () => {
     const job = mintInstantJob(dispatch, { why: "fix the typo" })
     expect(job).toMatchObject({
-      executable: "fix",
       implementation: "fix",
       capability: "fix",
       target: 7,
@@ -1001,7 +998,6 @@ describe("mintScheduledJob (Phase 2)", () => {
   it("maps a due capability slug to a scheduled job", () => {
     const job = mintScheduledJob({
       capability: "stale-prs",
-      executable: "capability-tick",
       implementation: "capability-tick",
       schedule: "*/5 * * * *",
       agent: "kody",
@@ -1009,7 +1005,7 @@ describe("mintScheduledJob (Phase 2)", () => {
     })
     expect(job).toMatchObject({
       capability: "stale-prs",
-      executable: "capability-tick",
+      implementation: "capability-tick",
       schedule: "*/5 * * * *",
       agent: "kody",
       cliArgs: { capability: "stale-prs" },
@@ -1018,14 +1014,14 @@ describe("mintScheduledJob (Phase 2)", () => {
   })
 
   it("defaults cliArgs to empty", () => {
-    expect(mintScheduledJob({ capability: "d", executable: "capability-tick" }).cliArgs).toEqual({})
+    expect(mintScheduledJob({ capability: "d", implementation: "capability-tick" }).cliArgs).toEqual({})
   })
 
   it("carries the cadence onto ctx.data.jobSchedule so the ledger records when it fired", async () => {
     await runJob(
       mintScheduledJob({
         capability: "capability-tick",
-        executable: "capability-tick",
+        implementation: "capability-tick",
         schedule: "7d",
       }),
       { cwd: "/x" },
@@ -1035,14 +1031,14 @@ describe("mintScheduledJob (Phase 2)", () => {
     expect(input.preloadedData?.jobFlavor).toBe("scheduled")
     expect(input.preloadedData?.jobCapability).toBe("capability-tick")
     expect(input.preloadedData?.jobImplementation).toBe("capability-tick")
-    expect(input.preloadedData?.jobExecutable).toBe("capability-tick")
+    expect(input.preloadedData?.jobImplementation).toBe("capability-tick")
   })
 
   it("carries saveReport onto ctx.data.jobSaveReport", async () => {
     await runJob(
       mintScheduledJob({
         capability: "model-health-audit",
-        executable: "model-health-audit",
+        implementation: "model-health-audit",
         saveReport: true,
       }),
       { cwd: "/x" },

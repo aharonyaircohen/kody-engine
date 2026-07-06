@@ -153,7 +153,6 @@ describe("executor: jobReferenceBlock", () => {
         jobSchedule: "manual",
         jobCapability: "live-job-wiring",
         jobImplementation: "job-live-verify",
-        jobExecutable: "live-job-wiring",
       },
     )
 

@@ -1,7 +1,7 @@
 /**
  * Job — the unified execution unit (Phase 1: additive seam, no caller yet).
  *
- * `runJob` lowers a validated Job onto the existing executor
+ * `runJob` lowers a validated Job onto the existing implementation runner
  * (`runExecutableChain`). This is the single entry point every trigger path
  * (comment, cron, manual) will funnel through in later phases. It deliberately
  * does NOT touch executor.ts — a Job maps to a (profileName, ExecutorInput) pair.
@@ -62,8 +62,8 @@ export class InvalidJobError extends Error {
 
 /**
  * Validate a minted Job at the boundary. A Job must name a capability/action, a
- * known `flavor`, and (if present) an object `cliArgs`. `executable` is only
- * an implementation selected under that capability; it is never valid by itself.
+ * known `flavor`, and (if present) an object `cliArgs`. `implementation` is
+ * selected under that capability; it is never valid by itself.
  * `why` is untrusted free text and is NOT content-checked here — fencing
  * happens where it enters a prompt.
  */
@@ -83,18 +83,7 @@ export function validateJob(input: unknown): Job {
   }
   return {
     action: typeof j.action === "string" ? j.action : undefined,
-    implementation:
-      typeof j.implementation === "string"
-        ? j.implementation
-        : typeof j.executable === "string"
-          ? j.executable
-          : undefined,
-    executable:
-      typeof j.executable === "string"
-        ? j.executable
-        : typeof j.implementation === "string"
-          ? j.implementation
-          : undefined,
+    implementation: typeof j.implementation === "string" ? j.implementation : undefined,
     capability: typeof j.capability === "string" ? j.capability : undefined,
     workflow: typeof j.workflow === "string" ? j.workflow : undefined,
     why: typeof j.why === "string" ? j.why : undefined,
@@ -144,9 +133,9 @@ export interface RunJobBase {
  *
  * Mapping:
  *   - capability/action resolves first             (the public capability contract)
- *   - profile = job.implementation ?? compatibility alias ?? capability implementation
+ *   - profile = job.implementation ?? capability implementation
  *   - cliArgs = job.cliArgs                   (target already bound by the minter)
- *   - capability/executable → preloadedData          (seeded so the executor can
+ *   - capability/implementation → preloadedData      (seeded so the executor can
  *                                              expose the job references to
  *                                              the model generically)
  *   - inline why → preloadedData.jobWhy        (seeded into ctx.data before
@@ -170,7 +159,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     : !capabilityContext && !resolvedCapability
       ? loadWorkflowContext(capabilityIdentity ?? action, base)
       : null
-  const explicitImplementation = valid.implementation ?? valid.executable
+  const explicitImplementation = valid.implementation
   const explicitImplementationOnly =
     explicitImplementation !== undefined &&
     (valid.action === undefined || valid.action === explicitImplementation) &&
@@ -202,7 +191,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   }
 
   if (!profileName) {
-    throw new InvalidJobError(`job capability resolves to no executable: ${capabilityIdentity ?? action}`)
+    throw new InvalidJobError(`job capability resolves to no implementation: ${capabilityIdentity ?? action}`)
   }
 
   return runDefaultCapabilityWorkflow(
@@ -252,7 +241,6 @@ async function runCapabilityImplementationStep(
   if (capabilityIdentity !== undefined && capabilityIdentity.length > 0)
     preloadedData.jobCapability = capabilityIdentity
   preloadedData.jobImplementation = profileName
-  preloadedData.jobExecutable = profileName
   // The job carries *when*: a scheduled job's cadence, recorded in the ledger.
   if (valid.schedule !== undefined && valid.schedule.length > 0) preloadedData.jobSchedule = valid.schedule
   if (valid.saveReport === true) preloadedData.jobSaveReport = true
@@ -289,10 +277,7 @@ async function runCapabilityImplementationStep(
     preloadedData: Object.keys(preloadedData).length > 0 ? preloadedData : undefined,
   }
   const shouldApplyResolvedCapabilityArgs =
-    valid.implementation === undefined &&
-    valid.executable === undefined &&
-    resolvedCapability &&
-    profileName === resolvedCapability.implementation
+    valid.implementation === undefined && resolvedCapability && profileName === resolvedCapability.implementation
   input.cliArgs = shouldApplyResolvedCapabilityArgs
     ? { ...resolvedCapability.cliArgs, ...input.cliArgs }
     : input.cliArgs
@@ -305,7 +290,7 @@ function shouldRunCapabilityWorkflow(
   job: Job,
   workflow: CapabilityWorkflowConfig,
   capabilityIdentity: string | undefined,
-  selectedExecutable: string | undefined,
+  selectedImplementation: string | undefined,
   base: RunJobBase,
 ): boolean {
   if (workflow.steps.length === 0) return false
@@ -314,10 +299,10 @@ function shouldRunCapabilityWorkflow(
     ? (base.preloadedData.workflowStack as unknown[]).filter((entry): entry is string => typeof entry === "string")
     : []
   if (stack.includes(capabilityIdentity)) return false
-  const requestedImplementation = job.implementation ?? job.executable
+  const requestedImplementation = job.implementation
   if (!requestedImplementation) return true
   return (
-    requestedImplementation === selectedExecutable ||
+    requestedImplementation === selectedImplementation ||
     requestedImplementation === capabilityIdentity ||
     requestedImplementation === job.action
   )
@@ -570,7 +555,7 @@ function loadWorkflowContext(slug: string | undefined, base: RunJobBase): Capabi
 
 /**
  * Mint an INSTANT job from a comment / manual-dispatch route. The trigger
- * resolves to a DispatchResult (executable + cliArgs + target); this turns it
+ * resolves to a DispatchResult (implementation + cliArgs + target); this turns it
  * into a Job. `why` is the operator's free-text request after `@kody <command>`
  * (carried on the DispatchResult); `agent` defaults to "kody" — instant verbs
  * ran agent-less before, and the default is the agreed starting point.
@@ -580,7 +565,6 @@ export function mintInstantJob(dispatch: DispatchResult, opts?: { why?: string; 
   return {
     action: dispatch.action,
     implementation: dispatch.implementation ?? dispatch.executable,
-    executable: dispatch.executable,
     capability: dispatch.capability,
     why: opts?.why ?? dispatch.why,
     agent: opts?.agent ?? DEFAULT_INSTANT_AGENT,
@@ -597,9 +581,7 @@ export interface ScheduledJobInput {
   /** The capability slug (its capability contract body lives in `.kody/capabilities/<slug>/capability.md`). */
   capability: string
   /** The implementation that ticks it (capability-tick / capability-tick-scripted, or a folder-capability slug). */
-  implementation?: string
-  /** Legacy compatibility copy of `implementation`. */
-  executable: string
+  implementation: string
   /** Cron cadence the capability fired on. */
   schedule?: string
   /** Agent identity that runs it (from the capability's profile.json). */
@@ -612,15 +594,14 @@ export interface ScheduledJobInput {
 
 /**
  * Mint a SCHEDULED job from a due capability slug. The cron path enumerates due
- * capabilities; each becomes a scheduled Job whose `executable` is the ticker and
+ * capabilities; each becomes a scheduled Job whose `implementation` is the ticker and
  * whose `capability` carries the intent. No caller yet — wired in a later phase.
  */
 export function mintScheduledJob(input: ScheduledJobInput): Job {
   return {
     action: input.action,
     capability: input.capability,
-    implementation: input.implementation ?? input.executable,
-    executable: input.executable,
+    implementation: input.implementation,
     schedule: input.schedule,
     agent: input.agent,
     cliArgs: input.cliArgs ?? {},

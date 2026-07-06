@@ -57,6 +57,7 @@ const BANNED: Array<string | RegExp> = [
   /\bDuty\b/,
   /\bduties\b/,
   /\bDuties\b/,
+  "jobExecutable",
 ]
 
 function walk(dir: string): string[] {

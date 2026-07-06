@@ -30,7 +30,6 @@ function taskJobToJob(job: TaskJob, issueArg: unknown): Job {
   return {
     capability: job.capability ?? job.implementation,
     implementation: job.implementation,
-    executable: job.implementation,
     ...(job.reason ? { why: job.reason } : {}),
     ...(job.agent ? { agent: job.agent } : {}),
     ...(job.schedule ? { schedule: job.schedule } : {}),

@@ -121,7 +121,7 @@ export function operatorRequestBlock(why: string): string | null {
 
 /**
  * Render the job metadata that every minted Job carries. This is deliberately
- * generic: the model should know the execution point, capability, executable, agent,
+ * generic: the model should know the execution point, capability, implementation, agent,
  * and description without each executable inventing its own prompt tokens.
  */
 export function jobReferenceBlock(
@@ -133,7 +133,7 @@ export function jobReferenceBlock(
   const flavor = typeof data.jobFlavor === "string" && data.jobFlavor.length > 0 ? data.jobFlavor : null
   const schedule = typeof data.jobSchedule === "string" && data.jobSchedule.length > 0 ? data.jobSchedule : null
   const isJob = Boolean(
-    jobId || flavor || schedule || data.jobCapability || data.jobImplementation || data.jobExecutable || data.jobWhy,
+    jobId || flavor || schedule || data.jobCapability || data.jobImplementation || data.jobWhy,
   )
   if (!isJob) return null
 
@@ -150,9 +150,7 @@ export function jobReferenceBlock(
         ? profile.executable
         : typeof data.jobImplementation === "string" && data.jobImplementation.length > 0
           ? data.jobImplementation
-          : typeof data.jobExecutable === "string" && data.jobExecutable.length > 0
-            ? data.jobExecutable
-            : profileName
+          : profileName
   const agent =
     typeof profile.agent === "string" && profile.agent.length > 0
       ? profile.agent
@@ -875,7 +873,7 @@ export async function runExecutableChain(profileName: string, input: ExecutorInp
     if (result.nextJob) {
       const next = result.nextJob
       const after = result.afterNextJob
-      const label = next.executable ?? next.capability ?? "unknown"
+      const label = next.implementation ?? next.capability ?? "unknown"
       process.stdout.write(`→ kody: in-process job hand-off → ${label} (hop ${hops}/${MAX_CHAIN_HOPS})\n\n`)
       const { runJob } = await import("./job.js")
       const childResult = await runJob(next, {
@@ -955,7 +953,7 @@ export async function runExecutableChain(profileName: string, input: ExecutorInp
     const pending =
       result.nextDispatch?.executable ??
       result.nextDispatch?.workflow ??
-      result.nextJob?.executable ??
+      result.nextJob?.implementation ??
       result.nextJob?.workflow ??
       result.nextJob?.capability ??
       "unknown"
@@ -981,7 +979,6 @@ function handoffToJob(handoff: {
     capability: handoff.capability,
     workflow: handoff.workflow,
     implementation: handoff.implementation ?? handoff.executable,
-    executable: handoff.executable,
     cliArgs: handoff.cliArgs,
     flavor: "instant",
     saveReport: handoff.saveReport === true,

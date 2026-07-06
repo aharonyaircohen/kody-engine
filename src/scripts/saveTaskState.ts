@@ -28,11 +28,9 @@ export function jobMetaFromData(data: Record<string, unknown>): JobMeta {
     schedule: typeof data.jobSchedule === "string" ? data.jobSchedule : undefined,
     runUrl: typeof data.runUrl === "string" ? data.runUrl : undefined,
     capability: typeof data.jobCapability === "string" ? data.jobCapability : undefined,
-    implementation:
-      typeof data.jobImplementation === "string"
-        ? data.jobImplementation
-        : typeof data.jobExecutable === "string"
-          ? data.jobExecutable
+      implementation:
+        typeof data.jobImplementation === "string"
+          ? data.jobImplementation
           : undefined,
     target: typeof data.jobTarget === "number" ? data.jobTarget : undefined,
     agent: typeof data.jobAgent === "string" ? data.jobAgent : undefined,

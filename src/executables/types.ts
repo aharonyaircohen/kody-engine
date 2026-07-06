@@ -489,9 +489,8 @@ export type AnyScript = PreflightScript | PostflightScript
 // Job — the unified work request (task-state jobs collect run attempts).
 //
 // A Job is the required work the engine tries to execute, regardless of how it
-// was triggered. It must reference an capability/action capability
-// contract. The executable is only the selected implementation detail, never a
-// standalone request.
+// was triggered. It must reference a capability/action capability contract.
+// The implementation is selected under that contract, never requested by itself.
 // Task state stores this durable job separately from individual run attempts.
 // Two flavors:
 //   - "instant"   — run once now (an `@kody <verb>` comment or a manual dispatch)
@@ -508,8 +507,6 @@ export interface Job {
   action?: string
   /** How: implementation profile selected by the capability. Not valid by itself. */
   implementation?: string
-  /** Legacy compatibility copy of `implementation`. */
-  executable?: string
   /** Why (referenced): a capability slug whose intent drives the run. */
   capability?: string
   /** Why (referenced): a stored workflow definition to run as an ordered capability chain. */

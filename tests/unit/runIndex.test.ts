@@ -261,7 +261,6 @@ describe("run index", () => {
         jobFlavor: "instant",
         jobCapability: "release-prepare",
         jobImplementation: "release-prepare",
-        jobExecutable: "release-prepare",
         jobModel: "claude/claude-haiku-4-5-20251001",
         jobModelProvider: "claude",
         jobModelName: "claude-haiku-4-5-20251001",

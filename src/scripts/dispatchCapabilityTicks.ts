@@ -49,7 +49,7 @@ export const dispatchCapabilityTicks: PreflightScript = async (ctx, _profile, ar
       const out = await runJob(
         mintScheduledJob({
           capability: targetExecutable,
-          executable: targetExecutable,
+          implementation: targetExecutable,
           cliArgs: { [issueArg]: issue.number },
         }),
         { cwd: ctx.cwd, config: ctx.config, verbose: ctx.verbose, quiet: ctx.quiet, chain: false },
