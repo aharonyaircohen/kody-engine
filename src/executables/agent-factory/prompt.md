@@ -59,6 +59,7 @@ Each `models[]` entry must also carry the creator's canonical model metadata:
 - Loop models use `"kind": "agentLoop"` and include `"wakeTarget": {"type": "goal|workflow|capability", "slug": "target-slug"}`. Use `"wakeTarget"`, not only `"target"`, in `models[]`.
 - Workflow models include non-empty `"steps"` as objects with a `"capability"` slug.
 - Workflow models and workflow profiles must not use `"capabilityKind": "workflow"`. `capabilityKind` only belongs to Capability models and its only valid values are `"observe"`, `"act"`, and `"verify"`.
+- When the operator asks for a Workflow model, create a `models[]` entry with `"kind": "workflow"`. Do not convert that requested workflow into a `kind: "capability"` model, and do not call it a "workflow capability".
 - Capability models include `"capabilityKind"`, `"ability"`, `"inputs"`, `"outputs"`, `"allowedActions"`, `"forbiddenActions"`, and `doesNotOwn` includes `"agent identity"` and `"goal progress"`.
 
 When a request asks for both a goal and a workflow, keep them separate:

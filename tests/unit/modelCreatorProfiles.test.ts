@@ -114,6 +114,9 @@ describe("model creator profiles", () => {
       "Do not make the goal depend on the workflow by listing the workflow slug as a capability.",
     )
     expect(prompt).toContain('Workflow models and workflow profiles must not use `"capabilityKind": "workflow"`.')
+    expect(prompt).toContain(
+      'When the operator asks for a Workflow model, create a `models[]` entry with `"kind": "workflow"`.',
+    )
     expect(prompt).toContain("Every `files[].content` value must be one JSON string with newlines escaped as `\\n`")
   })
 
