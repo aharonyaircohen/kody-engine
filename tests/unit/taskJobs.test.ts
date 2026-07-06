@@ -11,24 +11,24 @@ describe("task job plan parsing", () => {
 
 <!-- ${TASK_JOBS_MARKER}
 [
-  { "executable": "plan-verify", "reason": "api slice" },
-  { "executable": "probe-skill", "agent": "qa", "reason": "ui slice" }
+  { "implementation": "plan-verify", "reason": "api slice" },
+  { "implementation": "probe-skill", "agent": "qa", "reason": "ui slice" }
 ]
 -->
 `)
 
     expect(specs).toEqual([
-      { executable: "plan-verify", reason: "api slice" },
-      { executable: "probe-skill", agent: "qa", reason: "ui slice" },
+      { implementation: "plan-verify", reason: "api slice" },
+      { implementation: "probe-skill", agent: "qa", reason: "ui slice" },
     ])
   })
 
   it("turns each entry into one instant job targeting the parent issue by default", () => {
-    const job = taskJobSpecToJob({ executable: "plan-verify", reason: "api slice", agent: "qa" }, 42)
+    const job = taskJobSpecToJob({ implementation: "plan-verify", reason: "api slice", agent: "qa" }, 42)
 
     expect(job).toMatchObject({
       capability: "plan-verify",
-      executable: "plan-verify",
+      implementation: "plan-verify",
       cliArgs: { issue: 42 },
       target: 42,
       flavor: "instant",
@@ -41,7 +41,7 @@ describe("task job plan parsing", () => {
   it("turns a capability-planned entry into one scheduled child job", () => {
     const job = taskJobSpecToJob(
       {
-        executable: "probe-skill",
+        implementation: "probe-skill",
         capability: "daily-check",
         reason: "UI slice",
         agent: "qa",
@@ -53,7 +53,7 @@ describe("task job plan parsing", () => {
 
     expect(job).toMatchObject({
       capability: "daily-check",
-      executable: "probe-skill",
+      implementation: "probe-skill",
       cliArgs: { issue: 42 },
       target: 42,
       flavor: "scheduled",
@@ -65,7 +65,7 @@ describe("task job plan parsing", () => {
   })
 
   it("keeps explicit cliArgs when the task data needs a non-default target", () => {
-    const job = taskJobSpecToJob({ executable: "review", cliArgs: { pr: 77 }, reason: "review slice" }, 42)
+    const job = taskJobSpecToJob({ implementation: "review", cliArgs: { pr: 77 }, reason: "review slice" }, 42)
 
     expect(job.cliArgs).toEqual({ pr: 77 })
     expect(job.target).toBe(77)
@@ -74,17 +74,17 @@ describe("task job plan parsing", () => {
 
   it("rejects malformed task data instead of silently running the wrong thing", () => {
     expect(() => parseTaskJobSpecs(`<!-- ${TASK_JOBS_MARKER}\n{}\n-->`)).toThrow(/array/)
-    expect(() => parseTaskJobSpecs(`<!-- ${TASK_JOBS_MARKER}\n[{ "reason": "missing executable" }]\n-->`)).toThrow(
-      /executable/,
+    expect(() => parseTaskJobSpecs(`<!-- ${TASK_JOBS_MARKER}\n[{ "reason": "missing implementation" }]\n-->`)).toThrow(
+      /implementation/,
     )
   })
 
   it("dispatches the next pending job with a task-jobs return address", async () => {
-    const job = taskJobSpecToJob({ executable: "plan-verify", reason: "api slice" }, 42)
+    const job = taskJobSpecToJob({ implementation: "plan-verify", reason: "api slice" }, 42)
     const id = stableJobKey(job)
     const taskState = upsertTaskJobs(
       emptyState(),
-      [{ id, executable: "plan-verify", flavor: "instant", target: 42, reason: "api slice" }],
+      [{ id, implementation: "plan-verify", flavor: "instant", target: 42, reason: "api slice" }],
       "2026-06-08T08:00:00Z",
     )
     const ctx = {

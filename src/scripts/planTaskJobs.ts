@@ -12,7 +12,7 @@ import {
 export const TASK_JOBS_MARKER = "kody:task-jobs:v1"
 
 export interface TaskJobSpec {
-  executable: string
+  implementation: string
   capability?: string
   reason?: string
   agent?: string
@@ -41,8 +41,9 @@ export function taskJobSpecToJob(spec: TaskJobSpec, issueNumber: number): Job {
   const cliArgs = spec.cliArgs ?? { issue: issueNumber }
   const target = typeof spec.target === "number" ? spec.target : (targetFromCliArgs(cliArgs) ?? issueNumber)
   return {
-    capability: spec.capability ?? spec.executable,
-    executable: spec.executable,
+    capability: spec.capability ?? spec.implementation,
+    implementation: spec.implementation,
+    executable: spec.implementation,
     why: spec.reason,
     agent: spec.agent,
     schedule: spec.schedule,
@@ -90,9 +91,14 @@ function normalizeSpec(input: unknown, index: number): TaskJobSpec {
     throw new Error(`task job plan entry ${index} must be an object`)
   }
   const raw = input as Record<string, unknown>
-  const executable = typeof raw.executable === "string" ? raw.executable.trim() : ""
-  if (!/^[a-z][a-z0-9-]*$/.test(executable)) {
-    throw new Error(`task job plan entry ${index} must have a valid executable`)
+  const implementation =
+    typeof raw.implementation === "string"
+      ? raw.implementation.trim()
+      : typeof raw.executable === "string"
+        ? raw.executable.trim()
+        : ""
+  if (!/^[a-z][a-z0-9-]*$/.test(implementation)) {
+    throw new Error(`task job plan entry ${index} must have a valid implementation`)
   }
   const cliArgs = raw.cliArgs
   if (cliArgs !== undefined && (!cliArgs || typeof cliArgs !== "object" || Array.isArray(cliArgs))) {
@@ -103,7 +109,7 @@ function normalizeSpec(input: unknown, index: number): TaskJobSpec {
     throw new Error(`task job plan entry ${index} flavor must be "instant" or "scheduled"`)
   }
   return {
-    executable,
+    implementation,
     ...(typeof raw.capability === "string" && raw.capability.trim() ? { capability: raw.capability.trim() } : {}),
     ...(typeof raw.reason === "string" && raw.reason.trim() ? { reason: raw.reason.trim() } : {}),
     ...(typeof raw.agent === "string" && raw.agent.trim() ? { agent: raw.agent.trim() } : {}),
@@ -116,9 +122,10 @@ function normalizeSpec(input: unknown, index: number): TaskJobSpec {
 }
 
 function jobToPlannedTaskJob(job: Job): PlannedTaskJob {
+  const implementation = job.implementation ?? job.executable ?? job.capability ?? "unknown"
   return {
     id: stableJobKey(job),
-    executable: job.executable ?? job.capability ?? "unknown",
+    implementation,
     capability: job.capability ?? job.action ?? job.executable ?? "unknown",
     ...(job.agent ? { agent: job.agent } : {}),
     ...(job.flavor ? { flavor: job.flavor } : {}),

@@ -98,7 +98,7 @@ export const finishFlow: PostflightScript = async (ctx, profile, _agentResult, a
   if (terminal && state) {
     state.core.phase = terminal.phase
     state.core.status = terminal.status
-    state.core.currentExecutable = null
+    state.core.currentImplementation = null
     const target = (ctx.data.commentTargetType as TaskTarget | undefined) ?? "issue"
     const targetNumber = (ctx.data.commentTargetNumber as number | undefined) ?? issueNumber
     try {

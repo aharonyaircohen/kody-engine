@@ -7,7 +7,7 @@
  * `next` map ("done" / "abort" / another child name).
  *
  * Children are mocked via the `__runChild` test seam — these tests never
- * spin up real executables. A matching `__readTaskState` stub feeds the
+ * spin up real implementations. A matching `__readTaskState` stub feeds the
  * "what did the child just write" lookup.
  */
 
@@ -113,10 +113,10 @@ function makeMockEnvironment(
     if (a) {
       state.core.lastOutcome = a
       state.core.attempts[name] = (state.core.attempts[name] ?? 0) + 1
-      state.executables[name] = { lastAction: a }
+      state.implementations[name] = { lastAction: a }
       state.history.push({
         timestamp: a.timestamp,
-        executable: name,
+        implementation: name,
         action: a.type,
       })
     }
@@ -313,7 +313,7 @@ describe("container: idempotency", () => {
     ])
     // Pre-seed plan as already completed.
     const seeded = action("PLAN_COMPLETED")
-    env.state.executables.plan = { lastAction: seeded }
+    env.state.implementations.plan = { lastAction: seeded }
     env.state.core.lastOutcome = seeded
 
     process.chdir(root)
@@ -417,7 +417,7 @@ describe("container: target-aware state reads", () => {
         const a = action("PLAN_COMPLETED")
         issueState.core.lastOutcome = a
         issueState.core.attempts.plan = (issueState.core.attempts.plan ?? 0) + 1
-        issueState.executables.plan = { lastAction: a }
+        issueState.implementations.plan = { lastAction: a }
         issueState.core.prUrl = "https://github.com/o/r/pull/42"
         return { exitCode: 0 }
       }
@@ -425,7 +425,7 @@ describe("container: target-aware state reads", () => {
         const a = action("REVIEW_PASS")
         prState.core.lastOutcome = a
         prState.core.attempts.review = (prState.core.attempts.review ?? 0) + 1
-        prState.executables.review = { lastAction: a }
+        prState.implementations.review = { lastAction: a }
         // issueState.lastOutcome stays at PLAN_COMPLETED — the bug case.
         return { exitCode: 0 }
       }
@@ -472,7 +472,7 @@ describe("container: target-aware state reads", () => {
         const a = action("RUN_COMPLETED")
         issueState.core.lastOutcome = a
         issueState.core.attempts.again = (issueState.core.attempts.again ?? 0) + 1
-        issueState.executables.again = { lastAction: a }
+        issueState.implementations.again = { lastAction: a }
         return { exitCode: 0 }
       }
       return { exitCode: 99 }
@@ -549,7 +549,7 @@ describe("container: failure-shape regression suite", () => {
 
   it("synthesizes <EXEC>_COMPLETED when child exits 0 without writing a new action", async () => {
     // Mirror of the above for the success path. If a child legitimately
-    // exits 0 without saveTaskState (e.g. a no-op executable), the
+    // exits 0 without saveTaskState (e.g. a no-op implementation), the
     // container should synthesize <EXEC>_COMPLETED so routing keys match.
     const root = makeContainerFixture({
       containerName: "noop-ok",

@@ -22,7 +22,7 @@ import { type Action, emptyState, readTaskState, type TaskState, type TaskTarget
 const CONTAINER_MAX_ITERATIONS = 50
 
 /**
- * Read the input specs of a child executable's profile, returning null if the
+ * Read the input specs of a child implementation's profile, returning null if the
  * profile can't be loaded. Used by the container loop to know which
  * parent-supplied args (e.g. `--base` from a parent dispatch) to
  * forward to the child without crashing the parent on profile-load errors.
@@ -136,7 +136,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
     // re-doing committed work (e.g. a plan that already produced an artifact).
     const priorState = readContainerState(ctx, child, reader)
     if (priorState.core?.prUrl) knownPrUrl = priorState.core.prUrl
-    const priorAction = priorState.executables?.[child.exec]?.lastAction
+    const priorAction = priorState.implementations?.[child.exec]?.lastAction
     let actionType: string | undefined
     if (priorAction && /_COMPLETED$/i.test(priorAction.type)) {
       process.stderr.write(`[kody container] skipping ${child.exec}: already completed (${priorAction.type})\n`)
@@ -262,7 +262,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
       const next = readContainerState(ctx, child, reader)
       if (next.core?.prUrl) knownPrUrl = next.core.prUrl
       const nextAttempts = next.core?.attempts?.[child.exec] ?? 0
-      const nextChildAction = next.executables?.[child.exec]?.lastAction
+      const nextChildAction = next.implementations?.[child.exec]?.lastAction
       const childWrote = nextAttempts > priorAttempts && nextChildAction != null
       if (childWrote && nextChildAction) {
         actionType = nextChildAction.type
@@ -286,7 +286,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
           next.core = {
             phase: "idle",
             status: "pending",
-            currentExecutable: null,
+            currentImplementation: null,
             lastOutcome: synthetic,
             // Bump attempts here too — a synthesized action is, semantically,
             // a saveTaskState write that just didn't happen mechanically.

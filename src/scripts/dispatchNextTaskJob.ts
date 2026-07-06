@@ -28,8 +28,9 @@ export const dispatchNextTaskJob: PreflightScript = async (ctx, profile) => {
 function taskJobToJob(job: TaskJob, issueArg: unknown): Job {
   const target = typeof job.target === "number" ? job.target : typeof issueArg === "number" ? issueArg : undefined
   return {
-    capability: job.capability ?? job.executable,
-    executable: job.executable,
+    capability: job.capability ?? job.implementation,
+    implementation: job.implementation,
+    executable: job.implementation,
     ...(job.reason ? { why: job.reason } : {}),
     ...(job.agent ? { agent: job.agent } : {}),
     ...(job.schedule ? { schedule: job.schedule } : {}),

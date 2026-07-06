@@ -28,11 +28,11 @@ function makeState() {
     core: {
       phase: "reviewing",
       status: "running",
-      currentExecutable: "review",
+      currentImplementation: "review",
       lastOutcome: { type: "REVIEW_PASS", payload: {}, timestamp: "x" },
       attempts: {},
     },
-    executables: {},
+    implementations: {},
     artifacts: {},
     history: [],
   }
@@ -64,7 +64,7 @@ describe("finishFlow: terminal state-mirror update", () => {
     const written = writeTaskStateSpy.mock.calls[0]![2] as ReturnType<typeof makeState>
     expect(written.core.phase).toBe("shipped")
     expect(written.core.status).toBe("succeeded")
-    expect(written.core.currentExecutable).toBeNull()
+    expect(written.core.currentImplementation).toBeNull()
   })
 
   it("flips to 'shipped'/'succeeded' on fix-applied as well", async () => {

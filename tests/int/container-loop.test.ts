@@ -14,17 +14,17 @@ import type { TaskState } from "../../src/state.js"
  * seams — `__runChild` (stub the child invocation) and `__readTaskState`
  * (stub the state each child "wrote") — so routing, idempotency, failure
  * synthesis, and the abort guards are exercised without spawning real
- * executables or touching GitHub.
+ * implementations or touching GitHub.
  */
 
 function state(opts: {
   attempts?: Record<string, number>
-  lastAction?: { exec: string; type: string }
+  lastAction?: { implementation: string; type: string }
   prUrl?: string
 }): TaskState {
-  const executables: Record<string, unknown> = {}
+  const implementations: Record<string, unknown> = {}
   if (opts.lastAction) {
-    executables[opts.lastAction.exec] = {
+    implementations[opts.lastAction.implementation] = {
       lastAction: { type: opts.lastAction.type, payload: {}, timestamp: "2026-01-01T00:00:00Z" },
     }
   }
@@ -33,12 +33,12 @@ function state(opts: {
     core: {
       phase: "idle",
       status: "pending",
-      currentExecutable: null,
+      currentImplementation: null,
       lastOutcome: null,
       attempts: opts.attempts ?? {},
       ...(opts.prUrl ? { prUrl: opts.prUrl } : {}),
     },
-    executables,
+    implementations,
     artifacts: {},
     history: [],
   } as unknown as TaskState
@@ -90,7 +90,7 @@ describe("integration: container loop", () => {
     const profile = makeProfile([{ exec: "stage1", target: "issue", next: { STAGE1_DONE: "done", "*": "abort" } }])
     const readQueue = [
       state({ attempts: { stage1: 0 } }), // prior
-      state({ attempts: { stage1: 1 }, lastAction: { exec: "stage1", type: "STAGE1_DONE" } }), // next
+      state({ attempts: { stage1: 1 }, lastAction: { implementation: "stage1", type: "STAGE1_DONE" } }), // next
     ]
     const runChild = vi.fn<(name: string, input: ExecutorInput) => Promise<ExecutorOutput>>(async () => ({
       exitCode: 0,
@@ -135,9 +135,9 @@ describe("integration: container loop", () => {
     ])
     const readQueue = [
       state({ attempts: { stage1: 0 } }), // iter1 prior
-      state({ attempts: { stage1: 1 }, lastAction: { exec: "stage1", type: "STAGE1_DONE" } }), // iter1 next
+      state({ attempts: { stage1: 1 }, lastAction: { implementation: "stage1", type: "STAGE1_DONE" } }), // iter1 next
       state({ attempts: { stage1: 1, stage2: 0 } }), // iter2 prior
-      state({ attempts: { stage1: 1, stage2: 1 }, lastAction: { exec: "stage2", type: "STAGE2_DONE" } }), // iter2 next
+      state({ attempts: { stage1: 1, stage2: 1 }, lastAction: { implementation: "stage2", type: "STAGE2_DONE" } }), // iter2 next
     ]
     let i = 0
     const runChild = vi.fn<(name: string, input: ExecutorInput) => Promise<ExecutorOutput>>(async () => ({
@@ -159,7 +159,7 @@ describe("integration: container loop", () => {
     const profile = makeProfile([{ exec: "stage1", target: "issue", next: { SOMETHING_ELSE: "done" } }])
     const readQueue = [
       state({ attempts: { stage1: 0 } }),
-      state({ attempts: { stage1: 1 }, lastAction: { exec: "stage1", type: "STAGE1_DONE" } }),
+      state({ attempts: { stage1: 1 }, lastAction: { implementation: "stage1", type: "STAGE1_DONE" } }),
     ]
     let i = 0
     await runContainerLoop(profile, ctx, {

@@ -67,7 +67,7 @@ describe("saveTaskState: persistence", () => {
     expect(number).toBe(42)
     expect(cwd).toBe("/repo")
     expect(next.core.lastOutcome?.type).toBe("RUN_COMPLETED")
-    expect(next.core.currentExecutable).toBe("run")
+    expect(next.core.currentImplementation).toBe("run")
     expect(typeof ctx.data.taskStateRendered).toBe("string")
   })
 
@@ -120,7 +120,7 @@ describe("saveTaskState: persistence", () => {
     const next = writeTaskStateSpy.mock.calls[0]![2] as TaskState
     expect(next.jobs["instant:run:42"]).toMatchObject({
       id: "instant:run:42",
-      executable: "run",
+      implementation: "run",
       agent: "kody",
       flavor: "instant",
       target: 42,

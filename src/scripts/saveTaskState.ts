@@ -2,7 +2,7 @@
  * Postflight (runs last): apply the reducer to the task state with the
  * action emitted by parseAgentResult, then write the state repo file.
  *
- * If no action was emitted (executable had no agent run, e.g. init), a
+ * If no action was emitted (the implementation had no agent run, e.g. init), a
  * synthetic action is composed from ctx.output so the task state still
  * reflects the run's outcome.
  */
@@ -28,7 +28,12 @@ export function jobMetaFromData(data: Record<string, unknown>): JobMeta {
     schedule: typeof data.jobSchedule === "string" ? data.jobSchedule : undefined,
     runUrl: typeof data.runUrl === "string" ? data.runUrl : undefined,
     capability: typeof data.jobCapability === "string" ? data.jobCapability : undefined,
-    executable: typeof data.jobExecutable === "string" ? data.jobExecutable : undefined,
+    implementation:
+      typeof data.jobImplementation === "string"
+        ? data.jobImplementation
+        : typeof data.jobExecutable === "string"
+          ? data.jobExecutable
+          : undefined,
     target: typeof data.jobTarget === "number" ? data.jobTarget : undefined,
     agent: typeof data.jobAgent === "string" ? data.jobAgent : undefined,
     why: typeof data.jobWhy === "string" ? data.jobWhy : undefined,
@@ -41,13 +46,13 @@ export const saveTaskState: PostflightScript = async (ctx, profile) => {
   const state = ctx.data.taskState as TaskState | undefined
   if (!target || !number || !state) return
 
-  const executable = profile.name
+  const implementation = profile.name
   const action: Action = (ctx.data.action as Action | undefined) ?? synthesizeAction(ctx)
 
   // Don't mutate the loaded prior state — `reduce` treats it as immutable input
   // and other postflights may hold the same reference. The prUrl/runUrl carry
   // is applied to `next` below, which is the only thing we persist.
-  const next = reduce(state, executable, action, profile.phase, profile.agent, {
+  const next = reduce(state, implementation, action, profile.phase, profile.agent, {
     ...jobMetaFromData(ctx.data),
     ...(ctx.output.prUrl ? { prUrl: ctx.output.prUrl } : {}),
   })
@@ -72,7 +77,7 @@ function applyStandaloneFinalState(
   const succeeded = ctx.output.exitCode === 0 && (hasPr || noDeliveryNeeded)
   state.core.phase = succeeded ? (hasPr ? "reviewing" : "shipped") : "failed"
   state.core.status = succeeded ? "succeeded" : "failed"
-  state.core.currentExecutable = null
+  state.core.currentImplementation = null
 }
 
 interface CtxShape {

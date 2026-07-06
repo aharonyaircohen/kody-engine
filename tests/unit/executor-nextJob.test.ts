@@ -111,7 +111,7 @@ describe("executor: nextJob chain", () => {
 
     const plannedJob = {
       capability: "child",
-      executable: "child",
+      implementation: "child",
       cliArgs: { issue: 42 },
       target: 42,
       flavor: "instant" as const,
@@ -123,7 +123,7 @@ describe("executor: nextJob chain", () => {
         {
           id: "instant:child:42",
           capability: "child",
-          executable: "child",
+          implementation: "child",
           flavor: "instant",
           target: 42,
           reason: "child slice",
@@ -165,7 +165,7 @@ describe("executor: nextJob chain", () => {
 
     const failerJob = {
       capability: "failer",
-      executable: "failer",
+      implementation: "failer",
       cliArgs: { issue: 42 },
       target: 42,
       flavor: "instant" as const,
@@ -173,7 +173,7 @@ describe("executor: nextJob chain", () => {
     }
     const childJob = {
       capability: "child",
-      executable: "child",
+      implementation: "child",
       cliArgs: { issue: 42 },
       target: 42,
       flavor: "instant" as const,
@@ -186,7 +186,7 @@ describe("executor: nextJob chain", () => {
         {
           id: "instant:failer:42",
           capability: "failer",
-          executable: "failer",
+          implementation: "failer",
           flavor: "instant",
           target: 42,
           reason: "first slice",
@@ -194,7 +194,7 @@ describe("executor: nextJob chain", () => {
         {
           id: "instant:child:42",
           capability: "child",
-          executable: "child",
+          implementation: "child",
           flavor: "instant",
           target: 42,
           reason: "second slice",

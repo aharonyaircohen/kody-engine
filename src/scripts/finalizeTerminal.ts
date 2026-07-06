@@ -1,5 +1,5 @@
 /**
- * Postflight (single-session executables): settle the run label + phase/status
+ * Postflight (single-session implementations): settle the run label + phase/status
  * after delivery is known.
  *
  * This is the orchestration-free replacement for what container profiles
@@ -88,7 +88,7 @@ export const finalizeTerminal: PostflightScript = async (ctx) => {
   if (!state) return
 
   const alreadyTerminal =
-    state.core.phase === phase && state.core.status === status && state.core.currentExecutable === null
+    state.core.phase === phase && state.core.status === status && state.core.currentImplementation === null
   if (alreadyTerminal) return
 
   const next: TaskState = {
@@ -97,7 +97,7 @@ export const finalizeTerminal: PostflightScript = async (ctx) => {
       ...state.core,
       phase,
       status,
-      currentExecutable: null,
+      currentImplementation: null,
     },
   }
   ctx.data.taskState = next

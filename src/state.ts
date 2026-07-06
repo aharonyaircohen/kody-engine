@@ -3,7 +3,7 @@
  *
  * Each task (issue or PR) stores canonical JSON in the configured Kody state
  * repo at tasks/issues/<number>/state.json or tasks/prs/<number>/state.json.
- * Executables read the state at the start of a run, emit a typed Action, and
+ * Implementations read the state at the start of a run, emit a typed Action, and
  * the reducer merges the action into a new state written back to that file.
  *
  * See docs/architecture/state-reducer-pattern.md for the full concept.
@@ -36,7 +36,7 @@ export interface TaskJobRun {
 export interface TaskJob {
   /** Stable id for the required work, not the per-attempt run id. */
   id: string
-  executable: string
+  implementation: string
   capability?: string
   agent?: string
   flavor?: JobFlavor
@@ -54,7 +54,7 @@ export interface TaskJob {
 
 export interface PlannedTaskJob {
   id: string
-  executable: string
+  implementation: string
   capability?: string
   agent?: string
   flavor?: JobFlavor
@@ -74,7 +74,7 @@ export interface TaskState {
   core: {
     phase: Phase
     status: Status
-    currentExecutable: string | null
+    currentImplementation: string | null
     lastOutcome: Action | null
     attempts: Record<string, number>
     prUrl?: string
@@ -83,14 +83,14 @@ export interface TaskState {
      * Agent member the most recent run executed as (the capability's `agent`),
      * recorded by the executor when it loads + injects that agent. Durable
      * proof of *who* ran — surfaced in the rendered comment. Null/absent when
-     * the run had no agent (legacy executable with no agent).
+     * the run had no agent (legacy implementation with no agent).
      */
     ranAsAgent?: string | null
   }
-  executables: Record<string, ExecutableState>
+  implementations: Record<string, ImplementationState>
   /**
-   * Addressable, typed outputs produced by executables. Persisted as a
-   * top-level map so consumers never need to dig into executables/history.
+   * Addressable, typed outputs produced by implementations. Persisted as a
+   * top-level map so consumers never need to dig into implementations/history.
    * Producer declares output via profile.output.artifacts; consumer declares
    * input via profile.input.artifacts.
    */
@@ -102,7 +102,7 @@ export interface TaskState {
   jobs: Record<string, TaskJob>
   history: HistoryEntry[]
   /**
-   * Optional multi-executable flow context. Set by `startFlow`, cleared by
+   * Optional multi-implementation flow context. Set by `startFlow`, cleared by
    * `finishFlow`. Each child's `advanceFlow` postflight reads this to know
    * whether to re-trigger the orchestrator. Absence means "no flow in
    * progress" — children run standalone and advanceFlow is a no-op.
@@ -130,7 +130,7 @@ export interface FlowState {
 export interface Artifact {
   /** "markdown" | "text" | … — informational. */
   format: string
-  /** Name of the executable that produced this artifact. */
+  /** Name of the implementation that produced this artifact. */
   producedBy: string
   /** ISO timestamp of production. */
   createdAt: string
@@ -138,7 +138,7 @@ export interface Artifact {
   content: string
 }
 
-export interface ExecutableState {
+export interface ImplementationState {
   lastAction: Action | null
   [key: string]: unknown
 }
@@ -149,7 +149,7 @@ export interface ExecutableState {
  */
 export interface HistoryEntry {
   timestamp: string
-  executable: string
+  implementation: string
   action: string
   note?: string
   /** Agent member this run executed as, when the capability declares one. */
@@ -174,11 +174,11 @@ export function emptyState(): TaskState {
     core: {
       phase: "idle",
       status: "pending",
-      currentExecutable: null,
+      currentImplementation: null,
       lastOutcome: null,
       attempts: {},
     },
-    executables: {},
+    implementations: {},
     artifacts: {},
     jobs: {},
     history: [],
@@ -212,13 +212,29 @@ function normalizeTaskState(parsed: TaskState): TaskState {
   if (parsed?.schemaVersion !== 1) {
     throw new CorruptStateError(`unexpected schemaVersion: ${JSON.stringify(parsed?.schemaVersion)}`)
   }
+  const raw = parsed as TaskState & {
+    core?: { currentExecutable?: unknown }
+    executables?: unknown
+  }
+  const legacyCurrent =
+    typeof raw.core?.currentExecutable === "string" ? raw.core.currentExecutable : undefined
+  const currentImplementation =
+    typeof parsed.core?.currentImplementation === "string" ? parsed.core.currentImplementation : legacyCurrent ?? null
+  const implementations =
+    parsed.implementations && typeof parsed.implementations === "object"
+      ? parsed.implementations
+      : raw.executables && typeof raw.executables === "object" && !Array.isArray(raw.executables)
+        ? (raw.executables as Record<string, ImplementationState>)
+        : {}
+  const coreWithoutLegacy = { ...(parsed.core ?? {}) } as Record<string, unknown>
+  delete coreWithoutLegacy.currentExecutable
   return {
     schemaVersion: 1,
-    core: { ...emptyState().core, ...parsed.core },
-    executables: parsed.executables ?? {},
+    core: { ...emptyState().core, ...coreWithoutLegacy, currentImplementation },
+    implementations,
     artifacts: parsed.artifacts && typeof parsed.artifacts === "object" ? parsed.artifacts : {},
     jobs: normalizeJobs((parsed as { jobs?: unknown }).jobs),
-    history: Array.isArray(parsed.history) ? parsed.history : [],
+    history: normalizeHistory(parsed.history),
     flow: parsed.flow,
   }
 }
@@ -271,7 +287,7 @@ export function parseStateComment(body: string): TaskState {
  * `phase` is the label the caller's profile declares for successful runs.
  * Failing actions always collapse to "failed" regardless; omitted phase → "idle".
  * Keeping phase a caller-supplied parameter (rather than deriving from the
- * executable name) lets this module stay generic — no executable names here.
+ * implementation name) lets this module stay generic — no implementation names here.
  */
 /** Identity + provenance of the task job and the run being recorded. */
 export interface JobMeta {
@@ -284,7 +300,7 @@ export interface JobMeta {
   runUrl?: string
   prUrl?: string
   capability?: string
-  executable?: string
+  implementation?: string
   target?: number
   agent?: string
   why?: string
@@ -292,24 +308,24 @@ export interface JobMeta {
 
 export function reduce(
   state: TaskState,
-  executable: string,
+  implementation: string,
   action: Action | null,
   phase?: Phase,
   agent?: string | null,
   job?: JobMeta,
 ): TaskState {
   if (!action) return state
-  const newAttempts = { ...state.core.attempts, [executable]: (state.core.attempts[executable] ?? 0) + 1 }
-  const newExecutables: Record<string, ExecutableState> = {
-    ...state.executables,
-    [executable]: { ...(state.executables[executable] ?? { lastAction: null }), lastAction: action },
+  const newAttempts = { ...state.core.attempts, [implementation]: (state.core.attempts[implementation] ?? 0) + 1 }
+  const newImplementations: Record<string, ImplementationState> = {
+    ...state.implementations,
+    [implementation]: { ...(state.implementations[implementation] ?? { lastAction: null }), lastAction: action },
   }
   const ranAsAgent = typeof agent === "string" && agent.length > 0 ? agent : undefined
   // Each run appends one audit entry. The durable job state is updated below
   // via `reduceJobs`, keyed by the stable jobKey when the caller knows it.
   const entry: HistoryEntry = {
     timestamp: action.timestamp,
-    executable,
+    implementation,
     action: action.type,
     note: noteFromAction(action),
     agent: ranAsAgent,
@@ -320,19 +336,19 @@ export function reduce(
     ...(job?.runUrl ? { runUrl: job.runUrl } : {}),
   }
   const newHistory = [...state.history, entry].slice(-HISTORY_MAX_ENTRIES)
-  const newJobs = reduceJobs(state.jobs ?? {}, executable, action, agent, job)
+  const newJobs = reduceJobs(state.jobs ?? {}, implementation, action, agent, job)
   return {
     schemaVersion: 1,
     core: {
       ...state.core,
       attempts: newAttempts,
       lastOutcome: action,
-      currentExecutable: executable,
+      currentImplementation: implementation,
       ranAsAgent: ranAsAgent ?? null,
       status: statusFromAction(action),
       phase: phaseFromAction(action, phase),
     },
-    executables: newExecutables,
+    implementations: newImplementations,
     artifacts: { ...(state.artifacts ?? {}) },
     jobs: newJobs,
     history: newHistory,
@@ -347,7 +363,7 @@ export function upsertTaskJobs(state: TaskState, planned: PlannedTaskJob[], time
     const prior = jobs[plan.id]
     jobs[plan.id] = {
       id: plan.id,
-      executable: plan.executable,
+      implementation: plan.implementation,
       ...((plan.capability ?? prior?.capability) ? { capability: plan.capability ?? prior?.capability } : {}),
       ...((plan.agent ?? prior?.agent) ? { agent: plan.agent ?? prior?.agent } : {}),
       ...((plan.flavor ?? prior?.flavor) ? { flavor: plan.flavor ?? prior?.flavor } : {}),
@@ -382,13 +398,13 @@ export function nextPendingTaskJob(state: TaskState, ids?: string[]): TaskJob | 
 
 function reduceJobs(
   jobs: Record<string, TaskJob>,
-  executable: string,
+  implementation: string,
   action: Action,
   agent?: string | null,
   job?: JobMeta,
 ): Record<string, TaskJob> {
   const status = statusFromAction(action)
-  const id = job?.jobKey || job?.jobId || `legacy:${executable}`
+  const id = job?.jobKey || job?.jobId || `legacy:${implementation}`
   const prior = jobs[id]
   const note = noteFromAction(action)
   const prUrl = job?.prUrl ?? prUrlFromAction(action)
@@ -405,7 +421,7 @@ function reduceJobs(
   const ranAsAgent = typeof agent === "string" && agent.length > 0 ? agent : job?.agent
   const next: TaskJob = {
     id,
-    executable: job?.executable ?? prior?.executable ?? executable,
+    implementation: job?.implementation ?? prior?.implementation ?? implementation,
     ...((job?.capability ?? prior?.capability) ? { capability: job?.capability ?? prior?.capability } : {}),
     ...((ranAsAgent ?? prior?.agent) ? { agent: ranAsAgent ?? prior?.agent } : {}),
     ...((job?.flavor ?? prior?.flavor) ? { flavor: job?.flavor ?? prior?.flavor } : {}),
@@ -456,12 +472,18 @@ function normalizeJobs(input: unknown): Record<string, TaskJob> {
   const out: Record<string, TaskJob> = {}
   for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
     if (!value || typeof value !== "object" || Array.isArray(value)) continue
-    const raw = value as Partial<TaskJob>
-    if (typeof raw.id !== "string" || typeof raw.executable !== "string") continue
+    const raw = value as Partial<TaskJob> & { executable?: unknown }
+    const implementation =
+      typeof raw.implementation === "string"
+        ? raw.implementation
+        : typeof raw.executable === "string"
+          ? raw.executable
+          : undefined
+    if (typeof raw.id !== "string" || typeof implementation !== "string") continue
     if (!isStatus(raw.status)) continue
     out[key] = {
       id: raw.id,
-      executable: raw.executable,
+      implementation,
       ...(typeof raw.capability === "string" ? { capability: raw.capability } : {}),
       ...(typeof raw.agent === "string" ? { agent: raw.agent } : {}),
       ...(raw.flavor === "instant" || raw.flavor === "scheduled" ? { flavor: raw.flavor } : {}),
@@ -476,6 +498,37 @@ function normalizeJobs(input: unknown): Record<string, TaskJob> {
       ...(typeof raw.prUrl === "string" ? { prUrl: raw.prUrl } : {}),
       agentRuns: Array.isArray(raw.agentRuns) ? raw.agentRuns.filter(isTaskJobRun).slice(-JOB_RUNS_MAX_ENTRIES) : [],
     }
+  }
+  return out
+}
+
+function normalizeHistory(input: unknown): HistoryEntry[] {
+  if (!Array.isArray(input)) return []
+  const out: HistoryEntry[] = []
+  for (const value of input) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue
+    const raw = value as Partial<HistoryEntry> & { executable?: unknown }
+    const implementation =
+      typeof raw.implementation === "string"
+        ? raw.implementation
+        : typeof raw.executable === "string"
+          ? raw.executable
+          : undefined
+    if (typeof raw.timestamp !== "string" || typeof implementation !== "string" || typeof raw.action !== "string") {
+      continue
+    }
+    out.push({
+      timestamp: raw.timestamp,
+      implementation,
+      action: raw.action,
+      ...(typeof raw.note === "string" ? { note: raw.note } : {}),
+      ...(typeof raw.agent === "string" ? { agent: raw.agent } : {}),
+      ...(typeof raw.jobId === "string" ? { jobId: raw.jobId } : {}),
+      ...(raw.flavor === "instant" || raw.flavor === "scheduled" ? { flavor: raw.flavor } : {}),
+      ...(typeof raw.schedule === "string" ? { schedule: raw.schedule } : {}),
+      ...(isStatus(raw.status) ? { status: raw.status } : {}),
+      ...(typeof raw.runUrl === "string" ? { runUrl: raw.runUrl } : {}),
+    })
   }
   return out
 }
@@ -516,8 +569,8 @@ export function renderStateComment(state: TaskState): string {
     lines.push(`- **Flow:** \`${state.flow.name}\` (step: \`${state.flow.step}\`)`)
   }
   lines.push(`- **Phase:** \`${state.core.phase}\`  **Status:** \`${state.core.status}\``)
-  if (state.core.currentExecutable) {
-    lines.push(`- **Last executable:** \`${state.core.currentExecutable}\``)
+  if (state.core.currentImplementation) {
+    lines.push(`- **Last implementation:** \`${state.core.currentImplementation}\``)
   }
   if (state.core.ranAsAgent) {
     lines.push(`- **Ran as:** \`${state.core.ranAsAgent}\``)
@@ -549,7 +602,7 @@ export function renderStateComment(state: TaskState): string {
     const recent = state.history.slice(-10).reverse()
     for (const h of recent) {
       const note = h.note ? ` — ${h.note}` : ""
-      lines.push(`- \`${h.timestamp}\` **${h.executable}** → \`${h.action}\`${note}`)
+      lines.push(`- \`${h.timestamp}\` **${h.implementation}** → \`${h.action}\`${note}`)
     }
     lines.push("")
   }
@@ -559,7 +612,7 @@ export function renderStateComment(state: TaskState): string {
     lines.push("### Jobs")
     lines.push("")
     for (const job of jobEntries) {
-      lines.push(`- \`${job.id}\` **${job.executable}** → \`${job.status}\` (${job.agentRuns.length} runs)`)
+      lines.push(`- \`${job.id}\` **${job.implementation}** → \`${job.status}\` (${job.agentRuns.length} runs)`)
     }
     lines.push("")
   }
@@ -578,7 +631,7 @@ export function renderStateComment(state: TaskState): string {
         core: state.core,
         artifacts: state.artifacts ?? {},
         jobs: state.jobs ?? {},
-        executables: state.executables,
+        implementations: state.implementations,
         history: state.history,
         ...(state.flow ? { flow: state.flow } : {}),
       },

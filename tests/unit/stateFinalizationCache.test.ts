@@ -79,7 +79,7 @@ describe("task state finalization caching", () => {
     const written = mocks.writeTaskState.mock.calls[0]![2] as TaskState
     expect(written.core.phase).toBe("reviewing")
     expect(written.core.status).toBe("succeeded")
-    expect(written.core.currentExecutable).toBeNull()
+    expect(written.core.currentImplementation).toBeNull()
     expect(c.data.taskState).toBe(written)
   })
 
@@ -92,7 +92,7 @@ describe("task state finalization caching", () => {
     const written = mocks.writeTaskState.mock.calls[0]![2] as TaskState
     expect(written.core.phase).toBe("failed")
     expect(written.core.status).toBe("failed")
-    expect(written.core.currentExecutable).toBeNull()
+    expect(written.core.currentImplementation).toBeNull()
   })
 
   it("saveTaskState writes terminal shipped state when no delivery is needed", async () => {
@@ -105,7 +105,7 @@ describe("task state finalization caching", () => {
     const written = mocks.writeTaskState.mock.calls[0]![2] as TaskState
     expect(written.core.phase).toBe("shipped")
     expect(written.core.status).toBe("succeeded")
-    expect(written.core.currentExecutable).toBeNull()
+    expect(written.core.currentImplementation).toBeNull()
   })
 
   it("saveTaskState does not terminalize child flow runs", async () => {
@@ -132,7 +132,7 @@ describe("task state finalization caching", () => {
     const written = mocks.writeTaskState.mock.calls[0]![2] as TaskState
     expect(written.core.phase).toBe("implementing")
     expect(written.core.status).toBe("succeeded")
-    expect(written.core.currentExecutable).toBe("run")
+    expect(written.core.currentImplementation).toBe("run")
     expect(written.flow?.issueNumber).toBe(42)
   })
 
@@ -192,7 +192,7 @@ describe("task state finalization caching", () => {
         ...emptyState().core,
         phase: "reviewing",
         status: "succeeded",
-        currentExecutable: null,
+        currentImplementation: null,
         prUrl: "https://github.com/acme/widgets/pull/88",
       },
     })
@@ -224,7 +224,7 @@ describe("task state finalization caching", () => {
     const written = mocks.writeTaskState.mock.calls[0]![2] as TaskState
     expect(written.core.phase).toBe("failed")
     expect(written.core.status).toBe("failed")
-    expect(written.core.currentExecutable).toBeNull()
+    expect(written.core.currentImplementation).toBeNull()
     expect(c.data.taskState).toBe(written)
   })
 
@@ -239,7 +239,7 @@ describe("task state finalization caching", () => {
     const written = mocks.writeTaskState.mock.calls[0]![2] as TaskState
     expect(written.core.phase).toBe("shipped")
     expect(written.core.status).toBe("succeeded")
-    expect(written.core.currentExecutable).toBeNull()
+    expect(written.core.currentImplementation).toBeNull()
   })
 
   it("finalizeTerminal falls back to reading task state when no cached state exists", async () => {
