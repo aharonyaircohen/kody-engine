@@ -123,6 +123,26 @@ describe("validateModelBundle", () => {
     expect(validateModelBundle(loop, "loop-creator")).toEqual([])
   })
 
+  it("accepts agent loops stored under current capability state paths", () => {
+    const loop = bundle({
+      model: {
+        kind: "agentLoop",
+        slug: "daily-docs-proof-loop",
+        docsUsed: ["docs/jobs-model.md", "docs/engine-company.md", "docs/ledgers.md"],
+        cadence: "1d",
+        wakeTarget: { type: "goal", slug: "docs-proof" },
+      },
+      files: [
+        {
+          path: ".kody/capabilities/daily-docs-proof-loop/state.json",
+          content: JSON.stringify({ version: 1, cursor: "idle", done: false }),
+        },
+      ],
+    })
+
+    expect(validateModelBundle(loop, "loop-creator")).toEqual([])
+  })
+
   it("rejects capability bundles shaped by agent wiring", () => {
     const bad = bundle({
       files: [
@@ -224,5 +244,100 @@ describe("validateModelBundle", () => {
     )
 
     expect(failures).toContain("workflow release-verify-flow references missing capability missing-capability")
+  })
+
+  it("accepts factory bundles when canonical goal and loop facts are present in files", () => {
+    const factory = bundle({
+      modelCreatorContractsUsed: [
+        "agent-creator",
+        "goal-creator",
+        "loop-creator",
+        "workflow-creator",
+        "capability-creator",
+      ],
+      models: [
+        {
+          kind: "agent",
+          slug: "docs-proof-agent",
+          docsUsed: ["docs/agents.md"],
+          doesNotOwn: ["tasks", "schedules", "tools", "outputs", "workflows", "goals", "loops"],
+        },
+        {
+          kind: "capability",
+          slug: "docs-proof-signal",
+          capabilityKind: "act",
+          ability: "verify documentation correctness",
+          docsUsed: ["docs/capabilities.md", "docs/capability-kind-map.md", "docs/executables.md"],
+          inputs: [],
+          outputs: [],
+          allowedActions: [],
+          forbiddenActions: [],
+          doesNotOwn: ["agent identity", "goal progress", "loop cadence", "workflow order"],
+        },
+        {
+          kind: "goal",
+          slug: "docs-proof-goal",
+          docsUsed: ["docs/goals.md", "docs/jobs-model.md", "docs/capabilities.md"],
+          allowedCapabilities: ["docs-proof-signal"],
+          doesNotOwn: ["capability implementation", "agent identity", "loop cadence"],
+        },
+        {
+          kind: "workflow",
+          slug: "docs-proof-workflow",
+          docsUsed: ["docs/jobs-model.md", "docs/capabilities.md"],
+          steps: ["docs-proof-signal"],
+        },
+        {
+          kind: "agentLoop",
+          slug: "daily-docs-proof-loop",
+          docsUsed: ["docs/jobs-model.md", "docs/engine-company.md", "docs/ledgers.md"],
+          cadence: "daily",
+          target: "docs-proof-goal",
+        },
+      ],
+      files: [
+        {
+          path: "agents/docs-proof-agent.md",
+          content: "---\nidentity:\n  role: docs proof\njudgment:\n  scope: docs\nboundaries: []\n",
+        },
+        {
+          path: "capabilities/docs-proof-signal/profile.json",
+          content: JSON.stringify({
+            name: "docs-proof-signal",
+            capabilityKind: "act",
+          }),
+        },
+        {
+          path: "capabilities/docs-proof-signal/capability.md",
+          content: "# Docs Proof Signal\n",
+        },
+        {
+          path: "goals/templates/docs-proof-goal/state.json",
+          content: JSON.stringify({
+            outcome: "Documentation is verified",
+            evidence: ["verification findings"],
+            allowedCapabilities: ["docs-proof-signal"],
+          }),
+        },
+        {
+          path: "capabilities/docs-proof-workflow/profile.json",
+          content: JSON.stringify({
+            name: "docs-proof-workflow",
+            workflow: { steps: [{ capability: "docs-proof-signal" }] },
+          }),
+        },
+        {
+          path: "loops/daily-docs-proof-loop/state.json",
+          content: JSON.stringify({
+            loop: {
+              cadence: "daily",
+              target: "docs-proof-goal",
+            },
+          }),
+        },
+      ],
+    })
+
+    expect(validateModelBundle(factory, "agent-factory")).toEqual([])
   })
 })

@@ -102,7 +102,7 @@ function validateOneModel(
       if (!docsUsed.includes(doc)) failures.push(`${label} docsUsed missing ${doc}`)
     }
     validateFilesForKind(kind, slug, files, strictSingleModel, failures)
-    validateModelShape(kind, model, failures)
+    validateModelShape(kind, model, files, slug, failures)
   }
 }
 
@@ -151,7 +151,7 @@ function validateFilesForKind(
   if (kind === "agentLoop") {
     if (!paths.some((filePath) => filePath.endsWith("/state.json")))
       failures.push("agentLoop must produce a state.json file")
-    if (strictSingleModel) rejectOtherRoots(paths, ["goals/", "loops/"], "agentLoop", failures)
+    if (strictSingleModel) rejectOtherRoots(paths, ["goals/", "loops/", "capabilities/"], "agentLoop", failures)
   }
 
   if (kind === "workflow") {
@@ -182,13 +182,18 @@ function validateFactoryAssembly(models: unknown[], failures: string[]): void {
     const input = model as Record<string, unknown>
     const kind = stringField(input.kind)
     if (kind === "goal") {
-      for (const capability of stringArray(input.capabilities)) {
+      for (const capability of capabilityRefs(input)) {
         if (!available.has(`capability:${capability}`)) {
           failures.push(`goal ${stringField(input.slug)} references missing capability ${capability}`)
         }
       }
     }
     if (kind === "workflow") {
+      for (const capability of stringArray(input.steps)) {
+        if (!available.has(`capability:${capability}`)) {
+          failures.push(`workflow ${stringField(input.slug)} references missing capability ${capability}`)
+        }
+      }
       for (const step of arrayObjects(input.steps)) {
         const capability = stringField(step.capability)
         if (capability && !available.has(`capability:${capability}`)) {
@@ -197,26 +202,36 @@ function validateFactoryAssembly(models: unknown[], failures: string[]): void {
       }
     }
     if (kind === "agentLoop") {
-      const wakeTarget = input.wakeTarget
-      if (wakeTarget && typeof wakeTarget === "object" && !Array.isArray(wakeTarget)) {
-        const target = wakeTarget as Record<string, unknown>
-        const type = stringField(target.type)
-        const slug = stringField(target.slug)
-        const modelKind = type === "loop" ? "agentLoop" : type
-        if (
-          (modelKind === "goal" || modelKind === "workflow" || modelKind === "capability") &&
-          !available.has(`${modelKind}:${slug}`)
-        ) {
-          failures.push(`agentLoop ${stringField(input.slug)} references missing ${type} ${slug}`)
+      const target = wakeTarget(input)
+      if (target) {
+        if (!available.has(`${target.kind}:${target.slug}`)) {
+          failures.push(`agentLoop ${stringField(input.slug)} references missing ${target.kind} ${target.slug}`)
+        }
+      } else {
+        const targetSlug = stringField(input.target)
+        const targetExists = ["goal", "workflow", "capability"].some((kindName) =>
+          available.has(`${kindName}:${targetSlug}`),
+        )
+        if (targetSlug && !targetExists) {
+          failures.push(`agentLoop ${stringField(input.slug)} references missing target ${targetSlug}`)
         }
       }
     }
   }
 }
 
-function validateModelShape(kind: ModelKind, model: Record<string, unknown>, failures: string[]): void {
+function validateModelShape(
+  kind: ModelKind,
+  model: Record<string, unknown>,
+  files: Array<{ path: string; content: string }>,
+  slug: string,
+  failures: string[],
+): void {
   if (kind === "agent") {
-    requireStringArrayIncludes(model.owns, "identity", "agent owns", failures)
+    const agentFile = textFile(files, `agents/${slug}.md`)
+    if (!stringArray(model.owns).includes("identity") && !containsWord(agentFile, "identity")) {
+      failures.push("agent owns must include identity")
+    }
     requireStringArrayIncludes(model.doesNotOwn, "tasks", "agent doesNotOwn", failures)
   }
   if (kind === "capability") {
@@ -231,22 +246,84 @@ function validateModelShape(kind: ModelKind, model: Record<string, unknown>, fai
     requireStringArrayIncludes(model.doesNotOwn, "goal progress", "capability doesNotOwn", failures)
   }
   if (kind === "goal") {
-    if (!stringField(model.outcome)) failures.push("goal model must declare outcome")
-    if (!Array.isArray(model.evidence) || model.evidence.length === 0)
+    const goalState = parseJsonContent(textFile(files, `goals/templates/${slug}/state.json`))
+    if (!stringField(model.outcome) && !stringField(goalState?.outcome))
+      failures.push("goal model must declare outcome")
+    if (evidenceRefs(model).length === 0 && evidenceRefs(goalState).length === 0) {
       failures.push("goal model evidence must be non-empty")
-    if (!Array.isArray(model.capabilities) || model.capabilities.length === 0) {
+    }
+    if (capabilityRefs(model).length === 0 && capabilityRefs(goalState).length === 0) {
       failures.push("goal model capabilities must be non-empty")
     }
   }
   if (kind === "agentLoop") {
     if (!stringField(model.cadence)) failures.push("agentLoop model must declare cadence")
-    if (!model.wakeTarget || typeof model.wakeTarget !== "object" || Array.isArray(model.wakeTarget)) {
+    const loopState = parseJsonContent(firstStateFile(files, slug))
+    const hasTarget =
+      Boolean(wakeTarget(model)) ||
+      Boolean(stringField(model.target)) ||
+      Boolean(wakeTarget(loopState)) ||
+      Boolean(stringField(loopState?.target)) ||
+      Boolean(loopTargetString(loopState))
+    if (!hasTarget) {
       failures.push("agentLoop model must declare wakeTarget object")
     }
   }
   if (kind === "workflow") {
     if (!Array.isArray(model.steps) || model.steps.length === 0) failures.push("workflow model steps must be non-empty")
   }
+}
+
+function capabilityRefs(value: Record<string, unknown> | null | undefined): string[] {
+  return [...stringArray(value?.capabilities), ...stringArray(value?.allowedCapabilities)]
+}
+
+function evidenceRefs(value: Record<string, unknown> | null | undefined): string[] {
+  if (!value) return []
+  if (Array.isArray(value.evidence)) return value.evidence.map((item) => String(item).trim()).filter(Boolean)
+  if (value.evidence && typeof value.evidence === "object") return Object.keys(value.evidence)
+  return []
+}
+
+function wakeTarget(
+  value: Record<string, unknown> | null | undefined,
+): { kind: "goal" | "workflow" | "capability"; slug: string } | null {
+  const raw = value?.wakeTarget
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
+  const target = raw as Record<string, unknown>
+  const type = stringField(target.type)
+  const slug = stringField(target.slug)
+  if ((type === "goal" || type === "workflow" || type === "capability") && slug) return { kind: type, slug }
+  return null
+}
+
+function loopTargetString(value: Record<string, unknown> | null | undefined): string {
+  const loop = value?.loop
+  if (!loop || typeof loop !== "object" || Array.isArray(loop)) return ""
+  return stringField((loop as Record<string, unknown>).target)
+}
+
+function textFile(files: Array<{ path: string; content: string }>, wantedPath: string): string {
+  return files.find((item) => normalizeBundlePath(item.path) === wantedPath)?.content ?? ""
+}
+
+function firstStateFile(files: Array<{ path: string; content: string }>, slug: string): string {
+  const normalizedSlug = `${slug}/state.json`
+  return files.find((item) => normalizeBundlePath(item.path).endsWith(normalizedSlug))?.content ?? ""
+}
+
+function parseJsonContent(content: string): Record<string, unknown> | null {
+  if (!content.trim()) return null
+  try {
+    const parsed = JSON.parse(content) as unknown
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null
+  } catch {
+    return null
+  }
+}
+
+function containsWord(content: string, word: string): boolean {
+  return new RegExp(`\\b${word}\\b`, "i").test(content)
 }
 
 function parseJsonFile(
