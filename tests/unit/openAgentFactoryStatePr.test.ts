@@ -5,7 +5,7 @@ vi.mock("../../src/issue.js", () => ({
 }))
 
 import type { AgentResult } from "../../src/agent.js"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { gh as ghMock } from "../../src/issue.js"
 import { openAgentFactoryStatePr, parseAgentFactoryBundle } from "../../src/scripts/openAgentFactoryStatePr.js"
 
@@ -170,17 +170,17 @@ describe("openAgentFactoryStatePr", () => {
     expect(tree.tree[0]?.path).toBe("app-state/capabilities/example/profile.json")
   })
 
-  it("rejects obsolete executable paths", async () => {
+  it("rejects obsolete implementation paths", async () => {
     await expect(
       openAgentFactoryStatePr(
         makeCtx(
           bundle({
-            files: [{ path: "executables/example/profile.json", content: "{}\n" }],
+            files: [{ path: "implementations/example/profile.json", content: "{}\n" }],
           }),
         ),
         profile,
         agentResult,
       ),
-    ).rejects.toThrow(/obsolete executables storage/)
+    ).rejects.toThrow(/obsolete implementations storage/)
   })
 })

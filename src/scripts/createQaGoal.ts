@@ -1,5 +1,5 @@
 /**
- * Postflight for the `qa-engineer` executable. Turns the agent's QA report
+ * Postflight for the `qa-engineer` implementation. Turns the agent's QA report
  * into a kody goal whose tasks are real, severity-labelled bug tickets:
  *
  *   1. Parse the agent's final message — markdown report on top + a
@@ -26,7 +26,7 @@
  *   missing report / parse failure / gh failure → 1+
  */
 import type { AgentResult } from "../agent.js"
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../implementations/types.js"
 import type { ManagedGoal } from "../goal/manager.js"
 import { type GoalState, nowIso } from "../goal/state.js"
 import { putGoalState } from "../goal/stateStore.js"

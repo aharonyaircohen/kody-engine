@@ -4,11 +4,11 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
 import { loadProfile } from "../../src/profile.js"
-import { resolveExecutable } from "../../src/registry.js"
+import { resolveImplementation } from "../../src/registry.js"
 
 function ciCheckProfilePath(): string {
-  const resolved = resolveExecutable("ci-check")
-  if (!resolved) throw new Error("ci-check executable not found")
+  const resolved = resolveImplementation("ci-check")
+  if (!resolved) throw new Error("ci-check implementation not found")
   return resolved
 }
 
@@ -57,12 +57,12 @@ function runCiCheck(checks: unknown): string {
   })
 }
 
-describe("ci-check executable", () => {
-  it("loads the executable profile", () => {
-    const executable = loadProfile(ciCheckProfilePath())
+describe("ci-check implementation", () => {
+  it("loads the implementation profile", () => {
+    const implementation = loadProfile(ciCheckProfilePath())
 
-    expect(executable.name).toBe("ci-check")
-    expect(executable.scripts.postflight.map((entry) => entry.script)).toContain("applyCapabilityReports")
+    expect(implementation.name).toBe("ci-check")
+    expect(implementation.scripts.postflight.map((entry) => entry.script)).toContain("applyCapabilityReports")
   })
 
   it("reports requested evidence true when every CI check is green", () => {

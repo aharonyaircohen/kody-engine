@@ -16,7 +16,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import type { ExecutorInput, ExecutorOutput } from "../../src/executor.js"
-import { runExecutable } from "../../src/executor.js"
+import { runImplementation } from "../../src/executor.js"
 import { loadProfile } from "../../src/profile.js"
 import { type Action, emptyState, type TaskState, type TaskTarget } from "../../src/state.js"
 
@@ -34,7 +34,7 @@ function tmpDir(prefix: string): string {
 /** Build a minimal container profile in a fresh project root. Returns the cwd. */
 function makeContainerFixture(opts: {
   containerName: string
-  children: Array<{ exec: string; target: "issue" | "pr"; next: Record<string, string> }>
+  children: Array<{ implementation: string; target: "issue" | "pr"; next: Record<string, string> }>
 }): string {
   const root = tmpDir("kody-container")
   const exeDir = path.join(root, ".kody", "capabilities", opts.containerName)
@@ -90,7 +90,7 @@ function action(type: string, payload: Record<string, unknown> = {}): Action {
  */
 function makeMockEnvironment(
   scripts: Array<{
-    exec: string
+    implementation: string
     onInvoke?: (state: TaskState) => Action | null
     exitCode?: number
   }>,
@@ -105,7 +105,7 @@ function makeMockEnvironment(
 
   const runChild: NonNullable<ExecutorInput["__runChild"]> = async (name, input): Promise<ExecutorOutput> => {
     calls.push({ name, cliArgs: input.cliArgs })
-    const script = scripts.find((s) => s.exec === name)
+    const script = scripts.find((s) => s.implementation === name)
     if (!script) {
       return { exitCode: 99, reason: `unexpected child invocation: ${name}` }
     }
@@ -142,9 +142,9 @@ describe("container: smoke fixture", () => {
     expect(profile.name).toBe("smoke-container")
     expect(profile.role).toBe("container")
     expect(profile.children).toHaveLength(2)
-    expect(profile.children?.[0]?.exec).toBe("echo-a")
+    expect(profile.children?.[0]?.implementation).toBe("echo-a")
     expect(profile.children?.[0]?.next.ECHO_A_COMPLETED).toBe("echo-b")
-    expect(profile.children?.[1]?.exec).toBe("echo-b")
+    expect(profile.children?.[1]?.implementation).toBe("echo-b")
     expect(profile.children?.[1]?.next.ECHO_B_COMPLETED).toBe("done")
   })
 })
@@ -154,14 +154,14 @@ describe("container: profile loading", () => {
     const root = makeContainerFixture({
       containerName: "demo",
       children: [
-        { exec: "plan", target: "issue", next: { PLAN_COMPLETED: "run", "*": "abort" } },
-        { exec: "run", target: "issue", next: { RUN_COMPLETED: "done", "*": "abort" } },
+        { implementation: "plan", target: "issue", next: { PLAN_COMPLETED: "run", "*": "abort" } },
+        { implementation: "run", target: "issue", next: { RUN_COMPLETED: "done", "*": "abort" } },
       ],
     })
     const profile = loadProfile(path.join(root, ".kody", "capabilities", "demo", "profile.json"))
     expect(profile.role).toBe("container")
     expect(profile.children).toHaveLength(2)
-    expect(profile.children?.[0]?.exec).toBe("plan")
+    expect(profile.children?.[0]?.implementation).toBe("plan")
     expect(profile.children?.[0]?.next.PLAN_COMPLETED).toBe("run")
   })
 
@@ -175,7 +175,7 @@ describe("container: profile loading", () => {
   it("rejects an invalid child target", () => {
     const root = makeContainerFixture({
       containerName: "demo",
-      children: [{ exec: "plan", target: "bogus" as "issue", next: { "*": "done" } }],
+      children: [{ implementation: "plan", target: "bogus" as "issue", next: { "*": "done" } }],
     })
     expect(() => loadProfile(path.join(root, ".kody", "capabilities", "demo", "profile.json"))).toThrow(
       /target must be "issue" or "pr"/,
@@ -208,7 +208,7 @@ describe("container: profile loading", () => {
       },
       cliTools: [],
       scripts: { preflight: [], postflight: [] },
-      children: [{ exec: "plan", target: "issue", next: { "*": "done" } }],
+      children: [{ implementation: "plan", target: "issue", next: { "*": "done" } }],
     }
     fs.writeFileSync(path.join(exeDir, "profile.json"), JSON.stringify(profile))
     expect(() => loadProfile(path.join(exeDir, "profile.json"))).toThrow(
@@ -222,17 +222,17 @@ describe("container: routing through children", () => {
     const root = makeContainerFixture({
       containerName: "plan-run",
       children: [
-        { exec: "plan", target: "issue", next: { PLAN_COMPLETED: "run", "*": "abort" } },
-        { exec: "run", target: "issue", next: { RUN_COMPLETED: "done", "*": "abort" } },
+        { implementation: "plan", target: "issue", next: { PLAN_COMPLETED: "run", "*": "abort" } },
+        { implementation: "run", target: "issue", next: { RUN_COMPLETED: "done", "*": "abort" } },
       ],
     })
     const env = makeMockEnvironment([
-      { exec: "plan", onInvoke: () => action("PLAN_COMPLETED") },
-      { exec: "run", onInvoke: () => action("RUN_COMPLETED") },
+      { implementation: "plan", onInvoke: () => action("PLAN_COMPLETED") },
+      { implementation: "run", onInvoke: () => action("RUN_COMPLETED") },
     ])
 
     process.chdir(root)
-    const result = await runExecutable("plan-run", {
+    const result = await runImplementation("plan-run", {
       cliArgs: { issue: 42 },
       cwd: root,
       skipConfig: true,
@@ -250,20 +250,20 @@ describe("container: routing through children", () => {
       containerName: "plan-abort",
       children: [
         {
-          exec: "plan",
+          implementation: "plan",
           target: "issue",
           next: { PLAN_COMPLETED: "run", PLAN_FAILED: "abort", "*": "abort" },
         },
-        { exec: "run", target: "issue", next: { RUN_COMPLETED: "done", "*": "abort" } },
+        { implementation: "run", target: "issue", next: { RUN_COMPLETED: "done", "*": "abort" } },
       ],
     })
     const env = makeMockEnvironment([
-      { exec: "plan", onInvoke: () => action("PLAN_FAILED") },
-      { exec: "run", onInvoke: () => action("RUN_COMPLETED") },
+      { implementation: "plan", onInvoke: () => action("PLAN_FAILED") },
+      { implementation: "run", onInvoke: () => action("RUN_COMPLETED") },
     ])
 
     process.chdir(root)
-    const result = await runExecutable("plan-abort", {
+    const result = await runImplementation("plan-abort", {
       cliArgs: { issue: 42 },
       cwd: root,
       skipConfig: true,
@@ -279,12 +279,12 @@ describe("container: routing through children", () => {
   it("aborts when an action type has no route and no wildcard", async () => {
     const root = makeContainerFixture({
       containerName: "no-route",
-      children: [{ exec: "plan", target: "issue", next: { PLAN_COMPLETED: "done" } }],
+      children: [{ implementation: "plan", target: "issue", next: { PLAN_COMPLETED: "done" } }],
     })
-    const env = makeMockEnvironment([{ exec: "plan", onInvoke: () => action("PLAN_FAILED") }])
+    const env = makeMockEnvironment([{ implementation: "plan", onInvoke: () => action("PLAN_FAILED") }])
 
     process.chdir(root)
-    const result = await runExecutable("no-route", {
+    const result = await runImplementation("no-route", {
       cliArgs: { issue: 1 },
       cwd: root,
       skipConfig: true,
@@ -302,14 +302,14 @@ describe("container: idempotency", () => {
     const root = makeContainerFixture({
       containerName: "resume",
       children: [
-        { exec: "plan", target: "issue", next: { PLAN_COMPLETED: "run", "*": "abort" } },
-        { exec: "run", target: "issue", next: { RUN_COMPLETED: "done", "*": "abort" } },
+        { implementation: "plan", target: "issue", next: { PLAN_COMPLETED: "run", "*": "abort" } },
+        { implementation: "run", target: "issue", next: { RUN_COMPLETED: "done", "*": "abort" } },
       ],
     })
     const env = makeMockEnvironment([
       // plan should NOT be invoked — pre-seeded as completed.
-      { exec: "plan", onInvoke: () => action("PLAN_COMPLETED") },
-      { exec: "run", onInvoke: () => action("RUN_COMPLETED") },
+      { implementation: "plan", onInvoke: () => action("PLAN_COMPLETED") },
+      { implementation: "run", onInvoke: () => action("RUN_COMPLETED") },
     ])
     // Pre-seed plan as already completed.
     const seeded = action("PLAN_COMPLETED")
@@ -317,7 +317,7 @@ describe("container: idempotency", () => {
     env.state.core.lastOutcome = seeded
 
     process.chdir(root)
-    const result = await runExecutable("resume", {
+    const result = await runImplementation("resume", {
       cliArgs: { issue: 7 },
       cwd: root,
       skipConfig: true,
@@ -336,17 +336,17 @@ describe("container: PR target resolution", () => {
     const root = makeContainerFixture({
       containerName: "pr-target",
       children: [
-        { exec: "plan", target: "issue", next: { PLAN_COMPLETED: "review", "*": "abort" } },
-        { exec: "review", target: "pr", next: { REVIEW_PASS: "done", "*": "abort" } },
+        { implementation: "plan", target: "issue", next: { PLAN_COMPLETED: "review", "*": "abort" } },
+        { implementation: "review", target: "pr", next: { REVIEW_PASS: "done", "*": "abort" } },
       ],
     })
     const env = makeMockEnvironment([
-      { exec: "plan", onInvoke: () => action("PLAN_COMPLETED") },
-      { exec: "review", onInvoke: () => action("REVIEW_PASS") },
+      { implementation: "plan", onInvoke: () => action("PLAN_COMPLETED") },
+      { implementation: "review", onInvoke: () => action("REVIEW_PASS") },
     ])
 
     process.chdir(root)
-    const result = await runExecutable("pr-target", {
+    const result = await runImplementation("pr-target", {
       cliArgs: { issue: 99 },
       cwd: root,
       skipConfig: true,
@@ -364,26 +364,26 @@ describe("container: PR target resolution", () => {
       containerName: "pr-ok",
       children: [
         {
-          exec: "plan",
+          implementation: "plan",
           target: "issue",
           next: { PLAN_COMPLETED: "review", "*": "abort" },
         },
-        { exec: "review", target: "pr", next: { REVIEW_PASS: "done", "*": "abort" } },
+        { implementation: "review", target: "pr", next: { REVIEW_PASS: "done", "*": "abort" } },
       ],
     })
     const env = makeMockEnvironment([
       {
-        exec: "plan",
+        implementation: "plan",
         onInvoke: (state) => {
           state.core.prUrl = "https://github.com/o/r/pull/123"
           return action("PLAN_COMPLETED")
         },
       },
-      { exec: "review", onInvoke: () => action("REVIEW_PASS") },
+      { implementation: "review", onInvoke: () => action("REVIEW_PASS") },
     ])
 
     process.chdir(root)
-    const result = await runExecutable("pr-ok", {
+    const result = await runImplementation("pr-ok", {
       cliArgs: { issue: 7 },
       cwd: root,
       skipConfig: true,
@@ -440,13 +440,13 @@ describe("container: target-aware state reads", () => {
     const root = makeContainerFixture({
       containerName: "tgt-pr",
       children: [
-        { exec: "plan", target: "issue", next: { PLAN_COMPLETED: "review", "*": "abort" } },
-        { exec: "review", target: "pr", next: { REVIEW_PASS: "done", "*": "abort" } },
+        { implementation: "plan", target: "issue", next: { PLAN_COMPLETED: "review", "*": "abort" } },
+        { implementation: "review", target: "pr", next: { REVIEW_PASS: "done", "*": "abort" } },
       ],
     })
 
     process.chdir(root)
-    const result = await runExecutable("tgt-pr", {
+    const result = await runImplementation("tgt-pr", {
       cliArgs: { issue: 7 },
       cwd: root,
       skipConfig: true,
@@ -485,11 +485,11 @@ describe("container: target-aware state reads", () => {
 
     const root = makeContainerFixture({
       containerName: "tgt-issue",
-      children: [{ exec: "again", target: "issue", next: { RUN_COMPLETED: "done", "*": "abort" } }],
+      children: [{ implementation: "again", target: "issue", next: { RUN_COMPLETED: "done", "*": "abort" } }],
     })
 
     process.chdir(root)
-    const result = await runExecutable("tgt-issue", {
+    const result = await runImplementation("tgt-issue", {
       cliArgs: { issue: 7 },
       cwd: root,
       skipConfig: true,
@@ -520,19 +520,19 @@ describe("container: failure-shape regression suite", () => {
     const root = makeContainerFixture({
       containerName: "noop-bail",
       children: [
-        { exec: "plan", target: "issue", next: { PLAN_COMPLETED: "run", "*": "abort" } },
-        { exec: "run", target: "issue", next: { RUN_COMPLETED: "done", RUN_FAILED: "abort", "*": "abort" } },
+        { implementation: "plan", target: "issue", next: { PLAN_COMPLETED: "run", "*": "abort" } },
+        { implementation: "run", target: "issue", next: { RUN_COMPLETED: "done", RUN_FAILED: "abort", "*": "abort" } },
       ],
     })
 
     const env = makeMockEnvironment([
-      { exec: "plan", onInvoke: () => action("PLAN_COMPLETED") },
+      { implementation: "plan", onInvoke: () => action("PLAN_COMPLETED") },
       // run "bails" — exit non-zero but writes nothing to state.
-      { exec: "run", onInvoke: () => null, exitCode: 5 },
+      { implementation: "run", onInvoke: () => null, exitCode: 5 },
     ])
 
     process.chdir(root)
-    const result = await runExecutable("noop-bail", {
+    const result = await runImplementation("noop-bail", {
       cliArgs: { issue: 7 },
       cwd: root,
       skipConfig: true,
@@ -553,13 +553,13 @@ describe("container: failure-shape regression suite", () => {
     // container should synthesize <EXEC>_COMPLETED so routing keys match.
     const root = makeContainerFixture({
       containerName: "noop-ok",
-      children: [{ exec: "noop", target: "issue", next: { NOOP_COMPLETED: "done", "*": "abort" } }],
+      children: [{ implementation: "noop", target: "issue", next: { NOOP_COMPLETED: "done", "*": "abort" } }],
     })
 
-    const env = makeMockEnvironment([{ exec: "noop", onInvoke: () => null, exitCode: 0 }])
+    const env = makeMockEnvironment([{ implementation: "noop", onInvoke: () => null, exitCode: 0 }])
 
     process.chdir(root)
-    const result = await runExecutable("noop-ok", {
+    const result = await runImplementation("noop-ok", {
       cliArgs: { issue: 7 },
       cwd: root,
       skipConfig: true,
@@ -575,28 +575,28 @@ describe("container: failure-shape regression suite", () => {
     // finishFlow) read core.lastOutcome.type via runWhen and need to see
     // the child's actual failure, not the prior child's success.
     //
-    // We can't observe ctx.data directly from runExecutable, but we can
+    // We can't observe ctx.data directly from runImplementation, but we can
     // verify via the routing decision in the abort reason — if the abort
     // route was taken because of RUN_FAILED, the runWhen system would also
     // see RUN_FAILED.
     const root = makeContainerFixture({
       containerName: "lastoutcome-check",
       children: [
-        { exec: "plan", target: "issue", next: { PLAN_COMPLETED: "run", "*": "abort" } },
+        { implementation: "plan", target: "issue", next: { PLAN_COMPLETED: "run", "*": "abort" } },
         // Only RUN_FAILED routes to abort. PLAN_COMPLETED should NOT match
         // because plan already succeeded. If the container leaks the prior
         // PLAN_COMPLETED into run's outcome, this routing fails silently.
-        { exec: "run", target: "issue", next: { RUN_FAILED: "abort", RUN_COMPLETED: "done" } },
+        { implementation: "run", target: "issue", next: { RUN_FAILED: "abort", RUN_COMPLETED: "done" } },
       ],
     })
 
     const env = makeMockEnvironment([
-      { exec: "plan", onInvoke: () => action("PLAN_COMPLETED") },
-      { exec: "run", onInvoke: () => null, exitCode: 1 }, // write nothing, fail
+      { implementation: "plan", onInvoke: () => action("PLAN_COMPLETED") },
+      { implementation: "run", onInvoke: () => null, exitCode: 1 }, // write nothing, fail
     ])
 
     process.chdir(root)
-    const result = await runExecutable("lastoutcome-check", {
+    const result = await runImplementation("lastoutcome-check", {
       cliArgs: { issue: 7 },
       cwd: root,
       skipConfig: true,
@@ -619,17 +619,17 @@ describe("container: iteration cap", () => {
     const root = makeContainerFixture({
       containerName: "loop",
       children: [
-        { exec: "a", target: "issue", next: { TICK: "b", "*": "abort" } },
-        { exec: "b", target: "issue", next: { TICK: "a", "*": "abort" } },
+        { implementation: "a", target: "issue", next: { TICK: "b", "*": "abort" } },
+        { implementation: "b", target: "issue", next: { TICK: "a", "*": "abort" } },
       ],
     })
     const env = makeMockEnvironment([
-      { exec: "a", onInvoke: () => action("TICK") },
-      { exec: "b", onInvoke: () => action("TICK") },
+      { implementation: "a", onInvoke: () => action("TICK") },
+      { implementation: "b", onInvoke: () => action("TICK") },
     ])
 
     process.chdir(root)
-    const result = await runExecutable("loop", {
+    const result = await runImplementation("loop", {
       cliArgs: { issue: 1 },
       cwd: root,
       skipConfig: true,

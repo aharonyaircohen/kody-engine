@@ -1,4 +1,4 @@
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../implementations/types.js"
 import { type AppliedAgencyArchitectAction, logAppliedAgencyArchitectActions } from "./applyAgencyArchitectDecision.js"
 
 export const appendCompanyIntentDecision: PostflightScript = async (ctx) => {

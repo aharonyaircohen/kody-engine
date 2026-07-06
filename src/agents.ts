@@ -1,14 +1,14 @@
 /**
- * Load an agent's agent for an executable that declares `agent:`.
+ * Load an agent's agent for an implementation that declares `agent:`.
  *
  * This is the generic, executor-level version of what the capability/tick path does
  * via the `{{agentIdentity}}` prompt token (see loadJobFromFile.ts /
  * loadAgentAdhoc.ts). A `agent` field on a profile lets the executor run that
- * executable *as* a named agent.
+ * implementation *as* a named agent.
  *
  * Resolution mirrors the capability path: hydrated local
  * `.kody/agents/<slug>.md`, frontmatter stripped, body returned. A declared-but-missing agent file is fatal — an
- * executable must never silently run without the identity it asked for.
+ * implementation must never silently run without the identity it asked for.
  */
 
 import * as fs from "node:fs"
@@ -67,7 +67,7 @@ export function resolveAgentFile(cwd: string, slug: string, agentsDir: string = 
 
 /**
  * Wrap an agent identity body in the authoritative-identity framing the agent expects,
- * matching agent-ask's prompt. Returned block is meant to lead the executable's
+ * matching agent-ask's prompt. Returned block is meant to lead the implementation's
  * system-prompt append so identity sits ahead of task-specific instructions.
  */
 export function frameAgentIdentity(slug: string, agent: string): string {

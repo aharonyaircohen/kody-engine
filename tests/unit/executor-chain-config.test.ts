@@ -11,7 +11,7 @@ vi.mock("../../src/job.js", () => ({
   runJob: mocks.runJob,
 }))
 
-import { runExecutableChain } from "../../src/executor.js"
+import { runImplementationChain } from "../../src/executor.js"
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-chain-config-"))
@@ -82,7 +82,7 @@ describe("executor: chain config propagation", () => {
     writeDispatchingProfile(tmp)
     process.chdir(tmp)
 
-    const result = await runExecutableChain("parent", {
+    const result = await runImplementationChain("parent", {
       cwd: tmp,
       cliArgs: { issue: 42 },
     })

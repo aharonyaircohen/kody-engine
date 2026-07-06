@@ -45,7 +45,7 @@ describe("smoke: CLI boots and validates args", () => {
     expect(r.stderr).toMatch(/--bogus/)
   })
 
-  it("runs a project capability action through its implementation executable", () => {
+  it("runs a project capability action through its implementation", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-cli-smoke-"))
     fs.mkdirSync(path.join(root, ".kody", "capabilities"), { recursive: true })
     fs.mkdirSync(path.join(root, ".kody", "capabilities", "smoke-impl"), { recursive: true })

@@ -1,5 +1,5 @@
 /**
- * Postflight for the `fix` executable. Records whether the agent emitted a
+ * Postflight for the `fix` implementation. Records whether the agent emitted a
  * `FEEDBACK_ACTIONS:` block and counts its items, but does NOT hard-fail
  * the run when the block is missing or empty.
  *
@@ -18,7 +18,7 @@
  * No-op unless the agent reported DONE.
  */
 
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../implementations/types.js"
 
 const MIN_ITEMS = 1
 

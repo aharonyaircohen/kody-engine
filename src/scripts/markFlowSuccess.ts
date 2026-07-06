@@ -11,7 +11,7 @@
  * No-op if a prior step has already set a non-zero exit code.
  */
 
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../implementations/types.js"
 
 export const markFlowSuccess: PostflightScript = async (ctx) => {
   const exit = ctx.output.exitCode

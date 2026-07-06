@@ -7,7 +7,7 @@
  * reflects the run's outcome.
  */
 
-import type { JobFlavor, PostflightScript } from "../executables/types.js"
+import type { JobFlavor, PostflightScript } from "../implementations/types.js"
 import {
   type Action,
   type JobMeta,
@@ -29,8 +29,8 @@ export function jobMetaFromData(data: Record<string, unknown>): JobMeta {
     runUrl: typeof data.runUrl === "string" ? data.runUrl : undefined,
     capability: typeof data.jobCapability === "string" ? data.jobCapability : undefined,
       implementation:
-        typeof data.jobImplementation === "string"
-          ? data.jobImplementation
+        typeof data.selectedImplementation === "string"
+          ? data.selectedImplementation
           : undefined,
     target: typeof data.jobTarget === "number" ? data.jobTarget : undefined,
     agent: typeof data.jobAgent === "string" ? data.jobAgent : undefined,

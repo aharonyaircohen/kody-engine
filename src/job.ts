@@ -2,7 +2,7 @@
  * Job — the unified execution unit (Phase 1: additive seam, no caller yet).
  *
  * `runJob` lowers a validated Job onto the existing implementation runner
- * (`runExecutableChain`). This is the single entry point every trigger path
+ * (`runImplementationChain`). This is the single entry point every trigger path
  * (comment, cron, manual) will funnel through in later phases. It deliberately
  * does NOT touch executor.ts — a Job maps to a (profileName, ExecutorInput) pair.
  *
@@ -15,9 +15,9 @@ import { evaluateAgencyBoundaries } from "./agencyBoundaryEval.js"
 import type { CapabilityFolder, CapabilityWorkflowConfig, CapabilityWorkflowStepConfig } from "./capabilityFolders.js"
 import type { KodyConfig } from "./config.js"
 import type { DispatchResult } from "./dispatch.js"
-import type { CapabilityResultTarget, Job, JobFlavor } from "./executables/types.js"
+import type { CapabilityResultTarget, Job, JobFlavor } from "./implementations/types.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
-import { runExecutable, runExecutableChain } from "./executor.js"
+import { runImplementation, runImplementationChain } from "./executor.js"
 import {
   type DiscoveredCapabilityAction,
   getCapabilityActionInputs,
@@ -121,7 +121,7 @@ export interface RunJobBase {
   quiet?: boolean
   preloadedData?: Record<string, unknown>
   /**
-   * Follow in-process stage hand-offs (`runExecutableChain`) by default,
+   * Follow in-process stage hand-offs (`runImplementationChain`) by default,
    * matching the comment/manual route. Scheduled watch fan-out can set `false`
    * for one-shot ticks that must not follow a returned nextDispatch.
    */
@@ -238,7 +238,7 @@ async function runCapabilityImplementationStep(
   if (valid.action !== undefined && valid.action.length > 0) preloadedData.jobAction = valid.action
   if (capabilityIdentity !== undefined && capabilityIdentity.length > 0)
     preloadedData.jobCapability = capabilityIdentity
-  preloadedData.jobImplementation = profileName
+  preloadedData.selectedImplementation = profileName
   // The job carries *when*: a scheduled job's cadence, recorded in the ledger.
   if (valid.schedule !== undefined && valid.schedule.length > 0) preloadedData.jobSchedule = valid.schedule
   if (valid.saveReport === true) preloadedData.jobSaveReport = true
@@ -280,7 +280,7 @@ async function runCapabilityImplementationStep(
     ? { ...resolvedCapability.cliArgs, ...input.cliArgs }
     : input.cliArgs
 
-  const run = base.chain === false ? runExecutable : runExecutableChain
+  const run = base.chain === false ? runImplementation : runImplementationChain
   return run(profileName, input)
 }
 
@@ -583,7 +583,7 @@ export interface ScheduledJobInput {
   schedule?: string
   /** Agent identity that runs it (from the capability's profile.json). */
   agent?: string
-  /** Args handed to the tick executable (e.g. `{ job: slug }` for `.md` capabilities). */
+  /** Args handed to the tick implementation (e.g. `{ job: slug }` for `.md` capabilities). */
   cliArgs?: Record<string, unknown>
   /** Ask the owning goal/loop to write a report run after its persisted decision. */
   saveReport?: boolean

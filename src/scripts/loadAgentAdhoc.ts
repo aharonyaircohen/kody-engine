@@ -28,7 +28,7 @@
 
 import * as fs from "node:fs"
 import { resolveAgentFile } from "../agents.js"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 
 export const loadAgentAdhoc: PreflightScript = async (ctx, _profile, args) => {
   const agentsDir = String(args?.agentsDir ?? ".kody/agents")

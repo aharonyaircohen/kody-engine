@@ -20,7 +20,7 @@
  *         ctx.data.nextStateParseError on failure
  */
 
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../implementations/types.js"
 import type { LoadedJobState } from "./jobState/index.js"
 import { extractNextStateFromText } from "./stateEnvelope.js"
 

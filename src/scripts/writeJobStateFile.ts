@@ -16,7 +16,7 @@
  * (never advancing, re-firing every cron wake, stuck "overdue" on the dash).
  */
 
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../implementations/types.js"
 import type { StateEnvelope } from "./issueStateComment.js"
 import { type LoadedJobState, resolveBackend } from "./jobState/index.js"
 

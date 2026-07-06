@@ -1,5 +1,5 @@
 /**
- * Flow script for the `revert` executable.
+ * Flow script for the `revert` implementation.
  * Loads the PR, checks it out, validates each requested commit SHA is
  * reachable from the PR branch's HEAD, and stages metadata for the
  * downstream `revert.sh` (does the revert) + commitAndPush (commits & pushes).
@@ -9,7 +9,7 @@
 
 import { execFileSync } from "node:child_process"
 import { checkoutPrBranch, getCurrentBranch } from "../branch.js"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { getRunUrl } from "../gha.js"
 import { getPr, postPrReviewComment } from "../issue.js"
 

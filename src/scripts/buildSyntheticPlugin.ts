@@ -10,18 +10,18 @@
  * on the fly per run.
  *
  * Resolution order for each declared name:
- *   1. The executable's own directory:
- *      the executable directory `{skills,commands,agents,hooks}/<entry>`
- *      — for parts that are specific to one executable.
+ *   1. The implementation's own directory:
+ *      the implementation directory `{skills,commands,agents,hooks}/<entry>`
+ *      — for parts that are specific to one implementation.
  *   2. The engine's shared catalog:
  *      src/plugins/{skills,commands,agents,hooks}/<entry>
- *      — for parts reused across multiple executables.
+ *      — for parts reused across multiple implementations.
  */
 
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 
 /** Resolve the engine's bundled plugin-parts catalog (dev + built layouts). */
 export function getPluginsCatalogRoot(): string {
@@ -50,10 +50,10 @@ export const buildSyntheticPlugin: PreflightScript = async (ctx, profile) => {
   const root = path.join(os.tmpdir(), `kody-synth-${runId}`)
   fs.mkdirSync(path.join(root, ".claude-plugin"), { recursive: true })
 
-  // Resolve plugin parts from the executable's own directory first, then fall
-  // back to the engine's central catalog. Lets an executable ship local
+  // Resolve plugin parts from the implementation's own directory first, then fall
+  // back to the engine's central catalog. Lets an implementation ship local
   // skills/commands/subagents/hooks under
-  //   the executable directory `{skills,commands,agents,hooks}/
+  //   the implementation directory `{skills,commands,agents,hooks}/
   // without polluting the shared catalog.
   const resolvePart = (bucket: "skills" | "commands" | "agents" | "hooks", entry: string): string => {
     const local = path.join(profile.dir, bucket, entry)
@@ -61,7 +61,7 @@ export const buildSyntheticPlugin: PreflightScript = async (ctx, profile) => {
     const central = path.join(catalog, bucket, entry)
     if (fs.existsSync(central)) return central
     throw new Error(
-      `buildSyntheticPlugin: ${bucket} entry '${entry}' not found in executable dir (${profile.dir}/${bucket}/) or catalog (${catalog}/${bucket}/)`,
+      `buildSyntheticPlugin: ${bucket} entry '${entry}' not found in implementation dir (${profile.dir}/${bucket}/) or catalog (${catalog}/${bucket}/)`,
     )
   }
 

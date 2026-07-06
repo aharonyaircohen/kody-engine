@@ -1,20 +1,20 @@
 /**
  * Preflight: list open issues tagged with a given label, then invoke a target
- * executable once per matching issue (in-process, sequentially). Each child
+ * implementation once per matching issue (in-process, sequentially). Each child
  * run is isolated — failures on one issue don't stop later issues.
  *
- * This is the fan-out primitive for capability-style scheduled executables:
+ * This is the fan-out primitive for capability-style scheduled implementations:
  * one cron wake → N classifier ticks, one per live capability issue.
  *
  * Script args (via `with:`):
  *   label             required — e.g. "kody:job"
- *   targetExecutable  required — e.g. "capability-tick"
+ *   targetImplementation  required — e.g. "capability-tick"
  *   issueArg          optional — CLI input name the target expects (default "issue")
  *
  * Sets ctx.skipAgent so the outer scheduler itself never invokes the SDK.
  */
 
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { gh } from "../issue.js"
 import { mintScheduledJob, runJob } from "../job.js"
 
@@ -27,9 +27,9 @@ export const dispatchCapabilityTicks: PreflightScript = async (ctx, _profile, ar
   ctx.skipAgent = true
 
   const label = String(args?.label ?? "")
-  const targetExecutable = String(args?.targetExecutable ?? "")
+  const targetImplementation = String(args?.targetImplementation ?? "")
   if (!label) throw new Error("dispatchCapabilityTicks: `with.label` is required")
-  if (!targetExecutable) throw new Error("dispatchCapabilityTicks: `with.targetExecutable` is required")
+  if (!targetImplementation) throw new Error("dispatchCapabilityTicks: `with.targetImplementation` is required")
   const issueArg = String(args?.issueArg ?? "issue")
 
   const issues = listIssuesByLabel(label, ctx.cwd)
@@ -40,7 +40,7 @@ export const dispatchCapabilityTicks: PreflightScript = async (ctx, _profile, ar
     return
   }
 
-  process.stdout.write(`[jobs] ticking ${issues.length} issue(s) via ${targetExecutable}\n`)
+  process.stdout.write(`[jobs] ticking ${issues.length} issue(s) via ${targetImplementation}\n`)
 
   const results: Array<{ issue: number; exitCode: number; reason?: string }> = []
   for (const issue of issues) {
@@ -48,8 +48,8 @@ export const dispatchCapabilityTicks: PreflightScript = async (ctx, _profile, ar
     try {
       const out = await runJob(
         mintScheduledJob({
-          capability: targetExecutable,
-          implementation: targetExecutable,
+          capability: targetImplementation,
+          implementation: targetImplementation,
           cliArgs: { [issueArg]: issue.number },
         }),
         { cwd: ctx.cwd, config: ctx.config, verbose: ctx.verbose, quiet: ctx.quiet, chain: false },

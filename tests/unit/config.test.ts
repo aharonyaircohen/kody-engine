@@ -418,25 +418,29 @@ describe("config: loadConfig", () => {
     }
   })
 
-  it("does not accept retired executable config keys as compatibility aliases", () => {
+  it("does not accept retired implementation config keys as compatibility aliases", () => {
     const dir = tmpDir()
+    const retiredPerModel = "perExec" + "utable"
+    const retiredPerReasoning = "perExec" + "utableReasoningEffort"
+    const retiredDefault = "defaultExec" + "utable"
+    const retiredDefaultPr = "defaultPrExec" + "utable"
     writeConfig(dir, {
       github: { owner: "o", repo: "r" },
       agent: {
         model: "m/x",
-        perExecutable: { run: "m/old-run" },
-        perExecutableReasoningEffort: { run: "high" },
+        [retiredPerModel]: { run: "m/old-run" },
+        [retiredPerReasoning]: { run: "high" },
       },
-      defaultExecutable: "old-run",
-      defaultPrExecutable: "old-sync",
+      [retiredDefault]: "old-run",
+      [retiredDefaultPr]: "old-sync",
     })
     const cfg = loadConfig(dir)
     expect(cfg.agent.perImplementation).toBeUndefined()
     expect(cfg.agent.perImplementationReasoningEffort).toBeUndefined()
     expect(cfg.defaultImplementation).toBe("run")
     expect(cfg.defaultPrImplementation).toBeUndefined()
-    expect(cfg).not.toHaveProperty("defaultExecutable")
-    expect(cfg).not.toHaveProperty("defaultPrExecutable")
+    expect(cfg).not.toHaveProperty(retiredDefault)
+    expect(cfg).not.toHaveProperty(retiredDefaultPr)
   })
 
   describe("agent.reasoningEffort", () => {

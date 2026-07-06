@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { dispatchCapabilityFileTicks } from "../../src/scripts/dispatchCapabilityFileTicks.js"
 
 vi.mock("../../src/executor.js", async () => {
   const actual = await vi.importActual<typeof import("../../src/executor.js")>("../../src/executor.js")
-  return { ...actual, runExecutable: vi.fn() }
+  return { ...actual, runImplementation: vi.fn() }
 })
 
-import { runExecutable } from "../../src/executor.js"
+import { runImplementation } from "../../src/executor.js"
 
 const PROFILE = {} as unknown as Profile
 
@@ -32,7 +32,7 @@ describe("dispatchCapabilityFileTicks", () => {
 
     await dispatchCapabilityFileTicks(ctx, PROFILE, {})
 
-    expect(runExecutable).not.toHaveBeenCalled()
+    expect(runImplementation).not.toHaveBeenCalled()
     expect(ctx.skipAgent).toBe(true)
     expect(ctx.output.exitCode).toBe(0)
     expect(ctx.output.reason).toContain("capability scheduling")

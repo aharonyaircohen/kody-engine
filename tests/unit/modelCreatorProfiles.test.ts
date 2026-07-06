@@ -38,7 +38,7 @@ const creators = [
   },
 ] as const
 
-const implementationRoot = path.resolve(__dirname, "../../src/executables")
+const implementationRoot = path.resolve(__dirname, "../../src/implementations")
 
 describe("model creator profiles", () => {
   it("loads every creator as a safe issue-scoped primitive", () => {

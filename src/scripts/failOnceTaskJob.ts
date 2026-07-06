@@ -1,4 +1,4 @@
-import type { Job, PostflightScript } from "../executables/types.js"
+import type { Job, PostflightScript } from "../implementations/types.js"
 import { stableJobKey } from "../jobIdentity.js"
 import type { TaskState } from "../state.js"
 

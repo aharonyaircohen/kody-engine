@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { dispatchCapabilityFileTicks } from "../../src/scripts/dispatchCapabilityFileTicks.js"
 
 const ghMock = vi.hoisted(() => vi.fn())
@@ -32,7 +32,7 @@ function ctxFor(): Context {
   } as unknown as Context
 }
 
-describe("dispatchCapabilityFileTicks multi-executable compatibility", () => {
+describe("dispatchCapabilityFileTicks multi-implementation compatibility", () => {
   it("does not create task issues because flat capability fan-out is retired", async () => {
     const ctx = ctxFor()
 

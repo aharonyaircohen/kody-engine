@@ -2,7 +2,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { writeAgentRunSummary } from "../../src/scripts/writeAgentRunSummary.js"
 
 function baseCtx(overrides: Partial<Context> = {}): Context {

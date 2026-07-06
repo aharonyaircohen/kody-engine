@@ -1,5 +1,5 @@
 /**
- * Kody labels — mechanism-only helper. No executable, phase, or group
+ * Kody labels — mechanism-only helper. No implementation, phase, or group
  * names live here: every label is declared inline by whichever profile
  * wants it (via a script entry's `with` block). This module just:
  *
@@ -28,10 +28,10 @@
  *     collected spec. Best-effort, never throws.
  */
 
-import type { ScriptEntry } from "./executables/types.js"
+import type { ScriptEntry } from "./implementations/types.js"
 import { gh } from "./issue.js"
 import { loadProfile } from "./profile.js"
-import { listExecutables } from "./registry.js"
+import { listImplementations } from "./registry.js"
 
 /** Namespace prefix — labels starting with this are kody-owned and safe to touch. */
 export const KODY_NAMESPACE = "kody"
@@ -57,13 +57,13 @@ export interface EnsureLabelsResult {
 }
 
 /**
- * Walk every executable profile and harvest label specs declared on
+ * Walk every implementation profile and harvest label specs declared on
  * script entries' `with` blocks. Deduped by label name — last writer
  * wins on conflicting color/description (shouldn't happen in practice).
  */
 export function collectProfileLabels(): KodyLabelSpec[] {
   const byLabel = new Map<string, KodyLabelSpec>()
-  for (const exe of listExecutables()) {
+  for (const exe of listImplementations()) {
     let profile: ReturnType<typeof loadProfile>
     try {
       profile = loadProfile(exe.profilePath)

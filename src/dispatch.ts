@@ -16,12 +16,12 @@
 import * as fs from "node:fs"
 import { BUILTIN_ALIASES, type KodyConfig } from "./config.js"
 import { cronMatchesInWindow } from "./cron-match.js"
-import type { InputSpec } from "./executables/types.js"
+import type { InputSpec } from "./implementations/types.js"
 import {
   type DiscoveredCapabilityAction,
   getProfileInputs,
   listCapabilityActions,
-  listExecutables,
+  listImplementations,
   resolveCapabilityAction,
 } from "./registry.js"
 
@@ -170,7 +170,7 @@ export function autoDispatch(opts?: {
       if (!route) return null
       const base = String(inputs?.base ?? "").trim()
       // The `issue_number` input is a generic numeric target, not literally an
-      // issue. Bind `n` under the resolved executable's declared int input name
+      // issue. Bind `n` under the resolved implementation's declared int input name
       // (`run` → `issue`, `resolve`/`sync`/`fix-ci` → `pr`). Hardcoding `issue`
       // here used to make PR primitives reject the dispatched run with
       // "unknown arg: --issue", silently breaking pr-health auto-runs.
@@ -179,14 +179,14 @@ export function autoDispatch(opts?: {
       if (base) cliArgs.base = base
       return routeResult(route, cliArgs, n)
     }
-    // No issue_number input → manual force-fire of all watch executables.
+    // No issue_number input → manual force-fire of all watch implementations.
     // The CLI handles this the same way as a schedule event but with the
     // cron filter bypassed (humans want to test "now"). Returning null
     // signals "fan out via dispatchScheduledWatches({ force: true })".
     return null
   }
 
-  // Cron-driven wakes are not handled here — they fire many executables
+  // Cron-driven wakes are not handled here — they fire many implementations
   // (every watch whose `schedule` matches the wake window), not one. The
   // CLI calls dispatchScheduledWatches() instead and iterates the result.
   if (eventName === "schedule") return null
@@ -197,9 +197,9 @@ export function autoDispatch(opts?: {
   // doesn't auto-finalize; they'd run `kody release-publish` directly or
   // re-trigger `@kody release` on the originating issue.
   //
-  // Opt-in routing: when `config.onPullRequest` names an executable and the
+  // Opt-in routing: when `config.onPullRequest` names an implementation and the
   // action is opened/synchronize/reopened, route the PR there (e.g.
-  // "preview-build" rebuilds a per-PR preview on every push). The executable
+  // "preview-build" rebuilds a per-PR preview on every push). The implementation
   // name lives in config, never here. closed/merged stay null (see above).
   if (eventName === "pull_request") {
     const actionName = opts?.config?.onPullRequest?.trim()
@@ -252,7 +252,7 @@ export function autoDispatch(opts?: {
   const firstToken = firstTokenRaw && POLITE_WORDS.has(firstTokenRaw) ? null : firstTokenRaw
 
   // Bot-authored `@kody <command>` comments are an invalid trigger surface.
-  // Bot-to-bot continuation must use workflow_dispatch/runExecutableChain so
+  // Bot-to-bot continuation must use workflow_dispatch/runImplementationChain so
   // the engine can report the transition explicitly. Returning null here keeps
   // the legacy resolver from routing it; autoDispatchTyped reclassifies the
   // same event as `rejected` so the CLI can mark the target terminal.
@@ -342,7 +342,7 @@ export function autoDispatch(opts?: {
   const restInput = effectiveInputs.find((s) => s.bindsCommentRest === true)
   let why: string | undefined
   if (restInput && leftover.length > 0 && args[restInput.name] === undefined) {
-    // A declared input captures the free text — the executable owns it; don't
+    // A declared input captures the free text — the implementation owns it; don't
     // also surface it as `why` (that would double the same words).
     args[restInput.name] = leftover
   } else if (leftover.length > 0) {
@@ -470,7 +470,7 @@ export function dispatchScheduledWatches(opts?: { now?: Date; windowSec?: number
   const envWindow = Number(process.env.KODY_SCHEDULE_WINDOW_SEC)
   const windowSec = opts?.windowSec ?? (Number.isFinite(envWindow) && envWindow > 0 ? envWindow : 300)
   const out: DispatchResult[] = []
-  for (const exe of listExecutables()) {
+  for (const exe of listImplementations()) {
     let raw: string
     try {
       raw = fs.readFileSync(exe.profilePath, "utf-8")

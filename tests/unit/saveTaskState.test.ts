@@ -10,7 +10,7 @@ vi.mock("../../src/state.js", async (importOriginal) => {
   }
 })
 
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { saveTaskState } from "../../src/scripts/saveTaskState.js"
 import { type Action, emptyState, type TaskState } from "../../src/state.js"
 

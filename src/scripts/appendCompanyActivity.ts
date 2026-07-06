@@ -4,7 +4,7 @@
  * The activity feed is Kody runtime state, so it lives in the configured state
  * repo under `activity/<YYYY-MM-DD>.jsonl`.
  */
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../implementations/types.js"
 import { getRunUrl } from "../gha.js"
 import { appendStateLine } from "../stateRepo.js"
 

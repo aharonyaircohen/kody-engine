@@ -13,7 +13,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { KodyConfig } from "../../src/config.js"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { loadJobFromFile } from "../../src/scripts/loadJobFromFile.js"
 
 let tmp: string
@@ -191,14 +191,14 @@ describe("loadJobFromFile capability-noun aliases (Phase 1 rename)", () => {
     expect(ctx.data.agentTitle).toBe("Kody — root agent")
   })
 
-  it("populates executableSlug from profile.name", async () => {
+  it("populates implementationSlug from profile.name", async () => {
     writeAgent("kody")
     writeCapability("stale-prs", { agent: "kody" }, "# Stale PR Watcher")
 
     const ctx = ctxFor("stale-prs")
     await loadJobFromFile(ctx, { ...PROFILE, name: "capability-tick" }, {})
 
-    expect(ctx.data.executableSlug).toBe("capability-tick")
+    expect(ctx.data.implementationSlug).toBe("capability-tick")
   })
 
   it("populates capabilitySchedule from the runtime job schedule", async () => {

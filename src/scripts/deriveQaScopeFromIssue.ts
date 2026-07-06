@@ -19,7 +19,7 @@
  * `@kody qa-engineer --scope "..."` keeps full control.
  */
 
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { getIssue } from "../issue.js"
 
 const TITLE_PATTERN = /^QA:\s*(.+?)(?:\s*\(#\d+\))?\s*$/i

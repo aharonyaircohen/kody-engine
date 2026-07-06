@@ -41,15 +41,15 @@ try {
 
   for (const required of [
     "package/dist/bin/kody.js",
-    "package/dist/executables/run/profile.json",
+    "package/dist/implementations/run/profile.json",
     "package/dist/capabilities/run/profile.json",
   ]) {
     assert(hasEntry(required), `package tarball is missing ${required}`)
   }
 
   for (const obsolete of [
-    "package/dist/bin/executables/feature/profile.json",
-    "package/dist/executables/feature/profile.json",
+    "package/dist/bin/implementations/feature/profile.json",
+    "package/dist/implementations/feature/profile.json",
   ]) {
     assert(!hasEntry(obsolete), `package tarball still includes obsolete ${obsolete}`)
   }

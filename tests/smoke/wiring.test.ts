@@ -1,6 +1,6 @@
 /**
  * Smoke (system wiring): in-process, offline checks that the engine is
- * fundamentally assembled — every shipped executable profile parses, every
+ * fundamentally assembled — every shipped implementation profile parses, every
  * script it names exists, and the script registries are self-consistent. A
  * broken profile.json or a profile naming a deleted script fails here in
  * milliseconds, before any heavier tier runs.
@@ -11,20 +11,20 @@
 
 import { describe, expect, it } from "vitest"
 import { loadProfile, validateScriptReferences } from "../../src/profile.js"
-import { getExecutablesRoot, listExecutables } from "../../src/registry.js"
+import { getImplementationsRoot, listImplementations } from "../../src/registry.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "../../src/scripts/index.js"
 
-// Engine root only — independent of cwd, so a stray .kody/executables can't
+// Engine root only — independent of cwd, so a stray .kody/implementations can't
 // pollute the set.
-const executables = listExecutables(getExecutablesRoot())
+const implementations = listImplementations(getImplementationsRoot())
 
 const FLAG_RE = /^--[a-z][a-z0-9-]*$/
 const INPUT_TYPES = new Set(["string", "int", "bool", "enum"])
 
 describe("smoke: system wiring", () => {
-  it("every shipped executable profile loads and validates with well-formed inputs", () => {
-    // Keep this list explicit so newly bundled executables are reviewed.
-    expect(executables.map((exe) => exe.name)).toEqual([
+  it("every shipped implementation profile loads and validates with well-formed inputs", () => {
+    // Keep this list explicit so newly bundled implementations are reviewed.
+    expect(implementations.map((exe) => exe.name)).toEqual([
       "agent-creator",
       "agent-factory",
       "capability-creator",
@@ -34,7 +34,7 @@ describe("smoke: system wiring", () => {
       "workflow-creator",
     ])
     const failures: string[] = []
-    for (const exe of executables) {
+    for (const exe of implementations) {
       try {
         const profile = loadProfile(exe.profilePath)
         for (const input of profile.inputs) {
@@ -53,7 +53,7 @@ describe("smoke: system wiring", () => {
 
   it("every script referenced by a profile resolves in the registry", () => {
     const failures: string[] = []
-    for (const exe of executables) {
+    for (const exe of implementations) {
       const profile = loadProfile(exe.profilePath)
       const missing = validateScriptReferences(profile, allScriptNames)
       if (missing.length > 0) failures.push(`${exe.name}: unregistered script(s) ${missing.join(", ")}`)

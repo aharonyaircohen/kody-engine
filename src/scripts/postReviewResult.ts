@@ -1,5 +1,5 @@
 /**
- * Postflight for the `review` executable. Takes the agent's final message
+ * Postflight for the `review` implementation. Takes the agent's final message
  * (which the prompt instructs to be the entire review body) and posts it
  * verbatim as a PR comment. Decides exit code based on the extracted verdict:
  *   PASS     → exit 0
@@ -9,12 +9,12 @@
  *
  * Emits a typed Action into ctx.data.action so `saveTaskState` (if present in
  * the profile postflight) records the review in history/lastOutcome. The
- * action type mirrors the verdict so downstream executables (`fix`) can
+ * action type mirrors the verdict so downstream implementations (`fix`) can
  * dispatch on it.
  */
 
 import type { AgentResult } from "../agent.js"
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../implementations/types.js"
 import { postPrReviewComment, truncate } from "../issue.js"
 import type { Action } from "../state.js"
 

@@ -14,11 +14,11 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { resolveExecutable } from "../../src/registry.js"
+import { resolveImplementation } from "../../src/registry.js"
 
 function schedulerPath(): string {
-  const resolved = resolveExecutable("goal-scheduler")
-  if (!resolved) throw new Error("goal-scheduler executable not found")
+  const resolved = resolveImplementation("goal-scheduler")
+  if (!resolved) throw new Error("goal-scheduler implementation not found")
   return path.join(path.dirname(resolved), "scheduler.sh")
 }
 
@@ -256,7 +256,7 @@ describe("goal-scheduler live wiring", () => {
     const { status, stdout, calls } = runScheduler()
 
     expect(status).toBe(0)
-    expect(calls).toEqual(["kody-engine exec goal-manager --goal release-v1-2-3"])
+    expect(calls).toEqual(["kody-engine implementation goal-manager --goal release-v1-2-3"])
     expect(stdout).toContain("-> tick release-v1-2-3 (goal-manager)")
     expect(stdout).toContain("scanned 1 goal instance(s), active=1, managed=1")
     expect(stdout).toContain("KODY_SKIP_AGENT=true")
@@ -270,7 +270,7 @@ describe("goal-scheduler live wiring", () => {
     const { status, stdout, calls } = runScheduler()
 
     expect(status).toBe(0)
-    expect(calls).toEqual(["kody-engine exec goal-manager --goal managed"])
+    expect(calls).toEqual(["kody-engine implementation goal-manager --goal managed"])
     expect(stdout).toContain("-> tick managed (goal-manager)")
   })
 
@@ -299,7 +299,7 @@ describe("goal-scheduler live wiring", () => {
     expect(ghCalls.join("\n")).toContain("/contents/A-Guy-Web/todos/web-release.json")
     expect(ghCalls.join("\n")).toContain("/contents/A-Guy-Web/todos/todo-list-1.json")
     expect(ghCalls.some((call) => call.includes("/repos/https://github.com"))).toBe(false)
-    expect(calls).toEqual(["kody-engine exec goal-manager --goal web-release"])
+    expect(calls).toEqual(["kody-engine implementation goal-manager --goal web-release"])
   })
 
   it("skips paused and done goals", () => {
@@ -311,7 +311,7 @@ describe("goal-scheduler live wiring", () => {
     const { status, stdout, calls } = runScheduler()
 
     expect(status).toBe(0)
-    expect(calls).toEqual(["kody-engine exec goal-manager --goal a"])
+    expect(calls).toEqual(["kody-engine implementation goal-manager --goal a"])
     expect(stdout).toContain("scanned 3 goal instance(s), active=1, managed=1")
   })
 
@@ -324,9 +324,9 @@ describe("goal-scheduler live wiring", () => {
     const { status, stdout, calls } = runScheduler()
 
     expect(status).toBe(0)
-    expect(calls).toContain("kody-engine exec goal-manager --goal ok-1")
-    expect(calls).toContain("kody-engine exec goal-manager --goal fail-goal")
-    expect(calls).toContain("kody-engine exec goal-manager --goal ok-2")
+    expect(calls).toContain("kody-engine implementation goal-manager --goal ok-1")
+    expect(calls).toContain("kody-engine implementation goal-manager --goal fail-goal")
+    expect(calls).toContain("kody-engine implementation goal-manager --goal ok-2")
     expect(stdout).toContain("tick fail-goal failed (continuing)")
     expect(stdout).toContain("scanned 3 goal instance(s), active=3, managed=3")
   })
@@ -347,7 +347,7 @@ describe("goal-scheduler live wiring", () => {
       state: "active",
       facts: { issue: 123 },
     })
-    expect(calls).toEqual(["kody-engine exec goal-manager --goal weekly-release-2026-W25"])
+    expect(calls).toEqual(["kody-engine implementation goal-manager --goal weekly-release-2026-W25"])
     expect(stdout).toContain("created goal instance weekly-release-2026-W25")
     expect(stdout).toContain("-> tick weekly-release-2026-W25 (goal-manager)")
   })
@@ -369,7 +369,7 @@ describe("goal-scheduler live wiring", () => {
 
     const after = runScheduler({ now: "2026-06-24T07:01:00Z" })
     expect(after.status).toBe(0)
-    expect(after.calls).toEqual(["kody-engine exec goal-manager --goal web-release-2026-06-24"])
+    expect(after.calls).toEqual(["kody-engine implementation goal-manager --goal web-release-2026-06-24"])
     expect(after.stdout).toContain("created goal instance web-release-2026-06-24")
   })
 
@@ -399,7 +399,7 @@ describe("goal-scheduler live wiring", () => {
     const { status, calls, stdout } = runScheduler({ now: "2026-06-25T06:59:00Z" })
 
     expect(status).toBe(0)
-    expect(calls).toEqual(["kody-engine exec goal-manager --goal web-release-2026-06-24"])
+    expect(calls).toEqual(["kody-engine implementation goal-manager --goal web-release-2026-06-24"])
     expect(stdout).toContain("skip web-release: waiting preferred time 10:00 Asia/Jerusalem")
     expect(stdout).toContain("-> tick web-release-2026-06-24 (goal-manager)")
   })
@@ -430,7 +430,7 @@ describe("goal-scheduler live wiring", () => {
     const { status, calls, stdout } = runScheduler({ now: "2026-06-25T07:01:00Z" })
 
     expect(status).toBe(0)
-    expect(calls).toEqual(["kody-engine exec goal-manager --goal web-release-2026-06-24"])
+    expect(calls).toEqual(["kody-engine implementation goal-manager --goal web-release-2026-06-24"])
     expect(fs.existsSync(path.join(tmp, ".kody", "todos", "web-release-2026-06-25.json"))).toBe(false)
     expect(stdout).toContain("skip web-release: active scheduled instance already running (web-release-2026-06-24)")
   })
@@ -471,7 +471,7 @@ describe("goal-scheduler live wiring", () => {
     const { status, calls, stdout } = runScheduler({ now: "2026-06-25T07:01:00Z" })
 
     expect(status).toBe(0)
-    expect(calls).toEqual(["kody-engine exec goal-manager --goal web-release-2026-06-24"])
+    expect(calls).toEqual(["kody-engine implementation goal-manager --goal web-release-2026-06-24"])
     expect(stdout).toContain("skip web-release: active scheduled instance already running (web-release-2026-06-24)")
     expect(stdout).not.toContain("-> tick web-release-2026-06-25 (goal-manager)")
   })
@@ -490,7 +490,7 @@ describe("goal-scheduler live wiring", () => {
     const { status, calls, stdout } = runScheduler({ now: "2026-06-24T07:01:00Z" })
 
     expect(status).toBe(0)
-    expect(calls).toEqual(["kody-engine exec goal-manager --goal web-release-2026-06-24"])
+    expect(calls).toEqual(["kody-engine implementation goal-manager --goal web-release-2026-06-24"])
     expect(stdout).toContain("created goal instance web-release-2026-06-24")
     expect(stdout).not.toContain("-> tick web-release (goal-manager)")
   })

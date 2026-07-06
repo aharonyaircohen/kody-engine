@@ -29,7 +29,7 @@ describe("initFlow: performInit", () => {
     expect(result.wrote).toContain("kody.config.json")
     expect(result.wrote).toContain(".github/workflows/kody.yml")
     expect(result.wrote.some((file) => file.startsWith(".kody/"))).toBe(false)
-    // Every discovered scheduled executable also gets its own workflow file.
+    // Every discovered scheduled implementation also gets its own workflow file.
     const scheduledWorkflows = result.wrote.filter((f) => /\.github\/workflows\/kody-.+\.yml$/.test(f))
     expect(scheduledWorkflows.length).toBeGreaterThanOrEqual(1)
     expect(result.skipped).toEqual([])
@@ -37,7 +37,7 @@ describe("initFlow: performInit", () => {
     expect(fs.existsSync(path.join(dir, ".github/workflows/kody.yml"))).toBe(true)
     const workflow = fs.readFileSync(path.join(dir, ".github/workflows/kody.yml"), "utf-8")
     expect(workflow).toContain("      capability:")
-    expect(workflow).not.toContain("      executable:")
+    expect(workflow).not.toContain("      implementation:")
 
     expect(result.wrote.some((file) => file.startsWith(".kody/capabilities/"))).toBe(false)
     expect(fs.existsSync(path.join(dir, ".kody/capabilities"))).toBe(false)
@@ -140,7 +140,7 @@ describe("renderScheduledWorkflow", () => {
     const yml = renderScheduledWorkflow("capability-scheduler", "*/5 * * * *")
     expect(yml).toMatch(/uses: actions\/setup-python/)
     expect(yml).toMatch(/python-version:/)
-    expect(yml).toContain("kody-engine exec capability-scheduler")
-    expect(yml).toContain("\n        run: npx -y -p @kody-ade/kody-engine@latest kody-engine exec capability-scheduler")
+    expect(yml).toContain("kody-engine implementation capability-scheduler")
+    expect(yml).toContain("\n        run: npx -y -p @kody-ade/kody-engine@latest kody-engine implementation capability-scheduler")
   })
 })

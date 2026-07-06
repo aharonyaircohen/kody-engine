@@ -1,5 +1,5 @@
 /**
- * serveFlow — preflight for the `serve` executable.
+ * serveFlow — preflight for the `serve` implementation.
  *
  * Starts a LiteLLM proxy for the configured model (when the model needs one)
  * and optionally launches an editor pointed at it. Three forms:

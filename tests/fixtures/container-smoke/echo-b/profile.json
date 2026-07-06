@@ -1,7 +1,7 @@
 {
   "name": "echo-b",
   "role": "utility",
-  "describe": "No-op echo executable used by the container smoke fixture.",
+  "describe": "No-op echo implementation used by the container smoke fixture.",
   "kind": "oneshot",
   "inputs": [
     {

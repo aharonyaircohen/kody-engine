@@ -3,7 +3,7 @@
  * change the thinking depth when invoked via the kody CLI? Exercises the full
  * path: parseArgs → loadProfile → parseClaudeCode → executor → runAgent → SDK.
  *
- * For each budget, we create a temporary profile under src/executables/, run
+ * For each budget, we create a temporary profile under src/implementations/, run
  * `pnpm kody:run <name>` against a temp project dir, parse the NDJSON, and delete
  * the profile. No commits, no persistent fixtures.
  */
@@ -13,7 +13,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 
 const REPO_ROOT = path.resolve(new URL(".", import.meta.url).pathname, "..")
-const EXECUTABLES_ROOT = path.join(REPO_ROOT, "src", "executables")
+const IMPLEMENTATIONS_ROOT = path.join(REPO_ROOT, "src", "implementations")
 
 const REASONING_PROMPT = [
   "Find the unique 10-digit number N (using each of the digits 0, 1, 2, 3, 4, 5,",
@@ -38,7 +38,7 @@ interface RunResult {
 
 function makeProfile(budget: number): string {
   const dirName = `verify-think-${budget}`
-  const dir = path.join(EXECUTABLES_ROOT, dirName)
+  const dir = path.join(IMPLEMENTATIONS_ROOT, dirName)
   fs.mkdirSync(dir, { recursive: true })
 
   const profile = {
@@ -144,7 +144,7 @@ function runOne(budget: number): RunResult {
     const usage = parseUsage(ndjsonPath)
     return { budget, exitCode: res.status ?? -1, ...usage }
   } finally {
-    fs.rmSync(path.join(EXECUTABLES_ROOT, profileName), { recursive: true, force: true })
+    fs.rmSync(path.join(IMPLEMENTATIONS_ROOT, profileName), { recursive: true, force: true })
     fs.rmSync(projectDir, { recursive: true, force: true })
   }
 }

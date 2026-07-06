@@ -1,4 +1,4 @@
-import type { Job } from "./executables/types.js"
+import type { Job } from "./implementations/types.js"
 
 /** Stable key for the required work on a task; retries keep this value. */
 export function stableJobKey(job: Job): string {

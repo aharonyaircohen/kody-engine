@@ -6,7 +6,7 @@
  * Staging and pre-commit cleanup are handled by earlier
  * postflight entries (e.g. abortUnfinishedGitOps for normal flows,
  * stageMergeConflicts for merge flows). This script does not branch on
- * executable identity.
+ * implementation identity.
  *
  * Commit message source (in priority order):
  *   1. ctx.data.commitMessage (agent's COMMIT_MSG line, parsed by parseAgentResult)
@@ -23,7 +23,7 @@ import {
   listFilesInCommit,
 } from "../commit.js"
 import { resolveRunId } from "../events.js"
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../implementations/types.js"
 import { runtimeStatePath } from "../runtimePaths.js"
 
 const DEFAULT_COMMIT_MESSAGE = "chore: kody changes"
@@ -50,7 +50,7 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
   }
 
   // Idempotency sentinel — short-circuit if this commitAndPush has
-  // already run successfully for the same (runId, executable) tuple.
+  // already run successfully for the same (runId, implementation) tuple.
   const idempotencyEnabled = process.env.KODY_COMMIT_IDEMPOTENCY !== "0"
   const sentinel = idempotencyEnabled ? sentinelPathForStage(ctx.cwd, profile.name) : null
   if (sentinel && fs.existsSync(sentinel)) {

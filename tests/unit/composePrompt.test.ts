@@ -8,7 +8,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { composePrompt } from "../../src/scripts/composePrompt.js"
 
 function makeProfile(dir: string): Profile {
@@ -124,7 +124,7 @@ describe("composePrompt: capability-pipeline tokens (Phase 1 capability-tick ren
     const ctx = ctxFor({
       capabilitySlug: "stale-prs",
       capabilityTitle: "Stale PR Watcher",
-      executableSlug: "capability-tick",
+      implementationSlug: "capability-tick",
       agentSlug: "kody",
       agentTitle: "Kody",
       capabilitySchedule: "*/5 * * * *",
@@ -138,15 +138,15 @@ describe("composePrompt: capability-pipeline tokens (Phase 1 capability-tick ren
     expect(out).toContain("- Cadence: `*/5 * * * *`")
   })
 
-  it("renders the {{capabilitySlug}}, {{capabilityTitle}}, {{executableSlug}}, {{agentSlug}}, {{capabilitySchedule}} aliases individually", async () => {
+  it("renders the {{capabilitySlug}}, {{capabilityTitle}}, {{implementationSlug}}, {{agentSlug}}, {{capabilitySchedule}} aliases individually", async () => {
     fs.writeFileSync(
       path.join(dir, "prompt.md"),
-      "{{capabilitySlug}}|{{capabilityTitle}}|{{executableSlug}}|{{agentSlug}}|{{capabilitySchedule}}",
+      "{{capabilitySlug}}|{{capabilityTitle}}|{{implementationSlug}}|{{agentSlug}}|{{capabilitySchedule}}",
     )
     const ctx = ctxFor({
       capabilitySlug: "stale-prs",
       capabilityTitle: "Stale PR Watcher",
-      executableSlug: "capability-tick",
+      implementationSlug: "capability-tick",
       agentSlug: "kody",
       capabilitySchedule: "15m",
     })
@@ -212,7 +212,7 @@ describe("composePrompt: capability-pipeline tokens (Phase 1 capability-tick ren
     const ctx = ctxFor({
       capabilitySlug: "ad-hoc",
       capabilityTitle: "Ad Hoc Capability",
-      executableSlug: "capability-tick",
+      implementationSlug: "capability-tick",
       // No agentSlug, no capabilitySchedule — on-demand run.
     })
     await composePrompt(ctx, makeProfile(dir))
@@ -229,16 +229,16 @@ describe("composePrompt: capability-pipeline tokens (Phase 1 capability-tick ren
     fs.writeFileSync(path.join(dir, "prompt.md"), "before{{capabilityReference}}after")
     const ctx = ctxFor({}) // no capability fields
     const profile = makeProfile(dir)
-    profile.name = "" // suppress the executableSlug fallback
+    profile.name = "" // suppress the implementationSlug fallback
     await composePrompt(ctx, profile)
     expect(ctx.data.prompt).toBe("beforeafter")
   })
 
-  it("falls back to the profile name for {{executableSlug}} when ctx.data is silent", async () => {
-    // The loader (loadJobFromFile) sets ctx.data.executableSlug from
+  it("falls back to the profile name for {{implementationSlug}} when ctx.data is silent", async () => {
+    // The loader (loadJobFromFile) sets ctx.data.implementationSlug from
     // profile.name. composePrompt's fallback uses the profile's own name so
     // a bare profile still renders something coherent.
-    fs.writeFileSync(path.join(dir, "prompt.md"), "exe={{executableSlug}}")
+    fs.writeFileSync(path.join(dir, "prompt.md"), "exe={{implementationSlug}}")
     const profile = makeProfile(dir)
     profile.name = "capability-tick"
     const ctx = ctxFor({})

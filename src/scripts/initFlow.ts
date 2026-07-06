@@ -1,5 +1,5 @@
 /**
- * initFlow — preflight for the `init` executable.
+ * initFlow — preflight for the `init` implementation.
  *
  * Scaffolds a consumer repo: writes `kody.config.json` and
  * `.github/workflows/kody.yml` if absent (or when `--force`). Detects the
@@ -13,10 +13,10 @@ import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import pkg from "../../package.json"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { type EnsureLabelsResult, ensureLabels } from "../lifecycleLabels.js"
 import { loadProfile } from "../profile.js"
-import { listExecutables } from "../registry.js"
+import { listImplementations } from "../registry.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -204,8 +204,8 @@ export function performInit(cwd: string, force: boolean): InitResult {
     wrote.push(".github/workflows/kody.yml")
   }
 
-  // 3. .github/workflows/kody-<name>.yml for every discovered scheduled executable profile.
-  for (const exe of listExecutables()) {
+  // 3. .github/workflows/kody-<name>.yml for every discovered scheduled implementation profile.
+  for (const exe of listImplementations()) {
     let profile: ReturnType<typeof loadProfile>
     try {
       profile = loadProfile(exe.profilePath)
@@ -222,7 +222,7 @@ export function performInit(cwd: string, force: boolean): InitResult {
     wrote.push(`.github/workflows/kody-${exe.name}.yml`)
   }
 
-  // 6. Create/update every kody-owned label declared across the executable
+  // 6. Create/update every kody-owned label declared across the implementation
   //    profile set. Best-effort: if `gh` isn't installed/authenticated, this
   //    is skipped silently and setKodyLabel will lazily create the label on
   //    first use during a real flow run.
@@ -268,7 +268,7 @@ jobs:
           python-version: "3.12"
       - env:
           GH_TOKEN: \${{ secrets.KODY_TOKEN || github.token }}
-        run: npx -y -p @kody-ade/kody-engine@latest kody-engine exec ${name}
+        run: npx -y -p @kody-ade/kody-engine@latest kody-engine implementation ${name}
 `
 }
 

@@ -195,7 +195,7 @@ function normalizeRecommendationIntent(body: string): string | null {
   return null
 }
 
-function containsExecutableKodyCommand(body: string): boolean {
+function containsImplementationKodyCommand(body: string): boolean {
   return /@kody\b/i.test(body) || /\bkody-cmd\s*:/i.test(body)
 }
 
@@ -232,10 +232,10 @@ function postRecommendation(
   message: string,
   capabilitySlug?: string,
 ): RecommendationPostResult {
-  if (containsExecutableKodyCommand(message)) {
+  if (containsImplementationKodyCommand(message)) {
     return {
       ok: false,
-      error: "recommendation body contains executable Kody command text; use inert kody-intent metadata",
+      error: "recommendation body contains implementation Kody command text; use inert kody-intent metadata",
     }
   }
 

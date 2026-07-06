@@ -1,4 +1,4 @@
-import type { Context, PostflightScript } from "../executables/types.js"
+import type { Context, PostflightScript } from "../implementations/types.js"
 import { gh } from "../issue.js"
 import { normalizeStatePath, parseStateRepo, stateRepoPath } from "../stateRepo.js"
 
@@ -224,9 +224,9 @@ function normalizeBundleFiles(
     if (!relativePath) {
       throw new Error(`openAgentFactoryStatePr: files[${index}].path must point to a state repo file`)
     }
-    if (relativePath === "executables" || relativePath.startsWith("executables/")) {
+    if (relativePath === "implementations" || relativePath.startsWith("implementations/")) {
       throw new Error(
-        `openAgentFactoryStatePr: files[${index}].path uses obsolete executables storage; use capabilities/<slug>/ instead`,
+        `openAgentFactoryStatePr: files[${index}].path uses obsolete implementations storage; use capabilities/<slug>/ instead`,
       )
     }
     if (seen.has(relativePath)) {
@@ -275,7 +275,7 @@ function requireString(value: unknown, label: string): string {
 
 function creatorSourceLabel(ctx: Context, profileName: string | undefined): string {
   const capability = typeof ctx.data.jobCapability === "string" ? ctx.data.jobCapability.trim() : ""
-  const implementation = typeof ctx.data.jobImplementation === "string" ? ctx.data.jobImplementation.trim() : ""
+  const implementation = typeof ctx.data.selectedImplementation === "string" ? ctx.data.selectedImplementation.trim() : ""
   const profile = typeof profileName === "string" ? profileName.trim() : ""
   return capability || implementation || profile || "agent-factory"
 }

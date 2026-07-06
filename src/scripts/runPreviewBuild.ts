@@ -31,7 +31,7 @@ import { copyFile, writeFile } from "node:fs/promises"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { readGithubStateText } from "../stateRepoGithub.js"
 import {
   basePreviewAppName,

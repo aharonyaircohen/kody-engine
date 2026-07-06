@@ -46,7 +46,7 @@ vi.mock("node:child_process", async (orig) => {
   return { ...actual, spawn: mocks.spawn }
 })
 
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { verifyReproFails } from "../../src/scripts/verifyReproFails.js"
 
 const profile = { name: "reproduce" } as Profile

@@ -1,5 +1,5 @@
 /**
- * Flow script for the `resolve` executable.
+ * Flow script for the `resolve` implementation.
  *
  * GitHub's `mergeable` field is the authoritative source of truth for
  * "is there a conflict?" We consult it FIRST. The local `git merge` is
@@ -22,7 +22,7 @@
 
 import { execFileSync } from "node:child_process"
 import { checkoutPrBranch, getCurrentBranch, mergeBase } from "../branch.js"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { getRunUrl } from "../gha.js"
 import { getPr, postPrReviewComment } from "../issue.js"
 import { prMergeStatus } from "../pr.js"

@@ -1,14 +1,14 @@
 /**
  * Read-only preflight: load an issue's metadata + formatted comments into
  * ctx.data.issue. No branch creation, no "started" comment. Used by
- * read-only executables (plan, orchestrator) that must not touch git state.
+ * read-only implementations (plan, orchestrator) that must not touch git state.
  *
  * ctx.data.issue: IssueData & { commentsFormatted: string }
  * ctx.data.commentTargetType = "issue"
  * ctx.data.commentTargetNumber = issueNumber
  */
 
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { DEFAULT_COMMENT_LIMIT, DEFAULT_COMMENT_MAX_BYTES, formatIssueComments, getIssue } from "../issue.js"
 
 export const loadIssueContext: PreflightScript = async (ctx) => {

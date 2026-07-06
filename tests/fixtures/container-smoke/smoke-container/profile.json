@@ -33,12 +33,12 @@
   },
   "children": [
     {
-      "exec": "echo-a",
+      "implementation": "echo-a",
       "target": "issue",
       "next": { "ECHO_A_COMPLETED": "echo-b", "*": "abort" }
     },
     {
-      "exec": "echo-b",
+      "implementation": "echo-b",
       "target": "issue",
       "next": { "ECHO_B_COMPLETED": "done", "*": "abort" }
     }

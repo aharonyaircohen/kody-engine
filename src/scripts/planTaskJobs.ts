@@ -1,4 +1,4 @@
-import type { Job, JobFlavor, PreflightScript } from "../executables/types.js"
+import type { Job, JobFlavor, PreflightScript } from "../implementations/types.js"
 import { stableJobKey, targetFromCliArgs } from "../jobIdentity.js"
 import {
   emptyState,

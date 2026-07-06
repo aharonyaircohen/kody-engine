@@ -75,7 +75,7 @@ function resetWorkingTree(cwd?: string): void {
  * is ephemeral and may carry build artifacts written by earlier steps
  * (e.g. payload's `importMap.js` regenerated during `pnpm install`); these
  * would otherwise make `gh pr checkout` refuse with "Your local changes
- * would be overwritten by checkout" and crash the executable.
+ * would be overwritten by checkout" and crash the implementation.
  *
  * Discarding is safe because nothing the engine cares about lives in the
  * runner's pre-checkout working tree — the PR's branch contents are the

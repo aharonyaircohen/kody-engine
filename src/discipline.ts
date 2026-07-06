@@ -1,9 +1,9 @@
 /**
  * The universal working-discipline block.
  *
- * Prepended to every executable's system-prompt append (see executor.ts) so
+ * Prepended to every implementation's system-prompt append (see executor.ts) so
  * it reaches the agent on every run, regardless of role. It is role-agnostic
- * by construction — it names no executable, phase, or mode — and static, so
+ * by construction — it names no implementation, phase, or mode — and static, so
  * it sits at the front of the cacheable system-prompt prefix.
  *
  * Why it exists: kody runs unattended in CI. There is no human to catch a

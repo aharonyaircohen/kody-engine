@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process"
 
-import type { Context } from "../executables/types.js"
+import type { Context } from "../implementations/types.js"
 import type { LoadedJobState } from "./jobState/index.js"
 import { extractNextStateFromText } from "./parseJobStateFromAgentResult.js"
 

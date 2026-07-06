@@ -15,7 +15,7 @@
  *
  *   ctx.data.capabilitySlug       alias of jobSlug
  *   ctx.data.capabilityTitle      profile.describe
- *   ctx.data.executableSlug profile.implementation ?? profile.name
+ *   ctx.data.implementationSlug profile.implementation ?? profile.name
  *   ctx.data.agentSlug      profile.agent ?? ""
  *   ctx.data.capabilitySchedule   runtime job schedule when supplied, otherwise empty
  *
@@ -24,7 +24,7 @@
  */
 
 import { CAPABILITY_MCP_TOOL_NAMES } from "../capabilityMcp.js"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { resolveBackend } from "./jobState/index.js"
 
 const CAPABILITY_TOOL_PALETTE: ReadonlySet<string> = new Set(CAPABILITY_MCP_TOOL_NAMES)
@@ -47,7 +47,7 @@ export const loadCapabilityState: PreflightScript = async (ctx, profile, args) =
   // `{{capabilityReference}}` block.
   ctx.data.capabilitySlug = slug
   ctx.data.capabilityTitle = profile.describe
-  ctx.data.executableSlug = profile.implementation ?? profile.name
+  ctx.data.implementationSlug = profile.implementation ?? profile.name
   ctx.data.agentSlug = profile.agent ?? ""
   ctx.data.agentTitle = ""
   // Runtime cadence comes from the scheduled job/goal/loop, not the capability profile.

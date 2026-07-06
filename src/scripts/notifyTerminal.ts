@@ -19,7 +19,7 @@
  * Best-effort: any gh failure is logged and swallowed. Never aborts the run.
  */
 
-import type { PostflightScript, ScriptArgs } from "../executables/types.js"
+import type { PostflightScript, ScriptArgs } from "../implementations/types.js"
 import { postIssueComment as ghPostIssueComment, truncate } from "../issue.js"
 
 export const notifyTerminal: PostflightScript = async (ctx, _profile, _agentResult, args?: ScriptArgs) => {

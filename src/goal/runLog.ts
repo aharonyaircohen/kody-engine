@@ -452,7 +452,7 @@ function jobContext(data: Record<string, unknown>): Record<string, unknown> | un
     flavor: stringValue(data.jobFlavor) ?? undefined,
     action: stringValue(data.jobAction) ?? undefined,
     capability: stringValue(data.jobCapability) ?? undefined,
-    implementation: stringValue(data.jobImplementation) ?? undefined,
+    implementation: stringValue(data.selectedImplementation) ?? undefined,
     agent: stringValue(data.jobAgent) ?? undefined,
     schedule: stringValue(data.jobSchedule) ?? undefined,
     target: data.jobTarget ?? undefined,

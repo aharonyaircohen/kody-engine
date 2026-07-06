@@ -161,7 +161,7 @@ export interface ParsedAgentResult {
   planDeviations: string
   /**
    * Optional JSON payload following a `PRIOR_ART:` marker. Generic channel
-   * for any executable that wants to flag "here is structured data downstream
+   * for any implementation that wants to flag "here is structured data downstream
    * consumers may want." Research uses it to list closed/merged PRs whose
    * diffs should be loaded by a later `loadPriorArt` preflight. The parser
    * does NOT validate the shape — it just captures the trimmed string so

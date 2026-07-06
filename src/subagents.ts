@@ -7,14 +7,14 @@
  * model can't see them and falls back to doing the work itself. Passing
  * them directly via the SDK `agents` option is the reliable path.
  *
- * Resolution mirrors buildSyntheticPlugin: the executable's own
+ * Resolution mirrors buildSyntheticPlugin: the implementation's own
  * `<profile.dir>/agents/<name>.md` wins, then the shared catalog at
  * `src/plugins/agents/<name>.md`.
  */
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { Profile } from "./executables/types.js"
+import type { Profile } from "./implementations/types.js"
 import { getPluginsCatalogRoot } from "./scripts/buildSyntheticPlugin.js"
 
 export interface LoadedAgent {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import type { AgentResult } from "../../src/agent.js"
-import type { Profile } from "../../src/executables/types.js"
+import type { Profile } from "../../src/implementations/types.js"
 import { postReviewResult } from "../../src/scripts/postReviewResult.js"
 
 vi.mock("../../src/issue.js", async (orig) => {

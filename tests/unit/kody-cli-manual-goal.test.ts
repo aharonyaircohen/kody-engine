@@ -63,11 +63,11 @@ function writeConfig(dir: string): void {
   )
 }
 
-function writeScheduledExecutable(dir: string, name: string): void {
-  const executableDir = path.join(dir, ".kody", "capabilities", name)
-  fs.mkdirSync(executableDir, { recursive: true })
+function writeScheduledImplementation(dir: string, name: string): void {
+  const implementationDir = path.join(dir, ".kody", "capabilities", name)
+  fs.mkdirSync(implementationDir, { recursive: true })
   fs.writeFileSync(
-    path.join(executableDir, "profile.json"),
+    path.join(implementationDir, "profile.json"),
     JSON.stringify({
       name,
       internal: true,
@@ -77,7 +77,7 @@ function writeScheduledExecutable(dir: string, name: string): void {
       scripts: { preflight: [], postflight: [] },
     }),
   )
-  fs.writeFileSync(path.join(executableDir, "capability.md"), `# ${name}\n`)
+  fs.writeFileSync(path.join(implementationDir, "capability.md"), `# ${name}\n`)
 }
 
 afterEach(() => {
@@ -175,7 +175,7 @@ describe("kody-cli manual goal dispatch", () => {
   it("runs scheduled watch capabilities from manual workflow dispatch", async () => {
     const dir = tmpDir()
     writeConfig(dir)
-    writeScheduledExecutable(dir, "goal-scheduler")
+    writeScheduledImplementation(dir, "goal-scheduler")
     previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
     previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
@@ -234,7 +234,7 @@ describe("kody-cli manual goal dispatch", () => {
   it("chains scheduled goal-scheduler ticks from schedule events", async () => {
     const dir = tmpDir()
     writeConfig(dir)
-    writeScheduledExecutable(dir, "goal-scheduler")
+    writeScheduledImplementation(dir, "goal-scheduler")
     previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
     previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
     process.env.GITHUB_EVENT_NAME = "schedule"
@@ -260,7 +260,7 @@ describe("kody-cli manual goal dispatch", () => {
   it("does not check scheduled watches for issue comments with no direct action", async () => {
     const dir = tmpDir()
     writeConfig(dir)
-    writeScheduledExecutable(dir, "goal-scheduler")
+    writeScheduledImplementation(dir, "goal-scheduler")
     previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
     previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
     process.env.GITHUB_EVENT_NAME = "issue_comment"
@@ -277,7 +277,7 @@ describe("kody-cli manual goal dispatch", () => {
   it("does not check scheduled watches for pull_request events with no direct action", async () => {
     const dir = tmpDir()
     writeConfig(dir)
-    writeScheduledExecutable(dir, "goal-scheduler")
+    writeScheduledImplementation(dir, "goal-scheduler")
     previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
     previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
     process.env.GITHUB_EVENT_NAME = "pull_request"

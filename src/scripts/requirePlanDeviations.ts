@@ -1,5 +1,5 @@
 /**
- * Postflight for `run` (and any future plan-consuming executable): record
+ * Postflight for `run` (and any future plan-consuming implementation): record
  * the agent's `PLAN_DEVIATIONS:` block when present and warn when omitted
  * or malformed. NOT a hard gate — verify/tests are the real shipability
  * check; forgetting a bureaucratic checklist at the end of a long task
@@ -12,7 +12,7 @@
  *   - no plan artifact was loaded (nothing to deviate from).
  */
 
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../implementations/types.js"
 
 export const requirePlanDeviations: PostflightScript = async (ctx, _profile) => {
   if (!ctx.data.agentDone) return

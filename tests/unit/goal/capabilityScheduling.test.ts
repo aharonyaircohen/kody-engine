@@ -2,7 +2,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import type { Context, Profile } from "../../../src/executables/types.js"
+import type { Context, Profile } from "../../../src/implementations/types.js"
 import type { ManagedGoal } from "../../../src/goal/manager.js"
 import type { GoalState } from "../../../src/goal/state.js"
 import { advanceManagedGoal } from "../../../src/scripts/advanceManagedGoal.js"
@@ -758,7 +758,7 @@ describe("standing goal capability scheduling", () => {
     })
   })
 
-  it("passes capability slug when executable inputs declare capability", async () => {
+  it("passes capability slug when implementation inputs declare capability", async () => {
     writeCapability("auto-fix-ci", {
       agent: "kody",
       implementation: "auto-fix-ci",

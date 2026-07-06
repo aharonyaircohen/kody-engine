@@ -10,7 +10,7 @@
  */
 
 import { loadConfig } from "./config.js"
-import type { JobFlavor } from "./executables/types.js"
+import type { JobFlavor } from "./implementations/types.js"
 import { readStateText, type StateRepoConfig, upsertStateText } from "./stateRepo.js"
 
 export const STATE_BEGIN = "<!-- kody:state:v1:begin -->"

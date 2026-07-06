@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import type { AgentResult } from "../../src/agent.js"
 import type { KodyConfig } from "../../src/config.js"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { verifyWithRetry } from "../../src/scripts/verifyWithRetry.js"
 import type { Action } from "../../src/state.js"
 

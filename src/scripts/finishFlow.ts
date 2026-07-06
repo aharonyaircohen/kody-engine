@@ -10,7 +10,7 @@
  */
 
 import { execFileSync } from "node:child_process"
-import type { PostflightScript, ScriptArgs } from "../executables/types.js"
+import type { PostflightScript, ScriptArgs } from "../implementations/types.js"
 import { parsePrNumber } from "../issue.js"
 import { KODY_NAMESPACE, setKodyLabel } from "../lifecycleLabels.js"
 import { type TaskState, type TaskTarget, writeTaskState } from "../state.js"

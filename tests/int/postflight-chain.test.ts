@@ -86,10 +86,10 @@ vi.mock("../../src/commit.js", async (orig) => {
 })
 
 import type { AgentResult } from "../../src/agent.js"
-import type { Context } from "../../src/executables/types.js"
+import type { Context } from "../../src/implementations/types.js"
 import { shouldBlockMutatingPostflight } from "../../src/executor.js"
 import { loadProfile } from "../../src/profile.js"
-import { listExecutables } from "../../src/registry.js"
+import { listImplementations } from "../../src/registry.js"
 import { postflightScripts } from "../../src/scripts/index.js"
 
 function makeAgentResult(finalText: string, outcome: "completed" | "failed" = "completed"): AgentResult {
@@ -122,7 +122,7 @@ function makeCtx(): Context {
 }
 
 async function runPostflights(ctx: Context, agentResult: AgentResult, profileName: string): Promise<void> {
-  const exe = listExecutables().find((e) => e.name === profileName)
+  const exe = listImplementations().find((e) => e.name === profileName)
   if (!exe) throw new Error(`profile ${profileName} not found`)
   const profile = loadProfile(exe.profilePath)
   for (const entry of profile.scripts.postflight) {

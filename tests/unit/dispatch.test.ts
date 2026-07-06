@@ -17,10 +17,10 @@ function testConfig(config: Partial<KodyConfig>): KodyConfig {
 }
 
 function writeLocalReleaseAsset(root: string): void {
-  const executableDir = path.join(root, ".kody", "capabilities", "release")
-  fs.mkdirSync(executableDir, { recursive: true })
+  const implementationDir = path.join(root, ".kody", "capabilities", "release")
+  fs.mkdirSync(implementationDir, { recursive: true })
   fs.writeFileSync(
-    path.join(executableDir, "profile.json"),
+    path.join(implementationDir, "profile.json"),
     JSON.stringify({
       name: "release",
       action: "release",
@@ -48,7 +48,7 @@ function writeLocalReleaseAsset(root: string): void {
       scripts: { preflight: [], postflight: [] },
     }),
   )
-  fs.writeFileSync(path.join(executableDir, "capability.md"), "# Release\n\nRun release flow.\n")
+  fs.writeFileSync(path.join(implementationDir, "capability.md"), "# Release\n\nRun release flow.\n")
 }
 
 describe("dispatch: explicit override", () => {
@@ -108,7 +108,7 @@ describe("dispatch: workflow_dispatch event", () => {
     })
   })
 
-  it("routes workflow_dispatch capability=release to release executable", () => {
+  it("routes workflow_dispatch capability=release to release implementation", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-dispatch-release-workflow-"))
     const prevCwd = process.cwd()
     try {
@@ -131,7 +131,7 @@ describe("dispatch: workflow_dispatch event", () => {
     }
   })
 
-  it("ignores removed legacy workflow_dispatch executable input and falls back to run", () => {
+  it("ignores removed legacy workflow_dispatch implementation input and falls back to run", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-dispatch-release-workflow-"))
     const prevCwd = process.cwd()
     try {
@@ -365,7 +365,7 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("routes '@kody <action>' through a capability action, not a bare executable", () => {
+  it("routes '@kody <action>' through a capability action, not a bare implementation", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-action-dispatch-"))
     const prevCwd = process.cwd()
     try {
@@ -827,7 +827,7 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     })
   })
 
-  it("'@kody release minor' parses bump enum (release executable declares it after the merged-flow refactor)", () => {
+  it("'@kody release minor' parses bump enum (release implementation declares it after the merged-flow refactor)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody release minor" },
       issue: { number: 33 },
@@ -887,7 +887,7 @@ describe("dispatch: alias misconfig surfacing", () => {
     stderrSpy.mockRestore()
   })
 
-  it("warns when a configured alias maps to a non-registered executable", () => {
+  it("warns when a configured alias maps to a non-registered implementation", () => {
     process.env.GITHUB_EVENT_NAME = "issue_comment"
     process.env.GITHUB_EVENT_PATH = writeEvent({
       issue: { number: 9, pull_request: null },
@@ -895,7 +895,7 @@ describe("dispatch: alias misconfig surfacing", () => {
     })
     const result = autoDispatch({
       config: {
-        aliases: { "phantom-cmd": "no-such-executable" },
+        aliases: { "phantom-cmd": "no-such-implementation" },
         defaultImplementation: "classify",
       } as never,
     })
@@ -904,7 +904,7 @@ describe("dispatch: alias misconfig surfacing", () => {
     // the user instead. The alias-misconfig warning still fires.
     expect(result).toBeNull()
     const warnings = stderrSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n")
-    expect(warnings).toMatch(/alias 'phantom-cmd' → 'no-such-executable'/)
+    expect(warnings).toMatch(/alias 'phantom-cmd' → 'no-such-implementation'/)
     expect(warnings).toMatch(/has no matching capability action/)
   })
 

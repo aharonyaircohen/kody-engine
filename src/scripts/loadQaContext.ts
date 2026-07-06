@@ -1,6 +1,6 @@
 /**
  * Preflight: assemble QA context for the `qa-engineer` / `ui-review`
- * executables from dashboard-managed, per-repo stores. Replaces the legacy
+ * implementations from dashboard-managed, per-repo stores. Replaces the legacy
  * committed `.kody/qa-guide.md` mechanism.
  *
  *   - scenarios / notes → the state-repo `context/*.md` entries
@@ -21,7 +21,7 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { readKodyVariables } from "./kodyVariables.js"
 import { resolveRuntimeSecret } from "./runtimeSecrets.js"
 

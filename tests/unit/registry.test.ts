@@ -4,16 +4,16 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import {
-  builtinExecutableNames,
-  hasExecutable,
-  isBuiltinExecutable,
+  builtinImplementationNames,
+  hasImplementation,
+  isBuiltinImplementation,
   isSafeName,
   listCapabilityActions,
-  listExecutables,
+  listImplementations,
   parseGenericFlags,
   resolveCapabilityAction,
   resolveCapabilityFolder,
-  resolveExecutable,
+  resolveImplementation,
 } from "../../src/registry.js"
 
 function mkFixture(): string {
@@ -26,19 +26,19 @@ function writeProfile(root: string, name: string, body: object = {}): void {
   fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify(body))
 }
 
-describe("registry: builtin executables", () => {
-  it("detects the engine-bundled executables by name", () => {
-    const names = builtinExecutableNames()
+describe("registry: builtin implementations", () => {
+  it("detects the engine-bundled implementations by name", () => {
+    const names = builtinImplementationNames()
     // a sample of known engine builtins
     expect(names.has("run")).toBe(true)
     expect(names.has("merge")).toBe(false)
     expect(names.has("capability-scheduler")).toBe(false)
   })
 
-  it("isBuiltinExecutable is true for builtins, false for custom names", () => {
-    expect(isBuiltinExecutable("run")).toBe(true)
-    expect(isBuiltinExecutable("merge")).toBe(false)
-    expect(isBuiltinExecutable("a-custom-consumer-capability-xyz")).toBe(false)
+  it("isBuiltinImplementation is true for builtins, false for custom names", () => {
+    expect(isBuiltinImplementation("run")).toBe(true)
+    expect(isBuiltinImplementation("merge")).toBe(false)
+    expect(isBuiltinImplementation("a-custom-consumer-capability-xyz")).toBe(false)
   })
 })
 
@@ -60,7 +60,7 @@ describe("registry: isSafeName", () => {
   })
 })
 
-describe("registry: listExecutables", () => {
+describe("registry: listImplementations", () => {
   let root: string
 
   beforeEach(() => {
@@ -70,12 +70,12 @@ describe("registry: listExecutables", () => {
     fs.rmSync(root, { recursive: true, force: true })
   })
 
-  it("returns empty when root has no executables", () => {
-    expect(listExecutables(root)).toEqual([])
+  it("returns empty when root has no implementations", () => {
+    expect(listImplementations(root)).toEqual([])
   })
 
   it("returns empty when root does not exist", () => {
-    expect(listExecutables(path.join(root, "nope"))).toEqual([])
+    expect(listImplementations(path.join(root, "nope"))).toEqual([])
   })
 
   it("finds every directory containing profile.json", () => {
@@ -83,7 +83,7 @@ describe("registry: listExecutables", () => {
     writeProfile(root, "review", { name: "review" })
     writeProfile(root, "watch-stale-prs", { name: "watch-stale-prs" })
 
-    const names = listExecutables(root).map((e) => e.name)
+    const names = listImplementations(root).map((e) => e.name)
     expect(names).toEqual(["build", "review", "watch-stale-prs"])
   })
 
@@ -92,19 +92,19 @@ describe("registry: listExecutables", () => {
     fs.mkdirSync(path.join(root, "types"), { recursive: true })
     fs.writeFileSync(path.join(root, "types", "types.ts"), "export {}")
 
-    const names = listExecutables(root).map((e) => e.name)
+    const names = listImplementations(root).map((e) => e.name)
     expect(names).toEqual(["build"])
   })
 
   it("returns absolute profilePath for each discovery", () => {
     writeProfile(root, "init", {})
-    const [exe] = listExecutables(root)
+    const [exe] = listImplementations(root)
     expect(exe?.profilePath).toBe(path.join(root, "init", "profile.json"))
     expect(fs.existsSync(exe!.profilePath)).toBe(true)
   })
 })
 
-describe("registry: obsolete project executables", () => {
+describe("registry: obsolete project implementations", () => {
   let root: string
   let previousStore: string | undefined
   const prevCwd = process.cwd()
@@ -125,9 +125,9 @@ describe("registry: obsolete project executables", () => {
     fs.rmSync(root, { recursive: true, force: true })
   })
 
-  it("ignores project .kody/executables roots", () => {
+  it("ignores project .kody/implementations roots", () => {
     const capabilityDir = path.join(root, ".kody", "capabilities", "feature")
-    const exeDir = path.join(root, ".kody", "executables", "feature")
+    const exeDir = path.join(root, ".kody", "implementations", "feature")
     fs.mkdirSync(capabilityDir, { recursive: true })
     fs.mkdirSync(exeDir, { recursive: true })
     fs.writeFileSync(
@@ -137,8 +137,8 @@ describe("registry: obsolete project executables", () => {
     fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Feature\n")
     fs.writeFileSync(path.join(exeDir, "profile.json"), JSON.stringify({ name: "feature", role: "primitive" }))
 
-    expect(resolveExecutable("feature")).toBeNull()
-    expect(listExecutables().find((exe) => exe.name === "feature")).toBeUndefined()
+    expect(resolveImplementation("feature")).toBeNull()
+    expect(listImplementations().find((exe) => exe.name === "feature")).toBeUndefined()
     expect(resolveCapabilityAction("feature")).toMatchObject({
       action: "feature",
       capability: "feature",
@@ -216,32 +216,32 @@ describe("registry: capabilities root", () => {
     })
   })
 
-  it("uses full .kody/capabilities implementation profiles and ignores project executables", () => {
+  it("uses full .kody/capabilities implementation profiles and ignores project implementations", () => {
     const capabilityDir = path.join(root, ".kody", "capabilities", "ship")
-    const executableDir = path.join(root, ".kody", "executables", "ship")
+    const implementationDir = path.join(root, ".kody", "implementations", "ship")
     fs.mkdirSync(capabilityDir, { recursive: true })
-    fs.mkdirSync(executableDir, { recursive: true })
+    fs.mkdirSync(implementationDir, { recursive: true })
     fs.writeFileSync(
       path.join(capabilityDir, "profile.json"),
       JSON.stringify({ name: "capability-ship", role: "primitive" }),
     )
     fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Ship\n")
     fs.writeFileSync(
-      path.join(executableDir, "profile.json"),
-      JSON.stringify({ name: "executable-ship", role: "primitive" }),
+      path.join(implementationDir, "profile.json"),
+      JSON.stringify({ name: "implementation-ship", role: "primitive" }),
     )
 
-    expect(fs.realpathSync(resolveExecutable("ship")!)).toBe(fs.realpathSync(path.join(capabilityDir, "profile.json")))
-    expect(fs.realpathSync(listExecutables().find((item) => item.name === "ship")!.profilePath)).toBe(
+    expect(fs.realpathSync(resolveImplementation("ship")!)).toBe(fs.realpathSync(path.join(capabilityDir, "profile.json")))
+    expect(fs.realpathSync(listImplementations().find((item) => item.name === "ship")!.profilePath)).toBe(
       fs.realpathSync(path.join(capabilityDir, "profile.json")),
     )
   })
 
-  it("does not treat thin .kody/capabilities contracts or obsolete executables as implementation profiles", () => {
+  it("does not treat thin .kody/capabilities contracts or obsolete implementations as implementation profiles", () => {
     const capabilityDir = path.join(root, ".kody", "capabilities", "ship")
-    const executableDir = path.join(root, ".kody", "executables", "ship")
+    const implementationDir = path.join(root, ".kody", "implementations", "ship")
     fs.mkdirSync(capabilityDir, { recursive: true })
-    fs.mkdirSync(executableDir, { recursive: true })
+    fs.mkdirSync(implementationDir, { recursive: true })
     fs.writeFileSync(
       path.join(capabilityDir, "profile.json"),
       JSON.stringify({
@@ -253,13 +253,13 @@ describe("registry: capabilities root", () => {
     )
     fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Ship\n")
     fs.writeFileSync(
-      path.join(executableDir, "profile.json"),
-      JSON.stringify({ name: "executable-ship", role: "primitive" }),
+      path.join(implementationDir, "profile.json"),
+      JSON.stringify({ name: "implementation-ship", role: "primitive" }),
     )
 
     expect(resolveCapabilityAction("ship")).toBeNull()
-    expect(resolveExecutable("ship")).toBeNull()
-    expect(listExecutables().find((item) => item.name === "ship")).toBeUndefined()
+    expect(resolveImplementation("ship")).toBeNull()
+    expect(listImplementations().find((item) => item.name === "ship")).toBeUndefined()
   })
 
   it("lets store capabilities override stale project capability implementation references", () => {
@@ -334,7 +334,7 @@ describe("registry: capabilities root", () => {
   })
 })
 
-describe("registry: hasExecutable", () => {
+describe("registry: hasImplementation", () => {
   let root: string
   beforeEach(() => {
     root = mkFixture()
@@ -345,22 +345,22 @@ describe("registry: hasExecutable", () => {
 
   it("true when the profile exists", () => {
     writeProfile(root, "review", {})
-    expect(hasExecutable("review", root)).toBe(true)
+    expect(hasImplementation("review", root)).toBe(true)
   })
 
   it("false when the directory exists but profile.json is missing", () => {
     fs.mkdirSync(path.join(root, "review"), { recursive: true })
-    expect(hasExecutable("review", root)).toBe(false)
+    expect(hasImplementation("review", root)).toBe(false)
   })
 
   it("false on unknown name", () => {
-    expect(hasExecutable("nothing", root)).toBe(false)
+    expect(hasImplementation("nothing", root)).toBe(false)
   })
 
   it("rejects unsafe names without touching the filesystem", () => {
     writeProfile(root, "build", {})
-    expect(hasExecutable("../build", root)).toBe(false)
-    expect(hasExecutable("..", root)).toBe(false)
+    expect(hasImplementation("../build", root)).toBe(false)
+    expect(hasImplementation("..", root)).toBe(false)
   })
 })
 

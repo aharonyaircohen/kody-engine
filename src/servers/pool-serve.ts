@@ -1,5 +1,5 @@
 /**
- * poolServe — preflight for the `pool-serve` executable.
+ * poolServe — preflight for the `pool-serve` implementation.
  *
  * The warm-pool OWNER. Runs always-on and serves the pool API the dashboard
  * calls to claim a pre-booted, frozen runner. It owns runner capacity only;

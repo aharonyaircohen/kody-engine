@@ -17,7 +17,7 @@ vi.mock("../../src/gha.js", () => ({
   getRunUrl: vi.fn(() => ""),
 }))
 
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { getPr, postPrReviewComment } from "../../src/issue.js"
 import { fixCiFlow } from "../../src/scripts/fixCiFlow.js"
 import { getFailedRunLogTail, pickFailedRunForFixCi } from "../../src/workflow.js"

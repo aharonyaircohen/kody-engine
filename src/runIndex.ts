@@ -1,4 +1,4 @@
-import type { Profile } from "./executables/types.js"
+import type { Profile } from "./implementations/types.js"
 import { readStateText, type StateRepoConfig, writeStateText } from "./stateRepo.js"
 
 export type RunIndexSubjectType = "goal" | "loop" | "workflow"
@@ -193,7 +193,7 @@ export function runIndexRowFromJobContext(input: {
     action: stringValue(input.data.jobAction) ?? undefined,
     capability: stringValue(input.data.jobCapability) ?? undefined,
     workflow: workflow ?? undefined,
-    implementation: stringValue(input.data.jobImplementation) ?? input.profileName,
+    implementation: stringValue(input.data.selectedImplementation) ?? input.profileName,
     agent: stringValue(input.data.jobAgent) ?? input.profile.agent ?? undefined,
     model: stringValue(input.data.jobModel) ?? undefined,
     modelProvider: stringValue(input.data.jobModelProvider) ?? undefined,

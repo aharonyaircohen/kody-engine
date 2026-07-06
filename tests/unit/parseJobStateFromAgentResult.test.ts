@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { AgentResult } from "../../src/agent.js"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import type { StateEnvelope } from "../../src/scripts/issueStateComment.js"
 import {
   extractNextStateFromText,

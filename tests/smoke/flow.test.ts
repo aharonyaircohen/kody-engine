@@ -1,6 +1,6 @@
 /**
  * Smoke (offline flow): the one test that drives a real flow end to end
- * through the executor with zero network. A fixture executable's shell
+ * through the executor with zero network. A fixture implementation's shell
  * preflight emits KODY_SKIP_AGENT=true, so the executor runs
  * preflight -> (agent skipped) -> postflight (recordOutcome) and returns
  * exit 0. If the executor pipeline is broken — preflight wiring, the
@@ -12,13 +12,13 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import { runExecutable } from "../../src/executor.js"
+import { runImplementation } from "../../src/executor.js"
 
 let prevCwd = process.cwd()
 afterEach(() => process.chdir(prevCwd))
 
-/** Scaffold a temp project with a no-agent echo executable. Returns its root. */
-function makeEchoExecutable(): string {
+/** Scaffold a temp project with a no-agent echo implementation. Returns its root. */
+function makeEchoImplementation(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-smoke-flow-"))
   const dir = path.join(root, ".kody", "capabilities", "smoke-echo")
   fs.mkdirSync(dir, { recursive: true })
@@ -54,9 +54,9 @@ function makeEchoExecutable(): string {
 describe("smoke: offline flow through the executor", () => {
   it("runs preflight -> skip-agent -> postflight and exits 0 with no network", async () => {
     prevCwd = process.cwd()
-    const root = makeEchoExecutable()
+    const root = makeEchoImplementation()
     process.chdir(root)
-    const result = await runExecutable("smoke-echo", {
+    const result = await runImplementation("smoke-echo", {
       cliArgs: { issue: 1 },
       cwd: root,
       skipConfig: true,

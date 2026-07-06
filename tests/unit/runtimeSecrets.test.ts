@@ -1,6 +1,6 @@
 import { createCipheriv } from "node:crypto"
 import { describe, expect, it } from "vitest"
-import type { Context } from "../../src/executables/types.js"
+import type { Context } from "../../src/implementations/types.js"
 import { resolveRuntimeSecret } from "../../src/scripts/runtimeSecrets.js"
 
 function makeCtx(): Pick<Context, "config"> {

@@ -201,8 +201,8 @@ export interface Profile {
  *   - no match → container aborts
  */
 export interface ContainerChild {
-  /** Name of the executable to invoke (must resolve via the registry). */
-  exec: string
+  /** Name of the implementation to invoke (must resolve via the registry). */
+  implementation: string
   /**
    * Where to source the target identifier from when invoking this child.
    *   - "issue": pass --issue <ctx.args.issue>
@@ -222,7 +222,7 @@ export interface ContainerChild {
 export interface InputArtifactSpec {
   /** Artifact name (the key in state.artifacts). */
   name: string
-  /** If true, the executable fails when this artifact is missing from state. */
+  /** If true, the implementation fails when this artifact is missing from state. */
   required?: boolean
 }
 
@@ -313,7 +313,7 @@ export interface ClaudeCodeSpec {
    * first attempt). Set to 0 or omit to use the default.
    */
   verifyAttempts?: number | null
-  /** SDK built-in tools this executable is allowed to use (capability pack). */
+  /** SDK built-in tools this implementation is allowed to use (capability pack). */
   tools: string[]
   /**
    * Names of bundled hook configs to load (from src/plugins/hooks/<name>.json).
@@ -361,7 +361,7 @@ export interface ScriptEntry {
    */
   script?: string
   /**
-   * Filename of a shell script colocated with the executable
+   * Filename of a shell script colocated with the implementation
    * (e.g. "apply-prefer.sh"). Resolved relative to the profile's
    * directory. Invoked via `bash <path> <with-args>` with ctx.args
    * exposed as env vars (KODY_ARG_<UPPER_NAME>=<value>). A stdout
@@ -515,7 +515,7 @@ export interface Job {
   schedule?: string
   /** The issue/PR number this job acts on, when applicable. */
   target?: number
-  /** Args passed through to the executable (mirrors DispatchResult.cliArgs). */
+  /** Args passed through to the implementation (mirrors DispatchResult.cliArgs). */
   cliArgs: Record<string, unknown>
   /** Run once now ("instant") or on the schedule ("scheduled"). */
   flavor: JobFlavor

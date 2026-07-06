@@ -1,4 +1,4 @@
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 import {
   applySimpleGoalTaskSummary,
   isSimpleGoal,

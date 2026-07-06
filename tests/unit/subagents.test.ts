@@ -2,7 +2,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import type { Profile } from "../../src/executables/types.js"
+import type { Profile } from "../../src/implementations/types.js"
 import { getPluginsCatalogRoot } from "../../src/scripts/buildSyntheticPlugin.js"
 import { captureSubagentTemplates, loadSubagents } from "../../src/subagents.js"
 
@@ -35,7 +35,7 @@ function makeProfile(subagents: string[], dir: string): Profile {
   } as Profile
 }
 
-/** Make a temp executable dir and write `agents/<file>.md` with given content. */
+/** Make a temp implementation dir and write `agents/<file>.md` with given content. */
 function withLocalAgent(file: string, content: string): string {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-subagents-"))
   const agentsDir = path.join(tmp, "agents")
@@ -128,7 +128,7 @@ describe("loadSubagents", () => {
     expect(Object.keys(snap)).toEqual(["present"])
   })
 
-  it("falls back to the shared catalog when the executable dir has no match", () => {
+  it("falls back to the shared catalog when the implementation dir has no match", () => {
     const catalogAgents = path.join(getPluginsCatalogRoot(), "agents")
     const createdDir = !fs.existsSync(catalogAgents)
     if (createdDir) fs.mkdirSync(catalogAgents, { recursive: true })

@@ -18,7 +18,7 @@ vi.mock("../../../src/stateRepo.js", async () => {
   }
 })
 
-import type { Context, Profile } from "../../../src/executables/types.js"
+import type { Context, Profile } from "../../../src/implementations/types.js"
 import { flushGoalRunLogEvents, stageGoalRunLogEvent } from "../../../src/goal/runLog.js"
 import type { GoalState } from "../../../src/goal/state.js"
 import { putGoalState } from "../../../src/goal/stateStore.js"
@@ -43,7 +43,7 @@ function goalState(overrides: Partial<GoalState["extra"]> = {}): GoalState {
           evidence: "releasePrExists",
           stage: "prepare",
           capability: "release-prepare",
-          executable: "release-prepare",
+          implementation: "release-prepare",
         },
       ],
       stage: "prepare",

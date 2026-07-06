@@ -3,7 +3,7 @@ const path = require("node:path")
 
 const ROOT = path.resolve(__dirname, "..")
 
-const ASSET_DIRS = ["executables", "capabilities", "jobs", "plugins"]
+const ASSET_DIRS = ["implementations", "capabilities", "jobs", "plugins"]
 
 for (const name of ASSET_DIRS) {
   const src = path.join(ROOT, "src", name)
@@ -15,7 +15,7 @@ for (const name of ASSET_DIRS) {
 }
 
 // Bundled Dockerfile templates consumed at runtime by the
-// preview-build scripted executable. tsup bundles every TS file in
+// preview-build scripted implementation. tsup bundles every TS file in
 // src/ into the SAME `dist/bin/kody.js`, so import.meta.url lands in
 // dist/bin/. The templates must sit next to that bundle for the
 // runtime path lookup (path.join(__dirname, "preview-build-templates",

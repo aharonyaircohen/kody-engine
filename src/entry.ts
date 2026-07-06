@@ -10,7 +10,7 @@ import {
   listCapabilityActions,
   parseGenericFlags,
   resolveCapabilityAction,
-  resolveExecutable,
+  resolveImplementation,
 } from "./registry.js"
 import { readRunRequestFromEnv } from "./run-request.js"
 import { brainServe } from "./servers/brain-serve.js"
@@ -20,9 +20,9 @@ import { serve } from "./servers/serve.js"
 import { runStats } from "./stats.js"
 
 interface ParsedArgs {
-  command: "ci" | "chat" | "help" | "version" | "stats" | "server" | "__capability__" | "__exec__"
+  command: "ci" | "chat" | "help" | "version" | "stats" | "server" | "__capability__" | "__implementation__"
   actionName?: string
-  executableName?: string
+  implementationName?: string
   serverName?: "serve" | "pool-serve" | "runner-serve" | "brain-serve" | "brain-proxy" | "mcp-http-server"
   serverArgs?: string[]
   cliArgs?: Record<string, unknown>
@@ -83,7 +83,7 @@ Usage:
   kody-engine release --issue <N>                    [--cwd <path>] [--verbose|--quiet]
   kody-engine init                                   [--cwd <path>] [--verbose|--quiet]
   kody-engine <action>                               [--cwd <path>] [--verbose|--quiet]
-  kody-engine exec <executable>                      [--cwd <path>] [--verbose|--quiet]
+  kody-engine implementation <name>                      [--cwd <path>] [--verbose|--quiet]
   kody-engine ci      [preflight flags — see: kody-engine ci --help]
   kody-engine chat    [chat flags — see: kody-engine chat --help]
   kody-engine stats   [--since 7d|--run <id>|--json|--cwd <path>]
@@ -91,8 +91,8 @@ Usage:
   kody-engine version
 
 Top-level work commands are capabilities. A capability owns the public command name
-and resolves the implementation that runs it. Use exec only for internal implementation
-profiles and legacy scheduled helpers.
+and resolves the implementation that runs it. Use the implementation command only for
+internal implementation profiles and scheduled helpers.
 
 Exit codes:
   0   success (PR opened, verify passed — or resolve produced a merge commit)
@@ -134,18 +134,18 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return { ...result, command: "stats", statsArgv: argv.slice(1) }
   }
 
-  if (cmd === "exec") {
-    const executableName = argv[1]
-    if (!executableName || executableName.startsWith("-")) {
-      result.errors.push("exec requires an executable name")
+  if (cmd === "implementation") {
+    const implementationName = argv[1]
+    if (!implementationName || implementationName.startsWith("-")) {
+      result.errors.push("implementation requires a name")
       return result
     }
-    if (!resolveExecutable(executableName)) {
-      result.errors.push(`unknown executable: ${executableName}`)
+    if (!resolveImplementation(implementationName)) {
+      result.errors.push(`unknown implementation: ${implementationName}`)
       return result
     }
-    result.command = "__exec__"
-    result.executableName = executableName
+    result.command = "__implementation__"
+    result.implementationName = implementationName
     result.cliArgs = parseGenericFlags(argv.slice(2))
     if (typeof result.cliArgs.cwd === "string") result.cwd = result.cliArgs.cwd
     if (result.cliArgs.verbose === true) result.verbose = true
@@ -155,7 +155,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
   // Long-running servers are engine plumbing, not user work-verbs. They route
   // to src/servers/ as hardcoded CLI verbs (like ci/help/version), so the
-  // executable registry never lists them and dispatch never treats them as verbs.
+  // implementation registry never lists them and dispatch never treats them as verbs.
   const SERVER_VERBS = new Set(["serve", "pool-serve", "runner-serve", "brain-serve", "brain-proxy", "mcp-http-server"])
   if (SERVER_VERBS.has(cmd)) {
     result.command = "server"
@@ -180,7 +180,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   }
 
   const discoveredActions = listCapabilityActions().map((e) => e.action)
-  const available = ["ci", "chat", "stats", "exec", "help", "version", ...discoveredActions]
+  const available = ["ci", "chat", "stats", "implementation", "help", "version", ...discoveredActions]
   result.errors.push(`unknown command: ${cmd} (available: ${available.join(", ")})`)
   return result
 }
@@ -304,16 +304,16 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     }
   }
 
-  if (args.command === "__exec__") {
-    const executable = args.executableName!
+  if (args.command === "__implementation__") {
+    const implementation = args.implementationName!
     const cliArgs = args.cliArgs ?? {}
-    const skipConfig = configlessCommands.has(executable)
+    const skipConfig = configlessCommands.has(implementation)
     try {
       const result = await runJob(
         {
-          action: executable,
-          capability: executable,
-          implementation: executable,
+          action: implementation,
+          capability: implementation,
+          implementation: implementation,
           cliArgs,
           target: numericTarget(cliArgs),
           flavor: "instant",
@@ -331,14 +331,14 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       return result.exitCode
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`[kody] ${executable} crashed: ${msg}\n`)
+      process.stderr.write(`[kody] ${implementation} crashed: ${msg}\n`)
       if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`)
-      process.stdout.write(`PR_URL=FAILED: ${executable} crashed: ${msg}\n`)
+      process.stdout.write(`PR_URL=FAILED: ${implementation} crashed: ${msg}\n`)
       return 99
     }
   }
 
-  process.stderr.write("error: command did not resolve to a capability or executable\n")
+  process.stderr.write("error: command did not resolve to a capability or implementation\n")
   return 64
 }
 

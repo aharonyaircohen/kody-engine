@@ -11,7 +11,7 @@
  * Script-only: sets `ctx.skipAgent` so no LLM runs — it's pure orchestration
  * over the already-produced report. Reuses `promoteReportToGoal`.
  */
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { getIssue } from "../issue.js"
 import { promoteReportToGoal } from "./createQaGoal.js"
 

@@ -1,9 +1,9 @@
 /**
  * Postflight: synthesize a typed Action from `ctx.output.exitCode` and stash
  * it as `ctx.data.action` so saveTaskState writes the right `lastOutcome`
- * for shell-only executables (no agent → no parseAgentResult).
+ * for shell-only implementations (no agent → no parseAgentResult).
  *
- * Outcome type is derived from the executable's profile name:
+ * Outcome type is derived from the implementation's profile name:
  *   release-prepare → RELEASE_PREPARE_COMPLETED  (exit 0)
  *                   → RELEASE_PREPARE_FAILED     (non-zero)
  *
@@ -11,7 +11,7 @@
  * lines up with the orchestrator's `runWhen` against `lastOutcome.type`.
  */
 
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../implementations/types.js"
 import type { Action } from "../state.js"
 
 export const recordOutcome: PostflightScript = async (ctx, profile) => {

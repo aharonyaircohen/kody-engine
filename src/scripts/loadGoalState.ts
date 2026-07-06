@@ -4,7 +4,7 @@
  */
 
 import type { KodyConfig } from "../config.js"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { type GoalState } from "../goal/state.js"
 import { fetchGoalState } from "../goal/stateStore.js"
 import { resolveStateRepoConfig } from "../stateRepo.js"

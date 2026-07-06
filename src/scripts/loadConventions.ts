@@ -2,7 +2,7 @@
  * Shared preflight: load AGENTS.md / CLAUDE.md into context.
  */
 
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { loadProjectConventions } from "../prompt.js"
 
 export const loadConventions: PreflightScript = async (ctx) => {

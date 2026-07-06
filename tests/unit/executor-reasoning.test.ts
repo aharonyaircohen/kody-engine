@@ -21,7 +21,7 @@ vi.mock("../../src/litellm.js", () => ({
   startLitellmIfNeeded: vi.fn(async () => null),
 }))
 
-import { runExecutable } from "../../src/executor.js"
+import { runImplementation } from "../../src/executor.js"
 
 const originalCwd = process.cwd()
 let dir: string
@@ -87,7 +87,7 @@ describe("executor: reasoning effort resolution", () => {
       perImplementationReasoningEffort: { probe: "high" },
     })
 
-    const out = await runExecutable("probe", { cliArgs: {}, cwd: dir })
+    const out = await runImplementation("probe", { cliArgs: {}, cwd: dir })
 
     expect(out.exitCode).toBe(0)
     expect(runAgentSpy).toHaveBeenCalled()
@@ -98,7 +98,7 @@ describe("executor: reasoning effort resolution", () => {
     writeProbeProfile({ reasoningEffort: "medium" })
     writeConfig({ reasoningEffort: "low" })
 
-    const out = await runExecutable("probe", { cliArgs: {}, cwd: dir })
+    const out = await runImplementation("probe", { cliArgs: {}, cwd: dir })
 
     expect(out.exitCode).toBe(0)
     expect(runAgentSpy.mock.calls[0]![0].reasoningEffort).toBe("medium")
@@ -108,7 +108,7 @@ describe("executor: reasoning effort resolution", () => {
     writeProbeProfile({ maxThinkingTokens: 8000 })
     writeConfig({ reasoningEffort: "low" })
 
-    const out = await runExecutable("probe", { cliArgs: {}, cwd: dir })
+    const out = await runImplementation("probe", { cliArgs: {}, cwd: dir })
 
     expect(out.exitCode).toBe(0)
     expect(runAgentSpy.mock.calls[0]![0].reasoningEffort).toBeUndefined()

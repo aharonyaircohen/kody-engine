@@ -1,4 +1,4 @@
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../implementations/types.js"
 import { parseAgentFactoryBundle } from "./openAgentFactoryStatePr.js"
 
 type ModelKind = "agent" | "capability" | "goal" | "agentLoop" | "workflow"
@@ -114,7 +114,7 @@ function validateFilesForKind(
   failures: string[],
 ): void {
   const paths = files.map((file) => normalizeBundlePath(file.path))
-  if (paths.some((filePath) => filePath === "executables" || filePath.startsWith("executables/"))) {
+  if (paths.some((filePath) => filePath === "implementations" || filePath.startsWith("implementations/"))) {
     failures.push("files must not use obsolete implementation storage")
   }
 

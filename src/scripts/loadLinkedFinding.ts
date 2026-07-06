@@ -12,7 +12,7 @@
  * and the prompt section is simply omitted.
  */
 
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { getIssue, type PrData, truncate } from "../issue.js"
 
 const FINDING_BODY_MAX_BYTES = 4000

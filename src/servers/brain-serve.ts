@@ -1,5 +1,5 @@
 /**
- * brainServe — preflight for the `brain-serve` executable.
+ * brainServe — preflight for the `brain-serve` implementation.
  *
  * Long-lived HTTP server that wraps the kody chat loop and speaks the Brain
  * SSE protocol. Pair with Kody-Dashboard's existing `/api/kody/chat/brain`
@@ -615,7 +615,7 @@ export async function brainServe(opts: { cwd: string }): Promise<number> {
   const port = Number(process.env.PORT ?? DEFAULT_PORT)
   // brain-serve runs config-free (it serves many repos cloned per message), so
   // its model comes from the MODEL env var — same fallback the executor used
-  // for this formerly-configless executable.
+  // for this formerly-configless implementation.
   const model = parseModelRuntimeConfig(
     process.env.MODEL?.trim() || "claude/claude-haiku-4-5-20251001",
     process.env.KODY_MODEL_CONFIG,

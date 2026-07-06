@@ -399,10 +399,10 @@ export async function runCi(argv: string[]): Promise<number> {
   const autoFallback = !args.issueNumber ? autoDispatch({ config: earlyConfig }) : null
 
   // Schedule wakes and parameterless workflow_dispatch fan out to every
-  // watch executable whose `schedule` cron matches the wake window
+  // watch implementation whose `schedule` cron matches the wake window
   // (workflow_dispatch ignores the cron — it's an explicit "fire all").
   // capability-scheduler is itself a watch and continues to fire from this
-  // path; nightly suites and any future watch executables join naturally,
+  // path; nightly suites and any future watch implementations join naturally,
   // no kody.yml or config edits.
   const eventName = process.env.GITHUB_EVENT_NAME
   const dispatchEventPath = process.env.GITHUB_EVENT_PATH
@@ -586,7 +586,7 @@ export async function runCi(argv: string[]): Promise<number> {
       const body = [
         `⚠️ kody rejected this trigger: bot-authored \`@kody ${outcome.token}\` comments cannot dispatch work.`,
         "",
-        "Use workflow_dispatch or runExecutableChain for engine-owned continuation instead.",
+        "Use workflow_dispatch or runImplementationChain for engine-owned continuation instead.",
       ].join("\n")
       try {
         if (outcome.isPr) ghPostPrReviewComment(outcome.target, body, cwd)
@@ -604,7 +604,7 @@ export async function runCi(argv: string[]): Promise<number> {
     }
     if (outcome.kind === "unrecognized") {
       // Unpack secrets and resolve GH_TOKEN before calling `gh` — the
-      // routed-dispatch path does this later inside the executable
+      // routed-dispatch path does this later inside the implementation
       // pipeline, but the unrecognized-token path bypasses that and would
       // otherwise hit the "set GH_TOKEN" error from the gh CLI.
       try {
@@ -698,7 +698,7 @@ export async function runCi(argv: string[]): Promise<number> {
     const buildOnly = dispatch.implementation === "preview-build"
 
     if (args.skipInstall || buildOnly) {
-      process.stdout.write(`→ kody: skipping dep install (${buildOnly ? "build-only executable" : "--skip-install"})\n`)
+      process.stdout.write(`→ kody: skipping dep install (${buildOnly ? "build-only implementation" : "--skip-install"})\n`)
     } else {
       const code = installDeps(pm, cwd)
       if (code !== 0) {
@@ -709,7 +709,7 @@ export async function runCi(argv: string[]): Promise<number> {
 
     if (args.skipLitellm || buildOnly) {
       process.stdout.write(
-        `→ kody: skipping LiteLLM install (${buildOnly ? "build-only executable" : "--skip-litellm"})\n`,
+        `→ kody: skipping LiteLLM install (${buildOnly ? "build-only implementation" : "--skip-litellm"})\n`,
       )
     } else {
       const code = installLitellmIfNeeded(cwd)
@@ -731,11 +731,11 @@ export async function runCi(argv: string[]): Promise<number> {
 
   try {
     const config = earlyConfig ?? loadConfig(cwd)
-    // runExecutableChain follows any in-process stage hand-offs (classify →
+    // runImplementationChain follows any in-process stage hand-offs (classify →
     // build, flow ping-pong, goal-manager -> capability pipeline) so a stage never has
     // to post a bot-authored `@kody` comment the follow-up run would ignore.
     // One-runner: the comment / manual route mints an INSTANT job and runs it.
-    // runJob wraps runExecutableChain, so in-process stage hand-offs and exit
+    // runJob wraps runImplementationChain, so in-process stage hand-offs and exit
     // codes are preserved. The minted job carries the default `kody` agent
     // (executor injects it) and the operator's verbatim request as `why`
     // (carried on the DispatchResult → surfaced as a fenced system block).
@@ -761,7 +761,7 @@ export async function runCi(argv: string[]): Promise<number> {
 }
 
 /**
- * Run every watch capability whose executable's `schedule` matches the wake window.
+ * Run every watch capability whose implementation's `schedule` matches the wake window.
  * Shares the same preflight (secret unpack, dep install, litellm, git
  * identity) as the single-target path; runs each match sequentially.
  * Aggregate exit code: 0 iff every watch returned 0.

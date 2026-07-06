@@ -19,7 +19,7 @@ vi.mock("../../src/state.js", async (importOriginal) => {
   }
 })
 
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { finishFlow } from "../../src/scripts/finishFlow.js"
 
 function makeState() {

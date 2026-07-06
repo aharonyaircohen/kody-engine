@@ -1,5 +1,5 @@
 import { listCompanyPortfolio } from "../companyIntent.js"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 
 export const loadCompanyPortfolio: PreflightScript = async (ctx) => {
   const portfolio = listCompanyPortfolio(ctx.config, ctx.cwd)

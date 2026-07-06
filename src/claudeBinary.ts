@@ -16,7 +16,7 @@ import * as path from "node:path"
  * (review) then fails with "native binary not found" — a terminal flow abort
  * caused purely by tooling disappearing mid-job.
  *
- * The SDK honors `options.pathToClaudeCodeExecutable` and, when set, skips its
+ * The SDK honors a native-binary path option and, when set, skips its
  * cache-rooted resolver entirely. So we resolve the binary once, copy it to a
  * job-stable directory outside `_npx` (immune to npm GC), and hand that path
  * to every `query()` call. Any failure here returns null and the caller

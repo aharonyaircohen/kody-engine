@@ -3,7 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { KodyConfig } from "../../src/config.js"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { loadCapabilityState } from "../../src/scripts/loadCapabilityState.js"
 
 let tmp: string
@@ -114,11 +114,11 @@ describe("loadCapabilityState capability-noun aliases (Phase 1 rename)", () => {
     expect(ctx.data.capabilityTitle).toBe("Folder Capability Title")
   })
 
-  it("populates executableSlug from profile.implementation when set, else profile.name", async () => {
+  it("populates implementationSlug from profile.implementation when set, else profile.name", async () => {
     const ctx = ctxFor()
     const profile = profileFor({}, { implementation: "capability-tick-scripted" })
     await loadCapabilityState(ctx, profile, {})
-    expect(ctx.data.executableSlug).toBe("capability-tick-scripted")
+    expect(ctx.data.implementationSlug).toBe("capability-tick-scripted")
   })
 
   it("populates agentSlug from profile.agent when set", async () => {

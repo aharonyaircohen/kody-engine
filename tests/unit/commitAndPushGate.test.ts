@@ -20,7 +20,7 @@ vi.mock("../../src/commit.js", async () => {
 
 import { commitAndPush as doCommitAndPush } from "../../src/commit.js"
 import { __resetRunIdCache } from "../../src/events.js"
-import type { Profile } from "../../src/executables/types.js"
+import type { Profile } from "../../src/implementations/types.js"
 import { runtimeStatePath } from "../../src/runtimePaths.js"
 import { commitAndPush } from "../../src/scripts/commitAndPush.js"
 

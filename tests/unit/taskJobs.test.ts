@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { stableJobKey } from "../../src/job.js"
 import { dispatchNextTaskJob } from "../../src/scripts/dispatchNextTaskJob.js"
 import { parseTaskJobSpecs, TASK_JOBS_MARKER, taskJobSpecToJob } from "../../src/scripts/planTaskJobs.js"

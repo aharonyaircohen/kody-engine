@@ -5,8 +5,8 @@ import { resolveCapabilityAction } from "../../src/registry.js"
 import { allScriptNames } from "../../src/scripts/index.js"
 
 describe("agent-factory profile", () => {
-  it("loads the executable and validates script references", () => {
-    const profile = loadProfile(path.resolve(__dirname, "../../src/executables/agent-factory/profile.json"))
+  it("loads the implementation and validates script references", () => {
+    const profile = loadProfile(path.resolve(__dirname, "../../src/implementations/agent-factory/profile.json"))
 
     expect(profile.name).toBe("agent-factory")
     expect(profile.action).toBe("agent-factory")

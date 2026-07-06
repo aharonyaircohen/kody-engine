@@ -15,10 +15,10 @@
  * loadCapabilityState; see also the legacy `{{jobSlug}}` / `{{agentSlug}}` /
  * `{{jobSchedule}}` aliases which remain populated for back-compat):
  *   - {{capabilityReference}}    full "Capability reference" block: slug + title +
- *                           executable + agent + runtime cadence when present (one block)
+ *                           implementation + agent + runtime cadence when present (one block)
  *   - {{capabilitySlug}}         the capability slug (alias of {{jobSlug}})
  *   - {{capabilityTitle}}        the capability title (alias of {{jobTitle}})
- *   - {{executableSlug}}   the executable doing the tick (profile.name)
+ *   - {{implementationSlug}}   the implementation doing the tick (profile.name)
  *   - {{agentSlug}}        the agent (alias of {{agentSlug}})
  *   - {{agentTitle}}       the agent file H1 (alias of {{agentTitle}})
  *   - {{capabilitySchedule}}     runtime goal/loop/job cadence, or "" when absent
@@ -28,7 +28,7 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { PreflightScript, Profile } from "../executables/types.js"
+import type { PreflightScript, Profile } from "../implementations/types.js"
 import type { LoadedConvention } from "../prompt.js"
 
 const MUSTACHE = /\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g
@@ -65,7 +65,7 @@ export const composePrompt: PreflightScript = async (ctx, profile) => {
   // Resolution order:
   //   1. ctx.data.promptTemplate (flow script override)
   //   2. profile.dir/prompts/<mode>.md  (per-mode file)
-  //   3. profile.dir/prompt.md          (standard executable template)
+  //   3. profile.dir/prompt.md          (standard implementation template)
   //   4. profile.dir/capability.md            (folder-capability body/template)
   const explicit = ctx.data.promptTemplate as string | undefined
   const mode = ctx.args.mode as string | undefined
@@ -134,11 +134,11 @@ export const composePrompt: PreflightScript = async (ctx, profile) => {
     // jobSlug/jobTitle/agentSlug/jobSchedule fallbacks) so a capability prompt can
     // place a labeled summary at the top. The five underlying tokens are
     // also exposed individually so a template can compose them differently
-    // (e.g. put the executable slug inline in a header).
+    // (e.g. put the implementation slug inline in a header).
     capabilityReference: formatCapabilityReference(ctx.data, profile.name),
     capabilitySlug: pickToken(ctx.data, "capabilitySlug", "jobSlug"),
     capabilityTitle: pickToken(ctx.data, "capabilityTitle", "jobTitle"),
-    executableSlug: pickToken(ctx.data, "executableSlug") || profile.name,
+    implementationSlug: pickToken(ctx.data, "implementationSlug") || profile.name,
     agentSlug: pickToken(ctx.data, "agentSlug", "agentSlug"),
     agentTitle: pickToken(ctx.data, "agentTitle", "agentTitle"),
     capabilitySchedule: pickToken(ctx.data, "capabilitySchedule", "jobSchedule"),
@@ -216,7 +216,7 @@ function formatToolsUsage(profile: Profile): string {
  * Render the `{{capabilityReference}}` token — a single labeled block at the top of
  * a capability tick's prompt that names the capability, the implementation doing the tick,
  * the assigned agent, and the cadence. The five underlying tokens
- * (`{{capabilitySlug}}`, `{{capabilityTitle}}`, `{{executableSlug}}`, `{{agentSlug}}`,
+ * (`{{capabilitySlug}}`, `{{capabilityTitle}}`, `{{implementationSlug}}`, `{{agentSlug}}`,
  * `{{capabilitySchedule}}`) are also exposed individually so templates can place
  * them in different spots.
  *
@@ -228,11 +228,11 @@ function formatToolsUsage(profile: Profile): string {
 function formatCapabilityReference(data: Record<string, unknown>, profileName: string): string {
   const capabilitySlug = pickToken(data, "capabilitySlug", "jobSlug")
   const capabilityTitle = pickToken(data, "capabilityTitle", "jobTitle")
-  // The implementation doing the tick — `ctx.data.executableSlug` is set by
+  // The implementation doing the tick — `ctx.data.implementationSlug` is set by
   // loadJobFromFile/loadCapabilityState; fall back to the profile name resolved at
   // compose-time so a bare profile that never ran the loader still renders
   // something coherent.
-  const executableSlug = pickToken(data, "executableSlug") || profileName
+  const implementationSlug = pickToken(data, "implementationSlug") || profileName
   const agentSlug = pickToken(data, "agentSlug", "agentSlug")
   const agentTitle = pickToken(data, "agentTitle", "agentTitle")
   const capabilitySchedule = pickToken(data, "capabilitySchedule", "jobSchedule")
@@ -241,8 +241,8 @@ function formatCapabilityReference(data: Record<string, unknown>, profileName: s
   if (capabilitySlug) {
     lines.push(`- Capability: \`${capabilitySlug}\`${capabilityTitle ? ` — *${capabilityTitle}*` : ""}`)
   }
-  if (executableSlug) {
-    lines.push(`- Implementation: \`${executableSlug}\``)
+  if (implementationSlug) {
+    lines.push(`- Implementation: \`${implementationSlug}\``)
   }
   const agentLine = agentSlug
     ? `\`${agentSlug}\`${agentTitle && agentTitle !== agentSlug ? ` — *${agentTitle}*` : ""}`

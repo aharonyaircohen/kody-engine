@@ -16,7 +16,7 @@ vi.mock("../../src/scripts/issueStateComment.js", () => ({
   updateStateComment: vi.fn(),
 }))
 
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import type { StateEnvelope } from "../../src/scripts/issueStateComment.js"
 import { createStateComment, updateStateComment } from "../../src/scripts/issueStateComment.js"
 import { writeIssueStateComment } from "../../src/scripts/writeIssueStateComment.js"

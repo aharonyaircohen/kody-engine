@@ -4,12 +4,12 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // Hoist-safe mock of the executor so runJob is tested in isolation (no real
-// executable spins up). Mirrors tests/unit/dispatchCapabilityFileTicks.routing.test.ts.
-const { gh, runExecutableChain } = vi.hoisted(() => ({
+// implementation spins up). Mirrors tests/unit/dispatchCapabilityFileTicks.routing.test.ts.
+const { gh, runImplementationChain } = vi.hoisted(() => ({
   gh: vi.fn(),
-  runExecutableChain: vi.fn(),
+  runImplementationChain: vi.fn(),
 }))
-vi.mock("../../src/executor.js", () => ({ runExecutableChain }))
+vi.mock("../../src/executor.js", () => ({ runImplementationChain }))
 vi.mock("../../src/issue.js", () => ({ gh }))
 
 import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
@@ -25,8 +25,8 @@ import {
 
 describe("runJob (Phase 1 seam)", () => {
   beforeEach(() => {
-    runExecutableChain.mockReset()
-    runExecutableChain.mockResolvedValue({ exitCode: 0 })
+    runImplementationChain.mockReset()
+    runImplementationChain.mockResolvedValue({ exitCode: 0 })
     gh.mockReset()
     gh.mockImplementation(() => {
       throw new Error("HTTP 404 Not Found")
@@ -38,13 +38,13 @@ describe("runJob (Phase 1 seam)", () => {
     resetCompanyStoreCacheForTests()
   })
 
-  it("lowers an instant job onto runExecutableChain with its executable + cliArgs", async () => {
+  it("lowers an instant job onto runImplementationChain with its implementation + cliArgs", async () => {
     await runJob(
       { capability: "run", implementation: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" },
       { cwd: "/x" },
     )
-    expect(runExecutableChain).toHaveBeenCalledTimes(1)
-    const [profile, input] = runExecutableChain.mock.calls[0]!
+    expect(runImplementationChain).toHaveBeenCalledTimes(1)
+    const [profile, input] = runImplementationChain.mock.calls[0]!
     expect(profile).toBe("run")
     expect(input.cliArgs).toEqual({ issue: 42 })
     expect(input.cwd).toBe("/x")
@@ -63,7 +63,7 @@ describe("runJob (Phase 1 seam)", () => {
       { cwd: "/x" },
     )
 
-    const [, input] = runExecutableChain.mock.calls[0]!
+    const [, input] = runImplementationChain.mock.calls[0]!
     expect(input.cliArgs).toEqual({})
     expect(input.preloadedData?.capabilityResultTarget).toEqual({
       type: "goal",
@@ -74,13 +74,13 @@ describe("runJob (Phase 1 seam)", () => {
 
   it("lowers an action-only instant job through the capability action registry", async () => {
     await runJob({ action: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" }, { cwd: "/x" })
-    const [profile, input] = runExecutableChain.mock.calls[0]!
+    const [profile, input] = runImplementationChain.mock.calls[0]!
     expect(profile).toBe("run")
     expect(input.cliArgs).toEqual({ issue: 42 })
     expect(input.preloadedData?.jobAction).toBe("run")
     expect(input.preloadedData?.jobCapability).toBe("run")
-    expect(input.preloadedData?.jobImplementation).toBe("run")
-    expect(input.preloadedData?.jobImplementation).toBe("run")
+    expect(input.preloadedData?.selectedImplementation).toBe("run")
+    expect(input.preloadedData?.selectedImplementation).toBe("run")
   })
 
   it("accepts implementation as the selected profile and writes both metadata fields", async () => {
@@ -88,13 +88,13 @@ describe("runJob (Phase 1 seam)", () => {
       { capability: "run", implementation: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" },
       { cwd: "/x" },
     )
-    const [profile, input] = runExecutableChain.mock.calls[0]!
+    const [profile, input] = runImplementationChain.mock.calls[0]!
     expect(profile).toBe("run")
-    expect(input.preloadedData?.jobImplementation).toBe("run")
-    expect(input.preloadedData?.jobImplementation).toBe("run")
+    expect(input.preloadedData?.selectedImplementation).toBe("run")
+    expect(input.preloadedData?.selectedImplementation).toBe("run")
   })
 
-  it("resolves a capability-only job to the capability-selected executable", async () => {
+  it("resolves a capability-only job to the capability-selected implementation", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-job-"))
     const capabilityDir = path.join(cwd, ".kody", "capabilities", "ci-health")
     fs.mkdirSync(capabilityDir, { recursive: true })
@@ -113,12 +113,12 @@ describe("runJob (Phase 1 seam)", () => {
       { cwd },
     )
 
-    const [profile, input] = runExecutableChain.mock.calls[0]!
+    const [profile, input] = runImplementationChain.mock.calls[0]!
     expect(profile).toBe("ci-check")
     expect(input.cliArgs).toEqual({ pr: 456, goal: "release-aguy", evidence: "mainDeployPrGreen" })
     expect(input.preloadedData?.jobCapability).toBe("ci-health")
-    expect(input.preloadedData?.jobImplementation).toBe("ci-check")
-    expect(input.preloadedData?.jobImplementation).toBe("ci-check")
+    expect(input.preloadedData?.selectedImplementation).toBe("ci-check")
+    expect(input.preloadedData?.selectedImplementation).toBe("ci-check")
   })
 
   it("seeds capabilityKind from capability folders for shared implementation traces", async () => {
@@ -139,12 +139,12 @@ describe("runJob (Phase 1 seam)", () => {
 
     await runJob({ capability: "pr-health", cliArgs: {}, flavor: "scheduled" }, { cwd })
 
-    const [, input] = runExecutableChain.mock.calls[0]!
+    const [, input] = runImplementationChain.mock.calls[0]!
     expect(input.preloadedData?.jobCapability).toBe("pr-health")
     expect(input.preloadedData?.jobCapabilityKind).toBe("observe")
   })
 
-  it("preserves capability identity without injecting capability args when executable is explicit", async () => {
+  it("preserves capability identity without injecting capability args when implementation is explicit", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-goal-handoff-"))
     const capabilityDir = path.join(cwd, ".kody", "capabilities", "company-graph")
     fs.mkdirSync(capabilityDir, { recursive: true })
@@ -159,11 +159,11 @@ describe("runJob (Phase 1 seam)", () => {
       },
       { cwd },
     )
-    const [profile, input] = runExecutableChain.mock.calls[0]!
+    const [profile, input] = runImplementationChain.mock.calls[0]!
     expect(profile).toBe("company-graph")
     expect(input.cliArgs).toEqual({ goal: "hourly-monitor-goal-smoke" })
     expect(input.preloadedData?.jobCapability).toBe("company-graph")
-    expect(input.preloadedData?.jobImplementation).toBe("company-graph")
+    expect(input.preloadedData?.selectedImplementation).toBe("company-graph")
   })
 
   it("seeds inline why into preloadedData.jobWhy", async () => {
@@ -171,14 +171,14 @@ describe("runJob (Phase 1 seam)", () => {
       { capability: "unit-fix", implementation: "unit-fix", why: "fix the flaky test", cliArgs: {}, flavor: "instant" },
       { cwd: "/x" },
     )
-    const [, input] = runExecutableChain.mock.calls[0]!
+    const [, input] = runImplementationChain.mock.calls[0]!
     expect(input.preloadedData?.jobWhy).toBe("fix the flaky test")
     expect(input.preloadedData?.jobIntent).toBeUndefined()
   })
 
   it("does not seed jobWhy for an empty why string", async () => {
     await runJob({ capability: "run", implementation: "run", why: "", cliArgs: {}, flavor: "instant" }, { cwd: "/x" })
-    const [, input] = runExecutableChain.mock.calls[0]!
+    const [, input] = runImplementationChain.mock.calls[0]!
     expect(input.preloadedData?.jobWhy).toBeUndefined()
   })
 
@@ -187,16 +187,16 @@ describe("runJob (Phase 1 seam)", () => {
       { capability: "run", implementation: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" },
       { cwd: "/x" },
     )
-    const [, input] = runExecutableChain.mock.calls[0]!
+    const [, input] = runImplementationChain.mock.calls[0]!
     expect(typeof input.preloadedData?.jobId).toBe("string")
     expect(input.preloadedData?.jobKey).toBe("instant:run:42")
     expect(input.preloadedData?.jobFlavor).toBe("instant")
-    expect(input.preloadedData?.jobImplementation).toBe("run")
-    expect(input.preloadedData?.jobImplementation).toBe("run")
+    expect(input.preloadedData?.selectedImplementation).toBe("run")
+    expect(input.preloadedData?.selectedImplementation).toBe("run")
     expect(input.preloadedData?.jobTarget).toBe(42)
   })
 
-  it("keeps the same stable job key for retries of the same target + executable", async () => {
+  it("keeps the same stable job key for retries of the same target + implementation", async () => {
     await runJob(
       { capability: "run", implementation: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" },
       { cwd: "/x" },
@@ -206,8 +206,8 @@ describe("runJob (Phase 1 seam)", () => {
       { cwd: "/x" },
     )
 
-    const first = runExecutableChain.mock.calls[0]![1].preloadedData
-    const second = runExecutableChain.mock.calls[1]![1].preloadedData
+    const first = runImplementationChain.mock.calls[0]![1].preloadedData
+    const second = runImplementationChain.mock.calls[1]![1].preloadedData
     expect(first?.jobKey).toBe("instant:run:42")
     expect(second?.jobKey).toBe("instant:run:42")
     expect(first?.jobId).not.toBe(second?.jobId)
@@ -237,7 +237,7 @@ describe("runJob (Phase 1 seam)", () => {
       }),
       { cwd: "/x" },
     )
-    const [, input] = runExecutableChain.mock.calls[0]!
+    const [, input] = runImplementationChain.mock.calls[0]!
     expect(input.preloadedData?.jobWhy).toBe("also add tests")
   })
 
@@ -246,7 +246,7 @@ describe("runJob (Phase 1 seam)", () => {
       { capability: "run", agent: "kody", schedule: "*/5 * * * *", cliArgs: {}, flavor: "scheduled" },
       { cwd: "/x" },
     )
-    const [, input] = runExecutableChain.mock.calls[0]!
+    const [, input] = runImplementationChain.mock.calls[0]!
     expect(input.preloadedData?.jobAgent).toBe("kody")
   })
 
@@ -261,18 +261,18 @@ describe("runJob (Phase 1 seam)", () => {
       },
       { cwd: "/x" },
     )
-    const [, input] = runExecutableChain.mock.calls[0]!
+    const [, input] = runImplementationChain.mock.calls[0]!
     expect(input.preloadedData?.jobKey).toBe("scheduled:capability-tick:capability-tick")
   })
 
-  it("falls back to the capability slug as the profile when no executable", async () => {
+  it("falls back to the capability slug as the profile when no implementation", async () => {
     await runJob({ capability: "run", schedule: "*/5 * * * *", cliArgs: {}, flavor: "scheduled" }, { cwd: "/x" })
-    expect(runExecutableChain.mock.calls[0]![0]).toBe("run")
+    expect(runImplementationChain.mock.calls[0]![0]).toBe("run")
   })
 
   it("seeds only job identity (no why/agent) for a bare scheduled job", async () => {
     await runJob({ capability: "run", cliArgs: {}, flavor: "scheduled" }, { cwd: "/x" })
-    const [, input] = runExecutableChain.mock.calls[0]!
+    const [, input] = runImplementationChain.mock.calls[0]!
     expect(input.preloadedData?.jobFlavor).toBe("scheduled")
     expect(input.preloadedData?.jobWhy).toBeUndefined()
     expect(input.preloadedData?.jobAgent).toBeUndefined()
@@ -282,7 +282,7 @@ describe("runJob (Phase 1 seam)", () => {
     expect(() => validateJob({ cliArgs: {}, flavor: "instant" })).toThrow(InvalidJobError)
   })
 
-  it("rejects an executable-only job", () => {
+  it("rejects an implementation-only job", () => {
     expect(() => validateJob({ implementation: "run", cliArgs: {}, flavor: "instant" })).toThrow(
       /capability action, capability, or workflow/,
     )
@@ -338,29 +338,29 @@ describe("runJob (Phase 1 seam)", () => {
         { cwd },
       )
 
-      expect(runExecutableChain).toHaveBeenCalledTimes(2)
-      expect(runExecutableChain.mock.calls[0]![0]).toBe("reproduce")
-      expect(runExecutableChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42 })
-      expect(runExecutableChain.mock.calls[0]![1].preloadedData).toMatchObject({
+      expect(runImplementationChain).toHaveBeenCalledTimes(2)
+      expect(runImplementationChain.mock.calls[0]![0]).toBe("reproduce")
+      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42 })
+      expect(runImplementationChain.mock.calls[0]![1].preloadedData).toMatchObject({
         workflowCapability: "bug",
         workflowStep: "reproduce",
         workflowStepIndex: 1,
         workflowStepCount: 2,
         jobCapability: "reproduce",
-        jobImplementation: "reproduce",
+        selectedImplementation: "reproduce",
       })
-      expect(runExecutableChain.mock.calls[0]![1].preloadedData?.jobWhy).toContain("operator note")
-      expect(runExecutableChain.mock.calls[0]![1].preloadedData?.jobWhy).toContain("capture the failing test")
+      expect(runImplementationChain.mock.calls[0]![1].preloadedData?.jobWhy).toContain("operator note")
+      expect(runImplementationChain.mock.calls[0]![1].preloadedData?.jobWhy).toContain("capture the failing test")
 
-      expect(runExecutableChain.mock.calls[1]![0]).toBe("run")
-      expect(runExecutableChain.mock.calls[1]![1].cliArgs).toEqual({ issue: 42, base: "feature/base" })
-      expect(runExecutableChain.mock.calls[1]![1].preloadedData).toMatchObject({
+      expect(runImplementationChain.mock.calls[1]![0]).toBe("run")
+      expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({ issue: 42, base: "feature/base" })
+      expect(runImplementationChain.mock.calls[1]![1].preloadedData).toMatchObject({
         workflowCapability: "bug",
         workflowStep: "run",
         workflowStepIndex: 2,
         workflowStepCount: 2,
         jobCapability: "run",
-        jobImplementation: "run",
+        selectedImplementation: "run",
       })
     } finally {
       process.chdir(originalCwd)
@@ -404,7 +404,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it("runs an action-only workflow capability without treating the action as an executable", async () => {
+  it("runs an action-only workflow capability without treating the action as an implementation", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-action-workflow-job-"))
     const originalCwd = process.cwd()
     try {
@@ -427,14 +427,14 @@ describe("runJob (Phase 1 seam)", () => {
         { cwd },
       )
 
-      expect(runExecutableChain).toHaveBeenCalledTimes(1)
-      expect(runExecutableChain.mock.calls[0]![0]).toBe("run")
-      expect(runExecutableChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42 })
-      expect(runExecutableChain.mock.calls[0]![1].preloadedData).toMatchObject({
+      expect(runImplementationChain).toHaveBeenCalledTimes(1)
+      expect(runImplementationChain.mock.calls[0]![0]).toBe("run")
+      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42 })
+      expect(runImplementationChain.mock.calls[0]![1].preloadedData).toMatchObject({
         workflowCapability: "feature",
         workflowStep: "run",
         jobCapability: "run",
-        jobImplementation: "run",
+        selectedImplementation: "run",
       })
     } finally {
       process.chdir(originalCwd)
@@ -502,18 +502,18 @@ describe("runJob (Phase 1 seam)", () => {
           cwd,
         },
       )
-      expect(runExecutableChain).toHaveBeenCalledTimes(2)
-      expect(runExecutableChain.mock.calls[0]![0]).toBe("reproduce")
-      expect(runExecutableChain.mock.calls[0]![1].preloadedData).toMatchObject({
+      expect(runImplementationChain).toHaveBeenCalledTimes(2)
+      expect(runImplementationChain.mock.calls[0]![0]).toBe("reproduce")
+      expect(runImplementationChain.mock.calls[0]![1].preloadedData).toMatchObject({
         workflowCapability: "bug-flow",
         workflowTitle: "Bug workflow",
         workflowStep: "reproduce",
         workflowStepIndex: 1,
         workflowStepCount: 2,
       })
-      expect(runExecutableChain.mock.calls[0]![1].preloadedData).not.toHaveProperty("jobWhy")
-      expect(runExecutableChain.mock.calls[1]![0]).toBe("run")
-      expect(runExecutableChain.mock.calls[1]![1].preloadedData).toMatchObject({
+      expect(runImplementationChain.mock.calls[0]![1].preloadedData).not.toHaveProperty("jobWhy")
+      expect(runImplementationChain.mock.calls[1]![0]).toBe("run")
+      expect(runImplementationChain.mock.calls[1]![1].preloadedData).toMatchObject({
         workflowCapability: "bug-flow",
         workflowStep: "run",
         workflowStepIndex: 2,
@@ -576,7 +576,7 @@ describe("runJob (Phase 1 seam)", () => {
         }),
       )
       process.chdir(cwd)
-      runExecutableChain
+      runImplementationChain
         .mockResolvedValueOnce({
           exitCode: 0,
           prUrl: "https://github.com/o/r/pull/10",
@@ -608,19 +608,19 @@ describe("runJob (Phase 1 seam)", () => {
         },
       )
 
-      expect(runExecutableChain).toHaveBeenCalledTimes(5)
-      expect(runExecutableChain.mock.calls.map((call) => call[0])).toEqual([
+      expect(runImplementationChain).toHaveBeenCalledTimes(5)
+      expect(runImplementationChain.mock.calls.map((call) => call[0])).toEqual([
         "release-prepare",
         "release-merge",
         "release-promote",
         "release-merge",
         "vercel-production-deploy",
       ])
-      expect(runExecutableChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42 })
-      expect(runExecutableChain.mock.calls[1]![1].cliArgs).toEqual({ issue: 42, pr: 10 })
-      expect(runExecutableChain.mock.calls[2]![1].cliArgs).toEqual({ issue: 42 })
-      expect(runExecutableChain.mock.calls[3]![1].cliArgs).toEqual({ issue: 42, pr: 11 })
-      expect(runExecutableChain.mock.calls[4]![1].cliArgs).toEqual({})
+      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42 })
+      expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({ issue: 42, pr: 10 })
+      expect(runImplementationChain.mock.calls[2]![1].cliArgs).toEqual({ issue: 42 })
+      expect(runImplementationChain.mock.calls[3]![1].cliArgs).toEqual({ issue: 42, pr: 11 })
+      expect(runImplementationChain.mock.calls[4]![1].cliArgs).toEqual({})
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
@@ -660,7 +660,7 @@ describe("runJob (Phase 1 seam)", () => {
       vi.stubEnv("KODY_COMPANY_STORE_REF", "main")
       resetCompanyStoreCacheForTests()
       process.chdir(cwd)
-      runExecutableChain
+      runImplementationChain
         .mockResolvedValueOnce({ exitCode: 0, prUrl: "https://github.com/o/r/pull/12" })
         .mockResolvedValueOnce({ exitCode: 0 })
 
@@ -689,11 +689,11 @@ describe("runJob (Phase 1 seam)", () => {
           cwd,
         },
       )
-      expect(runExecutableChain).toHaveBeenCalledTimes(2)
-      expect(runExecutableChain.mock.calls[0]![0]).toBe("release-prepare")
-      expect(runExecutableChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42, prefer: "ours" })
-      expect(runExecutableChain.mock.calls[1]![0]).toBe("release-merge")
-      expect(runExecutableChain.mock.calls[1]![1].cliArgs).toEqual({ issue: 42, pr: 12 })
+      expect(runImplementationChain).toHaveBeenCalledTimes(2)
+      expect(runImplementationChain.mock.calls[0]![0]).toBe("release-prepare")
+      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42, prefer: "ours" })
+      expect(runImplementationChain.mock.calls[1]![0]).toBe("release-merge")
+      expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({ issue: 42, pr: 12 })
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
@@ -701,7 +701,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it("runs a workflow when the public route includes the selected executable", async () => {
+  it("runs a workflow when the public route includes the selected implementation", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-route-"))
     const originalCwd = process.cwd()
     try {
@@ -729,9 +729,9 @@ describe("runJob (Phase 1 seam)", () => {
         { cwd },
       )
 
-      expect(runExecutableChain).toHaveBeenCalledTimes(2)
-      expect(runExecutableChain.mock.calls[0]![0]).toBe("reproduce")
-      expect(runExecutableChain.mock.calls[1]![0]).toBe("run")
+      expect(runImplementationChain).toHaveBeenCalledTimes(2)
+      expect(runImplementationChain.mock.calls[0]![0]).toBe("reproduce")
+      expect(runImplementationChain.mock.calls[1]![0]).toBe("run")
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
@@ -759,7 +759,7 @@ describe("runJob (Phase 1 seam)", () => {
         },
       })
       process.chdir(cwd)
-      runExecutableChain
+      runImplementationChain
         .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("RUN_COMPLETED", "https://github.com/o/r/pull/99") })
         .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("REVIEW_CONCERNS") })
         .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("FIX_COMPLETED") })
@@ -775,12 +775,12 @@ describe("runJob (Phase 1 seam)", () => {
         { cwd },
       )
 
-      expect(runExecutableChain).toHaveBeenCalledTimes(3)
-      expect(runExecutableChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42, base: "feature/base" })
-      expect(runExecutableChain.mock.calls[1]![1].cliArgs).toEqual({ pr: 99 })
-      expect(runExecutableChain.mock.calls[2]![1].cliArgs).toEqual({ pr: 99 })
-      expect(runExecutableChain.mock.calls[1]![1].preloadedData?.workflowStep).toBe("review")
-      expect(runExecutableChain.mock.calls[2]![1].preloadedData?.workflowStep).toBe("fix")
+      expect(runImplementationChain).toHaveBeenCalledTimes(3)
+      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42, base: "feature/base" })
+      expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({ pr: 99 })
+      expect(runImplementationChain.mock.calls[2]![1].cliArgs).toEqual({ pr: 99 })
+      expect(runImplementationChain.mock.calls[1]![1].preloadedData?.workflowStep).toBe("review")
+      expect(runImplementationChain.mock.calls[2]![1].preloadedData?.workflowStep).toBe("fix")
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
@@ -808,7 +808,7 @@ describe("runJob (Phase 1 seam)", () => {
         },
       })
       process.chdir(cwd)
-      runExecutableChain
+      runImplementationChain
         .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("RUN_COMPLETED", "https://github.com/o/r/pull/99") })
         .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("REVIEW_PASS") })
 
@@ -817,9 +817,9 @@ describe("runJob (Phase 1 seam)", () => {
         { cwd },
       )
 
-      expect(runExecutableChain).toHaveBeenCalledTimes(2)
-      expect(runExecutableChain.mock.calls[0]![0]).toBe("run")
-      expect(runExecutableChain.mock.calls[1]![0]).toBe("review")
+      expect(runImplementationChain).toHaveBeenCalledTimes(2)
+      expect(runImplementationChain.mock.calls[0]![0]).toBe("run")
+      expect(runImplementationChain.mock.calls[1]![0]).toBe("review")
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
@@ -847,7 +847,7 @@ describe("runJob (Phase 1 seam)", () => {
         },
       })
       process.chdir(cwd)
-      runExecutableChain
+      runImplementationChain
         .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("RUN_COMPLETED", "https://github.com/o/r/pull/99") })
         .mockResolvedValueOnce({ exitCode: 1, reason: "blocking review", taskState: taskState("REVIEW_FAIL") })
         .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("FIX_COMPLETED") })
@@ -858,9 +858,9 @@ describe("runJob (Phase 1 seam)", () => {
       )
 
       expect(result).toMatchObject({ exitCode: 0 })
-      expect(runExecutableChain).toHaveBeenCalledTimes(3)
-      expect(runExecutableChain.mock.calls[1]![1].preloadedData?.workflowContinueOn).toEqual(["REVIEW_FAIL"])
-      expect(runExecutableChain.mock.calls[2]![0]).toBe("fix")
+      expect(runImplementationChain).toHaveBeenCalledTimes(3)
+      expect(runImplementationChain.mock.calls[1]![1].preloadedData?.workflowContinueOn).toEqual(["REVIEW_FAIL"])
+      expect(runImplementationChain.mock.calls[2]![0]).toBe("fix")
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
@@ -882,7 +882,7 @@ describe("runJob (Phase 1 seam)", () => {
         implementation: "reproduce",
       })
       process.chdir(cwd)
-      runExecutableChain.mockResolvedValueOnce({ exitCode: 1, reason: "repro failed" })
+      runImplementationChain.mockResolvedValueOnce({ exitCode: 1, reason: "repro failed" })
 
       const result = await runJob(
         { action: "bug", capability: "bug", cliArgs: { issue: 42 }, target: 42, flavor: "instant" },
@@ -890,7 +890,7 @@ describe("runJob (Phase 1 seam)", () => {
       )
 
       expect(result).toMatchObject({ exitCode: 1, reason: "repro failed" })
-      expect(runExecutableChain).toHaveBeenCalledTimes(1)
+      expect(runImplementationChain).toHaveBeenCalledTimes(1)
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
@@ -986,9 +986,9 @@ describe("mintInstantJob (Phase 2)", () => {
   })
 
   it("produces a job that runJob can run", async () => {
-    runExecutableChain.mockResolvedValue({ exitCode: 0 })
+    runImplementationChain.mockResolvedValue({ exitCode: 0 })
     await runJob(mintInstantJob(dispatch, { why: "x" }), { cwd: "/x" })
-    expect(runExecutableChain.mock.calls.at(-1)![0]).toBe("fix")
+    expect(runImplementationChain.mock.calls.at(-1)![0]).toBe("fix")
   })
 })
 
@@ -1024,12 +1024,12 @@ describe("mintScheduledJob (Phase 2)", () => {
       }),
       { cwd: "/x" },
     )
-    const [, input] = runExecutableChain.mock.calls.at(-1)!
+    const [, input] = runImplementationChain.mock.calls.at(-1)!
     expect(input.preloadedData?.jobSchedule).toBe("7d")
     expect(input.preloadedData?.jobFlavor).toBe("scheduled")
     expect(input.preloadedData?.jobCapability).toBe("capability-tick")
-    expect(input.preloadedData?.jobImplementation).toBe("capability-tick")
-    expect(input.preloadedData?.jobImplementation).toBe("capability-tick")
+    expect(input.preloadedData?.selectedImplementation).toBe("capability-tick")
+    expect(input.preloadedData?.selectedImplementation).toBe("capability-tick")
   })
 
   it("carries saveReport onto ctx.data.jobSaveReport", async () => {
@@ -1042,7 +1042,7 @@ describe("mintScheduledJob (Phase 2)", () => {
       { cwd: "/x" },
     )
 
-    const [, input] = runExecutableChain.mock.calls.at(-1)!
+    const [, input] = runImplementationChain.mock.calls.at(-1)!
     expect(input.preloadedData?.jobSaveReport).toBe(true)
   })
 })

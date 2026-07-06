@@ -34,14 +34,14 @@ function writeFolderCapability(slug: string, profile: Record<string, unknown>): 
   fs.writeFileSync(path.join(dir, "capability.md"), `# ${slug}\n`)
 }
 
-function writeExecutable(slug: string, profile: Record<string, unknown>): void {
-  const dir = path.join(root, ".kody", "executables", slug)
+function writeImplementation(slug: string, profile: Record<string, unknown>): void {
+  const dir = path.join(root, ".kody", "implementations", slug)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, inputs: [], ...profile }, null, 2))
 }
 
 describe("capability actions", () => {
-  it("resolves folder capability action to its declared executable", () => {
+  it("resolves folder capability action to its declared implementation", () => {
     process.chdir(root)
     writeFolderCapability("memorize", { action: "remember", implementation: "impl", agent: "kody" })
 
@@ -53,7 +53,7 @@ describe("capability actions", () => {
     })
   })
 
-  it("defaults folder capability action to the capability slug and first executable", () => {
+  it("defaults folder capability action to the capability slug and first implementation", () => {
     process.chdir(root)
     writeFolderCapability("ship", { implementations: ["impl"], agent: "kody" })
 
@@ -114,10 +114,10 @@ describe("capability actions", () => {
     expect(resolveCapabilityAction("legacy")).toBeNull()
   })
 
-  it("resolves folder capability action before the same action on an executable profile", () => {
+  it("resolves folder capability action before the same action on an implementation profile", () => {
     process.chdir(root)
     writeFolderCapability("daily-impl", { action: "ship", implementation: "impl", agent: "kody" })
-    writeExecutable("direct-ship", {
+    writeImplementation("direct-ship", {
       action: "ship",
       role: "utility",
       kind: "oneshot",
@@ -132,9 +132,9 @@ describe("capability actions", () => {
     })
   })
 
-  it("does not resolve public actions declared directly on obsolete executable profiles", () => {
+  it("does not resolve public actions declared directly on obsolete implementation profiles", () => {
     process.chdir(root)
-    writeExecutable("direct-ship", {
+    writeImplementation("direct-ship", {
       action: "ship",
       role: "utility",
       kind: "oneshot",
@@ -144,17 +144,17 @@ describe("capability actions", () => {
     expect(resolveCapabilityAction("ship")).toBeNull()
   })
 
-  it("ignores all direct executable actions", () => {
+  it("ignores all direct implementation actions", () => {
     process.chdir(root)
-    writeExecutable("direct-ship", {
+    writeImplementation("direct-ship", {
       action: "ship",
       role: "utility",
       kind: "oneshot",
       describe: "Ship directly.",
     })
-    writeExecutable("chatty", { action: "chatty", role: "chat" })
-    writeExecutable("untyped", { action: "untyped", role: "utility" })
-    writeExecutable("floating", { action: "floating", role: "utility", inputs: undefined })
+    writeImplementation("chatty", { action: "chatty", role: "chat" })
+    writeImplementation("untyped", { action: "untyped", role: "utility" })
+    writeImplementation("floating", { action: "floating", role: "utility", inputs: undefined })
 
     expect(resolveCapabilityAction("ship")).toBeNull()
     expect(resolveCapabilityAction("chatty")).toBeNull()

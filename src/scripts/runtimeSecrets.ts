@@ -1,4 +1,4 @@
-import type { Context } from "../executables/types.js"
+import type { Context } from "../implementations/types.js"
 import { masterKeyBytes } from "../pool/keys.js"
 import { readRepoSecret } from "../stateRepoVault.js"
 

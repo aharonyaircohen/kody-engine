@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { evaluateAgencyBoundariesScript } from "../../src/scripts/evaluateAgencyBoundaries.js"
 
 function fakeCtx(data: Record<string, unknown>): Context {

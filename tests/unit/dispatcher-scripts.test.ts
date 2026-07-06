@@ -1,6 +1,6 @@
 import * as childProcess from "node:child_process"
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { setKodyLabel } from "../../src/lifecycleLabels.js"
 import { advanceFlow } from "../../src/scripts/advanceFlow.js"
 import { dispatch } from "../../src/scripts/dispatch.js"

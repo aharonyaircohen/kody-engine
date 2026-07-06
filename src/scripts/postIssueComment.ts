@@ -4,7 +4,7 @@
  * collected ctx.data state.
  */
 
-import type { Context, PostflightScript } from "../executables/types.js"
+import type { Context, PostflightScript } from "../implementations/types.js"
 import {
   postIssueComment as ghPostIssueComment,
   postPrReviewComment as ghPostPrReviewComment,

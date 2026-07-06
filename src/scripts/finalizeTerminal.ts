@@ -3,7 +3,7 @@
  * after delivery is known.
  *
  * This is the orchestration-free replacement for what container profiles
- * did via `finishFlow`. A single-session executable (feature, bug, …) has
+ * did via `finishFlow`. A single-session implementation (feature, bug, …) has
  * no orchestrator to re-trigger and no `state.flow` to clear — it just
  * needs the issue/PR to end in an honest terminal state so the dashboard
  * and goal-phase derivation don't show it stuck in "building" forever.
@@ -25,7 +25,7 @@
  * remove. Better a loud kody:failed than a silently stuck card.
  */
 
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../implementations/types.js"
 import { parsePrNumber } from "../issue.js"
 import { type KodyLabelSpec, setKodyLabel } from "../lifecycleLabels.js"
 import { type Phase, readTaskState, type Status, type TaskState, type TaskTarget, writeTaskState } from "../state.js"

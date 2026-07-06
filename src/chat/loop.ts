@@ -13,7 +13,7 @@ import { runAgent } from "../agent.js"
 import { frameAgentIdentity, loadAgentIdentity } from "../agents.js"
 import type { ProviderModel, ReasoningEffort } from "../config.js"
 import { litellmModelGroup } from "../config.js"
-import { listExecutables } from "../registry.js"
+import { listImplementations } from "../registry.js"
 import type { StateRepoConfig } from "../stateRepo.js"
 import {
   persistTaskArtifactsToState,
@@ -150,10 +150,10 @@ export const DASHBOARD_CMS_PROMPT = [
  * is picked up without a restart. Failures degrade silently (empty string)
  * because the rest of the chat loop must not depend on this list being present.
  */
-export function buildExecutableCatalog(): string {
-  let discovered: ReturnType<typeof listExecutables>
+export function buildImplementationCatalog(): string {
+  let discovered: ReturnType<typeof listImplementations>
   try {
-    discovered = listExecutables()
+    discovered = listImplementations()
   } catch {
     return ""
   }
@@ -268,7 +268,7 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   const basePrompt =
     opts.systemPrompt ?? (opts.model.protocol === "openai" ? OPENAI_CHAT_SYSTEM_PROMPT : CHAT_SYSTEM_PROMPT)
   const agentIdentityBlock = readAgentIdentityBlock(opts.cwd, opts.agentIdentity)
-  const catalog = buildExecutableCatalog()
+  const catalog = buildImplementationCatalog()
   // Per-task artifacts contract appended to every chat session so the
   // agent writes context.json / memory-recs.json / followups.json /
   // handoff-notes.md to a local temp dir before its final reply.
@@ -285,7 +285,7 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   // learned) are factual background, so they sit right after the base
   // prompt. User instructions are behavioral overrides — placed last among
   // the context blocks so they win on tone/style by recency, but still
-  // ahead of the executable catalog + artifact contract, which are hard
+  // ahead of the implementation catalog + artifact contract, which are hard
   // operational requirements the agent must not override.
   const fetchRepoEnabled = Boolean(opts.enableFetchRepoTool && opts.reposRoot)
   // Advertise the fetch_repo tool only when it is explicitly wired.

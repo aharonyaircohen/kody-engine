@@ -8,7 +8,7 @@ import {
 } from "../capabilityEvidence.js"
 import { type CapabilityReport, parseCapabilityReport, parseCapabilityReportsFromText } from "../capabilityReport.js"
 import { type CapabilityResult, parseCapabilityResult, parseCapabilityResultsFromText } from "../capabilityResult.js"
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../implementations/types.js"
 import { mergeGoalEvidenceProgress, parseGoalEvidenceState } from "../goal/evidenceState.js"
 import { managedGoalFromState, planManagedGoalTick, writeManagedGoalToState } from "../goal/manager.js"
 import { capabilityEvidenceOutput, refreshGoalDashboardReport } from "../goal/report.js"

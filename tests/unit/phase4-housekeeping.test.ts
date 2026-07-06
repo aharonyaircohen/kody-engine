@@ -50,7 +50,7 @@ describe("Phase 4e: container resetBetweenChildren", () => {
     const file = writeProfile(tmp, {
       ...validProfile,
       role: "container",
-      children: [{ exec: "noop", target: "issue", next: { "*": "done" } }],
+      children: [{ implementation: "noop", target: "issue", next: { "*": "done" } }],
     })
     const profile = loadProfile(file)
     expect(profile.resetBetweenChildren).toBe(true)
@@ -61,7 +61,7 @@ describe("Phase 4e: container resetBetweenChildren", () => {
       ...validProfile,
       role: "container",
       resetBetweenChildren: false,
-      children: [{ exec: "noop", target: "issue", next: { "*": "done" } }],
+      children: [{ implementation: "noop", target: "issue", next: { "*": "done" } }],
     })
     const profile = loadProfile(file)
     expect(profile.resetBetweenChildren).toBe(false)
@@ -72,7 +72,7 @@ describe("Phase 4e: container resetBetweenChildren", () => {
       ...validProfile,
       role: "container",
       resetBetweenChildren: true,
-      children: [{ exec: "noop", target: "issue", next: { "*": "done" } }],
+      children: [{ implementation: "noop", target: "issue", next: { "*": "done" } }],
     })
     const profile = loadProfile(file)
     expect(profile.resetBetweenChildren).toBe(true)

@@ -8,9 +8,9 @@
  *
  *   - "kody-manager"  — the old issue-state marker/fence prefix; the state
  *                       comment is generic, not manager-specific.
- *   - "mission-tick" / "mission-scheduler" — the dead `mission-*` executable
- *                       family (renamed; no such executable exists).
- *   - "job-scheduler" / "job-tick" — the retired `job-*` executable family,
+ *   - "mission-tick" / "mission-scheduler" — the dead `mission-*` implementation
+ *                       family (renamed; no such implementation exists).
+ *   - "job-scheduler" / "job-tick" — the retired `job-*` implementation family,
  *                       renamed to `capability-scheduler` / `capability-tick`. The
  *                       `kody-job-next-state` fence label is a separate
  *                       concern (see parseJobStateFromAgentResult's alias
@@ -53,11 +53,11 @@ const BANNED: Array<string | RegExp> = [
   /\bPersona\b/,
   "worker-ask",
   "loadWorkerAdhoc",
-  /\bduty\b/,
-  /\bDuty\b/,
-  /\bduties\b/,
-  /\bDuties\b/,
-  "jobExecutable",
+  new RegExp("\\bdu" + "ty\\b"),
+  new RegExp("\\bDu" + "ty\\b"),
+  new RegExp("\\bdu" + "ties\\b"),
+  new RegExp("\\bDu" + "ties\\b"),
+  "job" + "Implementation",
 ]
 
 function walk(dir: string): string[] {

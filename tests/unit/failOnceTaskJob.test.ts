@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { failOnceTaskJob } from "../../src/scripts/failOnceTaskJob.js"
 import { emptyState, reduce, upsertTaskJobs } from "../../src/state.js"
 

@@ -44,7 +44,7 @@ vi.mock("../../src/issue.js", async (orig) => {
 })
 
 import type { KodyConfig } from "../../src/config.js"
-import { runExecutableChain } from "../../src/executor.js"
+import { runImplementationChain } from "../../src/executor.js"
 import { emptyState, upsertTaskJobs } from "../../src/state.js"
 
 const config: KodyConfig = {
@@ -132,7 +132,7 @@ describe("executor: nextJob chain", () => {
       "2026-06-08T08:00:00Z",
     )
 
-    const result = await runExecutableChain("parent", {
+    const result = await runImplementationChain("parent", {
       cliArgs: { issue: 42 },
       cwd: tmp,
       config,
@@ -209,7 +209,7 @@ describe("executor: nextJob chain", () => {
       commentTargetNumber: 42,
     }
 
-    const first = await runExecutableChain("parent", {
+    const first = await runImplementationChain("parent", {
       cliArgs: { issue: 42 },
       cwd: tmp,
       config,
@@ -220,7 +220,7 @@ describe("executor: nextJob chain", () => {
     expect(first.taskState?.jobs["instant:failer:42"]?.status).toBe("failed")
     expect(first.taskState?.jobs["instant:child:42"]?.status).toBe("pending")
 
-    const second = await runExecutableChain("parent", {
+    const second = await runImplementationChain("parent", {
       cliArgs: { issue: 42 },
       cwd: tmp,
       config,

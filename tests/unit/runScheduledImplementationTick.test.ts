@@ -5,8 +5,8 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import type { KodyConfig } from "../../src/config.js"
-import type { Context, Profile } from "../../src/executables/types.js"
-import { runScheduledExecutableTick } from "../../src/scripts/runScheduledExecutableTick.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
+import { runScheduledImplementationTick } from "../../src/scripts/runScheduledImplementationTick.js"
 import { buildTickChildEnv } from "../../src/scripts/tickShellRunner.js"
 
 function configFor(): KodyConfig {
@@ -63,8 +63,8 @@ afterEach(() => {
   resetCompanyStoreCacheForTests()
 })
 
-describe("runScheduledExecutableTick", () => {
-  it("forwards generic dry-run flags to executable-local shell", () => {
+describe("runScheduledImplementationTick", () => {
+  it("forwards generic dry-run flags to implementation-local shell", () => {
     expect(
       buildTickChildEnv(
         {
@@ -91,11 +91,11 @@ describe("runScheduledExecutableTick", () => {
     })
   })
 
-  it("runs the executable-local shell and parses the next-state fence", async () => {
+  it("runs the implementation-local shell and parses the next-state fence", async () => {
     writeTickScript()
 
     const ctx = ctxFor(tmp, "demo")
-    await runScheduledExecutableTick(ctx, { name: "demo-watch", dir: execDir } as Profile, {
+    await runScheduledImplementationTick(ctx, { name: "demo-watch", dir: execDir } as Profile, {
       jobsDir: ".kody/capabilities",
       slugArg: "capability",
       shell: "tick.sh",
@@ -104,7 +104,7 @@ describe("runScheduledExecutableTick", () => {
     expect(ctx.skipAgent).toBe(true)
     expect(ctx.output.exitCode).toBe(0)
     expect(ctx.data.jobSlug).toBe("demo")
-    expect(ctx.data.executableSlug).toBe("demo-watch")
+    expect(ctx.data.implementationSlug).toBe("demo-watch")
     expect(ctx.data.nextStateParseError).toBeUndefined()
     expect(ctx.data.nextJobState).toMatchObject({
       cursor: "demo-1",
@@ -133,7 +133,7 @@ describe("runScheduledExecutableTick", () => {
     resetCompanyStoreCacheForTests()
 
     const ctx = ctxFor(tmp, "demo")
-    await runScheduledExecutableTick(ctx, { name: "demo-watch", dir: execDir } as Profile, {
+    await runScheduledImplementationTick(ctx, { name: "demo-watch", dir: execDir } as Profile, {
       jobsDir: ".kody/capabilities",
       slugArg: "capability",
       shell: "tick.sh",

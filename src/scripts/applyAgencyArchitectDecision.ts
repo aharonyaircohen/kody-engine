@@ -10,7 +10,7 @@ import {
   writeCompanyGoalState,
   writeCompanyIntent,
 } from "../companyIntent.js"
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../implementations/types.js"
 import { nowIso } from "../goal/state.js"
 import { fetchGoalState } from "../goal/stateStore.js"
 

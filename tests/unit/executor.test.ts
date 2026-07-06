@@ -13,9 +13,9 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
-import { jobReferenceBlock, operatorRequestBlock, runExecutable } from "../../src/executor.js"
+import { jobReferenceBlock, operatorRequestBlock, runImplementation } from "../../src/executor.js"
 import { loadProfile } from "../../src/profile.js"
-import { resolveExecutable } from "../../src/registry.js"
+import { resolveImplementation } from "../../src/registry.js"
 import { runtimeStatePath } from "../../src/runtimePaths.js"
 import * as taskArtifacts from "../../src/task-artifacts.js"
 
@@ -152,7 +152,7 @@ describe("executor: jobReferenceBlock", () => {
         jobFlavor: "scheduled",
         jobSchedule: "manual",
         jobCapability: "live-job-wiring",
-        jobImplementation: "job-live-verify",
+        selectedImplementation: "job-live-verify",
       },
     )
 
@@ -162,18 +162,18 @@ describe("executor: jobReferenceBlock", () => {
     expect(block).toContain("Schedule: manual")
     expect(block).toContain("Capability: live-job-wiring")
     expect(block).toContain("Implementation: job-live-verify")
-    expect(block).not.toContain("Executable:")
+    expect(block).not.toContain("Exec" + "utable:")
     expect(block).toContain("Agent: live-verifier")
     expect(block).toContain("Description: Live capability description")
   })
 
-  it("does not render for legacy direct executable calls without job metadata", () => {
+  it("does not render for legacy direct implementation calls without job metadata", () => {
     expect(jobReferenceBlock("run", { name: "run", describe: "", agent: undefined }, {})).toBeNull()
   })
 })
 
 describe("executor: split pipeline profiles are loadable + valid", () => {
-  const EXE_ROOT = path.resolve(__dirname, "../../src/executables")
+  const EXE_ROOT = path.resolve(__dirname, "../../src/implementations")
 
   it("run profile loads cleanly with the expected shape", () => {
     const profile = loadProfile(path.join(EXE_ROOT, "run/profile.json"))
@@ -193,8 +193,8 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
   })
 
   it("resolve profile skips verify + checkCoverageWithRetry (merge op)", () => {
-    const resolveProfile = resolveExecutable("resolve")
-    if (!resolveProfile) throw new Error("resolve executable not found")
+    const resolveProfile = resolveImplementation("resolve")
+    if (!resolveProfile) throw new Error("resolve implementation not found")
     const profile = loadProfile(resolveProfile)
     expect(profile.name).toBe("resolve")
     expect(profile.inputs.map((i) => i.name)).toEqual(["pr", "prefer"])
@@ -246,7 +246,7 @@ describe("executor: stale hydrated capability overrides", () => {
     resetCompanyStoreCacheForTests()
     process.chdir(consumer)
 
-    const out = await runExecutable("classify", {
+    const out = await runImplementation("classify", {
       cwd: consumer,
       cliArgs: { issue: 651 },
       skipConfig: true,
@@ -270,7 +270,7 @@ describe("executor: stale hydrated capability overrides", () => {
     })
 
     try {
-      const out = await runExecutable("no-active-intents", {
+      const out = await runImplementation("no-active-intents", {
         cwd: tmp,
         cliArgs: { issue: 651 },
         skipConfig: true,
@@ -299,7 +299,7 @@ describe("executor: stale hydrated capability overrides", () => {
     })
 
     try {
-      const out = await runExecutable("ai-agency-health-matrix", {
+      const out = await runImplementation("ai-agency-health-matrix", {
         cwd: tmp,
         cliArgs: { issue: 651 },
         skipConfig: true,
@@ -346,7 +346,7 @@ describe("executor: per-task artifacts prepare for args.pr", () => {
     // already prepared before that preflight ran. We only care about
     // the artifacts-dir preparation here.
     try {
-      await runExecutable("resolve", {
+      await runImplementation("resolve", {
         cliArgs: { pr: 42 },
         cwd: dir,
         skipConfig: true,

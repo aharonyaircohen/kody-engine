@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { Profile } from "../../src/executables/types.js"
+import type { Profile } from "../../src/implementations/types.js"
 import { countActionItems, requireFeedbackActions } from "../../src/scripts/requireFeedbackActions.js"
 
 const profile = { name: "fix" } as Profile

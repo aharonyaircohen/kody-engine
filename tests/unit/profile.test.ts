@@ -3,7 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
 import { loadProfile, ProfileError, validateScriptReferences } from "../../src/profile.js"
-import { resolveExecutable } from "../../src/registry.js"
+import { resolveImplementation } from "../../src/registry.js"
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-profile-"))
@@ -48,7 +48,7 @@ describe("profile: loadProfile", () => {
     expect(profile.scripts.preflight[0]!.script).toBe("composePrompt")
   })
 
-  it("parses claudeCode.reasoningEffort on executable profiles", () => {
+  it("parses claudeCode.reasoningEffort on implementation profiles", () => {
     const dir = tmpDir()
     const profile = loadProfile(
       writeProfile(dir, { ...VALID_MIN, claudeCode: { ...VALID_MIN.claudeCode, reasoningEffort: "high" } }),
@@ -120,12 +120,12 @@ describe("profile: loadProfile", () => {
     expect(() => loadProfile(p)).not.toThrow()
   })
 
-  it("accepts state postflights when runScheduledExecutableTick is in preflight", () => {
+  it("accepts state postflights when runScheduledImplementationTick is in preflight", () => {
     const dir = tmpDir()
     const p = writeProfile(dir, {
       ...VALID_MIN,
       scripts: {
-        preflight: [{ script: "runScheduledExecutableTick" }],
+        preflight: [{ script: "runScheduledImplementationTick" }],
         postflight: [{ script: "writeJobStateFile" }],
       },
     })
@@ -151,7 +151,7 @@ describe("profile: loadProfile", () => {
     expect(profile.capabilityTools).toEqual(["ensure_issue"]) // toolbox (overlaid)
     // how came from the referenced implementation profile: canonical
     // capabilities resolve before bundled implementations during migration.
-    const resolvedMerge = resolveExecutable("merge")
+    const resolvedMerge = resolveImplementation("merge")
     expect(resolvedMerge).toBeTruthy()
     expect(profile.dir).toBe(path.dirname(resolvedMerge!))
     expect(profile.claudeCode).toBeTruthy()
@@ -210,7 +210,7 @@ describe("profile: loadProfile", () => {
     expect(() => loadProfile(p)).toThrow(/permissionMode must be one of/)
   })
 
-  it("accepts empty tools (configless executables like init/release)", () => {
+  it("accepts empty tools (configless implementations like init/release)", () => {
     const dir = tmpDir()
     const good = { ...VALID_MIN, claudeCode: { ...VALID_MIN.claudeCode, tools: [] } }
     const p = writeProfile(dir, good)

@@ -5,7 +5,7 @@ vi.mock("node:child_process", () => ({
   execFileSync: (...args: unknown[]) => execFileSyncMock(...args),
 }))
 
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { DEFAULT_PREVIEW_URL, resolvePreviewUrl } from "../../src/scripts/resolvePreviewUrl.js"
 
 function makeCtx(args: Record<string, unknown> = {}): Context {

@@ -2,7 +2,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { buildSyntheticPlugin, getPluginsCatalogRoot } from "../../src/scripts/buildSyntheticPlugin.js"
 
 function makeCtx(): Context {
@@ -79,11 +79,11 @@ describe("buildSyntheticPlugin: skill copy", () => {
   it("throws a clear error for unknown skill", async () => {
     const ctx = makeCtx()
     await expect(buildSyntheticPlugin(ctx, makeProfile({ skills: ["does-not-exist"] }))).rejects.toThrow(
-      /skills entry 'does-not-exist' not found in executable dir .* or catalog/,
+      /skills entry 'does-not-exist' not found in implementation dir .* or catalog/,
     )
   })
 
-  it("prefers an executable-local skill over the catalog", async () => {
+  it("prefers an implementation-local skill over the catalog", async () => {
     const ctx = makeCtx()
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-local-skill-"))
     try {
@@ -103,7 +103,7 @@ describe("buildSyntheticPlugin: skill copy", () => {
     }
   })
 
-  it("loads an executable-local skill that is not in the catalog", async () => {
+  it("loads an implementation-local skill that is not in the catalog", async () => {
     const ctx = makeCtx()
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-local-skill-only-"))
     try {
@@ -134,7 +134,7 @@ describe("buildSyntheticPlugin: command copy", () => {
   it("throws a clear error for unknown command", async () => {
     const ctx = makeCtx()
     await expect(buildSyntheticPlugin(ctx, makeProfile({ commands: ["does-not-exist"] }))).rejects.toThrow(
-      /commands entry 'does-not-exist.md' not found in executable dir .* or catalog/,
+      /commands entry 'does-not-exist.md' not found in implementation dir .* or catalog/,
     )
   })
 })
@@ -152,7 +152,7 @@ describe("buildSyntheticPlugin: hook merge", () => {
   it("throws a clear error for unknown hook", async () => {
     const ctx = makeCtx()
     await expect(buildSyntheticPlugin(ctx, makeProfile({ hooks: ["does-not-exist"] }))).rejects.toThrow(
-      /hooks entry 'does-not-exist.json' not found in executable dir .* or catalog/,
+      /hooks entry 'does-not-exist.json' not found in implementation dir .* or catalog/,
     )
   })
 })

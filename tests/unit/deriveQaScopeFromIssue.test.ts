@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { getIssue } from "../../src/issue.js"
 import { deriveQaScopeFromIssue } from "../../src/scripts/deriveQaScopeFromIssue.js"
 

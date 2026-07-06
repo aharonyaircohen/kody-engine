@@ -1,5 +1,5 @@
 /**
- * Postflight for the `qa-engineer` executable. Takes the agent's final message
+ * Postflight for the `qa-engineer` implementation. Takes the agent's final message
  * (the entire QA report) and posts it as either:
  *   - a comment on an existing issue (when --issue <N> is set)
  *   - a brand-new issue (default), labeled `kody:qa-report`
@@ -13,7 +13,7 @@
  *   missing report / agent crashed / post failed → 1+ (failure path)
  */
 import type { AgentResult } from "../agent.js"
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../implementations/types.js"
 import { gh, postIssueComment, truncate } from "../issue.js"
 import type { Action } from "../state.js"
 import { detectVerdict, type ReviewVerdict } from "./postReviewResult.js"

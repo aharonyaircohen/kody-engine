@@ -1,5 +1,5 @@
 /**
- * runnerServe — preflight for the `runner-serve` executable.
+ * runnerServe — preflight for the `runner-serve` implementation.
  *
  * Idle HTTP server for a WARM-POOL one-shot runner. A pooled machine boots
  * into this mode with NO issue baked in, starts the listener, and is then

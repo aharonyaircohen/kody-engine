@@ -5,7 +5,7 @@
  */
 
 import * as fs from "node:fs"
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../implementations/types.js"
 
 export const writeAgentRunSummary: PostflightScript = async (ctx, profile) => {
   const summaryPath = process.env.GITHUB_STEP_SUMMARY

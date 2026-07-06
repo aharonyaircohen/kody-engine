@@ -11,7 +11,7 @@ vi.mock("../../src/lifecycleLabels.js", () => ({
   setKodyLabel: vi.fn(),
 }))
 
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import {
   postIssueComment as ghPostIssueComment,
   postPrReviewComment as ghPostPrReviewComment,

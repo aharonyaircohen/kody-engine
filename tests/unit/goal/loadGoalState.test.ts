@@ -4,7 +4,7 @@ vi.mock("../../../src/goal/stateStore.js", () => ({
   fetchGoalState: vi.fn(),
 }))
 
-import type { Context, Profile } from "../../../src/executables/types.js"
+import type { Context, Profile } from "../../../src/implementations/types.js"
 import type { GoalState } from "../../../src/goal/state.js"
 import { fetchGoalState } from "../../../src/goal/stateStore.js"
 import { loadGoalState } from "../../../src/scripts/loadGoalState.js"

@@ -229,7 +229,7 @@ describe("autoDispatchTyped: unrecognized variant (user-facing feedback needed)"
       expect(out.available).toContain("run")
       expect(out.available).toContain("resolve")
       expect(out.available).toContain("merge")
-      // Watch executables (goal-/job-) are filtered out — they're internal.
+      // Watch implementations (goal-/job-) are filtered out — they're internal.
       expect(out.available.find((n) => n.startsWith("goal-"))).toBeUndefined()
       expect(out.available.find((n) => n.startsWith("job-"))).toBeUndefined()
     }

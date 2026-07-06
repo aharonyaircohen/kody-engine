@@ -4,7 +4,7 @@
  * here. Any profile referencing an unregistered script name fails at load.
  */
 
-import type { PostflightScript, PreflightScript } from "../executables/types.js"
+import type { PostflightScript, PreflightScript } from "../implementations/types.js"
 import { abortUnfinishedGitOps } from "./abortUnfinishedGitOps.js"
 import { advanceFlow } from "./advanceFlow.js"
 import { advanceManagedGoal } from "./advanceManagedGoal.js"
@@ -84,7 +84,7 @@ import { revertFlow } from "./revertFlow.js"
 import { reviewFlow } from "./reviewFlow.js"
 import { runFlow } from "./runFlow.js"
 import { runPreviewBuild } from "./runPreviewBuild.js"
-import { runScheduledExecutableTick } from "./runScheduledExecutableTick.js"
+import { runScheduledImplementationTick } from "./runScheduledImplementationTick.js"
 import { runTickScript } from "./runTickScript.js"
 import { saveManagedGoalState } from "./saveManagedGoalState.js"
 import { saveTaskState } from "./saveTaskState.js"
@@ -147,7 +147,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   dispatchCapabilityFileTicks,
   planTaskJobs,
   dispatchNextTaskJob,
-  runScheduledExecutableTick,
+  runScheduledImplementationTick,
   runTickScript,
   runPreviewBuild,
   advanceManagedGoal,

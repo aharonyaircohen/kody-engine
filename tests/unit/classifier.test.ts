@@ -1,6 +1,6 @@
 import * as childProcess from "node:child_process"
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { classifyByLabel, defaultLabelMap } from "../../src/scripts/classifyByLabel.js"
 import { dispatchClassified } from "../../src/scripts/dispatchClassified.js"
 import { parseClassification, recordClassification } from "../../src/scripts/recordClassification.js"

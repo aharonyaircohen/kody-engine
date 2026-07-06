@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { AgentResult } from "../../src/agent.js"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { parseReproOutput } from "../../src/scripts/parseReproOutput.js"
 
 const profile = { name: "reproduce" } as Profile

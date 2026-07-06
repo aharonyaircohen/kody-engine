@@ -17,7 +17,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { KodyConfig } from "../../src/config.js"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { runTickScript } from "../../src/scripts/runTickScript.js"
 
 function configFor(): KodyConfig {
@@ -132,7 +132,7 @@ EOF
     // Pins the maxBuffer fix. Without `maxBuffer: 16MB` on spawnSync,
     // stdout >1MB is silently truncated and the fenced block at the end
     // is dropped — the exact "silent state drop" failure mode this
-    // executable was written to prevent. The script writes ~2MB of
+    // implementation was written to prevent. The script writes ~2MB of
     // preamble, then the fenced block.
     writeJob("demo", { tickScript: ".kody/scripts/big.sh" })
     writeScript(

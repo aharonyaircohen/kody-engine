@@ -93,7 +93,7 @@ Capability implementation profiles are private implementation units and contain
 **only** three kinds of files: `profile.json` (declaration), `prompt.md` (agent
 instructions), and `.sh` scripts (mechanical side-effect work). Cross-cutting
 TypeScript lives in [src/scripts/](src/scripts/); it can't import from
-`src/executables/` and can't branch on `profile.name`.
+`src/implementations/` and can't branch on `profile.name`.
 
 ## Install in a consumer repo
 
@@ -174,7 +174,7 @@ without `tools` keep the legacy Bash/gh toolbox.
 
 A profile is declarative JSON plus an adjacent markdown body. New public work
 should live under `.kody/capabilities/<slug>/` with `capability.md`; legacy
-implementations under [src/executables/](src/executables/) still show the
+implementations under [src/implementations/](src/implementations/) still show the
 older split profile + prompt shape. Adding a new capability should not require
 executor, entry, or dispatch changes.
 

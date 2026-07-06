@@ -1,11 +1,11 @@
 /**
- * Flow script for the `run` executable.
+ * Flow script for the `run` implementation.
  * Loads the issue, creates/checks out a feature branch, posts the "started"
  * comment. Issue number lives in `ctx.args.issue`.
  */
 
 import { ensureFeatureBranch } from "../branch.js"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { getRunUrl } from "../gha.js"
 import {
   DEFAULT_COMMENT_LIMIT,

@@ -1,5 +1,5 @@
 import type { CapabilityResult } from "./capabilityResult.js"
-import type { Profile } from "./executables/types.js"
+import type { Profile } from "./implementations/types.js"
 
 export type AgencyBoundaryRule =
   | "observe-does-not-act"

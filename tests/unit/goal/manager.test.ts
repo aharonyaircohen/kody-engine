@@ -132,7 +132,7 @@ describe("planManagedGoalTick", () => {
     })
   })
 
-  it("can dispatch a capability without naming its executable", () => {
+  it("can dispatch a capability without naming its implementation", () => {
     const goal = releaseGoal({
       destination: {
         outcome: "release PR is green",

@@ -23,7 +23,7 @@
  *   ctx.data.capabilityTitle       alias of jobTitle
  *   ctx.data.agentSlug       alias of agentSlug — the agent (who)
  *   ctx.data.agentTitle      alias of agentTitle
- *   ctx.data.executableSlug  profile.name — the executable implementation doing the tick
+ *   ctx.data.implementationSlug  profile.name — the implementation doing the tick
  *
  * The agent is *who* the tick runs as: a capability names exactly one
  * agent via `profile.json`; its agent is injected ahead of the capability
@@ -40,7 +40,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { resolveAgentFile } from "../agents.js"
 import { CAPABILITY_MCP_TOOL_NAMES } from "../capabilityMcp.js"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { resolveCapabilityFolder } from "../registry.js"
 import { resolveBackend } from "./jobState/index.js"
 
@@ -95,7 +95,7 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
   ctx.data.jobSlug = slug
   ctx.data.jobTitle = title
   // Resolve {{mentions}} inside the capability body here. composePrompt only renders
-  // mustache tokens in the executable *template*; the body lands via the
+  // mustache tokens in the implementation *template*; the body lands via the
   // template's {{jobIntent}} token and is never re-scanned, so a `{{mentions}}`
   // written in a capability body would otherwise reach the agent literal — and the
   // agent then improvises (and mistypes) the operator handle. Substitute it to
@@ -115,7 +115,7 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
 
   // Capability-noun aliases. The domain noun for one tick of a markdown capability is
   // "Capability", not "Job" — the engine's `Job` runtime envelope (src/job.ts) and
-  // the scheduled-watch executable shape are a separate concern, see AGENTS.md.
+  // the scheduled-watch implementation shape are a separate concern, see AGENTS.md.
   // The legacy `jobSlug` / `jobTitle` / `agentSlug` / `agentTitle` fields
   // stay populated above for backwards compat with the kody-job-next-state
   // fence label, existing prompt templates, and any operator-written capability
@@ -124,7 +124,7 @@ export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
   ctx.data.capabilityTitle = title
   ctx.data.agentSlug = agentSlug
   ctx.data.agentTitle = agentTitle
-  ctx.data.executableSlug = profile.name
+  ctx.data.implementationSlug = profile.name
   ctx.data.capabilitySchedule = String(ctx.data.jobSchedule ?? "")
 
   // Capability MCP tools (`tools` / `capabilityTools` in profile.json). Default

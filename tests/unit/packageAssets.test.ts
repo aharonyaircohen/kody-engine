@@ -18,7 +18,7 @@ describe("package asset copying", () => {
   it("removes existing dist output before build", () => {
     copyScript("clean-dist.cjs", tmp)
     writeFile("dist/obsolete-output/stale/profile.json", "{}")
-    writeFile("dist/executables/stale/profile.json", "{}")
+    writeFile("dist/implementations/stale/profile.json", "{}")
 
     execFileSync(process.execPath, [path.join(tmp, "scripts", "clean-dist.cjs")], {
       cwd: tmp,
@@ -30,20 +30,20 @@ describe("package asset copying", () => {
 
   it("copies current package assets", () => {
     copyScript("copy-assets.cjs", tmp)
-    writeFile("src/executables/run/profile.json", "{}")
+    writeFile("src/implementations/run/profile.json", "{}")
     writeFile("src/jobs/.keep", "")
     writeFile("src/capabilities/run/profile.json", "{}")
     writeFile("src/plugins/skills/probe/SKILL.md", "# Probe\n")
     writeFile("src/scripts/preview-build-templates/default-Dockerfile.preview.dev", "FROM node\n")
-    writeFile("dist/executables/stale/profile.json", "{}")
+    writeFile("dist/implementations/stale/profile.json", "{}")
 
     execFileSync(process.execPath, [path.join(tmp, "scripts", "copy-assets.cjs")], {
       cwd: tmp,
       stdio: "pipe",
     })
 
-    expect(fs.existsSync(path.join(tmp, "dist", "executables", "stale"))).toBe(false)
-    expect(fs.existsSync(path.join(tmp, "dist", "executables", "run", "profile.json"))).toBe(true)
+    expect(fs.existsSync(path.join(tmp, "dist", "implementations", "stale"))).toBe(false)
+    expect(fs.existsSync(path.join(tmp, "dist", "implementations", "run", "profile.json"))).toBe(true)
     expect(
       fs.existsSync(path.join(tmp, "dist", "bin", "preview-build-templates", "default-Dockerfile.preview.dev")),
     ).toBe(true)

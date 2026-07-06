@@ -20,10 +20,10 @@ import type {
   OutputArtifactSpec,
   Profile,
   ScriptEntry,
-} from "./executables/types.js"
+} from "./implementations/types.js"
 import { applyLifecycle } from "./lifecycles/index.js"
 import { ProfileError } from "./profile-error.js"
-import { resolveExecutable } from "./registry.js"
+import { resolveImplementation } from "./registry.js"
 import { captureSubagentTemplates } from "./subagents.js"
 
 export { ProfileError } from "./profile-error.js"
@@ -117,14 +117,14 @@ export function loadProfile(profilePath: string): Profile {
   }
 
   // Capability-as-reference: an capability stores a capability
-  // contract and names the executable implementation instead of embedding it.
-  // Resolve that executable's full profile and overlay this contract's identity
+  // contract and names the implementation instead of embedding it.
+  // Resolve that implementation's full profile and overlay this contract's identity
   // (name) + agent (who) + mentions. The capability folder then stays a
   // thin binding — no claudeCode/prompt/scripts of its own.
-  // Intent = why, agent = who, capability = how, executable = implementation.
+  // Intent = why, agent = who, capability = how, implementation = implementation.
   const execRef = typeof r.implementation === "string" && r.implementation.trim() ? r.implementation.trim() : ""
   if (execRef) {
-    const refPath = resolveExecutable(execRef)
+    const refPath = resolveImplementation(execRef)
     if (!refPath) {
       throw new ProfileError(profilePath, `capability references unknown implementation '${execRef}'`)
     }
@@ -271,7 +271,7 @@ export function loadProfile(profilePath: string): Profile {
   // Any of these preflights populate ctx.data.jobState: loadCapabilityState (folder
   // capability), loadJobFromFile (markdown capability via capability-tick), runTickScript (scripted
   // capability via capability-tick-scripted).
-  const STATE_LOADERS = ["loadCapabilityState", "loadJobFromFile", "runTickScript", "runScheduledExecutableTick"]
+  const STATE_LOADERS = ["loadCapabilityState", "loadJobFromFile", "runTickScript", "runScheduledImplementationTick"]
   if (needsState && !STATE_LOADERS.some((s) => preNames.has(s))) {
     throw new ProfileError(
       profilePath,
@@ -405,8 +405,8 @@ function parseClaudeCode(p: string, raw: unknown): ClaudeCodeSpec {
   }
 
   const tools = Array.isArray(r.tools) ? (r.tools as string[]) : []
-  // An empty tools array is permitted for configless / agentless executables
-  // (e.g. `init`, `release`). Such executables must set ctx.skipAgent in a
+  // An empty tools array is permitted for configless / agentless implementations
+  // (e.g. `init`, `release`). Such implementations must set ctx.skipAgent in a
   // preflight script — the executor refuses to invoke the agent without tools
   // and without skipAgent, surfacing the misconfiguration loudly.
 
@@ -553,10 +553,10 @@ function parseContainerChildren(p: string, role: Profile["role"], raw: unknown):
   const out: ContainerChild[] = []
   for (const [i, item] of (raw as unknown[]).entries()) {
     if (!item || typeof item !== "object") {
-      throw new ProfileError(p, `children[${i}] must be an object { exec, target, next }`)
+      throw new ProfileError(p, `children[${i}] must be an object { implementation, target, next }`)
     }
     const r = item as Record<string, unknown>
-    const exec = requireString(p, r, "exec")
+    const implementation = requireString(p, r, "implementation")
     const target = requireString(p, r, "target")
     if (!VALID_CONTAINER_CHILD_TARGETS.has(target)) {
       throw new ProfileError(p, `children[${i}].target must be "issue" or "pr"`)
@@ -571,7 +571,7 @@ function parseContainerChildren(p: string, role: Profile["role"], raw: unknown):
       }
       next[k] = v
     }
-    out.push({ exec, target: target as ContainerChild["target"], next })
+    out.push({ implementation, target: target as ContainerChild["target"], next })
   }
   return out
 }
@@ -597,7 +597,7 @@ function parseScriptList(p: string, key: string, raw: unknown): ScriptEntry[] {
     if (!hasScript && !hasShell) {
       throw new ProfileError(
         p,
-        `scripts.${key}[${i}] must set "script" (registered TS function) or "shell" (filename in executable dir)`,
+        `scripts.${key}[${i}] must set "script" (registered TS function) or "shell" (filename in implementation dir)`,
       )
     }
     const entry: ScriptEntry = {}

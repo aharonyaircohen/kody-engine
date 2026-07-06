@@ -108,14 +108,14 @@ describe("recommend_to_operator — inert and idempotent recommendations", () =>
   it("rejects literal @kody commands and does not touch GitHub", async () => {
     const result = await recommendTool().handler({ pr: 28, body: "Please run @kody sync --pr 28" })
 
-    expect(result.content[0]?.text).toContain("contains executable Kody command text")
+    expect(result.content[0]?.text).toContain("contains implementation Kody command text")
     expect(vi.mocked(gh)).not.toHaveBeenCalled()
   })
 
   it("rejects kody-cmd comments and does not touch GitHub", async () => {
     const result = await recommendTool().handler({ pr: 28, body: "kody-cmd: sync --pr 28" })
 
-    expect(result.content[0]?.text).toContain("contains executable Kody command text")
+    expect(result.content[0]?.text).toContain("contains implementation Kody command text")
     expect(vi.mocked(gh)).not.toHaveBeenCalled()
   })
 

@@ -6,13 +6,13 @@
  *      Using profile.name as an opaque label (state keys, logs, producedBy
  *      tags, action-type prefixes) is allowed.
  *
- *   2. No file under src/scripts/ may import from src/executables/ —
- *      shared code cannot reach into executable-specific code, structurally
- *      preventing the per-executable branching pattern from ever creeping
+ *   2. No file under src/scripts/ may import from src/implementations/ —
+ *      shared code cannot reach into implementation-specific code, structurally
+ *      preventing the per-implementation branching pattern from ever creeping
  *      back in.
  *
  * When this test fails, the fix is to move the offending logic into the
- * specific executable's directory (see AGENTS.md § "clean executor layer").
+ * specific implementation's directory (see AGENTS.md § "clean executor layer").
  */
 
 import * as fs from "node:fs"
@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest"
 import { loadProfile } from "../../src/profile.js"
 
 const SCRIPTS_DIR = path.resolve(__dirname, "../../src/scripts")
-const EXECUTABLES_DIR = path.resolve(__dirname, "../../src/executables")
+const IMPLEMENTATIONS_DIR = path.resolve(__dirname, "../../src/implementations")
 
 function listScriptFiles(): string[] {
   return fs
@@ -30,14 +30,14 @@ function listScriptFiles(): string[] {
     .map((f) => path.join(SCRIPTS_DIR, f))
 }
 
-function listExecutableNames(): string[] {
+function listImplementationNames(): string[] {
   return fs
-    .readdirSync(EXECUTABLES_DIR, { withFileTypes: true })
+    .readdirSync(IMPLEMENTATIONS_DIR, { withFileTypes: true })
     .filter((e) => e.isDirectory())
     .map((e) => e.name)
 }
 
-describe("shared scripts: invariant — no executable-name branching", () => {
+describe("shared scripts: invariant — no implementation-name branching", () => {
   it("does not compare profile.name as a branch condition", () => {
     const offenders: { file: string; line: number; text: string }[] = []
     // Matches: profile.name === / !== / == / != / switch(profile.name)
@@ -53,11 +53,11 @@ describe("shared scripts: invariant — no executable-name branching", () => {
     expect(offenders).toEqual([])
   })
 
-  it("does not compare against literal executable names (catches aliased comparisons)", () => {
+  it("does not compare against literal implementation names (catches aliased comparisons)", () => {
     // Catches the evade pattern: `const kind = profile.name; if (kind === "resolve")`.
-    // Builds a regex from the actual executable names on disk, so the rule
-    // stays accurate as executables are added/removed.
-    const names = listExecutableNames()
+    // Builds a regex from the actual implementation names on disk, so the rule
+    // stays accurate as implementations are added/removed.
+    const names = listImplementationNames()
     expect(names.length).toBeGreaterThan(0)
     const nameGroup = names.map((n) => n.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")).join("|")
     const pattern = new RegExp(`[!=]==?\\s*["'](?:${nameGroup})["']|case\\s+["'](?:${nameGroup})["']\\s*:`)
@@ -73,10 +73,10 @@ describe("shared scripts: invariant — no executable-name branching", () => {
     expect(offenders).toEqual([])
   })
 
-  it("does not import from src/executables/", () => {
+  it("does not import from src/implementations/", () => {
     const offenders: { file: string; line: number; text: string }[] = []
-    // Matches any import/require path that resolves into ../executables/
-    const pattern = /from\s+["'][^"']*\/executables\/[^"']+["']|require\(\s*["'][^"']*\/executables\/[^"']+["']/
+    // Matches any import/require path that resolves into ../implementations/
+    const pattern = /from\s+["'][^"']*\/implementations\/[^"']+["']|require\(\s*["'][^"']*\/implementations\/[^"']+["']/
     for (const file of listScriptFiles()) {
       const lines = fs.readFileSync(file, "utf-8").split("\n")
       lines.forEach((text, i) => {
@@ -85,24 +85,24 @@ describe("shared scripts: invariant — no executable-name branching", () => {
         }
       })
     }
-    // Importing types from "../executables/types.js" is allowed — it's the
+    // Importing types from "../implementations/types.js" is allowed — it's the
     // shared contract, not an implementation. Everything else is banned.
-    const real = offenders.filter((o) => !/executables\/types(\.js)?["']/.test(o.text))
+    const real = offenders.filter((o) => !/implementations\/types(\.js)?["']/.test(o.text))
     expect(real).toEqual([])
   })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Modularity invariant: src/scripts/ is for CROSS-CUTTING utilities. Single-
-// executable scripts must be explicitly allowlisted as "known solo" until
-// they're either generalised (referenced by ≥2 executables) or moved to an
-// executable-local subdirectory. New solo scripts that sneak in without
+// implementation scripts must be explicitly allowlisted as "known solo" until
+// they're either generalised (referenced by ≥2 implementations) or moved to an
+// implementation-local subdirectory. New solo scripts that sneak in without
 // allowlisting fail this test loudly, surfacing the "shared utility" lie
 // before it compounds.
 //
 // Owners of this allowlist: when removing the last reference to a solo
 // script, also remove the entry here. When a solo script becomes referenced
-// by ≥2 executables, also remove the entry (the script is now genuinely
+// by ≥2 implementations, also remove the entry (the script is now genuinely
 // shared and no longer solo).
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -132,7 +132,7 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   postIssueComment: { owner: "run", reason: "run-only issue comment result publisher." },
   requirePlanDeviations: { owner: "run", reason: "run-only plan-deviation check." },
   resolveArtifacts: { owner: "run", reason: "run-only artifact resolver." },
-  runFlow: { owner: "run", reason: "run bootstrap. Run is the only engine-bundled executable." },
+  runFlow: { owner: "run", reason: "run bootstrap. Run is the only engine-bundled implementation." },
   saveTaskState: { owner: "run", reason: "run-only task state persistence." },
   setLifecycleLabel: { owner: "run", reason: "run-only lifecycle label while engine keeps only run builtin." },
   verifyWithRetry: { owner: "run", reason: "run-only verification gate." },
@@ -141,15 +141,15 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Consumer-library scripts: deterministic preflight/postflight logic for
-// executable profiles that now live in kody-store. The engine still ships the
+// implementation profiles that now live in kody-store. The engine still ships the
 // TypeScript implementation catalog; store profiles reference scripts by name.
 // ─────────────────────────────────────────────────────────────────────────────
 const CONSUMER_LIBRARY_SCRIPTS: Record<string, string> = {
   advanceManagedGoal: "goal-manager",
   appendCompanyIntentDecision: "agency-architect",
-  applyCapabilityReports: "goal/reporting executables",
+  applyCapabilityReports: "goal/reporting implementations",
   applyAgencyArchitectDecision: "agency-architect",
-  buildSyntheticPlugin: "store executables with local skills/hooks",
+  buildSyntheticPlugin: "store implementations with local skills/hooks",
   classifyByLabel: "classify",
   createQaGoal: "qa-engineer",
   diagMcp: "research",
@@ -197,12 +197,12 @@ function buildUsageMap(): Map<string, Set<string>> {
   // structural truth — a lifecycle-driven reference is still a reference
   // to that script from that profile, just expressed via a macro instead
   // of a literal entry. Without this, lifecycle migration would falsely
-  // turn 3-executable shared scripts (syncFlow, loadMemoryContext, etc.)
+  // turn 3-implementation shared scripts (syncFlow, loadMemoryContext, etc.)
   // into "solo" merely because their explicit profile references moved
   // into the lifecycle module.
   const usage = new Map<string, Set<string>>()
-  for (const name of listExecutableNames()) {
-    const profilePath = path.join(EXECUTABLES_DIR, name, "profile.json")
+  for (const name of listImplementationNames()) {
+    const profilePath = path.join(IMPLEMENTATIONS_DIR, name, "profile.json")
     if (!fs.existsSync(profilePath)) continue
     let profile: ReturnType<typeof loadProfile>
     try {
@@ -222,7 +222,7 @@ function buildUsageMap(): Map<string, Set<string>> {
 }
 
 describe("script catalog: modularity invariant", () => {
-  it("every script referenced by ≥2 executables is genuinely shared (not in solo allowlist)", () => {
+  it("every script referenced by ≥2 implementations is genuinely shared (not in solo allowlist)", () => {
     const usage = buildUsageMap()
     const wrongly_allowlisted: string[] = []
     for (const [name, owners] of usage) {
@@ -242,7 +242,7 @@ describe("script catalog: modularity invariant", () => {
       if (owners.size === 1 && !KNOWN_SOLO_SCRIPTS[name]) {
         const owner = [...owners][0]
         unaccounted.push(
-          `${name} (used only by ${owner}) — add to KNOWN_SOLO_SCRIPTS with a reason, OR generalise so a second executable uses it`,
+          `${name} (used only by ${owner}) — add to KNOWN_SOLO_SCRIPTS with a reason, OR generalise so a second implementation uses it`,
         )
       }
     }
@@ -266,13 +266,13 @@ describe("script catalog: modularity invariant", () => {
   })
 })
 
-describe("consumer-library scripts (kept in engine, owned by moved executables)", () => {
-  it("each consumer-library script still exists in src/scripts/ (moved executables call it by name)", () => {
+describe("consumer-library scripts (kept in engine, owned by moved implementations)", () => {
+  it("each consumer-library script still exists in src/scripts/ (moved implementations call it by name)", () => {
     const missing: string[] = []
     for (const name of Object.keys(CONSUMER_LIBRARY_SCRIPTS)) {
       if (!fs.existsSync(path.join(SCRIPTS_DIR, `${name}.ts`))) {
         missing.push(
-          `${name}: listed as consumer-library (for the moved "${CONSUMER_LIBRARY_SCRIPTS[name]}" executable) but src/scripts/${name}.ts is gone — consumer repos that copied that executable will break`,
+          `${name}: listed as consumer-library (for the moved "${CONSUMER_LIBRARY_SCRIPTS[name]}" implementation) but src/scripts/${name}.ts is gone — consumer repos that copied that implementation will break`,
         )
       }
     }
@@ -299,7 +299,7 @@ describe("consumer-library scripts (kept in engine, owned by moved executables)"
   })
 })
 
-describe("script catalog: removed executable-era names", () => {
+describe("script catalog: removed implementation-era names", () => {
   it("does not keep writeRunSummary as a script alias", async () => {
     const scripts = await import("../../src/scripts/index.js")
     expect(scripts.postflightScripts).not.toHaveProperty("writeRunSummary")

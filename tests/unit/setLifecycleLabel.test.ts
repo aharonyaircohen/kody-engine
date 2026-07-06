@@ -8,7 +8,7 @@ vi.mock("../../src/lifecycleLabels.js", async () => {
   }
 })
 
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { setKodyLabel } from "../../src/lifecycleLabels.js"
 import { setLifecycleLabel } from "../../src/scripts/setLifecycleLabel.js"
 
@@ -43,7 +43,7 @@ describe("setLifecycleLabel script", () => {
     )
   })
 
-  it("falls back to ctx.args.pr for PR-scoped executables", async () => {
+  it("falls back to ctx.args.pr for PR-scoped implementations", async () => {
     await setLifecycleLabel(makeCtx({ pr: 7 }), profile, {
       label: "kody:reviewing",
       color: "d93f0b",

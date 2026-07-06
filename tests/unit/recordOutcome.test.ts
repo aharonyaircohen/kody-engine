@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { recordOutcome } from "../../src/scripts/recordOutcome.js"
 import type { Action } from "../../src/state.js"
 

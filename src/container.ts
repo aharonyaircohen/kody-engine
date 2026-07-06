@@ -5,7 +5,7 @@
  *
  * Extracted from executor.ts: the executor stays the generic
  * preflight→agent→postflight runner; container orchestration (the only
- * multi-child shape) lives here. `runExecutable`/`resolveProfilePath` are
+ * multi-child shape) lives here. `runImplementation`/`resolveProfilePath` are
  * imported back from the executor — a runtime-only circular reference that
  * ESM resolves because both are hoisted function declarations called only
  * at run time, never during module evaluation.
@@ -14,8 +14,8 @@
 import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import { emitEvent } from "./events.js"
-import type { ContainerChild, Context, InputSpec, Profile } from "./executables/types.js"
-import { type ExecutorInput, type ExecutorOutput, resolveProfilePath, runExecutable } from "./executor.js"
+import type { ContainerChild, Context, InputSpec, Profile } from "./implementations/types.js"
+import { type ExecutorInput, type ExecutorOutput, resolveProfilePath, runImplementation } from "./executor.js"
 import { loadProfile } from "./profile.js"
 import { type Action, emptyState, readTaskState, type TaskState, type TaskTarget } from "./state.js"
 
@@ -46,7 +46,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
     return
   }
 
-  const runChild = input.__runChild ?? ((name, opts) => runExecutable(name, opts))
+  const runChild = input.__runChild ?? ((name, opts) => runImplementation(name, opts))
   const reader = input.__readTaskState ?? readTaskState
 
   const issueNumber = ctx.args.issue as number | undefined
@@ -108,7 +108,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
     }
 
     const child = children[currentIdx]!
-    process.stderr.write(`[kody container] step ${iteration}: invoking ${child.exec}\n`)
+    process.stderr.write(`[kody container] step ${iteration}: invoking ${child.implementation}\n`)
 
     // Working-tree reset between children. Each child is built around the
     // assumption it owns a clean tree (legacy orchestrator gave each child
@@ -136,10 +136,10 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
     // re-doing committed work (e.g. a plan that already produced an artifact).
     const priorState = readContainerState(ctx, child, reader)
     if (priorState.core?.prUrl) knownPrUrl = priorState.core.prUrl
-    const priorAction = priorState.implementations?.[child.exec]?.lastAction
+    const priorAction = priorState.implementations?.[child.implementation]?.lastAction
     let actionType: string | undefined
     if (priorAction && /_COMPLETED$/i.test(priorAction.type)) {
-      process.stderr.write(`[kody container] skipping ${child.exec}: already completed (${priorAction.type})\n`)
+      process.stderr.write(`[kody container] skipping ${child.implementation}: already completed (${priorAction.type})\n`)
       actionType = priorAction.type
     } else {
       // Derive cliArgs from child.target. target=pr requires a known PR;
@@ -149,14 +149,14 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
       if (child.target === "pr") {
         const prNumber = knownPrUrl ? parsePrNumber(knownPrUrl) : null
         if (!prNumber) {
-          const reason = `container child "${child.exec}" needs --pr but state.core.prUrl is unset`
+          const reason = `container child "${child.implementation}" needs --pr but state.core.prUrl is unset`
           process.stderr.write(`[kody container] aborting: ${reason}\n`)
           ctx.output.exitCode = 1
           ctx.output.reason = reason
           // Record a synthetic AGENT_NOT_RUN action for downstream postflights.
           const action: Action = {
             type: "AGENT_NOT_RUN",
-            payload: { reason, dispatchTarget: "pr", child: child.exec },
+            payload: { reason, dispatchTarget: "pr", child: child.implementation },
             timestamp: new Date().toISOString(),
           }
           ctx.data.action = action
@@ -165,7 +165,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
         cliArgs = { pr: prNumber }
       } else {
         if (issueNumber === undefined) {
-          const reason = `container child "${child.exec}" needs --issue but ctx.args.issue is unset`
+          const reason = `container child "${child.implementation}" needs --issue but ctx.args.issue is unset`
           process.stderr.write(`[kody container] aborting: ${reason}\n`)
           ctx.output.exitCode = 1
           ctx.output.reason = reason
@@ -179,7 +179,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
       // this, comment-supplied flags like `@kody --base <branch>` are
       // silently dropped between the container (e.g. chore/feature/fix/bug)
       // run primitive.
-      const childInputs = getProfileInputsForChild(child.exec, input.cwd)
+      const childInputs = getProfileInputsForChild(child.implementation, input.cwd)
       if (childInputs) {
         for (const spec of childInputs) {
           if (spec.name === "issue" || spec.name === "pr") continue
@@ -203,7 +203,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
       const priorParent = process.env.KODY_CONTAINER_PARENT
       process.env.KODY_CONTAINER_PARENT = profile.name
       try {
-        childOut = await runChild(child.exec, {
+        childOut = await runChild(child.implementation, {
           cliArgs,
           cwd: input.cwd,
           config: input.config,
@@ -217,7 +217,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
         emitEvent(input.cwd, {
           implementation: profile.name,
           kind: "container_child",
-          name: child.exec,
+          name: child.implementation,
           durationMs: Date.now() - childStartedAt,
           outcome: childOut.exitCode === 0 ? "ok" : "failed",
           meta: { exitCode: childOut.exitCode, iteration },
@@ -226,15 +226,15 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
         emitEvent(input.cwd, {
           implementation: profile.name,
           kind: "container_child",
-          name: child.exec,
+          name: child.implementation,
           durationMs: Date.now() - childStartedAt,
           outcome: "failed",
           meta: { iteration, error: err instanceof Error ? err.message : String(err) },
         })
         const msg = err instanceof Error ? err.message : String(err)
-        process.stderr.write(`[kody container] child "${child.exec}" crashed: ${msg}\n`)
+        process.stderr.write(`[kody container] child "${child.implementation}" crashed: ${msg}\n`)
         ctx.output.exitCode = 1
-        ctx.output.reason = `child "${child.exec}" crashed: ${msg}`
+        ctx.output.reason = `child "${child.implementation}" crashed: ${msg}`
         return
       } finally {
         if (priorParent === undefined) delete process.env.KODY_CONTAINER_PARENT
@@ -258,16 +258,16 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
       // is unchanged and we synthesize <EXEC>_COMPLETED|FAILED from the
       // exit code so finishFlow's runWhens can match the actual outcome
       // instead of leaking the prior child's action.
-      const priorAttempts = priorState.core?.attempts?.[child.exec] ?? 0
+      const priorAttempts = priorState.core?.attempts?.[child.implementation] ?? 0
       const next = readContainerState(ctx, child, reader)
       if (next.core?.prUrl) knownPrUrl = next.core.prUrl
-      const nextAttempts = next.core?.attempts?.[child.exec] ?? 0
-      const nextChildAction = next.implementations?.[child.exec]?.lastAction
+      const nextAttempts = next.core?.attempts?.[child.implementation] ?? 0
+      const nextChildAction = next.implementations?.[child.implementation]?.lastAction
       const childWrote = nextAttempts > priorAttempts && nextChildAction != null
       if (childWrote && nextChildAction) {
         actionType = nextChildAction.type
       } else {
-        const childTag = child.exec.toUpperCase().replace(/-/g, "_")
+        const childTag = child.implementation.toUpperCase().replace(/-/g, "_")
         actionType = childOut.exitCode === 0 ? `${childTag}_COMPLETED` : `${childTag}_FAILED`
         // Mirror the synthesized action onto core.lastOutcome so postflight
         // runWhens (which read core.lastOutcome.type) see it consistently
@@ -276,7 +276,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
           type: actionType,
           payload: {
             synthesized: true,
-            child: child.exec,
+            child: child.implementation,
             exitCode: childOut.exitCode,
             reason: childOut.reason,
           },
@@ -292,13 +292,13 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
             // a saveTaskState write that just didn't happen mechanically.
             // Without this, the dashboard's `attempts[child]` view shows
             // "never run" forever whenever a flaky preflight always bails.
-            attempts: { [child.exec]: priorAttempts + 1 },
+            attempts: { [child.implementation]: priorAttempts + 1 },
           }
         } else {
           next.core.lastOutcome = synthetic
           next.core.attempts = {
             ...next.core.attempts,
-            [child.exec]: priorAttempts + 1,
+            [child.implementation]: priorAttempts + 1,
           }
         }
       }
@@ -308,7 +308,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
     // Route based on action type. Exact match → wildcard "*" → abort.
     const route = child.next[actionType] ?? child.next["*"]
     if (!route) {
-      const reason = `no route for action "${actionType}" from child "${child.exec}"`
+      const reason = `no route for action "${actionType}" from child "${child.implementation}"`
       process.stderr.write(`[kody container] aborting: ${reason}\n`)
       ctx.output.exitCode = 1
       ctx.output.reason = reason
@@ -323,13 +323,13 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
     }
     if (route === "abort") {
       ctx.output.exitCode = 1
-      ctx.output.reason = `container aborted by route from "${child.exec}" on ${actionType}`
+      ctx.output.reason = `container aborted by route from "${child.implementation}" on ${actionType}`
       return
     }
 
-    const nextIdx = children.findIndex((c) => c.exec === route)
+    const nextIdx = children.findIndex((c) => c.implementation === route)
     if (nextIdx < 0) {
-      const reason = `container route "${route}" does not match any declared child exec name`
+      const reason = `container route "${route}" does not match any declared child implementation name`
       process.stderr.write(`[kody container] aborting: ${reason}\n`)
       ctx.output.exitCode = 1
       ctx.output.reason = reason

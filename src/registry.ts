@@ -7,7 +7,7 @@
  *   an engine role
  *
  * The engine package still has minimal built-in implementation profiles under
- * `src/executables`, but project and company-store `.kody/executables` roots
+ * `src/implementations`, but project and company-store `.kody/implementations` roots
  * are no longer registry sources.
  *
  * Both follow the same dev/built path-resolution pattern so `src/` and
@@ -19,11 +19,11 @@ import * as path from "node:path"
 import type { CapabilityFolder } from "./capabilityFolders.js"
 import { CAPABILITY_PROFILE_FILE, listCapabilityFolderSlugs, readCapabilityFolder } from "./capabilityFolders.js"
 import { getCompanyStoreAssetRoot } from "./companyStore.js"
-import type { InputSpec } from "./executables/types.js"
+import type { InputSpec } from "./implementations/types.js"
 
-const PUBLIC_EXECUTABLE_ROLES = new Set(["primitive", "orchestrator", "container", "watch", "utility"])
+const PUBLIC_IMPLEMENTATION_ROLES = new Set(["primitive", "orchestrator", "container", "watch", "utility"])
 
-export interface DiscoveredExecutable {
+export interface DiscoveredImplementation {
   name: string
   profilePath: string
 }
@@ -44,15 +44,15 @@ export interface DiscoveredCapabilityAction {
 }
 
 /**
- * Resolve the engine's built-in executables root. Mirrors `resolveProfilePath`
+ * Resolve the engine's built-in implementations root. Mirrors `resolveProfilePath`
  * in executor.ts so dev (src/) and built (dist/) layouts both work.
  */
-export function getExecutablesRoot(): string {
+export function getImplementationsRoot(): string {
   const here = path.dirname(new URL(import.meta.url).pathname)
   const candidates = [
-    path.join(here, "executables"), // dev: src/
-    path.join(here, "..", "executables"), // built: dist/bin → dist/executables
-    path.join(here, "..", "src", "executables"), // fallback
+    path.join(here, "implementations"), // dev: src/
+    path.join(here, "..", "implementations"), // built: dist/bin → dist/implementations
+    path.join(here, "..", "src", "implementations"), // fallback
   ]
   for (const c of candidates) {
     if (fs.existsSync(c) && fs.statSync(c).isDirectory()) return c
@@ -87,13 +87,13 @@ export function getBuiltinCapabilitiesRoot(): string {
 
 /**
  * Ordered list of implementation-profile roots. Capability folders are the
- * external source; the engine-bundled executable root is only the internal
+ * external source; the engine-bundled implementation root is only the internal
  * stdlib fallback.
  */
-export function getExecutableRoots(): string[] {
+export function getImplementationRoots(): string[] {
   const projectCapabilitiesRoot = getProjectCapabilitiesRoot()
   const storeCapabilitiesRoot = getCompanyStoreCapabilitiesRoot()
-  return [projectCapabilitiesRoot, ...(storeCapabilitiesRoot ? [storeCapabilitiesRoot] : []), getExecutablesRoot()]
+  return [projectCapabilitiesRoot, ...(storeCapabilitiesRoot ? [storeCapabilitiesRoot] : []), getImplementationsRoot()]
 }
 
 export function getCapabilityRoots(projectCapabilitiesRoot: string = getProjectCapabilitiesRoot()): string[] {
@@ -106,16 +106,16 @@ export function getCapabilityRoots(projectCapabilitiesRoot: string = getProjectC
 }
 
 /**
- * Names of the engine-bundled executables (the dir names under the engine root
+ * Names of the engine-bundled implementations (the dir names under the engine root
  * that contain a profile.json). Cached — the engine root never changes within a
  * process. Used to stop a hydrated `.kody/capabilities/<name>/` folder from silently
  * shadowing an engine builtin (run/merge/serve/capability-scheduler/…).
  */
 let _builtinNames: Set<string> | null = null
-export function builtinExecutableNames(): Set<string> {
+export function builtinImplementationNames(): Set<string> {
   if (_builtinNames) return _builtinNames
   const out = new Set<string>()
-  const root = getExecutablesRoot()
+  const root = getImplementationsRoot()
   try {
     for (const ent of fs.readdirSync(root, { withFileTypes: true })) {
       if (ent.isDirectory() && fs.existsSync(path.join(root, ent.name, "profile.json"))) out.add(ent.name)
@@ -127,9 +127,9 @@ export function builtinExecutableNames(): Set<string> {
   return out
 }
 
-/** True iff `name` is an engine-bundled executable that capabilities must not shadow. */
-export function isBuiltinExecutable(name: string): boolean {
-  return builtinExecutableNames().has(name)
+/** True iff `name` is an engine-bundled implementation that capabilities must not shadow. */
+export function isBuiltinImplementation(name: string): boolean {
+  return builtinImplementationNames().has(name)
 }
 
 /**
@@ -138,10 +138,10 @@ export function isBuiltinExecutable(name: string): boolean {
  * directory needs a readable `profile.json`; capability roots also require an
  * implementation `role`.
  */
-export function listExecutables(roots: string | string[] = getExecutableRoots()): DiscoveredExecutable[] {
+export function listImplementations(roots: string | string[] = getImplementationRoots()): DiscoveredImplementation[] {
   const rootList = typeof roots === "string" ? [roots] : roots
   const seen = new Set<string>()
-  const out: DiscoveredExecutable[] = []
+  const out: DiscoveredImplementation[] = []
   for (const root of rootList) {
     if (!fs.existsSync(root)) continue
     const requireImplementationProfile = isCapabilityRoot(root)
@@ -167,8 +167,8 @@ export function listExecutables(roots: string | string[] = getExecutableRoots())
  * Resolve a single implementation profile by name across all roots. Returns
  * the first matching `profile.json` path, or null if nothing matches.
  */
-export function resolveExecutable(name: string, roots: string | string[] = getExecutableRoots()): string | null {
-  return resolveExecutableCandidates(name, roots)[0] ?? null
+export function resolveImplementation(name: string, roots: string | string[] = getImplementationRoots()): string | null {
+  return resolveImplementationCandidates(name, roots)[0] ?? null
 }
 
 /**
@@ -177,7 +177,7 @@ export function resolveExecutable(name: string, roots: string | string[] = getEx
  * validate against the current engine and continue to the company-store
  * profile instead.
  */
-export function resolveExecutableCandidates(name: string, roots: string | string[] = getExecutableRoots()): string[] {
+export function resolveImplementationCandidates(name: string, roots: string | string[] = getImplementationRoots()): string[] {
   if (!isSafeName(name)) return []
   const rootList = typeof roots === "string" ? [roots] : roots
   const out: string[] = []
@@ -195,8 +195,8 @@ export function resolveExecutableCandidates(name: string, roots: string | string
 }
 
 /** Convenience: true iff `<name>/profile.json` exists in any root. */
-export function hasExecutable(name: string, roots: string | string[] = getExecutableRoots()): boolean {
-  return resolveExecutable(name, roots) !== null
+export function hasImplementation(name: string, roots: string | string[] = getImplementationRoots()): boolean {
+  return resolveImplementation(name, roots) !== null
 }
 
 /**
@@ -279,7 +279,7 @@ export function resolveCapabilityExecution(capability: CapabilityFolder): {
 }
 
 function implementationDeclaresInput(implementation: string, inputName: string): boolean {
-  const profilePath = resolveExecutable(implementation)
+  const profilePath = resolveImplementation(implementation)
   if (!profilePath) return false
   try {
     const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as { inputs?: unknown }
@@ -294,7 +294,7 @@ function implementationDeclaresInput(implementation: string, inputName: string):
   }
 }
 
-/** Executable names: lowercase letters, digits, and dashes. Rejects traversal. */
+/** Implementation names: lowercase letters, digits, and dashes. Rejects traversal. */
 export function isSafeName(name: string): boolean {
   return /^[a-z][a-z0-9-]*$/.test(name) && !name.includes("..")
 }
@@ -311,7 +311,7 @@ function isImplementationProfile(profilePath: string, requireImplementationProfi
   if (!requireImplementationProfile) return true
   try {
     const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as { role?: unknown }
-    return typeof raw.role === "string" && PUBLIC_EXECUTABLE_ROLES.has(raw.role)
+    return typeof raw.role === "string" && PUBLIC_IMPLEMENTATION_ROLES.has(raw.role)
   } catch {
     return false
   }
@@ -351,8 +351,8 @@ function hasUnresolvedExplicitImplementation(capability: CapabilityFolder, imple
     Boolean(config.implementation) || (config.implementations?.length ?? 0) > 0
   if (!hasExplicitImplementation) return false
   if (config.workflow?.steps.length) return false
-  if (config.role && PUBLIC_EXECUTABLE_ROLES.has(config.role)) return false
-  return resolveExecutable(implementation) === null
+  if (config.role && PUBLIC_IMPLEMENTATION_ROLES.has(config.role)) return false
+  return resolveImplementation(implementation) === null
 }
 
 function listBuiltinCapabilityActions(root: string = getBuiltinCapabilitiesRoot()): DiscoveredCapabilityAction[] {
@@ -379,14 +379,14 @@ function listBuiltinCapabilityActions(root: string = getBuiltinCapabilitiesRoot(
 }
 
 /**
- * Light-weight profile inspector: returns an executable's declared `inputs`
+ * Light-weight profile inspector: returns an implementation's declared `inputs`
  * without running the full profile validator. Dispatch uses this to drive
  * comment-argument parsing entirely from profile metadata. Returns null if
- * the executable doesn't exist or the profile is unreadable (dispatch
+ * the implementation doesn't exist or the profile is unreadable (dispatch
  * should degrade gracefully, not throw).
  */
-export function getProfileInputs(name: string, roots: string | string[] = getExecutableRoots()): InputSpec[] | null {
-  const profilePath = resolveExecutable(name, roots)
+export function getProfileInputs(name: string, roots: string | string[] = getImplementationRoots()): InputSpec[] | null {
+  const profilePath = resolveImplementation(name, roots)
   if (!profilePath) return null
   try {
     const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8"))
@@ -398,9 +398,9 @@ export function getProfileInputs(name: string, roots: string | string[] = getExe
 }
 
 /**
- * Minimal generic flag parser for auto-discovered executables.
+ * Minimal generic flag parser for auto-discovered implementations.
  * Supports `--key value` and `--flag` (boolean). Unknown positionals
- * accumulate in `args._` for the executable to reject if it wishes.
+ * accumulate in `args._` for the implementation to reject if it wishes.
  *
  * Dashed flags get both shapes in the output: `--run-id 42` produces
  * `{ "run-id": "42", runId: "42" }` so profiles can name inputs with

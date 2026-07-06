@@ -9,7 +9,7 @@ import {
   applyCompanyStoreRuntimeConfig,
   resetCompanyStoreCacheForTests,
 } from "../../src/companyStore.js"
-import { listCapabilityActions, listExecutables, resolveExecutable } from "../../src/registry.js"
+import { listCapabilityActions, listImplementations, resolveImplementation } from "../../src/registry.js"
 
 let tmp: string
 let cwdBefore: string
@@ -55,10 +55,10 @@ describe("company store resolution", () => {
     process.chdir(consumer)
     configureStore(remote)
 
-    expect(resolveExecutable("store-exe")).toMatch(/store-exe\/profile\.json$/)
-    expect(listExecutables().some((exe) => exe.name === "store-exe")).toBe(true)
-    expect(resolveExecutable("legacy-store-exe")).toBeNull()
-    expect(listExecutables().some((exe) => exe.name === "legacy-store-exe")).toBe(false)
+    expect(resolveImplementation("store-exe")).toMatch(/store-exe\/profile\.json$/)
+    expect(listImplementations().some((exe) => exe.name === "store-exe")).toBe(true)
+    expect(resolveImplementation("legacy-store-exe")).toBeNull()
+    expect(listImplementations().some((exe) => exe.name === "legacy-store-exe")).toBe(false)
 
     const action = listCapabilityActions().find((item) => item.action === "store-capability")
     expect(action?.source).toBe("company-store")
@@ -74,10 +74,10 @@ describe("company store resolution", () => {
     process.chdir(consumer)
     configureStore(remote)
 
-    expect(resolveExecutable("store-exe")).toMatch(/store-exe\/profile\.json$/)
-    expect(listExecutables().some((exe) => exe.name === "store-exe")).toBe(true)
-    expect(resolveExecutable("store-capability")).toBeNull()
-    expect(listExecutables().some((exe) => exe.name === "store-capability")).toBe(false)
+    expect(resolveImplementation("store-exe")).toMatch(/store-exe\/profile\.json$/)
+    expect(listImplementations().some((exe) => exe.name === "store-exe")).toBe(true)
+    expect(resolveImplementation("store-capability")).toBeNull()
+    expect(listImplementations().some((exe) => exe.name === "store-capability")).toBe(false)
 
     const action = listCapabilityActions().find((item) => item.action === "store-capability")
     expect(action).toMatchObject({
@@ -109,7 +109,7 @@ describe("company store resolution", () => {
     process.chdir(consumer)
     configureStore(remote)
 
-    expect(fs.realpathSync(resolveExecutable("store-exe")!)).toBe(
+    expect(fs.realpathSync(resolveImplementation("store-exe")!)).toBe(
       fs.realpathSync(path.join(consumer, ".kody", "capabilities", "store-exe", "profile.json")),
     )
     expect(listCapabilityActions().find((item) => item.action === "store-capability")?.source).toBe("project-folder")
@@ -141,9 +141,9 @@ function createStoreRepo(): string {
   })
   fs.mkdirSync(path.join(repo, ".kody", "agents"), { recursive: true })
   fs.writeFileSync(path.join(repo, ".kody", "agents", "cto.md"), "Store CTO agent.")
-  fs.mkdirSync(path.join(repo, ".kody", "executables", "legacy-store-exe"), { recursive: true })
+  fs.mkdirSync(path.join(repo, ".kody", "implementations", "legacy-store-exe"), { recursive: true })
   fs.writeFileSync(
-    path.join(repo, ".kody", "executables", "legacy-store-exe", "profile.json"),
+    path.join(repo, ".kody", "implementations", "legacy-store-exe", "profile.json"),
     '{"name":"legacy-store-exe","role":"utility","inputs":[]}\n',
   )
 

@@ -9,7 +9,7 @@
  */
 
 import { execFileSync } from "node:child_process"
-import type { PostflightScript } from "../executables/types.js"
+import type { PostflightScript } from "../implementations/types.js"
 
 export const stageMergeConflicts: PostflightScript = async (ctx) => {
   if (ctx.data.agentDone === false) return

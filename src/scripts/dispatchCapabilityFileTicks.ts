@@ -1,10 +1,10 @@
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 
 /**
  * Compatibility no-op for old scheduler profiles.
  *
  * Capabilities no longer own cadence. Goals and loops decide when a
- * capability runs, then dispatch the capability's executable.
+ * capability runs, then dispatch the capability's implementation.
  */
 export const dispatchCapabilityFileTicks: PreflightScript = async (ctx) => {
   ctx.skipAgent = true

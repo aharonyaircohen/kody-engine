@@ -3,7 +3,7 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import { loadProfile } from "../../src/profile.js"
-import { listCapabilityActions, resolveCapabilityFolder, resolveExecutable } from "../../src/registry.js"
+import { listCapabilityActions, resolveCapabilityFolder, resolveImplementation } from "../../src/registry.js"
 
 const STORE_ROOT = process.env.KODY_STORE_PATH ?? path.resolve(process.cwd(), "..", "kody-store")
 const STORE_CAPABILITIES_ROOT = resolveStoreAssetRoot("capabilities")
@@ -91,7 +91,7 @@ describe("kody-store capability profiles", () => {
     expect(actionSlugs).toEqual(expect.arrayContaining(MIGRATED_FULL_CAPABILITY_ACTIONS))
   })
 
-  it("resolves migrated store direct executable actions", () => {
+  it("resolves migrated store direct implementation actions", () => {
     if (!fs.existsSync(STORE_ROOT)) return
 
     process.env.KODY_COMPANY_STORE = STORE_ROOT
@@ -148,7 +148,7 @@ describe("kody-store capability profiles", () => {
 
     const actionNames = listCapabilityActions().map((action) => action.action)
     for (const capability of REQUIRED_INTERNAL_CAPABILITY_PROFILES) {
-      const profilePath = resolveExecutable(capability)
+      const profilePath = resolveImplementation(capability)
       expect(profilePath).toBeTruthy()
       expect(fs.realpathSync(profilePath!)).toContain(fs.realpathSync(path.join(STORE_CAPABILITIES_ROOT, capability)))
       expect(actionNames).not.toContain(capability)
@@ -170,7 +170,7 @@ describe("kody-store capability profiles", () => {
     expect(genericWrappers).toEqual([])
   })
 
-  it("routes chat capability aliases through the kody-chat executable", () => {
+  it("routes chat capability aliases through the kody-chat implementation", () => {
     if (!fs.existsSync(STORE_CAPABILITIES_ROOT)) return
 
     process.env.KODY_COMPANY_STORE = STORE_ROOT
@@ -184,7 +184,7 @@ describe("kody-store capability profiles", () => {
       .sort(([a], [b]) => a.localeCompare(b))
 
     expect(aliasRoutes).toEqual([...CHAT_CAPABILITY_ALIASES].sort().map((alias) => [alias, "kody-chat"]))
-    expect(resolveExecutable("kody-chat")).toBeTruthy()
+    expect(resolveImplementation("kody-chat")).toBeTruthy()
   })
 })
 

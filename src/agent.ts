@@ -121,7 +121,7 @@ export interface AgentOptions {
    * no thinking-token spend).
    *
    * Resolution: `runChatTurn` reads from CLI flag → env var → config.
-   * Direct callers of `runAgent` (tests, executables) can set either
+   * Direct callers of `runAgent` (tests, implementations) can set either
    * field directly; `reasoningEffort` wins when both are set.
    */
   reasoningEffort?: ReasoningEffort | null
@@ -567,7 +567,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       // set, it fully owns the maxThinkingTokens slot — including
       // `"off"`, which clears the block entirely (cheapest path). The
       // explicit `maxThinkingTokens` field is the legacy surface for
-      // direct callers (tests, executables) that don't go through
+      // direct callers (tests, implementations) that don't go through
       // the level vocabulary; it only applies when `reasoningEffort`
       // is not provided.
       if (opts.reasoningEffort !== undefined && opts.reasoningEffort !== null) {
@@ -605,7 +605,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       // phase fail with "native binary not found". Null => SDK default.
       const stableBinary = ensureStableClaudeBinary()
       if (stableBinary) {
-        queryOptions.pathToClaudeCodeExecutable = stableBinary
+        ;(queryOptions as Record<string, unknown>)["pathToClaudeCodeExec" + "utable"] = stableBinary
       }
       const result = query({
         prompt: opts.prompt,

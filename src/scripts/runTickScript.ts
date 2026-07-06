@@ -15,7 +15,7 @@
  *     `profile.json` (relative path under cwd).
  *   - Script MUST emit a `kody-job-next-state` JSON fenced block on
  *     stdout. Anything else on stdout is preserved as run-log noise.
- *   - Non-zero script exit propagates to the executable's exitCode.
+ *   - Non-zero script exit propagates to the implementation's exitCode.
  *
  * Reads   ctx.args[<slugArg>]
  * Writes  ctx.data.jobSlug, ctx.data.jobState, ctx.data.nextJobState
@@ -30,7 +30,7 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { readCapabilityFolder } from "../capabilityFolders.js"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { resolveBackend } from "./jobState/index.js"
 import { runTickShellAndParse } from "./tickShellRunner.js"
 

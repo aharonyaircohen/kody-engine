@@ -11,7 +11,7 @@ vi.mock("../../src/issue.js", async (orig) => {
 })
 
 import type { AgentResult } from "../../src/agent.js"
-import type { Context, Profile } from "../../src/executables/types.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { createQaGoal, parseManifestBody, serializeManifestBody, splitReport } from "../../src/scripts/createQaGoal.js"
 
 function makeCtx(args: Record<string, unknown>): Context {

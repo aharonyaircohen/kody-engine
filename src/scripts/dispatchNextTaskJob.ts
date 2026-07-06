@@ -1,4 +1,4 @@
-import type { Job, PreflightScript } from "../executables/types.js"
+import type { Job, PreflightScript } from "../implementations/types.js"
 import { stableJobKey } from "../jobIdentity.js"
 import { emptyState, nextPendingTaskJob, type TaskJob, type TaskState } from "../state.js"
 

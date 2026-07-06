@@ -22,7 +22,7 @@
  */
 
 import { spawn } from "node:child_process"
-import type { PreflightScript } from "../executables/types.js"
+import type { PreflightScript } from "../implementations/types.js"
 
 const PER_SERVER_TIMEOUT_MS = 60_000
 const PER_REQUEST_TIMEOUT_MS = 20_000
