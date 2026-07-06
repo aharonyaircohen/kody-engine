@@ -343,19 +343,19 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
   }
 
   // Resolve model. Precedence:
-  //   1. config.agent.perExecutable[profileName] (per-stage override)
+  //   1. config.agent.perImplementation[profileName] (per-stage override)
   //   2. profile.claudeCode.model (when not "inherit")
   //   3. config.agent.model (default for everything else)
-  const perExecutableModel = config.agent.perExecutable?.[profileName]
-  const modelSpec = perExecutableModel
-    ? perExecutableModel
+  const perImplementationModel = config.agent.perImplementation?.[profileName]
+  const modelSpec = perImplementationModel
+    ? perImplementationModel
     : profile.claudeCode.model === "inherit"
       ? config.agent.model
       : profile.claudeCode.model
   const profileHasThinkingTokens =
     typeof profile.claudeCode.maxThinkingTokens === "number" && profile.claudeCode.maxThinkingTokens > 0
   const reasoningEffort =
-    config.agent.perExecutableReasoningEffort?.[profileName] ??
+    config.agent.perImplementationReasoningEffort?.[profileName] ??
     profile.claudeCode.reasoningEffort ??
     (profileHasThinkingTokens ? undefined : config.agent.reasoningEffort)
   let model: ReturnType<typeof parseProviderModel>

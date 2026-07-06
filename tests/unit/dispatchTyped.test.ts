@@ -218,8 +218,8 @@ describe("autoDispatchTyped: unrecognized variant (user-facing feedback needed)"
       comment: { body: "@kody totally-not-a-real-command", user: { login: "alice", type: "User" } },
       issue: { number: 9 },
     })
-    const out = autoDispatchTyped({ config: { defaultExecutable: undefined } as never })
-    // No defaultExecutable for issues → legacy autoDispatch returns null →
+    const out = autoDispatchTyped({ config: { defaultImplementation: undefined } as never })
+    // No defaultImplementation for issues -> autoDispatch returns null ->
     // typed wrapper classifies as unrecognized.
     expect(out.kind).toBe("unrecognized")
     if (out.kind === "unrecognized") {
@@ -241,7 +241,7 @@ describe("autoDispatchTyped: unrecognized variant (user-facing feedback needed)"
       comment: { body: "@kody totally-not-a-real-command", user: { login: "alice", type: "User" } },
       issue: { number: 9, pull_request: {} },
     })
-    const out = autoDispatchTyped({ config: { defaultPrExecutable: undefined } as never })
+    const out = autoDispatchTyped({ config: { defaultPrImplementation: undefined } as never })
     expect(out.kind).toBe("unrecognized")
     if (out.kind === "unrecognized") {
       expect(out.token).toBe("totally-not-a-real-command")
@@ -258,10 +258,10 @@ describe("autoDispatchTyped: typo'd command does NOT fall through to default cap
       comment: { body: "@kody totally-not-a-real-command-035", user: { login: "alice", type: "User" } },
       issue: { number: 11 },
     })
-    // Reproduces the live-tested A-Guy-educ/A-Guy bug: defaultExecutable
+    // Reproduces the live-tested A-Guy-educ/A-Guy bug: defaultImplementation
     // was 'classify', so any @kody comment routed there silently — a
     // typo'd command was indistinguishable from `@kody` on its own.
-    const out = autoDispatchTyped({ config: { defaultExecutable: "classify" } as never })
+    const out = autoDispatchTyped({ config: { defaultImplementation: "classify" } as never })
     expect(out.kind).toBe("unrecognized")
     if (out.kind === "unrecognized") {
       expect(out.token).toBe("totally-not-a-real-command-035")
@@ -274,7 +274,7 @@ describe("autoDispatchTyped: typo'd command does NOT fall through to default cap
       comment: { body: "@kody", user: { login: "alice", type: "User" } },
       issue: { number: 12 },
     })
-    const out = autoDispatchTyped({ config: { defaultExecutable: "run" } as never })
+    const out = autoDispatchTyped({ config: { defaultImplementation: "run" } as never })
     expect(out.kind).toBe("route")
     if (out.kind === "route") expect(out.executable).toBe("run")
   })
@@ -286,7 +286,7 @@ describe("autoDispatchTyped: typo'd command does NOT fall through to default cap
         comment: { body: `@kody ${polite} fix the test failure`, user: { login: "alice", type: "User" } },
         issue: { number: 13 },
       })
-      const out = autoDispatchTyped({ config: { defaultExecutable: "run" } as never })
+      const out = autoDispatchTyped({ config: { defaultImplementation: "run" } as never })
       expect(out.kind, `polite word "${polite}"`).toBe("route")
       if (out.kind === "route") expect(out.executable).toBe("run")
     }
@@ -298,7 +298,7 @@ describe("autoDispatchTyped: typo'd command does NOT fall through to default cap
       comment: { body: "@kody panl", user: { login: "alice", type: "User" } },
       issue: { number: 14 },
     })
-    const out = autoDispatchTyped({ config: { defaultExecutable: undefined } as never })
+    const out = autoDispatchTyped({ config: { defaultImplementation: undefined } as never })
     expect(out.kind).toBe("unrecognized")
     if (out.kind === "unrecognized") expect(out.token).toBe("panl")
   })
@@ -319,13 +319,13 @@ describe("autoDispatchTyped: typo'd command does NOT fall through to default cap
     }
   })
 
-  it("falls through to defaultPrExecutable for `@kody` alone on a PR", () => {
+  it("falls through to defaultPrImplementation for `@kody` alone on a PR", () => {
     process.env.GITHUB_EVENT_NAME = "issue_comment"
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody", user: { login: "alice", type: "User" } },
       issue: { number: 99, pull_request: { url: "https://x" } },
     })
-    const out = autoDispatchTyped({ config: { defaultPrExecutable: "sync" } as never })
+    const out = autoDispatchTyped({ config: { defaultPrImplementation: "sync" } as never })
     expect(out.kind).toBe("route")
     if (out.kind === "route") expect(out.executable).toBe("sync")
   })

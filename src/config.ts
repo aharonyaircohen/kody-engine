@@ -55,12 +55,12 @@ export interface KodyConfig {
      */
     reasoningEffort?: ReasoningEffort
     /**
-     * Per-executable model override. Lets consumers route specific stages to
+     * Per-implementation model override. Lets consumers route specific stages to
      * cheaper or stronger models without forking the profile:
      *
      *   "agent": {
      *     "model": "claude/claude-sonnet-4-6",
-     *     "perExecutable": {
+     *     "perImplementation": {
      *       "classify":      "claude/claude-haiku-4-5-20251001",
      *       "research":      "claude/claude-haiku-4-5-20251001",
      *       "plan":          "claude/claude-opus-4-7",
@@ -68,16 +68,16 @@ export interface KodyConfig {
      *     }
      *   }
      *
-     * Resolution order in the executor: perExecutable[name] → profile.model
+     * Resolution order in the executor: perImplementation[name] → profile.model
      * (when non-"inherit") → agent.model. Missing entries fall through —
      * existing configs without this key see no behaviour change.
      */
-    perExecutable?: Record<string, string>
+    perImplementation?: Record<string, string>
     /**
-     * Per-executable thinking effort override. Keeps LLM cost/quality tuning
-     * attached to the executable that actually invokes the agent.
+     * Per-implementation thinking effort override. Keeps LLM cost/quality tuning
+     * attached to the implementation that actually invokes the agent.
      */
-    perExecutableReasoningEffort?: Record<string, ReasoningEffort>
+    perImplementationReasoningEffort?: Record<string, ReasoningEffort>
   }
   issueContext?: {
     commentLimit?: number
@@ -85,17 +85,17 @@ export interface KodyConfig {
   }
   testRequirements?: TestRequirement[]
   /**
-   * Legacy key name: capability action to invoke when a user triggers bare `@kody`
+   * Capability action to invoke when a user triggers bare `@kody`
    * on an issue with no subcommand. Defaults to "run" so a plain issue
    * comment implements the issue directly.
    */
-  defaultExecutable?: string
+  defaultImplementation?: string
   /**
-   * Legacy key name: capability action to invoke when a bare `@kody` lands on a PR.
+   * Capability action to invoke when a bare `@kody` lands on a PR.
    * Opt-in: absent means PR comments must name an explicit capability action such as
    * `resolve`, `sync`, or a repo-provided action.
    */
-  defaultPrExecutable?: string
+  defaultPrImplementation?: string
   /**
    * Capability action to run on a `pull_request` event whose action is `opened`,
    * `synchronize`, or `reopened` — e.g. "preview-build" to rebuild a per-PR
@@ -105,14 +105,14 @@ export interface KodyConfig {
    * `closed`/`merged` actions are ALWAYS ignored here regardless of this
    * setting — the release orchestrator self-manages its own merge.
    *
-   * The dispatched PR number is bound under the target capability executable's first
+   * The dispatched PR number is bound under the target implementation's first
    * required int input (e.g. preview-build's `pr`). This only takes effect
    * when the consumer's kody.yml actually subscribes to `pull_request`
    * (opened/synchronize) — the trigger can only live in YAML, not here.
    */
   onPullRequest?: string
   /**
-   * Comment-subcommand aliases: map typed word → executable name. Merged with
+   * Comment-subcommand aliases: map typed word → implementation name. Merged with
    * built-in compatibility aliases ({ build: "run" }). User entries override
    * built-ins. Dispatch resolves the first token against this map before the
    * registry.
@@ -120,7 +120,7 @@ export interface KodyConfig {
   aliases?: Record<string, string>
   /**
    * Classifier configuration (only honored when bare `@kody` routes to
-   * the `classify` executable). `labelMap` lets you override the built-in
+   * the `classify` implementation). `labelMap` lets you override the built-in
    * label → flow mapping (see src/scripts/classifyByLabel.ts for defaults).
    */
   classify?: {
@@ -341,17 +341,19 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     state: parseStateConfig(raw, github),
     agent: {
       model: String(agent.model),
-      ...parsePerExecutable(agent.perExecutable),
-      ...parsePerExecutableReasoningEffort(agent.perExecutableReasoningEffort),
+      ...parsePerImplementation(agent.perImplementation),
+      ...parsePerImplementationReasoningEffort(agent.perImplementationReasoningEffort),
       ...parseAgentReasoningEffort(agent.reasoningEffort),
     },
     issueContext: parseIssueContext(raw.issueContext),
     testRequirements: parseTestRequirements(raw.testRequirements),
-    defaultExecutable:
-      typeof raw.defaultExecutable === "string" && raw.defaultExecutable.length > 0 ? raw.defaultExecutable : "run",
-    defaultPrExecutable:
-      typeof raw.defaultPrExecutable === "string" && raw.defaultPrExecutable.length > 0
-        ? raw.defaultPrExecutable
+    defaultImplementation:
+      typeof raw.defaultImplementation === "string" && raw.defaultImplementation.length > 0
+        ? raw.defaultImplementation
+        : "run",
+    defaultPrImplementation:
+      typeof raw.defaultPrImplementation === "string" && raw.defaultPrImplementation.length > 0
+        ? raw.defaultPrImplementation
         : undefined,
     onPullRequest:
       typeof raw.onPullRequest === "string" && raw.onPullRequest.length > 0 ? raw.onPullRequest : undefined,
@@ -575,23 +577,23 @@ function mergeAliases(raw: unknown): Record<string, string> {
 }
 
 /**
- * Parse `agent.perExecutable` into a validated string→string map, spread into
- * the returned `agent` object. Returns `{}` (not `{ perExecutable: undefined }`)
+ * Parse `agent.perImplementation` into a validated string→string map, spread into
+ * the returned `agent` object. Returns `{}` (not `{ perImplementation: undefined }`)
  * when absent so the spread is a clean no-op and the key stays off the object.
- * Without this, the executor's `config.agent.perExecutable?.[name]` lookup is
+ * Without this, the executor's `config.agent.perImplementation?.[name]` lookup is
  * always undefined and every stage silently runs the base model.
  */
-function parsePerExecutable(raw: unknown): { perExecutable?: Record<string, string> } {
+function parsePerImplementation(raw: unknown): { perImplementation?: Record<string, string> } {
   if (!raw || typeof raw !== "object") return {}
   const out: Record<string, string> = {}
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
     if (typeof v === "string" && v.length > 0) out[k] = v
   }
-  return Object.keys(out).length > 0 ? { perExecutable: out } : {}
+  return Object.keys(out).length > 0 ? { perImplementation: out } : {}
 }
 
-function parsePerExecutableReasoningEffort(raw: unknown): {
-  perExecutableReasoningEffort?: Record<string, ReasoningEffort>
+function parsePerImplementationReasoningEffort(raw: unknown): {
+  perImplementationReasoningEffort?: Record<string, ReasoningEffort>
 } {
   if (!raw || typeof raw !== "object") return {}
   const out: Record<string, ReasoningEffort> = {}
@@ -599,7 +601,7 @@ function parsePerExecutableReasoningEffort(raw: unknown): {
     const effort = typeof v === "string" ? parseReasoningEffort(v) : null
     if (effort) out[k] = effort
   }
-  return Object.keys(out).length > 0 ? { perExecutableReasoningEffort: out } : {}
+  return Object.keys(out).length > 0 ? { perImplementationReasoningEffort: out } : {}
 }
 
 /**

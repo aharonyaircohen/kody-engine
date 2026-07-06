@@ -6,7 +6,7 @@
  *   - the comment body (first token after `@kody`),
  *   - the matched capability action's implementation profile `inputs[]`,
  *   - `config.aliases` (typed word → action name),
- *   - legacy `config.defaultExecutable` / `config.defaultPrExecutable`
+ *   - `config.defaultImplementation` / `config.defaultPrImplementation`
  *     fields, now interpreted as default action names.
  *
  * Adding a public command = add a capability action. The executable remains the
@@ -298,7 +298,9 @@ export function autoDispatch(opts?: {
   // POLITE_WORDS filter above lets natural-language phrasings through to
   // the default — the "no firstToken" condition here is what gates them.
   if (!route && !firstToken) {
-    const defaultAction = isPr ? (opts?.config?.defaultPrExecutable ?? null) : (opts?.config?.defaultExecutable ?? null)
+    const defaultAction = isPr
+      ? (opts?.config?.defaultPrImplementation ?? null)
+      : (opts?.config?.defaultImplementation ?? null)
     route = defaultAction ? resolveConfiguredAction(defaultAction) : null
   }
   if (isBotAuthor && !consumedFirstToken) {
@@ -319,8 +321,8 @@ export function autoDispatch(opts?: {
     process.stderr.write(
       `[kody] dispatch: no capability action resolved for issue_comment ` +
         `(firstToken=${firstToken ?? "<none>"}, aliased=${aliased ?? "<none>"}, ` +
-        `actionFound=${!profileMissing}, defaultExecutable=${opts?.config?.defaultExecutable ?? "<unset>"}, ` +
-        `defaultPrExecutable=${opts?.config?.defaultPrExecutable ?? "<unset>"})\n`,
+        `actionFound=${!profileMissing}, defaultImplementation=${opts?.config?.defaultImplementation ?? "<unset>"}, ` +
+        `defaultPrImplementation=${opts?.config?.defaultPrImplementation ?? "<unset>"})\n`,
     )
     return null
   }

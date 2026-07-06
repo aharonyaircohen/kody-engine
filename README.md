@@ -83,12 +83,11 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 ```
 
 Every top-level command is an auto-discovered capability action. The router has
-**zero executable names hardcoded** - comment dispatch resolves the first token
-after `@kody` through `config.aliases`, then falls back to the legacy-named
-`config.defaultExecutable` / `config.defaultPrExecutable` fields as default
+**zero implementation names hardcoded** - comment dispatch resolves the first token
+after `@kody` through `config.aliases`, then falls back to
+`config.defaultImplementation` / `config.defaultPrImplementation` as default
 capability actions. Drop a new `.kody/capabilities/<slug>/` directory with
-`profile.json` + `capability.md`. Project/store `.kody/executables/` folders
-are obsolete and are not resolver sources.
+`profile.json` + `capability.md`.
 
 Capability implementation profiles are private implementation units and contain
 **only** three kinds of files: `profile.json` (declaration), `prompt.md` (agent

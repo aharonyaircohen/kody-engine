@@ -80,11 +80,11 @@ afterEach(() => {
 })
 
 describe("executor: reasoning effort resolution", () => {
-  it("uses per-executable reasoning effort over the global default", async () => {
+  it("uses per-implementation reasoning effort over the global default", async () => {
     writeProbeProfile()
     writeConfig({
       reasoningEffort: "low",
-      perExecutableReasoningEffort: { probe: "high" },
+      perImplementationReasoningEffort: { probe: "high" },
     })
 
     const out = await runExecutable("probe", { cliArgs: {}, cwd: dir })

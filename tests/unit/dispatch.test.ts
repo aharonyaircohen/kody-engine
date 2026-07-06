@@ -435,7 +435,7 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("unknown subcommand returns null even when defaultExecutable is set (typo guard)", () => {
+  it("unknown subcommand returns null even when defaultImplementation is set (typo guard)", () => {
     // Behavior changed in 0.4.36: a typed-but-unrecognized subcommand no
     // longer silently routes to the default capability action. The kody-cli typed
     // wrapper (autoDispatchTyped) now classifies these as `unrecognized`
@@ -450,7 +450,7 @@ describe("dispatch: issue_comment on issue", () => {
     })
     expect(
       autoDispatch({
-        config: testConfig({ defaultExecutable: "classify" }),
+        config: testConfig({ defaultImplementation: "classify" }),
       }),
     ).toBeNull()
   })
@@ -467,7 +467,7 @@ describe("dispatch: issue_comment on issue", () => {
     })
     expect(
       autoDispatch({
-        config: testConfig({ defaultExecutable: "run" }),
+        config: testConfig({ defaultImplementation: "run" }),
       }),
     ).toEqual({
       action: "run",
@@ -479,14 +479,14 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("falls back to defaultExecutable for `@kody` alone (no typo to surface)", () => {
+  it("falls back to defaultImplementation for `@kody` alone (no typo to surface)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody" },
       issue: { number: 11 },
     })
     expect(
       autoDispatch({
-        config: testConfig({ defaultExecutable: "run" }),
+        config: testConfig({ defaultImplementation: "run" }),
       }),
     ).toEqual({
       action: "run",
@@ -498,14 +498,14 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it("falls back to defaultExecutable for natural-language openings (please/kindly/...)", () => {
+  it("falls back to defaultImplementation for natural-language openings (please/kindly/...)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody please fix the failing test" },
       issue: { number: 11 },
     })
     expect(
       autoDispatch({
-        config: testConfig({ defaultExecutable: "run" }),
+        config: testConfig({ defaultImplementation: "run" }),
       }),
     ).toEqual({
       action: "run",
@@ -527,14 +527,14 @@ describe("dispatch: issue_comment on issue", () => {
     expect(autoDispatch()).toBeNull()
   })
 
-  it("bare '@kody' falls back to the legacy defaultExecutable action", () => {
+  it("bare '@kody' falls back to the defaultImplementation action", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody" },
       issue: { number: 12 },
     })
     expect(
       autoDispatch({
-        config: testConfig({ defaultExecutable: "run" }),
+        config: testConfig({ defaultImplementation: "run" }),
       }),
     ).toEqual({
       action: "run",
@@ -703,12 +703,12 @@ describe("dispatch: issue_comment on PR", () => {
     expect(autoDispatch()).toBeNull()
   })
 
-  it("bare '@kody' on PR falls back to the legacy defaultPrExecutable action", () => {
+  it("bare '@kody' on PR falls back to the defaultPrImplementation action", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody" },
       issue: { number: 23, pull_request: {} },
     })
-    expect(autoDispatch({ config: testConfig({ defaultPrExecutable: "sync" }) })).toEqual({
+    expect(autoDispatch({ config: testConfig({ defaultPrImplementation: "sync" }) })).toEqual({
       action: "sync",
       capability: "sync",
       implementation: "sync",
@@ -929,7 +929,7 @@ describe("dispatch: alias misconfig surfacing", () => {
     const result = autoDispatch({
       config: {
         aliases: { "phantom-cmd": "no-such-executable" },
-        defaultExecutable: "classify",
+        defaultImplementation: "classify",
       } as never,
     })
     // Behavior changed in 0.4.36: typed-but-unrecognized tokens no longer
@@ -953,7 +953,7 @@ describe("dispatch: alias misconfig surfacing", () => {
       comment: { body: "@kody totally-unknown-thing", user: { login: "alice", type: "User" } },
     })
     autoDispatch({
-      config: { defaultExecutable: "classify", aliases: {} } as never,
+      config: { defaultImplementation: "classify", aliases: {} } as never,
     })
     const warnings = stderrSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n")
     expect(warnings).toMatch(/no capability action resolved/)

@@ -3,13 +3,13 @@ import type { KodyConfig } from "../../src/config.js"
 
 /**
  * The model-resolution precedence lives inline in src/executor.ts. This
- * test mirrors the resolution rule (perExecutable → profile.model → agent.model)
+ * test mirrors the resolution rule (perImplementation → profile.model → agent.model)
  * directly so the rule is locked in by tests even though it's not yet
  * extracted into a standalone function.
  */
 function resolveModel(config: KodyConfig, profileName: string, profileModel: string): string {
-  const perExecutableModel = config.agent.perExecutable?.[profileName]
-  return perExecutableModel ? perExecutableModel : profileModel === "inherit" ? config.agent.model : profileModel
+  const perImplementationModel = config.agent.perImplementation?.[profileName]
+  return perImplementationModel ? perImplementationModel : profileModel === "inherit" ? config.agent.model : profileModel
 }
 
 const baseConfig: KodyConfig = {
@@ -28,34 +28,34 @@ describe("model resolution precedence (mirror)", () => {
     expect(resolveModel(baseConfig, "plan", "claude/claude-opus-4-7")).toBe("claude/claude-opus-4-7")
   })
 
-  it("perExecutable wins over agent.model", () => {
+  it("perImplementation wins over agent.model", () => {
     const cfg: KodyConfig = {
       ...baseConfig,
       agent: {
         model: "claude/claude-sonnet-4-6",
-        perExecutable: { classify: "claude/claude-haiku-4-5-20251001" },
+        perImplementation: { classify: "claude/claude-haiku-4-5-20251001" },
       },
     }
     expect(resolveModel(cfg, "classify", "inherit")).toBe("claude/claude-haiku-4-5-20251001")
   })
 
-  it("perExecutable wins even when the profile names an explicit model", () => {
+  it("perImplementation wins even when the profile names an explicit model", () => {
     const cfg: KodyConfig = {
       ...baseConfig,
       agent: {
         model: "claude/claude-sonnet-4-6",
-        perExecutable: { plan: "claude/claude-haiku-4-5-20251001" },
+        perImplementation: { plan: "claude/claude-haiku-4-5-20251001" },
       },
     }
     expect(resolveModel(cfg, "plan", "claude/claude-opus-4-7")).toBe("claude/claude-haiku-4-5-20251001")
   })
 
-  it("missing perExecutable entry falls through to the normal precedence", () => {
+  it("missing perImplementation entry falls through to the normal precedence", () => {
     const cfg: KodyConfig = {
       ...baseConfig,
       agent: {
         model: "claude/claude-sonnet-4-6",
-        perExecutable: { classify: "claude/claude-haiku-4-5-20251001" },
+        perImplementation: { classify: "claude/claude-haiku-4-5-20251001" },
       },
     }
     expect(resolveModel(cfg, "run", "inherit")).toBe("claude/claude-sonnet-4-6")
