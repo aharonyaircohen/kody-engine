@@ -59,7 +59,7 @@ function mockSuccessfulGh(): void {
     if (path.endsWith("/git/refs")) return JSON.stringify({})
     if (path.endsWith("/git/trees")) return JSON.stringify({ sha: "new-tree" })
     if (path.endsWith("/git/commits")) return JSON.stringify({ sha: "new-commit" })
-    if (path.includes("/git/refs/heads/agent-factory/")) return JSON.stringify({})
+    if (path.includes("/git/refs/heads/")) return JSON.stringify({})
     if (path.endsWith("/pulls"))
       return JSON.stringify({ html_url: "https://github.com/acme/kody-state/pull/7", number: 7 })
     if (args[0] === "issue" && args[1] === "comment") return ""
@@ -112,6 +112,27 @@ describe("openAgentFactoryStatePr", () => {
         content: '{\n  "name": "example"\n}\n',
       },
     ])
+  })
+
+  it("uses the actual creator capability in state PR title and issue comment", async () => {
+    mockSuccessfulGh()
+    const ctx = makeCtx(bundle({ title: "Add example workflow" }))
+    ctx.data.jobCapability = "workflow-creator"
+
+    await openAgentFactoryStatePr(ctx, { name: "workflow-creator" } as Profile, agentResult)
+
+    const commit = inputForPath("/git/commits") as { message: string }
+    expect(commit.message).toBe("workflow-creator: Add example workflow")
+    const pull = inputForPath("/pulls") as { title: string; body: string }
+    expect(pull.title).toBe("workflow-creator: Add example workflow")
+    expect(pull.body).toContain("workflow-creator generated Kody agency model changes")
+    const commentCall = gh.mock.calls.find(
+      (call: unknown[]) =>
+        Array.isArray(call[0]) && (call[0] as string[]).join(" ") === "issue comment 42 --body-file -",
+    )
+    expect((commentCall as [string[], { input: string }])[1].input).toContain(
+      "workflow-creator opened a state-repo review PR",
+    )
   })
 
   it("rejects empty files", () => {

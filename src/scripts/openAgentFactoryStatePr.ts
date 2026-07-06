@@ -37,7 +37,7 @@ interface PullResponse {
   number?: number
 }
 
-export const openAgentFactoryStatePr: PostflightScript = async (ctx, _profile, agentResult) => {
+export const openAgentFactoryStatePr: PostflightScript = async (ctx, profile, agentResult) => {
   if (agentResult?.outcome !== "completed") {
     throw new Error(`openAgentFactoryStatePr: agent did not complete: ${agentResult?.error ?? "unknown failure"}`)
   }
@@ -49,11 +49,12 @@ export const openAgentFactoryStatePr: PostflightScript = async (ctx, _profile, a
   }
 
   const issueNumber = readIssueNumber(ctx)
+  const sourceLabel = creatorSourceLabel(ctx, profile.name)
   const bundle = parseAgentFactoryBundle(String(ctx.data.prSummary ?? ""))
   const normalizedFiles = normalizeBundleFiles(ctx, bundle)
   const stateRepo = parseStateRepo(ctx.config)
   const baseBranch = "main"
-  const branch = buildAgentFactoryBranchName(issueNumber, bundle.title)
+  const branch = buildStatePrBranchName(sourceLabel, issueNumber, bundle.title)
 
   const baseRef = ghJson<GitRefResponse>(
     ["api", `/repos/${stateRepo.owner}/${stateRepo.repo}/git/ref/heads/${baseBranch}`],
@@ -96,7 +97,7 @@ export const openAgentFactoryStatePr: PostflightScript = async (ctx, _profile, a
     ["api", "--method", "POST", `/repos/${stateRepo.owner}/${stateRepo.repo}/git/commits`, "--input", "-"],
     ctx.cwd,
     {
-      message: `agent-factory: ${bundle.title}`,
+      message: `${sourceLabel}: ${bundle.title}`,
       tree: treeSha,
       parents: [baseSha],
     },
@@ -123,17 +124,17 @@ export const openAgentFactoryStatePr: PostflightScript = async (ctx, _profile, a
     ["api", "--method", "POST", `/repos/${stateRepo.owner}/${stateRepo.repo}/pulls`, "--input", "-"],
     ctx.cwd,
     {
-      title: `agent-factory: ${bundle.title}`,
+      title: `${sourceLabel}: ${bundle.title}`,
       head: branch,
       base: baseBranch,
-      body: renderPullRequestBody(ctx, bundle, normalizedFiles),
+      body: renderPullRequestBody(ctx, bundle, normalizedFiles, sourceLabel),
     },
   )
   const prUrl = requireString(pr.html_url, "created pull request url")
 
   gh(["issue", "comment", String(issueNumber), "--body-file", "-"], {
     cwd: ctx.cwd,
-    input: renderIssueComment(stateRepo.owner, stateRepo.repo, prUrl, bundle),
+    input: renderIssueComment(stateRepo.owner, stateRepo.repo, prUrl, bundle, sourceLabel),
   })
 
   ctx.data.agentFactoryStatePr = {
@@ -190,6 +191,15 @@ export function parseAgentFactoryBundle(raw: string): AgentFactoryBundle {
 }
 
 export function buildAgentFactoryBranchName(issueNumber: number, title: string, now: number = Date.now()): string {
+  return buildStatePrBranchName("agent-factory", issueNumber, title, now)
+}
+
+function buildStatePrBranchName(
+  sourceLabel: string,
+  issueNumber: number,
+  title: string,
+  now: number = Date.now(),
+): string {
   const slug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -197,7 +207,7 @@ export function buildAgentFactoryBranchName(issueNumber: number, title: string, 
     .slice(0, 48)
     .replace(/-+$/g, "")
   const suffix = slug ? `-${slug}` : ""
-  return `agent-factory/issue-${issueNumber}-${now.toString(36)}${suffix}`
+  return `${sourceLabel}/issue-${issueNumber}-${now.toString(36)}${suffix}`
 }
 
 function normalizeBundleFiles(
@@ -263,6 +273,14 @@ function requireString(value: unknown, label: string): string {
   return value
 }
 
+function creatorSourceLabel(ctx: Context, profileName: string | undefined): string {
+  const capability = typeof ctx.data.jobCapability === "string" ? ctx.data.jobCapability.trim() : ""
+  const implementation = typeof ctx.data.jobImplementation === "string" ? ctx.data.jobImplementation.trim() : ""
+  const executable = typeof ctx.data.jobExecutable === "string" ? ctx.data.jobExecutable.trim() : ""
+  const profile = typeof profileName === "string" ? profileName.trim() : ""
+  return capability || implementation || executable || profile || "agent-factory"
+}
+
 function ghJson<T>(args: string[], cwd: string, input?: unknown): T {
   const raw = gh(args, input === undefined ? { cwd } : { cwd, input: JSON.stringify(input) })
   if (!raw) return {} as T
@@ -279,10 +297,11 @@ function renderPullRequestBody(
   ctx: Context,
   bundle: AgentFactoryBundle,
   files: Array<AgentFactoryFile & { targetPath: string }>,
+  sourceLabel: string,
 ): string {
   const issueNumber = readIssueNumber(ctx)
   return [
-    "Agent factory generated a Kody agency model bundle for review.",
+    `${sourceLabel} generated Kody agency model changes for review.`,
     "",
     `Source issue: ${ctx.config.github.owner}/${ctx.config.github.repo}#${issueNumber}`,
     "",
@@ -298,9 +317,15 @@ function renderPullRequestBody(
   ].join("\n")
 }
 
-function renderIssueComment(owner: string, repo: string, prUrl: string, bundle: AgentFactoryBundle): string {
+function renderIssueComment(
+  owner: string,
+  repo: string,
+  prUrl: string,
+  bundle: AgentFactoryBundle,
+  sourceLabel: string,
+): string {
   return [
-    `agent-factory opened a state-repo review PR: ${prUrl}`,
+    `${sourceLabel} opened a state-repo review PR: ${prUrl}`,
     "",
     `State repo: ${owner}/${repo}`,
     "",
