@@ -523,11 +523,11 @@ function readDispatchTargetKind(
 // Trust gate for dispatch tools.
 // ---------------------------------------------------------------------------
 
-const GATE_EXEMPT_DUTIES: ReadonlySet<string> = new Set(["qa-engineer", "ui-review"])
+const GATE_EXEMPT_CAPABILITIES: ReadonlySet<string> = new Set(["qa-engineer", "ui-review"])
 
 export function isDispatchGated(capability: string | null | undefined, mode: CapabilityTrustMode): boolean {
   if (mode === "auto") return false
-  if (capability && GATE_EXEMPT_DUTIES.has(capability)) return false
+  if (capability && GATE_EXEMPT_CAPABILITIES.has(capability)) return false
   return true
 }
 

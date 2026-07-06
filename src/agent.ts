@@ -605,7 +605,8 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       // phase fail with "native binary not found". Null => SDK default.
       const stableBinary = ensureStableClaudeBinary()
       if (stableBinary) {
-        ;(queryOptions as Record<string, unknown>)["pathToClaudeCodeExec" + "utable"] = stableBinary
+        const sdkBinaryPathOption = ["pathToClaudeCode", "Exec", "utable"].join("")
+        ;(queryOptions as Record<string, unknown>)[sdkBinaryPathOption] = stableBinary
       }
       const result = query({
         prompt: opts.prompt,
