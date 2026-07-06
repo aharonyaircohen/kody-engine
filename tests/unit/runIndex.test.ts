@@ -67,7 +67,7 @@ describe("run index", () => {
     })
   })
 
-  it("normalizes legacy dispatch rows that were stored as running or waiting", () => {
+  it("preserves legacy dispatch rows as open work instead of normalizing them to success", () => {
     const next = mergeRunIndexRow(
       JSON.stringify({
         version: 1,
@@ -110,11 +110,11 @@ describe("run index", () => {
 
     expect(next.runs[1]).toMatchObject({
       id: "goal:ci-health:run-0",
-      status: "success",
+      status: "running",
     })
     expect(next.runs[2]).toMatchObject({
       id: "goal:ci-health:run-2",
-      status: "success",
+      status: "waiting",
     })
   })
 
@@ -149,6 +149,44 @@ describe("run index", () => {
       status: "failed",
       summary: "dev-ci-health failed",
       updatedAt: "2026-07-05T10:05:00.000Z",
+    })
+  })
+
+  it("keeps loop dispatch rows waiting on the child goal after dispatch succeeds", () => {
+    const row = {
+      version: 1 as const,
+      id: "loop:daily-web-release-loop:gh-123-1-1",
+      subjectType: "loop" as const,
+      subjectId: "daily-web-release-loop",
+      subjectModel: "agentLoop",
+      status: "running" as const,
+      title: "daily-web-release-loop",
+      summary: "dispatch goal web-release-2026-07-06",
+      currentStep: "loop.tick.dispatch",
+      target: { type: "goal", id: "web-release-2026-07-06" },
+      sourceType: "goal-run-log" as const,
+      updatedAt: "2026-07-06T11:45:45.000Z",
+    }
+    const data: Record<string, unknown> = {}
+    stageRunIndexFinalization(data, row)
+    stateRepo.readStateText.mockReturnValue({
+      content: JSON.stringify({ version: 1, updatedAt: row.updatedAt, runs: [row] }),
+      sha: "sha-1",
+    })
+
+    finalizeStagedRunIndexRows(config, "/repo", data, {
+      status: "success",
+      updatedAt: "2026-07-06T11:45:46.000Z",
+      reason: "dispatch goal web-release-2026-07-06",
+    })
+
+    const [, , filePath, content] = stateRepo.writeStateText.mock.calls[0]!
+    expect(filePath).toBe(runIndexPath())
+    expect(JSON.parse(String(content)).runs[0]).toMatchObject({
+      id: "loop:daily-web-release-loop:gh-123-1-1",
+      status: "waiting",
+      summary: "waiting on goal web-release-2026-07-06",
+      currentStep: "web-release-2026-07-06",
     })
   })
 

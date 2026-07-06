@@ -106,14 +106,39 @@ export function finalizeStagedRunIndexRows(
 ): void {
   const rows = stagedRunIndexRows(data)
   for (const row of Object.values(rows)) {
-    upsertRunIndexRowBestEffort(config, cwd, {
-      ...row,
-      status: result.status,
-      updatedAt: result.updatedAt,
-      summary: result.reason ?? row.summary,
-    })
+    upsertRunIndexRowBestEffort(config, cwd, finalizedRunIndexRow(row, result))
   }
   data[STAGED_RUN_INDEX_ROWS_KEY] = {}
+}
+
+function finalizedRunIndexRow(
+  row: RunIndexRow,
+  result: { status: RunIndexStatus; updatedAt: string; reason?: string },
+): RunIndexRow {
+  const target = recordValue(row.target)
+  const targetType = stringValue(target?.type)
+  const targetId = stringValue(target?.id)
+  if (
+    row.sourceType === "goal-run-log" &&
+    row.subjectType === "loop" &&
+    targetType === "goal" &&
+    targetId &&
+    result.status === "success"
+  ) {
+    return {
+      ...row,
+      status: "waiting",
+      updatedAt: result.updatedAt,
+      summary: `waiting on goal ${targetId}`,
+      currentStep: targetId,
+    }
+  }
+  return {
+    ...row,
+    status: result.status,
+    updatedAt: result.updatedAt,
+    summary: result.reason ?? row.summary,
+  }
 }
 
 export function mergeRunIndexRow(raw: string | undefined | null, row: RunIndexRow): RunIndexFile {
@@ -284,14 +309,6 @@ function stagedRunIndexRows(data: Record<string, unknown>): Record<string, RunIn
 }
 
 function normalizeRunIndexRow(row: RunIndexRow): RunIndexRow {
-  if (
-    (row.status === "running" || row.status === "waiting") &&
-    (row.decision?.toLowerCase().startsWith("dispatch") ||
-      row.summary?.toLowerCase().startsWith("dispatch") ||
-      row.currentStep?.toLowerCase().includes("dispatch"))
-  ) {
-    return { ...row, status: "success" }
-  }
   return row
 }
 
