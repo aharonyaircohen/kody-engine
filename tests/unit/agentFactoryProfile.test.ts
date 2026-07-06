@@ -35,7 +35,7 @@ describe("agent-factory profile", () => {
     expect(resolveCapabilityAction("agent-factory")).toMatchObject({
       action: "agent-factory",
       capability: "agent-factory",
-      executable: "agent-factory",
+      implementation: "agent-factory",
     })
   })
 })

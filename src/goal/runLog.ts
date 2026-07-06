@@ -10,7 +10,6 @@ export interface GoalRunLogDispatch {
   capability?: string
   workflow?: string
   implementation?: string
-  executable?: string
   cliArgs?: Record<string, unknown>
 }
 
@@ -331,8 +330,7 @@ function capabilityDispatchFromOutput(output: Record<string, unknown> | null): G
   if (!output) return undefined
   const dispatch = pruneUndefined({
     capability: stringValue(output.capability) ?? undefined,
-    implementation: stringValue(output.implementation) ?? stringValue(output.executable) ?? undefined,
-    executable: stringValue(output.executable) ?? undefined,
+    implementation: stringValue(output.implementation) ?? undefined,
     action: stringValue(output.action) ?? undefined,
   })
   return Object.keys(dispatch).length > 0 ? dispatch : undefined
@@ -426,7 +424,6 @@ function triggerContext(): Record<string, unknown> | undefined {
           "title",
           "capability",
           "implementation",
-          "executable",
           "base",
         ])
       : undefined,
@@ -456,7 +453,6 @@ function jobContext(data: Record<string, unknown>): Record<string, unknown> | un
     action: stringValue(data.jobAction) ?? undefined,
     capability: stringValue(data.jobCapability) ?? undefined,
     implementation: stringValue(data.jobImplementation) ?? undefined,
-    executable: stringValue(data.jobImplementation) ?? undefined,
     agent: stringValue(data.jobAgent) ?? undefined,
     schedule: stringValue(data.jobSchedule) ?? undefined,
     target: data.jobTarget ?? undefined,

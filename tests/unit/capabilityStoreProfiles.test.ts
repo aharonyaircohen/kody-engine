@@ -104,7 +104,7 @@ describe("kody-store capability profiles", () => {
         expect.objectContaining({
           action,
           capability: action,
-          executable: action,
+          implementation: action,
           source: "company-store",
         }),
       )
@@ -124,7 +124,7 @@ describe("kody-store capability profiles", () => {
         expect.objectContaining({
           action,
           capability: action,
-          executable: firstStep,
+          implementation: firstStep,
           source: "company-store",
         }),
       )
@@ -164,7 +164,7 @@ describe("kody-store capability profiles", () => {
 
     const genericWrappers = listCapabilityActions()
       .filter((action) => action.source === "company-store")
-      .filter((action) => action.executable === "capability-tick" || action.executable === "capability-tick-scripted")
+      .filter((action) => action.implementation === "capability-tick" || action.implementation === "capability-tick-scripted")
       .map((action) => action.action)
 
     expect(genericWrappers).toEqual([])
@@ -180,7 +180,7 @@ describe("kody-store capability profiles", () => {
     const actions = listCapabilityActions()
     const aliasRoutes = actions
       .filter((action) => CHAT_CAPABILITY_ALIASES.has(action.action))
-      .map((action) => [action.action, action.executable])
+      .map((action) => [action.action, action.implementation])
       .sort(([a], [b]) => a.localeCompare(b))
 
     expect(aliasRoutes).toEqual([...CHAT_CAPABILITY_ALIASES].sort().map((alias) => [alias, "kody-chat"]))

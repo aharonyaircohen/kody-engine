@@ -450,35 +450,6 @@ describe("state: parseStateComment / renderStateComment", () => {
     expect(body).toContain("currentImplementation")
     expect(body).toContain("implementations")
     expect(body).toContain('"implementation": "run"')
-    expect(body).not.toContain("currentExecutable")
-    expect(body).not.toContain('"executables"')
-    expect(body).not.toContain('"executable"')
-  })
-
-  it("reads older task state and rewrites it with canonical implementation fields", () => {
-    const oldState = {
-      schemaVersion: 1,
-      core: { ...emptyState().core, currentExecutable: "run" },
-      artifacts: {},
-      jobs: {
-        "instant:run:42": {
-          id: "instant:run:42",
-          executable: "run",
-          status: "succeeded",
-          createdAt: "2026-04-20T09:00:00Z",
-          updatedAt: "2026-04-20T09:00:00Z",
-          agentRuns: [],
-        },
-      },
-      executables: { run: { lastAction: null } },
-      history: [{ timestamp: "2026-04-20T09:00:00Z", executable: "run", action: "RUN_COMPLETED" }],
-    }
-    const parsed = parseStateComment(`${STATE_BEGIN}\n\n\`\`\`json\n${JSON.stringify(oldState)}\n\`\`\`\n\n${STATE_END}`)
-
-    expect(parsed.core.currentImplementation).toBe("run")
-    expect(parsed.jobs["instant:run:42"]?.implementation).toBe("run")
-    expect(parsed.history[0]?.implementation).toBe("run")
-    expect(renderStateComment(parsed)).not.toContain("currentExecutable")
   })
 
   it("parses older state comments that do not have jobs", () => {

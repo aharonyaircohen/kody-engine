@@ -221,8 +221,8 @@ export interface AgentOptions {
   verifyToolMaxAttempts?: number | null
   /** Config passed to the verify tool's underlying `verifyAllWithRetry` call. */
   verifyConfig?: unknown
-  /** Executable name (for event-emission attribution from the verify tool). */
-  executableName?: string
+  /** Implementation name (for event-emission attribution from the verify tool). */
+  implementationName?: string
   /**
    * Filesystem sources the SDK should auto-load. `"project"` loads
    * `<cwd>/.claude/` (skills, commands, settings.json) and CLAUDE.md;
@@ -483,7 +483,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         const verifyServer = buildVerifyMcpServer({
           config: opts.verifyConfig as Parameters<typeof buildVerifyMcpServer>[0]["config"],
           cwd: opts.cwd,
-          executable: opts.executableName ?? "agent",
+          implementation: opts.implementationName ?? "agent",
           maxAttempts:
             typeof opts.verifyToolMaxAttempts === "number" && opts.verifyToolMaxAttempts > 0
               ? opts.verifyToolMaxAttempts

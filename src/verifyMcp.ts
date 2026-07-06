@@ -35,7 +35,7 @@ const PER_FAILURE_TAIL_CHARS = 600
 interface VerifyToolOptions {
   config: KodyConfig
   cwd: string
-  executable: string
+  implementation: string
   maxAttempts?: number
   /** Test hook: override the verifier (used by unit tests to inject results). */
   __runVerify?: (config: KodyConfig, cwd: string) => Promise<VerifyResult>
@@ -80,7 +80,7 @@ export function verifyToolDefinition(opts: VerifyToolOptions): VerifyToolDefinit
       const attempt = state.attempts
       if (attempt > state.maxAttempts) {
         emitEvent(opts.cwd, {
-          executable: opts.executable,
+          implementation: opts.implementation,
           kind: "error",
           name: "verify_tool",
           outcome: "failed",
@@ -103,7 +103,7 @@ export function verifyToolDefinition(opts: VerifyToolOptions): VerifyToolDefinit
       const result = await runVerify(opts.config, opts.cwd)
       const durationMs = Date.now() - startedAt
       emitEvent(opts.cwd, {
-        executable: opts.executable,
+        implementation: opts.implementation,
         kind: "postflight",
         name: `verify_attempt_${attempt}`,
         durationMs,

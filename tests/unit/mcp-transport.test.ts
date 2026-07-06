@@ -56,7 +56,7 @@ describe("transport parity: verify", () => {
         agent: { model: "claude/claude-sonnet-4" },
       },
       cwd: "/tmp/parity",
-      executable: "test",
+      implementation: "test",
     })
     expect(def.name).toBe("verify")
     expect(def.description).toBeTruthy()
@@ -71,7 +71,7 @@ describe("transport parity: verify", () => {
         agent: { model: "claude/claude-sonnet-4" },
       },
       cwd: "/tmp/parity",
-      executable: "test",
+      implementation: "test",
     })
     expect(server.name).toBe("kody-verify")
   })

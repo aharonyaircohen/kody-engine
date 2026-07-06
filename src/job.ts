@@ -561,7 +561,7 @@ function loadWorkflowContext(slug: string | undefined, base: RunJobBase): Capabi
 export function mintInstantJob(dispatch: DispatchResult, opts?: { why?: string; agent?: string }): Job {
   return {
     action: dispatch.action,
-    implementation: dispatch.implementation ?? dispatch.executable,
+    implementation: dispatch.implementation,
     capability: dispatch.capability,
     why: opts?.why ?? dispatch.why,
     agent: opts?.agent ?? DEFAULT_INSTANT_AGENT,

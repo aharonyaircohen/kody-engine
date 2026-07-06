@@ -243,7 +243,6 @@ export interface ExecutorOutput {
     capability?: string
     workflow?: string
     implementation?: string
-    executable?: string
     cliArgs: Record<string, unknown>
     saveReport?: boolean
   }
@@ -255,7 +254,6 @@ export interface ExecutorOutput {
     capability?: string
     workflow?: string
     implementation?: string
-    executable?: string
     cliArgs: Record<string, unknown>
     saveReport?: boolean
   }
@@ -266,11 +264,11 @@ export interface ExecutorOutput {
 export async function runExecutable(profileName: string, input: ExecutorInput): Promise<ExecutorOutput> {
   const stageStartedAt = Date.now()
   let finishRunIndex: ((out: ExecutorOutput) => void) | null = null
-  emitEvent(input.cwd, { executable: profileName, kind: "stage_start" })
+  emitEvent(input.cwd, { implementation: profileName, kind: "stage_start" })
   const finishAndEnd = (out: ExecutorOutput): ExecutorOutput => {
     finishRunIndex?.(out)
     emitEvent(input.cwd, {
-      executable: profileName,
+      implementation: profileName,
       kind: "stage_end",
       durationMs: Date.now() - stageStartedAt,
       outcome: out.exitCode === 0 ? "ok" : "failed",
@@ -553,7 +551,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
           : process.env.GITHUB_REPOSITORY?.trim() || undefined,
       verifyToolMaxAttempts: profile.claudeCode.verifyAttempts ?? null,
       verifyConfig: profile.claudeCode.enableVerifyTool ? config : undefined,
-      executableName: profileName,
+      implementationName: profileName,
       settingSources: (profile.claudeCode as { settingSources?: Array<"user" | "project" | "local"> }).settingSources,
     })
   }
@@ -567,7 +565,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
       const preLabel = entry.script ?? entry.shell ?? "<unknown>"
       if (!shouldRun(entry, ctx)) {
         emitEvent(input.cwd, {
-          executable: profileName,
+          implementation: profileName,
           kind: "preflight",
           name: preLabel,
           outcome: "skipped",
@@ -583,7 +581,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
         // that should bail (commitAndPush, ensurePr, postIssueComment)
         // already check `ctx.skipAgent && exitCode !== undefined`.
         emitEvent(input.cwd, {
-          executable: profileName,
+          implementation: profileName,
           kind: "preflight",
           name: preLabel,
           durationMs: Date.now() - t0,
@@ -594,7 +592,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
         if (!fn) return finishAndEnd({ exitCode: 99, reason: `preflight script not registered: ${entry.script}` })
         await fn(ctx, profile, entry.with)
         emitEvent(input.cwd, {
-          executable: profileName,
+          implementation: profileName,
           kind: "preflight",
           name: preLabel,
           durationMs: Date.now() - t0,
@@ -624,7 +622,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
           reason: "composePrompt did not produce a prompt (ctx.data.prompt missing)",
         })
       }
-      emitEvent(input.cwd, { executable: profileName, kind: "agent_start" })
+      emitEvent(input.cwd, { implementation: profileName, kind: "agent_start" })
       try {
         agentResult = await invokeAgent(prompt)
       } catch (err) {
@@ -634,7 +632,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
         })
       }
       emitEvent(input.cwd, {
-        executable: profileName,
+        implementation: profileName,
         kind: "agent_end",
         durationMs: agentResult.durationMs,
         outcome: agentResult.outcome === "completed" ? "ok" : "failed",
@@ -679,7 +677,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
           `[kody postflight] enforce-skip ${entryLabel}: run already failed (exit ${ctx.output.exitCode})\n`,
         )
         emitEvent(input.cwd, {
-          executable: profileName,
+          implementation: profileName,
           kind: "postflight",
           name: entryLabel,
           outcome: "skipped",
@@ -701,7 +699,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
           process.stderr.write(`[kody postflight] skip ${entryLabel}: ${reasons.join("; ")}\n`)
         }
         emitEvent(input.cwd, {
-          executable: profileName,
+          implementation: profileName,
           kind: "postflight",
           name: entryLabel,
           outcome: "skipped",
@@ -740,7 +738,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
             file,
             JSON.stringify(
               {
-                executable: profileName,
+                implementation: profileName,
                 postflight: label,
                 message: msg,
                 stack: err instanceof Error ? err.stack : undefined,
@@ -762,7 +760,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
         if (ctx.output.exitCode === 0) ctx.output.exitCode = 99
       }
       emitEvent(input.cwd, {
-        executable: profileName,
+        implementation: profileName,
         kind: "postflight",
         name: label,
         durationMs: Date.now() - t0,
@@ -896,7 +894,7 @@ export async function runExecutableChain(profileName: string, input: ExecutorInp
         if (!afterJob) {
           return {
             exitCode: 99,
-            reason: `in-process return missing capability/action for ${after.executable ?? "unknown"}`,
+            reason: `in-process return missing capability/action for ${handoffLabel(after)}`,
           }
         }
         process.stdout.write(
@@ -928,7 +926,7 @@ export async function runExecutableChain(profileName: string, input: ExecutorInp
     if (!nextJob) {
       return {
         exitCode: 99,
-        reason: `in-process hand-off missing capability/action for ${next.executable ?? "unknown"}`,
+        reason: `in-process hand-off missing capability/action for ${handoffLabel(next)}`,
       }
     }
     process.stdout.write(
@@ -949,8 +947,10 @@ export async function runExecutableChain(profileName: string, input: ExecutorInp
   }
   if (result.nextDispatch || result.nextJob) {
     const pending =
-      result.nextDispatch?.executable ??
+      result.nextDispatch?.implementation ??
       result.nextDispatch?.workflow ??
+      result.nextDispatch?.action ??
+      result.nextDispatch?.capability ??
       result.nextJob?.implementation ??
       result.nextJob?.workflow ??
       result.nextJob?.capability ??
@@ -965,7 +965,6 @@ function handoffToJob(handoff: {
   capability?: string
   workflow?: string
   implementation?: string
-  executable?: string
   cliArgs: Record<string, unknown>
   saveReport?: boolean
   resultTarget?: Job["resultTarget"]
@@ -976,12 +975,21 @@ function handoffToJob(handoff: {
     action: handoff.action ?? handoff.capability,
     capability: handoff.capability,
     workflow: handoff.workflow,
-    implementation: handoff.implementation ?? handoff.executable,
+    implementation: handoff.implementation,
     cliArgs: handoff.cliArgs,
     flavor: "instant",
     saveReport: handoff.saveReport === true,
     resultTarget: handoff.resultTarget,
   }
+}
+
+function handoffLabel(handoff: {
+  action?: string
+  capability?: string
+  workflow?: string
+  implementation?: string
+}): string {
+  return handoff.implementation ?? handoff.workflow ?? handoff.action ?? handoff.capability ?? "unknown"
 }
 
 function clearStampedLifecycleLabels(profile: Profile, ctx: Context): void {

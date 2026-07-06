@@ -244,7 +244,7 @@ describe("standing goal capability scheduling", () => {
       kind: "dispatch",
       dispatch: {
         action: "goal-manager",
-        executable: "goal-manager",
+        implementation: "goal-manager",
         cliArgs: { goal: "web-release" },
       },
       scheduleState: {
@@ -252,7 +252,7 @@ describe("standing goal capability scheduling", () => {
           kind: "dispatch",
           targetType: "goal",
           targetId: "web-release",
-          executable: "goal-manager",
+          implementation: "goal-manager",
         },
       },
     })
@@ -300,7 +300,7 @@ describe("standing goal capability scheduling", () => {
 
     expect(ctx.output.nextDispatch).toEqual({
       action: "goal-manager",
-      executable: "goal-manager",
+      implementation: "goal-manager",
       cliArgs: { goal: "web-release" },
     })
     const updatedGoal = ctx.data.goal as GoalCtx
@@ -310,7 +310,7 @@ describe("standing goal capability scheduling", () => {
         kind: "dispatch",
         targetType: "goal",
         targetId: "web-release",
-        executable: "goal-manager",
+        implementation: "goal-manager",
       },
       capabilities: {},
     })
@@ -354,7 +354,7 @@ describe("standing goal capability scheduling", () => {
 
       expect(ctx.output.nextDispatch).toEqual({
         action: "goal-manager",
-        executable: "goal-manager",
+        implementation: "goal-manager",
         cliArgs: { goal: "web-release-2026-06-26" },
       })
       const updatedGoal = ctx.data.goal as GoalCtx
@@ -363,7 +363,7 @@ describe("standing goal capability scheduling", () => {
           kind: "dispatch",
           targetType: "goal",
           targetId: "web-release-2026-06-26",
-          executable: "goal-manager",
+          implementation: "goal-manager",
         },
       })
     } finally {
@@ -418,7 +418,7 @@ describe("standing goal capability scheduling", () => {
           targetType: "goal",
           targetId: "web-release-2026-07-06",
           action: "goal-manager",
-          executable: "goal-manager",
+          implementation: "goal-manager",
           reason: "preferred time 02:00 Asia/Jerusalem",
           at: "2026-07-05T23:37:31.095Z",
         },
@@ -431,7 +431,7 @@ describe("standing goal capability scheduling", () => {
 
       expect(ctx.output.nextDispatch).toEqual({
         action: "goal-manager",
-        executable: "goal-manager",
+        implementation: "goal-manager",
         cliArgs: { goal: "web-release-2026-07-06" },
       })
       const updatedGoal = ctx.data.goal as GoalCtx
@@ -440,7 +440,7 @@ describe("standing goal capability scheduling", () => {
           kind: "dispatch",
           targetType: "goal",
           targetId: "web-release-2026-07-06",
-          executable: "goal-manager",
+          implementation: "goal-manager",
         },
       })
     } finally {
@@ -498,7 +498,7 @@ describe("standing goal capability scheduling", () => {
 
       expect(ctx.output.nextDispatch).toEqual({
         action: "goal-manager",
-        executable: "goal-manager",
+        implementation: "goal-manager",
         cliArgs: { goal: "web-release-2026-06-27" },
       })
       expect(readRepoGoal(stateRoot, "web-release-2026-06-27")).toMatchObject({
@@ -579,7 +579,7 @@ describe("standing goal capability scheduling", () => {
           targetType: "goal",
           targetId: "web-release-2026-06-26",
           action: "goal-manager",
-          executable: "goal-manager",
+          implementation: "goal-manager",
           reason: "preferred time 08:30 Asia/Jerusalem",
           at: "2026-06-30T15:04:38.728Z",
         },
@@ -592,7 +592,7 @@ describe("standing goal capability scheduling", () => {
 
       expect(ctx.output.nextDispatch).toEqual({
         action: "goal-manager",
-        executable: "goal-manager",
+        implementation: "goal-manager",
         cliArgs: { goal: "web-release-2026-06-30" },
       })
       expect(readRepoGoal(stateRoot, "web-release-2026-06-30")).toMatchObject({
@@ -688,7 +688,7 @@ describe("standing goal capability scheduling", () => {
 
     expect(ctx.output.nextDispatch).toEqual({
       capability: "ci-health",
-      executable: "ci-check",
+      implementation: "ci-check",
       cliArgs: {},
     })
     const updatedGoal = ctx.data.goal as GoalCtx
@@ -698,7 +698,7 @@ describe("standing goal capability scheduling", () => {
       lastDecision: {
         kind: "dispatch",
         capability: "ci-health",
-        executable: "ci-check",
+        implementation: "ci-check",
         reason: "ready for loop tick",
       },
       capabilities: { "ci-health": { state: "due", reason: "ready for loop tick" } },
@@ -720,7 +720,7 @@ describe("standing goal capability scheduling", () => {
     expect(ctx.output.reason).toBe("dispatch ci-health: ready for loop tick")
     expect(ctx.output.nextDispatch).toEqual({
       capability: "ci-health",
-      executable: "ci-check",
+      implementation: "ci-check",
       cliArgs: {},
     })
     const updatedGoal = ctx.data.goal as GoalCtx
@@ -743,7 +743,7 @@ describe("standing goal capability scheduling", () => {
 
     expect(ctx.output.nextDispatch).toEqual({
       capability: "ci-health",
-      executable: "ci-check",
+      implementation: "ci-check",
       cliArgs: {},
     })
     const updatedGoal = ctx.data.goal as GoalCtx
@@ -752,7 +752,7 @@ describe("standing goal capability scheduling", () => {
       lastDecision: {
         kind: "dispatch",
         capability: "ci-health",
-        executable: "ci-check",
+        implementation: "ci-check",
       },
       capabilities: { "ci-health": { state: "due" } },
     })
@@ -772,12 +772,12 @@ describe("standing goal capability scheduling", () => {
 
     expect(ctx.output.nextDispatch).toEqual({
       capability: "auto-fix-ci",
-      executable: "auto-fix-ci",
+      implementation: "auto-fix-ci",
       cliArgs: { capability: "auto-fix-ci" },
     })
     const updatedGoal = ctx.data.goal as GoalCtx
     expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
-      lastDecision: { kind: "dispatch", capability: "auto-fix-ci", executable: "auto-fix-ci" },
+      lastDecision: { kind: "dispatch", capability: "auto-fix-ci", implementation: "auto-fix-ci" },
     })
   })
 
@@ -793,7 +793,7 @@ describe("standing goal capability scheduling", () => {
 
     expect(ctx.output.nextDispatch).toEqual({
       capability: "stale-prs",
-      executable: "pr-check",
+      implementation: "pr-check",
       cliArgs: {},
     })
     const updatedGoal = ctx.data.goal as GoalCtx

@@ -35,8 +35,6 @@ export interface DiscoveredCapabilityAction {
   capability: string
   /** Implementation profile selected by the capability. */
   implementation: string
-  /** Compatibility result field removed in a later phase; mirrors `implementation`. */
-  executable: string
   /** Extra args required to lower the capability to its implementation. */
   cliArgs: Record<string, unknown>
   source: "project-folder" | "company-store" | "builtin"
@@ -212,7 +210,7 @@ export function listCapabilityActions(
   const seen = new Set<string>()
   const out: DiscoveredCapabilityAction[] = []
   const add = (action: DiscoveredCapabilityAction) => {
-    if (!isSafeName(action.action) || !isSafeName(action.capability) || !isSafeName(action.executable)) return
+    if (!isSafeName(action.action) || !isSafeName(action.capability) || !isSafeName(action.implementation)) return
     if (seen.has(action.action)) return
     seen.add(action.action)
     out.push(action)
@@ -264,25 +262,24 @@ export function getCapabilityActionInputs(action: string): InputSpec[] | null {
 
 export function resolveCapabilityExecution(capability: CapabilityFolder): {
   implementation: string
-  executable: string
   cliArgs: Record<string, unknown>
 } {
   const firstWorkflowStep = capability.config.workflow?.steps[0]
   if (firstWorkflowStep) {
     const implementation = firstWorkflowStep.implementation ?? firstWorkflowStep.capability
-    return { implementation, executable: implementation, cliArgs: {} }
+    return { implementation, cliArgs: {} }
   }
   const implementation =
     capability.config.implementation ??
     capability.config.implementations?.[0] ??
     (capability.config.role ? capability.slug : undefined) ??
     (capability.config.tickScript ? "capability-tick-scripted" : "capability-tick")
-  const cliArgs = executableDeclaresInput(implementation, "capability") ? { capability: capability.slug } : {}
-  return { implementation, executable: implementation, cliArgs }
+  const cliArgs = implementationDeclaresInput(implementation, "capability") ? { capability: capability.slug } : {}
+  return { implementation, cliArgs }
 }
 
-function executableDeclaresInput(executable: string, inputName: string): boolean {
-  const profilePath = resolveExecutable(executable)
+function implementationDeclaresInput(implementation: string, inputName: string): boolean {
+  const profilePath = resolveExecutable(implementation)
   if (!profilePath) return false
   try {
     const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as { inputs?: unknown }
@@ -332,13 +329,12 @@ function listFolderCapabilityActions(
     if (!capability) continue
     if (capability.config.internal === true || capability.config.public === false) continue
     const action = capability.config.action ?? slug
-    const { implementation, executable, cliArgs } = resolveCapabilityExecution(capability)
+    const { implementation, cliArgs } = resolveCapabilityExecution(capability)
     if (hasUnresolvedExplicitImplementation(capability, implementation)) continue
     out.push({
       action,
       capability: slug,
       implementation,
-      executable,
       cliArgs,
       source,
       describe: capability.config.describe ?? capability.title,
@@ -349,14 +345,14 @@ function listFolderCapabilityActions(
   return out.sort((a, b) => a.action.localeCompare(b.action))
 }
 
-function hasUnresolvedExplicitImplementation(capability: CapabilityFolder, executable: string): boolean {
+function hasUnresolvedExplicitImplementation(capability: CapabilityFolder, implementation: string): boolean {
   const config = capability.config
   const hasExplicitImplementation =
     Boolean(config.implementation) || (config.implementations?.length ?? 0) > 0
   if (!hasExplicitImplementation) return false
   if (config.workflow?.steps.length) return false
   if (config.role && PUBLIC_EXECUTABLE_ROLES.has(config.role)) return false
-  return resolveExecutable(executable) === null
+  return resolveExecutable(implementation) === null
 }
 
 function listBuiltinCapabilityActions(root: string = getBuiltinCapabilitiesRoot()): DiscoveredCapabilityAction[] {
@@ -372,7 +368,6 @@ function listBuiltinCapabilityActions(root: string = getBuiltinCapabilitiesRoot(
       action,
       capability: slug,
       implementation,
-      executable: implementation,
       cliArgs: {},
       source: "builtin",
       describe: capability.config.describe ?? capability.title,

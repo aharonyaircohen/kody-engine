@@ -48,7 +48,7 @@ describe("capability actions", () => {
     expect(resolveCapabilityAction("remember")).toMatchObject({
       action: "remember",
       capability: "memorize",
-      executable: "impl",
+      implementation: "impl",
       source: "project-folder",
     })
   })
@@ -60,7 +60,7 @@ describe("capability actions", () => {
     expect(resolveCapabilityAction("ship")).toMatchObject({
       action: "ship",
       capability: "ship",
-      executable: "impl",
+      implementation: "impl",
       source: "project-folder",
     })
   })
@@ -72,7 +72,7 @@ describe("capability actions", () => {
     expect(resolveCapabilityAction("watch")).toMatchObject({
       action: "watch",
       capability: "watch",
-      executable: "capability-tick",
+      implementation: "capability-tick",
       source: "project-folder",
     })
   })
@@ -84,7 +84,7 @@ describe("capability actions", () => {
     expect(resolveCapabilityAction("scripted")).toMatchObject({
       action: "scripted",
       capability: "scripted",
-      executable: "capability-tick-scripted",
+      implementation: "capability-tick-scripted",
       source: "project-folder",
     })
   })
@@ -108,7 +108,7 @@ describe("capability actions", () => {
     fs.mkdirSync(path.join(root, ".kody", "capabilities"), { recursive: true })
     fs.writeFileSync(
       path.join(root, ".kody", "capabilities", "legacy.md"),
-      "---\naction: legacy\nexecutable: impl\nagent: kody\n---\n# Legacy\n",
+      "---\naction: legacy\nimplementation: impl\nagent: kody\n---\n# Legacy\n",
     )
 
     expect(resolveCapabilityAction("legacy")).toBeNull()
@@ -127,7 +127,7 @@ describe("capability actions", () => {
     expect(resolveCapabilityAction("ship")).toMatchObject({
       action: "ship",
       capability: "daily-impl",
-      executable: "impl",
+      implementation: "impl",
       source: "project-folder",
     })
   })

@@ -77,7 +77,7 @@ describe("model creator profiles", () => {
       expect(resolveCapabilityAction(creator.name)).toMatchObject({
         action: creator.name,
         capability: creator.name,
-        executable: creator.name,
+        implementation: creator.name,
         source: "builtin",
       })
     }

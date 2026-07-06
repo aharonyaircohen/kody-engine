@@ -17,7 +17,7 @@ export interface GoalCapabilityScheduleState {
   mode: "agentLoop"
   lastGoalTickAt: string
   lastDecision:
-    | { kind: "dispatch"; capability: string; executable: string; reason: string; at: string }
+    | { kind: "dispatch"; capability: string; implementation: string; reason: string; at: string }
     | {
         kind: "dispatch"
         targetType: "goal" | "workflow"
@@ -25,7 +25,7 @@ export interface GoalCapabilityScheduleState {
         action?: string
         capability?: string
         workflow?: string
-        executable?: string
+        implementation?: string
         reason: string
         at: string
       }
@@ -42,7 +42,7 @@ export interface GoalCapabilityScheduleDecision {
     action?: string
     capability?: string
     workflow?: string
-    executable?: string
+    implementation?: string
     cliArgs: Record<string, unknown>
   }
 }
@@ -104,7 +104,7 @@ export function planTargetLoopSchedule(opts: {
     target.type === "goal" && opts.resolvedGoalTargetId?.trim() ? opts.resolvedGoalTargetId.trim() : targetId
   const dispatch: NonNullable<GoalCapabilityScheduleDecision["dispatch"]> =
     target.type === "goal"
-      ? { action: "goal-manager", executable: "goal-manager", cliArgs: { goal: dispatchTargetId } }
+      ? { action: "goal-manager", implementation: "goal-manager", cliArgs: { goal: dispatchTargetId } }
       : { workflow: targetId, cliArgs: {} }
 
   return {
@@ -121,7 +121,7 @@ export function planTargetLoopSchedule(opts: {
         ...(dispatch.action ? { action: dispatch.action } : {}),
         ...(dispatch.capability ? { capability: dispatch.capability } : {}),
         ...(dispatch.workflow ? { workflow: dispatch.workflow } : {}),
-        ...(dispatch.executable ? { executable: dispatch.executable } : {}),
+        ...(dispatch.implementation ? { implementation: dispatch.implementation } : {}),
         reason: preferred ? `preferred time ${preferred.time} ${preferred.timezone}` : "ready target loop tick",
         at,
       },
@@ -205,7 +205,7 @@ export async function planGoalCapabilitySchedule(
       lastDecision: {
         kind: "dispatch",
         capability: due.slug,
-        executable: dispatch.executable,
+        implementation: dispatch.implementation,
         reason: due.reason,
         at,
       },
@@ -265,11 +265,11 @@ async function describeCapabilitySchedule(
 
 function capabilityDispatch(capability: CapabilityFolder): {
   capability: string
-  executable: string
+  implementation: string
   cliArgs: Record<string, unknown>
 } {
-  const { executable, cliArgs } = resolveCapabilityExecution(capability)
-  return { capability: capability.slug, executable, cliArgs }
+  const { implementation, cliArgs } = resolveCapabilityExecution(capability)
+  return { capability: capability.slug, implementation, cliArgs }
 }
 
 function compareOldestLastFired(a: GoalCapabilityScheduleStatus, b: GoalCapabilityScheduleStatus): number {

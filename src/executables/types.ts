@@ -437,7 +437,6 @@ export interface Context {
       capability?: string
       workflow?: string
       implementation?: string
-      executable?: string
       cliArgs: Record<string, unknown>
       saveReport?: boolean
       resultTarget?: CapabilityResultTarget
@@ -450,7 +449,6 @@ export interface Context {
       capability?: string
       workflow?: string
       implementation?: string
-      executable?: string
       cliArgs: Record<string, unknown>
       saveReport?: boolean
       resultTarget?: CapabilityResultTarget

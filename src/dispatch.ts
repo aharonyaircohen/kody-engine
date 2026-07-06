@@ -1,7 +1,7 @@
 /**
  * Route a GitHub event / CLI invocation to a capability action.
  *
- * Dispatch contains ZERO hardcoded implementation executable names. What to
+ * Dispatch contains ZERO hardcoded implementation names. What to
  * route where comes from:
  *   - the comment body (first token after `@kody`),
  *   - the matched capability action's implementation profile `inputs[]`,
@@ -9,8 +9,8 @@
  *   - `config.defaultImplementation` / `config.defaultPrImplementation`
  *     fields, now interpreted as default action names.
  *
- * Adding a public command = add a capability action. The executable remains the
- * implementation detail selected by that capability.
+ * Adding a public command = add a capability action. The implementation is
+ * selected by that capability.
  */
 
 import * as fs from "node:fs"
@@ -40,9 +40,7 @@ export interface DispatchResult {
   /** Capability slug that owns the action. */
   capability: string
   /** Implementation profile selected by the capability. */
-  implementation?: string
-  /** Legacy compatibility copy of `implementation`. */
-  executable: string
+  implementation: string
   cliArgs: Record<string, unknown>
   target: number
   /**
@@ -57,18 +55,18 @@ export interface DispatchResult {
 }
 
 /**
- * Look up an executable's primary numeric input name from its profile.
+ * Look up an implementation's primary numeric input name from its profile.
  * Returns the first required `int` input's `name` (e.g. "issue" for `run`,
  * "pr" for `resolve`/`sync`/`fix-ci`). Returns null when the profile is
  * missing or declares no required int — caller decides the fallback.
  *
  * Why: workflow_dispatch carries a generic `issue_number` numeric input.
- * Each executable's profile declares which flag it actually accepts; binding
+ * Each implementation's profile declares which flag it actually accepts; binding
  * the dispatched number under that declared name keeps the router free of
  * a per-verb list and works automatically for any future PR/issue primitive.
  */
-function primaryNumericInputName(executable: string): string | null {
-  const inputs = getProfileInputs(executable)
+function primaryNumericInputName(implementation: string): string | null {
+  const inputs = getProfileInputs(implementation)
   if (!inputs) return null
   const intInput = inputs.find((i) => i.type === "int" && i.required)
   return intInput?.name ?? null
@@ -98,7 +96,6 @@ function routeResult(
     action: route.action,
     capability: route.capability,
     implementation: route.implementation,
-    executable: route.executable,
     cliArgs: { ...route.cliArgs, ...cliArgs },
     target,
   }
@@ -114,7 +111,7 @@ function routeResult(
  * kody did nothing, no record was left.
  *
  * Variants:
- *   - route: dispatch resolved an executable; run it.
+ *   - route: dispatch resolved an implementation; run it.
  *   - unrecognized: comment had `@kody <token>` but no capability action was
  *     found. The user should be told. Carries the token + the available
  *     options so the comment can suggest alternatives.
@@ -137,7 +134,7 @@ export type DispatchOutcome =
   | { kind: "silent"; reason: string }
 
 /**
- * Explicit CLI override (legacy --issue flag): route to the `run` executable.
+ * Explicit CLI override (legacy --issue flag): route to the `run` implementation.
  * Intentionally the one hardcoded path — it exists to support the historical
  * `kody --issue N` shorthand and has no comment-dispatch analogue.
  */
@@ -512,7 +509,6 @@ export function dispatchScheduledWatches(opts?: { now?: Date; windowSec?: number
             action: exe.name,
             capability: exe.name,
             implementation: exe.name,
-            executable: exe.name,
             cliArgs: {},
             target: 0,
           },

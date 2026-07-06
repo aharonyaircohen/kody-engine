@@ -98,7 +98,7 @@ describe("kody-cli manual goal dispatch", () => {
     previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      inputs: { executable: "goal-manager", message: "weekly-docs" },
+      inputs: { capability: "goal-manager", message: "weekly-docs" },
     })
 
     await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
@@ -165,14 +165,14 @@ describe("kody-cli manual goal dispatch", () => {
     previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      inputs: { executable: "goal-manager" },
+      inputs: { capability: "goal-manager" },
     })
 
     await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(64)
     expect(mocks.runJob).not.toHaveBeenCalled()
   })
 
-  it("runs scheduled watch executables from manual workflow dispatch", async () => {
+  it("runs scheduled watch capabilities from manual workflow dispatch", async () => {
     const dir = tmpDir()
     writeConfig(dir)
     writeScheduledExecutable(dir, "goal-scheduler")
@@ -180,7 +180,7 @@ describe("kody-cli manual goal dispatch", () => {
     previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      inputs: { executable: "goal-scheduler" },
+      inputs: { capability: "goal-scheduler" },
     })
 
     await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)

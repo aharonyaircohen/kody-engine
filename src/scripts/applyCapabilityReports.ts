@@ -116,7 +116,7 @@ export const applyCapabilityReports: PostflightScript = async (ctx, _profile, ag
       if (changed && ctx.output.exitCode === 0 && !ctx.output.nextDispatch && shouldResumeManagedGoal(goalId, nextForOutput)) {
         ctx.output.nextDispatch = {
           action: "goal-manager",
-          executable: "goal-manager",
+          implementation: "goal-manager",
           cliArgs: { goal: goalId },
         }
       }

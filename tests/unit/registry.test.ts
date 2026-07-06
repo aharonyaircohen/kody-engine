@@ -132,7 +132,7 @@ describe("registry: obsolete project executables", () => {
     fs.mkdirSync(exeDir, { recursive: true })
     fs.writeFileSync(
       path.join(capabilityDir, "profile.json"),
-      JSON.stringify({ name: "feature", action: "feature", executable: "feature" }),
+      JSON.stringify({ name: "feature", action: "feature" }),
     )
     fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Feature\n")
     fs.writeFileSync(path.join(exeDir, "profile.json"), JSON.stringify({ name: "feature", role: "primitive" }))
@@ -185,7 +185,7 @@ describe("registry: capabilities root", () => {
     expect(resolveCapabilityAction("triage")).toMatchObject({
       action: "triage",
       capability: "triage",
-      executable: "run",
+      implementation: "run",
       source: "project-folder",
     })
     expect(fs.realpathSync(resolveCapabilityFolder("triage")!.bodyPath)).toBe(
@@ -211,7 +211,7 @@ describe("registry: capabilities root", () => {
     expect(resolveCapabilityAction("ship")).toMatchObject({
       action: "ship",
       capability: "ship",
-      executable: "ship",
+      implementation: "ship",
       source: "project-folder",
     })
   })
@@ -304,13 +304,13 @@ describe("registry: capabilities root", () => {
       expect(resolveCapabilityAction("classify")).toMatchObject({
         action: "classify",
         capability: "classify",
-        executable: "classify",
+        implementation: "classify",
         source: "company-store",
       })
       expect(resolveCapabilityAction("feature")).toMatchObject({
         action: "feature",
         capability: "feature",
-        executable: "classify",
+        implementation: "classify",
         source: "company-store",
       })
     } finally {

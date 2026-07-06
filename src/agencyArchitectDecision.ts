@@ -24,7 +24,7 @@ export interface CreateManagedGoalAction {
     stage: string
     evidence: string
     capability: string
-    executable?: string
+    implementation?: string
     args?: Record<string, unknown>
   }>
   facts?: Record<string, unknown>
@@ -209,7 +209,9 @@ function parseRouteStep(value: unknown): CreateManagedGoalAction["route"][number
     stage: requiredString(input.stage, "route.stage"),
     evidence: requiredString(input.evidence, "route.evidence"),
     capability: slug(input.capability, "route.capability"),
-    ...(typeof input.executable === "string" && input.executable.trim() ? { executable: input.executable.trim() } : {}),
+    ...(typeof input.implementation === "string" && input.implementation.trim()
+      ? { implementation: input.implementation.trim() }
+      : {}),
     ...(record(input.args) ? { args: record(input.args)! } : {}),
   }
 }

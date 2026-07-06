@@ -749,29 +749,6 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     },
   }
 
-  const dispatchTool: CapabilityToolDefinition = {
-    name: "dispatch_workflow",
-    description:
-      "Legacy alias for start_capability. Dispatches a kody.yml workflow_dispatch run for a capability action against an issue. Prefer start_capability({name:'run', issue:<n>}). Returns {ok} or {ok:false,error}.",
-    inputSchema: {
-      capability: z.string().min(1).optional().describe("Capability action to run (e.g. 'run')."),
-      executable: z.string().min(1).optional().describe("Deprecated alias for capability."),
-      issueNumber: z.number().int().positive().describe("Issue (or PR) number forwarded as issue_number."),
-    },
-    handler: async (args) => {
-      const capability = String(args.capability ?? args.executable ?? "")
-      const issueNumber = Number(args.issueNumber)
-      if (isDispatchGated(capability, readCapabilityTrustMode(opts.state, opts.repoSlug, opts.capabilitySlug))) {
-        return { content: [{ type: "text", text: trustRefusal(opts.capabilitySlug) }] }
-      }
-      const result = startCapability(workflowFile, capability, issueNumber, opts.repoSlug)
-      const text = result.ok
-        ? `Dispatched capability \`${capability}\` on #${issueNumber} via workflow_dispatch.`
-        : `Dispatch failed for capability \`${capability}\` on #${issueNumber}: ${result.error}`
-      return { content: [{ type: "text", text }] }
-    },
-  }
-
   const cmsTools = dashboardCmsToolDefinitions({
     repoSlug: opts.repoSlug,
     assertWriteAllowed: () => assertCmsWriteAllowed(opts),
@@ -789,7 +766,6 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     ensureIssueTool,
     ensureCommentTool,
     startCapabilityTool,
-    dispatchTool,
     ...cmsTools,
   ]
 }
@@ -830,6 +806,5 @@ export const CAPABILITY_MCP_TOOL_NAMES = [
   "ensure_issue",
   "ensure_comment",
   "start_capability",
-  "dispatch_workflow",
   ...DASHBOARD_CMS_MCP_TOOL_NAMES,
 ] as const

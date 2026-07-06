@@ -17,7 +17,7 @@ describe("goal run trace", () => {
       status: "dispatch",
       dispatch: {
         capability: "release-prepare",
-        executable: "release-prepare",
+        implementation: "release-prepare",
         cliArgs: { version: "1.2.3" },
       },
       goal: {
@@ -62,7 +62,7 @@ describe("goal run trace", () => {
       },
       capability: {
         capability: "release-prepare",
-        executable: "release-prepare",
+        implementation: "release-prepare",
         cliArgs: { version: "1.2.3" },
       },
       result: {

@@ -29,7 +29,6 @@ export interface RunIndexRow {
   capability?: string
   workflow?: string
   implementation?: string
-  executable?: string
   agent?: string
   model?: string
   modelProvider?: string
@@ -195,7 +194,6 @@ export function runIndexRowFromJobContext(input: {
     capability: stringValue(input.data.jobCapability) ?? undefined,
     workflow: workflow ?? undefined,
     implementation: stringValue(input.data.jobImplementation) ?? input.profileName,
-    executable: stringValue(input.data.jobImplementation) ?? input.profileName,
     agent: stringValue(input.data.jobAgent) ?? input.profile.agent ?? undefined,
     model: stringValue(input.data.jobModel) ?? undefined,
     modelProvider: stringValue(input.data.jobModelProvider) ?? undefined,
@@ -259,7 +257,6 @@ export function runIndexRowFromGoalEvents(
     action: stringValue(job?.action) ?? undefined,
     capability: stringValue(job?.capability) ?? undefined,
     implementation: stringValue(job?.implementation) ?? undefined,
-    executable: stringValue(job?.implementation) ?? undefined,
     agent: stringValue(job?.agent) ?? undefined,
     model: stringValue(job?.model) ?? undefined,
     modelProvider: stringValue(job?.modelProvider) ?? undefined,

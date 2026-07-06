@@ -138,7 +138,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
         ...(decision.dispatch.action ? { action: decision.dispatch.action } : {}),
         ...(decision.dispatch.capability ? { capability: decision.dispatch.capability } : {}),
         ...(decision.dispatch.workflow ? { workflow: decision.dispatch.workflow } : {}),
-        ...(decision.dispatch.executable ? { executable: decision.dispatch.executable } : {}),
+        ...(decision.dispatch.implementation ? { implementation: decision.dispatch.implementation } : {}),
         cliArgs: decision.dispatch.cliArgs,
       }
     }
@@ -199,7 +199,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     if (decision.kind === "dispatch" && decision.dispatch) {
       ctx.output.nextDispatch = {
         capability: decision.dispatch.capability,
-        executable: decision.dispatch.executable,
+        implementation: decision.dispatch.implementation,
         cliArgs: decision.dispatch.cliArgs,
         ...(goal.raw.extra.saveReport === true ? { saveReport: true } : {}),
       }

@@ -212,25 +212,25 @@ function normalizeTaskState(parsed: TaskState): TaskState {
   if (parsed?.schemaVersion !== 1) {
     throw new CorruptStateError(`unexpected schemaVersion: ${JSON.stringify(parsed?.schemaVersion)}`)
   }
-  const raw = parsed as TaskState & {
-    core?: { currentExecutable?: unknown }
-    executables?: unknown
-  }
-  const legacyCurrent =
-    typeof raw.core?.currentExecutable === "string" ? raw.core.currentExecutable : undefined
   const currentImplementation =
-    typeof parsed.core?.currentImplementation === "string" ? parsed.core.currentImplementation : legacyCurrent ?? null
+    typeof parsed.core?.currentImplementation === "string" ? parsed.core.currentImplementation : null
   const implementations =
     parsed.implementations && typeof parsed.implementations === "object"
       ? parsed.implementations
-      : raw.executables && typeof raw.executables === "object" && !Array.isArray(raw.executables)
-        ? (raw.executables as Record<string, ImplementationState>)
-        : {}
-  const coreWithoutLegacy = { ...(parsed.core ?? {}) } as Record<string, unknown>
-  delete coreWithoutLegacy.currentExecutable
+      : {}
+  const parsedCore = parsed.core ?? emptyState().core
+  const core = {
+    phase: parsedCore.phase,
+    status: parsedCore.status,
+    lastOutcome: parsedCore.lastOutcome,
+    attempts: parsedCore.attempts,
+    ...(parsedCore.prUrl ? { prUrl: parsedCore.prUrl } : {}),
+    ...(parsedCore.runUrl ? { runUrl: parsedCore.runUrl } : {}),
+    ...(parsedCore.ranAsAgent !== undefined ? { ranAsAgent: parsedCore.ranAsAgent } : {}),
+  }
   return {
     schemaVersion: 1,
-    core: { ...emptyState().core, ...coreWithoutLegacy, currentImplementation },
+    core: { ...emptyState().core, ...core, currentImplementation },
     implementations,
     artifacts: parsed.artifacts && typeof parsed.artifacts === "object" ? parsed.artifacts : {},
     jobs: normalizeJobs((parsed as { jobs?: unknown }).jobs),
@@ -472,13 +472,8 @@ function normalizeJobs(input: unknown): Record<string, TaskJob> {
   const out: Record<string, TaskJob> = {}
   for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
     if (!value || typeof value !== "object" || Array.isArray(value)) continue
-    const raw = value as Partial<TaskJob> & { executable?: unknown }
-    const implementation =
-      typeof raw.implementation === "string"
-        ? raw.implementation
-        : typeof raw.executable === "string"
-          ? raw.executable
-          : undefined
+    const raw = value as Partial<TaskJob>
+    const implementation = typeof raw.implementation === "string" ? raw.implementation : undefined
     if (typeof raw.id !== "string" || typeof implementation !== "string") continue
     if (!isStatus(raw.status)) continue
     out[key] = {
@@ -507,13 +502,8 @@ function normalizeHistory(input: unknown): HistoryEntry[] {
   const out: HistoryEntry[] = []
   for (const value of input) {
     if (!value || typeof value !== "object" || Array.isArray(value)) continue
-    const raw = value as Partial<HistoryEntry> & { executable?: unknown }
-    const implementation =
-      typeof raw.implementation === "string"
-        ? raw.implementation
-        : typeof raw.executable === "string"
-          ? raw.executable
-          : undefined
+    const raw = value as Partial<HistoryEntry>
+    const implementation = typeof raw.implementation === "string" ? raw.implementation : undefined
     if (typeof raw.timestamp !== "string" || typeof implementation !== "string" || typeof raw.action !== "string") {
       continue
     }

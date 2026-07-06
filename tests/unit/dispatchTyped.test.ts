@@ -33,7 +33,7 @@ describe("autoDispatchTyped: route variant", () => {
     const out = autoDispatchTyped({ explicit: { issueNumber: 42 } })
     expect(out.kind).toBe("route")
     if (out.kind === "route") {
-      expect(out.executable).toBe("run")
+      expect(out.implementation).toBe("run")
       expect(out.target).toBe(42)
     }
   })
@@ -47,7 +47,7 @@ describe("autoDispatchTyped: route variant", () => {
     const out = autoDispatchTyped()
     expect(out.kind).toBe("route")
     if (out.kind === "route") {
-      expect(out.executable).toBe("run")
+      expect(out.implementation).toBe("run")
       expect(out.target).toBe(7)
     }
   })
@@ -163,7 +163,7 @@ describe("autoDispatchTyped: membership gate (access.allowedAssociations)", () =
     })
     const out = autoDispatchTyped({ config: teamOnly })
     expect(out.kind).toBe("route")
-    if (out.kind === "route") expect(out.executable).toBe("run")
+    if (out.kind === "route") expect(out.implementation).toBe("run")
   })
 
   it("silently ignores a blocked association even when the subcommand is real", () => {
@@ -276,7 +276,7 @@ describe("autoDispatchTyped: typo'd command does NOT fall through to default cap
     })
     const out = autoDispatchTyped({ config: { defaultImplementation: "run" } as never })
     expect(out.kind).toBe("route")
-    if (out.kind === "route") expect(out.executable).toBe("run")
+    if (out.kind === "route") expect(out.implementation).toBe("run")
   })
 
   it("falls through to the default for natural-language lead-ins (please/kindly/etc)", () => {
@@ -288,7 +288,7 @@ describe("autoDispatchTyped: typo'd command does NOT fall through to default cap
       })
       const out = autoDispatchTyped({ config: { defaultImplementation: "run" } as never })
       expect(out.kind, `polite word "${polite}"`).toBe("route")
-      if (out.kind === "route") expect(out.executable).toBe("run")
+      if (out.kind === "route") expect(out.implementation).toBe("run")
     }
   })
 
@@ -327,6 +327,6 @@ describe("autoDispatchTyped: typo'd command does NOT fall through to default cap
     })
     const out = autoDispatchTyped({ config: { defaultPrImplementation: "sync" } as never })
     expect(out.kind).toBe("route")
-    if (out.kind === "route") expect(out.executable).toBe("sync")
+    if (out.kind === "route") expect(out.implementation).toBe("sync")
   })
 })

@@ -33,7 +33,6 @@ type ManualOneShotRoute = {
   capability?: string
   workflow?: string
   implementation?: string
-  executable?: string
   cliArgs: Record<string, unknown>
 }
 
@@ -240,8 +239,7 @@ function shouldChainScheduledWatch(match: DispatchResult): boolean {
   return (
     match.action === "goal-scheduler" ||
     match.capability === "goal-scheduler" ||
-    match.implementation === "goal-scheduler" ||
-    match.executable === "goal-scheduler"
+    match.implementation === "goal-scheduler"
   )
 }
 
@@ -458,7 +456,7 @@ export async function runCi(argv: string[]): Promise<number> {
       applyCompanyStoreRuntimeConfig(inputs)
       const issueInput = parseInt(String(inputs?.issue_number ?? ""), 10)
       const sessionInput = String(inputs?.sessionId ?? "")
-      const capabilityInput = String(inputs?.capability ?? inputs?.executable ?? "").trim()
+      const capabilityInput = String(inputs?.capability ?? "").trim()
       const messageInput = String(inputs?.message ?? "").trim()
       const noTarget = !sessionInput && !(Number.isFinite(issueInput) && issueInput > 0)
       // Explicit `capability` + no target → manual one-shot "Run now" of that
@@ -495,15 +493,13 @@ export async function runCi(argv: string[]): Promise<number> {
             (match) =>
               match.action === forceRunAction ||
               match.capability === forceRunAction ||
-              match.implementation === forceRunAction ||
-              match.executable === forceRunAction,
+              match.implementation === forceRunAction,
           )
     const route: ManualOneShotRoute | undefined = manualGoalManager
       ? {
           action: "goal-manager",
           capability: "goal-manager",
           implementation: "goal-manager",
-          executable: "goal-manager",
           cliArgs: forceRunCliArgs,
         }
       : (capabilityRoute ?? workflowRoute ?? scheduledWatchRoute)
@@ -511,7 +507,7 @@ export async function runCi(argv: string[]): Promise<number> {
       process.stderr.write(`[kody] manual one-shot action '${forceRunAction}' has no capability action or workflow\n`)
       return 64
     }
-    if (route.executable === "goal-manager" && typeof forceRunCliArgs.goal !== "string") {
+    if (route.implementation === "goal-manager" && typeof forceRunCliArgs.goal !== "string") {
       process.stderr.write("[kody] manual goal-manager run requires message goal id\n")
       return 64
     }
@@ -699,7 +695,7 @@ export async function runCi(argv: string[]): Promise<number> {
     // the image) and runs no model — so the runner needs neither the
     // consumer's node_modules nor the LiteLLM proxy. Skipping both trims
     // ~1–2 min of otherwise-wasted preflight on the preview path.
-    const buildOnly = dispatch.implementation === "preview-build" || dispatch.executable === "preview-build"
+    const buildOnly = dispatch.implementation === "preview-build"
 
     if (args.skipInstall || buildOnly) {
       process.stdout.write(`→ kody: skipping dep install (${buildOnly ? "build-only executable" : "--skip-install"})\n`)
@@ -827,7 +823,7 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
         mintScheduledJob({
           action: match.action,
           capability: match.capability,
-          implementation: match.implementation ?? match.executable,
+          implementation: match.implementation,
           cliArgs: match.cliArgs,
         }),
         {

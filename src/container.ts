@@ -215,7 +215,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
           preloadedData: preloadedSnapshot,
         })
         emitEvent(input.cwd, {
-          executable: profile.name,
+          implementation: profile.name,
           kind: "container_child",
           name: child.exec,
           durationMs: Date.now() - childStartedAt,
@@ -224,7 +224,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
         })
       } catch (err) {
         emitEvent(input.cwd, {
-          executable: profile.name,
+          implementation: profile.name,
           kind: "container_child",
           name: child.exec,
           durationMs: Date.now() - childStartedAt,

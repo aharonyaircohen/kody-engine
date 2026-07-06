@@ -59,7 +59,7 @@ export async function mcpHttpServer(): Promise<number> {
         verifyToolDefinition({
           config,
           cwd: process.cwd(),
-          executable: "mcp-http",
+          implementation: "mcp-http",
         }),
       ],
     },

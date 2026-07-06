@@ -62,7 +62,7 @@ describe("company store resolution", () => {
 
     const action = listCapabilityActions().find((item) => item.action === "store-capability")
     expect(action?.source).toBe("company-store")
-    expect(action?.executable).toBe("store-exe")
+    expect(action?.implementation).toBe("store-exe")
 
     expect(loadAgentIdentity(consumer, "cto")).toBe("Store CTO agent.")
   })
@@ -83,7 +83,7 @@ describe("company store resolution", () => {
     expect(action).toMatchObject({
       action: "store-capability",
       capability: "store-capability",
-      executable: "store-exe",
+      implementation: "store-exe",
       source: "company-store",
     })
 

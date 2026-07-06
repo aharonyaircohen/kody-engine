@@ -231,7 +231,6 @@ describe("runJob (Phase 1 seam)", () => {
         action: "run",
         capability: "run",
         implementation: "run",
-        executable: "run",
         cliArgs: { issue: 5 },
         target: 5,
         why: "also add tests",
@@ -962,7 +961,6 @@ describe("mintInstantJob (Phase 2)", () => {
     action: "fix",
     capability: "fix",
     implementation: "fix",
-    executable: "fix",
     cliArgs: { pr: 7 },
     target: 7,
   }

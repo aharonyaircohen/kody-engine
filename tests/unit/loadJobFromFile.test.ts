@@ -89,19 +89,19 @@ describe("loadJobFromFile locked-toolbox (tools:)", () => {
     writeAgent("cto")
     writeCapability("dev-ci-health", {
       agent: "cto",
-      tools: ["read_check_runs", "ensure_issue", "dispatch_workflow", "ensure_comment"],
+      tools: ["read_check_runs", "ensure_issue", "start_capability", "ensure_comment"],
     })
 
     const ctx = ctxFor("dev-ci-health")
     const profile = lockedProfile()
     await loadJobFromFile(ctx, profile, {})
 
-    expect(ctx.data.capabilityTools).toEqual(["read_check_runs", "ensure_issue", "dispatch_workflow", "ensure_comment"])
+    expect(ctx.data.capabilityTools).toEqual(["read_check_runs", "ensure_issue", "start_capability", "ensure_comment"])
     const lockedTools = (profile as unknown as { claudeCode: { tools: string[] } }).claudeCode.tools
     expect(lockedTools).toEqual([
       "mcp__kody-capability__read_check_runs",
       "mcp__kody-capability__ensure_issue",
-      "mcp__kody-capability__dispatch_workflow",
+      "mcp__kody-capability__start_capability",
       "mcp__kody-capability__ensure_comment",
       "mcp__kody-submit__submit_state",
     ])

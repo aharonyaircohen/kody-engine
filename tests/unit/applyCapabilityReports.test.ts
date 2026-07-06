@@ -226,7 +226,7 @@ describe("applyCapabilityReports", () => {
 
     expect(ctx.output.nextDispatch).toEqual({
       action: "goal-manager",
-      executable: "goal-manager",
+      implementation: "goal-manager",
       cliArgs: { goal: "web-release-2026-07-03" },
     })
     expect(stagedGoalEvents(ctx.data, "web-release-2026-07-03")).toEqual(
