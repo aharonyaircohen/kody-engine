@@ -158,6 +158,9 @@ function validateFilesForKind(
     requirePath(paths, `capabilities/${slug}/profile.json`, "workflow capability profile", failures)
     const profile = parseJsonFile(files, `capabilities/${slug}/profile.json`, failures)
     if (profile) {
+      if (profile.capabilityKind !== undefined) {
+        failures.push("workflow profile must not declare capabilityKind")
+      }
       const hasWorkflowObject = Boolean(profile.workflow && typeof profile.workflow === "object")
       const hasTopLevelSteps = Array.isArray(profile.steps) && profile.steps.length > 0
       if (!hasWorkflowObject && !hasTopLevelSteps) {
@@ -270,6 +273,9 @@ function validateModelShape(
     }
   }
   if (kind === "workflow") {
+    if (model.capabilityKind !== undefined) {
+      failures.push("workflow model must not declare capabilityKind")
+    }
     if (!Array.isArray(model.steps) || model.steps.length === 0) failures.push("workflow model steps must be non-empty")
   }
 }

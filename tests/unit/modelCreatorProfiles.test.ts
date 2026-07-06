@@ -113,6 +113,8 @@ describe("model creator profiles", () => {
     expect(prompt).toContain(
       "Do not make the goal depend on the workflow by listing the workflow slug as a capability.",
     )
+    expect(prompt).toContain('Workflow models and workflow profiles must not use `"capabilityKind": "workflow"`.')
+    expect(prompt).toContain("Every `files[].content` value must be one JSON string with newlines escaped as `\\n`")
   })
 
   it("keeps capability-creator self-contained on the current profile shape", () => {

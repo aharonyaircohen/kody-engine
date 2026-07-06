@@ -58,6 +58,7 @@ Each `models[]` entry must also carry the creator's canonical model metadata:
 - Goal model `"capabilities"` entries must be slugs of generated `kind: "capability"` models only. Do not put a workflow slug in a goal's `"capabilities"` or `"allowedCapabilities"` list.
 - Loop models use `"kind": "agentLoop"` and include `"wakeTarget": {"type": "goal|workflow|capability", "slug": "target-slug"}`. Use `"wakeTarget"`, not only `"target"`, in `models[]`.
 - Workflow models include non-empty `"steps"` as objects with a `"capability"` slug.
+- Workflow models and workflow profiles must not use `"capabilityKind": "workflow"`. `capabilityKind` only belongs to Capability models and its only valid values are `"observe"`, `"act"`, and `"verify"`.
 - Capability models include `"capabilityKind"`, `"ability"`, `"inputs"`, `"outputs"`, `"allowedActions"`, `"forbiddenActions"`, and `doesNotOwn` includes `"agent identity"` and `"goal progress"`.
 
 When a request asks for both a goal and a workflow, keep them separate:
@@ -92,6 +93,7 @@ Use current storage names when producing files:
 - Put generated file paths relative to the configured state path, for example `capabilities/...`, `agents/...`, `goals/...`, or `memory/...`.
 - Do not create old implementation-root paths. Implementation profiles live in capability folders.
 - Produce complete file contents. Do not describe patches.
+- The `PR_SUMMARY` must be valid JSON. Every `files[].content` value must be one JSON string with newlines escaped as `\n`; never put literal unescaped line breaks inside a JSON string.
 - Prefer a small bundle over a broad framework. Include assumptions in the summary.
 
 # Final Output Contract

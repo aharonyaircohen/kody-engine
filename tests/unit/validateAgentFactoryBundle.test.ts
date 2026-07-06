@@ -103,6 +103,56 @@ describe("validateModelBundle", () => {
     expect(validateModelBundle(workflow, "workflow-creator")).toEqual([])
   })
 
+  it("rejects workflow models that pretend capabilityKind can be workflow", () => {
+    const workflow = bundle({
+      model: {
+        kind: "workflow",
+        slug: "docs-proof-workflow",
+        capabilityKind: "workflow",
+        docsUsed: ["docs/jobs-model.md", "docs/capabilities.md"],
+        steps: [{ capability: "inspect", reason: "inspect first" }],
+      },
+      files: [
+        {
+          path: "capabilities/docs-proof-workflow/profile.json",
+          content: JSON.stringify({
+            name: "docs-proof-workflow",
+            workflow: { steps: [{ capability: "inspect", reason: "inspect first" }] },
+          }),
+        },
+      ],
+    })
+
+    expect(validateModelBundle(workflow, "workflow-creator")).toContain(
+      "workflow model must not declare capabilityKind",
+    )
+  })
+
+  it("rejects workflow profiles that pretend capabilityKind can be workflow", () => {
+    const workflow = bundle({
+      model: {
+        kind: "workflow",
+        slug: "docs-proof-workflow",
+        docsUsed: ["docs/jobs-model.md", "docs/capabilities.md"],
+        steps: [{ capability: "inspect", reason: "inspect first" }],
+      },
+      files: [
+        {
+          path: "capabilities/docs-proof-workflow/profile.json",
+          content: JSON.stringify({
+            name: "docs-proof-workflow",
+            capabilityKind: "workflow",
+            workflow: { steps: [{ capability: "inspect", reason: "inspect first" }] },
+          }),
+        },
+      ],
+    })
+
+    expect(validateModelBundle(workflow, "workflow-creator")).toContain(
+      "workflow profile must not declare capabilityKind",
+    )
+  })
+
   it("accepts agent loops stored under goals state paths", () => {
     const loop = bundle({
       model: {
