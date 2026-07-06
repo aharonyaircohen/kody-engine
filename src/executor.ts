@@ -91,13 +91,8 @@ export function collectShellSideChannels(ctx: Pick<Context, "data" | "output" | 
   }
   const capabilityResults = parseCapabilityResultsFromText(stdout)
   if (capabilityResults.length > 0) {
-    const prior = Array.isArray(ctx.data.capabilityResults)
-      ? ctx.data.capabilityResults
-      : Array.isArray(ctx.data.dutyResults)
-        ? ctx.data.dutyResults
-        : []
+    const prior = Array.isArray(ctx.data.capabilityResults) ? ctx.data.capabilityResults : []
     ctx.data.capabilityResults = [...prior, ...capabilityResults]
-    ctx.data.dutyResults = ctx.data.capabilityResults
   }
 }
 
@@ -979,8 +974,8 @@ function handoffToJob(handoff: {
   saveReport?: boolean
   resultTarget?: Job["resultTarget"]
 }): Job | null {
-  const dutyOrAction = handoff.workflow ?? handoff.action ?? handoff.capability
-  if (!dutyOrAction) return null
+  const capabilityOrAction = handoff.workflow ?? handoff.action ?? handoff.capability
+  if (!capabilityOrAction) return null
   return {
     action: handoff.action ?? handoff.capability,
     capability: handoff.capability,

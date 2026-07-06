@@ -4,7 +4,7 @@ import { type CapabilityResult, parseCapabilityResult, parseCapabilityResultsFro
 import type { PostflightScript, Profile } from "../executables/types.js"
 
 export const evaluateAgencyBoundariesScript: PostflightScript = async (ctx, profile, agentResult) => {
-  const results = collectResults(ctx.data.capabilityResults ?? ctx.data.dutyResults, agentResult)
+  const results = collectResults(ctx.data.capabilityResults, agentResult)
   const capabilityKind = agencyBoundaryCapabilityKind(ctx.data, profile)
   const capability = agencyBoundaryCapability(ctx.data, profile)
   const evalResult = evaluateAgencyBoundaries({

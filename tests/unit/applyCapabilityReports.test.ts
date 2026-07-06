@@ -241,35 +241,6 @@ describe("applyCapabilityReports", () => {
     )
   })
 
-  it("accepts legacy dutyResults as a compatibility alias", async () => {
-    fetchGoalStateMock.mockReturnValueOnce(goalState())
-
-    await applyCapabilityReports(
-      fakeCtx(
-        {
-          dutyResults: [
-            {
-              version: 1,
-              status: "pass",
-              summary: "Release PR exists.",
-              facts: { releasePr: 123 },
-              artifacts: [],
-              missingEvidence: [],
-              blockers: [],
-            },
-          ],
-        },
-        { goal: "release-aguy" },
-      ),
-      fakeProfile(),
-      null,
-    )
-
-    const [, goalId, next] = putGoalStateMock.mock.calls[0]!
-    expect(goalId).toBe("release-aguy")
-    expect((next as GoalState).extra.facts).toEqual({ releasePrExists: true, releasePr: 123 })
-  })
-
   it("merges report and result output before writing one goal evidence event", async () => {
     fetchGoalStateMock.mockReturnValueOnce(goalState())
     const data: Record<string, unknown> = {
