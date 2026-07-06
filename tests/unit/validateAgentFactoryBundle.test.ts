@@ -60,6 +60,69 @@ describe("validateModelBundle", () => {
     expect(validateModelBundle(bundle(), "capability-creator")).toEqual([])
   })
 
+  it("accepts a display name when capability profile slug matches the model", () => {
+    const named = bundle({
+      files: [
+        {
+          path: "capabilities/verify-production-live/profile.json",
+          content: JSON.stringify({
+            slug: "verify-production-live",
+            name: "Verify Production Live",
+            capabilityKind: "verify",
+          }),
+        },
+        {
+          path: "capabilities/verify-production-live/capability.md",
+          content: "# Verify Production Live\n",
+        },
+      ],
+    })
+
+    expect(validateModelBundle(named, "capability-creator")).toEqual([])
+  })
+
+  it("accepts workflow profiles with top-level steps", () => {
+    const workflow = bundle({
+      model: {
+        kind: "workflow",
+        slug: "docs-proof-workflow",
+        docsUsed: ["docs/jobs-model.md", "docs/capabilities.md"],
+        steps: [{ capability: "inspect", reason: "inspect first" }],
+      },
+      files: [
+        {
+          path: "capabilities/docs-proof-workflow/profile.json",
+          content: JSON.stringify({
+            name: "docs-proof-workflow",
+            steps: [{ capability: "inspect", reason: "inspect first" }],
+          }),
+        },
+      ],
+    })
+
+    expect(validateModelBundle(workflow, "workflow-creator")).toEqual([])
+  })
+
+  it("accepts agent loops stored under goals state paths", () => {
+    const loop = bundle({
+      model: {
+        kind: "agentLoop",
+        slug: "daily-docs-proof-loop",
+        docsUsed: ["docs/jobs-model.md", "docs/engine-company.md", "docs/ledgers.md"],
+        cadence: "1d",
+        wakeTarget: { type: "goal", slug: "docs-proof" },
+      },
+      files: [
+        {
+          path: "goals/daily-docs-proof-loop/state.json",
+          content: JSON.stringify({ state: "active" }),
+        },
+      ],
+    })
+
+    expect(validateModelBundle(loop, "loop-creator")).toEqual([])
+  })
+
   it("rejects capability bundles shaped by agent wiring", () => {
     const bad = bundle({
       files: [

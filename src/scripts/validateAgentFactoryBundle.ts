@@ -129,8 +129,12 @@ function validateFilesForKind(
     if (strictSingleModel) rejectOtherRoots(paths, [`capabilities/${slug}/`], "capability", failures)
     const profile = parseJsonFile(files, `capabilities/${slug}/profile.json`, failures)
     if (profile) {
+      const profileSlug = stringField(profile.slug)
       const profileName = stringField(profile.name)
-      if (profileName && profileName !== slug) failures.push("capability profile name must match model.slug")
+      if (profileSlug && profileSlug !== slug) failures.push("capability profile slug must match model.slug")
+      if (!profileSlug && profileName && profileName !== slug) {
+        failures.push("capability profile name must match model.slug when slug is absent")
+      }
       if (profile.agent !== undefined)
         failures.push("capability profile must not set agent; agent wiring belongs outside capability creation")
       if (!["observe", "act", "verify"].includes(stringField(profile.capabilityKind))) {
@@ -147,14 +151,18 @@ function validateFilesForKind(
   if (kind === "agentLoop") {
     if (!paths.some((filePath) => filePath.endsWith("/state.json")))
       failures.push("agentLoop must produce a state.json file")
-    if (strictSingleModel) rejectOtherRoots(paths, ["goals/templates/", "loops/"], "agentLoop", failures)
+    if (strictSingleModel) rejectOtherRoots(paths, ["goals/", "loops/"], "agentLoop", failures)
   }
 
   if (kind === "workflow") {
     requirePath(paths, `capabilities/${slug}/profile.json`, "workflow capability profile", failures)
     const profile = parseJsonFile(files, `capabilities/${slug}/profile.json`, failures)
-    if (profile && (!profile.workflow || typeof profile.workflow !== "object")) {
-      failures.push("workflow profile must include workflow object")
+    if (profile) {
+      const hasWorkflowObject = Boolean(profile.workflow && typeof profile.workflow === "object")
+      const hasTopLevelSteps = Array.isArray(profile.steps) && profile.steps.length > 0
+      if (!hasWorkflowObject && !hasTopLevelSteps) {
+        failures.push("workflow profile must include workflow object or top-level steps")
+      }
     }
   }
 }

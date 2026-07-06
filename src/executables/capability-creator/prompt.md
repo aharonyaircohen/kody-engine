@@ -63,6 +63,8 @@ Required files:
 - `capabilities/<slug>/profile.json`
 - `capabilities/<slug>/capability.md`
 
+In `profile.json`, include `"slug": "<slug>"`. The `"name"` field may be a display name, but if `slug` is absent then `name` must equal the slug.
+
 Add colocated prompt/scripts only if the capability needs a new implementation. Reuse existing capabilities, implementation profiles, skills, or scripts when they fit.
 
 # Final Output Contract

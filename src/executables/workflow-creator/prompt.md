@@ -50,6 +50,8 @@ Do not call Bash, Write, Edit, mkdir, cat, tee, printf, python, node, git, gh, o
 
 Prefer placing workflow steps on the public capability that owns the composed action. Do not create a workflow when a single capability is enough.
 
+Put the workflow contract in `capabilities/<slug>/profile.json`. Prefer a `workflow` object with `steps`; top-level `steps` are only for existing profiles that already use that shape.
+
 # Final Output Contract
 
 If the request is too ambiguous to produce one review-ready Workflow model, output one line:

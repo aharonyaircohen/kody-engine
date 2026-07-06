@@ -38,6 +38,19 @@ Use these contracts when deciding whether a file belongs in the bundle:
 
 If one generated model needs information from another, reference the other model by slug. Do not copy that model's responsibility into the file.
 
+Use these exact model kinds and required file shapes:
+
+| Model kind | Required files |
+| --- | --- |
+| `agent` | `agents/<slug>.md` |
+| `goal` | `goals/templates/<slug>/state.json` |
+| `agentLoop` | a `state.json` under `goals/<slug>/` or `loops/<slug>/` |
+| `workflow` | `capabilities/<slug>/profile.json` containing a `workflow` object or top-level `steps` |
+| `capability` | `capabilities/<slug>/profile.json` and `capabilities/<slug>/capability.md` |
+
+Do not use `kind: "loop"`; the loop model kind is `agentLoop`.
+Do not use `agents/<slug>/identity.json`, `goals/<slug>/goal.json`, `workflows/<slug>/workflow.json`, or `executables/<slug>/...`.
+
 Capability files must be shaped by ability, kind, interface, and constraints. Do not include fields or prose that make the capability depend on who asked for it, which workflow calls it, which goal consumes it, which loop wakes it, or which agent may run it.
 
 Use the current Kody vocabulary:
