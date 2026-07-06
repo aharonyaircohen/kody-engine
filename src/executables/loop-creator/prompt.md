@@ -14,6 +14,8 @@ Read and follow these docs before producing the model:
 - `docs/engine-company.md`
 - `docs/ledgers.md`
 
+These docs are contract references. If the consumer repo does not contain them or `Read` fails, continue from the model boundary below and still list the referenced doc paths in `model.docsUsed`.
+
 # Operator Request
 
 {{issue.body}}
@@ -44,6 +46,8 @@ Do not own:
 # Task
 
 Create the smallest review-ready AgentLoop model that satisfies the requested wakeup behavior.
+
+Do not call Bash, Write, Edit, mkdir, cat, tee, printf, python, node, git, gh, or any external command. Your only mutation channel is `PR_SUMMARY.files`; the deterministic postflight opens the state-repo review PR from that JSON.
 
 Use current storage names in file paths. Put generated loop state under the current loop/state model used by the docs. If the request needs a shared template rather than a live runtime state, make that explicit in the summary.
 

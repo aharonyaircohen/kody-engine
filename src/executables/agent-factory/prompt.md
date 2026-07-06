@@ -22,6 +22,8 @@ Design the smallest Kody model structure that satisfies the request. You may cre
 
 Treat each generated model as if it were produced by its model-specific creator. Do not let the factory invent mixed-responsibility files.
 
+The docs named in the creator contracts are contract references. If the consumer repo does not contain them or `Read` fails, continue from the table below and still list the referenced doc paths in each model's `docsUsed`.
+
 ## Model creator contracts
 
 Use these contracts when deciding whether a file belongs in the bundle:

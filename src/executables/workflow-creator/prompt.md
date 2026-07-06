@@ -13,6 +13,8 @@ Read and follow these docs before producing the model:
 - `docs/jobs-model.md`
 - `docs/capabilities.md`
 
+These docs are contract references. If the consumer repo does not contain them or `Read` fails, continue from the model boundary below and still list the referenced doc paths in `model.docsUsed`.
+
 # Operator Request
 
 {{issue.body}}
@@ -43,6 +45,8 @@ Do not own:
 # Task
 
 Create the smallest review-ready Workflow model that satisfies the requested ordered run behavior.
+
+Do not call Bash, Write, Edit, mkdir, cat, tee, printf, python, node, git, gh, or any external command. Your only mutation channel is `PR_SUMMARY.files`; the deterministic postflight opens the state-repo review PR from that JSON.
 
 Prefer placing workflow steps on the public capability that owns the composed action. Do not create a workflow when a single capability is enough.
 

@@ -93,6 +93,7 @@ describe("model creator profiles", () => {
       expect(prompt).toContain('"docsUsed"')
       expect(prompt).toContain('"model"')
       expect(prompt).toContain("PR_SUMMARY")
+      expect(prompt).toContain("Your only mutation channel is `PR_SUMMARY.files`")
     }
   })
 
@@ -104,6 +105,7 @@ describe("model creator profiles", () => {
       for (const doc of creator.docs) expect(prompt).toContain(doc)
     }
     expect(prompt).toContain("Do not let the factory invent mixed-responsibility files.")
+    expect(prompt).toContain("still list the referenced doc paths")
     expect(prompt).toContain("modelCreatorContractsUsed")
   })
 })
