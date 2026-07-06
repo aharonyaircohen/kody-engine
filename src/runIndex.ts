@@ -308,6 +308,7 @@ function statusFromGoalEvent(event: Record<string, unknown>, decision: Record<st
   if (status === "failure" || status === "failed" || eventName.includes("fail")) return "failed"
   if (status === "cancelled") return "cancelled"
   if (decisionKind === "blocked") return "blocked"
+  if (status === "idle" || decisionKind === "idle" || eventName.includes(".idle")) return "waiting"
   if (status === "running" || status === "dispatch" || decisionKind === "dispatch" || eventName.includes("dispatch"))
     return "running"
   return "recorded"

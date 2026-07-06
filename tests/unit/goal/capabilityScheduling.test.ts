@@ -376,6 +376,88 @@ describe("standing goal capability scheduling", () => {
     }
   })
 
+  it("continues an active goal target instance even when today's loop already dispatched", async () => {
+    const stateRoot = path.join(tmp, "state-repo")
+    writeRepoGoal(stateRoot, "web-release", {
+      state: "done",
+      createdAt: "2026-06-24T00:00:00.000Z",
+      updatedAt: "2026-06-24T01:00:00.000Z",
+      type: "web-release",
+      facts: {},
+      blockers: [],
+    })
+    writeRepoGoal(stateRoot, "web-release-2026-07-06", {
+      state: "active",
+      createdAt: "2026-07-05T23:37:45.000Z",
+      updatedAt: "2026-07-05T23:37:51.000Z",
+      kind: "instance",
+      template: "web-release",
+      sourceTemplate: "web-release",
+      templateId: "web-release",
+      type: "web-release",
+      facts: { pendingEvidence: "releasePrExists" },
+      blockers: [],
+    })
+    const oldPath = process.env.PATH
+    const oldStateRoot = process.env.KODY_TEST_STATE_ROOT
+    const oldNow = process.env.KODY_GOAL_LOOP_NOW
+    process.env.PATH = `${installStateRepoGhStub()}${path.delimiter}${oldPath || ""}`
+    process.env.KODY_TEST_STATE_ROOT = stateRoot
+    process.env.KODY_GOAL_LOOP_NOW = "2026-07-06T11:29:13.000Z"
+
+    try {
+      const raw = goalState([])
+      raw.extra.type = "agentLoop"
+      raw.extra.loopTarget = { type: "goal", id: "web-release" }
+      raw.extra.preferredRunTime = { time: "02:00", timezone: "Asia/Jerusalem" }
+      raw.extra.scheduleState = {
+        mode: "agentLoop",
+        lastGoalTickAt: "2026-07-05T23:37:31.095Z",
+        lastDecision: {
+          kind: "dispatch",
+          targetType: "goal",
+          targetId: "web-release-2026-07-06",
+          action: "goal-manager",
+          executable: "goal-manager",
+          reason: "preferred time 02:00 Asia/Jerusalem",
+          at: "2026-07-05T23:37:31.095Z",
+        },
+        capabilities: {},
+      } satisfies GoalCapabilityScheduleState
+      const ctx = fakeCtx(raw, "daily-web-release-loop")
+      ;(ctx.config as unknown as Record<string, unknown>).state = { repo: "o/r", path: "state" }
+
+      await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+
+      expect(ctx.output.nextDispatch).toEqual({
+        action: "goal-manager",
+        executable: "goal-manager",
+        cliArgs: { goal: "web-release-2026-07-06" },
+      })
+      const updatedGoal = ctx.data.goal as GoalCtx
+      expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({
+        lastDecision: {
+          kind: "dispatch",
+          targetType: "goal",
+          targetId: "web-release-2026-07-06",
+          executable: "goal-manager",
+        },
+      })
+    } finally {
+      process.env.PATH = oldPath
+      if (oldStateRoot === undefined) {
+        delete process.env.KODY_TEST_STATE_ROOT
+      } else {
+        process.env.KODY_TEST_STATE_ROOT = oldStateRoot
+      }
+      if (oldNow === undefined) {
+        delete process.env.KODY_GOAL_LOOP_NOW
+      } else {
+        process.env.KODY_GOAL_LOOP_NOW = oldNow
+      }
+    }
+  })
+
   it("creates a new goal target instance when no active instance exists", async () => {
     const stateRoot = path.join(tmp, "state-repo")
     writeRepoGoal(stateRoot, "web-release", {

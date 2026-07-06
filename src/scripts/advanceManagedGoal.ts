@@ -109,13 +109,14 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     const activeTarget = isGoalTargetLoop(managed)
       ? resolveActiveGoalLoopTarget(ctx.config, ctx.cwd, goal.id, managed)
       : null
-    const allowRepeatAfterCompletedTarget =
-      isGoalTargetLoop(managed) && !activeTarget && previousDispatchWasTargetInstance(managed, previousScheduleState)
+    const allowSameDayTargetDispatch =
+      isGoalTargetLoop(managed) &&
+      (!!activeTarget || previousDispatchWasTargetInstance(managed, previousScheduleState))
     let decision = planTargetLoopSchedule({
       goal: managed,
       previousScheduleState,
       now,
-      allowRepeatAfterCompletedTarget,
+      allowSameDayTargetDispatch,
     })
     let targetResolution: GoalLoopTargetResolution | undefined
     if (decision.kind === "dispatch" && decision.dispatch && isGoalTargetLoop(managed)) {
@@ -125,7 +126,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
         previousScheduleState,
         now,
         resolvedGoalTargetId: targetResolution.targetId,
-        allowRepeatAfterCompletedTarget,
+        allowSameDayTargetDispatch,
       })
     }
     restoreGoalIdFact()

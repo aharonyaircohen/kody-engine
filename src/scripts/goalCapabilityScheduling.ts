@@ -77,7 +77,7 @@ export function planTargetLoopSchedule(opts: {
   now?: Date
   previousScheduleState?: GoalCapabilityScheduleState
   resolvedGoalTargetId?: string
-  allowRepeatAfterCompletedTarget?: boolean
+  allowSameDayTargetDispatch?: boolean
 }): GoalCapabilityScheduleDecision {
   const now = opts.now ?? new Date()
   const at = now.toISOString()
@@ -95,7 +95,7 @@ export function planTargetLoopSchedule(opts: {
   const preferred = opts.goal.preferredRunTime
   if (preferred) {
     const gate = preferredRunTimeGate(preferred, now, opts.previousScheduleState, {
-      allowRepeatAfterCompletedTarget: opts.allowRepeatAfterCompletedTarget === true,
+      allowSameDayTargetDispatch: opts.allowSameDayTargetDispatch === true,
     })
     if (!gate.ok) return targetLoopDecision("idle", gate.reason, at)
   }
@@ -303,7 +303,7 @@ function preferredRunTimeGate(
   preferred: { time: string; timezone: string },
   now: Date,
   previous?: GoalCapabilityScheduleState,
-  opts?: { allowRepeatAfterCompletedTarget?: boolean },
+  opts?: { allowSameDayTargetDispatch?: boolean },
 ): { ok: true } | { ok: false; reason: string } {
   const current = zonedTimeParts(now, preferred.timezone)
   if (!current) return { ok: false, reason: `invalid preferred timezone: ${preferred.timezone}` }
@@ -319,7 +319,7 @@ function preferredRunTimeGate(
   const lastDispatchAt = previous?.lastDecision.kind === "dispatch" ? previous.lastDecision.at : undefined
   if (lastDispatchAt) {
     const last = zonedTimeParts(new Date(lastDispatchAt), preferred.timezone)
-    if (last?.date === current.date && opts?.allowRepeatAfterCompletedTarget !== true) {
+    if (last?.date === current.date && opts?.allowSameDayTargetDispatch !== true) {
       return { ok: false, reason: `already dispatched today at preferred time ${preferred.time} ${preferred.timezone}` }
     }
   }
