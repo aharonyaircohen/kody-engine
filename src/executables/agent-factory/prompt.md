@@ -55,9 +55,17 @@ Each `models[]` entry must also carry the creator's canonical model metadata:
 
 - Agent models include `"owns": ["identity", "judgment", "boundaries"]` and `doesNotOwn` includes `"tasks"`.
 - Goal models include `"outcome"`, non-empty `"evidence"`, and non-empty `"capabilities"`. Use `"capabilities"`, not only `"allowedCapabilities"`, in `models[]`.
+- Goal model `"capabilities"` entries must be slugs of generated `kind: "capability"` models only. Do not put a workflow slug in a goal's `"capabilities"` or `"allowedCapabilities"` list.
 - Loop models use `"kind": "agentLoop"` and include `"wakeTarget": {"type": "goal|workflow|capability", "slug": "target-slug"}`. Use `"wakeTarget"`, not only `"target"`, in `models[]`.
 - Workflow models include non-empty `"steps"` as objects with a `"capability"` slug.
 - Capability models include `"capabilityKind"`, `"ability"`, `"inputs"`, `"outputs"`, `"allowedActions"`, `"forbiddenActions"`, and `doesNotOwn` includes `"agent identity"` and `"goal progress"`.
+
+When a request asks for both a goal and a workflow, keep them separate:
+
+- The goal owns outcome, evidence, and the allowlist of capabilities that can produce evidence.
+- The workflow owns ordered capability steps for one run.
+- The goal may name the capability that produces evidence; the workflow may also use that capability as a step.
+- Do not make the goal depend on the workflow by listing the workflow slug as a capability.
 
 Capability files must be shaped by ability, kind, interface, and constraints. Do not include fields or prose that make the capability depend on who asked for it, which workflow calls it, which goal consumes it, which loop wakes it, or which agent may run it.
 

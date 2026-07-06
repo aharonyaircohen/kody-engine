@@ -107,6 +107,12 @@ describe("model creator profiles", () => {
     expect(prompt).toContain("Do not let the factory invent mixed-responsibility files.")
     expect(prompt).toContain("still list the referenced doc paths")
     expect(prompt).toContain("modelCreatorContractsUsed")
+    expect(prompt).toContain(
+      'Goal model `"capabilities"` entries must be slugs of generated `kind: "capability"` models only.',
+    )
+    expect(prompt).toContain(
+      "Do not make the goal depend on the workflow by listing the workflow slug as a capability.",
+    )
   })
 
   it("keeps capability-creator self-contained on the current profile shape", () => {
