@@ -12,10 +12,12 @@ vi.mock("../../src/stateRepo.js", async (importOriginal) => ({
 }))
 
 import {
+  finalizeStagedRunIndexRows,
   mergeRunIndexRow,
   runIndexPath,
   runIndexRowFromGoalEvents,
   runIndexRowFromJobContext,
+  stageRunIndexFinalization,
   statusFromExitCode,
   upsertRunIndexRow,
 } from "../../src/runIndex.js"
@@ -65,7 +67,7 @@ describe("run index", () => {
     })
   })
 
-  it("normalizes legacy dispatch rows that were stored as running", () => {
+  it("normalizes legacy dispatch rows that were stored as running or waiting", () => {
     const next = mergeRunIndexRow(
       JSON.stringify({
         version: 1,
@@ -82,6 +84,17 @@ describe("run index", () => {
             currentStep: "watching",
             updatedAt: "2026-07-05T10:00:00.000Z",
           },
+          {
+            version: 1,
+            id: "goal:ci-health:run-2",
+            subjectType: "goal",
+            subjectId: "ci-health",
+            status: "waiting",
+            title: "ci-health",
+            decision: "dispatch - dispatch dev-ci-health: ready for loop tick",
+            currentStep: "watching",
+            updatedAt: "2026-07-05T10:30:00.000Z",
+          },
         ],
       }),
       {
@@ -97,7 +110,45 @@ describe("run index", () => {
 
     expect(next.runs[1]).toMatchObject({
       id: "goal:ci-health:run-0",
-      status: "waiting",
+      status: "success",
+    })
+    expect(next.runs[2]).toMatchObject({
+      id: "goal:ci-health:run-2",
+      status: "success",
+    })
+  })
+
+  it("finalizes staged goal rows from the actual engine result", () => {
+    const row = {
+      version: 1 as const,
+      id: "goal:ci-health:run-0",
+      subjectType: "goal" as const,
+      subjectId: "ci-health",
+      status: "running" as const,
+      title: "ci-health",
+      summary: "dispatch dev-ci-health: ready for loop tick",
+      updatedAt: "2026-07-05T10:00:00.000Z",
+    }
+    const data: Record<string, unknown> = {}
+    stageRunIndexFinalization(data, row)
+    stateRepo.readStateText.mockReturnValue({
+      content: JSON.stringify({ version: 1, updatedAt: row.updatedAt, runs: [row] }),
+      sha: "sha-1",
+    })
+
+    finalizeStagedRunIndexRows(config, "/repo", data, {
+      status: "failed",
+      updatedAt: "2026-07-05T10:05:00.000Z",
+      reason: "dev-ci-health failed",
+    })
+
+    const [, , filePath, content] = stateRepo.writeStateText.mock.calls[0]!
+    expect(filePath).toBe(runIndexPath())
+    expect(JSON.parse(String(content)).runs[0]).toMatchObject({
+      id: "goal:ci-health:run-0",
+      status: "failed",
+      summary: "dev-ci-health failed",
+      updatedAt: "2026-07-05T10:05:00.000Z",
     })
   })
 
@@ -193,7 +244,7 @@ describe("run index", () => {
     })
   })
 
-  it("marks dispatch rows as waiting rather than running", () => {
+  it("marks dispatch rows as running until the engine finalizes them", () => {
     const row = runIndexRowFromGoalEvents("ci-health", "logs/goals/ci-health/runs/run.jsonl", [
       {
         time: "2026-07-05T10:00:00.000Z",
@@ -221,7 +272,7 @@ describe("run index", () => {
       id: "loop:ci-health:gh-123-1",
       subjectType: "loop",
       subjectModel: "agentLoop",
-      status: "waiting",
+      status: "running",
       sourceType: "goal-run-log",
       sourcePath: "logs/goals/ci-health/runs/run.jsonl",
       detailUrl: "https://github.com/o/kody-state/blob/main/r/logs/goals/ci-health/runs/run.jsonl",

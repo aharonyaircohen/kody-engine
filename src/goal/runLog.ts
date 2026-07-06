@@ -1,7 +1,7 @@
 import * as fs from "node:fs"
 import type { CapabilityResultArtifact } from "../capabilityResult.js"
 import { appendStateLine, parseStateRepoSlug, resolveStateRepoConfig, type StateRepoConfig } from "../stateRepo.js"
-import { runIndexRowFromGoalEvents, upsertRunIndexRowBestEffort } from "../runIndex.js"
+import { runIndexRowFromGoalEvents, stageRunIndexFinalization, upsertRunIndexRowBestEffort } from "../runIndex.js"
 import type { GoalRouteStep, ManagedGoal } from "./manager.js"
 import { nowIso } from "./state.js"
 
@@ -111,11 +111,9 @@ export function flushGoalRunLogEvents(
     const enrichedEvents = log.events.map((event) => enrichGoalRunLogEvent(config, data, log.path, event))
     const lines = `${enrichedEvents.map((event) => JSON.stringify(event)).join("\n")}\n`
     appendStateLine(config, cwd, log.path, lines, `chore(goal-logs): append ${goalId}`)
-    upsertRunIndexRowBestEffort(
-      config,
-      cwd,
-      runIndexRowFromGoalEvents(goalId, log.path, enrichedEvents as unknown as Record<string, unknown>[]),
-    )
+    const row = runIndexRowFromGoalEvents(goalId, log.path, enrichedEvents as unknown as Record<string, unknown>[])
+    upsertRunIndexRowBestEffort(config, cwd, row)
+    stageRunIndexFinalization(data, row)
     log.events = []
   }
 }

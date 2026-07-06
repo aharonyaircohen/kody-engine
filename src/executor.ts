@@ -25,7 +25,12 @@ import { KODY_NAMESPACE, removeLabel } from "./lifecycleLabels.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
 import { resolveExecutable, resolveExecutableCandidates } from "./registry.js"
-import { runIndexRowFromJobContext, statusFromExitCode, upsertRunIndexRowBestEffort } from "./runIndex.js"
+import {
+  finalizeStagedRunIndexRows,
+  runIndexRowFromJobContext,
+  statusFromExitCode,
+  upsertRunIndexRowBestEffort,
+} from "./runIndex.js"
 import { agentRunDir } from "./runtimePaths.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
 import type { TaskState, TaskTarget } from "./state.js"
@@ -399,6 +404,7 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
     )
     finishRunIndex = (out: ExecutorOutput) => {
       const finishedAt = new Date().toISOString()
+      const status = statusFromExitCode(out.exitCode)
       upsertRunIndexRowBestEffort(
         config,
         input.cwd,
@@ -406,12 +412,17 @@ export async function runExecutable(profileName: string, input: ExecutorInput): 
           data: ctx.data,
           profileName,
           profile,
-          status: statusFromExitCode(out.exitCode),
+          status,
           startedAt: runIndexStartedAt,
           updatedAt: finishedAt,
           reason: out.reason,
         }),
       )
+      finalizeStagedRunIndexRows(config, input.cwd, ctx.data, {
+        status,
+        updatedAt: finishedAt,
+        reason: out.reason,
+      })
     }
   }
 

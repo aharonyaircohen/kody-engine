@@ -49,6 +49,7 @@ export interface RunIndexFile {
 
 const RUN_INDEX_PATH = "runs/index.json"
 const MAX_RUNS = 200
+const STAGED_RUN_INDEX_ROWS_KEY = "__stagedRunIndexRows"
 
 export function runIndexPath(): string {
   return RUN_INDEX_PATH
@@ -89,6 +90,30 @@ export function upsertRunIndexRowBestEffort(
   } catch (err) {
     process.stderr.write(`[kody runs] index update failed: ${err instanceof Error ? err.message : String(err)}\n`)
   }
+}
+
+export function stageRunIndexFinalization(data: Record<string, unknown>, row: RunIndexRow | null): void {
+  if (!row) return
+  const rows = stagedRunIndexRows(data)
+  rows[row.id] = row
+}
+
+export function finalizeStagedRunIndexRows(
+  config: StateRepoConfig,
+  cwd: string | undefined,
+  data: Record<string, unknown>,
+  result: { status: RunIndexStatus; updatedAt: string; reason?: string },
+): void {
+  const rows = stagedRunIndexRows(data)
+  for (const row of Object.values(rows)) {
+    upsertRunIndexRowBestEffort(config, cwd, {
+      ...row,
+      status: result.status,
+      updatedAt: result.updatedAt,
+      summary: result.reason ?? row.summary,
+    })
+  }
+  data[STAGED_RUN_INDEX_ROWS_KEY] = {}
 }
 
 export function mergeRunIndexRow(raw: string | undefined | null, row: RunIndexRow): RunIndexFile {
@@ -248,14 +273,24 @@ function isRunSubjectType(value: unknown): value is RunIndexSubjectType {
   return value === "goal" || value === "loop" || value === "workflow"
 }
 
+function stagedRunIndexRows(data: Record<string, unknown>): Record<string, RunIndexRow> {
+  const value = data[STAGED_RUN_INDEX_ROWS_KEY]
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, RunIndexRow>
+  }
+  const rows: Record<string, RunIndexRow> = {}
+  data[STAGED_RUN_INDEX_ROWS_KEY] = rows
+  return rows
+}
+
 function normalizeRunIndexRow(row: RunIndexRow): RunIndexRow {
   if (
-    row.status === "running" &&
+    (row.status === "running" || row.status === "waiting") &&
     (row.decision?.toLowerCase().startsWith("dispatch") ||
       row.summary?.toLowerCase().startsWith("dispatch") ||
       row.currentStep?.toLowerCase().includes("dispatch"))
   ) {
-    return { ...row, status: "waiting" }
+    return { ...row, status: "success" }
   }
   return row
 }
@@ -273,8 +308,8 @@ function statusFromGoalEvent(event: Record<string, unknown>, decision: Record<st
   if (status === "failure" || status === "failed" || eventName.includes("fail")) return "failed"
   if (status === "cancelled") return "cancelled"
   if (decisionKind === "blocked") return "blocked"
-  if (status === "dispatch" || decisionKind === "dispatch" || eventName.includes("dispatch")) return "waiting"
-  if (status === "running") return "running"
+  if (status === "running" || status === "dispatch" || decisionKind === "dispatch" || eventName.includes("dispatch"))
+    return "running"
   return "recorded"
 }
 
