@@ -260,6 +260,7 @@ describe("run index", () => {
         jobId: "job-1",
         jobFlavor: "instant",
         jobCapability: "release-prepare",
+        jobImplementation: "release-prepare",
         jobExecutable: "release-prepare",
         jobModel: "claude/claude-haiku-4-5-20251001",
         jobModelProvider: "claude",
@@ -276,6 +277,7 @@ describe("run index", () => {
       model: "claude/claude-haiku-4-5-20251001",
       modelProvider: "claude",
       modelName: "claude-haiku-4-5-20251001",
+      implementation: "release-prepare",
       githubRunUrl: "https://github.com/o/r/actions/runs/123",
       triggerMode: "manual",
       actor: "alice",
@@ -295,6 +297,7 @@ describe("run index", () => {
         job: {
           id: "gh-123-1",
           capability: "goal-manager",
+          implementation: "goal-manager",
           executable: "goal-manager",
           model: "claude/claude-haiku-4-5-20251001",
         },
@@ -315,33 +318,38 @@ describe("run index", () => {
       sourcePath: "logs/goals/ci-health/runs/run.jsonl",
       detailUrl: "https://github.com/o/kody-state/blob/main/r/logs/goals/ci-health/runs/run.jsonl",
       model: "claude/claude-haiku-4-5-20251001",
+      implementation: "goal-manager",
       triggerMode: "scheduled",
     })
   })
 
   it("marks idle loop rows as waiting instead of success", () => {
-    const row = runIndexRowFromGoalEvents("daily-web-release-loop", "logs/goals/daily-web-release-loop/runs/run.jsonl", [
-      {
-        time: "2026-07-06T11:30:07.000Z",
-        goalId: "daily-web-release-loop",
-        goalType: "agentLoop",
-        event: "loop.tick.idle",
-        status: "idle",
-        reason: "already dispatched today at preferred time 02:00 Asia/Jerusalem",
-        decision: {
-          kind: "idle",
+    const row = runIndexRowFromGoalEvents(
+      "daily-web-release-loop",
+      "logs/goals/daily-web-release-loop/runs/run.jsonl",
+      [
+        {
+          time: "2026-07-06T11:30:07.000Z",
+          goalId: "daily-web-release-loop",
+          goalType: "agentLoop",
+          event: "loop.tick.idle",
+          status: "idle",
           reason: "already dispatched today at preferred time 02:00 Asia/Jerusalem",
+          decision: {
+            kind: "idle",
+            reason: "already dispatched today at preferred time 02:00 Asia/Jerusalem",
+          },
+          run: { id: "gh-28788241519-1-1", githubRunId: "28788241519", githubRunAttempt: "1" },
+          trigger: { kind: "manual-workflow-dispatch", githubActor: "aguyaharonyair" },
+          job: {
+            id: "gh-28788241519-1-1",
+            action: "goal-manager",
+            capability: "goal-manager",
+            executable: "goal-manager",
+          },
         },
-        run: { id: "gh-28788241519-1-1", githubRunId: "28788241519", githubRunAttempt: "1" },
-        trigger: { kind: "manual-workflow-dispatch", githubActor: "aguyaharonyair" },
-        job: {
-          id: "gh-28788241519-1-1",
-          action: "goal-manager",
-          capability: "goal-manager",
-          executable: "goal-manager",
-        },
-      },
-    ])
+      ],
+    )
 
     expect(row).toMatchObject({
       id: "loop:daily-web-release-loop:gh-28788241519-1-1",

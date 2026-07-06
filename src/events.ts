@@ -23,6 +23,7 @@ export type EventKind =
 export interface RunEvent {
   ts: string
   runId: string
+  implementation?: string
   executable: string
   kind: EventKind
   /** Script name for preflight/postflight, child name for container_child. */
@@ -68,10 +69,15 @@ export function emitEvent(cwd: string, ev: Omit<RunEvent, "ts" | "runId">): void
   if (process.env.KODY_EVENTS === "0") return
   try {
     const runId = resolveRunId()
+    const implementation =
+      typeof (ev as { implementation?: unknown }).implementation === "string"
+        ? (ev as { implementation: string }).implementation
+        : ev.executable
     const fullEvent: RunEvent = {
       ts: new Date().toISOString(),
       runId,
       ...ev,
+      implementation,
     }
     const file = eventsPath(cwd, runId)
     fs.mkdirSync(path.dirname(file), { recursive: true })

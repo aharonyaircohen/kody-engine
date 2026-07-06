@@ -12,6 +12,7 @@ const { gh, runExecutableChain } = vi.hoisted(() => ({
 vi.mock("../../src/executor.js", () => ({ runExecutableChain }))
 vi.mock("../../src/issue.js", () => ({ gh }))
 
+import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import {
   DEFAULT_INSTANT_AGENT,
   InvalidJobError,
@@ -21,7 +22,6 @@ import {
   runJob,
   validateJob,
 } from "../../src/job.js"
-import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 
 describe("runJob (Phase 1 seam)", () => {
   beforeEach(() => {
@@ -79,6 +79,18 @@ describe("runJob (Phase 1 seam)", () => {
     expect(input.cliArgs).toEqual({ issue: 42 })
     expect(input.preloadedData?.jobAction).toBe("run")
     expect(input.preloadedData?.jobCapability).toBe("run")
+    expect(input.preloadedData?.jobImplementation).toBe("run")
+    expect(input.preloadedData?.jobExecutable).toBe("run")
+  })
+
+  it("accepts implementation as the selected profile and writes both metadata fields", async () => {
+    await runJob(
+      { capability: "run", implementation: "run", target: 42, cliArgs: { issue: 42 }, flavor: "instant" },
+      { cwd: "/x" },
+    )
+    const [profile, input] = runExecutableChain.mock.calls[0]!
+    expect(profile).toBe("run")
+    expect(input.preloadedData?.jobImplementation).toBe("run")
     expect(input.preloadedData?.jobExecutable).toBe("run")
   })
 
@@ -105,6 +117,7 @@ describe("runJob (Phase 1 seam)", () => {
     expect(profile).toBe("ci-check")
     expect(input.cliArgs).toEqual({ pr: 456, goal: "release-aguy", evidence: "mainDeployPrGreen" })
     expect(input.preloadedData?.jobCapability).toBe("ci-health")
+    expect(input.preloadedData?.jobImplementation).toBe("ci-check")
     expect(input.preloadedData?.jobExecutable).toBe("ci-check")
   })
 
@@ -178,6 +191,7 @@ describe("runJob (Phase 1 seam)", () => {
     expect(typeof input.preloadedData?.jobId).toBe("string")
     expect(input.preloadedData?.jobKey).toBe("instant:run:42")
     expect(input.preloadedData?.jobFlavor).toBe("instant")
+    expect(input.preloadedData?.jobImplementation).toBe("run")
     expect(input.preloadedData?.jobExecutable).toBe("run")
     expect(input.preloadedData?.jobTarget).toBe(42)
   })
@@ -333,6 +347,7 @@ describe("runJob (Phase 1 seam)", () => {
         workflowStepIndex: 1,
         workflowStepCount: 2,
         jobCapability: "reproduce",
+        jobImplementation: "reproduce",
         jobExecutable: "reproduce",
       })
       expect(runExecutableChain.mock.calls[0]![1].preloadedData?.jobWhy).toContain("operator note")
@@ -346,6 +361,7 @@ describe("runJob (Phase 1 seam)", () => {
         workflowStepIndex: 2,
         workflowStepCount: 2,
         jobCapability: "run",
+        jobImplementation: "run",
         jobExecutable: "run",
       })
     } finally {
@@ -420,6 +436,7 @@ describe("runJob (Phase 1 seam)", () => {
         workflowCapability: "feature",
         workflowStep: "run",
         jobCapability: "run",
+        jobImplementation: "run",
         jobExecutable: "run",
       })
     } finally {
@@ -669,9 +686,12 @@ describe("runJob (Phase 1 seam)", () => {
         },
       )
 
-      expect(gh).toHaveBeenCalledWith(["api", "/repos/o/kody-state/contents/r/workflows/web-release/workflow.json?ref=main"], {
-        cwd,
-      })
+      expect(gh).toHaveBeenCalledWith(
+        ["api", "/repos/o/kody-state/contents/r/workflows/web-release/workflow.json?ref=main"],
+        {
+          cwd,
+        },
+      )
       expect(runExecutableChain).toHaveBeenCalledTimes(2)
       expect(runExecutableChain.mock.calls[0]![0]).toBe("release-prepare")
       expect(runExecutableChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42, prefer: "ours" })
@@ -940,12 +960,20 @@ function taskState(type: string, prUrl?: string): Record<string, unknown> {
 }
 
 describe("mintInstantJob (Phase 2)", () => {
-  const dispatch = { action: "fix", capability: "fix", executable: "fix", cliArgs: { pr: 7 }, target: 7 }
+  const dispatch = {
+    action: "fix",
+    capability: "fix",
+    implementation: "fix",
+    executable: "fix",
+    cliArgs: { pr: 7 },
+    target: 7,
+  }
 
   it("maps a DispatchResult to an instant job", () => {
     const job = mintInstantJob(dispatch, { why: "fix the typo" })
     expect(job).toMatchObject({
       executable: "fix",
+      implementation: "fix",
       capability: "fix",
       target: 7,
       cliArgs: { pr: 7 },
@@ -974,6 +1002,7 @@ describe("mintScheduledJob (Phase 2)", () => {
     const job = mintScheduledJob({
       capability: "stale-prs",
       executable: "capability-tick",
+      implementation: "capability-tick",
       schedule: "*/5 * * * *",
       agent: "kody",
       cliArgs: { capability: "stale-prs" },
@@ -1005,6 +1034,7 @@ describe("mintScheduledJob (Phase 2)", () => {
     expect(input.preloadedData?.jobSchedule).toBe("7d")
     expect(input.preloadedData?.jobFlavor).toBe("scheduled")
     expect(input.preloadedData?.jobCapability).toBe("capability-tick")
+    expect(input.preloadedData?.jobImplementation).toBe("capability-tick")
     expect(input.preloadedData?.jobExecutable).toBe("capability-tick")
   })
 

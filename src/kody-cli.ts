@@ -32,6 +32,7 @@ type ManualOneShotRoute = {
   action?: string
   capability?: string
   workflow?: string
+  implementation?: string
   executable?: string
   cliArgs: Record<string, unknown>
 }
@@ -237,7 +238,10 @@ export function detectPackageManager(cwd: string): PackageManager {
 
 function shouldChainScheduledWatch(match: DispatchResult): boolean {
   return (
-    match.action === "goal-scheduler" || match.capability === "goal-scheduler" || match.executable === "goal-scheduler"
+    match.action === "goal-scheduler" ||
+    match.capability === "goal-scheduler" ||
+    match.implementation === "goal-scheduler" ||
+    match.executable === "goal-scheduler"
   )
 }
 
@@ -488,12 +492,17 @@ export async function runCi(argv: string[]): Promise<number> {
       manualGoalManager || capabilityRoute || workflowRoute
         ? undefined
         : dispatchScheduledWatches({ force: true }).find(
-            (match) => match.action === forceRunAction || match.executable === forceRunAction,
+            (match) =>
+              match.action === forceRunAction ||
+              match.capability === forceRunAction ||
+              match.implementation === forceRunAction ||
+              match.executable === forceRunAction,
           )
     const route: ManualOneShotRoute | undefined = manualGoalManager
       ? {
           action: "goal-manager",
           capability: "goal-manager",
+          implementation: "goal-manager",
           executable: "goal-manager",
           cliArgs: forceRunCliArgs,
         }
@@ -541,6 +550,7 @@ export async function runCi(argv: string[]): Promise<number> {
         action: route.action,
         capability: route.capability,
         workflow: route.workflow,
+        implementation: route.implementation ?? route.executable,
         executable: route.executable,
         cliArgs: { ...route.cliArgs, ...forceRunCliArgs },
         flavor: "instant",
@@ -672,7 +682,7 @@ export async function runCi(argv: string[]): Promise<number> {
   const issueNumber = dispatch.target
 
   process.stdout.write(
-    `→ kody preflight (cwd=${cwd}, action=${dispatch.action}, capability=${dispatch.capability}, executable=${dispatch.executable}, target=${issueNumber})\n`,
+    `→ kody preflight (cwd=${cwd}, action=${dispatch.action}, capability=${dispatch.capability}, implementation=${dispatch.implementation}, target=${issueNumber})\n`,
   )
 
   try {
@@ -690,7 +700,7 @@ export async function runCi(argv: string[]): Promise<number> {
     // the image) and runs no model — so the runner needs neither the
     // consumer's node_modules nor the LiteLLM proxy. Skipping both trims
     // ~1–2 min of otherwise-wasted preflight on the preview path.
-    const buildOnly = dispatch.executable === "preview-build"
+    const buildOnly = dispatch.implementation === "preview-build" || dispatch.executable === "preview-build"
 
     if (args.skipInstall || buildOnly) {
       process.stdout.write(`→ kody: skipping dep install (${buildOnly ? "build-only executable" : "--skip-install"})\n`)
@@ -722,7 +732,7 @@ export async function runCi(argv: string[]): Promise<number> {
     return 99
   }
 
-  process.stdout.write(`→ kody: preflight done, handing off to kody ${dispatch.executable}\n\n`)
+  process.stdout.write(`→ kody: preflight done, handing off to kody ${dispatch.implementation}\n\n`)
 
   try {
     const config = earlyConfig ?? loadConfig(cwd)
@@ -770,7 +780,7 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
     return 0
   }
 
-  const names = matches.map((m) => `${m.capability}→${m.executable}`).join(", ")
+  const names = matches.map((m) => `${m.capability}→${m.implementation}`).join(", ")
   process.stdout.write(`→ kody: scheduled wake — firing ${matches.length} watch capability/ies: ${names}\n`)
 
   try {
@@ -812,12 +822,13 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
   // restore the legacy behaviour while the new mode bakes in.
   const serial = process.env.KODY_SERIAL_WATCHES === "1"
   const runWatch = async (match: DispatchResult): Promise<number> => {
-    process.stdout.write(`\n→ kody: running watch capability \`${match.capability}\` (${match.executable})\n`)
+    process.stdout.write(`\n→ kody: running watch capability \`${match.capability}\` (${match.implementation})\n`)
     try {
       const result = await runJob(
         mintScheduledJob({
           action: match.action,
           capability: match.capability,
+          implementation: match.implementation,
           executable: match.executable,
           cliArgs: match.cliArgs,
         }),

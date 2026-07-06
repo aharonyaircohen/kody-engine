@@ -11,8 +11,8 @@
  */
 
 import * as path from "node:path"
-import type { CapabilityFolder, CapabilityWorkflowConfig, CapabilityWorkflowStepConfig } from "./capabilityFolders.js"
 import { evaluateAgencyBoundaries } from "./agencyBoundaryEval.js"
+import type { CapabilityFolder, CapabilityWorkflowConfig, CapabilityWorkflowStepConfig } from "./capabilityFolders.js"
 import type { KodyConfig } from "./config.js"
 import type { DispatchResult } from "./dispatch.js"
 import type { CapabilityResultTarget, Job, JobFlavor } from "./executables/types.js"
@@ -83,7 +83,18 @@ export function validateJob(input: unknown): Job {
   }
   return {
     action: typeof j.action === "string" ? j.action : undefined,
-    executable: typeof j.executable === "string" ? j.executable : undefined,
+    implementation:
+      typeof j.implementation === "string"
+        ? j.implementation
+        : typeof j.executable === "string"
+          ? j.executable
+          : undefined,
+    executable:
+      typeof j.executable === "string"
+        ? j.executable
+        : typeof j.implementation === "string"
+          ? j.implementation
+          : undefined,
     capability: typeof j.capability === "string" ? j.capability : undefined,
     workflow: typeof j.workflow === "string" ? j.workflow : undefined,
     why: typeof j.why === "string" ? j.why : undefined,
@@ -133,7 +144,7 @@ export interface RunJobBase {
  *
  * Mapping:
  *   - capability/action resolves first             (the public capability contract)
- *   - profile = job.executable ?? capability.executable (the implementation)
+ *   - profile = job.implementation ?? compatibility alias ?? capability implementation
  *   - cliArgs = job.cliArgs                   (target already bound by the minter)
  *   - capability/executable → preloadedData          (seeded so the executor can
  *                                              expose the job references to
@@ -159,11 +170,12 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     : !capabilityContext && !resolvedCapability
       ? loadWorkflowContext(capabilityIdentity ?? action, base)
       : null
-  const explicitExecutableOnly =
-    valid.executable !== undefined &&
-    (valid.action === undefined || valid.action === valid.executable) &&
-    (valid.capability === undefined || valid.capability === valid.executable)
-  if (!resolvedCapability && !capabilityContext && !workflowContext && !explicitExecutableOnly) {
+  const explicitImplementation = valid.implementation ?? valid.executable
+  const explicitImplementationOnly =
+    explicitImplementation !== undefined &&
+    (valid.action === undefined || valid.action === explicitImplementation) &&
+    (valid.capability === undefined || valid.capability === explicitImplementation)
+  if (!resolvedCapability && !capabilityContext && !workflowContext && !explicitImplementationOnly) {
     throw new InvalidJobError(
       `job capability/workflow not found: ${valid.workflow ?? action ?? valid.capability ?? "<none>"}`,
     )
@@ -171,15 +183,19 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
 
   const workflow = capabilityContext?.config.workflow ?? workflowContext?.config.workflow
   const workflowIdentity = valid.workflow ?? capabilityIdentity ?? workflowContext?.slug
-  const capabilitySelectedExecutable =
-    resolvedCapability?.executable ??
+  const capabilitySelectedImplementation =
+    resolvedCapability?.implementation ??
     capabilityContext?.config.implementation ??
     capabilityContext?.config.executable ??
+    capabilityContext?.config.implementations?.[0] ??
     capabilityContext?.config.executables?.[0] ??
     (capabilityContext?.config.role ? capabilityContext.slug : undefined) ??
     (capabilityContext?.config.tickScript ? "capability-tick-scripted" : undefined)
-  const profileName = valid.executable ?? capabilitySelectedExecutable
-  if (workflow && shouldRunCapabilityWorkflow(valid, workflow, workflowIdentity, capabilitySelectedExecutable, base)) {
+  const profileName = explicitImplementation ?? capabilitySelectedImplementation
+  if (
+    workflow &&
+    shouldRunCapabilityWorkflow(valid, workflow, workflowIdentity, capabilitySelectedImplementation, base)
+  ) {
     const workflowCapability = capabilityContext ?? workflowContext!
     const workflowJob = workflowContext && !valid.why ? { ...valid, why: workflowContext.body } : valid
     return runCapabilityWorkflow(workflowJob, workflow, workflowCapability, base)
@@ -235,6 +251,7 @@ async function runCapabilityImplementationStep(
   if (valid.action !== undefined && valid.action.length > 0) preloadedData.jobAction = valid.action
   if (capabilityIdentity !== undefined && capabilityIdentity.length > 0)
     preloadedData.jobCapability = capabilityIdentity
+  preloadedData.jobImplementation = profileName
   preloadedData.jobExecutable = profileName
   // The job carries *when*: a scheduled job's cadence, recorded in the ledger.
   if (valid.schedule !== undefined && valid.schedule.length > 0) preloadedData.jobSchedule = valid.schedule
@@ -243,7 +260,8 @@ async function runCapabilityImplementationStep(
   if (capabilityContext) {
     preloadedData.capabilitySlug = capabilityContext.slug
     preloadedData.capabilityTitle = capabilityContext.title
-    if (capabilityContext.config.capabilityKind) preloadedData.jobCapabilityKind = capabilityContext.config.capabilityKind
+    if (capabilityContext.config.capabilityKind)
+      preloadedData.jobCapabilityKind = capabilityContext.config.capabilityKind
     preloadedData.capabilityIntent = capabilityContext.body
     preloadedData.dutyIntent = capabilityContext.body
     preloadedData.jobIntent = capabilityContext.body
@@ -272,7 +290,10 @@ async function runCapabilityImplementationStep(
     preloadedData: Object.keys(preloadedData).length > 0 ? preloadedData : undefined,
   }
   const shouldApplyResolvedCapabilityArgs =
-    valid.executable === undefined && resolvedCapability && profileName === resolvedCapability.executable
+    valid.implementation === undefined &&
+    valid.executable === undefined &&
+    resolvedCapability &&
+    profileName === resolvedCapability.implementation
   input.cliArgs = shouldApplyResolvedCapabilityArgs
     ? { ...resolvedCapability.cliArgs, ...input.cliArgs }
     : input.cliArgs
@@ -294,8 +315,13 @@ function shouldRunCapabilityWorkflow(
     ? (base.preloadedData.workflowStack as unknown[]).filter((entry): entry is string => typeof entry === "string")
     : []
   if (stack.includes(capabilityIdentity)) return false
-  if (!job.executable) return true
-  return job.executable === selectedExecutable || job.executable === capabilityIdentity || job.executable === job.action
+  const requestedImplementation = job.implementation ?? job.executable
+  if (!requestedImplementation) return true
+  return (
+    requestedImplementation === selectedExecutable ||
+    requestedImplementation === capabilityIdentity ||
+    requestedImplementation === job.action
+  )
 }
 
 async function runCapabilityWorkflow(
@@ -416,6 +442,7 @@ function workflowStepToJob(step: CapabilityWorkflowStepConfig, parent: Job, chai
   return {
     action,
     capability: step.capability,
+    ...(step.implementation ? { implementation: step.implementation } : {}),
     ...(step.executable ? { executable: step.executable } : {}),
     ...(composeStepWhy(parent.why, step) ? { why: composeStepWhy(parent.why, step) } : {}),
     ...((step.agent ?? parent.agent) ? { agent: step.agent ?? parent.agent } : {}),
@@ -553,6 +580,7 @@ function loadWorkflowContext(slug: string | undefined, base: RunJobBase): Capabi
 export function mintInstantJob(dispatch: DispatchResult, opts?: { why?: string; agent?: string }): Job {
   return {
     action: dispatch.action,
+    implementation: dispatch.implementation ?? dispatch.executable,
     executable: dispatch.executable,
     capability: dispatch.capability,
     why: opts?.why ?? dispatch.why,
@@ -569,7 +597,9 @@ export interface ScheduledJobInput {
   action?: string
   /** The capability slug (its capability contract body lives in `.kody/capabilities/<slug>/capability.md`). */
   capability: string
-  /** The executable that ticks it (capability-tick / capability-tick-scripted, or a folder-capability slug). */
+  /** The implementation that ticks it (capability-tick / capability-tick-scripted, or a folder-capability slug). */
+  implementation?: string
+  /** Legacy compatibility copy of `implementation`. */
   executable: string
   /** Cron cadence the capability fired on. */
   schedule?: string
@@ -590,6 +620,7 @@ export function mintScheduledJob(input: ScheduledJobInput): Job {
   return {
     action: input.action,
     capability: input.capability,
+    implementation: input.implementation ?? input.executable,
     executable: input.executable,
     schedule: input.schedule,
     agent: input.agent,

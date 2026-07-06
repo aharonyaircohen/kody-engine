@@ -32,11 +32,11 @@ import {
   upsertRunIndexRowBestEffort,
 } from "./runIndex.js"
 import { agentRunDir } from "./runtimePaths.js"
+import { shouldEvaluateAgencyBoundaries } from "./scripts/evaluateAgencyBoundaries.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
 import type { TaskState, TaskTarget } from "./state.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
 import { loadSubagents } from "./subagents.js"
-import { shouldEvaluateAgencyBoundaries } from "./scripts/evaluateAgencyBoundaries.js"
 import {
   persistTaskArtifactsToState,
   prepareTaskArtifactsDir,
@@ -131,13 +131,15 @@ export function operatorRequestBlock(why: string): string | null {
  */
 export function jobReferenceBlock(
   profileName: string,
-  profile: Pick<Profile, "name" | "describe" | "agent" | "executable">,
+  profile: Pick<Profile, "name" | "describe" | "agent" | "implementation" | "executable">,
   data: Record<string, unknown>,
 ): string | null {
   const jobId = typeof data.jobId === "string" && data.jobId.length > 0 ? data.jobId : null
   const flavor = typeof data.jobFlavor === "string" && data.jobFlavor.length > 0 ? data.jobFlavor : null
   const schedule = typeof data.jobSchedule === "string" && data.jobSchedule.length > 0 ? data.jobSchedule : null
-  const isJob = Boolean(jobId || flavor || schedule || data.jobCapability || data.jobExecutable || data.jobWhy)
+  const isJob = Boolean(
+    jobId || flavor || schedule || data.jobCapability || data.jobImplementation || data.jobExecutable || data.jobWhy,
+  )
   if (!isJob) return null
 
   const capability =
@@ -146,12 +148,16 @@ export function jobReferenceBlock(
       : profile.executable
         ? profile.name
         : null
-  const executable =
-    typeof profile.executable === "string" && profile.executable.length > 0
-      ? profile.executable
-      : typeof data.jobExecutable === "string" && data.jobExecutable.length > 0
-        ? data.jobExecutable
-        : profileName
+  const implementation =
+    typeof profile.implementation === "string" && profile.implementation.length > 0
+      ? profile.implementation
+      : typeof profile.executable === "string" && profile.executable.length > 0
+        ? profile.executable
+        : typeof data.jobImplementation === "string" && data.jobImplementation.length > 0
+          ? data.jobImplementation
+          : typeof data.jobExecutable === "string" && data.jobExecutable.length > 0
+            ? data.jobExecutable
+            : profileName
   const agent =
     typeof profile.agent === "string" && profile.agent.length > 0
       ? profile.agent
@@ -180,7 +186,7 @@ export function jobReferenceBlock(
     `- Flavor: ${flavor ?? "(unavailable)"}`,
     ...(schedule ? [`- Schedule: ${schedule}`] : []),
     `- Capability: ${capability ?? "(none)"}`,
-    `- Executable: ${executable}`,
+    `- Implementation: ${implementation}`,
     `- Agent: ${agent ?? "(none)"}`,
     `- Description: ${description || "(none)"}`,
     ...(workflow ? [`- Workflow: ${workflow}`] : []),
@@ -245,6 +251,7 @@ export interface ExecutorOutput {
     action?: string
     capability?: string
     workflow?: string
+    implementation?: string
     executable?: string
     cliArgs: Record<string, unknown>
     saveReport?: boolean
@@ -256,6 +263,7 @@ export interface ExecutorOutput {
     action?: string
     capability?: string
     workflow?: string
+    implementation?: string
     executable?: string
     cliArgs: Record<string, unknown>
     saveReport?: boolean
@@ -821,7 +829,8 @@ function postflightEntriesForRun(profile: Profile, ctx: Context): ScriptEntry[] 
     return [...entries.slice(0, afterParser + 1), evalEntry, ...entries.slice(afterParser + 1)]
   }
   const beforeStateChange = entries.findIndex(
-    (entry) => isMutatingPostflight(entry.script) || entry.script === "writeJobStateFile" || entry.script === "saveTaskState",
+    (entry) =>
+      isMutatingPostflight(entry.script) || entry.script === "writeJobStateFile" || entry.script === "saveTaskState",
   )
   if (beforeStateChange >= 0) {
     return [...entries.slice(0, beforeStateChange), evalEntry, ...entries.slice(beforeStateChange)]
@@ -964,6 +973,7 @@ function handoffToJob(handoff: {
   action?: string
   capability?: string
   workflow?: string
+  implementation?: string
   executable?: string
   cliArgs: Record<string, unknown>
   saveReport?: boolean
@@ -975,6 +985,7 @@ function handoffToJob(handoff: {
     action: handoff.action ?? handoff.capability,
     capability: handoff.capability,
     workflow: handoff.workflow,
+    implementation: handoff.implementation ?? handoff.executable,
     executable: handoff.executable,
     cliArgs: handoff.cliArgs,
     flavor: "instant",

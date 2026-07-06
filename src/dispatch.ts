@@ -39,7 +39,9 @@ export interface DispatchResult {
   action: string
   /** Capability slug that owns the action. */
   capability: string
-  /** Implementation executable selected by the capability. */
+  /** Implementation profile selected by the capability. */
+  implementation?: string
+  /** Legacy compatibility copy of `implementation`. */
   executable: string
   cliArgs: Record<string, unknown>
   target: number
@@ -95,6 +97,7 @@ function routeResult(
   const result: DispatchResult = {
     action: route.action,
     capability: route.capability,
+    implementation: route.implementation,
     executable: route.executable,
     cliArgs: { ...route.cliArgs, ...cliArgs },
     target,
@@ -174,7 +177,7 @@ export function autoDispatch(opts?: {
       // (`run` → `issue`, `resolve`/`sync`/`fix-ci` → `pr`). Hardcoding `issue`
       // here used to make PR primitives reject the dispatched run with
       // "unknown arg: --issue", silently breaking pr-health auto-runs.
-      const targetKey = primaryNumericInputName(route.executable) ?? "issue"
+      const targetKey = primaryNumericInputName(route.implementation) ?? "issue"
       const cliArgs: Record<string, unknown> = { [targetKey]: n }
       if (base) cliArgs.base = base
       return routeResult(route, cliArgs, n)
@@ -214,7 +217,7 @@ export function autoDispatch(opts?: {
         // Bind the PR number under the target's first required int input
         // (preview-build → `pr`); falls back to `pr` if the profile is
         // missing, mirroring the workflow_dispatch numeric-input binding.
-        const targetKey = primaryNumericInputName(route.executable) ?? "pr"
+        const targetKey = primaryNumericInputName(route.implementation) ?? "pr"
         return routeResult(route, { [targetKey]: prNum }, prNum)
       }
     }
@@ -325,7 +328,7 @@ export function autoDispatch(opts?: {
   // Inputs drive arg parsing and injection. If the profile isn't registered
   // (e.g. a consumer-configured default pointing at something not bundled),
   // fall back to event-shape injection so context isn't silently dropped.
-  const inputs = getProfileInputs(route.executable)
+  const inputs = getProfileInputs(route.implementation)
   const effectiveInputs = inputs ?? []
   const unknownProfile = inputs === null
   const rest = extractCommentRest(afterTag, consumedFirstToken ? firstToken : null)
@@ -506,6 +509,7 @@ export function dispatchScheduledWatches(opts?: { now?: Date; windowSec?: number
         : {
             action: exe.name,
             capability: exe.name,
+            implementation: exe.name,
             executable: exe.name,
             cliArgs: {},
             target: 0,
@@ -538,13 +542,18 @@ function objectValue(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : undefined
 }
 
-function isReleasePullRequest(pullRequest: Record<string, unknown> | undefined, config: KodyConfig | undefined): boolean {
+function isReleasePullRequest(
+  pullRequest: Record<string, unknown> | undefined,
+  config: KodyConfig | undefined,
+): boolean {
   const head = objectValue(pullRequest?.head)
   const base = objectValue(pullRequest?.base)
   const ref = typeof head?.ref === "string" ? head.ref : ""
   if (ref.startsWith("release/")) return true
   const baseRef = typeof base?.ref === "string" ? base.ref : ""
-  return !!config?.release?.releaseBranch && ref === config.git?.defaultBranch && baseRef === config.release.releaseBranch
+  return (
+    !!config?.release?.releaseBranch && ref === config.git?.defaultBranch && baseRef === config.release.releaseBranch
+  )
 }
 
 /**

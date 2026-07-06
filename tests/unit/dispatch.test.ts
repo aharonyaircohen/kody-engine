@@ -57,6 +57,7 @@ describe("dispatch: explicit override", () => {
     expect(r).toEqual({
       action: "run",
       capability: "run",
+      implementation: "run",
       executable: "run",
       cliArgs: { issue: 42 },
       target: 42,
@@ -88,6 +89,7 @@ describe("dispatch: workflow_dispatch event", () => {
     expect(autoDispatch()).toEqual({
       action: "run",
       capability: "run",
+      implementation: "run",
       executable: "run",
       cliArgs: { issue: 17 },
       target: 17,
@@ -102,6 +104,7 @@ describe("dispatch: workflow_dispatch event", () => {
     expect(autoDispatch()).toEqual({
       action: "run",
       capability: "run",
+      implementation: "run",
       executable: "run",
       cliArgs: { issue: 42, base: "11-x" },
       target: 42,
@@ -121,6 +124,7 @@ describe("dispatch: workflow_dispatch event", () => {
       expect(autoDispatch()).toEqual({
         action: "release",
         capability: "release",
+        implementation: "release",
         executable: "release",
         cliArgs: { issue: 291 },
         target: 291,
@@ -144,6 +148,7 @@ describe("dispatch: workflow_dispatch event", () => {
       expect(autoDispatch()).toEqual({
         action: "run",
         capability: "run",
+        implementation: "run",
         executable: "run",
         cliArgs: { issue: 291 },
         target: 291,
@@ -206,6 +211,7 @@ describe("dispatch: schedule event", () => {
         expect.objectContaining({
           action: "goal-scheduler",
           capability: "goal-scheduler",
+          implementation: "goal-scheduler",
           executable: "goal-scheduler",
           cliArgs: {},
           target: 0,
@@ -240,6 +246,7 @@ describe("dispatch: pull_request event", () => {
     expect(autoDispatch({ config: testConfig({ onPullRequest: "preview-build" }) })).toEqual({
       action: "preview-build",
       capability: "preview-build",
+      implementation: "preview-build",
       executable: "preview-build",
       cliArgs: { pr: 7 },
       target: 7,
@@ -251,6 +258,7 @@ describe("dispatch: pull_request event", () => {
     expect(autoDispatch({ config: testConfig({ onPullRequest: "preview-build" }) })).toEqual({
       action: "preview-build",
       capability: "preview-build",
+      implementation: "preview-build",
       executable: "preview-build",
       cliArgs: { pr: 9 },
       target: 9,
@@ -317,6 +325,7 @@ describe("dispatch: issue_comment on issue", () => {
     expect(autoDispatch()).toEqual({
       action: "run",
       capability: "run",
+      implementation: "run",
       executable: "run",
       cliArgs: { issue: 8 },
       target: 8,
@@ -358,6 +367,7 @@ describe("dispatch: issue_comment on issue", () => {
     expect(autoDispatch()).toEqual({
       action: "run",
       capability: "run",
+      implementation: "run",
       executable: "run",
       cliArgs: { issue: 9 },
       target: 9,
@@ -399,6 +409,7 @@ describe("dispatch: issue_comment on issue", () => {
       expect(autoDispatch()).toEqual({
         action: "remember",
         capability: "remember",
+        implementation: "custom-impl",
         executable: "custom-impl",
         cliArgs: { issue: 12 },
         target: 12,
@@ -417,6 +428,7 @@ describe("dispatch: issue_comment on issue", () => {
     expect(autoDispatch()).toEqual({
       action: "run",
       capability: "run",
+      implementation: "run",
       executable: "run",
       cliArgs: { issue: 15 },
       target: 15,
@@ -460,6 +472,7 @@ describe("dispatch: issue_comment on issue", () => {
     ).toEqual({
       action: "run",
       capability: "run",
+      implementation: "run",
       executable: "run",
       cliArgs: { issue: 42, base: "3293-stacked-test-1" },
       target: 42,
@@ -478,6 +491,7 @@ describe("dispatch: issue_comment on issue", () => {
     ).toEqual({
       action: "run",
       capability: "run",
+      implementation: "run",
       executable: "run",
       cliArgs: { issue: 11 },
       target: 11,
@@ -496,6 +510,7 @@ describe("dispatch: issue_comment on issue", () => {
     ).toEqual({
       action: "run",
       capability: "run",
+      implementation: "run",
       executable: "run",
       cliArgs: { issue: 11 },
       target: 11,
@@ -524,6 +539,7 @@ describe("dispatch: issue_comment on issue", () => {
     ).toEqual({
       action: "run",
       capability: "run",
+      implementation: "run",
       executable: "run",
       cliArgs: { issue: 12 },
       target: 12,
@@ -567,6 +583,7 @@ describe("dispatch: issue_comment on PR", () => {
     expect(autoDispatch()).toEqual({
       action: "fix-ci",
       capability: "fix-ci",
+      implementation: "fix-ci",
       executable: "fix-ci",
       cliArgs: { pr: 20 },
       target: 20,
@@ -581,6 +598,7 @@ describe("dispatch: issue_comment on PR", () => {
     expect(autoDispatch()).toEqual({
       action: "fix-ci",
       capability: "fix-ci",
+      implementation: "fix-ci",
       executable: "fix-ci",
       cliArgs: { pr: 21, runId: "123456" },
       target: 21,
@@ -595,6 +613,7 @@ describe("dispatch: issue_comment on PR", () => {
     expect(autoDispatch()).toEqual({
       action: "resolve",
       capability: "resolve",
+      implementation: "resolve",
       executable: "resolve",
       cliArgs: { pr: 21 },
       target: 21,
@@ -609,6 +628,7 @@ describe("dispatch: issue_comment on PR", () => {
     expect(autoDispatch()).toEqual({
       action: "resolve",
       capability: "resolve",
+      implementation: "resolve",
       executable: "resolve",
       cliArgs: { pr: 22, prefer: "ours" },
       target: 22,
@@ -623,6 +643,7 @@ describe("dispatch: issue_comment on PR", () => {
     expect(autoDispatch()).toEqual({
       action: "resolve",
       capability: "resolve",
+      implementation: "resolve",
       executable: "resolve",
       cliArgs: { pr: 23, prefer: "theirs" },
       target: 23,
@@ -637,6 +658,7 @@ describe("dispatch: issue_comment on PR", () => {
     expect(autoDispatch()).toEqual({
       action: "sync",
       capability: "sync",
+      implementation: "sync",
       executable: "sync",
       cliArgs: { pr: 25 },
       target: 25,
@@ -651,6 +673,7 @@ describe("dispatch: issue_comment on PR", () => {
     expect(autoDispatch()).toEqual({
       action: "fix",
       capability: "fix",
+      implementation: "fix",
       executable: "fix",
       cliArgs: { pr: 24 },
       target: 24,
@@ -665,6 +688,7 @@ describe("dispatch: issue_comment on PR", () => {
     expect(autoDispatch()).toEqual({
       action: "fix",
       capability: "fix",
+      implementation: "fix",
       executable: "fix",
       cliArgs: { pr: 25, feedback: "address reviewer feedback" },
       target: 25,
@@ -687,6 +711,7 @@ describe("dispatch: issue_comment on PR", () => {
     expect(autoDispatch({ config: testConfig({ defaultPrExecutable: "sync" }) })).toEqual({
       action: "sync",
       capability: "sync",
+      implementation: "sync",
       executable: "sync",
       cliArgs: { pr: 23 },
       target: 23,
@@ -724,6 +749,7 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     expect(autoDispatch()).toEqual({
       action: "release",
       capability: "release",
+      implementation: "release",
       executable: "release",
       cliArgs: { issue: 30 },
       target: 30,
@@ -738,6 +764,7 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     expect(autoDispatch()).toEqual({
       action: "release-prepare",
       capability: "release-prepare",
+      implementation: "release-prepare",
       executable: "release-prepare",
       cliArgs: { issue: 31 },
       target: 31,
@@ -752,6 +779,7 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     expect(autoDispatch()).toEqual({
       action: "release-prepare",
       capability: "release-prepare",
+      implementation: "release-prepare",
       executable: "release-prepare",
       cliArgs: { issue: 32, bump: "minor" },
       target: 32,
@@ -766,6 +794,7 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     expect(autoDispatch()).toEqual({
       action: "release-prepare",
       capability: "release-prepare",
+      implementation: "release-prepare",
       executable: "release-prepare",
       cliArgs: { issue: 40, prefer: "ours" },
       target: 40,
@@ -793,6 +822,7 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     expect(autoDispatch()).toEqual({
       action: "release-prepare",
       capability: "release-prepare",
+      implementation: "release-prepare",
       executable: "release-prepare",
       cliArgs: { issue: 42, bump: "patch", "dry-run": true },
       target: 42,
@@ -807,6 +837,7 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     expect(autoDispatch()).toEqual({
       action: "release-publish",
       capability: "release-publish",
+      implementation: "release-publish",
       executable: "release-publish",
       cliArgs: { issue: 50 },
       target: 50,
@@ -821,6 +852,7 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     expect(autoDispatch()).toEqual({
       action: "release-promote",
       capability: "release-promote",
+      implementation: "release-promote",
       executable: "release-promote",
       cliArgs: { issue: 51 },
       target: 51,
@@ -835,6 +867,7 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     expect(autoDispatch()).toEqual({
       action: "release",
       capability: "release",
+      implementation: "release",
       executable: "release",
       cliArgs: { issue: 33, bump: "minor" },
       target: 33,

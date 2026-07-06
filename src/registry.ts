@@ -33,7 +33,9 @@ export interface DiscoveredCapabilityAction {
   action: string
   /** Capability slug that owns the public action. */
   capability: string
-  /** Implementation executable selected by the capability. */
+  /** Implementation profile selected by the capability. */
+  implementation: string
+  /** Legacy compatibility copy of `implementation`. */
   executable: string
   /** Extra args required to lower the capability to its implementation. */
   cliArgs: Record<string, unknown>
@@ -257,26 +259,29 @@ export function resolveCapabilityFolder(
 export function getCapabilityActionInputs(action: string): InputSpec[] | null {
   const resolved = resolveCapabilityAction(action)
   if (!resolved) return null
-  return getProfileInputs(resolved.executable)
+  return getProfileInputs(resolved.implementation)
 }
 
 export function resolveCapabilityExecution(capability: CapabilityFolder): {
+  implementation: string
   executable: string
   cliArgs: Record<string, unknown>
 } {
   const firstWorkflowStep = capability.config.workflow?.steps[0]
   if (firstWorkflowStep) {
-    return { executable: firstWorkflowStep.executable ?? firstWorkflowStep.capability, cliArgs: {} }
+    const implementation =
+      firstWorkflowStep.implementation ?? firstWorkflowStep.executable ?? firstWorkflowStep.capability
+    return { implementation, executable: implementation, cliArgs: {} }
   }
-  const executable =
+  const implementation =
     capability.config.implementation ??
     capability.config.executable ??
     capability.config.implementations?.[0] ??
     capability.config.executables?.[0] ??
     (capability.config.role ? capability.slug : undefined) ??
     (capability.config.tickScript ? "capability-tick-scripted" : "capability-tick")
-  const cliArgs = executableDeclaresInput(executable, "capability") ? { capability: capability.slug } : {}
-  return { executable, cliArgs }
+  const cliArgs = executableDeclaresInput(implementation, "capability") ? { capability: capability.slug } : {}
+  return { implementation, executable: implementation, cliArgs }
 }
 
 function executableDeclaresInput(executable: string, inputName: string): boolean {
@@ -330,11 +335,12 @@ function listFolderCapabilityActions(
     if (!capability) continue
     if (capability.config.internal === true || capability.config.public === false) continue
     const action = capability.config.action ?? slug
-    const { executable, cliArgs } = resolveCapabilityExecution(capability)
-    if (hasUnresolvedExplicitImplementation(capability, executable)) continue
+    const { implementation, executable, cliArgs } = resolveCapabilityExecution(capability)
+    if (hasUnresolvedExplicitImplementation(capability, implementation)) continue
     out.push({
       action,
       capability: slug,
+      implementation,
       executable,
       cliArgs,
       source,
@@ -366,11 +372,12 @@ function listBuiltinCapabilityActions(root: string = getBuiltinCapabilitiesRoot(
     const capability = readCapabilityFolder(root, slug)
     if (!capability) continue
     const action = capability.config.action ?? slug
-    const executable = capability.config.implementation ?? capability.config.executable ?? slug
+    const implementation = capability.config.implementation ?? capability.config.executable ?? slug
     out.push({
       action,
       capability: slug,
-      executable,
+      implementation,
+      executable: implementation,
       cliArgs: {},
       source: "builtin",
       describe: capability.config.describe ?? capability.title,

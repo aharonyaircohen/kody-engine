@@ -1,5 +1,5 @@
+import { type GoalEvidenceResultClass, type GoalEvidenceState, parseGoalEvidenceState } from "./evidenceState.js"
 import type { GoalState } from "./state.js"
-import { parseGoalEvidenceState, type GoalEvidenceState, type GoalEvidenceResultClass } from "./evidenceState.js"
 
 export const SIMPLE_GOAL_TYPE = "simple"
 export const SIMPLE_GOAL_EVIDENCE = "labelledTasksComplete"
@@ -13,6 +13,7 @@ export interface GoalRouteStep {
   evidence: string
   stage: string
   capability: string
+  implementation?: string
   executable?: string
   args?: Record<string, unknown>
   saveReport?: boolean
@@ -73,6 +74,7 @@ export type ManagedGoalDecision =
       evidence: string
       stage: string
       capability: string
+      implementation?: string
       executable?: string
       cliArgs: Record<string, unknown>
       saveReport?: boolean
@@ -257,6 +259,7 @@ export function planManagedGoalTick(goal: ManagedGoal): ManagedGoalDecision {
     evidence: missing,
     stage: step.stage,
     capability: step.capability,
+    implementation: step.implementation ?? step.executable,
     executable: step.executable,
     cliArgs: resolved.cliArgs,
     ...(step.saveReport === true ? { saveReport: true } : {}),
@@ -343,7 +346,11 @@ function decisionFromEvidenceProgress(
     const reason = progress.reason ?? `${resultClassLabel(progress.resultClass)} for ${evidence}`
     goal.stage = "blocked"
     goal.reason = reason
-    goal.nextAction = progress.issue ? `fix issue #${progress.issue}` : policy.action === "issue" ? "create issue" : "block"
+    goal.nextAction = progress.issue
+      ? `fix issue #${progress.issue}`
+      : policy.action === "issue"
+        ? "create issue"
+        : "block"
     pushBlocker(goal, reason)
     return { kind: "blocked", evidence, stage: step.stage, reason }
   }
@@ -385,6 +392,12 @@ function asRoute(value: unknown): GoalRouteStep[] | null {
       evidence: raw.evidence,
       stage: raw.stage,
       capability: raw.capability,
+      implementation:
+        typeof raw.implementation === "string"
+          ? raw.implementation
+          : typeof raw.executable === "string"
+            ? raw.executable
+            : undefined,
       executable: typeof raw.executable === "string" ? raw.executable : undefined,
       args: args ?? undefined,
       saveReport: raw.saveReport === true,

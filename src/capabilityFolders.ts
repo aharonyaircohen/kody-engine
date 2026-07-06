@@ -35,6 +35,7 @@ export interface CapabilityWorkflowConfig {
 export interface CapabilityWorkflowStepConfig {
   capability: string
   action?: string
+  implementation?: string
   executable?: string
   target?: "issue" | "pr"
   reason?: string
@@ -204,7 +205,7 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
   const raw = value as Record<string, unknown>
   const capability = stringField(raw.capability ?? raw.action)
   if (!capability || !isSafeSlug(capability)) return null
-  const executable = stringField(raw.executable ?? raw.implementation)
+  const implementation = stringField(raw.implementation ?? raw.executable)
   const action = stringField(raw.action)
   const agent = stringField(raw.agent)
   const reason = stringField(raw.reason)
@@ -213,7 +214,7 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
   return {
     capability,
     ...(action && isSafeSlug(action) ? { action } : {}),
-    ...(executable && isSafeSlug(executable) ? { executable } : {}),
+    ...(implementation && isSafeSlug(implementation) ? { implementation, executable: implementation } : {}),
     ...(target === "issue" || target === "pr" ? { target } : {}),
     ...(agent && isSafeSlug(agent) ? { agent } : {}),
     ...(reason ? { reason } : {}),

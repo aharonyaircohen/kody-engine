@@ -1,7 +1,7 @@
 import * as fs from "node:fs"
 import type { CapabilityResultArtifact } from "../capabilityResult.js"
-import { appendStateLine, parseStateRepoSlug, resolveStateRepoConfig, type StateRepoConfig } from "../stateRepo.js"
 import { runIndexRowFromGoalEvents, stageRunIndexFinalization, upsertRunIndexRowBestEffort } from "../runIndex.js"
+import { appendStateLine, parseStateRepoSlug, resolveStateRepoConfig, type StateRepoConfig } from "../stateRepo.js"
 import type { GoalRouteStep, ManagedGoal } from "./manager.js"
 import { nowIso } from "./state.js"
 
@@ -9,6 +9,7 @@ export interface GoalRunLogDispatch {
   action?: string
   capability?: string
   workflow?: string
+  implementation?: string
   executable?: string
   cliArgs?: Record<string, unknown>
 }
@@ -330,6 +331,7 @@ function capabilityDispatchFromOutput(output: Record<string, unknown> | null): G
   if (!output) return undefined
   const dispatch = pruneUndefined({
     capability: stringValue(output.capability) ?? undefined,
+    implementation: stringValue(output.implementation) ?? stringValue(output.executable) ?? undefined,
     executable: stringValue(output.executable) ?? undefined,
     action: stringValue(output.action) ?? undefined,
   })
@@ -416,7 +418,17 @@ function triggerContext(): Record<string, unknown> | undefined {
     comment: numberValue(recordValue(event?.comment)?.id),
     schedule: stringValue(event?.schedule),
     inputs: inputs
-      ? pickRecord(inputs, ["issue_number", "sessionId", "message", "model", "title", "executable", "base"])
+      ? pickRecord(inputs, [
+          "issue_number",
+          "sessionId",
+          "message",
+          "model",
+          "title",
+          "capability",
+          "implementation",
+          "executable",
+          "base",
+        ])
       : undefined,
   })
   return Object.keys(trigger).length > 0 ? trigger : undefined
@@ -443,6 +455,7 @@ function jobContext(data: Record<string, unknown>): Record<string, unknown> | un
     flavor: stringValue(data.jobFlavor) ?? undefined,
     action: stringValue(data.jobAction) ?? undefined,
     capability: stringValue(data.jobCapability) ?? undefined,
+    implementation: stringValue(data.jobImplementation) ?? stringValue(data.jobExecutable) ?? undefined,
     executable: stringValue(data.jobExecutable) ?? undefined,
     agent: stringValue(data.jobAgent) ?? undefined,
     schedule: stringValue(data.jobSchedule) ?? undefined,
@@ -475,6 +488,7 @@ function dispatchContext(
     target: event.target,
     action: dispatch.action ?? stringValue(job?.action),
     capability: dispatch.capability ?? stringValue(job?.capability),
+    implementation: dispatch.implementation ?? stringValue(job?.implementation),
     reason: event.reason,
   })
   return Object.keys(context).length > 0 ? context : undefined
@@ -528,6 +542,7 @@ function routeStepForLog(step: GoalRouteStep): Record<string, unknown> {
     evidence: step.evidence,
     stage: step.stage,
     capability: step.capability,
+    implementation: step.implementation ?? step.executable,
     executable: step.executable,
     args: step.args,
     saveReport: step.saveReport === true ? true : undefined,

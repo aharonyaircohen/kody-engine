@@ -439,6 +439,7 @@ export interface Context {
       action?: string
       capability?: string
       workflow?: string
+      implementation?: string
       executable?: string
       cliArgs: Record<string, unknown>
       saveReport?: boolean
@@ -451,6 +452,7 @@ export interface Context {
       action?: string
       capability?: string
       workflow?: string
+      implementation?: string
       executable?: string
       cliArgs: Record<string, unknown>
       saveReport?: boolean
@@ -505,6 +507,8 @@ export interface Job {
   /** Public action the user/operator invoked. Mirrors the capability action. */
   action?: string
   /** How: implementation profile selected by the capability. Not valid by itself. */
+  implementation?: string
+  /** Legacy compatibility copy of `implementation`. */
   executable?: string
   /** Why (referenced): a capability slug whose intent drives the run. */
   capability?: string

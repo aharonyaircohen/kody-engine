@@ -1,5 +1,5 @@
 import type { Profile } from "./executables/types.js"
-import { readStateText, writeStateText, type StateRepoConfig } from "./stateRepo.js"
+import { readStateText, type StateRepoConfig, writeStateText } from "./stateRepo.js"
 
 export type RunIndexSubjectType = "goal" | "loop" | "workflow"
 export type RunIndexStatus = "running" | "waiting" | "success" | "failed" | "blocked" | "cancelled" | "recorded"
@@ -28,6 +28,7 @@ export interface RunIndexRow {
   action?: string
   capability?: string
   workflow?: string
+  implementation?: string
   executable?: string
   agent?: string
   model?: string
@@ -55,11 +56,7 @@ export function runIndexPath(): string {
   return RUN_INDEX_PATH
 }
 
-export function upsertRunIndexRow(
-  config: StateRepoConfig,
-  cwd: string | undefined,
-  row: RunIndexRow,
-): void {
+export function upsertRunIndexRow(config: StateRepoConfig, cwd: string | undefined, row: RunIndexRow): void {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     const current = readStateText(config, cwd, RUN_INDEX_PATH)
     const next = mergeRunIndexRow(current?.content, row)
@@ -189,14 +186,17 @@ export function runIndexRowFromJobContext(input: {
     kodyRunId,
     githubRunId,
     githubRunAttempt,
-    githubRunUrl: githubRunId && githubRepository ? `${githubServer}/${githubRepository}/actions/runs/${githubRunId}` : undefined,
+    githubRunUrl:
+      githubRunId && githubRepository ? `${githubServer}/${githubRepository}/actions/runs/${githubRunId}` : undefined,
     triggerKind,
     triggerMode: triggerMode(triggerKind),
     actor: process.env.GITHUB_ACTOR?.trim() || undefined,
     action: stringValue(input.data.jobAction) ?? undefined,
     capability: stringValue(input.data.jobCapability) ?? undefined,
     workflow: workflow ?? undefined,
-    executable: stringValue(input.data.jobExecutable) ?? input.profileName,
+    implementation:
+      stringValue(input.data.jobImplementation) ?? stringValue(input.data.jobExecutable) ?? input.profileName,
+    executable: stringValue(input.data.jobExecutable) ?? stringValue(input.data.jobImplementation) ?? input.profileName,
     agent: stringValue(input.data.jobAgent) ?? input.profile.agent ?? undefined,
     model: stringValue(input.data.jobModel) ?? undefined,
     modelProvider: stringValue(input.data.jobModelProvider) ?? undefined,
@@ -237,9 +237,17 @@ export function runIndexRowFromGoalEvents(
     subjectModel: goalType ?? undefined,
     status: statusFromGoalEvent(last, decision),
     title: goalId,
-    summary: stringValue(last.summary) ?? stringValue(last.reason) ?? stringValue(traceResult?.summary) ?? stringValue(last.event) ?? undefined,
+    summary:
+      stringValue(last.summary) ??
+      stringValue(last.reason) ??
+      stringValue(traceResult?.summary) ??
+      stringValue(last.event) ??
+      undefined,
     currentStep: stringValue(last.stage) ?? stringValue(goal?.stage) ?? stringValue(last.event) ?? undefined,
-    decision: [stringValue(decision?.kind), stringValue(decision?.reason) ?? stringValue(last.reason)].filter(Boolean).join(" - ") || undefined,
+    decision:
+      [stringValue(decision?.kind), stringValue(decision?.reason) ?? stringValue(last.reason)]
+        .filter(Boolean)
+        .join(" - ") || undefined,
     startedAt: stringValue(first.time) ?? undefined,
     updatedAt,
     kodyRunId,
@@ -251,7 +259,8 @@ export function runIndexRowFromGoalEvents(
     actor: stringValue(trigger?.githubActor) ?? stringValue(trigger?.actor) ?? undefined,
     action: stringValue(job?.action) ?? undefined,
     capability: stringValue(job?.capability) ?? undefined,
-    executable: stringValue(job?.executable) ?? undefined,
+    implementation: stringValue(job?.implementation) ?? stringValue(job?.executable) ?? undefined,
+    executable: stringValue(job?.executable) ?? stringValue(job?.implementation) ?? undefined,
     agent: stringValue(job?.agent) ?? undefined,
     model: stringValue(job?.model) ?? undefined,
     modelProvider: stringValue(job?.modelProvider) ?? undefined,

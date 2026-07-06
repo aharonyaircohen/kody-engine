@@ -16,9 +16,21 @@ const GOAL_TYPE_DEFINITIONS: Record<ManagedGoalTypeId, ManagedGoalTypeDefinition
     evidence: ["planReady", "changeImplemented", "changeVerified"],
     capabilities: ["plan", "fix", "review"],
     route: [
-      { stage: "plan", evidence: "planReady", capability: "plan", executable: "plan" },
-      { stage: "implement", evidence: "changeImplemented", capability: "fix", executable: "fix" },
-      { stage: "review", evidence: "changeVerified", capability: "review", executable: "review" },
+      { stage: "plan", evidence: "planReady", capability: "plan", implementation: "plan", executable: "plan" },
+      {
+        stage: "implement",
+        evidence: "changeImplemented",
+        capability: "fix",
+        implementation: "fix",
+        executable: "fix",
+      },
+      {
+        stage: "review",
+        evidence: "changeVerified",
+        capability: "review",
+        implementation: "review",
+        executable: "review",
+      },
     ],
   },
   maintain: {
@@ -50,6 +62,7 @@ const GOAL_TYPE_DEFINITIONS: Record<ManagedGoalTypeId, ManagedGoalTypeDefinition
         stage: "release",
         evidence: "releasePrExists",
         capability: "release",
+        implementation: "release-prepare",
         executable: "release-prepare",
         args: { issue: { fact: "issue" }, goal: { fact: "goalId" } },
       },
@@ -57,6 +70,7 @@ const GOAL_TYPE_DEFINITIONS: Record<ManagedGoalTypeId, ManagedGoalTypeDefinition
         stage: "merge",
         evidence: "mainMerged",
         capability: "release-merge",
+        implementation: "release-merge",
         executable: "release-merge",
         args: { pr: { fact: "releasePr" }, issue: { fact: "issue" }, goal: { fact: "goalId" } },
       },
@@ -64,6 +78,7 @@ const GOAL_TYPE_DEFINITIONS: Record<ManagedGoalTypeId, ManagedGoalTypeDefinition
         stage: "publish",
         evidence: "productionDeployed",
         capability: "vercel-production-deploy",
+        implementation: "vercel-production-deploy",
         executable: "vercel-production-deploy",
       },
     ],
@@ -77,6 +92,7 @@ const GOAL_TYPE_DEFINITIONS: Record<ManagedGoalTypeId, ManagedGoalTypeDefinition
         stage: "verify",
         evidence: "checklistComplete",
         capability: "task-verifier",
+        implementation: "task-verifier",
         executable: "task-verifier",
       },
     ],
@@ -88,6 +104,11 @@ function cloneRoute(route: GoalRouteStep[]): GoalRouteStep[] {
     stage: step.stage,
     evidence: step.evidence,
     capability: step.capability,
+    ...(step.implementation
+      ? { implementation: step.implementation }
+      : step.executable
+        ? { implementation: step.executable }
+        : {}),
     ...(step.executable ? { executable: step.executable } : {}),
     ...(step.args ? { args: structuredClone(step.args) as Record<string, unknown> } : {}),
   }))
@@ -109,6 +130,12 @@ function routeArray(value: unknown): GoalRouteStep[] | null {
       stage: raw.stage,
       evidence: raw.evidence,
       capability: raw.capability,
+      implementation:
+        typeof raw.implementation === "string"
+          ? raw.implementation
+          : typeof raw.executable === "string"
+            ? raw.executable
+            : undefined,
       executable: typeof raw.executable === "string" ? raw.executable : undefined,
       args:
         raw.args && typeof raw.args === "object" && !Array.isArray(raw.args)

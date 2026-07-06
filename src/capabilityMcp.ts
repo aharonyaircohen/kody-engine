@@ -496,7 +496,7 @@ export function startCapability(
 function expectedDispatchTarget(capability: string): "issue" | "pr" | null {
   const route = resolveCapabilityAction(capability)
   if (!route) return null
-  const inputs = getProfileInputs(route.executable)
+  const inputs = getProfileInputs(route.implementation)
   const numeric = inputs?.find((input) => input.type === "int" && input.required)
   if (numeric?.name === "issue") return "issue"
   if (numeric?.name === "pr") return "pr"

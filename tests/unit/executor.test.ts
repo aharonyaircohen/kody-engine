@@ -152,6 +152,7 @@ describe("executor: jobReferenceBlock", () => {
         jobFlavor: "scheduled",
         jobSchedule: "manual",
         jobCapability: "live-job-wiring",
+        jobImplementation: "job-live-verify",
         jobExecutable: "live-job-wiring",
       },
     )
@@ -161,7 +162,8 @@ describe("executor: jobReferenceBlock", () => {
     expect(block).toContain("Flavor: scheduled")
     expect(block).toContain("Schedule: manual")
     expect(block).toContain("Capability: live-job-wiring")
-    expect(block).toContain("Executable: job-live-verify")
+    expect(block).toContain("Implementation: job-live-verify")
+    expect(block).not.toContain("Executable:")
     expect(block).toContain("Agent: live-verifier")
     expect(block).toContain("Description: Live capability description")
   })

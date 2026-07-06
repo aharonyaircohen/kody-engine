@@ -73,8 +73,19 @@ describe("events: emitEvent + readEvents", () => {
     const events = readEvents(tmpDir, "test-run")
     expect(events).toHaveLength(3)
     expect(events[0]?.kind).toBe("stage_start")
+    expect(events[0]?.implementation).toBe("run")
     expect(events[1]?.name).toBe("loadIssueContext")
     expect(events[2]?.outcome).toBe("ok")
+  })
+
+  it("preserves an explicit implementation while keeping the compatibility executable field", () => {
+    process.env.KODY_RUN_ID = "rid"
+    emitEvent(tmpDir, { implementation: "docs-proof", executable: "legacy-docs-proof", kind: "stage_start" })
+    const events = readEvents(tmpDir, "rid")
+    expect(events[0]).toMatchObject({
+      implementation: "docs-proof",
+      executable: "legacy-docs-proof",
+    })
   })
 
   it("attaches an ISO timestamp and the resolved run id to every event", () => {

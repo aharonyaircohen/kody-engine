@@ -273,12 +273,13 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       return 64
     }
     const cliArgs = { ...route.cliArgs, ...(args.cliArgs ?? {}) }
-    const skipConfig = configlessCommands.has(route.executable)
+    const skipConfig = configlessCommands.has(route.implementation)
     try {
       const result = await runJob(
         {
           action: route.action,
           capability: route.capability,
+          implementation: route.implementation,
           executable: route.executable,
           cliArgs,
           target: numericTarget(cliArgs),
@@ -313,6 +314,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         {
           action: executable,
           capability: executable,
+          implementation: executable,
           executable,
           cliArgs,
           target: numericTarget(cliArgs),
