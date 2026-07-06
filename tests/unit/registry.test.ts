@@ -139,7 +139,11 @@ describe("registry: obsolete project executables", () => {
 
     expect(resolveExecutable("feature")).toBeNull()
     expect(listExecutables().find((exe) => exe.name === "feature")).toBeUndefined()
-    expect(resolveCapabilityAction("feature")).toBeNull()
+    expect(resolveCapabilityAction("feature")).toMatchObject({
+      action: "feature",
+      capability: "feature",
+      implementation: "capability-tick",
+    })
   })
 })
 

@@ -30,7 +30,7 @@ describe("agent-factory profile", () => {
 
     expect(profile.name).toBe("agent-factory")
     expect(profile.action).toBe("agent-factory")
-    expect(profile.executable).toBe("agent-factory")
+    expect(profile.implementation).toBe("agent-factory")
 
     expect(resolveCapabilityAction("agent-factory")).toMatchObject({
       action: "agent-factory",

@@ -1,7 +1,7 @@
 /**
  * Profile loader + validator.
  *
- * Reads an executable profile.json from disk, applies permissive defaults,
+ * Reads an implementation profile.json from disk, applies permissive defaults,
  * and checks invariants (every referenced script exists in the registry,
  * every input spec is well-formed, etc.). The executor treats a loaded
  * Profile as trustworthy.
@@ -45,8 +45,6 @@ const KNOWN_PROFILE_KEYS = new Set([
   "action",
   "implementation",
   "implementations",
-  "executable",
-  "executables",
   "internal",
   "public",
   "capabilityKind",
@@ -124,16 +122,11 @@ export function loadProfile(profilePath: string): Profile {
   // (name) + agent (who) + mentions. The capability folder then stays a
   // thin binding — no claudeCode/prompt/scripts of its own.
   // Intent = why, agent = who, capability = how, executable = implementation.
-  const execRef =
-    typeof r.implementation === "string" && r.implementation.trim()
-      ? r.implementation.trim()
-      : typeof r.executable === "string"
-        ? r.executable.trim()
-        : ""
+  const execRef = typeof r.implementation === "string" && r.implementation.trim() ? r.implementation.trim() : ""
   if (execRef) {
     const refPath = resolveExecutable(execRef)
     if (!refPath) {
-      throw new ProfileError(profilePath, `capability references unknown executable '${execRef}'`)
+      throw new ProfileError(profilePath, `capability references unknown implementation '${execRef}'`)
     }
     if (path.resolve(refPath) === path.resolve(profilePath)) {
       // A capability folder can be both the public contract and the runnable
@@ -146,7 +139,6 @@ export function loadProfile(profilePath: string): Profile {
         name: requireString(profilePath, r, "name"),
         action: typeof r.action === "string" && r.action.trim() ? r.action.trim() : undefined,
         implementation: execRef,
-        executable: execRef,
         internal: typeof r.internal === "boolean" ? r.internal : base.internal,
         public: typeof r.public === "boolean" ? r.public : base.public,
         capabilityKind: parseCapabilityKind(r.capabilityKind) ?? base.capabilityKind,
@@ -210,7 +202,6 @@ export function loadProfile(profilePath: string): Profile {
     name: requireString(profilePath, r, "name"),
     action: typeof r.action === "string" && r.action.trim() ? r.action.trim() : undefined,
     implementation: undefined,
-    executable: undefined,
     internal: typeof r.internal === "boolean" ? r.internal : undefined,
     public: typeof r.public === "boolean" ? r.public : undefined,
     capabilityKind: parseCapabilityKind(r.capabilityKind),

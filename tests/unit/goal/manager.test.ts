@@ -23,14 +23,12 @@ function releaseGoal(overrides: Partial<ManagedGoal> = {}): ManagedGoal {
         stage: "prepare",
         capability: "release-prepare",
         implementation: "release-prepare",
-        executable: "release-prepare",
       },
       {
         evidence: "qaPassed",
         stage: "qa",
         capability: "qa-goal",
         implementation: "qa-goal",
-        executable: "qa-goal",
         args: { issue: 123 },
       },
       {
@@ -38,7 +36,6 @@ function releaseGoal(overrides: Partial<ManagedGoal> = {}): ManagedGoal {
         stage: "publish",
         capability: "npm-publish",
         implementation: "npm-publish",
-        executable: "npm-publish",
       },
     ],
     stage: "prepare",
@@ -76,7 +73,6 @@ describe("planManagedGoalTick", () => {
       stage: "prepare",
       capability: "release-prepare",
       implementation: "release-prepare",
-      executable: "release-prepare",
       cliArgs: {},
     })
     expect(goal.stage).toBe("prepare")
@@ -95,7 +91,6 @@ describe("planManagedGoalTick", () => {
       stage: "qa",
       capability: "qa-goal",
       implementation: "qa-goal",
-      executable: "qa-goal",
       cliArgs: { issue: 123 },
     })
     expect(goal.stage).toBe("qa")
@@ -111,14 +106,12 @@ describe("planManagedGoalTick", () => {
           stage: "prepare",
           capability: "release-prepare",
           implementation: "release-prepare",
-          executable: "release-prepare",
         },
         {
           evidence: "qaPassed",
           stage: "qa",
           capability: "qa-goal",
           implementation: "qa-goal",
-          executable: "qa-goal",
           args: { pr: { fact: "deployPr" }, issue: 123 },
         },
         {
@@ -126,7 +119,6 @@ describe("planManagedGoalTick", () => {
           stage: "publish",
           capability: "npm-publish",
           implementation: "npm-publish",
-          executable: "npm-publish",
         },
       ],
     })
@@ -153,7 +145,6 @@ describe("planManagedGoalTick", () => {
           stage: "prepare",
           capability: "release-prepare",
           implementation: "release-prepare",
-          executable: "release-prepare",
         },
         {
           evidence: "mainDeployPrGreen",
@@ -172,7 +163,6 @@ describe("planManagedGoalTick", () => {
       evidence: "mainDeployPrGreen",
       stage: "wait-ci",
       capability: "ci-health",
-      executable: undefined,
       cliArgs: { pr: 456, evidence: "mainDeployPrGreen" },
     })
   })
@@ -186,14 +176,12 @@ describe("planManagedGoalTick", () => {
           stage: "prepare",
           capability: "release-prepare",
           implementation: "release-prepare",
-          executable: "release-prepare",
         },
         {
           evidence: "qaPassed",
           stage: "qa",
           capability: "qa-goal",
           implementation: "qa-goal",
-          executable: "qa-goal",
           args: { pr: { fact: "deployPr" } },
         },
         {
@@ -201,7 +189,6 @@ describe("planManagedGoalTick", () => {
           stage: "publish",
           capability: "npm-publish",
           implementation: "npm-publish",
-          executable: "npm-publish",
         },
       ],
     })
@@ -228,7 +215,6 @@ describe("planManagedGoalTick", () => {
       stage: "prepare",
       capability: "release-prepare",
       implementation: "release-prepare",
-      executable: "release-prepare",
       cliArgs: {},
     })
     expect(goal.facts.pendingEvidence).toBe("releasePrExists")

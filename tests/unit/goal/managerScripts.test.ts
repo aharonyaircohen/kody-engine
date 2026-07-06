@@ -23,13 +23,11 @@ function releaseGoal(overrides: Partial<ManagedGoal> = {}): ManagedGoal {
         evidence: "releasePrExists",
         stage: "prepare",
         capability: "release-prepare",
-        executable: "release-prepare",
       },
       {
         evidence: "qaPassed",
         stage: "qa",
         capability: "qa-goal",
-        executable: "qa-goal",
         args: { issue: 55 },
       },
     ],
@@ -86,7 +84,6 @@ describe("advanceManagedGoal", () => {
 
     expect(ctx.output.nextDispatch).toEqual({
       capability: "release-prepare",
-      executable: "release-prepare",
       cliArgs: {},
       resultTarget: { type: "goal", id: "release-v1-2-3", evidence: "releasePrExists" },
     })
@@ -102,7 +99,6 @@ describe("advanceManagedGoal", () => {
 
     expect(ctx.output.nextDispatch).toEqual({
       capability: "release-prepare",
-      executable: "release-prepare",
       cliArgs: {},
       resultTarget: { type: "goal", id: "release-v1-2-3", evidence: "releasePrExists" },
     })
@@ -144,7 +140,6 @@ describe("advanceManagedGoal", () => {
               evidence: "releasePrExists",
               stage: "prepare",
               capability: "release-prepare",
-              executable: "release-prepare",
               args: { goal: { fact: "goalId" } },
             },
           ],
@@ -156,7 +151,6 @@ describe("advanceManagedGoal", () => {
 
     expect(ctx.output.nextDispatch).toEqual({
       capability: "release-prepare",
-      executable: "release-prepare",
       cliArgs: { goal: "release-v1-2-3" },
       resultTarget: { type: "goal", id: "release-v1-2-3", evidence: "releasePrExists" },
     })
@@ -176,7 +170,7 @@ describe("advanceManagedGoal", () => {
 
     expect(ctx.output.nextDispatch).toEqual({
       capability: "release",
-      executable: "release-prepare",
+      implementation: "release-prepare",
       cliArgs: { issue: 321, goal: "release-v1-2-3" },
       resultTarget: { type: "goal", id: "release-v1-2-3", evidence: "releasePrExists" },
     })
@@ -220,7 +214,7 @@ describe("advanceManagedGoal", () => {
 
     expect(ctx.output.nextDispatch).toEqual({
       capability: "release",
-      executable: "release-prepare",
+      implementation: "release-prepare",
       cliArgs: { issue: 654, goal: "release-v1-2-3" },
       resultTarget: { type: "goal", id: "release-v1-2-3", evidence: "releasePrExists" },
     })

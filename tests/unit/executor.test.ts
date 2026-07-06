@@ -143,7 +143,7 @@ describe("executor: jobReferenceBlock", () => {
       "live-job-wiring",
       {
         name: "live-job-wiring",
-        executable: "job-live-verify",
+        implementation: "job-live-verify",
         agent: "live-verifier",
         describe: "Live capability description",
       },

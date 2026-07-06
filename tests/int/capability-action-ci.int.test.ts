@@ -61,7 +61,7 @@ function makeRepo(opts: { sameName?: boolean } = {}): { root: string; eventPath:
       {
         name: capabilityName,
         action: "noop",
-        executable: exeName,
+        implementation: exeName,
         agent: "kody",
         ...(opts.sameName ? implementationProfile : {}),
       },

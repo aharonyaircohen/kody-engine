@@ -284,7 +284,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
   ctx.output.nextDispatch = {
     capability: decision.capability,
     cliArgs: decision.cliArgs,
-    ...(decision.executable ? { executable: decision.executable } : {}),
+    ...(decision.implementation ? { implementation: decision.implementation } : {}),
     ...(decision.saveReport === true ? { saveReport: true } : {}),
     resultTarget: { type: "goal", id: goal.id, evidence: decision.evidence },
   }
@@ -321,7 +321,7 @@ function stageManagedGoalDecision(
           : {
               capability: decision.capability,
               cliArgs: decision.cliArgs,
-              ...(decision.executable ? { executable: decision.executable } : {}),
+              ...(decision.implementation ? { implementation: decision.implementation } : {}),
             },
       goal: details.goalSnapshot,
       inspection: details.inspection,
@@ -340,7 +340,7 @@ function stageManagedGoalDecision(
               stage: decision.stage,
               capability: decision.capability,
               cliArgs: decision.cliArgs,
-              ...(decision.executable ? { executable: decision.executable } : {}),
+              ...(decision.implementation ? { implementation: decision.implementation } : {}),
             },
       change: details.change,
     })

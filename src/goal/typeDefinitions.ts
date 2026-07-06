@@ -16,20 +16,18 @@ const GOAL_TYPE_DEFINITIONS: Record<ManagedGoalTypeId, ManagedGoalTypeDefinition
     evidence: ["planReady", "changeImplemented", "changeVerified"],
     capabilities: ["plan", "fix", "review"],
     route: [
-      { stage: "plan", evidence: "planReady", capability: "plan", implementation: "plan", executable: "plan" },
+      { stage: "plan", evidence: "planReady", capability: "plan", implementation: "plan" },
       {
         stage: "implement",
         evidence: "changeImplemented",
         capability: "fix",
         implementation: "fix",
-        executable: "fix",
       },
       {
         stage: "review",
         evidence: "changeVerified",
         capability: "review",
         implementation: "review",
-        executable: "review",
       },
     ],
   },
@@ -63,7 +61,6 @@ const GOAL_TYPE_DEFINITIONS: Record<ManagedGoalTypeId, ManagedGoalTypeDefinition
         evidence: "releasePrExists",
         capability: "release",
         implementation: "release-prepare",
-        executable: "release-prepare",
         args: { issue: { fact: "issue" }, goal: { fact: "goalId" } },
       },
       {
@@ -71,7 +68,6 @@ const GOAL_TYPE_DEFINITIONS: Record<ManagedGoalTypeId, ManagedGoalTypeDefinition
         evidence: "mainMerged",
         capability: "release-merge",
         implementation: "release-merge",
-        executable: "release-merge",
         args: { pr: { fact: "releasePr" }, issue: { fact: "issue" }, goal: { fact: "goalId" } },
       },
       {
@@ -79,7 +75,6 @@ const GOAL_TYPE_DEFINITIONS: Record<ManagedGoalTypeId, ManagedGoalTypeDefinition
         evidence: "productionDeployed",
         capability: "vercel-production-deploy",
         implementation: "vercel-production-deploy",
-        executable: "vercel-production-deploy",
       },
     ],
   },
@@ -93,7 +88,6 @@ const GOAL_TYPE_DEFINITIONS: Record<ManagedGoalTypeId, ManagedGoalTypeDefinition
         evidence: "checklistComplete",
         capability: "task-verifier",
         implementation: "task-verifier",
-        executable: "task-verifier",
       },
     ],
   },
@@ -104,12 +98,7 @@ function cloneRoute(route: GoalRouteStep[]): GoalRouteStep[] {
     stage: step.stage,
     evidence: step.evidence,
     capability: step.capability,
-    ...(step.implementation
-      ? { implementation: step.implementation }
-      : step.executable
-        ? { implementation: step.executable }
-        : {}),
-    ...(step.executable ? { executable: step.executable } : {}),
+    ...(step.implementation ? { implementation: step.implementation } : {}),
     ...(step.args ? { args: structuredClone(step.args) as Record<string, unknown> } : {}),
   }))
 }
@@ -130,13 +119,7 @@ function routeArray(value: unknown): GoalRouteStep[] | null {
       stage: raw.stage,
       evidence: raw.evidence,
       capability: raw.capability,
-      implementation:
-        typeof raw.implementation === "string"
-          ? raw.implementation
-          : typeof raw.executable === "string"
-            ? raw.executable
-            : undefined,
-      executable: typeof raw.executable === "string" ? raw.executable : undefined,
+      implementation: typeof raw.implementation === "string" ? raw.implementation : undefined,
       args:
         raw.args && typeof raw.args === "object" && !Array.isArray(raw.args)
           ? { ...(raw.args as Record<string, unknown>) }

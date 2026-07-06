@@ -229,12 +229,12 @@ async function describeCapabilitySchedule(
   if (!config.agent || config.agent.trim().length === 0) {
     return { slug, title: capability.title, state: "blocked", reason: "no agent assigned" }
   }
-  if (config.executables && config.executables.length > 1) {
+  if (config.implementations && config.implementations.length > 1) {
     return {
       slug,
       title: capability.title,
       state: "blocked",
-      reason: "multi-executable capability needs task-jobs route",
+      reason: "multi-implementation capability needs task-jobs route",
     }
   }
 

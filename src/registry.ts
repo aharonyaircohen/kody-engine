@@ -35,7 +35,7 @@ export interface DiscoveredCapabilityAction {
   capability: string
   /** Implementation profile selected by the capability. */
   implementation: string
-  /** Legacy compatibility copy of `implementation`. */
+  /** Compatibility result field removed in a later phase; mirrors `implementation`. */
   executable: string
   /** Extra args required to lower the capability to its implementation. */
   cliArgs: Record<string, unknown>
@@ -269,15 +269,12 @@ export function resolveCapabilityExecution(capability: CapabilityFolder): {
 } {
   const firstWorkflowStep = capability.config.workflow?.steps[0]
   if (firstWorkflowStep) {
-    const implementation =
-      firstWorkflowStep.implementation ?? firstWorkflowStep.executable ?? firstWorkflowStep.capability
+    const implementation = firstWorkflowStep.implementation ?? firstWorkflowStep.capability
     return { implementation, executable: implementation, cliArgs: {} }
   }
   const implementation =
     capability.config.implementation ??
-    capability.config.executable ??
     capability.config.implementations?.[0] ??
-    capability.config.executables?.[0] ??
     (capability.config.role ? capability.slug : undefined) ??
     (capability.config.tickScript ? "capability-tick-scripted" : "capability-tick")
   const cliArgs = executableDeclaresInput(implementation, "capability") ? { capability: capability.slug } : {}
@@ -355,9 +352,7 @@ function listFolderCapabilityActions(
 function hasUnresolvedExplicitImplementation(capability: CapabilityFolder, executable: string): boolean {
   const config = capability.config
   const hasExplicitImplementation =
-    Boolean(config.implementation || config.executable) ||
-    (config.implementations?.length ?? 0) > 0 ||
-    (config.executables?.length ?? 0) > 0
+    Boolean(config.implementation) || (config.implementations?.length ?? 0) > 0
   if (!hasExplicitImplementation) return false
   if (config.workflow?.steps.length) return false
   if (config.role && PUBLIC_EXECUTABLE_ROLES.has(config.role)) return false
@@ -372,7 +367,7 @@ function listBuiltinCapabilityActions(root: string = getBuiltinCapabilitiesRoot(
     const capability = readCapabilityFolder(root, slug)
     if (!capability) continue
     const action = capability.config.action ?? slug
-    const implementation = capability.config.implementation ?? capability.config.executable ?? slug
+    const implementation = capability.config.implementation ?? slug
     out.push({
       action,
       capability: slug,

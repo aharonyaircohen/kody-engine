@@ -122,11 +122,11 @@ export function operatorRequestBlock(why: string): string | null {
 /**
  * Render the job metadata that every minted Job carries. This is deliberately
  * generic: the model should know the execution point, capability, implementation, agent,
- * and description without each executable inventing its own prompt tokens.
+ * and description without each implementation inventing its own prompt tokens.
  */
 export function jobReferenceBlock(
   profileName: string,
-  profile: Pick<Profile, "name" | "describe" | "agent" | "implementation" | "executable">,
+  profile: Pick<Profile, "name" | "describe" | "agent" | "implementation">,
   data: Record<string, unknown>,
 ): string | null {
   const jobId = typeof data.jobId === "string" && data.jobId.length > 0 ? data.jobId : null
@@ -140,17 +140,15 @@ export function jobReferenceBlock(
   const capability =
     typeof data.jobCapability === "string" && data.jobCapability.length > 0
       ? data.jobCapability
-      : profile.executable
+      : profile.implementation
         ? profile.name
         : null
   const implementation =
     typeof profile.implementation === "string" && profile.implementation.length > 0
       ? profile.implementation
-      : typeof profile.executable === "string" && profile.executable.length > 0
-        ? profile.executable
-        : typeof data.jobImplementation === "string" && data.jobImplementation.length > 0
-          ? data.jobImplementation
-          : profileName
+      : typeof data.jobImplementation === "string" && data.jobImplementation.length > 0
+        ? data.jobImplementation
+        : profileName
   const agent =
     typeof profile.agent === "string" && profile.agent.length > 0
       ? profile.agent

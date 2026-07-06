@@ -7,7 +7,6 @@ export const CAPABILITY_BODY_FILE = "capability.md"
 export interface CapabilityFolderConfig {
   action?: string
   implementation?: string
-  executable?: string
   tickScript?: string
   capabilityKind?: "observe" | "act" | "verify"
   disabled?: boolean
@@ -19,7 +18,6 @@ export interface CapabilityFolderConfig {
   capabilityTools?: string[]
   capabilityToolMode?: "lock" | "append"
   implementations?: string[]
-  executables?: string[]
   role?: string
   describe?: string
   stage?: string
@@ -36,7 +34,6 @@ export interface CapabilityWorkflowStepConfig {
   capability: string
   action?: string
   implementation?: string
-  executable?: string
   target?: "issue" | "pr"
   reason?: string
   agent?: string
@@ -105,11 +102,10 @@ export function readCapabilityFolder(root: string, slug: string): CapabilityFold
 
 export function parseCapabilityConfig(raw: Record<string, unknown>): CapabilityFolderConfig {
   const tools = stringList(raw.tools ?? raw.capabilityTools ?? raw.capabilityTools)
-  const implementations = stringList(raw.implementations ?? raw.executables)
+  const implementations = stringList(raw.implementations)
   return {
     action: stringField(raw.action),
-    implementation: stringField(raw.implementation ?? raw.executable),
-    executable: stringField(raw.executable),
+    implementation: stringField(raw.implementation),
     tickScript: stringField(raw.tickScript),
     capabilityKind: parseCapabilityKind(raw.capabilityKind),
     disabled: typeof raw.disabled === "boolean" ? raw.disabled : undefined,
@@ -121,7 +117,6 @@ export function parseCapabilityConfig(raw: Record<string, unknown>): CapabilityF
     capabilityTools: tools,
     capabilityToolMode: parseCapabilityToolMode(raw.capabilityToolMode),
     implementations,
-    executables: stringList(raw.executables),
     role: stringField(raw.role),
     describe: stringField(raw.describe),
     stage: stringField(raw.stage),
@@ -205,7 +200,7 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
   const raw = value as Record<string, unknown>
   const capability = stringField(raw.capability ?? raw.action)
   if (!capability || !isSafeSlug(capability)) return null
-  const implementation = stringField(raw.implementation ?? raw.executable)
+  const implementation = stringField(raw.implementation)
   const action = stringField(raw.action)
   const agent = stringField(raw.agent)
   const reason = stringField(raw.reason)
@@ -214,7 +209,7 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
   return {
     capability,
     ...(action && isSafeSlug(action) ? { action } : {}),
-    ...(implementation && isSafeSlug(implementation) ? { implementation, executable: implementation } : {}),
+    ...(implementation && isSafeSlug(implementation) ? { implementation } : {}),
     ...(target === "issue" || target === "pr" ? { target } : {}),
     ...(agent && isSafeSlug(agent) ? { agent } : {}),
     ...(reason ? { reason } : {}),

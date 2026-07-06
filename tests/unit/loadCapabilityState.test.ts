@@ -114,9 +114,9 @@ describe("loadCapabilityState capability-noun aliases (Phase 1 rename)", () => {
     expect(ctx.data.capabilityTitle).toBe("Folder Capability Title")
   })
 
-  it("populates executableSlug from profile.executable when set, else profile.name", async () => {
+  it("populates executableSlug from profile.implementation when set, else profile.name", async () => {
     const ctx = ctxFor()
-    const profile = profileFor({}, { executable: "capability-tick-scripted" })
+    const profile = profileFor({}, { implementation: "capability-tick-scripted" })
     await loadCapabilityState(ctx, profile, {})
     expect(ctx.data.executableSlug).toBe("capability-tick-scripted")
   })

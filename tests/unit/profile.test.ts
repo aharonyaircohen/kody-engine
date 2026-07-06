@@ -132,35 +132,35 @@ describe("profile: loadProfile", () => {
     expect(() => loadProfile(p)).not.toThrow()
   })
 
-  it("resolves a capability that references an executable (how) + overlays who/when/tools", () => {
-    // A thin capability: references the engine's `merge` executable (the HOW), adds
+  it("resolves a capability that references an implementation + overlays who/when/tools", () => {
+    // A thin capability: references the engine's `merge` implementation (the HOW), adds
     // its own name + agent (WHO). No claudeCode of its own.
     const dir = tmpDir()
     const p = writeProfile(dir, {
       name: "merge-daily",
-      executable: "merge",
+      implementation: "merge",
       agent: "cto",
       every: "1d",
       capabilityTools: ["ensure_issue"],
     })
     const profile = loadProfile(p)
     expect(profile.name).toBe("merge-daily") // capability identity
-    expect(profile.executable).toBe("merge") // how (preserved for prompt/job reference)
+    expect(profile.implementation).toBe("merge") // how (preserved for prompt/job reference)
     expect(profile.agent).toBe("cto") // who (overlaid)
     expect((profile as unknown as Record<string, unknown>).every).toBeUndefined() // legacy cadence ignored
     expect(profile.capabilityTools).toEqual(["ensure_issue"]) // toolbox (overlaid)
     // how came from the referenced implementation profile: canonical
-    // capabilities resolve before legacy executables during migration.
+    // capabilities resolve before bundled implementations during migration.
     const resolvedMerge = resolveExecutable("merge")
     expect(resolvedMerge).toBeTruthy()
     expect(profile.dir).toBe(path.dirname(resolvedMerge!))
     expect(profile.claudeCode).toBeTruthy()
   })
 
-  it("throws when a capability references an unknown executable", () => {
+  it("throws when a capability references an unknown implementation", () => {
     const dir = tmpDir()
-    const p = writeProfile(dir, { name: "x", executable: "no-such-executable-xyz" })
-    expect(() => loadProfile(p)).toThrow(/references unknown executable/)
+    const p = writeProfile(dir, { name: "x", implementation: "no-such-implementation-xyz" })
+    expect(() => loadProfile(p)).toThrow(/references unknown implementation/)
   })
 
   it("throws on missing file", () => {

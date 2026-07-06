@@ -542,8 +542,7 @@ function routeStepForLog(step: GoalRouteStep): Record<string, unknown> {
     evidence: step.evidence,
     stage: step.stage,
     capability: step.capability,
-    implementation: step.implementation ?? step.executable,
-    executable: step.executable,
+    implementation: step.implementation,
     args: step.args,
     saveReport: step.saveReport === true ? true : undefined,
   })

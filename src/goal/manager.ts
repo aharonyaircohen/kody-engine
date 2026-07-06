@@ -14,7 +14,6 @@ export interface GoalRouteStep {
   stage: string
   capability: string
   implementation?: string
-  executable?: string
   args?: Record<string, unknown>
   saveReport?: boolean
   onPending?: GoalRoutePolicy
@@ -75,7 +74,6 @@ export type ManagedGoalDecision =
       stage: string
       capability: string
       implementation?: string
-      executable?: string
       cliArgs: Record<string, unknown>
       saveReport?: boolean
     }
@@ -259,8 +257,7 @@ export function planManagedGoalTick(goal: ManagedGoal): ManagedGoalDecision {
     evidence: missing,
     stage: step.stage,
     capability: step.capability,
-    implementation: step.implementation ?? step.executable,
-    executable: step.executable,
+    implementation: step.implementation,
     cliArgs: resolved.cliArgs,
     ...(step.saveReport === true ? { saveReport: true } : {}),
   }
@@ -392,13 +389,7 @@ function asRoute(value: unknown): GoalRouteStep[] | null {
       evidence: raw.evidence,
       stage: raw.stage,
       capability: raw.capability,
-      implementation:
-        typeof raw.implementation === "string"
-          ? raw.implementation
-          : typeof raw.executable === "string"
-            ? raw.executable
-            : undefined,
-      executable: typeof raw.executable === "string" ? raw.executable : undefined,
+      implementation: typeof raw.implementation === "string" ? raw.implementation : undefined,
       args: args ?? undefined,
       saveReport: raw.saveReport === true,
       onPending: asRoutePolicy(raw.onPending),

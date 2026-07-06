@@ -175,9 +175,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   const capabilitySelectedImplementation =
     resolvedCapability?.implementation ??
     capabilityContext?.config.implementation ??
-    capabilityContext?.config.executable ??
     capabilityContext?.config.implementations?.[0] ??
-    capabilityContext?.config.executables?.[0] ??
     (capabilityContext?.config.role ? capabilityContext.slug : undefined) ??
     (capabilityContext?.config.tickScript ? "capability-tick-scripted" : undefined)
   const profileName = explicitImplementation ?? capabilitySelectedImplementation
@@ -427,7 +425,6 @@ function workflowStepToJob(step: CapabilityWorkflowStepConfig, parent: Job, chai
     action,
     capability: step.capability,
     ...(step.implementation ? { implementation: step.implementation } : {}),
-    ...(step.executable ? { executable: step.executable } : {}),
     ...(composeStepWhy(parent.why, step) ? { why: composeStepWhy(parent.why, step) } : {}),
     ...((step.agent ?? parent.agent) ? { agent: step.agent ?? parent.agent } : {}),
     ...(parent.schedule ? { schedule: parent.schedule } : {}),

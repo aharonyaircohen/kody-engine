@@ -15,7 +15,7 @@
  *
  *   ctx.data.capabilitySlug       alias of jobSlug
  *   ctx.data.capabilityTitle      profile.describe
- *   ctx.data.executableSlug profile.executable ?? profile.name
+ *   ctx.data.executableSlug profile.implementation ?? profile.name
  *   ctx.data.agentSlug      profile.agent ?? ""
  *   ctx.data.capabilitySchedule   runtime job schedule when supplied, otherwise empty
  *
@@ -42,12 +42,12 @@ export const loadCapabilityState: PreflightScript = async (ctx, profile, args) =
   // Capability-noun aliases. A folder-capability's body is the profile's own `capability.md`
   // (rendered by composePrompt via the `{{jobIntent}}` / `{{capabilityIntent}}`
   // token path is not relevant here — the folder capability's body comes from the
-  // resolved executable, not the capability). It still has a slug, a title (the
-  // profile.describe), and a (resolved) executable slug — all required for the
+  // resolved implementation, not the capability). It still has a slug, a title (the
+  // profile.describe), and a resolved implementation slug — all required for the
   // `{{capabilityReference}}` block.
   ctx.data.capabilitySlug = slug
   ctx.data.capabilityTitle = profile.describe
-  ctx.data.executableSlug = profile.implementation ?? profile.executable ?? profile.name
+  ctx.data.executableSlug = profile.implementation ?? profile.name
   ctx.data.agentSlug = profile.agent ?? ""
   ctx.data.agentTitle = ""
   // Runtime cadence comes from the scheduled job/goal/loop, not the capability profile.

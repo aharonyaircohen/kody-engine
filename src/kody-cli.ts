@@ -550,7 +550,7 @@ export async function runCi(argv: string[]): Promise<number> {
         action: route.action,
         capability: route.capability,
         workflow: route.workflow,
-        implementation: route.implementation ?? route.executable,
+        implementation: route.implementation,
         cliArgs: { ...route.cliArgs, ...forceRunCliArgs },
         flavor: "instant",
         force: true,

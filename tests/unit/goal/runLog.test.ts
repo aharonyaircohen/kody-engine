@@ -84,7 +84,6 @@ describe("goal run logs", () => {
         evidence: "releasePrExists",
         dispatch: {
           capability: "release-prepare",
-          executable: "release-prepare",
           cliArgs: { goal: "web-release" },
         },
       },
@@ -212,7 +211,6 @@ describe("goal run logs", () => {
         target: { type: "goal", id: "web-release" },
         dispatch: {
           action: "goal-manager",
-          executable: "goal-manager",
           cliArgs: { goal: "web-release" },
         },
       },
@@ -258,7 +256,6 @@ describe("goal run logs", () => {
           evidence: "releasePrExists",
           stage: "prepare",
           capability: "release-prepare",
-          executable: "release-prepare",
           args: { goal: "release" },
         },
       ],

@@ -680,7 +680,7 @@ describe("standing goal capability scheduling", () => {
   })
 
   it("dispatches runnable capability and records goal scheduling decision", async () => {
-    writeCapability("ci-health", { agent: "kody", executable: "ci-check" })
+    writeCapability("ci-health", { agent: "kody", implementation: "ci-check" })
     const raw = goalState()
     const ctx = fakeCtx(raw)
 
@@ -710,7 +710,7 @@ describe("standing goal capability scheduling", () => {
   })
 
   it("keeps route-free agentLoops on agentLoop loop", async () => {
-    writeCapability("ci-health", { agent: "kody", executable: "ci-check" })
+    writeCapability("ci-health", { agent: "kody", implementation: "ci-check" })
     const raw = goalState(["ci-health"])
     raw.extra.type = "agentLoop"
     const ctx = fakeCtx(raw)
@@ -733,7 +733,7 @@ describe("standing goal capability scheduling", () => {
   })
 
   it("dispatches explicit capability target loops without a separate capability list", async () => {
-    writeCapability("ci-health", { agent: "kody", executable: "ci-check" })
+    writeCapability("ci-health", { agent: "kody", implementation: "ci-check" })
     const raw = goalState([])
     raw.extra.type = "agentLoop"
     raw.extra.loopTarget = { type: "capability", id: "ci-health" }
@@ -761,7 +761,7 @@ describe("standing goal capability scheduling", () => {
   it("passes capability slug when executable inputs declare capability", async () => {
     writeCapability("auto-fix-ci", {
       agent: "kody",
-      executable: "auto-fix-ci",
+      implementation: "auto-fix-ci",
       role: "utility",
       inputs: [{ name: "capability", flag: "--capability", type: "string", required: true }],
     })
@@ -782,8 +782,8 @@ describe("standing goal capability scheduling", () => {
   })
 
   it("selects the oldest runnable capability on each loop tick", async () => {
-    writeCapability("ci-health", { agent: "kody", executable: "ci-check" })
-    writeCapability("stale-prs", { agent: "kody", executable: "pr-check" })
+    writeCapability("ci-health", { agent: "kody", implementation: "ci-check" })
+    writeCapability("stale-prs", { agent: "kody", implementation: "pr-check" })
     writeCapabilityState("ci-health", "2026-01-02T00:00:00.000Z")
     writeCapabilityState("stale-prs", "2026-01-01T00:00:00.000Z")
     const raw = goalState(["ci-health", "stale-prs"])

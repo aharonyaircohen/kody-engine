@@ -1,5 +1,5 @@
 /**
- * Types shared by the generic executor and executables.
+ * Types shared by the generic executor and implementation profiles.
  *
  * The executor reads a Profile, validates the user's CLI args against
  * Profile.inputs, then runs the declared preflight scripts → agent →
@@ -20,42 +20,39 @@ export interface Profile {
   /**
    * Public action name owned by a capability. A user may type `@kody <action>`;
    * dispatch resolves that action to the capability, then the capability selects the
-   * implementation executable. Absent → the capability slug/name is the action.
+   * implementation profile. Absent → the capability slug/name is the action.
    */
   action?: string
   /**
-   * Optional agent this executable runs *as*. When set, the executor
+   * Optional agent this implementation runs *as*. When set, the executor
    * loads hydrated `.kody/agents/<agent>.md` and injects that agent (authoritative
-   * identity) ahead of the executable's own system-prompt append. This is the
-   * unification hook: a "capability" is just an executable + an agent. Absent →
+   * identity) ahead of the implementation's own system-prompt append. This is the
+   * unification hook: a capability can select an implementation + an agent. Absent →
    * runs with no agent (unchanged legacy behaviour). A declared-but-missing
    * agent file is fatal at run time (see src/agents.ts).
    */
   agent?: string
   describe: string
   /**
-   * Semantic role — what this executable IS, not when it runs.
+   * Semantic role — what this implementation IS, not when it runs.
    *   - primitive:    single-step agent executor (flow → agent → verify → commit → PR).
    *   - orchestrator: no-agent, drives primitives via a postflight transition table
    *                   (comment-based, one GHA run per step).
    *   - container:    no-agent, runs declared `children` sequentially in-process
    *                   (one GHA run for the whole flow). Routing is done by per-child
    *                   `next` maps over action types — no @kody comments dispatched.
-   *   - watch:        scheduled observer that inspects repo state and may trigger other executables.
+   *   - watch:        scheduled observer that inspects repo state and may trigger other implementations.
    *   - utility:      no-agent, one-off administrative work (scaffolding, release, etc.).
    *
    * Roles enforce shape at profile-load time and let help/dispatch treat
-   * executables differently by category.
+   * implementations differently by category.
    */
   role: "primitive" | "orchestrator" | "container" | "watch" | "utility"
   /**
    * Capability contract profiles can point at a separate implementation by name.
-   * `executable` remains a legacy alias while old assets migrate.
    */
   implementation?: string
-  executable?: string
   implementations?: string[]
-  executables?: string[]
   /** Hide a capability implementation profile from public action discovery. */
   internal?: boolean
   /** Explicit public-action flag for capability profiles. */
@@ -99,7 +96,7 @@ export interface Profile {
   /** Cron expression for scheduled profiles (e.g. "0 8 * * MON"). */
   schedule?: string
   /**
-   * Task-state phase label emitted when this executable completes successfully.
+   * Task-state phase label emitted when this implementation completes successfully.
    * Failing actions always set phase to "failed" regardless. Omitted → "idle".
    * Lets state.ts stay generic — phase semantics live on the profile.
    */
@@ -115,7 +112,7 @@ export interface Profile {
    *
    * Lifecycles exist to consolidate orchestration boilerplate (label,
    * context loading, verify, commit, comment) that recurs across many
-   * executables. Per-executable specifics still go in `scripts.preflight`
+   * implementations. Per-implementation specifics still go in `scripts.preflight`
    * and `scripts.postflight` — the lifecycle wraps them, it doesn't
    * replace them.
    */
@@ -131,14 +128,14 @@ export interface Profile {
   }
   outputContract?: OutputContract
   /**
-   * Declared artifacts consumed by this executable. The resolveArtifacts
+   * Declared artifacts consumed by this implementation. The resolveArtifacts
    * preflight loads each into ctx.data.artifacts[name] from the task-state
-   * comment. If `required: true` and the artifact is absent, the executable
+   * comment. If `required: true` and the artifact is absent, the implementation
    * fails fast.
    */
   inputArtifacts: InputArtifactSpec[]
   /**
-   * Declared artifacts produced by this executable. The persistArtifacts
+   * Declared artifacts produced by this implementation. The persistArtifacts
    * postflight reads the named source field from ctx.data and writes an
    * Artifact entry into the task state's `artifacts` map.
    */
