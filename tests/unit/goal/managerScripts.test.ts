@@ -18,6 +18,7 @@ function releaseGoal(overrides: Partial<ManagedGoal> = {}): ManagedGoal {
     type: "release",
     destination: { outcome: "publish and verify", evidence: ["releasePrExists", "qaPassed"] },
     capabilities: ["release-prepare", "qa-goal"],
+    runWithoutApproval: true,
     route: [
       {
         evidence: "releasePrExists",
@@ -92,6 +93,28 @@ describe("advanceManagedGoal", () => {
     expect(raw.facts).toEqual({ pendingEvidence: "releasePrExists" })
   })
 
+  it("does not dispatch when run without approval is off", async () => {
+    const ctx = fakeCtx(state(goalExtra({ runWithoutApproval: false })))
+
+    await advanceManagedGoal(ctx, fakeProfile())
+
+    expect(ctx.output.nextDispatch).toBeUndefined()
+    expect(ctx.output.reason).toBe("Run without approval is off for Goal release-v1-2-3")
+  })
+
+  it("allows a manual forced run when run without approval is off", async () => {
+    const ctx = fakeCtx(state(goalExtra({ runWithoutApproval: false })))
+    ctx.data.jobForce = true
+
+    await advanceManagedGoal(ctx, fakeProfile())
+
+    expect(ctx.output.nextDispatch).toEqual({
+      capability: "release-prepare",
+      cliArgs: {},
+      resultTarget: { type: "goal", id: "release-v1-2-3", evidence: "releasePrExists" },
+    })
+  })
+
   it("retries the active pending evidence instead of waiting forever", async () => {
     const ctx = fakeCtx(state(goalExtra({ stage: "prepare", facts: { pendingEvidence: "releasePrExists" } })))
 
@@ -162,6 +185,7 @@ describe("advanceManagedGoal", () => {
     const ctx = fakeCtx(
       state({
         type: "release",
+        runWithoutApproval: true,
         destination: { outcome: "Publish Kody Dashboard to production safely." },
       }),
     )
@@ -206,6 +230,7 @@ describe("advanceManagedGoal", () => {
     const ctx = fakeCtx(
       state({
         type: "release",
+        runWithoutApproval: true,
         destination: { outcome: "Publish Kody Dashboard to production safely." },
       }),
     )

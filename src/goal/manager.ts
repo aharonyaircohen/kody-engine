@@ -50,6 +50,7 @@ export interface ManagedGoal {
   destination: GoalDestination
   capabilities: string[]
   route: GoalRouteStep[]
+  runWithoutApproval?: boolean
   workflowRef?: ManagedWorkflowRef
   schedule?: string
   preferredRunTime?: ManagedGoalPreferredRunTime
@@ -481,6 +482,7 @@ export function managedGoalFromState(state: GoalState): ManagedGoal | null {
     destination: { outcome: destination.outcome, evidence },
     capabilities,
     route,
+    ...(extra.runWithoutApproval === true ? { runWithoutApproval: true } : {}),
     workflowRef: asWorkflowRef(extra.workflowRef),
     schedule: typeof extra.schedule === "string" ? extra.schedule : undefined,
     preferredRunTime: asPreferredRunTime(extra.preferredRunTime),
@@ -503,6 +505,7 @@ export function writeManagedGoalToState(state: GoalState, goal: ManagedGoal): Go
       destination: goal.destination,
       capabilities: goal.capabilities,
       route: goal.route,
+      ...(goal.runWithoutApproval === true ? { runWithoutApproval: true } : {}),
       workflowRef: goal.workflowRef,
       stage: goal.stage,
       facts: goal.facts,

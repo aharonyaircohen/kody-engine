@@ -9,6 +9,7 @@ export interface WorkflowDefinition {
   version: 1
   name: string
   capabilities: string[]
+  runWithoutApproval?: boolean
   steps?: CapabilityWorkflowStepConfig[]
   createdAt?: string
   updatedAt?: string
@@ -40,6 +41,7 @@ export function normalizeWorkflowDefinition(value: unknown): WorkflowDefinition 
     version: 1,
     name,
     capabilities,
+    ...(raw.runWithoutApproval === true ? { runWithoutApproval: true } : {}),
     ...(steps ? { steps } : {}),
     ...(typeof raw.createdAt === "string" ? { createdAt: raw.createdAt } : {}),
     ...(typeof raw.updatedAt === "string" ? { updatedAt: raw.updatedAt } : {}),

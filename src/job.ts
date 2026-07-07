@@ -242,6 +242,7 @@ async function runCapabilityImplementationStep(
   // The job carries *when*: a scheduled job's cadence, recorded in the ledger.
   if (valid.schedule !== undefined && valid.schedule.length > 0) preloadedData.jobSchedule = valid.schedule
   if (valid.saveReport === true) preloadedData.jobSaveReport = true
+  if (valid.force === true) preloadedData.jobForce = true
   if (valid.resultTarget) preloadedData.capabilityResultTarget = valid.resultTarget
   if (capabilityContext) {
     preloadedData.capabilitySlug = capabilityContext.slug

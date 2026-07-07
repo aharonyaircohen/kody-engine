@@ -9,6 +9,7 @@ import {
 } from "../goal/manager.js"
 import { goalRunLogChange, goalRunLogSnapshot, stageGoalRunLogEvent } from "../goal/runLog.js"
 import { serializeGoalState } from "../goal/state.js"
+import { fetchGoalState } from "../goal/stateStore.js"
 import {
   type GoalLoopTargetResolution,
   goalLoopNow,
@@ -18,6 +19,7 @@ import {
 import { expandManagedGoalState } from "../goal/typeDefinitions.js"
 import type { PreflightScript } from "../implementations/types.js"
 import { gh } from "../issue.js"
+import { readWorkflowDefinition } from "../workflowDefinitions.js"
 import {
   type GoalCapabilityScheduleState,
   isCapabilityCadenceGoal,
@@ -132,6 +134,15 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     goal.raw = writeManagedGoalToState({ ...goal.raw, state: goal.state }, managed)
     goal.raw.extra.scheduleState = decision.scheduleState
     ctx.data.managedGoalDecision = decision
+    const autonomyBlock =
+      decision.kind === "dispatch" && decision.dispatch
+        ? autonomyBlockReason(ctx, goal.id, managed, decision.dispatch)
+        : null
+    if (autonomyBlock) {
+      stageAutonomyBlocked(ctx.data, goal.id, managed, goal.state, autonomyBlock)
+      ctx.output.reason = autonomyBlock
+      return
+    }
     if (decision.kind === "dispatch" && decision.dispatch) {
       ctx.output.nextDispatch = {
         ...(decision.dispatch.action ? { action: decision.dispatch.action } : {}),
@@ -195,6 +206,15 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     goal.raw = writeManagedGoalToState({ ...goal.raw, state: goal.state }, managed)
     goal.raw.extra.scheduleState = decision.scheduleState
     ctx.data.managedGoalDecision = decision
+    const autonomyBlock =
+      decision.kind === "dispatch" && decision.dispatch
+        ? autonomyBlockReason(ctx, goal.id, managed, decision.dispatch)
+        : null
+    if (autonomyBlock) {
+      stageAutonomyBlocked(ctx.data, goal.id, managed, goal.state, autonomyBlock)
+      ctx.output.reason = autonomyBlock
+      return
+    }
     if (decision.kind === "dispatch" && decision.dispatch) {
       ctx.output.nextDispatch = {
         capability: decision.dispatch.capability,
@@ -251,6 +271,22 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
 
   goal.raw = writeManagedGoalToState({ ...goal.raw, state: goal.state }, managed)
   const afterDecisionSnapshot = goalRunLogSnapshot(goal.id, goal.state, managed)
+  if (decision.kind === "dispatch" || decision.kind === "dispatchWorkflow") {
+    const planned =
+      decision.kind === "dispatchWorkflow"
+        ? { workflow: decision.workflow, cliArgs: decision.cliArgs }
+        : {
+            capability: decision.capability,
+            ...(decision.implementation ? { implementation: decision.implementation } : {}),
+            cliArgs: decision.cliArgs,
+          }
+    const autonomyBlock = autonomyBlockReason(ctx, goal.id, managed, planned)
+    if (autonomyBlock) {
+      stageAutonomyBlocked(ctx.data, goal.id, managed, goal.state, autonomyBlock)
+      ctx.output.reason = autonomyBlock
+      return
+    }
+  }
   stageManagedGoalDecision(ctx.data, goal.id, managed, goal.state, decision, {
     goalSnapshot: afterDecisionSnapshot,
     inspection: {
@@ -288,6 +324,69 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     resultTarget: { type: "goal", id: goal.id, evidence: decision.evidence },
   }
   ctx.output.reason = `dispatch ${decision.capability} for ${decision.evidence}`
+}
+
+type PlannedDispatch = {
+  action?: string
+  capability?: string
+  workflow?: string
+  implementation?: string
+  cliArgs: Record<string, unknown>
+}
+
+function autonomyBlockReason(
+  ctx: Parameters<PreflightScript>[0],
+  goalId: string,
+  goal: ManagedGoal,
+  dispatch: PlannedDispatch,
+): string | null {
+  if (ctx.data.jobForce === true) return null
+  if (goal.runWithoutApproval !== true) {
+    return `Run without approval is off for ${managedModelKind(goal)} ${goalId}`
+  }
+
+  if (dispatch.workflow) {
+    const workflow = readWorkflowDefinition(ctx.config, ctx.cwd, dispatch.workflow)
+    if (workflow && workflow.runWithoutApproval !== true) {
+      return `Run without approval is off for workflow ${dispatch.workflow}`
+    }
+  }
+
+  const targetGoal =
+    dispatch.action === "goal-manager" && typeof dispatch.cliArgs.goal === "string" ? dispatch.cliArgs.goal : null
+  if (targetGoal && targetGoal !== goalId) {
+    const target = fetchGoalState(ctx.config, targetGoal, ctx.cwd)
+    const targetManaged = target ? managedGoalFromState(expandManagedGoalState(target)) : null
+    if (targetManaged && targetManaged.runWithoutApproval !== true) {
+      return `Run without approval is off for goal ${targetGoal}`
+    }
+  }
+
+  return null
+}
+
+function managedModelKind(goal: ManagedGoal): "Loop" | "Goal" {
+  return goal.loopTarget || goal.schedule ? "Loop" : "Goal"
+}
+
+function stageAutonomyBlocked(
+  data: Record<string, unknown>,
+  goalId: string,
+  goal: ManagedGoal,
+  goalState: string,
+  reason: string,
+): void {
+  stageGoalRunLogEvent(data, goalId, {
+    source: "goal-manager",
+    event: "goal.tick.wait",
+    goalType: goal.type,
+    goalState,
+    stage: goal.stage,
+    status: "wait",
+    reason,
+    goal: goalRunLogSnapshot(goalId, goalState, goal),
+    decision: { kind: "wait", reason },
+  })
 }
 
 function stageManagedGoalDecision(

@@ -54,6 +54,26 @@ function writeRepoGoal(stateRoot: string, goalId: string, state: Record<string, 
         managed: true,
         managedModel: state.scheduleMode === "agentLoop" || state.type === "agentLoop" ? "agentLoop" : "agentGoal",
         items: [],
+        runWithoutApproval: true,
+        ...state,
+      },
+      null,
+      2,
+    ),
+  )
+}
+
+function writeRepoWorkflow(stateRoot: string, workflowId: string, state: Record<string, unknown>): void {
+  const file = path.join(stateRoot, "state", "workflows", workflowId, "workflow.json")
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(
+    file,
+    JSON.stringify(
+      {
+        version: 1,
+        name: workflowId,
+        capabilities: ["ci-health"],
+        runWithoutApproval: true,
         ...state,
       },
       null,
@@ -70,7 +90,7 @@ function readRepoGoal(stateRoot: string, goalId: string): Record<string, unknown
 function writeLocalGoalTemplate(goalId: string, state: Record<string, unknown>): void {
   const file = path.join(tmp, ".kody", "goals", "templates", goalId, "state.json")
   fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, JSON.stringify(state, null, 2))
+  fs.writeFileSync(file, JSON.stringify({ runWithoutApproval: true, ...state }, null, 2))
 }
 
 function installStateRepoGhStub(): string {
@@ -164,6 +184,7 @@ function goalState(capabilities: string[] = ["ci-health"]): GoalState {
         outcome: "PRs stay mergeable",
         evidence: [],
       },
+      runWithoutApproval: true,
       capabilities,
       route: [],
       stage: "watching",
@@ -178,6 +199,7 @@ function goalTargetLoop(): ManagedGoal {
     type: "agentLoop",
     destination: { outcome: "daily web release loop", evidence: [] },
     capabilities: [],
+    runWithoutApproval: true,
     route: [],
     facts: {},
     blockers: [],
@@ -191,6 +213,7 @@ function workflowTargetLoop(): ManagedGoal {
     type: "agentLoop",
     destination: { outcome: "daily release hygiene", evidence: [] },
     capabilities: [],
+    runWithoutApproval: true,
     route: [],
     facts: {},
     blockers: [],
@@ -646,6 +669,13 @@ describe("standing goal capability scheduling", () => {
   })
 
   it("hands workflow-backed goals to the referenced workflow", async () => {
+    const stateRoot = path.join(tmp, "state-repo")
+    writeRepoWorkflow(stateRoot, "web-release", {})
+    const oldPath = process.env.PATH
+    const oldStateRoot = process.env.KODY_TEST_STATE_ROOT
+    process.env.PATH = `${installStateRepoGhStub()}${path.delimiter}${oldPath || ""}`
+    process.env.KODY_TEST_STATE_ROOT = stateRoot
+
     const raw = goalState([])
     raw.extra.type = "web-release"
     delete raw.extra.scheduleMode
@@ -663,20 +693,30 @@ describe("standing goal capability scheduling", () => {
     }
     raw.extra.facts = { issue: 42, releasePrExists: false }
     const ctx = fakeCtx(raw, "web-release-2026-07-05")
+    ;(ctx.config as unknown as Record<string, unknown>).state = { repo: "o/r", path: "state" }
 
-    await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+    try {
+      await advanceManagedGoal(ctx, {} as unknown as Profile, {})
 
-    expect(ctx.output.nextDispatch).toEqual({
-      workflow: "web-release",
-      cliArgs: { issue: 42, goal: "web-release-2026-07-05" },
-      resultTarget: { type: "goal", id: "web-release-2026-07-05" },
-    })
-    const updatedGoal = ctx.data.goal as GoalCtx
-    expect(updatedGoal.raw!.extra.stage).toBe("workflow")
-    expect(updatedGoal.raw!.extra.facts).toMatchObject({
-      issue: 42,
-      pendingEvidence: "releasePrExists",
-    })
+      expect(ctx.output.nextDispatch).toEqual({
+        workflow: "web-release",
+        cliArgs: { issue: 42, goal: "web-release-2026-07-05" },
+        resultTarget: { type: "goal", id: "web-release-2026-07-05" },
+      })
+      const updatedGoal = ctx.data.goal as GoalCtx
+      expect(updatedGoal.raw!.extra.stage).toBe("workflow")
+      expect(updatedGoal.raw!.extra.facts).toMatchObject({
+        issue: 42,
+        pendingEvidence: "releasePrExists",
+      })
+    } finally {
+      process.env.PATH = oldPath
+      if (oldStateRoot === undefined) {
+        delete process.env.KODY_TEST_STATE_ROOT
+      } else {
+        process.env.KODY_TEST_STATE_ROOT = oldStateRoot
+      }
+    }
   })
 
   it("dispatches runnable capability and records goal scheduling decision", async () => {
