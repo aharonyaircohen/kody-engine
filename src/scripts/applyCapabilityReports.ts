@@ -21,9 +21,11 @@ export const applyCapabilityReports: PostflightScript = async (ctx, _profile, ag
   const reports = collectReports(ctx.data.capabilityReports, agentResult)
   const results = collectResults(ctx.data.capabilityResults, agentResult)
   const resultTarget = parseResultTarget(ctx.data.capabilityResultTarget)
+  const evidenceContext = parseEvidenceContext(ctx.data.capabilityEvidence)
   const resultGoalId =
     resultTarget?.id ?? (typeof ctx.args.goal === "string" && ctx.args.goal.length > 0 ? ctx.args.goal : null)
   const explicitEvidence =
+    evidenceContext?.evidence ??
     resultTarget?.evidence ??
     (typeof ctx.args.evidence === "string" && ctx.args.evidence.length > 0 ? ctx.args.evidence : undefined)
   const evidenceItems = collectGoalCapabilityEvidence(reports, results, resultGoalId, explicitEvidence)
@@ -274,6 +276,14 @@ function parseResultTarget(raw: unknown): { type: "goal"; id: string; evidence?:
     id: target.id.trim(),
     ...(evidence ? { evidence } : {}),
   }
+}
+
+function parseEvidenceContext(raw: unknown): { evidence?: string } | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
+  const context = raw as Record<string, unknown>
+  const evidence =
+    typeof context.evidence === "string" && context.evidence.trim().length > 0 ? context.evidence.trim() : undefined
+  return evidence ? { evidence } : null
 }
 
 function collectGoalCapabilityEvidence(

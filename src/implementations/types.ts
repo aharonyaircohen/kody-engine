@@ -401,7 +401,6 @@ export interface OutputContract {
 export interface CapabilityResultTarget {
   type: "goal"
   id: string
-  evidence?: string
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -439,6 +438,7 @@ export interface Context {
       implementation?: string
       cliArgs: Record<string, unknown>
       workflowFacts?: Record<string, unknown>
+      evidence?: string
       saveReport?: boolean
       resultTarget?: CapabilityResultTarget
     }
@@ -452,6 +452,7 @@ export interface Context {
       implementation?: string
       cliArgs: Record<string, unknown>
       workflowFacts?: Record<string, unknown>
+      evidence?: string
       saveReport?: boolean
       resultTarget?: CapabilityResultTarget
     }
@@ -521,6 +522,8 @@ export interface Job {
   cliArgs: Record<string, unknown>
   /** Internal workflow resume context. Not passed to capability CLI args. */
   workflowFacts?: Record<string, unknown>
+  /** Evidence this capability run is expected to report, independent of who consumes it. */
+  evidence?: string
   /** Run once now ("instant") or on the schedule ("scheduled"). */
   flavor: JobFlavor
   /** Manual force-run (bypass cadence) for a scheduled job. */

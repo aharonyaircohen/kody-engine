@@ -243,6 +243,7 @@ export interface ExecutorOutput {
     implementation?: string
     cliArgs: Record<string, unknown>
     workflowFacts?: Record<string, unknown>
+    evidence?: string
     saveReport?: boolean
     resultTarget?: Job["resultTarget"]
   }
@@ -967,6 +968,7 @@ function handoffToJob(handoff: {
   implementation?: string
   cliArgs: Record<string, unknown>
   workflowFacts?: Record<string, unknown>
+  evidence?: string
   saveReport?: boolean
   resultTarget?: Job["resultTarget"]
 }): Job | null {
@@ -979,6 +981,7 @@ function handoffToJob(handoff: {
     implementation: handoff.implementation,
     cliArgs: handoff.cliArgs,
     workflowFacts: handoff.workflowFacts,
+    evidence: handoff.evidence,
     flavor: "instant",
     saveReport: handoff.saveReport === true,
     resultTarget: handoff.resultTarget,

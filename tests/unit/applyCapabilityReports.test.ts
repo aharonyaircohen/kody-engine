@@ -463,7 +463,8 @@ describe("applyCapabilityReports", () => {
 
     await applyCapabilityReports(
       fakeCtx({
-        capabilityResultTarget: { type: "goal", id: "release-aguy", evidence: "productionDeployed" },
+        capabilityEvidence: { evidence: "productionDeployed" },
+        capabilityResultTarget: { type: "goal", id: "release-aguy" },
         capabilityResults: [
           {
             version: 1,

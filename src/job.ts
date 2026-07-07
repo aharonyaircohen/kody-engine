@@ -95,6 +95,7 @@ export function validateJob(input: unknown): Job {
       j.workflowFacts && typeof j.workflowFacts === "object" && !Array.isArray(j.workflowFacts)
         ? (j.workflowFacts as Record<string, unknown>)
         : undefined,
+    evidence: parseJobEvidence(j),
     flavor: j.flavor,
     force: j.force === true,
     saveReport: j.saveReport === true,
@@ -107,13 +108,18 @@ function parseCapabilityResultTarget(raw: unknown): CapabilityResultTarget | und
   const target = raw as Record<string, unknown>
   if (target.type !== "goal") return undefined
   if (typeof target.id !== "string" || target.id.trim().length === 0) return undefined
-  const evidence =
-    typeof target.evidence === "string" && target.evidence.trim().length > 0 ? target.evidence.trim() : undefined
   return {
     type: "goal",
     id: target.id.trim(),
-    ...(evidence ? { evidence } : {}),
   }
+}
+
+function parseJobEvidence(job: Record<string, unknown>): string | undefined {
+  if (typeof job.evidence === "string" && job.evidence.trim().length > 0) return job.evidence.trim()
+  const target = job.resultTarget
+  if (!target || typeof target !== "object" || Array.isArray(target)) return undefined
+  const evidence = (target as Record<string, unknown>).evidence
+  return typeof evidence === "string" && evidence.trim().length > 0 ? evidence.trim() : undefined
 }
 
 /** Ambient inputs the executor needs that don't belong to the Job itself. */
@@ -247,6 +253,7 @@ async function runCapabilityImplementationStep(
   if (valid.schedule !== undefined && valid.schedule.length > 0) preloadedData.jobSchedule = valid.schedule
   if (valid.saveReport === true) preloadedData.jobSaveReport = true
   if (valid.force === true) preloadedData.jobForce = true
+  if (valid.evidence) preloadedData.capabilityEvidence = { evidence: valid.evidence }
   if (valid.resultTarget) preloadedData.capabilityResultTarget = valid.resultTarget
   if (capabilityContext) {
     preloadedData.capabilitySlug = capabilityContext.slug
@@ -336,7 +343,7 @@ async function runCapabilityWorkflow(
     ],
   }
   let result: ExecutorOutput = { exitCode: 0 }
-  const startIndex = workflowResumeStartIndex(workflow.steps, parent.resultTarget?.evidence)
+  const startIndex = workflowResumeStartIndex(workflow.steps, parent.evidence)
 
   for (let index = startIndex; index < workflow.steps.length; index++) {
     const step = workflow.steps[index]!
@@ -437,9 +444,11 @@ function workflowStepToJob(step: CapabilityWorkflowStepConfig, parent: Job, chai
     ...(parent.schedule ? { schedule: parent.schedule } : {}),
     ...(typeof target === "number" ? { target } : {}),
     cliArgs,
+    ...(step.evidence ? { evidence: step.evidence } : parent.evidence ? { evidence: parent.evidence } : {}),
     flavor: parent.flavor,
     force: parent.force,
     saveReport: step.saveReport === true || parent.saveReport === true,
+    ...(parent.resultTarget ? { resultTarget: parent.resultTarget } : {}),
   }
 }
 

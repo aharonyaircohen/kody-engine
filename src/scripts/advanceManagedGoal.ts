@@ -310,8 +310,9 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
       workflow: decision.workflow,
       cliArgs: decision.cliArgs,
       workflowFacts: scalarFacts(managed.facts),
+      evidence: decision.evidence,
       ...(decision.saveReport === true ? { saveReport: true } : {}),
-      resultTarget: { type: "goal", id: goal.id, evidence: decision.evidence },
+      resultTarget: { type: "goal", id: goal.id },
     }
     ctx.output.reason = `dispatch workflow ${decision.workflow} for ${decision.evidence}`
     return
@@ -320,9 +321,10 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
   ctx.output.nextDispatch = {
     capability: decision.capability,
     cliArgs: decision.cliArgs,
+    evidence: decision.evidence,
     ...(decision.implementation ? { implementation: decision.implementation } : {}),
     ...(decision.saveReport === true ? { saveReport: true } : {}),
-    resultTarget: { type: "goal", id: goal.id, evidence: decision.evidence },
+    resultTarget: { type: "goal", id: goal.id },
   }
   ctx.output.reason = `dispatch ${decision.capability} for ${decision.evidence}`
 }

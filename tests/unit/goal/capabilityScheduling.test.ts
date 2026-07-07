@@ -734,7 +734,8 @@ describe("standing goal capability scheduling", () => {
         workflow: "web-release",
         cliArgs: { issue: 42, goal: "web-release-2026-07-05" },
         workflowFacts: { issue: 42, releasePrExists: false },
-        resultTarget: { type: "goal", id: "web-release-2026-07-05", evidence: "releasePrExists" },
+        evidence: "releasePrExists",
+        resultTarget: { type: "goal", id: "web-release-2026-07-05" },
       })
       const updatedGoal = ctx.data.goal as GoalCtx
       expect(updatedGoal.raw!.extra.stage).toBe("workflow")

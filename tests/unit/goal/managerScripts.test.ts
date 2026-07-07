@@ -86,7 +86,8 @@ describe("advanceManagedGoal", () => {
     expect(ctx.output.nextDispatch).toEqual({
       capability: "release-prepare",
       cliArgs: {},
-      resultTarget: { type: "goal", id: "release-v1-2-3", evidence: "releasePrExists" },
+      evidence: "releasePrExists",
+      resultTarget: { type: "goal", id: "release-v1-2-3" },
     })
     const raw = ((ctx.data.goal as GoalCtx).raw as GoalState).extra
     expect(raw.stage).toBe("prepare")
@@ -111,7 +112,8 @@ describe("advanceManagedGoal", () => {
     expect(ctx.output.nextDispatch).toEqual({
       capability: "release-prepare",
       cliArgs: {},
-      resultTarget: { type: "goal", id: "release-v1-2-3", evidence: "releasePrExists" },
+      evidence: "releasePrExists",
+      resultTarget: { type: "goal", id: "release-v1-2-3" },
     })
   })
 
@@ -123,7 +125,8 @@ describe("advanceManagedGoal", () => {
     expect(ctx.output.nextDispatch).toEqual({
       capability: "release-prepare",
       cliArgs: {},
-      resultTarget: { type: "goal", id: "release-v1-2-3", evidence: "releasePrExists" },
+      evidence: "releasePrExists",
+      resultTarget: { type: "goal", id: "release-v1-2-3" },
     })
     const raw = ((ctx.data.goal as GoalCtx).raw as GoalState).extra
     expect(raw.stage).toBe("prepare")
@@ -150,7 +153,8 @@ describe("advanceManagedGoal", () => {
     expect(ctx.output.nextDispatch).toEqual({
       capability: "release-prepare",
       cliArgs: {},
-      resultTarget: { type: "goal", id: "release-v1-2-3", evidence: "releasePrExists" },
+      evidence: "releasePrExists",
+      resultTarget: { type: "goal", id: "release-v1-2-3" },
     })
   })
 
@@ -175,7 +179,8 @@ describe("advanceManagedGoal", () => {
     expect(ctx.output.nextDispatch).toEqual({
       capability: "release-prepare",
       cliArgs: { goal: "release-v1-2-3" },
-      resultTarget: { type: "goal", id: "release-v1-2-3", evidence: "releasePrExists" },
+      evidence: "releasePrExists",
+      resultTarget: { type: "goal", id: "release-v1-2-3" },
     })
   })
 
@@ -196,7 +201,8 @@ describe("advanceManagedGoal", () => {
       capability: "release",
       implementation: "release-prepare",
       cliArgs: { issue: 321, goal: "release-v1-2-3" },
-      resultTarget: { type: "goal", id: "release-v1-2-3", evidence: "releasePrExists" },
+      evidence: "releasePrExists",
+      resultTarget: { type: "goal", id: "release-v1-2-3" },
     })
     expect(((ctx.data.goal as GoalCtx).raw as GoalState).extra.facts).toMatchObject({
       issue: 321,
@@ -241,7 +247,8 @@ describe("advanceManagedGoal", () => {
       capability: "release",
       implementation: "release-prepare",
       cliArgs: { issue: 654, goal: "release-v1-2-3" },
-      resultTarget: { type: "goal", id: "release-v1-2-3", evidence: "releasePrExists" },
+      evidence: "releasePrExists",
+      resultTarget: { type: "goal", id: "release-v1-2-3" },
     })
     expect(ghMock).toHaveBeenCalledTimes(1)
   })

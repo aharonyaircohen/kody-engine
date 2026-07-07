@@ -58,7 +58,8 @@ describe("runJob (Phase 1 seam)", () => {
         implementation: "vercel-production-deploy",
         cliArgs: {},
         flavor: "instant",
-        resultTarget: { type: "goal", id: "web-release-2026-07-01", evidence: "productionDeployed" },
+        evidence: "productionDeployed",
+        resultTarget: { type: "goal", id: "web-release-2026-07-01" },
       },
       { cwd: "/x" },
     )
@@ -68,8 +69,8 @@ describe("runJob (Phase 1 seam)", () => {
     expect(input.preloadedData?.capabilityResultTarget).toEqual({
       type: "goal",
       id: "web-release-2026-07-01",
-      evidence: "productionDeployed",
     })
+    expect(input.preloadedData?.capabilityEvidence).toEqual({ evidence: "productionDeployed" })
   })
 
   it("lowers an action-only instant job through the capability action registry", async () => {
@@ -686,7 +687,8 @@ describe("runJob (Phase 1 seam)", () => {
           cliArgs: { issue: 756 },
           target: 756,
           flavor: "instant",
-          resultTarget: { type: "goal", id: "web-release-2026-07-06", evidence: "releaseBranchMerged" },
+          evidence: "releaseBranchMerged",
+          resultTarget: { type: "goal", id: "web-release-2026-07-06" },
           workflowFacts: { releasePr: 767, promotionPr: 763 },
         } as never,
         {
@@ -704,8 +706,22 @@ describe("runJob (Phase 1 seam)", () => {
       expect(runImplementationChain).toHaveBeenCalledTimes(2)
       expect(runImplementationChain.mock.calls[0]![0]).toBe("release-merge")
       expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 756, pr: 763 })
+      expect(runImplementationChain.mock.calls[0]![1].preloadedData?.capabilityResultTarget).toEqual({
+        type: "goal",
+        id: "web-release-2026-07-06",
+      })
+      expect(runImplementationChain.mock.calls[0]![1].preloadedData?.capabilityEvidence).toEqual({
+        evidence: "releaseBranchMerged",
+      })
       expect(runImplementationChain.mock.calls[1]![0]).toBe("vercel-production-deploy")
       expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({})
+      expect(runImplementationChain.mock.calls[1]![1].preloadedData?.capabilityResultTarget).toEqual({
+        type: "goal",
+        id: "web-release-2026-07-06",
+      })
+      expect(runImplementationChain.mock.calls[1]![1].preloadedData?.capabilityEvidence).toEqual({
+        evidence: "productionDeployed",
+      })
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
