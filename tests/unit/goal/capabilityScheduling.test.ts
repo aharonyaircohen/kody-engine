@@ -174,6 +174,23 @@ if (method === "PUT") {
   return bin
 }
 
+async function withStateRepoStub(stateRoot: string, run: () => Promise<void>): Promise<void> {
+  const oldPath = process.env.PATH
+  const oldStateRoot = process.env.KODY_TEST_STATE_ROOT
+  process.env.PATH = `${installStateRepoGhStub()}${path.delimiter}${oldPath || ""}`
+  process.env.KODY_TEST_STATE_ROOT = stateRoot
+  try {
+    await run()
+  } finally {
+    process.env.PATH = oldPath
+    if (oldStateRoot === undefined) {
+      delete process.env.KODY_TEST_STATE_ROOT
+    } else {
+      process.env.KODY_TEST_STATE_ROOT = oldStateRoot
+    }
+  }
+}
+
 function goalState(capabilities: string[] = ["ci-health"]): GoalState {
   return {
     state: "active",
@@ -314,12 +331,22 @@ describe("standing goal capability scheduling", () => {
   })
 
   it("hands goal target loops to goal-manager", async () => {
+    const stateRoot = path.join(tmp, "state-repo")
+    writeRepoGoal(stateRoot, "web-release", {
+      state: "active",
+      type: "web-release",
+      facts: {},
+      blockers: [],
+    })
     const raw = goalState([])
     raw.extra.type = "agentLoop"
     raw.extra.loopTarget = { type: "goal", id: "web-release" }
     const ctx = fakeCtx(raw)
+    ;(ctx.config as unknown as Record<string, unknown>).state = { repo: "o/r", path: "state" }
 
-    await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+    await withStateRepoStub(stateRoot, async () => {
+      await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+    })
 
     expect(ctx.output.nextDispatch).toEqual({
       action: "goal-manager",
@@ -644,12 +671,17 @@ describe("standing goal capability scheduling", () => {
   })
 
   it("hands workflow target loops to workflow capability chain", async () => {
+    const stateRoot = path.join(tmp, "state-repo")
+    writeRepoWorkflow(stateRoot, "release-hygiene", {})
     const raw = goalState([])
     raw.extra.type = "agentLoop"
     raw.extra.loopTarget = { type: "workflow", id: "release-hygiene" }
     const ctx = fakeCtx(raw)
+    ;(ctx.config as unknown as Record<string, unknown>).state = { repo: "o/r", path: "state" }
 
-    await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+    await withStateRepoStub(stateRoot, async () => {
+      await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+    })
 
     expect(ctx.output.nextDispatch).toEqual({
       workflow: "release-hygiene",
