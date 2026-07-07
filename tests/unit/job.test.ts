@@ -627,6 +627,91 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("resumes a workflow at the step that owns the pending goal evidence", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-web-release-resume-job-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "release-prepare", {
+        name: "release-prepare",
+        action: "release-prepare",
+        implementation: "release-prepare",
+        inputs: [{ name: "issue", flag: "--issue", type: "int", required: false }],
+      })
+      writeCapability(cwd, "release-merge", {
+        name: "release-merge",
+        action: "release-merge",
+        implementation: "release-merge",
+        inputs: [
+          { name: "pr", flag: "--pr", type: "int", required: true },
+          { name: "issue", flag: "--issue", type: "int", required: false },
+        ],
+      })
+      writeCapability(cwd, "release-promote", {
+        name: "release-promote",
+        action: "release-promote",
+        implementation: "release-promote",
+        inputs: [{ name: "issue", flag: "--issue", type: "int", required: false }],
+      })
+      writeCapability(cwd, "vercel-production-deploy", {
+        name: "vercel-production-deploy",
+        action: "vercel-production-deploy",
+        implementation: "vercel-production-deploy",
+        inputs: [],
+      })
+      const workflow = {
+        version: 1,
+        name: "Web release",
+        steps: [
+          { capability: "release-prepare", target: "issue", evidence: "releasePrExists" },
+          { capability: "release-merge", target: "pr", evidence: "defaultBranchMerged", targetFact: "releasePr" },
+          { capability: "release-promote", target: "issue", evidence: "releasePromotionPrExists" },
+          { capability: "release-merge", target: "pr", evidence: "releaseBranchMerged", targetFact: "promotionPr" },
+          { capability: "vercel-production-deploy", evidence: "productionDeployed" },
+        ],
+      }
+      gh.mockReturnValue(
+        JSON.stringify({
+          type: "file",
+          encoding: "base64",
+          content: Buffer.from(JSON.stringify(workflow), "utf8").toString("base64"),
+          sha: "workflow-sha",
+        }),
+      )
+      process.chdir(cwd)
+      runImplementationChain.mockResolvedValueOnce({ exitCode: 0, taskState: taskState("RELEASE_BRANCH_MERGED") })
+
+      await runJob(
+        {
+          workflow: "web-release",
+          cliArgs: { issue: 756 },
+          target: 756,
+          flavor: "instant",
+          resultTarget: { type: "goal", id: "web-release-2026-07-06", evidence: "releaseBranchMerged" },
+          workflowFacts: { releasePr: 767, promotionPr: 763 },
+        } as never,
+        {
+          cwd,
+          config: {
+            quality: { typecheck: "", lint: "", testUnit: "", format: "" },
+            git: { defaultBranch: "main" },
+            github: { owner: "o", repo: "r" },
+            agent: { model: "anthropic/claude-haiku-4-5-20251001" },
+            state: { repo: "o/kody-state", path: "r" },
+          },
+        },
+      )
+
+      expect(runImplementationChain).toHaveBeenCalledTimes(2)
+      expect(runImplementationChain.mock.calls[0]![0]).toBe("release-merge")
+      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 756, pr: 763 })
+      expect(runImplementationChain.mock.calls[1]![0]).toBe("vercel-production-deploy")
+      expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({})
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it("runs a Store-only workflow definition after state repo lookup misses", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-store-workflow-definition-job-"))
     const store = fs.mkdtempSync(path.join(os.tmpdir(), "kody-store-workflow-definition-store-"))

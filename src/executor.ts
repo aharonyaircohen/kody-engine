@@ -242,7 +242,9 @@ export interface ExecutorOutput {
     workflow?: string
     implementation?: string
     cliArgs: Record<string, unknown>
+    workflowFacts?: Record<string, unknown>
     saveReport?: boolean
+    resultTarget?: Job["resultTarget"]
   }
   /** In-process hand-off to a full Job, preserving job identity in task state. */
   nextJob?: Job
@@ -964,6 +966,7 @@ function handoffToJob(handoff: {
   workflow?: string
   implementation?: string
   cliArgs: Record<string, unknown>
+  workflowFacts?: Record<string, unknown>
   saveReport?: boolean
   resultTarget?: Job["resultTarget"]
 }): Job | null {
@@ -975,6 +978,7 @@ function handoffToJob(handoff: {
     workflow: handoff.workflow,
     implementation: handoff.implementation,
     cliArgs: handoff.cliArgs,
+    workflowFacts: handoff.workflowFacts,
     flavor: "instant",
     saveReport: handoff.saveReport === true,
     resultTarget: handoff.resultTarget,

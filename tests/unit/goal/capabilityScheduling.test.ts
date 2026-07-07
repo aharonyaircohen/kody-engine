@@ -733,7 +733,8 @@ describe("standing goal capability scheduling", () => {
       expect(ctx.output.nextDispatch).toEqual({
         workflow: "web-release",
         cliArgs: { issue: 42, goal: "web-release-2026-07-05" },
-        resultTarget: { type: "goal", id: "web-release-2026-07-05" },
+        workflowFacts: { issue: 42, releasePrExists: false },
+        resultTarget: { type: "goal", id: "web-release-2026-07-05", evidence: "releasePrExists" },
       })
       const updatedGoal = ctx.data.goal as GoalCtx
       expect(updatedGoal.raw!.extra.stage).toBe("workflow")

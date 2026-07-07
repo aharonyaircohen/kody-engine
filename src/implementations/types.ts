@@ -438,6 +438,7 @@ export interface Context {
       workflow?: string
       implementation?: string
       cliArgs: Record<string, unknown>
+      workflowFacts?: Record<string, unknown>
       saveReport?: boolean
       resultTarget?: CapabilityResultTarget
     }
@@ -450,6 +451,7 @@ export interface Context {
       workflow?: string
       implementation?: string
       cliArgs: Record<string, unknown>
+      workflowFacts?: Record<string, unknown>
       saveReport?: boolean
       resultTarget?: CapabilityResultTarget
     }
@@ -517,6 +519,8 @@ export interface Job {
   target?: number
   /** Args passed through to the implementation (mirrors DispatchResult.cliArgs). */
   cliArgs: Record<string, unknown>
+  /** Internal workflow resume context. Not passed to capability CLI args. */
+  workflowFacts?: Record<string, unknown>
   /** Run once now ("instant") or on the schedule ("scheduled"). */
   flavor: JobFlavor
   /** Manual force-run (bypass cadence) for a scheduled job. */

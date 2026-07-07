@@ -91,6 +91,10 @@ export function validateJob(input: unknown): Job {
     schedule: typeof j.schedule === "string" ? j.schedule : undefined,
     target: typeof j.target === "number" ? j.target : undefined,
     cliArgs: (j.cliArgs as Record<string, unknown> | undefined) ?? {},
+    workflowFacts:
+      j.workflowFacts && typeof j.workflowFacts === "object" && !Array.isArray(j.workflowFacts)
+        ? (j.workflowFacts as Record<string, unknown>)
+        : undefined,
     flavor: j.flavor,
     force: j.force === true,
     saveReport: j.saveReport === true,
@@ -323,6 +327,7 @@ async function runCapabilityWorkflow(
     workflowTitle: capability.title,
     workflowStepCount: workflow.steps.length,
     workflowIssueNumber: workflowIssueNumber(parent),
+    workflowFacts: parent.workflowFacts ?? {},
     workflowStack: [
       ...(Array.isArray(base.preloadedData?.workflowStack)
         ? (base.preloadedData.workflowStack as unknown[]).filter((entry): entry is string => typeof entry === "string")
@@ -331,8 +336,9 @@ async function runCapabilityWorkflow(
     ],
   }
   let result: ExecutorOutput = { exitCode: 0 }
+  const startIndex = workflowResumeStartIndex(workflow.steps, parent.resultTarget?.evidence)
 
-  for (let index = 0; index < workflow.steps.length; index++) {
+  for (let index = startIndex; index < workflow.steps.length; index++) {
     const step = workflow.steps[index]!
     const label = step.action ?? step.capability
     if (!shouldRunWorkflowStep(step, chainData)) {
@@ -485,11 +491,31 @@ function workflowStepTargetNumber(
   parent: Job,
   chainData: Record<string, unknown>,
 ): number | undefined {
-  if (step.target === "pr") return workflowPrNumber(chainData) ?? targetFromCliArgs(step.cliArgs ?? {})
+  if (step.target === "pr")
+    return (
+      workflowPrNumber(chainData) ?? workflowTargetFactNumber(step, chainData) ?? targetFromCliArgs(step.cliArgs ?? {})
+    )
   if (step.target === "issue") return workflowIssueNumber(parent)
   return typeof parent.target === "number"
     ? parent.target
     : targetFromCliArgs({ ...parent.cliArgs, ...(step.cliArgs ?? {}) })
+}
+
+function workflowResumeStartIndex(steps: CapabilityWorkflowStepConfig[], evidence: string | undefined): number {
+  if (!evidence) return 0
+  const index = steps.findIndex((step) => step.evidence === evidence)
+  return index >= 0 ? index : 0
+}
+
+function workflowTargetFactNumber(
+  step: CapabilityWorkflowStepConfig,
+  data: Record<string, unknown>,
+): number | undefined {
+  if (!step.targetFact) return undefined
+  const facts = data.workflowFacts
+  if (!facts || typeof facts !== "object" || Array.isArray(facts)) return undefined
+  const value = (facts as Record<string, unknown>)[step.targetFact]
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined
 }
 
 function workflowIssueNumber(parent: Job): number | undefined {
