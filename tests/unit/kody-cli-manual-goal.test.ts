@@ -204,12 +204,14 @@ describe("kody-cli manual goal dispatch", () => {
     previousEnv.ALL_SECRETS = process.env.ALL_SECRETS
     previousEnv.GH_TOKEN = process.env.GH_TOKEN
     previousEnv.GH_PAT = process.env.GH_PAT
+    previousEnv.GITHUB_TOKEN = process.env.GITHUB_TOKEN
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
     process.env.GITHUB_EVENT_PATH = writeEvent({
       inputs: { capability: "web-release" },
     })
     delete process.env.GH_TOKEN
     delete process.env.GH_PAT
+    delete process.env.GITHUB_TOKEN
     process.env.ALL_SECRETS = JSON.stringify({ GH_PAT: "secret-gh-token" })
     mocks.readWorkflowDefinition.mockImplementation(() => {
       expect(process.env.GH_TOKEN).toBe("secret-gh-token")
