@@ -164,7 +164,9 @@ describe("kody-store capability profiles", () => {
 
     const genericWrappers = listCapabilityActions()
       .filter((action) => action.source === "company-store")
-      .filter((action) => action.implementation === "capability-tick" || action.implementation === "capability-tick-scripted")
+      .filter(
+        (action) => action.implementation === "capability-tick" || action.implementation === "capability-tick-scripted",
+      )
       .map((action) => action.action)
 
     expect(genericWrappers).toEqual([])

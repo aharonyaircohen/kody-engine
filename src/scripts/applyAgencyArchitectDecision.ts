@@ -10,9 +10,9 @@ import {
   writeCompanyGoalState,
   writeCompanyIntent,
 } from "../companyIntent.js"
-import type { PostflightScript } from "../implementations/types.js"
 import { nowIso } from "../goal/state.js"
 import { fetchGoalState } from "../goal/stateStore.js"
+import type { PostflightScript } from "../implementations/types.js"
 
 export interface AppliedAgencyArchitectAction {
   kind: string

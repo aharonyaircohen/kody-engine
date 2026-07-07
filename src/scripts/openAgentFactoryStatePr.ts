@@ -275,7 +275,8 @@ function requireString(value: unknown, label: string): string {
 
 function creatorSourceLabel(ctx: Context, profileName: string | undefined): string {
   const capability = typeof ctx.data.jobCapability === "string" ? ctx.data.jobCapability.trim() : ""
-  const implementation = typeof ctx.data.selectedImplementation === "string" ? ctx.data.selectedImplementation.trim() : ""
+  const implementation =
+    typeof ctx.data.selectedImplementation === "string" ? ctx.data.selectedImplementation.trim() : ""
   const profile = typeof profileName === "string" ? profileName.trim() : ""
   return capability || implementation || profile || "agent-factory"
 }

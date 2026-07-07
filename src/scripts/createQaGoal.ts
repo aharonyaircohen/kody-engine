@@ -26,10 +26,10 @@
  *   missing report / parse failure / gh failure → 1+
  */
 import type { AgentResult } from "../agent.js"
-import type { PostflightScript } from "../implementations/types.js"
 import type { ManagedGoal } from "../goal/manager.js"
 import { type GoalState, nowIso } from "../goal/state.js"
 import { putGoalState } from "../goal/stateStore.js"
+import type { PostflightScript } from "../implementations/types.js"
 import { gh, postIssueComment, truncate } from "../issue.js"
 import type { Action } from "../state.js"
 import { detectVerdict, type ReviewVerdict } from "./postReviewResult.js"

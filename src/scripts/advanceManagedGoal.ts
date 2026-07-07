@@ -1,4 +1,3 @@
-import type { PreflightScript } from "../implementations/types.js"
 import {
   applySimpleGoalTaskSummary,
   isSimpleGoal,
@@ -17,6 +16,7 @@ import {
   resolveGoalLoopTarget,
 } from "../goal/targetLoopResolution.js"
 import { expandManagedGoalState } from "../goal/typeDefinitions.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { gh } from "../issue.js"
 import {
   type GoalCapabilityScheduleState,
@@ -110,8 +110,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
       ? resolveActiveGoalLoopTarget(ctx.config, ctx.cwd, goal.id, managed)
       : null
     const allowSameDayTargetDispatch =
-      isGoalTargetLoop(managed) &&
-      (!!activeTarget || previousDispatchWasTargetInstance(managed, previousScheduleState))
+      isGoalTargetLoop(managed) && (!!activeTarget || previousDispatchWasTargetInstance(managed, previousScheduleState))
     let decision = planTargetLoopSchedule({
       goal: managed,
       previousScheduleState,

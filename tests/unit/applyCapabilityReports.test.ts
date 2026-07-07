@@ -23,10 +23,10 @@ vi.mock("../../src/issue.js", () => ({
 }))
 
 import type { AgentResult } from "../../src/agent.js"
-import type { Context, Profile } from "../../src/implementations/types.js"
 import { flushGoalRunLogEvents } from "../../src/goal/runLog.js"
 import { type GoalState, serializeGoalState } from "../../src/goal/state.js"
 import { fetchGoalState, putGoalState } from "../../src/goal/stateStore.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { gh } from "../../src/issue.js"
 import { applyCapabilityReports } from "../../src/scripts/applyCapabilityReports.js"
 import { writeStateText } from "../../src/stateRepo.js"

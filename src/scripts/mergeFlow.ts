@@ -14,8 +14,8 @@
  * Effects merges the PR (or not) + posts one PR comment; sets ctx.skipAgent.
  */
 
-import type { PreflightScript } from "../implementations/types.js"
 import { commentOnIssue, mergePrSquash } from "../goal/operations.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { gh } from "../issue.js"
 
 interface PrMergeView {

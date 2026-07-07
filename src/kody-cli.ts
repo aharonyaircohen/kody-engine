@@ -698,7 +698,9 @@ export async function runCi(argv: string[]): Promise<number> {
     const buildOnly = dispatch.implementation === "preview-build"
 
     if (args.skipInstall || buildOnly) {
-      process.stdout.write(`→ kody: skipping dep install (${buildOnly ? "build-only implementation" : "--skip-install"})\n`)
+      process.stdout.write(
+        `→ kody: skipping dep install (${buildOnly ? "build-only implementation" : "--skip-install"})\n`,
+      )
     } else {
       const code = installDeps(pm, cwd)
       if (code !== 0) {

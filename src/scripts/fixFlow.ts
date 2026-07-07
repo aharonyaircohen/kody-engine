@@ -5,8 +5,8 @@
  */
 
 import { checkoutPrBranch, getCurrentBranch } from "../branch.js"
-import type { PreflightScript } from "../implementations/types.js"
 import { getRunUrl } from "../gha.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { getPr, getPrDiff, getPrLatestReviewBody, postPrReviewComment, truncate } from "../issue.js"
 
 export const fixFlow: PreflightScript = async (ctx) => {

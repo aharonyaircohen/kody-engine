@@ -1,5 +1,5 @@
-import type { PreflightScript } from "../implementations/types.js"
 import { type GoalState, nowIso, serializeGoalState } from "../goal/state.js"
+import type { PreflightScript } from "../implementations/types.js"
 import type { GoalCtx } from "./goalCtx.js"
 
 export const saveManagedGoalState: PreflightScript = async (ctx) => {

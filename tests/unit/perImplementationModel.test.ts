@@ -9,7 +9,11 @@ import type { KodyConfig } from "../../src/config.js"
  */
 function resolveModel(config: KodyConfig, profileName: string, profileModel: string): string {
   const perImplementationModel = config.agent.perImplementation?.[profileName]
-  return perImplementationModel ? perImplementationModel : profileModel === "inherit" ? config.agent.model : profileModel
+  return perImplementationModel
+    ? perImplementationModel
+    : profileModel === "inherit"
+      ? config.agent.model
+      : profileModel
 }
 
 const baseConfig: KodyConfig = {

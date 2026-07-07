@@ -5,8 +5,8 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { loadAgentIdentity } from "../../src/agents.js"
 import {
-  DEFAULT_COMPANY_STORE_REF,
   applyCompanyStoreRuntimeConfig,
+  DEFAULT_COMPANY_STORE_REF,
   resetCompanyStoreCacheForTests,
 } from "../../src/companyStore.js"
 import { listCapabilityActions, listImplementations, resolveImplementation } from "../../src/registry.js"

@@ -3,8 +3,8 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { runContainerLoop } from "../../src/container.js"
-import type { Context, Profile } from "../../src/implementations/types.js"
 import type { ExecutorInput, ExecutorOutput } from "../../src/executor.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import type { TaskState } from "../../src/state.js"
 
 /**
@@ -87,7 +87,9 @@ describe("integration: container loop", () => {
 
   it("routes to 'done' when a child writes a completing action", async () => {
     const ctx = makeCtx(cwd, 7)
-    const profile = makeProfile([{ implementation: "stage1", target: "issue", next: { STAGE1_DONE: "done", "*": "abort" } }])
+    const profile = makeProfile([
+      { implementation: "stage1", target: "issue", next: { STAGE1_DONE: "done", "*": "abort" } },
+    ])
     const readQueue = [
       state({ attempts: { stage1: 0 } }), // prior
       state({ attempts: { stage1: 1 }, lastAction: { implementation: "stage1", type: "STAGE1_DONE" } }), // next
@@ -110,7 +112,9 @@ describe("integration: container loop", () => {
 
   it("synthesizes <EXEC>_FAILED and routes via wildcard when a failed child writes no action", async () => {
     const ctx = makeCtx(cwd, 9)
-    const profile = makeProfile([{ implementation: "stage1", target: "issue", next: { STAGE1_DONE: "done", "*": "abort" } }])
+    const profile = makeProfile([
+      { implementation: "stage1", target: "issue", next: { STAGE1_DONE: "done", "*": "abort" } },
+    ])
     // Both reads return unchanged attempts → childWrote is false → synthesize.
     const runChild = vi.fn<(name: string, input: ExecutorInput) => Promise<ExecutorOutput>>(async () => ({
       exitCode: 1,

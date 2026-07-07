@@ -4,11 +4,11 @@
  * `ctx.data.goalPersistState` and marks `goalPersistChanged`.
  */
 
-import type { PostflightScript } from "../implementations/types.js"
 import { refreshGoalDashboardReport } from "../goal/report.js"
 import { flushGoalRunLogEvents } from "../goal/runLog.js"
 import type { GoalState } from "../goal/state.js"
 import { putGoalState } from "../goal/stateStore.js"
+import type { PostflightScript } from "../implementations/types.js"
 import type { GoalCtx } from "./goalCtx.js"
 
 export const commitGoalState: PostflightScript = async (ctx) => {

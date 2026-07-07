@@ -4,8 +4,8 @@
  */
 
 import { checkoutPrBranch, getCurrentBranch } from "../branch.js"
-import type { PreflightScript } from "../implementations/types.js"
 import { getRunUrl } from "../gha.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { getPr, getPrDiff, postPrReviewComment } from "../issue.js"
 import { getFailedRunLogTail, pickFailedRunForFixCi } from "../workflow.js"
 

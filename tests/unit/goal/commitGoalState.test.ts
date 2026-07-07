@@ -18,10 +18,10 @@ vi.mock("../../../src/stateRepo.js", async () => {
   }
 })
 
-import type { Context, Profile } from "../../../src/implementations/types.js"
 import { flushGoalRunLogEvents, stageGoalRunLogEvent } from "../../../src/goal/runLog.js"
 import type { GoalState } from "../../../src/goal/state.js"
 import { putGoalState } from "../../../src/goal/stateStore.js"
+import type { Context, Profile } from "../../../src/implementations/types.js"
 import { commitGoalState } from "../../../src/scripts/commitGoalState.js"
 import type { GoalCtx } from "../../../src/scripts/goalCtx.js"
 import { writeStateText } from "../../../src/stateRepo.js"

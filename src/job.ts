@@ -15,9 +15,9 @@ import { evaluateAgencyBoundaries } from "./agencyBoundaryEval.js"
 import type { CapabilityFolder, CapabilityWorkflowConfig, CapabilityWorkflowStepConfig } from "./capabilityFolders.js"
 import type { KodyConfig } from "./config.js"
 import type { DispatchResult } from "./dispatch.js"
-import type { CapabilityResultTarget, Job, JobFlavor } from "./implementations/types.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
 import { runImplementation, runImplementationChain } from "./executor.js"
+import type { CapabilityResultTarget, Job, JobFlavor } from "./implementations/types.js"
 import {
   type DiscoveredCapabilityAction,
   getCapabilityActionInputs,

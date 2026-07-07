@@ -167,7 +167,10 @@ export function listImplementations(roots: string | string[] = getImplementation
  * Resolve a single implementation profile by name across all roots. Returns
  * the first matching `profile.json` path, or null if nothing matches.
  */
-export function resolveImplementation(name: string, roots: string | string[] = getImplementationRoots()): string | null {
+export function resolveImplementation(
+  name: string,
+  roots: string | string[] = getImplementationRoots(),
+): string | null {
   return resolveImplementationCandidates(name, roots)[0] ?? null
 }
 
@@ -177,7 +180,10 @@ export function resolveImplementation(name: string, roots: string | string[] = g
  * validate against the current engine and continue to the company-store
  * profile instead.
  */
-export function resolveImplementationCandidates(name: string, roots: string | string[] = getImplementationRoots()): string[] {
+export function resolveImplementationCandidates(
+  name: string,
+  roots: string | string[] = getImplementationRoots(),
+): string[] {
   if (!isSafeName(name)) return []
   const rootList = typeof roots === "string" ? [roots] : roots
   const out: string[] = []
@@ -347,8 +353,7 @@ function listFolderCapabilityActions(
 
 function hasUnresolvedExplicitImplementation(capability: CapabilityFolder, implementation: string): boolean {
   const config = capability.config
-  const hasExplicitImplementation =
-    Boolean(config.implementation) || (config.implementations?.length ?? 0) > 0
+  const hasExplicitImplementation = Boolean(config.implementation) || (config.implementations?.length ?? 0) > 0
   if (!hasExplicitImplementation) return false
   if (config.workflow?.steps.length) return false
   if (config.role && PUBLIC_IMPLEMENTATION_ROLES.has(config.role)) return false
@@ -385,7 +390,10 @@ function listBuiltinCapabilityActions(root: string = getBuiltinCapabilitiesRoot(
  * the implementation doesn't exist or the profile is unreadable (dispatch
  * should degrade gracefully, not throw).
  */
-export function getProfileInputs(name: string, roots: string | string[] = getImplementationRoots()): InputSpec[] | null {
+export function getProfileInputs(
+  name: string,
+  roots: string | string[] = getImplementationRoots(),
+): InputSpec[] | null {
   const profilePath = resolveImplementation(name, roots)
   if (!profilePath) return null
   try {

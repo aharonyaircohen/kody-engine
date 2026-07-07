@@ -76,15 +76,7 @@ export function serializeTodoGoalState(goalId: string, state: GoalState, previou
   const items =
     evidence.length > 0
       ? evidence.map((key) =>
-          itemFromEvidence(
-            key,
-            routeByEvidence.get(key),
-            facts,
-            evidenceState,
-            createdAt,
-            now,
-            previousItems.get(key),
-          ),
+          itemFromEvidence(key, routeByEvidence.get(key), facts, evidenceState, createdAt, now, previousItems.get(key)),
         )
       : stringArray(raw.capabilities).map((capability) =>
           itemFromCapability(capability, createdAt, previousItems.get(capability)),

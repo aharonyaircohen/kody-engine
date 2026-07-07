@@ -132,9 +132,7 @@ export function jobReferenceBlock(
   const jobId = typeof data.jobId === "string" && data.jobId.length > 0 ? data.jobId : null
   const flavor = typeof data.jobFlavor === "string" && data.jobFlavor.length > 0 ? data.jobFlavor : null
   const schedule = typeof data.jobSchedule === "string" && data.jobSchedule.length > 0 ? data.jobSchedule : null
-  const isJob = Boolean(
-    jobId || flavor || schedule || data.jobCapability || data.selectedImplementation || data.jobWhy,
-  )
+  const isJob = Boolean(jobId || flavor || schedule || data.jobCapability || data.selectedImplementation || data.jobWhy)
   if (!isJob) return null
 
   const capability =

@@ -5,8 +5,8 @@
  */
 
 import { ensureFeatureBranch } from "../branch.js"
-import type { PreflightScript } from "../implementations/types.js"
 import { getRunUrl } from "../gha.js"
+import type { PreflightScript } from "../implementations/types.js"
 import {
   DEFAULT_COMMENT_LIMIT,
   DEFAULT_COMMENT_MAX_BYTES,

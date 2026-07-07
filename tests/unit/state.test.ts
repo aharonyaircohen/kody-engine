@@ -257,7 +257,12 @@ describe("state: explicit task jobs", () => {
   })
 
   it("preserves completed runs when the plan is seen again", () => {
-    const planned = { id: "instant:plan-verify:42", implementation: "plan-verify", flavor: "instant" as const, target: 42 }
+    const planned = {
+      id: "instant:plan-verify:42",
+      implementation: "plan-verify",
+      flavor: "instant" as const,
+      target: 42,
+    }
     let s = upsertTaskJobs(emptyState(), [planned], "2026-06-08T08:00:00Z")
     s = reduce(
       s,

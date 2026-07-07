@@ -47,11 +47,7 @@ export function mergeGoalEvidenceProgress(
 
 export function isGoalEvidenceResultClass(value: unknown): value is GoalEvidenceResultClass {
   return (
-    value === "succeeded" ||
-    value === "pending" ||
-    value === "retryable" ||
-    value === "needsFix" ||
-    value === "fatal"
+    value === "succeeded" || value === "pending" || value === "retryable" || value === "needsFix" || value === "fatal"
   )
 }
 

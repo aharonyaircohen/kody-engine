@@ -24,8 +24,8 @@
 
 import { execFileSync } from "node:child_process"
 import { checkoutPrBranch, getCurrentBranch, mergeBase } from "../branch.js"
-import type { PreflightScript, ScriptArgs } from "../implementations/types.js"
 import { getRunUrl } from "../gha.js"
+import type { PreflightScript, ScriptArgs } from "../implementations/types.js"
 import { getPr, postPrReviewComment } from "../issue.js"
 import { type KodyLabelSpec, setKodyLabel } from "../lifecycleLabels.js"
 import { pushWithRetry } from "../pushWithRetry.js"

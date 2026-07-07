@@ -3,7 +3,7 @@ import {
   parseCapabilityReportEvidence,
   parseCapabilityReportTarget,
 } from "./capabilityReport.js"
-import { isGoalEvidenceResultClass, type GoalEvidenceResultClass } from "./goal/evidenceState.js"
+import { type GoalEvidenceResultClass, isGoalEvidenceResultClass } from "./goal/evidenceState.js"
 import type { GoalState } from "./goal/state.js"
 
 export const CAPABILITY_RESULT_MARKER = "KODY_CAPABILITY_RESULT"

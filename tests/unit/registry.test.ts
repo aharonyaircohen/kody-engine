@@ -130,10 +130,7 @@ describe("registry: obsolete project implementations", () => {
     const exeDir = path.join(root, ".kody", "implementations", "feature")
     fs.mkdirSync(capabilityDir, { recursive: true })
     fs.mkdirSync(exeDir, { recursive: true })
-    fs.writeFileSync(
-      path.join(capabilityDir, "profile.json"),
-      JSON.stringify({ name: "feature", action: "feature" }),
-    )
+    fs.writeFileSync(path.join(capabilityDir, "profile.json"), JSON.stringify({ name: "feature", action: "feature" }))
     fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Feature\n")
     fs.writeFileSync(path.join(exeDir, "profile.json"), JSON.stringify({ name: "feature", role: "primitive" }))
 
@@ -231,7 +228,9 @@ describe("registry: capabilities root", () => {
       JSON.stringify({ name: "implementation-ship", role: "primitive" }),
     )
 
-    expect(fs.realpathSync(resolveImplementation("ship")!)).toBe(fs.realpathSync(path.join(capabilityDir, "profile.json")))
+    expect(fs.realpathSync(resolveImplementation("ship")!)).toBe(
+      fs.realpathSync(path.join(capabilityDir, "profile.json")),
+    )
     expect(fs.realpathSync(listImplementations().find((item) => item.name === "ship")!.profilePath)).toBe(
       fs.realpathSync(path.join(capabilityDir, "profile.json")),
     )

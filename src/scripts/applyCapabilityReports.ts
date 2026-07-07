@@ -8,13 +8,13 @@ import {
 } from "../capabilityEvidence.js"
 import { type CapabilityReport, parseCapabilityReport, parseCapabilityReportsFromText } from "../capabilityReport.js"
 import { type CapabilityResult, parseCapabilityResult, parseCapabilityResultsFromText } from "../capabilityResult.js"
-import type { PostflightScript } from "../implementations/types.js"
 import { mergeGoalEvidenceProgress, parseGoalEvidenceState } from "../goal/evidenceState.js"
 import { managedGoalFromState, planManagedGoalTick, writeManagedGoalToState } from "../goal/manager.js"
 import { capabilityEvidenceOutput, refreshGoalDashboardReport } from "../goal/report.js"
 import { flushGoalRunLogEvents, goalRunLogChange, goalRunLogSnapshot, stageGoalRunLogEvent } from "../goal/runLog.js"
 import { type GoalState, nowIso, serializeGoalState } from "../goal/state.js"
 import { fetchGoalState, putGoalState } from "../goal/stateStore.js"
+import type { PostflightScript } from "../implementations/types.js"
 import { gh } from "../issue.js"
 
 export const applyCapabilityReports: PostflightScript = async (ctx, _profile, agentResult) => {
@@ -113,7 +113,12 @@ export const applyCapabilityReports: PostflightScript = async (ctx, _profile, ag
         putGoalState(ctx.config, goalId, nextForOutput, describeMessage(goalId, goalEvidence), ctx.cwd)
       }
       refreshReportOrFail(ctx, goalId, nextForOutput, goalEvidence)
-      if (changed && ctx.output.exitCode === 0 && !ctx.output.nextDispatch && shouldResumeManagedGoal(goalId, nextForOutput)) {
+      if (
+        changed &&
+        ctx.output.exitCode === 0 &&
+        !ctx.output.nextDispatch &&
+        shouldResumeManagedGoal(goalId, nextForOutput)
+      ) {
         ctx.output.nextDispatch = {
           action: "goal-manager",
           implementation: "goal-manager",
@@ -138,7 +143,9 @@ function ensureNeedsFixIssue(
   const progress = evidenceState[evidenceKey]
   if (progress?.issue) return state
 
-  const issue = findExistingNeedsFixIssue(goalId, evidenceKey, ctx.cwd) ?? createNeedsFixIssue(goalId, evidenceKey, evidence, ctx.cwd)
+  const issue =
+    findExistingNeedsFixIssue(goalId, evidenceKey, ctx.cwd) ??
+    createNeedsFixIssue(goalId, evidenceKey, evidence, ctx.cwd)
   const nextEvidenceState = mergeGoalEvidenceProgress(evidenceState, evidenceKey, {
     resultClass: "needsFix",
     attempts: progress?.attempts ?? 1,

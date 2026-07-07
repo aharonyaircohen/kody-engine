@@ -1,9 +1,9 @@
 import type { CapabilityReport } from "./capabilityReport.js"
 import type { CapabilityResult, CapabilityResultArtifact, CapabilityResultStatus } from "./capabilityResult.js"
 import {
+  type GoalEvidenceResultClass,
   mergeGoalEvidenceProgress,
   parseGoalEvidenceState,
-  type GoalEvidenceResultClass,
 } from "./goal/evidenceState.js"
 import type { GoalState } from "./goal/state.js"
 import { nowIso } from "./goal/state.js"
@@ -33,11 +33,7 @@ export function capabilityReportToEvidence(report: CapabilityReport): Capability
   const values = Object.values(evidence)
   const hasFalse = values.some((value) => value === false)
   const hasTrue = values.some((value) => value === true)
-  const status = hasFalse
-    ? "fail"
-    : values.length > 0 || report.facts
-      ? "changed"
-      : "noop"
+  const status = hasFalse ? "fail" : values.length > 0 || report.facts ? "changed" : "noop"
   return {
     version: 1,
     target: { type: "goal", id: report.target.id },
@@ -144,16 +140,17 @@ export function applyCapabilityEvidenceToGoalState(state: GoalState, evidence: C
   }
 
   const evidenceState = parseGoalEvidenceState(state.extra.evidenceState)
-  const nextEvidenceState = progressEvidence && changesProgressState
-    ? mergeGoalEvidenceProgress(evidenceState, progressEvidence, {
-        resultClass,
-        attempts: (evidenceState[progressEvidence]?.attempts ?? 0) + 1,
-        reason: evidence.summary,
-        nextAction: nextActionForResultClass(resultClass),
-        nextRetryAt: nextRetryAtFor(state, progressEvidence, resultClass),
-        updatedAt: nowIso(),
-      })
-    : evidenceState
+  const nextEvidenceState =
+    progressEvidence && changesProgressState
+      ? mergeGoalEvidenceProgress(evidenceState, progressEvidence, {
+          resultClass,
+          attempts: (evidenceState[progressEvidence]?.attempts ?? 0) + 1,
+          reason: evidence.summary,
+          nextAction: nextActionForResultClass(resultClass),
+          nextRetryAt: nextRetryAtFor(state, progressEvidence, resultClass),
+          updatedAt: nowIso(),
+        })
+      : evidenceState
 
   const nextExtra: GoalState["extra"] = {
     ...state.extra,
@@ -232,11 +229,7 @@ function nextActionForResultClass(resultClass: GoalEvidenceResultClass): string 
   return "block"
 }
 
-function nextRetryAtFor(
-  state: GoalState,
-  evidence: string,
-  resultClass: GoalEvidenceResultClass,
-): string | undefined {
+function nextRetryAtFor(state: GoalState, evidence: string, resultClass: GoalEvidenceResultClass): string | undefined {
   if (resultClass !== "retryable") return undefined
   const delaySeconds = retryAfterSecondsFor(state.extra.route, evidence) ?? 300
   return new Date(Date.now() + delaySeconds * 1000).toISOString().replace(/\.\d{3}Z$/, "Z")

@@ -140,8 +140,7 @@ export async function planGoalCapabilitySchedule(
   const backend = resolveBackend({ config: opts.config, cwd: opts.cwd, jobsDir })
   const statuses: Record<string, GoalCapabilityScheduleStatus> = {}
   const blockers: string[] = []
-  const explicitCapabilityTarget =
-    opts.goal.loopTarget?.type === "capability" ? opts.goal.loopTarget.id.trim() : ""
+  const explicitCapabilityTarget = opts.goal.loopTarget?.type === "capability" ? opts.goal.loopTarget.id.trim() : ""
   const capabilitySlugs = explicitCapabilityTarget ? [explicitCapabilityTarget] : opts.goal.capabilities
 
   for (const slug of capabilitySlugs) {

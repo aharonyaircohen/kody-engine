@@ -90,8 +90,7 @@ function normalizeSpec(input: unknown, index: number): TaskJobSpec {
     throw new Error(`task job plan entry ${index} must be an object`)
   }
   const raw = input as Record<string, unknown>
-  const implementation =
-    typeof raw.implementation === "string" ? raw.implementation.trim() : ""
+  const implementation = typeof raw.implementation === "string" ? raw.implementation.trim() : ""
   if (!/^[a-z][a-z0-9-]*$/.test(implementation)) {
     throw new Error(`task job plan entry ${index} must have a valid implementation`)
   }

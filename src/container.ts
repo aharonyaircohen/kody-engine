@@ -14,8 +14,8 @@
 import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import { emitEvent } from "./events.js"
-import type { ContainerChild, Context, InputSpec, Profile } from "./implementations/types.js"
 import { type ExecutorInput, type ExecutorOutput, resolveProfilePath, runImplementation } from "./executor.js"
+import type { ContainerChild, Context, InputSpec, Profile } from "./implementations/types.js"
 import { loadProfile } from "./profile.js"
 import { type Action, emptyState, readTaskState, type TaskState, type TaskTarget } from "./state.js"
 
@@ -139,7 +139,9 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
     const priorAction = priorState.implementations?.[child.implementation]?.lastAction
     let actionType: string | undefined
     if (priorAction && /_COMPLETED$/i.test(priorAction.type)) {
-      process.stderr.write(`[kody container] skipping ${child.implementation}: already completed (${priorAction.type})\n`)
+      process.stderr.write(
+        `[kody container] skipping ${child.implementation}: already completed (${priorAction.type})\n`,
+      )
       actionType = priorAction.type
     } else {
       // Derive cliArgs from child.target. target=pr requires a known PR;

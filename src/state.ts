@@ -215,9 +215,7 @@ function normalizeTaskState(parsed: TaskState): TaskState {
   const currentImplementation =
     typeof parsed.core?.currentImplementation === "string" ? parsed.core.currentImplementation : null
   const implementations =
-    parsed.implementations && typeof parsed.implementations === "object"
-      ? parsed.implementations
-      : {}
+    parsed.implementations && typeof parsed.implementations === "object" ? parsed.implementations : {}
   const parsedCore = parsed.core ?? emptyState().core
   const core = {
     phase: parsedCore.phase,

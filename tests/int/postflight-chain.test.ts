@@ -86,8 +86,8 @@ vi.mock("../../src/commit.js", async (orig) => {
 })
 
 import type { AgentResult } from "../../src/agent.js"
-import type { Context } from "../../src/implementations/types.js"
 import { shouldBlockMutatingPostflight } from "../../src/executor.js"
+import type { Context } from "../../src/implementations/types.js"
 import { loadProfile } from "../../src/profile.js"
 import { listImplementations } from "../../src/registry.js"
 import { postflightScripts } from "../../src/scripts/index.js"

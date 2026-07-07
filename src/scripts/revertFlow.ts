@@ -9,8 +9,8 @@
 
 import { execFileSync } from "node:child_process"
 import { checkoutPrBranch, getCurrentBranch } from "../branch.js"
-import type { PreflightScript } from "../implementations/types.js"
 import { getRunUrl } from "../gha.js"
+import type { PreflightScript } from "../implementations/types.js"
 import { getPr, postPrReviewComment } from "../issue.js"
 
 const SHA_RE = /^[0-9a-f]{4,40}$/i
