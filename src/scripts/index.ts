@@ -148,6 +148,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   planTaskJobs,
   dispatchNextTaskJob,
   runScheduledImplementationTick,
+  runScheduledExecutableTick: runScheduledImplementationTick,
   runTickScript,
   runPreviewBuild,
   advanceManagedGoal,

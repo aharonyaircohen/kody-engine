@@ -83,7 +83,8 @@ Usage:
   kody-engine release --issue <N>                    [--cwd <path>] [--verbose|--quiet]
   kody-engine init                                   [--cwd <path>] [--verbose|--quiet]
   kody-engine <action>                               [--cwd <path>] [--verbose|--quiet]
-  kody-engine implementation <name>                      [--cwd <path>] [--verbose|--quiet]
+  kody-engine exec <name>                            [--cwd <path>] [--verbose|--quiet]
+  kody-engine implementation <name>                  [--cwd <path>] [--verbose|--quiet]
   kody-engine ci      [preflight flags — see: kody-engine ci --help]
   kody-engine chat    [chat flags — see: kody-engine chat --help]
   kody-engine stats   [--since 7d|--run <id>|--json|--cwd <path>]
@@ -91,7 +92,7 @@ Usage:
   kody-engine version
 
 Top-level work commands are capabilities. A capability owns the public command name
-and resolves the implementation that runs it. Use the implementation command only for
+and resolves the implementation that runs it. Use the exec command only for
 internal implementation profiles and scheduled helpers.
 
 Exit codes:
@@ -134,10 +135,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return { ...result, command: "stats", statsArgv: argv.slice(1) }
   }
 
-  if (cmd === "implementation") {
+  if (cmd === "implementation" || cmd === "exec") {
     const implementationName = argv[1]
     if (!implementationName || implementationName.startsWith("-")) {
-      result.errors.push("implementation requires a name")
+      result.errors.push(`${cmd} requires a name`)
       return result
     }
     if (!resolveImplementation(implementationName)) {
@@ -180,7 +181,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   }
 
   const discoveredActions = listCapabilityActions().map((e) => e.action)
-  const available = ["ci", "chat", "stats", "implementation", "help", "version", ...discoveredActions]
+  const available = ["ci", "chat", "stats", "exec", "implementation", "help", "version", ...discoveredActions]
   result.errors.push(`unknown command: ${cmd} (available: ${available.join(", ")})`)
   return result
 }

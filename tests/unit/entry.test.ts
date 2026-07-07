@@ -50,9 +50,22 @@ describe("entry: parseArgs", () => {
     expect(a.errors).toEqual([])
   })
 
-  it("rejects exec without an implementation name", () => {
+  it("routes exec alias to __implementation__", () => {
+    const a = parseArgs(["exec", "run", "--issue", "42"])
+    expect(a.command).toBe("__implementation__")
+    expect(a.implementationName).toBe("run")
+    expect(a.cliArgs).toEqual({ issue: "42" })
+    expect(a.errors).toEqual([])
+  })
+
+  it("rejects implementation without a name", () => {
     const a = parseArgs(["implementation", "--quiet"])
     expect(a.errors).toEqual(["implementation requires a name"])
+  })
+
+  it("rejects exec without a name", () => {
+    const a = parseArgs(["exec", "--quiet"])
+    expect(a.errors).toEqual(["exec requires a name"])
   })
 
   it("parses --verbose / --quiet flags through the generic parser", () => {

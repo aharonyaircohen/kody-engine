@@ -271,7 +271,13 @@ export function loadProfile(profilePath: string): Profile {
   // Any of these preflights populate ctx.data.jobState: loadCapabilityState (folder
   // capability), loadJobFromFile (markdown capability via capability-tick), runTickScript (scripted
   // capability via capability-tick-scripted).
-  const STATE_LOADERS = ["loadCapabilityState", "loadJobFromFile", "runTickScript", "runScheduledImplementationTick"]
+  const STATE_LOADERS = [
+    "loadCapabilityState",
+    "loadJobFromFile",
+    "runTickScript",
+    "runScheduledImplementationTick",
+    "runScheduledExecutableTick",
+  ]
   if (needsState && !STATE_LOADERS.some((s) => preNames.has(s))) {
     throw new ProfileError(
       profilePath,
