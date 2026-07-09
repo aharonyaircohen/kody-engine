@@ -134,17 +134,20 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     }
     restoreGoalIdFact()
     goal.raw = writeManagedGoalToState({ ...goal.raw, state: goal.state }, managed)
-    goal.raw.extra.scheduleState = decision.scheduleState
-    ctx.data.managedGoalDecision = decision
     const autonomyBlock =
       decision.kind === "dispatch" && decision.dispatch
         ? autonomyBlockReason(ctx, goal.id, managed, goal.raw, decision.dispatch)
         : null
     if (autonomyBlock) {
-      stageAutonomyBlocked(ctx.data, goal.id, managed, goal.state, autonomyBlock)
+      const waitDecision = scheduleWaitDecision(previousScheduleState, decision, autonomyBlock)
+      goal.raw.extra.scheduleState = waitDecision.scheduleState
+      ctx.data.managedGoalDecision = waitDecision
+      stageAutonomyBlocked(ctx.data, goal.id, managed, goal.state, waitDecision, previousScheduleState)
       ctx.output.reason = autonomyBlock
       return
     }
+    goal.raw.extra.scheduleState = decision.scheduleState
+    ctx.data.managedGoalDecision = decision
     if (decision.kind === "dispatch" && decision.dispatch) {
       ctx.output.nextDispatch = {
         ...(decision.dispatch.action ? { action: decision.dispatch.action } : {}),
@@ -206,17 +209,20 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     })
     restoreGoalIdFact()
     goal.raw = writeManagedGoalToState({ ...goal.raw, state: goal.state }, managed)
-    goal.raw.extra.scheduleState = decision.scheduleState
-    ctx.data.managedGoalDecision = decision
     const autonomyBlock =
       decision.kind === "dispatch" && decision.dispatch
         ? autonomyBlockReason(ctx, goal.id, managed, goal.raw, decision.dispatch)
         : null
     if (autonomyBlock) {
-      stageAutonomyBlocked(ctx.data, goal.id, managed, goal.state, autonomyBlock)
+      const waitDecision = scheduleWaitDecision(previousScheduleState, decision, autonomyBlock)
+      goal.raw.extra.scheduleState = waitDecision.scheduleState
+      ctx.data.managedGoalDecision = waitDecision
+      stageAutonomyBlocked(ctx.data, goal.id, managed, goal.state, waitDecision, previousScheduleState)
       ctx.output.reason = autonomyBlock
       return
     }
+    goal.raw.extra.scheduleState = decision.scheduleState
+    ctx.data.managedGoalDecision = decision
     if (decision.kind === "dispatch" && decision.dispatch) {
       ctx.output.nextDispatch = {
         capability: decision.dispatch.capability,
@@ -386,6 +392,39 @@ function autonomyBlockReason(
   return null
 }
 
+function scheduleWaitDecision(
+  previousScheduleState: GoalCapabilityScheduleState | undefined,
+  plannedDecision: { scheduleState: GoalCapabilityScheduleState },
+  reason: string,
+): { kind: "wait"; reason: string; scheduleState: GoalCapabilityScheduleState } {
+  const at = plannedDecision.scheduleState.lastGoalTickAt
+  return {
+    kind: "wait",
+    reason,
+    scheduleState: {
+      mode: "agentLoop",
+      lastGoalTickAt: previousScheduleState?.lastGoalTickAt ?? plannedDecision.scheduleState.lastGoalTickAt,
+      lastDecision: { kind: "wait", reason, at },
+      capabilities:
+        previousScheduleState?.capabilities ?? unmarkPlannedCapabilityDispatch(plannedDecision.scheduleState, at),
+    },
+  }
+}
+
+function unmarkPlannedCapabilityDispatch(
+  scheduleState: GoalCapabilityScheduleState,
+  at: string,
+): GoalCapabilityScheduleState["capabilities"] {
+  return Object.fromEntries(
+    Object.entries(scheduleState.capabilities).map(([slug, status]) => {
+      if (status.lastFiredAt !== at) return [slug, status]
+      const rest = { ...status }
+      delete rest.lastFiredAt
+      return [slug, rest]
+    }),
+  )
+}
+
 function managedModelKind(goal: ManagedGoal): "Loop" | "Goal" {
   return goal.loopTarget || goal.schedule ? "Loop" : "Goal"
 }
@@ -422,8 +461,11 @@ function stageAutonomyBlocked(
   goalId: string,
   goal: ManagedGoal,
   goalState: string,
-  reason: string,
+  waitDecision: string | { kind: "wait"; reason: string; scheduleState: GoalCapabilityScheduleState },
+  previousScheduleState?: GoalCapabilityScheduleState,
 ): void {
+  const reason = typeof waitDecision === "string" ? waitDecision : waitDecision.reason
+  const scheduleState = typeof waitDecision === "string" ? undefined : waitDecision.scheduleState
   stageGoalRunLogEvent(data, goalId, {
     source: "goal-manager",
     event: "goal.tick.wait",
@@ -433,6 +475,20 @@ function stageAutonomyBlocked(
     status: "wait",
     reason,
     goal: goalRunLogSnapshot(goalId, goalState, goal),
+    ...(scheduleState
+      ? {
+          inspection: {
+            previousScheduleState,
+            scheduleState,
+          },
+          change: {
+            scheduleState: {
+              previousDecision: previousScheduleState?.lastDecision,
+              nextDecision: scheduleState.lastDecision,
+            },
+          },
+        }
+      : {}),
     decision: { kind: "wait", reason },
   })
 }

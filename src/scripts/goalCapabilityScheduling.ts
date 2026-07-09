@@ -31,11 +31,12 @@ export interface GoalCapabilityScheduleState {
       }
     | { kind: "idle"; reason: string; at: string }
     | { kind: "blocked"; reason: string; at: string }
+    | { kind: "wait"; reason: string; at: string }
   capabilities: Record<string, GoalCapabilityScheduleStatus>
 }
 
 export interface GoalCapabilityScheduleDecision {
-  kind: "dispatch" | "idle" | "blocked"
+  kind: "dispatch" | "idle" | "blocked" | "wait"
   reason: string
   scheduleState: GoalCapabilityScheduleState
   dispatch?: {
