@@ -122,6 +122,20 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
       allowSameDayTargetDispatch,
     })
     let targetResolution: GoalLoopTargetResolution | undefined
+    const selfAutonomyBlock =
+      decision.kind === "dispatch" && decision.dispatch
+        ? autonomyBlockReason(ctx, goal.id, managed, goal.raw, decision.dispatch, { checkTargets: false })
+        : null
+    if (selfAutonomyBlock) {
+      restoreGoalIdFact()
+      goal.raw = writeManagedGoalToState({ ...goal.raw, state: goal.state }, managed)
+      const waitDecision = scheduleWaitDecision(previousScheduleState, decision, selfAutonomyBlock)
+      goal.raw.extra.scheduleState = waitDecision.scheduleState
+      ctx.data.managedGoalDecision = waitDecision
+      stageAutonomyBlocked(ctx.data, goal.id, managed, goal.state, waitDecision, previousScheduleState)
+      ctx.output.reason = selfAutonomyBlock
+      return
+    }
     if (decision.kind === "dispatch" && decision.dispatch && isGoalTargetLoop(managed)) {
       targetResolution = resolveGoalLoopTarget(ctx.config, ctx.cwd, goal.id, managed, now)
       decision = planTargetLoopSchedule({
@@ -361,6 +375,7 @@ function autonomyBlockReason(
   goal: ManagedGoal,
   goalState: GoalState,
   dispatch: PlannedDispatch,
+  options: { checkTargets?: boolean } = {},
 ): string | null {
   if (ctx.data.jobForce === true) return null
   const selfMode = firstTrustOverride(ctx, subjectCandidates(managedModelSubjectKind(goal), goalId, goalState))
@@ -378,7 +393,7 @@ function autonomyBlockReason(
 
   const targetGoal =
     dispatch.action === "goal-manager" && typeof dispatch.cliArgs.goal === "string" ? dispatch.cliArgs.goal : null
-  if (targetGoal && targetGoal !== goalId) {
+  if (targetGoal && targetGoal !== goalId && options.checkTargets !== false) {
     const target = fetchGoalState(ctx.config, targetGoal, ctx.cwd)
     const targetManaged = target ? managedGoalFromState(expandManagedGoalState(target)) : null
     const targetMode = targetManaged

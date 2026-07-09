@@ -537,6 +537,47 @@ describe("standing goal capability scheduling", () => {
     expect(nextDecision.kind).toBe("dispatch")
   })
 
+  it("blocks a target loop before persisting a dispatch when local approval is off", async () => {
+    const stateRoot = path.join(tmp, "state-repo")
+    writeRepoGoal(stateRoot, "web-release", {
+      state: "active",
+      type: "web-release",
+      facts: {},
+      blockers: [],
+    })
+
+    const raw = goalState([])
+    raw.extra.type = "agentLoop"
+    raw.extra.runWithoutApproval = false
+    raw.extra.loopTarget = { type: "goal", id: "web-release" }
+    raw.extra.preferredRunTime = { time: "02:00", timezone: "Asia/Jerusalem" }
+    const ctx = fakeCtx(raw, "daily-web-release-loop")
+    ;(ctx.config as unknown as Record<string, unknown>).state = { repo: "o/r", path: "state" }
+
+    const oldNow = process.env.KODY_GOAL_LOOP_NOW
+    process.env.KODY_GOAL_LOOP_NOW = "2026-07-08T23:47:18.785Z"
+    await withStateRepoStub(stateRoot, async () => {
+      try {
+        await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+      } finally {
+        if (oldNow === undefined) {
+          delete process.env.KODY_GOAL_LOOP_NOW
+        } else {
+          process.env.KODY_GOAL_LOOP_NOW = oldNow
+        }
+      }
+    })
+
+    expect(ctx.output.nextDispatch).toBeUndefined()
+    expect(ctx.output.reason).toBe("Run without approval is off for Loop daily-web-release-loop")
+    const updatedGoal = ctx.data.goal as GoalCtx
+    const scheduleState = updatedGoal.raw!.extra.scheduleState as GoalCapabilityScheduleState
+    expect(scheduleState.lastDecision).toMatchObject({
+      kind: "wait",
+      reason: "Run without approval is off for Loop daily-web-release-loop",
+    })
+  })
+
   it("continues an active goal target instance even when today's loop already dispatched", async () => {
     const stateRoot = path.join(tmp, "state-repo")
     writeRepoGoal(stateRoot, "web-release", {
