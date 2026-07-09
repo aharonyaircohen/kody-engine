@@ -82,6 +82,12 @@ function writeRepoWorkflow(stateRoot: string, workflowId: string, state: Record<
   )
 }
 
+function writeTrust(stateRoot: string, trust: Record<string, unknown>): void {
+  const file = path.join(stateRoot, "state", "state", "trust.json")
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, JSON.stringify(trust, null, 2))
+}
+
 function readRepoGoal(stateRoot: string, goalId: string): Record<string, unknown> {
   const todoFile = path.join(stateRoot, "state", "todos", `${goalId}.json`)
   return JSON.parse(fs.readFileSync(todoFile, "utf8")) as Record<string, unknown>
@@ -424,6 +430,84 @@ describe("standing goal capability scheduling", () => {
         process.env.KODY_TEST_STATE_ROOT = oldStateRoot
       }
     }
+  })
+
+  it("uses subject trust to allow a loop and generated target without local approval", async () => {
+    const stateRoot = path.join(tmp, "state-repo")
+    writeTrust(stateRoot, {
+      subjects: {
+        "loop:daily-web-release-loop": { mode: "auto" },
+        "goal:web-release": { mode: "auto" },
+      },
+    })
+    writeRepoGoal(stateRoot, "web-release", {
+      state: "done",
+      runWithoutApproval: false,
+      createdAt: "2026-07-07T00:00:00.000Z",
+      updatedAt: "2026-07-07T01:00:00.000Z",
+      type: "web-release",
+      facts: {},
+      blockers: [],
+    })
+    writeRepoGoal(stateRoot, "web-release-2026-07-08", {
+      state: "active",
+      runWithoutApproval: false,
+      createdAt: "2026-07-08T00:00:00.000Z",
+      updatedAt: "2026-07-08T00:00:00.000Z",
+      kind: "instance",
+      template: "web-release",
+      sourceTemplate: "web-release",
+      templateId: "web-release",
+      type: "web-release",
+      facts: {},
+      blockers: [],
+    })
+
+    const raw = goalState([])
+    raw.extra.type = "agentLoop"
+    raw.extra.runWithoutApproval = false
+    raw.extra.loopTarget = { type: "goal", id: "web-release" }
+    const ctx = fakeCtx(raw, "daily-web-release-loop")
+    ;(ctx.config as unknown as Record<string, unknown>).state = { repo: "o/r", path: "state" }
+
+    await withStateRepoStub(stateRoot, async () => {
+      await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+    })
+
+    expect(ctx.output.nextDispatch).toEqual({
+      action: "goal-manager",
+      implementation: "goal-manager",
+      cliArgs: { goal: "web-release-2026-07-08" },
+    })
+  })
+
+  it("lets explicit ask subject trust block a locally auto-approved loop", async () => {
+    const stateRoot = path.join(tmp, "state-repo")
+    writeTrust(stateRoot, {
+      subjects: {
+        "loop:daily-web-release-loop": { mode: "ask" },
+      },
+    })
+    writeRepoGoal(stateRoot, "web-release", {
+      state: "active",
+      type: "web-release",
+      facts: {},
+      blockers: [],
+    })
+
+    const raw = goalState([])
+    raw.extra.type = "agentLoop"
+    raw.extra.runWithoutApproval = true
+    raw.extra.loopTarget = { type: "goal", id: "web-release" }
+    const ctx = fakeCtx(raw, "daily-web-release-loop")
+    ;(ctx.config as unknown as Record<string, unknown>).state = { repo: "o/r", path: "state" }
+
+    await withStateRepoStub(stateRoot, async () => {
+      await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+    })
+
+    expect(ctx.output.nextDispatch).toBeUndefined()
+    expect(ctx.output.reason).toBe("Run without approval is off for Loop daily-web-release-loop")
   })
 
   it("continues an active goal target instance even when today's loop already dispatched", async () => {

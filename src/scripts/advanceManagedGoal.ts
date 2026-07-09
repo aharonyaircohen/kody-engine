@@ -8,6 +8,7 @@ import {
   writeManagedGoalToState,
 } from "../goal/manager.js"
 import { goalRunLogChange, goalRunLogSnapshot, stageGoalRunLogEvent } from "../goal/runLog.js"
+import type { GoalState } from "../goal/state.js"
 import { serializeGoalState } from "../goal/state.js"
 import { fetchGoalState } from "../goal/stateStore.js"
 import {
@@ -19,6 +20,7 @@ import {
 import { expandManagedGoalState } from "../goal/typeDefinitions.js"
 import type { PreflightScript } from "../implementations/types.js"
 import { gh } from "../issue.js"
+import { readTrustModeOverride, type TrustModeOverride, type TrustSubject } from "../trustPolicy.js"
 import { readWorkflowDefinition } from "../workflowDefinitions.js"
 import {
   type GoalCapabilityScheduleState,
@@ -136,7 +138,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     ctx.data.managedGoalDecision = decision
     const autonomyBlock =
       decision.kind === "dispatch" && decision.dispatch
-        ? autonomyBlockReason(ctx, goal.id, managed, decision.dispatch)
+        ? autonomyBlockReason(ctx, goal.id, managed, goal.raw, decision.dispatch)
         : null
     if (autonomyBlock) {
       stageAutonomyBlocked(ctx.data, goal.id, managed, goal.state, autonomyBlock)
@@ -208,7 +210,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     ctx.data.managedGoalDecision = decision
     const autonomyBlock =
       decision.kind === "dispatch" && decision.dispatch
-        ? autonomyBlockReason(ctx, goal.id, managed, decision.dispatch)
+        ? autonomyBlockReason(ctx, goal.id, managed, goal.raw, decision.dispatch)
         : null
     if (autonomyBlock) {
       stageAutonomyBlocked(ctx.data, goal.id, managed, goal.state, autonomyBlock)
@@ -280,7 +282,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
             ...(decision.implementation ? { implementation: decision.implementation } : {}),
             cliArgs: decision.cliArgs,
           }
-    const autonomyBlock = autonomyBlockReason(ctx, goal.id, managed, planned)
+    const autonomyBlock = autonomyBlockReason(ctx, goal.id, managed, goal.raw, planned)
     if (autonomyBlock) {
       stageAutonomyBlocked(ctx.data, goal.id, managed, goal.state, autonomyBlock)
       ctx.output.reason = autonomyBlock
@@ -351,16 +353,19 @@ function autonomyBlockReason(
   ctx: Parameters<PreflightScript>[0],
   goalId: string,
   goal: ManagedGoal,
+  goalState: GoalState,
   dispatch: PlannedDispatch,
 ): string | null {
   if (ctx.data.jobForce === true) return null
-  if (goal.runWithoutApproval !== true) {
+  const selfMode = firstTrustOverride(ctx, subjectCandidates(managedModelSubjectKind(goal), goalId, goalState))
+  if (selfMode === "ask" || (selfMode !== "auto" && goal.runWithoutApproval !== true)) {
     return `Run without approval is off for ${managedModelKind(goal)} ${goalId}`
   }
 
   if (dispatch.workflow) {
-    const workflow = readWorkflowDefinition(ctx.config, ctx.cwd, dispatch.workflow)
-    if (workflow && workflow.runWithoutApproval !== true) {
+    const workflowMode = firstTrustOverride(ctx, [{ kind: "workflow", id: dispatch.workflow }])
+    const workflow = workflowMode === "auto" ? null : readWorkflowDefinition(ctx.config, ctx.cwd, dispatch.workflow)
+    if (workflowMode === "ask" || (workflowMode !== "auto" && workflow && workflow.runWithoutApproval !== true)) {
       return `Run without approval is off for workflow ${dispatch.workflow}`
     }
   }
@@ -370,7 +375,10 @@ function autonomyBlockReason(
   if (targetGoal && targetGoal !== goalId) {
     const target = fetchGoalState(ctx.config, targetGoal, ctx.cwd)
     const targetManaged = target ? managedGoalFromState(expandManagedGoalState(target)) : null
-    if (targetManaged && targetManaged.runWithoutApproval !== true) {
+    const targetMode = targetManaged
+      ? firstTrustOverride(ctx, subjectCandidates(managedModelSubjectKind(targetManaged), targetGoal, target))
+      : null
+    if (targetMode === "ask" || (targetMode !== "auto" && targetManaged && targetManaged.runWithoutApproval !== true)) {
       return `Run without approval is off for goal ${targetGoal}`
     }
   }
@@ -380,6 +388,33 @@ function autonomyBlockReason(
 
 function managedModelKind(goal: ManagedGoal): "Loop" | "Goal" {
   return goal.loopTarget || goal.schedule ? "Loop" : "Goal"
+}
+
+function managedModelSubjectKind(goal: ManagedGoal): "loop" | "goal" {
+  return managedModelKind(goal) === "Loop" ? "loop" : "goal"
+}
+
+function subjectCandidates(kind: "loop" | "goal", id: string, state: GoalState | null): TrustSubject[] {
+  const ids = new Set<string>()
+  ids.add(id)
+  if (state?.extra) {
+    for (const key of ["sourceTemplate", "templateId", "template"]) {
+      const value = state.extra[key]
+      if (typeof value === "string" && value.trim()) ids.add(value.trim())
+    }
+  }
+  return [...ids].map((candidate) => ({ kind, id: candidate }))
+}
+
+function firstTrustOverride(ctx: Parameters<PreflightScript>[0], subjects: TrustSubject[]): TrustModeOverride {
+  if (!ctx.config.state) return null
+  const repoSlug =
+    ctx.config.github?.owner && ctx.config.github?.repo ? `${ctx.config.github.owner}/${ctx.config.github.repo}` : ""
+  for (const subject of subjects) {
+    const mode = readTrustModeOverride(ctx.config.state, repoSlug, subject)
+    if (mode) return mode
+  }
+  return null
 }
 
 function stageAutonomyBlocked(

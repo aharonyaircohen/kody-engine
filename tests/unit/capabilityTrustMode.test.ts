@@ -5,6 +5,7 @@ vi.mock("../../src/issue.js", () => ({
 }))
 
 import { isDispatchGated, parseCapabilityTrustMode, readCapabilityTrustMode } from "../../src/capabilityMcp.js"
+import { parseTrustModeOverride, readTrustModeOverride } from "../../src/trustPolicy.js"
 import { gh } from "../../src/issue.js"
 
 const b64 = (s: string) => Buffer.from(s, "utf-8").toString("base64")
@@ -26,6 +27,24 @@ describe("parseCapabilityTrustMode (pure)", () => {
     expect(parseCapabilityTrustMode(JSON.stringify({}), "qa")).toBe("ask")
     expect(parseCapabilityTrustMode("not json", "qa")).toBe("ask")
     expect(parseCapabilityTrustMode("", "qa")).toBe("ask")
+  })
+})
+
+describe("parseTrustModeOverride (pure)", () => {
+  it("reads managed subject trust from subjects while preserving missing as no override", () => {
+    const json = JSON.stringify({
+      capabilities: { qa: { mode: "auto" } },
+      subjects: {
+        "loop:daily-web-release-loop": { mode: "auto" },
+        "goal:web-release": { mode: "ask" },
+      },
+    })
+
+    expect(parseTrustModeOverride(json, { kind: "capability", id: "qa" })).toBe("auto")
+    expect(parseTrustModeOverride(json, { kind: "loop", id: "daily-web-release-loop" })).toBe("auto")
+    expect(parseTrustModeOverride(json, { kind: "goal", id: "web-release" })).toBe("ask")
+    expect(parseTrustModeOverride(json, { kind: "goal", id: "missing" })).toBeNull()
+    expect(parseTrustModeOverride("not json", { kind: "goal", id: "web-release" })).toBeNull()
   })
 })
 
@@ -55,6 +74,23 @@ describe("readCapabilityTrustMode (gh-backed)", () => {
       throw new Error("HTTP 404: Not Found")
     })
     expect(readCapabilityTrustMode(state, "o/r", "qa")).toBe("ask")
+  })
+})
+
+describe("readTrustModeOverride (gh-backed)", () => {
+  it("reads managed subject trust from the shared trust file", () => {
+    vi.mocked(gh).mockReturnValue(
+      JSON.stringify({
+        type: "file",
+        encoding: "base64",
+        sha: "abc",
+        content: b64(JSON.stringify({ subjects: { "goal:web-release": { mode: "auto" } } })),
+      }),
+    )
+
+    expect(readTrustModeOverride(state, "o/r", { kind: "goal", id: "web-release" })).toBe("auto")
+    const call = vi.mocked(gh).mock.calls[0]![0] as string[]
+    expect(call.join(" ")).toContain("/repos/o/kody-state/contents/r/state/trust.json")
   })
 })
 

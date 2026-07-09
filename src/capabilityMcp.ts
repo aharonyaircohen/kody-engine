@@ -36,7 +36,8 @@ import { z } from "zod"
 import { DASHBOARD_CMS_MCP_TOOL_NAMES, dashboardCmsToolDefinitions } from "./dashboardCmsMcp.js"
 import { gh } from "./issue.js"
 import { getProfileInputs, resolveCapabilityAction } from "./registry.js"
-import { readStateText, type StateRepoConfig } from "./stateRepo.js"
+import type { StateRepoConfig } from "./stateRepo.js"
+import { parseTrustMode, readTrustMode, type TrustMode } from "./trustPolicy.js"
 
 export interface CapabilityMcpHandle {
   /** Config object to drop into `mcpServers["kody-capability"]`. */
@@ -290,21 +291,10 @@ function readLedger(label: string): LedgerResult {
 // Capability trust gate.
 // ---------------------------------------------------------------------------
 
-export type CapabilityTrustMode = "ask" | "auto"
-const TRUST_FILE_PATH = "state/trust.json"
+export type CapabilityTrustMode = TrustMode
 
 export function parseCapabilityTrustMode(rawJson: string, capabilitySlug: string): CapabilityTrustMode {
-  try {
-    const parsed = JSON.parse(rawJson) as { capabilities?: Record<string, { mode?: string }> }
-    return parsed?.capabilities?.[capabilitySlug]?.mode === "auto" ? "auto" : "ask"
-  } catch {
-    return "ask"
-  }
-}
-
-function defaultStateForRepoSlug(repoSlug: string): StateRepoConfig["state"] {
-  const [owner, repo] = repoSlug.split("/")
-  return { repo: `${owner}/kody-state`, path: repo ?? repoSlug }
+  return parseTrustMode(rawJson, { kind: "capability", id: capabilitySlug })
 }
 
 export function readCapabilityTrustMode(repoSlug: string, capabilitySlug?: string): CapabilityTrustMode
@@ -322,12 +312,7 @@ export function readCapabilityTrustMode(
   const repoSlug = typeof stateOrRepoSlug === "string" ? stateOrRepoSlug : (repoSlugOrCapabilitySlug ?? "")
   const capabilitySlug = typeof stateOrRepoSlug === "string" ? repoSlugOrCapabilitySlug : maybeCapabilitySlug
   if (!capabilitySlug) return "ask"
-  try {
-    const loaded = readStateText({ state: state ?? defaultStateForRepoSlug(repoSlug) }, undefined, TRUST_FILE_PATH)
-    return loaded ? parseCapabilityTrustMode(loaded.content, capabilitySlug) : "ask"
-  } catch {
-    return "ask"
-  }
+  return readTrustMode(state, repoSlug, { kind: "capability", id: capabilitySlug })
 }
 
 // ---------------------------------------------------------------------------
