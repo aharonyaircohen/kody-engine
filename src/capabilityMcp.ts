@@ -508,27 +508,14 @@ function readDispatchTargetKind(
 // Trust gate for dispatch tools.
 // ---------------------------------------------------------------------------
 
-const GATE_EXEMPT_CAPABILITIES: ReadonlySet<string> = new Set(["qa-engineer", "ui-review"])
-
 export function isDispatchGated(capability: string | null | undefined, mode: CapabilityTrustMode): boolean {
-  if (mode === "auto") return false
-  if (capability && GATE_EXEMPT_CAPABILITIES.has(capability)) return false
-  return true
-}
-
-function trustRefusal(capabilitySlug?: string): string {
-  return (
-    `Not dispatched: capability \`${capabilitySlug ?? "?"}\` is in ASK mode (not trusted for autonomy). ` +
-    `Do NOT retry the dispatch. Instead notify the operator (use recommend_to_operator, or rely on the ` +
-    `tracking issue that already @-mentions them), then submit_state. To let this capability act on its own, ` +
-    `grant it Auto on the dashboard Trust page.`
-  )
+  void capability
+  void mode
+  return false
 }
 
 function assertCmsWriteAllowed(opts: CapabilityMcpOptions): string | null {
-  if (isDispatchGated(opts.capabilitySlug, readCapabilityTrustMode(opts.state, opts.repoSlug, opts.capabilitySlug))) {
-    return trustRefusal(opts.capabilitySlug)
-  }
+  void opts
   return null
 }
 
@@ -568,9 +555,6 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     },
     handler: async (args) => {
       const pr = Number(args.pr)
-      if (isDispatchGated(verb, readCapabilityTrustMode(opts.state, opts.repoSlug, opts.capabilitySlug))) {
-        return { content: [{ type: "text", text: trustRefusal(opts.capabilitySlug) }] }
-      }
       const result = dispatchVerb(workflowFile, opts.repoSlug, verb, pr)
       const text = result.ok
         ? `Dispatched \`${verb}\` on PR #${pr}. The repair runs in its own workflow_dispatch — wait for the next tick to see the new headSha.`
@@ -595,7 +579,7 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
   const recommendTool: CapabilityToolDefinition = {
     name: "recommend_to_operator",
     description:
-      "Post ONE comment on a PR with the operator @-mention prepended. Use this when a capability is in ASK mode and you want the operator to confirm via the dashboard inbox. The mention handle is substituted from kody.config.json `github.operators` — do not type it yourself.",
+      "Post ONE comment on a PR with the operator @-mention prepended. Use this when the operator should confirm or review something via the dashboard inbox. The mention handle is substituted from kody.config.json `github.operators` — do not type it yourself.",
     inputSchema: {
       pr: z.number().int().positive().describe("PR number to comment on."),
       body: z
@@ -722,9 +706,6 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
       const issue = Number(args.issue ?? args.issueNumber)
       if (!Number.isFinite(issue) || issue <= 0) {
         return { content: [{ type: "text", text: "Start failed: `issue` is required and must be a positive number." }] }
-      }
-      if (isDispatchGated(name, readCapabilityTrustMode(opts.state, opts.repoSlug, opts.capabilitySlug))) {
-        return { content: [{ type: "text", text: trustRefusal(opts.capabilitySlug) }] }
       }
       const result = startCapability(workflowFile, name, issue, opts.repoSlug)
       const text = result.ok

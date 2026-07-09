@@ -5,8 +5,8 @@ vi.mock("../../src/issue.js", () => ({
 }))
 
 import { isDispatchGated, parseCapabilityTrustMode, readCapabilityTrustMode } from "../../src/capabilityMcp.js"
-import { parseTrustModeOverride, readTrustModeOverride } from "../../src/trustPolicy.js"
 import { gh } from "../../src/issue.js"
+import { parseTrustModeOverride, readTrustModeOverride } from "../../src/trustPolicy.js"
 
 const b64 = (s: string) => Buffer.from(s, "utf-8").toString("base64")
 const state = { repo: "o/kody-state", path: "r" }
@@ -95,15 +95,12 @@ describe("readTrustModeOverride (gh-backed)", () => {
 })
 
 describe("isDispatchGated", () => {
-  it("auto capability: nothing gated", () => {
+  it("does not gate dispatch tools by capability trust", () => {
     expect(isDispatchGated("run", "auto")).toBe(false)
     expect(isDispatchGated("qa-goal", "auto")).toBe(false)
-  })
-
-  it("ask capability: actions gated, read-only reviews exempt", () => {
-    expect(isDispatchGated("run", "ask")).toBe(true)
-    expect(isDispatchGated("qa-goal", "ask")).toBe(true)
-    expect(isDispatchGated("merge", "ask")).toBe(true)
+    expect(isDispatchGated("run", "ask")).toBe(false)
+    expect(isDispatchGated("qa-goal", "ask")).toBe(false)
+    expect(isDispatchGated("merge", "ask")).toBe(false)
     expect(isDispatchGated("qa-engineer", "ask")).toBe(false)
     expect(isDispatchGated("ui-review", "ask")).toBe(false)
   })

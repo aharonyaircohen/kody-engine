@@ -378,8 +378,9 @@ function autonomyBlockReason(
   options: { checkTargets?: boolean } = {},
 ): string | null {
   if (ctx.data.jobForce === true) return null
-  const selfMode = firstTrustOverride(ctx, subjectCandidates(managedModelSubjectKind(goal), goalId, goalState))
-  if (selfMode === "ask" || (selfMode !== "auto" && goal.runWithoutApproval !== true)) {
+  const selfKind = managedModelKind(goal)
+  const selfMode = selfKind === "Goal" ? firstTrustOverride(ctx, subjectCandidates("goal", goalId, goalState)) : null
+  if (selfKind === "Goal" && (selfMode === "ask" || (selfMode !== "auto" && goal.runWithoutApproval !== true))) {
     return `Run without approval is off for ${managedModelKind(goal)} ${goalId}`
   }
 
@@ -396,10 +397,13 @@ function autonomyBlockReason(
   if (targetGoal && targetGoal !== goalId && options.checkTargets !== false) {
     const target = fetchGoalState(ctx.config, targetGoal, ctx.cwd)
     const targetManaged = target ? managedGoalFromState(expandManagedGoalState(target)) : null
-    const targetMode = targetManaged
-      ? firstTrustOverride(ctx, subjectCandidates(managedModelSubjectKind(targetManaged), targetGoal, target))
-      : null
-    if (targetMode === "ask" || (targetMode !== "auto" && targetManaged && targetManaged.runWithoutApproval !== true)) {
+    const targetIsGoal = targetManaged ? managedModelKind(targetManaged) === "Goal" : false
+    const targetMode =
+      targetManaged && targetIsGoal ? firstTrustOverride(ctx, subjectCandidates("goal", targetGoal, target)) : null
+    if (
+      targetIsGoal &&
+      (targetMode === "ask" || (targetMode !== "auto" && targetManaged && targetManaged.runWithoutApproval !== true))
+    ) {
       return `Run without approval is off for goal ${targetGoal}`
     }
   }
@@ -442,10 +446,6 @@ function unmarkPlannedCapabilityDispatch(
 
 function managedModelKind(goal: ManagedGoal): "Loop" | "Goal" {
   return goal.loopTarget || goal.schedule ? "Loop" : "Goal"
-}
-
-function managedModelSubjectKind(goal: ManagedGoal): "loop" | "goal" {
-  return managedModelKind(goal) === "Loop" ? "loop" : "goal"
 }
 
 function subjectCandidates(kind: "loop" | "goal", id: string, state: GoalState | null): TrustSubject[] {

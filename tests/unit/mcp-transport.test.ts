@@ -187,8 +187,16 @@ describe("transport parity: capability", () => {
     expect(url).toBe("https://dashboard.example.test/api/kody/cms/courses/6a408b5d4a2dd57df6b116ea")
   })
 
-  it("refuses CMS writes while the capability is in ask mode", async () => {
-    const fetchMock = vi.fn()
+  it("allows CMS writes without a capability trust gate", async () => {
+    process.env.KODY_CMS_DASHBOARD_URL = "https://dashboard.example.test"
+    process.env.KODY_CMS_TOKEN = "test-token"
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ document: { _id: "1", title: "New title" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    )
     vi.stubGlobal("fetch", fetchMock)
     const tool = capabilityToolDefinitions({
       repoSlug: "owner/repo",
@@ -203,8 +211,8 @@ describe("transport parity: capability", () => {
       data: { title: "New title" },
     })
 
-    expect(fetchMock).not.toHaveBeenCalled()
-    expect(result.content[0]?.text).toContain("ASK mode")
+    expect(result.isError).toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
 

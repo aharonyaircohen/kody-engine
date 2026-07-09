@@ -481,7 +481,7 @@ describe("standing goal capability scheduling", () => {
     })
   })
 
-  it("lets explicit ask subject trust block a locally auto-approved loop", async () => {
+  it("ignores loop subject trust when the target goal is allowed", async () => {
     const stateRoot = path.join(tmp, "state-repo")
     writeTrust(stateRoot, {
       subjects: {
@@ -517,27 +517,21 @@ describe("standing goal capability scheduling", () => {
       }
     })
 
-    expect(ctx.output.nextDispatch).toBeUndefined()
-    expect(ctx.output.reason).toBe("Run without approval is off for Loop daily-web-release-loop")
+    expect(ctx.output.nextDispatch).toEqual({
+      action: "goal-manager",
+      implementation: "goal-manager",
+      cliArgs: { goal: "web-release" },
+    })
     const updatedGoal = ctx.data.goal as GoalCtx
     const scheduleState = updatedGoal.raw!.extra.scheduleState as GoalCapabilityScheduleState
     expect(scheduleState.lastDecision).toMatchObject({
-      kind: "wait",
-      reason: "Run without approval is off for Loop daily-web-release-loop",
+      kind: "dispatch",
+      targetType: "goal",
+      targetId: "web-release",
     })
-
-    const nextDecision = planTargetLoopSchedule({
-      goal: {
-        ...goalTargetLoop(),
-        preferredRunTime: { time: "02:00", timezone: "Asia/Jerusalem" },
-      },
-      previousScheduleState: scheduleState,
-      now: new Date("2026-07-09T01:00:00.000Z"),
-    })
-    expect(nextDecision.kind).toBe("dispatch")
   })
 
-  it("blocks a target loop before persisting a dispatch when local approval is off", async () => {
+  it("lets loop auto-run fire even when the loop has no trust approval", async () => {
     const stateRoot = path.join(tmp, "state-repo")
     writeRepoGoal(stateRoot, "web-release", {
       state: "active",
@@ -568,13 +562,17 @@ describe("standing goal capability scheduling", () => {
       }
     })
 
-    expect(ctx.output.nextDispatch).toBeUndefined()
-    expect(ctx.output.reason).toBe("Run without approval is off for Loop daily-web-release-loop")
+    expect(ctx.output.nextDispatch).toEqual({
+      action: "goal-manager",
+      implementation: "goal-manager",
+      cliArgs: { goal: "web-release" },
+    })
     const updatedGoal = ctx.data.goal as GoalCtx
     const scheduleState = updatedGoal.raw!.extra.scheduleState as GoalCapabilityScheduleState
     expect(scheduleState.lastDecision).toMatchObject({
-      kind: "wait",
-      reason: "Run without approval is off for Loop daily-web-release-loop",
+      kind: "dispatch",
+      targetType: "goal",
+      targetId: "web-release",
     })
   })
 
