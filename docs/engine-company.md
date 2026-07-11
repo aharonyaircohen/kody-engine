@@ -37,16 +37,15 @@ Current storage names:
 Intent selects and prioritizes goals and agentLoops. It is not another execution
 chain; goals and agentLoops still own their own runtime state.
 
-## CTO agency architect
+## Agency management
 
-The first agency architect is `cto`, running the `agency-architect` capability.
-It reads active intent files under `<statePath>/intents/<id>/intent.json`,
-compares them with current goal/loop state, and applies validated portfolio
-actions. This is portfolio orchestration: creating, linking, pausing, or
-resuming goals and agentLoops so the agency serves active intent.
+Agency management is Store-owned. Management loops and capabilities read active
+intent files under `<statePath>/intents/<id>/intent.json` and decide how the
+company and agency portfolios should change. The engine loads and runs those
+declarative assets without naming a particular manager, loop, or capability.
 
 Intent may include a `description` for deeper context and lightweight `metrics`
-names. Description helps CTO interpret the one-line direction; metrics are not
+names. Description helps managers interpret the one-line direction; metrics are not
 a separate model in v1 and tell CTO how intent should be judged.
 
 Canonical noun docs:

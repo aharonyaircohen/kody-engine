@@ -58,6 +58,9 @@ const BANNED: Array<string | RegExp> = [
   new RegExp("\\bdu" + "ties\\b"),
   new RegExp("\\bDu" + "ties\\b"),
   "job" + "Implementation",
+  "agency-architect",
+  "AgencyArchitect",
+  "agencyArchitect",
 ]
 
 function walk(dir: string): string[] {

@@ -44,13 +44,6 @@ export interface CompanyIntent {
     loops: string[]
     capabilities: string[]
   }
-  manager: {
-    agent: "cto"
-    loop: "agency-architect-loop"
-    capability: "agency-architect"
-    reviewEvery: "1d" | "1w"
-    lastReviewedAt?: string
-  }
   createdAt: string
   updatedAt: string
 }
@@ -77,7 +70,7 @@ export interface CompanyPortfolio {
 
 export interface CompanyIntentDecisionLog {
   at: string
-  agent: "cto"
+  agent: string
   intentId?: string
   action: string
   reason: string
@@ -136,7 +129,6 @@ export function normalizeCompanyIntent(path: string, raw: unknown): CompanyInten
       loops: stringArray(recordField(input.portfolio)?.loops).filter(isCompanyIntentId),
       capabilities: stringArray(recordField(input.portfolio)?.capabilities).filter(isCompanyIntentId),
     },
-    manager: normalizeManager(recordField(input.manager)),
     createdAt,
     updatedAt,
   }
@@ -274,15 +266,5 @@ function normalizeAutomationPolicy(raw: Record<string, unknown> | null): Company
     maxConcurrentGoals: Math.max(1, Math.floor(numberField(raw?.maxConcurrentGoals, 1))),
     maxDailyActions: Math.max(1, Math.floor(numberField(raw?.maxDailyActions, 6))),
     requiresHumanFor: stringArray(raw?.requiresHumanFor),
-  }
-}
-
-function normalizeManager(raw: Record<string, unknown> | null): CompanyIntent["manager"] {
-  return {
-    agent: "cto",
-    loop: "agency-architect-loop",
-    capability: "agency-architect",
-    reviewEvery: oneOf(raw?.reviewEvery, ["1d", "1w"] as const, "1d"),
-    ...(typeof raw?.lastReviewedAt === "string" ? { lastReviewedAt: raw.lastReviewedAt } : {}),
   }
 }

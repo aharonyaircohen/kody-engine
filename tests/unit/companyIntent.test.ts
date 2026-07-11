@@ -32,7 +32,7 @@ describe("company intent model", () => {
         loops: ["release-health-loop"],
         capabilities: ["ci-health"],
       },
-      manager: { agent: "cto", loop: "agency-architect-loop", capability: "agency-architect", reviewEvery: "1d" },
+      manager: { agent: "legacy-manager", loop: "legacy-loop", capability: "legacy-capability", reviewEvery: "1d" },
       createdAt: "2026-06-24T00:00:00Z",
       updatedAt: "2026-06-24T00:00:00Z",
     })
@@ -44,11 +44,11 @@ describe("company intent model", () => {
       description: "Prefer evidence-backed releases and avoid risky shortcuts.",
       posture: "confidence",
       metrics: ["ciGreen", "previewHealthy"],
-      manager: { agent: "cto", loop: "agency-architect-loop", capability: "agency-architect" },
     })
+    expect(intent).not.toHaveProperty("manager")
   })
 
-  it("defaults missing policy to bounded full-auto CTO management", () => {
+  it("defaults missing policy without injecting an agency manager", () => {
     const intent = normalizeCompanyIntent("intents/code-health/intent.json", {
       id: "code-health",
       for: "healthy codebase",
@@ -60,6 +60,6 @@ describe("company intent model", () => {
       maxDailyActions: 6,
       requiresHumanFor: [],
     })
-    expect(intent.manager.agent).toBe("cto")
+    expect(intent).not.toHaveProperty("manager")
   })
 })

@@ -9,8 +9,6 @@ import { abortUnfinishedGitOps } from "./abortUnfinishedGitOps.js"
 import { advanceFlow } from "./advanceFlow.js"
 import { advanceManagedGoal } from "./advanceManagedGoal.js"
 import { appendCompanyActivity } from "./appendCompanyActivity.js"
-import { appendCompanyIntentDecision } from "./appendCompanyIntentDecision.js"
-import { applyAgencyArchitectDecision } from "./applyAgencyArchitectDecision.js"
 import { applyCapabilityReports } from "./applyCapabilityReports.js"
 import { buildSyntheticPlugin } from "./buildSyntheticPlugin.js"
 import { checkCoverageWithRetry } from "./checkCoverageWithRetry.js"
@@ -58,7 +56,6 @@ import { mirrorStateToPr } from "./mirrorStateToPr.js"
 import { notifyTerminal } from "./notifyTerminal.js"
 import { openAgentFactoryStatePr } from "./openAgentFactoryStatePr.js"
 import { openQaIssue } from "./openQaIssue.js"
-import { parseAgencyArchitectDecision } from "./parseAgencyArchitectDecision.js"
 import { parseAgentResult } from "./parseAgentResult.js"
 import { parseIssueStateFromAgentResult } from "./parseIssueStateFromAgentResult.js"
 import { parseJobStateFromAgentResult } from "./parseJobStateFromAgentResult.js"
@@ -158,7 +155,6 @@ export const preflightScripts: Record<string, PreflightScript> = {
 
 export const postflightScripts: Record<string, PostflightScript> = {
   parseAgentResult,
-  parseAgencyArchitectDecision,
   parseIssueStateFromAgentResult,
   parseJobStateFromAgentResult,
   parseReproOutput,
@@ -166,8 +162,6 @@ export const postflightScripts: Record<string, PostflightScript> = {
   writeIssueStateComment,
   writeJobStateFile,
   appendCompanyActivity,
-  appendCompanyIntentDecision,
-  applyAgencyArchitectDecision,
   requireFeedbackActions,
   requirePlanDeviations,
   verify,

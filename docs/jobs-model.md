@@ -35,9 +35,9 @@ Compact mapping: **intent = why**, **goal = what**, **agentLoop = when**,
 Current storage mapping: **capability = capability contract** and
 **executable = capability implementation**.
 
-The CTO `agency-architect` loop reads intent and performs portfolio
-orchestration. It may create or adjust goals and agentLoops, but goal-manager
-still owns step-by-step execution inside each goal.
+Store-owned management loops read intent and manage the company and agency
+portfolios. The engine remains generic, while goal-manager still owns
+step-by-step execution inside each goal.
 
 Nesting: **goal → tasks → jobs → runs.** A managed goal is the outcome manager
 above tasks. Legacy stacked goals are archived migration state, not a parallel
