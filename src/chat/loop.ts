@@ -266,7 +266,9 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   const { turns: promptTurns, imagePaths } = prepareAttachments(turns, opts.cwd, opts.sessionId)
 
   const basePrompt =
-    opts.systemPrompt ?? (opts.model.protocol === "openai" ? OPENAI_CHAT_SYSTEM_PROMPT : CHAT_SYSTEM_PROMPT)
+    opts.systemPrompt ??
+    readSystemPromptOverride(opts.cwd) ??
+    (opts.model.protocol === "openai" ? OPENAI_CHAT_SYSTEM_PROMPT : CHAT_SYSTEM_PROMPT)
   const agentIdentityBlock = readAgentIdentityBlock(opts.cwd, opts.agentIdentity)
   const catalog = buildImplementationCatalog()
   // Per-task artifacts contract appended to every chat session so the
@@ -669,6 +671,26 @@ function readContextBlock(cwd: string): string {
  */
 const INSTRUCTIONS_REL = ".kody/instructions.md"
 const MAX_INSTRUCTIONS_BYTES = 8_000
+
+/**
+ * Read state-repo `system-prompt.md` from the hydrated local cache. When
+ * present and non-empty it REPLACES the built-in CHAT_SYSTEM_PROMPT /
+ * OPENAI_CHAT_SYSTEM_PROMPT entirely — the operator owns the base prompt.
+ * An explicit `opts.systemPrompt` still wins over both. Returns null when
+ * absent or empty (fall back to the built-in).
+ */
+const SYSTEM_PROMPT_OVERRIDE_REL = ".kody/system-prompt.md"
+
+export function readSystemPromptOverride(cwd: string): string | null {
+  let raw: string
+  try {
+    raw = fs.readFileSync(path.join(cwd, SYSTEM_PROMPT_OVERRIDE_REL), "utf-8")
+  } catch {
+    return null
+  }
+  const trimmed = raw.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
 
 function readInstructionsBlock(cwd: string): string {
   const instructionsPath = path.join(cwd, INSTRUCTIONS_REL)

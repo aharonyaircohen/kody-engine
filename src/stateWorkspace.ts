@@ -19,6 +19,7 @@ const DIR_MAPPINGS: Array<{ stateDir: string; localDir: string }> = [
 
 const FILE_MAPPINGS: Array<{ statePath: string; localPath: string }> = [
   { statePath: "instructions.md", localPath: path.join(".kody", "instructions.md") },
+  { statePath: "system-prompt.md", localPath: path.join(".kody", "system-prompt.md") },
   { statePath: "variables.json", localPath: path.join(".kody", "variables.json") },
   { statePath: "secrets.enc", localPath: path.join(".kody", "secrets.enc") },
 ]
