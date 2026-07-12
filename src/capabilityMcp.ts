@@ -646,7 +646,8 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     },
     handler: async (args) => {
       const requestedRef = String(args.ref ?? "default")
-      const ref = requestedRef === "default" ? (opts.defaultBranch ?? "main") : requestedRef
+      const workflowRef = process.env.GITHUB_REF_NAME?.trim()
+      const ref = requestedRef === "default" ? (workflowRef || opts.defaultBranch || "main") : requestedRef
       const ignoreNames = Array.isArray(args.ignoreNames) ? (args.ignoreNames as string[]) : DEFAULT_IGNORE_CHECKS
       const result = readCheckRuns(opts.repoSlug, ref, ignoreNames)
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }

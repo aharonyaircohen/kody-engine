@@ -371,17 +371,19 @@ describe("readCheckRuns — branch CI classification", () => {
   }
 
   it("resolves the default ref from the configured agency branch", async () => {
+    vi.stubEnv("GITHUB_REF_NAME", "dev")
     mockChecks(JSON.stringify({ name: "health", status: "completed", conclusion: "success", details_url: "u1" }))
     const tool = capabilityToolDefinitions({
       repoSlug: REPO,
       operatorMention: "@operator",
-      defaultBranch: "dev",
+      defaultBranch: "main",
     }).find((candidate) => candidate.name === "read_check_runs")
     if (!tool) throw new Error("read_check_runs tool missing")
 
     const result = await tool.handler({ ref: "default" })
 
     expect(JSON.parse(result.content[0]?.text ?? "{}").sha).toBe(sha)
+    vi.unstubAllEnvs()
   })
 
   it("uses repo token for check-run reads", () => {
