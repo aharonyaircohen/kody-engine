@@ -178,7 +178,7 @@ function dispatchVerb(
   repoSlug: string,
   capability: string,
   prNumber: number,
-): { ok: true } | { ok: false; error: string } {
+): { ok: true; runId?: number } | { ok: false; error: string } {
   return dispatchWorkflow(workflowFile, capability, prNumber, repoSlug)
 }
 
@@ -445,7 +445,7 @@ export function dispatchWorkflow(
   issueNumber: number | undefined,
   repoSlug?: string,
   ref?: string,
-): { ok: true } | { ok: false; error: string } {
+): { ok: true; runId?: number } | { ok: false; error: string } {
   const expected = expectedDispatchTarget(capability)
   if (repoSlug && expected && issueNumber) {
     const target = readDispatchTargetKind(repoSlug, issueNumber)
@@ -465,7 +465,7 @@ export function dispatchWorkflow(
   }
 
   try {
-    gh([
+    const output = gh([
       "workflow",
       "run",
       workflowFile,
@@ -474,7 +474,8 @@ export function dispatchWorkflow(
       `capability=${capability}`,
       ...(issueNumber ? ["-f", `issue_number=${issueNumber}`] : []),
     ])
-    return { ok: true }
+    const runId = Number(output.match(/actions\/runs\/(\d+)/)?.[1])
+    return Number.isFinite(runId) && runId > 0 ? { ok: true, runId } : { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
@@ -486,7 +487,7 @@ export function startCapability(
   issue: number | undefined,
   repoSlug?: string,
   ref?: string,
-): { ok: true } | { ok: false; error: string } {
+): { ok: true; runId?: number } | { ok: false; error: string } {
   return dispatchWorkflow(workflowFile, name, issue, repoSlug, ref)
 }
 
@@ -727,9 +728,7 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
         opts.repoSlug,
         opts.defaultBranch,
       )
-      const text = result.ok
-        ? `Started capability \`${name}\`${issue ? ` on #${issue}` : ""} via workflow_dispatch.`
-        : `Start failed for capability \`${name}\`${issue ? ` on #${issue}` : ""}: ${result.error}`
+      const text = JSON.stringify(result)
       return { content: [{ type: "text", text }] }
     },
   }

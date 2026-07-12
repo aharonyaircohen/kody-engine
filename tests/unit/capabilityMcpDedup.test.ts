@@ -290,7 +290,7 @@ describe("start_capability — public dispatch primitive", () => {
 
     const result = await tool.handler({ name: "qa-engineer", issue: 687 })
 
-    expect(result.content[0]?.text).toBe("Started capability `qa-engineer` on #687 via workflow_dispatch.")
+    expect(result.content[0]?.text).toBe('{"ok":true}')
     expect(vi.mocked(gh).mock.calls.map((c) => c[0] as string[])).toContainEqual([
       "workflow",
       "run",
@@ -304,7 +304,9 @@ describe("start_capability — public dispatch primitive", () => {
 
   it("dispatches child capabilities on the configured agency branch", async () => {
     vi.mocked(gh).mockImplementation((args: string[]) => {
-      if (args[0] === "workflow" && args[1] === "run") return ""
+      if (args[0] === "workflow" && args[1] === "run") {
+        return "https://github.com/acme/widget/actions/runs/123456"
+      }
       throw new Error(`unexpected gh call: ${args.join(" ")}`)
     })
     const tool = capabilityToolDefinitions({
@@ -332,7 +334,9 @@ describe("start_capability — public dispatch primitive", () => {
 
   it("does not forward an issue input to inputless capabilities", async () => {
     vi.mocked(gh).mockImplementation((args: string[]) => {
-      if (args[0] === "workflow" && args[1] === "run") return ""
+      if (args[0] === "workflow" && args[1] === "run") {
+        return "https://github.com/acme/widget/actions/runs/123456"
+      }
       throw new Error(`unexpected gh call: ${args.join(" ")}`)
     })
     const tool = capabilityToolDefinitions({
@@ -345,7 +349,7 @@ describe("start_capability — public dispatch primitive", () => {
 
     const result = await tool.handler({ name: "dev-ci-health" })
 
-    expect(result.content[0]?.text).toBe("Started capability `dev-ci-health` via workflow_dispatch.")
+    expect(result.content[0]?.text).toBe('{"ok":true,"runId":123456}')
     expect(vi.mocked(gh).mock.calls.map((call) => call[0] as string[])).toContainEqual([
       "workflow",
       "run",
