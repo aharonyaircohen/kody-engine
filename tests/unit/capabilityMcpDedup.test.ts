@@ -327,8 +327,6 @@ describe("start_capability — public dispatch primitive", () => {
       "dev",
       "-f",
       "capability=dev-ci-health",
-      "-f",
-      "issue_number=687",
     ])
   })
 

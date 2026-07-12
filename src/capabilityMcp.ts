@@ -488,8 +488,16 @@ export function startCapability(
   repoSlug?: string,
   ref?: string,
 ): { ok: true; runId?: number } | { ok: false; error: string } {
-  const forwardedIssue = expectedDispatchTarget(name) ? issue : undefined
+  const acceptsIssue = capabilityAcceptsIssue(name)
+  const forwardedIssue = acceptsIssue === false ? undefined : issue
   return dispatchWorkflow(workflowFile, name, forwardedIssue, repoSlug, ref)
+}
+
+function capabilityAcceptsIssue(capability: string): boolean | null {
+  const route = resolveCapabilityAction(capability)
+  if (!route) return null
+  const inputs = getProfileInputs(route.implementation) ?? []
+  return inputs.some((input) => input.name === "issue" || input.name === "pr")
 }
 
 function expectedDispatchTarget(capability: string): "issue" | "pr" | null {
