@@ -57,6 +57,8 @@ interface CapabilityMcpOptions {
   operatorMention: string
   /** Workflow file to dispatch (default "kody.yml"). */
   workflowFile?: string
+  /** Consumer agency branch used for child workflow dispatches. */
+  defaultBranch?: string
   /**
    * Slug of the capability currently running (`ctx.data.jobSlug`). Stamped onto every
    * `recommend_to_operator` comment as `<!-- kody-capability: <slug> -->` so the
@@ -442,6 +444,7 @@ export function dispatchWorkflow(
   capability: string,
   issueNumber: number,
   repoSlug?: string,
+  ref?: string,
 ): { ok: true } | { ok: false; error: string } {
   const expected = expectedDispatchTarget(capability)
   if (repoSlug && expected) {
@@ -462,7 +465,16 @@ export function dispatchWorkflow(
   }
 
   try {
-    gh(["workflow", "run", workflowFile, "-f", `capability=${capability}`, "-f", `issue_number=${issueNumber}`])
+    gh([
+      "workflow",
+      "run",
+      workflowFile,
+      ...(ref ? ["--ref", ref] : []),
+      "-f",
+      `capability=${capability}`,
+      "-f",
+      `issue_number=${issueNumber}`,
+    ])
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -474,8 +486,9 @@ export function startCapability(
   name: string,
   issue: number,
   repoSlug?: string,
+  ref?: string,
 ): { ok: true } | { ok: false; error: string } {
-  return dispatchWorkflow(workflowFile, name, issue, repoSlug)
+  return dispatchWorkflow(workflowFile, name, issue, repoSlug, ref)
 }
 
 function expectedDispatchTarget(capability: string): "issue" | "pr" | null {
@@ -707,7 +720,13 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
       if (!Number.isFinite(issue) || issue <= 0) {
         return { content: [{ type: "text", text: "Start failed: `issue` is required and must be a positive number." }] }
       }
-      const result = startCapability(workflowFile, name, issue, opts.repoSlug)
+      const result = startCapability(
+        workflowFile,
+        name,
+        issue,
+        opts.repoSlug,
+        opts.defaultBranch,
+      )
       const text = result.ok
         ? `Started capability \`${name}\` on #${issue} via workflow_dispatch.`
         : `Start failed for capability \`${name}\` on #${issue}: ${result.error}`

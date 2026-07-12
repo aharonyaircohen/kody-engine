@@ -181,6 +181,8 @@ export interface AgentOptions {
    * `enableCapabilityTool` is false.
    */
   capabilityRepoSlug?: string
+  /** Consumer agency branch used by start_capability child dispatches. */
+  capabilityDefaultBranch?: string
   /** Canonical Kody state location used by locked capability tools. */
   capabilityState?: KodyConfig["state"]
   /**
@@ -511,6 +513,9 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
           repoSlug: opts.capabilityRepoSlug,
           state: opts.capabilityState,
           operatorMention: opts.capabilityOperatorMention ?? "",
+          ...(opts.capabilityDefaultBranch
+            ? { defaultBranch: opts.capabilityDefaultBranch }
+            : {}),
           ...(opts.capabilitySlug ? { capabilitySlug: opts.capabilitySlug } : {}),
         })
         mcpEntries.push(["kody-capability", capabilityHandle.server as unknown as Record<string, unknown>])

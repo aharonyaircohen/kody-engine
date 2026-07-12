@@ -301,6 +301,34 @@ describe("start_capability — public dispatch primitive", () => {
       "issue_number=687",
     ])
   })
+
+  it("dispatches child capabilities on the configured agency branch", async () => {
+    vi.mocked(gh).mockImplementation((args: string[]) => {
+      if (args[0] === "workflow" && args[1] === "run") return ""
+      throw new Error(`unexpected gh call: ${args.join(" ")}`)
+    })
+    const tool = capabilityToolDefinitions({
+      repoSlug: REPO,
+      operatorMention: "@operator",
+      capabilitySlug: "operate-findings",
+      defaultBranch: "dev",
+    }).find((candidate) => candidate.name === "start_capability")
+    if (!tool) throw new Error("start_capability tool missing")
+
+    await tool.handler({ name: "dev-ci-health", issue: 687 })
+
+    expect(vi.mocked(gh).mock.calls.map((call) => call[0] as string[])).toContainEqual([
+      "workflow",
+      "run",
+      "kody.yml",
+      "--ref",
+      "dev",
+      "-f",
+      "capability=dev-ci-health",
+      "-f",
+      "issue_number=687",
+    ])
+  })
 })
 
 describe("readCheckRuns — branch CI classification", () => {

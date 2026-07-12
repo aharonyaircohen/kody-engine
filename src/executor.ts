@@ -543,6 +543,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       // keys trust per capability (not per agent). `jobSlug` is set by loadJobFromFile.
       capabilitySlug: typeof ctx.data.jobSlug === "string" ? (ctx.data.jobSlug as string) : undefined,
       capabilityState: config.state,
+      capabilityDefaultBranch: config.git.defaultBranch,
       // owner/repo from kody.config.json; envelope falls back to GITHUB_REPOSITORY
       // for tester repos that don't set config.github (the file isn't always
       // checked in). Either way, capabilityMcp needs "owner/name" to hit the compare API.
