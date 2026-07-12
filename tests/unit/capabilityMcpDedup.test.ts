@@ -370,6 +370,20 @@ describe("readCheckRuns — branch CI classification", () => {
     })
   }
 
+  it("resolves the default ref from the configured agency branch", async () => {
+    mockChecks(JSON.stringify({ name: "health", status: "completed", conclusion: "success", details_url: "u1" }))
+    const tool = capabilityToolDefinitions({
+      repoSlug: REPO,
+      operatorMention: "@operator",
+      defaultBranch: "dev",
+    }).find((candidate) => candidate.name === "read_check_runs")
+    if (!tool) throw new Error("read_check_runs tool missing")
+
+    await tool.handler({ ref: "default" })
+
+    expect(vi.mocked(gh).mock.calls[0]?.[0]).toContain("repos/acme/widget/commits/dev")
+  })
+
   it("uses repo token for check-run reads", () => {
     mockChecks(JSON.stringify({ name: "health", status: "completed", conclusion: "success", details_url: "u1" }))
 
