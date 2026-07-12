@@ -442,12 +442,12 @@ export function ensureComment(repoSlug: string, issue: number, key: string, body
 export function dispatchWorkflow(
   workflowFile: string,
   capability: string,
-  issueNumber: number,
+  issueNumber: number | undefined,
   repoSlug?: string,
   ref?: string,
 ): { ok: true } | { ok: false; error: string } {
   const expected = expectedDispatchTarget(capability)
-  if (repoSlug && expected) {
+  if (repoSlug && expected && issueNumber) {
     const target = readDispatchTargetKind(repoSlug, issueNumber)
     if (!target.ok) return target
     if (expected === "issue" && target.kind === "pr") {
@@ -472,8 +472,7 @@ export function dispatchWorkflow(
       ...(ref ? ["--ref", ref] : []),
       "-f",
       `capability=${capability}`,
-      "-f",
-      `issue_number=${issueNumber}`,
+      ...(issueNumber ? ["-f", `issue_number=${issueNumber}`] : []),
     ])
     return { ok: true }
   } catch (err) {
@@ -484,7 +483,7 @@ export function dispatchWorkflow(
 export function startCapability(
   workflowFile: string,
   name: string,
-  issue: number,
+  issue: number | undefined,
   repoSlug?: string,
   ref?: string,
 ): { ok: true } | { ok: false; error: string } {
@@ -716,9 +715,10 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     },
     handler: async (args) => {
       const name = String(args.name ?? "")
-      const issue = Number(args.issue ?? args.issueNumber)
-      if (!Number.isFinite(issue) || issue <= 0) {
-        return { content: [{ type: "text", text: "Start failed: `issue` is required and must be a positive number." }] }
+      const rawIssue = args.issue ?? args.issueNumber
+      const issue = rawIssue == null ? undefined : Number(rawIssue)
+      if (issue !== undefined && (!Number.isFinite(issue) || issue <= 0)) {
+        return { content: [{ type: "text", text: "Start failed: `issue` must be a positive number when provided." }] }
       }
       const result = startCapability(
         workflowFile,
@@ -728,8 +728,8 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
         opts.defaultBranch,
       )
       const text = result.ok
-        ? `Started capability \`${name}\` on #${issue} via workflow_dispatch.`
-        : `Start failed for capability \`${name}\` on #${issue}: ${result.error}`
+        ? `Started capability \`${name}\`${issue ? ` on #${issue}` : ""} via workflow_dispatch.`
+        : `Start failed for capability \`${name}\`${issue ? ` on #${issue}` : ""}: ${result.error}`
       return { content: [{ type: "text", text }] }
     },
   }
