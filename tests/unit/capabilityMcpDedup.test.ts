@@ -347,7 +347,7 @@ describe("start_capability — public dispatch primitive", () => {
     }).find((candidate) => candidate.name === "start_capability")
     if (!tool) throw new Error("start_capability tool missing")
 
-    const result = await tool.handler({ name: "dev-ci-health" })
+    const result = await tool.handler({ name: "dev-ci-health", issue: 55 })
 
     expect(result.content[0]?.text).toBe('{"ok":true,"runId":123456}')
     expect(vi.mocked(gh).mock.calls.map((call) => call[0] as string[])).toContainEqual([

@@ -488,7 +488,8 @@ export function startCapability(
   repoSlug?: string,
   ref?: string,
 ): { ok: true; runId?: number } | { ok: false; error: string } {
-  return dispatchWorkflow(workflowFile, name, issue, repoSlug, ref)
+  const forwardedIssue = expectedDispatchTarget(name) ? issue : undefined
+  return dispatchWorkflow(workflowFile, name, forwardedIssue, repoSlug, ref)
 }
 
 function expectedDispatchTarget(capability: string): "issue" | "pr" | null {
