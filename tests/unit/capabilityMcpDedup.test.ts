@@ -366,6 +366,7 @@ describe("readCheckRuns — branch CI classification", () => {
     vi.mocked(gh).mockImplementation((args: string[]) => {
       if (args[0] === "api" && /\/commits\/dev$/.test(args[1] ?? "")) return sha
       if (args[0] === "api" && /check-runs$/.test(args[1] ?? "")) return ndjson
+      if (args[0] === "api" && /\/status$/.test(args[1] ?? "")) return ""
       throw new Error(`unexpected gh call: ${args.join(" ")}`)
     })
   }
@@ -403,6 +404,33 @@ describe("readCheckRuns — branch CI classification", () => {
         ],
         { preferRepoToken: true },
       ],
+      [
+        [
+          "api",
+          `repos/${REPO}/commits/${sha}/status`,
+          "--jq",
+          ".statuses[] | {context, state, target_url}",
+        ],
+        { preferRepoToken: true },
+      ],
+    ])
+  })
+
+  it("treats a failing commit status as RED CI evidence", () => {
+    vi.mocked(gh).mockImplementation((args: string[]) => {
+      if (args[0] === "api" && /\/commits\/dev$/.test(args[1] ?? "")) return sha
+      if (args[0] === "api" && /check-runs$/.test(args[1] ?? "")) return ""
+      if (args[0] === "api" && /\/status$/.test(args[1] ?? "")) {
+        return JSON.stringify({ context: "Source Tests", state: "failure", target_url: "u-status" })
+      }
+      throw new Error(`unexpected gh call: ${args.join(" ")}`)
+    })
+
+    const result = readCheckRuns(REPO, "dev", [])
+
+    expect(result.state).toBe("RED")
+    expect(result.failing).toEqual([
+      { name: "Source Tests", conclusion: "failure", detailsUrl: "u-status" },
     ])
   })
 

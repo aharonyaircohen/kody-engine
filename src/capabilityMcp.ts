@@ -383,6 +383,21 @@ export function readCheckRuns(repoSlug: string, ref: string, ignoreNames: string
     ],
     ghOptions,
   )
+  let rawStatuses = ""
+  try {
+    rawStatuses = gh(
+      [
+        "api",
+        `repos/${repoSlug}/commits/${sha}/status`,
+        "--jq",
+        ".statuses[] | {context, state, target_url}",
+      ],
+      ghOptions,
+    )
+  } catch {
+    // Some tokens can read check-runs but not legacy commit statuses. Keep the
+    // check-run result usable instead of failing the whole health read.
+  }
   const ignore = new Set(ignoreNames.map((n) => n.toLowerCase()))
   const checks = raw
     .split("\n")
@@ -390,12 +405,32 @@ export function readCheckRuns(repoSlug: string, ref: string, ignoreNames: string
     .filter(Boolean)
     .map((l) => JSON.parse(l) as { name: string; status: string; conclusion: string | null; details_url: string })
     .filter((c) => !ignore.has(String(c.name).toLowerCase()))
-  const failing = checks
+  const statuses = rawStatuses
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => JSON.parse(l) as { context: string; state: string; target_url: string | null })
+    .filter((status) => !ignore.has(String(status.context).toLowerCase()))
+  const failing: CheckRunsResult["failing"] = checks
     .filter((c) => CHECK_FAIL_CONCLUSIONS.has(String(c.conclusion ?? "").toUpperCase()))
     .map((c) => ({ name: c.name, conclusion: String(c.conclusion), detailsUrl: c.details_url }))
-  const pending = checks
+  failing.push(
+    ...statuses
+      .filter((status) => ["error", "failure"].includes(String(status.state).toLowerCase()))
+      .map((status) => ({
+        name: status.context,
+        conclusion: status.state,
+        detailsUrl: status.target_url ?? "",
+      })),
+  )
+  const pending: CheckRunsResult["pending"] = checks
     .filter((c) => String(c.status).toLowerCase() !== "completed")
     .map((c) => ({ name: c.name, status: c.status }))
+  pending.push(
+    ...statuses
+      .filter((status) => String(status.state).toLowerCase() === "pending")
+      .map((status) => ({ name: status.context, status: status.state })),
+  )
   const state: CheckRunsResult["state"] = failing.length > 0 ? "RED" : pending.length > 0 ? "PENDING" : "GREEN"
   return { sha, state, failing, pending }
 }
