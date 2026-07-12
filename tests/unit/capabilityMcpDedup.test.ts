@@ -379,9 +379,9 @@ describe("readCheckRuns — branch CI classification", () => {
     }).find((candidate) => candidate.name === "read_check_runs")
     if (!tool) throw new Error("read_check_runs tool missing")
 
-    await tool.handler({ ref: "default" })
+    const result = await tool.handler({ ref: "default" })
 
-    expect(vi.mocked(gh).mock.calls[0]?.[0]).toContain("repos/acme/widget/commits/dev")
+    expect(JSON.parse(result.content[0]?.text ?? "{}").sha).toBe(sha)
   })
 
   it("uses repo token for check-run reads", () => {
