@@ -120,6 +120,22 @@ describe("integration: git flow", () => {
     expect(trackedFiles.find((f) => f.startsWith("node_modules/"))).toBeUndefined()
   })
 
+  it("never commits GitHub YAML alongside a source-code repair", () => {
+    const branch = ensureFeatureBranch(91, "Repair source only", "main", repo.workdir).branch
+    fs.writeFileSync(path.join(repo.workdir, "src.txt"), "repaired")
+    fs.mkdirSync(path.join(repo.workdir, ".github", "workflows"), { recursive: true })
+    fs.writeFileSync(path.join(repo.workdir, ".github", "workflows", "ci.yml"), "name: changed\n")
+
+    const result = commitAndPush(branch, "fix: repair source", repo.workdir)
+
+    expect(result.committed).toBe(true)
+    expect(result.pushed).toBe(true)
+    expect(git(repo.workdir, ["show", "--name-only", "--pretty=format:", "HEAD"]).split("\n")).toEqual([
+      "src.txt",
+    ])
+    expect(fs.existsSync(path.join(repo.workdir, ".github", "workflows", "ci.yml"))).toBe(true)
+  })
+
   it("normalizes commit prefix when missing", () => {
     const branch = ensureFeatureBranch(10, "Edit W", "main", repo.workdir).branch
     fs.writeFileSync(path.join(repo.workdir, "x.txt"), "y")

@@ -32,6 +32,19 @@ describe("commit: isForbiddenPath", () => {
     expect(isForbiddenPath("kody.config.json")).toBe(true)
   })
 
+  it("blocks every GitHub YAML file", () => {
+    expect(isForbiddenPath(".github/workflows/ci.yml")).toBe(true)
+    expect(isForbiddenPath(".github/workflows/release.yaml")).toBe(true)
+    expect(isForbiddenPath(".github/dependabot.yml")).toBe(true)
+    expect(isForbiddenPath(".github/ISSUE_TEMPLATE/config.yaml")).toBe(true)
+  })
+
+  it("does not block non-YAML GitHub files or YAML outside .github", () => {
+    expect(isForbiddenPath(".github/CODEOWNERS")).toBe(false)
+    expect(isForbiddenPath(".github/ISSUE_TEMPLATE/bug.md")).toBe(false)
+    expect(isForbiddenPath("config/ci.yml")).toBe(false)
+  })
+
   it("allows source files", () => {
     expect(isForbiddenPath("src/foo.ts")).toBe(false)
     expect(isForbiddenPath("README.md")).toBe(false)

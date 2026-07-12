@@ -26,6 +26,11 @@ const ALLOWED_PATH_PREFIXES: string[] = []
 const FORBIDDEN_PATH_EXACT = new Set([".env", ".kody-pip-requirements.txt", "kody.config.json"])
 const FORBIDDEN_PATH_SUFFIXES = [".log"]
 
+function isGitHubYamlPath(filePath: string): boolean {
+  const normalized = filePath.replace(/^\.\/+/, "")
+  return normalized.startsWith(".github/") && /\.ya?ml$/i.test(normalized)
+}
+
 const CONVENTIONAL_PREFIXES = [
   "feat:",
   "fix:",
@@ -146,6 +151,9 @@ export function abortUnfinishedGitOps(cwd?: string): string[] {
 
 export function isForbiddenPath(p: string): boolean {
   if (FORBIDDEN_PATH_EXACT.has(p)) return true
+  // GitHub configuration is operator-owned. Kody may inspect it to diagnose
+  // failures, but no agent-produced commit may create or modify GitHub YAML.
+  if (isGitHubYamlPath(p)) return true
   for (const pre of ALLOWED_PATH_PREFIXES) if (p.startsWith(pre)) return false
   for (const pre of FORBIDDEN_PATH_PREFIXES) if (p.startsWith(pre)) return true
   for (const suf of FORBIDDEN_PATH_SUFFIXES) if (p.endsWith(suf)) return true
@@ -153,9 +161,12 @@ export function isForbiddenPath(p: string): boolean {
 }
 
 export function listChangedFiles(cwd?: string): string[] {
+  // List every untracked file instead of collapsing a new directory to one
+  // entry. Path safety is file-specific (for example GitHub YAML), so staging
+  // a summarized directory would bypass the guard for forbidden children.
   // Use NUL-delimited output to avoid quoting/whitespace issues with paths.
   // Each entry begins with a 2-char status code + 1 space, then the path.
-  const raw = execFileSync("git", ["status", "--porcelain=v1", "-z"], {
+  const raw = execFileSync("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all"], {
     encoding: "utf-8",
     cwd,
     env: { ...process.env, HUSKY: "0", SKIP_HOOKS: "1" },
