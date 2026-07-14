@@ -71,7 +71,7 @@ describe("loadCapabilityState", () => {
     expect(ctx.data.capabilityOperatorMention).toBe("@alice")
   })
 
-  it("append mode keeps shell tools and adds declared capability MCP tools", async () => {
+  it("append mode keeps shell tools and adds capability plus state submission tools", async () => {
     const ctx = ctxFor()
     const profile = profileFor(
       { tools: ["Bash", "Read"], enableSubmitTool: false },
@@ -82,8 +82,13 @@ describe("loadCapabilityState", () => {
       },
     )
     await loadCapabilityState(ctx, profile, {})
-    expect(profile.claudeCode.tools).toEqual(["Bash", "Read", "mcp__kody-capability__start_capability"])
-    expect(profile.claudeCode.enableSubmitTool).toBe(false)
+    expect(profile.claudeCode.tools).toEqual([
+      "Bash",
+      "Read",
+      "mcp__kody-capability__start_capability",
+      "mcp__kody-submit__submit_state",
+    ])
+    expect(profile.claudeCode.enableSubmitTool).toBe(true)
     expect(ctx.data.capabilityTools).toEqual(["start_capability"])
     expect(ctx.data.capabilityToolMode).toBe("append")
     expect(ctx.data.capabilityOperatorMention).toBe("@alice")

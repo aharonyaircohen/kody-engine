@@ -77,18 +77,16 @@ export const loadCapabilityState: PreflightScript = async (ctx, profile, args) =
     ctx.data.capabilityToolsList = declaredTools.map((name) => `- \`${name}\``).join("\n")
     ctx.data.capabilityOperatorMention = mentions
     const mcpToolNames = declaredTools.map((name) => `mcp__kody-capability__${name}`)
+    // State submission is Engine-owned and required in both lock and append modes.
+    const submitStateTool = "mcp__kody-submit__submit_state"
+    profile.claudeCode.enableSubmitTool = true
     if (mode === "append") {
-      profile.claudeCode.tools = [...new Set([...(profile.claudeCode.tools ?? []), ...mcpToolNames])]
+      profile.claudeCode.tools = [...new Set([...(profile.claudeCode.tools ?? []), ...mcpToolNames, submitStateTool])]
       return
     }
     // Lock the toolbox: rewrite allowedTools to the capability MCP palette (+ submit),
     // revoking Bash/Read — mirrors loadJobFromFile. Without this the SDK blocks
     // the mcp__kody-capability__* calls for permission and the agent stalls.
-    profile.claudeCode.tools = [...mcpToolNames, "mcp__kody-submit__submit_state"]
-    // The submit tool is in the allowed list, so its MCP server MUST exist —
-    // the executor only spins it up when enableSubmitTool is true. Force it on
-    // (a locked capability persists state via submit_state). Without this the model is
-    // offered a tool that doesn't exist and stalls.
-    profile.claudeCode.enableSubmitTool = true
+    profile.claudeCode.tools = [...mcpToolNames, submitStateTool]
   }
 }
