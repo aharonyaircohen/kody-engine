@@ -1,7 +1,0 @@
-{
-  "name": "capability-creator",
-  "action": "capability-creator",
-  "implementation": "capability-creator",
-  "capabilityKind": "act",
-  "describe": "Create one complete single-responsibility Kody capability from an ability contract."
-}

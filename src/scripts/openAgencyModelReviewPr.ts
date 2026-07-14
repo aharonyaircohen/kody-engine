@@ -2,18 +2,16 @@ import type { Context, PostflightScript } from "../implementations/types.js"
 import { gh } from "../issue.js"
 import { normalizeStatePath, parseStateRepo, stateRepoPath } from "../stateRepo.js"
 
-interface AgentFactoryFile {
+interface AgencyModelFile {
   path: string
   content: string
 }
 
-interface AgentFactoryBundle {
+interface AgencyModelProposal {
   title: string
   summary: string
-  files: AgentFactoryFile[]
+  files: AgencyModelFile[]
   model?: unknown
-  models?: unknown
-  modelCreatorContractsUsed?: unknown
 }
 
 interface GitRefResponse {
@@ -37,20 +35,20 @@ interface PullResponse {
   number?: number
 }
 
-export const openAgentFactoryStatePr: PostflightScript = async (ctx, profile, agentResult) => {
+export const openAgencyModelReviewPr: PostflightScript = async (ctx, profile, agentResult) => {
   if (agentResult?.outcome !== "completed") {
-    throw new Error(`openAgentFactoryStatePr: agent did not complete: ${agentResult?.error ?? "unknown failure"}`)
+    throw new Error(`openAgencyModelReviewPr: agent did not complete: ${agentResult?.error ?? "unknown failure"}`)
   }
   if (ctx.data.agentDone !== true) {
-    throw new Error("openAgentFactoryStatePr: agent did not produce a successful final result")
+    throw new Error("openAgencyModelReviewPr: agent did not produce a successful final result")
   }
   if (!ctx.config.state?.repo || !ctx.config.state?.path) {
-    throw new Error("openAgentFactoryStatePr: config.state.repo and config.state.path are required")
+    throw new Error("openAgencyModelReviewPr: config.state.repo and config.state.path are required")
   }
 
   const issueNumber = readIssueNumber(ctx)
   const sourceLabel = creatorSourceLabel(ctx, profile.name)
-  const bundle = parseAgentFactoryBundle(String(ctx.data.prSummary ?? ""))
+  const bundle = parseAgencyModelProposal(String(ctx.data.prSummary ?? ""))
   const normalizedFiles = normalizeBundleFiles(ctx, bundle)
   const stateRepo = parseStateRepo(ctx.config)
   const baseBranch = "main"
@@ -137,7 +135,7 @@ export const openAgentFactoryStatePr: PostflightScript = async (ctx, profile, ag
     input: renderIssueComment(stateRepo.owner, stateRepo.repo, prUrl, bundle, sourceLabel),
   })
 
-  ctx.data.agentFactoryStatePr = {
+  ctx.data.agencyModelReviewPr = {
     repo: `${stateRepo.owner}/${stateRepo.repo}`,
     branch,
     base: baseBranch,
@@ -148,30 +146,30 @@ export const openAgentFactoryStatePr: PostflightScript = async (ctx, profile, ag
   ctx.output.prUrl = prUrl
 }
 
-export function parseAgentFactoryBundle(raw: string): AgentFactoryBundle {
+export function parseAgencyModelProposal(raw: string): AgencyModelProposal {
   const jsonText = stripJsonFence(raw)
   let parsed: unknown
   try {
     parsed = JSON.parse(jsonText)
   } catch (err) {
     throw new Error(
-      `openAgentFactoryStatePr: PR_SUMMARY must be valid JSON: ${err instanceof Error ? err.message : String(err)}`,
+      `openAgencyModelReviewPr: PR_SUMMARY must be valid JSON: ${err instanceof Error ? err.message : String(err)}`,
     )
   }
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("openAgentFactoryStatePr: PR_SUMMARY must be a JSON object")
+    throw new Error("openAgencyModelReviewPr: PR_SUMMARY must be a JSON object")
   }
   const value = parsed as Record<string, unknown>
   const title = readRequiredJsonString(value.title, "title")
   const summary = readRequiredJsonString(value.summary, "summary")
   if (!Array.isArray(value.files) || value.files.length === 0) {
-    throw new Error("openAgentFactoryStatePr: files must be a non-empty array")
+    throw new Error("openAgencyModelReviewPr: files must be a non-empty array")
   }
 
   const files = value.files.map((item, index) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) {
-      throw new Error(`openAgentFactoryStatePr: files[${index}] must be an object`)
+      throw new Error(`openAgencyModelReviewPr: files[${index}] must be an object`)
     }
     const file = item as Record<string, unknown>
     return {
@@ -185,13 +183,11 @@ export function parseAgentFactoryBundle(raw: string): AgentFactoryBundle {
     summary,
     files,
     model: value.model,
-    models: value.models,
-    modelCreatorContractsUsed: value.modelCreatorContractsUsed,
   }
 }
 
-export function buildAgentFactoryBranchName(issueNumber: number, title: string, now: number = Date.now()): string {
-  return buildStatePrBranchName("agent-factory", issueNumber, title, now)
+export function buildAgencyModelReviewBranchName(issueNumber: number, title: string, now: number = Date.now()): string {
+  return buildStatePrBranchName("model-creator", issueNumber, title, now)
 }
 
 function buildStatePrBranchName(
@@ -212,25 +208,25 @@ function buildStatePrBranchName(
 
 function normalizeBundleFiles(
   ctx: Context,
-  bundle: AgentFactoryBundle,
-): Array<AgentFactoryFile & { targetPath: string }> {
+  bundle: AgencyModelProposal,
+): Array<AgencyModelFile & { targetPath: string }> {
   const seen = new Set<string>()
   return bundle.files.map((file, index) => {
     if (file.path.startsWith("/") || file.path.includes("\\")) {
-      throw new Error(`openAgentFactoryStatePr: files[${index}].path must be a relative POSIX path`)
+      throw new Error(`openAgencyModelReviewPr: files[${index}].path must be a relative POSIX path`)
     }
     const normalizedPath = normalizeStatePath(file.path, `files[${index}].path`)
     const relativePath = normalizedPath.replace(/^\.kody\/?/, "")
     if (!relativePath) {
-      throw new Error(`openAgentFactoryStatePr: files[${index}].path must point to a state repo file`)
+      throw new Error(`openAgencyModelReviewPr: files[${index}].path must point to a state repo file`)
     }
     if (relativePath === "implementations" || relativePath.startsWith("implementations/")) {
       throw new Error(
-        `openAgentFactoryStatePr: files[${index}].path uses obsolete implementations storage; use capabilities/<slug>/ instead`,
+        `openAgencyModelReviewPr: files[${index}].path uses obsolete implementations storage; use capabilities/<slug>/ instead`,
       )
     }
     if (seen.has(relativePath)) {
-      throw new Error(`openAgentFactoryStatePr: duplicate generated file path: ${relativePath}`)
+      throw new Error(`openAgencyModelReviewPr: duplicate generated file path: ${relativePath}`)
     }
     seen.add(relativePath)
     return {
@@ -250,25 +246,25 @@ function stripJsonFence(raw: string): string {
 function readIssueNumber(ctx: Context): number {
   const issueNumber = ctx.args.issue
   if (typeof issueNumber !== "number" || !Number.isInteger(issueNumber) || issueNumber <= 0) {
-    throw new Error("openAgentFactoryStatePr: ctx.args.issue must be a positive integer")
+    throw new Error("openAgencyModelReviewPr: ctx.args.issue must be a positive integer")
   }
   return issueNumber
 }
 
 function readRequiredJsonString(value: unknown, field: string): string {
   const text = readJsonString(value, field).trim()
-  if (!text) throw new Error(`openAgentFactoryStatePr: ${field} must be a non-empty string`)
+  if (!text) throw new Error(`openAgencyModelReviewPr: ${field} must be a non-empty string`)
   return text
 }
 
 function readJsonString(value: unknown, field: string): string {
-  if (typeof value !== "string") throw new Error(`openAgentFactoryStatePr: ${field} must be a string`)
+  if (typeof value !== "string") throw new Error(`openAgencyModelReviewPr: ${field} must be a string`)
   return value
 }
 
 function requireString(value: unknown, label: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(`openAgentFactoryStatePr: missing ${label}`)
+    throw new Error(`openAgencyModelReviewPr: missing ${label}`)
   }
   return value
 }
@@ -278,7 +274,7 @@ function creatorSourceLabel(ctx: Context, profileName: string | undefined): stri
   const implementation =
     typeof ctx.data.selectedImplementation === "string" ? ctx.data.selectedImplementation.trim() : ""
   const profile = typeof profileName === "string" ? profileName.trim() : ""
-  return capability || implementation || profile || "agent-factory"
+  return capability || implementation || profile || "model-creator"
 }
 
 function ghJson<T>(args: string[], cwd: string, input?: unknown): T {
@@ -288,15 +284,15 @@ function ghJson<T>(args: string[], cwd: string, input?: unknown): T {
     return JSON.parse(raw) as T
   } catch (err) {
     throw new Error(
-      `openAgentFactoryStatePr: gh api returned invalid JSON: ${err instanceof Error ? err.message : String(err)}`,
+      `openAgencyModelReviewPr: gh api returned invalid JSON: ${err instanceof Error ? err.message : String(err)}`,
     )
   }
 }
 
 function renderPullRequestBody(
   ctx: Context,
-  bundle: AgentFactoryBundle,
-  files: Array<AgentFactoryFile & { targetPath: string }>,
+  bundle: AgencyModelProposal,
+  files: Array<AgencyModelFile & { targetPath: string }>,
   sourceLabel: string,
 ): string {
   const issueNumber = readIssueNumber(ctx)
@@ -321,7 +317,7 @@ function renderIssueComment(
   owner: string,
   repo: string,
   prUrl: string,
-  bundle: AgentFactoryBundle,
+  bundle: AgencyModelProposal,
   sourceLabel: string,
 ): string {
   return [

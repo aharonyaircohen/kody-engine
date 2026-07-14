@@ -54,12 +54,11 @@ import { mergeFlow } from "./mergeFlow.js"
 import { mergeReleasePr } from "./mergeReleasePr.js"
 import { mirrorStateToPr } from "./mirrorStateToPr.js"
 import { notifyTerminal } from "./notifyTerminal.js"
-import { openAgentFactoryStatePr } from "./openAgentFactoryStatePr.js"
+import { openAgencyModelReviewPr } from "./openAgencyModelReviewPr.js"
 import { openQaIssue } from "./openQaIssue.js"
 import { parseAgentResult } from "./parseAgentResult.js"
 import { parseIssueStateFromAgentResult } from "./parseIssueStateFromAgentResult.js"
 import { parseJobStateFromAgentResult } from "./parseJobStateFromAgentResult.js"
-import { publishReport } from "./publishReport.js"
 import { parseReproOutput } from "./parseReproOutput.js"
 import { persistArtifacts } from "./persistArtifacts.js"
 import { persistFlowState } from "./persistFlowState.js"
@@ -70,6 +69,7 @@ import { postPlanComment } from "./postPlanComment.js"
 import { postResearchComment } from "./postResearchComment.js"
 import { postReviewResult } from "./postReviewResult.js"
 import { promoteQaGoal } from "./promoteQaGoal.js"
+import { publishReport } from "./publishReport.js"
 import { recordClassification } from "./recordClassification.js"
 import { recordOutcome } from "./recordOutcome.js"
 import { requireFeedbackActions } from "./requireFeedbackActions.js"
@@ -92,7 +92,7 @@ import { skipAgent } from "./skipAgent.js"
 import { stageMergeConflicts } from "./stageMergeConflicts.js"
 import { startFlow } from "./startFlow.js"
 import { syncFlow } from "./syncFlow.js"
-import { validateAgentFactoryBundle } from "./validateAgentFactoryBundle.js"
+import { validateAgencyModelProposal } from "./validateAgencyModelProposal.js"
 import { verify } from "./verify.js"
 import { verifyReproFails } from "./verifyReproFails.js"
 import { verifyWithRetry } from "./verifyWithRetry.js"
@@ -159,7 +159,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   parseIssueStateFromAgentResult,
   parseJobStateFromAgentResult,
   parseReproOutput,
-  validateAgentFactoryBundle,
+  validateAgencyModelProposal,
   writeIssueStateComment,
   writeJobStateFile,
   appendCompanyActivity,
@@ -194,7 +194,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   recordClassification,
   dispatchClassified,
   notifyTerminal,
-  openAgentFactoryStatePr,
+  openAgencyModelReviewPr,
   openQaIssue,
   createQaGoal,
   failOnceTaskJob,

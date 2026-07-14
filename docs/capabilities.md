@@ -270,6 +270,9 @@ Creator calls target the agency workspace:
 }
 ```
 
+Model creators are agency-owned Store capabilities. The engine only resolves
+and executes them, validates their model proposals, and delivers review PRs.
+
 ## Capability Output Contract
 
 Capability implementations should return one machine-readable result when they

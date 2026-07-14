@@ -163,13 +163,18 @@ describe("capability actions", () => {
   })
 
   it("lists built-in public actions from engine capability definitions", () => {
-    const actions = listCapabilityActions().map((d) => d.action)
-    expect(actions).toContain("run")
-    expect(actions).toContain("agent-factory")
-    expect(actions).toContain("agent-creator")
-    expect(actions).toContain("goal-creator")
-    expect(actions).toContain("loop-creator")
-    expect(actions).toContain("workflow-creator")
-    expect(actions).toContain("capability-creator")
+    process.env.KODY_COMPANY_STORE = "off"
+    try {
+      const actions = listCapabilityActions().map((d) => d.action)
+      expect(actions).toContain("run")
+      expect(actions).not.toContain("agent-factory")
+      expect(actions).not.toContain("agent-creator")
+      expect(actions).not.toContain("goal-creator")
+      expect(actions).not.toContain("loop-creator")
+      expect(actions).not.toContain("workflow-creator")
+      expect(actions).not.toContain("capability-creator")
+    } finally {
+      delete process.env.KODY_COMPANY_STORE
+    }
   })
 })

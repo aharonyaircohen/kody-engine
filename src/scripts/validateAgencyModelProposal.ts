@@ -1,23 +1,11 @@
-import type { PostflightScript } from "../implementations/types.js"
-import { parseAgentFactoryBundle } from "./openAgentFactoryStatePr.js"
+import type { PostflightScript, ScriptArgs } from "../implementations/types.js"
+import { parseAgencyModelProposal } from "./openAgencyModelReviewPr.js"
 
 type ModelKind = "agent" | "capability" | "goal" | "agentLoop" | "workflow"
 
 interface ModelBundle {
   model?: unknown
-  models?: unknown
-  modelCreatorContractsUsed?: unknown
 }
-
-const CREATOR_CONTRACTS = [
-  "agent-creator",
-  "goal-creator",
-  "loop-creator",
-  "workflow-creator",
-  "capability-creator",
-] as const
-
-const FACTORY_PRODUCER = "agent-factory"
 
 const REQUIRED_DOCS: Record<ModelKind, string[]> = {
   agent: ["docs/agents.md"],
@@ -27,50 +15,32 @@ const REQUIRED_DOCS: Record<ModelKind, string[]> = {
   workflow: ["docs/jobs-model.md", "docs/capabilities.md"],
 }
 
-const CREATOR_KIND: Record<string, ModelKind> = {
-  "agent-creator": "agent",
-  "capability-creator": "capability",
-  "goal-creator": "goal",
-  "loop-creator": "agentLoop",
-  "workflow-creator": "workflow",
-}
-
-export const validateAgentFactoryBundle: PostflightScript = async (ctx, profile) => {
+export const validateAgencyModelProposal: PostflightScript = async (ctx, _profile, _agentResult, args) => {
   if (ctx.data.agentDone !== true) return
 
   const raw = String(ctx.data.prSummary ?? "")
-  const bundle = parseAgentFactoryBundle(raw) as ReturnType<typeof parseAgentFactoryBundle> & ModelBundle
-  const failures = validateModelBundle(bundle, profile.name)
+  const bundle = parseAgencyModelProposal(raw) as ReturnType<typeof parseAgencyModelProposal> & ModelBundle
+  const expectedKind = readExpectedModelKind(args)
+  const failures = validateModelBundle(bundle, expectedKind)
   if (failures.length > 0) {
-    throw new Error(`validateAgentFactoryBundle: ${failures.join("; ")}`)
+    throw new Error(`validateAgencyModelProposal: ${failures.join("; ")}`)
   }
 }
 
 export function validateModelBundle(
-  bundle: ReturnType<typeof parseAgentFactoryBundle> & ModelBundle,
-  producer: string,
+  bundle: ReturnType<typeof parseAgencyModelProposal> & ModelBundle,
+  expectedKind: ModelKind,
 ): string[] {
   const failures: string[] = []
-  const expectedKind = CREATOR_KIND[producer]
 
-  if (producer === FACTORY_PRODUCER) {
-    const contracts = stringArray(bundle.modelCreatorContractsUsed)
-    for (const contract of CREATOR_CONTRACTS) {
-      if (!contracts.includes(contract)) failures.push(`modelCreatorContractsUsed missing ${contract}`)
-    }
-    if (!Array.isArray(bundle.models) || bundle.models.length === 0) {
-      failures.push("agent-factory bundle must include non-empty models array")
-      return failures
-    }
-    for (const [index, model] of bundle.models.entries()) {
-      validateOneModel(model, bundle.files, `models[${index}]`, false, failures)
-    }
-    validateFactoryAssembly(bundle.models, failures)
-    return failures
-  }
-
-  validateOneModel(bundle.model, bundle.files, "model", true, failures, expectedKind, producer)
+  validateOneModel(bundle.model, bundle.files, "model", true, failures, expectedKind)
   return failures
+}
+
+function readExpectedModelKind(args: ScriptArgs | undefined): ModelKind {
+  const value = args?.modelKind
+  if (typeof value === "string" && isModelKind(value)) return value
+  throw new Error("validateAgencyModelProposal: with.modelKind must be agent, capability, goal, agentLoop, or workflow")
 }
 
 function validateOneModel(
@@ -80,7 +50,6 @@ function validateOneModel(
   strictSingleModel: boolean,
   failures: string[],
   expectedKind?: ModelKind,
-  producer?: string,
 ): void {
   if (!rawModel || typeof rawModel !== "object" || Array.isArray(rawModel)) {
     failures.push(`${label} must be an object`)
@@ -90,8 +59,7 @@ function validateOneModel(
   const model = rawModel as Record<string, unknown>
   const kind = stringField(model.kind) as ModelKind
   if (!isModelKind(kind)) failures.push(`${label}.kind must be agent, capability, goal, agentLoop, or workflow`)
-  if (expectedKind && kind !== expectedKind && producer)
-    failures.push(`${producer} must output model.kind ${expectedKind}`)
+  if (expectedKind && kind !== expectedKind) failures.push(`proposal must output model.kind ${expectedKind}`)
 
   const slug = stringField(model.slug)
   if (!isSlug(slug)) failures.push(`${label}.slug must be a lowercase slug`)
@@ -165,59 +133,6 @@ function validateFilesForKind(
       const hasTopLevelSteps = Array.isArray(profile.steps) && profile.steps.length > 0
       if (!hasWorkflowObject && !hasTopLevelSteps) {
         failures.push("workflow profile must include workflow object or top-level steps")
-      }
-    }
-  }
-}
-
-function validateFactoryAssembly(models: unknown[], failures: string[]): void {
-  const available = new Map<string, ModelKind>()
-  for (const model of models) {
-    if (!model || typeof model !== "object" || Array.isArray(model)) continue
-    const input = model as Record<string, unknown>
-    const kind = stringField(input.kind) as ModelKind
-    const slug = stringField(input.slug)
-    if (isModelKind(kind) && isSlug(slug)) available.set(`${kind}:${slug}`, kind)
-  }
-
-  for (const model of models) {
-    if (!model || typeof model !== "object" || Array.isArray(model)) continue
-    const input = model as Record<string, unknown>
-    const kind = stringField(input.kind)
-    if (kind === "goal") {
-      for (const capability of capabilityRefs(input)) {
-        if (!available.has(`capability:${capability}`)) {
-          failures.push(`goal ${stringField(input.slug)} references missing capability ${capability}`)
-        }
-      }
-    }
-    if (kind === "workflow") {
-      for (const capability of stringArray(input.steps)) {
-        if (!available.has(`capability:${capability}`)) {
-          failures.push(`workflow ${stringField(input.slug)} references missing capability ${capability}`)
-        }
-      }
-      for (const step of arrayObjects(input.steps)) {
-        const capability = stringField(step.capability)
-        if (capability && !available.has(`capability:${capability}`)) {
-          failures.push(`workflow ${stringField(input.slug)} references missing capability ${capability}`)
-        }
-      }
-    }
-    if (kind === "agentLoop") {
-      const target = wakeTarget(input)
-      if (target) {
-        if (!available.has(`${target.kind}:${target.slug}`)) {
-          failures.push(`agentLoop ${stringField(input.slug)} references missing ${target.kind} ${target.slug}`)
-        }
-      } else {
-        const targetSlug = stringField(input.target)
-        const targetExists = ["goal", "workflow", "capability"].some((kindName) =>
-          available.has(`${kindName}:${targetSlug}`),
-        )
-        if (targetSlug && !targetExists) {
-          failures.push(`agentLoop ${stringField(input.slug)} references missing target ${targetSlug}`)
-        }
       }
     }
   }
@@ -378,13 +293,6 @@ function stringArray(value: unknown): string[] {
     .filter((item): item is string => typeof item === "string")
     .map((item) => item.trim())
     .filter(Boolean)
-}
-
-function arrayObjects(value: unknown): Array<Record<string, unknown>> {
-  if (!Array.isArray(value)) return []
-  return value.filter(
-    (item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item),
-  )
 }
 
 function requireStringArrayIncludes(value: unknown, expected: string, label: string, failures: string[]): void {

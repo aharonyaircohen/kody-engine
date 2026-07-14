@@ -7,7 +7,7 @@ vi.mock("../../src/issue.js", () => ({
 import type { AgentResult } from "../../src/agent.js"
 import type { Context, Profile } from "../../src/implementations/types.js"
 import { gh as ghMock } from "../../src/issue.js"
-import { openAgentFactoryStatePr, parseAgentFactoryBundle } from "../../src/scripts/openAgentFactoryStatePr.js"
+import { openAgencyModelReviewPr, parseAgencyModelProposal } from "../../src/scripts/openAgencyModelReviewPr.js"
 
 const gh = ghMock as unknown as ReturnType<typeof vi.fn>
 const profile = {} as Profile
@@ -75,7 +75,7 @@ function inputForPath(pathSuffix: string): unknown {
   return JSON.parse((call as [string[], { input: string }])[1].input)
 }
 
-describe("openAgentFactoryStatePr", () => {
+describe("openAgencyModelReviewPr", () => {
   beforeEach(() => {
     gh.mockReset()
     vi.spyOn(Date, "now").mockReturnValue(1_800_000_000_000)
@@ -85,13 +85,13 @@ describe("openAgentFactoryStatePr", () => {
     mockSuccessfulGh()
     const ctx = makeCtx(bundle())
 
-    await openAgentFactoryStatePr(ctx, profile, agentResult)
+    await openAgencyModelReviewPr(ctx, profile, agentResult)
 
     expect(
       gh.mock.calls.some((call: unknown[]) => (call[0] as string[]).includes("/repos/acme/kody-state/pulls")),
     ).toBe(true)
     expect(ctx.output.prUrl).toBe("https://github.com/acme/kody-state/pull/7")
-    expect(ctx.data.agentFactoryStatePr).toMatchObject({
+    expect(ctx.data.agencyModelReviewPr).toMatchObject({
       repo: "acme/kody-state",
       url: "https://github.com/acme/kody-state/pull/7",
       base: "main",
@@ -101,7 +101,7 @@ describe("openAgentFactoryStatePr", () => {
   it("prefixes generated file paths with state.path", async () => {
     mockSuccessfulGh()
 
-    await openAgentFactoryStatePr(makeCtx(bundle()), profile, agentResult)
+    await openAgencyModelReviewPr(makeCtx(bundle()), profile, agentResult)
 
     const tree = inputForPath("/git/trees") as { tree: Array<{ path: string; content: string }> }
     expect(tree.tree).toEqual([
@@ -119,7 +119,7 @@ describe("openAgentFactoryStatePr", () => {
     const ctx = makeCtx(bundle({ title: "Add example workflow" }))
     ctx.data.jobCapability = "workflow-creator"
 
-    await openAgentFactoryStatePr(ctx, { name: "workflow-creator" } as Profile, agentResult)
+    await openAgencyModelReviewPr(ctx, { name: "workflow-creator" } as Profile, agentResult)
 
     const commit = inputForPath("/git/commits") as { message: string }
     expect(commit.message).toBe("workflow-creator: Add example workflow")
@@ -136,12 +136,12 @@ describe("openAgentFactoryStatePr", () => {
   })
 
   it("rejects empty files", () => {
-    expect(() => parseAgentFactoryBundle(bundle({ files: [] }))).toThrow(/files must be a non-empty array/)
+    expect(() => parseAgencyModelProposal(bundle({ files: [] }))).toThrow(/files must be a non-empty array/)
   })
 
   it("rejects unsafe paths", async () => {
     await expect(
-      openAgentFactoryStatePr(
+      openAgencyModelReviewPr(
         makeCtx(
           bundle({
             files: [{ path: "../secret", content: "nope" }],
@@ -156,7 +156,7 @@ describe("openAgentFactoryStatePr", () => {
   it("strips .kody prefixes from generated paths", async () => {
     mockSuccessfulGh()
 
-    await openAgentFactoryStatePr(
+    await openAgencyModelReviewPr(
       makeCtx(
         bundle({
           files: [{ path: ".kody/capabilities/example/profile.json", content: "{}\n" }],
@@ -172,7 +172,7 @@ describe("openAgentFactoryStatePr", () => {
 
   it("rejects obsolete implementation paths", async () => {
     await expect(
-      openAgentFactoryStatePr(
+      openAgencyModelReviewPr(
         makeCtx(
           bundle({
             files: [{ path: "implementations/example/profile.json", content: "{}\n" }],
