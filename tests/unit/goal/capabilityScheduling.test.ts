@@ -822,7 +822,7 @@ describe("standing goal capability scheduling", () => {
 
   it("hands workflow target loops to workflow capability chain", async () => {
     const stateRoot = path.join(tmp, "state-repo")
-    writeRepoWorkflow(stateRoot, "release-hygiene", {})
+    writeRepoWorkflow(stateRoot, "release-hygiene", { runWithoutApproval: false })
     const raw = goalState([])
     raw.extra.type = "agentLoop"
     raw.extra.loopTarget = { type: "workflow", id: "release-hygiene" }
@@ -901,6 +901,29 @@ describe("standing goal capability scheduling", () => {
         process.env.KODY_TEST_STATE_ROOT = oldStateRoot
       }
     }
+  })
+
+  it("keeps workflow approval required for workflow-backed goals", async () => {
+    const stateRoot = path.join(tmp, "state-repo")
+    writeRepoWorkflow(stateRoot, "web-release", { runWithoutApproval: false })
+    const raw = goalState([])
+    raw.extra.type = "web-release"
+    delete raw.extra.scheduleMode
+    raw.extra.destination = {
+      outcome: "Release is verified on production",
+      evidence: ["releasePrExists"],
+    }
+    raw.extra.workflowRef = { id: "web-release" }
+    raw.extra.facts = { releasePrExists: false }
+    const ctx = fakeCtx(raw, "web-release-2026-07-05")
+    ;(ctx.config as unknown as Record<string, unknown>).state = { repo: "o/r", path: "state" }
+
+    await withStateRepoStub(stateRoot, async () => {
+      await advanceManagedGoal(ctx, {} as unknown as Profile, {})
+    })
+
+    expect(ctx.output.nextDispatch).toBeUndefined()
+    expect(ctx.output.reason).toBe("Run without approval is off for workflow web-release")
   })
 
   it("dispatches runnable capability and records goal scheduling decision", async () => {

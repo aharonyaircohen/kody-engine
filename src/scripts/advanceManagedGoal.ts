@@ -384,7 +384,9 @@ function autonomyBlockReason(
     return `Run without approval is off for ${managedModelKind(goal)} ${goalId}`
   }
 
-  if (dispatch.workflow) {
+  // Enabling a Loop is the operator's approval for its declared target.
+  // Keep the workflow's own approval gate for Goals and standalone runs.
+  if (dispatch.workflow && selfKind === "Goal") {
     const workflowMode = firstTrustOverride(ctx, [{ kind: "workflow", id: dispatch.workflow }])
     const workflow = workflowMode === "auto" ? null : readWorkflowDefinition(ctx.config, ctx.cwd, dispatch.workflow)
     if (workflowMode === "ask" || (workflowMode !== "auto" && workflow && workflow.runWithoutApproval !== true)) {
