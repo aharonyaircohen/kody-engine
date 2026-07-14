@@ -187,6 +187,47 @@ describe("PoolRegistry.claim — happy path with injected resolvers", () => {
     })
   })
 
+  it("uses the repository-scoped GitHub token for vault reads and the runner", async () => {
+    const pm = makeFakePm()
+    mocks.PoolManagerCtor.mockImplementationOnce(() => pm)
+    mocks.readRepoSecrets.mockResolvedValueOnce({})
+    const resolveGithubToken = vi.fn(async () => "ghs_repo")
+    const reg = new PoolRegistry(
+      baseConfig({
+        resolveGithubToken,
+        resolveFlyToken: vi.fn(async () => "fly-token"),
+      }),
+    )
+
+    await reg.claim("Owner", "Repo", makeReq())
+
+    expect(resolveGithubToken).toHaveBeenCalledWith("Owner", "Repo")
+    expect(mocks.readRepoSecrets).toHaveBeenCalledWith(
+      expect.objectContaining({ githubToken: "ghs_repo", owner: "Owner", repo: "Repo" }),
+    )
+    const job = (pm.claim.mock.calls[0] as unknown[])?.[0] as { githubToken: string }
+    expect(job.githubToken).toBe("ghs_repo")
+  })
+
+  it("does not start a runner when repository-scoped authentication fails", async () => {
+    const pm = makeFakePm()
+    mocks.PoolManagerCtor.mockImplementationOnce(() => pm)
+    const reg = new PoolRegistry(
+      baseConfig({
+        resolveGithubToken: vi.fn(async () => {
+          throw new Error("installation removed")
+        }),
+        resolveFlyToken: vi.fn(async () => "fly-token"),
+      }),
+    )
+
+    await expect(reg.claim("Owner", "Repo", makeReq())).resolves.toEqual({
+      ok: false,
+      reason: "repository authentication failed",
+    })
+    expect(pm.claim).not.toHaveBeenCalled()
+  })
+
   it("reuses the same PoolManager for a second claim on the same repo (case-insensitive key)", async () => {
     mocks.readRepoSecrets.mockResolvedValue({})
     const reg = new PoolRegistry(baseConfig({ resolveFlyToken: vi.fn(async () => "t") }))

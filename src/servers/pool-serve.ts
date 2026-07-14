@@ -22,8 +22,8 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 
-import { gitHubActionsDegraded } from "../github-health.js"
-import { runCapabilityFallbackTick } from "../pool/capability-fallback-tick.js"
+import { discoverAppRepositories, mintAppInstallationToken, readAppCreds } from "../app-auth.js"
+import { runAgencyLoopTick } from "../pool/agency-loop-tick.js"
 import type { FlyGuest } from "../pool/fly.js"
 import { bearerOk, derivePoolApiKey, deriveRunnerApiKey, masterKeyBytes } from "../pool/keys.js"
 import { type ClaimRequest, PoolRegistry } from "../pool/registry.js"
@@ -166,11 +166,24 @@ function synthesizeLegacyClaimRequest(input: {
 export async function poolServe(): Promise<number> {
   const masterRaw = process.env.KODY_MASTER_KEY?.trim()
   if (!masterRaw) throw new Error("KODY_MASTER_KEY required for pool-serve")
-  // The owner reads each repo's vault to get THAT repo's FLY_API_TOKEN (so its
-  // pool runs in its own Fly account) and to clone — it needs a GitHub token,
-  // not a global Fly token.
-  const githubToken = process.env.GITHUB_TOKEN?.trim()
-  if (!githubToken) throw new Error("GITHUB_TOKEN required for pool-serve (reads per-repo vaults)")
+  const appCreds = readAppCreds()
+  const fallbackGithubToken = process.env.GITHUB_TOKEN?.trim() ?? ""
+  if (!appCreds && !fallbackGithubToken) {
+    throw new Error("GitHub App credentials or GITHUB_TOKEN required for pool-serve")
+  }
+  const repoTokens = new Map<string, string>()
+  const resolveGithubToken = async (owner: string, repo: string): Promise<string> => {
+    const key = `${owner}/${repo}`.toLowerCase()
+    const discovered = repoTokens.get(key)
+    if (discovered) return discovered
+    if (appCreds) {
+      const token = await mintAppInstallationToken({ ...appCreds, repo: `${owner}/${repo}` })
+      repoTokens.set(key, token)
+      return token
+    }
+    if (fallbackGithubToken) return fallbackGithubToken
+    throw new Error(`no unattended GitHub token for ${key}`)
+  }
 
   const master = masterKeyBytes(masterRaw)
   const poolApiKey = derivePoolApiKey(master)
@@ -190,7 +203,8 @@ export async function poolServe(): Promise<number> {
 
   // One pool per repo, each created with that repo's own vault Fly token.
   const registry = new PoolRegistry({
-    githubToken,
+    githubToken: fallbackGithubToken,
+    resolveGithubToken,
     masterKey: master,
     base: {
       min,
@@ -212,24 +226,32 @@ export async function poolServe(): Promise<number> {
     registry.resyncAll().catch((err) => log(`resync tick failed: ${err instanceof Error ? err.message : String(err)}`))
   }, refillMs)
 
-  // GitHub-outage fallback: GitHub Actions' cron normally fires the scheduled
-  // capability/goal fan-out. When Actions is down that cron can't fire, so while this
-  // always-on machine is awake we tick every 15 min and — ONLY if GitHub is
-  // degraded — run the fan-out on a Fly runner per active repo. GitHub stays
-  // the default; the engine's per-capability cadence guard prevents double-runs.
-  // Set POOL_CAPABILITY_TICK=0 to disable.
-  const capabilityTickEnabled = (process.env.POOL_CAPABILITY_TICK ?? "1") !== "0"
-  const capabilityTickMs = envInt("POOL_CAPABILITY_TICK_MS", 15 * 60_000)
-  const capabilityTick = capabilityTickEnabled
-    ? setInterval(() => {
-        runCapabilityFallbackTick({
-          isDegraded: () => gitHubActionsDegraded(),
-          activeRepos: () => registry.activeRepos(),
-          claim: (owner, repo, req) => registry.claim(owner, repo, req),
-          log,
-        }).catch((err) => log(`capability fallback tick failed: ${err instanceof Error ? err.message : String(err)}`))
-      }, capabilityTickMs)
-    : null
+  const discoverAgencies = async (): Promise<string[]> => {
+    if (!appCreds) return registry.activeRepos()
+    const repositories = await discoverAppRepositories(appCreds)
+    for (const access of repositories) repoTokens.set(access.repo.toLowerCase(), access.token)
+    return [...new Set([...repositories.map((access) => access.repo), ...registry.activeRepos()])]
+  }
+  let agencyTickInFlight: Promise<unknown> | null = null
+  const runLoopTick = (): Promise<unknown> => {
+    if (agencyTickInFlight) return agencyTickInFlight
+    agencyTickInFlight = runAgencyLoopTick({
+      discover: discoverAgencies,
+      claim: (owner, repo, req) => registry.claim(owner, repo, req),
+      log,
+    })
+      .catch((err) => log(`agency Loop tick failed: ${err instanceof Error ? err.message : String(err)}`))
+      .finally(() => {
+        agencyTickInFlight = null
+      })
+    return agencyTickInFlight
+  }
+  const loopTickEnabled = (process.env.POOL_LOOP_TICK ?? process.env.POOL_CAPABILITY_TICK ?? "1") !== "0"
+  const loopTickMs = envInt(
+    process.env.POOL_LOOP_TICK_MS ? "POOL_LOOP_TICK_MS" : "POOL_CAPABILITY_TICK_MS",
+    15 * 60_000,
+  )
+  const loopTick = loopTickEnabled ? setInterval(() => void runLoopTick(), loopTickMs) : null
 
   const server = createServer(async (req, res) => {
     try {
@@ -296,11 +318,12 @@ export async function poolServe(): Promise<number> {
       resolve()
     })
   })
+  if (loopTickEnabled) void runLoopTick()
 
   const shutdown = (signal: string) => {
     log(`${signal} — shutting down`)
     clearInterval(tick)
-    if (capabilityTick) clearInterval(capabilityTick)
+    if (loopTick) clearInterval(loopTick)
     server.close(() => process.exit(0))
   }
   process.once("SIGINT", () => shutdown("SIGINT"))

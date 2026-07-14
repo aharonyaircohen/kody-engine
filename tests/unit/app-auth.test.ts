@@ -1,6 +1,6 @@
 import { createVerify, generateKeyPairSync } from "node:crypto"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { mintAppInstallationToken, readAppCreds } from "../../src/app-auth.js"
+import { discoverAppRepositories, mintAppInstallationToken, readAppCreds } from "../../src/app-auth.js"
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", {
   modulusLength: 2048,
@@ -96,5 +96,81 @@ describe("app-auth: mintAppInstallationToken", () => {
       vi.fn(async () => new Response("bad creds", { status: 401, statusText: "Unauthorized" })),
     )
     await expect(mintAppInstallationToken({ appId: "1", privateKey, installationId: "5" })).rejects.toThrow(/401/)
+  })
+})
+
+describe("app-auth: discoverAppRepositories", () => {
+  it("lists every installation repo with its installation token", async () => {
+    const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const path = String(url)
+      if (path.includes("/app/installations?")) {
+        return new Response(JSON.stringify([{ id: 11 }, { id: 22 }]), { status: 200 })
+      }
+      if (path.endsWith("/app/installations/11/access_tokens")) {
+        return new Response(JSON.stringify({ token: "ghs_11" }), { status: 200 })
+      }
+      if (path.endsWith("/app/installations/22/access_tokens")) {
+        return new Response(JSON.stringify({ token: "ghs_22" }), { status: 200 })
+      }
+      const auth = String((init?.headers as Record<string, string>).Authorization)
+      if (path.includes("/installation/repositories") && auth === "Bearer ghs_11") {
+        return new Response(
+          JSON.stringify({ repositories: [{ full_name: "acme/widgets" }, { full_name: "acme/gadgets" }] }),
+          { status: 200 },
+        )
+      }
+      if (path.includes("/installation/repositories") && auth === "Bearer ghs_22") {
+        return new Response(JSON.stringify({ repositories: [{ full_name: "other/service" }] }), { status: 200 })
+      }
+      return new Response("unexpected request", { status: 500 })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const repos = await discoverAppRepositories({ appId: "42", privateKey })
+
+    expect(repos).toEqual([
+      { repo: "acme/gadgets", token: "ghs_11" },
+      { repo: "acme/widgets", token: "ghs_11" },
+      { repo: "other/service", token: "ghs_22" },
+    ])
+  })
+
+  it("paginates installations and repositories", async () => {
+    const calls: string[] = []
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL) => {
+        const path = String(url)
+        calls.push(path)
+        if (path.includes("/app/installations?") && path.includes("&page=1")) {
+          return new Response(JSON.stringify([{ id: 7 }]), {
+            status: 200,
+            headers: { link: '<https://api.github.com/app/installations?per_page=100&page=2>; rel="next"' },
+          })
+        }
+        if (path.includes("/app/installations?") && path.includes("&page=2")) {
+          return new Response(JSON.stringify([]), { status: 200 })
+        }
+        if (path.endsWith("/app/installations/7/access_tokens")) {
+          return new Response(JSON.stringify({ token: "ghs_7" }), { status: 200 })
+        }
+        if (path.includes("/installation/repositories") && path.includes("&page=1")) {
+          return new Response(JSON.stringify({ repositories: [{ full_name: "acme/one" }] }), {
+            status: 200,
+            headers: { link: '<https://api.github.com/installation/repositories?per_page=100&page=2>; rel="next"' },
+          })
+        }
+        if (path.includes("/installation/repositories") && path.includes("&page=2")) {
+          return new Response(JSON.stringify({ repositories: [] }), { status: 200 })
+        }
+        return new Response("unexpected request", { status: 500 })
+      }),
+    )
+
+    await expect(discoverAppRepositories({ appId: "42", privateKey })).resolves.toEqual([
+      { repo: "acme/one", token: "ghs_7" },
+    ])
+    expect(calls.some((url) => url.includes("/app/installations?") && url.includes("&page=2"))).toBe(true)
+    expect(calls.some((url) => url.includes("/installation/repositories") && url.includes("&page=2"))).toBe(true)
   })
 })

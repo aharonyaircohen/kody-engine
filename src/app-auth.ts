@@ -67,6 +67,27 @@ async function ghApp<T>(jwt: string, apiPath: string, method = "GET"): Promise<T
   return (await res.json()) as T
 }
 
+async function ghAppPage<T>(authToken: string, apiPath: string): Promise<{ data: T; hasNext: boolean }> {
+  const res = await fetch(`${GH_API}${apiPath}`, {
+    headers: {
+      Authorization: `Bearer ${authToken}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "kody-engine",
+    },
+  })
+  if (!res.ok) {
+    const body = await res.text().catch(() => "")
+    throw new Error(
+      `GitHub App API GET ${apiPath} → ${res.status} ${res.statusText}${body ? `: ${body.slice(0, 200)}` : ""}`,
+    )
+  }
+  return {
+    data: (await res.json()) as T,
+    hasNext: /rel="next"/.test(res.headers.get("link") ?? ""),
+  }
+}
+
 export interface AppCreds {
   appId: string
   privateKey: string
@@ -74,6 +95,13 @@ export interface AppCreds {
   installationId?: string
   /** "owner/repo" used to resolve the installation when id is absent. */
   repo?: string
+}
+
+export interface AppRepositoryAccess {
+  /** Canonical owner/repo. */
+  repo: string
+  /** Short-lived token scoped to the repository's App installation. */
+  token: string
 }
 
 /**
@@ -111,4 +139,37 @@ export async function mintAppInstallationToken(creds: AppCreds): Promise<string>
 
   const tok = await ghApp<{ token: string }>(jwt, `/app/installations/${installationId}/access_tokens`, "POST")
   return tok.token
+}
+
+/** Discover every repository accessible to this App with its installation token. */
+export async function discoverAppRepositories(creds: AppCreds): Promise<AppRepositoryAccess[]> {
+  const jwt = buildAppJwt(creds.appId, creds.privateKey)
+  const installations: Array<{ id: number }> = []
+  for (let page = 1; ; page++) {
+    const result = await ghAppPage<Array<{ id: number }>>(jwt, `/app/installations?per_page=100&page=${page}`)
+    installations.push(...result.data.filter((item) => Number.isInteger(item.id) && item.id > 0))
+    if (!result.hasNext) break
+  }
+
+  const byRepo = new Map<string, AppRepositoryAccess>()
+  for (const installation of installations) {
+    const token = await mintAppInstallationToken({
+      appId: creds.appId,
+      privateKey: creds.privateKey,
+      installationId: String(installation.id),
+    })
+    for (let page = 1; ; page++) {
+      const result = await ghAppPage<{ repositories?: Array<{ full_name?: string }> }>(
+        token,
+        `/installation/repositories?per_page=100&page=${page}`,
+      )
+      for (const repository of result.data.repositories ?? []) {
+        const repo = repository.full_name?.trim()
+        if (!repo || !/^[^/\s]+\/[^/\s]+$/.test(repo)) continue
+        byRepo.set(repo.toLowerCase(), { repo, token })
+      }
+      if (!result.hasNext) break
+    }
+  }
+  return [...byRepo.values()].sort((left, right) => left.repo.localeCompare(right.repo))
 }

@@ -55,8 +55,10 @@ export interface ClaimRequest {
 }
 
 export interface RegistryConfig {
-  /** Operator GitHub token used to read each repo's state-repo secrets.enc. */
+  /** Fallback GitHub token when no repository-scoped resolver is supplied. */
   githubToken: string
+  /** Resolve the unattended token for one repository. Defaults to githubToken. */
+  resolveGithubToken?: (owner: string, repo: string) => Promise<string>
   /** KODY_MASTER_KEY bytes — decrypts the vault. */
   masterKey: Buffer
   /** Per-pool config shared across repos EXCEPT the Fly token + repoTag. */
@@ -82,17 +84,19 @@ export interface RegistryConfig {
 export class PoolRegistry {
   private pools = new Map<string, PoolManager>()
   private poolCreates = new Map<string, Promise<PoolManager | null>>()
+  private readonly resolveGithubToken: (owner: string, repo: string) => Promise<string>
   private readonly resolveFlyToken: (owner: string, repo: string) => Promise<string | null>
   private readonly resolvePoolMin: (owner: string, repo: string) => Promise<number>
   private readonly log: (msg: string) => void
 
   constructor(private readonly cfg: RegistryConfig) {
     this.log = cfg.log ?? (() => {})
+    this.resolveGithubToken = cfg.resolveGithubToken ?? (async () => cfg.githubToken)
     this.resolveFlyToken =
       cfg.resolveFlyToken ??
-      ((owner, repo) =>
+      (async (owner, repo) =>
         readRepoSecret({
-          githubToken: cfg.githubToken,
+          githubToken: await this.resolveGithubToken(owner, repo),
           masterKey: cfg.masterKey,
           owner,
           repo,
@@ -103,7 +107,7 @@ export class PoolRegistry {
       (async (owner, repo) =>
         parsePoolMin(
           await readRepoSecret({
-            githubToken: cfg.githubToken,
+            githubToken: await this.resolveGithubToken(owner, repo),
             masterKey: cfg.masterKey,
             owner,
             repo,
@@ -173,12 +177,20 @@ export class PoolRegistry {
     const pm = await this.getPool(owner, repo)
     if (!pm) return { ok: false, reason: "repo has no FLY_API_TOKEN (no pool)" }
 
+    let githubToken: string
+    try {
+      githubToken = await this.resolveGithubToken(owner, repo)
+    } catch (err) {
+      this.log(`[${this.key(owner, repo)}] repository auth failed: ${err instanceof Error ? err.message : String(err)}`)
+      return { ok: false, reason: "repository authentication failed" }
+    }
+
     // Pull the repo's provider keys from its vault (NOT FLY_API_TOKEN — that's
-    // for pool ops, not the agent). The runner clones with the operator token.
+    // for pool ops, not the agent). The runner clones with repository-scoped auth.
     let allSecrets: Record<string, string> = {}
     try {
       const vault = await readRepoSecrets({
-        githubToken: this.cfg.githubToken,
+        githubToken,
         masterKey: this.cfg.masterKey,
         owner,
         repo,
@@ -200,7 +212,7 @@ export class PoolRegistry {
     const job: PoolJob = {
       jobId: req.jobId,
       repo: `${owner}/${repo}`,
-      githubToken: this.cfg.githubToken,
+      githubToken,
       runRequest: req.runRequest,
       issueNumber: req.issueNumber,
       sessionId: req.sessionId,

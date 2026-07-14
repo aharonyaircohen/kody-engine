@@ -207,6 +207,10 @@ function installGhStub(binDir: string): void {
       '  printf \'{"type":"file","encoding":"base64","sha":"regular-todo-sha","content":"%s"}\\n\' "$(printf \'%s\' "$KODY_REMOTE_REGULAR_TODO_MD" | base64 | tr -d \'\\n\')"',
       "  exit 0",
       "fi",
+      'if [ "$1" = "api" ] && [ "$2" = "--method" ] && [ "$3" = "PUT" ]; then',
+      "  printf '{}\\n'",
+      "  exit 0",
+      "fi",
       'echo "unexpected gh call: $*" >&2',
       "exit 9",
       "",
@@ -513,5 +517,68 @@ describe("goal-scheduler live wiring", () => {
     expect(status).toBe(0)
     expect(calls).toEqual([])
     expect(stdout).toContain("no company.activeGoals configured")
+  })
+
+  it("ticks a persisted active Loop without company.activeGoals", () => {
+    writeGoal("repo-observer", "active", {
+      ...managedGoalExtra(),
+      type: "agency-observer",
+      scheduleMode: "agentLoop",
+      schedule: "15m",
+      loopTarget: { type: "capability", id: "observe-repo-ci" },
+    })
+
+    const { status, stdout, calls } = runScheduler()
+
+    expect(status).toBe(0)
+    expect(calls).toEqual([expect.stringMatching(goalManagerCall("repo-observer"))])
+    expect(stdout).toContain("-> tick repo-observer (goal-manager)")
+  })
+
+  it("does not tick a paused persisted Loop without company.activeGoals", () => {
+    writeGoal("repo-observer", "paused", {
+      ...managedGoalExtra(),
+      type: "agency-observer",
+      scheduleMode: "agentLoop",
+      schedule: "15m",
+      loopTarget: { type: "capability", id: "observe-repo-ci" },
+    })
+
+    const { status, calls } = runScheduler()
+
+    expect(status).toBe(0)
+    expect(calls).toEqual([])
+  })
+
+  it("honors the persisted Loop cadence without company.activeGoals", () => {
+    writeGoal("repo-observer", "active", {
+      ...managedGoalExtra(),
+      type: "agency-observer",
+      scheduleMode: "agentLoop",
+      schedule: "15m",
+      scheduleState: { lastGoalTickAt: "2026-06-20T11:55:00Z" },
+      loopTarget: { type: "capability", id: "observe-repo-ci" },
+    })
+
+    const { status, stdout, calls } = runScheduler({ now: "2026-06-20T12:00:00Z" })
+
+    expect(status).toBe(0)
+    expect(calls).toEqual([])
+    expect(stdout).toContain("waiting schedule 15m until 2026-06-20T12:10:00Z")
+  })
+
+  it("does not automatically tick a manual persisted Loop", () => {
+    writeGoal("manual-observer", "active", {
+      ...managedGoalExtra(),
+      type: "agency-observer",
+      scheduleMode: "agentLoop",
+      schedule: "manual",
+      loopTarget: { type: "capability", id: "observe-repo-ci" },
+    })
+
+    const { status, calls } = runScheduler()
+
+    expect(status).toBe(0)
+    expect(calls).toEqual([])
   })
 })
