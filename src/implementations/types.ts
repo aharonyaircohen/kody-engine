@@ -500,6 +500,19 @@ export type AnyScript = PreflightScript | PostflightScript
 
 export type JobFlavor = "instant" | "scheduled"
 
+export interface ReportPublicationConfig {
+  type: string
+  version?: number
+  owner: string
+  slug?: string
+  slugFact?: string
+  title?: string
+  titleFact?: string
+  publishWhenFact?: string
+  reviewStatus?: string
+  reviewArea?: string
+}
+
 export interface Job {
   /** Public action the user/operator invoked. Mirrors the capability action. */
   action?: string
@@ -530,6 +543,8 @@ export interface Job {
   force?: boolean
   /** Ask the owning goal/loop to write a report run after its persisted decision. */
   saveReport?: boolean
+  /** Workflow-owned request for the runtime to publish typed capability output. */
+  report?: ReportPublicationConfig
   /** Internal parent context used by postflights to attach neutral capability output. */
   resultTarget?: CapabilityResultTarget
 }

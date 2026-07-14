@@ -147,6 +147,7 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
 const CONSUMER_LIBRARY_SCRIPTS: Record<string, string> = {
   advanceManagedGoal: "goal-manager",
   applyCapabilityReports: "goal/reporting implementations",
+  publishReport: "workflow-owned typed report publication",
   buildSyntheticPlugin: "store implementations with local skills/hooks",
   classifyByLabel: "classify",
   createQaGoal: "qa-engineer",

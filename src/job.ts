@@ -17,7 +17,7 @@ import type { KodyConfig } from "./config.js"
 import type { DispatchResult } from "./dispatch.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
 import { runImplementation, runImplementationChain } from "./executor.js"
-import type { CapabilityResultTarget, Job, JobFlavor } from "./implementations/types.js"
+import type { CapabilityResultTarget, Job, JobFlavor, ReportPublicationConfig } from "./implementations/types.js"
 import {
   type DiscoveredCapabilityAction,
   getCapabilityActionInputs,
@@ -99,8 +99,16 @@ export function validateJob(input: unknown): Job {
     flavor: j.flavor,
     force: j.force === true,
     saveReport: j.saveReport === true,
+    report: parseReportPublication(j.report),
     resultTarget: parseCapabilityResultTarget(j.resultTarget),
   }
+}
+
+function parseReportPublication(raw: unknown): ReportPublicationConfig | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined
+  const report = raw as Record<string, unknown>
+  if (typeof report.type !== "string" || typeof report.owner !== "string") return undefined
+  return raw as ReportPublicationConfig
 }
 
 function parseCapabilityResultTarget(raw: unknown): CapabilityResultTarget | undefined {
@@ -252,6 +260,7 @@ async function runCapabilityImplementationStep(
   // The job carries *when*: a scheduled job's cadence, recorded in the ledger.
   if (valid.schedule !== undefined && valid.schedule.length > 0) preloadedData.jobSchedule = valid.schedule
   if (valid.saveReport === true) preloadedData.jobSaveReport = true
+  if (valid.report) preloadedData.reportPublication = valid.report
   if (valid.force === true) preloadedData.jobForce = true
   if (valid.evidence) preloadedData.capabilityEvidence = { evidence: valid.evidence }
   if (valid.resultTarget) preloadedData.capabilityResultTarget = valid.resultTarget
@@ -448,6 +457,7 @@ function workflowStepToJob(step: CapabilityWorkflowStepConfig, parent: Job, chai
     flavor: parent.flavor,
     force: parent.force,
     saveReport: step.saveReport === true || parent.saveReport === true,
+    ...(step.report ? { report: step.report } : {}),
     ...(parent.resultTarget ? { resultTarget: parent.resultTarget } : {}),
   }
 }

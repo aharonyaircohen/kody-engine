@@ -59,6 +59,7 @@ import { openQaIssue } from "./openQaIssue.js"
 import { parseAgentResult } from "./parseAgentResult.js"
 import { parseIssueStateFromAgentResult } from "./parseIssueStateFromAgentResult.js"
 import { parseJobStateFromAgentResult } from "./parseJobStateFromAgentResult.js"
+import { publishReport } from "./publishReport.js"
 import { parseReproOutput } from "./parseReproOutput.js"
 import { persistArtifacts } from "./persistArtifacts.js"
 import { persistFlowState } from "./persistFlowState.js"
@@ -189,6 +190,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   advanceFlow,
   persistFlowState,
   applyCapabilityReports,
+  publishReport,
   recordClassification,
   dispatchClassified,
   notifyTerminal,

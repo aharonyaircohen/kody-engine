@@ -628,6 +628,66 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("lets the workflow request a typed report without changing the capability contract", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-report-job-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "observe-repo-ci", {
+        name: "observe-repo-ci",
+        action: "observe-repo-ci",
+        implementation: "observe-repo-ci",
+        inputs: [],
+      })
+      const workflow = {
+        version: 1,
+        name: "Agency observer",
+        steps: [
+          {
+            capability: "observe-repo-ci",
+            report: {
+              type: "finding",
+              version: 1,
+              owner: "agency-observer",
+              slugFact: "finding.id",
+              titleFact: "finding.title",
+              publishWhenFact: "finding.id",
+            },
+          },
+        ],
+      }
+      gh.mockReturnValue(
+        JSON.stringify({
+          type: "file",
+          encoding: "base64",
+          content: Buffer.from(JSON.stringify(workflow), "utf8").toString("base64"),
+          sha: "workflow-sha",
+        }),
+      )
+      process.chdir(cwd)
+
+      await runJob(
+        { workflow: "agency-observer", cliArgs: {}, flavor: "scheduled" },
+        {
+          cwd,
+          config: {
+            quality: { typecheck: "", lint: "", testUnit: "", format: "" },
+            git: { defaultBranch: "main" },
+            github: { owner: "o", repo: "r" },
+            agent: { model: "anthropic/claude-haiku-4-5-20251001" },
+            state: { repo: "o/kody-state", path: "r" },
+          },
+        },
+      )
+
+      expect(runImplementationChain.mock.calls[0]![1].preloadedData?.reportPublication).toEqual(
+        workflow.steps[0]!.report,
+      )
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it("resumes a workflow at the step that owns the pending goal evidence", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-web-release-resume-job-"))
     const originalCwd = process.cwd()

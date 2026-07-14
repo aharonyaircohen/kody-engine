@@ -1,5 +1,6 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
+import type { ReportPublicationConfig } from "./implementations/types.js"
 
 export const CAPABILITY_PROFILE_FILE = "profile.json"
 export const CAPABILITY_BODY_FILE = "capability.md"
@@ -43,6 +44,7 @@ export interface CapabilityWorkflowStepConfig {
   runWhen?: Record<string, unknown>
   continueOn?: string[]
   saveReport?: boolean
+  report?: ReportPublicationConfig
 }
 
 export interface CapabilityFolder {
@@ -210,6 +212,7 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
   const target = stringField(raw.target)
   const targetFact = stringField(raw.targetFact ?? raw.target_fact)
   const cliArgs = raw.cliArgs
+  const report = parseReportPublication(raw.report)
   return {
     capability,
     ...(action && isSafeSlug(action) ? { action } : {}),
@@ -227,6 +230,38 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
       ? { continueOn: stringList(raw.continueOn ?? raw.continue_on) }
       : {}),
     ...(raw.saveReport === true ? { saveReport: true } : {}),
+    ...(report ? { report } : {}),
+  }
+}
+
+function parseReportPublication(value: unknown): ReportPublicationConfig | undefined {
+  if (!isPlainObject(value)) return undefined
+  const type = stringField(value.type)
+  const owner = stringField(value.owner)
+  if (!type || !/^[a-z0-9][a-z0-9_-]{0,79}$/.test(type) || !owner || !isSafeSlug(owner)) return undefined
+  const version =
+    typeof value.version === "number" && Number.isInteger(value.version) && value.version > 0
+      ? value.version
+      : undefined
+  const slug = stringField(value.slug)
+  const slugFact = stringField(value.slugFact)
+  const title = stringField(value.title)
+  const titleFact = stringField(value.titleFact)
+  const publishWhenFact = stringField(value.publishWhenFact)
+  const reviewStatus = stringField(value.reviewStatus)
+  const reviewArea = stringField(value.reviewArea)
+  if (!slug && !slugFact) return undefined
+  return {
+    type,
+    ...(version ? { version } : {}),
+    owner,
+    ...(slug ? { slug } : {}),
+    ...(slugFact ? { slugFact } : {}),
+    ...(title ? { title } : {}),
+    ...(titleFact ? { titleFact } : {}),
+    ...(publishWhenFact ? { publishWhenFact } : {}),
+    ...(reviewStatus ? { reviewStatus } : {}),
+    ...(reviewArea ? { reviewArea } : {}),
   }
 }
 
