@@ -121,6 +121,10 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   advanceFlow: { owner: "run", reason: "run-only flow handoff after task branch work." },
   checkCoverageWithRetry: { owner: "run", reason: "run-only coverage gate." },
   commitAndPush: { owner: "run", reason: "run-only branch commit/push step." },
+  composePrompt: {
+    owner: "run",
+    reason: "run is the only engine caller; Store-owned model creators also compose prompts through this shared script.",
+  },
   ensurePr: { owner: "run", reason: "run-only PR creation step." },
   finalizeTerminal: { owner: "run", reason: "run-only terminal notification step." },
   loadConventions: { owner: "run", reason: "run-only prompt context loader after catalog moved to store." },
@@ -130,6 +134,10 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   loadPriorArt: { owner: "run", reason: "run-only prior-art context loader." },
   mirrorStateToPr: { owner: "run", reason: "run-only task state mirror." },
   postIssueComment: { owner: "run", reason: "run-only issue comment result publisher." },
+  parseAgentResult: {
+    owner: "run",
+    reason: "run is the only engine caller; Store-owned model creators also parse their structured result through this shared script.",
+  },
   requirePlanDeviations: { owner: "run", reason: "run-only plan-deviation check." },
   resolveArtifacts: { owner: "run", reason: "run-only artifact resolver." },
   runFlow: { owner: "run", reason: "run bootstrap. Run is the only engine-bundled implementation." },
@@ -169,6 +177,7 @@ const CONSUMER_LIBRARY_SCRIPTS: Record<string, string> = {
   loadAgentAdhoc: "agent-ask",
   markFlowSuccess: "revert",
   mergeFlow: "merge",
+  openAgencyModelReviewPr: "agency model creators",
   parseReproOutput: "reproduce",
   planTaskJobs: "task-jobs",
   postPlanComment: "plan",
@@ -185,6 +194,7 @@ const CONSUMER_LIBRARY_SCRIPTS: Record<string, string> = {
   stageMergeConflicts: "resolve",
   startFlow: "spec",
   syncFlow: "sync",
+  validateAgencyModelProposal: "agency model creators",
   verifyReproFails: "reproduce",
   warmupMcp: "qa-engineer",
 }
