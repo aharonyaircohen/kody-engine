@@ -123,7 +123,8 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   commitAndPush: { owner: "run", reason: "run-only branch commit/push step." },
   composePrompt: {
     owner: "run",
-    reason: "run is the only engine caller; Store-owned model creators also compose prompts through this shared script.",
+    reason:
+      "run is the only engine caller; Store-owned model creators also compose prompts through this shared script.",
   },
   ensurePr: { owner: "run", reason: "run-only PR creation step." },
   finalizeTerminal: { owner: "run", reason: "run-only terminal notification step." },
@@ -136,7 +137,8 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   postIssueComment: { owner: "run", reason: "run-only issue comment result publisher." },
   parseAgentResult: {
     owner: "run",
-    reason: "run is the only engine caller; Store-owned model creators also parse their structured result through this shared script.",
+    reason:
+      "run is the only engine caller; Store-owned model creators also parse their structured result through this shared script.",
   },
   requirePlanDeviations: { owner: "run", reason: "run-only plan-deviation check." },
   resolveArtifacts: { owner: "run", reason: "run-only artifact resolver." },

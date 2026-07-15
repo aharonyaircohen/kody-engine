@@ -1,5 +1,5 @@
 import type { AgentResult } from "../agent.js"
-import { parseCapabilityResult, parseCapabilityResultsFromText, type CapabilityResult } from "../capabilityResult.js"
+import { type CapabilityResult, parseCapabilityResult, parseCapabilityResultsFromText } from "../capabilityResult.js"
 import type { PostflightScript, ReportPublicationConfig } from "../implementations/types.js"
 import { writeStateText } from "../stateRepo.js"
 
@@ -67,13 +67,7 @@ export const publishReport: PostflightScript = async (ctx, _profile, agentResult
     ...(publication.reviewArea ? { reviewArea: publication.reviewArea } : {}),
   })
   const runId = generatedAt.replace(/\.\d{3}Z$/, "Z").replace(/:/g, "-")
-  writeStateText(
-    ctx.config,
-    ctx.cwd,
-    `reports/${slug}/runs/${runId}.md`,
-    markdown,
-    `chore(reports): add ${slug} run`,
-  )
+  writeStateText(ctx.config, ctx.cwd, `reports/${slug}/runs/${runId}.md`, markdown, `chore(reports): add ${slug} run`)
 }
 
 function parsePublication(value: unknown): ReportPublicationConfig | null {

@@ -405,12 +405,7 @@ describe("readCheckRuns — branch CI classification", () => {
         { preferRepoToken: true },
       ],
       [
-        [
-          "api",
-          `repos/${REPO}/commits/${sha}/status`,
-          "--jq",
-          ".statuses[] | {context, state, target_url}",
-        ],
+        ["api", `repos/${REPO}/commits/${sha}/status`, "--jq", ".statuses[] | {context, state, target_url}"],
         { preferRepoToken: true },
       ],
     ])
@@ -429,9 +424,7 @@ describe("readCheckRuns — branch CI classification", () => {
     const result = readCheckRuns(REPO, "dev", [])
 
     expect(result.state).toBe("RED")
-    expect(result.failing).toEqual([
-      { name: "Source Tests", conclusion: "failure", detailsUrl: "u-status" },
-    ])
+    expect(result.failing).toEqual([{ name: "Source Tests", conclusion: "failure", detailsUrl: "u-status" }])
   })
 
   it("is RED when a non-Kody check has a terminal failure, even while others run, and excludes Kody jobs", () => {

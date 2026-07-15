@@ -314,7 +314,14 @@ function updateExistingPr(
       const promotedTitle = existing.title?.replace(/^\[WIP\]\s*/, "")
       if (promotedTitle && promotedTitle !== existing.title) {
         gh(
-          ["api", "--method", "PATCH", `repos/${owner}/${repo}/pulls/${existing.number}`, "-f", `title=${promotedTitle}`],
+          [
+            "api",
+            "--method",
+            "PATCH",
+            `repos/${owner}/${repo}/pulls/${existing.number}`,
+            "-f",
+            `title=${promotedTitle}`,
+          ],
           { cwd, preferRepoToken: true },
         )
       }

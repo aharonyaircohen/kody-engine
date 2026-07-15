@@ -65,9 +65,7 @@ describe("publishReport", () => {
     await publishReport(ctx as never, {} as never, null)
 
     expect(writeStateText).toHaveBeenCalledOnce()
-    expect(writeStateText.mock.calls[0]![2]).toMatch(
-      /^reports\/finding-repo-ci-main\/runs\/.+\.md$/,
-    )
+    expect(writeStateText.mock.calls[0]![2]).toMatch(/^reports\/finding-repo-ci-main\/runs\/.+\.md$/)
     expect(writeStateText.mock.calls[0]![3]).toContain("reportType: finding")
   })
 
@@ -142,12 +140,8 @@ describe("publishReport", () => {
     await publishReport(ctx as never, {} as never, null)
 
     expect(writeStateText).toHaveBeenCalledOnce()
-    expect(writeStateText.mock.calls[0]![2]).toMatch(
-      /^reports\/learning-finding-repo-ci-main\/runs\/.+\.md$/,
-    )
+    expect(writeStateText.mock.calls[0]![2]).toMatch(/^reports\/learning-finding-repo-ci-main\/runs\/.+\.md$/)
     expect(writeStateText.mock.calls[0]![3]).toContain("reportType: learning")
-    expect(writeStateText.mock.calls[0]![3]).toContain(
-      "# The repository recovered after its CI fix",
-    )
+    expect(writeStateText.mock.calls[0]![3]).toContain("# The repository recovered after its CI fix")
   })
 })

@@ -2,9 +2,9 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { CapabilityFolder, CapabilityWorkflowConfig, CapabilityWorkflowStepConfig } from "./capabilityFolders.js"
 import { parseCapabilityWorkflow } from "./capabilityFolders.js"
-import { validateWorkflow } from "./workflowValidation.js"
 import { getCompanyStoreAssetRoot } from "./companyStore.js"
 import { readStateText, type StateRepoConfig } from "./stateRepo.js"
+import { validateWorkflow } from "./workflowValidation.js"
 
 export interface WorkflowDefinition {
   version: 1
@@ -38,11 +38,17 @@ export function normalizeWorkflowDefinition(value: unknown): WorkflowDefinition 
   const hasGraphConnections =
     Array.isArray(raw.steps) &&
     raw.steps.some(
-      (step) => step && typeof step === "object" && !Array.isArray(step) &&
-        ((step as Record<string, unknown>).next !== undefined || (step as Record<string, unknown>).inputs !== undefined),
+      (step) =>
+        step &&
+        typeof step === "object" &&
+        !Array.isArray(step) &&
+        ((step as Record<string, unknown>).next !== undefined ||
+          (step as Record<string, unknown>).inputs !== undefined),
     )
   if (hasGraphConnections) {
-    if (validateWorkflow({ steps: raw.steps, ...(raw.startAt !== undefined ? { startAt: raw.startAt } : {}) }).length > 0) {
+    if (
+      validateWorkflow({ steps: raw.steps, ...(raw.startAt !== undefined ? { startAt: raw.startAt } : {}) }).length > 0
+    ) {
       return null
     }
   }

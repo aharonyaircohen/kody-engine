@@ -386,12 +386,7 @@ export function readCheckRuns(repoSlug: string, ref: string, ignoreNames: string
   let rawStatuses = ""
   try {
     rawStatuses = gh(
-      [
-        "api",
-        `repos/${repoSlug}/commits/${sha}/status`,
-        "--jq",
-        ".statuses[] | {context, state, target_url}",
-      ],
+      ["api", `repos/${repoSlug}/commits/${sha}/status`, "--jq", ".statuses[] | {context, state, target_url}"],
       ghOptions,
     )
   } catch {
@@ -676,13 +671,17 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     description:
       "Read CI for a branch or commit ref (e.g. 'dev'). Returns {sha, state, failing:[{name,conclusion,detailsUrl}], pending:[{name,status}]}. state is RED (≥1 check has a terminal-failure conclusion: failure/timed_out/startup_failure/action_required), PENDING (none failed but some still running), or GREEN (all completed, none failed). Kody's own job check-runs (run/kody/capability-tick/…) are excluded by default. This reads the commit's authoritative check-runs — use it instead of guessing CI health from a run list.",
     inputSchema: {
-      ref: z.string().min(1).optional().describe("Branch name, commit SHA, or 'default' for the configured agency branch."),
+      ref: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("Branch name, commit SHA, or 'default' for the configured agency branch."),
       ignoreNames: z.array(z.string()).optional().describe("Check names to exclude (default: Kody's own job names)."),
     },
     handler: async (args) => {
       const requestedRef = String(args.ref ?? "default")
       const workflowRef = process.env.GITHUB_REF_NAME?.trim()
-      const ref = requestedRef === "default" ? (workflowRef || opts.defaultBranch || "main") : requestedRef
+      const ref = requestedRef === "default" ? workflowRef || opts.defaultBranch || "main" : requestedRef
       const ignoreNames = Array.isArray(args.ignoreNames) ? (args.ignoreNames as string[]) : DEFAULT_IGNORE_CHECKS
       const result = readCheckRuns(opts.repoSlug, ref, ignoreNames)
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }
@@ -767,13 +766,7 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
       if (issue !== undefined && (!Number.isFinite(issue) || issue <= 0)) {
         return { content: [{ type: "text", text: "Start failed: `issue` must be a positive number when provided." }] }
       }
-      const result = startCapability(
-        workflowFile,
-        name,
-        issue,
-        opts.repoSlug,
-        opts.defaultBranch,
-      )
+      const result = startCapability(workflowFile, name, issue, opts.repoSlug, opts.defaultBranch)
       const text = JSON.stringify(result)
       return { content: [{ type: "text", text }] }
     },

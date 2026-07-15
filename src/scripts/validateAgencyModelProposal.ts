@@ -1,6 +1,6 @@
 import * as path from "node:path"
-import type { PostflightScript, ScriptArgs } from "../implementations/types.js"
 import { listCapabilityFolderSlugs } from "../capabilityFolders.js"
+import type { PostflightScript, ScriptArgs } from "../implementations/types.js"
 import { getCapabilityActionInputs, getCapabilityRoots } from "../registry.js"
 import { formatWorkflowValidationIssues, validateWorkflow } from "../workflowValidation.js"
 import { parseAgencyModelProposal } from "./openAgencyModelReviewPr.js"
