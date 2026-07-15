@@ -800,10 +800,14 @@ function workflowConditionContext(data: Record<string, unknown>): Record<string,
 }
 
 function resolveDottedPath(root: unknown, dotted: string): unknown {
-  return dotted.split(".").reduce<unknown>((cur, part) => {
+  const direct = dotted.split(".").reduce<unknown>((cur, part) => {
     if (!cur || typeof cur !== "object") return undefined
     return (cur as Record<string, unknown>)[part]
   }, root)
+  if (direct !== undefined || !dotted.startsWith("result.")) return direct
+  const result = resolveDottedPath(root, "result")
+  if (!result || typeof result !== "object" || Array.isArray(result)) return direct
+  return resolveDottedPath((result as Record<string, unknown>).facts, dotted.slice("result.".length))
 }
 
 function valueMatches(actual: unknown, expected: unknown): boolean {

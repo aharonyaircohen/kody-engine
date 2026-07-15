@@ -1043,7 +1043,7 @@ describe("runJob (Phase 1 seam)", () => {
               capability: "run",
               target: "issue",
               next: [
-                { to: "repair", when: { "facts.needsFix": true } },
+                { to: "repair", when: { "result.needsFix": true } },
                 { to: "verify", default: true },
               ],
             },
