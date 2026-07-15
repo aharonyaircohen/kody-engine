@@ -98,6 +98,17 @@ describe("openAgencyModelReviewPr", () => {
     })
   })
 
+  it("validates and records a dry run without creating a branch, commit, or PR", async () => {
+    const ctx = makeCtx(bundle())
+    ctx.args.dry_run = true
+
+    await openAgencyModelReviewPr(ctx, profile, agentResult)
+
+    expect(gh).not.toHaveBeenCalled()
+    expect(ctx.output.prUrl).toBeUndefined()
+    expect(ctx.data.agencyModelReviewPr).toMatchObject({ dryRun: true, files: ["app-state/capabilities/example/profile.json"] })
+  })
+
   it("prefixes generated file paths with state.path", async () => {
     mockSuccessfulGh()
 

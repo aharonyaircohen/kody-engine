@@ -54,6 +54,17 @@ export const openAgencyModelReviewPr: PostflightScript = async (ctx, profile, ag
   const baseBranch = "main"
   const branch = buildStatePrBranchName(sourceLabel, issueNumber, bundle.title)
 
+  if (isDryRun(ctx)) {
+    ctx.data.agencyModelReviewPr = {
+      dryRun: true,
+      repo: `${stateRepo.owner}/${stateRepo.repo}`,
+      branch,
+      base: baseBranch,
+      files: normalizedFiles.map((file) => file.targetPath),
+    }
+    return
+  }
+
   const baseRef = ghJson<GitRefResponse>(
     ["api", `/repos/${stateRepo.owner}/${stateRepo.repo}/git/ref/heads/${baseBranch}`],
     ctx.cwd,
@@ -144,6 +155,13 @@ export const openAgencyModelReviewPr: PostflightScript = async (ctx, profile, ag
     files: normalizedFiles.map((file) => file.targetPath),
   }
   ctx.output.prUrl = prUrl
+}
+
+function isDryRun(ctx: Context): boolean {
+  const arg = ctx.args.dry_run ?? ctx.args.dryRun
+  if (arg === true) return true
+  if (typeof arg === "string" && ["1", "true", "yes"].includes(arg.trim().toLowerCase())) return true
+  return ["1", "true", "yes"].includes((process.env.KODY_DRY_RUN ?? "").trim().toLowerCase())
 }
 
 export function parseAgencyModelProposal(raw: string): AgencyModelProposal {

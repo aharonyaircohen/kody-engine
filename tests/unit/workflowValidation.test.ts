@@ -114,4 +114,22 @@ describe("validateWorkflow", () => {
       expect.arrayContaining(["unknown_capability", "unknown_capability_input"]),
     )
   })
+
+  it("rejects invented workflow fields instead of silently ignoring them", () => {
+    const issues = validateWorkflow({
+      steps: [
+        {
+          id: "inspect",
+          capability: "inspect",
+          produces: ["health"],
+          next: [{ to: "publish", default: true, handoff: "health" }],
+        },
+        { id: "publish", capability: "publish" },
+      ],
+    })
+
+    expect(issues.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining(["unsupported_step_field", "unsupported_transition_field"]),
+    )
+  })
 })

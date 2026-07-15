@@ -17,6 +17,26 @@ export interface WorkflowValidationOptions {
 
 type Raw = Record<string, unknown>
 
+const SUPPORTED_STEP_FIELDS = new Set([
+  "id",
+  "capability",
+  "action",
+  "implementation",
+  "evidence",
+  "target",
+  "targetFact",
+  "reason",
+  "agent",
+  "cliArgs",
+  "inputs",
+  "next",
+  "runWhen",
+  "continueOn",
+  "saveReport",
+  "report",
+])
+const SUPPORTED_TRANSITION_FIELDS = new Set(["to", "when", "default", "maxIterations"])
+
 export function validateWorkflow(value: unknown, options: WorkflowValidationOptions = {}): WorkflowValidationIssue[] {
   const issues: WorkflowValidationIssue[] = []
   const workflow = asRecord(value)
@@ -49,6 +69,11 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
     if (!step) {
       issue(issues, "invalid_step", base, "workflow step must be a capability name or an object")
       return
+    }
+    for (const field of Object.keys(step)) {
+      if (!SUPPORTED_STEP_FIELDS.has(field)) {
+        issue(issues, "unsupported_step_field", `${base}.${field}`, `workflow step field ${field} is not supported`)
+      }
     }
     const capability = text(step.capability ?? step.action)
     if (!capability || !SAFE_NAME.test(capability)) {
@@ -169,6 +194,16 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
       if (!raw) {
         issue(issues, "invalid_transition", base, "workflow connection must be a step id or an object")
         return
+      }
+      for (const field of Object.keys(raw)) {
+        if (!SUPPORTED_TRANSITION_FIELDS.has(field)) {
+          issue(
+            issues,
+            "unsupported_transition_field",
+            `${base}.${field}`,
+            `workflow connection field ${field} is not supported`,
+          )
+        }
       }
       const target = text(raw.to)
       if (!target || !SAFE_NAME.test(target)) {

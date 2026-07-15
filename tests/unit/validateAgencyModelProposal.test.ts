@@ -427,6 +427,35 @@ describe("validateModelBundle", () => {
     expect(validateModelBundle(workflow, "workflow")).toContain("workflow profile must not declare capabilityKind")
   })
 
+  it("rejects workflow fields that the engine would otherwise ignore", () => {
+    const steps = [
+      {
+        id: "inspect",
+        capability: "inspect",
+        produces: ["health"],
+        next: [{ to: "publish", default: true, handoff: "health" }],
+      },
+      { id: "publish", capability: "publish" },
+    ]
+    const workflow = bundle({
+      model: {
+        kind: "workflow",
+        slug: "strict-workflow",
+        docsUsed: ["docs/jobs-model.md", "docs/capabilities.md"],
+        steps,
+      },
+      files: [
+        {
+          path: "capabilities/strict-workflow/profile.json",
+          content: JSON.stringify({ name: "strict-workflow", workflow: { steps } }),
+        },
+        { path: "capabilities/strict-workflow/capability.md", content: "# Strict Workflow\n" },
+      ],
+    })
+
+    expect(validateModelBundle(workflow, "workflow").join("; ")).toContain("field produces is not supported")
+  })
+
   it("accepts agent loops stored under goals state paths", () => {
     const loop = bundle({
       model: {
