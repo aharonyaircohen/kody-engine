@@ -9,6 +9,7 @@
 
 import { spawn } from "node:child_process"
 import * as fs from "node:fs"
+import * as os from "node:os"
 import * as path from "node:path"
 import type { AgentResult } from "./agent.js"
 import { runAgent } from "./agent.js"
@@ -75,6 +76,9 @@ export function isMutatingPostflight(scriptName: string | undefined): boolean {
 export function shouldBlockMutatingPostflight(scriptName: string | undefined, exitCode: number | undefined): boolean {
   return isMutatingPostflight(scriptName) && (exitCode ?? 0) !== 0
 }
+
+/** Any KODY_* side-channel marker at line start — used only to detect legacy stdout usage. */
+const SHELL_MARKER_RE = /^KODY_(SKIP_AGENT|PR_URL|REASON|CAPABILITY_REPORT|CAPABILITY_RESULT)=/m
 
 export function collectShellSideChannels(ctx: Pick<Context, "data" | "output" | "skipAgent">, stdout: string): void {
   if (/^KODY_SKIP_AGENT=true\s*$/m.test(stdout)) {
@@ -562,6 +566,17 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
   // Stash for checkCoverageWithRetry.
   ctx.data.__invokeAgent = invokeAgent
 
+  // Profile-declared SDK plugin parts (skills/commands/hooks) only reach the
+  // SDK through the synthetic plugin assembled by buildSyntheticPlugin →
+  // ctx.data.syntheticPluginPath. Auto-schedule it whenever the profile
+  // declares any part and no preflight entry already includes it — otherwise
+  // declarations like hooks:["block-git"] are silently dead.
+  const cc = profile.claudeCode
+  const declaresPluginParts = cc.skills.length > 0 || cc.commands.length > 0 || cc.hooks.length > 0
+  if (declaresPluginParts && !profile.scripts.preflight.some((e) => e.script === "buildSyntheticPlugin")) {
+    profile.scripts.preflight = [{ script: "buildSyntheticPlugin" }, ...profile.scripts.preflight]
+  }
+
   try {
     // ── Preflight ────────────────────────────────────────────────────────────
     for (const entry of profile.scripts.preflight) {
@@ -780,6 +795,13 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       afterNextJob: ctx.output.afterNextJob,
       taskState: ctx.data.taskState as TaskState | undefined,
     })
+  } catch (err) {
+    // A throwing preflight (or any other escape from the main flow) must
+    // still finalize the run-index row and emit stage_end — otherwise the
+    // run stays "running" forever with no terminal marker. Postflight
+    // crashes are handled granularly above; this is the last-resort net.
+    const msg = err instanceof Error ? err.message : String(err)
+    return finishAndEnd({ exitCode: 99, reason: ctx.output.reason ?? msg })
   } finally {
     // Clear any kody:* lifecycle labels stamped by `setLifecycleLabel`
     // preflight entries. Runs on every exit path (normal completion, hard
@@ -1212,7 +1234,14 @@ async function runShellEntry(entry: ScriptEntry, ctx: Context, profile: Profile)
   }
 
   const positional = entry.with ? Object.values(entry.with).map((v) => String(v)) : []
-  const env: NodeJS.ProcessEnv = { ...process.env, HUSKY: "0", SKIP_HOOKS: "1" }
+  // Dedicated side-channel file (same pattern as GHA's $GITHUB_OUTPUT).
+  // Markers written here cannot be forged by untrusted text a script merely
+  // echoes to stdout (e.g. an issue body containing "KODY_SKIP_AGENT=true").
+  const outputFile = path.join(
+    os.tmpdir(),
+    `kody-shell-output-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  )
+  const env: NodeJS.ProcessEnv = { ...process.env, HUSKY: "0", SKIP_HOOKS: "1", KODY_OUTPUT: outputFile }
   for (const [k, v] of Object.entries(ctx.args)) {
     if (v === undefined || v === null) continue
     env[`KODY_ARG_${envKey(k)}`] = String(v)
@@ -1292,7 +1321,29 @@ async function runShellEntry(entry: ScriptEntry, ctx: Context, profile: Profile)
     return
   }
 
-  collectShellSideChannels(ctx, stdout)
+  // Prefer the $KODY_OUTPUT file; fall back to legacy stdout scraping (still
+  // the documented contract for older consumer scripts) with a deprecation
+  // warning so consumers migrate off the injectable path.
+  let sideChannelText = ""
+  try {
+    if (fs.existsSync(outputFile)) {
+      sideChannelText = fs.readFileSync(outputFile, "utf-8")
+      fs.rmSync(outputFile, { force: true })
+    }
+  } catch {
+    /* unreadable output file → treat as absent */
+  }
+  if (sideChannelText.trim().length > 0) {
+    collectShellSideChannels(ctx, sideChannelText)
+  } else {
+    if (SHELL_MARKER_RE.test(stdout)) {
+      process.stderr.write(
+        `[kody] shell '${shellName}': KODY_* markers read from stdout are deprecated — ` +
+          `write them to "$KODY_OUTPUT" instead (stdout markers are forgeable by echoed untrusted text)\n`,
+      )
+    }
+    collectShellSideChannels(ctx, stdout)
+  }
 
   if (timedOut) {
     ctx.skipAgent = true

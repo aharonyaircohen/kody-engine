@@ -84,6 +84,12 @@ export interface EnsurePrOptions {
    * runFlow allowlist enforces that.
    */
   baseBranch?: string
+  /**
+   * True when this run produced no new commit — the PR body on an existing PR
+   * is left untouched so a no-op rerun doesn't replace a good agent-written
+   * summary with "(agent did not supply PR_SUMMARY)".
+   */
+  preserveBodyOnUpdate?: boolean
   cwd?: string
 }
 
@@ -169,7 +175,22 @@ function firstLine(s: string): string {
   return head.length > 200 ? `${head.slice(0, 197)}…` : head
 }
 
-export function findExistingPr(branch: string, cwd?: string): { number: number; url: string; body: string } | null {
+export interface ExistingPr {
+  number: number
+  url: string
+  body: string
+  title: string
+  isDraft: boolean
+}
+
+/**
+ * Look up the open PR for a head branch, distinguishing "no PR" from
+ * "the lookup itself failed". Callers that take destructive action on
+ * "no PR" (recoverFromExistingPr's branch delete) MUST refuse when
+ * `error` is set — a transient gh failure is otherwise indistinguishable
+ * from a genuinely missing PR.
+ */
+export function lookupExistingPr(branch: string, cwd?: string): { pr: ExistingPr | null; error: string | null } {
   // Use `gh pr list --head` rather than `gh pr view <branch>`. `gh pr view`
   // treats a numeric arg as a PR number, so a branch literally named "1347"
   // (kody convention `<issue>-<slug>` minus the slug) is misread as PR #1347
@@ -177,19 +198,31 @@ export function findExistingPr(branch: string, cwd?: string): { number: number; 
   // crashes with "a pull request for branch X already exists".
   try {
     const output = gh(
-      ["pr", "list", "--head", branch, "--state", "open", "--json", "number,url,body", "--limit", "1"],
+      ["pr", "list", "--head", branch, "--state", "open", "--json", "number,url,body,title,isDraft", "--limit", "1"],
       { cwd, preferRepoToken: true },
     )
     const arr = JSON.parse(output)
     const first = Array.isArray(arr) ? arr[0] : null
     if (first && typeof first.number === "number" && typeof first.url === "string") {
-      const body = typeof first.body === "string" ? first.body : ""
-      return { number: first.number, url: first.url, body }
+      return {
+        pr: {
+          number: first.number,
+          url: first.url,
+          body: typeof first.body === "string" ? first.body : "",
+          title: typeof first.title === "string" ? first.title : "",
+          isDraft: first.isDraft === true,
+        },
+        error: null,
+      }
     }
-    return null
-  } catch {
-    return null
+    return { pr: null, error: null }
+  } catch (err) {
+    return { pr: null, error: err instanceof Error ? err.message : String(err) }
   }
+}
+
+export function findExistingPr(branch: string, cwd?: string): ExistingPr | null {
+  return lookupExistingPr(branch, cwd).pr
 }
 
 /**
@@ -250,23 +283,46 @@ function git(args: string[], cwd?: string): string {
  * scope (matching what release/deploy.sh already does).
  */
 function updateExistingPr(
-  existing: { number: number; url: string },
+  existing: { number: number; url: string; title?: string; isDraft?: boolean },
   body: string,
   draft: boolean,
   cwd?: string,
+  preserveBody?: boolean,
 ): PrResult {
   const stripped = existing.url.replace(/^https:\/\/github\.com\//, "")
   const [owner, repo] = stripped.split("/")
-  try {
-    gh(["api", "--method", "PATCH", `repos/${owner}/${repo}/pulls/${existing.number}`, "-f", `body=${body}`], {
-      cwd,
-      preferRepoToken: true,
-    })
-  } catch (err) {
-    // Surface the failure — the ensurePr script wraps this in try/catch and
-    // reports it via ctx.output.reason. Swallowing it once masked a successful
-    // update over a real downstream failure.
-    throw new Error(`gh api PATCH #${existing.number} failed: ${err instanceof Error ? err.message : String(err)}`)
+  if (!preserveBody) {
+    try {
+      gh(["api", "--method", "PATCH", `repos/${owner}/${repo}/pulls/${existing.number}`, "-f", `body=${body}`], {
+        cwd,
+        preferRepoToken: true,
+      })
+    } catch (err) {
+      // Surface the failure — the ensurePr script wraps this in try/catch and
+      // reports it via ctx.output.reason. Swallowing it once masked a successful
+      // update over a real downstream failure.
+      throw new Error(`gh api PATCH #${existing.number} failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+  // Promote draft → ready when this run succeeded on a PR an earlier failed
+  // run opened as draft. Without this the PR stays `[WIP]` + unmergeable
+  // forever even though the follow-up run was fully green. Best-effort:
+  // `gh pr ready` needs GraphQL, which some minimal-scope tokens lack.
+  if (existing.isDraft === true && !draft) {
+    try {
+      gh(["pr", "ready", String(existing.number)], { cwd, preferRepoToken: true })
+      const promotedTitle = existing.title?.replace(/^\[WIP\]\s*/, "")
+      if (promotedTitle && promotedTitle !== existing.title) {
+        gh(
+          ["api", "--method", "PATCH", `repos/${owner}/${repo}/pulls/${existing.number}`, "-f", `title=${promotedTitle}`],
+          { cwd, preferRepoToken: true },
+        )
+      }
+    } catch (err) {
+      process.stderr.write(
+        `[kody ensurePr] draft→ready promotion of #${existing.number} failed (non-fatal): ${err instanceof Error ? err.message : String(err)}\n`,
+      )
+    }
   }
   return { url: existing.url, number: existing.number, draft, action: "updated" }
 }
@@ -309,8 +365,16 @@ function recoverFromExistingPr(
   draft: boolean,
   cwd?: string,
 ): PrResult {
-  const raced = findExistingPr(branch, cwd)
+  const { pr: raced, error: lookupError } = lookupExistingPr(branch, cwd)
   if (raced) return updateExistingPr(raced, body, draft, cwd)
+  if (lookupError) {
+    // The lookup FAILED — we do not know whether a live PR owns this branch.
+    // Deleting the branch here would auto-close a real open PR on a mere
+    // transient gh error. Fail the run instead; a retry can recover cleanly.
+    throw new Error(
+      `refusing phantom-PR recovery for '${branch}': PR lookup failed (${lookupError}) — a live PR may own this branch`,
+    )
+  }
 
   try {
     git(["push", "origin", "--delete", branch], cwd)
@@ -340,7 +404,7 @@ export function ensurePr(opts: EnsurePrOptions): PrResult {
   const body = buildPrBody(effectiveOpts)
 
   if (existing) {
-    return updateExistingPr(existing, body, opts.draft, opts.cwd)
+    return updateExistingPr(existing, body, opts.draft, opts.cwd, opts.preserveBodyOnUpdate === true)
   }
 
   const base = opts.baseBranch && opts.baseBranch.length > 0 ? opts.baseBranch : opts.defaultBranch

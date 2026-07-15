@@ -364,9 +364,12 @@ export interface ScriptEntry {
    * Filename of a shell script colocated with the implementation
    * (e.g. "apply-prefer.sh"). Resolved relative to the profile's
    * directory. Invoked via `bash <path> <with-args>` with ctx.args
-   * exposed as env vars (KODY_ARG_<UPPER_NAME>=<value>). A stdout
-   * line `KODY_SKIP_AGENT=true` signals the executor to bypass the
-   * agent. Non-zero exit is treated as a preflight failure.
+   * exposed as env vars (KODY_ARG_<UPPER_NAME>=<value>). Side-channel
+   * markers (KODY_SKIP_AGENT=true, KODY_PR_URL=, KODY_REASON=,
+   * KODY_CAPABILITY_RESULT=, KODY_CAPABILITY_REPORT=) are read from the
+   * file named by $KODY_OUTPUT (preferred — not forgeable by echoed
+   * untrusted text); plain-stdout markers remain a deprecated fallback.
+   * Non-zero exit is treated as a preflight failure.
    */
   shell?: string
   /**

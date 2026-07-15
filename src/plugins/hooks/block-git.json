@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e 'let s=\"\";process.stdin.on(\"data\",c=>s+=c).on(\"end\",()=>{try{const d=JSON.parse(s);const cmd=(d.tool_input&&d.tool_input.command)||\"\";if(cmd.split(/[;&|\\n]+/).some(p=>/^(git|gh)(\\s|$)/.test(p.trim()))){process.stderr.write(\"kody blocks git/gh — the wrapper handles VCS; do not run git or gh commands\\n\");process.exit(2)}}catch{}})'"
+            "command": "node -e 'let s=\"\";process.stdin.on(\"data\",c=>s+=c).on(\"end\",()=>{try{const d=JSON.parse(s);const cmd=(d.tool_input&&d.tool_input.command)||\"\";const vcs=t=>/^(?:\\S*\\/)?(git|gh)$/.test(t);const wrap=new Set([\"command\",\"exec\",\"xargs\",\"env\",\"nohup\",\"time\",\"nice\",\"sudo\",\"doas\"]);const seg=cmd.split(/[;&|\\n]+/).some(p=>{const t=p.trim().split(/\\s+/).filter(Boolean);let i=0;while(i<t.length&&(wrap.has(t[i])||/^[A-Za-z_][A-Za-z0-9_]*=/.test(t[i])))i++;return t[i]!==undefined&&vcs(t[i])});const shc=/\\b(?:ba|z|da|k)?sh\\s+[^;|&]*-c\\s*[\"\\x27`]+\\s*(?:\\S*\\/)?(?:git|gh)\\b/.test(cmd);const sub=/[$`]\\(?\\s*(?:\\S*\\/)?(?:git|gh)\\s/.test(cmd);if(seg||shc||sub){process.stderr.write(\"kody blocks git/gh — the wrapper handles VCS; do not run git or gh commands (any invocation form)\\n\");process.exit(2)}}catch{}})'"
           }
         ]
       }

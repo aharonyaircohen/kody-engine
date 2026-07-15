@@ -88,6 +88,9 @@ export const ensurePr: PostflightScript = async (ctx) => {
       changedFiles,
       agentSummary: ctx.data.prSummary as string | undefined,
       baseBranch,
+      // No fresh commit this run → don't rebuild the body of an existing PR;
+      // it would replace the original agent summary with the empty fallback.
+      preserveBodyOnUpdate: !commitResult?.committed,
       cwd: ctx.cwd,
     })
     // Boundary assertion: gh pr create returning an empty URL is not a

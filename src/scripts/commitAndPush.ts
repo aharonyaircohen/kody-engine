@@ -60,11 +60,24 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
         changedFiles?: string[]
         hasCommitsAhead?: boolean
         salvagedFromMissingMarker?: boolean
+        commitCrash?: string
+        exitCode?: number
+        reason?: string
       }
       ctx.data.commitResult = replay.commitResult ?? { committed: false, pushed: false }
       if (Array.isArray(replay.changedFiles)) ctx.data.changedFiles = replay.changedFiles
       if (typeof replay.hasCommitsAhead === "boolean") ctx.data.hasCommitsAhead = replay.hasCommitsAhead
       if (replay.salvagedFromMissingMarker) ctx.data.salvagedFromMissingMarker = true
+      // A committed-but-unpushed first attempt must replay as the same
+      // failure, not as success — otherwise a re-entry reports green while
+      // the commits never reached origin.
+      if (typeof replay.commitCrash === "string") {
+        ctx.data.commitCrash = replay.commitCrash
+        if (typeof replay.exitCode === "number" && (ctx.output.exitCode === undefined || ctx.output.exitCode === 0)) {
+          ctx.output.exitCode = replay.exitCode
+        }
+        if (!ctx.output.reason && replay.reason) ctx.output.reason = replay.reason
+      }
       ctx.data.commitIdempotencyReplay = true
       process.stderr.write(`[kody commitAndPush] idempotency replay (sentinel ${sentinel})\n`)
       return
@@ -166,6 +179,9 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
             changedFiles: ctx.data.changedFiles,
             hasCommitsAhead: ctx.data.hasCommitsAhead,
             salvagedFromMissingMarker: ctx.data.salvagedFromMissingMarker === true,
+            commitCrash: typeof ctx.data.commitCrash === "string" ? ctx.data.commitCrash : undefined,
+            exitCode: ctx.output.exitCode,
+            reason: ctx.output.reason,
             writtenAt: new Date().toISOString(),
           },
           null,

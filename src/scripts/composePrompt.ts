@@ -46,6 +46,9 @@ const UNTRUSTED_TOKENS: ReadonlySet<string> = new Set([
   "issue.commentsFormatted",
   "pr.body",
   "pr.commentsFormatted",
+  // Prior-art bundles PR diffs and review/issue comments — authorable by any
+  // external GitHub user, so exactly as attacker-controllable as issue bodies.
+  "priorArt",
 ])
 
 const FENCE_END = "----- END UNTRUSTED INPUT -----"

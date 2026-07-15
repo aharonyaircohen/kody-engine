@@ -120,7 +120,7 @@ function locateLitellmScript(): string | null {
       "python3",
       [
         "-c",
-        "import os,sys; p=os.path.join(os.path.dirname(sys.implementation),'litellm'); print(p if os.path.exists(p) else '')",
+        "import os,sys,site,sysconfig; c=[os.path.join(os.path.dirname(sys.executable),'litellm'),os.path.join(sysconfig.get_path('scripts'),'litellm'),os.path.join(site.USER_BASE,'bin','litellm')]; m=[p for p in c if os.path.exists(p)]; print(m[0] if m else '')",
       ],
       { encoding: "utf-8", timeout: 10_000 },
     ).trim()

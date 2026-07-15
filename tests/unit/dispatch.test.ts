@@ -937,3 +937,39 @@ describe("dispatch: alias misconfig surfacing", () => {
     expect(stderrSpy.mock.calls.length).toBe(0)
   })
 })
+
+describe("dispatch: comment casing preserved", () => {
+  const prev: Record<string, string | undefined> = {}
+  beforeEach(() => {
+    prev.EVENT_NAME = process.env.GITHUB_EVENT_NAME
+    prev.EVENT_PATH = process.env.GITHUB_EVENT_PATH
+    process.env.GITHUB_EVENT_NAME = "issue_comment"
+  })
+  afterEach(() => {
+    process.env.GITHUB_EVENT_NAME = prev.EVENT_NAME
+    process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
+  })
+
+  it("keeps the operator's casing in flag values and why", () => {
+    // Regression: the whole body was lowercased before parsing, so
+    // `--base Feature/API-v2` checked out a nonexistent branch and the
+    // "verbatim" why reached the agent mangled.
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody run --base Feature/API-v2 Fix the OAuth redirect on MyComponent" },
+      issue: { number: 12 },
+    })
+    const r = autoDispatch()
+    expect(r?.cliArgs).toEqual({ issue: 12, base: "Feature/API-v2" })
+    expect(r?.why).toBe("Fix the OAuth redirect on MyComponent")
+  })
+
+  it("still recognizes mention, subcommand, and flags case-insensitively", () => {
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@Kody RUN --Base Hotfix/X" },
+      issue: { number: 13 },
+    })
+    const r = autoDispatch()
+    expect(r?.action).toBe("run")
+    expect(r?.cliArgs).toEqual({ issue: 13, base: "Hotfix/X" })
+  })
+})

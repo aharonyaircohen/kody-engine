@@ -251,6 +251,32 @@ describe("commitAndPush: sentinel replay", () => {
     expect(ctx2.data.commitIdempotencyReplay).toBe(true)
   })
 
+  it("replays a committed-but-unpushed result as the SAME failure (exit 4), not success", async () => {
+    // Regression: the sentinel was written on committed=true even when the
+    // push failed, and the replay restored only commitResult — so a retry
+    // within the same run reported green while the commits never reached
+    // origin (silent lost work).
+    __resetRunIdCache()
+    process.env.KODY_RUN_ID = "test-run-pushfail"
+    process.env.KODY_COMMIT_IDEMPOTENCY = "1"
+    vi.mocked(doCommitAndPush).mockClear()
+    vi.mocked(doCommitAndPush).mockReturnValueOnce({
+      committed: true,
+      pushed: false,
+      pushError: "remote hung up",
+    } as never)
+    const ctx1 = makeCtxWithCwd(tmp, { agentDone: true, commitMessage: "feat: y" })
+    await commitAndPush(ctx1 as never, { name: "fix" } as Profile, null)
+    expect(ctx1.output.exitCode).toBe(4)
+
+    vi.mocked(doCommitAndPush).mockClear()
+    const ctx2 = makeCtxWithCwd(tmp, { agentDone: true, commitMessage: "feat: y" })
+    await commitAndPush(ctx2 as never, { name: "fix" } as Profile, null)
+    expect(doCommitAndPush).not.toHaveBeenCalled()
+    expect(ctx2.output.exitCode).toBe(4)
+    expect(ctx2.data.commitCrash).toBe("remote hung up")
+  })
+
   it("skips the sentinel machinery entirely when KODY_COMMIT_IDEMPOTENCY=0", async () => {
     __resetRunIdCache()
     process.env.KODY_RUN_ID = "test-run-no-sentinel"

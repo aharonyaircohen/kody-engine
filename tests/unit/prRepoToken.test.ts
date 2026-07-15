@@ -43,7 +43,7 @@ describe("ensurePr repo token preference", () => {
     expect(result.action).toBe("updated")
     expect(ghMock).toHaveBeenNthCalledWith(
       1,
-      ["pr", "list", "--head", "3705-feature", "--state", "open", "--json", "number,url,body", "--limit", "1"],
+      ["pr", "list", "--head", "3705-feature", "--state", "open", "--json", "number,url,body,title,isDraft", "--limit", "1"],
       { cwd: "/repo", preferRepoToken: true },
     )
     expect(ghMock).toHaveBeenNthCalledWith(

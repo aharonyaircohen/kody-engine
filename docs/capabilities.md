@@ -282,6 +282,19 @@ finish:
 KODY_CAPABILITY_RESULT={"version":1,"status":"pass","summary":"CI is green.","evidence":{"ciGreen":true},"facts":{"pr":123},"artifacts":[],"missingEvidence":[],"blockers":[]}
 ```
 
+Shell scripts must write this line (and every other `KODY_*` marker) to the
+file named by `$KODY_OUTPUT` — the same pattern as GitHub Actions'
+`$GITHUB_OUTPUT`:
+
+```bash
+echo "KODY_CAPABILITY_RESULT={...}" >> "$KODY_OUTPUT"
+```
+
+Markers echoed to plain stdout are still honored for older scripts but
+deprecated: stdout is forgeable by any untrusted text a script echoes (an
+issue body containing a `KODY_SKIP_AGENT=true` line would be obeyed). When
+`$KODY_OUTPUT` has content, stdout markers are ignored for that script.
+
 Rules:
 
 - Omit `target` when the invoking parent owns the goal or loop context.

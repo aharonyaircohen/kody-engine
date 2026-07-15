@@ -653,9 +653,15 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
           outcomeKind = "stalled"
           errorMessage = `agent stalled: no SDK message in ${Math.round(turnTimeoutMs / 1000)}s`
           // Best-effort iterator cleanup so the SDK can release tool processes.
+          // Raced against a short timer: `iterator.return` awaits the same
+          // stalled SDK internals, so an unbounded await here could wedge the
+          // executor past the watchdog it exists to serve.
           if (typeof iterator.return === "function") {
             try {
-              await iterator.return(undefined)
+              await Promise.race([
+                iterator.return(undefined).catch(() => undefined),
+                new Promise((resolve) => setTimeout(resolve, 10_000).unref()),
+              ])
             } catch {
               /* ignore — we already know we're aborting */
             }

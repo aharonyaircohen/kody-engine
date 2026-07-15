@@ -238,7 +238,11 @@ export function autoDispatch(opts?: {
   // author_association is allowlisted may trigger kody. Unset → anyone.
   if (!associationAllowed(event, opts?.config)) return null
 
-  const body = rawBody.toLowerCase()
+  // Parse the ORIGINAL body — token recognition is case-insensitive per
+  // helper, but arg values and the free-text `why` must keep the operator's
+  // casing (a lowercased `--base Feature/X` checks out a nonexistent branch,
+  // and the agent is told the `why` is the operator's verbatim words).
+  const body = rawBody
   const targetNum = Number(issue?.number ?? 0)
   const isPr = !!issue?.pull_request
   if (!targetNum) return null
@@ -405,7 +409,7 @@ export function autoDispatchTyped(opts?: {
   if (!targetNum) {
     return { kind: "silent", reason: "comment has no associated issue/PR number" }
   }
-  const afterTag = extractAfterTag(rawBody.toLowerCase())
+  const afterTag = extractAfterTag(rawBody)
   const tokenRaw = extractSubcommand(afterTag) ?? ""
   if ((authorLogin === "kody-bot" || authorType === "Bot") && tokenRaw && !POLITE_WORDS.has(tokenRaw)) {
     return {
@@ -576,13 +580,16 @@ function extractAfterTag(body: string): string {
   // to extractSubcommand and trigger a stray "unrecognized command" reply.
   // Callers gate on hasKodyMention first, so this is belt-and-suspenders.
   if (!m || m.index === undefined) return ""
-  const at = body.indexOf("@kody", m.index)
+  // Case-insensitive locate (body may be original-cased; mention may be "@Kody").
+  const at = body.toLowerCase().indexOf("@kody", m.index)
   return body.slice(at + "@kody".length).trim()
 }
 
 function extractSubcommand(afterTag: string): string | null {
-  const match = afterTag.match(/^([a-z][a-z0-9-]{1,40})\b/)
-  return match ? match[1]! : null
+  // Recognize the token case-insensitively but return it lowercased —
+  // aliases and the capability registry are lowercase-keyed.
+  const match = afterTag.match(/^([a-zA-Z][a-zA-Z0-9-]{1,40})\b/)
+  return match ? match[1]!.toLowerCase() : null
 }
 
 /**
@@ -624,7 +631,8 @@ function parseCommentArgs(rest: string, inputs: InputSpec[]): { args: Record<str
 
     if (t.startsWith("--")) {
       const eq = t.indexOf("=")
-      const key = eq >= 0 ? t.slice(2, eq) : t.slice(2)
+      // Flag NAMES match case-insensitively; flag VALUES keep their casing.
+      const key = (eq >= 0 ? t.slice(2, eq) : t.slice(2)).toLowerCase()
       const inlineValue = eq >= 0 ? t.slice(eq + 1) : undefined
       const spec = findInputByFlag(inputs, key)
       if (!spec) {
@@ -645,9 +653,13 @@ function parseCommentArgs(rest: string, inputs: InputSpec[]): { args: Record<str
       continue
     }
 
-    const enumHit = inputs.find((s) => s.type === "enum" && s.values?.includes(t) && args[s.name] === undefined)
+    const tLower = t.toLowerCase()
+    const enumHit = inputs.find(
+      (s) => s.type === "enum" && s.values?.some((v) => v.toLowerCase() === tLower) && args[s.name] === undefined,
+    )
     if (enumHit) {
-      args[enumHit.name] = t
+      // Store the CANONICAL enum value from the spec, not the user's casing.
+      args[enumHit.name] = enumHit.values!.find((v) => v.toLowerCase() === tLower)!
       continue
     }
 
@@ -659,7 +671,7 @@ function parseCommentArgs(rest: string, inputs: InputSpec[]): { args: Record<str
       }
     }
 
-    const boolHit = inputs.find((s) => s.type === "bool" && s.flag === `--${t}` && args[s.name] === undefined)
+    const boolHit = inputs.find((s) => s.type === "bool" && s.flag === `--${tLower}` && args[s.name] === undefined)
     if (boolHit) {
       args[boolHit.name] = true
       continue
