@@ -15,7 +15,7 @@ import type { AgentResult } from "./agent.js"
 import { runAgent } from "./agent.js"
 import { frameAgentIdentity, loadAgentIdentity } from "./agents.js"
 import { parseCapabilityReportsFromText } from "./capabilityReport.js"
-import { parseCapabilityResultsFromText } from "./capabilityResult.js"
+import { type CapabilityResult, parseCapabilityResultsFromText } from "./capabilityResult.js"
 import type { KodyConfig } from "./config.js"
 import { loadConfig, parseProviderModel } from "./config.js"
 import { runContainerLoop } from "./container.js"
@@ -265,6 +265,10 @@ export interface ExecutorOutput {
   }
   /** Internal state snapshot for in-process continuations. */
   taskState?: TaskState
+  /** Neutral capability output exposed to a parent workflow in the same process. */
+  capabilityResults?: CapabilityResult[]
+  /** Durable graph cursor returned by workflow execution. */
+  workflowState?: Job["workflowState"]
 }
 
 export async function runImplementation(profileName: string, input: ExecutorInput): Promise<ExecutorOutput> {
@@ -794,6 +798,9 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       nextJob: ctx.output.nextJob,
       afterNextJob: ctx.output.afterNextJob,
       taskState: ctx.data.taskState as TaskState | undefined,
+      capabilityResults: Array.isArray(ctx.data.capabilityResults)
+        ? (ctx.data.capabilityResults as CapabilityResult[])
+        : undefined,
     })
   } catch (err) {
     // A throwing preflight (or any other escape from the main flow) must

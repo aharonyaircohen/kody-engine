@@ -1028,6 +1028,485 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("follows explicit workflow connections and maps prior facts into the next capability", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-graph-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "graph-pilot", {
+        name: "graph-pilot",
+        action: "graph-pilot",
+        workflow: {
+          startAt: "inspect",
+          steps: [
+            {
+              id: "inspect",
+              capability: "run",
+              target: "issue",
+              next: [
+                { to: "repair", when: { "facts.needsFix": true } },
+                { to: "verify", default: true },
+              ],
+            },
+            {
+              id: "repair",
+              capability: "fix",
+              inputs: { feedback: { from: "facts.feedback" } },
+              next: "verify",
+            },
+            { id: "verify", capability: "review", target: "pr" },
+          ],
+        },
+      })
+      writeWorkflowStages(cwd)
+      process.chdir(cwd)
+      runImplementationChain
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          prUrl: "https://github.com/o/r/pull/99",
+          capabilityResults: [capabilityResult({ needsFix: true, feedback: "repair the failing check" })],
+        })
+        .mockResolvedValueOnce({ exitCode: 0, capabilityResults: [capabilityResult({ repaired: true })] })
+        .mockResolvedValueOnce({ exitCode: 0, capabilityResults: [capabilityResult({ verified: true })] })
+
+      const result = await runJob(
+        { action: "graph-pilot", capability: "graph-pilot", cliArgs: { issue: 42 }, target: 42, flavor: "instant" },
+        { cwd },
+      )
+
+      expect(result).toMatchObject({
+        exitCode: 0,
+        workflowState: {
+          status: "done",
+          facts: { needsFix: true, feedback: "repair the failing check", repaired: true, verified: true },
+        },
+      })
+      expect(runImplementationChain.mock.calls.map((call) => call[0])).toEqual(["run", "fix", "review"])
+      expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({ feedback: "repair the failing check" })
+      expect(runImplementationChain.mock.calls[2]![1].cliArgs).toEqual({ pr: 99 })
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("rejects every unknown workflow capability before executing the first step", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-preflight-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "unsafe-pilot", {
+        name: "unsafe-pilot",
+        action: "unsafe-pilot",
+        workflow: {
+          startAt: "inspect",
+          steps: [
+            { id: "inspect", capability: "run", next: "missing" },
+            { id: "missing", capability: "does-not-exist" },
+          ],
+        },
+      })
+      writeWorkflowStages(cwd)
+      process.chdir(cwd)
+
+      const result = await runJob(
+        { action: "unsafe-pilot", capability: "unsafe-pilot", cliArgs: {}, flavor: "instant" },
+        { cwd },
+      )
+
+      expect(result).toMatchObject({
+        exitCode: 64,
+        reason: expect.stringContaining("unknown capability does-not-exist"),
+        workflowState: { status: "blocked", currentStepId: "inspect" },
+      })
+      expect(runImplementationChain).not.toHaveBeenCalled()
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("preflights every capability in a linear workflow before executing it", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-linear-workflow-preflight-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "unsafe-linear", {
+        name: "unsafe-linear",
+        action: "unsafe-linear",
+        workflow: { steps: ["run", "does-not-exist"] },
+      })
+      writeWorkflowStages(cwd)
+      process.chdir(cwd)
+
+      const result = await runJob(
+        { action: "unsafe-linear", capability: "unsafe-linear", cliArgs: {}, flavor: "instant" },
+        { cwd },
+      )
+
+      expect(result).toMatchObject({
+        exitCode: 64,
+        reason: expect.stringContaining("unknown capability does-not-exist"),
+      })
+      expect(runImplementationChain).not.toHaveBeenCalled()
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    { status: "fail", expectedSteps: ["run", "fix"] },
+    { status: "pass", expectedSteps: ["run", "review"] },
+  ])("routes a $status result through the expected visual branch", async ({ status, expectedSteps }) => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-status-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "status-pilot", {
+        name: "status-pilot",
+        action: "status-pilot",
+        workflow: {
+          startAt: "inspect",
+          steps: [
+            {
+              id: "inspect",
+              capability: "run",
+              next: [
+                { to: "repair", when: { "result.status": "fail" } },
+                { to: "verify", default: true },
+              ],
+            },
+            { id: "repair", capability: "fix" },
+            { id: "verify", capability: "review" },
+          ],
+        },
+      })
+      writeWorkflowStages(cwd)
+      process.chdir(cwd)
+      runImplementationChain
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityResults: [{ ...capabilityResult({}), status }],
+        })
+        .mockResolvedValueOnce({ exitCode: 0, capabilityResults: [capabilityResult({ completed: true })] })
+
+      const result = await runJob(
+        { action: "status-pilot", capability: "status-pilot", cliArgs: {}, flavor: "instant" },
+        { cwd },
+      )
+
+      expect(result.workflowState?.status).toBe("done")
+      expect(runImplementationChain.mock.calls.map((call) => call[0])).toEqual(expectedSteps)
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    {
+      name: "repeats once, then exits when the condition becomes false",
+      results: [true, false],
+      expectedSteps: ["run", "fix", "run", "review"],
+      expectedCounts: { "repair->inspect": 1 },
+    },
+    {
+      name: "takes the fallback without entering the loop",
+      results: [false],
+      expectedSteps: ["run", "review"],
+      expectedCounts: {},
+    },
+  ])("routes a conditional loop correctly when it $name", async ({ results, expectedSteps, expectedCounts }) => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-conditional-loop-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "conditional-loop-pilot", {
+        name: "conditional-loop-pilot",
+        action: "conditional-loop-pilot",
+        workflow: {
+          startAt: "inspect",
+          steps: [
+            {
+              id: "inspect",
+              capability: "run",
+              next: [
+                { to: "repair", when: { "facts.needsFix": true } },
+                { to: "verify", default: true },
+              ],
+            },
+            {
+              id: "repair",
+              capability: "fix",
+              next: [{ to: "inspect", maxIterations: 2 }],
+            },
+            { id: "verify", capability: "review" },
+          ],
+        },
+      })
+      writeWorkflowStages(cwd)
+      process.chdir(cwd)
+      for (const needsFix of results) {
+        runImplementationChain.mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityResults: [capabilityResult({ needsFix })],
+        })
+      }
+      runImplementationChain.mockResolvedValueOnce({
+        exitCode: 0,
+        capabilityResults: [capabilityResult({ verified: true })],
+      })
+
+      const result = await runJob(
+        { action: "conditional-loop-pilot", capability: "conditional-loop-pilot", cliArgs: {}, flavor: "instant" },
+        { cwd },
+      )
+
+      expect(result.workflowState).toMatchObject({ status: "done", transitionCounts: expectedCounts })
+      expect(runImplementationChain.mock.calls.map((call) => call[0])).toEqual(expectedSteps)
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("does not replay a workflow whose persisted state is already done", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-idempotent-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "done-pilot", {
+        name: "done-pilot",
+        action: "done-pilot",
+        workflow: {
+          startAt: "inspect",
+          steps: [{ id: "inspect", capability: "run" }],
+        },
+      })
+      writeWorkflowStages(cwd)
+      process.chdir(cwd)
+      const result = await runJob(
+        {
+          action: "done-pilot",
+          capability: "done-pilot",
+          cliArgs: {},
+          flavor: "instant",
+          workflowState: {
+            status: "done",
+            completedStepIds: ["inspect"],
+            transitionCounts: {},
+            facts: { verified: true },
+            evidence: {},
+            artifacts: [],
+          },
+        },
+        { cwd },
+      )
+
+      expect(result.workflowState).toMatchObject({ status: "done", completedStepIds: ["inspect"] })
+      expect(runImplementationChain).not.toHaveBeenCalled()
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("limits backward workflow connections and takes the default exit", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-loop-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "loop-pilot", {
+        name: "loop-pilot",
+        action: "loop-pilot",
+        workflow: {
+          startAt: "inspect",
+          steps: [
+            {
+              id: "inspect",
+              capability: "run",
+              target: "issue",
+              next: [
+                { to: "repair", when: { "facts.needsFix": true } },
+                { to: "verify", default: true },
+              ],
+            },
+            {
+              id: "repair",
+              capability: "fix",
+              next: [
+                { to: "inspect", maxIterations: 1 },
+                { to: "verify", default: true },
+              ],
+            },
+            { id: "verify", capability: "review", target: "pr" },
+          ],
+        },
+      })
+      writeWorkflowStages(cwd)
+      process.chdir(cwd)
+      runImplementationChain
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          prUrl: "https://github.com/o/r/pull/99",
+          capabilityResults: [capabilityResult({ needsFix: true })],
+        })
+        .mockResolvedValueOnce({ exitCode: 0, capabilityResults: [capabilityResult({ repaired: true })] })
+        .mockResolvedValueOnce({ exitCode: 0, capabilityResults: [capabilityResult({ needsFix: true })] })
+        .mockResolvedValueOnce({ exitCode: 0, capabilityResults: [capabilityResult({ repairedAgain: true })] })
+        .mockResolvedValueOnce({ exitCode: 0, capabilityResults: [capabilityResult({ verified: true })] })
+
+      const result = await runJob(
+        { action: "loop-pilot", capability: "loop-pilot", cliArgs: { issue: 42 }, target: 42, flavor: "instant" },
+        { cwd },
+      )
+
+      expect(result.workflowState).toMatchObject({
+        status: "done",
+        transitionCounts: { "repair->inspect": 1 },
+      })
+      expect(runImplementationChain.mock.calls.map((call) => call[0])).toEqual(["run", "fix", "run", "fix", "review"])
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("resumes a graph workflow from its saved current step and facts", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-resume-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "resume-pilot", {
+        name: "resume-pilot",
+        action: "resume-pilot",
+        workflow: {
+          startAt: "inspect",
+          steps: [
+            { id: "inspect", capability: "run", next: "repair" },
+            {
+              id: "repair",
+              capability: "fix",
+              inputs: { feedback: { from: "facts.feedback" } },
+            },
+          ],
+        },
+      })
+      writeWorkflowStages(cwd)
+      process.chdir(cwd)
+      runImplementationChain.mockResolvedValueOnce({
+        exitCode: 0,
+        capabilityResults: [capabilityResult({ repaired: true })],
+      })
+
+      const result = await runJob(
+        {
+          action: "resume-pilot",
+          capability: "resume-pilot",
+          cliArgs: { issue: 42 },
+          target: 42,
+          flavor: "instant",
+          workflowState: {
+            status: "running",
+            currentStepId: "repair",
+            completedStepIds: ["inspect"],
+            transitionCounts: {},
+            facts: { feedback: "continue here" },
+            evidence: {},
+            artifacts: [],
+          },
+        },
+        { cwd },
+      )
+
+      expect(runImplementationChain).toHaveBeenCalledTimes(1)
+      expect(runImplementationChain.mock.calls[0]![0]).toBe("fix")
+      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({ feedback: "continue here" })
+      expect(result.workflowState).toMatchObject({
+        status: "done",
+        facts: { feedback: "continue here", repaired: true },
+      })
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("returns a clear blocked workflow state when a mapped input is missing", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-missing-input-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "mapping-pilot", {
+        name: "mapping-pilot",
+        action: "mapping-pilot",
+        workflow: {
+          startAt: "repair",
+          steps: [
+            {
+              id: "repair",
+              capability: "fix",
+              inputs: { feedback: { from: "facts.feedback" } },
+            },
+          ],
+        },
+      })
+      writeWorkflowStages(cwd)
+      process.chdir(cwd)
+
+      const result = await runJob(
+        { action: "mapping-pilot", capability: "mapping-pilot", cliArgs: {}, flavor: "instant" },
+        { cwd },
+      )
+
+      expect(result).toMatchObject({
+        exitCode: 64,
+        reason: "workflow step repair needs missing input facts.feedback",
+        workflowState: { status: "blocked", currentStepId: "repair" },
+      })
+      expect(runImplementationChain).not.toHaveBeenCalled()
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("rejects a mapped input that the target capability does not accept", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-invalid-input-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "invalid-mapping-pilot", {
+        name: "invalid-mapping-pilot",
+        action: "invalid-mapping-pilot",
+        workflow: {
+          startAt: "repair",
+          steps: [
+            {
+              id: "repair",
+              capability: "fix",
+              inputs: { unsupported: { from: "facts.feedback" } },
+            },
+          ],
+        },
+      })
+      writeWorkflowStages(cwd)
+      process.chdir(cwd)
+
+      const result = await runJob(
+        {
+          action: "invalid-mapping-pilot",
+          capability: "invalid-mapping-pilot",
+          cliArgs: {},
+          workflowFacts: { feedback: "available" },
+          flavor: "instant",
+        },
+        { cwd },
+      )
+
+      expect(result).toMatchObject({
+        exitCode: 64,
+        reason: expect.stringContaining("does not declare input unsupported"),
+        workflowState: { status: "blocked" },
+      })
+      expect(runImplementationChain).not.toHaveBeenCalled()
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it("stops a workflow when a child capability fails", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-fail-"))
     const originalCwd = process.cwd()
@@ -1114,6 +1593,18 @@ function taskState(type: string, prUrl?: string): Record<string, unknown> {
     artifacts: {},
     jobs: {},
     history: [],
+  }
+}
+
+function capabilityResult(facts: Record<string, unknown>): Record<string, unknown> {
+  return {
+    version: 1,
+    status: "changed",
+    summary: "pilot result",
+    facts,
+    artifacts: [],
+    missingEvidence: [],
+    blockers: [],
   }
 }
 

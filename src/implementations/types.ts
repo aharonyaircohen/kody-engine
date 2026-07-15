@@ -538,6 +538,10 @@ export interface Job {
   cliArgs: Record<string, unknown>
   /** Internal workflow resume context. Not passed to capability CLI args. */
   workflowFacts?: Record<string, unknown>
+  /** Durable execution cursor for a graph-shaped workflow. */
+  workflowState?: WorkflowRunState
+  /** Stable id used to load and persist one workflow execution. */
+  workflowRunId?: string
   /** Evidence this capability run is expected to report, independent of who consumes it. */
   evidence?: string
   /** Run once now ("instant") or on the schedule ("scheduled"). */
@@ -550,4 +554,15 @@ export interface Job {
   report?: ReportPublicationConfig
   /** Internal parent context used by postflights to attach neutral capability output. */
   resultTarget?: CapabilityResultTarget
+}
+
+export interface WorkflowRunState {
+  status: "running" | "blocked" | "failed" | "done"
+  currentStepId?: string
+  completedStepIds: string[]
+  transitionCounts: Record<string, number>
+  facts: Record<string, unknown>
+  evidence: Record<string, boolean>
+  artifacts: Array<{ label: string; url?: string; path?: string }>
+  blocker?: string
 }

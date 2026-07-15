@@ -113,7 +113,7 @@ export function parseCiArgs(argv: string[]): CiArgs {
 }
 
 type RunRequestRoute =
-  | { kind: "action"; action: string; cliArgs: Record<string, unknown> }
+  | { kind: "action"; action: string; cliArgs: Record<string, unknown>; workflowRunId?: string }
   | { kind: "fanout"; force: boolean }
   | { kind: "ignore" }
   | { kind: "error"; error: string }
@@ -140,7 +140,11 @@ function routeRunRequest(request: RunRequest): RunRequestRoute {
     if (intent !== "run" && intent !== "tick") {
       return { kind: "error", error: `workflow target does not support intent '${intent}'` }
     }
-    return { kind: "action", action: target.id, cliArgs: {} }
+    const workflowRunId =
+      typeof request.input?.runId === "string" && /^[a-z0-9][a-z0-9_-]{0,79}$/.test(request.input.runId)
+        ? request.input.runId
+        : undefined
+    return { kind: "action", action: target.id, cliArgs: {}, ...(workflowRunId ? { workflowRunId } : {}) }
   }
 
   return { kind: "error", error: "unsupported run request target" }
@@ -409,6 +413,7 @@ export async function runCi(argv: string[]): Promise<number> {
   let manualWorkflowDispatch = false
   let forceRunAction: string | null = null
   let forceRunCliArgs: Record<string, unknown> = {}
+  let forceWorkflowRunId: string | undefined
   let runRequestFanOut = false
   let runRequestFanOutForce = false
   const parsedRunRequest = readRunRequestFromEnv()
@@ -431,6 +436,7 @@ export async function runCi(argv: string[]): Promise<number> {
     } else if (route.kind === "action") {
       forceRunAction = route.action
       forceRunCliArgs = route.cliArgs
+      forceWorkflowRunId = route.workflowRunId
     }
   }
   const envForceAction = (process.env.KODY_FORCE_ACTION ?? "").trim()
@@ -547,6 +553,7 @@ export async function runCi(argv: string[]): Promise<number> {
         capability: route.capability,
         workflow: route.workflow,
         implementation: route.implementation,
+        workflowRunId: forceWorkflowRunId,
         cliArgs: { ...route.cliArgs, ...forceRunCliArgs },
         flavor: "instant",
         force: true,

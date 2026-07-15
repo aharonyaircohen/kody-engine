@@ -29,9 +29,22 @@ export interface CapabilityFolderConfig {
 
 export interface CapabilityWorkflowConfig {
   steps: CapabilityWorkflowStepConfig[]
+  startAt?: string
+}
+
+export interface CapabilityWorkflowInputConfig {
+  from: string
+}
+
+export interface CapabilityWorkflowTransitionConfig {
+  to: string
+  when?: Record<string, unknown>
+  default?: boolean
+  maxIterations?: number
 }
 
 export interface CapabilityWorkflowStepConfig {
+  id?: string
   capability: string
   action?: string
   implementation?: string
@@ -41,6 +54,8 @@ export interface CapabilityWorkflowStepConfig {
   reason?: string
   agent?: string
   cliArgs?: Record<string, unknown>
+  inputs?: Record<string, CapabilityWorkflowInputConfig>
+  next?: CapabilityWorkflowTransitionConfig[]
   runWhen?: Record<string, unknown>
   continueOn?: string[]
   saveReport?: boolean
@@ -192,7 +207,15 @@ export function parseCapabilityWorkflow(value: unknown): CapabilityWorkflowConfi
       ? (value as { steps: unknown[] }).steps
       : []
   const steps = stepsRaw.map(parseWorkflowStep).filter((step): step is CapabilityWorkflowStepConfig => step !== null)
-  return steps.length > 0 ? { steps } : undefined
+  if (steps.length === 0) return undefined
+  const startAt =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? stringField((value as Record<string, unknown>).startAt)
+      : undefined
+  return {
+    steps,
+    ...(startAt && isSafeSlug(startAt) ? { startAt } : {}),
+  }
 }
 
 function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null {
@@ -205,6 +228,7 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
   const capability = stringField(raw.capability ?? raw.action)
   if (!capability || !isSafeSlug(capability)) return null
   const implementation = stringField(raw.implementation)
+  const id = stringField(raw.id)
   const action = stringField(raw.action)
   const evidence = stringField(raw.evidence)
   const agent = stringField(raw.agent)
@@ -212,9 +236,12 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
   const target = stringField(raw.target)
   const targetFact = stringField(raw.targetFact ?? raw.target_fact)
   const cliArgs = raw.cliArgs
+  const inputs = parseWorkflowInputs(raw.inputs)
+  const next = parseWorkflowTransitions(raw.next)
   const report = parseReportPublication(raw.report)
   return {
     capability,
+    ...(id && isSafeSlug(id) ? { id } : {}),
     ...(action && isSafeSlug(action) ? { action } : {}),
     ...(implementation && isSafeSlug(implementation) ? { implementation } : {}),
     ...(evidence ? { evidence } : {}),
@@ -225,6 +252,8 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
     ...(cliArgs && typeof cliArgs === "object" && !Array.isArray(cliArgs)
       ? { cliArgs: cliArgs as Record<string, unknown> }
       : {}),
+    ...(inputs ? { inputs } : {}),
+    ...(next ? { next } : {}),
     ...(isPlainObject(raw.runWhen) ? { runWhen: raw.runWhen as Record<string, unknown> } : {}),
     ...(stringList(raw.continueOn ?? raw.continue_on).length > 0
       ? { continueOn: stringList(raw.continueOn ?? raw.continue_on) }
@@ -232,6 +261,44 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
     ...(raw.saveReport === true ? { saveReport: true } : {}),
     ...(report ? { report } : {}),
   }
+}
+
+function parseWorkflowInputs(value: unknown): Record<string, CapabilityWorkflowInputConfig> | undefined {
+  if (!isPlainObject(value)) return undefined
+  const inputs: Record<string, CapabilityWorkflowInputConfig> = {}
+  for (const [name, raw] of Object.entries(value)) {
+    if (!isSafeSlug(name) || !isPlainObject(raw)) continue
+    const from = stringField(raw.from)
+    if (!from) continue
+    inputs[name] = { from }
+  }
+  return Object.keys(inputs).length > 0 ? inputs : undefined
+}
+
+function parseWorkflowTransitions(value: unknown): CapabilityWorkflowTransitionConfig[] | undefined {
+  const rawTransitions = Array.isArray(value) ? value : value === undefined ? [] : [value]
+  const transitions = rawTransitions
+    .map((raw): CapabilityWorkflowTransitionConfig | null => {
+      if (typeof raw === "string") {
+        const to = raw.trim()
+        return isSafeSlug(to) ? { to } : null
+      }
+      if (!isPlainObject(raw)) return null
+      const to = stringField(raw.to)
+      if (!to || !isSafeSlug(to)) return null
+      const maxIterations =
+        typeof raw.maxIterations === "number" && Number.isInteger(raw.maxIterations) && raw.maxIterations > 0
+          ? raw.maxIterations
+          : undefined
+      return {
+        to,
+        ...(isPlainObject(raw.when) ? { when: raw.when as Record<string, unknown> } : {}),
+        ...(raw.default === true ? { default: true } : {}),
+        ...(maxIterations ? { maxIterations } : {}),
+      }
+    })
+    .filter((transition): transition is CapabilityWorkflowTransitionConfig => transition !== null)
+  return transitions.length > 0 ? transitions : undefined
 }
 
 function parseReportPublication(value: unknown): ReportPublicationConfig | undefined {

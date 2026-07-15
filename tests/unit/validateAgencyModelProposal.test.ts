@@ -277,10 +277,106 @@ describe("validateModelBundle", () => {
             steps: [{ capability: "inspect", reason: "inspect first" }],
           }),
         },
+        { path: "capabilities/docs-proof-workflow/capability.md", content: "# Docs Proof Workflow\n" },
       ],
     })
 
     expect(validateModelBundle(workflow, "workflow")).toEqual([])
+  })
+
+  it("rejects workflow profiles without a capability body", () => {
+    const workflow = bundle({
+      model: {
+        kind: "workflow",
+        slug: "docs-proof-workflow",
+        docsUsed: ["docs/jobs-model.md", "docs/capabilities.md"],
+        steps: [{ capability: "inspect", reason: "inspect first" }],
+      },
+      files: [
+        {
+          path: "capabilities/docs-proof-workflow/profile.json",
+          content: JSON.stringify({ name: "docs-proof-workflow", steps: [{ capability: "inspect" }] }),
+        },
+      ],
+    })
+
+    expect(validateModelBundle(workflow, "workflow")).toContain(
+      "missing workflow capability body: capabilities/docs-proof-workflow/capability.md",
+    )
+  })
+
+  it("accepts a complete agent-created graph with a bounded loop", () => {
+    const steps = [
+      {
+        id: "inspect",
+        capability: "inspect",
+        next: [
+          { to: "repair", when: { "facts.needsFix": true } },
+          { to: "publish", default: true },
+        ],
+      },
+      { id: "repair", capability: "repair", next: [{ to: "inspect", maxIterations: 3 }] },
+      { id: "publish", capability: "publish" },
+    ]
+    const workflow = bundle({
+      model: {
+        kind: "workflow",
+        slug: "safe-workflow",
+        docsUsed: ["docs/jobs-model.md", "docs/capabilities.md"],
+        steps,
+      },
+      files: [
+        {
+          path: "capabilities/safe-workflow/profile.json",
+          content: JSON.stringify({ name: "safe-workflow", workflow: { startAt: "inspect", steps } }),
+        },
+        { path: "capabilities/safe-workflow/capability.md", content: "# Safe Workflow\n" },
+      ],
+    })
+
+    expect(validateModelBundle(workflow, "workflow")).toEqual([])
+  })
+
+  it.each([
+    {
+      name: "a missing destination",
+      steps: [{ id: "inspect", capability: "inspect", next: "missing" }],
+      failure: "connects to missing step",
+    },
+    {
+      name: "an unbounded loop",
+      steps: [
+        { id: "inspect", capability: "inspect", next: "repair" },
+        { id: "repair", capability: "repair", next: "inspect" },
+      ],
+      failure: "must set maxIterations",
+    },
+    {
+      name: "a conditional branch without an otherwise path",
+      steps: [
+        { id: "inspect", capability: "inspect", next: [{ to: "repair", when: { "facts.needsFix": true } }] },
+        { id: "repair", capability: "repair" },
+      ],
+      failure: "needs one default connection",
+    },
+  ])("rejects a workflow proposal with $name", ({ steps, failure }) => {
+    const workflow = bundle({
+      model: {
+        kind: "workflow",
+        slug: "unsafe-workflow",
+        docsUsed: ["docs/jobs-model.md", "docs/capabilities.md"],
+        steps,
+      },
+      files: [
+        {
+          path: "capabilities/unsafe-workflow/profile.json",
+          content: JSON.stringify({ name: "unsafe-workflow", workflow: { steps } }),
+        },
+        { path: "capabilities/unsafe-workflow/capability.md", content: "# Unsafe Workflow\n" },
+      ],
+    })
+
+    expect(validateModelBundle(workflow, "workflow").join("; ")).toContain(failure)
   })
 
   it("rejects workflow models that pretend capabilityKind can be workflow", () => {
@@ -300,6 +396,7 @@ describe("validateModelBundle", () => {
             workflow: { steps: [{ capability: "inspect", reason: "inspect first" }] },
           }),
         },
+        { path: "capabilities/docs-proof-workflow/capability.md", content: "# Docs Proof Workflow\n" },
       ],
     })
 
@@ -323,6 +420,7 @@ describe("validateModelBundle", () => {
             workflow: { steps: [{ capability: "inspect", reason: "inspect first" }] },
           }),
         },
+        { path: "capabilities/docs-proof-workflow/capability.md", content: "# Docs Proof Workflow\n" },
       ],
     })
 

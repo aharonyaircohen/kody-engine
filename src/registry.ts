@@ -260,8 +260,11 @@ export function resolveCapabilityFolder(
 }
 
 /** Read the implementation profile inputs for a public capability action. */
-export function getCapabilityActionInputs(action: string): InputSpec[] | null {
-  const resolved = resolveCapabilityAction(action)
+export function getCapabilityActionInputs(
+  action: string,
+  projectCapabilitiesRoot: string = getProjectCapabilitiesRoot(),
+): InputSpec[] | null {
+  const resolved = resolveCapabilityAction(action, projectCapabilitiesRoot)
   if (!resolved) return null
   return getProfileInputs(resolved.implementation)
 }

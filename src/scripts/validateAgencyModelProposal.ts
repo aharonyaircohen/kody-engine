@@ -1,4 +1,8 @@
+import * as path from "node:path"
 import type { PostflightScript, ScriptArgs } from "../implementations/types.js"
+import { listCapabilityFolderSlugs } from "../capabilityFolders.js"
+import { getCapabilityActionInputs, getCapabilityRoots } from "../registry.js"
+import { formatWorkflowValidationIssues, validateWorkflow } from "../workflowValidation.js"
 import { parseAgencyModelProposal } from "./openAgencyModelReviewPr.js"
 
 type ModelKind = "intent" | "operation" | "agent" | "capability" | "goal" | "agentLoop" | "workflow"
@@ -23,7 +27,9 @@ export const validateAgencyModelProposal: PostflightScript = async (ctx, _profil
   const raw = String(ctx.data.prSummary ?? "")
   const bundle = parseAgencyModelProposal(raw) as ReturnType<typeof parseAgencyModelProposal> & ModelBundle
   const expectedKind = readExpectedModelKind(args)
-  const failures = validateModelBundle(bundle, expectedKind)
+  const failures = validateModelBundle(bundle, expectedKind, {
+    capabilityRoot: path.join(ctx.cwd, ".kody", "capabilities"),
+  })
   if (failures.length > 0) {
     throw new Error(`validateAgencyModelProposal: ${failures.join("; ")}`)
   }
@@ -32,10 +38,11 @@ export const validateAgencyModelProposal: PostflightScript = async (ctx, _profil
 export function validateModelBundle(
   bundle: ReturnType<typeof parseAgencyModelProposal> & ModelBundle,
   expectedKind: ModelKind,
+  options: { capabilityRoot?: string } = {},
 ): string[] {
   const failures: string[] = []
 
-  validateOneModel(bundle.model, bundle.files, "model", true, failures, expectedKind)
+  validateOneModel(bundle.model, bundle.files, "model", true, failures, expectedKind, options)
   return failures
 }
 
@@ -54,6 +61,7 @@ function validateOneModel(
   strictSingleModel: boolean,
   failures: string[],
   expectedKind?: ModelKind,
+  options: { capabilityRoot?: string } = {},
 ): void {
   if (!rawModel || typeof rawModel !== "object" || Array.isArray(rawModel)) {
     failures.push(`${label} must be an object`)
@@ -75,7 +83,7 @@ function validateOneModel(
     for (const doc of REQUIRED_DOCS[kind]) {
       if (!docsUsed.includes(doc)) failures.push(`${label} docsUsed missing ${doc}`)
     }
-    validateFilesForKind(kind, slug, files, strictSingleModel, failures)
+    validateFilesForKind(kind, slug, files, strictSingleModel, failures, options)
     validateModelShape(kind, model, files, slug, failures)
   }
 }
@@ -86,6 +94,7 @@ function validateFilesForKind(
   files: Array<{ path: string; content: string }>,
   strictSingleModel: boolean,
   failures: string[],
+  options: { capabilityRoot?: string },
 ): void {
   const paths = files.map((file) => normalizeBundlePath(file.path))
   if (paths.some((filePath) => filePath === "implementations" || filePath.startsWith("implementations/"))) {
@@ -140,6 +149,7 @@ function validateFilesForKind(
 
   if (kind === "workflow") {
     requirePath(paths, `capabilities/${slug}/profile.json`, "workflow capability profile", failures)
+    requirePath(paths, `capabilities/${slug}/capability.md`, "workflow capability body", failures)
     const profile = parseJsonFile(files, `capabilities/${slug}/profile.json`, failures)
     if (profile) {
       if (profile.capabilityKind !== undefined) {
@@ -149,6 +159,34 @@ function validateFilesForKind(
       const hasTopLevelSteps = Array.isArray(profile.steps) && profile.steps.length > 0
       if (!hasWorkflowObject && !hasTopLevelSteps) {
         failures.push("workflow profile must include workflow object or top-level steps")
+      } else {
+        const workflow = hasWorkflowObject
+          ? profile.workflow
+          : { steps: profile.steps, ...(profile.startAt !== undefined ? { startAt: profile.startAt } : {}) }
+        const known = options.capabilityRoot
+          ? getCapabilityRoots(options.capabilityRoot).flatMap((root) => listCapabilityFolderSlugs(root))
+          : []
+        const uniqueKnown = [...new Set(known)]
+        const capabilityInputs = new Map<string, Set<string>>()
+        if (options.capabilityRoot) {
+          for (const capability of uniqueKnown) {
+            const inputs = getCapabilityActionInputs(capability, options.capabilityRoot)
+            if (inputs) {
+              capabilityInputs.set(
+                capability,
+                new Set(inputs.flatMap((input) => [input.name, input.flag.replace(/^--/, "")])),
+              )
+            }
+          }
+        }
+        failures.push(
+          ...formatWorkflowValidationIssues(
+            validateWorkflow(workflow, {
+              ...(uniqueKnown.length > 0 ? { knownCapabilities: new Set(uniqueKnown) } : {}),
+              ...(capabilityInputs.size > 0 ? { capabilityInputs } : {}),
+            }),
+          ),
+        )
       }
     }
   }

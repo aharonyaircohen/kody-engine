@@ -137,6 +137,34 @@ describe("kody-cli manual goal dispatch", () => {
     })
   })
 
+  it("passes a workflow run id from the runner request into durable workflow execution", async () => {
+    const dir = tmpDir()
+    writeConfig(dir)
+    previousEnv.KODY_RUN_REQUEST_JSON = process.env.KODY_RUN_REQUEST_JSON
+    process.env.KODY_RUN_REQUEST_JSON = JSON.stringify({
+      target: { type: "workflow", id: "pilot-flow" },
+      intent: "run",
+      source: "dashboard",
+      input: { runId: "pilot-run-1" },
+    })
+    mocks.readWorkflowDefinition.mockReturnValue({
+      version: 1,
+      name: "Pilot flow",
+      capabilities: ["inspect"],
+    })
+
+    await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
+
+    expect(mocks.runJob).toHaveBeenCalledTimes(1)
+    expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
+      workflow: "pilot-flow",
+      workflowRunId: "pilot-run-1",
+      cliArgs: {},
+      flavor: "instant",
+      force: true,
+    })
+  })
+
   it("keeps legacy env action/message as a compatibility fallback", async () => {
     const dir = tmpDir()
     writeConfig(dir)
