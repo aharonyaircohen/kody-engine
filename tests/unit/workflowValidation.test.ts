@@ -27,6 +27,18 @@ describe("validateWorkflow", () => {
     ).toEqual([])
   })
 
+  it("accepts documented camelCase step ids in graph workflows", () => {
+    expect(
+      validateWorkflow({
+        startAt: "healthCheck",
+        steps: [
+          { id: "healthCheck", capability: "inspect", next: "finish" },
+          { id: "finish", capability: "publish" },
+        ],
+      }),
+    ).toEqual([])
+  })
+
   it.each([
     [{}, "steps_required"],
     [{ steps: [] }, "steps_required"],

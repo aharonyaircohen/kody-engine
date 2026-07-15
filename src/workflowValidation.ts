@@ -1,4 +1,5 @@
 const SAFE_NAME = /^[a-z][a-z0-9-]*$/
+const SAFE_STEP_ID = /^[A-Za-z][A-Za-z0-9_-]*$/
 const SAFE_DATA_PATH = /^(facts|evidence|artifacts|result|workflow|lastOutcome)(?:\.[A-Za-z_][A-Za-z0-9_-]*)+$/
 
 export interface WorkflowValidationIssue {
@@ -89,7 +90,7 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
 
     if (graphMode) {
       const id = text(step.id)
-      if (!id || !SAFE_NAME.test(id)) {
+      if (!id || !SAFE_STEP_ID.test(id)) {
         issue(issues, "invalid_step_id", `${base}.id`, "graph workflow steps must each have a valid id")
       } else {
         ids.push(id)
