@@ -19,6 +19,7 @@ should inspect, decide, report, or dispatch those store-backed capabilities.
 The canonical model is:
 
 - **Intent = why** — company direction, optional deeper context, priority, posture, scope, and success signals.
+- **Operation = responsibility** — one durable agency responsibility, its boundaries, linked Intents, and accountable Goals and Loops.
 - **Goal = what** — durable outcome state with destination evidence, route, facts, and blockers. It chooses
   the next missing evidence and dispatches the right capability until done or
   blocked.

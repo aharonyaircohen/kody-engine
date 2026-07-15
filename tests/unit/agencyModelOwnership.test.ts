@@ -6,6 +6,8 @@ import { allScriptNames } from "../../src/scripts/index.js"
 
 const modelActions = [
   "agent-factory",
+  "intent-creator",
+  "operation-creator",
   "agent-creator",
   "capability-creator",
   "goal-creator",

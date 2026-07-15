@@ -56,6 +56,186 @@ function bundle(overrides: Record<string, unknown> = {}) {
 }
 
 describe("validateModelBundle", () => {
+  it("accepts a review-first company Intent bundle", () => {
+    const intent = bundle({
+      model: {
+        kind: "intent",
+        slug: "reliable-releases",
+        docsUsed: ["docs/intents.md", "docs/engine-company.md"],
+        direction: "Ship reliable releases without slowing routine delivery.",
+        priority: 10,
+        scope: { repos: ["owner/repo"], areas: ["release"] },
+        principles: ["Evidence before production"],
+        successMeasures: ["production deployment verified"],
+        policy: { automation: { authority: "full-auto", requiresHumanFor: ["production"] } },
+        status: "paused",
+        doesNotOwn: ["operations", "goals", "loops", "capability implementation"],
+      },
+      files: [
+        {
+          path: "intents/reliable-releases/intent.json",
+          content: JSON.stringify({
+            version: 1,
+            id: "reliable-releases",
+            status: "paused",
+            for: "Ship reliable releases without slowing routine delivery.",
+            priority: 10,
+            scope: { repos: ["owner/repo"], areas: ["release"] },
+            principles: ["Evidence before production"],
+            metrics: ["production deployment verified"],
+            policy: { automation: { authority: "full-auto", requiresHumanFor: ["production"] } },
+          }),
+        },
+      ],
+    })
+
+    expect(validateModelBundle(intent, "intent")).toEqual([])
+  })
+
+  it("accepts a proposed Operation bundle", () => {
+    const operation = bundle({
+      model: {
+        kind: "operation",
+        slug: "release-operations",
+        docsUsed: ["docs/operations.md", "docs/engine-company.md"],
+        responsibility: "Own reliable release outcomes.",
+        doesNotOwn: ["company direction", "capability implementation", "runtime operation"],
+        intentIds: ["reliable-releases"],
+        goals: ["web-release"],
+        loops: ["daily-web-release-loop"],
+        status: "proposed",
+      },
+      files: [
+        {
+          path: "operations/release-operations/operation.json",
+          content: JSON.stringify({
+            version: 1,
+            id: "release-operations",
+            name: "Release Operations",
+            responsibility: "Own reliable release outcomes.",
+            doesNotOwn: ["company direction", "capability implementation", "runtime operation"],
+            intentIds: ["reliable-releases"],
+            goals: ["web-release"],
+            loops: ["daily-web-release-loop"],
+            status: "proposed",
+          }),
+        },
+      ],
+    })
+
+    expect(validateModelBundle(operation, "operation")).toEqual([])
+  })
+
+  it("accepts an unprovisioned Operation proposal before Goals or Loops exist", () => {
+    const operation = bundle({
+      model: {
+        kind: "operation",
+        slug: "release-operations",
+        docsUsed: ["docs/operations.md", "docs/engine-company.md"],
+        responsibility: "Own reliable release outcomes.",
+        doesNotOwn: ["company direction", "capability implementation", "runtime operation"],
+        intentIds: ["reliable-releases"],
+        goals: [],
+        loops: [],
+        status: "proposed",
+      },
+      files: [
+        {
+          path: "operations/release-operations/operation.json",
+          content: JSON.stringify({
+            version: 1,
+            id: "release-operations",
+            name: "Release Operations",
+            responsibility: "Own reliable release outcomes.",
+            doesNotOwn: ["company direction", "capability implementation", "runtime operation"],
+            intentIds: ["reliable-releases"],
+            goals: [],
+            loops: [],
+            status: "proposed",
+          }),
+        },
+      ],
+    })
+
+    expect(validateModelBundle(operation, "operation")).toEqual([])
+  })
+
+  it("rejects creators that activate Intent or Operation proposals", () => {
+    const intent = bundle({
+      model: {
+        kind: "intent",
+        slug: "reliable-releases",
+        docsUsed: ["docs/intents.md", "docs/engine-company.md"],
+        direction: "Ship reliable releases.",
+        priority: 10,
+        scope: { repos: [], areas: ["release"] },
+        principles: ["Evidence first"],
+        successMeasures: ["release verified"],
+        policy: {},
+        status: "active",
+        doesNotOwn: ["operations", "goals", "loops", "capability implementation"],
+      },
+      files: [
+        {
+          path: "intents/reliable-releases/intent.json",
+          content: JSON.stringify({ version: 1, id: "reliable-releases", status: "active" }),
+        },
+      ],
+    })
+
+    expect(validateModelBundle(intent, "intent")).toContain("intent proposal status must be paused")
+  })
+
+  it("rejects an incomplete Intent file even when the model summary is complete", () => {
+    const intent = bundle({
+      model: {
+        kind: "intent",
+        slug: "reliable-releases",
+        docsUsed: ["docs/intents.md", "docs/engine-company.md"],
+        direction: "Ship reliable releases.",
+        priority: 10,
+        scope: { repos: [], areas: ["release"] },
+        principles: ["Evidence first"],
+        successMeasures: ["release verified"],
+        policy: { automation: {} },
+        status: "paused",
+        doesNotOwn: ["operations", "goals", "loops", "capability implementation"],
+      },
+      files: [
+        {
+          path: "intents/reliable-releases/intent.json",
+          content: JSON.stringify({ version: 1, id: "reliable-releases", status: "paused" }),
+        },
+      ],
+    })
+
+    expect(validateModelBundle(intent, "intent")).toContain("intent file must declare direction")
+  })
+
+  it("rejects an incomplete Operation file even when the model summary is complete", () => {
+    const operation = bundle({
+      model: {
+        kind: "operation",
+        slug: "release-operations",
+        docsUsed: ["docs/operations.md", "docs/engine-company.md"],
+        responsibility: "Own reliable release outcomes.",
+        doesNotOwn: ["company direction"],
+        intentIds: ["reliable-releases"],
+        goals: ["web-release"],
+        loops: [],
+        status: "proposed",
+      },
+      files: [
+        {
+          path: "operations/release-operations/operation.json",
+          content: JSON.stringify({ version: 1, id: "release-operations", status: "proposed" }),
+        },
+      ],
+    })
+
+    expect(validateModelBundle(operation, "operation")).toContain("operation file must declare responsibility")
+  })
+
   it("accepts a focused capability creator bundle", () => {
     expect(validateModelBundle(bundle(), "capability")).toEqual([])
   })
