@@ -39,6 +39,23 @@ describe("validateWorkflow", () => {
     ).toEqual([])
   })
 
+  it("accepts camelCase targets for bounded graph loops", () => {
+    expect(
+      validateWorkflow({
+        startAt: "healthCheck",
+        steps: [
+          { id: "healthCheck", capability: "inspect", next: "repair" },
+          {
+            id: "repair",
+            capability: "inspect",
+            next: [{ to: "healthCheck", maxIterations: 1 }, { to: "finish", default: true }],
+          },
+          { id: "finish", capability: "publish" },
+        ],
+      }),
+    ).toEqual([])
+  })
+
   it.each([
     [{}, "steps_required"],
     [{ steps: [] }, "steps_required"],
