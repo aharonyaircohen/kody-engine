@@ -214,7 +214,7 @@ export function parseCapabilityWorkflow(value: unknown): CapabilityWorkflowConfi
       : undefined
   return {
     steps,
-    ...(startAt && isSafeSlug(startAt) ? { startAt } : {}),
+    ...(startAt && isSafeStepId(startAt) ? { startAt } : {}),
   }
 }
 
@@ -241,7 +241,7 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
   const report = parseReportPublication(raw.report)
   return {
     capability,
-    ...(id && isSafeSlug(id) ? { id } : {}),
+    ...(id && isSafeStepId(id) ? { id } : {}),
     ...(action && isSafeSlug(action) ? { action } : {}),
     ...(implementation && isSafeSlug(implementation) ? { implementation } : {}),
     ...(evidence ? { evidence } : {}),
@@ -281,11 +281,11 @@ function parseWorkflowTransitions(value: unknown): CapabilityWorkflowTransitionC
     .map((raw): CapabilityWorkflowTransitionConfig | null => {
       if (typeof raw === "string") {
         const to = raw.trim()
-        return isSafeSlug(to) ? { to } : null
+        return isSafeStepId(to) ? { to } : null
       }
       if (!isPlainObject(raw)) return null
       const to = stringField(raw.to)
-      if (!to || !isSafeSlug(to)) return null
+      if (!to || !isSafeStepId(to)) return null
       const maxIterations =
         typeof raw.maxIterations === "number" && Number.isInteger(raw.maxIterations) && raw.maxIterations > 0
           ? raw.maxIterations
@@ -338,4 +338,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function isSafeSlug(value: string): boolean {
   return /^[a-z][a-z0-9-]*$/.test(value) && !value.includes("..")
+}
+
+function isSafeStepId(value: string): boolean {
+  return /^[A-Za-z][A-Za-z0-9_-]*$/.test(value) && !value.includes("..")
 }
