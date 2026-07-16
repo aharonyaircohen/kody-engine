@@ -184,6 +184,7 @@ const CONSUMER_LIBRARY_SCRIPTS: Record<string, string> = {
   planTaskJobs: "task-jobs",
   postPlanComment: "plan",
   postResearchComment: "research",
+  prepareBrowserAuth: "qa-engineer secure browser session bootstrap",
   promoteQaGoal: "qa-goal",
   recordClassification: "classify",
   resolveFlow: "resolve",

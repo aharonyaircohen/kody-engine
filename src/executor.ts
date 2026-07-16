@@ -32,6 +32,7 @@ import {
   statusFromExitCode,
   upsertRunIndexRowBestEffort,
 } from "./runIndex.js"
+import { runRuntimeCleanup } from "./runtimeCleanup.js"
 import { agentRunDir } from "./runtimePaths.js"
 import { shouldEvaluateAgencyBoundaries } from "./scripts/evaluateAgencyBoundaries.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
@@ -810,6 +811,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
     const msg = err instanceof Error ? err.message : String(err)
     return finishAndEnd({ exitCode: 99, reason: ctx.output.reason ?? msg })
   } finally {
+    runRuntimeCleanup(ctx)
     // Clear any kody:* lifecycle labels stamped by `setLifecycleLabel`
     // preflight entries. Runs on every exit path (normal completion, hard
     // preflight bail, thrown exception) so labels never strand a PR/issue

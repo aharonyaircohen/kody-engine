@@ -25,7 +25,8 @@ import { prepareAttachments } from "./attachments.js"
 import type { ChatEvent, EventSink } from "./events.js"
 import { makeRunId } from "./events.js"
 import type { ChatTurn } from "./session.js"
-import { appendTurn, readSession } from "./session.js"
+import type { SessionStore } from "./session-store.js"
+import { createSessionStore } from "./session-store.js"
 
 export const CHAT_SYSTEM_PROMPT = [
   "You are Kody, an AI assistant for the Kody Operations Dashboard. Reply to the",
@@ -238,6 +239,11 @@ export interface ChatTurnOptions {
   fetchImpl?: typeof fetch
   /** Configured external state repo for durable task artifacts. */
   stateConfig?: StateRepoConfig | null
+  /**
+   * Transcript store. Defaults to Convex when CONVEX_URL is configured,
+   * else the legacy session JSONL file (see session-store.ts).
+   */
+  store?: SessionStore
 }
 
 export interface ChatTurnResult {
@@ -247,7 +253,9 @@ export interface ChatTurnResult {
 }
 
 export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult> {
-  const turns = readSession(opts.sessionFile)
+  const store =
+    opts.store ?? createSessionStore({ sessionId: opts.sessionId, sessionFile: opts.sessionFile })
+  const turns = await store.readTurns()
   if (turns.length === 0) {
     const error = "session file is empty — nothing to reply to"
     await emit(opts.sink, "chat.error", opts.sessionId, "error", { error })
@@ -328,7 +336,7 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
       opts,
       turns: promptTurns,
       systemPrompt,
-      sessionFile: opts.sessionFile,
+      store,
     })
   }
 
@@ -426,7 +434,7 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   }
   const now = new Date().toISOString()
 
-  appendTurn(opts.sessionFile, {
+  await store.appendTurn({
     role: "assistant",
     content: reply,
     timestamp: now,
@@ -474,9 +482,9 @@ async function runOpenAIChatTurn(args: {
   opts: ChatTurnOptions
   turns: ChatTurn[]
   systemPrompt: string
-  sessionFile: string
+  store: SessionStore
 }): Promise<ChatTurnResult> {
-  const { opts, turns, systemPrompt, sessionFile } = args
+  const { opts, turns, systemPrompt, store } = args
   const doFetch = opts.fetchImpl ?? fetch
   const url = `${opts.litellmUrl!.replace(/\/+$/, "")}/v1/chat/completions`
   try {
@@ -517,7 +525,7 @@ async function runOpenAIChatTurn(args: {
     }
 
     const now = new Date().toISOString()
-    appendTurn(sessionFile, {
+    await store.appendTurn({
       role: "assistant",
       content: reply,
       timestamp: now,

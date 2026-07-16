@@ -21,8 +21,10 @@ import { makeRunId } from "../events.js"
 import { waitForNextUserMessage } from "../inbox.js"
 import type { ChatTurnResult } from "../loop.js"
 import { runChatTurn } from "../loop.js"
-import type { SessionMeta } from "../session.js"
-import { readSession, sessionFilePath } from "../session.js"
+import type { ChatTurn, SessionMeta } from "../session.js"
+import { sessionFilePath } from "../session.js"
+import type { SessionStore } from "../session-store.js"
+import { createSessionStore } from "../session-store.js"
 import { persistChatFilesToState, syncChatSessionFromState } from "../state-sync.js"
 
 const DEFAULT_IDLE_EXIT_MS = 5 * 60_000 // 5 minutes
@@ -46,6 +48,8 @@ export interface InteractiveModeOptions {
   stateConfig?: StateRepoConfig | null
   /** Test seam — override poll interval (default 30s). */
   pollIntervalMs?: number
+  /** Transcript store override (tests). Defaults per session-store.ts. */
+  store?: SessionStore
   /**
    * Thinking level. Forwarded to every `runChatTurn` call inside the
    * loop so each turn gets the same thinking budget. Unset / `"off"`
@@ -62,6 +66,7 @@ export interface InteractiveModeResult {
 
 export async function runInteractiveMode(opts: InteractiveModeOptions): Promise<InteractiveModeResult> {
   const sessionFile = sessionFilePath(opts.cwd, opts.sessionId)
+  const store = opts.store ?? createSessionStore({ sessionId: opts.sessionId, sessionFile })
   const idleExitMs = opts.meta.idleExitMs ?? DEFAULT_IDLE_EXIT_MS
   const hardCapMs = opts.meta.hardCapMs ?? DEFAULT_HARD_CAP_MS
   const startedAt = Date.now()
@@ -103,10 +108,11 @@ export async function runInteractiveMode(opts: InteractiveModeOptions): Promise<
   let turnsCompleted = 0
 
   while (true) {
-    if (opts.stateConfig && !opts.skipGit) {
+    // Convex store: user turns arrive via the Convex query, no git sync.
+    if (store.backend !== "convex" && opts.stateConfig && !opts.skipGit) {
       syncChatSessionFromState(opts.stateConfig, opts.cwd, opts.sessionId)
     }
-    const turns = readSession(sessionFile)
+    const turns = await store.readTurns()
     const pendingIdx = findNextUserTurn(turns, watermark)
 
     if (pendingIdx === -1) {
@@ -118,11 +124,13 @@ export async function runInteractiveMode(opts: InteractiveModeOptions): Promise<
         deadlineMs,
         pollIntervalMs: opts.pollIntervalMs ?? DEFAULT_POLL_MS,
         skipPull: opts.skipGit,
-        ...(opts.stateConfig
-          ? {
-              sync: () => syncChatSessionFromState(opts.stateConfig!, opts.cwd, opts.sessionId),
-            }
-          : {}),
+        ...(store.backend === "convex"
+          ? { readTurns: () => store.readTurns() }
+          : opts.stateConfig
+            ? {
+                sync: () => syncChatSessionFromState(opts.stateConfig!, opts.cwd, opts.sessionId),
+              }
+            : {}),
       })
       if (result.kind === "idle-timeout") {
         await emitExit(opts, "idle-timeout", turnsCompleted)
@@ -154,6 +162,7 @@ export async function runInteractiveMode(opts: InteractiveModeOptions): Promise<
         quiet: opts.quiet,
         invokeAgent: opts.invokeAgent,
         stateConfig: opts.stateConfig,
+        store,
         ...(opts.reasoningEffort ? { reasoningEffort: opts.reasoningEffort } : {}),
       })
     } catch (err) {
@@ -177,11 +186,11 @@ export async function runInteractiveMode(opts: InteractiveModeOptions): Promise<
 
     // Advance watermark past everything we've seen, including the just-appended
     // assistant reply. Re-read because runChatTurn appends.
-    watermark = readSession(sessionFile).length
+    watermark = (await store.readTurns()).length
   }
 }
 
-function findNextUserTurn(turns: ReturnType<typeof readSession>, fromIdx: number): number {
+function findNextUserTurn(turns: ChatTurn[], fromIdx: number): number {
   for (let i = fromIdx; i < turns.length; i++) {
     if (turns[i]!.role === "user") return i
   }

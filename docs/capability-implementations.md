@@ -36,6 +36,7 @@ Every implementation profile is defined by `profile.json`.
 | `kind` | yes | Execution timing, usually `oneshot` or `scheduled`. |
 | `describe` | yes | Short human-readable action summary. |
 | `inputs` | yes | CLI input contract. Use flags; do not parse ad hoc strings in scripts. |
+| `auth` | no | Typed runtime-owned browser login methods. Profiles declare variable/secret keys; credentials stay out of agent prompts. |
 | `claudeCode` | yes | Agent configuration. Use `maxTurns: 0` and empty tool lists for no-agent implementations. |
 | `cliTools` | yes | External tools required by shell or scripts. Empty array when none. |
 | `inputArtifacts` | yes | Task artifacts this implementation consumes. Empty array when none. |

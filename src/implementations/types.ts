@@ -15,6 +15,30 @@ import type { Phase } from "../state.js"
 // Profile shape (mirrors the JSON on disk).
 // ────────────────────────────────────────────────────────────────────────────
 
+export interface AuthFieldSpec {
+  /** User-facing label of the login control. */
+  label: string
+  /** Non-sensitive values come from variables; credentials come from the vault. */
+  source: "variable" | "secret"
+  /** Explicit variable or secret name. Never inferred from prose. */
+  key: string
+}
+
+export interface AuthMethodSpec {
+  /** User-facing name used to distinguish multiple available login forms. */
+  name: string
+  /** Engine-owned preparation mechanism; credentials never enter the prompt. */
+  strategy: "browser-storage-state"
+  /** Typed session builder selected by the profile, independent of credential names. */
+  adapter: "kody-repository"
+  /** Every field is required before this method is exposed to the agent. */
+  fields: AuthFieldSpec[]
+}
+
+export interface AuthSpec {
+  methods: AuthMethodSpec[]
+}
+
 export interface Profile {
   name: string
   /**
@@ -65,6 +89,8 @@ export interface Profile {
   skills?: string[]
   prompt?: string
   chatTools?: string[]
+  /** Declarative login methods resolved by authentication-aware preflights. */
+  auth?: AuthSpec
   /**
    * Execution model — orthogonal to `role`.
    * `oneshot` (default): single invocation on demand.

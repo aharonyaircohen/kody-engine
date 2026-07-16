@@ -135,9 +135,12 @@ describe("loadQaContext", () => {
   })
 
   it("emits the storageState auth block when --auth-profile is passed", async () => {
+    writeVariables(tmp, { LOGIN_USER: "qa@example.com" })
+    process.env.LOGIN_PASSWORD = "website-password"
     const ctx = makeCtx(tmp, { authProfile: ".kody/qa-storage-state.json" })
     await loadQaContext(ctx, dummyProfile)
     expect(ctx.data.qaAuthBlock).toContain(".kody/qa-storage-state.json")
     expect(ctx.data.qaAuthBlock).toContain("storageState")
+    expect(ctx.data.qaAuthBlock).not.toContain("website-password")
   })
 })

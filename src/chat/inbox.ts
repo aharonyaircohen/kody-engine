@@ -31,6 +31,12 @@ export interface InboxOptions {
   sync?: () => void
   /** Test seam: skip the actual git pull. */
   skipPull?: boolean
+  /**
+   * Transcript reader override (Convex-backed store). When present the
+   * inbox polls it directly and skips the git sync entirely — the dashboard
+   * writes user turns to Convex, so no state-repo pull is needed.
+   */
+  readTurns?: () => Promise<ChatTurn[]>
 }
 
 export type InboxResult =
@@ -61,7 +67,9 @@ export async function waitForNextUserMessage(opts: InboxOptions): Promise<InboxR
     if (now >= opts.deadlineMs) return { kind: "deadline" }
     if (now - idleStart >= opts.idleTimeoutMs) return { kind: "idle-timeout" }
 
-    if (opts.sync && !opts.skipPull) {
+    if (opts.readTurns) {
+      // Convex path — no git sync; the query returns the live transcript.
+    } else if (opts.sync && !opts.skipPull) {
       try {
         opts.sync()
       } catch (err) {
@@ -95,7 +103,18 @@ export async function waitForNextUserMessage(opts: InboxOptions): Promise<InboxR
       }
     }
 
-    const turns = readSession(opts.sessionFile)
+    let turns: ChatTurn[]
+    if (opts.readTurns) {
+      try {
+        turns = await opts.readTurns()
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        logger.warn(`convex transcript poll failed (will retry): ${msg}`)
+        turns = []
+      }
+    } else {
+      turns = readSession(opts.sessionFile)
+    }
     for (let i = opts.watermark; i < turns.length; i++) {
       const t = turns[i]!
       if (t.role === "user") {

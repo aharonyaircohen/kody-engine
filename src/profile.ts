@@ -12,6 +12,7 @@ import * as path from "node:path"
 import { CAPABILITY_MCP_TOOL_NAMES } from "./capabilityMcp.js"
 import { parseReasoningEffort } from "./config.js"
 import type {
+  AuthSpec,
   ClaudeCodeSpec,
   CliToolSpec,
   ContainerChild,
@@ -53,6 +54,7 @@ const KNOWN_PROFILE_KEYS = new Set([
   "skills",
   "prompt",
   "chatTools",
+  "auth",
   "agent",
   "every",
   "capabilityTools",
@@ -210,6 +212,7 @@ export function loadProfile(profilePath: string): Profile {
     skills: parseStringArray(r.skills),
     prompt: typeof r.prompt === "string" && r.prompt.trim() ? r.prompt.trim() : undefined,
     chatTools: parseStringArray(r.chatTools),
+    auth: parseAuth(profilePath, r.auth),
     describe: typeof r.describe === "string" ? r.describe : "",
     // Optional agent to run as. Empty/blank string → undefined (no agent).
     agent: typeof r.agent === "string" && r.agent.trim() ? r.agent.trim() : undefined,
@@ -355,6 +358,96 @@ function parseStringArray(raw: unknown): string[] | undefined {
   if (!Array.isArray(raw)) return undefined
   const values = raw.map((t) => String(t).trim()).filter(Boolean)
   return values.length > 0 ? values : undefined
+}
+
+const AUTH_KEY_RE = /^[A-Z][A-Z0-9_]{0,127}$/
+const AUTH_TEXT_RE = /^[^\r\n]{1,120}$/
+
+function rejectUnknownAuthFields(
+  p: string,
+  value: Record<string, unknown>,
+  allowed: readonly string[],
+  prefix: string,
+): void {
+  const known = new Set(allowed)
+  const unknown = Object.keys(value).find((key) => !known.has(key))
+  if (unknown) throw new ProfileError(p, `${prefix} has unknown field "${unknown}"`)
+}
+
+function parseAuth(p: string, raw: unknown): AuthSpec | undefined {
+  if (raw === undefined || raw === null) return undefined
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ProfileError(p, `"auth" must be an object`)
+  }
+
+  const auth = raw as Record<string, unknown>
+  rejectUnknownAuthFields(p, auth, ["methods"], "auth")
+  const methodsRaw = auth.methods
+  if (!Array.isArray(methodsRaw) || methodsRaw.length === 0) {
+    throw new ProfileError(p, `auth.methods must be a non-empty array`)
+  }
+
+  const methods: AuthSpec["methods"] = methodsRaw.map((methodRaw, methodIndex) => {
+    if (!methodRaw || typeof methodRaw !== "object" || Array.isArray(methodRaw)) {
+      throw new ProfileError(p, `auth.methods[${methodIndex}] must be an object`)
+    }
+    const method = methodRaw as Record<string, unknown>
+    rejectUnknownAuthFields(p, method, ["name", "strategy", "adapter", "fields"], `auth.methods[${methodIndex}]`)
+    const name = method.name
+    if (typeof name !== "string" || !AUTH_TEXT_RE.test(name.trim())) {
+      throw new ProfileError(p, `auth.methods[${methodIndex}].name must be a single-line string of 1-120 characters`)
+    }
+    if (method.strategy !== "browser-storage-state") {
+      throw new ProfileError(p, `auth.methods[${methodIndex}].strategy must be browser-storage-state`)
+    }
+    if (method.adapter !== "kody-repository") {
+      throw new ProfileError(p, `auth.methods[${methodIndex}].adapter must be kody-repository`)
+    }
+    if (!Array.isArray(method.fields) || method.fields.length === 0) {
+      throw new ProfileError(p, `auth.methods[${methodIndex}].fields must be a non-empty array`)
+    }
+
+    const fields: AuthSpec["methods"][number]["fields"] = method.fields.map((fieldRaw, fieldIndex) => {
+      const prefix = `auth.methods[${methodIndex}].fields[${fieldIndex}]`
+      if (!fieldRaw || typeof fieldRaw !== "object" || Array.isArray(fieldRaw)) {
+        throw new ProfileError(p, `${prefix} must be an object`)
+      }
+      const field = fieldRaw as Record<string, unknown>
+      rejectUnknownAuthFields(p, field, ["label", "source", "key"], prefix)
+      if (typeof field.label !== "string" || !AUTH_TEXT_RE.test(field.label.trim())) {
+        throw new ProfileError(p, `${prefix}.label must be a single-line string of 1-120 characters`)
+      }
+      if (field.source !== "variable" && field.source !== "secret") {
+        throw new ProfileError(p, `${prefix}.source must be variable or secret`)
+      }
+      if (typeof field.key !== "string" || !AUTH_KEY_RE.test(field.key)) {
+        throw new ProfileError(p, `${prefix}.key must be an uppercase variable or secret name`)
+      }
+      return {
+        label: field.label.trim(),
+        source: field.source,
+        key: field.key,
+      }
+    })
+
+    const variableFields = fields.filter((field) => field.source === "variable")
+    const secretFields = fields.filter((field) => field.source === "secret")
+    if (variableFields.length !== 1 || secretFields.length !== 1) {
+      throw new ProfileError(
+        p,
+        `auth.methods[${methodIndex}] kody-repository requires exactly one variable field and one secret field`,
+      )
+    }
+
+    return {
+      name: name.trim(),
+      strategy: method.strategy,
+      adapter: method.adapter,
+      fields,
+    }
+  })
+
+  return { methods }
 }
 
 function parseCapabilityKind(raw: unknown): Profile["capabilityKind"] | undefined {

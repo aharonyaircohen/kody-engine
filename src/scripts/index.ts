@@ -68,6 +68,7 @@ import { postIssueComment } from "./postIssueComment.js"
 import { postPlanComment } from "./postPlanComment.js"
 import { postResearchComment } from "./postResearchComment.js"
 import { postReviewResult } from "./postReviewResult.js"
+import { prepareBrowserAuth } from "./prepareBrowserAuth.js"
 import { promoteQaGoal } from "./promoteQaGoal.js"
 import { publishReport } from "./publishReport.js"
 import { recordClassification } from "./recordClassification.js"
@@ -127,6 +128,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   loadMemoryContext,
   loadPriorArt,
   loadQaContext,
+  prepareBrowserAuth,
   buildSyntheticPlugin,
   resolveArtifacts,
   discoverQaContext,
