@@ -89,6 +89,15 @@ function createJsonlStore(sessionFile: string): SessionStore {
   }
 }
 
+function normalizeTurn(turn: ChatTurn): ChatTurn {
+  return {
+    role: turn.role,
+    content: turn.content,
+    timestamp: turn.timestamp,
+    toolCalls: turn.toolCalls ?? [],
+  }
+}
+
 function createConvexStore(args: {
   client: ConvexHttpClient
   tenantId: string
@@ -99,42 +108,58 @@ function createConvexStore(args: {
   const { client, tenantId, sessionId, sessionFile, logger } = args
   let sessionUpserted = false
 
+  const appendToConvex = async (turn: ChatTurn): Promise<void> => {
+    // Ensure the session record exists once per run (sessions seeded
+    // before this store existed have turns but no chatSessions row). The
+    // meta comes from the local JSONL meta line, matching how the
+    // dashboard records it; upsert only patches meta+updatedAt, so
+    // re-running is harmless.
+    if (!sessionUpserted) {
+      try {
+        const meta = readMeta(sessionFile) ?? { type: "meta", mode: "one-shot" }
+        await client.mutation(anyApi.chatSessions.upsert, {
+          tenantId,
+          sessionId,
+          meta,
+          updatedAt: new Date().toISOString(),
+        })
+        sessionUpserted = true
+      } catch (err) {
+        logger.warn(`session ${sessionId}: chatSessions.upsert failed: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+    await client.mutation(anyApi.chatTurns.append, { tenantId, sessionId, turn })
+  }
+
   return {
     backend: "convex",
     readTurns: async () => {
       const docs = (await client.query(anyApi.chatTurns.list, { tenantId, sessionId })) as ConvexTurnDoc[]
-      return [...docs]
+      const convexTurns = [...docs]
         .sort((a, b) => a.seq - b.seq)
         .map((doc) => doc.turn)
         .filter(isChatTurn)
+      // Backfill: dispatch paths that seed the user message into the local
+      // JSONL only (workflow INIT_MESSAGE, state-repo sync, pre-Convex
+      // sessions) leave Convex behind the local file. Convex is the
+      // canonical prefix (appendTurn mirrors every Convex write into the
+      // JSONL), so any local tail beyond Convex's length is new — push it
+      // up and include it in the returned transcript. Without this, a
+      // Convex-empty session reads as "nothing to reply to" (exit 64).
+      const localTurns = readSession(sessionFile)
+      if (localTurns.length <= convexTurns.length) return convexTurns
+      const tail = localTurns.slice(convexTurns.length).map(normalizeTurn)
+      logger.info(
+        `session ${sessionId}: backfilling ${tail.length} local JSONL turn(s) into Convex (convex=${convexTurns.length}, local=${localTurns.length})`,
+      )
+      for (const turn of tail) {
+        await appendToConvex(turn)
+      }
+      return [...convexTurns, ...tail]
     },
     appendTurn: async (turn) => {
-      const normalized: ChatTurn = {
-        role: turn.role,
-        content: turn.content,
-        timestamp: turn.timestamp,
-        toolCalls: turn.toolCalls ?? [],
-      }
-      // Ensure the session record exists once per run (sessions seeded
-      // before this store existed have turns but no chatSessions row). The
-      // meta comes from the local JSONL meta line, matching how the
-      // dashboard records it; upsert only patches meta+updatedAt, so
-      // re-running is harmless.
-      if (!sessionUpserted) {
-        try {
-          const meta = readMeta(sessionFile) ?? { type: "meta", mode: "one-shot" }
-          await client.mutation(anyApi.chatSessions.upsert, {
-            tenantId,
-            sessionId,
-            meta,
-            updatedAt: new Date().toISOString(),
-          })
-          sessionUpserted = true
-        } catch (err) {
-          logger.warn(`session ${sessionId}: chatSessions.upsert failed: ${err instanceof Error ? err.message : String(err)}`)
-        }
-      }
-      await client.mutation(anyApi.chatTurns.append, { tenantId, sessionId, turn: normalized })
+      const normalized = normalizeTurn(turn)
+      await appendToConvex(normalized)
       // Mirror to the local JSONL so git persistence and dashboards on the
       // legacy path keep seeing the transcript during the transition.
       try {

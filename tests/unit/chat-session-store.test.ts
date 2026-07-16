@@ -87,6 +87,78 @@ describe("chat/session-store", () => {
     })
   })
 
+  it("backfills local JSONL turns into Convex when Convex is behind (workflow-seeded session)", async () => {
+    // Simulate `kody chat --message` seeding the user turn into the local
+    // JSONL only — Convex has no rows for this session yet.
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, `${JSON.stringify({ role: "user", content: "Say hello and stop.", timestamp: "t1" })}\n`)
+    const { client, mutations } = makeMockClient([])
+    const store = createSessionStore({
+      sessionId: "s1",
+      sessionFile: file,
+      client,
+      tenantId: "owner/repo",
+      logger: silentLogger,
+    })
+    const turns = await store.readTurns()
+    expect(turns).toHaveLength(1)
+    expect(turns[0]).toMatchObject({ role: "user", content: "Say hello and stop.", toolCalls: [] })
+    // Upsert + one append pushed the local turn up to Convex.
+    expect(mutations).toHaveLength(2)
+    expect(mutations[1]?.args).toMatchObject({
+      tenantId: "owner/repo",
+      sessionId: "s1",
+      turn: { role: "user", content: "Say hello and stop." },
+    })
+  })
+
+  it("backfills only the local tail beyond the Convex prefix", async () => {
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(
+      file,
+      [
+        JSON.stringify({ role: "user", content: "hi", timestamp: "t1" }),
+        JSON.stringify({ role: "assistant", content: "hello", timestamp: "t2" }),
+        JSON.stringify({ role: "user", content: "next question", timestamp: "t3" }),
+      ].join("\n") + "\n",
+    )
+    const { client, mutations } = makeMockClient([
+      { seq: 0, turn: { role: "user", content: "hi", timestamp: "t1" } },
+      { seq: 1, turn: { role: "assistant", content: "hello", timestamp: "t2" } },
+    ])
+    const store = createSessionStore({
+      sessionId: "s1",
+      sessionFile: file,
+      client,
+      tenantId: "owner/repo",
+      logger: silentLogger,
+    })
+    const turns = await store.readTurns()
+    expect(turns.map((t) => t.content)).toEqual(["hi", "hello", "next question"])
+    const appends = mutations.filter((m) => "turn" in m.args)
+    expect(appends).toHaveLength(1)
+    expect(appends[0]?.args.turn).toMatchObject({ content: "next question" })
+  })
+
+  it("does not backfill when Convex already has all local turns", async () => {
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, `${JSON.stringify({ role: "user", content: "hi", timestamp: "t1" })}\n`)
+    const { client, mutations } = makeMockClient([
+      { seq: 0, turn: { role: "user", content: "hi", timestamp: "t1" } },
+      { seq: 1, turn: { role: "assistant", content: "hello", timestamp: "t2" } },
+    ])
+    const store = createSessionStore({
+      sessionId: "s1",
+      sessionFile: file,
+      client,
+      tenantId: "owner/repo",
+      logger: silentLogger,
+    })
+    const turns = await store.readTurns()
+    expect(turns).toHaveLength(2)
+    expect(mutations).toHaveLength(0)
+  })
+
   it("appends turns via chatSessions.upsert (once) + chatTurns.append and mirrors to JSONL", async () => {
     const { client, mutations } = makeMockClient([])
     const store = createSessionStore({
