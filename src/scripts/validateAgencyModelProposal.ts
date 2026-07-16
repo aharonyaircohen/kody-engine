@@ -1,5 +1,5 @@
 import * as path from "node:path"
-import { listCapabilityFolderSlugs } from "../capabilityFolders.js"
+import { capabilityOutputConditionPaths, listCapabilityFolderSlugs, readCapabilityFolder } from "../capabilityFolders.js"
 import type { PostflightScript, ScriptArgs } from "../implementations/types.js"
 import { getCapabilityActionInputs, getCapabilityRoots } from "../registry.js"
 import { formatWorkflowValidationIssues, validateWorkflow } from "../workflowValidation.js"
@@ -168,8 +168,13 @@ function validateFilesForKind(
           : []
         const uniqueKnown = [...new Set(known)]
         const capabilityInputs = new Map<string, Set<string>>()
+        const capabilityOutputs = new Map<string, Set<string>>()
         if (options.capabilityRoot) {
           for (const capability of uniqueKnown) {
+            const folder = getCapabilityRoots(options.capabilityRoot)
+              .map((root) => readCapabilityFolder(root, capability))
+              .find((entry) => entry !== null)
+            capabilityOutputs.set(capability, folder ? capabilityOutputConditionPaths(folder.config) : new Set())
             const inputs = getCapabilityActionInputs(capability, options.capabilityRoot)
             if (inputs) {
               capabilityInputs.set(
@@ -184,6 +189,7 @@ function validateFilesForKind(
             validateWorkflow(workflow, {
               ...(uniqueKnown.length > 0 ? { knownCapabilities: new Set(uniqueKnown) } : {}),
               ...(capabilityInputs.size > 0 ? { capabilityInputs } : {}),
+              ...(capabilityOutputs.size > 0 ? { capabilityOutputs } : {}),
             }),
           ),
         )

@@ -18,6 +18,7 @@ import type {
   CapabilityWorkflowStepConfig,
   CapabilityWorkflowTransitionConfig,
 } from "./capabilityFolders.js"
+import { capabilityOutputConditionPaths } from "./capabilityFolders.js"
 import type { CapabilityResult } from "./capabilityResult.js"
 import type { KodyConfig } from "./config.js"
 import type { DispatchResult } from "./dispatch.js"
@@ -469,12 +470,17 @@ function workflowError(workflow: CapabilityWorkflowConfig, base: RunJobBase): st
   const projectCapabilitiesRoot = path.join(base.cwd, ".kody", "capabilities")
   const knownCapabilities = new Set<string>()
   const capabilityInputs = new Map<string, Set<string>>()
+  const capabilityOutputs = new Map<string, Set<string>>()
   for (const step of workflow.steps) {
     const action = step.action ?? step.capability
     const resolvedAction = resolveCapabilityAction(action, projectCapabilitiesRoot)
     const resolvedFolder = resolveCapabilityFolder(step.capability, projectCapabilitiesRoot)
     if (!resolvedAction && !resolvedFolder) continue
     knownCapabilities.add(step.capability)
+    capabilityOutputs.set(
+      step.capability,
+      resolvedFolder ? capabilityOutputConditionPaths(resolvedFolder.config) : new Set(),
+    )
     const inputs = getCapabilityActionInputs(action, projectCapabilitiesRoot)
     if (inputs) {
       capabilityInputs.set(
@@ -483,7 +489,11 @@ function workflowError(workflow: CapabilityWorkflowConfig, base: RunJobBase): st
       )
     }
   }
-  return formatWorkflowValidationIssues(validateWorkflow(workflow, { knownCapabilities, capabilityInputs }))[0] ?? null
+  return (
+    formatWorkflowValidationIssues(
+      validateWorkflow(workflow, { knownCapabilities, capabilityInputs, capabilityOutputs }),
+    )[0] ?? null
+  )
 }
 
 function initialWorkflowState(parent: Job, workflow: CapabilityWorkflowConfig): WorkflowRunState {
@@ -632,6 +642,16 @@ async function runGraphCapabilityWorkflow(
       return withWorkflowBoundaryEval(capability, { ...result, workflowState: state })
     }
 
+    const resultConditionPaths = workflowResultConditionPaths(step.next)
+    if (resultConditionPaths.length > 0 && !result.capabilityResults?.at(-1)) {
+      const reason =
+        `workflow step ${step.id} did not emit the structured result required by its conditions: ${resultConditionPaths.join(", ")}`
+      state.status = "blocked"
+      state.blocker = reason
+      checkpoint?.(state)
+      return { ...result, exitCode: 64, reason, workflowState: state }
+    }
+
     const transition = selectWorkflowTransition(step, chainData, state.transitionCounts)
     if (!transition) {
       const reason = `workflow step ${step.id} has no available connection`
@@ -688,6 +708,12 @@ function selectWorkflowTransition(
     if (!transition.when || conditionMatches(transition.when, workflowConditionContext(data))) return transition
   }
   return fallback
+}
+
+function workflowResultConditionPaths(transitions: CapabilityWorkflowTransitionConfig[]): string[] {
+  return transitions.flatMap((transition) =>
+    Object.keys(transition.when ?? {}).filter((path) => path.startsWith("result.")),
+  )
 }
 
 function conditionMatches(condition: Record<string, unknown>, context: Record<string, unknown>): boolean {
@@ -800,14 +826,10 @@ function workflowConditionContext(data: Record<string, unknown>): Record<string,
 }
 
 function resolveDottedPath(root: unknown, dotted: string): unknown {
-  const direct = dotted.split(".").reduce<unknown>((cur, part) => {
+  return dotted.split(".").reduce<unknown>((cur, part) => {
     if (!cur || typeof cur !== "object") return undefined
     return (cur as Record<string, unknown>)[part]
   }, root)
-  if (direct !== undefined || !dotted.startsWith("result.")) return direct
-  const result = resolveDottedPath(root, "result")
-  if (!result || typeof result !== "object" || Array.isArray(result)) return direct
-  return resolveDottedPath((result as Record<string, unknown>).facts, dotted.slice("result.".length))
 }
 
 function valueMatches(actual: unknown, expected: unknown): boolean {

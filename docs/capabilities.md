@@ -35,6 +35,18 @@ capability returns call-local result facts
 parent attaches that result to the goal or loop evidence model
 ```
 
+The execution boundary is intentionally simple:
+
+- A capability reports what happened.
+- A workflow chooses what runs next.
+- The engine validates and executes the connection.
+- Nothing guesses or parses prose.
+
+Workflow conditions may use only structured results that the preceding
+capability declares. A capability that does not expose a decision result can
+still be used as a normal workflow step, but it cannot be used as a branching
+decision without changing its contract.
+
 Do not make a normal capability require `--goal`, `--loop`, route stage, or
 destination outcome as part of its core contract. Those values belong to the
 parent model. A capability may receive domain inputs such as `--pr`, `--branch`,

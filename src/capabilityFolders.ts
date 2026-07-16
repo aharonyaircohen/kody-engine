@@ -24,7 +24,25 @@ export interface CapabilityFolderConfig {
   stage?: string
   readsFrom?: string[]
   writesTo?: string[]
+  output?: CapabilityOutputConfig
   workflow?: CapabilityWorkflowConfig
+}
+
+export interface CapabilityOutputConfig {
+  result?: {
+    facts: string[]
+  }
+}
+
+export function capabilityOutputConditionPaths(config: CapabilityFolderConfig): Set<string> {
+  const result = config.output?.result
+  if (!result) return new Set()
+  return new Set([
+    "result.status",
+    "result.summary",
+    "result.resultClass",
+    ...result.facts.map((fact) => `result.facts.${fact}`),
+  ])
 }
 
 export interface CapabilityWorkflowConfig {
@@ -141,8 +159,17 @@ export function parseCapabilityConfig(raw: Record<string, unknown>): CapabilityF
     stage: stringField(raw.stage),
     readsFrom: stringList(raw.readsFrom ?? raw.reads_from),
     writesTo: stringList(raw.writesTo ?? raw.writes_to),
+    output: parseCapabilityOutput(raw.output),
     workflow: parseCapabilityWorkflow(raw.workflow),
   }
+}
+
+function parseCapabilityOutput(raw: unknown): CapabilityOutputConfig | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined
+  const result = (raw as Record<string, unknown>).result
+  if (!result || typeof result !== "object" || Array.isArray(result)) return undefined
+  const facts = stringList((result as Record<string, unknown>).facts)
+  return { result: { facts } }
 }
 
 function parseCapabilityKind(raw: unknown): CapabilityFolderConfig["capabilityKind"] | undefined {

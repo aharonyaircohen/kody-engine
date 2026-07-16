@@ -27,6 +27,55 @@ describe("validateWorkflow", () => {
     ).toEqual([])
   })
 
+  it("accepts only structured result fields declared by the source capability", () => {
+    const capabilityOutputs = new Map([["inspect", new Set(["result.status", "result.facts.needsFix"])]] as const)
+    expect(
+      validateWorkflow(
+        {
+          startAt: "inspect",
+          steps: [
+            {
+              id: "inspect",
+              capability: "inspect",
+              next: [
+                { to: "repair", when: { "result.facts.needsFix": true } },
+                { to: "finish", default: true },
+              ],
+            },
+            { id: "repair", capability: "repair" },
+            { id: "finish", capability: "finish" },
+          ],
+        },
+        { capabilityOutputs },
+      ),
+    ).toEqual([])
+  })
+
+  it("rejects a condition that reads an undeclared result field", () => {
+    const issues = validateWorkflow(
+      {
+        startAt: "inspect",
+        steps: [
+          {
+            id: "inspect",
+            capability: "inspect",
+            next: [
+              { to: "repair", when: { "result.facts.needsFix": true } },
+              { to: "finish", default: true },
+            ],
+          },
+          { id: "repair", capability: "repair" },
+          { id: "finish", capability: "finish" },
+        ],
+      },
+      { capabilityOutputs: new Map([["inspect", new Set(["result.status"])]] as const) },
+    )
+
+    expect(issues).toEqual([
+      expect.objectContaining({ code: "undeclared_result_path", path: "steps[0].next[0].when.result.facts.needsFix" }),
+    ])
+  })
+
   it("accepts documented camelCase step ids in graph workflows", () => {
     expect(
       validateWorkflow({

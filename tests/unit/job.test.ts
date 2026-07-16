@@ -1043,7 +1043,7 @@ describe("runJob (Phase 1 seam)", () => {
               capability: "run",
               target: "issue",
               next: [
-                { to: "repair", when: { "result.needsFix": true } },
+                { to: "repair", when: { "result.facts.needsFix": true } },
                 { to: "verify", default: true },
               ],
             },
@@ -1083,6 +1083,53 @@ describe("runJob (Phase 1 seam)", () => {
       expect(runImplementationChain.mock.calls.map((call) => call[0])).toEqual(["run", "fix", "review"])
       expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({ feedback: "repair the failing check" })
       expect(runImplementationChain.mock.calls[2]![1].cliArgs).toEqual({ pr: 99 })
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("blocks a conditional workflow when the source step declares a result but emits none", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-missing-result-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "inspect", {
+        name: "inspect",
+        action: "inspect",
+        output: { result: { facts: ["needsFix"] } },
+      })
+      writeCapability(cwd, "repair", { name: "repair", action: "repair" })
+      writeCapability(cwd, "finish", { name: "finish", action: "finish" })
+      writeCapability(cwd, "graph-pilot", {
+        name: "graph-pilot",
+        action: "graph-pilot",
+        workflow: {
+          startAt: "inspect",
+          steps: [
+            {
+              id: "inspect",
+              capability: "inspect",
+              next: [
+                { to: "repair", when: { "result.facts.needsFix": true } },
+                { to: "finish", default: true },
+              ],
+            },
+            { id: "repair", capability: "repair" },
+            { id: "finish", capability: "finish" },
+          ],
+        },
+      })
+      process.chdir(cwd)
+      runImplementationChain.mockResolvedValueOnce({ exitCode: 0 })
+
+      const result = await runJob(
+        { action: "graph-pilot", capability: "graph-pilot", cliArgs: {}, flavor: "instant" },
+        { cwd },
+      )
+
+      expect(result).toMatchObject({ exitCode: 64 })
+      expect(result.reason).toContain("did not emit the structured result")
+      expect(runImplementationChain).toHaveBeenCalledTimes(1)
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
@@ -1555,6 +1602,7 @@ function writeWorkflowStages(cwd: string): void {
   writeCapability(cwd, "run", {
     name: "run",
     action: "run",
+    output: { result: { facts: ["needsFix"] } },
     role: "primitive",
     inputs: [
       { name: "issue", flag: "--issue", type: "int", required: true },

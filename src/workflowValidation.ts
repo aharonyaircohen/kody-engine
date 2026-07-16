@@ -14,6 +14,7 @@ export interface WorkflowValidationOptions {
   maxLoopIterations?: number
   knownCapabilities?: ReadonlySet<string>
   capabilityInputs?: ReadonlyMap<string, ReadonlySet<string>>
+  capabilityOutputs?: ReadonlyMap<string, ReadonlySet<string>>
 }
 
 type Raw = Record<string, unknown>
@@ -145,6 +146,7 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
     if (!step) return
     const id = text(step.id)
     if (!id) return
+    const sourceCapability = text(step.capability ?? step.action)
     const transitions = transitionList(step.next)
     adjacency.set(id, [])
     if (transitions.length > maxTransitions) {
@@ -224,7 +226,10 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
       if (raw.default === true && raw.when !== undefined) {
         issue(issues, "conflicting_transition", base, "workflow connection cannot be both conditional and default")
       }
-      if (raw.when !== undefined) validateDataMatch(raw.when, `${base}.when`, issues)
+      if (raw.when !== undefined) {
+        const outputPaths = options.capabilityOutputs?.get(sourceCapability ?? "")
+        validateDataMatch(raw.when, `${base}.when`, issues, outputPaths)
+      }
       const targetIndex = ids.indexOf(target ?? "")
       const iterations = raw.maxIterations
       if (targetIndex >= 0 && targetIndex <= index) {
@@ -273,7 +278,12 @@ export function formatWorkflowValidationIssues(issues: readonly WorkflowValidati
   return issues.map((entry) => `${entry.path}: ${entry.message}`)
 }
 
-function validateDataMatch(value: unknown, path: string, issues: WorkflowValidationIssue[]): void {
+function validateDataMatch(
+  value: unknown,
+  path: string,
+  issues: WorkflowValidationIssue[],
+  capabilityOutputs?: ReadonlySet<string>,
+): void {
   if (value === undefined) return
   const match = asRecord(value)
   if (!match || Object.keys(match).length === 0) {
@@ -287,6 +297,14 @@ function validateDataMatch(value: unknown, path: string, issues: WorkflowValidat
         "invalid_data_path",
         `${path}.${field}`,
         `workflow condition must read from facts, evidence, artifacts, result, workflow, or lastOutcome`,
+      )
+    }
+    if (capabilityOutputs && field.startsWith("result.") && !capabilityOutputs.has(field)) {
+      issue(
+        issues,
+        "undeclared_result_path",
+        `${path}.${field}`,
+        `workflow condition reads ${field}, but the source capability does not declare it`,
       )
     }
     if (!isComparable(expected)) {

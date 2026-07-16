@@ -24,4 +24,15 @@ describe("parseCapabilityWorkflow", () => {
     expect(workflow?.steps.map((step) => step.id)).toEqual(["healthCheck", "inspect", "repair", "finish"])
     expect(workflow?.steps[2]?.next?.[0]?.to).toBe("healthCheck")
   })
+
+  it("parses declared structured result facts from a capability profile", async () => {
+    const { parseCapabilityConfig } = await import("../../src/capabilityFolders.js")
+
+    const config = parseCapabilityConfig({
+      name: "observe",
+      output: { result: { facts: ["observation", "finding"] } },
+    })
+
+    expect(config.output).toEqual({ result: { facts: ["observation", "finding"] } })
+  })
 })
