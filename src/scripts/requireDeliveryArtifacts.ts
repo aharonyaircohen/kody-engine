@@ -12,7 +12,6 @@
  */
 
 import type { PostflightScript } from "../implementations/types.js"
-import type { Action } from "../state.js"
 
 const FALLBACK_SUMMARY_MAX = 6000
 
@@ -33,24 +32,19 @@ export const requireDeliveryArtifacts: PostflightScript = async (ctx) => {
   if (missing.length === 0) return
 
   const reason = `agent omitted required delivery artifacts: ${missing.join(", ")}`
-  ctx.data.agentDone = false
+  // Delivery must remain reviewable even when the model forgets the markers.
+  // Fill deterministic defaults and retain a warning for observability instead
+  // of converting an otherwise successful run into RUN_FAILED.
+  const target = typeof ctx.args.issue === "number" ? `issue #${ctx.args.issue}` : typeof ctx.args.pr === "number" ? `PR #${ctx.args.pr}` : "task"
+  if (!commitMessage) ctx.data.commitMessage = `chore: update ${target}`
+  if (!prSummary) {
+    const fallback = fallbackSummary(String(ctx.data.agentFinalText ?? ""))
+    ctx.data.prSummary = fallback || `Automated changes for ${target}.`
+    if (fallback) ctx.data.agentFallbackSummary = fallback
+  }
   ctx.data.agentResultIncomplete = true
   ctx.data.agentMissingArtifacts = missing
   ctx.data.agentFailureReason = reason
-
-  if (!prSummary) {
-    const fallback = fallbackSummary(String(ctx.data.agentFinalText ?? ""))
-    if (fallback) ctx.data.agentFallbackSummary = fallback
-  }
-
-  const action = ctx.data.action as Action | undefined
-  if (action?.type.endsWith("_COMPLETED")) {
-    ctx.data.action = {
-      type: action.type.replace(/_COMPLETED$/, "_FAILED"),
-      payload: { reason, downgradedFrom: action.type },
-      timestamp: new Date().toISOString(),
-    }
-  }
 }
 
 function fallbackSummary(finalText: string): string {

@@ -223,17 +223,17 @@ describe("postflight chain: run profile, success path", () => {
     const ctx = makeCtx()
     const agent = makeAgentResult("All tests pass and lint is clean. Ready for review.")
     await runPostflights(ctx, agent, "run")
-    expect(ctx.data.agentDone).toBe(false)
+    expect(ctx.data.agentDone).toBe(true)
     expect(ctx.data.agentMarkerMissing).toBe(true)
     expect(ctx.data.agentResultIncomplete).toBe(true)
     expect(mocks.doCommitAndPush).toHaveBeenCalledTimes(1)
     expect(mocks.doEnsurePr).toHaveBeenCalledWith(
       expect.objectContaining({
-        draft: true,
+        draft: false,
         agentSummary: "All tests pass and lint is clean. Ready for review.",
       }),
     )
-    expect(ctx.output.exitCode).toBe(1)
+    expect(ctx.output.exitCode).toBe(0)
   })
 
   it("verify fails → ensurePr is skipped with a typed PrSkipped outcome", async () => {
