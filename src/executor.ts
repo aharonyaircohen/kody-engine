@@ -42,6 +42,7 @@ import { loadSubagents } from "./subagents.js"
 import {
   persistTaskArtifactsToState,
   prepareTaskArtifactsDir,
+  initializeTaskArtifacts,
   taskArtifactsPromptAddendum,
   verifyTaskArtifacts,
 } from "./task-artifacts.js"
@@ -445,6 +446,10 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       ? (() => {
           const taskType: "issue" | "pr" = args.issue ? "issue" : "pr"
           const paths = prepareTaskArtifactsDir(input.cwd, taskTarget)
+          initializeTaskArtifacts(paths, {
+            taskType,
+            target: String(taskTarget),
+          })
           return {
             ...paths,
             taskKey: `${taskType === "issue" ? "issues" : "prs"}/${paths.taskId}`,

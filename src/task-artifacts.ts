@@ -54,6 +54,42 @@ export function prepareTaskArtifactsDir(cwd: string, taskId: string | number): T
   return { taskId: safeId, absDir, relDir }
 }
 
+/** Create safe baseline artifacts before the agent starts. The agent can
+ * replace these files with richer content, but it can never leave them absent. */
+export function initializeTaskArtifacts(
+  artifacts: TaskArtifactPaths,
+  metadata: { taskType: "issue" | "pr" | "chat" | "job" | "goal"; target?: string } = { taskType: "job" },
+): void {
+  const startedAt = new Date().toISOString()
+  const defaults: Record<TaskArtifactFile, string> = {
+    "context.json": JSON.stringify(
+      {
+        taskId: artifacts.taskId,
+        taskType: metadata.taskType,
+        target: metadata.target ?? artifacts.taskId,
+        outcome: "partial",
+        exitCode: null,
+        reason: "Baseline created; agent details not provided",
+        prUrl: null,
+        runUrl: process.env.GITHUB_RUN_URL ?? null,
+        filesTouched: [],
+        sessionLog: null,
+        startedAt,
+        finishedAt: null,
+      },
+      null,
+      2,
+    ) + "\n",
+    "memory-recs.json": "[]\n",
+    "followups.json": "[]\n",
+    "handoff-notes.md": "Baseline handoff: the agent did not provide additional notes.\n",
+  }
+  for (const file of TASK_ARTIFACT_FILES) {
+    const full = path.join(artifacts.absDir, file)
+    if (!fs.existsSync(full)) fs.writeFileSync(full, defaults[file], "utf8")
+  }
+}
+
 /**
  * Returns missing artifact filenames (relative to the task dir).
  * Empty array means the agent produced all four.

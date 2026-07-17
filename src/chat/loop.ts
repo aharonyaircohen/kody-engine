@@ -18,6 +18,7 @@ import type { StateRepoConfig } from "../stateRepo.js"
 import {
   persistTaskArtifactsToState,
   prepareTaskArtifactsDir,
+  initializeTaskArtifacts,
   taskArtifactsPromptAddendum,
   verifyTaskArtifacts,
 } from "../task-artifacts.js"
@@ -286,6 +287,7 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
     ...prepareTaskArtifactsDir(opts.cwd, opts.sessionId),
     taskKey: `sessions/${opts.sessionId}`,
   }
+  initializeTaskArtifacts(taskArtifactsPaths, { taskType: "chat", target: opts.sessionId })
   const artifactAddendum = taskArtifactsPromptAddendum({
     taskId: taskArtifactsPaths.taskId,
     taskType: "chat",
