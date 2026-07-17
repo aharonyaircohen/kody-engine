@@ -658,7 +658,11 @@ function backendScope(config?: StateRepoConfig): { tenantId: string } | null {
   const tenantId = config?.github?.owner && config.github.repo
     ? `${config.github.owner}/${config.github.repo}`
     : process.env.GITHUB_REPOSITORY?.trim()
-  if (!process.env.CONVEX_URL || !process.env.KODY_SERVICE_KEY || !tenantId) return null
+  const configured = !!process.env.CONVEX_URL && !!process.env.KODY_SERVICE_KEY && !!tenantId
+  if (!configured && process.env.GITHUB_ACTIONS === "true") {
+    throw new Error("Convex task-state backend is required in GitHub Actions (CONVEX_URL, KODY_SERVICE_KEY, and repository identity)")
+  }
+  if (!configured) return null
   return { tenantId }
 }
 

@@ -84,6 +84,9 @@ export async function persistTaskArtifactsToState(
   const tenantId = config.github?.owner && config.github.repo
     ? `${config.github.owner}/${config.github.repo}`
     : process.env.GITHUB_REPOSITORY?.trim()
+  if (process.env.GITHUB_ACTIONS === "true" && (!process.env.CONVEX_URL || !process.env.KODY_SERVICE_KEY || !tenantId)) {
+    throw new Error("Convex artifact backend is required in GitHub Actions (CONVEX_URL, KODY_SERVICE_KEY, and repository identity)")
+  }
   if (process.env.CONVEX_URL && process.env.KODY_SERVICE_KEY && tenantId) {
     const backend = createStateBackendFromEnv()
     for (const file of TASK_ARTIFACT_FILES) {

@@ -72,8 +72,14 @@ export function createSessionStore(opts: SessionStoreOptions): SessionStore {
   }
 
   if (client && !tenantId) {
+    if (process.env.GITHUB_ACTIONS === "true") {
+      throw new Error("Convex chat backend requires GITHUB_REPOSITORY in GitHub Actions")
+    }
     logger.warn(`session ${opts.sessionId}: CONVEX_URL set but no tenant (GITHUB_REPOSITORY unset) — using JSONL`)
   } else {
+    if (process.env.GITHUB_ACTIONS === "true") {
+      throw new Error("Convex chat backend is required in GitHub Actions (CONVEX_URL and KODY_SERVICE_KEY)")
+    }
     logger.info(`session ${opts.sessionId}: CONVEX_URL unset — using legacy state-repo JSONL store`)
   }
   return createJsonlStore(opts.sessionFile)
