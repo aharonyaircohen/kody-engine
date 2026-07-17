@@ -25,6 +25,9 @@ export interface StateBackend {
     doc: unknown,
     expectedUpdatedAt?: string,
   ): Promise<void>
+  getRepoDoc(tenantId: string, kind: string): Promise<TaskDocument | null>
+  listRepoDocs(tenantId: string, prefix: string): Promise<TaskDocument[]>
+  saveRepoDoc(tenantId: string, kind: string, doc: unknown, expectedUpdatedAt?: string): Promise<void>
 }
 
 function requireTenant(tenantId: string): string {
@@ -61,6 +64,29 @@ export function createStateBackendFromEnv(
       await transport.mutation(anyApi.taskState.save, {
         tenantId: requireTenant(tenantId),
         taskKey: requireNonEmpty(taskKey, "taskKey"),
+        kind: requireNonEmpty(kind, "kind"),
+        doc,
+        updatedAt: new Date().toISOString(),
+        ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}),
+      })
+    },
+    async getRepoDoc(tenantId, kind) {
+      const result = await transport.query(anyApi.repoDocs.get, {
+        tenantId: requireTenant(tenantId),
+        kind: requireNonEmpty(kind, "kind"),
+      })
+      return (result as TaskDocument | null) ?? null
+    },
+    async listRepoDocs(tenantId, prefix) {
+      const result = await transport.query(anyApi.repoDocs.listByPrefix, {
+        tenantId: requireTenant(tenantId),
+        prefix: requireNonEmpty(prefix, "prefix"),
+      })
+      return Array.isArray(result) ? (result as TaskDocument[]) : []
+    },
+    async saveRepoDoc(tenantId, kind, doc, expectedUpdatedAt) {
+      await transport.mutation(anyApi.repoDocs.save, {
+        tenantId: requireTenant(tenantId),
         kind: requireNonEmpty(kind, "kind"),
         doc,
         updatedAt: new Date().toISOString(),
