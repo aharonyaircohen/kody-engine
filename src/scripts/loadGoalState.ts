@@ -5,7 +5,7 @@
 
 import type { KodyConfig } from "../config.js"
 import { type GoalState } from "../goal/state.js"
-import { fetchGoalState } from "../goal/stateStore.js"
+import { fetchGoalStateAsync } from "../goal/stateStore.js"
 import type { PreflightScript } from "../implementations/types.js"
 import { resolveStateRepoConfig } from "../stateRepo.js"
 
@@ -26,12 +26,12 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function fetchGoalStateWithRetry(config: KodyConfig, goalId: string, cwd: string): Promise<GoalState | null> {
-  let state = fetchGoalState(config, goalId, cwd)
+  let state = await fetchGoalStateAsync(config, goalId, cwd)
   if (state) return state
 
   for (const delay of retryDelaysMs()) {
     await sleep(delay)
-    state = fetchGoalState(config, goalId, cwd)
+    state = await fetchGoalStateAsync(config, goalId, cwd)
     if (state) {
       process.stdout.write(`[goal-manager] loaded goal state for ${goalId} after retry\n`)
       return state

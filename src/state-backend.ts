@@ -11,6 +11,13 @@ export interface TaskDocument {
   updatedAt: string
 }
 
+export interface GoalDocument {
+  tenantId: string
+  goalId: string
+  state: unknown
+  updatedAt: string
+}
+
 export interface StateBackendClient {
   query: (fn: FunctionReference<"query">, args: Record<string, unknown>) => Promise<unknown>
   mutation: (fn: FunctionReference<"mutation">, args: Record<string, unknown>) => Promise<unknown>
@@ -28,6 +35,9 @@ export interface StateBackend {
   getRepoDoc(tenantId: string, kind: string): Promise<TaskDocument | null>
   listRepoDocs(tenantId: string, prefix: string): Promise<TaskDocument[]>
   saveRepoDoc(tenantId: string, kind: string, doc: unknown, expectedUpdatedAt?: string): Promise<void>
+  getGoal(tenantId: string, goalId: string): Promise<GoalDocument | null>
+  listGoals(tenantId: string): Promise<GoalDocument[]>
+  saveGoal(tenantId: string, goalId: string, state: unknown, updatedAt: string, expectedUpdatedAt?: string): Promise<void>
 }
 
 function requireTenant(tenantId: string): string {
@@ -90,6 +100,26 @@ export function createStateBackendFromEnv(
         kind: requireNonEmpty(kind, "kind"),
         doc,
         updatedAt: new Date().toISOString(),
+        ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}),
+      })
+    },
+    async getGoal(tenantId, goalId) {
+      const result = await transport.query(anyApi.goals.get, {
+        tenantId: requireTenant(tenantId),
+        goalId: requireNonEmpty(goalId, "goalId"),
+      })
+      return (result as GoalDocument | null) ?? null
+    },
+    async listGoals(tenantId) {
+      const result = await transport.query(anyApi.goals.list, { tenantId: requireTenant(tenantId) })
+      return Array.isArray(result) ? (result as GoalDocument[]) : []
+    },
+    async saveGoal(tenantId, goalId, state, updatedAt, expectedUpdatedAt) {
+      await transport.mutation(anyApi.goals.save, {
+        tenantId: requireTenant(tenantId),
+        goalId: requireNonEmpty(goalId, "goalId"),
+        state,
+        updatedAt,
         ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}),
       })
     },

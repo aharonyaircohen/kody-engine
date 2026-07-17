@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("../../../src/goal/stateStore.js", () => ({
-  fetchGoalState: vi.fn(),
+  fetchGoalStateAsync: vi.fn(),
 }))
 
 import type { GoalState } from "../../../src/goal/state.js"
-import { fetchGoalState } from "../../../src/goal/stateStore.js"
+import { fetchGoalStateAsync } from "../../../src/goal/stateStore.js"
 import type { Context, Profile } from "../../../src/implementations/types.js"
 import { loadGoalState } from "../../../src/scripts/loadGoalState.js"
 
@@ -48,13 +48,13 @@ afterEach(() => {
 describe("loadGoalState", () => {
   it("retries state repo reads before treating a goal as missing", async () => {
     const state = goalState()
-    vi.mocked(fetchGoalState).mockReturnValueOnce(null).mockReturnValueOnce(state)
+    vi.mocked(fetchGoalStateAsync).mockResolvedValueOnce(null).mockResolvedValueOnce(state)
 
     const ctx = fakeCtx()
     await loadGoalState(ctx, {} as unknown as Profile)
 
-    expect(fetchGoalState).toHaveBeenCalledTimes(2)
-    expect(fetchGoalState).toHaveBeenCalledWith(
+    expect(fetchGoalStateAsync).toHaveBeenCalledTimes(2)
+    expect(fetchGoalStateAsync).toHaveBeenCalledWith(
       expect.objectContaining({
         github: { owner: "acme", repo: "widgets" },
       }),
@@ -72,12 +72,12 @@ describe("loadGoalState", () => {
   })
 
   it("still exits cleanly when goal state is truly missing", async () => {
-    vi.mocked(fetchGoalState).mockReturnValue(null)
+    vi.mocked(fetchGoalStateAsync).mockResolvedValue(null)
 
     const ctx = fakeCtx()
     await loadGoalState(ctx, {} as unknown as Profile)
 
-    expect(fetchGoalState).toHaveBeenCalledTimes(3)
+    expect(fetchGoalStateAsync).toHaveBeenCalledTimes(3)
     expect(ctx.skipAgent).toBe(true)
     expect(ctx.output.exitCode).toBe(0)
     expect(ctx.output.reason).toBe("no goal state to tick")

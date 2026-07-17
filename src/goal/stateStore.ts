@@ -11,6 +11,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { getCompanyStoreAssetRoot } from "../companyStore.js"
 import { listStateDirectory, readStateText, type StateRepoConfig, upsertStateText } from "../stateRepo.js"
+import { createStateBackendFromEnv, type GoalDocument } from "../state-backend.js"
 import { isManagedTodoRaw, parseTodoGoalState, serializeTodoGoalState } from "./managedTodoState.js"
 import type { GoalState } from "./state.js"
 
@@ -19,7 +20,7 @@ export function goalStatePath(goalId: string): string {
 }
 
 /** Read and parse one goal state. Returns `null` when it does not exist. */
-export function fetchGoalState(config: StateRepoConfig, goalId: string, cwd?: string): GoalState | null {
+function fetchGoalStateLegacy(config: StateRepoConfig, goalId: string, cwd?: string): GoalState | null {
   const filePath = goalStatePath(goalId)
   const loaded = readStateText(config, cwd, filePath)
   if (!loaded) return null
@@ -82,7 +83,7 @@ function recordField(value: unknown): Record<string, unknown> | null {
 }
 
 /** Write one goal state to the configured state repo. */
-export function putGoalState(
+function putGoalStateLegacy(
   config: StateRepoConfig,
   goalId: string,
   state: GoalState,
@@ -96,7 +97,7 @@ export function putGoalState(
   upsertStateText(config, cwd, goalStatePath(goalId), serializeTodoGoalState(goalId, state, previous?.content), message)
 }
 
-export function listGoalStateIds(config: StateRepoConfig, cwd?: string): string[] {
+function listGoalStateIdsLegacy(config: StateRepoConfig, cwd?: string): string[] {
   const ids = new Set<string>()
   const todoEntries = listStateDirectory(config, cwd, "todos")
   for (const entry of todoEntries) {
@@ -106,4 +107,80 @@ export function listGoalStateIds(config: StateRepoConfig, cwd?: string): string[
     if (loaded && isManagedTodoRaw(loaded.content)) ids.add(id)
   }
   return [...ids].sort()
+}
+
+function backendTenant(config: StateRepoConfig): string | null {
+  const owner = config.github?.owner?.trim() || process.env.GITHUB_REPOSITORY?.split("/")[0]?.trim()
+  const repo = config.github?.repo?.trim() || process.env.GITHUB_REPOSITORY?.split("/")[1]?.trim()
+  return owner && repo ? `${owner}/${repo}` : null
+}
+
+function backendEnabled(config: StateRepoConfig): boolean {
+  return Boolean(process.env.CONVEX_URL?.trim() && process.env.KODY_SERVICE_KEY?.trim() && backendTenant(config))
+}
+
+function backendRequired(): boolean {
+  return process.env.GITHUB_ACTIONS === "true"
+}
+
+function decodeGoal(doc: GoalDocument | null): GoalState | null {
+  if (!doc || !doc.state || typeof doc.state !== "object" || Array.isArray(doc.state)) return null
+  const state = doc.state as GoalState
+  if (typeof state.state !== "string" || !state.extra || typeof state.extra !== "object") return null
+  return resolveStoreBackedGoalState(state)
+}
+
+export async function fetchGoalStateAsync(config: StateRepoConfig, goalId: string, cwd?: string): Promise<GoalState | null> {
+  const tenantId = backendTenant(config)
+  if (backendEnabled(config) && tenantId) {
+    return decodeGoal(await createStateBackendFromEnv().getGoal(tenantId, goalId))
+  }
+  if (backendRequired()) throw new Error("Convex backend is required for goal state in GitHub Actions")
+  return fetchGoalStateLegacy(config, goalId, cwd)
+}
+
+export async function putGoalStateAsync(
+  config: StateRepoConfig,
+  goalId: string,
+  state: GoalState,
+  message = `chore(goals): update ${goalId}`,
+  cwd?: string,
+): Promise<void> {
+  const tenantId = backendTenant(config)
+  if (backendEnabled(config) && tenantId) {
+    const backend = createStateBackendFromEnv()
+    const previous = await backend.getGoal(tenantId, goalId)
+    await backend.saveGoal(tenantId, goalId, state, state.updatedAt ?? new Date().toISOString(), previous?.updatedAt)
+    return
+  }
+  if (backendRequired()) throw new Error("Convex backend is required for goal state in GitHub Actions")
+  putGoalStateLegacy(config, goalId, state, message, cwd)
+}
+
+export async function listGoalStateIdsAsync(config: StateRepoConfig, cwd?: string): Promise<string[]> {
+  const tenantId = backendTenant(config)
+  if (backendEnabled(config) && tenantId) {
+    const docs = await createStateBackendFromEnv().listGoals(tenantId)
+    return docs.map((doc) => doc.goalId).filter(Boolean).sort()
+  }
+  if (backendRequired()) throw new Error("Convex backend is required for goal state in GitHub Actions")
+  return listGoalStateIdsLegacy(config, cwd)
+}
+
+// Synchronous compatibility API for local callers and existing tests. Runtime
+// workflows should use the async backend-first variants above.
+export function fetchGoalState(config: StateRepoConfig, goalId: string, cwd?: string): GoalState | null {
+  return fetchGoalStateLegacy(config, goalId, cwd)
+}
+export function putGoalState(
+  config: StateRepoConfig,
+  goalId: string,
+  state: GoalState,
+  message = `chore(goals): update ${goalId}`,
+  cwd?: string,
+): void {
+  putGoalStateLegacy(config, goalId, state, message, cwd)
+}
+export function listGoalStateIds(config: StateRepoConfig, cwd?: string): string[] {
+  return listGoalStateIdsLegacy(config, cwd)
 }
