@@ -7,7 +7,7 @@ vi.mock("../../../src/goal/runLog.js", async () => {
   const actual = await vi.importActual<typeof import("../../../src/goal/runLog.js")>("../../../src/goal/runLog.js")
   return {
     ...actual,
-    flushGoalRunLogEvents: vi.fn(),
+    flushGoalRunLogEventsAsync: vi.fn(),
   }
 })
 vi.mock("../../../src/stateRepo.js", async () => {
@@ -18,7 +18,7 @@ vi.mock("../../../src/stateRepo.js", async () => {
   }
 })
 
-import { flushGoalRunLogEvents, stageGoalRunLogEvent } from "../../../src/goal/runLog.js"
+import { flushGoalRunLogEventsAsync, stageGoalRunLogEvent } from "../../../src/goal/runLog.js"
 import type { GoalState } from "../../../src/goal/state.js"
 import { putGoalState } from "../../../src/goal/stateStore.js"
 import type { Context, Profile } from "../../../src/implementations/types.js"
@@ -27,7 +27,7 @@ import type { GoalCtx } from "../../../src/scripts/goalCtx.js"
 import { writeStateText } from "../../../src/stateRepo.js"
 
 const putGoalStateMock = vi.mocked(putGoalState)
-const flushGoalRunLogEventsMock = vi.mocked(flushGoalRunLogEvents)
+const flushGoalRunLogEventsMock = vi.mocked(flushGoalRunLogEventsAsync)
 const writeStateTextMock = vi.mocked(writeStateText)
 
 function goalState(overrides: Partial<GoalState["extra"]> = {}): GoalState {

@@ -38,6 +38,7 @@ export interface StateBackend {
   getGoal(tenantId: string, goalId: string): Promise<GoalDocument | null>
   listGoals(tenantId: string): Promise<GoalDocument[]>
   saveGoal(tenantId: string, goalId: string, state: unknown, updatedAt: string, expectedUpdatedAt?: string): Promise<void>
+  appendDailyLog(tenantId: string, stream: "activity" | "events" | "flyActivity", date: string, entry: unknown): Promise<void>
 }
 
 function requireTenant(tenantId: string): string {
@@ -121,6 +122,14 @@ export function createStateBackendFromEnv(
         state,
         updatedAt,
         ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}),
+      })
+    },
+    async appendDailyLog(tenantId, stream, date, entry) {
+      await transport.mutation(anyApi.dailyLogs.append, {
+        tenantId: requireTenant(tenantId),
+        stream,
+        date: requireNonEmpty(date, "date"),
+        entry,
       })
     },
   }

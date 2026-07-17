@@ -11,7 +11,7 @@ import { type CapabilityResult, parseCapabilityResult, parseCapabilityResultsFro
 import { mergeGoalEvidenceProgress, parseGoalEvidenceState } from "../goal/evidenceState.js"
 import { managedGoalFromState, planManagedGoalTick, writeManagedGoalToState } from "../goal/manager.js"
 import { capabilityEvidenceOutput, refreshGoalDashboardReport } from "../goal/report.js"
-import { flushGoalRunLogEvents, goalRunLogChange, goalRunLogSnapshot, stageGoalRunLogEvent } from "../goal/runLog.js"
+import { flushGoalRunLogEventsAsync, goalRunLogChange, goalRunLogSnapshot, stageGoalRunLogEvent } from "../goal/runLog.js"
 import { type GoalState, nowIso, serializeGoalState } from "../goal/state.js"
 import { fetchGoalState, putGoalState } from "../goal/stateStore.js"
 import type { PostflightScript } from "../implementations/types.js"
@@ -52,7 +52,7 @@ export const applyCapabilityReports: PostflightScript = async (ctx, _profile, ag
         },
         decision: { kind: "reject-evidence", nextStep: "block", reason: "goal missing in state repo" },
       })
-      flushLogs(ctx)
+      await flushLogs(ctx)
       process.stderr.write(`[kody capability-report] goal ${goalId} missing in state repo; report skipped\n`)
       continue
     }
@@ -128,7 +128,7 @@ export const applyCapabilityReports: PostflightScript = async (ctx, _profile, ag
         }
       }
     } finally {
-      flushLogs(ctx)
+      await flushLogs(ctx)
     }
   }
 }
@@ -205,9 +205,9 @@ function createNeedsFixIssue(goalId: string, evidence: string, result: Capabilit
   return Number(match[1])
 }
 
-function flushLogs(ctx: Parameters<PostflightScript>[0]): void {
+async function flushLogs(ctx: Parameters<PostflightScript>[0]): Promise<void> {
   try {
-    flushGoalRunLogEvents(ctx.config, ctx.cwd, ctx.data)
+    await flushGoalRunLogEventsAsync(ctx.config, ctx.cwd, ctx.data)
   } catch (err) {
     process.stderr.write(
       `[kody capability-report] goal log persist failed (${err instanceof Error ? err.message : String(err)})\n`,

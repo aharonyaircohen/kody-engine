@@ -2,6 +2,7 @@ import * as fs from "node:fs"
 import type { CapabilityResultArtifact } from "../capabilityResult.js"
 import { runIndexRowFromGoalEvents, stageRunIndexFinalization, upsertRunIndexRowBestEffort } from "../runIndex.js"
 import { appendStateLine, parseStateRepoSlug, resolveStateRepoConfig, type StateRepoConfig } from "../stateRepo.js"
+import { createStateBackendFromEnv } from "../state-backend.js"
 import type { GoalRouteStep, ManagedGoal } from "./manager.js"
 import { nowIso } from "./state.js"
 
@@ -114,6 +115,31 @@ export function flushGoalRunLogEvents(
     const row = runIndexRowFromGoalEvents(goalId, log.path, enrichedEvents as unknown as Record<string, unknown>[])
     upsertRunIndexRowBestEffort(config, cwd, row)
     stageRunIndexFinalization(data, row)
+    log.events = []
+  }
+}
+
+/** Backend-first flush used by Actions; the synchronous function above remains
+ * for local compatibility and existing state-repo tooling. */
+export async function flushGoalRunLogEventsAsync(
+  config: StateRepoConfig,
+  cwd: string | undefined,
+  data: Record<string, unknown>,
+): Promise<void> {
+  const tenantId = config.github?.owner && config.github.repo ? `${config.github.owner}/${config.github.repo}` : process.env.GITHUB_REPOSITORY
+  const backendConfigured = Boolean(process.env.CONVEX_URL?.trim() && process.env.KODY_SERVICE_KEY?.trim() && tenantId)
+  if (!backendConfigured) {
+    if (process.env.GITHUB_ACTIONS === "true") throw new Error("Convex backend is required for goal run logs in GitHub Actions")
+    flushGoalRunLogEvents(config, cwd, data)
+    return
+  }
+  const backend = createStateBackendFromEnv()
+  for (const [goalId, log] of Object.entries(goalRunLogs(data))) {
+    if (log.events.length === 0) continue
+    const enrichedEvents = log.events.map((event) => enrichGoalRunLogEvent(config, data, log.path, event))
+    for (const event of enrichedEvents) {
+      await backend.appendDailyLog(tenantId as string, "events", event.time.slice(0, 10), event)
+    }
     log.events = []
   }
 }

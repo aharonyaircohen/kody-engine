@@ -81,4 +81,19 @@ describe("state backend", () => {
       expectedUpdatedAt: "old",
     }))
   })
+
+  it("appends goal run events to the daily log stream", async () => {
+    const transport = client()
+    const backend = createStateBackendFromEnv(
+      { CONVEX_URL: "https://example.convex.cloud", KODY_SERVICE_KEY: "secret" },
+      transport,
+    )
+    await backend.appendDailyLog("acme/app", "events", "2026-07-17", { goalId: "g1", event: "tick" })
+    expect(transport.mutation).toHaveBeenCalledWith(anyApi.dailyLogs.append, {
+      tenantId: "acme/app",
+      stream: "events",
+      date: "2026-07-17",
+      entry: { goalId: "g1", event: "tick" },
+    })
+  })
 })

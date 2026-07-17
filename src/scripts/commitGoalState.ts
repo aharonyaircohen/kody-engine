@@ -5,7 +5,7 @@
  */
 
 import { refreshGoalDashboardReport } from "../goal/report.js"
-import { flushGoalRunLogEvents } from "../goal/runLog.js"
+import { flushGoalRunLogEventsAsync } from "../goal/runLog.js"
 import type { GoalState } from "../goal/state.js"
 import { putGoalState } from "../goal/stateStore.js"
 import type { PostflightScript } from "../implementations/types.js"
@@ -14,18 +14,18 @@ import type { GoalCtx } from "./goalCtx.js"
 export const commitGoalState: PostflightScript = async (ctx) => {
   const goal = ctx.data.goal as GoalCtx | undefined
   if (!goal) {
-    flushLogs(ctx)
+    await flushLogs(ctx)
     return
   }
   if (ctx.data.goalPersistChanged !== true) {
     refreshReportOrFail(ctx, goal.id, goal.raw)
-    flushLogs(ctx)
+    await flushLogs(ctx)
     return
   }
 
   const updated = ctx.data.goalPersistState as GoalState | undefined
   if (!updated) {
-    flushLogs(ctx)
+    await flushLogs(ctx)
     return
   }
 
@@ -39,7 +39,7 @@ export const commitGoalState: PostflightScript = async (ctx) => {
       }); will retry next tick\n`,
     )
   } finally {
-    flushLogs(ctx)
+    await flushLogs(ctx)
   }
 }
 
@@ -60,9 +60,9 @@ function refreshReportOrFail(ctx: Parameters<PostflightScript>[0], goalId: strin
   }
 }
 
-function flushLogs(ctx: Parameters<PostflightScript>[0]): void {
+async function flushLogs(ctx: Parameters<PostflightScript>[0]): Promise<void> {
   try {
-    flushGoalRunLogEvents(ctx.config, ctx.cwd, ctx.data)
+    await flushGoalRunLogEventsAsync(ctx.config, ctx.cwd, ctx.data)
   } catch (err) {
     process.stderr.write(
       `[goal-manager] goal log persist failed (${err instanceof Error ? err.message : String(err)})\n`,

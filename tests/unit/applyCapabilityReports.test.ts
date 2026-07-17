@@ -8,7 +8,7 @@ vi.mock("../../src/goal/runLog.js", async () => {
   const actual = await vi.importActual<typeof import("../../src/goal/runLog.js")>("../../src/goal/runLog.js")
   return {
     ...actual,
-    flushGoalRunLogEvents: vi.fn(),
+    flushGoalRunLogEventsAsync: vi.fn(),
   }
 })
 vi.mock("../../src/stateRepo.js", async () => {
@@ -23,7 +23,7 @@ vi.mock("../../src/issue.js", () => ({
 }))
 
 import type { AgentResult } from "../../src/agent.js"
-import { flushGoalRunLogEvents } from "../../src/goal/runLog.js"
+import { flushGoalRunLogEventsAsync } from "../../src/goal/runLog.js"
 import { type GoalState, serializeGoalState } from "../../src/goal/state.js"
 import { fetchGoalState, putGoalState } from "../../src/goal/stateStore.js"
 import type { Context, Profile } from "../../src/implementations/types.js"
@@ -33,7 +33,7 @@ import { writeStateText } from "../../src/stateRepo.js"
 
 const fetchGoalStateMock = vi.mocked(fetchGoalState)
 const putGoalStateMock = vi.mocked(putGoalState)
-const flushGoalRunLogEventsMock = vi.mocked(flushGoalRunLogEvents)
+const flushGoalRunLogEventsMock = vi.mocked(flushGoalRunLogEventsAsync)
 const writeStateTextMock = vi.mocked(writeStateText)
 const ghMock = vi.mocked(gh)
 
