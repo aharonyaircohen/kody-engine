@@ -1,4 +1,5 @@
 import { readStateText, type StateRepoConfig } from "./stateRepo.js"
+import { createStateBackendFromEnv } from "./state-backend.js"
 
 export const TRUST_FILE_PATH = "state/trust.json"
 
@@ -79,6 +80,27 @@ export function readTrustModeOverride(
   } catch {
     return null
   }
+}
+
+export async function readTrustModeOverrideAsync(
+  repoSlug: string,
+  subject: TrustSubject,
+  state?: StateRepoConfig["state"],
+): Promise<TrustModeOverride> {
+  if (!subject.id) return null
+  const backendConfigured = Boolean(
+    process.env.CONVEX_URL?.trim() &&
+    process.env.KODY_SERVICE_KEY?.trim() &&
+    /^[^/\s]+\/[^/\s]+$/.test(repoSlug),
+  )
+  if (backendConfigured) {
+    const stored = await createStateBackendFromEnv().getManifest(repoSlug, "capability-trust")
+    return stored ? parseTrustModeOverride(JSON.stringify(stored.doc), subject) : null
+  }
+  if (process.env.GITHUB_ACTIONS === "true") {
+    throw new Error("Convex backend is required for trust policy in GitHub Actions")
+  }
+  return readTrustModeOverride(state, repoSlug, subject)
 }
 
 function defaultStateForRepoSlug(repoSlug: string): StateRepoConfig["state"] {

@@ -63,6 +63,7 @@ export interface StateBackend {
     event: unknown,
     time: string,
   ): Promise<void>
+  getManifest(tenantId: string, kind: string): Promise<{ doc: unknown; updatedAt: string } | null>
   saveReport(
     tenantId: string,
     slug: string,
@@ -187,6 +188,13 @@ export function createStateBackendFromEnv(
         event,
         time: requireNonEmpty(time, "time"),
       })
+    },
+    async getManifest(tenantId, kind) {
+      const result = await transport.query(anyApi.manifests.get, {
+        tenantId: requireTenant(tenantId),
+        kind: requireNonEmpty(kind, "kind"),
+      })
+      return (result as { doc: unknown; updatedAt: string } | null) ?? null
     },
     async saveReport(tenantId, slug, runId, title, body, meta, updatedAt) {
       await transport.mutation(anyApi.reports.save, {

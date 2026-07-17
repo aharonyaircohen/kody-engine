@@ -20,7 +20,7 @@ import {
 import { expandManagedGoalState } from "../goal/typeDefinitions.js"
 import type { PreflightScript } from "../implementations/types.js"
 import { gh } from "../issue.js"
-import { readTrustModeOverride, type TrustModeOverride, type TrustSubject } from "../trustPolicy.js"
+import { readTrustModeOverrideAsync, type TrustModeOverride, type TrustSubject } from "../trustPolicy.js"
 import { readWorkflowDefinition } from "../workflowDefinitions.js"
 import {
   type GoalCapabilityScheduleState,
@@ -379,7 +379,7 @@ async function autonomyBlockReason(
 ): Promise<string | null> {
   if (ctx.data.jobForce === true) return null
   const selfKind = managedModelKind(goal)
-  const selfMode = selfKind === "Goal" ? firstTrustOverride(ctx, subjectCandidates("goal", goalId, goalState)) : null
+  const selfMode = selfKind === "Goal" ? await firstTrustOverride(ctx, subjectCandidates("goal", goalId, goalState)) : null
   if (selfKind === "Goal" && (selfMode === "ask" || (selfMode !== "auto" && goal.runWithoutApproval !== true))) {
     return `Run without approval is off for ${managedModelKind(goal)} ${goalId}`
   }
@@ -387,7 +387,7 @@ async function autonomyBlockReason(
   // Enabling a Loop is the operator's approval for its declared target.
   // Keep the workflow's own approval gate for Goals and standalone runs.
   if (dispatch.workflow && selfKind === "Goal") {
-    const workflowMode = firstTrustOverride(ctx, [{ kind: "workflow", id: dispatch.workflow }])
+    const workflowMode = await firstTrustOverride(ctx, [{ kind: "workflow", id: dispatch.workflow }])
     const workflow = workflowMode === "auto" ? null : readWorkflowDefinition(ctx.config, ctx.cwd, dispatch.workflow)
     if (workflowMode === "ask" || (workflowMode !== "auto" && workflow && workflow.runWithoutApproval !== true)) {
       return `Run without approval is off for workflow ${dispatch.workflow}`
@@ -401,7 +401,7 @@ async function autonomyBlockReason(
     const targetManaged = target ? managedGoalFromState(expandManagedGoalState(target)) : null
     const targetIsGoal = targetManaged ? managedModelKind(targetManaged) === "Goal" : false
     const targetMode =
-      targetManaged && targetIsGoal ? firstTrustOverride(ctx, subjectCandidates("goal", targetGoal, target)) : null
+      targetManaged && targetIsGoal ? await firstTrustOverride(ctx, subjectCandidates("goal", targetGoal, target)) : null
     if (
       targetIsGoal &&
       (targetMode === "ask" || (targetMode !== "auto" && targetManaged && targetManaged.runWithoutApproval !== true))
@@ -462,12 +462,18 @@ function subjectCandidates(kind: "loop" | "goal", id: string, state: GoalState |
   return [...ids].map((candidate) => ({ kind, id: candidate }))
 }
 
-function firstTrustOverride(ctx: Parameters<PreflightScript>[0], subjects: TrustSubject[]): TrustModeOverride {
-  if (!ctx.config.state) return null
+async function firstTrustOverride(
+  ctx: Parameters<PreflightScript>[0],
+  subjects: TrustSubject[],
+): Promise<TrustModeOverride> {
+  const backendConfigured = Boolean(
+    process.env.CONVEX_URL?.trim() && process.env.KODY_SERVICE_KEY?.trim(),
+  )
+  if (!ctx.config.state && !backendConfigured) return null
   const repoSlug =
     ctx.config.github?.owner && ctx.config.github?.repo ? `${ctx.config.github.owner}/${ctx.config.github.repo}` : ""
   for (const subject of subjects) {
-    const mode = readTrustModeOverride(ctx.config.state, repoSlug, subject)
+    const mode = await readTrustModeOverrideAsync(repoSlug, subject, ctx.config.state)
     if (mode) return mode
   }
   return null

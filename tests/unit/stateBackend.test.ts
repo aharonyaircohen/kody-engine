@@ -136,6 +136,19 @@ describe("state backend", () => {
     })
   })
 
+  it("reads typed manifests through the backend aggregate", async () => {
+    const transport = client()
+    const backend = createStateBackendFromEnv(
+      { CONVEX_URL: "https://example.convex.cloud", KODY_SERVICE_KEY: "secret" },
+      transport,
+    )
+    await backend.getManifest("acme/app", "capability-trust")
+    expect(transport.query).toHaveBeenCalledWith(anyApi.manifests.get, {
+      tenantId: "acme/app",
+      kind: "capability-trust",
+    })
+  })
+
   it("stores reports with a stable slug and run id", async () => {
     const transport = client()
     const backend = createStateBackendFromEnv(
