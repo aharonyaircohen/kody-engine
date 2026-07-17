@@ -11,19 +11,31 @@ vi.mock("../../../src/stateRepo.js", async (importOriginal) => ({
 vi.mock("../../../src/runIndex.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../src/runIndex.js")>()),
   upsertRunIndexRowBestEffort: vi.fn(),
+  upsertRunIndexRowBestEffortAsync: vi.fn(),
+}))
+
+const backend = vi.hoisted(() => ({
+  appendDailyLog: vi.fn(),
+  appendRunEvent: vi.fn(),
+}))
+
+vi.mock("../../../src/state-backend.js", () => ({
+  createStateBackendFromEnv: () => backend,
 }))
 
 import {
   flushGoalRunLogEvents,
+  flushGoalRunLogEventsAsync,
   goalRunLogChange,
   goalRunLogSnapshot,
   stageGoalRunLogEvent,
 } from "../../../src/goal/runLog.js"
-import { upsertRunIndexRowBestEffort } from "../../../src/runIndex.js"
+import { upsertRunIndexRowBestEffort, upsertRunIndexRowBestEffortAsync } from "../../../src/runIndex.js"
 import { appendStateLine } from "../../../src/stateRepo.js"
 
 const appendStateLineMock = vi.mocked(appendStateLine)
 const upsertRunIndexRowBestEffortMock = vi.mocked(upsertRunIndexRowBestEffort)
+const upsertRunIndexRowBestEffortAsyncMock = vi.mocked(upsertRunIndexRowBestEffortAsync)
 
 const config = {
   quality: { typecheck: "", lint: "", testUnit: "", format: "" },
@@ -37,6 +49,9 @@ describe("goal run logs", () => {
   beforeEach(() => {
     appendStateLineMock.mockReset()
     upsertRunIndexRowBestEffortMock.mockReset()
+    upsertRunIndexRowBestEffortAsyncMock.mockReset()
+    backend.appendDailyLog.mockReset()
+    backend.appendRunEvent.mockReset()
   })
 
   afterEach(() => {
@@ -49,6 +64,42 @@ describe("goal run logs", () => {
     delete process.env.GITHUB_EVENT_NAME
     delete process.env.GITHUB_ACTOR
     delete process.env.GITHUB_EVENT_PATH
+    delete process.env.CONVEX_URL
+    delete process.env.KODY_SERVICE_KEY
+  })
+
+  it("writes Actions run summaries and evidence to Convex", async () => {
+    process.env.CONVEX_URL = "https://example.convex.cloud"
+    process.env.KODY_SERVICE_KEY = "secret"
+    process.env.GITHUB_REPOSITORY = "o/r"
+    const data: Record<string, unknown> = { jobId: "run-1" }
+    stageGoalRunLogEvent(
+      data,
+      "web-release",
+      {
+        source: "goal-manager",
+        event: "goal.tick.dispatch",
+        goalType: "release",
+        status: "dispatch",
+      },
+      "2026-07-17T10:00:00.000Z",
+    )
+
+    await flushGoalRunLogEventsAsync(config, "/repo", data)
+
+    const row = upsertRunIndexRowBestEffortAsyncMock.mock.calls[0]?.[2]
+    expect(row).toMatchObject({
+      id: "goal:web-release:run-1",
+      subjectId: "web-release",
+      status: "running",
+    })
+    expect(backend.appendRunEvent).toHaveBeenCalledWith(
+      "o/r",
+      "goal:web-release:run-1",
+      "web-release",
+      expect.objectContaining({ event: "goal.tick.dispatch" }),
+      "2026-07-17T10:00:00.000Z",
+    )
   })
 
   it("writes staged goal events as JSONL under the state repo path", () => {

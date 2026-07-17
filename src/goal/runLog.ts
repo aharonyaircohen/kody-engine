@@ -1,6 +1,11 @@
 import * as fs from "node:fs"
 import type { CapabilityResultArtifact } from "../capabilityResult.js"
-import { runIndexRowFromGoalEvents, stageRunIndexFinalization, upsertRunIndexRowBestEffort } from "../runIndex.js"
+import {
+  runIndexRowFromGoalEvents,
+  stageRunIndexFinalization,
+  upsertRunIndexRowBestEffort,
+  upsertRunIndexRowBestEffortAsync,
+} from "../runIndex.js"
 import { appendStateLine, parseStateRepoSlug, resolveStateRepoConfig, type StateRepoConfig } from "../stateRepo.js"
 import { createStateBackendFromEnv } from "../state-backend.js"
 import type { GoalRouteStep, ManagedGoal } from "./manager.js"
@@ -137,9 +142,14 @@ export async function flushGoalRunLogEventsAsync(
   for (const [goalId, log] of Object.entries(goalRunLogs(data))) {
     if (log.events.length === 0) continue
     const enrichedEvents = log.events.map((event) => enrichGoalRunLogEvent(config, data, log.path, event))
+    const row = runIndexRowFromGoalEvents(goalId, log.path, enrichedEvents as unknown as Record<string, unknown>[])
+    if (!row) continue
     for (const event of enrichedEvents) {
       await backend.appendDailyLog(tenantId as string, "events", event.time.slice(0, 10), event)
+      await backend.appendRunEvent(tenantId as string, row.id, goalId, event, event.time)
     }
+    await upsertRunIndexRowBestEffortAsync(config, cwd, row)
+    stageRunIndexFinalization(data, row)
     log.events = []
   }
 }

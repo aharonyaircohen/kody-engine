@@ -27,10 +27,10 @@ import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
 import { resolveImplementation, resolveImplementationCandidates } from "./registry.js"
 import {
-  finalizeStagedRunIndexRows,
+  finalizeStagedRunIndexRowsAsync,
   runIndexRowFromJobContext,
   statusFromExitCode,
-  upsertRunIndexRowBestEffort,
+  upsertRunIndexRowBestEffortAsync,
 } from "./runIndex.js"
 import { runRuntimeCleanup } from "./runtimeCleanup.js"
 import { agentRunDir } from "./runtimePaths.js"
@@ -275,10 +275,10 @@ export interface ExecutorOutput {
 
 export async function runImplementation(profileName: string, input: ExecutorInput): Promise<ExecutorOutput> {
   const stageStartedAt = Date.now()
-  let finishRunIndex: ((out: ExecutorOutput) => void) | null = null
+  let finishRunIndex: ((out: ExecutorOutput) => Promise<void>) | null = null
   emitEvent(input.cwd, { implementation: profileName, kind: "stage_start" })
-  const finishAndEnd = (out: ExecutorOutput): ExecutorOutput => {
-    finishRunIndex?.(out)
+  const finishAndEnd = async (out: ExecutorOutput): Promise<ExecutorOutput> => {
+    await finishRunIndex?.(out)
     emitEvent(input.cwd, {
       implementation: profileName,
       kind: "stage_end",
@@ -399,7 +399,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
 
   const runIndexStartedAt = new Date(stageStartedAt).toISOString()
   if (!input.skipConfig) {
-    upsertRunIndexRowBestEffort(
+    await upsertRunIndexRowBestEffortAsync(
       config,
       input.cwd,
       runIndexRowFromJobContext({
@@ -411,10 +411,10 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
         updatedAt: runIndexStartedAt,
       }),
     )
-    finishRunIndex = (out: ExecutorOutput) => {
+    finishRunIndex = async (out: ExecutorOutput) => {
       const finishedAt = new Date().toISOString()
       const status = statusFromExitCode(out.exitCode)
-      upsertRunIndexRowBestEffort(
+      await upsertRunIndexRowBestEffortAsync(
         config,
         input.cwd,
         runIndexRowFromJobContext({
@@ -427,7 +427,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
           reason: out.reason,
         }),
       )
-      finalizeStagedRunIndexRows(config, input.cwd, ctx.data, {
+      await finalizeStagedRunIndexRowsAsync(config, input.cwd, ctx.data, {
         status,
         updatedAt: finishedAt,
         reason: out.reason,

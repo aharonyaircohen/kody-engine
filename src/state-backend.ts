@@ -18,6 +18,15 @@ export interface GoalDocument {
   updatedAt: string
 }
 
+export interface AgencyRunDocument {
+  tenantId: string
+  runId: string
+  subjectType: "goal" | "loop" | "workflow"
+  subjectId: string
+  run: unknown
+  updatedAt: string
+}
+
 export interface StateBackendClient {
   query: (fn: FunctionReference<"query">, args: Record<string, unknown>) => Promise<unknown>
   mutation: (fn: FunctionReference<"mutation">, args: Record<string, unknown>) => Promise<unknown>
@@ -39,6 +48,21 @@ export interface StateBackend {
   listGoals(tenantId: string): Promise<GoalDocument[]>
   saveGoal(tenantId: string, goalId: string, state: unknown, updatedAt: string, expectedUpdatedAt?: string): Promise<void>
   appendDailyLog(tenantId: string, stream: "activity" | "events" | "flyActivity", date: string, entry: unknown): Promise<void>
+  saveAgencyRun(
+    tenantId: string,
+    runId: string,
+    subjectType: AgencyRunDocument["subjectType"],
+    subjectId: string,
+    run: unknown,
+    updatedAt: string,
+  ): Promise<void>
+  appendRunEvent(
+    tenantId: string,
+    runId: string,
+    goalId: string | undefined,
+    event: unknown,
+    time: string,
+  ): Promise<void>
   saveReport(
     tenantId: string,
     slug: string,
@@ -143,6 +167,25 @@ export function createStateBackendFromEnv(
         stream,
         date: requireNonEmpty(date, "date"),
         entry,
+      })
+    },
+    async saveAgencyRun(tenantId, runId, subjectType, subjectId, run, updatedAt) {
+      await transport.mutation(anyApi.agencyRuns.save, {
+        tenantId: requireTenant(tenantId),
+        runId: requireNonEmpty(runId, "runId"),
+        subjectType,
+        subjectId: requireNonEmpty(subjectId, "subjectId"),
+        run,
+        updatedAt,
+      })
+    },
+    async appendRunEvent(tenantId, runId, goalId, event, time) {
+      await transport.mutation(anyApi.runEvents.append, {
+        tenantId: requireTenant(tenantId),
+        runId: requireNonEmpty(runId, "runId"),
+        ...(goalId ? { goalId: requireNonEmpty(goalId, "goalId") } : {}),
+        event,
+        time: requireNonEmpty(time, "time"),
       })
     },
     async saveReport(tenantId, slug, runId, title, body, meta, updatedAt) {

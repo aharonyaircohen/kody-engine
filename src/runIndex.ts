@@ -1,4 +1,5 @@
 import type { Profile } from "./implementations/types.js"
+import { createStateBackendFromEnv } from "./state-backend.js"
 import { readStateText, type StateRepoConfig, writeStateText } from "./stateRepo.js"
 
 export type RunIndexSubjectType = "goal" | "loop" | "workflow"
@@ -88,6 +89,32 @@ export function upsertRunIndexRowBestEffort(
   }
 }
 
+export async function upsertRunIndexRowBestEffortAsync(
+  config: StateRepoConfig,
+  cwd: string | undefined,
+  row: RunIndexRow | null,
+): Promise<void> {
+  if (!row) return
+  const tenantId = tenantIdForRun(config)
+  const backendConfigured = Boolean(process.env.CONVEX_URL?.trim() && process.env.KODY_SERVICE_KEY?.trim() && tenantId)
+  if (backendConfigured) {
+    const backend = createStateBackendFromEnv()
+    await backend.saveAgencyRun(
+      tenantId as string,
+      row.id,
+      row.subjectType,
+      row.subjectId,
+      row,
+      row.updatedAt,
+    )
+    return
+  }
+  if (process.env.GITHUB_ACTIONS === "true") {
+    throw new Error("Convex backend is required for the run index in GitHub Actions")
+  }
+  upsertRunIndexRowBestEffort(config, cwd, row)
+}
+
 export function stageRunIndexFinalization(data: Record<string, unknown>, row: RunIndexRow | null): void {
   if (!row) return
   const rows = stagedRunIndexRows(data)
@@ -103,6 +130,19 @@ export function finalizeStagedRunIndexRows(
   const rows = stagedRunIndexRows(data)
   for (const row of Object.values(rows)) {
     upsertRunIndexRowBestEffort(config, cwd, finalizedRunIndexRow(row, result))
+  }
+  data[STAGED_RUN_INDEX_ROWS_KEY] = {}
+}
+
+export async function finalizeStagedRunIndexRowsAsync(
+  config: StateRepoConfig,
+  cwd: string | undefined,
+  data: Record<string, unknown>,
+  result: { status: RunIndexStatus; updatedAt: string; reason?: string },
+): Promise<void> {
+  const rows = stagedRunIndexRows(data)
+  for (const row of Object.values(rows)) {
+    await upsertRunIndexRowBestEffortAsync(config, cwd, finalizedRunIndexRow(row, result))
   }
   data[STAGED_RUN_INDEX_ROWS_KEY] = {}
 }
@@ -355,6 +395,11 @@ function triggerMode(kind: string | null | undefined): RunIndexRow["triggerMode"
 function isConflict(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err)
   return /HTTP 409/i.test(msg) || /HTTP 422/i.test(msg) || /does not match|is at|but expected/i.test(msg)
+}
+
+function tenantIdForRun(config: StateRepoConfig): string | undefined {
+  if (config.github?.owner && config.github.repo) return `${config.github.owner}/${config.github.repo}`
+  return process.env.GITHUB_REPOSITORY?.trim() || undefined
 }
 
 function recordValue(value: unknown): Record<string, unknown> | null {

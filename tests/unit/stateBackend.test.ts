@@ -97,6 +97,45 @@ describe("state backend", () => {
     })
   })
 
+  it("stores run summaries and ordered run evidence in their dedicated aggregates", async () => {
+    const transport = client()
+    const backend = createStateBackendFromEnv(
+      { CONVEX_URL: "https://example.convex.cloud", KODY_SERVICE_KEY: "secret" },
+      transport,
+    )
+    await backend.saveAgencyRun(
+      "acme/app",
+      "goal:g1:run-1",
+      "goal",
+      "g1",
+      { status: "running" },
+      "2026-07-17T10:00:00.000Z",
+    )
+    await backend.appendRunEvent(
+      "acme/app",
+      "goal:g1:run-1",
+      "g1",
+      { event: "goal.tick.dispatch" },
+      "2026-07-17T10:00:00.000Z",
+    )
+
+    expect(transport.mutation).toHaveBeenCalledWith(anyApi.agencyRuns.save, {
+      tenantId: "acme/app",
+      runId: "goal:g1:run-1",
+      subjectType: "goal",
+      subjectId: "g1",
+      run: { status: "running" },
+      updatedAt: "2026-07-17T10:00:00.000Z",
+    })
+    expect(transport.mutation).toHaveBeenCalledWith(anyApi.runEvents.append, {
+      tenantId: "acme/app",
+      runId: "goal:g1:run-1",
+      goalId: "g1",
+      event: { event: "goal.tick.dispatch" },
+      time: "2026-07-17T10:00:00.000Z",
+    })
+  })
+
   it("stores reports with a stable slug and run id", async () => {
     const transport = client()
     const backend = createStateBackendFromEnv(
