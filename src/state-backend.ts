@@ -48,6 +48,10 @@ export interface StateBackend {
     meta: unknown,
     updatedAt: string,
   ): Promise<void>
+  listIntents(tenantId: string): Promise<Array<{ intentId: string; intent: unknown; updatedAt: string }>>
+  getIntent(tenantId: string, intentId: string): Promise<{ intentId: string; intent: unknown; updatedAt: string } | null>
+  saveIntent(tenantId: string, intentId: string, intent: unknown, updatedAt: string): Promise<void>
+  appendIntentDecision(tenantId: string, intentId: string, decision: unknown): Promise<void>
 }
 
 function requireTenant(tenantId: string): string {
@@ -150,6 +154,32 @@ export function createStateBackendFromEnv(
         body,
         meta,
         updatedAt,
+      })
+    },
+    async listIntents(tenantId) {
+      const result = await transport.query(anyApi.intents.list, { tenantId: requireTenant(tenantId) })
+      return Array.isArray(result) ? (result as Array<{ intentId: string; intent: unknown; updatedAt: string }>) : []
+    },
+    async getIntent(tenantId, intentId) {
+      const result = await transport.query(anyApi.intents.get, {
+        tenantId: requireTenant(tenantId),
+        intentId: requireNonEmpty(intentId, "intentId"),
+      })
+      return (result as { intentId: string; intent: unknown; updatedAt: string } | null) ?? null
+    },
+    async saveIntent(tenantId, intentId, intent, updatedAt) {
+      await transport.mutation(anyApi.intents.save, {
+        tenantId: requireTenant(tenantId),
+        intentId: requireNonEmpty(intentId, "intentId"),
+        intent,
+        updatedAt,
+      })
+    },
+    async appendIntentDecision(tenantId, intentId, decision) {
+      await transport.mutation(anyApi.intents.appendDecision, {
+        tenantId: requireTenant(tenantId),
+        intentId: requireNonEmpty(intentId, "intentId"),
+        decision,
       })
     },
   }

@@ -1,8 +1,8 @@
-import { listCompanyIntents } from "../companyIntent.js"
+import { listCompanyIntentsAsync } from "../companyIntent.js"
 import type { PreflightScript } from "../implementations/types.js"
 
 export const loadCompanyIntents: PreflightScript = async (ctx) => {
-  const intents = listCompanyIntents(ctx.config, ctx.cwd)
+  const intents = await listCompanyIntentsAsync(ctx.config, ctx.cwd)
   const active = intents.filter((record) => record.intent.status === "active")
   ctx.data.companyIntents = intents
   ctx.data.companyActiveIntents = active
