@@ -114,4 +114,31 @@ describe("state backend", () => {
       updatedAt: "now",
     })
   })
+
+  it("reads and writes company intents through the intent aggregate", async () => {
+    const transport = client()
+    const backend = createStateBackendFromEnv(
+      { CONVEX_URL: "https://example.convex.cloud", KODY_SERVICE_KEY: "secret" },
+      transport,
+    )
+    await backend.listIntents("acme/app")
+    await backend.getIntent("acme/app", "release-confidence")
+    await backend.saveIntent("acme/app", "release-confidence", { id: "release-confidence" }, "now")
+    await backend.appendIntentDecision("acme/app", "release-confidence", { action: "pause", at: "now" })
+    expect(transport.query).toHaveBeenCalledWith(anyApi.intents.list, { tenantId: "acme/app" })
+    expect(transport.query).toHaveBeenCalledWith(anyApi.intents.get, {
+      tenantId: "acme/app",
+      intentId: "release-confidence",
+    })
+    expect(transport.mutation).toHaveBeenCalledWith(anyApi.intents.save, expect.objectContaining({
+      tenantId: "acme/app",
+      intentId: "release-confidence",
+      updatedAt: "now",
+    }))
+    expect(transport.mutation).toHaveBeenCalledWith(anyApi.intents.appendDecision, {
+      tenantId: "acme/app",
+      intentId: "release-confidence",
+      decision: { action: "pause", at: "now" },
+    })
+  })
 })
