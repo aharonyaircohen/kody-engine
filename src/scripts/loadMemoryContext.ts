@@ -18,6 +18,7 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type { PreflightScript } from "../implementations/types.js"
+import { createStateBackendFromEnv, type TaskDocument } from "../state-backend.js"
 
 const MEMORY_DIR_RELATIVE = ".kody/memory"
 const MAX_PAGES = 8
@@ -37,6 +38,20 @@ export const loadMemoryContext: PreflightScript = async (ctx) => {
   // Phase 5 fast path: container already loaded memory pages. Detect by
   // "key present" so empty-memory ("") is honoured too.
   if (typeof ctx.data.memoryContext === "string") return
+
+  const tenantId = ctx.config.github?.owner && ctx.config.github.repo
+    ? `${ctx.config.github.owner}/${ctx.config.github.repo}`
+    : process.env.GITHUB_REPOSITORY?.trim()
+  if (process.env.CONVEX_URL && process.env.KODY_SERVICE_KEY && tenantId) {
+    try {
+      const backend = createStateBackendFromEnv()
+      const docs = await backend.listRepoDocs(tenantId, "memory:")
+      ctx.data.memoryContext = formatBlockFromBackend(docs)
+    } catch {
+      ctx.data.memoryContext = ""
+    }
+    return
+  }
 
   const memoryAbs = path.join(ctx.cwd, MEMORY_DIR_RELATIVE)
   if (!fs.existsSync(memoryAbs)) {
@@ -70,6 +85,22 @@ export const loadMemoryContext: PreflightScript = async (ctx) => {
   const top = ordered.slice(0, MAX_PAGES)
 
   ctx.data.memoryContext = formatBlock(top)
+}
+
+function formatBlockFromBackend(docs: TaskDocument[]): string {
+  const pages: MemoryPage[] = docs.flatMap((record) => {
+    if (!record.doc || typeof record.doc !== "object") return []
+    const doc = record.doc as Partial<MemoryPage>
+    if (typeof doc.content !== "string") return []
+    return [{
+      relPath: typeof doc.relPath === "string" ? doc.relPath : record.kind,
+      title: typeof doc.title === "string" ? doc.title : record.kind,
+      updated: typeof doc.updated === "string" ? doc.updated : record.updatedAt,
+      content: doc.content.length > PER_PAGE_MAX_BYTES ? doc.content.slice(0, PER_PAGE_MAX_BYTES) + TRUNCATED_SUFFIX : doc.content,
+      mtime: Date.parse(record.updatedAt) || 0,
+    }]
+  })
+  return formatBlock(sortByRecency(pages).slice(0, MAX_PAGES))
 }
 
 function collectPages(memoryAbs: string): MemoryPage[] {

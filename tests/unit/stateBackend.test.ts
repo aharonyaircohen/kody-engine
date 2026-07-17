@@ -55,4 +55,30 @@ describe("state backend", () => {
       expectedUpdatedAt: "2026-07-17T00:00:00.000Z",
     }))
   })
+
+  it("supports bounded repository-document reads and guarded writes", async () => {
+    const transport = client()
+    const backend = createStateBackendFromEnv(
+      { CONVEX_URL: "https://example.convex.cloud", KODY_SERVICE_KEY: "secret" },
+      transport,
+    )
+
+    await backend.getRepoDoc("acme/app", "memory:preferences")
+    await backend.listRepoDocs("acme/app", "memory:")
+    await backend.saveRepoDoc("acme/app", "memory:preferences", { content: "plain" }, "old")
+
+    expect(transport.query).toHaveBeenCalledWith(anyApi.repoDocs.get, {
+      tenantId: "acme/app",
+      kind: "memory:preferences",
+    })
+    expect(transport.query).toHaveBeenCalledWith(anyApi.repoDocs.listByPrefix, {
+      tenantId: "acme/app",
+      prefix: "memory:",
+    })
+    expect(transport.mutation).toHaveBeenCalledWith(anyApi.repoDocs.save, expect.objectContaining({
+      tenantId: "acme/app",
+      kind: "memory:preferences",
+      expectedUpdatedAt: "old",
+    }))
+  })
 })
