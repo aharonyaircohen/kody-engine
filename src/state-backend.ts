@@ -39,6 +39,15 @@ export interface StateBackend {
   listGoals(tenantId: string): Promise<GoalDocument[]>
   saveGoal(tenantId: string, goalId: string, state: unknown, updatedAt: string, expectedUpdatedAt?: string): Promise<void>
   appendDailyLog(tenantId: string, stream: "activity" | "events" | "flyActivity", date: string, entry: unknown): Promise<void>
+  saveReport(
+    tenantId: string,
+    slug: string,
+    runId: string,
+    title: string,
+    body: string,
+    meta: unknown,
+    updatedAt: string,
+  ): Promise<void>
 }
 
 function requireTenant(tenantId: string): string {
@@ -130,6 +139,17 @@ export function createStateBackendFromEnv(
         stream,
         date: requireNonEmpty(date, "date"),
         entry,
+      })
+    },
+    async saveReport(tenantId, slug, runId, title, body, meta, updatedAt) {
+      await transport.mutation(anyApi.reports.save, {
+        tenantId: requireTenant(tenantId),
+        slug: requireNonEmpty(slug, "slug"),
+        runId: requireNonEmpty(runId, "runId"),
+        title,
+        body,
+        meta,
+        updatedAt,
       })
     },
   }

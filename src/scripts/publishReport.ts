@@ -2,6 +2,7 @@ import type { AgentResult } from "../agent.js"
 import { type CapabilityResult, parseCapabilityResult, parseCapabilityResultsFromText } from "../capabilityResult.js"
 import type { PostflightScript, ReportPublicationConfig } from "../implementations/types.js"
 import { writeStateText } from "../stateRepo.js"
+import { createStateBackendFromEnv } from "../state-backend.js"
 
 const SAFE_SLUG = /^[a-z0-9][a-z0-9_-]{0,79}$/
 
@@ -67,7 +68,21 @@ export const publishReport: PostflightScript = async (ctx, _profile, agentResult
     ...(publication.reviewArea ? { reviewArea: publication.reviewArea } : {}),
   })
   const runId = generatedAt.replace(/\.\d{3}Z$/, "Z").replace(/:/g, "-")
-  writeStateText(ctx.config, ctx.cwd, `reports/${slug}/runs/${runId}.md`, markdown, `chore(reports): add ${slug} run`)
+  const tenantId = ctx.config.github?.owner && ctx.config.github.repo
+    ? `${ctx.config.github.owner}/${ctx.config.github.repo}`
+    : process.env.GITHUB_REPOSITORY
+  if (process.env.CONVEX_URL?.trim() && process.env.KODY_SERVICE_KEY?.trim() && tenantId) {
+    await createStateBackendFromEnv().saveReport(tenantId, slug, runId, title, markdown, {
+      reportType: publication.type,
+      reportTypeVersion: publication.version ?? 1,
+      owner: publication.owner,
+      capability: stringValue(ctx.data.jobCapability) ?? stringValue(ctx.data.capabilitySlug) ?? "unknown",
+    }, generatedAt)
+  } else if (process.env.GITHUB_ACTIONS === "true") {
+    throw new Error("Convex backend is required for reports in GitHub Actions")
+  } else {
+    writeStateText(ctx.config, ctx.cwd, `reports/${slug}/runs/${runId}.md`, markdown, `chore(reports): add ${slug} run`)
+  }
 }
 
 function parsePublication(value: unknown): ReportPublicationConfig | null {

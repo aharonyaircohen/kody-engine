@@ -96,4 +96,22 @@ describe("state backend", () => {
       entry: { goalId: "g1", event: "tick" },
     })
   })
+
+  it("stores reports with a stable slug and run id", async () => {
+    const transport = client()
+    const backend = createStateBackendFromEnv(
+      { CONVEX_URL: "https://example.convex.cloud", KODY_SERVICE_KEY: "secret" },
+      transport,
+    )
+    await backend.saveReport("acme/app", "release", "run-1", "Release", "# Release", { owner: "kody" }, "now")
+    expect(transport.mutation).toHaveBeenCalledWith(anyApi.reports.save, {
+      tenantId: "acme/app",
+      slug: "release",
+      runId: "run-1",
+      title: "Release",
+      body: "# Release",
+      meta: { owner: "kody" },
+      updatedAt: "now",
+    })
+  })
 })
