@@ -7,7 +7,7 @@
 import { refreshGoalDashboardReport } from "../goal/report.js"
 import { flushGoalRunLogEventsAsync } from "../goal/runLog.js"
 import type { GoalState } from "../goal/state.js"
-import { putGoalState } from "../goal/stateStore.js"
+import { putGoalStateAsync } from "../goal/stateStore.js"
 import type { PostflightScript } from "../implementations/types.js"
 import type { GoalCtx } from "./goalCtx.js"
 
@@ -30,7 +30,7 @@ export const commitGoalState: PostflightScript = async (ctx) => {
   }
 
   try {
-    putGoalState(ctx.config, goal.id, updated, describeCommitMessage(goal), ctx.cwd)
+    await putGoalStateAsync(ctx.config, goal.id, updated, describeCommitMessage(goal), ctx.cwd)
     refreshReportOrFail(ctx, goal.id, updated)
   } catch (err) {
     process.stderr.write(

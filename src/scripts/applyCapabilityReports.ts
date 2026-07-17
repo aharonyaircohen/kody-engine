@@ -13,7 +13,7 @@ import { managedGoalFromState, planManagedGoalTick, writeManagedGoalToState } fr
 import { capabilityEvidenceOutput, refreshGoalDashboardReport } from "../goal/report.js"
 import { flushGoalRunLogEventsAsync, goalRunLogChange, goalRunLogSnapshot, stageGoalRunLogEvent } from "../goal/runLog.js"
 import { type GoalState, nowIso, serializeGoalState } from "../goal/state.js"
-import { fetchGoalState, putGoalState } from "../goal/stateStore.js"
+import { fetchGoalStateAsync, putGoalStateAsync } from "../goal/stateStore.js"
 import type { PostflightScript } from "../implementations/types.js"
 import { gh } from "../issue.js"
 
@@ -34,7 +34,7 @@ export const applyCapabilityReports: PostflightScript = async (ctx, _profile, ag
   const evidenceByGoal = groupGoalEvidence(evidenceItems)
 
   for (const [goalId, goalEvidence] of evidenceByGoal) {
-    const prior = fetchGoalState(ctx.config, goalId, ctx.cwd)
+    const prior = await fetchGoalStateAsync(ctx.config, goalId, ctx.cwd)
     if (!prior) {
       stageGoalRunLogEvent(ctx.data, goalId, {
         source: "goal-loop",
@@ -112,7 +112,7 @@ export const applyCapabilityReports: PostflightScript = async (ctx, _profile, ag
 
     try {
       if (changed) {
-        putGoalState(ctx.config, goalId, nextForOutput, describeMessage(goalId, goalEvidence), ctx.cwd)
+        await putGoalStateAsync(ctx.config, goalId, nextForOutput, describeMessage(goalId, goalEvidence), ctx.cwd)
       }
       refreshReportOrFail(ctx, goalId, nextForOutput, goalEvidence)
       if (

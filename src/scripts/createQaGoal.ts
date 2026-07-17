@@ -28,7 +28,7 @@
 import type { AgentResult } from "../agent.js"
 import type { ManagedGoal } from "../goal/manager.js"
 import { type GoalState, nowIso } from "../goal/state.js"
-import { putGoalState } from "../goal/stateStore.js"
+import { putGoalStateAsync } from "../goal/stateStore.js"
 import type { PostflightScript } from "../implementations/types.js"
 import { gh, postIssueComment, truncate } from "../issue.js"
 import type { Action } from "../state.js"
@@ -642,7 +642,7 @@ export async function promoteReportToGoal(
     extra: { version: 1, ...managedGoal },
   }
   try {
-    putGoalState(ctx.config, goalId, goalState, `chore(goals): activate ${goalId}`, ctx.cwd)
+    await putGoalStateAsync(ctx.config, goalId, goalState, `chore(goals): activate ${goalId}`, ctx.cwd)
   } catch (err) {
     process.stderr.write(
       `[createQaGoal] failed to persist goal state to state repo: ${err instanceof Error ? err.message : String(err)}\n` +

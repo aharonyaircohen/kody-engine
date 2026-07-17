@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("../../src/goal/stateStore.js", () => ({
-  fetchGoalState: vi.fn(),
-  putGoalState: vi.fn(),
-}))
+vi.mock("../../src/goal/stateStore.js", () => {
+  const fetch = vi.fn()
+  const put = vi.fn()
+  return { fetchGoalState: fetch, fetchGoalStateAsync: fetch, putGoalState: put, putGoalStateAsync: put }
+})
 vi.mock("../../src/goal/runLog.js", async () => {
   const actual = await vi.importActual<typeof import("../../src/goal/runLog.js")>("../../src/goal/runLog.js")
   return {

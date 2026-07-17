@@ -1,5 +1,5 @@
 import { type GoalState, nowIso } from "./goal/state.js"
-import { fetchGoalState, listGoalStateIds, putGoalState } from "./goal/stateStore.js"
+import { fetchGoalStateAsync, listGoalStateIdsAsync, putGoalStateAsync } from "./goal/stateStore.js"
 import {
   appendStateLine,
   listStateDirectory,
@@ -187,11 +187,11 @@ export function appendCompanyIntentDecision(
   )
 }
 
-export function listCompanyPortfolio(config: StateRepoConfig, cwd?: string): CompanyPortfolio {
+export async function listCompanyPortfolio(config: StateRepoConfig, cwd?: string): Promise<CompanyPortfolio> {
   const goals: CompanyPortfolioGoal[] = []
-  for (const id of listGoalStateIds(config, cwd)) {
+  for (const id of await listGoalStateIdsAsync(config, cwd)) {
     if (!isCompanyIntentId(id)) continue
-    const state = fetchGoalState(config, id, cwd)
+    const state = await fetchGoalStateAsync(config, id, cwd)
     if (!state) continue
     const destination = recordField(state.extra.destination)
     goals.push({
@@ -207,15 +207,15 @@ export function listCompanyPortfolio(config: StateRepoConfig, cwd?: string): Com
   return { goals: goals.sort((a, b) => a.id.localeCompare(b.id)) }
 }
 
-export function writeCompanyGoalState(
+export async function writeCompanyGoalState(
   config: StateRepoConfig,
   cwd: string | undefined,
   id: string,
   state: GoalState,
   message: string,
-): void {
+): Promise<void> {
   assertIntentId(id)
-  putGoalState(config, id, state, message, cwd)
+  await putGoalStateAsync(config, id, state, message, cwd)
 }
 
 function assertIntentId(id: string): void {

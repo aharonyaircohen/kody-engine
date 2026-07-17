@@ -10,7 +10,7 @@ import {
 import { goalRunLogChange, goalRunLogSnapshot, stageGoalRunLogEvent } from "../goal/runLog.js"
 import type { GoalState } from "../goal/state.js"
 import { serializeGoalState } from "../goal/state.js"
-import { fetchGoalState } from "../goal/stateStore.js"
+import { fetchGoalStateAsync } from "../goal/stateStore.js"
 import {
   type GoalLoopTargetResolution,
   goalLoopNow,
@@ -111,7 +111,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
         : undefined
     const now = goalLoopNow()
     const activeTarget = isGoalTargetLoop(managed)
-      ? resolveActiveGoalLoopTarget(ctx.config, ctx.cwd, goal.id, managed)
+      ? await resolveActiveGoalLoopTarget(ctx.config, ctx.cwd, goal.id, managed)
       : null
     const allowSameDayTargetDispatch =
       isGoalTargetLoop(managed) && (!!activeTarget || previousDispatchWasTargetInstance(managed, previousScheduleState))
@@ -124,7 +124,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     let targetResolution: GoalLoopTargetResolution | undefined
     const selfAutonomyBlock =
       decision.kind === "dispatch" && decision.dispatch
-        ? autonomyBlockReason(ctx, goal.id, managed, goal.raw, decision.dispatch, { checkTargets: false })
+        ? await autonomyBlockReason(ctx, goal.id, managed, goal.raw, decision.dispatch, { checkTargets: false })
         : null
     if (selfAutonomyBlock) {
       restoreGoalIdFact()
@@ -137,7 +137,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
       return
     }
     if (decision.kind === "dispatch" && decision.dispatch && isGoalTargetLoop(managed)) {
-      targetResolution = resolveGoalLoopTarget(ctx.config, ctx.cwd, goal.id, managed, now)
+      targetResolution = await resolveGoalLoopTarget(ctx.config, ctx.cwd, goal.id, managed, now)
       decision = planTargetLoopSchedule({
         goal: managed,
         previousScheduleState,
@@ -150,7 +150,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     goal.raw = writeManagedGoalToState({ ...goal.raw, state: goal.state }, managed)
     const autonomyBlock =
       decision.kind === "dispatch" && decision.dispatch
-        ? autonomyBlockReason(ctx, goal.id, managed, goal.raw, decision.dispatch)
+        ? await autonomyBlockReason(ctx, goal.id, managed, goal.raw, decision.dispatch)
         : null
     if (autonomyBlock) {
       const waitDecision = scheduleWaitDecision(previousScheduleState, decision, autonomyBlock)
@@ -225,7 +225,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
     goal.raw = writeManagedGoalToState({ ...goal.raw, state: goal.state }, managed)
     const autonomyBlock =
       decision.kind === "dispatch" && decision.dispatch
-        ? autonomyBlockReason(ctx, goal.id, managed, goal.raw, decision.dispatch)
+        ? await autonomyBlockReason(ctx, goal.id, managed, goal.raw, decision.dispatch)
         : null
     if (autonomyBlock) {
       const waitDecision = scheduleWaitDecision(previousScheduleState, decision, autonomyBlock)
@@ -302,7 +302,7 @@ export const advanceManagedGoal: PreflightScript = async (ctx) => {
             ...(decision.implementation ? { implementation: decision.implementation } : {}),
             cliArgs: decision.cliArgs,
           }
-    const autonomyBlock = autonomyBlockReason(ctx, goal.id, managed, goal.raw, planned)
+    const autonomyBlock = await autonomyBlockReason(ctx, goal.id, managed, goal.raw, planned)
     if (autonomyBlock) {
       stageAutonomyBlocked(ctx.data, goal.id, managed, goal.state, autonomyBlock)
       ctx.output.reason = autonomyBlock
@@ -369,14 +369,14 @@ type PlannedDispatch = {
   cliArgs: Record<string, unknown>
 }
 
-function autonomyBlockReason(
+async function autonomyBlockReason(
   ctx: Parameters<PreflightScript>[0],
   goalId: string,
   goal: ManagedGoal,
   goalState: GoalState,
   dispatch: PlannedDispatch,
   options: { checkTargets?: boolean } = {},
-): string | null {
+): Promise<string | null> {
   if (ctx.data.jobForce === true) return null
   const selfKind = managedModelKind(goal)
   const selfMode = selfKind === "Goal" ? firstTrustOverride(ctx, subjectCandidates("goal", goalId, goalState)) : null
@@ -397,7 +397,7 @@ function autonomyBlockReason(
   const targetGoal =
     dispatch.action === "goal-manager" && typeof dispatch.cliArgs.goal === "string" ? dispatch.cliArgs.goal : null
   if (targetGoal && targetGoal !== goalId && options.checkTargets !== false) {
-    const target = fetchGoalState(ctx.config, targetGoal, ctx.cwd)
+    const target = await fetchGoalStateAsync(ctx.config, targetGoal, ctx.cwd)
     const targetManaged = target ? managedGoalFromState(expandManagedGoalState(target)) : null
     const targetIsGoal = targetManaged ? managedModelKind(targetManaged) === "Goal" : false
     const targetMode =

@@ -4,7 +4,7 @@ import { getCompanyStoreAssetRoot } from "../companyStore.js"
 import { type StateRepoConfig } from "../stateRepo.js"
 import type { ManagedGoal } from "./manager.js"
 import type { GoalState } from "./state.js"
-import { fetchGoalState, listGoalStateIds, putGoalState } from "./stateStore.js"
+import { fetchGoalStateAsync, listGoalStateIdsAsync, putGoalStateAsync } from "./stateStore.js"
 
 export interface GoalLoopTargetResolution {
   targetId: string
@@ -19,17 +19,17 @@ export interface ActiveGoalLoopTarget {
   reason: string
 }
 
-export function resolveActiveGoalLoopTarget(
+export async function resolveActiveGoalLoopTarget(
   config: StateRepoConfig,
   cwd: string,
   loopGoalId: string,
   loopGoal: ManagedGoal,
-): ActiveGoalLoopTarget | null {
+): Promise<ActiveGoalLoopTarget | null> {
   const targetId = loopGoal.loopTarget?.id.trim() ?? ""
   assertSafeGoalId(targetId, "loop target")
   if (!hasExplicitStateRepo(config)) return null
 
-  const activeInstance = findActiveTargetInstance(config, cwd, loopGoalId, targetId)
+  const activeInstance = await findActiveTargetInstance(config, cwd, loopGoalId, targetId)
   if (activeInstance) {
     return {
       targetId: activeInstance.id,
@@ -38,7 +38,7 @@ export function resolveActiveGoalLoopTarget(
     }
   }
 
-  const directTarget = fetchGoalState(config, targetId, cwd)
+  const directTarget = await fetchGoalStateAsync(config, targetId, cwd)
   if (directTarget?.state === "active") {
     return { targetId, templateId: targetId, reason: "active target goal" }
   }
@@ -46,23 +46,23 @@ export function resolveActiveGoalLoopTarget(
   return null
 }
 
-export function resolveGoalLoopTarget(
+export async function resolveGoalLoopTarget(
   config: StateRepoConfig,
   cwd: string,
   loopGoalId: string,
   loopGoal: ManagedGoal,
   now: Date,
-): GoalLoopTargetResolution {
+): Promise<GoalLoopTargetResolution> {
   const targetId = loopGoal.loopTarget?.id.trim() ?? ""
   assertSafeGoalId(targetId, "loop target")
   if (!hasExplicitStateRepo(config)) {
     return { targetId, templateId: targetId, reason: "literal target; state repo not configured" }
   }
 
-  const activeTarget = resolveActiveGoalLoopTarget(config, cwd, loopGoalId, loopGoal)
+  const activeTarget = await resolveActiveGoalLoopTarget(config, cwd, loopGoalId, loopGoal)
   if (activeTarget) return activeTarget
 
-  const directTarget = fetchGoalState(config, targetId, cwd)
+  const directTarget = await fetchGoalStateAsync(config, targetId, cwd)
   const template = loadGoalTemplate(cwd, targetId)
   if (!template) {
     if (directTarget) {
@@ -71,9 +71,9 @@ export function resolveGoalLoopTarget(
     return { targetId, templateId: targetId, reason: "literal target; no target state or template found" }
   }
 
-  const instanceId = chooseTargetInstanceId(config, cwd, targetId, loopGoal.preferredRunTime?.timezone, now)
+  const instanceId = await chooseTargetInstanceId(config, cwd, targetId, loopGoal.preferredRunTime?.timezone, now)
   const instance = buildGoalTargetInstance(template, targetId, now)
-  putGoalState(config, instanceId, instance, `chore(goals): create ${instanceId}`, cwd)
+  await putGoalStateAsync(config, instanceId, instance, `chore(goals): create ${instanceId}`, cwd)
   return {
     targetId: instanceId,
     templateId: targetId,
@@ -102,19 +102,19 @@ function hasExplicitStateRepo(config: StateRepoConfig): boolean {
   )
 }
 
-function findActiveTargetInstance(
+async function findActiveTargetInstance(
   config: StateRepoConfig,
   cwd: string,
   loopGoalId: string,
   targetId: string,
-): { id: string; state: GoalState } | null {
+): Promise<{ id: string; state: GoalState } | null> {
   const candidates: Array<{ id: string; state: GoalState }> = []
 
-  for (const entryId of listGoalStateIds(config, cwd)) {
+  for (const entryId of await listGoalStateIdsAsync(config, cwd)) {
     const id = entryId.trim()
     if (!id || id === loopGoalId || id === targetId || !id.startsWith(`${targetId}-`)) continue
     assertSafeGoalId(id, "goal instance")
-    const state = fetchGoalState(config, id, cwd)
+    const state = await fetchGoalStateAsync(config, id, cwd)
     if (!state || state.state !== "active") continue
     if (!isTargetInstanceState(id, state, targetId)) continue
     candidates.push({ id, state })
@@ -160,18 +160,18 @@ function readJsonObject(filePath: string): Record<string, unknown> | null {
   return parsed as Record<string, unknown>
 }
 
-function chooseTargetInstanceId(
+async function chooseTargetInstanceId(
   config: StateRepoConfig,
   cwd: string,
   targetId: string,
   timezone: string | undefined,
   now: Date,
-): string {
+): Promise<string> {
   const base = `${targetId}-${zonedDate(now, timezone ?? "UTC")}`
   for (let index = 1; index <= 20; index += 1) {
     const id = index === 1 ? base : `${base}-${index}`
     assertSafeGoalId(id, "goal instance")
-    const existing = fetchGoalState(config, id, cwd)
+    const existing = await fetchGoalStateAsync(config, id, cwd)
     if (!existing || existing.state === "active") return id
   }
   throw new Error(`could not allocate goal target instance id for ${targetId}`)
