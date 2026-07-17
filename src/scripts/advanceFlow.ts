@@ -60,7 +60,7 @@ export const advanceFlow: PostflightScript = async (ctx, profile) => {
   const curState = state as TaskState
   let issueState: TaskState
   try {
-    issueState = readTaskState("issue", flow.issueNumber, ctx.cwd, ctx.config)
+    issueState = await readTaskState("issue", flow.issueNumber, ctx.cwd, ctx.config)
   } catch {
     issueState = curState
   }
@@ -85,7 +85,7 @@ export const advanceFlow: PostflightScript = async (ctx, profile) => {
     // tell the issue why we stopped.
     nextIssueState.flow = undefined
     try {
-      writeTaskState("issue", flow.issueNumber, nextIssueState, ctx.cwd, ctx.config)
+      await writeTaskState("issue", flow.issueNumber, nextIssueState, ctx.cwd, ctx.config)
     } catch (err) {
       process.stderr.write(
         `[kody advanceFlow] failed to clear looping flow on issue #${flow.issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,
@@ -107,7 +107,7 @@ export const advanceFlow: PostflightScript = async (ctx, profile) => {
   // re-triggering, so the next run sees the higher count.
   nextIssueState.flow = { ...flow, hops }
   try {
-    writeTaskState("issue", flow.issueNumber, nextIssueState, ctx.cwd, ctx.config)
+    await writeTaskState("issue", flow.issueNumber, nextIssueState, ctx.cwd, ctx.config)
   } catch (err) {
     process.stderr.write(
       `[kody advanceFlow] failed to persist hop count on issue #${flow.issueNumber}: ${err instanceof Error ? err.message : String(err)}\n`,

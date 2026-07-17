@@ -11,6 +11,7 @@
 
 import { loadConfig } from "./config.js"
 import type { JobFlavor } from "./implementations/types.js"
+import { createStateBackendFromEnv } from "./state-backend.js"
 import { readStateText, type StateRepoConfig, upsertStateText } from "./stateRepo.js"
 
 export const STATE_BEGIN = "<!-- kody:state:v1:begin -->"
@@ -636,7 +637,7 @@ export function renderStateComment(state: TaskState): string {
   return lines.join("\n")
 }
 
-export function readTaskState(target: TaskTarget, number: number, cwd?: string, config?: StateRepoConfig): TaskState {
+function readTaskStateLegacy(target: TaskTarget, number: number, cwd?: string, config?: StateRepoConfig): TaskState {
   const stateConfig = taskStateConfig(cwd, config)
   const loaded = readStateText(stateConfig, cwd, taskStatePath(target, number))
   if (!loaded) return emptyState()
@@ -653,6 +654,39 @@ export function readTaskState(target: TaskTarget, number: number, cwd?: string, 
   return normalizeTaskState(parsed)
 }
 
+function backendScope(config?: StateRepoConfig): { tenantId: string } | null {
+  const tenantId = config?.github?.owner && config.github.repo
+    ? `${config.github.owner}/${config.github.repo}`
+    : process.env.GITHUB_REPOSITORY?.trim()
+  if (!process.env.CONVEX_URL || !process.env.KODY_SERVICE_KEY || !tenantId) return null
+  return { tenantId }
+}
+
+/** Async backend-first task-state read used by runtime execution paths. */
+export async function readTaskState(
+  target: TaskTarget,
+  number: number,
+  cwd?: string,
+  config?: StateRepoConfig,
+): Promise<TaskState> {
+  const scope = backendScope(config)
+  if (!scope) return readTaskStateLegacy(target, number, cwd, config)
+  const backend = createStateBackendFromEnv()
+  const kind = "state"
+  const taskKey = `${target === "issue" ? "issues" : "prs"}/${number}`
+  const record = await backend.get(scope.tenantId, taskKey, kind)
+  if (!record) return emptyState()
+  try {
+    return normalizeTaskState(record.doc as TaskState)
+  } catch (err) {
+    throw new CorruptStateError(
+      `backend task state unparseable for ${taskKey}: ${err instanceof Error ? err.message : String(err)}`,
+    )
+  }
+}
+
+export const readTaskStateAsync = readTaskState
+
 /**
  * Immutable update: return a new state with the named artifact set. Used by
  * the persistArtifacts postflight so declared outputs land in a stable slot.
@@ -664,7 +698,7 @@ export function setArtifact(state: TaskState, name: string, artifact: Artifact):
   }
 }
 
-export function writeTaskState(
+function writeTaskStateLegacy(
   target: TaskTarget,
   number: number,
   state: TaskState,
@@ -680,3 +714,22 @@ export function writeTaskState(
     `chore(tasks): update ${target} ${number} state`,
   )
 }
+
+/** Async backend-first task-state write used by runtime execution paths. */
+export async function writeTaskState(
+  target: TaskTarget,
+  number: number,
+  state: TaskState,
+  cwd?: string,
+  config?: StateRepoConfig,
+): Promise<void> {
+  const scope = backendScope(config)
+  if (!scope) {
+    writeTaskStateLegacy(target, number, state, cwd, config)
+    return
+  }
+  const backend = createStateBackendFromEnv()
+  await backend.save(scope.tenantId, `${target === "issue" ? "issues" : "prs"}/${number}`, "state", state)
+}
+
+export const writeTaskStateAsync = writeTaskState

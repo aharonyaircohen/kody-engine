@@ -79,7 +79,7 @@ export const finalizeTerminal: PostflightScript = async (ctx) => {
 
   if (!state) {
     try {
-      state = readTaskState(target, targetNumber, ctx.cwd, ctx.config)
+    state = await readTaskState(target, targetNumber, ctx.cwd, ctx.config)
     } catch {
       state = undefined
     }
@@ -105,7 +105,7 @@ export const finalizeTerminal: PostflightScript = async (ctx) => {
   // Best-effort: a failed write is logged, not thrown — the user-visible
   // label is already in place.
   try {
-    writeTaskState(target, targetNumber, next, ctx.cwd, ctx.config)
+    await writeTaskState(target, targetNumber, next, ctx.cwd, ctx.config)
   } catch (err) {
     process.stderr.write(
       `[kody finalizeTerminal] failed to write terminal state on ${target} #${targetNumber}: ${err instanceof Error ? err.message : String(err)}\n`,

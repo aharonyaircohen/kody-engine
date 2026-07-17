@@ -282,7 +282,10 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   // Per-task artifacts contract appended to every chat session so the
   // agent writes context.json / memory-recs.json / followups.json /
   // handoff-notes.md to a local temp dir before its final reply.
-  const taskArtifactsPaths = prepareTaskArtifactsDir(opts.cwd, opts.sessionId)
+  const taskArtifactsPaths = {
+    ...prepareTaskArtifactsDir(opts.cwd, opts.sessionId),
+    taskKey: `sessions/${opts.sessionId}`,
+  }
   const artifactAddendum = taskArtifactsPromptAddendum({
     taskId: taskArtifactsPaths.taskId,
     taskType: "chat",
@@ -456,7 +459,7 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
         `[task-artifacts] chat session ${taskArtifactsPaths.taskId} missing: ${missing.join(", ")}\n`,
       )
     }
-    if (opts.stateConfig) persistTaskArtifactsToState(opts.stateConfig, opts.cwd, taskArtifactsPaths)
+    if (opts.stateConfig) await persistTaskArtifactsToState(opts.stateConfig, opts.cwd, taskArtifactsPaths)
   } catch (err) {
     process.stderr.write(
       `[task-artifacts] chat session ${taskArtifactsPaths.taskId} persist failed: ${

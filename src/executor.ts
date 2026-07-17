@@ -212,7 +212,7 @@ export interface ExecutorInput {
    * to `readTaskState`. Tests inject a stub that returns the state a mock
    * child "wrote" to skip the gh round-trip.
    */
-  __readTaskState?: (target: TaskTarget, number: number, cwd?: string) => TaskState
+  __readTaskState?: (target: TaskTarget, number: number, cwd?: string) => TaskState | Promise<TaskState>
   /**
    * Phase 5 foundation: pre-populated `ctx.data` entries seeded into the
    * child's context before any preflight runs. Container loops use this
@@ -447,6 +447,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
           const paths = prepareTaskArtifactsDir(input.cwd, taskTarget)
           return {
             ...paths,
+            taskKey: `${taskType === "issue" ? "issues" : "prs"}/${paths.taskId}`,
             taskType,
             promptAddendum: taskArtifactsPromptAddendum({
               taskId: paths.taskId,
@@ -826,7 +827,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
           process.stderr.write(`[task-artifacts] task ${taskArtifacts.taskId} missing: ${missing.join(", ")}\n`)
         }
         if (!input.skipConfig && (config.state || (config.github.owner && config.github.repo))) {
-          persistTaskArtifactsToState(config, input.cwd, taskArtifacts)
+          await persistTaskArtifactsToState(config, input.cwd, taskArtifacts)
         }
       } catch (err) {
         process.stderr.write(

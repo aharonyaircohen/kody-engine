@@ -28,7 +28,7 @@ export const mirrorStateToPr: PostflightScript = async (ctx) => {
 
   if (!state) {
     try {
-      state = readTaskState("issue", issueNumber, ctx.cwd, ctx.config)
+    state = await readTaskState("issue", issueNumber, ctx.cwd, ctx.config)
     } catch {
       return
     }
@@ -39,7 +39,7 @@ export const mirrorStateToPr: PostflightScript = async (ctx) => {
   }
 
   try {
-    writeTaskState("pr", prNumber, state, ctx.cwd, ctx.config)
+  await writeTaskState("pr", prNumber, state, ctx.cwd, ctx.config)
   } catch (err) {
     process.stderr.write(
       `[kody mirrorStateToPr] failed to mirror state to PR #${prNumber}: ${err instanceof Error ? err.message : String(err)}\n`,

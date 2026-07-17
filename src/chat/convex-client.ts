@@ -47,8 +47,7 @@ export function deepUnescapeKeys<T>(value: T): T {
 type CallMethod = "query" | "mutation" | "action"
 const CALL_METHODS: readonly CallMethod[] = ["query", "mutation", "action"]
 
-function injectServiceKey(args: unknown): unknown {
-  const serviceKey = process.env.KODY_SERVICE_KEY
+function injectServiceKey(args: unknown, serviceKey = process.env.KODY_SERVICE_KEY): unknown {
   if (!serviceKey) return args
   if (args === undefined) return { serviceKey }
   if (typeof args !== "object" || args === null || Array.isArray(args)) return args
@@ -60,13 +59,13 @@ function injectServiceKey(args: unknown): unknown {
  * (and results unescaped) and the KODY_SERVICE_KEY service secret is
  * injected into every call.
  */
-export function withEscapedKeys(client: ConvexHttpClient): ConvexHttpClient {
+export function withEscapedKeys(client: ConvexHttpClient, serviceKey = process.env.KODY_SERVICE_KEY): ConvexHttpClient {
   return new Proxy(client, {
     get(target, prop, receiver) {
       if (CALL_METHODS.includes(prop as CallMethod)) {
         const method = Reflect.get(target, prop, target) as (fn: unknown, args?: unknown) => Promise<unknown>
         return async (fn: unknown, args?: unknown) => {
-          const authed = injectServiceKey(args)
+          const authed = injectServiceKey(args, serviceKey)
           const result = await method.call(target, fn, authed === undefined ? undefined : deepEscapeKeys(authed))
           return deepUnescapeKeys(result)
         }
@@ -85,5 +84,5 @@ export function withEscapedKeys(client: ConvexHttpClient): ConvexHttpClient {
 export function createConvexClientFromEnv(env: NodeJS.ProcessEnv = process.env): ConvexHttpClient | null {
   const url = env.CONVEX_URL?.trim()
   if (!url) return null
-  return withEscapedKeys(new ConvexHttpClient(url))
+  return withEscapedKeys(new ConvexHttpClient(url), env.KODY_SERVICE_KEY)
 }

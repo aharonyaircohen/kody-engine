@@ -17,7 +17,7 @@ export const loadTaskState: PreflightScript = async (ctx) => {
     return
   }
   try {
-    ctx.data.taskState = readTaskState(target, number, ctx.cwd, ctx.config)
+    ctx.data.taskState = await readTaskState(target, number, ctx.cwd, ctx.config)
   } catch (err) {
     if (err instanceof CorruptStateError) {
       // A present-but-unparseable state file. Proceeding on emptyState()
@@ -29,7 +29,7 @@ export const loadTaskState: PreflightScript = async (ctx) => {
         `[kody state] CORRUPT state on ${target} #${number}: ${err.message} — healing to empty and bailing so committed work isn't silently redone.\n`,
       )
       try {
-        writeTaskState(target, number, emptyState(), ctx.cwd, ctx.config)
+        await writeTaskState(target, number, emptyState(), ctx.cwd, ctx.config)
       } catch {
         /* best effort — bail loud regardless */
       }

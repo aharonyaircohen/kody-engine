@@ -102,7 +102,7 @@ export const finishFlow: PostflightScript = async (ctx, profile, _agentResult, a
     const target = (ctx.data.commentTargetType as TaskTarget | undefined) ?? "issue"
     const targetNumber = (ctx.data.commentTargetNumber as number | undefined) ?? issueNumber
     try {
-      writeTaskState(target, targetNumber, state, ctx.cwd, ctx.config)
+  await writeTaskState(target, targetNumber, state, ctx.cwd, ctx.config)
     } catch (err) {
       process.stderr.write(
         `[kody finishFlow] failed to update state mirror: ${err instanceof Error ? err.message : String(err)}\n`,

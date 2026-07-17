@@ -17,7 +17,7 @@ import { emitEvent } from "./events.js"
 import { type ExecutorInput, type ExecutorOutput, resolveProfilePath, runImplementation } from "./executor.js"
 import type { ContainerChild, Context, InputSpec, Profile } from "./implementations/types.js"
 import { loadProfile } from "./profile.js"
-import { type Action, emptyState, readTaskState, type TaskState, type TaskTarget } from "./state.js"
+import { type Action, emptyState, readTaskStateAsync, type TaskState, type TaskTarget } from "./state.js"
 
 const CONTAINER_MAX_ITERATIONS = 50
 
@@ -47,7 +47,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
   }
 
   const runChild = input.__runChild ?? ((name, opts) => runImplementation(name, opts))
-  const reader = input.__readTaskState ?? readTaskState
+  const reader = input.__readTaskState ?? readTaskStateAsync
 
   const issueNumber = ctx.args.issue as number | undefined
 
@@ -134,7 +134,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
     // skip the invocation and use the stored outcome to route. Lets a
     // re-invoked container resume from where the prior run left off without
     // re-doing committed work (e.g. a plan that already produced an artifact).
-    const priorState = readContainerState(ctx, child, reader)
+    const priorState = await readContainerState(ctx, child, reader)
     if (priorState.core?.prUrl) knownPrUrl = priorState.core.prUrl
     const priorAction = priorState.implementations?.[child.implementation]?.lastAction
     let actionType: string | undefined
@@ -261,7 +261,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
       // exit code so finishFlow's runWhens can match the actual outcome
       // instead of leaking the prior child's action.
       const priorAttempts = priorState.core?.attempts?.[child.implementation] ?? 0
-      const next = readContainerState(ctx, child, reader)
+      const next = await readContainerState(ctx, child, reader)
       if (next.core?.prUrl) knownPrUrl = next.core.prUrl
       const nextAttempts = next.core?.attempts?.[child.implementation] ?? 0
       const nextChildAction = next.implementations?.[child.implementation]?.lastAction
@@ -375,11 +375,11 @@ function resetWorkingTree(cwd: string): void {
  * `target: "issue"` children, then the cached preflight state if both gh
  * round-trips fail.
  */
-function readContainerState(
+async function readContainerState(
   ctx: Context,
   child: ContainerChild,
-  reader: (target: TaskTarget, number: number, cwd?: string) => TaskState,
-): TaskState {
+  reader: (target: TaskTarget, number: number, cwd?: string) => TaskState | Promise<TaskState>,
+): Promise<TaskState> {
   const issueNumber = ctx.args.issue as number | undefined
   const cached = ctx.data.taskState as TaskState | undefined
   const prUrl = cached?.core?.prUrl
@@ -387,14 +387,14 @@ function readContainerState(
 
   if (child.target === "pr" && prNumber) {
     try {
-      return reader("pr", prNumber, ctx.cwd)
+      return await reader("pr", prNumber, ctx.cwd)
     } catch {
       // Fall through to issue / cache below.
     }
   }
   if (issueNumber !== undefined) {
     try {
-      return reader("issue", issueNumber, ctx.cwd)
+      return await reader("issue", issueNumber, ctx.cwd)
     } catch {
       // Fall through to cached state below.
     }

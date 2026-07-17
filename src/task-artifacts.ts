@@ -25,6 +25,7 @@ import fs from "node:fs"
 import path from "node:path"
 import posixPath from "node:path/posix"
 import { runtimeStatePath } from "./runtimePaths.js"
+import { createStateBackendFromEnv } from "./state-backend.js"
 import { type StateRepoConfig, upsertStateText } from "./stateRepo.js"
 
 export const TASK_ARTIFACT_FILES = ["context.json", "memory-recs.json", "followups.json", "handoff-notes.md"] as const
@@ -33,6 +34,8 @@ export type TaskArtifactFile = (typeof TASK_ARTIFACT_FILES)[number]
 
 export interface TaskArtifactPaths {
   taskId: string
+  /** Canonical backend address, e.g. issues/42 or sessions/abc. */
+  taskKey?: string
   absDir: string
   relDir: string
 }
@@ -73,7 +76,36 @@ export function taskArtifactStatePath(taskId: string, file: TaskArtifactFile): s
   return posixPath.join("tasks", taskId, file)
 }
 
-export function persistTaskArtifactsToState(config: StateRepoConfig, cwd: string, artifacts: TaskArtifactPaths): void {
+export async function persistTaskArtifactsToState(
+  config: StateRepoConfig,
+  cwd: string,
+  artifacts: TaskArtifactPaths,
+): Promise<void> {
+  const tenantId = config.github?.owner && config.github.repo
+    ? `${config.github.owner}/${config.github.repo}`
+    : process.env.GITHUB_REPOSITORY?.trim()
+  if (process.env.CONVEX_URL && process.env.KODY_SERVICE_KEY && tenantId) {
+    const backend = createStateBackendFromEnv()
+    for (const file of TASK_ARTIFACT_FILES) {
+      const full = path.join(artifacts.absDir, file)
+      if (!fs.existsSync(full)) continue
+      const stat = fs.statSync(full)
+      if (!stat.isFile() || stat.size === 0) continue
+      const content = fs.readFileSync(full, "utf-8")
+      const kind = file.replace(/\.(json|md)$/, "")
+      let doc: unknown = content
+      if (file.endsWith(".json")) {
+        try {
+          doc = JSON.parse(content)
+        } catch (err) {
+          throw new Error(`task artifact ${file} is not valid JSON: ${err instanceof Error ? err.message : String(err)}`)
+        }
+      }
+      await backend.save(tenantId, artifacts.taskKey ?? artifacts.taskId, kind, doc)
+    }
+    return
+  }
+
   for (const file of TASK_ARTIFACT_FILES) {
     const full = path.join(artifacts.absDir, file)
     if (!fs.existsSync(full)) continue

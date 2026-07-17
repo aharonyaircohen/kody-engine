@@ -40,7 +40,7 @@ export const dispatchClassified: PostflightScript = async (ctx, profile) => {
   const nextState = reduce(state, "classify", action, undefined, profile.agent, jobMetaFromData(ctx.data))
   ctx.data.taskState = nextState
   ctx.data.taskStateRendered = renderStateComment(nextState)
-  writeTaskState("issue", issueNumber, nextState, ctx.cwd, ctx.config)
+  await writeTaskState("issue", issueNumber, nextState, ctx.cwd, ctx.config)
 
   // Hand the chosen sub-orchestrator to kody-cli for in-process execution.
   // Forward `--base` only to stages that declare it (spec does not).

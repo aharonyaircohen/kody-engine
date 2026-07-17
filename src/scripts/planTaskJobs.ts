@@ -82,7 +82,7 @@ export const planTaskJobs: PreflightScript = async (ctx) => {
 
   const target = ctx.data.commentTargetType as TaskTarget | undefined
   const number = ctx.data.commentTargetNumber as number | undefined
-  if (target && number) writeTaskState(target, number, next, ctx.cwd, ctx.config)
+  if (target && number) await writeTaskState(target, number, next, ctx.cwd, ctx.config)
 }
 
 function normalizeSpec(input: unknown, index: number): TaskJobSpec {
