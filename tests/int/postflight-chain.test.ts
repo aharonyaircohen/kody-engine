@@ -219,15 +219,21 @@ describe("postflight chain: run profile, success path", () => {
     expect(ctx.output.exitCode).toBe(0)
   })
 
-  it("agent missing DONE marker but produced text → still success (markerMissing flag set)", async () => {
-    // Locks in the 0.4.30 architectural fix: verify/tests are the real
-    // shipability gate, not a five-letter sentinel in the wrap-up.
+  it("agent returns prose without result artifacts → draft PR with preserved summary", async () => {
     const ctx = makeCtx()
     const agent = makeAgentResult("All tests pass and lint is clean. Ready for review.")
     await runPostflights(ctx, agent, "run")
-    expect(ctx.data.agentDone).toBe(true)
+    expect(ctx.data.agentDone).toBe(false)
     expect(ctx.data.agentMarkerMissing).toBe(true)
-    expect(ctx.output.exitCode).toBe(0)
+    expect(ctx.data.agentResultIncomplete).toBe(true)
+    expect(mocks.doCommitAndPush).toHaveBeenCalledTimes(1)
+    expect(mocks.doEnsurePr).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draft: true,
+        agentSummary: "All tests pass and lint is clean. Ready for review.",
+      }),
+    )
+    expect(ctx.output.exitCode).toBe(1)
   })
 
   it("verify fails → ensurePr is skipped with a typed PrSkipped outcome", async () => {

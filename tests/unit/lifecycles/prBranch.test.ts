@@ -77,6 +77,7 @@ describe('lifecycle: "pr-branch"', () => {
       "checkCoverageWithRetry",
       "abortUnfinishedGitOps",
       "commitAndPush",
+      "requireDeliveryArtifacts",
       "ensurePr",
       "postIssueComment",
       "writeAgentRunSummary",

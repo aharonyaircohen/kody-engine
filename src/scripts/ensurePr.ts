@@ -86,7 +86,7 @@ export const ensurePr: PostflightScript = async (ctx) => {
       draft: isFailure,
       failureReason: isFailure ? failureReason : undefined,
       changedFiles,
-      agentSummary: ctx.data.prSummary as string | undefined,
+      agentSummary: (ctx.data.prSummary as string | undefined) || (ctx.data.agentFallbackSummary as string | undefined),
       baseBranch,
       // No fresh commit this run → don't rebuild the body of an existing PR;
       // it would replace the original agent summary with the empty fallback.

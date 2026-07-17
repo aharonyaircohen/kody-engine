@@ -141,6 +141,11 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
       "run is the only engine caller; Store-owned model creators also parse their structured result through this shared script.",
   },
   requirePlanDeviations: { owner: "run", reason: "run-only plan-deviation check." },
+  requireDeliveryArtifacts: {
+    owner: "run",
+    reason:
+      "run is the only engine caller; Store-owned pr-branch implementations share this delivery-artifact gate through the lifecycle.",
+  },
   resolveArtifacts: { owner: "run", reason: "run-only artifact resolver." },
   runFlow: { owner: "run", reason: "run bootstrap. Run is the only engine-bundled implementation." },
   saveTaskState: { owner: "run", reason: "run-only task state persistence." },

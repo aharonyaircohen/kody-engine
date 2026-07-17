@@ -73,6 +73,7 @@ import { promoteQaGoal } from "./promoteQaGoal.js"
 import { publishReport } from "./publishReport.js"
 import { recordClassification } from "./recordClassification.js"
 import { recordOutcome } from "./recordOutcome.js"
+import { requireDeliveryArtifacts } from "./requireDeliveryArtifacts.js"
 import { requireFeedbackActions } from "./requireFeedbackActions.js"
 import { requirePlanDeviations } from "./requirePlanDeviations.js"
 import { resolveArtifacts } from "./resolveArtifacts.js"
@@ -166,6 +167,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   writeJobStateFile,
   appendCompanyActivity,
   requireFeedbackActions,
+  requireDeliveryArtifacts,
   requirePlanDeviations,
   verify,
   verifyWithRetry,

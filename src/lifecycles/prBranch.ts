@@ -109,6 +109,7 @@ export function prBranchLifecycle(profile: Profile, profilePath: string): void {
   const tail: ScriptEntry[] = [
     ...verifyChain,
     { script: "commitAndPush" },
+    { script: "requireDeliveryArtifacts" },
     { script: "ensurePr" },
     { script: "postIssueComment" },
     { script: "writeAgentRunSummary" },

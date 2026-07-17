@@ -28,13 +28,52 @@ interface RunResult {
   tail: string
 }
 
+const SENSITIVE_ENV_NAME =
+  /(?:^|_)(?:TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|PRIVATE_KEY|SERVICE_KEY|MASTER_KEY|CREDENTIALS?)(?:_|$)/i
+
+/**
+ * Build the environment inherited by consumer quality commands.
+ *
+ * The CI launcher passes every repository secret through ALL_SECRETS, and the
+ * engine unpacks that blob into process.env for its own runtime integrations.
+ * Verification executes agent-edited repository code, so it must not inherit
+ * those credentials. Preserve normal build variables while removing the raw
+ * blob, every key named by it, and credential-shaped variables from other
+ * runtime sources.
+ */
+export function buildVerifyEnv(source: Record<string, string | undefined> = process.env): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...source }
+  const rawSecrets = env.ALL_SECRETS
+  delete env.ALL_SECRETS
+
+  if (rawSecrets) {
+    try {
+      const parsed = JSON.parse(rawSecrets) as Record<string, unknown>
+      for (const key of Object.keys(parsed)) delete env[key]
+    } catch {
+      // Fail closed for recognizable credential names below. The launcher
+      // always supplies valid JSON, but malformed input must never preserve
+      // the raw blob itself.
+    }
+  }
+
+  for (const key of Object.keys(env)) {
+    if (SENSITIVE_ENV_NAME.test(key)) delete env[key]
+  }
+
+  env.HUSKY = "0"
+  env.SKIP_HOOKS = "1"
+  env.CI = source.CI ?? "1"
+  return env
+}
+
 function runCommand(command: string, cwd?: string): Promise<RunResult> {
   return new Promise((resolve) => {
     const start = Date.now()
     const child = spawn(command, {
       cwd,
       shell: true,
-      env: { ...process.env, HUSKY: "0", SKIP_HOOKS: "1", CI: process.env.CI ?? "1" },
+      env: buildVerifyEnv(),
       stdio: ["ignore", "pipe", "pipe"],
     })
 
