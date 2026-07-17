@@ -7,8 +7,13 @@ vi.mock("../../../src/issue.js", () => ({
   gh: vi.fn(),
 }))
 
+vi.mock("../../../src/state-backend.js", () => ({
+  createStateBackendFromEnv: vi.fn(),
+}))
+
 import { resetCompanyStoreCacheForTests } from "../../../src/companyStore.js"
-import { fetchGoalState, listGoalStateIds, putGoalState } from "../../../src/goal/stateStore.js"
+import { fetchGoalState, fetchGoalStateAsync, listGoalStateIds, putGoalState } from "../../../src/goal/stateStore.js"
+import { createStateBackendFromEnv } from "../../../src/state-backend.js"
 import { gh } from "../../../src/issue.js"
 import { STATE_BRANCH } from "../../../src/stateBranch.js"
 
@@ -84,6 +89,8 @@ beforeEach(() => {
   resetCompanyStoreCacheForTests()
   delete process.env.KODY_COMPANY_STORE
   delete process.env.KODY_COMPANY_STORE_REF
+  delete process.env.CONVEX_URL
+  delete process.env.KODY_SERVICE_KEY
 })
 
 describe("goal state store", () => {
@@ -283,6 +290,43 @@ describe("goal state store", () => {
         "/tmp/repo",
       ),
     ).toThrow("Cannot overwrite regular todo list todo-list-1")
+  })
+
+  it("falls back to the state-repo todo file when the backend has no goal doc", async () => {
+    process.env.CONVEX_URL = "https://convex.example"
+    process.env.KODY_SERVICE_KEY = "service-key"
+    vi.mocked(createStateBackendFromEnv).mockReturnValue({
+      getGoal: vi.fn().mockResolvedValue(null),
+    } as never)
+    vi.mocked(gh).mockReturnValue(
+      JSON.stringify({
+        sha: "abc",
+        type: "file",
+        encoding: "base64",
+        content: b64(todoJson("release")),
+      }),
+    )
+
+    const state = await fetchGoalStateAsync({ ...config, github: { owner: "acme", repo: "widgets" } }, "release")
+
+    expect(state?.state).toBe("active")
+    expect(vi.mocked(gh)).toHaveBeenCalled()
+  })
+
+  it("prefers the backend goal doc when it exists", async () => {
+    process.env.CONVEX_URL = "https://convex.example"
+    process.env.KODY_SERVICE_KEY = "service-key"
+    vi.mocked(createStateBackendFromEnv).mockReturnValue({
+      getGoal: vi.fn().mockResolvedValue({
+        state: { state: "active", extra: { type: "release" } },
+        updatedAt: "2026-07-17T00:00:00.000Z",
+      }),
+    } as never)
+
+    const state = await fetchGoalStateAsync({ ...config, github: { owner: "acme", repo: "widgets" } }, "release")
+
+    expect(state?.state).toBe("active")
+    expect(vi.mocked(gh)).not.toHaveBeenCalled()
   })
 
   it("writes goal state with current file sha", () => {

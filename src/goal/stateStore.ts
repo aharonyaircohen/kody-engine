@@ -133,7 +133,12 @@ function decodeGoal(doc: GoalDocument | null): GoalState | null {
 export async function fetchGoalStateAsync(config: StateRepoConfig, goalId: string, cwd?: string): Promise<GoalState | null> {
   const tenantId = backendTenant(config)
   if (backendEnabled(config) && tenantId) {
-    return decodeGoal(await createStateBackendFromEnv().getGoal(tenantId, goalId))
+    const fromBackend = decodeGoal(await createStateBackendFromEnv().getGoal(tenantId, goalId))
+    if (fromBackend) return fromBackend
+    // Scheduler-spawned loop instances are still written to the state repo
+    // (todos/<id>.json) before any Convex doc exists — fall back so the first
+    // tick can run; the tick's own write then creates the Convex doc.
+    return fetchGoalStateLegacy(config, goalId, cwd)
   }
   if (backendRequired()) throw new Error("Convex backend is required for goal state in GitHub Actions")
   return fetchGoalStateLegacy(config, goalId, cwd)
