@@ -48,6 +48,23 @@ describe("parseTrustModeOverride (pure)", () => {
   })
 })
 
+describe("neverAuto pin", () => {
+  it("forces ask even when earned mode is auto, for capabilities and subjects", () => {
+    const json = JSON.stringify({
+      capabilities: { qa: { mode: "auto", neverAuto: true } },
+      subjects: { "workflow:web-release": { mode: "auto", neverAuto: true } },
+    })
+
+    expect(parseCapabilityTrustMode(json, "qa")).toBe("ask")
+    expect(parseTrustModeOverride(json, { kind: "workflow", id: "web-release" })).toBe("ask")
+  })
+
+  it("does not affect entries without the flag", () => {
+    const json = JSON.stringify({ capabilities: { qa: { mode: "auto", neverAuto: false } } })
+    expect(parseCapabilityTrustMode(json, "qa")).toBe("auto")
+  })
+})
+
 describe("readCapabilityTrustMode (gh-backed)", () => {
   it("reads + decodes state repo trust file returns mode", () => {
     vi.mocked(gh).mockReturnValue(

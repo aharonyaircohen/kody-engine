@@ -19,7 +19,10 @@ import {
 } from "../goal/targetLoopResolution.js"
 import { expandManagedGoalState } from "../goal/typeDefinitions.js"
 import type { PreflightScript } from "../implementations/types.js"
+import * as path from "node:path"
+
 import { gh } from "../issue.js"
+import { resolveCapabilityFolder } from "../registry.js"
 import { readTrustModeOverrideAsync, type TrustModeOverride, type TrustSubject } from "../trustPolicy.js"
 import { readWorkflowDefinition } from "../workflowDefinitions.js"
 import {
@@ -361,6 +364,17 @@ function scalarFacts(facts: Record<string, unknown>): Record<string, unknown> {
   )
 }
 
+/** True when every step capability declares capabilityKind observe or verify. */
+export function workflowIsObserveOnly(capabilities: readonly string[], cwd: string): boolean {
+  if (capabilities.length === 0) return false
+  const root = path.join(cwd, ".kody", "capabilities")
+  return capabilities.every((slug) => {
+    const folder = resolveCapabilityFolder(slug, root)
+    const kind = folder?.config.capabilityKind
+    return kind === "observe" || kind === "verify"
+  })
+}
+
 type PlannedDispatch = {
   action?: string
   capability?: string
@@ -390,6 +404,11 @@ async function autonomyBlockReason(
     const workflowMode = await firstTrustOverride(ctx, [{ kind: "workflow", id: dispatch.workflow }])
     const workflow = workflowMode === "auto" ? null : readWorkflowDefinition(ctx.config, ctx.cwd, dispatch.workflow)
     if (workflowMode === "ask" || (workflowMode !== "auto" && workflow && workflow.runWithoutApproval !== true)) {
+      // Observe/verify-only workflows cannot change anything — they run
+      // without approval unless explicitly pinned to "ask" in the ledger.
+      if (workflowMode !== "ask" && workflow && workflowIsObserveOnly(workflow.capabilities, ctx.cwd)) {
+        return null
+      }
       return `Run without approval is off for workflow ${dispatch.workflow}`
     }
   }

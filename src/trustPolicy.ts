@@ -24,11 +24,13 @@ export function parseTrustModeOverride(rawJson: string, subject: TrustSubject): 
   const key = trustSubjectKey(subject)
   try {
     const parsed = JSON.parse(rawJson) as {
-      capabilities?: Record<string, { mode?: string }>
-      subjects?: Record<string, { mode?: string }>
+      capabilities?: Record<string, { mode?: string; neverAuto?: boolean }>
+      subjects?: Record<string, { mode?: string; neverAuto?: boolean }>
     }
-    const rawMode =
-      subject.kind === "capability" ? parsed?.capabilities?.[subject.id]?.mode : parsed?.subjects?.[key]?.mode
+    const entry = subject.kind === "capability" ? parsed?.capabilities?.[subject.id] : parsed?.subjects?.[key]
+    // neverAuto pins the subject to approval-required regardless of earned mode.
+    if (entry?.neverAuto === true) return "ask"
+    const rawMode = entry?.mode
     if (rawMode === "auto" || rawMode === "ask") return rawMode
     return null
   } catch {
