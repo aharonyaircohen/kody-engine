@@ -169,14 +169,22 @@ export function autoDispatch(opts?: {
       const route = resolveConfiguredAction(actionName)
       if (!route) return null
       const base = String(inputs?.base ?? "").trim()
+      const profileInputs = getProfileInputs(route.implementation)
       // The `issue_number` input is a generic numeric target, not literally an
       // issue. Bind `n` under the resolved implementation's declared int input name
-      // (`run` → `issue`, `resolve`/`sync`/`fix-ci` → `pr`). Hardcoding `issue`
-      // here used to make PR primitives reject the dispatched run with
-      // "unknown arg: --issue", silently breaking pr-health auto-runs.
-      const targetKey = primaryNumericInputName(route.implementation) ?? "issue"
-      const cliArgs: Record<string, unknown> = { [targetKey]: n }
-      if (base) cliArgs.base = base
+      // (`run` → `issue`, `resolve`/`sync`/`fix-ci` → `pr`). For an inputless
+      // capability the number remains routing context only; forwarding an
+      // undeclared `issue` argument would make the executor reject the run.
+      const targetKey = primaryNumericInputName(route.implementation)
+      const cliArgs: Record<string, unknown> = {}
+      if (targetKey) cliArgs[targetKey] = n
+      else if (profileInputs === null) cliArgs.issue = n
+      if (
+        base &&
+        profileInputs?.some((input) => input.name === "base" || input.flag === "--base")
+      ) {
+        cliArgs.base = base
+      }
       return routeResult(route, cliArgs, n)
     }
     // No issue_number input → manual force-fire of all watch implementations.

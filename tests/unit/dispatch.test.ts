@@ -51,6 +51,38 @@ function writeLocalReleaseAsset(root: string): void {
   fs.writeFileSync(path.join(implementationDir, "capability.md"), "# Release\n\nRun release flow.\n")
 }
 
+function writeLocalInputlessAsset(root: string, name: string): void {
+  const implementationDir = path.join(root, ".kody", "capabilities", name)
+  fs.mkdirSync(implementationDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(implementationDir, "profile.json"),
+    JSON.stringify({
+      name,
+      action: name,
+      role: "primitive",
+      describe: "Run without a numeric target input.",
+      inputs: [],
+      claudeCode: {
+        model: "inherit",
+        permissionMode: "default",
+        maxTurns: null,
+        maxThinkingTokens: null,
+        systemPromptAppend: null,
+        tools: [],
+        hooks: [],
+        skills: [],
+        commands: [],
+        subagents: [],
+        plugins: [],
+        mcpServers: [],
+      },
+      cliTools: [],
+      scripts: { preflight: [], postflight: [] },
+    }),
+  )
+  fs.writeFileSync(path.join(implementationDir, "capability.md"), `# ${name}\n`)
+}
+
 describe("dispatch: explicit override", () => {
   it("routes to run when issueNumber provided", () => {
     const r = autoDispatch({ explicit: { issueNumber: 42 } })
@@ -124,6 +156,29 @@ describe("dispatch: workflow_dispatch event", () => {
         implementation: "release",
         cliArgs: { issue: 291 },
         target: 291,
+      })
+    } finally {
+      process.chdir(prevCwd)
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  it("keeps issue_number as routing context when the capability declares no numeric input", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-dispatch-inputless-workflow-"))
+    const prevCwd = process.cwd()
+    try {
+      process.chdir(tmp)
+      writeLocalInputlessAsset(tmp, "health-check")
+      process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
+      process.env.GITHUB_EVENT_PATH = writeEvent({
+        inputs: { issue_number: "3813", capability: "health-check", base: "main" },
+      })
+      expect(autoDispatch()).toEqual({
+        action: "health-check",
+        capability: "health-check",
+        implementation: "health-check",
+        cliArgs: {},
+        target: 3813,
       })
     } finally {
       process.chdir(prevCwd)

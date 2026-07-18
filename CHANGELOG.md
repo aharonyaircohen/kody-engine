@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Managed goals retry still-missing pending evidence instead of waiting forever after the first dispatch.
+- Workflow dispatch no longer forwards issue or base arguments to capabilities
+  that do not declare those inputs.
 
 ## [0.4.211] — restore fix-ci command
 
