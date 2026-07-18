@@ -51,8 +51,8 @@ describe("loadAgentIdentity", () => {
     expect(() => loadAgentIdentity(cwd, "   ")).toThrow(/empty agent slug/)
   })
 
-  it("does not fall through when the hydrated agent is missing", () => {
-    expect(() => loadAgentIdentity(cwd, "kody")).toThrow(/does not exist/)
+  it("uses the engine-owned kody identity when no tenant override exists", () => {
+    expect(loadAgentIdentity(cwd, "kody")).toContain("You are Kody")
   })
 
   it("lets a consumer file override a store agent", () => {
@@ -60,9 +60,9 @@ describe("loadAgentIdentity", () => {
     expect(loadAgentIdentity(cwd, "kody")).toBe("My own kody identity.")
   })
 
-  it("throws when a consumer file for a store slug is empty", () => {
+  it("uses the engine-owned kody identity when a tenant override is empty", () => {
     writeAgent("kody", "---\ntitle: x\n---\n")
-    expect(() => loadAgentIdentity(cwd, "kody")).toThrow(/agent identity body is empty/)
+    expect(loadAgentIdentity(cwd, "kody")).toContain("You are Kody")
   })
 
   it("still throws for an unknown slug with no file (no silent default)", () => {

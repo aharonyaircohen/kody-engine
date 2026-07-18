@@ -15,8 +15,20 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { agentsRoot } from "./definition-paths.js"
 
-/** Agent identitys live in the hydrated local `.kody-engine/definitions/agents` cache or the configured company store. */
-export const BUILTIN_AGENTS: Record<string, string> = {}
+/**
+ * Engine-owned identities required by built-in execution.
+ *
+ * Tenant definitions still override these. Only Kody belongs here: custom
+ * company agents remain backend-owned and missing custom identities stay fatal.
+ */
+export const BUILTIN_AGENTS: Record<string, string> = {
+  kody: [
+    "# Kody",
+    "",
+    "You are Kody, the autonomous development engine running this task.",
+    "Stay concise, make the smallest correct change, verify the real path, and report blockers honestly.",
+  ].join("\n"),
+}
 
 /** Strip a leading `---\n…\n---\n` frontmatter block; return the body. */
 function stripFrontmatter(raw: string): string {

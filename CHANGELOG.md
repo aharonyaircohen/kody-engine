@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Restored the engine-owned Kody identity required by built-in task execution while keeping tenant agent definitions backend-authoritative.
+
 ### Added
 
 - Agent loops can now dispatch a target goal after their preferred local runtime, once per local day.
