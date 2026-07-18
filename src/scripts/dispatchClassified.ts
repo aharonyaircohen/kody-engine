@@ -12,7 +12,7 @@
  *   comment round-trip entirely: no second run, no bot-author gate, no race.
  *
  * State continuity:
- *   The classify action is written to the configured Kody state repo before
+ *   The classify action is written to the configured Kody backend before
  *   the next in-process dispatch runs, so the child sees the same task state
  *   without relying on a GitHub comment as a storage layer.
  */

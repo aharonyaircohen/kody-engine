@@ -1,12 +1,7 @@
 import * as fs from "node:fs"
 import type { CapabilityResultArtifact } from "../capabilityResult.js"
-import {
-  runIndexRowFromGoalEvents,
-  stageRunIndexFinalization,
-  upsertRunIndexRowBestEffort,
-  upsertRunIndexRowBestEffortAsync,
-} from "../runIndex.js"
-import { appendStateLine, parseStateRepoSlug, resolveStateRepoConfig, type StateRepoConfig } from "../stateRepo.js"
+import type { KodyConfig } from "../config.js"
+import { runIndexRowFromGoalEvents, stageRunIndexFinalization, upsertRunIndexRowBestEffortAsync } from "../runIndex.js"
 import { createStateBackendFromEnv } from "../state-backend.js"
 import type { GoalRouteStep, ManagedGoal } from "./manager.js"
 import { nowIso } from "./state.js"
@@ -43,7 +38,6 @@ export interface GoalRunLogEvent {
   change?: Record<string, unknown>
   run?: Record<string, unknown>
   repo?: Record<string, unknown>
-  stateRepo?: Record<string, unknown>
   trigger?: Record<string, unknown>
   job?: Record<string, unknown>
   links?: Record<string, unknown>
@@ -106,38 +100,16 @@ export function stageGoalRunLogEvent(
   }
 }
 
-export function flushGoalRunLogEvents(
-  config: StateRepoConfig,
-  cwd: string | undefined,
-  data: Record<string, unknown>,
-): void {
-  const logs = goalRunLogs(data)
-  for (const [goalId, log] of Object.entries(logs)) {
-    if (log.events.length === 0) continue
-    const enrichedEvents = log.events.map((event) => enrichGoalRunLogEvent(config, data, log.path, event))
-    const lines = `${enrichedEvents.map((event) => JSON.stringify(event)).join("\n")}\n`
-    appendStateLine(config, cwd, log.path, lines, `chore(goal-logs): append ${goalId}`)
-    const row = runIndexRowFromGoalEvents(goalId, log.path, enrichedEvents as unknown as Record<string, unknown>[])
-    upsertRunIndexRowBestEffort(config, cwd, row)
-    stageRunIndexFinalization(data, row)
-    log.events = []
-  }
-}
-
-/** Backend-first flush used by Actions; the synchronous function above remains
- * for local compatibility and existing state-repo tooling. */
 export async function flushGoalRunLogEventsAsync(
-  config: StateRepoConfig,
+  config: KodyConfig,
   cwd: string | undefined,
   data: Record<string, unknown>,
 ): Promise<void> {
-  const tenantId = config.github?.owner && config.github.repo ? `${config.github.owner}/${config.github.repo}` : process.env.GITHUB_REPOSITORY
-  const backendConfigured = Boolean(process.env.CONVEX_URL?.trim() && process.env.KODY_SERVICE_KEY?.trim() && tenantId)
-  if (!backendConfigured) {
-    if (process.env.GITHUB_ACTIONS === "true") throw new Error("Convex backend is required for goal run logs in GitHub Actions")
-    flushGoalRunLogEvents(config, cwd, data)
-    return
-  }
+  const tenantId =
+    config.github?.owner && config.github.repo
+      ? `${config.github.owner}/${config.github.repo}`
+      : process.env.GITHUB_REPOSITORY
+  if (!tenantId) throw new Error("Repository identity is required for goal run logs")
   const backend = createStateBackendFromEnv()
   for (const [goalId, log] of Object.entries(goalRunLogs(data))) {
     if (log.events.length === 0) continue
@@ -285,25 +257,22 @@ function buildGoalRunLogEvent(
 }
 
 function enrichGoalRunLogEvent(
-  config: StateRepoConfig,
+  config: KodyConfig,
   data: Record<string, unknown>,
   logPath: string,
   event: GoalRunLogEvent,
 ): GoalRunLogEvent {
-  const stateRepo = stateRepoContext(config, event.goalId, logPath)
   const trigger = event.trigger ?? triggerContext()
   const job = event.job ?? jobContext(data)
   const run = event.run ?? runContext(data)
-  const links = event.links ?? linkContext(stateRepo)
   const enriched = pruneUndefined({
     ...event,
     run,
     repo: event.repo ?? repoContext(config),
-    stateRepo: event.stateRepo ?? stateRepo,
     trigger,
     job,
     dispatchContext: event.dispatchContext ?? dispatchContext(event, trigger, job),
-    links,
+    links: event.links,
   }) as GoalRunLogEvent
   enriched.trace = event.trace ?? goalRunTrace(enriched)
   return enriched
@@ -402,7 +371,7 @@ function runContext(data: Record<string, unknown>): Record<string, unknown> {
   })
 }
 
-function repoContext(config: StateRepoConfig): Record<string, unknown> {
+function repoContext(config: KodyConfig): Record<string, unknown> {
   const owner = config.github?.owner
   const repo = config.github?.repo
   return pruneUndefined({
@@ -412,25 +381,6 @@ function repoContext(config: StateRepoConfig): Record<string, unknown> {
     ref: process.env.GITHUB_REF?.trim() || undefined,
     sha: process.env.GITHUB_SHA?.trim() || undefined,
   })
-}
-
-function stateRepoContext(
-  config: StateRepoConfig,
-  goalId: string,
-  logPath: string,
-): Record<string, unknown> | undefined {
-  try {
-    const state = resolveStateRepoConfig(config)
-    return {
-      repo: state.repo,
-      path: state.path,
-      branch: state.branch,
-      goalStatePath: `${state.path}/${goalStateLogPath(goalId)}`,
-      logPath: `${state.path}/${logPath}`,
-    }
-  } catch {
-    return undefined
-  }
 }
 
 function triggerContext(): Record<string, unknown> | undefined {
@@ -542,31 +492,6 @@ function dispatchMode(trigger: Record<string, unknown> | undefined): string {
   if (kind === "manual-workflow-dispatch") return "manual"
   if (kind) return "event-driven"
   return "local"
-}
-
-function linkContext(stateRepo: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
-  const links: Record<string, unknown> = {}
-  const runId = process.env.GITHUB_RUN_ID?.trim()
-  const repository = process.env.GITHUB_REPOSITORY?.trim()
-  const server = process.env.GITHUB_SERVER_URL?.trim() || "https://github.com"
-  if (runId && repository) links.workflowRun = `${server}/${repository}/actions/runs/${runId}`
-
-  const repo = stringValue(stateRepo?.repo)
-  const branch = stringValue(stateRepo?.branch)
-  const goalStatePath = stringValue(stateRepo?.goalStatePath)
-  const logPath = stringValue(stateRepo?.logPath)
-  if (repo && branch && goalStatePath) links.goalState = githubBlobUrl(repo, branch, goalStatePath)
-  if (repo && branch && logPath) links.log = githubBlobUrl(repo, branch, logPath)
-  return Object.keys(links).length > 0 ? links : undefined
-}
-
-function githubBlobUrl(repo: string, branch: string, filePath: string): string | undefined {
-  try {
-    const parsed = parseStateRepoSlug(repo)
-    return `https://github.com/${parsed.owner}/${parsed.repo}/blob/${encodeURIComponent(branch)}/${filePath}`
-  } catch {
-    return undefined
-  }
 }
 
 function routeStepForLog(step: GoalRouteStep): Record<string, unknown> {

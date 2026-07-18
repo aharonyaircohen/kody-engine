@@ -64,7 +64,7 @@ function writeConfig(dir: string): void {
 }
 
 function writeScheduledImplementation(dir: string, name: string): void {
-  const implementationDir = path.join(dir, ".kody", "capabilities", name)
+  const implementationDir = path.join(dir, ".kody-engine", "definitions", "capabilities", name)
   fs.mkdirSync(implementationDir, { recursive: true })
   fs.writeFileSync(
     path.join(implementationDir, "profile.json"),

@@ -40,9 +40,9 @@ import type { TaskState, TaskTarget } from "./state.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
 import { loadSubagents } from "./subagents.js"
 import {
+  initializeTaskArtifacts,
   persistTaskArtifactsToState,
   prepareTaskArtifactsDir,
-  initializeTaskArtifacts,
   taskArtifactsPromptAddendum,
   verifyTaskArtifacts,
 } from "./task-artifacts.js"
@@ -345,7 +345,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
   }
 
   if (!input.skipConfig && config.github.owner && config.github.repo) {
-    hydrateStateWorkspace(config, input.cwd)
+    await hydrateStateWorkspace(config, input.cwd)
   }
 
   // Resolve model. Precedence:
@@ -438,7 +438,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
   // Per-task artifacts: if this run targets a concrete issue or PR,
   // prepare a local temp dir so the agent can write context.json /
   // memory-recs.json / followups.json / handoff-notes.md as its final
-  // act. The executor uploads those files to the external state repo;
+  // act. The executor uploads those files to the external backend;
   // the consumer repo never owns the durable copy.
   const taskTarget = (args.issue ?? args.pr) as number | undefined
   const taskArtifacts =
@@ -558,7 +558,6 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       // Stamp the running capability's slug onto recommendations so the dashboard
       // keys trust per capability (not per agent). `jobSlug` is set by loadJobFromFile.
       capabilitySlug: typeof ctx.data.jobSlug === "string" ? (ctx.data.jobSlug as string) : undefined,
-      capabilityState: config.state,
       capabilityDefaultBranch: config.git.defaultBranch,
       // owner/repo from kody.config.json; envelope falls back to GITHUB_REPOSITORY
       // for tester repos that don't set config.github (the file isn't always
@@ -824,14 +823,14 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
     // outside the lifecycle taxonomy. Best-effort, never throws.
     clearStampedLifecycleLabels(profile, ctx)
     // Best-effort: warn if the agent didn't produce the per-task artifacts,
-    // then persist whatever exists to the external state repo.
+    // then persist whatever exists to the external backend.
     if (taskArtifacts) {
       try {
         const missing = verifyTaskArtifacts(taskArtifacts.absDir)
         if (missing.length > 0) {
           process.stderr.write(`[task-artifacts] task ${taskArtifacts.taskId} missing: ${missing.join(", ")}\n`)
         }
-        if (!input.skipConfig && (config.state || (config.github.owner && config.github.repo))) {
+        if (!input.skipConfig && config.github.owner && config.github.repo) {
           await persistTaskArtifactsToState(config, input.cwd, taskArtifacts)
         }
       } catch (err) {

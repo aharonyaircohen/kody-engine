@@ -123,8 +123,8 @@ describe("chat/events", () => {
     expect(makeRunId("s1", "done")).toBe("chat-s1-done")
   })
 
-  it("eventsFilePath lives under .kody/events", () => {
-    expect(eventsFilePath("/repo", "abc")).toBe(path.join("/repo", ".kody", "events", "abc.jsonl"))
+  it("eventsFilePath lives under the disposable engine runtime", () => {
+    expect(eventsFilePath("/repo", "abc")).toBe(path.join("/repo", ".kody-engine", "runtime", "events", "abc.jsonl"))
   })
 
   it("redactUrl masks the token but keeps the rest of the URL", () => {

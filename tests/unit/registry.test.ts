@@ -2,7 +2,6 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import {
   builtinImplementationNames,
   hasImplementation,
@@ -113,7 +112,6 @@ describe("registry: obsolete project implementations", () => {
     root = mkFixture()
     previousStore = process.env.KODY_COMPANY_STORE
     process.env.KODY_COMPANY_STORE = "0"
-    resetCompanyStoreCacheForTests()
     process.chdir(root)
   })
 
@@ -121,12 +119,11 @@ describe("registry: obsolete project implementations", () => {
     process.chdir(prevCwd)
     if (previousStore === undefined) delete process.env.KODY_COMPANY_STORE
     else process.env.KODY_COMPANY_STORE = previousStore
-    resetCompanyStoreCacheForTests()
     fs.rmSync(root, { recursive: true, force: true })
   })
 
   it("ignores project .kody/implementations roots", () => {
-    const capabilityDir = path.join(root, ".kody", "capabilities", "feature")
+    const capabilityDir = path.join(root, ".kody-engine", "definitions", "capabilities", "feature")
     const exeDir = path.join(root, ".kody", "implementations", "feature")
     fs.mkdirSync(capabilityDir, { recursive: true })
     fs.mkdirSync(exeDir, { recursive: true })
@@ -153,7 +150,6 @@ describe("registry: capabilities root", () => {
     root = mkFixture()
     previousStore = process.env.KODY_COMPANY_STORE
     process.env.KODY_COMPANY_STORE = "0"
-    resetCompanyStoreCacheForTests()
     process.chdir(root)
   })
 
@@ -161,12 +157,11 @@ describe("registry: capabilities root", () => {
     process.chdir(prevCwd)
     if (previousStore === undefined) delete process.env.KODY_COMPANY_STORE
     else process.env.KODY_COMPANY_STORE = previousStore
-    resetCompanyStoreCacheForTests()
     fs.rmSync(root, { recursive: true, force: true })
   })
 
-  it("discovers .kody/capabilities folders as public capability actions", () => {
-    const capabilityDir = path.join(root, ".kody", "capabilities", "triage")
+  it("discovers hydrated backend capability folders as public capability actions", () => {
+    const capabilityDir = path.join(root, ".kody-engine", "definitions", "capabilities", "triage")
     fs.mkdirSync(capabilityDir, { recursive: true })
     fs.writeFileSync(
       path.join(capabilityDir, "profile.json"),
@@ -190,8 +185,8 @@ describe("registry: capabilities root", () => {
     )
   })
 
-  it("uses a full .kody/capabilities profile as its own implementation", () => {
-    const capabilityDir = path.join(root, ".kody", "capabilities", "ship")
+  it("uses a full hydrated capability profile as its own implementation", () => {
+    const capabilityDir = path.join(root, ".kody-engine", "definitions", "capabilities", "ship")
     fs.mkdirSync(capabilityDir, { recursive: true })
     fs.writeFileSync(
       path.join(capabilityDir, "profile.json"),
@@ -213,8 +208,8 @@ describe("registry: capabilities root", () => {
     })
   })
 
-  it("uses full .kody/capabilities implementation profiles and ignores project implementations", () => {
-    const capabilityDir = path.join(root, ".kody", "capabilities", "ship")
+  it("uses full hydrated capability implementation profiles and ignores project implementations", () => {
+    const capabilityDir = path.join(root, ".kody-engine", "definitions", "capabilities", "ship")
     const implementationDir = path.join(root, ".kody", "implementations", "ship")
     fs.mkdirSync(capabilityDir, { recursive: true })
     fs.mkdirSync(implementationDir, { recursive: true })
@@ -236,8 +231,8 @@ describe("registry: capabilities root", () => {
     )
   })
 
-  it("does not treat thin .kody/capabilities contracts or obsolete implementations as implementation profiles", () => {
-    const capabilityDir = path.join(root, ".kody", "capabilities", "ship")
+  it("does not treat thin hydrated capability contracts or obsolete implementations as implementation profiles", () => {
+    const capabilityDir = path.join(root, ".kody-engine", "definitions", "capabilities", "ship")
     const implementationDir = path.join(root, ".kody", "implementations", "ship")
     fs.mkdirSync(capabilityDir, { recursive: true })
     fs.mkdirSync(implementationDir, { recursive: true })
@@ -259,65 +254,6 @@ describe("registry: capabilities root", () => {
     expect(resolveCapabilityAction("ship")).toBeNull()
     expect(resolveImplementation("ship")).toBeNull()
     expect(listImplementations().find((item) => item.name === "ship")).toBeUndefined()
-  })
-
-  it("lets store capabilities override stale project capability implementation references", () => {
-    const store = mkFixture()
-    const previousStore = process.env.KODY_COMPANY_STORE
-    try {
-      process.env.KODY_COMPANY_STORE = store
-      resetCompanyStoreCacheForTests()
-      fs.writeFileSync(
-        path.join(store, "kody-store.json"),
-        JSON.stringify({ assetRoots: { capabilities: "capabilities" } }),
-      )
-
-      const projectClassify = path.join(root, ".kody", "capabilities", "classify")
-      fs.mkdirSync(projectClassify, { recursive: true })
-      fs.writeFileSync(
-        path.join(projectClassify, "profile.json"),
-        JSON.stringify({ name: "classify", action: "classify", implementation: "feature" }),
-      )
-      fs.writeFileSync(path.join(projectClassify, "capability.md"), "# Classify\n")
-
-      const storeClassify = path.join(store, "capabilities", "classify")
-      fs.mkdirSync(storeClassify, { recursive: true })
-      fs.writeFileSync(
-        path.join(storeClassify, "profile.json"),
-        JSON.stringify({ name: "classify", action: "classify", role: "primitive" }),
-      )
-      fs.writeFileSync(path.join(storeClassify, "capability.md"), "# Classify\n")
-
-      const storeFeature = path.join(store, "capabilities", "feature")
-      fs.mkdirSync(storeFeature, { recursive: true })
-      fs.writeFileSync(
-        path.join(storeFeature, "profile.json"),
-        JSON.stringify({
-          name: "feature",
-          action: "feature",
-          workflow: { steps: [{ capability: "classify" }] },
-        }),
-      )
-      fs.writeFileSync(path.join(storeFeature, "capability.md"), "# Feature\n")
-
-      expect(resolveCapabilityAction("classify")).toMatchObject({
-        action: "classify",
-        capability: "classify",
-        implementation: "classify",
-        source: "company-store",
-      })
-      expect(resolveCapabilityAction("feature")).toMatchObject({
-        action: "feature",
-        capability: "feature",
-        implementation: "classify",
-        source: "company-store",
-      })
-    } finally {
-      if (previousStore === undefined) delete process.env.KODY_COMPANY_STORE
-      else process.env.KODY_COMPANY_STORE = previousStore
-      resetCompanyStoreCacheForTests()
-      fs.rmSync(store, { recursive: true, force: true })
-    }
   })
 
   it("does not read removed capabilities roots as capability fallbacks", () => {

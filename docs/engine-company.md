@@ -3,7 +3,7 @@
 This doc describes the repo-local company layer used to maintain
 `@kody-ade/kody-engine`.
 
-The company layer is not the engine itself. It sits in `.kody/` and helps watch,
+The company layer is not the engine itself. It lives in the backend and helps watch,
 route, verify, and explain engine work.
 
 ## Core Rule
@@ -74,12 +74,12 @@ See [Company Activation](company-activation.md) for the full activation contract
 
 | Piece | Path | Purpose |
 | --- | --- | --- |
-| Agent | `.kody/agents/<slug>.md` | Who is acting. Identity only. |
-| Capabilities | `.kody/capabilities/<slug>/` | Capability contracts: public action, kind, cadence, owner, and output contract. |
-| Capability implementations | `.kody/capabilities/<slug>/` with `role` | Capability implementations for inspection, reports, triage, and dispatch. |
+| Agent | `backend agent definition` | Who is acting. Identity only. |
+| Capabilities | `backend capability definition` | Capability contracts: public action, kind, cadence, owner, and output contract. |
+| Capability implementations | `backend capability definition` with `role` | Capability implementations for inspection, reports, triage, and dispatch. |
 | Reports | `<statePath>/reports/<slug>/runs/*.md` in `stateRepo` | Goal/loop-owned state findings for Dashboard display. |
-| Context | `.kody/context/*.md` | Short background and vocabulary. Not hard rules. |
-| Goal templates | `.kody/goals/templates/<slug>/state.json` | Reusable managed agentGoal definitions. |
+| Context | `backend context/*.md` | Short background and vocabulary. Not hard rules. |
+| Goal templates | `backend goal template` | Reusable managed agentGoal definitions. |
 | Goal instances | `<statePath>/goals/instances/<id>/state.json` in `stateRepo` | Live managed agentGoal runs with facts and progress. |
 
 For ledger storage and trust gates, see [ledgers.md](ledgers.md).
@@ -98,8 +98,8 @@ KODY_COMPANY_STORE_REF=stable
 
 Resolution order:
 
-1. Repo-local `.kody/capabilities`, `.kody/agents`
-2. Company store `.kody/capabilities`, `.kody/agents`
+1. Activated backend capability and agent definitions
+2. Company Store capability and agent catalog assets
 3. Engine built-ins (`run` only)
 
 Local repo assets are overrides. Store assets are shared defaults. `stable`
@@ -110,12 +110,12 @@ local or use explicit names.
 
 - `AGENTS.md` / `CLAUDE.md`: hard constraints and repo conventions.
 - `docs/engine-company.md`: this operating model.
-- `.kody/context/*.md`: short orientation for company agents.
-- `.kody/agents/*.md`: identity only.
-- `.kody/capabilities/<slug>/capability.md`: recurring intent.
-- `.kody/capabilities/<slug>/skills/*/SKILL.md`: exact method and allowed actions.
+- `backend context/*.md`: short orientation for company agents.
+- `backend agent definitions*.md`: identity only.
+- `backend capability definitioncapability.md`: recurring intent.
+- `backend capability definitionskills/*/SKILL.md`: exact method and allowed actions.
 
-`.kody/context` is not loaded by every engine implementation. Treat it as background
+`backend context` is not loaded by every engine implementation. Treat it as background
 for company coordination, not as execution policy.
 
 ## Recommended Agent

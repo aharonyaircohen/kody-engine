@@ -1,7 +1,7 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { ManagedGoal } from "../../../src/goal/manager.js"
 import type { GoalState } from "../../../src/goal/state.js"
 import type { Context, Profile } from "../../../src/implementations/types.js"
@@ -12,10 +12,35 @@ import {
 } from "../../../src/scripts/goalCapabilityScheduling.js"
 import type { GoalCtx } from "../../../src/scripts/goalCtx.js"
 
+const backendMocks = vi.hoisted(() => ({
+  goals: new Map<string, GoalState>(),
+  trust: null as Record<string, unknown> | null,
+}))
+vi.mock("../../../src/state-backend.js", () => ({
+  createStateBackendFromEnv: () => ({
+    getGoal: async (_tenantId: string, goalId: string) => {
+      const state = backendMocks.goals.get(goalId)
+      return state ? { goalId, state, updatedAt: state.updatedAt ?? "now" } : null
+    },
+    listGoals: async () =>
+      [...backendMocks.goals.entries()].map(([goalId, state]) => ({
+        goalId,
+        state,
+        updatedAt: state.updatedAt ?? "now",
+      })),
+    saveGoal: async (_tenantId: string, goalId: string, state: GoalState) => {
+      backendMocks.goals.set(goalId, state)
+    },
+    getManifest: async () => (backendMocks.trust ? { doc: backendMocks.trust, updatedAt: "now" } : null),
+  }),
+}))
+
 let tmp: string
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "goal-capability-schedule-"))
+  backendMocks.goals.clear()
+  backendMocks.trust = null
 })
 
 afterEach(() => {
@@ -23,14 +48,14 @@ afterEach(() => {
 })
 
 function writeCapability(slug: string, profile: Record<string, unknown>): void {
-  const dir = path.join(tmp, ".kody", "capabilities", slug)
+  const dir = path.join(tmp, ".kody-engine", "definitions", "capabilities", slug)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
   fs.writeFileSync(path.join(dir, "capability.md"), `# ${slug}\n\nKeep ${slug} healthy.\n`)
 }
 
 function writeCapabilityState(slug: string, lastFiredAt: string): void {
-  const file = path.join(tmp, ".kody", "capabilities", slug, "state.json")
+  const file = path.join(tmp, ".kody-engine", "definitions", "capabilities", slug, "state.json")
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(
     file,
@@ -39,6 +64,11 @@ function writeCapabilityState(slug: string, lastFiredAt: string): void {
 }
 
 function writeRepoGoal(stateRoot: string, goalId: string, state: Record<string, unknown>): void {
+  const { state: status, ...extra } = state
+  backendMocks.goals.set(goalId, {
+    state: typeof status === "string" ? status : "active",
+    extra,
+  } as GoalState)
   const file = path.join(stateRoot, "state", "todos", `${goalId}.json`)
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(
@@ -64,7 +94,7 @@ function writeRepoGoal(stateRoot: string, goalId: string, state: Record<string, 
 }
 
 function writeRepoWorkflow(stateRoot: string, workflowId: string, state: Record<string, unknown>): void {
-  const file = path.join(stateRoot, "state", "workflows", workflowId, "workflow.json")
+  const file = path.join(path.dirname(stateRoot), ".kody-engine", "runtime", "workflows", workflowId, "workflow.json")
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(
     file,
@@ -83,18 +113,19 @@ function writeRepoWorkflow(stateRoot: string, workflowId: string, state: Record<
 }
 
 function writeTrust(stateRoot: string, trust: Record<string, unknown>): void {
+  backendMocks.trust = trust
   const file = path.join(stateRoot, "state", "state", "trust.json")
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(file, JSON.stringify(trust, null, 2))
 }
 
 function readRepoGoal(stateRoot: string, goalId: string): Record<string, unknown> {
-  const todoFile = path.join(stateRoot, "state", "todos", `${goalId}.json`)
-  return JSON.parse(fs.readFileSync(todoFile, "utf8")) as Record<string, unknown>
+  const goal = backendMocks.goals.get(goalId)
+  return goal ? { state: goal.state, ...goal.extra } : {}
 }
 
 function writeLocalGoalTemplate(goalId: string, state: Record<string, unknown>): void {
-  const file = path.join(tmp, ".kody", "goals", "templates", goalId, "state.json")
+  const file = path.join(tmp, ".kody-engine", "definitions", "goals", goalId, "state.json")
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(file, JSON.stringify({ runWithoutApproval: true, ...state }, null, 2))
 }

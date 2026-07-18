@@ -14,8 +14,7 @@
  */
 
 import type { AgentResult } from "../../agent.js"
-import type { ProviderModel, ReasoningEffort } from "../../config.js"
-import type { StateRepoConfig } from "../../stateRepo.js"
+import type { KodyConfig, ProviderModel, ReasoningEffort } from "../../config.js"
 import type { EventSink } from "../events.js"
 import { makeRunId } from "../events.js"
 import { waitForNextUserMessage } from "../inbox.js"
@@ -25,7 +24,6 @@ import type { ChatTurn, SessionMeta } from "../session.js"
 import { sessionFilePath } from "../session.js"
 import type { SessionStore } from "../session-store.js"
 import { createSessionStore } from "../session-store.js"
-import { persistChatFilesToState, syncChatSessionFromState } from "../state-sync.js"
 
 const DEFAULT_IDLE_EXIT_MS = 5 * 60_000 // 5 minutes
 const DEFAULT_HARD_CAP_MS = 30 * 60_000 // 30 minutes (spike cap; raise to 6h after validation)
@@ -44,8 +42,8 @@ export interface InteractiveModeOptions {
   invokeAgent?: (prompt: string) => Promise<AgentResult>
   /** Test seam — skip git pull, commit, push. Useful for in-process simulation. */
   skipGit?: boolean
-  /** Configured external state repo for durable session/event JSONL. */
-  stateConfig?: StateRepoConfig | null
+  /** Consumer identity used to scope backend runtime state. */
+  config?: KodyConfig | null
   /** Test seam — override poll interval (default 30s). */
   pollIntervalMs?: number
   /** Transcript store override (tests). Defaults per session-store.ts. */
@@ -91,16 +89,6 @@ export async function runInteractiveMode(opts: InteractiveModeOptions): Promise<
     ...(runId ? { runId } : {}),
     ...(runUrl ? { runUrl } : {}),
   })
-  // Push the events file to origin RIGHT NOW so the dashboard's git-poll
-  // sees chat.ready without waiting for the first turn. Without this, an
-  // interactive session with no seed user message stays invisible until
-  // the user sends — defeating the "warm up button → input enables" UX.
-  if (!opts.skipGit) {
-    process.stdout.write(`→ kody:chat:interactive: committing chat.ready event to git\n`)
-    commitTurn(opts.cwd, opts.sessionId, opts.verbose ?? false, opts.stateConfig ?? null)
-    process.stdout.write(`→ kody:chat:interactive: chat.ready committed; entering poll loop\n`)
-  }
-
   // Watermark = next index to look at. Start by replying to anything already
   // in the file (the dashboard typically seeds an initial user turn before
   // dispatch). After replying, we move past it and wait for new appends.
@@ -108,10 +96,6 @@ export async function runInteractiveMode(opts: InteractiveModeOptions): Promise<
   let turnsCompleted = 0
 
   while (true) {
-    // Convex store: user turns arrive via the Convex query, no git sync.
-    if (store.backend !== "convex" && opts.stateConfig && !opts.skipGit) {
-      syncChatSessionFromState(opts.stateConfig, opts.cwd, opts.sessionId)
-    }
     const turns = await store.readTurns()
     const pendingIdx = findNextUserTurn(turns, watermark)
 
@@ -124,25 +108,14 @@ export async function runInteractiveMode(opts: InteractiveModeOptions): Promise<
         deadlineMs,
         pollIntervalMs: opts.pollIntervalMs ?? DEFAULT_POLL_MS,
         skipPull: opts.skipGit,
-        ...(store.backend === "convex"
-          ? { readTurns: () => store.readTurns() }
-          : opts.stateConfig
-            ? {
-                sync: () => syncChatSessionFromState(opts.stateConfig!, opts.cwd, opts.sessionId),
-              }
-            : {}),
+        ...(store.backend === "convex" ? { readTurns: () => store.readTurns() } : {}),
       })
       if (result.kind === "idle-timeout") {
         await emitExit(opts, "idle-timeout", turnsCompleted)
-        // Push the exit event so dashboards relying on the git-fallback
-        // path see the lifecycle end (HttpSink delivers it real-time, but
-        // a freshly-loading client needs the durable record too).
-        if (!opts.skipGit) commitTurn(opts.cwd, opts.sessionId, opts.verbose ?? false, opts.stateConfig ?? null)
         return { exitCode: 0, reason: "idle-timeout", turnsCompleted }
       }
       if (result.kind === "deadline") {
         await emitExit(opts, "deadline", turnsCompleted)
-        if (!opts.skipGit) commitTurn(opts.cwd, opts.sessionId, opts.verbose ?? false, opts.stateConfig ?? null)
         return { exitCode: 0, reason: "deadline", turnsCompleted }
       }
       // New message arrived — fall through and process it via runChatTurn,
@@ -161,7 +134,7 @@ export async function runInteractiveMode(opts: InteractiveModeOptions): Promise<
         verbose: opts.verbose,
         quiet: opts.quiet,
         invokeAgent: opts.invokeAgent,
-        stateConfig: opts.stateConfig,
+        config: opts.config,
         store,
         ...(opts.reasoningEffort ? { reasoningEffort: opts.reasoningEffort } : {}),
       })
@@ -169,7 +142,6 @@ export async function runInteractiveMode(opts: InteractiveModeOptions): Promise<
       const msg = err instanceof Error ? err.message : String(err)
       await emit(opts.sink, "chat.error", opts.sessionId, `loop-${turnsCompleted}`, { error: msg })
       await emitExit(opts, "fatal", turnsCompleted)
-      if (!opts.skipGit) commitTurn(opts.cwd, opts.sessionId, opts.verbose ?? false, opts.stateConfig ?? null)
       return { exitCode: 99, reason: "fatal", turnsCompleted }
     }
 
@@ -181,7 +153,6 @@ export async function runInteractiveMode(opts: InteractiveModeOptions): Promise<
       // tear down the session — the user can retry.
     } else {
       turnsCompleted += 1
-      if (!opts.skipGit) commitTurn(opts.cwd, opts.sessionId, opts.verbose ?? false, opts.stateConfig ?? null)
     }
 
     // Advance watermark past everything we've seen, including the just-appended
@@ -198,16 +169,6 @@ function findNextUserTurn(turns: ChatTurn[], fromIdx: number): number {
   // assistant or list empty from index), there's nothing pending.
   if (turns.length > 0 && turns[turns.length - 1]!.role === "user") return turns.length - 1
   return -1
-}
-
-/** Persist chat session/event JSONLs to the configured external state repo. */
-function commitTurn(cwd: string, sessionId: string, _verbose: boolean, stateConfig: StateRepoConfig | null): void {
-  if (stateConfig) {
-    persistChatFilesToState(stateConfig, cwd, sessionId, `chat: interactive turn for ${sessionId}`)
-    return
-  }
-
-  throw new Error(`kody chat interactive requires state repo config for session ${sessionId}`)
 }
 
 async function emitExit(

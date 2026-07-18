@@ -20,9 +20,8 @@
  * `Authorization: Bearer $BRAIN_API_KEY`). The key is set at machine boot —
  * the dashboard's Settings stores it alongside the URL.
  *
- * Sessions are cached locally as JSONL at `<repo-cwd>/.kody/sessions/<chatId>.jsonl`,
- * then synced to the configured state repo under `sessions/` and
- * `brain-events/` so a replacement machine can restore the chat state.
+ * Sessions use disposable runtime JSONL caches, with the backend as the
+ * durable authority so a replacement machine can restore chat state.
  *
  * Sets ctx.skipAgent — never invokes the Kody agent through the executor.
  * The agent runs once per chat turn inside the HTTP handler.
@@ -33,7 +32,8 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import * as path from "node:path"
 import type { ChatEvent, EventSink } from "../chat/events.js"
 import { type ChatTurnOptions, type ChatTurnResult, runChatTurn } from "../chat/loop.js"
-import { appendTurn, sessionFilePath, sessionStatePath } from "../chat/session.js"
+import { sessionFilePath } from "../chat/session.js"
+import { createSessionStore } from "../chat/session-store.js"
 import { LITELLM_DEFAULT_URL, needsLitellmProxy, type ProviderModel, parseModelRuntimeConfig } from "../config.js"
 import { unpackAllSecrets } from "../kody-cli.js"
 import { type LitellmHandle, startLitellmIfNeeded } from "../litellm.js"
@@ -41,17 +41,11 @@ import { type CloneRepoFn, defaultCloneRepo, ensureRepoCwd } from "../repoWorksp
 import {
   beginTurn,
   brainEventsFilePath,
-  brainEventsStatePath,
   endTurnIfUnterminated,
   getLastSeq,
   subscribe,
 } from "../scripts/brainTurnLog.js"
-import {
-  type GithubStateConfig,
-  loadGithubStateConfig,
-  persistJsonlFileToGithubState,
-  syncJsonlFileFromGithubState,
-} from "../stateRepoGithub.js"
+import { createStateBackendFromEnv } from "../state-backend.js"
 
 export interface BrainEvent {
   type: "chat" | "text" | "tool_use" | "done" | "error"
@@ -239,11 +233,14 @@ export class BrokerSink implements EventSink {
   constructor(
     private readonly emitToLog: (event: BrainEvent) => void,
     private readonly chatId: string,
+    private readonly tenantId?: string,
   ) {}
 
   async emit(event: ChatEvent): Promise<void> {
     const be = translateChatEvent(event, this.chatId)
-    if (be) this.emitToLog(be)
+    if (!be) return
+    this.emitToLog(be)
+    if (this.tenantId) await createStateBackendFromEnv().appendChatEvent(this.tenantId, this.chatId, be)
   }
 }
 
@@ -325,8 +322,6 @@ export interface BuildServerOptions {
   cloneRepo?: CloneRepoFn
   /** Seam for tests — defaults to the real chat-loop runChatTurn. */
   runTurn?: (opts: ChatTurnOptions) => Promise<ChatTurnResult>
-  /** Seam for tests — defaults to global fetch for state-repo GitHub calls. */
-  stateFetch?: typeof fetch
 }
 
 async function handleChatTurn(
@@ -340,7 +335,6 @@ async function handleChatTurn(
     model: ProviderModel
     litellmUrl: string | null
     runTurn: (opts: ChatTurnOptions) => Promise<ChatTurnResult>
-    stateFetch?: typeof fetch
   },
 ): Promise<void> {
   let body: unknown
@@ -367,7 +361,6 @@ async function handleChatTurn(
   const storeRepoUrl = strField(body, "storeRepoUrl")
   const storeRef = strField(body, "storeRef")
   const allowCrossRepo = boolField(body, "allowCrossRepo")
-  const firstTurn = boolField(body, "firstTurn")
   const agentIdentity = agentIdentityField(body)
 
   // Open the stream before repo clone/state restore. First Repo Brain turns can
@@ -403,53 +396,14 @@ async function handleChatTurn(
   }
 
   const stateToken = repoToken || envGithubToken()
-  const parsedRepo = parseRepoSlug(repo)
-  let stateConfig: GithubStateConfig | null = null
-  if (parsedRepo && stateToken) {
-    try {
-      stateConfig = await loadGithubStateConfig({
-        owner: parsedRepo.owner,
-        repo: parsedRepo.repo,
-        githubToken: stateToken,
-        fetchImpl: opts.stateFetch,
-      })
-    } catch (err) {
-      process.stderr.write(
-        `[brain-serve] state config unavailable for ${repo}: ${err instanceof Error ? err.message : String(err)}\n`,
-      )
-    }
-  }
-
   const sessionFile = sessionFilePath(agentCwd, chatId)
   const brainEventsFile = brainEventsFilePath(agentCwd, chatId)
-  if (!firstTurn && stateConfig && stateToken) {
-    try {
-      await syncJsonlFileFromGithubState({
-        config: stateConfig,
-        filePath: sessionStatePath(chatId),
-        localPath: sessionFile,
-        githubToken: stateToken,
-        fetchImpl: opts.stateFetch,
-      })
-      await syncJsonlFileFromGithubState({
-        config: stateConfig,
-        filePath: brainEventsStatePath(chatId),
-        localPath: brainEventsFile,
-        githubToken: stateToken,
-        fetchImpl: opts.stateFetch,
-      })
-    } catch (err) {
-      process.stderr.write(
-        `[brain-serve] state sync failed for ${repo ?? "local"}:${chatId}: ${
-          err instanceof Error ? err.message : String(err)
-        }\n`,
-      )
-    }
-  }
-
-  fs.mkdirSync(path.dirname(sessionFile), { recursive: true })
-
-  appendTurn(sessionFile, {
+  const sessionStore = createSessionStore({
+    sessionId: chatId,
+    sessionFile,
+    ...(repo ? { tenantId: repo } : {}),
+  })
+  await sessionStore.appendTurn({
     role: "user",
     content: message,
     timestamp: new Date().toISOString(),
@@ -461,7 +415,7 @@ async function handleChatTurn(
   // GET /chats/:id/stream?since=<seq> after a Vercel-ceiling disconnect.
   const sinceFloor = getLastSeq(agentCwd, chatId)
   const emitToLog = beginTurn(agentCwd, chatId)
-  const sink = new BrokerSink(emitToLog, chatId)
+  const sink = new BrokerSink(emitToLog, chatId, repo)
 
   void enqueue(chatId, async () => {
     try {
@@ -472,6 +426,7 @@ async function handleChatTurn(
         model: opts.model,
         litellmUrl: opts.litellmUrl,
         sink,
+        store: sessionStore,
         reposRoot: opts.reposRoot,
         // Repo Brain is selected-repo focused by default. Higher-level
         // coordinator flows can opt into fetch_repo explicitly.
@@ -501,32 +456,6 @@ async function handleChatTurn(
         chatId,
         "Brain turn ended without a reply (the machine may have restarted mid-turn) — please resend your message",
       )
-      if (stateConfig && stateToken) {
-        try {
-          await persistJsonlFileToGithubState({
-            config: stateConfig,
-            filePath: sessionStatePath(chatId),
-            localPath: sessionFile,
-            message: `brain: session ${chatId}`,
-            githubToken: stateToken,
-            fetchImpl: opts.stateFetch,
-          })
-          await persistJsonlFileToGithubState({
-            config: stateConfig,
-            filePath: brainEventsStatePath(chatId),
-            localPath: brainEventsFile,
-            message: `brain: events ${chatId}`,
-            githubToken: stateToken,
-            fetchImpl: opts.stateFetch,
-          })
-        } catch (err) {
-          process.stderr.write(
-            `[brain-serve] state persist failed for ${repo ?? "local"}:${chatId}: ${
-              err instanceof Error ? err.message : String(err)
-            }\n`,
-          )
-        }
-      }
     }
   })
 
@@ -574,7 +503,6 @@ export function buildServer(opts: BuildServerOptions): Server {
         model: opts.model,
         litellmUrl: opts.litellmUrl,
         runTurn,
-        stateFetch: opts.stateFetch,
       })
       return
     }

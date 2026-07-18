@@ -1,5 +1,5 @@
 /**
- * Postflight: persist goal state to the configured Kody state repo.
+ * Postflight: persist goal state to the configured Kody backend.
  * `saveManagedGoalState` stashes the updated state on
  * `ctx.data.goalPersistState` and marks `goalPersistChanged`.
  */
@@ -18,7 +18,7 @@ export const commitGoalState: PostflightScript = async (ctx) => {
     return
   }
   if (ctx.data.goalPersistChanged !== true) {
-    refreshReportOrFail(ctx, goal.id, goal.raw)
+    await refreshReportOrFail(ctx, goal.id, goal.raw)
     await flushLogs(ctx)
     return
   }
@@ -31,10 +31,10 @@ export const commitGoalState: PostflightScript = async (ctx) => {
 
   try {
     await putGoalStateAsync(ctx.config, goal.id, updated, describeCommitMessage(goal), ctx.cwd)
-    refreshReportOrFail(ctx, goal.id, updated)
+    await refreshReportOrFail(ctx, goal.id, updated)
   } catch (err) {
     process.stderr.write(
-      `[goal-manager] commitGoalState: persist to state repo failed (${
+      `[goal-manager] commitGoalState: backend persistence failed (${
         err instanceof Error ? err.message : String(err)
       }); will retry next tick\n`,
     )
@@ -43,10 +43,14 @@ export const commitGoalState: PostflightScript = async (ctx) => {
   }
 }
 
-function refreshReportOrFail(ctx: Parameters<PostflightScript>[0], goalId: string, state: GoalState | undefined): void {
+async function refreshReportOrFail(
+  ctx: Parameters<PostflightScript>[0],
+  goalId: string,
+  state: GoalState | undefined,
+): Promise<void> {
   if (!state) return
   try {
-    refreshGoalDashboardReport({
+    await refreshGoalDashboardReport({
       config: ctx.config,
       cwd: ctx.cwd,
       data: ctx.data,

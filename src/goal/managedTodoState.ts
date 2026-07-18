@@ -1,7 +1,7 @@
 /**
  * Managed-goal todo state contract.
  *
- * This module owns the JSON todo mapping. State repo transport stays in
+ * This module owns the JSON todo mapping. Backend transport stays in
  * stateStore.ts.
  */
 import { type GoalState, parseGoalState, serializeGoalState } from "./state.js"

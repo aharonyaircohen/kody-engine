@@ -16,6 +16,7 @@
  * (never advancing, re-firing every cron wake, stuck "overdue" on the dash).
  */
 
+import { capabilitiesRoot } from "../definition-paths.js"
 import type { PostflightScript } from "../implementations/types.js"
 import type { StateEnvelope } from "./issueStateComment.js"
 import { type LoadedJobState, resolveBackend } from "./jobState/index.js"
@@ -49,7 +50,7 @@ export const writeJobStateFile: PostflightScript = async (ctx, _profile, agentRe
         },
         done: prior.state.done,
       }
-      const jobsDir = String(args?.jobsDir ?? ".kody/capabilities")
+      const jobsDir = String(args?.jobsDir ?? capabilitiesRoot(ctx.cwd))
       const backend = resolveBackend({ config: ctx.config, cwd: ctx.cwd, jobsDir })
       await backend.save(prior, carried)
     }
@@ -92,7 +93,7 @@ export const writeJobStateFile: PostflightScript = async (ctx, _profile, agentRe
   // than pass through ctx.data because the backend is cheap to construct
   // and stateless per-tick (lifecycle state lives on the dispatcher's
   // single instance — see dispatchCapabilityFileTicks).
-  const jobsDir = String(args?.jobsDir ?? ".kody/capabilities")
+  const jobsDir = String(args?.jobsDir ?? capabilitiesRoot(ctx.cwd))
   const backend = resolveBackend({ config: ctx.config, cwd: ctx.cwd, jobsDir })
   await backend.save(loaded, stamped)
 }

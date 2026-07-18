@@ -8,8 +8,8 @@ export default defineConfig({
   test: {
     testTimeout: 30_000,
     env: {
-      KODY_COMPANY_STORE: path.resolve(here, "../kody-store"),
-      KODY_COMPANY_STORE_REF: "working-tree",
+      KODY_DEFINITIONS_ROOT: path.resolve(here, "../kody-store"),
+      KODY_TEST_LOCAL_JOB_STATE: "1",
     },
     coverage: {
       provider: "v8",

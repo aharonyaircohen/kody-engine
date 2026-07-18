@@ -156,21 +156,14 @@ try {
 
   run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", tarball], { cwd: install })
   const bin = path.join(install, "node_modules", ".bin", "kody-engine")
-  const classifyOutput = run(bin, ["classify", "--issue", "1", "--cwd", consumer], {
-    cwd: consumer,
-    env: { KODY_COMPANY_STORE: store, VITEST: "1" },
-  })
-  assert(!classifyOutput.includes("Invalid profile"), "fresh tarball install hit an Invalid profile error")
-  assert(
-    !classifyOutput.includes("profile references unknown scripts"),
-    "fresh tarball install let a removed-script capability override shadow the store",
-  )
+  const versionOutput = run(bin, ["version"], { cwd: consumer })
+  assert(versionOutput.includes(packed.version), "fresh tarball reports the wrong version")
 
-  const featureOutput = run(bin, ["feature", "--issue", "1", "--cwd", consumer], {
-    cwd: consumer,
-    env: { KODY_COMPANY_STORE: store, VITEST: "1" },
-  })
-  assert(!featureOutput.includes("Invalid profile"), "fresh tarball install could not start feature workflow")
+  const helpOutput = run(bin, ["help", "--cwd", consumer], { cwd: consumer })
+  assert(
+    !helpOutput.includes("classify --issue") && !helpOutput.includes("feature --issue"),
+    "fresh tarball exposed removed consumer-local capabilities",
+  )
 
   process.stdout.write("package tarball verification passed\n")
 } finally {

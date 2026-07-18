@@ -2,101 +2,85 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-
-const { execFileSync } = vi.hoisted(() => ({
-  execFileSync: vi.fn(),
-}))
-
-vi.mock("node:child_process", () => ({
-  execFileSync,
-}))
-
+import type { KodyConfig } from "../../src/config.js"
 import { hydrateStateWorkspace, resetStateWorkspaceHydrationCacheForTests } from "../../src/stateWorkspace.js"
+
+const config: KodyConfig = {
+  quality: { typecheck: "", lint: "", format: "", testUnit: "" },
+  git: { defaultBranch: "main" },
+  github: { owner: "acme", repo: "widgets" },
+  agent: { model: "test" },
+}
 
 describe("hydrateStateWorkspace", () => {
   let cwd: string
-  let cacheRoot: string
-  const priorCache = process.env.KODY_STATE_REPO_CACHE
+  const previous = { ...process.env }
 
   beforeEach(() => {
-    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-state-workspace-"))
-    cacheRoot = fs.mkdtempSync(path.join(os.tmpdir(), "kody-state-cache-"))
-    process.env.KODY_STATE_REPO_CACHE = cacheRoot
-    process.env.KODY_STATE_WORKSPACE_FETCH_FOR_TESTS = "1"
-    execFileSync.mockReset()
+    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-runtime-workspace-"))
+    process.env.CONVEX_URL = "https://example.convex.cloud"
+    process.env.KODY_SERVICE_KEY = "test-key"
     resetStateWorkspaceHydrationCacheForTests()
   })
 
   afterEach(() => {
     fs.rmSync(cwd, { recursive: true, force: true })
-    fs.rmSync(cacheRoot, { recursive: true, force: true })
-    if (priorCache === undefined) delete process.env.KODY_STATE_REPO_CACHE
-    else process.env.KODY_STATE_REPO_CACHE = priorCache
-    delete process.env.KODY_STATE_WORKSPACE_FETCH_FOR_TESTS
+    process.env = { ...previous }
     resetStateWorkspaceHydrationCacheForTests()
   })
 
-  it("overlays state capability folders without deleting unrelated repo capabilities", () => {
-    const researchDir = path.join(cwd, ".kody", "capabilities", "research")
-    const stateOwnedDir = path.join(cwd, ".kody", "capabilities", "dev-ci-health")
-    fs.mkdirSync(researchDir, { recursive: true })
-    fs.mkdirSync(stateOwnedDir, { recursive: true })
-    fs.writeFileSync(path.join(researchDir, "profile.json"), '{"name":"research"}')
-    fs.writeFileSync(path.join(researchDir, "install-codegraph.sh"), "#!/usr/bin/env bash\n")
-    fs.writeFileSync(path.join(stateOwnedDir, "stale.txt"), "stale")
+  it("hydrates backend prompt documents into engine-owned runtime scratch", async () => {
+    const backend = {
+      listRepoDocs: vi.fn(async (_tenant: string, prefix: string) =>
+        prefix === "context:"
+          ? [
+              {
+                kind: "context:mission",
+                doc: { body: "Build reliable software.\n" },
+                updatedAt: "t",
+              },
+            ]
+          : [
+              {
+                kind: "memory:plain",
+                doc: {
+                  meta: {
+                    name: "Plain",
+                    description: "Use plain language",
+                    type: "preference",
+                  },
+                  body: "Keep it simple.\n",
+                },
+                updatedAt: "t",
+              },
+            ],
+      ),
+      getRepoDoc: vi.fn(async (_tenant: string, kind: string) =>
+        kind === "instructions" ? { kind, doc: { body: "Be concise.\n" }, updatedAt: "t" } : null,
+      ),
+      listWorkflows: vi.fn(async () => []),
+    }
 
-    mockStateRepoSnapshot("repo", (root) => {
-      const capabilityDir = path.join(root, "capabilities", "dev-ci-health")
-      fs.mkdirSync(capabilityDir, { recursive: true })
-      fs.writeFileSync(path.join(capabilityDir, "profile.json"), '{"name":"dev-ci-health"}')
-    })
+    await hydrateStateWorkspace(config, cwd, backend as never)
 
-    hydrateStateWorkspace({ state: { repo: "https://github.com/acme/state", path: "repo" } }, cwd)
-
-    expect(fs.existsSync(path.join(researchDir, "install-codegraph.sh"))).toBe(true)
-    expect(fs.readFileSync(path.join(stateOwnedDir, "profile.json"), "utf8")).toBe('{"name":"dev-ci-health"}')
-    expect(fs.existsSync(path.join(stateOwnedDir, "stale.txt"))).toBe(false)
+    const root = path.join(cwd, ".kody-engine", "runtime")
+    expect(fs.readFileSync(path.join(root, "context/mission.md"), "utf8")).toBe("Build reliable software.\n")
+    expect(fs.readFileSync(path.join(root, "memory/INDEX.md"), "utf8")).toContain("[Plain](plain.md)")
+    expect(fs.readFileSync(path.join(root, "instructions.md"), "utf8")).toBe("Be concise.\n")
+    expect(fs.existsSync(path.join(cwd, ".kody"))).toBe(false)
   })
 
-  it("hydrates each state workspace only once per process", () => {
-    mockStateRepoSnapshot("repo", (root) => {
-      const capabilityDir = path.join(root, "capabilities", "review")
-      fs.mkdirSync(capabilityDir, { recursive: true })
-      fs.writeFileSync(path.join(capabilityDir, "profile.json"), '{"name":"review"}')
-      fs.writeFileSync(path.join(capabilityDir, "capability.md"), "review")
-    })
+  it("hydrates each tenant workspace only once per process", async () => {
+    const backend = {
+      listRepoDocs: vi.fn(async () => []),
+      getRepoDoc: vi.fn(async () => null),
+      listWorkflows: vi.fn(async () => []),
+    }
 
-    const config = { state: { repo: "https://github.com/acme/state", path: "repo" } }
-    hydrateStateWorkspace(config, cwd)
-    const callsAfterFirstHydrate = execFileSync.mock.calls.length
+    await hydrateStateWorkspace(config, cwd, backend as never)
+    const calls = backend.getRepoDoc.mock.calls.length
+    await hydrateStateWorkspace(config, cwd, backend as never)
 
-    hydrateStateWorkspace(config, cwd)
-
-    expect(execFileSync).toHaveBeenCalled()
-    expect(execFileSync.mock.calls.length).toBe(callsAfterFirstHydrate)
-    expect(fs.readFileSync(path.join(cwd, ".kody", "capabilities", "review", "capability.md"), "utf8")).toBe("review")
+    expect(backend.getRepoDoc.mock.calls.length).toBe(calls)
   })
-
-  function mockStateRepoSnapshot(basePath: string, writeSnapshot: (root: string) => void): void {
-    let cacheDir = ""
-    execFileSync.mockImplementation((_cmd: string, rawArgs: string[]) => {
-      const args = rawArgs[0] === "-c" ? rawArgs.slice(2) : rawArgs
-      if (args[0] === "clone") {
-        cacheDir = args[args.length - 1]!
-        fs.mkdirSync(path.join(cacheDir, ".git"), { recursive: true })
-        return ""
-      }
-      if (args.includes("checkout")) {
-        if (!cacheDir) {
-          const cIdx = args.indexOf("-C")
-          cacheDir = cIdx >= 0 ? args[cIdx + 1]! : cacheDir
-        }
-        const root = path.join(cacheDir, basePath)
-        fs.rmSync(root, { recursive: true, force: true })
-        fs.mkdirSync(root, { recursive: true })
-        writeSnapshot(root)
-      }
-      return ""
-    })
-  }
 })

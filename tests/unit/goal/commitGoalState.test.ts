@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("../../../src/goal/stateStore.js", () => {
   const put = vi.fn()
-  return { putGoalState: put, putGoalStateAsync: put }
+  return { putGoalStateAsync: put }
 })
 vi.mock("../../../src/goal/runLog.js", async () => {
   const actual = await vi.importActual<typeof import("../../../src/goal/runLog.js")>("../../../src/goal/runLog.js")
@@ -11,25 +11,20 @@ vi.mock("../../../src/goal/runLog.js", async () => {
     flushGoalRunLogEventsAsync: vi.fn(),
   }
 })
-vi.mock("../../../src/stateRepo.js", async () => {
-  const actual = await vi.importActual<typeof import("../../../src/stateRepo.js")>("../../../src/stateRepo.js")
-  return {
-    ...actual,
-    writeStateText: vi.fn(),
-  }
-})
+const backendMocks = vi.hoisted(() => ({ saveReport: vi.fn() }))
+vi.mock("../../../src/state-backend.js", () => ({
+  createStateBackendFromEnv: () => ({ saveReport: backendMocks.saveReport }),
+}))
 
 import { flushGoalRunLogEventsAsync, stageGoalRunLogEvent } from "../../../src/goal/runLog.js"
 import type { GoalState } from "../../../src/goal/state.js"
-import { putGoalState } from "../../../src/goal/stateStore.js"
+import { putGoalStateAsync } from "../../../src/goal/stateStore.js"
 import type { Context, Profile } from "../../../src/implementations/types.js"
 import { commitGoalState } from "../../../src/scripts/commitGoalState.js"
 import type { GoalCtx } from "../../../src/scripts/goalCtx.js"
-import { writeStateText } from "../../../src/stateRepo.js"
 
-const putGoalStateMock = vi.mocked(putGoalState)
+const putGoalStateMock = vi.mocked(putGoalStateAsync)
 const flushGoalRunLogEventsMock = vi.mocked(flushGoalRunLogEventsAsync)
-const writeStateTextMock = vi.mocked(writeStateText)
 
 function goalState(overrides: Partial<GoalState["extra"]> = {}): GoalState {
   return {
@@ -62,7 +57,6 @@ function fakeCtx(raw: GoalState, data: Record<string, unknown> = {}): Context {
     cwd: "/repo",
     config: {
       github: { owner: "o", repo: "r" },
-      state: { repo: "o/kody-state", path: "r" },
       git: { defaultBranch: "main" },
       quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       agent: { model: "anthropic/claude-haiku-4-5-20251001" },
@@ -91,7 +85,7 @@ describe("commitGoalState report refresh", () => {
   beforeEach(() => {
     putGoalStateMock.mockReset()
     flushGoalRunLogEventsMock.mockReset()
-    writeStateTextMock.mockReset()
+    backendMocks.saveReport.mockReset()
     delete process.env.GITHUB_EVENT_NAME
     delete process.env.GITHUB_ACTOR
   })
@@ -129,9 +123,12 @@ describe("commitGoalState report refresh", () => {
     await commitGoalState(ctx, fakeProfile(), null)
 
     expect(putGoalStateMock).toHaveBeenCalledOnce()
-    expect(writeStateTextMock).toHaveBeenCalledOnce()
-    expect(putGoalStateMock.mock.invocationCallOrder[0]).toBeLessThan(writeStateTextMock.mock.invocationCallOrder[0]!)
-    const [, , path, body] = writeStateTextMock.mock.calls[0]!
+    expect(backendMocks.saveReport).toHaveBeenCalledOnce()
+    expect(putGoalStateMock.mock.invocationCallOrder[0]).toBeLessThan(
+      backendMocks.saveReport.mock.invocationCallOrder[0]!,
+    )
+    const [, , runId, , body] = backendMocks.saveReport.mock.calls[0]!
+    const path = `reports/release-v1-2-3/runs/${runId}.md`
     expect(path).toMatch(/^reports\/release-v1-2-3\/runs\/\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z\.md$/)
     expect(body).toContain("- Event: goal.tick.dispatch")
     expect(body).toContain("- Next step: dispatch")
@@ -163,8 +160,9 @@ describe("commitGoalState report refresh", () => {
     await commitGoalState(ctx, fakeProfile(), null)
 
     expect(putGoalStateMock).not.toHaveBeenCalled()
-    expect(writeStateTextMock).toHaveBeenCalledOnce()
-    const [, , path, body] = writeStateTextMock.mock.calls[0]!
+    expect(backendMocks.saveReport).toHaveBeenCalledOnce()
+    const [, , runId, , body] = backendMocks.saveReport.mock.calls[0]!
+    const path = `reports/release-v1-2-3/runs/${runId}.md`
     expect(path).toMatch(/^reports\/release-v1-2-3\/runs\/\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z\.md$/)
     expect(body).toContain("- Event: goal.tick.wait")
     expect(body).toContain("- Next step: wait")
@@ -185,7 +183,7 @@ describe("commitGoalState report refresh", () => {
 
     await commitGoalState(ctx, fakeProfile(), null)
 
-    expect(writeStateTextMock).not.toHaveBeenCalled()
+    expect(backendMocks.saveReport).not.toHaveBeenCalled()
     expect(flushGoalRunLogEventsMock).toHaveBeenCalledOnce()
   })
 })

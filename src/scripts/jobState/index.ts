@@ -1,22 +1,16 @@
 /**
  * Job state backend resolver.
  *
- * Picks an implementation based on `config.jobs.stateBackend`.
- * Runtime config accepts only "contents-api"; "local-file" remains as an
- * internal test seam for unit tests that construct KodyConfig directly.
- *
- * Adding a backend: implement `JobStateBackend`, drop the file in this
- * directory, register a case below. Job-tick scripts (loadJobFromFile,
- * writeJobStateFile) and the dispatcher only see the interface — no
- * change needed to add a new storage option.
+ * The backend is the single durable runtime authority. LocalFileBackend is
+ * available only as a directly constructed unit-test seam.
  */
 
 import type { KodyConfig } from "../../config.js"
 import type { JobStateBackend } from "./backend.js"
-import { ContentsApiBackend } from "./contentsApiBackend.js"
+import { BackendStateBackend } from "./backendStateBackend.js"
 import { LocalFileBackend } from "./localFileBackend.js"
 
-export type JobStateBackendName = "contents-api" | "local-file"
+export type JobStateBackendName = "backend"
 
 export interface ResolveBackendOptions {
   config: KodyConfig
@@ -25,25 +19,17 @@ export interface ResolveBackendOptions {
 }
 
 export function resolveBackend(opts: ResolveBackendOptions): JobStateBackend {
-  const requested = opts.config.jobs?.stateBackend ?? "contents-api"
-
-  switch (requested) {
-    case "contents-api":
-      return new ContentsApiBackend({ config: opts.config, jobsDir: opts.jobsDir, cwd: opts.cwd })
-    case "local-file": {
-      const owner = opts.config.github?.owner
-      const repo = opts.config.github?.repo
-      if (!owner || !repo) {
-        throw new Error("resolveBackend: config.github.owner and config.github.repo must be set")
-      }
-      return new LocalFileBackend({ cwd: opts.cwd, jobsDir: opts.jobsDir, owner, repo })
-    }
-    default: {
-      // Exhaustiveness check — TS will catch unhandled cases at compile time.
-      const _exhaustive: never = requested
-      throw new Error(`resolveBackend: unknown stateBackend "${String(_exhaustive)}"`)
-    }
+  // Unit tests exercise state transitions without a live backend. This seam is
+  // deliberately unavailable in production, including GitHub Actions.
+  if (process.env.VITEST === "true" && process.env.KODY_TEST_LOCAL_JOB_STATE === "1") {
+    return new LocalFileBackend({
+      cwd: opts.cwd,
+      jobsDir: opts.jobsDir,
+      owner: opts.config.github.owner,
+      repo: opts.config.github.repo,
+    })
   }
+  return new BackendStateBackend({ config: opts.config, jobsDir: opts.jobsDir })
 }
 
 export type { JobStateBackend, LoadedJobState } from "./backend.js"

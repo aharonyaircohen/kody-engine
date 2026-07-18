@@ -10,7 +10,7 @@ let tmp: string
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "load-capability-state-"))
-  fs.mkdirSync(path.join(tmp, ".kody", "capabilities"), { recursive: true })
+  fs.mkdirSync(path.join(tmp, ".kody-engine", "definitions", "capabilities"), { recursive: true })
 })
 afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }))
 
@@ -20,7 +20,6 @@ function ctxFor(): Context {
     git: { defaultBranch: "main" },
     github: { owner: "o", repo: "r" },
     agent: { model: "anthropic/test" },
-    jobs: { stateBackend: "local-file" },
   }
   return { args: {}, cwd: tmp, config, data: {}, output: { exitCode: 0 } }
 }

@@ -1,7 +1,12 @@
 import { createCipheriv, randomBytes } from "node:crypto"
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { decryptVault, readRepoSecret } from "../../src/stateRepoVault.js"
+const mocks = vi.hoisted(() => ({ getRepoDoc: vi.fn() }))
+vi.mock("../../src/state-backend.js", () => ({
+  createStateBackendFromEnv: () => ({ getRepoDoc: mocks.getRepoDoc }),
+}))
+
+import { decryptVault, readRepoSecret } from "../../src/backendVault.js"
 
 const MASTER = Buffer.from("a".repeat(64), "hex") // 32 bytes
 
@@ -32,32 +37,12 @@ describe("pool vault: decryptVault", () => {
 })
 
 describe("pool vault: readRepoSecret", () => {
-  function contentResponse(content: string): Response {
-    return new Response(
-      JSON.stringify({
-        type: "file",
-        content: Buffer.from(content, "utf8").toString("base64"),
-        encoding: "base64",
-        sha: "sha",
-      }),
-      { status: 200 },
-    )
-  }
+  beforeEach(() => {
+    mocks.getRepoDoc.mockReset()
+  })
 
-  function mockFetch(blob: string | null, calls: string[] = []): typeof fetch {
-    return (async (url: string) => {
-      calls.push(String(url))
-      if (String(url).endsWith("/contents/kody.config.json")) {
-        return contentResponse(
-          JSON.stringify({
-            github: { owner: "o", repo: "r" },
-            state: { repo: "https://github.com/o/kody-state", path: "r" },
-          }),
-        )
-      }
-      if (blob === null) return new Response("not found", { status: 404 })
-      return contentResponse(blob)
-    }) as unknown as typeof fetch
+  function vaultRecord(blob: string | null): unknown {
+    return blob ? { doc: { ciphertext: blob }, updatedAt: "now" } : null
   }
 
   it("reads a named secret out of the encrypted vault", async () => {
@@ -65,43 +50,36 @@ describe("pool vault: readRepoSecret", () => {
       version: 1,
       secrets: { FLY_API_TOKEN: { value: "fly-abc" }, ANTHROPIC_API_KEY: { value: "sk-x" } },
     })
-    const calls: string[] = []
+    mocks.getRepoDoc.mockResolvedValue(vaultRecord(dashboardEncrypt(doc, MASTER)))
     const out = await readRepoSecret({
-      githubToken: "ghp_op",
       masterKey: MASTER,
       owner: "o",
       repo: "r-readsecret",
       name: "FLY_API_TOKEN",
-      fetchImpl: mockFetch(dashboardEncrypt(doc, MASTER), calls),
     })
     expect(out).toBe("fly-abc")
-    expect(calls).toEqual([
-      "https://api.github.com/repos/o/r-readsecret/contents/kody.config.json",
-      "https://api.github.com/repos/o/kody-state/contents/r/secrets.enc",
-    ])
+    expect(mocks.getRepoDoc).toHaveBeenCalledWith("o/r-readsecret", "secrets.enc")
   })
 
   it("returns null when the repo has no vault (404)", async () => {
+    mocks.getRepoDoc.mockResolvedValue(null)
     const out = await readRepoSecret({
-      githubToken: "ghp_op",
       masterKey: MASTER,
       owner: "o",
       repo: "r-novault",
       name: "FLY_API_TOKEN",
-      fetchImpl: mockFetch(null),
     })
     expect(out).toBeNull()
   })
 
   it("returns null when the secret is absent from the vault", async () => {
     const doc = JSON.stringify({ version: 1, secrets: { OTHER: { value: "x" } } })
+    mocks.getRepoDoc.mockResolvedValue(vaultRecord(dashboardEncrypt(doc, MASTER)))
     const out = await readRepoSecret({
-      githubToken: "ghp_op",
       masterKey: MASTER,
       owner: "o",
       repo: "r-absent",
       name: "FLY_API_TOKEN",
-      fetchImpl: mockFetch(dashboardEncrypt(doc, MASTER)),
     })
     expect(out).toBeNull()
   })

@@ -2,8 +2,6 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { CapabilityFolder, CapabilityWorkflowConfig, CapabilityWorkflowStepConfig } from "./capabilityFolders.js"
 import { parseCapabilityWorkflow } from "./capabilityFolders.js"
-import { getCompanyStoreAssetRoot } from "./companyStore.js"
-import { readStateText, type StateRepoConfig } from "./stateRepo.js"
 import { validateWorkflow } from "./workflowValidation.js"
 
 export interface WorkflowDefinition {
@@ -72,13 +70,13 @@ export function normalizeWorkflowDefinition(value: unknown): WorkflowDefinition 
 }
 
 export function readWorkflowDefinition(
-  config: StateRepoConfig,
+  _config: unknown,
   cwd: string | undefined,
   id: string,
 ): WorkflowDefinition | null {
-  const file = readStateText(config, cwd, workflowDefinitionPath(id))
-  if (!file) return readCompanyStoreWorkflowDefinition(id)
-  return parseWorkflowDefinition(file.content)
+  const filePath = path.join(cwd ?? process.cwd(), ".kody-engine", "runtime", workflowDefinitionPath(id))
+  if (!fs.existsSync(filePath)) return null
+  return parseWorkflowDefinition(fs.readFileSync(filePath, "utf8"))
 }
 
 export function workflowDefinitionToCapabilityFolder(
@@ -122,14 +120,6 @@ function workflowDefinitionToConfig(workflow: WorkflowDefinition): CapabilityWor
     steps: workflow.steps ?? workflow.capabilities.map((capability) => ({ capability })),
     ...(workflow.startAt ? { startAt: workflow.startAt } : {}),
   }
-}
-
-function readCompanyStoreWorkflowDefinition(id: string): WorkflowDefinition | null {
-  const root = getCompanyStoreAssetRoot("workflows")
-  if (!root) return null
-  const filePath = path.join(root, id, "workflow.json")
-  if (!fs.existsSync(filePath)) return null
-  return parseWorkflowDefinition(fs.readFileSync(filePath, "utf8"))
 }
 
 function parseWorkflowDefinition(content: string): WorkflowDefinition | null {

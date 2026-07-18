@@ -185,7 +185,7 @@ export interface RunJobBase {
 export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput> {
   const valid = validateJob(job)
   const action = valid.action ?? valid.capability
-  const projectCapabilitiesRoot = path.join(base.cwd, ".kody", "capabilities")
+  const projectCapabilitiesRoot = hydratedCapabilitiesRoot(base.cwd)
   const resolvedCapability = !valid.workflow && action ? resolveCapabilityAction(action, projectCapabilitiesRoot) : null
   const capabilityIdentity = valid.capability ?? resolvedCapability?.capability
   const capabilityContext = valid.workflow ? null : loadCapabilityContext(capabilityIdentity, base.cwd)
@@ -221,7 +221,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     const workflowCapability = capabilityContext ?? workflowContext!
     const persistedState =
       valid.workflowRunId && workflowIdentity && base.config
-        ? readWorkflowRunState(base.config, base.cwd, workflowIdentity, valid.workflowRunId)
+        ? await readWorkflowRunState(base.config, base.cwd, workflowIdentity, valid.workflowRunId)
         : null
     const workflowJob = {
       ...(workflowContext && !valid.why ? { ...valid, why: workflowContext.body } : valid),
@@ -236,7 +236,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
         : undefined
     const result = await runCapabilityWorkflow(workflowJob, workflow, workflowCapability, base, checkpoint)
     if (valid.workflowRunId && workflowIdentity && base.config && result.workflowState) {
-      writeWorkflowRunState(base.config, base.cwd, workflowIdentity, valid.workflowRunId, result.workflowState)
+      await writeWorkflowRunState(base.config, base.cwd, workflowIdentity, valid.workflowRunId, result.workflowState)
     }
     return result
   }
@@ -367,7 +367,7 @@ async function runCapabilityWorkflow(
   workflow: CapabilityWorkflowConfig,
   capability: CapabilityFolder,
   base: RunJobBase,
-  checkpoint?: (state: WorkflowRunState) => void,
+  checkpoint?: (state: WorkflowRunState) => Promise<void>,
 ): Promise<ExecutorOutput> {
   const invalid = workflowError(workflow, base)
   if (invalid) {
@@ -375,7 +375,7 @@ async function runCapabilityWorkflow(
       const state = initialWorkflowState(parent, workflow)
       state.status = "blocked"
       state.blocker = invalid
-      checkpoint?.(state)
+      await checkpoint?.(state)
       return { exitCode: 64, reason: invalid, workflowState: state }
     }
     return { exitCode: 64, reason: invalid }
@@ -467,7 +467,7 @@ function isGraphWorkflow(workflow: CapabilityWorkflowConfig): boolean {
 }
 
 function workflowError(workflow: CapabilityWorkflowConfig, base: RunJobBase): string | null {
-  const projectCapabilitiesRoot = path.join(base.cwd, ".kody", "capabilities")
+  const projectCapabilitiesRoot = hydratedCapabilitiesRoot(base.cwd)
   const knownCapabilities = new Set<string>()
   const capabilityInputs = new Map<string, Set<string>>()
   const capabilityOutputs = new Map<string, Set<string>>()
@@ -555,7 +555,7 @@ async function runGraphCapabilityWorkflow(
   workflow: CapabilityWorkflowConfig,
   capability: CapabilityFolder,
   base: RunJobBase,
-  checkpoint?: (state: WorkflowRunState) => void,
+  checkpoint?: (state: WorkflowRunState) => Promise<void>,
 ): Promise<ExecutorOutput> {
   const state = initialWorkflowState(parent, workflow)
 
@@ -570,7 +570,7 @@ async function runGraphCapabilityWorkflow(
       const reason = `workflow ${capability.slug} exceeded ${maxExecutedSteps} executed steps`
       state.status = "blocked"
       state.blocker = reason
-      checkpoint?.(state)
+      await checkpoint?.(state)
       return { ...result, exitCode: 64, reason, workflowState: state }
     }
 
@@ -580,12 +580,12 @@ async function runGraphCapabilityWorkflow(
       const reason = `workflow ${capability.slug} current step ${state.currentStepId} is missing`
       state.status = "blocked"
       state.blocker = reason
-      checkpoint?.(state)
+      await checkpoint?.(state)
       return { ...result, exitCode: 64, reason, workflowState: state }
     }
 
     const label = step.action ?? step.capability
-    checkpoint?.(state)
+    await checkpoint?.(state)
     let child: Job
     try {
       child = workflowStepToJob(step, parent, chainData)
@@ -593,7 +593,7 @@ async function runGraphCapabilityWorkflow(
       const reason = error instanceof Error ? error.message : String(error)
       state.status = "blocked"
       state.blocker = reason
-      checkpoint?.(state)
+      await checkpoint?.(state)
       return { exitCode: 64, reason, workflowState: state }
     }
 
@@ -630,7 +630,7 @@ async function runGraphCapabilityWorkflow(
     if (result.exitCode !== 0 && !canContinueWorkflow(step, outcome)) {
       state.status = "failed"
       state.blocker = result.reason ?? `workflow step ${step.id} failed`
-      checkpoint?.(state)
+      await checkpoint?.(state)
       return withWorkflowBoundaryEval(capability, { ...result, workflowState: state })
     }
 
@@ -638,17 +638,16 @@ async function runGraphCapabilityWorkflow(
       state.status = "done"
       delete state.currentStepId
       delete state.blocker
-      checkpoint?.(state)
+      await checkpoint?.(state)
       return withWorkflowBoundaryEval(capability, { ...result, workflowState: state })
     }
 
     const resultConditionPaths = workflowResultConditionPaths(step.next)
     if (resultConditionPaths.length > 0 && !result.capabilityResults?.at(-1)) {
-      const reason =
-        `workflow step ${step.id} did not emit the structured result required by its conditions: ${resultConditionPaths.join(", ")}`
+      const reason = `workflow step ${step.id} did not emit the structured result required by its conditions: ${resultConditionPaths.join(", ")}`
       state.status = "blocked"
       state.blocker = reason
-      checkpoint?.(state)
+      await checkpoint?.(state)
       return { ...result, exitCode: 64, reason, workflowState: state }
     }
 
@@ -657,7 +656,7 @@ async function runGraphCapabilityWorkflow(
       const reason = `workflow step ${step.id} has no available connection`
       state.status = "blocked"
       state.blocker = reason
-      checkpoint?.(state)
+      await checkpoint?.(state)
       return { ...result, exitCode: 64, reason, workflowState: state }
     }
     if (transition.maxIterations !== undefined) {
@@ -667,11 +666,11 @@ async function runGraphCapabilityWorkflow(
     state.currentStepId = transition.to
     state.status = "running"
     delete state.blocker
-    checkpoint?.(state)
+    await checkpoint?.(state)
   }
 
   state.status = "done"
-  checkpoint?.(state)
+  await checkpoint?.(state)
   return withWorkflowBoundaryEval(capability, { ...result, workflowState: state })
 }
 
@@ -913,7 +912,11 @@ function composeStepWhy(parentWhy: string | undefined, step: CapabilityWorkflowS
 
 function loadCapabilityContext(slug: string | undefined, cwd: string): ReturnType<typeof resolveCapabilityFolder> {
   if (!slug) return null
-  return resolveCapabilityFolder(slug, path.join(cwd, ".kody", "capabilities"))
+  return resolveCapabilityFolder(slug, hydratedCapabilitiesRoot(cwd))
+}
+
+function hydratedCapabilitiesRoot(cwd: string): string {
+  return path.join(cwd, ".kody-engine", "definitions", "capabilities")
 }
 
 function loadWorkflowContext(slug: string | undefined, base: RunJobBase): CapabilityFolder | null {
@@ -953,7 +956,7 @@ export function mintInstantJob(dispatch: DispatchResult, opts?: { why?: string; 
 export interface ScheduledJobInput {
   /** Public action for this scheduled capability, when distinct from the slug. */
   action?: string
-  /** The capability slug (its capability contract body lives in `.kody/capabilities/<slug>/capability.md`). */
+  /** The capability slug (its capability contract body lives in `.kody-engine/definitions/capabilities/<slug>/capability.md`). */
   capability: string
   /** The implementation that ticks it (capability-tick / capability-tick-scripted, or a folder-capability slug). */
   implementation: string

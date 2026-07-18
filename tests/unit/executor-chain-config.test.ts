@@ -24,14 +24,13 @@ function writeConfig(dir: string): void {
       quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       git: { defaultBranch: "main" },
       github: { owner: "owner", repo: "repo" },
-      state: { repo: "owner/kody-state", path: "repo" },
       agent: { model: "claude/claude-haiku-4-5-20251001" },
     }),
   )
 }
 
 function writeDispatchingProfile(dir: string): void {
-  const profileDir = path.join(dir, ".kody", "capabilities", "parent")
+  const profileDir = path.join(dir, ".kody-engine", "definitions", "capabilities", "parent")
   fs.mkdirSync(profileDir, { recursive: true })
   fs.writeFileSync(path.join(profileDir, "capability.md"), "# Parent\n")
   fs.writeFileSync(
@@ -98,7 +97,6 @@ describe("executor: chain config propagation", () => {
       cwd: tmp,
       config: {
         github: { owner: "owner", repo: "repo" },
-        state: { repo: "owner/kody-state", path: "repo" },
       },
     })
   })

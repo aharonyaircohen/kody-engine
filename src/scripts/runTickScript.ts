@@ -22,7 +22,7 @@
  *         (or ctx.data.nextStateParseError on failure)
  *
  * Script args (via `with:`):
- *   jobsDir     optional — default ".kody/capabilities"
+ *   jobsDir     optional — default ".kody-engine/definitions/capabilities"
  *   slugArg     optional — default "job"
  *   fenceLabel  optional — default "kody-job-next-state"
  */
@@ -30,6 +30,7 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { readCapabilityFolder } from "../capabilityFolders.js"
+import { capabilitiesRoot } from "../definition-paths.js"
 import type { PreflightScript } from "../implementations/types.js"
 import { resolveBackend } from "./jobState/index.js"
 import { runTickShellAndParse } from "./tickShellRunner.js"
@@ -37,7 +38,7 @@ import { runTickShellAndParse } from "./tickShellRunner.js"
 export const runTickScript: PreflightScript = async (ctx, _profile, args) => {
   ctx.skipAgent = true
 
-  const jobsDir = String(args?.jobsDir ?? ".kody/capabilities")
+  const jobsDir = String(args?.jobsDir ?? capabilitiesRoot(ctx.cwd))
   const slugArg = String(args?.slugArg ?? "job")
   const fenceLabel = String(args?.fenceLabel ?? "kody-job-next-state")
   const slug = String(ctx.args[slugArg] ?? "").trim()
@@ -47,10 +48,10 @@ export const runTickScript: PreflightScript = async (ctx, _profile, args) => {
     return
   }
 
-  const capability = readCapabilityFolder(path.join(ctx.cwd, jobsDir), slug)
+  const capability = readCapabilityFolder(path.resolve(ctx.cwd, jobsDir), slug)
   if (!capability) {
     ctx.output.exitCode = 99
-    ctx.output.reason = `runTickScript: capability folder not found or incomplete: ${path.join(ctx.cwd, jobsDir, slug)}`
+    ctx.output.reason = `runTickScript: capability folder not found or incomplete: ${path.resolve(ctx.cwd, jobsDir, slug)}`
     return
   }
 

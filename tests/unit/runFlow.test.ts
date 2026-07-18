@@ -31,7 +31,6 @@ function makeCtx(issue = 413): Context {
       quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       git: { defaultBranch: "dev" },
       github: { owner: "owner", repo: "repo" },
-      state: { repo: "owner/kody-state", path: "repo" },
       agent: { model: "m/x" },
     },
     data: {},

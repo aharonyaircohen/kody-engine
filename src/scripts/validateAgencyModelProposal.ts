@@ -1,5 +1,9 @@
 import * as path from "node:path"
-import { capabilityOutputConditionPaths, listCapabilityFolderSlugs, readCapabilityFolder } from "../capabilityFolders.js"
+import {
+  capabilityOutputConditionPaths,
+  listCapabilityFolderSlugs,
+  readCapabilityFolder,
+} from "../capabilityFolders.js"
 import type { PostflightScript, ScriptArgs } from "../implementations/types.js"
 import { getCapabilityActionInputs, getCapabilityRoots } from "../registry.js"
 import { formatWorkflowValidationIssues, validateWorkflow } from "../workflowValidation.js"
@@ -378,7 +382,10 @@ function requirePath(paths: string[], wantedPath: string, label: string, failure
 }
 
 function normalizeBundlePath(filePath: string): string {
-  return filePath.replace(/^\.kody\/?/, "").replace(/^\/+/, "")
+  return filePath
+    .replace(/^\.kody-engine\/definitions\/?/, "")
+    .replace(/^\.kody\/?/, "")
+    .replace(/^\/+/, "")
 }
 
 function stringField(value: unknown): string {

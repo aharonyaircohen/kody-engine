@@ -1,18 +1,19 @@
 /**
  * Task state — the store for the reducer pattern.
  *
- * Each task (issue or PR) stores canonical JSON in the configured Kody state
- * repo at tasks/issues/<number>/state.json or tasks/prs/<number>/state.json.
+ * Each task (issue or PR) stores canonical JSON in the Kody backend.
  * Implementations read the state at the start of a run, emit a typed Action, and
  * the reducer merges the action into a new state written back to that file.
  *
  * See docs/architecture/state-reducer-pattern.md for the full concept.
  */
 
-import { loadConfig } from "./config.js"
 import type { JobFlavor } from "./implementations/types.js"
 import { createStateBackendFromEnv } from "./state-backend.js"
-import { readStateText, type StateRepoConfig, upsertStateText } from "./stateRepo.js"
+
+interface TaskBackendConfig {
+  github?: { owner?: string; repo?: string }
+}
 
 export const STATE_BEGIN = "<!-- kody:state:v1:begin -->"
 export const STATE_END = "<!-- kody:state:v1:end -->"
@@ -198,15 +199,6 @@ export class CorruptStateError extends Error {
     super(message)
     this.name = "CorruptStateError"
   }
-}
-
-function taskStatePath(target: TaskTarget, number: number): string {
-  const bucket = target === "issue" ? "issues" : "prs"
-  return `tasks/${bucket}/${number}/state.json`
-}
-
-function taskStateConfig(cwd?: string, config?: StateRepoConfig): StateRepoConfig {
-  return config ?? loadConfig(cwd)
 }
 
 function normalizeTaskState(parsed: TaskState): TaskState {
@@ -637,32 +629,12 @@ export function renderStateComment(state: TaskState): string {
   return lines.join("\n")
 }
 
-function readTaskStateLegacy(target: TaskTarget, number: number, cwd?: string, config?: StateRepoConfig): TaskState {
-  const stateConfig = taskStateConfig(cwd, config)
-  const loaded = readStateText(stateConfig, cwd, taskStatePath(target, number))
-  if (!loaded) return emptyState()
-
-  let parsed: TaskState
-  try {
-    parsed = JSON.parse(loaded.content) as TaskState
-  } catch (err) {
-    throw new CorruptStateError(
-      `state repo JSON unparseable for ${loaded.path}: ${err instanceof Error ? err.message : String(err)}`,
-    )
-  }
-
-  return normalizeTaskState(parsed)
-}
-
-function backendScope(config?: StateRepoConfig): { tenantId: string } | null {
-  const tenantId = config?.github?.owner && config.github.repo
-    ? `${config.github.owner}/${config.github.repo}`
-    : process.env.GITHUB_REPOSITORY?.trim()
-  const configured = !!process.env.CONVEX_URL && !!process.env.KODY_SERVICE_KEY && !!tenantId
-  if (!configured && process.env.GITHUB_ACTIONS === "true") {
-    throw new Error("Convex task-state backend is required in GitHub Actions (CONVEX_URL, KODY_SERVICE_KEY, and repository identity)")
-  }
-  if (!configured) return null
+function backendScope(config?: TaskBackendConfig): { tenantId: string } {
+  const tenantId =
+    config?.github?.owner && config.github.repo
+      ? `${config.github.owner}/${config.github.repo}`
+      : process.env.GITHUB_REPOSITORY?.trim()
+  if (!tenantId) throw new Error("Repository identity is required for task state")
   return { tenantId }
 }
 
@@ -670,11 +642,10 @@ function backendScope(config?: StateRepoConfig): { tenantId: string } | null {
 export async function readTaskState(
   target: TaskTarget,
   number: number,
-  cwd?: string,
-  config?: StateRepoConfig,
+  _cwd?: string,
+  config?: TaskBackendConfig,
 ): Promise<TaskState> {
   const scope = backendScope(config)
-  if (!scope) return readTaskStateLegacy(target, number, cwd, config)
   const backend = createStateBackendFromEnv()
   const kind = "state"
   const taskKey = `${target === "issue" ? "issues" : "prs"}/${number}`
@@ -702,36 +673,15 @@ export function setArtifact(state: TaskState, name: string, artifact: Artifact):
   }
 }
 
-function writeTaskStateLegacy(
-  target: TaskTarget,
-  number: number,
-  state: TaskState,
-  cwd?: string,
-  config?: StateRepoConfig,
-): void {
-  const stateConfig = taskStateConfig(cwd, config)
-  upsertStateText(
-    stateConfig,
-    cwd,
-    taskStatePath(target, number),
-    `${JSON.stringify(state, null, 2)}\n`,
-    `chore(tasks): update ${target} ${number} state`,
-  )
-}
-
 /** Async backend-first task-state write used by runtime execution paths. */
 export async function writeTaskState(
   target: TaskTarget,
   number: number,
   state: TaskState,
-  cwd?: string,
-  config?: StateRepoConfig,
+  _cwd?: string,
+  config?: TaskBackendConfig,
 ): Promise<void> {
   const scope = backendScope(config)
-  if (!scope) {
-    writeTaskStateLegacy(target, number, state, cwd, config)
-    return
-  }
   const backend = createStateBackendFromEnv()
   await backend.save(scope.tenantId, `${target === "issue" ? "issues" : "prs"}/${number}`, "state", state)
 }

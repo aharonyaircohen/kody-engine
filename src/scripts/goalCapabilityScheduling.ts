@@ -1,6 +1,7 @@
 import * as path from "node:path"
 import type { CapabilityFolder } from "../capabilityFolders.js"
 import type { KodyConfig } from "../config.js"
+import { capabilitiesRoot } from "../definition-paths.js"
 import type { ManagedGoal } from "../goal/manager.js"
 import { resolveCapabilityExecution, resolveCapabilityFolder } from "../registry.js"
 import { resolveBackend } from "./jobState/index.js"
@@ -134,8 +135,8 @@ export function planTargetLoopSchedule(opts: {
 export async function planGoalCapabilitySchedule(
   opts: PlanGoalCapabilityScheduleOptions,
 ): Promise<GoalCapabilityScheduleDecision> {
-  const jobsDir = opts.jobsDir ?? ".kody/capabilities"
-  const jobsRoot = path.join(opts.cwd, jobsDir)
+  const jobsDir = opts.jobsDir ?? capabilitiesRoot(opts.cwd)
+  const jobsRoot = path.resolve(opts.cwd, jobsDir)
   const now = opts.now ?? new Date()
   const at = now.toISOString()
   const backend = resolveBackend({ config: opts.config, cwd: opts.cwd, jobsDir })

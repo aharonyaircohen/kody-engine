@@ -65,10 +65,10 @@ Every run is a reducer application:
 (state, { executable, args, action })  ->  newState
 ```
 
-- `state` is read from the configured Kody state repo at run start.
+- `state` is read from the configured Kody backend at run start.
 - `executable` does its work, producing an action.
 - The postflight that writes task state is the reducer: it merges the action into state.
-- `newState` is written back to the state repo file; the previous entry is appended to the history section.
+- `newState` is written back to the backend file; the previous entry is appended to the history section.
 
 ## State structure
 

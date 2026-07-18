@@ -48,7 +48,7 @@ vi.mock("../../src/pool/manager.js", () => ({
   },
 }))
 
-vi.mock("../../src/stateRepoVault.js", () => ({
+vi.mock("../../src/backendVault.js", () => ({
   readRepoSecret: mocks.readRepoSecret,
   readRepoSecrets: mocks.readRepoSecrets,
 }))
@@ -202,9 +202,7 @@ describe("PoolRegistry.claim — happy path with injected resolvers", () => {
     await reg.claim("Owner", "Repo", makeReq())
 
     expect(resolveGithubToken).toHaveBeenCalledWith("Owner", "Repo")
-    expect(mocks.readRepoSecrets).toHaveBeenCalledWith(
-      expect.objectContaining({ githubToken: "ghs_repo", owner: "Owner", repo: "Repo" }),
-    )
+    expect(mocks.readRepoSecrets).toHaveBeenCalledWith(expect.objectContaining({ owner: "Owner", repo: "Repo" }))
     const job = (pm.claim.mock.calls[0] as unknown[])?.[0] as { githubToken: string }
     expect(job.githubToken).toBe("ghs_repo")
   })
@@ -359,7 +357,7 @@ describe("PoolRegistry default resolvers (vault-backed closures)", () => {
 
     expect(res.ok).toBe(true)
     expect(mocks.readRepoSecret).toHaveBeenCalledWith(
-      expect.objectContaining({ githubToken: "ghtok", owner: "o", repo: "r", name: "FLY_API_TOKEN" }),
+      expect.objectContaining({ owner: "o", repo: "r", name: "FLY_API_TOKEN" }),
     )
     expect(mocks.readRepoSecret).toHaveBeenCalledWith(
       expect.objectContaining({ name: "POOL_MIN", owner: "o", repo: "r" }),

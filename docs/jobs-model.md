@@ -19,7 +19,7 @@ Retries stay under the same job instead of becoming new work.
 | **intent** | why | company-level reason, optional deeper context, priority, posture, scope, and success signals |
 | **goal** | what | durable outcome + manager loop; stores destination evidence, route, facts, blockers, and progress |
 | **agentLoop** | when | stateful heartbeat wrapper; stores schedule/cursor and wakes a goal, workflow, or capability target |
-| **agent** | who | reusable executor identity (`.kody/agents/<slug>.md`, usually from project or company store) |
+| **agent** | who | reusable executor identity (`backend agent definition`, usually from project or company store) |
 | **capability** | how | reusable ability the agency can use; currently stored as an capability contract plus an executable implementation |
 | **workflow** | how, composed | ordered capability steps for one engine run; default workflow is one capability |
 | **issue** | what | a GitHub **issue or PR** — the work-item a task is about |
@@ -130,7 +130,7 @@ persist the run without the executor knowing task-state details.
 
 ### How each field is consumed
 
-- **agent →** the executor loads `.kody/agents/<agent>.md` from the project
+- **agent →** the executor loads `backend agent definitions<agent>.md` from the project
   or company store and injects it as an authoritative-identity block. An
   executable's own declared `agent` wins when present; otherwise the job's
   agent applies. Missing agent is a hard error.
@@ -215,7 +215,7 @@ moving to later pending jobs, so failed work is not skipped.
   triggers.
 - **No consumer-repo job storage.** The planned jobs live in task state under
   `stateRepo`; the issue/PR comment is only a readable mirror. Rejected:
-  `.kody/jobs/` in the consumer repo, because that contaminates product history.
+  consumer-repo folders, because that contaminates product history.
 - **No new orchestration layer.** `task-jobs` is a small script-only executable
   on top of the existing `runJob` / `runExecutableChain` path. Rejected: a new
   orchestrator primitive or an "orchestrate" executable kind.

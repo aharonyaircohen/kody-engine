@@ -3,7 +3,6 @@ import * as os from "node:os"
 import * as path from "node:path"
 import type { ConvexHttpClient } from "convex/browser"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { readSession } from "../../src/chat/session.js"
 import { createSessionStore } from "../../src/chat/session-store.js"
 
 const silentLogger = { info: () => {}, warn: () => {} }
@@ -37,14 +36,14 @@ describe("chat/session-store", () => {
     fs.rmSync(tmp, { recursive: true, force: true })
   })
 
-  it("falls back to the JSONL store when no Convex client is available", async () => {
+  it("uses local runtime storage when no backend client is available", async () => {
     const store = createSessionStore({
       sessionId: "s1",
       sessionFile: file,
       client: null,
       logger: silentLogger,
     })
-    expect(store.backend).toBe("jsonl")
+    expect(store.backend).toBe("local")
     expect(await store.readTurns()).toEqual([])
     await store.appendTurn({ role: "user", content: "hi", timestamp: "t1" })
     const turns = await store.readTurns()
@@ -52,7 +51,7 @@ describe("chat/session-store", () => {
     expect(turns[0]?.content).toBe("hi")
   })
 
-  it("falls back to JSONL when a client exists but no tenant is derivable", () => {
+  it("uses local runtime storage when a client exists but no tenant is derivable", () => {
     const { client } = makeMockClient([])
     const store = createSessionStore({
       sessionId: "s1",
@@ -61,7 +60,7 @@ describe("chat/session-store", () => {
       tenantId: "",
       logger: silentLogger,
     })
-    expect(store.backend).toBe("jsonl")
+    expect(store.backend).toBe("local")
   })
 
   it("reads the transcript from Convex ordered by seq, skipping malformed turns", async () => {
@@ -112,7 +111,7 @@ describe("chat/session-store", () => {
     })
   })
 
-  it("backfills only the local tail beyond the Convex prefix", async () => {
+  it("does not merge local runtime data over an existing backend transcript", async () => {
     fs.mkdirSync(path.dirname(file), { recursive: true })
     fs.writeFileSync(
       file,
@@ -134,10 +133,9 @@ describe("chat/session-store", () => {
       logger: silentLogger,
     })
     const turns = await store.readTurns()
-    expect(turns.map((t) => t.content)).toEqual(["hi", "hello", "next question"])
+    expect(turns.map((t) => t.content)).toEqual(["hi", "hello"])
     const appends = mutations.filter((m) => "turn" in m.args)
-    expect(appends).toHaveLength(1)
-    expect(appends[0]?.args.turn).toMatchObject({ content: "next question" })
+    expect(appends).toHaveLength(0)
   })
 
   it("does not backfill when Convex already has all local turns", async () => {
@@ -159,7 +157,7 @@ describe("chat/session-store", () => {
     expect(mutations).toHaveLength(0)
   })
 
-  it("appends turns via chatSessions.upsert (once) + chatTurns.append and mirrors to JSONL", async () => {
+  it("appends turns via chatSessions.upsert once and chatTurns.append without a durable local mirror", async () => {
     const { client, mutations } = makeMockClient([])
     const store = createSessionStore({
       sessionId: "s1",
@@ -185,9 +183,7 @@ describe("chat/session-store", () => {
     })
     expect(mutations[2]?.args.turn).toMatchObject({ content: "a2" })
 
-    // Local JSONL mirror keeps the git persistence path alive.
-    const mirrored = readSession(file)
-    expect(mirrored.map((t) => t.content)).toEqual(["a1", "a2"])
+    expect(fs.existsSync(file)).toBe(false)
   })
 
   it("uses the local meta line for the session upsert when present", async () => {

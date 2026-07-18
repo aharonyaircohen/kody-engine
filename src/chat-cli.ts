@@ -22,8 +22,6 @@ import { eventsFilePath, FileSink, HttpSink, makeRunId, TeeSink } from "./chat/e
 import { runChatTurn } from "./chat/loop.js"
 import { runInteractiveMode } from "./chat/modes/interactive.js"
 import { readMeta, seedInitialMessage, sessionFilePath } from "./chat/session.js"
-import { persistChatFilesToState, syncChatFilesFromState } from "./chat/state-sync.js"
-import { applyCompanyStoreRuntimeConfig } from "./companyStore.js"
 import {
   loadConfig,
   needsLitellmProxy,
@@ -147,7 +145,6 @@ export async function runChat(argv: string[]): Promise<number> {
   const sessionId = args.sessionId!
   const runRequest = readRunRequestFromEnv()
   if (runRequest && "request" in runRequest) {
-    applyCompanyStoreRuntimeConfig(runRequest.request.input)
   }
 
   const unpackedSecrets = unpackAllSecrets()
@@ -159,10 +156,10 @@ export async function runChat(argv: string[]): Promise<number> {
 
   const config = tryLoadConfig(cwd)
   if (!config) {
-    process.stderr.write("error: kody chat requires kody.config.json with configured state.repo/state.path\n")
+    process.stderr.write("error: kody chat requires kody.config.json\n")
     return 64
   }
-  hydrateStateWorkspace(config, cwd)
+  await hydrateStateWorkspace(config, cwd)
   const modelSpec = args.model ?? config?.agent.model ?? DEFAULT_MODEL
   // Resolve reasoning effort: CLI flag → env → config default → unset.
   // Unset stays unset (no maxThinkingTokens set on the SDK call — the
@@ -206,9 +203,6 @@ export async function runChat(argv: string[]): Promise<number> {
   process.stdout.write(`→ kody:chat: litellm proxy ready (url=${litellm?.url ?? "skipped"})\n`)
 
   const sessionFile = sessionFilePath(cwd, sessionId)
-  if (config) {
-    syncChatFilesFromState(config, cwd, sessionId)
-  }
   if (args.initMessage) seedInitialMessage(sessionFile, args.initMessage)
 
   const sink = buildSink(cwd, sessionId, args.dashboardUrl)
@@ -233,7 +227,7 @@ export async function runChat(argv: string[]): Promise<number> {
         meta,
         verbose: args.verbose,
         quiet: args.quiet,
-        stateConfig: config,
+        config,
         ...(reasoningEffort ? { reasoningEffort } : {}),
       })
       return result.exitCode
@@ -248,10 +242,9 @@ export async function runChat(argv: string[]): Promise<number> {
       sink,
       verbose: args.verbose,
       quiet: args.quiet,
-      stateConfig: config,
+      config,
       ...(reasoningEffort ? { reasoningEffort } : {}),
     })
-    persistChatFilesToState(config, cwd, sessionId)
     return result.exitCode
   } finally {
     try {

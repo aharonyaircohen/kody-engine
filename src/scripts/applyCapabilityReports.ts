@@ -11,7 +11,12 @@ import { type CapabilityResult, parseCapabilityResult, parseCapabilityResultsFro
 import { mergeGoalEvidenceProgress, parseGoalEvidenceState } from "../goal/evidenceState.js"
 import { managedGoalFromState, planManagedGoalTick, writeManagedGoalToState } from "../goal/manager.js"
 import { capabilityEvidenceOutput, refreshGoalDashboardReport } from "../goal/report.js"
-import { flushGoalRunLogEventsAsync, goalRunLogChange, goalRunLogSnapshot, stageGoalRunLogEvent } from "../goal/runLog.js"
+import {
+  flushGoalRunLogEventsAsync,
+  goalRunLogChange,
+  goalRunLogSnapshot,
+  stageGoalRunLogEvent,
+} from "../goal/runLog.js"
 import { type GoalState, nowIso, serializeGoalState } from "../goal/state.js"
 import { fetchGoalStateAsync, putGoalStateAsync } from "../goal/stateStore.js"
 import type { PostflightScript } from "../implementations/types.js"
@@ -40,7 +45,7 @@ export const applyCapabilityReports: PostflightScript = async (ctx, _profile, ag
         source: "goal-loop",
         event: "goal.evidence.rejected",
         status: "rejected",
-        reason: "goal missing in state repo",
+        reason: "goal missing in backend",
         inspection: {
           capabilityOutput: {
             kind: "capability-evidence",
@@ -48,12 +53,12 @@ export const applyCapabilityReports: PostflightScript = async (ctx, _profile, ag
             items: goalEvidence.map(capabilityEvidenceOutput),
           },
           missingEvidence: [],
-          blockers: ["goal missing in state repo"],
+          blockers: ["goal missing in backend"],
         },
-        decision: { kind: "reject-evidence", nextStep: "block", reason: "goal missing in state repo" },
+        decision: { kind: "reject-evidence", nextStep: "block", reason: "goal missing in backend" },
       })
       await flushLogs(ctx)
-      process.stderr.write(`[kody capability-report] goal ${goalId} missing in state repo; report skipped\n`)
+      process.stderr.write(`[kody capability-report] goal ${goalId} missing in backend; report skipped\n`)
       continue
     }
 
@@ -114,7 +119,7 @@ export const applyCapabilityReports: PostflightScript = async (ctx, _profile, ag
       if (changed) {
         await putGoalStateAsync(ctx.config, goalId, nextForOutput, describeMessage(goalId, goalEvidence), ctx.cwd)
       }
-      refreshReportOrFail(ctx, goalId, nextForOutput, goalEvidence)
+      await refreshReportOrFail(ctx, goalId, nextForOutput, goalEvidence)
       if (
         changed &&
         ctx.output.exitCode === 0 &&
@@ -215,14 +220,14 @@ async function flushLogs(ctx: Parameters<PostflightScript>[0]): Promise<void> {
   }
 }
 
-function refreshReportOrFail(
+async function refreshReportOrFail(
   ctx: Parameters<PostflightScript>[0],
   goalId: string,
   state: GoalState,
   evidenceItems: CapabilityEvidence[],
-): void {
+): Promise<void> {
   try {
-    refreshGoalDashboardReport({
+    await refreshGoalDashboardReport({
       config: ctx.config,
       cwd: ctx.cwd,
       data: ctx.data,

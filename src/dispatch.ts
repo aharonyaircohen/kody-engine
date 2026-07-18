@@ -179,10 +179,7 @@ export function autoDispatch(opts?: {
       const cliArgs: Record<string, unknown> = {}
       if (targetKey) cliArgs[targetKey] = n
       else if (profileInputs === null) cliArgs.issue = n
-      if (
-        base &&
-        profileInputs?.some((input) => input.name === "base" || input.flag === "--base")
-      ) {
+      if (base && profileInputs?.some((input) => input.name === "base" || input.flag === "--base")) {
         cliArgs.base = base
       }
       return routeResult(route, cliArgs, n)

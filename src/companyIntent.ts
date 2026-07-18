@@ -1,13 +1,10 @@
 import { type GoalState, nowIso } from "./goal/state.js"
 import { fetchGoalStateAsync, listGoalStateIdsAsync, putGoalStateAsync } from "./goal/stateStore.js"
 import { createStateBackendFromEnv } from "./state-backend.js"
-import {
-  appendStateLine,
-  listStateDirectory,
-  readStateText,
-  type StateRepoConfig,
-  upsertStateText,
-} from "./stateRepo.js"
+
+interface CompanyBackendConfig {
+  github?: { owner?: string; repo?: string }
+}
 
 export type CompanyIntentStatus = "active" | "paused" | "archived"
 export type CompanyIntentPosture = "confidence" | "speed" | "stability-recovery" | "maintenance" | "balanced"
@@ -135,139 +132,67 @@ export function normalizeCompanyIntent(path: string, raw: unknown): CompanyInten
   }
 }
 
-export function listCompanyIntents(config: StateRepoConfig, cwd?: string): CompanyIntentRecord[] {
-  const entries = listStateDirectory(config, cwd, "intents")
-  const records: CompanyIntentRecord[] = []
-  for (const entry of entries) {
-    if (entry.type !== "dir" || !entry.name || !isCompanyIntentId(entry.name)) continue
-    const path = companyIntentPath(entry.name)
-    const file = readStateText(config, cwd, path)
-    if (!file) continue
-    records.push({
-      id: entry.name,
-      path: file.path,
-      intent: normalizeCompanyIntent(file.path, JSON.parse(file.content)),
-    })
-  }
-  return records.sort((a, b) => a.intent.priority - b.intent.priority || a.id.localeCompare(b.id))
-}
-
-function backendTenant(config: StateRepoConfig): string | null {
+function backendTenant(config: CompanyBackendConfig): string | null {
   const owner = config.github?.owner?.trim() || process.env.GITHUB_REPOSITORY?.split("/")[0]?.trim()
   const repo = config.github?.repo?.trim() || process.env.GITHUB_REPOSITORY?.split("/")[1]?.trim()
   return owner && repo ? `${owner}/${repo}` : null
 }
 
-function backendEnabled(config: StateRepoConfig): boolean {
-  return Boolean(process.env.CONVEX_URL?.trim() && process.env.KODY_SERVICE_KEY?.trim() && backendTenant(config))
-}
-
-function backendRequired(): boolean {
-  return process.env.GITHUB_ACTIONS === "true"
-}
-
-export async function listCompanyIntentsAsync(config: StateRepoConfig, cwd?: string): Promise<CompanyIntentRecord[]> {
+export async function listCompanyIntentsAsync(
+  config: CompanyBackendConfig,
+  _cwd?: string,
+): Promise<CompanyIntentRecord[]> {
   const tenantId = backendTenant(config)
-  if (backendEnabled(config) && tenantId) {
-    const records = await createStateBackendFromEnv().listIntents(tenantId)
-    return records
-      .filter((record) => isCompanyIntentId(record.intentId))
-      .map((record) => ({
-        id: record.intentId,
-        path: `convex:intents/${record.intentId}`,
-        intent: normalizeCompanyIntent(`convex:intents/${record.intentId}`, record.intent),
-      }))
-      .sort((a, b) => a.intent.priority - b.intent.priority || a.id.localeCompare(b.id))
-  }
-  if (backendRequired()) throw new Error("Convex backend is required for company intents in GitHub Actions")
-  return listCompanyIntents(config, cwd)
-}
-
-export function readCompanyIntent(
-  config: StateRepoConfig,
-  cwd: string | undefined,
-  id: string,
-): CompanyIntentRecord | null {
-  const path = companyIntentPath(id)
-  const file = readStateText(config, cwd, path)
-  if (!file) return null
-  return { id, path: file.path, intent: normalizeCompanyIntent(file.path, JSON.parse(file.content)) }
+  if (!tenantId) throw new Error("Repository identity is required for company intents")
+  const records = await createStateBackendFromEnv().listIntents(tenantId)
+  return records
+    .filter((record) => isCompanyIntentId(record.intentId))
+    .map((record) => ({
+      id: record.intentId,
+      path: `convex:intents/${record.intentId}`,
+      intent: normalizeCompanyIntent(`convex:intents/${record.intentId}`, record.intent),
+    }))
+    .sort((a, b) => a.intent.priority - b.intent.priority || a.id.localeCompare(b.id))
 }
 
 export async function readCompanyIntentAsync(
-  config: StateRepoConfig,
-  cwd: string | undefined,
+  config: CompanyBackendConfig,
+  _cwd: string | undefined,
   id: string,
 ): Promise<CompanyIntentRecord | null> {
   assertIntentId(id)
   const tenantId = backendTenant(config)
-  if (backendEnabled(config) && tenantId) {
-    const record = await createStateBackendFromEnv().getIntent(tenantId, id)
-    if (!record) return null
-    return { id, path: `convex:intents/${id}`, intent: normalizeCompanyIntent(`convex:intents/${id}`, record.intent) }
-  }
-  if (backendRequired()) throw new Error("Convex backend is required for company intents in GitHub Actions")
-  return readCompanyIntent(config, cwd, id)
-}
-
-export function writeCompanyIntent(
-  config: StateRepoConfig,
-  cwd: string | undefined,
-  intent: CompanyIntent,
-  message = `chore(intents): update ${intent.id}`,
-): void {
-  upsertStateText(config, cwd, companyIntentPath(intent.id), `${JSON.stringify(intent, null, 2)}\n`, message)
+  if (!tenantId) throw new Error("Repository identity is required for company intents")
+  const record = await createStateBackendFromEnv().getIntent(tenantId, id)
+  if (!record) return null
+  return { id, path: `convex:intents/${id}`, intent: normalizeCompanyIntent(`convex:intents/${id}`, record.intent) }
 }
 
 export async function writeCompanyIntentAsync(
-  config: StateRepoConfig,
-  cwd: string | undefined,
+  config: CompanyBackendConfig,
+  _cwd: string | undefined,
   intent: CompanyIntent,
-  message = `chore(intents): update ${intent.id}`,
+  _message = `chore(intents): update ${intent.id}`,
 ): Promise<void> {
   assertIntentId(intent.id)
   const tenantId = backendTenant(config)
-  if (backendEnabled(config) && tenantId) {
-    await createStateBackendFromEnv().saveIntent(tenantId, intent.id, intent, intent.updatedAt || nowIso())
-    return
-  }
-  if (backendRequired()) throw new Error("Convex backend is required for company intents in GitHub Actions")
-  writeCompanyIntent(config, cwd, intent, message)
-}
-
-export function appendCompanyIntentDecision(
-  config: StateRepoConfig,
-  cwd: string | undefined,
-  intentId: string,
-  entry: CompanyIntentDecisionLog,
-): void {
-  assertIntentId(intentId)
-  appendStateLine(
-    config,
-    cwd,
-    `intents/${intentId}/decisions.jsonl`,
-    JSON.stringify(entry),
-    `chore(intents): log ${intentId} decision`,
-  )
+  if (!tenantId) throw new Error("Repository identity is required for company intents")
+  await createStateBackendFromEnv().saveIntent(tenantId, intent.id, intent, intent.updatedAt || nowIso())
 }
 
 export async function appendCompanyIntentDecisionAsync(
-  config: StateRepoConfig,
-  cwd: string | undefined,
+  config: CompanyBackendConfig,
+  _cwd: string | undefined,
   intentId: string,
   entry: CompanyIntentDecisionLog,
 ): Promise<void> {
   assertIntentId(intentId)
   const tenantId = backendTenant(config)
-  if (backendEnabled(config) && tenantId) {
-    await createStateBackendFromEnv().appendIntentDecision(tenantId, intentId, entry)
-    return
-  }
-  if (backendRequired()) throw new Error("Convex backend is required for company intent decisions in GitHub Actions")
-  appendCompanyIntentDecision(config, cwd, intentId, entry)
+  if (!tenantId) throw new Error("Repository identity is required for company intent decisions")
+  await createStateBackendFromEnv().appendIntentDecision(tenantId, intentId, entry)
 }
 
-export async function listCompanyPortfolio(config: StateRepoConfig, cwd?: string): Promise<CompanyPortfolio> {
+export async function listCompanyPortfolio(config: CompanyBackendConfig, cwd?: string): Promise<CompanyPortfolio> {
   const goals: CompanyPortfolioGoal[] = []
   for (const id of await listGoalStateIdsAsync(config, cwd)) {
     if (!isCompanyIntentId(id)) continue
@@ -288,7 +213,7 @@ export async function listCompanyPortfolio(config: StateRepoConfig, cwd?: string
 }
 
 export async function writeCompanyGoalState(
-  config: StateRepoConfig,
+  config: CompanyBackendConfig,
   cwd: string | undefined,
   id: string,
   state: GoalState,

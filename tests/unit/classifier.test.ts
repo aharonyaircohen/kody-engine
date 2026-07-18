@@ -9,6 +9,10 @@ vi.mock("node:child_process", async () => {
   const actual = await vi.importActual<typeof import("node:child_process")>("node:child_process")
   return { ...actual, execFileSync: vi.fn() }
 })
+const backendMocks = vi.hoisted(() => ({ save: vi.fn() }))
+vi.mock("../../src/state-backend.js", () => ({
+  createStateBackendFromEnv: () => ({ save: backendMocks.save }),
+}))
 
 const execFileSync = childProcess.execFileSync as unknown as Mock
 
@@ -49,7 +53,6 @@ function ctx(overrides: Partial<Context> = {}): Context {
       quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       git: { defaultBranch: "main" },
       github: { owner: "o", repo: "r" },
-      state: { repo: "o/kody-state", path: "r" },
       agent: { model: "claude/claude-haiku-4-5-20251001" },
     },
     data: {},
@@ -58,7 +61,10 @@ function ctx(overrides: Partial<Context> = {}): Context {
   }
 }
 
-beforeEach(() => execFileSync.mockReset())
+beforeEach(() => {
+  execFileSync.mockReset()
+  backendMocks.save.mockReset()
+})
 afterEach(() => vi.clearAllMocks())
 
 describe("classifyByLabel", () => {
@@ -188,18 +194,7 @@ describe("recordClassification", () => {
 })
 
 describe("dispatchClassified", () => {
-  it("hands the next stage to the orchestrator in-process and persists state to the state repo", async () => {
-    execFileSync.mockImplementation((cmd: string, args: string[]) => {
-      if (cmd === "gh" && Array.isArray(args) && args[0] === "api") {
-        const apiPath = args.find((arg) => arg.startsWith("/repos/")) ?? ""
-        if (apiPath.endsWith("/git/ref/heads/main")) {
-          return JSON.stringify({ object: { sha: "state-branch-sha" } })
-        }
-        if (args.includes("--method") && args.includes("PUT")) return "{}"
-        throw new Error("HTTP 404 Not Found")
-      }
-      return ""
-    })
+  it("hands the next stage to the orchestrator in-process and persists backend state", async () => {
     const c = ctx({
       data: {
         classification: "bug",
@@ -212,18 +207,11 @@ describe("dispatchClassified", () => {
     // bot-author deadlock (a bot-authored `@kody bug` is silently ignored).
     expect(c.output.nextDispatch).toEqual({ action: "bug", cliArgs: { issue: 99 } })
 
-    const puts = execFileSync.mock.calls.filter(
-      (call) => call[0] === "gh" && Array.isArray(call[1]) && (call[1] as string[]).includes("PUT"),
-    )
-    expect(puts.length).toBe(1)
-    const args = puts[0]![1] as string[]
-    expect(args).toContain("/repos/o/kody-state/contents/r/tasks/issues/99/state.json")
-    const payload = JSON.parse((puts[0]![2] as { input?: string }).input ?? "{}") as {
-      branch?: string
-      content?: string
-    }
-    expect(payload.branch).toBe("main")
-    const stateJson = Buffer.from(payload.content ?? "", "base64").toString("utf-8")
+    expect(backendMocks.save).toHaveBeenCalledOnce()
+    const [, taskKey, kind, doc] = backendMocks.save.mock.calls[0]!
+    expect(taskKey).toBe("issues/99")
+    expect(kind).toBe("state")
+    const stateJson = JSON.stringify(doc)
     expect(stateJson).toContain("CLASSIFIED_AS_BUG")
     expect(stateJson).not.toContain("@kody")
   })

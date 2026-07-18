@@ -1,17 +1,16 @@
 /**
  * Preflight: assemble QA context for the `qa-engineer` / `ui-review`
- * implementations from dashboard-managed, per-repo stores. Replaces the legacy
- * committed `.kody/qa-guide.md` mechanism.
+ * implementations from dashboard-managed backend stores.
  *
- *   - scenarios / notes → the state-repo `context/*.md` entries
+ *   - scenarios / notes → the backend `context/*.md` entries
  *     (only entries whose `agent` list includes `qa-engineer`)
- *   - login username     → state-repo variables file `variables.json`, key LOGIN_USER
+ *   - login username     → backend variables file `variables.json`, key LOGIN_USER
  *   - password           → secret LOGIN_PASSWORD, read from the repo vault
  *                          first, then process.env as local/dev fallback.
  *
  * Populates:
  *   ctx.data.qaLogin     — the LOGIN_USER variable ("" if unset)
- *   ctx.data.qaProfile   — concatenated state-repo context markdown ("" if none)
+ *   ctx.data.qaProfile   — concatenated backend context markdown ("" if none)
  *   ctx.data.qaAuthBlock — a complete, ready-to-insert auth instruction string
  *
  * Every step is fail-soft: missing variables, missing password, or a missing
@@ -25,7 +24,7 @@ import type { PreflightScript } from "../implementations/types.js"
 import { readKodyVariables } from "./kodyVariables.js"
 import { resolveRuntimeSecret } from "./runtimeSecrets.js"
 
-const CONTEXT_DIR_REL_PATH = ".kody/context"
+const CONTEXT_DIR_REL_PATH = ".kody-engine/runtime/context"
 
 /** Slug of the QAn agent this preflight runs as. */
 const QA_AGENT = "qa-engineer"
@@ -87,7 +86,7 @@ function readProfileAgents(raw: string): { agent: string[]; body: string } {
 }
 
 /**
- * Concatenate the QA-scoped state-repo context files from the hydrated local
+ * Concatenate the QA-scoped backend context files from the hydrated local
  * cache into one markdown block, each prefixed with a `## <filename>` heading.
  * Only sections whose `agent` list includes `qa-engineer` (or the `*` all-agent
  * wildcard) are included — chat-only sections, unassigned docs, and

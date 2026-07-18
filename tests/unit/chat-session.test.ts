@@ -64,7 +64,7 @@ describe("chat/session", () => {
     expect(readSession(file)).toEqual([])
   })
 
-  it("sessionFilePath lives under .kody/sessions", () => {
-    expect(sessionFilePath("/repo", "abc")).toBe(path.join("/repo", ".kody", "sessions", "abc.jsonl"))
+  it("sessionFilePath lives under the disposable engine runtime", () => {
+    expect(sessionFilePath("/repo", "abc")).toBe(path.join("/repo", ".kody-engine", "runtime", "sessions", "abc.jsonl"))
   })
 })

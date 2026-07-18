@@ -26,9 +26,6 @@ function configFor(): KodyConfig {
     git: { defaultBranch: "main" },
     github: { owner: "acme", repo: "widgets" },
     agent: { model: "anthropic/test" },
-    // local-file backend writes/reads `.kody/jobs/<slug>/state.json`
-    // synchronously — no network, suitable for unit tests.
-    jobs: { stateBackend: "local-file" },
   }
 }
 

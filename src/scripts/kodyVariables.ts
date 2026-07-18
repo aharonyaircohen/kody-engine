@@ -1,7 +1,7 @@
 /**
  * Read the dashboard-managed per-repo variables file. The durable copy lives at
- * `variables.json` in the configured state repo; engine runs hydrate it into
- * `.kody/variables.json` as a local compatibility cache.
+ * `variables.json` in the configured backend; engine runs hydrate it into
+ * `.kody-engine/runtime/variables.json` as a local compatibility cache.
  *
  * On-disk shape:
  *   { "version": 1, "variables": { "NAME": { "value": "...", "updatedAt": "...", "updatedBy": "..." } } }
@@ -14,7 +14,7 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 
-export const KODY_VARIABLES_REL_PATH = ".kody/variables.json"
+export const KODY_VARIABLES_REL_PATH = ".kody-engine/runtime/variables.json"
 
 interface VariablesDocument {
   version?: number

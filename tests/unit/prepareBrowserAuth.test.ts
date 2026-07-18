@@ -25,7 +25,7 @@ function makeCtx(cwd: string): Context {
 
 function writeVariables(cwd: string, vars: Record<string, string>): void {
   const variables = Object.fromEntries(Object.entries(vars).map(([key, value]) => [key, { value }]))
-  const dir = path.join(cwd, ".kody")
+  const dir = path.join(cwd, ".kody-engine", "runtime")
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "variables.json"), JSON.stringify({ version: 1, variables }))
 }

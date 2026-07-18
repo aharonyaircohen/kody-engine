@@ -11,7 +11,7 @@ only describes the internal profile shape that lets a capability run.
 Shared capabilities and implementations live in `kody-store`:
 
 ```text
-.kody/capabilities/<slug>/
+backend capability definition
   profile.json
   capability.md
   prompt.md      # only when an agent runs
@@ -116,7 +116,7 @@ Implementation anchors:
 Use this checklist:
 
 1. Reuse an existing capability implementation if it already performs the concrete action.
-2. Put shared implementations in `kody-store` under `.kody/capabilities/<slug>/`.
+2. Put shared implementations in `kody-store` under `backend capability definition`.
 3. Put project-specific implementations in the consumer repo under the same path.
 4. Add `profile.json` with explicit inputs, tools, scripts, and agent config.
 5. Add `prompt.md` only when an agent runs.
@@ -132,4 +132,4 @@ Use this checklist:
 - Do not make parent goal id a required input for reusable implementation profiles.
 - Do not branch shared scripts on implementation names.
 - Do not change consumer workflow YAML for normal new capabilities.
-- Do not read `.kody/secrets.enc` from capability shell scripts; use shared engine secret helpers.
+- Do not read `backend secret vault` from capability shell scripts; use shared engine secret helpers.

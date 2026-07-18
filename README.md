@@ -56,7 +56,7 @@ key. It's built to keep that blast radius small:
   write. A dedicated `KODY_TOKEN` PAT is optional, only for triggering
   downstream CI.
 - **Write allowlist.** The agent commits through `commitAndPush`, which blocks
-  writes outside an allowlisted set of `.kody/` paths — it can't touch your
+  writes to engine runtime or configuration paths — it can't touch your
   runtime state.
 - **Locked-toolbox mode.** A job can declare `tools: [...]` to drop `Bash` and
   shell entirely, running only a fixed set of high-level intents.
@@ -76,7 +76,7 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 │   bin/kody.ts — entrypoint                  │
 │   src/dispatch.ts — capability-driven routing              │
 │   src/executor.ts — runs capability implementations         │
-│   .kody/capabilities/<slug>/                                │
+│   backend capability definition                                │
 │     profile.json · capability.md · optional skills/scripts  │
 │   src/scripts/*.ts — cross-cutting catalog  │
 └─────────────────────────────────────────────┘
@@ -86,7 +86,7 @@ Every top-level command is an auto-discovered capability action. The router has
 **zero implementation names hardcoded** - comment dispatch resolves the first token
 after `@kody` through `config.aliases`, then falls back to
 `config.defaultImplementation` / `config.defaultPrImplementation` as default
-capability actions. Drop a new `.kody/capabilities/<slug>/` directory with
+capability actions. Drop a new `backend capability definition` directory with
 `profile.json` + `capability.md`.
 
 Capability implementation profiles are private implementation units and contain
@@ -134,10 +134,10 @@ kody-engine release-deploy    --issue <N> [--dry-run]
 kody-engine npm-publish       [--tag latest] [--access public] [--dry-run]
 
 # scheduled capabilities and goals
-kody-engine capability-scheduler                                    # fan out due .kody/capabilities/<slug>/ folders plus legacy fallbacks
+kody-engine capability-scheduler                                    # fan out due backend capability definition folders plus legacy fallbacks
 kody-engine capability-tick          --capability <slug> [--force]        # one agent tick for one capability
 kody-engine capability-tick-scripted --capability <slug> [--force]        # one deterministic tickScript capability tick
-kody-engine goal-scheduler                                    # fan out active goal instances in configured state repo
+kody-engine goal-scheduler                                    # fan out active goal instances in configured backend
 kody-engine goal-manager      --goal <id>                     # advance one managed goal instance
 
 # setup, servers, and utilities
@@ -154,7 +154,7 @@ kody-engine stats                                             # inspect run/even
 
 ### Capabilities
 
-A **capability** is a folder at `.kody/capabilities/<slug>/` with
+A **capability** is a folder at `backend capability definition` with
 `profile.json` metadata (`action`, `capabilityKind`, `agent`, `every`, and
 related fields) plus human-owned prose in `capability.md`. The scheduler wakes
 on cron, finds due capabilities, and dispatches either
@@ -173,7 +173,7 @@ without `tools` keep the legacy Bash/gh toolbox.
 ## Profiles
 
 A profile is declarative JSON plus an adjacent markdown body. New public work
-should live under `.kody/capabilities/<slug>/` with `capability.md`; legacy
+should live under `backend capability definition` with `capability.md`; legacy
 implementations under [src/implementations/](src/implementations/) still show the
 older split profile + prompt shape. Adding a new capability should not require
 executor, entry, or dispatch changes.

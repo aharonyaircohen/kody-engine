@@ -3,7 +3,6 @@ import * as os from "node:os"
 import * as path from "node:path"
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import type { KodyConfig } from "../../src/config.js"
 import type { Context, Profile } from "../../src/implementations/types.js"
 import { runScheduledImplementationTick } from "../../src/scripts/runScheduledImplementationTick.js"
@@ -15,7 +14,6 @@ function configFor(): KodyConfig {
     git: { defaultBranch: "main" },
     github: { owner: "acme", repo: "widgets" },
     agent: { model: "anthropic/test" },
-    jobs: { stateBackend: "local-file" },
   }
 }
 
@@ -47,20 +45,19 @@ let execDir: string
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "scheduled-exec-tick-"))
-  execDir = path.join(tmp, ".kody", "capabilities", "demo-watch")
-  fs.mkdirSync(path.join(tmp, ".kody", "capabilities", "demo"), { recursive: true })
+  execDir = path.join(tmp, ".kody-engine", "definitions", "capabilities", "demo-watch")
+  fs.mkdirSync(path.join(tmp, ".kody-engine", "definitions", "capabilities", "demo"), { recursive: true })
   fs.mkdirSync(execDir, { recursive: true })
   fs.writeFileSync(
-    path.join(tmp, ".kody", "capabilities", "demo", "profile.json"),
+    path.join(tmp, ".kody-engine", "definitions", "capabilities", "demo", "profile.json"),
     JSON.stringify({ name: "demo", agent: "kody", implementation: "demo-watch" }),
   )
-  fs.writeFileSync(path.join(tmp, ".kody", "capabilities", "demo", "capability.md"), "# Demo\n")
+  fs.writeFileSync(path.join(tmp, ".kody-engine", "definitions", "capabilities", "demo", "capability.md"), "# Demo\n")
 })
 
 afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true })
   vi.unstubAllEnvs()
-  resetCompanyStoreCacheForTests()
 })
 
 describe("runScheduledImplementationTick", () => {
@@ -96,7 +93,7 @@ describe("runScheduledImplementationTick", () => {
 
     const ctx = ctxFor(tmp, "demo")
     await runScheduledImplementationTick(ctx, { name: "demo-watch", dir: execDir } as Profile, {
-      jobsDir: ".kody/capabilities",
+      jobsDir: ".kody-engine/definitions/capabilities",
       slugArg: "capability",
       shell: "tick.sh",
     })
@@ -106,42 +103,6 @@ describe("runScheduledImplementationTick", () => {
     expect(ctx.data.jobSlug).toBe("demo")
     expect(ctx.data.implementationSlug).toBe("demo-watch")
     expect(ctx.data.nextStateParseError).toBeUndefined()
-    expect(ctx.data.nextJobState).toMatchObject({
-      cursor: "demo-1",
-      data: { seen: true },
-      done: false,
-    })
-  })
-
-  it("loads capability metadata from company store when project capability folder is absent", async () => {
-    writeTickScript()
-    fs.rmSync(path.join(tmp, ".kody", "capabilities", "demo"), { recursive: true, force: true })
-    const storeRoot = path.join(tmp, "store")
-    const storeCapabilityDir = path.join(storeRoot, ".kody", "capabilities", "demo")
-    fs.mkdirSync(storeCapabilityDir, { recursive: true })
-    fs.writeFileSync(
-      path.join(storeCapabilityDir, "profile.json"),
-      JSON.stringify({
-        name: "demo",
-        every: "15m",
-        agent: "kody",
-        implementation: "demo-watch",
-      }),
-    )
-    fs.writeFileSync(path.join(storeCapabilityDir, "capability.md"), "# Store Demo\n")
-    vi.stubEnv("KODY_COMPANY_STORE", storeRoot)
-    resetCompanyStoreCacheForTests()
-
-    const ctx = ctxFor(tmp, "demo")
-    await runScheduledImplementationTick(ctx, { name: "demo-watch", dir: execDir } as Profile, {
-      jobsDir: ".kody/capabilities",
-      slugArg: "capability",
-      shell: "tick.sh",
-    })
-
-    expect(ctx.skipAgent).toBe(true)
-    expect(ctx.output.exitCode).toBe(0)
-    expect(ctx.data.jobSlug).toBe("demo")
     expect(ctx.data.nextJobState).toMatchObject({
       cursor: "demo-1",
       data: { seen: true },

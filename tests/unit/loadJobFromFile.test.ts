@@ -20,8 +20,8 @@ let tmp: string
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "load-job-"))
-  fs.mkdirSync(path.join(tmp, ".kody", "capabilities"), { recursive: true })
-  fs.mkdirSync(path.join(tmp, ".kody", "agents"), { recursive: true })
+  fs.mkdirSync(path.join(tmp, ".kody-engine", "definitions", "capabilities"), { recursive: true })
+  fs.mkdirSync(path.join(tmp, ".kody-engine", "definitions", "agents"), { recursive: true })
 })
 
 afterEach(() => {
@@ -29,14 +29,14 @@ afterEach(() => {
 })
 
 function writeCapability(slug: string, profile: Record<string, unknown>, body = "# Capability\nbody"): void {
-  const dir = path.join(tmp, ".kody", "capabilities", slug)
+  const dir = path.join(tmp, ".kody-engine", "definitions", "capabilities", slug)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
   fs.writeFileSync(path.join(dir, "capability.md"), body)
 }
 
 function writeAgent(slug: string, body = "# Agent\nidentity"): void {
-  fs.writeFileSync(path.join(tmp, ".kody", "agents", `${slug}.md`), body)
+  fs.writeFileSync(path.join(tmp, ".kody-engine", "definitions", "agents", `${slug}.md`), body)
 }
 
 function ctxFor(slug: string): Context {
@@ -45,7 +45,6 @@ function ctxFor(slug: string): Context {
     git: { defaultBranch: "main" },
     github: { owner: "o", repo: "r" },
     agent: { model: "anthropic/test" },
-    jobs: { stateBackend: "local-file" },
   }
   return {
     args: { job: slug },

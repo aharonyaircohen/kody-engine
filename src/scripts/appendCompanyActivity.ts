@@ -1,13 +1,12 @@
 /**
  * Postflight: append a Company Activity record for an capability tick.
  *
- * The activity feed is Kody runtime state, so it lives in the configured state
- * repo under `activity/<YYYY-MM-DD>.jsonl`.
+ * The activity feed is Kody runtime state persisted by the backend.
  */
 
 import { getRunUrl } from "../gha.js"
 import type { PostflightScript } from "../implementations/types.js"
-import { appendStateLine } from "../stateRepo.js"
+import { createStateBackendFromEnv } from "../state-backend.js"
 
 interface ActivityRecord {
   ts: string
@@ -33,9 +32,18 @@ function resolveTrigger(force: boolean): ActivityRecord["trigger"] {
   return "event"
 }
 
-function appendLine(ctx: Parameters<PostflightScript>[0], record: ActivityRecord): void {
-  const filePath = `activity/${record.ts.slice(0, 10)}.jsonl`
-  appendStateLine(ctx.config, ctx.cwd, filePath, JSON.stringify(record), `chore(activity): ${record.action}`)
+async function appendActivity(ctx: Parameters<PostflightScript>[0], record: ActivityRecord): Promise<void> {
+  const tenantId =
+    ctx.config.github?.owner && ctx.config.github.repo
+      ? `${ctx.config.github.owner}/${ctx.config.github.repo}`
+      : process.env.GITHUB_REPOSITORY
+  if (process.env.CONVEX_URL?.trim() && process.env.KODY_SERVICE_KEY?.trim() && tenantId) {
+    await createStateBackendFromEnv().appendDailyLog(tenantId, "activity", record.ts.slice(0, 10), record)
+    return
+  }
+  if (process.env.GITHUB_ACTIONS === "true") {
+    throw new Error("Convex backend is required for company activity in GitHub Actions")
+  }
 }
 
 export const appendCompanyActivity: PostflightScript = async (ctx, _profile, agentResult) => {
@@ -63,7 +71,7 @@ export const appendCompanyActivity: PostflightScript = async (ctx, _profile, age
       runUrl: getRunUrl() || null,
     }
 
-    appendLine(ctx, record)
+    await appendActivity(ctx, record)
   } catch (err) {
     process.stderr.write(
       `[activity] company-activity append failed: ${err instanceof Error ? err.message : String(err)}\n`,

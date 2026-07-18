@@ -52,16 +52,13 @@ function resetWorkingTree(cwd?: string): void {
     /* best effort */
   }
   try {
-    // `-e .kody` excludes kody's own directory from the clean. Consumer
-    // capability profiles live at `.kody/capabilities/<name>/` and are TRACKED, but the
-    // consumer repo's `.gitignore` ignores `.kody/*` and re-includes them via a
-    // negation (`!.kody/capabilities/**`). On the CI runner, `git clean -fd`'s
-    // directory walk over that negated-ignore pattern removes the whole
-    // `.kody/capabilities/<name>` directory — so the next preflight (composePrompt)
-    // crashes with "no prompt template found" (readdir ENOENT). Excluding `.kody`
-    // keeps the engine's tracked assets intact; the ephemeral runtime state under
-    // `.kody/` is gitignored bookkeeping that's safe to leave on an ephemeral runner.
-    execFileSync("git", ["clean", "-fd", "-e", ".kody"], { cwd, stdio: ["ignore", "pipe", "pipe"], timeout: 30_000 })
+    // Backend definitions are hydrated into an untracked engine-owned cache.
+    // Preserve that cache across the branch reset performed within one run.
+    execFileSync("git", ["clean", "-fd", "-e", ".kody-engine"], {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 30_000,
+    })
   } catch {
     /* best effort */
   }
@@ -98,10 +95,8 @@ export function checkoutPrBranch(prNumber: number, cwd?: string): string {
     /* best effort */
   }
   try {
-    // Exclude `.kody` for the same reason as resetWorkingTree: `git clean -fd`
-    // otherwise removes the tracked-but-ignore-negated `.kody/capabilities/<name>`
-    // dirs on the CI runner, breaking PR-driven capability implementations.
-    execFileSync("git", ["clean", "-fd", "-e", ".kody"], {
+    // Preserve the backend-hydrated definition cache during checkout.
+    execFileSync("git", ["clean", "-fd", "-e", ".kody-engine"], {
       cwd,
       env,
       stdio: ["ignore", "pipe", "pipe"],
@@ -116,10 +111,6 @@ export function checkoutPrBranch(prNumber: number, cwd?: string): string {
     stdio: ["ignore", "pipe", "pipe"],
     timeout: 60_000,
   })
-  // The checkout can drop kody's tracked-but-ignore-negated `.kody/` assets;
-  // restore them from the checked-out branch's HEAD tree (no-op if that branch
-  // predates the capabilities — those PRs would need a rebase regardless).
-  restoreKodyAssets(cwd)
   return getCurrentBranch(cwd)
 }
 
@@ -153,28 +144,6 @@ export function mergeBase(baseBranch: string, cwd?: string): "clean" | "conflict
   }
 }
 
-/**
- * Force-restore kody-owned tracked assets (`.kody/capabilities`,
- * …) into the working tree from the current HEAD tree. A branch checkout on the
- * CI runner can drop these: they're tracked, but the consumer repo's `.gitignore`
- * ignores `.kody/*` and re-includes them via a negation, and git's working-tree
- * update over that pattern removes the `.kody/capabilities/<name>` directory —
- * which makes the next preflight (composePrompt) crash with readdir ENOENT.
- * `git checkout HEAD -- .kody` rematerialises whatever the branch dance dropped.
- * Best-effort: repos that don't track `.kody` just no-op (the checkout errors).
- */
-function restoreKodyAssets(cwd?: string): void {
-  try {
-    execFileSync("git", ["checkout", "HEAD", "--", ".kody"], {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: 30_000,
-    })
-  } catch {
-    /* .kody not tracked here, or nothing to restore — fine */
-  }
-}
-
 export function ensureFeatureBranch(
   issueNumber: number,
   title: string,
@@ -182,12 +151,7 @@ export function ensureFeatureBranch(
   cwd?: string,
   baseBranch?: string,
 ): BranchResult {
-  // The branch setup (reset/clean/checkout) can drop kody's tracked-but-
-  // ignore-negated `.kody/` assets on the CI runner; restore them once the
-  // branch is in place, before any downstream script reads them.
-  const result = ensureFeatureBranchInner(issueNumber, title, defaultBranch, cwd, baseBranch)
-  restoreKodyAssets(cwd)
-  return result
+  return ensureFeatureBranchInner(issueNumber, title, defaultBranch, cwd, baseBranch)
 }
 
 function ensureFeatureBranchInner(

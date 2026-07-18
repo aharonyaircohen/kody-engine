@@ -19,7 +19,7 @@ function makeCtx(cwd: string, data: Record<string, unknown> = {}): Context {
 }
 
 function writeMemory(root: string, relPath: string, content: string): void {
-  const full = path.join(root, ".kody", "memory", relPath)
+  const full = path.join(root, ".kody-engine", "runtime", "memory", relPath)
   fs.mkdirSync(path.dirname(full), { recursive: true })
   fs.writeFileSync(full, content, "utf-8")
 }
@@ -55,7 +55,7 @@ describe("loadMemoryContext", () => {
   })
 
   it("returns '' when the memory dir is empty", async () => {
-    fs.mkdirSync(path.join(tmp, ".kody", "memory"), { recursive: true })
+    fs.mkdirSync(path.join(tmp, ".kody-engine", "runtime", "memory"), { recursive: true })
     const ctx = makeCtx(tmp)
     await loadMemoryContext(ctx, profile)
     expect(ctx.data.memoryContext).toBe("")
@@ -66,7 +66,7 @@ describe("loadMemoryContext", () => {
     const ctx = makeCtx(tmp)
     await loadMemoryContext(ctx, profile)
     const block = ctx.data.memoryContext as string
-    expect(block).toContain("# Project memory (state repo `memory/`)")
+    expect(block).toContain("# Project memory (backend `memory/`)")
     expect(block).toContain("## Lesson One — `lesson.md`")
     expect(block).toContain("Body about caching.")
   })
@@ -125,7 +125,7 @@ describe("loadMemoryContext", () => {
   it("walks nested subdirectories and skips dotfiles / non-md files", async () => {
     writeMemory(tmp, "sub/nested.md", "---\ntitle: Nested\n---\nnested body")
     writeMemory(tmp, "ignore.txt", "not markdown")
-    const memRoot = path.join(tmp, ".kody", "memory")
+    const memRoot = path.join(tmp, ".kody-engine", "runtime", "memory")
     fs.writeFileSync(path.join(memRoot, ".hidden.md"), "hidden", "utf-8")
     const ctx = makeCtx(tmp)
     await loadMemoryContext(ctx, profile)

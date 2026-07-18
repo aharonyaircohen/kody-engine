@@ -1,6 +1,6 @@
+import type { ConvexHttpClient } from "convex/browser"
 import type { FunctionReference } from "convex/server"
 import { anyApi } from "convex/server"
-import type { ConvexHttpClient } from "convex/browser"
 import { createConvexClientFromEnv } from "./chat/convex-client.js"
 
 export interface TaskDocument {
@@ -27,6 +27,23 @@ export interface AgencyRunDocument {
   updatedAt: string
 }
 
+export interface DefinitionDocument {
+  slug: string
+  version: string
+  bundle: {
+    schemaVersion: 1
+    files: Record<string, string>
+  }
+  updatedAt: string
+}
+
+export interface WorkflowDocument {
+  workflowId: string
+  definition: unknown
+  source: "local" | "store"
+  updatedAt: string
+}
+
 export interface StateBackendClient {
   query: (fn: FunctionReference<"query">, args: Record<string, unknown>) => Promise<unknown>
   mutation: (fn: FunctionReference<"mutation">, args: Record<string, unknown>) => Promise<unknown>
@@ -34,20 +51,26 @@ export interface StateBackendClient {
 
 export interface StateBackend {
   get(tenantId: string, taskKey: string, kind: string): Promise<TaskDocument | null>
-  save(
-    tenantId: string,
-    taskKey: string,
-    kind: string,
-    doc: unknown,
-    expectedUpdatedAt?: string,
-  ): Promise<void>
+  save(tenantId: string, taskKey: string, kind: string, doc: unknown, expectedUpdatedAt?: string): Promise<void>
   getRepoDoc(tenantId: string, kind: string): Promise<TaskDocument | null>
   listRepoDocs(tenantId: string, prefix: string): Promise<TaskDocument[]>
   saveRepoDoc(tenantId: string, kind: string, doc: unknown, expectedUpdatedAt?: string): Promise<void>
   getGoal(tenantId: string, goalId: string): Promise<GoalDocument | null>
   listGoals(tenantId: string): Promise<GoalDocument[]>
-  saveGoal(tenantId: string, goalId: string, state: unknown, updatedAt: string, expectedUpdatedAt?: string): Promise<void>
-  appendDailyLog(tenantId: string, stream: "activity" | "events" | "flyActivity", date: string, entry: unknown): Promise<void>
+  saveGoal(
+    tenantId: string,
+    goalId: string,
+    state: unknown,
+    updatedAt: string,
+    expectedUpdatedAt?: string,
+  ): Promise<void>
+  appendDailyLog(
+    tenantId: string,
+    stream: "activity" | "events" | "flyActivity",
+    date: string,
+    entry: unknown,
+  ): Promise<void>
+  appendChatEvent(tenantId: string, sessionId: string, event: unknown): Promise<void>
   saveAgencyRun(
     tenantId: string,
     runId: string,
@@ -74,9 +97,16 @@ export interface StateBackend {
     updatedAt: string,
   ): Promise<void>
   listIntents(tenantId: string): Promise<Array<{ intentId: string; intent: unknown; updatedAt: string }>>
-  getIntent(tenantId: string, intentId: string): Promise<{ intentId: string; intent: unknown; updatedAt: string } | null>
+  getIntent(
+    tenantId: string,
+    intentId: string,
+  ): Promise<{ intentId: string; intent: unknown; updatedAt: string } | null>
   saveIntent(tenantId: string, intentId: string, intent: unknown, updatedAt: string): Promise<void>
   appendIntentDecision(tenantId: string, intentId: string, decision: unknown): Promise<void>
+  listDefinitions(tenantId: string, kind: "agent" | "capability" | "goal"): Promise<DefinitionDocument[]>
+  listWorkflows(tenantId: string): Promise<WorkflowDocument[]>
+  getWorkflowRun(tenantId: string, workflowId: string, runId: string): Promise<{ state: unknown } | null>
+  saveWorkflowRun(tenantId: string, workflowId: string, runId: string, state: unknown, updatedAt: string): Promise<void>
 }
 
 function requireTenant(tenantId: string): string {
@@ -170,6 +200,13 @@ export function createStateBackendFromEnv(
         entry,
       })
     },
+    async appendChatEvent(tenantId, sessionId, event) {
+      await transport.mutation(anyApi.chatEvents.append, {
+        tenantId: requireTenant(tenantId),
+        sessionId: requireNonEmpty(sessionId, "sessionId"),
+        event,
+      })
+    },
     async saveAgencyRun(tenantId, runId, subjectType, subjectId, run, updatedAt) {
       await transport.mutation(anyApi.agencyRuns.save, {
         tenantId: requireTenant(tenantId),
@@ -231,6 +268,36 @@ export function createStateBackendFromEnv(
         tenantId: requireTenant(tenantId),
         intentId: requireNonEmpty(intentId, "intentId"),
         decision,
+      })
+    },
+    async listDefinitions(tenantId, kind) {
+      const result = await transport.query(anyApi.definitions.listCurrent, {
+        tenantId: requireTenant(tenantId),
+        kind,
+      })
+      return Array.isArray(result) ? (result as DefinitionDocument[]) : []
+    },
+    async listWorkflows(tenantId) {
+      const result = await transport.query(anyApi.workflows.list, {
+        tenantId: requireTenant(tenantId),
+      })
+      return Array.isArray(result) ? (result as WorkflowDocument[]) : []
+    },
+    async getWorkflowRun(tenantId, workflowId, runId) {
+      const result = await transport.query(anyApi.workflowRuns.get, {
+        tenantId: requireTenant(tenantId),
+        workflowId: requireNonEmpty(workflowId, "workflowId"),
+        runId: requireNonEmpty(runId, "runId"),
+      })
+      return (result as { state: unknown } | null) ?? null
+    },
+    async saveWorkflowRun(tenantId, workflowId, runId, state, updatedAt) {
+      await transport.mutation(anyApi.workflowRuns.save, {
+        tenantId: requireTenant(tenantId),
+        workflowId: requireNonEmpty(workflowId, "workflowId"),
+        runId: requireNonEmpty(runId, "runId"),
+        state,
+        updatedAt,
       })
     },
   }

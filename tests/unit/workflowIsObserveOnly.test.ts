@@ -8,7 +8,7 @@ import { workflowIsObserveOnly } from "../../src/scripts/advanceManagedGoal.js"
 let cwd: string
 
 function writeCapability(slug: string, capabilityKind?: string): void {
-  const dir = join(cwd, ".kody", "capabilities", slug)
+  const dir = join(cwd, ".kody-engine", "definitions", "capabilities", slug)
   mkdirSync(dir, { recursive: true })
   writeFileSync(
     join(dir, "profile.json"),

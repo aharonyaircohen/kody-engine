@@ -1,161 +1,135 @@
 /**
- * Hydrate Kody-authored runtime assets from the configured state repo into a
- * temporary local `.kody` cache for existing file-based engine loaders.
+ * Hydrate read-only runtime prompt documents from the backend into the
+ * engine-owned scratch workspace used by synchronous prompt loaders.
+ *
+ * Persistent authority remains in the backend. This cache is disposable,
+ * never lives under consumer `.kody`, and is never written back to GitHub.
  */
 
-import { execFileSync } from "node:child_process"
-import * as crypto from "node:crypto"
 import * as fs from "node:fs"
-import * as os from "node:os"
 import * as path from "node:path"
-import { type ParsedStateRepo, parseStateRepo, type StateRepoConfig } from "./stateRepo.js"
+import type { KodyConfig } from "./config.js"
+import { createStateBackendFromEnv, type StateBackend, type TaskDocument } from "./state-backend.js"
 
-const DIR_MAPPINGS: Array<{ stateDir: string; localDir: string }> = [
-  { stateDir: "capabilities", localDir: path.join(".kody", "capabilities") },
-  { stateDir: "agents", localDir: path.join(".kody", "agents") },
-  { stateDir: "context", localDir: path.join(".kody", "context") },
-  { stateDir: "memory", localDir: path.join(".kody", "memory") },
-]
-
-const FILE_MAPPINGS: Array<{ statePath: string; localPath: string }> = [
-  { statePath: "instructions.md", localPath: path.join(".kody", "instructions.md") },
-  { statePath: "system-prompt.md", localPath: path.join(".kody", "system-prompt.md") },
-  { statePath: "variables.json", localPath: path.join(".kody", "variables.json") },
-  { statePath: "secrets.enc", localPath: path.join(".kody", "secrets.enc") },
-]
-
-const CACHE_ENV = "KODY_STATE_REPO_CACHE"
-const TEST_FETCH_ENV = "KODY_STATE_WORKSPACE_FETCH_FOR_TESTS"
+const RUNTIME_ROOT = path.join(".kody-engine", "runtime")
 const hydratedWorkspaces = new Set<string>()
 
-function writeLocalFile(cwd: string, relativePath: string, content: string): void {
-  const fullPath = path.join(cwd, relativePath)
-  fs.mkdirSync(path.dirname(fullPath), { recursive: true })
-  fs.writeFileSync(fullPath, content)
+function tenantId(config: KodyConfig): string | null {
+  const owner = config.github?.owner?.trim() || process.env.GITHUB_REPOSITORY?.split("/")[0]?.trim()
+  const repo = config.github?.repo?.trim() || process.env.GITHUB_REPOSITORY?.split("/")[1]?.trim()
+  return owner && repo ? `${owner}/${repo}` : null
 }
 
-function copyPath(source: string, target: string): void {
-  const st = fs.lstatSync(source)
-  fs.rmSync(target, { recursive: true, force: true })
-  if (st.isSymbolicLink()) return
+function writeRuntimeFile(cwd: string, relativePath: string, content: string): void {
+  const target = path.join(cwd, RUNTIME_ROOT, relativePath)
   fs.mkdirSync(path.dirname(target), { recursive: true })
-  fs.cpSync(source, target, { recursive: true, force: true })
+  fs.writeFileSync(target, content, "utf8")
 }
 
-function overlayDirectoryChildren(cwd: string, sourceDir: string, localDir: string): void {
-  if (!fs.existsSync(sourceDir)) return
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null
+}
 
-  for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
-    const source = path.join(sourceDir, entry.name)
-    const target = path.join(cwd, localDir, entry.name)
-    copyPath(source, target)
+function stringField(value: unknown, key: string): string | null {
+  const candidate = record(value)?.[key]
+  return typeof candidate === "string" ? candidate : null
+}
+
+function memoryIndex(docs: TaskDocument[]): string {
+  const lines = docs
+    .map((doc) => {
+      const meta = record(record(doc.doc)?.meta)
+      const id = doc.kind.slice("memory:".length)
+      const name = typeof meta?.name === "string" && meta.name.trim() ? meta.name.trim() : id
+      const description = typeof meta?.description === "string" ? meta.description.trim() : ""
+      const type = typeof meta?.type === "string" ? meta.type : "lesson"
+      return `- [${name}](${id}.md) — ${description} (type: ${type})`
+    })
+    .sort()
+  if (lines.length === 0) return ""
+  return ["# Kody memory index", "", "One line per backend memory document.", "", ...lines, ""].join("\n")
+}
+
+async function hydratePrefix(
+  backend: Pick<StateBackend, "listRepoDocs">,
+  tenant: string,
+  cwd: string,
+  prefix: "context:" | "memory:",
+): Promise<void> {
+  const docs = await backend.listRepoDocs(tenant, prefix)
+  for (const doc of docs) {
+    const slug = doc.kind.slice(prefix.length)
+    if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(slug)) continue
+    const body = stringField(doc.doc, "body")
+    if (body === null) continue
+    writeRuntimeFile(cwd, `${prefix === "context:" ? "context" : "memory"}/${slug}.md`, body)
+  }
+  if (prefix === "memory:") {
+    const index = memoryIndex(docs)
+    if (index) writeRuntimeFile(cwd, "memory/INDEX.md", index)
   }
 }
 
-export function hydrateStateWorkspace(config: StateRepoConfig, cwd: string): void {
-  if (process.env.VITEST && process.env[TEST_FETCH_ENV] !== "1") return
-
-  const parsed = parseStateRepo(config)
-  const hydrateKey = `${path.resolve(cwd)}|${parsed.owner}/${parsed.repo}|${parsed.basePath}|${parsed.branch}`
-  if (hydratedWorkspaces.has(hydrateKey)) return
-
-  const snapshotRoot = fetchStateSnapshot(parsed)
-
-  for (const mapping of DIR_MAPPINGS) {
-    overlayDirectoryChildren(cwd, path.join(snapshotRoot, mapping.stateDir), mapping.localDir)
+async function hydrateSingleton(
+  backend: Pick<StateBackend, "getRepoDoc">,
+  tenant: string,
+  cwd: string,
+  kind: string,
+  relativePath: string,
+): Promise<void> {
+  const doc = await backend.getRepoDoc(tenant, kind)
+  if (!doc) return
+  const body = stringField(doc.doc, "body")
+  if (body !== null) {
+    writeRuntimeFile(cwd, relativePath, body)
+    return
   }
+  writeRuntimeFile(cwd, relativePath, `${JSON.stringify(doc.doc, null, 2)}\n`)
+}
 
-  for (const mapping of FILE_MAPPINGS) {
-    const source = path.join(snapshotRoot, mapping.statePath)
-    if (fs.existsSync(source) && !fs.lstatSync(source).isSymbolicLink() && fs.statSync(source).isFile()) {
-      writeLocalFile(cwd, mapping.localPath, fs.readFileSync(source, "utf-8"))
-    }
+async function hydrateWorkflows(
+  backend: Pick<StateBackend, "listWorkflows">,
+  tenant: string,
+  cwd: string,
+): Promise<void> {
+  for (const workflow of await backend.listWorkflows(tenant)) {
+    if (!/^[a-z0-9][a-z0-9_-]{0,79}$/.test(workflow.workflowId)) continue
+    writeRuntimeFile(
+      cwd,
+      `workflows/${workflow.workflowId}/workflow.json`,
+      `${JSON.stringify(workflow.definition, null, 2)}\n`,
+    )
   }
+}
 
-  hydratedWorkspaces.add(hydrateKey)
+export async function hydrateStateWorkspace(
+  config: KodyConfig,
+  cwd: string,
+  backendOverride?: StateBackend,
+): Promise<void> {
+  const tenant = tenantId(config)
+  const configured = Boolean(process.env.CONVEX_URL?.trim()) && Boolean(process.env.KODY_SERVICE_KEY?.trim())
+  if (!tenant || !configured) {
+    if (process.env.GITHUB_ACTIONS === "true")
+      throw new Error("Convex backend is required for runtime workspace documents")
+    return
+  }
+  const key = `${path.resolve(cwd)}|${tenant}`
+  if (hydratedWorkspaces.has(key)) return
+  const backend = backendOverride ?? createStateBackendFromEnv()
+  const root = path.join(cwd, RUNTIME_ROOT)
+  fs.rmSync(root, { recursive: true, force: true })
+  await Promise.all([
+    hydratePrefix(backend, tenant, cwd, "context:"),
+    hydratePrefix(backend, tenant, cwd, "memory:"),
+    hydrateSingleton(backend, tenant, cwd, "instructions", "instructions.md"),
+    hydrateSingleton(backend, tenant, cwd, "system-prompt", "system-prompt.md"),
+    hydrateSingleton(backend, tenant, cwd, "variables", "variables.json"),
+    hydrateWorkflows(backend, tenant, cwd),
+  ])
+  hydratedWorkspaces.add(key)
 }
 
 export function resetStateWorkspaceHydrationCacheForTests(): void {
   hydratedWorkspaces.clear()
-}
-
-function fetchStateSnapshot(parsed: ParsedStateRepo): string {
-  const cacheDir = path.join(cacheRoot(), cacheKey(parsed))
-  const url = `https://github.com/${parsed.owner}/${parsed.repo}.git`
-
-  try {
-    fs.mkdirSync(path.dirname(cacheDir), { recursive: true })
-    if (!fs.existsSync(path.join(cacheDir, ".git"))) {
-      fs.rmSync(cacheDir, { recursive: true, force: true })
-      runGit(["clone", "--no-checkout", "--filter=blob:none", url, cacheDir])
-    }
-
-    runGit(["-C", cacheDir, "remote", "set-url", "origin", url])
-    runGit(["-C", cacheDir, "fetch", "--depth=1", "origin", parsed.branch])
-    runGit(["-C", cacheDir, "sparse-checkout", "init", "--cone"])
-    runGit(["-C", cacheDir, "sparse-checkout", "set", parsed.basePath])
-    runGit(["-C", cacheDir, "checkout", "--force", "--detach", "FETCH_HEAD"])
-    runGit(["-C", cacheDir, "clean", "-fdx"])
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    throw new Error(
-      `stateWorkspace: failed to fetch ${parsed.owner}/${parsed.repo}:${parsed.basePath}@${parsed.branch}: ${msg}`,
-    )
-  }
-
-  return path.join(cacheDir, parsed.basePath)
-}
-
-function cacheRoot(): string {
-  return process.env[CACHE_ENV]?.trim() || path.join(os.homedir(), ".cache", "kody", "state-repo")
-}
-
-function cacheKey(parsed: ParsedStateRepo): string {
-  return crypto
-    .createHash("sha256")
-    .update(`${parsed.owner}/${parsed.repo}#${parsed.branch}#${parsed.basePath}`)
-    .digest("hex")
-    .slice(0, 24)
-}
-
-function runGit(args: string[]): void {
-  try {
-    execFileSync("git", args, {
-      encoding: "utf-8",
-      env: githubAuthEnv(),
-      stdio: ["ignore", "ignore", "pipe"],
-      timeout: 120_000,
-    })
-  } catch (err) {
-    const stderr = (err as { stderr?: unknown }).stderr
-    const detail = Buffer.isBuffer(stderr)
-      ? stderr.toString("utf-8").trim()
-      : typeof stderr === "string"
-        ? stderr.trim()
-        : ""
-    throw new Error(detail || `git ${args[0] ?? "command"} failed`)
-  }
-}
-
-function githubAuthEnv(): NodeJS.ProcessEnv {
-  const token = githubToken()
-  if (!token) return process.env
-  const encoded = Buffer.from(`x-access-token:${token}`).toString("base64")
-  const existingCount = /^\d+$/.test(process.env.GIT_CONFIG_COUNT ?? "") ? Number(process.env.GIT_CONFIG_COUNT) : 0
-  return {
-    ...process.env,
-    GIT_CONFIG_COUNT: String(existingCount + 1),
-    [`GIT_CONFIG_KEY_${existingCount}`]: "http.https://github.com/.extraheader",
-    [`GIT_CONFIG_VALUE_${existingCount}`]: `AUTHORIZATION: basic ${encoded}`,
-  }
-}
-
-function githubToken(): string | undefined {
-  return (
-    process.env.KODY_TOKEN?.trim() ||
-    process.env.GH_TOKEN?.trim() ||
-    process.env.GITHUB_TOKEN?.trim() ||
-    process.env.GH_PAT?.trim() ||
-    undefined
-  )
 }

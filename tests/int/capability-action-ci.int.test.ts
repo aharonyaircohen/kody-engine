@@ -16,7 +16,12 @@ function makeRepo(opts: { sameName?: boolean } = {}): { root: string; eventPath:
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-action-ci-"))
   const capabilityName = opts.sameName ? "noop" : "noop-capability"
   const exeName = opts.sameName ? "noop" : "noop-impl"
-  fs.mkdirSync(path.join(root, ".kody", "capabilities"), { recursive: true })
+  fs.mkdirSync(path.join(root, ".kody-engine", "definitions", "capabilities"), { recursive: true })
+  fs.mkdirSync(path.join(root, ".kody-engine", "definitions", "agents"), { recursive: true })
+  fs.copyFileSync(
+    path.join(process.env.KODY_DEFINITIONS_ROOT!, "agents", "kody.md"),
+    path.join(root, ".kody-engine", "definitions", "agents", "kody.md"),
+  )
   fs.writeFileSync(
     path.join(root, "kody.config.json"),
     JSON.stringify(
@@ -53,7 +58,7 @@ function makeRepo(opts: { sameName?: boolean } = {}): { root: string; eventPath:
     scripts: { preflight: [{ script: "skipAgent" }], postflight: [] },
   }
 
-  const capabilityDir = path.join(root, ".kody", "capabilities", capabilityName)
+  const capabilityDir = path.join(root, ".kody-engine", "definitions", "capabilities", capabilityName)
   fs.mkdirSync(capabilityDir, { recursive: true })
   fs.writeFileSync(
     path.join(capabilityDir, "profile.json"),
@@ -72,7 +77,7 @@ function makeRepo(opts: { sameName?: boolean } = {}): { root: string; eventPath:
   fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Noop\n")
 
   if (!opts.sameName) {
-    const implementationDir = path.join(root, ".kody", "capabilities", exeName)
+    const implementationDir = path.join(root, ".kody-engine", "definitions", "capabilities", exeName)
     fs.mkdirSync(implementationDir, { recursive: true })
     fs.writeFileSync(
       path.join(implementationDir, "profile.json"),

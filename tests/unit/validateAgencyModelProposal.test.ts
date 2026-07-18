@@ -487,7 +487,7 @@ describe("validateModelBundle", () => {
       },
       files: [
         {
-          path: ".kody/capabilities/daily-docs-proof-loop/state.json",
+          path: ".kody-engine/definitions/capabilities/daily-docs-proof-loop/state.json",
           content: JSON.stringify({ version: 1, cursor: "idle", done: false }),
         },
       ],

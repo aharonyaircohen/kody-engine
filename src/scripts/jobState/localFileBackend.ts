@@ -20,7 +20,7 @@ import { isStateUnchanged, type JobStateBackend, type LoadedJobState, stateFileP
 export interface LocalFileBackendOptions {
   /** Absolute path to the consumer repo working tree. */
   cwd: string
-  /** Capability directory relative to cwd (e.g. ".kody/capabilities"). */
+  /** Capability directory relative to cwd (e.g. ".kody-engine/definitions/capabilities"). */
   jobsDir: string
   /** Owner/repo are used as cache key components for cross-repo isolation. */
   owner: string
@@ -71,7 +71,7 @@ export class LocalFileBackend implements JobStateBackend {
     if (!opts.owner || !opts.repo) throw new Error("LocalFileBackend: owner and repo are required")
     this.cwd = opts.cwd
     this.jobsDir = opts.jobsDir
-    this.absDir = path.join(opts.cwd, opts.jobsDir)
+    this.absDir = path.resolve(opts.cwd, opts.jobsDir)
     this.owner = opts.owner
     this.repo = opts.repo
     this.cache = opts.cache ?? defaultCacheAdapter()
@@ -131,7 +131,7 @@ export class LocalFileBackend implements JobStateBackend {
 
   load(slug: string): LoadedJobState {
     const relPath = stateFilePath(this.jobsDir, slug)
-    const absPath = path.join(this.cwd, relPath)
+    const absPath = path.resolve(this.cwd, relPath)
     if (!fs.existsSync(absPath)) {
       return { path: relPath, handle: null, state: initialStateEnvelope("seed"), created: true }
     }
@@ -155,7 +155,7 @@ export class LocalFileBackend implements JobStateBackend {
     if (!loaded.created && isStateUnchanged(loaded.state, next)) {
       return false
     }
-    const absPath = path.join(this.cwd, loaded.path)
+    const absPath = path.resolve(this.cwd, loaded.path)
     fs.mkdirSync(path.dirname(absPath), { recursive: true })
     const body = `${JSON.stringify(next, null, 2)}\n`
     // Write atomically: a crash mid-write (the 5-min tick timeout, OOM, runner

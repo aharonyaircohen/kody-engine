@@ -1,6 +1,9 @@
 import type { Profile } from "./implementations/types.js"
 import { createStateBackendFromEnv } from "./state-backend.js"
-import { readStateText, type StateRepoConfig, writeStateText } from "./stateRepo.js"
+
+interface RunBackendConfig {
+  github?: { owner?: string; repo?: string }
+}
 
 export type RunIndexSubjectType = "goal" | "loop" | "workflow"
 export type RunIndexStatus = "running" | "waiting" | "success" | "failed" | "blocked" | "cancelled" | "recorded"
@@ -56,63 +59,15 @@ export function runIndexPath(): string {
   return RUN_INDEX_PATH
 }
 
-export function upsertRunIndexRow(config: StateRepoConfig, cwd: string | undefined, row: RunIndexRow): void {
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const current = readStateText(config, cwd, RUN_INDEX_PATH)
-    const next = mergeRunIndexRow(current?.content, row)
-    try {
-      writeStateText(
-        config,
-        cwd,
-        RUN_INDEX_PATH,
-        JSON.stringify(next, null, 2),
-        "chore(runs): update run index",
-        current?.sha,
-      )
-      return
-    } catch (err) {
-      if (!isConflict(err) || attempt === 3) throw err
-    }
-  }
-}
-
-export function upsertRunIndexRowBestEffort(
-  config: StateRepoConfig,
-  cwd: string | undefined,
-  row: RunIndexRow | null,
-): void {
-  if (!row) return
-  try {
-    upsertRunIndexRow(config, cwd, row)
-  } catch (err) {
-    process.stderr.write(`[kody runs] index update failed: ${err instanceof Error ? err.message : String(err)}\n`)
-  }
-}
-
 export async function upsertRunIndexRowBestEffortAsync(
-  config: StateRepoConfig,
-  cwd: string | undefined,
+  config: RunBackendConfig,
+  _cwd: string | undefined,
   row: RunIndexRow | null,
 ): Promise<void> {
   if (!row) return
   const tenantId = tenantIdForRun(config)
-  const backendConfigured = Boolean(process.env.CONVEX_URL?.trim() && process.env.KODY_SERVICE_KEY?.trim() && tenantId)
-  if (backendConfigured) {
-    const backend = createStateBackendFromEnv()
-    await backend.saveAgencyRun(
-      tenantId as string,
-      row.id,
-      row.subjectType,
-      row.subjectId,
-      row,
-      row.updatedAt,
-    )
-    return
-  }
-  if (process.env.GITHUB_ACTIONS === "true") {
-    throw new Error("Convex backend is required for the run index in GitHub Actions")
-  }
-  upsertRunIndexRowBestEffort(config, cwd, row)
+  if (!tenantId) throw new Error("Repository identity is required for the run index")
+  await createStateBackendFromEnv().saveAgencyRun(tenantId, row.id, row.subjectType, row.subjectId, row, row.updatedAt)
 }
 
 export function stageRunIndexFinalization(data: Record<string, unknown>, row: RunIndexRow | null): void {
@@ -121,21 +76,8 @@ export function stageRunIndexFinalization(data: Record<string, unknown>, row: Ru
   rows[row.id] = row
 }
 
-export function finalizeStagedRunIndexRows(
-  config: StateRepoConfig,
-  cwd: string | undefined,
-  data: Record<string, unknown>,
-  result: { status: RunIndexStatus; updatedAt: string; reason?: string },
-): void {
-  const rows = stagedRunIndexRows(data)
-  for (const row of Object.values(rows)) {
-    upsertRunIndexRowBestEffort(config, cwd, finalizedRunIndexRow(row, result))
-  }
-  data[STAGED_RUN_INDEX_ROWS_KEY] = {}
-}
-
 export async function finalizeStagedRunIndexRowsAsync(
-  config: StateRepoConfig,
+  config: RunBackendConfig,
   cwd: string | undefined,
   data: Record<string, unknown>,
   result: { status: RunIndexStatus; updatedAt: string; reason?: string },
@@ -306,7 +248,6 @@ export function runIndexRowFromGoalEvents(
     sourceType: "goal-run-log" as const,
     sourcePath: logPath,
     detailUrl: stringValue(links?.log) ?? undefined,
-    statePath: stringValue(recordValue(last.stateRepo)?.goalStatePath) ?? undefined,
   })
 }
 
@@ -392,12 +333,7 @@ function triggerMode(kind: string | null | undefined): RunIndexRow["triggerMode"
   return "event"
 }
 
-function isConflict(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err)
-  return /HTTP 409/i.test(msg) || /HTTP 422/i.test(msg) || /does not match|is at|but expected/i.test(msg)
-}
-
-function tenantIdForRun(config: StateRepoConfig): string | undefined {
+function tenantIdForRun(config: RunBackendConfig): string | undefined {
   if (config.github?.owner && config.github.repo) return `${config.github.owner}/${config.github.repo}`
   return process.env.GITHUB_REPOSITORY?.trim() || undefined
 }

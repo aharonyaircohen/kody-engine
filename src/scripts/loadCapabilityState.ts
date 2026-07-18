@@ -24,13 +24,14 @@
  */
 
 import { CAPABILITY_MCP_TOOL_NAMES } from "../capabilityMcp.js"
+import { capabilitiesRoot } from "../definition-paths.js"
 import type { PreflightScript } from "../implementations/types.js"
 import { resolveBackend } from "./jobState/index.js"
 
 const CAPABILITY_TOOL_PALETTE: ReadonlySet<string> = new Set(CAPABILITY_MCP_TOOL_NAMES)
 
 export const loadCapabilityState: PreflightScript = async (ctx, profile, args) => {
-  const jobsDir = String(args?.jobsDir ?? ".kody/capabilities")
+  const jobsDir = String(args?.jobsDir ?? capabilitiesRoot(ctx.cwd))
   const slug = profile.name
   const backend = resolveBackend({ config: ctx.config, cwd: ctx.cwd, jobsDir })
   if (backend.hydrate) await backend.hydrate()

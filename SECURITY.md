@@ -38,9 +38,9 @@ kody is designed to run in CI with scoped credentials. When deploying it:
   scope it to the single consumer repo.
 - **Model-provider keys are secrets.** Store them as encrypted Actions secrets,
   never in committed config. The engine reads them from `process.env` only.
-- **The agent commits through `commitAndPush`**, which enforces a `.kody/` write
-  allowlist — the agent cannot write arbitrary runtime state. See the
-  `.kody/` write allowlist invariant in [AGENTS.md](AGENTS.md).
+- **The agent commits through `commitAndPush`**, which blocks engine runtime,
+  configuration, secret, build, and legacy state paths. See the runtime write
+  isolation invariant in [AGENTS.md](AGENTS.md).
 - **Locked-toolbox mode** (`tools:` frontmatter on a job) revokes `Bash` and
   shell access for that job, restricting it to a fixed set of high-level MCP
   intents. Prefer it for any job that doesn't need a general shell.

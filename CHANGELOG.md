@@ -103,7 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.99] — task artifacts
 
 ### Added
-- Task artifacts: chat replies commit `.kody/tasks/<sessionId>/`.
+- Task artifacts: chat replies commit `backend task artifacts/<sessionId>/`.
 
 ## [0.4.96] — agent-ask
 

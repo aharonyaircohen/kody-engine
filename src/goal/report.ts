@@ -1,5 +1,5 @@
 import type { CapabilityEvidence } from "../capabilityEvidence.js"
-import { type StateRepoConfig, writeStateText } from "../stateRepo.js"
+import { createStateBackendFromEnv } from "../state-backend.js"
 import { managedGoalFromState } from "./manager.js"
 import { goalRunLogSnapshot } from "./runLog.js"
 import type { GoalState } from "./state.js"
@@ -14,7 +14,7 @@ export interface GoalDashboardReportWrite {
 }
 
 export interface GoalDashboardReportInput {
-  config: StateRepoConfig
+  config: { github?: { owner?: string; repo?: string } }
   cwd?: string
   data: Record<string, unknown>
   goalId: string
@@ -26,7 +26,9 @@ export function goalDashboardReportRequested(data: Record<string, unknown>, stat
   return data.jobSaveReport === true || state?.extra.saveReport === true
 }
 
-export function refreshGoalDashboardReport(input: GoalDashboardReportInput): GoalDashboardReportWrite | null {
+export async function refreshGoalDashboardReport(
+  input: GoalDashboardReportInput,
+): Promise<GoalDashboardReportWrite | null> {
   const evidenceItems = input.evidenceItems ?? []
   if (!goalDashboardReportRequested(input.data, input.state)) return null
   if (!REPORT_SLUG_RE.test(input.goalId)) {
@@ -42,7 +44,21 @@ export function refreshGoalDashboardReport(input: GoalDashboardReportInput): Goa
     evidenceItems,
   )
 
-  writeStateText(input.config, input.cwd, filePath, body, `chore(reports): add ${input.goalId} run`)
+  const tenantId =
+    input.config.github?.owner && input.config.github.repo
+      ? `${input.config.github.owner}/${input.config.github.repo}`
+      : process.env.GITHUB_REPOSITORY?.trim()
+  if (!tenantId) throw new Error("goal report: repository identity is required")
+  const runId = filePath.split("/").at(-1)?.replace(/\.md$/, "") ?? Date.now().toString()
+  await createStateBackendFromEnv().saveReport(
+    tenantId,
+    input.goalId,
+    runId,
+    input.goalId,
+    body,
+    { goalId: input.goalId, state: input.state.state },
+    new Date().toISOString(),
+  )
   const report = { slug: input.goalId, path: filePath, changed: true }
   recordGoalReport(input.data, report)
   return report

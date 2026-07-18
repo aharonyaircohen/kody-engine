@@ -17,7 +17,7 @@ function testConfig(config: Partial<KodyConfig>): KodyConfig {
 }
 
 function writeLocalReleaseAsset(root: string): void {
-  const implementationDir = path.join(root, ".kody", "capabilities", "release")
+  const implementationDir = path.join(root, ".kody-engine", "definitions", "capabilities", "release")
   fs.mkdirSync(implementationDir, { recursive: true })
   fs.writeFileSync(
     path.join(implementationDir, "profile.json"),
@@ -52,7 +52,7 @@ function writeLocalReleaseAsset(root: string): void {
 }
 
 function writeLocalInputlessAsset(root: string, name: string): void {
-  const implementationDir = path.join(root, ".kody", "capabilities", name)
+  const implementationDir = path.join(root, ".kody-engine", "definitions", "capabilities", name)
   fs.mkdirSync(implementationDir, { recursive: true })
   fs.writeFileSync(
     path.join(implementationDir, "profile.json"),
@@ -238,7 +238,7 @@ describe("dispatch: schedule event", () => {
     const prevCwd = process.cwd()
     try {
       process.chdir(tmp)
-      const dir = path.join(tmp, ".kody", "capabilities", "goal-scheduler")
+      const dir = path.join(tmp, ".kody-engine", "definitions", "capabilities", "goal-scheduler")
       fs.mkdirSync(dir, { recursive: true })
       fs.writeFileSync(
         path.join(dir, "profile.json"),
@@ -425,10 +425,10 @@ describe("dispatch: issue_comment on issue", () => {
     const prevCwd = process.cwd()
     try {
       process.chdir(tmp)
-      fs.mkdirSync(path.join(tmp, ".kody", "capabilities", "custom-impl"), { recursive: true })
-      fs.mkdirSync(path.join(tmp, ".kody", "capabilities", "remember"), { recursive: true })
+      fs.mkdirSync(path.join(tmp, ".kody-engine", "definitions", "capabilities", "custom-impl"), { recursive: true })
+      fs.mkdirSync(path.join(tmp, ".kody-engine", "definitions", "capabilities", "remember"), { recursive: true })
       fs.writeFileSync(
-        path.join(tmp, ".kody", "capabilities", "remember", "profile.json"),
+        path.join(tmp, ".kody-engine", "definitions", "capabilities", "remember", "profile.json"),
         JSON.stringify({
           name: "remember",
           action: "remember",
@@ -436,9 +436,12 @@ describe("dispatch: issue_comment on issue", () => {
           agent: "kody",
         }),
       )
-      fs.writeFileSync(path.join(tmp, ".kody", "capabilities", "remember", "capability.md"), "# Remember\n")
       fs.writeFileSync(
-        path.join(tmp, ".kody", "capabilities", "custom-impl", "profile.json"),
+        path.join(tmp, ".kody-engine", "definitions", "capabilities", "remember", "capability.md"),
+        "# Remember\n",
+      )
+      fs.writeFileSync(
+        path.join(tmp, ".kody-engine", "definitions", "capabilities", "custom-impl", "profile.json"),
         JSON.stringify({
           name: "custom-impl",
           role: "utility",
@@ -763,6 +766,13 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-dispatch-release-"))
     process.chdir(tmp)
     writeLocalReleaseAsset(tmp)
+    for (const slug of ["release-prepare", "release-publish", "release-promote"]) {
+      fs.cpSync(
+        path.join(process.env.KODY_DEFINITIONS_ROOT!, "capabilities", slug),
+        path.join(tmp, ".kody-engine", "definitions", "capabilities", slug),
+        { recursive: true },
+      )
+    }
   })
   afterEach(() => {
     process.env.GITHUB_EVENT_NAME = prev.EVENT_NAME

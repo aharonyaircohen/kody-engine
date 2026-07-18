@@ -37,7 +37,7 @@ function makeContainerFixture(opts: {
   children: Array<{ implementation: string; target: "issue" | "pr"; next: Record<string, string> }>
 }): string {
   const root = tmpDir("kody-container")
-  const exeDir = path.join(root, ".kody", "capabilities", opts.containerName)
+  const exeDir = path.join(root, ".kody-engine", "definitions", "capabilities", opts.containerName)
   fs.mkdirSync(exeDir, { recursive: true })
   const profile = {
     name: opts.containerName,
@@ -158,7 +158,7 @@ describe("container: profile loading", () => {
         { implementation: "run", target: "issue", next: { RUN_COMPLETED: "done", "*": "abort" } },
       ],
     })
-    const profile = loadProfile(path.join(root, ".kody", "capabilities", "demo", "profile.json"))
+    const profile = loadProfile(path.join(root, ".kody-engine", "definitions", "capabilities", "demo", "profile.json"))
     expect(profile.role).toBe("container")
     expect(profile.children).toHaveLength(2)
     expect(profile.children?.[0]?.implementation).toBe("plan")
@@ -167,9 +167,9 @@ describe("container: profile loading", () => {
 
   it("rejects a container profile with no children", () => {
     const root = makeContainerFixture({ containerName: "demo", children: [] })
-    expect(() => loadProfile(path.join(root, ".kody", "capabilities", "demo", "profile.json"))).toThrow(
-      /role: "container" requires a non-empty "children" array/,
-    )
+    expect(() =>
+      loadProfile(path.join(root, ".kody-engine", "definitions", "capabilities", "demo", "profile.json")),
+    ).toThrow(/role: "container" requires a non-empty "children" array/)
   })
 
   it("rejects an invalid child target", () => {
@@ -177,14 +177,14 @@ describe("container: profile loading", () => {
       containerName: "demo",
       children: [{ implementation: "plan", target: "bogus" as "issue", next: { "*": "done" } }],
     })
-    expect(() => loadProfile(path.join(root, ".kody", "capabilities", "demo", "profile.json"))).toThrow(
-      /target must be "issue" or "pr"/,
-    )
+    expect(() =>
+      loadProfile(path.join(root, ".kody-engine", "definitions", "capabilities", "demo", "profile.json")),
+    ).toThrow(/target must be "issue" or "pr"/)
   })
 
   it("rejects children on a non-container role", () => {
     const root = tmpDir("kody-container-bad-role")
-    const exeDir = path.join(root, ".kody", "capabilities", "bad")
+    const exeDir = path.join(root, ".kody-engine", "definitions", "capabilities", "bad")
     fs.mkdirSync(exeDir, { recursive: true })
     const profile = {
       name: "bad",

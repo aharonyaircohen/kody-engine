@@ -20,6 +20,10 @@ vi.mock("../../src/lifecycleLabels.js", async () => {
   const actual = await vi.importActual<typeof import("../../src/lifecycleLabels.js")>("../../src/lifecycleLabels.js")
   return { ...actual, setKodyLabel: vi.fn() }
 })
+const backendMocks = vi.hoisted(() => ({ save: vi.fn() }))
+vi.mock("../../src/state-backend.js", () => ({
+  createStateBackendFromEnv: () => ({ save: backendMocks.save }),
+}))
 
 const execFileSync = childProcess.execFileSync as unknown as Mock
 
@@ -60,7 +64,6 @@ function ctx(overrides: Partial<Context> = {}): Context {
       quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       git: { defaultBranch: "main" },
       github: { owner: "o", repo: "r" },
-      state: { repo: "o/kody-state", path: "r" },
       agent: { model: "claude/claude-haiku-4-5-20251001" },
     },
     data: {},
@@ -80,6 +83,7 @@ beforeEach(() => {
     return ""
   })
   setKodyLabelMock.mockReset()
+  backendMocks.save.mockReset()
 })
 afterEach(() => vi.clearAllMocks())
 
@@ -291,13 +295,8 @@ describe("advanceFlow", () => {
       },
     })
     await advanceFlow(c, profile("review"), null)
-    const putCall = execFileSync.mock.calls.find(
-      (call) => Array.isArray(call[1]) && (call[1] as string[]).includes("PUT"),
-    )
-    // State mirror still happens via the Contents API; the re-trigger is now in-process.
-    expect(putCall).toBeDefined()
-    const payload = JSON.parse((putCall![2] as { input?: string }).input ?? "{}") as { content?: string }
-    const stateJson = Buffer.from(payload.content ?? "", "base64").toString("utf-8")
+    expect(backendMocks.save).toHaveBeenCalledOnce()
+    const stateJson = JSON.stringify(backendMocks.save.mock.calls[0]![3])
     expect(stateJson).toContain("REVIEW_PASS")
     expect(c.output.nextDispatch).toEqual({ action: "bug", cliArgs: { issue: 42 } })
   })

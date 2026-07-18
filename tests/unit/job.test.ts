@@ -12,7 +12,6 @@ const { gh, runImplementationChain } = vi.hoisted(() => ({
 vi.mock("../../src/executor.js", () => ({ runImplementationChain }))
 vi.mock("../../src/issue.js", () => ({ gh }))
 
-import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import {
   DEFAULT_INSTANT_AGENT,
   InvalidJobError,
@@ -35,7 +34,6 @@ describe("runJob (Phase 1 seam)", () => {
 
   afterEach(() => {
     vi.unstubAllEnvs()
-    resetCompanyStoreCacheForTests()
   })
 
   it("lowers an instant job onto runImplementationChain with its implementation + cliArgs", async () => {
@@ -97,7 +95,7 @@ describe("runJob (Phase 1 seam)", () => {
 
   it("resolves a capability-only job to the capability-selected implementation", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-job-"))
-    const capabilityDir = path.join(cwd, ".kody", "capabilities", "ci-health")
+    const capabilityDir = path.join(cwd, ".kody-engine", "definitions", "capabilities", "ci-health")
     fs.mkdirSync(capabilityDir, { recursive: true })
     fs.writeFileSync(
       path.join(capabilityDir, "profile.json"),
@@ -124,7 +122,7 @@ describe("runJob (Phase 1 seam)", () => {
 
   it("seeds capabilityKind from capability folders for shared implementation traces", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-kind-job-"))
-    const capabilityDir = path.join(cwd, ".kody", "capabilities", "pr-health")
+    const capabilityDir = path.join(cwd, ".kody-engine", "definitions", "capabilities", "pr-health")
     fs.mkdirSync(capabilityDir, { recursive: true })
     fs.writeFileSync(
       path.join(capabilityDir, "profile.json"),
@@ -147,7 +145,7 @@ describe("runJob (Phase 1 seam)", () => {
 
   it("preserves capability identity without injecting capability args when implementation is explicit", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-goal-handoff-"))
-    const capabilityDir = path.join(cwd, ".kody", "capabilities", "company-graph")
+    const capabilityDir = path.join(cwd, ".kody-engine", "definitions", "capabilities", "company-graph")
     fs.mkdirSync(capabilityDir, { recursive: true })
     fs.writeFileSync(path.join(capabilityDir, "profile.json"), JSON.stringify({ name: "company-graph" }))
     fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Company Graph\n")
@@ -341,7 +339,7 @@ describe("runJob (Phase 1 seam)", () => {
 
       expect(runImplementationChain).toHaveBeenCalledTimes(2)
       expect(runImplementationChain.mock.calls[0]![0]).toBe("reproduce")
-      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42 })
+      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42, base: "feature/base" })
       expect(runImplementationChain.mock.calls[0]![1].preloadedData).toMatchObject({
         workflowCapability: "bug",
         workflowStep: "reproduce",
@@ -469,14 +467,7 @@ describe("runJob (Phase 1 seam)", () => {
         createdAt: "2026-06-27T00:00:00Z",
         updatedAt: "2026-06-27T00:00:00Z",
       }
-      gh.mockReturnValue(
-        JSON.stringify({
-          type: "file",
-          encoding: "base64",
-          content: Buffer.from(JSON.stringify(workflow), "utf8").toString("base64"),
-          sha: "workflow-sha",
-        }),
-      )
+      writeWorkflowDefinition(cwd, "bug-flow", workflow)
       process.chdir(cwd)
 
       await runJob(
@@ -492,17 +483,11 @@ describe("runJob (Phase 1 seam)", () => {
             git: { defaultBranch: "main" },
             github: { owner: "o", repo: "r" },
             agent: { model: "anthropic/claude-haiku-4-5-20251001" },
-            state: { repo: "o/kody-state", path: "r" },
           },
         },
       )
 
-      expect(gh).toHaveBeenCalledWith(
-        ["api", "/repos/o/kody-state/contents/r/workflows/bug-flow/workflow.json?ref=main"],
-        {
-          cwd,
-        },
-      )
+      expect(gh).not.toHaveBeenCalled()
       expect(runImplementationChain).toHaveBeenCalledTimes(2)
       expect(runImplementationChain.mock.calls[0]![0]).toBe("reproduce")
       expect(runImplementationChain.mock.calls[0]![1].preloadedData).toMatchObject({
@@ -568,14 +553,7 @@ describe("runJob (Phase 1 seam)", () => {
           { capability: "vercel-production-deploy" },
         ],
       }
-      gh.mockReturnValue(
-        JSON.stringify({
-          type: "file",
-          encoding: "base64",
-          content: Buffer.from(JSON.stringify(workflow), "utf8").toString("base64"),
-          sha: "workflow-sha",
-        }),
-      )
+      writeWorkflowDefinition(cwd, "web-release", workflow)
       process.chdir(cwd)
       runImplementationChain
         .mockResolvedValueOnce({
@@ -604,7 +582,6 @@ describe("runJob (Phase 1 seam)", () => {
             git: { defaultBranch: "main" },
             github: { owner: "o", repo: "r" },
             agent: { model: "anthropic/claude-haiku-4-5-20251001" },
-            state: { repo: "o/kody-state", path: "r" },
           },
         },
       )
@@ -621,7 +598,7 @@ describe("runJob (Phase 1 seam)", () => {
       expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({ issue: 42, pr: 10 })
       expect(runImplementationChain.mock.calls[2]![1].cliArgs).toEqual({ issue: 42 })
       expect(runImplementationChain.mock.calls[3]![1].cliArgs).toEqual({ issue: 42, pr: 11 })
-      expect(runImplementationChain.mock.calls[4]![1].cliArgs).toEqual({})
+      expect(runImplementationChain.mock.calls[4]![1].cliArgs).toEqual({ issue: 42 })
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
@@ -655,14 +632,7 @@ describe("runJob (Phase 1 seam)", () => {
           },
         ],
       }
-      gh.mockReturnValue(
-        JSON.stringify({
-          type: "file",
-          encoding: "base64",
-          content: Buffer.from(JSON.stringify(workflow), "utf8").toString("base64"),
-          sha: "workflow-sha",
-        }),
-      )
+      writeWorkflowDefinition(cwd, "agency-observer", workflow)
       process.chdir(cwd)
 
       await runJob(
@@ -674,7 +644,6 @@ describe("runJob (Phase 1 seam)", () => {
             git: { defaultBranch: "main" },
             github: { owner: "o", repo: "r" },
             agent: { model: "anthropic/claude-haiku-4-5-20251001" },
-            state: { repo: "o/kody-state", path: "r" },
           },
         },
       )
@@ -730,14 +699,7 @@ describe("runJob (Phase 1 seam)", () => {
           { capability: "vercel-production-deploy", evidence: "productionDeployed" },
         ],
       }
-      gh.mockReturnValue(
-        JSON.stringify({
-          type: "file",
-          encoding: "base64",
-          content: Buffer.from(JSON.stringify(workflow), "utf8").toString("base64"),
-          sha: "workflow-sha",
-        }),
-      )
+      writeWorkflowDefinition(cwd, "web-release", workflow)
       process.chdir(cwd)
       runImplementationChain.mockResolvedValueOnce({ exitCode: 0, taskState: taskState("RELEASE_BRANCH_MERGED") })
 
@@ -758,7 +720,6 @@ describe("runJob (Phase 1 seam)", () => {
             git: { defaultBranch: "main" },
             github: { owner: "o", repo: "r" },
             agent: { model: "anthropic/claude-haiku-4-5-20251001" },
-            state: { repo: "o/kody-state", path: "r" },
           },
         },
       )
@@ -774,7 +735,7 @@ describe("runJob (Phase 1 seam)", () => {
         evidence: "releaseBranchMerged",
       })
       expect(runImplementationChain.mock.calls[1]![0]).toBe("vercel-production-deploy")
-      expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({})
+      expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({ issue: 756 })
       expect(runImplementationChain.mock.calls[1]![1].preloadedData?.capabilityResultTarget).toEqual({
         type: "goal",
         id: "web-release-2026-07-06",
@@ -785,80 +746,6 @@ describe("runJob (Phase 1 seam)", () => {
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
-    }
-  })
-
-  it("runs a Store-only workflow definition after state repo lookup misses", async () => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-store-workflow-definition-job-"))
-    const store = fs.mkdtempSync(path.join(os.tmpdir(), "kody-store-workflow-definition-store-"))
-    const originalCwd = process.cwd()
-    try {
-      writeCapability(cwd, "release-prepare", {
-        name: "release-prepare",
-        action: "release-prepare",
-        implementation: "release-prepare",
-        inputs: [{ name: "issue", flag: "--issue", type: "int", required: false }],
-      })
-      writeCapability(cwd, "release-merge", {
-        name: "release-merge",
-        action: "release-merge",
-        implementation: "release-merge",
-        inputs: [{ name: "pr", flag: "--pr", type: "int", required: false }],
-      })
-      writeWorkflowDefinition(store, "web-release", {
-        version: 1,
-        name: "Web release",
-        steps: [
-          { capability: "release-prepare", target: "issue", cliArgs: { prefer: "ours" } },
-          { capability: "release-merge", target: "pr" },
-        ],
-      })
-      fs.writeFileSync(
-        path.join(store, "kody-store.json"),
-        JSON.stringify({ name: "test-store", layoutVersion: 1, assetRoots: { workflows: "workflows" } }),
-      )
-      vi.stubEnv("KODY_COMPANY_STORE", store)
-      vi.stubEnv("KODY_COMPANY_STORE_REF", "main")
-      resetCompanyStoreCacheForTests()
-      process.chdir(cwd)
-      runImplementationChain
-        .mockResolvedValueOnce({ exitCode: 0, prUrl: "https://github.com/o/r/pull/12" })
-        .mockResolvedValueOnce({ exitCode: 0 })
-
-      await runJob(
-        {
-          workflow: "web-release",
-          cliArgs: { issue: 42 },
-          target: 42,
-          flavor: "instant",
-        },
-        {
-          cwd,
-          config: {
-            quality: { typecheck: "", lint: "", testUnit: "", format: "" },
-            git: { defaultBranch: "main" },
-            github: { owner: "o", repo: "r" },
-            agent: { model: "anthropic/claude-haiku-4-5-20251001" },
-            state: { repo: "o/kody-state", path: "r" },
-          },
-        },
-      )
-
-      expect(gh).toHaveBeenCalledWith(
-        ["api", "/repos/o/kody-state/contents/r/workflows/web-release/workflow.json?ref=main"],
-        {
-          cwd,
-        },
-      )
-      expect(runImplementationChain).toHaveBeenCalledTimes(2)
-      expect(runImplementationChain.mock.calls[0]![0]).toBe("release-prepare")
-      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42, prefer: "ours" })
-      expect(runImplementationChain.mock.calls[1]![0]).toBe("release-merge")
-      expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({ issue: 42, pr: 12 })
-    } finally {
-      process.chdir(originalCwd)
-      fs.rmSync(cwd, { recursive: true, force: true })
-      fs.rmSync(store, { recursive: true, force: true })
     }
   })
 
@@ -1586,14 +1473,14 @@ describe("runJob (Phase 1 seam)", () => {
 })
 
 function writeCapability(cwd: string, slug: string, profile: Record<string, unknown>): void {
-  const dir = path.join(cwd, ".kody", "capabilities", slug)
+  const dir = path.join(cwd, ".kody-engine", "definitions", "capabilities", slug)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify(profile))
   fs.writeFileSync(path.join(dir, "capability.md"), `# ${slug}\n`)
 }
 
 function writeWorkflowDefinition(cwd: string, slug: string, workflow: Record<string, unknown>): void {
-  const dir = path.join(cwd, "workflows", slug)
+  const dir = path.join(cwd, ".kody-engine", "runtime", "workflows", slug)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "workflow.json"), JSON.stringify(workflow))
 }

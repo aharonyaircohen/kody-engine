@@ -97,7 +97,10 @@ describe("validateWorkflow", () => {
           {
             id: "repair",
             capability: "inspect",
-            next: [{ to: "healthCheck", maxIterations: 1 }, { to: "finish", default: true }],
+            next: [
+              { to: "healthCheck", maxIterations: 1 },
+              { to: "finish", default: true },
+            ],
           },
           { id: "finish", capability: "publish" },
         ],

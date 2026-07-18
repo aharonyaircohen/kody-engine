@@ -79,7 +79,7 @@ export const finalizeTerminal: PostflightScript = async (ctx) => {
 
   if (!state) {
     try {
-    state = await readTaskState(target, targetNumber, ctx.cwd, ctx.config)
+      state = await readTaskState(target, targetNumber, ctx.cwd, ctx.config)
     } catch {
       state = undefined
     }

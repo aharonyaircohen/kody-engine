@@ -8,10 +8,10 @@ import { ensureFeatureBranch, getCurrentBranch } from "../../src/branch.js"
 /**
  * Stability guard for the branch-setup → `.kody`-asset-survival bug class
  * (engine v0.4.196–198). Consumer repos track their capability assets at
- * `.kody/capabilities/<name>/` but `.gitignore` ignores `.kody/*` and
- * re-includes them via a negation (`!.kody/capabilities/**`). On an ephemeral
+ * `.kody-engine/definitions/capabilities/<name>/` but `.gitignore` ignores `.kody/*` and
+ * re-includes them via a negation (`!.kody-engine/definitions/capabilities/**`). On an ephemeral
  * CI runner, branch setup's `git clean -fd` directory-walk over that
- * negated-ignore pattern could nuke the whole `.kody/capabilities/<name>`
+ * negated-ignore pattern could nuke the whole `.kody-engine/definitions/capabilities/<name>`
  * dir — so the next preflight (composePrompt) crashed with "no prompt
  * template found" (readdir ENOENT).
  *
@@ -56,9 +56,12 @@ function makeConsumerRepo(): TempRepo {
   git(workdir, ["remote", "add", "origin", remote])
 
   // Consumer .gitignore: ignore .kody/* but re-include tracked capabilities.
-  fs.writeFileSync(path.join(workdir, ".gitignore"), ".kody/*\n!.kody/capabilities/\n!.kody/capabilities/**\n")
+  fs.writeFileSync(
+    path.join(workdir, ".gitignore"),
+    ".kody/*\n!.kody-engine/definitions/capabilities/\n!.kody-engine/definitions/capabilities/**\n",
+  )
   fs.writeFileSync(path.join(workdir, "README.md"), "# consumer\n")
-  const execDir = path.join(workdir, ".kody", "capabilities", "run")
+  const execDir = path.join(workdir, ".kody-engine", "definitions", "capabilities", "run")
   fs.mkdirSync(execDir, { recursive: true })
   fs.writeFileSync(path.join(execDir, "prompt.md"), "do the thing\n")
   fs.writeFileSync(path.join(execDir, "profile.json"), '{"name":"run"}\n')
@@ -89,8 +92,8 @@ describe("integration: branch setup preserves tracked .kody assets", () => {
     repo.cleanup()
   })
 
-  it("keeps .kody/capabilities/<name> intact when creating a feature branch", () => {
-    const promptPath = path.join(repo.workdir, ".kody", "capabilities", "run", "prompt.md")
+  it("keeps .kody-engine/definitions/capabilities/<name> intact when creating a feature branch", () => {
+    const promptPath = path.join(repo.workdir, ".kody-engine", "definitions", "capabilities", "run", "prompt.md")
     expect(fs.existsSync(promptPath)).toBe(true)
 
     // Simulate an ephemeral runner: dirty a tracked file and drop untracked
@@ -108,18 +111,20 @@ describe("integration: branch setup preserves tracked .kody assets", () => {
     // The load-bearing assertion: the tracked capability survived branch setup.
     expect(fs.existsSync(promptPath)).toBe(true)
     expect(fs.readFileSync(promptPath, "utf-8")).toBe("do the thing\n")
-    expect(fs.existsSync(path.join(repo.workdir, ".kody", "capabilities", "run", "profile.json"))).toBe(true)
+    expect(
+      fs.existsSync(path.join(repo.workdir, ".kody-engine", "definitions", "capabilities", "run", "profile.json")),
+    ).toBe(true)
     // And the tree was actually cleaned (proves we exercised reset+clean, not a no-op).
     expect(fs.existsSync(path.join(repo.workdir, "untracked-artifact.tmp"))).toBe(false)
   })
 
   it("restores .kody assets even after they are removed from the working tree", () => {
-    const promptPath = path.join(repo.workdir, ".kody", "capabilities", "run", "prompt.md")
+    const promptPath = path.join(repo.workdir, ".kody-engine", "definitions", "capabilities", "run", "prompt.md")
 
     // Reproduce the worst case directly: the capability dir is gone from the
     // working tree (as the buggy `git clean -fd` left it). ensureFeatureBranch's
     // restoreKodyAssets (`git checkout HEAD -- .kody`) must bring it back.
-    fs.rmSync(path.join(repo.workdir, ".kody", "capabilities"), { recursive: true, force: true })
+    fs.rmSync(path.join(repo.workdir, ".kody-engine", "definitions", "capabilities"), { recursive: true, force: true })
     expect(fs.existsSync(promptPath)).toBe(false)
 
     ensureFeatureBranch(43, "Another feature", "main", repo.workdir)

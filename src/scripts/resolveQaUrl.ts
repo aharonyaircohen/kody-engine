@@ -9,7 +9,7 @@
  *                                tolerate in-progress deploys with no URL
  *                                yet.
  *   3. process.env.PREVIEW_URL — env-injected URL (CI secret pattern)
- *   4. QA_URL variable         — `variables.json` key QA_URL in the state repo,
+ *   4. QA_URL variable         — `variables.json` key QA_URL in the backend,
  *                                a per-repo stable dev URL managed via the dashboard.
  *   5. error                   — fail fast; the alternative is browsing a
  *                                non-existent host and emitting a useless
@@ -115,13 +115,13 @@ export const resolveQaUrl: PreflightScript = async (ctx) => {
   const fallback = readKodyVariables(ctx.cwd).QA_URL?.trim()
   if (fallback && fallback.length > 0) {
     ctx.data.previewUrl = fallback
-    ctx.data.previewUrlSource = "QA_URL variable (state repo variables.json)"
+    ctx.data.previewUrlSource = "QA_URL variable (backend variables.json)"
     return
   }
 
   throw new Error(
     "qa-engineer: no URL resolved. Pass --url, set --goal <id> on a goal that has a Vercel preview, " +
-      "set $PREVIEW_URL, or set the QA_URL variable in the state repo variables.json.",
+      "set $PREVIEW_URL, or set the QA_URL variable in the backend variables.json.",
   )
 }
 

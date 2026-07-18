@@ -32,7 +32,7 @@ import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 
 import type { PreflightScript } from "../implementations/types.js"
-import { readGithubStateText } from "../stateRepoGithub.js"
+import { createStateBackendFromEnv } from "../state-backend.js"
 import {
   basePreviewAppName,
   buildEnvFromVault,
@@ -75,17 +75,19 @@ function flyHeaders(token: string): HeadersInit {
   }
 }
 
-async function fetchVaultDoc(repo: string, ghToken: string, masterKey: string): Promise<VaultDoc> {
+async function fetchVaultDoc(repo: string, masterKey: string): Promise<VaultDoc> {
   const [owner, name] = repo.split("/", 2)
   if (!owner || !name) throw new Error(`invalid GITHUB_REPOSITORY "${repo}"`)
-  const meta = await readGithubStateText({
-    owner,
-    repo: name,
-    filePath: "secrets.enc",
-    githubToken: ghToken,
-  })
-  if (!meta) throw new Error("state repo has no secrets.enc — save secrets from the dashboard first")
-  const payload = meta.content
+  const record = await createStateBackendFromEnv().getRepoDoc(`${owner}/${name}`, "secrets.enc")
+  const raw = record?.doc
+  const payload =
+    raw &&
+    typeof raw === "object" &&
+    !Array.isArray(raw) &&
+    typeof (raw as { ciphertext?: unknown }).ciphertext === "string"
+      ? (raw as { ciphertext: string }).ciphertext
+      : ""
+  if (!payload) throw new Error("backend vault is empty — save secrets from the dashboard first")
   const plaintext = decryptVaultPayload(payload, masterKey)
   return JSON.parse(plaintext) as VaultDoc
 }
@@ -338,7 +340,7 @@ export const runPreviewBuild: PreflightScript = async (ctx, _profile, _args) => 
     // 1. Vault → build env. Single source of truth for FLY_API_TOKEN
     //    too — pulled from the doc here so we don't need it as a
     //    separate repo secret.
-    const doc = await fetchVaultDoc(repo, ghToken, masterKey)
+    const doc = await fetchVaultDoc(repo, masterKey)
     const { buildEnv, buildMode } = buildEnvFromVault(doc)
     const flyToken = doc.secrets?.FLY_API_TOKEN?.value?.trim()
     if (!flyToken) {

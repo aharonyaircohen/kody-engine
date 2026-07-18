@@ -17,7 +17,7 @@ It does not own Operations, Goals, Loops, Capabilities, Workflows, Agents, or ex
 
 ## Storage
 
-Intent state lives in the configured state repo at:
+Intent state lives in the configured backend at:
 
 `<statePath>/intents/<id>/intent.json`
 

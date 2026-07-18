@@ -29,14 +29,14 @@ describe("checkoutPrBranch: clears working-tree state before checkout", () => {
     calls.length = 0
   })
 
-  it("runs `git reset --hard HEAD` and `git clean -fd -e .kody` before `gh pr checkout`", async () => {
+  it("preserves the disposable engine cache before checkout", async () => {
     const { checkoutPrBranch } = await import("../../src/branch.js")
     checkoutPrBranch(1556, "/tmp/fake-repo")
     const order = calls.map((c) => `${c.cmd} ${c.args.join(" ")}`)
     const resetIdx = order.indexOf("git reset --hard HEAD")
     // `.kody` MUST be excluded so the clean doesn't wipe the tracked-but-
-    // ignore-negated consumer capability profiles under .kody/capabilities/.
-    const cleanIdx = order.indexOf("git clean -fd -e .kody")
+    // ignore-negated consumer capability profiles under .kody-engine/definitions/capabilities/.
+    const cleanIdx = order.indexOf("git clean -fd -e .kody-engine")
     const checkoutIdx = order.indexOf("gh pr checkout 1556")
     expect(resetIdx).toBeGreaterThanOrEqual(0)
     expect(cleanIdx).toBeGreaterThanOrEqual(0)
@@ -46,9 +46,8 @@ describe("checkoutPrBranch: clears working-tree state before checkout", () => {
     // Guard against regression to a bare `git clean -fd` (no .kody exclusion).
     expect(order).not.toContain("git clean -fd")
     // After the checkout, kody's tracked assets are force-restored — a branch
-    // checkout can drop the ignore-negated .kody/capabilities/ dirs on CI.
-    const restoreIdx = order.indexOf("git checkout HEAD -- .kody")
-    expect(restoreIdx).toBeGreaterThan(checkoutIdx)
+    // checkout can drop the ignore-negated .kody-engine/definitions/capabilities/ dirs on CI.
+    expect(order.some((call) => call.includes("checkout HEAD -- .kody"))).toBe(false)
   })
 
   it("still attempts gh pr checkout when the cleanup commands fail (best-effort)", async () => {

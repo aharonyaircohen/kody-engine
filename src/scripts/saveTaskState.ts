@@ -1,6 +1,6 @@
 /**
  * Postflight (runs last): apply the reducer to the task state with the
- * action emitted by parseAgentResult, then write the state repo file.
+ * action emitted by parseAgentResult, then write the backend file.
  *
  * If no action was emitted (the implementation had no agent run, e.g. init), a
  * synthetic action is composed from ctx.output so the task state still

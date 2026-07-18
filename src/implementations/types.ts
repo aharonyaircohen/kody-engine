@@ -49,7 +49,7 @@ export interface Profile {
   action?: string
   /**
    * Optional agent this implementation runs *as*. When set, the executor
-   * loads hydrated `.kody/agents/<agent>.md` and injects that agent (authoritative
+   * loads hydrated `.kody-engine/definitions/agents/<agent>.md` and injects that agent (authoritative
    * identity) ahead of the implementation's own system-prompt append. This is the
    * unification hook: a capability can select an implementation + an agent. Absent →
    * runs with no agent (unchanged legacy behaviour). A declared-but-missing
@@ -202,7 +202,7 @@ export interface Profile {
    * preflight runs. composePrompt prefers these over a fresh disk read so the
    * template survives working-tree churn from runFlow's branch setup — on the CI
    * runner a branch checkout can drop the tracked-but-ignore-negated
-   * `.kody/capabilities/<name>/` dir, and reading prompt.md afterwards fails with
+   * `.kody-engine/definitions/capabilities/<name>/` dir, and reading prompt.md afterwards fails with
    * ENOENT even though profile.json (read here, earlier) loaded fine.
    */
   promptTemplates?: Record<string, string>
@@ -210,7 +210,7 @@ export interface Profile {
    * Subagent markdown captured (by declared name) at load time, BEFORE any
    * task branch switch — same rationale as promptTemplates. loadSubagents
    * prefers this snapshot so a capability's `agents/` surviving only on the default
-   * checkout (e.g. `.kody/capabilities/<slug>/agents/` absent on a PR branch) doesn't
+   * checkout (e.g. `.kody-engine/definitions/capabilities/<slug>/agents/` absent on a PR branch) doesn't
    * crash a PR-targeted capability. Populated by captureSubagentTemplates.
    */
   subagentTemplates?: Record<string, string>

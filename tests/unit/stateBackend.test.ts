@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest"
 import { anyApi } from "convex/server"
+import { describe, expect, it, vi } from "vitest"
 import { createStateBackendFromEnv, type StateBackendClient } from "../../src/state-backend.js"
 
 function client(): StateBackendClient {
@@ -47,13 +47,16 @@ describe("state backend", () => {
     )
 
     await backend.save("acme/app", "issues/42", "state", { status: "done" }, "2026-07-17T00:00:00.000Z")
-    expect(transport.mutation).toHaveBeenCalledWith(anyApi.taskState.save, expect.objectContaining({
-      tenantId: "acme/app",
-      taskKey: "issues/42",
-      kind: "state",
-      doc: { status: "done" },
-      expectedUpdatedAt: "2026-07-17T00:00:00.000Z",
-    }))
+    expect(transport.mutation).toHaveBeenCalledWith(
+      anyApi.taskState.save,
+      expect.objectContaining({
+        tenantId: "acme/app",
+        taskKey: "issues/42",
+        kind: "state",
+        doc: { status: "done" },
+        expectedUpdatedAt: "2026-07-17T00:00:00.000Z",
+      }),
+    )
   })
 
   it("supports bounded repository-document reads and guarded writes", async () => {
@@ -75,11 +78,14 @@ describe("state backend", () => {
       tenantId: "acme/app",
       prefix: "memory:",
     })
-    expect(transport.mutation).toHaveBeenCalledWith(anyApi.repoDocs.save, expect.objectContaining({
-      tenantId: "acme/app",
-      kind: "memory:preferences",
-      expectedUpdatedAt: "old",
-    }))
+    expect(transport.mutation).toHaveBeenCalledWith(
+      anyApi.repoDocs.save,
+      expect.objectContaining({
+        tenantId: "acme/app",
+        kind: "memory:preferences",
+        expectedUpdatedAt: "old",
+      }),
+    )
   })
 
   it("appends goal run events to the daily log stream", async () => {
@@ -182,11 +188,14 @@ describe("state backend", () => {
       tenantId: "acme/app",
       intentId: "release-confidence",
     })
-    expect(transport.mutation).toHaveBeenCalledWith(anyApi.intents.save, expect.objectContaining({
-      tenantId: "acme/app",
-      intentId: "release-confidence",
-      updatedAt: "now",
-    }))
+    expect(transport.mutation).toHaveBeenCalledWith(
+      anyApi.intents.save,
+      expect.objectContaining({
+        tenantId: "acme/app",
+        intentId: "release-confidence",
+        updatedAt: "now",
+      }),
+    )
     expect(transport.mutation).toHaveBeenCalledWith(anyApi.intents.appendDecision, {
       tenantId: "acme/app",
       intentId: "release-confidence",

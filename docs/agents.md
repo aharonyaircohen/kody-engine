@@ -9,10 +9,10 @@ capabilities and executables.
 
 ## Canonical Shape
 
-Agents live in project `.kody/agents/` or in the company store:
+Agents live in project `backend agent definitions` or in the company store:
 
 ```text
-.kody/agents/<slug>.md
+backend agent definition
 ```
 
 Example:
@@ -47,7 +47,7 @@ Agent files are prose, but they must answer these questions:
 ## How Agent Are Used
 
 A capability or executable may declare `agent`. When set, the executor loads
-`.kody/agents/<slug>.md` from the project or company store and injects the
+`backend agent definition` from the project or company store and injects the
 authoritative identity before the executable prompt.
 
 If the agent file is missing, the run should fail instead of silently falling
@@ -55,8 +55,8 @@ back.
 
 Resolution order:
 
-1. Project `.kody/agents/<slug>.md`
-2. Company store `.kody/agents/<slug>.md`
+1. Project `backend agent definition`
+2. Company store `backend agent definition`
 
 Project agent override store agent.
 

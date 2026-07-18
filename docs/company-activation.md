@@ -29,7 +29,7 @@ older repos migrate. Do not use it for new activation.
 Store goals are inactive templates. Consumer repos may also define local goal templates.
 
 ```text
-.kody/goals/templates/<slug>/state.json
+backend goal template
 <statePath>/goals/instances/<id>/state.json
 ```
 

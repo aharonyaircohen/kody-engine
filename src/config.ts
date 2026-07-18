@@ -1,6 +1,5 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { normalizeStateBranch, normalizeStatePath, parseStateRepoSlug } from "./stateRepo.js"
 
 export interface TestRequirement {
   pattern: string
@@ -30,14 +29,6 @@ export interface KodyConfig {
   github: {
     owner: string
     repo: string
-  }
-  state?: {
-    /** GitHub repository that stores this repo's Kody runtime state. */
-    repo: string
-    /** Folder inside `state.repo` that belongs to this consumer repo. */
-    path: string
-    /** Branch inside `state.repo` that stores active runtime state. */
-    branch?: string
   }
   agent: {
     model: string
@@ -142,15 +133,6 @@ export interface KodyConfig {
      */
     releaseBranch?: string
     timeoutMs?: number
-  }
-  jobs?: {
-    /**
-     * Storage backend for file-based job state.
-     *   "contents-api" (default) — durable file in the configured state repo.
-     *   "local-file" is accepted only by direct in-process test/dev configs;
-     *   kody.config.json rejects it.
-     */
-    stateBackend?: "contents-api" | "local-file"
   }
   company?: {
     activeCapabilities?: string[]
@@ -338,7 +320,6 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
       owner: String(github.owner),
       repo: String(github.repo),
     },
-    state: parseStateConfig(raw, github),
     agent: {
       model: String(agent.model),
       ...parsePerImplementation(agent.perImplementation),
@@ -360,30 +341,8 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     aliases: mergeAliases(raw.aliases),
     classify: parseClassifyConfig(raw.classify),
     release: parseReleaseConfig(raw.release),
-    jobs: parseJobsConfig(raw.jobs),
     company: parseCompanyConfig(raw.company),
     access: parseAccessConfig(raw.access),
-  }
-}
-
-function parseStateConfig(raw: Record<string, unknown>, github: Record<string, unknown>): KodyConfig["state"] {
-  const nested = recordValue(raw.state) ?? {}
-  const repoRaw = typeof raw.stateRepo === "string" ? raw.stateRepo : nested.repo
-  const pathRaw = typeof raw.statePath === "string" ? raw.statePath : nested.path
-  const branchRaw = typeof raw.stateBranch === "string" ? raw.stateBranch : nested.branch
-  const stateRepo =
-    typeof repoRaw === "string" && repoRaw.trim().length > 0
-      ? repoRaw.trim()
-      : `https://github.com/${String(github.owner)}/kody-state`
-  parseStateRepoSlug(stateRepo)
-  const statePath = typeof pathRaw === "string" && pathRaw.trim().length > 0 ? pathRaw.trim() : String(github.repo)
-  return {
-    repo: stateRepo,
-    path: normalizeStatePath(statePath),
-    branch:
-      typeof branchRaw === "string" && branchRaw.trim().length > 0
-        ? normalizeStateBranch(branchRaw)
-        : normalizeStateBranch(undefined),
   }
 }
 
@@ -445,20 +404,6 @@ function parseAccessConfig(raw: unknown): KodyConfig["access"] {
   // "unset", which defaults to team-only above. dispatch treats a
   // zero-length allowlist as "no gate".
   return { allowedAssociations: out }
-}
-
-function parseJobsConfig(raw: unknown): KodyConfig["jobs"] {
-  if (!raw || typeof raw !== "object") return undefined
-  const r = raw as Record<string, unknown>
-  const out: NonNullable<KodyConfig["jobs"]> = {}
-  if (r.stateBackend === "contents-api") {
-    out.stateBackend = r.stateBackend
-  } else if (typeof r.stateBackend === "string") {
-    throw new Error(
-      `kody.config.json: jobs.stateBackend must be "contents-api"; local-file is not a supported durable storage mode`,
-    )
-  }
-  return Object.keys(out).length > 0 ? out : undefined
 }
 
 function parseCompanyConfig(raw: unknown): KodyConfig["company"] {

@@ -1,3 +1,5 @@
+import * as path from "node:path"
+import { capabilitiesRoot } from "../definition-paths.js"
 import {
   applySimpleGoalTaskSummary,
   isSimpleGoal,
@@ -19,7 +21,6 @@ import {
 } from "../goal/targetLoopResolution.js"
 import { expandManagedGoalState } from "../goal/typeDefinitions.js"
 import type { PreflightScript } from "../implementations/types.js"
-import * as path from "node:path"
 
 import { gh } from "../issue.js"
 import { resolveCapabilityFolder } from "../registry.js"
@@ -367,7 +368,7 @@ function scalarFacts(facts: Record<string, unknown>): Record<string, unknown> {
 /** True when every step capability declares capabilityKind observe or verify. */
 export function workflowIsObserveOnly(capabilities: readonly string[], cwd: string): boolean {
   if (capabilities.length === 0) return false
-  const root = path.join(cwd, ".kody", "capabilities")
+  const root = capabilitiesRoot(cwd)
   return capabilities.every((slug) => {
     const folder = resolveCapabilityFolder(slug, root)
     const kind = folder?.config.capabilityKind
@@ -393,7 +394,8 @@ async function autonomyBlockReason(
 ): Promise<string | null> {
   if (ctx.data.jobForce === true) return null
   const selfKind = managedModelKind(goal)
-  const selfMode = selfKind === "Goal" ? await firstTrustOverride(ctx, subjectCandidates("goal", goalId, goalState)) : null
+  const selfMode =
+    selfKind === "Goal" ? await firstTrustOverride(ctx, subjectCandidates("goal", goalId, goalState)) : null
   if (selfKind === "Goal" && (selfMode === "ask" || (selfMode !== "auto" && goal.runWithoutApproval !== true))) {
     return `Run without approval is off for ${managedModelKind(goal)} ${goalId}`
   }
@@ -420,7 +422,9 @@ async function autonomyBlockReason(
     const targetManaged = target ? managedGoalFromState(expandManagedGoalState(target)) : null
     const targetIsGoal = targetManaged ? managedModelKind(targetManaged) === "Goal" : false
     const targetMode =
-      targetManaged && targetIsGoal ? await firstTrustOverride(ctx, subjectCandidates("goal", targetGoal, target)) : null
+      targetManaged && targetIsGoal
+        ? await firstTrustOverride(ctx, subjectCandidates("goal", targetGoal, target))
+        : null
     if (
       targetIsGoal &&
       (targetMode === "ask" || (targetMode !== "auto" && targetManaged && targetManaged.runWithoutApproval !== true))
@@ -485,14 +489,12 @@ async function firstTrustOverride(
   ctx: Parameters<PreflightScript>[0],
   subjects: TrustSubject[],
 ): Promise<TrustModeOverride> {
-  const backendConfigured = Boolean(
-    process.env.CONVEX_URL?.trim() && process.env.KODY_SERVICE_KEY?.trim(),
-  )
-  if (!ctx.config.state && !backendConfigured) return null
+  const backendConfigured = Boolean(process.env.CONVEX_URL?.trim() && process.env.KODY_SERVICE_KEY?.trim())
+  if (!backendConfigured) return null
   const repoSlug =
     ctx.config.github?.owner && ctx.config.github?.repo ? `${ctx.config.github.owner}/${ctx.config.github.repo}` : ""
   for (const subject of subjects) {
-    const mode = await readTrustModeOverrideAsync(repoSlug, subject, ctx.config.state)
+    const mode = await readTrustModeOverrideAsync(repoSlug, subject)
     if (mode) return mode
   }
   return null

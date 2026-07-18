@@ -40,7 +40,7 @@ ledger's `log`. `qa-engineer` and `ui-review` are read-only exceptions.
 
 ## What Is Not A Ledger
 
-`.kody/context` is not a ledger. It is background/orientation.
+`backend context` is not a ledger. It is background/orientation.
 
 State repo `reports/` are not ledgers. They are generated goal/loop snapshots and findings.
 

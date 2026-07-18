@@ -174,7 +174,6 @@ async function boot(
     model: MODEL,
     litellmUrl: null,
     runTurn,
-    stateFetch: (async () => new Response("not found", { status: 404 })) as typeof fetch,
     ...extra,
   })
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()))
@@ -398,7 +397,7 @@ describe("buildServer routes", () => {
     })
     expect(res.status).toBe(200)
     await readSseBody(res)
-    expect(observedSessionFile).toContain(".kody/sessions/c1.jsonl")
+    expect(observedSessionFile).toContain(".kody-engine/runtime/sessions/c1.jsonl")
     expect(fs.existsSync(observedSessionFile)).toBe(true)
   })
 
@@ -781,8 +780,10 @@ describe("buildServer multi-repo", () => {
     // Agent runs in the per-repo clone…
     expect(observedCwd).toBe(path.join(reposRoot, "acme/widgets"))
     expect(clones).toEqual(["acme/widgets"])
-    // …and the session cache follows that repo; the state repo is the durable cross-machine source.
-    expect(observedSessionFile).toBe(path.join(reposRoot, "acme/widgets", ".kody", "sessions", "c1.jsonl"))
+    // …and the session cache follows that repo; the backend is the durable cross-machine source.
+    expect(observedSessionFile).toBe(
+      path.join(reposRoot, "acme/widgets", ".kody-engine", "runtime", "sessions", "c1.jsonl"),
+    )
   })
 
   it("passes Dashboard CMS settings from the request into the chat turn", async () => {

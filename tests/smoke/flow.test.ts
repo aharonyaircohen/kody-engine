@@ -20,7 +20,7 @@ afterEach(() => process.chdir(prevCwd))
 /** Scaffold a temp project with a no-agent echo implementation. Returns its root. */
 function makeEchoImplementation(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-smoke-flow-"))
-  const dir = path.join(root, ".kody", "capabilities", "smoke-echo")
+  const dir = path.join(root, ".kody-engine", "definitions", "capabilities", "smoke-echo")
   fs.mkdirSync(dir, { recursive: true })
   const profile = {
     name: "smoke-echo",

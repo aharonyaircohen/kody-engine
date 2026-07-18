@@ -16,7 +16,7 @@ It does not own company direction, shared Capabilities, Workflows, Agents, capab
 
 ## Storage
 
-Operation contracts live in the configured state repo at:
+Operation contracts live in the configured backend at:
 
 `<statePath>/operations/<id>/operation.json`
 

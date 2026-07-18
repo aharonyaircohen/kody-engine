@@ -12,8 +12,8 @@
  * ok:false and the dashboard falls back to create-fresh / GitHub Actions.
  */
 
+import { readRepoSecret, readRepoSecrets } from "../backendVault.js"
 import type { RunRequest } from "../run-request.js"
-import { readRepoSecret, readRepoSecrets } from "../stateRepoVault.js"
 import { FlyClient } from "./fly.js"
 import { type ClaimResult, type PoolJob, PoolManager } from "./manager.js"
 
@@ -96,7 +96,6 @@ export class PoolRegistry {
       cfg.resolveFlyToken ??
       (async (owner, repo) =>
         readRepoSecret({
-          githubToken: await this.resolveGithubToken(owner, repo),
           masterKey: cfg.masterKey,
           owner,
           repo,
@@ -107,7 +106,6 @@ export class PoolRegistry {
       (async (owner, repo) =>
         parsePoolMin(
           await readRepoSecret({
-            githubToken: await this.resolveGithubToken(owner, repo),
             masterKey: cfg.masterKey,
             owner,
             repo,
@@ -190,7 +188,6 @@ export class PoolRegistry {
     let allSecrets: Record<string, string> = {}
     try {
       const vault = await readRepoSecrets({
-        githubToken,
         masterKey: this.cfg.masterKey,
         owner,
         repo,

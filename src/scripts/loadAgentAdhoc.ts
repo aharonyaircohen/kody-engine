@@ -5,7 +5,7 @@
  * This is the engine half of the dashboard's "@mention an agent in a
  * message" feature: an agent is a stateless agent, so an ad-hoc
  * request is just that agent answering one inline prompt — there is no
- * `.kody/capabilities/<slug>/`, no cadence, and nothing to persist.
+ * `.kody-engine/definitions/capabilities/<slug>/`, no cadence, and nothing to persist.
  *
  * Message resolution (production vs. CLI):
  *   1. The dispatching `issue_comment` body (GITHUB_EVENT_PATH), with the
@@ -23,15 +23,16 @@
  *   ctx.data.thread         discussion number to reply into, or ""
  *
  * Script args (via `with:`):
- *   agentsDir    optional — default ".kody/agents"
+ *   agentsDir    optional — default ".kody-engine/definitions/agents"
  */
 
 import * as fs from "node:fs"
 import { resolveAgentFile } from "../agents.js"
+import { agentsRoot } from "../definition-paths.js"
 import type { PreflightScript } from "../implementations/types.js"
 
 export const loadAgentAdhoc: PreflightScript = async (ctx, _profile, args) => {
-  const agentsDir = String(args?.agentsDir ?? ".kody/agents")
+  const agentsDir = String(args?.agentsDir ?? agentsRoot(ctx.cwd))
   const agentSlug = String(ctx.args.agent ?? "").trim()
   if (!agentSlug) {
     throw new Error("loadAgentAdhoc: ctx.args.agent must be a non-empty slug")

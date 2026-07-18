@@ -1,5 +1,9 @@
 import type { WorkflowRunState } from "./implementations/types.js"
-import { readStateText, type StateRepoConfig, upsertStateText } from "./stateRepo.js"
+import { createStateBackendFromEnv } from "./state-backend.js"
+
+interface WorkflowBackendConfig {
+  github?: { owner?: string; repo?: string }
+}
 
 const SAFE_ID = /^[a-z0-9][a-z0-9_-]{0,79}$/
 
@@ -55,34 +59,37 @@ export function parseWorkflowRunState(raw: unknown): WorkflowRunState | null {
   }
 }
 
-export function readWorkflowRunState(
-  config: StateRepoConfig,
-  cwd: string | undefined,
+export async function readWorkflowRunState(
+  config: WorkflowBackendConfig,
+  _cwd: string | undefined,
   workflowId: string,
   runId: string,
-): WorkflowRunState | null {
-  const file = readStateText(config, cwd, workflowRunStatePath(workflowId, runId))
-  if (!file) return null
-  try {
-    return parseWorkflowRunState(JSON.parse(file.content))
-  } catch {
-    return null
-  }
+): Promise<WorkflowRunState | null> {
+  const tenantId = runtimeTenant(config)
+  const row = await createStateBackendFromEnv().getWorkflowRun(tenantId, workflowId, runId)
+  return row ? parseWorkflowRunState(row.state) : null
 }
 
-export function writeWorkflowRunState(
-  config: StateRepoConfig,
-  cwd: string | undefined,
+export async function writeWorkflowRunState(
+  config: WorkflowBackendConfig,
+  _cwd: string | undefined,
   workflowId: string,
   runId: string,
   state: WorkflowRunState,
-): void {
-  const path = workflowRunStatePath(workflowId, runId)
-  upsertStateText(
-    config,
-    cwd,
-    path,
-    `${JSON.stringify(state, null, 2)}\n`,
-    `chore(workflows): update ${workflowId} run ${runId}`,
+): Promise<void> {
+  workflowRunStatePath(workflowId, runId)
+  await createStateBackendFromEnv().saveWorkflowRun(
+    runtimeTenant(config),
+    workflowId,
+    runId,
+    state,
+    new Date().toISOString(),
   )
+}
+
+function runtimeTenant(config: WorkflowBackendConfig): string {
+  if (config.github?.owner && config.github.repo) return `${config.github.owner}/${config.github.repo}`
+  const tenantId = process.env.GITHUB_REPOSITORY?.trim()
+  if (!tenantId) throw new Error("Repository identity is required for workflow run state")
+  return tenantId
 }

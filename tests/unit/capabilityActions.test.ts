@@ -9,9 +9,9 @@ let root: string
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-actions-"))
-  fs.mkdirSync(path.join(root, ".kody", "capabilities", "impl"), { recursive: true })
+  fs.mkdirSync(path.join(root, ".kody-engine", "definitions", "capabilities", "impl"), { recursive: true })
   fs.writeFileSync(
-    path.join(root, ".kody", "capabilities", "impl", "profile.json"),
+    path.join(root, ".kody-engine", "definitions", "capabilities", "impl", "profile.json"),
     JSON.stringify({
       name: "impl",
       role: "utility",
@@ -28,7 +28,7 @@ afterEach(() => {
 })
 
 function writeFolderCapability(slug: string, profile: Record<string, unknown>): void {
-  const dir = path.join(root, ".kody", "capabilities", slug)
+  const dir = path.join(root, ".kody-engine", "definitions", "capabilities", slug)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
   fs.writeFileSync(path.join(dir, "capability.md"), `# ${slug}\n`)
@@ -105,9 +105,9 @@ describe("capability actions", () => {
 
   it("ignores legacy single-file markdown capabilities", () => {
     process.chdir(root)
-    fs.mkdirSync(path.join(root, ".kody", "capabilities"), { recursive: true })
+    fs.mkdirSync(path.join(root, ".kody-engine", "definitions", "capabilities"), { recursive: true })
     fs.writeFileSync(
-      path.join(root, ".kody", "capabilities", "legacy.md"),
+      path.join(root, ".kody-engine", "definitions", "capabilities", "legacy.md"),
       "---\naction: legacy\nimplementation: impl\nagent: kody\n---\n# Legacy\n",
     )
 
@@ -163,9 +163,9 @@ describe("capability actions", () => {
   })
 
   it("lists built-in public actions from engine capability definitions", () => {
-    process.env.KODY_COMPANY_STORE = "off"
+    const emptyDefinitions = fs.mkdtempSync(path.join(os.tmpdir(), "kody-empty-definitions-"))
     try {
-      const actions = listCapabilityActions().map((d) => d.action)
+      const actions = listCapabilityActions(emptyDefinitions).map((d) => d.action)
       expect(actions).toContain("run")
       expect(actions).not.toContain("agent-factory")
       expect(actions).not.toContain("agent-creator")
@@ -174,7 +174,7 @@ describe("capability actions", () => {
       expect(actions).not.toContain("workflow-creator")
       expect(actions).not.toContain("capability-creator")
     } finally {
-      delete process.env.KODY_COMPANY_STORE
+      fs.rmSync(emptyDefinitions, { recursive: true, force: true })
     }
   })
 })

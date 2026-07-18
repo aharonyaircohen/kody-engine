@@ -74,7 +74,7 @@ If a prior-art block is present above, READ THE DIFFS — those are failed or su
 - **No speculative refactors.** Stay inside the issue's scope. Do not rename variables, retype function signatures, restructure modules, reorder imports, reformat unchanged lines, or "clean up" code adjacent to the change unless that cleanup is *required* by the change. Scope drift in your diff is a hard failure even if the change works — reviewers can't tell what was intentional. If you find a real adjacent bug while working, mention it in `PR_SUMMARY` (without fixing it) so a follow-up issue can be opened.
 - Do NOT run **any** `git` or `gh` commands. The wrapper handles all git/gh operations. If a quality gate fails, that's the failure — do not investigate it via git.
 - Stay on the current branch (`{{branch}}`). It is already checked out for you.
-- Do NOT modify files under: `.kody/`, `.kody-engine/`, `.kody-lean/`, `.kody/`, `node_modules/`, `dist/`, `build/`, `.env`, or any `*.log`.
+- Do NOT modify files under: `.kody-engine/`, `.kody-lean/`, `node_modules/`, `dist/`, `build/`, `.env`, or any `*.log`.
 - Do NOT post issue comments — the wrapper handles that.
 - Pre-existing quality-gate failures: assume they are NOT yours unless your edits touched related code.
 - Keep the plan and reasoning concise. Long monologues waste turns.

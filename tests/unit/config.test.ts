@@ -107,37 +107,6 @@ describe("config: loadConfig", () => {
     expect(cfg.github.owner).toBe("o")
     expect(cfg.agent.model).toBe("minimax/m")
     expect(cfg.git.defaultBranch).toBe("main")
-    expect(cfg.state).toEqual({ repo: "https://github.com/o/kody-state", path: "r", branch: "main" })
-  })
-
-  it("accepts full GitHub URL for state repo", () => {
-    const dir = tmpDir()
-    writeConfig(dir, {
-      github: { owner: "o", repo: "r" },
-      agent: { model: "minimax/m" },
-      state: { repo: "https://github.com/o/kody-state", path: "r" },
-    })
-    expect(loadConfig(dir).state).toEqual({ repo: "https://github.com/o/kody-state", path: "r", branch: "main" })
-  })
-
-  it("keeps legacy owner/repo state repo references readable", () => {
-    const dir = tmpDir()
-    writeConfig(dir, {
-      github: { owner: "o", repo: "r" },
-      agent: { model: "minimax/m" },
-      state: { repo: "o/kody-state", path: "r" },
-    })
-    expect(loadConfig(dir).state).toEqual({ repo: "o/kody-state", path: "r", branch: "main" })
-  })
-
-  it("loads configured state repo branch", () => {
-    const dir = tmpDir()
-    writeConfig(dir, {
-      github: { owner: "o", repo: "r" },
-      agent: { model: "minimax/m" },
-      state: { repo: "o/kody-state", path: "r", branch: "state-main" },
-    })
-    expect(loadConfig(dir).state).toEqual({ repo: "o/kody-state", path: "r", branch: "state-main" })
   })
 
   it("parses scheduled goal preferred runtime", () => {
@@ -246,16 +215,6 @@ describe("config: loadConfig", () => {
     })
     const cfg = loadConfig(dir)
     expect(cfg.quality).toEqual({ typecheck: "tc", testUnit: "tu", lint: "ln", format: "" })
-  })
-
-  it("rejects local-file job state storage in kody.config.json", () => {
-    const dir = tmpDir()
-    writeConfig(dir, {
-      github: { owner: "o", repo: "r" },
-      agent: { model: "m/x" },
-      jobs: { stateBackend: "local-file" },
-    })
-    expect(() => loadConfig(dir)).toThrow(/local-file is not a supported durable storage mode/)
   })
 
   it("preserves string goal activations", () => {

@@ -1,5 +1,5 @@
 /**
- * Preflight: read the task's state repo file into ctx.data.taskState.
+ * Preflight: read the task's backend file into ctx.data.taskState.
  * Returns emptyState() if no Kody task state file exists yet.
  *
  * Must run AFTER the mode flow (runFlow/fixFlow/...) so that

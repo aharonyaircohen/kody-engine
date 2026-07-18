@@ -79,7 +79,7 @@ export function withEscapedKeys(client: ConvexHttpClient, serviceKey = process.e
 /**
  * Client factory for the engine runner. Returns null when CONVEX_URL is not
  * configured (Actions secrets may not be set yet) — callers fall back to the
- * legacy state-repo JSONL path.
+ * legacy backend JSONL path.
  */
 export function createConvexClientFromEnv(env: NodeJS.ProcessEnv = process.env): ConvexHttpClient | null {
   const url = env.CONVEX_URL?.trim()

@@ -114,7 +114,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
     // assumption it owns a clean tree (legacy orchestrator gave each child
     // a fresh `actions/checkout`). When children share one process, an
     // earlier child's side effects (engine cache writes, generated files,
-    // .kody/ artifacts) can leave tracked-file modifications behind that
+    // runtime artifacts can leave tracked-file modifications behind that
     // would otherwise interfere with the next child's branch operations.
     // Surfaced on A-Guy issue #1440: plan succeeded, run started on a
     // dirty tree — a hard reset is a deterministic recovery. Untracked

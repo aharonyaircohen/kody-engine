@@ -1,5 +1,5 @@
 /**
- * Preflight: load goal state from the configured Kody state repo into
+ * Preflight: load goal state from the configured Kody backend into
  * `ctx.data.goal` for goal-manager scripts.
  */
 
@@ -7,7 +7,6 @@ import type { KodyConfig } from "../config.js"
 import { type GoalState } from "../goal/state.js"
 import { fetchGoalStateAsync } from "../goal/stateStore.js"
 import type { PreflightScript } from "../implementations/types.js"
-import { resolveStateRepoConfig } from "../stateRepo.js"
 
 const DEFAULT_RETRY_DELAYS_MS = [250, 750, 1500, 2500]
 
@@ -60,10 +59,7 @@ export const loadGoalState: PreflightScript = async (ctx) => {
   try {
     const state = await fetchGoalStateWithRetry(ctx.config, goalId, ctx.cwd)
     if (!state) {
-      const stateTarget = resolveStateRepoConfig(ctx.config)
-      process.stdout.write(
-        `[goal-manager] no goal state for ${goalId} in ${stateTarget.repo}/${stateTarget.path}; nothing to tick\n`,
-      )
+      process.stdout.write(`[goal-manager] no backend goal state for ${goalId}; nothing to tick\n`)
       ctx.skipAgent = true
       ctx.output.exitCode = 0
       ctx.output.reason = "no goal state to tick"

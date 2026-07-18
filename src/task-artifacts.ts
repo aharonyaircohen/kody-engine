@@ -1,7 +1,7 @@
 /**
  * Per-task artifacts: at the end of every task (issue/agent mode and
  * chat mode alike), the agent that ran the task writes four local temp files.
- * The engine then copies them into the configured Kody state repo at
+ * The engine then copies them into the configured Kody backend at
  * `tasks/<taskId>/`. These are knowledge attached to the task itself —
  * separate from the long-lived memory under `memory/`.
  *
@@ -26,7 +26,10 @@ import path from "node:path"
 import posixPath from "node:path/posix"
 import { runtimeStatePath } from "./runtimePaths.js"
 import { createStateBackendFromEnv } from "./state-backend.js"
-import { type StateRepoConfig, upsertStateText } from "./stateRepo.js"
+
+interface RuntimeTenantConfig {
+  github?: { owner?: string; repo?: string }
+}
 
 export const TASK_ARTIFACT_FILES = ["context.json", "memory-recs.json", "followups.json", "handoff-notes.md"] as const
 
@@ -62,24 +65,25 @@ export function initializeTaskArtifacts(
 ): void {
   const startedAt = new Date().toISOString()
   const defaults: Record<TaskArtifactFile, string> = {
-    "context.json": JSON.stringify(
-      {
-        taskId: artifacts.taskId,
-        taskType: metadata.taskType,
-        target: metadata.target ?? artifacts.taskId,
-        outcome: "partial",
-        exitCode: null,
-        reason: "Baseline created; agent details not provided",
-        prUrl: null,
-        runUrl: process.env.GITHUB_RUN_URL ?? null,
-        filesTouched: [],
-        sessionLog: null,
-        startedAt,
-        finishedAt: null,
-      },
-      null,
-      2,
-    ) + "\n",
+    "context.json":
+      JSON.stringify(
+        {
+          taskId: artifacts.taskId,
+          taskType: metadata.taskType,
+          target: metadata.target ?? artifacts.taskId,
+          outcome: "partial",
+          exitCode: null,
+          reason: "Baseline created; agent details not provided",
+          prUrl: null,
+          runUrl: process.env.GITHUB_RUN_URL ?? null,
+          filesTouched: [],
+          sessionLog: null,
+          startedAt,
+          finishedAt: null,
+        },
+        null,
+        2,
+      ) + "\n",
     "memory-recs.json": "[]\n",
     "followups.json": "[]\n",
     "handoff-notes.md": "Baseline handoff: the agent did not provide additional notes.\n",
@@ -113,15 +117,21 @@ export function taskArtifactStatePath(taskId: string, file: TaskArtifactFile): s
 }
 
 export async function persistTaskArtifactsToState(
-  config: StateRepoConfig,
-  cwd: string,
+  config: RuntimeTenantConfig,
+  _cwd: string,
   artifacts: TaskArtifactPaths,
 ): Promise<void> {
-  const tenantId = config.github?.owner && config.github.repo
-    ? `${config.github.owner}/${config.github.repo}`
-    : process.env.GITHUB_REPOSITORY?.trim()
-  if (process.env.GITHUB_ACTIONS === "true" && (!process.env.CONVEX_URL || !process.env.KODY_SERVICE_KEY || !tenantId)) {
-    throw new Error("Convex artifact backend is required in GitHub Actions (CONVEX_URL, KODY_SERVICE_KEY, and repository identity)")
+  const tenantId =
+    config.github?.owner && config.github.repo
+      ? `${config.github.owner}/${config.github.repo}`
+      : process.env.GITHUB_REPOSITORY?.trim()
+  if (
+    process.env.GITHUB_ACTIONS === "true" &&
+    (!process.env.CONVEX_URL || !process.env.KODY_SERVICE_KEY || !tenantId)
+  ) {
+    throw new Error(
+      "Convex artifact backend is required in GitHub Actions (CONVEX_URL, KODY_SERVICE_KEY, and repository identity)",
+    )
   }
   if (process.env.CONVEX_URL && process.env.KODY_SERVICE_KEY && tenantId) {
     const backend = createStateBackendFromEnv()
@@ -137,7 +147,9 @@ export async function persistTaskArtifactsToState(
         try {
           doc = JSON.parse(content)
         } catch (err) {
-          throw new Error(`task artifact ${file} is not valid JSON: ${err instanceof Error ? err.message : String(err)}`)
+          throw new Error(
+            `task artifact ${file} is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
+          )
         }
       }
       await backend.save(tenantId, artifacts.taskKey ?? artifacts.taskId, kind, doc)
@@ -145,20 +157,8 @@ export async function persistTaskArtifactsToState(
     return
   }
 
-  for (const file of TASK_ARTIFACT_FILES) {
-    const full = path.join(artifacts.absDir, file)
-    if (!fs.existsSync(full)) continue
-    const stat = fs.statSync(full)
-    if (!stat.isFile() || stat.size === 0) continue
-    const content = fs.readFileSync(full, "utf-8")
-    upsertStateText(
-      config,
-      cwd,
-      taskArtifactStatePath(artifacts.taskId, file),
-      content,
-      `task artifacts: ${artifacts.taskId}`,
-    )
-  }
+  // Local runs without a configured backend retain only the engine-owned
+  // scratch files. Persistent runtime state never falls back to GitHub.
 }
 
 /**
@@ -196,7 +196,7 @@ export function taskArtifactsPromptAddendum(opts: {
     "   ```",
     "",
     `2. **memory-recs.json** — array of sticky-note candidates worth promoting`,
-    `   to long-term state-repo \`memory/\`. Each item:`,
+    `   to long-term backend \`memory/\`. Each item:`,
     "   ```json",
     "   {",
     `     "type": "preference" | "decision" | "lesson",`,

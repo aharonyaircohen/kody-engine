@@ -27,14 +27,14 @@ export interface InboxOptions {
   pollIntervalMs?: number
   /** Optional logger; defaults to stderr. */
   logger?: { warn: (msg: string) => void; debug?: (msg: string) => void }
-  /** Optional state-repo sync hook; when present it replaces git pull. */
+  /** Optional backend sync hook; when present it replaces git pull. */
   sync?: () => void
   /** Test seam: skip the actual git pull. */
   skipPull?: boolean
   /**
    * Transcript reader override (Convex-backed store). When present the
    * inbox polls it directly and skips the git sync entirely — the dashboard
-   * writes user turns to Convex, so no state-repo pull is needed.
+   * writes user turns to Convex, so no backend pull is needed.
    */
   readTurns?: () => Promise<ChatTurn[]>
 }

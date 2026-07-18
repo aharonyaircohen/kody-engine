@@ -9,7 +9,9 @@ let cwd: string
 
 beforeEach(() => {
   cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-agent-"))
-  fs.mkdirSync(path.join(cwd, ".kody", "agents"), { recursive: true })
+  fs.mkdirSync(path.join(cwd, ".kody-engine", "definitions", "agents"), {
+    recursive: true,
+  })
 })
 
 afterEach(() => {
@@ -17,7 +19,7 @@ afterEach(() => {
 })
 
 function writeAgent(slug: string, contents: string): void {
-  fs.writeFileSync(path.join(cwd, ".kody", "agents", `${slug}.md`), contents)
+  fs.writeFileSync(path.join(cwd, ".kody-engine", "definitions", "agents", `${slug}.md`), contents)
 }
 
 describe("loadAgentIdentity", () => {
@@ -49,8 +51,8 @@ describe("loadAgentIdentity", () => {
     expect(() => loadAgentIdentity(cwd, "   ")).toThrow(/empty agent slug/)
   })
 
-  it("resolves kody from the configured company store when no consumer file exists", () => {
-    expect(loadAgentIdentity(cwd, "kody")).toContain("Kody")
+  it("does not fall through when the hydrated agent is missing", () => {
+    expect(() => loadAgentIdentity(cwd, "kody")).toThrow(/does not exist/)
   })
 
   it("lets a consumer file override a store agent", () => {

@@ -7,12 +7,12 @@
  * turn longer than the Vercel ceiling was lost. Now a turn runs to completion
  * server-side regardless of client connection; every event is tagged with a
  * per-chat monotonic `seq` and appended to a local cache that brain-serve syncs
- * to `brain-events/<chatId>.jsonl` in the configured state repo. A disconnected
+ * to `brain-events/<chatId>.jsonl` in the configured backend. A disconnected
  * client reconnects with `?since=<seq>` (GET /chats/:id/stream) and we replay
  * the gap from the log, then live-tail the still-running turn until its
  * terminal event.
  *
- * The state repo is the source of truth for replay; the in-memory registry only
+ * The backend is the source of truth for replay; the in-memory registry only
  * accelerates live fan-out. If the process restarts mid-turn the in-memory turn
  * is gone but the synced log survives — a resume then replays what was
  * persisted and, finding no terminal event and no live turn, reports an honest

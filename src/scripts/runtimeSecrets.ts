@@ -1,6 +1,6 @@
+import { readRepoSecret } from "../backendVault.js"
 import type { Context } from "../implementations/types.js"
 import { masterKeyBytes } from "../pool/keys.js"
-import { readRepoSecret } from "../stateRepoVault.js"
 
 export type RuntimeSecretSource = "vault" | "env" | "missing"
 
@@ -8,10 +8,6 @@ export interface RuntimeSecretResult {
   value: string
   source: RuntimeSecretSource
   warning?: string
-}
-
-function tokenFromEnv(env: NodeJS.ProcessEnv): string {
-  return (env.KODY_TOKEN ?? env.GH_TOKEN ?? env.GITHUB_TOKEN ?? env.GH_PAT ?? "").trim()
 }
 
 function envSecret(name: string, env: NodeJS.ProcessEnv): RuntimeSecretResult {
@@ -30,13 +26,11 @@ export async function resolveRuntimeSecret(
   ctx: Pick<Context, "config">,
   opts: {
     env?: NodeJS.ProcessEnv
-    fetchImpl?: typeof fetch
   } = {},
 ): Promise<RuntimeSecretResult> {
   const env = opts.env ?? process.env
   const masterRaw = env.KODY_MASTER_KEY?.trim() ?? ""
-  const githubToken = tokenFromEnv(env)
-  if (!masterRaw || !githubToken) return envSecret(name, env)
+  if (!masterRaw || !env.CONVEX_URL?.trim() || !env.KODY_SERVICE_KEY?.trim()) return envSecret(name, env)
 
   try {
     const masterKey = masterKeyBytes(masterRaw)
@@ -47,9 +41,7 @@ export async function resolveRuntimeSecret(
       owner: ctx.config.github.owner,
       repo: ctx.config.github.repo,
       name,
-      githubToken,
       masterKey,
-      fetchImpl: opts.fetchImpl,
     })
     if (value) return { value, source: "vault" }
   } catch (err) {

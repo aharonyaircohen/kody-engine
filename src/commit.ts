@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process"
 import { pushWithRetry } from "./pushWithRetry.js"
 
 export const FORBIDDEN_PATH_PREFIXES = [
-  ".kody/",
+  ".kody/", // legacy consumer state must never be reintroduced or committed
   ".kody-engine/",
   ".kody-lean/", // back-compat: stale runtime dir from kody-lean v0.5.x
   ".codegraph/", // codegraph repo-map tool's runtime scratch (daemon.pid, sock,
@@ -14,9 +14,7 @@ export const FORBIDDEN_PATH_PREFIXES = [
   "build/",
 ]
 
-// Durable Kody state belongs in the configured external state repo. Any legacy
-// `.kody/*` files in the working tree must never be staged back into the
-// consumer repo.
+// Durable Kody state belongs in the configured backend.
 const ALLOWED_PATH_PREFIXES: string[] = []
 
 // `kody.config.json` is the engine's trust anchor: it declares the model,
@@ -233,7 +231,7 @@ export function commitAndPush(branch: string, agentMessage: string, cwd?: string
   // Unstage any forbidden paths an earlier postflight may have staged. In
   // resolve mode `stageMergeConflicts` runs `git add -A`, which stages
   // EVERYTHING — including `.env`, `kody.config.json` (the trust anchor), and
-  // runtime `.kody/` state. The per-file `git add` of allowedFiles below only
+  // engine runtime state. The per-file `git add` of allowedFiles below only
   // ADDS; it never un-stages, so without this reset the forbidden-path filter
   // is silently bypassed and those files land in the commit. Reset is per-file
   // (leaves MERGE_HEAD and resolved-file staging intact) and a harmless no-op

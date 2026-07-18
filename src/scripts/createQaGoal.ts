@@ -11,7 +11,7 @@
  *      JSON (creating the manifest issue if absent). The dashboard reads
  *      this to render the goal in its UI.
  *   4. Write `<statePath>/todos/<id>.json` (`state: "active"`) in the
- *      configured state repo.
+ *      configured backend.
  *   5. Open N task issues — one per finding — each labelled
  *      `goal:<id>`, `severity:P{n}`, `kody:qa-finding`. The issue body
  *      is rendered from the structured fields.
@@ -491,7 +491,7 @@ export const createQaGoal: PostflightScript = async (ctx, _profile, agentResult:
 /**
  * Turn a QA report (markdown + `<!-- KODY_QA_REPORT_JSON ... -->`) into a kody
  * goal: append to the goals manifest, open one fix-ticket per finding, and
- * write `<statePath>/todos/<id>.json` in the state repo so goal-scheduler ticks
+ * write `<statePath>/todos/<id>.json` in the backend so goal-scheduler ticks
  * it. This is the operator-gated half of QA — invoked by the standalone
  * qa-engineer path and by the `qa-goal` verb (which approve posts). PASS /
  * no-findings reports open a single record issue instead.
@@ -631,7 +631,7 @@ export async function promoteReportToGoal(
     }
   }
 
-  // Persist the activated goal's state to the configured state repo so
+  // Persist the activated goal's state to the configured backend so
   // goal-scheduler picks it up without consumer-branch commit churn.
   const now = nowIso()
   const managedGoal = buildQaManagedGoal(goalId, verdict, opened.length, failed.length)
@@ -645,7 +645,7 @@ export async function promoteReportToGoal(
     await putGoalStateAsync(ctx.config, goalId, goalState, `chore(goals): activate ${goalId}`, ctx.cwd)
   } catch (err) {
     process.stderr.write(
-      `[createQaGoal] failed to persist goal state to state repo: ${err instanceof Error ? err.message : String(err)}\n` +
+      `[createQaGoal] failed to persist goal state to backend: ${err instanceof Error ? err.message : String(err)}\n` +
         `[createQaGoal]   goal-scheduler will not see ${goalId} until this succeeds.\n`,
     )
   }

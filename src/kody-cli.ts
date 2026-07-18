@@ -2,7 +2,6 @@ import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { mintAppInstallationToken, readAppCreds } from "./app-auth.js"
-import { applyCompanyStoreRuntimeConfig } from "./companyStore.js"
 import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
 import { autoDispatch, autoDispatchTyped, type DispatchResult, dispatchScheduledWatches } from "./dispatch.js"
 import { reactToTriggerComment } from "./gha.js"
@@ -394,7 +393,7 @@ export async function runCi(argv: string[]): Promise<number> {
   let earlyConfigError: Error | undefined
   try {
     earlyConfig = loadConfig(cwd)
-    hydrateStateWorkspace(earlyConfig, cwd)
+    await hydrateStateWorkspace(earlyConfig, cwd)
   } catch (err) {
     earlyConfigError = err instanceof Error ? err : new Error(String(err))
   }
@@ -422,7 +421,6 @@ export async function runCi(argv: string[]): Promise<number> {
     return 64
   }
   if (parsedRunRequest && "request" in parsedRunRequest) {
-    applyCompanyStoreRuntimeConfig(parsedRunRequest.request.input)
   }
   if (!args.issueNumber && !autoFallback && parsedRunRequest && "request" in parsedRunRequest) {
     const route = routeRunRequest(parsedRunRequest.request)
@@ -459,7 +457,6 @@ export async function runCi(argv: string[]): Promise<number> {
     try {
       const evt = JSON.parse(fs.readFileSync(dispatchEventPath, "utf-8"))
       const inputs = objectValue(evt.inputs)
-      applyCompanyStoreRuntimeConfig(inputs)
       const issueInput = parseInt(String(inputs?.issue_number ?? ""), 10)
       const sessionInput = String(inputs?.sessionId ?? "")
       const capabilityInput = String(inputs?.capability ?? "").trim()

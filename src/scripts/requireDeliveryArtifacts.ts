@@ -35,7 +35,12 @@ export const requireDeliveryArtifacts: PostflightScript = async (ctx) => {
   // Delivery must remain reviewable even when the model forgets the markers.
   // Fill deterministic defaults and retain a warning for observability instead
   // of converting an otherwise successful run into RUN_FAILED.
-  const target = typeof ctx.args.issue === "number" ? `issue #${ctx.args.issue}` : typeof ctx.args.pr === "number" ? `PR #${ctx.args.pr}` : "task"
+  const target =
+    typeof ctx.args.issue === "number"
+      ? `issue #${ctx.args.issue}`
+      : typeof ctx.args.pr === "number"
+        ? `PR #${ctx.args.pr}`
+        : "task"
   if (!commitMessage) ctx.data.commitMessage = `chore: update ${target}`
   if (!prSummary) {
     const fallback = fallbackSummary(String(ctx.data.agentFinalText ?? ""))

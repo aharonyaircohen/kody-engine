@@ -42,6 +42,9 @@ vi.mock("../../src/issue.js", async (orig) => {
   const actual = await orig<typeof import("../../src/issue.js")>()
   return { ...actual, gh: stateApi.gh }
 })
+vi.mock("../../src/state-backend.js", () => ({
+  createStateBackendFromEnv: () => ({ save: vi.fn(async () => undefined) }),
+}))
 
 import type { KodyConfig } from "../../src/config.js"
 import { runImplementationChain } from "../../src/executor.js"
@@ -51,12 +54,11 @@ const config: KodyConfig = {
   quality: { typecheck: "", lint: "", testUnit: "", format: "" },
   git: { defaultBranch: "main" },
   github: { owner: "o", repo: "r" },
-  state: { repo: "o/kody-state", path: "r" },
   agent: { model: "claude/claude-haiku-4-5-20251001" },
 }
 
 function writeProfile(root: string, name: string, preflight: unknown[], postflight: unknown[] = []): void {
-  const dir = path.join(root, ".kody", "capabilities", name)
+  const dir = path.join(root, ".kody-engine", "definitions", "capabilities", name)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(
     path.join(dir, "profile.json"),

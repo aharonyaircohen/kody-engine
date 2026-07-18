@@ -16,8 +16,8 @@ The engine has two layers only:
 1. **Generic runner**: the engine loads a profile,
    validates args/tools, runs preflight scripts, optionally runs the agent, then
    runs postflight scripts. It knows no product behavior.
-2. **Capability profiles**: shared capabilities and agents live in `kody-store`
-   under `.kody/`. Profiles declare inputs, tools, Claude Code features, CLI
+2. **Capability profiles**: shared capabilities and agents come from backend
+   definitions or `kody-store`. Profiles declare inputs, tools, Claude Code features, CLI
    contracts, scripts, and optional `runWhen` gates. `prompt.md` sits beside a
    profile when an agent runs.
 
@@ -45,7 +45,7 @@ Keep parent ownership out of reusable capabilities.
   invariants, naming, dispatch safety, tests, release rules, forbidden actions.
 - [docs/engine-company.md](docs/engine-company.md): operating model for the
   repo-local company layer that maintains this engine.
-- `.kody/context/*.md`: background only: company mission, vocabulary, strategy,
+- `backend context/*.md`: background only: company mission, vocabulary, strategy,
   product notes, decisions. Do not rely on it for hard rules unless the current
   capability call explicitly loads it.
 
@@ -56,20 +56,20 @@ different terms, treat it as stale.
 
 | Term | Meaning |
 | --- | --- |
-| `agent` | Who runs: reusable identity in project/store `.kody/agents/<slug>.md`. |
-| `capability` | Reusable ability in `.kody/capabilities/<slug>/` with `profile.json` metadata and `capability.md` prose. |
+| `agent` | Who runs: reusable identity in project/store `backend agent definition`. |
+| `capability` | Reusable ability in `backend capability definition` with `profile.json` metadata and `capability.md` prose. |
 | `capability call` | One concrete run of a capability with inputs, `targetWorkspace`, and `delivery`. |
 | `workflow` | Ordered capability calls for one run. |
 | `task` | One GitHub issue/PR plus jobs, artifacts, recent history, rolled-up state. |
 | `job` | Required work on a task; points to one capability call and records runs. |
 | `run` | One execution attempt for a job. Retries add runs under the same job. |
-| `goal` | Related task list/state under `.kody/goals/<id>/state.json`; `goal-tick` advances stacked PRs. |
+| `goal` | Related task list/state under `backend managed goal`; `goal-tick` advances stacked PRs. |
 | `loop` | Wake rule for a goal, workflow, or capability. |
 | `manager` | Legacy prose label for progress ownership. Do not model it as a capability. |
 | `mission` | Dead term. Do not use it. |
 
 Naming note: consumer-facing paths and prompt tokens use **capability/agent**:
-`.kody/capabilities/<slug>/`, `capability-scheduler`, `capability-tick`,
+`backend capability definition`, `capability-scheduler`, `capability-tick`,
 `{{capabilityReference}}`, `{{capabilitySlug}}`, `{{agentSlug}}`,
 `{{capabilitySchedule}}`. Older `job` identifiers remain only
 where renaming would break public contracts: `Job` in [src/job.ts](src/job.ts),
@@ -80,7 +80,7 @@ not the broad `job` token.
 ## Capability Calls
 
 Commands are capability calls. Public commands are discovered from project
-`.kody/capabilities/`, the configured company store, then minimal engine
+`backend capability definitions`, the configured company store, then minimal engine
 built-ins. The shared command catalog lives in `kody-store`.
 
 | Command | Input | Agent | Trigger / purpose |
@@ -137,7 +137,7 @@ the capability registry: `serve`, `pool-serve`, `runner-serve`, `brain-serve`,
 Capability folders:
 
 ```text
-.kody/capabilities/<slug>/
+backend capability definition
   profile.json   # every, agent, action, workflow, tools, tickScript, mentions, disabled, stage
   capability.md        # human-owned intent/prose
 ```
@@ -200,15 +200,14 @@ tests/{unit,int,e2e}
    scripts/shell. Enforced by [tests/unit/sharedScriptsInvariants.test.ts](tests/unit/sharedScriptsInvariants.test.ts).
 7. **Shared scripts do not import capability implementations.** `src/scripts/*.ts`
    may import only the shared type contract.
-8. **`.kody/` write allowlist.** Agents may write only allowed subtrees in
-   [src/commit.ts](src/commit.ts), currently `.kody/memory/` and `.kody/tasks/`.
-   Other `.kody/*` writes are blocked during `run`/`fix`/`resolve`. Watches that
+8. **Runtime write isolation.** Engine runtime and legacy state paths are
+   blocked by [src/commit.ts](src/commit.ts) during `run`/`fix`/`resolve`. Watches that
 open PRs must require `commitResult.pushed === true`, not only
 `hasCommitsAhead`.
 9. **Capability scripts read secrets from env only.** Repo vault secrets
-(`.kody/secrets.enc`) are decrypted by Kody runtime/dashboard/pool code and
+(`backend secret vault`) are decrypted by Kody runtime/dashboard/pool code and
 loaded into environment variables before capability calls run. Colocated
-shell scripts must not read or decrypt `.kody/secrets.enc` directly.
+shell scripts must not read or decrypt `backend secret vault` directly.
 
 ## Kody Clean Boundary
 
@@ -223,7 +222,7 @@ Hard constraints:
 
 ## Adding / Changing Capability Implementations
 
-1. Create `.kody/capabilities/<name>/` in `kody-store` for shared commands, or
+1. Create `backend capability definitions<name>/` in `kody-store` for shared commands, or
    in a consumer repo for repo-local commands. Add built-ins to the engine only
    for the minimal bootstrap/runtime surface.
 2. Add `profile.json`; pick `role` and `kind`; see
@@ -293,7 +292,7 @@ are informative rather than scary.
 
 ## New Session Checklist
 
-1. Read relevant `src/` code and the relevant store/project `.kody/capabilities/<name>/` profile.
+1. Read relevant `src/` code and the relevant store/project `backend capability definitions<name>/` profile.
 2. Classify the request: existing profile tweak, new profile, script change, or
    runner change. Most work is profiles/scripts.
 3. Run `pnpm typecheck && pnpm test && pnpm test:e2e` before commit.

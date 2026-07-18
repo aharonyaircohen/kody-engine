@@ -1,6 +1,5 @@
 /**
- * Read-only accessor for the dashboard-managed repo vault in the configured
- * Kody state repo.
+ * Read-only accessor for the dashboard-managed backend vault.
  *
  * The dashboard stores each repo's secrets as `secrets.enc`: a single
  * AES-256-GCM blob ("v1:<iv_b64>:<ct_b64>:<tag_b64>") of a JSON document
@@ -10,7 +9,7 @@
  */
 
 import { createDecipheriv, createHash } from "node:crypto"
-import { readGithubStateText } from "./stateRepoGithub.js"
+import { createStateBackendFromEnv } from "./state-backend.js"
 
 const VAULT_PATH = "secrets.enc"
 const CACHE_TTL_MS = 60_000
@@ -53,28 +52,27 @@ export function decryptVault(payload: string, masterKey: Buffer): string {
  * throws on a missing vault; throws only on decrypt/parse corruption.
  */
 async function readVaultSecrets(opts: {
-  githubToken: string
   masterKey: Buffer
   owner: string
   repo: string
-  fetchImpl?: typeof fetch
 }): Promise<Record<string, string>> {
   const key = cacheKey(opts.owner, opts.repo, opts.masterKey)
   const hit = cache.get(key)
   if (hit && hit.expiresAt > Date.now()) return hit.secrets
 
-  const file = await readGithubStateText({
-    owner: opts.owner,
-    repo: opts.repo,
-    filePath: VAULT_PATH,
-    githubToken: opts.githubToken,
-    fetchImpl: opts.fetchImpl,
-  })
-  if (!file) {
+  const record = await createStateBackendFromEnv().getRepoDoc(`${opts.owner}/${opts.repo}`, VAULT_PATH)
+  const raw = record?.doc
+  const ciphertext =
+    raw &&
+    typeof raw === "object" &&
+    !Array.isArray(raw) &&
+    typeof (raw as { ciphertext?: unknown }).ciphertext === "string"
+      ? (raw as { ciphertext: string }).ciphertext.trim()
+      : ""
+  if (!ciphertext) {
     cache.set(key, { secrets: {}, expiresAt: Date.now() + CACHE_TTL_MS })
     return {}
   }
-  const ciphertext = file.content.trim()
   const doc = JSON.parse(decryptVault(ciphertext, opts.masterKey)) as VaultDocument
   const flat: Record<string, string> = {}
   for (const [name, entry] of Object.entries(doc.secrets ?? {})) {
@@ -86,12 +84,10 @@ async function readVaultSecrets(opts: {
 
 /** Read a single secret from a repo's vault. null if absent. */
 export async function readRepoSecret(opts: {
-  githubToken: string
   masterKey: Buffer
   owner: string
   repo: string
   name: string
-  fetchImpl?: typeof fetch
 }): Promise<string | null> {
   const secrets = await readVaultSecrets(opts)
   const v = secrets[opts.name]
@@ -100,11 +96,9 @@ export async function readRepoSecret(opts: {
 
 /** Read all of a repo's vault secrets. */
 export async function readRepoSecrets(opts: {
-  githubToken: string
   masterKey: Buffer
   owner: string
   repo: string
-  fetchImpl?: typeof fetch
 }): Promise<Record<string, string>> {
   return readVaultSecrets(opts)
 }

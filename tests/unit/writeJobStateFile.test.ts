@@ -25,7 +25,7 @@ let tmp: string
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "write-job-state-"))
-  fs.mkdirSync(path.join(tmp, ".kody", "capabilities"), { recursive: true })
+  fs.mkdirSync(path.join(tmp, ".kody-engine", "definitions", "capabilities"), { recursive: true })
 })
 
 afterEach(() => {
@@ -38,7 +38,6 @@ function config(): KodyConfig {
     git: { defaultBranch: "main" },
     github: { owner: "o", repo: "r" },
     agent: { model: "anthropic/test" },
-    jobs: { stateBackend: "local-file" },
   }
 }
 
@@ -54,7 +53,7 @@ function ctxFor(slug: string, data: Record<string, unknown>): Context {
 
 function loadedFor(slug: string, state: StateEnvelope): LoadedJobState {
   return {
-    path: `.kody/capabilities/${slug}/state.json`,
+    path: `.kody-engine/definitions/capabilities/${slug}/state.json`,
     handle: null,
     state,
     created: false,
@@ -77,17 +76,17 @@ describe("writeJobStateFile: parse-error path", () => {
       data: { ledger: { "PR-1": "open", "PR-2": "merged" }, lastFiredAt: "2026-05-01T00:00:00Z" },
       done: false,
     }
-    const stateDir = path.join(tmp, ".kody", "capabilities", slug)
+    const stateDir = path.join(tmp, ".kody-engine", "definitions", "capabilities", slug)
     fs.mkdirSync(stateDir, { recursive: true })
     fs.writeFileSync(path.join(stateDir, "state.json"), JSON.stringify(prior, null, 2))
     const ctx = ctxFor(slug, {
       nextStateParseError: "missing `kody-job-next-state` block in agent output",
       jobState: loadedFor(slug, prior),
     })
-    await writeJobStateFile(ctx, PROFILE, null, { jobsDir: ".kody/capabilities" })
+    await writeJobStateFile(ctx, PROFILE, null, { jobsDir: ".kody-engine/definitions/capabilities" })
 
     const after = JSON.parse(
-      fs.readFileSync(path.join(tmp, ".kody", "capabilities", slug, "state.json"), "utf-8"),
+      fs.readFileSync(path.join(tmp, ".kody-engine", "definitions", "capabilities", slug, "state.json"), "utf-8"),
     ) as StateEnvelope
     // rev was bumped so the next tick sees a fresh state.
     expect(after.rev).toBe(4)
@@ -114,11 +113,11 @@ describe("writeJobStateFile: parse-error path", () => {
       nextStateParseError: "missing `kody-job-next-state` block in agent output",
       // no jobState: first-ever tick
     })
-    await writeJobStateFile(ctx, PROFILE, null, { jobsDir: ".kody/capabilities" })
+    await writeJobStateFile(ctx, PROFILE, null, { jobsDir: ".kody-engine/definitions/capabilities" })
 
     expect(ctx.output.exitCode).toBe(1)
     expect(ctx.output.reason).toMatch(/next-state parse failed/)
     // No state file was written (nothing to carry).
-    expect(fs.existsSync(path.join(tmp, ".kody", "capabilities", slug, "state.json"))).toBe(false)
+    expect(fs.existsSync(path.join(tmp, ".kody-engine", "definitions", "capabilities", slug, "state.json"))).toBe(false)
   })
 })

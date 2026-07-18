@@ -102,7 +102,6 @@ function makeCtx(): Context {
     cwd: "/tmp/fake-repo",
     config: {
       github: { owner: "o", repo: "r" },
-      state: { repo: "o/kody-state", path: "r" },
       git: { defaultBranch: "main" },
       quality: { typecheck: "tsc", testUnit: "vitest", lint: "eslint", format: "prettier" },
       agent: { model: "anthropic/claude-haiku-4-5-20251001" },

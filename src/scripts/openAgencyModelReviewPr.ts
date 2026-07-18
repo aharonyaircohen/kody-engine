@@ -1,6 +1,7 @@
+import { createHash } from "node:crypto"
 import type { Context, PostflightScript } from "../implementations/types.js"
 import { gh } from "../issue.js"
-import { normalizeStatePath, parseStateRepo, stateRepoPath } from "../stateRepo.js"
+import { createStateBackendFromEnv } from "../state-backend.js"
 
 interface AgencyModelFile {
   path: string
@@ -14,147 +15,104 @@ interface AgencyModelProposal {
   model?: unknown
 }
 
-interface GitRefResponse {
-  object?: {
-    sha?: string
-  }
-}
-
-interface GitCommitResponse {
-  tree?: {
-    sha?: string
-  }
-}
-
-interface GitShaResponse {
-  sha?: string
-}
-
-interface PullResponse {
-  html_url?: string
-  number?: number
-}
-
 export const openAgencyModelReviewPr: PostflightScript = async (ctx, profile, agentResult) => {
-  if (agentResult?.outcome !== "completed") {
-    throw new Error(`openAgencyModelReviewPr: agent did not complete: ${agentResult?.error ?? "unknown failure"}`)
+  if (agentResult?.outcome !== "completed" || ctx.data.agentDone !== true) {
+    throw new Error(`openAgencyModelReviewPr: agent did not complete successfully`)
   }
-  if (ctx.data.agentDone !== true) {
-    throw new Error("openAgencyModelReviewPr: agent did not produce a successful final result")
-  }
-  if (!ctx.config.state?.repo || !ctx.config.state?.path) {
-    throw new Error("openAgencyModelReviewPr: config.state.repo and config.state.path are required")
-  }
-
   const issueNumber = readIssueNumber(ctx)
   const sourceLabel = creatorSourceLabel(ctx, profile.name)
   const bundle = parseAgencyModelProposal(String(ctx.data.prSummary ?? ""))
-  const normalizedFiles = normalizeBundleFiles(ctx, bundle)
-  const stateRepo = parseStateRepo(ctx.config)
-  const baseBranch = "main"
-  const branch = buildStatePrBranchName(sourceLabel, issueNumber, bundle.title)
+  const files = normalizeBundleFiles(bundle)
+  const proposalId = buildProposalId(issueNumber, bundle, sourceLabel)
+  const tenantId = `${ctx.config.github.owner}/${ctx.config.github.repo}`
+  const proposal = {
+    schemaVersion: 1,
+    proposalId,
+    status: "pending-review",
+    title: bundle.title,
+    summary: bundle.summary,
+    source: { issueNumber, capability: sourceLabel },
+    files,
+    model: bundle.model,
+    createdAt: new Date().toISOString(),
+  }
 
-  if (isDryRun(ctx)) {
-    ctx.data.agencyModelReviewPr = {
-      dryRun: true,
-      repo: `${stateRepo.owner}/${stateRepo.repo}`,
-      branch,
-      base: baseBranch,
-      files: normalizedFiles.map((file) => file.targetPath),
+  if (!isDryRun(ctx)) {
+    await createStateBackendFromEnv().saveRepoDoc(tenantId, `definition-proposal:${proposalId}`, proposal)
+    gh(["issue", "comment", String(issueNumber), "--body-file", "-"], {
+      cwd: ctx.cwd,
+      input: renderIssueComment(proposalId, bundle, sourceLabel),
+    })
+  }
+
+  ctx.data.agencyModelProposal = proposal
+}
+
+export function parseAgencyModelProposal(raw: string): AgencyModelProposal {
+  const text = raw.trim()
+  const jsonText = (text.match(/^```(?:json)?\s*\n([\s\S]*?)\n```$/i)?.[1] ?? text).trim()
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(jsonText)
+  } catch (err) {
+    throw new Error(
+      `openAgencyModelReviewPr: PR_SUMMARY must be valid JSON: ${err instanceof Error ? err.message : String(err)}`,
+    )
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("openAgencyModelReviewPr: PR_SUMMARY must be a JSON object")
+  }
+  const value = parsed as Record<string, unknown>
+  const title = requiredString(value.title, "title")
+  const summary = requiredString(value.summary, "summary")
+  if (!Array.isArray(value.files) || value.files.length === 0) {
+    throw new Error("openAgencyModelReviewPr: files must be a non-empty array")
+  }
+  const files = value.files.map((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error(`openAgencyModelReviewPr: files[${index}] must be an object`)
     }
-    return
-  }
-
-  const baseRef = ghJson<GitRefResponse>(
-    ["api", `/repos/${stateRepo.owner}/${stateRepo.repo}/git/ref/heads/${baseBranch}`],
-    ctx.cwd,
-  )
-  const baseSha = requireString(
-    baseRef.object?.sha,
-    `state repo ${stateRepo.owner}/${stateRepo.repo} ${baseBranch} ref sha`,
-  )
-  const baseCommit = ghJson<GitCommitResponse>(
-    ["api", `/repos/${stateRepo.owner}/${stateRepo.repo}/git/commits/${baseSha}`],
-    ctx.cwd,
-  )
-  const baseTreeSha = requireString(
-    baseCommit.tree?.sha,
-    `state repo ${stateRepo.owner}/${stateRepo.repo} base tree sha`,
-  )
-
-  ghJson(["api", "--method", "POST", `/repos/${stateRepo.owner}/${stateRepo.repo}/git/refs`, "--input", "-"], ctx.cwd, {
-    ref: `refs/heads/${branch}`,
-    sha: baseSha,
+    const file = item as Record<string, unknown>
+    return {
+      path: requiredString(file.path, `files[${index}].path`),
+      content: stringValue(file.content, `files[${index}].content`),
+    }
   })
+  return { title, summary, files, model: value.model }
+}
 
-  const tree = ghJson<GitShaResponse>(
-    ["api", "--method", "POST", `/repos/${stateRepo.owner}/${stateRepo.repo}/git/trees`, "--input", "-"],
-    ctx.cwd,
-    {
-      base_tree: baseTreeSha,
-      tree: normalizedFiles.map((file) => ({
-        path: file.targetPath,
-        mode: "100644",
-        type: "blob",
-        content: file.content,
-      })),
-    },
-  )
-  const treeSha = requireString(tree.sha, "created tree sha")
-
-  const commit = ghJson<GitShaResponse>(
-    ["api", "--method", "POST", `/repos/${stateRepo.owner}/${stateRepo.repo}/git/commits`, "--input", "-"],
-    ctx.cwd,
-    {
-      message: `${sourceLabel}: ${bundle.title}`,
-      tree: treeSha,
-      parents: [baseSha],
-    },
-  )
-  const commitSha = requireString(commit.sha, "created commit sha")
-
-  ghJson(
-    [
-      "api",
-      "--method",
-      "PATCH",
-      `/repos/${stateRepo.owner}/${stateRepo.repo}/git/refs/heads/${branch}`,
-      "--input",
-      "-",
-    ],
-    ctx.cwd,
-    {
-      sha: commitSha,
-      force: false,
-    },
-  )
-
-  const pr = ghJson<PullResponse>(
-    ["api", "--method", "POST", `/repos/${stateRepo.owner}/${stateRepo.repo}/pulls`, "--input", "-"],
-    ctx.cwd,
-    {
-      title: `${sourceLabel}: ${bundle.title}`,
-      head: branch,
-      base: baseBranch,
-      body: renderPullRequestBody(ctx, bundle, normalizedFiles, sourceLabel),
-    },
-  )
-  const prUrl = requireString(pr.html_url, "created pull request url")
-
-  gh(["issue", "comment", String(issueNumber), "--body-file", "-"], {
-    cwd: ctx.cwd,
-    input: renderIssueComment(stateRepo.owner, stateRepo.repo, prUrl, bundle, sourceLabel),
+function normalizeBundleFiles(bundle: AgencyModelProposal): AgencyModelFile[] {
+  const seen = new Set<string>()
+  return bundle.files.map((file, index) => {
+    const path = file.path.replace(/^\/+/, "")
+    const parts = path.split("/")
+    if (
+      !path ||
+      file.path.startsWith("/") ||
+      file.path.includes("\\") ||
+      parts.some((part) => !part || part === "." || part === "..")
+    ) {
+      throw new Error(`openAgencyModelReviewPr: files[${index}].path is unsafe`)
+    }
+    if (
+      !/^(agents\/[^/]+\.md|capabilities\/[^/]+\/.+|goals\/(?:templates\/)?[^/]+\/.+|workflows\/[^/]+\.json)$/.test(
+        path,
+      )
+    ) {
+      throw new Error(`openAgencyModelReviewPr: files[${index}].path is not a supported definition path`)
+    }
+    if (seen.has(path)) throw new Error(`openAgencyModelReviewPr: duplicate generated file path: ${path}`)
+    seen.add(path)
+    return { path, content: file.content.replace(/\r\n?/g, "\n") }
   })
+}
 
-  ctx.data.agencyModelReviewPr = {
-    repo: `${stateRepo.owner}/${stateRepo.repo}`,
-    branch,
-    base: baseBranch,
-    url: prUrl,
-    number: pr.number,
-    files: normalizedFiles.map((file) => file.targetPath),
-  }
-  ctx.output.prUrl = prUrl
+function buildProposalId(issueNumber: number, bundle: AgencyModelProposal, sourceLabel: string): string {
+  const digest = createHash("sha256")
+    .update(JSON.stringify({ issueNumber, sourceLabel, title: bundle.title, files: normalizeBundleFiles(bundle) }))
+    .digest("hex")
+    .slice(0, 16)
+  return `issue-${issueNumber}-${digest}`
 }
 
 function isDryRun(ctx: Context): boolean {
@@ -164,186 +122,41 @@ function isDryRun(ctx: Context): boolean {
   return ["1", "true", "yes"].includes((process.env.KODY_DRY_RUN ?? "").trim().toLowerCase())
 }
 
-export function parseAgencyModelProposal(raw: string): AgencyModelProposal {
-  const jsonText = stripJsonFence(raw)
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(jsonText)
-  } catch (err) {
-    throw new Error(
-      `openAgencyModelReviewPr: PR_SUMMARY must be valid JSON: ${err instanceof Error ? err.message : String(err)}`,
-    )
-  }
-
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("openAgencyModelReviewPr: PR_SUMMARY must be a JSON object")
-  }
-  const value = parsed as Record<string, unknown>
-  const title = readRequiredJsonString(value.title, "title")
-  const summary = readRequiredJsonString(value.summary, "summary")
-  if (!Array.isArray(value.files) || value.files.length === 0) {
-    throw new Error("openAgencyModelReviewPr: files must be a non-empty array")
-  }
-
-  const files = value.files.map((item, index) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) {
-      throw new Error(`openAgencyModelReviewPr: files[${index}] must be an object`)
-    }
-    const file = item as Record<string, unknown>
-    return {
-      path: readRequiredJsonString(file.path, `files[${index}].path`),
-      content: readJsonString(file.content, `files[${index}].content`),
-    }
-  })
-
-  return {
-    title,
-    summary,
-    files,
-    model: value.model,
-  }
-}
-
-export function buildAgencyModelReviewBranchName(issueNumber: number, title: string, now: number = Date.now()): string {
-  return buildStatePrBranchName("model-creator", issueNumber, title, now)
-}
-
-function buildStatePrBranchName(
-  sourceLabel: string,
-  issueNumber: number,
-  title: string,
-  now: number = Date.now(),
-): string {
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48)
-    .replace(/-+$/g, "")
-  const suffix = slug ? `-${slug}` : ""
-  return `${sourceLabel}/issue-${issueNumber}-${now.toString(36)}${suffix}`
-}
-
-function normalizeBundleFiles(
-  ctx: Context,
-  bundle: AgencyModelProposal,
-): Array<AgencyModelFile & { targetPath: string }> {
-  const seen = new Set<string>()
-  return bundle.files.map((file, index) => {
-    if (file.path.startsWith("/") || file.path.includes("\\")) {
-      throw new Error(`openAgencyModelReviewPr: files[${index}].path must be a relative POSIX path`)
-    }
-    const normalizedPath = normalizeStatePath(file.path, `files[${index}].path`)
-    const relativePath = normalizedPath.replace(/^\.kody\/?/, "")
-    if (!relativePath) {
-      throw new Error(`openAgencyModelReviewPr: files[${index}].path must point to a state repo file`)
-    }
-    if (relativePath === "implementations" || relativePath.startsWith("implementations/")) {
-      throw new Error(
-        `openAgencyModelReviewPr: files[${index}].path uses obsolete implementations storage; use capabilities/<slug>/ instead`,
-      )
-    }
-    if (seen.has(relativePath)) {
-      throw new Error(`openAgencyModelReviewPr: duplicate generated file path: ${relativePath}`)
-    }
-    seen.add(relativePath)
-    return {
-      ...file,
-      path: relativePath,
-      targetPath: stateRepoPath(ctx.config, relativePath),
-    }
-  })
-}
-
-function stripJsonFence(raw: string): string {
-  const text = raw.trim()
-  const fence = text.match(/^```(?:json)?\s*\n([\s\S]*?)\n```$/i)
-  return (fence ? fence[1]! : text).trim()
-}
-
 function readIssueNumber(ctx: Context): number {
-  const issueNumber = ctx.args.issue
-  if (typeof issueNumber !== "number" || !Number.isInteger(issueNumber) || issueNumber <= 0) {
+  const issue = ctx.args.issue
+  if (typeof issue !== "number" || !Number.isInteger(issue) || issue <= 0) {
     throw new Error("openAgencyModelReviewPr: ctx.args.issue must be a positive integer")
   }
-  return issueNumber
+  return issue
 }
 
-function readRequiredJsonString(value: unknown, field: string): string {
-  const text = readJsonString(value, field).trim()
+function requiredString(value: unknown, field: string): string {
+  const text = stringValue(value, field).trim()
   if (!text) throw new Error(`openAgencyModelReviewPr: ${field} must be a non-empty string`)
   return text
 }
 
-function readJsonString(value: unknown, field: string): string {
+function stringValue(value: unknown, field: string): string {
   if (typeof value !== "string") throw new Error(`openAgencyModelReviewPr: ${field} must be a string`)
   return value
 }
 
-function requireString(value: unknown, label: string): string {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(`openAgencyModelReviewPr: missing ${label}`)
-  }
-  return value
-}
-
 function creatorSourceLabel(ctx: Context, profileName: string | undefined): string {
-  const capability = typeof ctx.data.jobCapability === "string" ? ctx.data.jobCapability.trim() : ""
-  const implementation =
-    typeof ctx.data.selectedImplementation === "string" ? ctx.data.selectedImplementation.trim() : ""
-  const profile = typeof profileName === "string" ? profileName.trim() : ""
-  return capability || implementation || profile || "model-creator"
+  return (
+    (
+      [ctx.data.jobCapability, ctx.data.selectedImplementation, profileName].find(
+        (value) => typeof value === "string" && value.trim(),
+      ) as string | undefined
+    )?.trim() ?? "model-creator"
+  )
 }
 
-function ghJson<T>(args: string[], cwd: string, input?: unknown): T {
-  const raw = gh(args, input === undefined ? { cwd } : { cwd, input: JSON.stringify(input) })
-  if (!raw) return {} as T
-  try {
-    return JSON.parse(raw) as T
-  } catch (err) {
-    throw new Error(
-      `openAgencyModelReviewPr: gh api returned invalid JSON: ${err instanceof Error ? err.message : String(err)}`,
-    )
-  }
-}
-
-function renderPullRequestBody(
-  ctx: Context,
-  bundle: AgencyModelProposal,
-  files: Array<AgencyModelFile & { targetPath: string }>,
-  sourceLabel: string,
-): string {
-  const issueNumber = readIssueNumber(ctx)
+function renderIssueComment(proposalId: string, bundle: AgencyModelProposal, sourceLabel: string): string {
   return [
-    `${sourceLabel} generated Kody agency model changes for review.`,
-    "",
-    `Source issue: ${ctx.config.github.owner}/${ctx.config.github.repo}#${issueNumber}`,
-    "",
-    "## Summary",
+    `${sourceLabel} created backend definition proposal \`${proposalId}\` for review.`,
     "",
     bundle.summary,
     "",
-    "## Files",
-    "",
-    ...files.map((file) => `- \`${file.targetPath}\``),
-    "",
-    "Generated definitions are inactive until this state-repo PR is reviewed and merged.",
-  ].join("\n")
-}
-
-function renderIssueComment(
-  owner: string,
-  repo: string,
-  prUrl: string,
-  bundle: AgencyModelProposal,
-  sourceLabel: string,
-): string {
-  return [
-    `${sourceLabel} opened a state-repo review PR: ${prUrl}`,
-    "",
-    `State repo: ${owner}/${repo}`,
-    "",
-    "Summary:",
-    bundle.summary,
+    "The proposal is inactive until it is approved in Kody Dashboard.",
   ].join("\n")
 }

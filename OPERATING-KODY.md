@@ -38,7 +38,7 @@ When you comment, the engine turns your request into a **job** (one run) and exe
 | `preview-build` | a PR | build a per-PR preview |
 | `release` | an issue | run the engine's own release flow |
 
-**Consumer-defined:** a repo can add its own commands under `.kody/executables/<name>/` (e.g. `fix`, `bug`, `feature`, `review`). These are **not** part of the engine — they exist only in repos that define them. To see what a given repo accepts, look in its `.kody/executables/`.
+**Consumer-defined:** a repo can add its own commands under `backend capabilities/<name>/` (e.g. `fix`, `bug`, `feature`, `review`). These are **not** part of the engine — they exist only in repos that define them. To see what a given repo accepts, look in its `backend capabilities/`.
 
 Scheduled work (recurring capabilities) is **not** comment-driven — it runs on a cron via the schedulers.
 
@@ -55,7 +55,7 @@ Post a **new** `@kody …` comment. **Editing** an existing comment does nothing
 - ❌ **Don't leave a plain comment and expect Kody to read it.** No `@kody`, no run — the workflow never even starts.
 - ❌ **Don't expect a bot's or agent's prose to wake Kody.** Even with `@kody`, a bot-authored comment is honored only when it's an explicit `@kody <command>`; ordinary bot chatter is dropped on purpose (loop protection).
 - ❌ **Don't write `@kodyade[bot]`, `@kody-engine`, or `@kody-foo`.** Only a standalone `@kody` is recognized.
-- ❌ **Don't invent commands.** If a command isn't engine-shipped (above) or defined in the repo's `.kody/executables/`, it won't run.
+- ❌ **Don't invent commands.** If a command isn't engine-shipped (above) or defined in the repo's `backend capabilities/`, it won't run.
 - ❌ **Don't rely on a comment from a non-allowlisted user** when the repo sets `access.allowedAssociations`.
 
 ---

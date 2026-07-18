@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("../../src/goal/stateStore.js", () => {
   const fetch = vi.fn()
   const put = vi.fn()
-  return { fetchGoalState: fetch, fetchGoalStateAsync: fetch, putGoalState: put, putGoalStateAsync: put }
+  return { fetchGoalStateAsync: fetch, putGoalStateAsync: put }
 })
 vi.mock("../../src/goal/runLog.js", async () => {
   const actual = await vi.importActual<typeof import("../../src/goal/runLog.js")>("../../src/goal/runLog.js")
@@ -12,13 +12,10 @@ vi.mock("../../src/goal/runLog.js", async () => {
     flushGoalRunLogEventsAsync: vi.fn(),
   }
 })
-vi.mock("../../src/stateRepo.js", async () => {
-  const actual = await vi.importActual<typeof import("../../src/stateRepo.js")>("../../src/stateRepo.js")
-  return {
-    ...actual,
-    writeStateText: vi.fn(),
-  }
-})
+const backendMocks = vi.hoisted(() => ({ saveReport: vi.fn() }))
+vi.mock("../../src/state-backend.js", () => ({
+  createStateBackendFromEnv: () => ({ saveReport: backendMocks.saveReport }),
+}))
 vi.mock("../../src/issue.js", () => ({
   gh: vi.fn(),
 }))
@@ -26,16 +23,14 @@ vi.mock("../../src/issue.js", () => ({
 import type { AgentResult } from "../../src/agent.js"
 import { flushGoalRunLogEventsAsync } from "../../src/goal/runLog.js"
 import { type GoalState, serializeGoalState } from "../../src/goal/state.js"
-import { fetchGoalState, putGoalState } from "../../src/goal/stateStore.js"
+import { fetchGoalStateAsync, putGoalStateAsync } from "../../src/goal/stateStore.js"
 import type { Context, Profile } from "../../src/implementations/types.js"
 import { gh } from "../../src/issue.js"
 import { applyCapabilityReports } from "../../src/scripts/applyCapabilityReports.js"
-import { writeStateText } from "../../src/stateRepo.js"
 
-const fetchGoalStateMock = vi.mocked(fetchGoalState)
-const putGoalStateMock = vi.mocked(putGoalState)
+const fetchGoalStateMock = vi.mocked(fetchGoalStateAsync)
+const putGoalStateMock = vi.mocked(putGoalStateAsync)
 const flushGoalRunLogEventsMock = vi.mocked(flushGoalRunLogEventsAsync)
-const writeStateTextMock = vi.mocked(writeStateText)
 const ghMock = vi.mocked(gh)
 
 function fakeCtx(data: Record<string, unknown>, args: Record<string, unknown> = {}): Context {
@@ -44,7 +39,6 @@ function fakeCtx(data: Record<string, unknown>, args: Record<string, unknown> = 
     cwd: "/repo",
     config: {
       github: { owner: "o", repo: "r" },
-      state: { repo: "o/kody-state", path: "r" },
       git: { defaultBranch: "main" },
       quality: { typecheck: "", lint: "", testUnit: "", format: "" },
       agent: { model: "anthropic/claude-haiku-4-5-20251001" },
@@ -111,12 +105,12 @@ describe("applyCapabilityReports", () => {
     fetchGoalStateMock.mockReset()
     putGoalStateMock.mockReset()
     flushGoalRunLogEventsMock.mockReset()
-    writeStateTextMock.mockReset()
+    backendMocks.saveReport.mockReset()
     ghMock.mockReset()
   })
 
   it("applies shell-collected goal reports to kody-state", async () => {
-    fetchGoalStateMock.mockReturnValueOnce(goalState())
+    fetchGoalStateMock.mockResolvedValueOnce(goalState())
     const data: Record<string, unknown> = {
       capabilityReports: [
         {
@@ -160,7 +154,7 @@ describe("applyCapabilityReports", () => {
   })
 
   it("applies agent-emitted goal reports", async () => {
-    fetchGoalStateMock.mockReturnValueOnce(goalState())
+    fetchGoalStateMock.mockResolvedValueOnce(goalState())
     const agentResult = {
       outcome: "completed",
       finalText:
@@ -175,7 +169,7 @@ describe("applyCapabilityReports", () => {
   })
 
   it("applies capability result pass to the pending agentGoal evidence", async () => {
-    fetchGoalStateMock.mockReturnValueOnce(goalState())
+    fetchGoalStateMock.mockResolvedValueOnce(goalState())
 
     await applyCapabilityReports(
       fakeCtx(
@@ -205,7 +199,7 @@ describe("applyCapabilityReports", () => {
   })
 
   it("hands an active managed goal back to goal-manager when accepted evidence leaves more steps", async () => {
-    fetchGoalStateMock.mockReturnValueOnce(multiStepGoalState())
+    fetchGoalStateMock.mockResolvedValueOnce(multiStepGoalState())
     const ctx = fakeCtx(
       {
         capabilityResults: [
@@ -243,7 +237,7 @@ describe("applyCapabilityReports", () => {
   })
 
   it("merges report and result output before writing one goal evidence event", async () => {
-    fetchGoalStateMock.mockReturnValueOnce(goalState())
+    fetchGoalStateMock.mockResolvedValueOnce(goalState())
     const data: Record<string, unknown> = {
       capabilityReports: [
         {
@@ -301,7 +295,7 @@ describe("applyCapabilityReports", () => {
   })
 
   it("does not apply legacy --evidence when a result declares its own evidence", async () => {
-    fetchGoalStateMock.mockReturnValueOnce(goalState())
+    fetchGoalStateMock.mockResolvedValueOnce(goalState())
     const data = {
       capabilityResults: [
         {
@@ -345,7 +339,7 @@ describe("applyCapabilityReports", () => {
   })
 
   it("writes a goal-owned dashboard report when saveReport is requested", async () => {
-    fetchGoalStateMock.mockReturnValueOnce(goalState())
+    fetchGoalStateMock.mockResolvedValueOnce(goalState())
     const data: Record<string, unknown> = {
       jobSaveReport: true,
       capabilityResults: [
@@ -367,21 +361,22 @@ describe("applyCapabilityReports", () => {
       null,
     )
 
-    expect(writeStateTextMock).toHaveBeenCalledOnce()
-    const [, , path, body, message] = writeStateTextMock.mock.calls[0]!
-    expect(path).toMatch(/^reports\/release-aguy\/runs\/\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z\.md$/)
-    expect(message).toBe("chore(reports): add release-aguy run")
+    expect(backendMocks.saveReport).toHaveBeenCalledOnce()
+    const [, , runId, , body] = backendMocks.saveReport.mock.calls[0]!
+    const path = `reports/release-aguy/runs/${runId}.md`
     expect(body).toContain("# release-aguy")
     expect(body).toContain("- Next step: done")
     expect(body).toContain("- Summary: Release PR exists.")
     expect(body).toContain('"releasePr": 123')
     expect(body).toContain("[PR](https://github.com/o/r/pull/123)")
     expect(data.goalReports).toEqual([{ slug: "release-aguy", path, changed: true }])
-    expect(putGoalStateMock.mock.invocationCallOrder[0]).toBeLessThan(writeStateTextMock.mock.invocationCallOrder[0]!)
+    expect(putGoalStateMock.mock.invocationCallOrder[0]).toBeLessThan(
+      backendMocks.saveReport.mock.invocationCallOrder[0]!,
+    )
   })
 
   it("does not write a dashboard report when goal state persistence fails", async () => {
-    fetchGoalStateMock.mockReturnValueOnce(goalState())
+    fetchGoalStateMock.mockResolvedValueOnce(goalState())
     putGoalStateMock.mockImplementationOnce(() => {
       throw new Error("state write failed")
     })
@@ -410,12 +405,12 @@ describe("applyCapabilityReports", () => {
       ),
     ).rejects.toThrow("state write failed")
 
-    expect(writeStateTextMock).not.toHaveBeenCalled()
+    expect(backendMocks.saveReport).not.toHaveBeenCalled()
     expect(flushGoalRunLogEventsMock).toHaveBeenCalledOnce()
   })
 
   it("does not write a dashboard report unless saveReport is requested", async () => {
-    fetchGoalStateMock.mockReturnValueOnce(goalState())
+    fetchGoalStateMock.mockResolvedValueOnce(goalState())
 
     await applyCapabilityReports(
       fakeCtx(
@@ -438,11 +433,11 @@ describe("applyCapabilityReports", () => {
       null,
     )
 
-    expect(writeStateTextMock).not.toHaveBeenCalled()
+    expect(backendMocks.saveReport).not.toHaveBeenCalled()
   })
 
   it("marks managed goal done when result satisfies final destination evidence", async () => {
-    fetchGoalStateMock.mockReturnValueOnce({
+    fetchGoalStateMock.mockResolvedValueOnce({
       state: "active",
       extra: {
         type: "web-release",
@@ -494,7 +489,7 @@ describe("applyCapabilityReports", () => {
   })
 
   it("applies capability result failure as agentGoal evidence false plus blocker", async () => {
-    fetchGoalStateMock.mockReturnValueOnce(goalState())
+    fetchGoalStateMock.mockResolvedValueOnce(goalState())
     ghMock.mockImplementation((args, opts) => {
       const command = args.join(" ")
       if (command === "issue list --state all --limit 100 --json number,body") return "[]"
@@ -543,7 +538,7 @@ describe("applyCapabilityReports", () => {
 
   it("logs no-op reports without persisting unchanged goal state", async () => {
     const prior: GoalState = { state: "active", extra: { facts: { releasePrExists: true } } }
-    fetchGoalStateMock.mockReturnValueOnce(prior)
+    fetchGoalStateMock.mockResolvedValueOnce(prior)
     const data = {
       capabilityReports: [{ target: { type: "goal", id: "release-aguy" }, evidence: { releasePrExists: true } }],
     }

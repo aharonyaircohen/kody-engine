@@ -281,7 +281,7 @@ changing the agent loop. Most-bang-per-buck UX improvements.
 
 #### 4c. **QW13 — state.json artifact replacing GH comment parsing** (medium)
 
-- Task state writes to the configured Kody state repo on every postflight tick.
+- Task state writes to the configured Kody backend on every postflight tick.
 - `readTaskState` updated: prefer the file (one GH API call), fall
   back to comment-parsing if the file is missing (back-compat for
   in-flight tasks).
@@ -452,7 +452,7 @@ this. Otherwise skip.
   - At task start, embeds each tracked file ≤200 lines (or chunks
     bigger files at module / function boundaries).
   - Stores embeddings + symbol graph in
-    `.kody/index/<contentHash>.sqlite` (sqlite-vec) or in a Pinecone
+    `backend index/<contentHash>.sqlite` (sqlite-vec) or in a Pinecone
     namespace per repo.
   - Exposes a `repo_search(query, topK)` tool to the agent.
 - One-shot indexer script `src/scripts/buildRepoIndex.ts`.

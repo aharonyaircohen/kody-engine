@@ -7,7 +7,7 @@
  *   an engine role
  *
  * The engine package still has minimal built-in implementation profiles under
- * `src/implementations`, but project and company-store `.kody/implementations` roots
+ * `src/implementations`, but project and company-store implementation roots
  * are no longer registry sources.
  *
  * Both follow the same dev/built path-resolution pattern so `src/` and
@@ -18,7 +18,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { CapabilityFolder } from "./capabilityFolders.js"
 import { CAPABILITY_PROFILE_FILE, listCapabilityFolderSlugs, readCapabilityFolder } from "./capabilityFolders.js"
-import { getCompanyStoreAssetRoot } from "./companyStore.js"
+import { capabilitiesRoot } from "./definition-paths.js"
 import type { InputSpec } from "./implementations/types.js"
 
 const PUBLIC_IMPLEMENTATION_ROLES = new Set(["primitive", "orchestrator", "container", "watch", "utility"])
@@ -37,7 +37,7 @@ export interface DiscoveredCapabilityAction {
   implementation: string
   /** Extra args required to lower the capability to its implementation. */
   cliArgs: Record<string, unknown>
-  source: "project-folder" | "company-store" | "builtin"
+  source: "project-folder" | "builtin"
   describe?: string
   profilePath?: string
   bodyPath?: string
@@ -65,11 +65,7 @@ export function getImplementationsRoot(): string {
  * public model and may also carry implementation profile data during migration.
  */
 export function getProjectCapabilitiesRoot(): string {
-  return path.join(process.cwd(), ".kody", "capabilities")
-}
-
-export function getCompanyStoreCapabilitiesRoot(): string | null {
-  return getCompanyStoreAssetRoot("capabilities")
+  return capabilitiesRoot()
 }
 
 export function getBuiltinCapabilitiesRoot(): string {
@@ -92,23 +88,17 @@ export function getBuiltinCapabilitiesRoot(): string {
  */
 export function getImplementationRoots(): string[] {
   const projectCapabilitiesRoot = getProjectCapabilitiesRoot()
-  const storeCapabilitiesRoot = getCompanyStoreCapabilitiesRoot()
-  return [projectCapabilitiesRoot, ...(storeCapabilitiesRoot ? [storeCapabilitiesRoot] : []), getImplementationsRoot()]
+  return [projectCapabilitiesRoot, getImplementationsRoot()]
 }
 
 export function getCapabilityRoots(projectCapabilitiesRoot: string = getProjectCapabilitiesRoot()): string[] {
-  const storeCapabilitiesRoot = getCompanyStoreCapabilitiesRoot()
-  return [
-    projectCapabilitiesRoot,
-    ...(storeCapabilitiesRoot ? [storeCapabilitiesRoot] : []),
-    getBuiltinCapabilitiesRoot(),
-  ]
+  return [projectCapabilitiesRoot, getBuiltinCapabilitiesRoot()]
 }
 
 /**
  * Names of the engine-bundled implementations (the dir names under the engine root
  * that contain a profile.json). Cached — the engine root never changes within a
- * process. Used to stop a hydrated `.kody/capabilities/<name>/` folder from silently
+ * process. Used to stop a hydrated `.kody-engine/definitions/capabilities/<name>/` folder from silently
  * shadowing an engine builtin (run/merge/serve/capability-scheduler/…).
  */
 let _builtinNames: Set<string> | null = null
@@ -223,10 +213,6 @@ export function listCapabilityActions(
   }
 
   for (const action of listFolderCapabilityActions(projectCapabilitiesRoot, "project-folder")) add(action)
-  const storeCapabilitiesRoot = getCompanyStoreCapabilitiesRoot()
-  if (storeCapabilitiesRoot) {
-    for (const action of listFolderCapabilityActions(storeCapabilitiesRoot, "company-store")) add(action)
-  }
   for (const action of listBuiltinCapabilityActions(getBuiltinCapabilitiesRoot())) add(action)
   return out.sort((a, b) => a.action.localeCompare(b.action))
 }
@@ -312,7 +298,7 @@ function isCapabilityRoot(root: string): boolean {
   const normalized = path.normalize(root)
   if (path.basename(normalized) === "capabilities") return true
 
-  const knownRoots = [getProjectCapabilitiesRoot(), getCompanyStoreCapabilitiesRoot(), getBuiltinCapabilitiesRoot()]
+  const knownRoots = [getProjectCapabilitiesRoot(), getBuiltinCapabilitiesRoot()]
   return knownRoots.some((candidate) => candidate && path.normalize(candidate) === normalized)
 }
 
@@ -326,10 +312,7 @@ function isImplementationProfile(profilePath: string, requireImplementationProfi
   }
 }
 
-function listFolderCapabilityActions(
-  root: string,
-  source: "project-folder" | "company-store",
-): DiscoveredCapabilityAction[] {
+function listFolderCapabilityActions(root: string, source: "project-folder"): DiscoveredCapabilityAction[] {
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return []
   const out: DiscoveredCapabilityAction[] = []
   for (const slug of listCapabilityFolderSlugs(root)) {

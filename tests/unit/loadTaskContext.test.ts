@@ -18,7 +18,6 @@ function makeCtx(overrides: Partial<Context["data"]> = {}, cwd: string): Context
       quality: { typecheck: "", lint: "", format: "", testUnit: "" },
       git: { defaultBranch: "main" },
       github: { owner: "x", repo: "y" },
-      state: { repo: "x/kody-state", path: "y" },
       agent: { model: "claude/claude-sonnet-4-6" },
     },
     data: { ...overrides },

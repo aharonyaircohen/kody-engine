@@ -36,8 +36,7 @@ import { z } from "zod"
 import { DASHBOARD_CMS_MCP_TOOL_NAMES, dashboardCmsToolDefinitions } from "./dashboardCmsMcp.js"
 import { gh } from "./issue.js"
 import { getProfileInputs, resolveCapabilityAction } from "./registry.js"
-import type { StateRepoConfig } from "./stateRepo.js"
-import { parseTrustMode, readTrustMode, type TrustMode } from "./trustPolicy.js"
+import { parseTrustMode, type TrustMode } from "./trustPolicy.js"
 
 export interface CapabilityMcpHandle {
   /** Config object to drop into `mcpServers["kody-capability"]`. */
@@ -47,8 +46,6 @@ export interface CapabilityMcpHandle {
 interface CapabilityMcpOptions {
   /** Repo slug "owner/name" — read from kody.config.json/runtime context. */
   repoSlug: string
-  /** Canonical Kody state location for this repo. Defaults from repoSlug. */
-  state?: StateRepoConfig["state"]
   /**
    * The operator @-mention prefix (e.g. "@aguyaharonyair") substituted into
    * recommend_to_operator comments. Empty string when the capability's `mentions:`
@@ -297,24 +294,6 @@ export type CapabilityTrustMode = TrustMode
 
 export function parseCapabilityTrustMode(rawJson: string, capabilitySlug: string): CapabilityTrustMode {
   return parseTrustMode(rawJson, { kind: "capability", id: capabilitySlug })
-}
-
-export function readCapabilityTrustMode(repoSlug: string, capabilitySlug?: string): CapabilityTrustMode
-export function readCapabilityTrustMode(
-  state: StateRepoConfig["state"] | undefined,
-  repoSlug: string,
-  capabilitySlug?: string,
-): CapabilityTrustMode
-export function readCapabilityTrustMode(
-  stateOrRepoSlug: StateRepoConfig["state"] | string | undefined,
-  repoSlugOrCapabilitySlug?: string,
-  maybeCapabilitySlug?: string,
-): CapabilityTrustMode {
-  const state = typeof stateOrRepoSlug === "string" ? undefined : stateOrRepoSlug
-  const repoSlug = typeof stateOrRepoSlug === "string" ? stateOrRepoSlug : (repoSlugOrCapabilitySlug ?? "")
-  const capabilitySlug = typeof stateOrRepoSlug === "string" ? repoSlugOrCapabilitySlug : maybeCapabilitySlug
-  if (!capabilitySlug) return "ask"
-  return readTrustMode(state, repoSlug, { kind: "capability", id: capabilitySlug })
 }
 
 // ---------------------------------------------------------------------------

@@ -31,8 +31,8 @@
  * error — a capability must not silently run with no executor identity.
  *
  * Script args (via `with:`):
- *   jobsDir       optional — default ".kody/capabilities"
- *   agentsDir    optional — default ".kody/agents"
+ *   jobsDir       optional — default ".kody-engine/definitions/capabilities"
+ *   agentsDir    optional — default ".kody-engine/definitions/agents"
  *   slugArg       optional — name of the CLI input holding the slug (default "job")
  */
 
@@ -40,6 +40,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { resolveAgentFile } from "../agents.js"
 import { CAPABILITY_MCP_TOOL_NAMES } from "../capabilityMcp.js"
+import { agentsRoot, capabilitiesRoot } from "../definition-paths.js"
 import type { PreflightScript } from "../implementations/types.js"
 import { resolveCapabilityFolder } from "../registry.js"
 import { resolveBackend } from "./jobState/index.js"
@@ -47,17 +48,19 @@ import { resolveBackend } from "./jobState/index.js"
 const CAPABILITY_TOOL_PALETTE: ReadonlySet<string> = new Set(CAPABILITY_MCP_TOOL_NAMES)
 
 export const loadJobFromFile: PreflightScript = async (ctx, profile, args) => {
-  const jobsDir = String(args?.jobsDir ?? ".kody/capabilities")
-  const agentsDir = String(args?.agentsDir ?? ".kody/agents")
+  const jobsDir = String(args?.jobsDir ?? capabilitiesRoot(ctx.cwd))
+  const agentsDir = String(args?.agentsDir ?? agentsRoot(ctx.cwd))
   const slugArg = String(args?.slugArg ?? "job")
   const slug = String(ctx.args[slugArg] ?? "").trim()
   if (!slug) {
     throw new Error(`loadJobFromFile: ctx.args.${slugArg} must be a non-empty slug`)
   }
 
-  const capability = resolveCapabilityFolder(slug, path.join(ctx.cwd, jobsDir))
+  const capability = resolveCapabilityFolder(slug, path.resolve(ctx.cwd, jobsDir))
   if (!capability) {
-    throw new Error(`loadJobFromFile: capability folder not found or incomplete: ${path.join(ctx.cwd, jobsDir, slug)}`)
+    throw new Error(
+      `loadJobFromFile: capability folder not found or incomplete: ${path.resolve(ctx.cwd, jobsDir, slug)}`,
+    )
   }
   const { title, body, config } = capability
 

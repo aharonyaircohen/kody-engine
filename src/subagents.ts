@@ -51,7 +51,7 @@ function resolveAgentFile(profileDir: string, name: string): string {
  * by the declared name. Mirrors `readPromptTemplates` (see profile.ts): the
  * profile dir is read on the default checkout BEFORE any task branch switch,
  * so the captured content survives a later checkout that drops the capability's
- * `agents/` (e.g. a PR-branch review where `.kody/capabilities/<slug>/` doesn't
+ * `agents/` (e.g. a PR-branch review where `.kody-engine/definitions/capabilities/<slug>/` doesn't
  * exist). Best-effort — a name that can't be resolved here is simply absent
  * from the snapshot, and `loadSubagents` falls back to a disk read (which then
  * surfaces the real "not found" error at use time).

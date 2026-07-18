@@ -12,7 +12,6 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { resetCompanyStoreCacheForTests } from "../../src/companyStore.js"
 import { jobReferenceBlock, operatorRequestBlock, runImplementation } from "../../src/executor.js"
 import { loadProfile } from "../../src/profile.js"
 import { resolveImplementation } from "../../src/registry.js"
@@ -220,45 +219,20 @@ describe("executor: stale hydrated capability overrides", () => {
     process.chdir(previousCwd)
     if (previousStore === undefined) delete process.env.KODY_COMPANY_STORE
     else process.env.KODY_COMPANY_STORE = previousStore
-    resetCompanyStoreCacheForTests()
     if (tmp) fs.rmSync(tmp, { recursive: true, force: true })
     tmp = ""
   })
 
-  it("skips a stale local capability profile with removed scripts and uses the store profile", async () => {
-    tmp = tmpDir()
-    const consumer = path.join(tmp, "consumer")
-    const store = path.join(tmp, "store")
-    fs.mkdirSync(consumer, { recursive: true })
-    fs.mkdirSync(store, { recursive: true })
-    fs.writeFileSync(
-      path.join(store, "kody-store.json"),
-      JSON.stringify({ assetRoots: { capabilities: "capabilities" } }),
-    )
-
-    writeSkipAgentProfile(path.join(consumer, ".kody", "capabilities", "classify", "profile.json"), {
-      postflight: [{ script: "writeRunSummary" }],
-    })
-    writeSkipAgentProfile(path.join(store, "capabilities", "classify", "profile.json"))
-
-    previousStore = process.env.KODY_COMPANY_STORE
-    process.env.KODY_COMPANY_STORE = store
-    resetCompanyStoreCacheForTests()
-    process.chdir(consumer)
-
-    const out = await runImplementation("classify", {
-      cwd: consumer,
-      cliArgs: { issue: 651 },
-      skipConfig: true,
-    })
-
-    expect(out.exitCode).toBe(0)
-    expect(out.reason).toBeUndefined()
-  })
-
   it("does not print a failed terminal marker for successful runs with a reason", async () => {
     tmp = tmpDir()
-    const profilePath = path.join(tmp, ".kody", "capabilities", "no-active-intents", "profile.json")
+    const profilePath = path.join(
+      tmp,
+      ".kody-engine",
+      "definitions",
+      "capabilities",
+      "no-active-intents",
+      "profile.json",
+    )
     writeSkipAgentProfile(profilePath, {
       preflight: [{ script: "dispatchNextTaskJob" }],
     })
@@ -286,7 +260,14 @@ describe("executor: stale hydrated capability overrides", () => {
 
   it("auto-runs agency boundary evaluation for capability-shaped profiles", async () => {
     tmp = tmpDir()
-    const profilePath = path.join(tmp, ".kody", "capabilities", "ai-agency-health-matrix", "profile.json")
+    const profilePath = path.join(
+      tmp,
+      ".kody-engine",
+      "definitions",
+      "capabilities",
+      "ai-agency-health-matrix",
+      "profile.json",
+    )
     writeSkipAgentProfile(profilePath, {
       capabilityKind: "observe",
       postflight: [],

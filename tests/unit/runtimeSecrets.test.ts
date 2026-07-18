@@ -1,7 +1,12 @@
 import { createCipheriv } from "node:crypto"
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { Context } from "../../src/implementations/types.js"
 import { resolveRuntimeSecret } from "../../src/scripts/runtimeSecrets.js"
+
+const mocks = vi.hoisted(() => ({ getRepoDoc: vi.fn() }))
+vi.mock("../../src/state-backend.js", () => ({
+  createStateBackendFromEnv: () => ({ getRepoDoc: mocks.getRepoDoc }),
+}))
 
 function makeCtx(): Pick<Context, "config"> {
   return {
@@ -22,19 +27,11 @@ function encryptVault(doc: unknown, key: Buffer): string {
   return `v1:${iv.toString("base64")}:${ct.toString("base64")}:${tag.toString("base64")}`
 }
 
-function contents(content: string): Response {
-  return new Response(
-    JSON.stringify({
-      type: "file",
-      encoding: "base64",
-      content: Buffer.from(content, "utf8").toString("base64"),
-      sha: "sha",
-    }),
-    { status: 200 },
-  )
-}
-
 describe("resolveRuntimeSecret", () => {
+  beforeEach(() => {
+    mocks.getRepoDoc.mockReset()
+  })
+
   it("reads repo vault secrets before env fallback", async () => {
     const key = Buffer.alloc(32, 1)
     const payload = encryptVault(
@@ -46,20 +43,15 @@ describe("resolveRuntimeSecret", () => {
       },
       key,
     )
-    const fetchImpl = async (url: string | URL | Request): Promise<Response> => {
-      const u = String(url)
-      if (u.endsWith("/repos/o/r/contents/kody.config.json")) return new Response("{}", { status: 404 })
-      if (u.endsWith("/repos/o/kody-state/contents/r/secrets.enc")) return contents(payload)
-      return new Response("not found", { status: 404 })
-    }
+    mocks.getRepoDoc.mockResolvedValue({ doc: { ciphertext: payload }, updatedAt: "now" })
 
     const result = await resolveRuntimeSecret("LOGIN_PASSWORD", makeCtx(), {
       env: {
         KODY_MASTER_KEY: key.toString("hex"),
-        GITHUB_TOKEN: "gh-token",
+        CONVEX_URL: "https://example.convex.cloud",
+        KODY_SERVICE_KEY: "service-key",
         LOGIN_PASSWORD: "from-env",
       } as NodeJS.ProcessEnv,
-      fetchImpl,
     })
 
     expect(result).toEqual({ value: "from-vault", source: "vault" })
@@ -85,20 +77,15 @@ describe("resolveRuntimeSecret", () => {
       },
       goodKey,
     )
-    const fetchImpl = async (url: string | URL | Request): Promise<Response> => {
-      const u = String(url)
-      if (u.endsWith("/repos/o/r/contents/kody.config.json")) return new Response("{}", { status: 404 })
-      if (u.endsWith("/repos/o/kody-state/contents/r/secrets.enc")) return contents(payload)
-      return new Response("not found", { status: 404 })
-    }
+    mocks.getRepoDoc.mockResolvedValue({ doc: { ciphertext: payload }, updatedAt: "now" })
 
     const result = await resolveRuntimeSecret("LOGIN_PASSWORD", makeCtx(), {
       env: {
         KODY_MASTER_KEY: badKey.toString("hex"),
-        GITHUB_TOKEN: "gh-token",
+        CONVEX_URL: "https://example.convex.cloud",
+        KODY_SERVICE_KEY: "service-key",
         LOGIN_PASSWORD: "from-env",
       } as NodeJS.ProcessEnv,
-      fetchImpl,
     })
 
     expect(result.value).toBe("from-env")

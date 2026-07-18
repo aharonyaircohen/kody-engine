@@ -29,7 +29,7 @@ const dummyProfile = {} as Profile
 function writeVariables(cwd: string, vars: Record<string, string>): void {
   const variables: Record<string, { value: string }> = {}
   for (const [k, v] of Object.entries(vars)) variables[k] = { value: v }
-  const dir = path.join(cwd, ".kody")
+  const dir = path.join(cwd, ".kody-engine", "runtime")
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "variables.json"), JSON.stringify({ version: 1, variables }))
 }
@@ -81,7 +81,7 @@ describe("loadQaContext", () => {
   })
 
   it("includes only sections whose agent contains qa-engineer; legacy audience is mapped, unassigned/chat/legacy-less excluded", async () => {
-    const profileDir = path.join(tmp, ".kody", "context")
+    const profileDir = path.join(tmp, ".kody-engine", "runtime", "context")
     fs.mkdirSync(profileDir, { recursive: true })
     fs.writeFileSync(
       path.join(profileDir, "scenarios.md"),

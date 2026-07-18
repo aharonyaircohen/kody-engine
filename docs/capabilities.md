@@ -5,7 +5,7 @@ A **Capability** is how the agency can produce a result.
 The canonical storage root is:
 
 ```text
-.kody/capabilities/<slug>/
+backend capability definition
   profile.json
   capability.md
 ```
@@ -72,7 +72,7 @@ targetWorkspace: agency
 ```
 
 means the call may change the consumer agency definitions or state in
-`kody-state`.
+`backend`.
 
 `delivery` describes how the result is reviewed or persisted:
 
@@ -160,10 +160,10 @@ the capability.
 
 ## Canonical Shape
 
-Capabilities live in project `.kody/capabilities/` or in the company store:
+Capabilities live in project `backend capability definitions` or in the company store:
 
 ```text
-.kody/capabilities/<slug>/
+backend capability definition
   profile.json
   capability.md
 ```

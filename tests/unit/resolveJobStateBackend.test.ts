@@ -5,49 +5,25 @@
 
 import { describe, expect, it } from "vitest"
 import type { KodyConfig } from "../../src/config.js"
-import { ContentsApiBackend } from "../../src/scripts/jobState/contentsApiBackend.js"
+import { BackendStateBackend } from "../../src/scripts/jobState/backendStateBackend.js"
 import { resolveBackend } from "../../src/scripts/jobState/index.js"
-import { LocalFileBackend } from "../../src/scripts/jobState/localFileBackend.js"
 
-function configWith(jobs?: KodyConfig["jobs"]): KodyConfig {
+function configWith(): KodyConfig {
   return {
     quality: { typecheck: "", lint: "", format: "", testUnit: "" },
     git: { defaultBranch: "main" },
     github: { owner: "acme", repo: "widgets" },
     agent: { model: "anthropic/test" },
-    jobs,
   }
 }
 
 describe("resolveBackend", () => {
-  it("returns ContentsApiBackend by default (no jobs config)", () => {
-    const backend = resolveBackend({ config: configWith(undefined), cwd: "/tmp", jobsDir: ".kody/jobs" })
-    expect(backend).toBeInstanceOf(ContentsApiBackend)
-    expect(backend.name).toBe("contents-api")
-  })
-
-  it("returns ContentsApiBackend when explicitly requested", () => {
-    const backend = resolveBackend({
-      config: configWith({ stateBackend: "contents-api" }),
-      cwd: "/tmp",
-      jobsDir: ".kody/jobs",
-    })
-    expect(backend).toBeInstanceOf(ContentsApiBackend)
-  })
-
-  it("returns LocalFileBackend when configured", () => {
-    const backend = resolveBackend({
-      config: configWith({ stateBackend: "local-file" }),
-      cwd: "/tmp",
-      jobsDir: ".kody/jobs",
-    })
-    expect(backend).toBeInstanceOf(LocalFileBackend)
-    expect(backend.name).toBe("local-file")
-  })
-
-  it("throws when github.owner/repo is missing", () => {
-    const cfg = configWith()
-    cfg.github = { owner: "", repo: "" }
-    expect(() => resolveBackend({ config: cfg, cwd: "/tmp", jobsDir: ".kody/jobs" })).toThrow(/owner.*repo/i)
+  it("returns BackendStateBackend by default (no jobs config)", () => {
+    const testSeam = process.env.KODY_TEST_LOCAL_JOB_STATE
+    delete process.env.KODY_TEST_LOCAL_JOB_STATE
+    const backend = resolveBackend({ config: configWith(), cwd: "/tmp", jobsDir: ".kody-engine/runtime/jobs" })
+    if (testSeam !== undefined) process.env.KODY_TEST_LOCAL_JOB_STATE = testSeam
+    expect(backend).toBeInstanceOf(BackendStateBackend)
+    expect(backend.name).toBe("backend")
   })
 })

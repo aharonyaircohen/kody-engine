@@ -53,22 +53,6 @@
         "repo": { "type": "string" }
       }
     },
-    "state": {
-      "type": "object",
-      "description": "External repository and path used for Kody runtime state.",
-      "additionalProperties": false,
-      "properties": {
-        "repo": {
-          "type": "string",
-          "description": "Full GitHub repository URL for Kody runtime state.",
-          "pattern": "^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:\\.git)?$"
-        },
-        "path": {
-          "type": "string",
-          "description": "Folder inside state.repo that belongs to this consumer repo."
-        }
-      }
-    },
     "agent": {
       "type": "object",
       "required": ["model"],
@@ -168,17 +152,6 @@
         "timeoutMs": {
           "type": "integer",
           "minimum": 1
-        }
-      }
-    },
-    "jobs": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "stateBackend": {
-          "type": "string",
-          "enum": ["contents-api"],
-          "default": "contents-api"
         }
       }
     },

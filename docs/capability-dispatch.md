@@ -82,7 +82,7 @@ tick.
 ## Lint / CI
 
 Recommended CI gate on consumer repos: fail the build if any
-`.kody/capabilities/**/*.md` body contains
+`backend capability definitions**/*.md` body contains
 `gh issue comment.*@kody` or `gh pr comment.*@kody`. Cheap grep on the
 regression surface. The engine's runtime throw catches helpers that
 bypass the grep; the grep catches capability markdown the LLM follows verbatim.
@@ -91,7 +91,7 @@ bypass the grep; the grep catches capability markdown the LLM follows verbatim.
 
 For each repo running kody.yml:
 
-1. Grep your capabilities: `rg 'gh (issue|pr) comment.*@kody' .kody/capabilities`.
+1. Inspect the activated capability definitions in the Dashboard.
    Replace every hit with `gh workflow run kody.yml -f executable=<name>
    -f issue_number=<n>`.
 2. If the executable needs a parameter that isn't already in the target

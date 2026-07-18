@@ -3,8 +3,9 @@ import { brainProxy } from "./bin/brain-proxy.js"
 import { mcpHttpServer } from "./bin/mcp-http-server.js"
 import { runChat } from "./chat-cli.js"
 import { loadConfig } from "./config.js"
+import { hydrateDefinitionsFromEnv } from "./definition-hydration.js"
 import { runJob } from "./job.js"
-import { runCi } from "./kody-cli.js"
+import { runCi, unpackAllSecrets } from "./kody-cli.js"
 import {
   hasCapabilityAction,
   listCapabilityActions,
@@ -187,6 +188,21 @@ export function parseArgs(argv: string[]): ParsedArgs {
 }
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
+  unpackAllSecrets()
+  const cwdFlag = argv.findIndex((value) => value === "--cwd")
+  const definitionCwd = cwdFlag >= 0 && argv[cwdFlag + 1] ? argv[cwdFlag + 1]! : process.cwd()
+  const shouldHydrate =
+    Boolean(process.env.CONVEX_URL?.trim()) ||
+    (process.env.GITHUB_ACTIONS === "true" && Boolean(process.env.GITHUB_EVENT_NAME))
+  if (shouldHydrate) {
+    try {
+      await hydrateDefinitionsFromEnv(definitionCwd)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      process.stderr.write(`[kody] definition hydration failed: ${message}\n`)
+      return 99
+    }
+  }
   const args = parseArgs(argv)
 
   if (args.errors.length > 0) {

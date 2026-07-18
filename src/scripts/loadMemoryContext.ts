@@ -1,7 +1,7 @@
 /**
- * Preflight: surface the project's state-repo memory markdown wiki into the
+ * Preflight: surface the project's backend memory markdown wiki into the
  * agent's prompt as `{{memoryContext}}`. Engine runs hydrate it into the local
- * `.kody/memory/` compatibility cache before this loader runs.
+ * `.kody-engine/runtime/memory/` compatibility cache before this loader runs.
  *
  * Strategy:
  *   - Walk the memory dir, take at most MAX_PAGES pages.
@@ -20,7 +20,7 @@ import * as path from "node:path"
 import type { PreflightScript } from "../implementations/types.js"
 import { createStateBackendFromEnv, type TaskDocument } from "../state-backend.js"
 
-const MEMORY_DIR_RELATIVE = ".kody/memory"
+const MEMORY_DIR_RELATIVE = ".kody-engine/runtime/memory"
 const MAX_PAGES = 8
 const PER_PAGE_MAX_BYTES = 4_000
 const TOTAL_MAX_BYTES = 24_000
@@ -39,9 +39,10 @@ export const loadMemoryContext: PreflightScript = async (ctx) => {
   // "key present" so empty-memory ("") is honoured too.
   if (typeof ctx.data.memoryContext === "string") return
 
-  const tenantId = ctx.config.github?.owner && ctx.config.github.repo
-    ? `${ctx.config.github.owner}/${ctx.config.github.repo}`
-    : process.env.GITHUB_REPOSITORY?.trim()
+  const tenantId =
+    ctx.config.github?.owner && ctx.config.github.repo
+      ? `${ctx.config.github.owner}/${ctx.config.github.repo}`
+      : process.env.GITHUB_REPOSITORY?.trim()
   if (process.env.CONVEX_URL && process.env.KODY_SERVICE_KEY && tenantId) {
     try {
       const backend = createStateBackendFromEnv()
@@ -92,13 +93,18 @@ function formatBlockFromBackend(docs: TaskDocument[]): string {
     if (!record.doc || typeof record.doc !== "object") return []
     const doc = record.doc as Partial<MemoryPage>
     if (typeof doc.content !== "string") return []
-    return [{
-      relPath: typeof doc.relPath === "string" ? doc.relPath : record.kind,
-      title: typeof doc.title === "string" ? doc.title : record.kind,
-      updated: typeof doc.updated === "string" ? doc.updated : record.updatedAt,
-      content: doc.content.length > PER_PAGE_MAX_BYTES ? doc.content.slice(0, PER_PAGE_MAX_BYTES) + TRUNCATED_SUFFIX : doc.content,
-      mtime: Date.parse(record.updatedAt) || 0,
-    }]
+    return [
+      {
+        relPath: typeof doc.relPath === "string" ? doc.relPath : record.kind,
+        title: typeof doc.title === "string" ? doc.title : record.kind,
+        updated: typeof doc.updated === "string" ? doc.updated : record.updatedAt,
+        content:
+          doc.content.length > PER_PAGE_MAX_BYTES
+            ? doc.content.slice(0, PER_PAGE_MAX_BYTES) + TRUNCATED_SUFFIX
+            : doc.content,
+        mtime: Date.parse(record.updatedAt) || 0,
+      },
+    ]
   })
   return formatBlock(sortByRecency(pages).slice(0, MAX_PAGES))
 }
@@ -178,7 +184,7 @@ function sortByRecency(pages: MemoryPage[]): MemoryPage[] {
 function formatBlock(pages: MemoryPage[]): string {
   if (pages.length === 0) return ""
   const lines: string[] = [
-    "# Project memory (state repo `memory/`)",
+    "# Project memory (backend `memory/`)",
     "",
     "Pages from prior memorize ticks. Treat as advisory context — confirm against the codebase before acting.",
     "",

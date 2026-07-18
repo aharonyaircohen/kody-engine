@@ -1,12 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const { writeStateText } = vi.hoisted(() => ({ writeStateText: vi.fn() }))
-vi.mock("../../src/stateRepo.js", () => ({ writeStateText }))
+const { saveReport } = vi.hoisted(() => ({ saveReport: vi.fn() }))
+vi.mock("../../src/state-backend.js", () => ({
+  createStateBackendFromEnv: () => ({ saveReport }),
+}))
 
 import { buildRuntimeReportMarkdown, publishReport } from "../../src/scripts/publishReport.js"
 
 describe("publishReport", () => {
-  beforeEach(() => writeStateText.mockReset())
+  beforeEach(() => {
+    saveReport.mockReset()
+    process.env.CONVEX_URL = "https://example.convex.cloud"
+    process.env.KODY_SERVICE_KEY = "service-key"
+  })
 
   it("builds an extensible typed report from ordinary capability facts", () => {
     const markdown = buildRuntimeReportMarkdown({
@@ -30,7 +36,7 @@ describe("publishReport", () => {
 
   it("publishes only when the workflow-selected fact exists", async () => {
     const ctx = {
-      config: { state: { repo: "o/kody-state", path: "r" } },
+      config: { github: { owner: "o", repo: "r" } },
       cwd: "/repo",
       data: {
         jobCapability: "observe-repo-ci",
@@ -64,14 +70,14 @@ describe("publishReport", () => {
 
     await publishReport(ctx as never, {} as never, null)
 
-    expect(writeStateText).toHaveBeenCalledOnce()
-    expect(writeStateText.mock.calls[0]![2]).toMatch(/^reports\/finding-repo-ci-main\/runs\/.+\.md$/)
-    expect(writeStateText.mock.calls[0]![3]).toContain("reportType: finding")
+    expect(saveReport).toHaveBeenCalledOnce()
+    expect(saveReport.mock.calls[0]![1]).toBe("finding-repo-ci-main")
+    expect(saveReport.mock.calls[0]![4]).toContain("reportType: finding")
   })
 
   it("does nothing when a conditional report has no matching fact", async () => {
     const ctx = {
-      config: { state: { repo: "o/kody-state", path: "r" } },
+      config: { github: { owner: "o", repo: "r" } },
       cwd: "/repo",
       data: {
         reportPublication: {
@@ -97,12 +103,12 @@ describe("publishReport", () => {
 
     await publishReport(ctx as never, {} as never, null)
 
-    expect(writeStateText).not.toHaveBeenCalled()
+    expect(saveReport).not.toHaveBeenCalled()
   })
 
   it("publishes a learning report from workflow state data", async () => {
     const ctx = {
-      config: { state: { repo: "o/kody-state", path: "r" } },
+      config: { github: { owner: "o", repo: "r" } },
       cwd: "/repo",
       data: {
         jobCapability: "operate-findings",
@@ -139,9 +145,9 @@ describe("publishReport", () => {
 
     await publishReport(ctx as never, {} as never, null)
 
-    expect(writeStateText).toHaveBeenCalledOnce()
-    expect(writeStateText.mock.calls[0]![2]).toMatch(/^reports\/learning-finding-repo-ci-main\/runs\/.+\.md$/)
-    expect(writeStateText.mock.calls[0]![3]).toContain("reportType: learning")
-    expect(writeStateText.mock.calls[0]![3]).toContain("# The repository recovered after its CI fix")
+    expect(saveReport).toHaveBeenCalledOnce()
+    expect(saveReport.mock.calls[0]![1]).toBe("learning-finding-repo-ci-main")
+    expect(saveReport.mock.calls[0]![4]).toContain("reportType: learning")
+    expect(saveReport.mock.calls[0]![4]).toContain("# The repository recovered after its CI fix")
   })
 })

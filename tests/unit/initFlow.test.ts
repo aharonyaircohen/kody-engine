@@ -39,8 +39,8 @@ describe("initFlow: performInit", () => {
     expect(workflow).toContain("      capability:")
     expect(workflow).not.toContain("      implementation:")
 
-    expect(result.wrote.some((file) => file.startsWith(".kody/capabilities/"))).toBe(false)
-    expect(fs.existsSync(path.join(dir, ".kody/capabilities"))).toBe(false)
+    expect(result.wrote.some((file) => file.startsWith(".kody-engine/definitions/capabilities/"))).toBe(false)
+    expect(fs.existsSync(path.join(dir, ".kody-engine/definitions/capabilities"))).toBe(false)
   })
 
   it("detects package manager from lockfile", () => {
@@ -83,14 +83,14 @@ describe("initFlow: performInit", () => {
     expect(second.skipped).toContain("kody.config.json")
     expect(second.skipped).toContain(".github/workflows/kody.yml")
     expect(second.skipped.some((file) => file.startsWith(".kody/"))).toBe(false)
-    expect(second.skipped.some((file) => file.startsWith(".kody/capabilities/"))).toBe(false)
+    expect(second.skipped.some((file) => file.startsWith(".kody-engine/definitions/capabilities/"))).toBe(false)
     const after = fs.readFileSync(path.join(dir, "kody.config.json"), "utf-8")
     expect(after).toMatch(/user-edit/)
   })
 
   it("does not manage local capability folders", () => {
     dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
-    const capabilityDir = path.join(dir, ".kody/capabilities/local-only")
+    const capabilityDir = path.join(dir, ".kody-engine/definitions/capabilities/local-only")
     fs.mkdirSync(capabilityDir, { recursive: true })
     const profilePath = path.join(capabilityDir, "profile.json")
     const bodyPath = path.join(capabilityDir, "capability.md")
@@ -99,8 +99,8 @@ describe("initFlow: performInit", () => {
 
     const result = performInit(dir, true)
 
-    expect(result.wrote.some((file) => file.startsWith(".kody/capabilities/"))).toBe(false)
-    expect(result.skipped.some((file) => file.startsWith(".kody/capabilities/"))).toBe(false)
+    expect(result.wrote.some((file) => file.startsWith(".kody-engine/definitions/capabilities/"))).toBe(false)
+    expect(result.skipped.some((file) => file.startsWith(".kody-engine/definitions/capabilities/"))).toBe(false)
     expect(fs.readFileSync(profilePath, "utf-8")).toMatch(/user-edit/)
     expect(fs.readFileSync(bodyPath, "utf-8")).toMatch(/user-edited capability/)
   })

@@ -2,10 +2,10 @@
  * Chat session file I/O.
  *
  * Sessions are durable JSONL files at `sessions/<sessionId>.jsonl` in the
- * configured state repo. Chat runtimes hydrate a local cache at
- * `<cwd>/.kody/sessions/<sessionId>.jsonl` while executing.
+ * configured backend. Chat runtimes hydrate a local cache at
+ * `<cwd>/.kody-engine/runtime/sessions/<sessionId>.jsonl` while executing.
  *
- * The dashboard writes the latest turn through the state repo before dispatching
+ * The dashboard writes the latest turn through the backend before dispatching
  * the workflow, so when chat runs the cache is already seeded. We only append
  * assistant turns here.
  */
@@ -39,7 +39,7 @@ export interface SessionMeta {
 }
 
 export function sessionFilePath(cwd: string, sessionId: string): string {
-  return path.join(cwd, ".kody", "sessions", `${sessionId}.jsonl`)
+  return path.join(cwd, ".kody-engine", "runtime", "sessions", `${sessionId}.jsonl`)
 }
 
 export function sessionStatePath(sessionId: string): string {

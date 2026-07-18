@@ -10,7 +10,7 @@
  */
 import * as fs from "node:fs"
 import * as path from "node:path"
-
+import { capabilitiesRoot } from "../definition-paths.js"
 import type { PreflightScript } from "../implementations/types.js"
 import { resolveCapabilityFolder } from "../registry.js"
 import { resolveBackend } from "./jobState/index.js"
@@ -19,7 +19,7 @@ import { runTickShellAndParse } from "./tickShellRunner.js"
 export const runScheduledImplementationTick: PreflightScript = async (ctx, profile, args) => {
   ctx.skipAgent = true
 
-  const jobsDir = String(args?.jobsDir ?? ".kody/capabilities")
+  const jobsDir = String(args?.jobsDir ?? capabilitiesRoot(ctx.cwd))
   const slugArg = String(args?.slugArg ?? "capability")
   const fenceLabel = String(args?.fenceLabel ?? "kody-job-next-state")
   const shell = String(args?.shell ?? "tick.sh")
@@ -31,7 +31,7 @@ export const runScheduledImplementationTick: PreflightScript = async (ctx, profi
     return
   }
 
-  const capability = resolveCapabilityFolder(slug, path.join(ctx.cwd, jobsDir))
+  const capability = resolveCapabilityFolder(slug, path.resolve(ctx.cwd, jobsDir))
   if (!capability) {
     ctx.output.exitCode = 99
     ctx.output.reason = `runScheduledImplementationTick: capability folder not found or incomplete: ${slug} (searched ${jobsDir} and company store)`

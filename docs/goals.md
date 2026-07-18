@@ -28,12 +28,12 @@ parent context and attaches capability results to goal evidence.
 Goal templates and instances are physically separate:
 
 ```text
-.kody/goals/templates/<goal-slug>/state.json
+backend goal template
 <statePath>/goals/instances/<goal-instance-id>/state.json
 ```
 
 Templates are reusable definitions. Instances are live runs with facts and
-progress. Persisted runtime instances belong in the configured state repo, not
+progress. Persisted runtime instances belong in the configured backend, not
 the consumer repo.
 
 Templates may come from `kody-store` or a repo-specific source. Store templates

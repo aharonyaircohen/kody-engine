@@ -75,7 +75,6 @@ export async function mcpHttpServer(): Promise<number> {
       version: "0.1.0",
       tools: capabilityToolDefinitions({
         repoSlug: process.env.GITHUB_REPOSITORY ?? "owner/repo",
-        state: config.state,
         operatorMention: process.env.OPERATOR_MENTION ?? "",
       }),
     },
@@ -111,7 +110,6 @@ async function loadConfigSafe(): Promise<KodyConfig> {
       quality: { typecheck: "", lint: "", format: "", testUnit: "" },
       git: { defaultBranch: "main" },
       github: { owner: "unknown", repo: "unknown" },
-      state: { repo: "https://github.com/unknown/kody-state", path: "unknown" },
       agent: { model: "claude/claude-sonnet-4" },
     }
   }

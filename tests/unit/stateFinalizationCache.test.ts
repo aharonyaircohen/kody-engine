@@ -41,7 +41,7 @@ function ctx(taskState: TaskState, overrides: Partial<Context> = {}): Context {
   return {
     args: { issue: 42 },
     cwd: "/tmp/repo",
-    config: { state: { repo: "acme/kody-state", path: "widgets" } } as Context["config"],
+    config: { github: { owner: "acme", repo: "widgets" } } as Context["config"],
     data: {
       taskState,
       commentTargetType: "issue",

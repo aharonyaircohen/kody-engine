@@ -1,7 +1,6 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { getCompanyStoreAssetRoot } from "../companyStore.js"
-import { type StateRepoConfig } from "../stateRepo.js"
+import type { KodyConfig } from "../config.js"
 import type { ManagedGoal } from "./manager.js"
 import type { GoalState } from "./state.js"
 import { fetchGoalStateAsync, listGoalStateIdsAsync, putGoalStateAsync } from "./stateStore.js"
@@ -20,15 +19,13 @@ export interface ActiveGoalLoopTarget {
 }
 
 export async function resolveActiveGoalLoopTarget(
-  config: StateRepoConfig,
+  config: KodyConfig,
   cwd: string,
   loopGoalId: string,
   loopGoal: ManagedGoal,
 ): Promise<ActiveGoalLoopTarget | null> {
   const targetId = loopGoal.loopTarget?.id.trim() ?? ""
   assertSafeGoalId(targetId, "loop target")
-  if (!hasExplicitStateRepo(config)) return null
-
   const activeInstance = await findActiveTargetInstance(config, cwd, loopGoalId, targetId)
   if (activeInstance) {
     return {
@@ -47,7 +44,7 @@ export async function resolveActiveGoalLoopTarget(
 }
 
 export async function resolveGoalLoopTarget(
-  config: StateRepoConfig,
+  config: KodyConfig,
   cwd: string,
   loopGoalId: string,
   loopGoal: ManagedGoal,
@@ -55,10 +52,6 @@ export async function resolveGoalLoopTarget(
 ): Promise<GoalLoopTargetResolution> {
   const targetId = loopGoal.loopTarget?.id.trim() ?? ""
   assertSafeGoalId(targetId, "loop target")
-  if (!hasExplicitStateRepo(config)) {
-    return { targetId, templateId: targetId, reason: "literal target; state repo not configured" }
-  }
-
   const activeTarget = await resolveActiveGoalLoopTarget(config, cwd, loopGoalId, loopGoal)
   if (activeTarget) return activeTarget
 
@@ -91,19 +84,8 @@ export function goalLoopNow(): Date {
   return new Date()
 }
 
-function hasExplicitStateRepo(config: StateRepoConfig): boolean {
-  const state = config.state
-  return (
-    !!state &&
-    typeof state.repo === "string" &&
-    state.repo.trim().length > 0 &&
-    typeof state.path === "string" &&
-    state.path.trim().length > 0
-  )
-}
-
 async function findActiveTargetInstance(
-  config: StateRepoConfig,
+  config: KodyConfig,
   cwd: string,
   loopGoalId: string,
   targetId: string,
@@ -142,13 +124,7 @@ function goalInstanceTime(state: GoalState): number {
 }
 
 function loadGoalTemplate(cwd: string, targetId: string): Record<string, unknown> | null {
-  const local = path.join(cwd, ".kody", "goals", "templates", targetId, "state.json")
-  const localTemplate = readJsonObject(local)
-  if (localTemplate) return localTemplate
-
-  const storeGoalRoot = getCompanyStoreAssetRoot("goals")
-  if (!storeGoalRoot) return null
-  return readJsonObject(path.join(storeGoalRoot, "templates", targetId, "state.json"))
+  return readJsonObject(path.join(cwd, ".kody-engine", "definitions", "goals", targetId, "state.json"))
 }
 
 function readJsonObject(filePath: string): Record<string, unknown> | null {
@@ -161,7 +137,7 @@ function readJsonObject(filePath: string): Record<string, unknown> | null {
 }
 
 async function chooseTargetInstanceId(
-  config: StateRepoConfig,
+  config: KodyConfig,
   cwd: string,
   targetId: string,
   timezone: string | undefined,

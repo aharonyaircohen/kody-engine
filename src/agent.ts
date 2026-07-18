@@ -184,7 +184,6 @@ export interface AgentOptions {
   /** Consumer agency branch used by start_capability child dispatches. */
   capabilityDefaultBranch?: string
   /** Canonical Kody state location used by locked capability tools. */
-  capabilityState?: KodyConfig["state"]
   /**
    * Slug of the running capability (`ctx.data.jobSlug`), stamped onto
    * `recommend_to_operator` comments so the dashboard keys trust per capability.
@@ -511,7 +510,6 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         }
         const capabilityHandle = buildCapabilityMcpServer({
           repoSlug: opts.capabilityRepoSlug,
-          state: opts.capabilityState,
           operatorMention: opts.capabilityOperatorMention ?? "",
           ...(opts.capabilityDefaultBranch ? { defaultBranch: opts.capabilityDefaultBranch } : {}),
           ...(opts.capabilitySlug ? { capabilitySlug: opts.capabilitySlug } : {}),
