@@ -143,6 +143,12 @@ function locateLitellmScript(): string | null {
  * <implementation>` directly failed with "litellm not installed".
  */
 export function resolveLitellmCommand(): string {
+  // The Brain image installs LiteLLM in its dedicated virtualenv. Resolve the
+  // console script directly because a Fly machine can replace PATH before the
+  // Node process starts, even when the Docker image declares one.
+  const imageScript = "/opt/venv/bin/litellm"
+  if (fs.existsSync(imageScript)) return imageScript
+
   try {
     execFileSync("which", ["litellm"], { timeout: 3000, stdio: "pipe" })
     return "litellm"
