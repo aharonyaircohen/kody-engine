@@ -29,6 +29,11 @@ set -euo pipefail
 #                      CLAUDE_CODE_AUTH_B64 = base64(.tgz) containing only
 #                      .claude.json and/or .claude/.credentials.json.
 
+# Fly machine config can replace the image PATH at runtime. Keep the
+# image-installed Python tools discoverable in either case; brain-serve needs
+# the LiteLLM console script before it can start.
+export PATH="/opt/venv/bin:${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
+
 # REPO is OPTIONAL. A repo-less Brain boots with no work repo and clones
 # each repo on demand per chat message (into $BRAIN_REPOS_ROOT). When REPO
 # is set we still clone it as a convenience boot repo (back-compat).
