@@ -27,24 +27,18 @@
  * The agent runs once per chat turn inside the HTTP handler.
  */
 
-import * as fs from "node:fs"
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 import * as path from "node:path"
 import type { ChatEvent, EventSink } from "../chat/events.js"
 import { type ChatTurnOptions, type ChatTurnResult, runChatTurn } from "../chat/loop.js"
+import { resolveBrainDriver } from "../chat/runtime-drivers.js"
 import { sessionFilePath } from "../chat/session.js"
 import { createSessionStore } from "../chat/session-store.js"
 import { LITELLM_DEFAULT_URL, needsLitellmProxy, type ProviderModel, parseModelRuntimeConfig } from "../config.js"
 import { unpackAllSecrets } from "../kody-cli.js"
 import { type LitellmHandle, startLitellmIfNeeded } from "../litellm.js"
 import { type CloneRepoFn, defaultCloneRepo, ensureRepoCwd } from "../repoWorkspace.js"
-import {
-  beginTurn,
-  brainEventsFilePath,
-  endTurnIfUnterminated,
-  getLastSeq,
-  subscribe,
-} from "../scripts/brainTurnLog.js"
+import { beginTurn, endTurnIfUnterminated, getLastSeq, subscribe } from "../scripts/brainTurnLog.js"
 import { createStateBackendFromEnv } from "../state-backend.js"
 
 export interface BrainEvent {
@@ -165,13 +159,6 @@ function envGithubToken(): string {
   return (process.env.KODY_TOKEN ?? process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? process.env.GH_PAT ?? "").trim()
 }
 
-function parseRepoSlug(repo: string | undefined): { owner: string; repo: string } | null {
-  if (!repo) return null
-  const [owner, name] = repo.split("/", 2)
-  if (!owner || !name) return null
-  return { owner, repo: name }
-}
-
 /**
  * Pure translation: kody ChatEvent → Brain SSE event, or null when the event
  * has no Brain-protocol equivalent (chat.thinking / chat.ready / chat.exit,
@@ -240,8 +227,17 @@ export class BrokerSink implements EventSink {
     const be = translateChatEvent(event, this.chatId)
     if (!be) return
     this.emitToLog(be)
-    if (this.tenantId) await createStateBackendFromEnv().appendChatEvent(this.tenantId, this.chatId, be)
+    // Local Brain runs without Convex. The broker log remains the local
+    // source of truth in that mode; only mirror events remotely when the
+    // durable backend is actually configured.
+    if (this.tenantId && hasStateBackendConfig()) {
+      await createStateBackendFromEnv().appendChatEvent(this.tenantId, this.chatId, be)
+    }
   }
+}
+
+export function hasStateBackendConfig(env: NodeJS.ProcessEnv = process.env): boolean {
+  return Boolean(env.CONVEX_URL?.trim() && env.KODY_SERVICE_KEY?.trim())
 }
 
 // Per-chat turn serialization — a chat's turns must not interleave (shared
@@ -322,6 +318,8 @@ export interface BuildServerOptions {
   cloneRepo?: CloneRepoFn
   /** Seam for tests — defaults to the real chat-loop runChatTurn. */
   runTurn?: (opts: ChatTurnOptions) => Promise<ChatTurnResult>
+  /** Brain response driver. Codex uses the user's local subscription login. */
+  driver?: ChatTurnOptions["driver"]
 }
 
 async function handleChatTurn(
@@ -335,6 +333,7 @@ async function handleChatTurn(
     model: ProviderModel
     litellmUrl: string | null
     runTurn: (opts: ChatTurnOptions) => Promise<ChatTurnResult>
+    driver?: ChatTurnOptions["driver"]
   },
 ): Promise<void> {
   let body: unknown
@@ -360,8 +359,19 @@ async function handleChatTurn(
   const dashboardUrl = strField(body, "dashboardUrl")
   const storeRepoUrl = strField(body, "storeRepoUrl")
   const storeRef = strField(body, "storeRef")
+  const runtime = strField(body, "runtime")
   const allowCrossRepo = boolField(body, "allowCrossRepo")
   const agentIdentity = agentIdentityField(body)
+
+  let turnDriver = opts.driver
+  if (runtime) {
+    try {
+      turnDriver = resolveBrainDriver(runtime)
+    } catch (err) {
+      sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) })
+      return
+    }
+  }
 
   // Open the stream before repo clone/state restore. First Repo Brain turns can
   // spend a while preparing the workspace; the browser should not wait for that
@@ -397,7 +407,6 @@ async function handleChatTurn(
 
   const stateToken = repoToken || envGithubToken()
   const sessionFile = sessionFilePath(agentCwd, chatId)
-  const brainEventsFile = brainEventsFilePath(agentCwd, chatId)
   const sessionStore = createSessionStore({
     sessionId: chatId,
     sessionFile,
@@ -433,6 +442,7 @@ async function handleChatTurn(
         ...(allowCrossRepo ? { enableFetchRepoTool: true } : {}),
         repoToken,
         ...(agentIdentity ? { agentIdentity } : {}),
+        ...(turnDriver ? { driver: turnDriver } : {}),
         ...(dashboardUrl && repo && stateToken
           ? {
               cmsDashboardUrl: dashboardUrl,
@@ -503,6 +513,7 @@ export function buildServer(opts: BuildServerOptions): Server {
         model: opts.model,
         litellmUrl: opts.litellmUrl,
         runTurn,
+        driver: opts.driver,
       })
       return
     }
@@ -541,6 +552,8 @@ export async function brainServe(opts: { cwd: string }): Promise<number> {
 
   const apiKey = getApiKey()
   const port = Number(process.env.PORT ?? DEFAULT_PORT)
+  const driver: ChatTurnOptions["driver"] =
+    process.env.BRAIN_DRIVER?.trim() === "codex-app-server" ? "codex-app-server" : "native"
   // brain-serve runs config-free (it serves many repos cloned per message), so
   // its model comes from the MODEL env var — same fallback the executor used
   // for this formerly-configless implementation.
@@ -548,7 +561,7 @@ export async function brainServe(opts: { cwd: string }): Promise<number> {
     process.env.MODEL?.trim() || "claude/claude-haiku-4-5-20251001",
     process.env.KODY_MODEL_CONFIG,
   )
-  const usesProxy = needsLitellmProxy(model)
+  const usesProxy = driver === "native" && needsLitellmProxy(model)
 
   let handle: LitellmHandle | null = null
   if (usesProxy) {
@@ -565,6 +578,7 @@ export async function brainServe(opts: { cwd: string }): Promise<number> {
     reposRoot: process.env.BRAIN_REPOS_ROOT?.trim() || undefined,
     model,
     litellmUrl,
+    driver,
   })
 
   await new Promise<void>((resolve) => {

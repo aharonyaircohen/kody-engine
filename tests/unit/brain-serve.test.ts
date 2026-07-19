@@ -18,9 +18,11 @@ import {
   authOk,
   type BrainEvent,
   BrainSseSink,
+  BrokerSink,
   type BuildServerOptions,
   buildServer,
   ensureRepoCwd,
+  hasStateBackendConfig,
 } from "../../src/servers/brain-serve.js"
 
 const MODEL = { provider: "anthropic" as const, model: "claude-haiku-4-5-20251001" }
@@ -151,6 +153,27 @@ describe("BrainSseSink", () => {
     const sink = new BrainSseSink(res as unknown as import("node:http").ServerResponse, "c1")
     await sink.emit(makeEvent("chat.thinking", { text: "hmm" }))
     expect(res.chunks).toEqual([])
+  })
+})
+
+describe("BrokerSink", () => {
+  it("keeps local Brain turns local when Convex is not configured", async () => {
+    const events: BrainEvent[] = []
+    const sink = new BrokerSink((event) => events.push(event), "c1", "owner/repo")
+
+    await expect(sink.emit(makeEvent("chat.tool", { phase: "use", name: "Read", input: {} }))).resolves.toBeUndefined()
+    expect(events).toEqual([{ type: "tool_use", name: "Read", input: {}, chatId: "c1" }])
+  })
+})
+
+describe("hasStateBackendConfig", () => {
+  it("requires both Convex settings", () => {
+    expect(hasStateBackendConfig({})).toBe(false)
+    expect(hasStateBackendConfig({ CONVEX_URL: "https://example.convex.cloud" })).toBe(false)
+    expect(hasStateBackendConfig({ KODY_SERVICE_KEY: "service-key" })).toBe(false)
+    expect(hasStateBackendConfig({ CONVEX_URL: "https://example.convex.cloud", KODY_SERVICE_KEY: "service-key" })).toBe(
+      true,
+    )
   })
 })
 
@@ -314,6 +337,36 @@ describe("buildServer routes", () => {
     expect(events[2]).toMatchObject({ type: "done", chatId: "c1" })
     expect(events[1]!.seq).toBe(1)
     expect(events[2]!.seq).toBe(2)
+  })
+
+  it("selects the runtime adapter from the request", async () => {
+    let observedDriver: ChatTurnOptions["driver"]
+    booted = await boot(async (opts) => {
+      observedDriver = opts.driver
+      await opts.sink.emit(makeEvent("chat.done", { sessionId: opts.sessionId }))
+      return { exitCode: 0 }
+    }, tmp)
+    const res = await fetch(`${booted.url}/chats/codex/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": KEY },
+      body: JSON.stringify({ message: "hi", runtime: "codex app-server" }),
+    })
+    expect(res.status).toBe(200)
+    await readSseBody(res)
+    expect(observedDriver).toBe("codex-app-server")
+  })
+
+  it("rejects an unsupported runtime before starting a turn", async () => {
+    booted = await boot(async () => {
+      throw new Error("should not run turn")
+    }, tmp)
+    const res = await fetch(`${booted.url}/chats/c1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": KEY },
+      body: JSON.stringify({ message: "hi", runtime: "unknown" }),
+    })
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toContain("Unsupported Brain runtime")
   })
 
   it("opens the stream before repo clone finishes", async () => {

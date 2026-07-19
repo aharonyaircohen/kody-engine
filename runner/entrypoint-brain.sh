@@ -22,6 +22,8 @@ set -euo pipefail
 #                      kody.config.json brain.mode
 #   PORT              HTTP port for brain-serve (default: 8080)
 #   MODEL             model override, e.g. "anthropic/claude-sonnet-4-6" (optional)
+#   BRAIN_DRIVER      "native" (default) | "codex-app-server" — use the
+#                     personal Codex subscription already logged into this machine
 #   ALL_SECRETS       JSON blob of provider keys (mirrors GH Actions toJSON(secrets))
 #                      Optional Claude Code subscription auth:
 #                      CLAUDE_CODE_AUTH_B64 = base64(.tgz) containing only

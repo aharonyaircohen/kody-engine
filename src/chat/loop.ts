@@ -22,6 +22,7 @@ import {
   verifyTaskArtifacts,
 } from "../task-artifacts.js"
 import { prepareAttachments } from "./attachments.js"
+import { runCodexChatTurn } from "./codex-app-server.js"
 import type { ChatEvent, EventSink } from "./events.js"
 import { makeRunId } from "./events.js"
 import type { ChatTurn } from "./session.js"
@@ -244,12 +245,20 @@ export interface ChatTurnOptions {
    * else the legacy session JSONL file (see session-store.ts).
    */
   store?: SessionStore
+  /** Select the Brain response driver. Defaults to the existing native driver. */
+  driver?: "native" | "codex-app-server"
 }
 
 export interface ChatTurnResult {
   exitCode: number
   reply?: string
   error?: string
+}
+
+/** Codex app-server owns its own conversation/tool protocol; it must not be
+ * given the engine's task-artifact contract for ordinary Brain chat. */
+export function shouldWriteTaskArtifacts(driver: ChatTurnOptions["driver"]): boolean {
+  return driver !== "codex-app-server"
 }
 
 export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult> {
@@ -286,11 +295,13 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
     taskKey: `sessions/${opts.sessionId}`,
   }
   initializeTaskArtifacts(taskArtifactsPaths, { taskType: "chat", target: opts.sessionId })
-  const artifactAddendum = taskArtifactsPromptAddendum({
-    taskId: taskArtifactsPaths.taskId,
-    taskType: "chat",
-    relDir: taskArtifactsPaths.relDir,
-  })
+  const artifactAddendum = shouldWriteTaskArtifacts(opts.driver)
+    ? taskArtifactsPromptAddendum({
+        taskId: taskArtifactsPaths.taskId,
+        taskType: "chat",
+        relDir: taskArtifactsPaths.relDir,
+      })
+    : null
   const contextBlock = readContextBlock(opts.cwd)
   const memoryBlock = readMemoryIndexBlock(opts.cwd)
   const instructionsBlock = readInstructionsBlock(opts.cwd)
@@ -333,6 +344,15 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
     .filter((s): s is string => typeof s === "string" && s.length > 0)
     .join("\n\n")
   const prompt = buildPrompt(promptTurns)
+
+  if (opts.driver === "codex-app-server") {
+    return runCodexChatTurn({
+      opts,
+      turns: promptTurns,
+      systemPrompt,
+      store,
+    })
+  }
 
   if (opts.model.protocol === "openai" && opts.litellmUrl) {
     return runOpenAIChatTurn({

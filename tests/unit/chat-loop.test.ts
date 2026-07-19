@@ -3,7 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { ChatEvent, EventSink } from "../../src/chat/events.js"
-import { buildPrompt, runChatTurn } from "../../src/chat/loop.js"
+import { buildPrompt, runChatTurn, shouldWriteTaskArtifacts } from "../../src/chat/loop.js"
 import { appendTurn, readSession } from "../../src/chat/session.js"
 
 class MemSink implements EventSink {
@@ -23,6 +23,12 @@ describe("chat/loop", () => {
   })
   afterEach(() => {
     fs.rmSync(tmp, { recursive: true, force: true })
+  })
+
+  it("does not add engine artifact instructions to Codex chat turns", () => {
+    expect(shouldWriteTaskArtifacts("codex-app-server")).toBe(false)
+    expect(shouldWriteTaskArtifacts("native")).toBe(true)
+    expect(shouldWriteTaskArtifacts(undefined)).toBe(true)
   })
 
   it("buildPrompt interleaves turns and tags assistant as the next speaker", () => {
