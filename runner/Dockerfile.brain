@@ -27,7 +27,7 @@ RUN ARCH=$(dpkg --print-architecture) \
 
 RUN python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
-    && /opt/venv/bin/pip install --no-cache-dir 'litellm[proxy]' 'hermes-agent'
+    && /opt/venv/bin/pip install --no-cache-dir 'litellm[proxy]==1.93.0' 'hermes-agent'
 ENV PATH="/opt/venv/bin:${PATH}"
 
 # Install from git so unreleased changes (e.g. the brain-serve executable
