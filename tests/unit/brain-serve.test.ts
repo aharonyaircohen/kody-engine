@@ -37,6 +37,7 @@ function memoryStoreFactory(): (opts: SessionStoreOptions) => SessionStore {
     sessions.set(opts.sessionId, turns)
     return {
       backend: "convex",
+      readMode: async () => "interactive",
       readActiveAgent: async () => ({ slug: "kody", title: "Kody" }),
       readTurns: async () => [...turns],
       appendTurn: async (turn) => {

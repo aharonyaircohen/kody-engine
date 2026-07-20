@@ -25,6 +25,7 @@ const MODEL = { provider: "anthropic" as const, model: "claude-haiku-4-5-2025100
 function testStore(sessionFile: string): SessionStore {
   return {
     backend: "convex",
+    readMode: async () => "one-shot",
     readActiveAgent: async () => ({ slug: "kody", title: "Kody" }),
     readTurns: async () => readSession(sessionFile),
     appendTurn: async (turn) => appendTurn(sessionFile, turn),

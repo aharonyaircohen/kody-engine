@@ -1,11 +1,8 @@
 /**
- * Interactive chat mode — long-lived runner that polls for new user messages
- * via the session JSONL inbox and runs a turn for each.
+ * Interactive chat mode — long-lived runner that polls the canonical
+ * conversation for new user messages and runs a turn for each.
  *
- * Activated when the session file's first line is a meta line with
- * `mode: "interactive"`. Without that meta line, chat falls back to the
- * existing single-turn (one-shot) flow — no behavior change for legacy
- * sessions.
+ * Activated when the canonical conversation runtime is `live`.
  *
  * Lifecycle events (consumed by the dashboard):
  *  - `chat.ready` — emitted once at boot. Dashboard unlocks the input.

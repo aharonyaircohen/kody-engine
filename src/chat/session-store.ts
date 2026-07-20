@@ -10,6 +10,7 @@ import type { ChatTurn } from "./session.js"
 
 export interface SessionStore {
   backend: "convex"
+  readMode(): Promise<"interactive" | "one-shot">
   readActiveAgent(): Promise<{ slug: string; title: string }>
   readTurns(): Promise<ChatTurn[]>
   appendTurn(turn: ChatTurn): Promise<void>
@@ -28,6 +29,7 @@ export interface SessionStoreOptions {
 interface ConversationResult {
   conversation: {
     activeAgent: { slug: string; title: string }
+    runtime?: { kind?: string }
   }
   entries: Array<{
     entryId: string
@@ -96,6 +98,7 @@ export function createSessionStore(opts: SessionStoreOptions): SessionStore {
 
   return {
     backend: "convex",
+    readMode: async () => ((await read()).conversation.runtime?.kind === "live" ? "interactive" : "one-shot"),
     readActiveAgent: async () => (await read()).conversation.activeAgent,
     readTurns: async () => currentEpochTurns(await read()),
     appendTurn: async (turn) => {

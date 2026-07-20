@@ -29,7 +29,10 @@ describe("chat/session-store", () => {
 
   it("reads only the current agent epoch in exact sequence order", async () => {
     const { client, query } = mockClient({
-      conversation: { activeAgent: { slug: "ceo", title: "CEO" } },
+      conversation: {
+        activeAgent: { slug: "ceo", title: "CEO" },
+        runtime: { kind: "live" },
+      },
       entries: [
         {
           entryId: "m2",
@@ -86,6 +89,7 @@ describe("chat/session-store", () => {
       slug: "ceo",
       title: "CEO",
     })
+    await expect(store.readMode()).resolves.toBe("interactive")
     expect(query).toHaveBeenCalledWith(expect.anything(), {
       tenantId: "owner/repo",
       conversationId: "c1",

@@ -10,18 +10,18 @@
  *  1. Light preflight (unpack ALL_SECRETS, resolve auth token, configure git).
  *  2. Load config if present, resolve model (CLI flag > config > default).
  *  3. Start LiteLLM proxy for non-anthropic models.
- *  4. Read session file, optionally seed INIT_MESSAGE.
+ *  4. Read the canonical conversation, optionally append INIT_MESSAGE.
  *  5. Run one chat turn via runAgent; emit events through File+Http sink.
- *  6. Commit + push session and events back so the dashboard sees the reply.
+ *  6. Persist the reply to the canonical conversation and emit live events.
  */
 
-import * as fs from "node:fs"
 import * as path from "node:path"
 import type { EventSink } from "./chat/events.js"
 import { eventsFilePath, FileSink, HttpSink, makeRunId, TeeSink } from "./chat/events.js"
 import { runChatTurn } from "./chat/loop.js"
 import { runInteractiveMode } from "./chat/modes/interactive.js"
-import { readMeta, seedInitialMessage, sessionFilePath } from "./chat/session.js"
+import { type SessionMeta, sessionFilePath } from "./chat/session.js"
+import { createSessionStore } from "./chat/session-store.js"
 import {
   loadConfig,
   needsLitellmProxy,
@@ -203,21 +203,29 @@ export async function runChat(argv: string[]): Promise<number> {
   process.stdout.write(`→ kody:chat: litellm proxy ready (url=${litellm?.url ?? "skipped"})\n`)
 
   const sessionFile = sessionFilePath(cwd, sessionId)
-  if (args.initMessage) seedInitialMessage(sessionFile, args.initMessage)
+  const store = createSessionStore({ sessionId, sessionFile })
+  if (args.initMessage) {
+    await store.appendTurn({
+      role: "user",
+      content: args.initMessage,
+      timestamp: new Date().toISOString(),
+    })
+  }
 
   const sink = buildSink(cwd, sessionId, args.dashboardUrl)
 
-  // Read mode from session-file meta line. Absent meta = legacy one-shot
-  // (workflow dispatch = single reply). meta.mode = "interactive" enters
-  // the long-lived poll loop. Encoding mode in data (not workflow inputs)
-  // keeps kody.yml a thin shim — see CLAUDE.md / feedback_thin_yaml.md.
-  const meta = readMeta(sessionFile)
-  process.stdout.write(
-    `→ kody:chat: session file=${sessionFile} exists=${fs.existsSync(sessionFile)} meta=${meta ? meta.mode : "none"}\n`,
-  )
+  const mode = await store.readMode()
+  const meta: SessionMeta = {
+    type: "meta",
+    mode,
+    createdAt: new Date().toISOString(),
+    ...(process.env.KODY_IDLE_EXIT_MS ? { idleExitMs: Number(process.env.KODY_IDLE_EXIT_MS) } : {}),
+    ...(process.env.KODY_HARD_CAP_MS ? { hardCapMs: Number(process.env.KODY_HARD_CAP_MS) } : {}),
+  }
+  process.stdout.write(`→ kody:chat: canonical conversation mode=${mode}\n`)
 
   try {
-    if (meta?.mode === "interactive") {
+    if (mode === "interactive") {
       const result = await runInteractiveMode({
         sessionId,
         cwd,
@@ -228,6 +236,7 @@ export async function runChat(argv: string[]): Promise<number> {
         verbose: args.verbose,
         quiet: args.quiet,
         config,
+        store,
         ...(reasoningEffort ? { reasoningEffort } : {}),
       })
       return result.exitCode
@@ -243,6 +252,7 @@ export async function runChat(argv: string[]): Promise<number> {
       verbose: args.verbose,
       quiet: args.quiet,
       config,
+      store,
       ...(reasoningEffort ? { reasoningEffort } : {}),
     })
     return result.exitCode
