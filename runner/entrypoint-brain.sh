@@ -46,6 +46,10 @@ export PATH="/opt/venv/bin:${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr
 export BRAIN_REPOS_ROOT="${BRAIN_REPOS_ROOT:-/workspace/repos}"
 mkdir -p "$BRAIN_REPOS_ROOT"
 
+# Codex subscription state lives on the Fly-mounted persistent volume.
+mkdir -p /root/.codex
+chmod 700 /root/.codex
+
 if [ -n "${REPO:-}" ]; then
   WORKDIR="/workspace/repo"
 else

@@ -63,6 +63,14 @@ RUN corepack enable \
 RUN corepack enable \
  && corepack prepare pnpm@latest --activate
 
+# Codex is part of the immutable Brain image. The user's subscription login is
+# kept on the mounted /root/.codex Fly volume, so replacing a machine does not
+# remove the CLI or the login state.
+ARG CODEX_VERSION=0.144.6
+RUN npm install --global "@openai/codex@${CODEX_VERSION}" \
+ && command -v codex \
+ && codex --version
+
 WORKDIR /workspace
 
 COPY entrypoint-brain.sh /usr/local/bin/entrypoint-brain.sh
