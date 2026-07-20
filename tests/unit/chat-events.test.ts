@@ -4,6 +4,7 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { ChatEvent } from "../../src/chat/events.js"
 import {
+  BackendEventSink,
   eventsFilePath,
   FileSink,
   HttpSink,
@@ -21,6 +22,20 @@ const EV: ChatEvent = {
 }
 
 describe("chat/events", () => {
+  it("BackendEventSink appends lifecycle events to the canonical event log", async () => {
+    const append = vi.fn(async () => undefined)
+    const sink = new BackendEventSink(append, "global", "s1")
+    const event: ChatEvent = {
+      ...EV,
+      event: "chat.ready",
+      payload: { sessionId: "s1" },
+    }
+
+    await sink.emit(event)
+
+    expect(append).toHaveBeenCalledWith("global", "s1", event)
+  })
+
   let tmp: string
 
   beforeEach(() => {

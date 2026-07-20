@@ -17,7 +17,7 @@
 
 import * as path from "node:path"
 import type { EventSink } from "./chat/events.js"
-import { eventsFilePath, FileSink, HttpSink, makeRunId, TeeSink } from "./chat/events.js"
+import { BackendEventSink, eventsFilePath, FileSink, HttpSink, makeRunId, TeeSink } from "./chat/events.js"
 import { runChatTurn } from "./chat/loop.js"
 import { runInteractiveMode } from "./chat/modes/interactive.js"
 import { type SessionMeta, sessionFilePath } from "./chat/session.js"
@@ -32,6 +32,7 @@ import {
 import { configureGitIdentity, installLitellmIfNeeded, resolveAuthToken, unpackAllSecrets } from "./kody-cli.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 import { readRunRequestFromEnv } from "./run-request.js"
+import { createStateBackendFromEnv } from "./state-backend.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
 
 const DEFAULT_MODEL = "claude/claude-haiku-4-5-20251001"
@@ -123,7 +124,15 @@ function tryLoadConfig(cwd: string): ReturnType<typeof loadConfig> | null {
 }
 
 function buildSink(cwd: string, sessionId: string, dashboardUrl?: string): EventSink {
-  const sinks: EventSink[] = [new FileSink(eventsFilePath(cwd, sessionId))]
+  const backend = createStateBackendFromEnv()
+  const sinks: EventSink[] = [
+    new BackendEventSink(
+      (tenantId, targetSessionId, event) => backend.appendChatEvent(tenantId, targetSessionId, event),
+      "global",
+      sessionId,
+    ),
+    new FileSink(eventsFilePath(cwd, sessionId)),
+  ]
   if (dashboardUrl) sinks.push(new HttpSink(dashboardUrl, sessionId))
   return new TeeSink(sinks)
 }

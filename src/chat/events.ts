@@ -1,5 +1,6 @@
 /**
- * Chat event emission — file JSONL + optional HTTP push, composed via Tee.
+ * Chat event emission — canonical backend + local diagnostics + optional HTTP
+ * push, composed via Tee.
  *
  * Events are what the Kody-Dashboard SSE stream consumes. The FileSink writes a
  * local cache that chat runners sync to the configured backend, so the
@@ -28,6 +29,18 @@ export interface ChatEvent {
 
 export interface EventSink {
   emit(event: ChatEvent): Promise<void>
+}
+
+export class BackendEventSink implements EventSink {
+  constructor(
+    private readonly append: (tenantId: string, sessionId: string, event: ChatEvent) => Promise<void>,
+    private readonly tenantId: string,
+    private readonly sessionId: string,
+  ) {}
+
+  async emit(event: ChatEvent): Promise<void> {
+    await this.append(this.tenantId, this.sessionId, event)
+  }
 }
 
 export function eventsFilePath(cwd: string, sessionId: string): string {
