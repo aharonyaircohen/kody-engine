@@ -15,6 +15,7 @@ import type { AgentResult } from "../../src/agent.js"
 import type { ChatEvent, EventSink } from "../../src/chat/events.js"
 import { runInteractiveMode } from "../../src/chat/modes/interactive.js"
 import { appendTurn, readMeta, readSession, sessionFilePath } from "../../src/chat/session.js"
+import type { SessionStore } from "../../src/chat/session-store.js"
 
 class MemSink implements EventSink {
   events: ChatEvent[] = []
@@ -25,6 +26,15 @@ class MemSink implements EventSink {
 }
 
 const MODEL = { provider: "anthropic", model: "claude-haiku-4-5-20251001" }
+
+function testStore(sessionFile: string): SessionStore {
+  return {
+    backend: "convex",
+    readActiveAgent: async () => ({ slug: "kody", title: "Kody" }),
+    readTurns: async () => readSession(sessionFile),
+    appendTurn: async (turn) => appendTurn(sessionFile, turn),
+  }
+}
 
 describe("chat/modes/interactive — end-to-end simulation", () => {
   let tmp: string
@@ -104,6 +114,7 @@ describe("chat/modes/interactive — end-to-end simulation", () => {
       invokeAgent,
       skipGit: true,
       pollIntervalMs: 100,
+      store: testStore(sessionFile),
     })
 
     clearTimeout(midFlightAppend)
@@ -219,6 +230,7 @@ describe("chat/modes/interactive — end-to-end simulation", () => {
       invokeAgent,
       skipGit: true,
       pollIntervalMs: 80,
+      store: testStore(sessionFile),
     })
 
     for (const t of timers) clearTimeout(t)
@@ -280,6 +292,7 @@ describe("chat/modes/interactive — end-to-end simulation", () => {
         }) as AgentResult,
       skipGit: true,
       pollIntervalMs: 80,
+      store: testStore(sessionFile),
     })
 
     expect(result.reason).toBe("deadline")

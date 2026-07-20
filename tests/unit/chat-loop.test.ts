@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { ChatEvent, EventSink } from "../../src/chat/events.js"
 import { buildPrompt, runChatTurn, shouldWriteTaskArtifacts } from "../../src/chat/loop.js"
 import { appendTurn, readSession } from "../../src/chat/session.js"
+import type { SessionStore } from "../../src/chat/session-store.js"
 
 class MemSink implements EventSink {
   events: ChatEvent[] = []
@@ -14,6 +15,15 @@ class MemSink implements EventSink {
 }
 
 const MODEL = { provider: "anthropic", model: "claude-haiku-4-5-20251001" }
+
+function testStore(sessionFile: string): SessionStore {
+  return {
+    backend: "convex",
+    readActiveAgent: async () => ({ slug: "kody", title: "Kody" }),
+    readTurns: async () => readSession(sessionFile),
+    appendTurn: async (turn) => appendTurn(sessionFile, turn),
+  }
+}
 
 describe("chat/loop", () => {
   let tmp: string
@@ -51,6 +61,7 @@ describe("chat/loop", () => {
     const res = await runChatTurn({
       sessionId: "s1",
       sessionFile,
+      store: testStore(sessionFile),
       cwd: tmp,
       model: MODEL,
       litellmUrl: null,
@@ -71,6 +82,7 @@ describe("chat/loop", () => {
     const res = await runChatTurn({
       sessionId: "s1",
       sessionFile,
+      store: testStore(sessionFile),
       cwd: tmp,
       model: MODEL,
       litellmUrl: null,
@@ -90,6 +102,7 @@ describe("chat/loop", () => {
     const res = await runChatTurn({
       sessionId: "s1",
       sessionFile,
+      store: testStore(sessionFile),
       cwd: tmp,
       model: MODEL,
       litellmUrl: null,
@@ -118,6 +131,7 @@ describe("chat/loop", () => {
     const res = await runChatTurn({
       sessionId: "s1",
       sessionFile,
+      store: testStore(sessionFile),
       cwd: tmp,
       model: { provider: "custom", model: "MiniMax-M3", protocol: "openai", spec: "minimax/MiniMax-M3" },
       litellmUrl: "http://localhost:4000",
@@ -152,6 +166,7 @@ describe("chat/loop", () => {
     const res = await runChatTurn({
       sessionId: "s1",
       sessionFile,
+      store: testStore(sessionFile),
       cwd: tmp,
       model: { provider: "custom", model: "MiniMax-M3", protocol: "openai", spec: "minimax/MiniMax-M3" },
       litellmUrl: "http://localhost:4000",
@@ -186,6 +201,7 @@ describe("chat/loop", () => {
     const res = await runChatTurn({
       sessionId: "s1",
       sessionFile,
+      store: testStore(sessionFile),
       cwd: tmp,
       model: { provider: "custom", model: "MiniMax-M3", protocol: "openai", spec: "minimax/MiniMax-M3" },
       litellmUrl: "http://localhost:4000",
@@ -217,6 +233,7 @@ describe("chat/loop", () => {
     const res = await runChatTurn({
       sessionId: "s1",
       sessionFile,
+      store: testStore(sessionFile),
       cwd: tmp,
       model: { provider: "custom", model: "MiniMax-M3", protocol: "openai", spec: "minimax/MiniMax-M3" },
       litellmUrl: "http://localhost:4000",
@@ -248,6 +265,7 @@ describe("chat/loop", () => {
     const res = await runChatTurn({
       sessionId: "s1",
       sessionFile,
+      store: testStore(sessionFile),
       cwd: tmp,
       model: MODEL,
       litellmUrl: null,
@@ -269,6 +287,7 @@ describe("chat/loop", () => {
     const res = await runChatTurn({
       sessionId: "s1",
       sessionFile,
+      store: testStore(sessionFile),
       cwd: tmp,
       model: MODEL,
       litellmUrl: null,

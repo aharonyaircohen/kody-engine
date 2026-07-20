@@ -14,6 +14,8 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { ChatEvent } from "../../src/chat/events.js"
 import type { ChatTurnOptions, ChatTurnResult } from "../../src/chat/loop.js"
+import type { ChatTurn } from "../../src/chat/session.js"
+import type { SessionStore, SessionStoreOptions } from "../../src/chat/session-store.js"
 import {
   authOk,
   type BrainEvent,
@@ -27,6 +29,22 @@ import {
 
 const MODEL = { provider: "anthropic" as const, model: "claude-haiku-4-5-20251001" }
 const KEY = "test-key-do-not-leak"
+
+function memoryStoreFactory(): (opts: SessionStoreOptions) => SessionStore {
+  const sessions = new Map<string, ChatTurn[]>()
+  return (opts) => {
+    const turns = sessions.get(opts.sessionId) ?? []
+    sessions.set(opts.sessionId, turns)
+    return {
+      backend: "convex",
+      readActiveAgent: async () => ({ slug: "kody", title: "Kody" }),
+      readTurns: async () => [...turns],
+      appendTurn: async (turn) => {
+        turns.push(turn)
+      },
+    }
+  }
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // authOk
@@ -197,6 +215,7 @@ async function boot(
     model: MODEL,
     litellmUrl: null,
     runTurn,
+    createStore: memoryStoreFactory(),
     ...extra,
   })
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()))
@@ -432,12 +451,13 @@ describe("buildServer routes", () => {
     expect(events[events.length - 1]).toMatchObject({ type: "done" })
   })
 
-  it("appends the user message to the session file before invoking the turn", async () => {
+  it("appends the user message to the canonical store before invoking the turn", async () => {
     let observedSessionFile = ""
+    let observedTurns: ChatTurn[] = []
     booted = await boot(async (opts) => {
       observedSessionFile = opts.sessionFile
-      const raw = fs.readFileSync(opts.sessionFile, "utf-8").trim().split("\n")
-      const last = JSON.parse(raw[raw.length - 1]!) as { role: string; content: string }
+      observedTurns = await opts.store!.readTurns()
+      const last = observedTurns.at(-1)!
       expect(last.role).toBe("user")
       expect(last.content).toBe("from the user")
       await opts.sink.emit(makeEvent("chat.done", {}))
@@ -451,7 +471,8 @@ describe("buildServer routes", () => {
     expect(res.status).toBe(200)
     await readSseBody(res)
     expect(observedSessionFile).toContain(".kody-engine/runtime/sessions/c1.jsonl")
-    expect(fs.existsSync(observedSessionFile)).toBe(true)
+    expect(observedTurns).toHaveLength(1)
+    expect(fs.existsSync(observedSessionFile)).toBe(false)
   })
 
   it("emits an error SSE event when the turn throws", async () => {
@@ -507,12 +528,14 @@ describe("buildServer routes", () => {
     expect(invoked).toBe(false)
   })
 
-  it("preserves multi-turn session history across two requests", async () => {
+  it("preserves canonical multi-turn history across two requests", async () => {
     let firstSessionFile = ""
     let secondSessionFile = ""
+    const observedHistories: ChatTurn[][] = []
     booted = await boot(async (opts) => {
       if (!firstSessionFile) firstSessionFile = opts.sessionFile
       else secondSessionFile = opts.sessionFile
+      observedHistories.push(await opts.store!.readTurns())
       await opts.sink.emit(makeEvent("chat.message", { content: `ack ${opts.sessionId}` }))
       await opts.sink.emit(makeEvent("chat.done", {}))
       return { exitCode: 0 }
@@ -534,11 +557,11 @@ describe("buildServer routes", () => {
     )
 
     expect(firstSessionFile).toBe(secondSessionFile)
-    const lines = fs.readFileSync(firstSessionFile, "utf-8").trim().split("\n")
-    const userTurns = lines
-      .map((l) => JSON.parse(l) as { role: string; content: string })
-      .filter((t) => t.role === "user")
-    expect(userTurns.map((t) => t.content)).toEqual(["first", "second"])
+    expect(observedHistories.map((turns) => turns.map((turn) => turn.content))).toEqual([
+      ["first"],
+      ["first", "second"],
+    ])
+    expect(fs.existsSync(firstSessionFile)).toBe(false)
   })
 })
 

@@ -285,7 +285,8 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
     opts.systemPrompt ??
     readSystemPromptOverride(opts.cwd) ??
     (opts.model.protocol === "openai" ? OPENAI_CHAT_SYSTEM_PROMPT : CHAT_SYSTEM_PROMPT)
-  const agentIdentityBlock = readAgentIdentityBlock(opts.cwd, opts.agentIdentity)
+  const activeAgent = await store.readActiveAgent()
+  const agentIdentityBlock = readAgentIdentityBlock(opts.cwd, opts.agentIdentity ?? { slug: activeAgent.slug })
   const catalog = buildImplementationCatalog()
   // Per-task artifacts contract appended to every chat session so the
   // agent writes context.json / memory-recs.json / followups.json /

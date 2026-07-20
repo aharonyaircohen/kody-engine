@@ -33,7 +33,7 @@ import type { ChatEvent, EventSink } from "../chat/events.js"
 import { type ChatTurnOptions, type ChatTurnResult, runChatTurn } from "../chat/loop.js"
 import { resolveBrainDriver } from "../chat/runtime-drivers.js"
 import { sessionFilePath } from "../chat/session.js"
-import { createSessionStore } from "../chat/session-store.js"
+import { createSessionStore, type SessionStore, type SessionStoreOptions } from "../chat/session-store.js"
 import { LITELLM_DEFAULT_URL, needsLitellmProxy, type ProviderModel, parseModelRuntimeConfig } from "../config.js"
 import { unpackAllSecrets } from "../kody-cli.js"
 import { type LitellmHandle, startLitellmIfNeeded } from "../litellm.js"
@@ -318,6 +318,8 @@ export interface BuildServerOptions {
   cloneRepo?: CloneRepoFn
   /** Seam for tests — defaults to the real chat-loop runChatTurn. */
   runTurn?: (opts: ChatTurnOptions) => Promise<ChatTurnResult>
+  /** Seam for tests — production always uses the canonical Convex store. */
+  createStore?: (opts: SessionStoreOptions) => SessionStore
   /** Brain response driver. Codex uses the user's local subscription login. */
   driver?: ChatTurnOptions["driver"]
 }
@@ -333,6 +335,7 @@ async function handleChatTurn(
     model: ProviderModel
     litellmUrl: string | null
     runTurn: (opts: ChatTurnOptions) => Promise<ChatTurnResult>
+    createStore: (opts: SessionStoreOptions) => SessionStore
     driver?: ChatTurnOptions["driver"]
   },
 ): Promise<void> {
@@ -407,7 +410,7 @@ async function handleChatTurn(
 
   const stateToken = repoToken || envGithubToken()
   const sessionFile = sessionFilePath(agentCwd, chatId)
-  const sessionStore = createSessionStore({
+  const sessionStore = opts.createStore({
     sessionId: chatId,
     sessionFile,
     ...(repo ? { tenantId: repo } : {}),
@@ -479,6 +482,7 @@ async function handleChatTurn(
  */
 export function buildServer(opts: BuildServerOptions): Server {
   const runTurn = opts.runTurn ?? runChatTurn
+  const createStore = opts.createStore ?? createSessionStore
   const cloneRepo = opts.cloneRepo ?? defaultCloneRepo
   const reposRoot = opts.reposRoot ?? path.join(path.dirname(path.resolve(opts.cwd)), "repos")
   return createServer(async (req, res) => {
@@ -513,6 +517,7 @@ export function buildServer(opts: BuildServerOptions): Server {
         model: opts.model,
         litellmUrl: opts.litellmUrl,
         runTurn,
+        createStore,
         driver: opts.driver,
       })
       return

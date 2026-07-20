@@ -1,152 +1,124 @@
 /**
- * Session transcript store. Convex is the durable authority; local JSONL is
- * ephemeral runtime storage for direct development and tests only.
+ * Canonical chat transcript store. Convex conversations are the sole durable
+ * authority for every runtime; the engine never creates a parallel transcript.
  */
 
 import type { ConvexHttpClient } from "convex/browser"
 import { anyApi } from "convex/server"
 import { createConvexClientFromEnv } from "./convex-client.js"
 import type { ChatTurn } from "./session.js"
-import { appendTurn, readMeta, readSession } from "./session.js"
 
 export interface SessionStore {
-  backend: "convex" | "local"
+  backend: "convex"
+  readActiveAgent(): Promise<{ slug: string; title: string }>
   readTurns(): Promise<ChatTurn[]>
   appendTurn(turn: ChatTurn): Promise<void>
 }
 
 export interface SessionStoreOptions {
+  /** Canonical conversation id. */
   sessionId: string
-  /** Ephemeral runtime JSONL path. */
+  /** Retained as an ephemeral runner path; never read as transcript storage. */
   sessionFile: string
-  /** Convex tenant scope — `owner/repo`. Defaults to GITHUB_REPOSITORY. */
   tenantId?: string
-  /** Test seam — overrides the env-derived client. */
   client?: ConvexHttpClient | null
   logger?: { info: (msg: string) => void; warn: (msg: string) => void }
 }
 
-interface ConvexTurnDoc {
-  seq: number
-  turn: ChatTurn
+interface ConversationResult {
+  conversation: {
+    activeAgent: { slug: string; title: string }
+  }
+  entries: Array<{
+    entryId: string
+    seq: number
+    entry:
+      | {
+          kind: "message"
+          role: "user" | "assistant"
+          content: string
+          status: "pending" | "committed" | "failed" | "cancelled"
+          createdAt: string
+        }
+      | {
+          kind: "agent-handoff"
+          createdAt: string
+        }
+  }>
 }
 
-function isChatTurn(value: unknown): value is ChatTurn {
-  if (!value || typeof value !== "object") return false
-  const t = value as Partial<ChatTurn>
-  return (t.role === "user" || t.role === "assistant") && typeof t.content === "string"
+function currentEpochTurns(result: ConversationResult): ChatTurn[] {
+  const ordered = [...result.entries].sort((left, right) => left.seq - right.seq)
+  const lastHandoffSeq = ordered.filter((item) => item.entry.kind === "agent-handoff").at(-1)?.seq ?? -1
+  return ordered.flatMap((item) =>
+    item.seq > lastHandoffSeq &&
+    item.entry.kind === "message" &&
+    (item.entry.status === "committed" || item.entry.status === "pending")
+      ? [
+          {
+            role: item.entry.role,
+            content: item.entry.content,
+            timestamp: item.entry.createdAt,
+            toolCalls: [],
+          },
+        ]
+      : [],
+  )
 }
 
-/**
- * Build the session store for a chat run.
- */
+function entryKey(sessionId: string, turn: ChatTurn): string {
+  const safeTime = turn.timestamp.replace(/[^a-zA-Z0-9._-]/g, "-")
+  return `engine-${sessionId}-${turn.role}-${safeTime}`
+}
+
 export function createSessionStore(opts: SessionStoreOptions): SessionStore {
   const logger = opts.logger ?? {
-    info: (m) => process.stdout.write(`[kody:chat:store] ${m}\n`),
-    warn: (m) => process.stderr.write(`[kody:chat:store] ${m}\n`),
+    info: (message) => process.stdout.write(`[kody:chat:store] ${message}\n`),
+    warn: (message) => process.stderr.write(`[kody:chat:store] ${message}\n`),
   }
   const client = opts.client !== undefined ? opts.client : createConvexClientFromEnv()
   const tenantId = opts.tenantId ?? process.env.GITHUB_REPOSITORY ?? ""
+  if (!client || !tenantId) {
+    throw new Error(
+      "Canonical Convex conversation storage is required (CONVEX_URL, KODY_SERVICE_KEY, and GITHUB_REPOSITORY)",
+    )
+  }
+  logger.info(`conversation ${opts.sessionId}: using canonical Convex store (tenant ${tenantId})`)
 
-  if (client && tenantId) {
-    logger.info(`session ${opts.sessionId}: using Convex transcript store (tenant ${tenantId})`)
-    return createConvexStore({
-      client,
+  const read = async (): Promise<ConversationResult> => {
+    const result = (await client.query(anyApi.conversations.get, {
       tenantId,
-      sessionId: opts.sessionId,
-      sessionFile: opts.sessionFile,
-      logger,
-    })
-  }
-
-  if (client && !tenantId) {
-    if (process.env.GITHUB_ACTIONS === "true") {
-      throw new Error("Convex chat backend requires GITHUB_REPOSITORY in GitHub Actions")
-    }
-    logger.warn(`session ${opts.sessionId}: Convex configured without a tenant; using local runtime storage`)
-  } else {
-    if (process.env.GITHUB_ACTIONS === "true") {
-      throw new Error("Convex chat backend is required in GitHub Actions (CONVEX_URL and KODY_SERVICE_KEY)")
-    }
-    logger.info(`session ${opts.sessionId}: backend unavailable; using local runtime storage`)
-  }
-  return createLocalStore(opts.sessionFile)
-}
-
-function createLocalStore(sessionFile: string): SessionStore {
-  return {
-    backend: "local",
-    readTurns: async () => readSession(sessionFile),
-    appendTurn: async (turn) => {
-      appendTurn(sessionFile, turn)
-    },
-  }
-}
-
-function normalizeTurn(turn: ChatTurn): ChatTurn {
-  return {
-    role: turn.role,
-    content: turn.content,
-    timestamp: turn.timestamp,
-    toolCalls: turn.toolCalls ?? [],
-  }
-}
-
-function createConvexStore(args: {
-  client: ConvexHttpClient
-  tenantId: string
-  sessionId: string
-  sessionFile: string
-  logger: { info: (msg: string) => void; warn: (msg: string) => void }
-}): SessionStore {
-  const { client, tenantId, sessionId, sessionFile, logger } = args
-  let sessionUpserted = false
-
-  const appendToConvex = async (turn: ChatTurn): Promise<void> => {
-    // Ensure the session record exists once per run (sessions seeded
-    // before this store existed have turns but no chatSessions row). The
-    // meta comes from the local JSONL meta line, matching how the
-    // dashboard records it; upsert only patches meta+updatedAt, so
-    // re-running is harmless.
-    if (!sessionUpserted) {
-      try {
-        const meta = readMeta(sessionFile) ?? { type: "meta", mode: "one-shot" }
-        await client.mutation(anyApi.chatSessions.upsert, {
-          tenantId,
-          sessionId,
-          meta,
-          updatedAt: new Date().toISOString(),
-        })
-        sessionUpserted = true
-      } catch (err) {
-        logger.warn(
-          `session ${sessionId}: chatSessions.upsert failed: ${err instanceof Error ? err.message : String(err)}`,
-        )
-      }
-    }
-    await client.mutation(anyApi.chatTurns.append, { tenantId, sessionId, turn })
+      conversationId: opts.sessionId,
+    })) as ConversationResult | null
+    if (!result) throw new Error(`Conversation not found: ${opts.sessionId}`)
+    return result
   }
 
   return {
     backend: "convex",
-    readTurns: async () => {
-      const docs = (await client.query(anyApi.chatTurns.list, { tenantId, sessionId })) as ConvexTurnDoc[]
-      const convexTurns = [...docs]
-        .sort((a, b) => a.seq - b.seq)
-        .map((doc) => doc.turn)
-        .filter(isChatTurn)
-      if (convexTurns.length > 0) return convexTurns
-      const tail = readSession(sessionFile).map(normalizeTurn)
-      if (tail.length === 0) return convexTurns
-      logger.info(`session ${sessionId}: importing ${tail.length} runtime turn(s) into Convex`)
-      for (const turn of tail) {
-        await appendToConvex(turn)
-      }
-      return tail
-    },
+    readActiveAgent: async () => (await read()).conversation.activeAgent,
+    readTurns: async () => currentEpochTurns(await read()),
     appendTurn: async (turn) => {
-      const normalized = normalizeTurn(turn)
-      await appendToConvex(normalized)
+      const result = await read()
+      const id = entryKey(opts.sessionId, turn)
+      await client.mutation(anyApi.conversations.appendEntry, {
+        tenantId,
+        conversationId: opts.sessionId,
+        entryId: id,
+        idempotencyKey: id,
+        entry: {
+          kind: "message",
+          role: turn.role,
+          author:
+            turn.role === "assistant"
+              ? { kind: "agent", ...result.conversation.activeAgent }
+              : { kind: "user", actorId: "engine-runtime" },
+          content: turn.content,
+          status: "committed",
+          turnId: id,
+          createdAt: turn.timestamp,
+        },
+      })
     },
   }
 }

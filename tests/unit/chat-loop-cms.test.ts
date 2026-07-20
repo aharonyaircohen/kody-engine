@@ -4,7 +4,8 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { ChatEvent, EventSink } from "../../src/chat/events.js"
 import { runChatTurn } from "../../src/chat/loop.js"
-import { appendTurn } from "../../src/chat/session.js"
+import { appendTurn, readSession } from "../../src/chat/session.js"
+import type { SessionStore } from "../../src/chat/session-store.js"
 
 const runAgentMock = vi.hoisted(() => vi.fn())
 
@@ -20,6 +21,15 @@ class MemSink implements EventSink {
 }
 
 const MODEL = { provider: "anthropic" as const, model: "claude-haiku-4-5-20251001" }
+
+function testStore(sessionFile: string): SessionStore {
+  return {
+    backend: "convex",
+    readActiveAgent: async () => ({ slug: "kody", title: "Kody" }),
+    readTurns: async () => readSession(sessionFile),
+    appendTurn: async (turn) => appendTurn(sessionFile, turn),
+  }
+}
 
 describe("chat/loop Dashboard CMS wiring", () => {
   let tmp: string
@@ -49,6 +59,7 @@ describe("chat/loop Dashboard CMS wiring", () => {
       model: MODEL,
       litellmUrl: null,
       sink: new MemSink(),
+      store: testStore(sessionFile),
       cmsDashboardUrl: "https://dashboard.example.test",
       cmsRepoSlug: "owner/repo",
       cmsToken: "test-token",
