@@ -16,6 +16,20 @@ set -euo pipefail
 : "${REPO:?REPO is required (owner/name)}"
 : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
 
+start_local_test_database() {
+  if [ -n "${DATABASE_URL:-}" ] || ! command -v pg_ctlcluster >/dev/null 2>&1; then
+    return 0
+  fi
+  if ! pg_isready -q; then
+    pg_ctlcluster 15 main start
+  fi
+  export DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/postgres"
+  export PAYLOAD_SECRET="${PAYLOAD_SECRET:-kody-local-runner-test-secret}"
+  echo "→ runner: local PostgreSQL ready for repository verification"
+}
+
+start_local_test_database
+
 WORKDIR="/workspace/repo"
 rm -rf "$WORKDIR"
 mkdir -p "$WORKDIR"

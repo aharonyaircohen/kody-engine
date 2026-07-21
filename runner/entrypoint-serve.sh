@@ -16,6 +16,20 @@ set -euo pipefail
 
 : "${RUNNER_API_KEY:?RUNNER_API_KEY is required}"
 
+start_local_test_database() {
+  if [ -n "${DATABASE_URL:-}" ] || ! command -v pg_ctlcluster >/dev/null 2>&1; then
+    return 0
+  fi
+  if ! pg_isready -q; then
+    pg_ctlcluster 15 main start
+  fi
+  export DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/postgres"
+  export PAYLOAD_SECRET="${PAYLOAD_SECRET:-kody-local-runner-test-secret}"
+  echo "→ runner: local PostgreSQL ready for repository verification"
+}
+
+start_local_test_database
+
 # The engine refuses to boot any executable without a kody.config.json in cwd.
 # In serve mode we idle in /workspace with no repo yet, so write a minimal
 # placeholder. (Per-job runs clone into /workspace/repo and use the repo's

@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       python3-venv \
       jq \
       openssh-client \
+      postgresql \
       socat \
       fonts-liberation \
       fonts-noto-color-emoji \
@@ -45,6 +46,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libxrandr2 \
       xvfb \
     && rm -rf /var/lib/apt/lists/*
+
+# Give repository browser tests a private, machine-local PostgreSQL service
+# when the caller did not provide an external DATABASE_URL. The cluster never
+# listens outside the Fly Machine; entrypoints start it only for local tests.
+RUN pg_ctlcluster 15 main start \
+ && su postgres -c "psql -c \"ALTER USER postgres PASSWORD 'postgres';\"" \
+ && pg_ctlcluster 15 main stop
 
 # GitHub CLI — the engine shells out to `gh` for labels, comments, and PR
 # creation in agent mode (kody run). Pinned binary install avoids adding

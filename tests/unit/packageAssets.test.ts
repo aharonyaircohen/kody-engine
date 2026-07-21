@@ -23,9 +23,19 @@ describe("package asset copying", () => {
       "libgbm1",
       "libxkbcommon0",
       "fonts-noto-color-emoji",
+      "postgresql",
       "xvfb",
     ]) {
       expect(dockerfile).toContain(dependency)
+    }
+  })
+
+  it("boots an isolated local database for repository browser tests", () => {
+    for (const entrypoint of ["runner/entrypoint.sh", "runner/entrypoint-serve.sh"]) {
+      const source = fs.readFileSync(path.resolve(entrypoint), "utf8")
+      expect(source).toContain("pg_ctlcluster")
+      expect(source).toContain("DATABASE_URL")
+      expect(source).toContain("PAYLOAD_SECRET")
     }
   })
 
