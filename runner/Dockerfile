@@ -45,10 +45,11 @@ RUN ln -sf "$(npm root -g)/@kody-ade/kody-engine/dist/bin/kody.js" /usr/local/bi
 
 # Package managers — the engine's preflight + verify shell out to whatever
 # the cloned repo uses (pnpm/yarn/npm). Corepack ships with Node 22 and
-# shims all three so the right one is on PATH. Pre-activate pnpm@latest so
-# the first agent run doesn't pay the corepack-download delay.
+# shims all three so the right one is on PATH. Pin pnpm 10 because pnpm 11 is
+# outside the engine range used by supported repositories and would make their
+# frozen install fail before Kody can run.
 RUN corepack enable \
- && corepack prepare pnpm@latest --activate
+ && corepack prepare pnpm@10 --activate
 
 WORKDIR /workspace
 

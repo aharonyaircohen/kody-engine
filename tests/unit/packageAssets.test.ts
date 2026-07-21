@@ -7,6 +7,13 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 let tmp: string
 
 describe("package asset copying", () => {
+  it("pins the runner package manager to the supported pnpm major", () => {
+    const dockerfile = fs.readFileSync(path.resolve("runner/Dockerfile"), "utf8")
+
+    expect(dockerfile).toContain("corepack prepare pnpm@10 --activate")
+    expect(dockerfile).not.toContain("corepack prepare pnpm@latest --activate")
+  })
+
   beforeEach(() => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-package-assets-"))
   })
