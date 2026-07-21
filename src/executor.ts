@@ -273,6 +273,13 @@ export interface ExecutorOutput {
   workflowState?: Job["workflowState"]
 }
 
+const TASK_ARTIFACT_WRITE_TOOLS = new Set(["Write", "Edit", "NotebookEdit"])
+
+/** Read-only agents must not receive an instruction they cannot satisfy. */
+export function shouldPromptForTaskArtifacts(tools: readonly string[]): boolean {
+  return tools.some((tool) => TASK_ARTIFACT_WRITE_TOOLS.has(tool))
+}
+
 export async function runImplementation(profileName: string, input: ExecutorInput): Promise<ExecutorOutput> {
   const stageStartedAt = Date.now()
   let finishRunIndex: ((out: ExecutorOutput) => Promise<void>) | null = null
@@ -462,6 +469,8 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
           }
         })()
       : null
+  const agentTaskArtifacts =
+    taskArtifacts && shouldPromptForTaskArtifacts(profile.claudeCode.tools) ? taskArtifacts : null
 
   const ndjsonDir = agentRunDir(input.cwd)
   // Agent binding: run *as* an agent, injected into the system-prompt append
@@ -517,7 +526,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       verbose: input.verbose,
       quiet: input.quiet,
       ndjsonDir,
-      additionalDirectories: taskArtifacts ? [taskArtifacts.absDir] : undefined,
+      additionalDirectories: agentTaskArtifacts ? [agentTaskArtifacts.absDir] : undefined,
       allowedToolsOverride: profile.claudeCode.tools,
       permissionModeOverride: profile.claudeCode.permissionMode,
       mcpServers: profile.claudeCode.mcpServers.length > 0 ? profile.claudeCode.mcpServers : undefined,
@@ -539,7 +548,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
           jobRefBlock,
           jobWhyBlock,
           profile.claudeCode.systemPromptAppend,
-          taskArtifacts?.promptAddendum,
+          agentTaskArtifacts?.promptAddendum,
         ]
           .filter((s): s is string => typeof s === "string" && s.length > 0)
           .join("\n\n") || undefined,

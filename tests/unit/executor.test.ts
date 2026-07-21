@@ -12,7 +12,12 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { jobReferenceBlock, operatorRequestBlock, runImplementation } from "../../src/executor.js"
+import {
+  jobReferenceBlock,
+  operatorRequestBlock,
+  runImplementation,
+  shouldPromptForTaskArtifacts,
+} from "../../src/executor.js"
 import { loadProfile } from "../../src/profile.js"
 import { resolveImplementation } from "../../src/registry.js"
 import { runtimeStatePath } from "../../src/runtimePaths.js"
@@ -366,5 +371,11 @@ describe("executor: per-task artifacts prepare for args.pr", () => {
     })
     expect(prAddendum).toContain('"taskType": "pr"')
     expect(issueAddendum).toContain('"taskType": "issue"')
+  })
+
+  it("does not instruct a read-only agent to write task artifacts", () => {
+    expect(shouldPromptForTaskArtifacts(["Read", "Grep", "Glob", "Bash", "Agent"])).toBe(false)
+    expect(shouldPromptForTaskArtifacts(["Read", "Write"])).toBe(true)
+    expect(shouldPromptForTaskArtifacts(["Read", "Edit"])).toBe(true)
   })
 })
