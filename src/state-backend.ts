@@ -115,6 +115,11 @@ function requireTenant(tenantId: string): string {
   return value
 }
 
+function requireChatTenant(tenantId: string): string {
+  const value = tenantId.trim()
+  return value === "global" ? value : requireTenant(value)
+}
+
 function requireNonEmpty(value: string, name: string): string {
   const normalized = value.trim()
   if (!normalized) throw new Error(`${name} must not be empty`)
@@ -202,7 +207,7 @@ export function createStateBackendFromEnv(
     },
     async appendChatEvent(tenantId, sessionId, event) {
       await transport.mutation(anyApi.chatEvents.append, {
-        tenantId: requireTenant(tenantId),
+        tenantId: requireChatTenant(tenantId),
         sessionId: requireNonEmpty(sessionId, "sessionId"),
         event,
       })

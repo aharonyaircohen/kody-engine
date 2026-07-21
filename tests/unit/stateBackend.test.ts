@@ -103,6 +103,25 @@ describe("state backend", () => {
     })
   })
 
+  it("allows the reserved global tenant only for globally unique chat sessions", async () => {
+    const transport = client()
+    const backend = createStateBackendFromEnv(
+      { CONVEX_URL: "https://example.convex.cloud", KODY_SERVICE_KEY: "secret" },
+      transport,
+    )
+
+    await backend.appendChatEvent("global", "session-1", { event: "chat.ready" })
+
+    expect(transport.mutation).toHaveBeenCalledWith(anyApi.chatEvents.append, {
+      tenantId: "global",
+      sessionId: "session-1",
+      event: { event: "chat.ready" },
+    })
+    await expect(backend.getRepoDoc("global", "memory:preferences")).rejects.toThrow(
+      "tenantId must be an owner/repository pair",
+    )
+  })
+
   it("stores run summaries and ordered run evidence in their dedicated aggregates", async () => {
     const transport = client()
     const backend = createStateBackendFromEnv(
