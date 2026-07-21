@@ -1,7 +1,8 @@
 /**
  * Postflight for the `review` implementation. Takes the agent's final message
- * (which the prompt instructs to be the entire review body) and posts it
- * verbatim as a PR comment. Decides exit code based on the extracted verdict:
+ * (which the prompt instructs to be the entire review body), removes any
+ * preamble before the verdict, bounds its size, and posts it as a PR comment.
+ * Decides exit code based on the extracted verdict:
  *   PASS     → exit 0
  *   CONCERNS → exit 0 (review is advisory)
  *   FAIL     → exit 1 (signals a blocking verdict to external callers)
@@ -19,6 +20,30 @@ import { postPrReviewComment, truncate } from "../issue.js"
 import type { Action } from "../state.js"
 
 export type ReviewVerdict = "PASS" | "CONCERNS" | "FAIL" | "UNKNOWN"
+
+export const MAX_REVIEW_WORDS = 600
+const REVIEW_TRUNCATION_NOTE = "> Review truncated to the highest-priority findings."
+
+function words(value: string): string[] {
+  return value.trim().split(/\s+/).filter(Boolean)
+}
+
+export function prepareReviewBody(rawBody: string): string {
+  let body = rawBody.trim()
+  const verdict = body.match(/(^|\n)(\s*#{1,6}\s*Verdict\s*:?\s*(?:PASS|CONCERNS|FAIL)\b)/i)
+  if (verdict?.index !== undefined) {
+    body = body.slice(verdict.index + verdict[1]!.length).trim()
+  }
+
+  const bodyWords = words(body)
+  if (bodyWords.length <= MAX_REVIEW_WORDS) return body
+
+  const noteWords = words(REVIEW_TRUNCATION_NOTE)
+  const retainedWordCount = MAX_REVIEW_WORDS - noteWords.length
+  const matches = [...body.matchAll(/\S+/g)]
+  const retainedEnd = matches[retainedWordCount - 1]!.index + matches[retainedWordCount - 1]![0].length
+  return `${body.slice(0, retainedEnd).trimEnd()}\n\n${REVIEW_TRUNCATION_NOTE}`
+}
 
 function inferVerdictFromReviewText(body: string): ReviewVerdict {
   const structuredVerdict = body.match(/"verdict"\s*:\s*"(pass|concerns|fail|partial)"/i)
@@ -127,7 +152,7 @@ export const postReviewResult: PostflightScript = async (ctx, _profile, agentRes
     return
   }
 
-  const reviewBody = agentResult.finalText.trim()
+  const reviewBody = prepareReviewBody(agentResult.finalText)
   if (!reviewBody) {
     try {
       postPrReviewComment(prNumber, `⚠️ kody review FAILED: agent produced no review body`, ctx.cwd)

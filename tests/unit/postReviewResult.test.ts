@@ -1,5 +1,34 @@
 import { describe, expect, it } from "vitest"
-import { detectVerdict } from "../../src/scripts/postReviewResult.js"
+import {
+  MAX_REVIEW_WORDS,
+  detectVerdict,
+  prepareReviewBody,
+} from "../../src/scripts/postReviewResult.js"
+
+describe("postReviewResult: prepareReviewBody", () => {
+  it("removes model preamble before the verdict", () => {
+    const body = prepareReviewBody(
+      "All four reviewers reported.\n\n---\n\n## Verdict: CONCERNS\n\n### Summary\nOne verified concern.",
+    )
+
+    expect(body).toBe("## Verdict: CONCERNS\n\n### Summary\nOne verified concern.")
+  })
+
+  it("caps long reviews at the deterministic word limit", () => {
+    const body = prepareReviewBody(
+      `## Verdict: CONCERNS\n\n### Concerns\n${Array.from({ length: 700 }, (_, index) => `word${index}`).join(" ")}`,
+    )
+
+    expect(body.split(/\s+/).filter(Boolean)).toHaveLength(MAX_REVIEW_WORDS)
+    expect(body).toMatch(/^## Verdict: CONCERNS/)
+    expect(body).toContain("Review truncated to the highest-priority findings.")
+  })
+
+  it("leaves a concise review unchanged", () => {
+    const body = "## Verdict: PASS\n\n### Summary\nNo verified concerns."
+    expect(prepareReviewBody(body)).toBe(body)
+  })
+})
 
 describe("postReviewResult: detectVerdict", () => {
   it("parses PASS", () => {
