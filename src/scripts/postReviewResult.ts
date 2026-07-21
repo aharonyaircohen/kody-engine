@@ -26,6 +26,15 @@ function inferVerdictFromReviewText(body: string): ReviewVerdict {
     const value = structuredVerdict[1]!.toUpperCase()
     return value === "PARTIAL" ? "CONCERNS" : (value as ReviewVerdict)
   }
+  const status = body.match(
+    /(^|\n)\s*(?:#{1,6}\s*)?(?:\*\*Status:\*\*|Status:)\s*(PASS|CONCERNS|FAIL|WARN|NONE|BLOCK|NEEDS_CONTEXT)\b/i,
+  )
+  if (status) {
+    const value = status[2]!.toUpperCase()
+    if (value === "PASS" || value === "NONE") return "PASS"
+    if (value === "CONCERNS" || value === "WARN") return "CONCERNS"
+    return "FAIL"
+  }
   if (/\bpartial\b/i.test(body) && /\b(finding|gap|unverified|unverifiable|blocker|issue)s?\b/i.test(body)) {
     return "CONCERNS"
   }

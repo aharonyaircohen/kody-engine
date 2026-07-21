@@ -54,6 +54,11 @@ describe("postReviewResult: detectVerdict", () => {
   it("infers FAIL from blocking review language without a verdict heading", () => {
     expect(detectVerdict("This introduces a regression and should not merge until fixed.")).toBe("FAIL")
   })
+  it("does not treat an explicit non-blocking WARN status as FAIL", () => {
+    expect(
+      detectVerdict("**Status:** WARN — Ship-blocking issues: none. Two warnings and three nits."),
+    ).toBe("CONCERNS")
+  })
   it("infers PASS from a clean LGTM review without a verdict heading", () => {
     expect(detectVerdict("LGTM. The implementation is correct and no changes required.")).toBe("PASS")
   })
