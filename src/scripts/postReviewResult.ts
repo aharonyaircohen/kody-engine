@@ -28,12 +28,29 @@ function words(value: string): string[] {
   return value.trim().split(/\s+/).filter(Boolean)
 }
 
+const FORBIDDEN_REVIEW_SECTION = /^(?:clean\b|strengths?\b|suggest(?:ion|ed)s?\b|follow[- ]?ups?\b|verification\b|notes?\b|nits?\b|non[- ]issues?\b)/i
+
+function removeForbiddenReviewSections(body: string): string {
+  const kept: string[] = []
+  let skipping = false
+  for (const line of body.split("\n")) {
+    const heading = line.match(/^\s*(?:#{1,6}\s+(.+?)|\*\*(.+?)\*\*)\s*$/)
+    if (heading) {
+      const title = (heading[1] ?? heading[2] ?? "").replace(/[*_`]/g, "").trim()
+      skipping = FORBIDDEN_REVIEW_SECTION.test(title)
+    }
+    if (!skipping) kept.push(line)
+  }
+  return kept.join("\n").replace(/\n{3,}/g, "\n\n").trim()
+}
+
 export function prepareReviewBody(rawBody: string): string {
   let body = rawBody.trim()
   const verdict = body.match(/(^|\n)(\s*#{1,6}\s*Verdict\s*:?\s*(?:PASS|CONCERNS|FAIL)\b)/i)
   if (verdict?.index !== undefined) {
     body = body.slice(verdict.index + verdict[1]!.length).trim()
   }
+  body = removeForbiddenReviewSections(body)
 
   const bodyWords = words(body)
   if (bodyWords.length <= MAX_REVIEW_WORDS) return body

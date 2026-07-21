@@ -28,6 +28,28 @@ describe("postReviewResult: prepareReviewBody", () => {
     const body = "## Verdict: PASS\n\n### Summary\nNo verified concerns."
     expect(prepareReviewBody(body)).toBe(body)
   })
+
+  it("removes forbidden clean-axis and follow-up sections", () => {
+    const body = prepareReviewBody(
+      [
+        "## Verdict: CONCERNS",
+        "",
+        "**Verified concern**",
+        "Concrete problem.",
+        "",
+        "**Clean on the other three axes**",
+        "Long non-issue inventory.",
+        "",
+        "**Suggested follow-ups (not blockers)**",
+        "1. Optional cleanup.",
+      ].join("\n"),
+    )
+
+    expect(body).toContain("Concrete problem.")
+    expect(body).not.toContain("Clean on the other three axes")
+    expect(body).not.toContain("Suggested follow-ups")
+    expect(body).not.toContain("Optional cleanup")
+  })
 })
 
 describe("postReviewResult: detectVerdict", () => {
