@@ -14,6 +14,21 @@ describe("package asset copying", () => {
     expect(dockerfile).not.toContain("corepack prepare pnpm@latest --activate")
   })
 
+  it("installs the Chromium system libraries required by live browser tests", () => {
+    const dockerfile = fs.readFileSync(path.resolve("runner/Dockerfile"), "utf8")
+
+    for (const dependency of [
+      "libglib2.0-0",
+      "libnss3",
+      "libgbm1",
+      "libxkbcommon0",
+      "fonts-noto-color-emoji",
+      "xvfb",
+    ]) {
+      expect(dockerfile).toContain(dependency)
+    }
+  })
+
   beforeEach(() => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-package-assets-"))
   })
