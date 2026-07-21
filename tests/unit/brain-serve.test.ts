@@ -511,6 +511,37 @@ describe("buildServer routes", () => {
     expect(observed).toBe("user/alice/chat-1")
   })
 
+  it("uses the visible conversation id for persistence without changing the runtime chat id", async () => {
+    let runtimeSessionId = ""
+    let persistedSessionId = ""
+    booted = await boot(
+      async (opts) => {
+        runtimeSessionId = opts.sessionId
+        await opts.sink.emit(makeEvent("chat.done", {}))
+        return { exitCode: 0 }
+      },
+      tmp,
+      {
+        createStore: (opts) => {
+          persistedSessionId = opts.sessionId
+          return memoryStoreFactory()(opts)
+        },
+      },
+    )
+    const res = await fetch(`${booted.url}/chats/runtime%2Fepoch-2/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": KEY },
+      body: JSON.stringify({
+        message: "x",
+        conversationId: "visible-conversation",
+      }),
+    })
+    expect(res.status).toBe(200)
+    await readSseBody(res)
+    expect(runtimeSessionId).toBe("runtime/epoch-2")
+    expect(persistedSessionId).toBe("visible-conversation")
+  })
+
   it("rejects a path-traversal chatId with 400 and never invokes the turn", async () => {
     let invoked = false
     booted = await boot(async (opts) => {

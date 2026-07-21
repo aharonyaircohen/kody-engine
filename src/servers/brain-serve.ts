@@ -363,6 +363,7 @@ async function handleChatTurn(
   const storeRepoUrl = strField(body, "storeRepoUrl")
   const storeRef = strField(body, "storeRef")
   const runtime = strField(body, "runtime")
+  const conversationId = strField(body, "conversationId") || chatId
   const allowCrossRepo = boolField(body, "allowCrossRepo")
   const agentIdentity = agentIdentityField(body)
 
@@ -411,7 +412,7 @@ async function handleChatTurn(
   const stateToken = repoToken || envGithubToken()
   const sessionFile = sessionFilePath(agentCwd, chatId)
   const sessionStore = opts.createStore({
-    sessionId: chatId,
+    sessionId: conversationId,
     sessionFile,
     ...(repo ? { tenantId: repo } : {}),
   })

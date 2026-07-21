@@ -121,6 +121,7 @@ export function buildBrainProxy(opts: BrainProxyOptions): {
       for await (const chunk of req) chunks.push(chunk as Buffer)
       let body: {
         message?: string
+        conversationId?: string
         repo?: string
         repoToken?: string
         dashboardUrl?: string
