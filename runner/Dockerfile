@@ -47,6 +47,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       xvfb \
     && rm -rf /var/lib/apt/lists/*
 
+# Keep the browser binary in the image as well as its Linux libraries. Without
+# this, every clean one-shot runner must download Chromium before it can prove
+# a repository's real UI journey, which can consume the PR delivery deadline.
+ARG PLAYWRIGHT_VERSION=1.58.2
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN npx --yes playwright@${PLAYWRIGHT_VERSION} install chromium \
+ && chmod -R a+rX /ms-playwright
+
 # Give repository browser tests a private, machine-local PostgreSQL service
 # when the caller did not provide an external DATABASE_URL. The cluster never
 # listens outside the Fly Machine; entrypoints start it only for local tests.

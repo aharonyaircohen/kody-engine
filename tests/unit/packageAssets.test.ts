@@ -28,6 +28,7 @@ describe("package asset copying", () => {
     ]) {
       expect(dockerfile).toContain(dependency)
     }
+    expect(dockerfile).toContain("playwright@${PLAYWRIGHT_VERSION} install chromium")
   })
 
   it("boots an isolated local database for repository browser tests", () => {
