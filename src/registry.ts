@@ -87,8 +87,11 @@ export function getBuiltinCapabilitiesRoot(): string {
  * stdlib fallback.
  */
 export function getImplementationRoots(): string[] {
-  const projectCapabilitiesRoot = getProjectCapabilitiesRoot()
-  return [projectCapabilitiesRoot, getImplementationsRoot()]
+  return getImplementationRootsForCwd(process.cwd())
+}
+
+export function getImplementationRootsForCwd(cwd: string): string[] {
+  return [capabilitiesRoot(cwd), getImplementationsRoot()]
 }
 
 export function getCapabilityRoots(projectCapabilitiesRoot: string = getProjectCapabilitiesRoot()): string[] {
@@ -255,7 +258,10 @@ export function getCapabilityActionInputs(
   return getProfileInputs(resolved.implementation)
 }
 
-export function resolveCapabilityExecution(capability: CapabilityFolder): {
+export function resolveCapabilityExecution(
+  capability: CapabilityFolder,
+  cwd: string = process.cwd(),
+): {
   implementation: string
   cliArgs: Record<string, unknown>
 } {
@@ -269,12 +275,12 @@ export function resolveCapabilityExecution(capability: CapabilityFolder): {
     capability.config.implementations?.[0] ??
     (capability.config.role ? capability.slug : undefined) ??
     (capability.config.tickScript ? "capability-tick-scripted" : "capability-tick")
-  const cliArgs = implementationDeclaresInput(implementation, "capability") ? { capability: capability.slug } : {}
+  const cliArgs = implementationDeclaresInput(implementation, "capability", cwd) ? { capability: capability.slug } : {}
   return { implementation, cliArgs }
 }
 
-function implementationDeclaresInput(implementation: string, inputName: string): boolean {
-  const profilePath = resolveImplementation(implementation)
+function implementationDeclaresInput(implementation: string, inputName: string, cwd: string = process.cwd()): boolean {
+  const profilePath = resolveImplementation(implementation, getImplementationRootsForCwd(cwd))
   if (!profilePath) return false
   try {
     const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as { inputs?: unknown }

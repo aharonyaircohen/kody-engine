@@ -193,7 +193,7 @@ export async function planGoalCapabilitySchedule(
     }
   }
 
-  const dispatch = capabilityDispatch(capability)
+  const dispatch = capabilityDispatch(capability, opts.cwd)
   statuses[due.slug] = markCapabilitySelected(statuses[due.slug]!, now)
 
   return {
@@ -264,12 +264,15 @@ async function describeCapabilitySchedule(
   }
 }
 
-function capabilityDispatch(capability: CapabilityFolder): {
+function capabilityDispatch(
+  capability: CapabilityFolder,
+  cwd: string,
+): {
   capability: string
   implementation: string
   cliArgs: Record<string, unknown>
 } {
-  const { implementation, cliArgs } = resolveCapabilityExecution(capability)
+  const { implementation, cliArgs } = resolveCapabilityExecution(capability, cwd)
   return { capability: capability.slug, implementation, cliArgs }
 }
 

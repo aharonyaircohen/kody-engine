@@ -9,6 +9,7 @@ export default defineConfig({
     testTimeout: 30_000,
     env: {
       KODY_DEFINITIONS_ROOT: path.resolve(here, "../kody-store"),
+      KODY_DEFINITIONS_ROOT_CWD: here,
       KODY_TEST_LOCAL_JOB_STATE: "1",
     },
     coverage: {
