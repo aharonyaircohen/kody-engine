@@ -10,7 +10,8 @@ export function decideTrigger(input: {
   now: Date
   manualRequestId?: string
 }): TriggerDecision {
-  if (input.state && input.state.lifecycle !== "active") {
+  if (!input.state) return { kind: "skip", reason: "loop has no runtime state" }
+  if (input.state.lifecycle !== "active") {
     return { kind: "skip", reason: `loop is ${input.state.lifecycle}` }
   }
 
@@ -30,7 +31,7 @@ export function decideTrigger(input: {
   }
 
   const interval = parseInterval(trigger.every)
-  const anchor = input.state?.lastFiredAt ? Date.parse(input.state.lastFiredAt) : input.now.getTime() - interval
+  const anchor = input.state.lastFiredAt ? Date.parse(input.state.lastFiredAt) : input.now.getTime() - interval
   const dueAt = anchor + interval
   if (input.now.getTime() < dueAt) {
     return { kind: "skip", reason: "scheduled trigger is not due", nextEligibleAt: new Date(dueAt).toISOString() }

@@ -54,6 +54,13 @@ export interface AgencyOutputDocument {
   data: unknown
 }
 
+export interface AgencyDispatchDecision {
+  kind: "fire" | "skip"
+  reason: string
+  scheduledAt?: string
+  nextEligibleAt?: string
+}
+
 export interface DefinitionDocument {
   slug: string
   version: string
@@ -123,6 +130,28 @@ export interface StateBackend {
     data: unknown,
   ): Promise<void>
   listAgencyOutputs(tenantId: string, runId?: string): Promise<AgencyOutputDocument[]>
+  reserveAgencyDispatch(
+    tenantId: string,
+    idempotencyKey: string,
+    loopId: string,
+    decision: AgencyDispatchDecision,
+    leaseUntil: string,
+    now: string,
+  ): Promise<{ acquired: boolean; dispatchId: string }>
+  recordSkippedAgencyDispatch(
+    tenantId: string,
+    idempotencyKey: string,
+    loopId: string,
+    decision: AgencyDispatchDecision,
+    now: string,
+  ): Promise<void>
+  finishAgencyDispatch(
+    tenantId: string,
+    idempotencyKey: string,
+    status: "dispatched" | "failed",
+    now: string,
+    runId?: string,
+  ): Promise<void>
   appendRunEvent(
     tenantId: string,
     runId: string,
@@ -310,6 +339,35 @@ export function createStateBackendFromEnv(
         ...(runId ? { runId: requireNonEmpty(runId, "runId") } : {}),
       })
       return Array.isArray(result) ? (result as AgencyOutputDocument[]) : []
+    },
+    async reserveAgencyDispatch(tenantId, idempotencyKey, loopId, decision, leaseUntil, now) {
+      const result = await transport.mutation(anyApi.agencyModel.reserveDispatch, {
+        tenantId: requireTenant(tenantId),
+        idempotencyKey: requireNonEmpty(idempotencyKey, "idempotencyKey"),
+        loopId: requireNonEmpty(loopId, "loopId"),
+        decision,
+        leaseUntil,
+        now,
+      })
+      return result as { acquired: boolean; dispatchId: string }
+    },
+    async recordSkippedAgencyDispatch(tenantId, idempotencyKey, loopId, decision, now) {
+      await transport.mutation(anyApi.agencyModel.recordSkippedDispatch, {
+        tenantId: requireTenant(tenantId),
+        idempotencyKey: requireNonEmpty(idempotencyKey, "idempotencyKey"),
+        loopId: requireNonEmpty(loopId, "loopId"),
+        decision,
+        now,
+      })
+    },
+    async finishAgencyDispatch(tenantId, idempotencyKey, status, now, runId) {
+      await transport.mutation(anyApi.agencyModel.finishDispatch, {
+        tenantId: requireTenant(tenantId),
+        idempotencyKey: requireNonEmpty(idempotencyKey, "idempotencyKey"),
+        status,
+        now,
+        ...(runId ? { runId: requireNonEmpty(runId, "runId") } : {}),
+      })
     },
     async appendRunEvent(tenantId, runId, goalId, event, time) {
       await transport.mutation(anyApi.runEvents.append, {

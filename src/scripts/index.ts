@@ -24,6 +24,7 @@ import { dispatch } from "./dispatch.js"
 import { dispatchCapabilityFileTicks } from "./dispatchCapabilityFileTicks.js"
 import { dispatchCapabilityTicks } from "./dispatchCapabilityTicks.js"
 import { dispatchClassified } from "./dispatchClassified.js"
+import { dispatchAgencyLoops } from "./dispatchAgencyLoops.js"
 import { dispatchNextTaskJob } from "./dispatchNextTaskJob.js"
 import { ensurePr } from "./ensurePr.js"
 import { evaluateAgencyBoundariesScript } from "./evaluateAgencyBoundaries.js"
@@ -145,6 +146,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   diagMcp,
   warmupMcp,
   dispatchCapabilityTicks,
+  dispatchAgencyLoops,
   dispatchCapabilityFileTicks,
   planTaskJobs,
   dispatchNextTaskJob,

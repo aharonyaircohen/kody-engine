@@ -53,10 +53,23 @@ describe("Trigger dispatcher", () => {
     expect(
       decideTrigger({
         definition: { ...loop, trigger: { type: "manual" } },
-        state: null,
+        state: {
+          definitionId: loop.id,
+          lifecycle: "active",
+          health: "healthy",
+          failures: 0,
+          updatedAt: "2026-07-22T10:00:00.000Z",
+        },
         now: new Date("2026-07-22T11:05:00.000Z"),
         manualRequestId: "operator-42",
       }),
     ).toMatchObject({ kind: "fire", idempotencyKey: "refresh-knowledge:manual:operator-42" })
+  })
+
+  it("does not activate a Definition that has no runtime State", () => {
+    expect(decideTrigger({ definition: loop, state: null, now: new Date("2026-07-22T11:05:00.000Z") })).toEqual({
+      kind: "skip",
+      reason: "loop has no runtime state",
+    })
   })
 })

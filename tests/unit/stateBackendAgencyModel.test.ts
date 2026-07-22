@@ -54,4 +54,31 @@ describe("Agency Model state backend", () => {
       envelope: { schemaVersion: 1, recordId: "output-1", data: output },
     })
   })
+
+  it("uses the atomic dispatch ledger for Trigger idempotency", async () => {
+    const mutation = vi.fn().mockResolvedValue({ acquired: true, dispatchId: "dispatch-1" })
+    const backend = createStateBackendFromEnv({}, { query: vi.fn(), mutation })
+    const decision = {
+      kind: "fire" as const,
+      reason: "scheduled trigger is due",
+      scheduledAt: "2026-07-22T12:00:00.000Z",
+    }
+
+    await expect(
+      backend.reserveAgencyDispatch(
+        "acme/widgets",
+        "loop-1:schedule:2026-07-22T12:00:00.000Z",
+        "loop-1",
+        decision,
+        "2026-07-22T12:15:00.000Z",
+        "2026-07-22T12:00:00.000Z",
+      ),
+    ).resolves.toMatchObject({ acquired: true })
+
+    expect(mutation.mock.calls[0]?.[1]).toMatchObject({
+      tenantId: "acme/widgets",
+      loopId: "loop-1",
+      decision,
+    })
+  })
 })
