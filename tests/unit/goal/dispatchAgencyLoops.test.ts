@@ -66,4 +66,69 @@ describe("Agency Loop runtime dispatch", () => {
     expect(reserveAgencyDispatch.mock.invocationCallOrder[0]).toBeLessThan(run.mock.invocationCallOrder[0]!)
     expect(putAgencyState).toHaveBeenCalledTimes(2)
   })
+
+  it("resolves a Goal target to its declared execution reference", async () => {
+    const backend = {
+      listAgencyDefinitions: vi.fn().mockResolvedValue([
+        {
+          tenantId,
+          recordId: "refresh-goal",
+          kind: "goal",
+          schemaVersion: 1,
+          data: {
+            id: "refresh-goal",
+            operationId: "knowledge",
+            objective: { desiredState: "Knowledge stays current", requiredEvidence: [], scope: {} },
+            executionRef: { kind: "workflow", id: "refresh-knowledge-system" },
+          },
+          createdAt: now,
+        },
+        {
+          tenantId,
+          recordId: "refresh-loop",
+          kind: "loop",
+          schemaVersion: 1,
+          data: {
+            id: "refresh-loop",
+            operationId: "knowledge",
+            objective: { desiredState: "Knowledge stays current", requiredEvidence: [], scope: {} },
+            trigger: { type: "schedule", every: "1h" },
+            targetRef: { kind: "goal", id: "refresh-goal" },
+            reconciliationPolicy: { overlap: "skip", missed: "coalesce" },
+          },
+          createdAt: now,
+        },
+      ]),
+      getAgencyState: vi.fn(async (_tenant: string, id: string) =>
+        id === "refresh-loop"
+          ? {
+              tenantId,
+              definitionId: id,
+              kind: "loop",
+              schemaVersion: 1,
+              data: {
+                definitionId: id,
+                lifecycle: "active",
+                health: "healthy",
+                failures: 0,
+                lastFiredAt: "2026-07-22T10:00:00.000Z",
+                updatedAt: "2026-07-22T10:00:00.000Z",
+              },
+              updatedAt: "2026-07-22T10:00:00.000Z",
+            }
+          : null,
+      ),
+      putAgencyState: vi.fn(),
+      appendAgencyOutput: vi.fn(),
+      listAgencyOutputs: vi.fn().mockResolvedValue([]),
+      reserveAgencyDispatch: vi.fn().mockResolvedValue({ acquired: true, dispatchId: "dispatch-2" }),
+      recordSkippedAgencyDispatch: vi.fn(),
+      finishAgencyDispatch: vi.fn(),
+    } as unknown as StateBackend
+    const run = vi.fn().mockResolvedValue({ exitCode: 0 })
+
+    await dispatchAgencyLoopsWith({ tenantId, backend, now: new Date(now), run })
+
+    expect(run).toHaveBeenCalledWith({ workflow: "refresh-knowledge-system", cliArgs: {}, flavor: "scheduled" })
+  })
 })

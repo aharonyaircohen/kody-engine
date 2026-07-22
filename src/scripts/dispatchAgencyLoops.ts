@@ -1,4 +1,4 @@
-import { createLoopState, type LoopDefinition, type LoopState } from "@kody-ade/agency-domain"
+import { createLoopState, type GoalDefinition, type LoopDefinition, type LoopState } from "@kody-ade/agency-domain"
 import type { KodyConfig } from "../config.js"
 import { AgencyModelRepository } from "../goal/agencyModelRepository.js"
 import { decideTrigger } from "../goal/triggerDispatcher.js"
@@ -33,6 +33,13 @@ export async function dispatchAgencyLoopsWith(input: {
 }): Promise<DispatchResult[]> {
   const repository = new AgencyModelRepository(input.backend, input.tenantId)
   const records = await repository.listManagedWork()
+  const goals = new Map(
+    records
+      .filter((record): record is { definition: GoalDefinition; state: typeof record.state } =>
+        "executionRef" in record.definition,
+      )
+      .map((record) => [record.definition.id, record.definition]),
+  )
   const loops = records.filter(
     (record): record is { definition: LoopDefinition; state: LoopState | null } => "trigger" in record.definition,
   )
@@ -80,7 +87,7 @@ export async function dispatchAgencyLoopsWith(input: {
     await repository.saveState(runningState, "loop", now)
 
     try {
-      const output = await input.run(jobForTarget(record.definition))
+      const output = await input.run(jobForTarget(record.definition, goals))
       const succeeded = output.exitCode === 0
       await input.backend.finishAgencyDispatch(
         input.tenantId,
@@ -112,19 +119,13 @@ export async function dispatchAgencyLoopsWith(input: {
   return results
 }
 
-function jobForTarget(loop: LoopDefinition): Job {
-  if (loop.targetRef.kind === "workflow") {
-    return { workflow: loop.targetRef.id, cliArgs: {}, flavor: "scheduled" }
+function jobForTarget(loop: LoopDefinition, goals: ReadonlyMap<string, GoalDefinition>): Job {
+  const target = loop.targetRef.kind === "goal" ? goals.get(loop.targetRef.id)?.executionRef : loop.targetRef
+  if (!target) throw new Error(`Loop target Goal is missing: ${loop.targetRef.id}`)
+  if (target.kind === "workflow") {
+    return { workflow: target.id, cliArgs: {}, flavor: "scheduled" }
   }
-  if (loop.targetRef.kind === "capability") {
-    return { capability: loop.targetRef.id, cliArgs: {}, flavor: "scheduled" }
-  }
-  return {
-    capability: "goal-manager",
-    implementation: "goal-manager",
-    cliArgs: { goal: loop.targetRef.id },
-    flavor: "scheduled",
-  }
+  return { capability: target.id, cliArgs: {}, flavor: "scheduled" }
 }
 
 function repositoryTenant(config: KodyConfig): string | null {
