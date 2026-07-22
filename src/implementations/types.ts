@@ -453,6 +453,7 @@ export interface Context {
     exitCode: number
     prUrl?: string
     reason?: string
+    usage?: { tokens: number; costUsd: number }
     /**
      * In-process hand-off to the next stage. A stage (e.g. `classify`) sets
      * this so the orchestrator runs the chosen sub-orchestrator

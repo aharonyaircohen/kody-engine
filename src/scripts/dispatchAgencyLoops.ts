@@ -316,7 +316,11 @@ async function runAttempt(
   ) => Promise<{ exitCode: number; reason?: string; usage?: { tokens: number; costUsd: number } }>,
   job: Job,
   timeoutSeconds: number,
-) {
+): Promise<{
+  exitCode: number
+  reason?: string
+  usage?: { tokens: number; costUsd: number }
+}> {
   const abortController = new AbortController()
   let timer: NodeJS.Timeout | undefined
   try {
