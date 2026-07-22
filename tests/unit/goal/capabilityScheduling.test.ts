@@ -120,7 +120,7 @@ function writeTrust(stateRoot: string, trust: Record<string, unknown>): void {
   fs.writeFileSync(file, JSON.stringify(trust, null, 2))
 }
 
-function readRepoGoal(stateRoot: string, goalId: string): Record<string, unknown> {
+function readRepoGoal(_stateRoot: string, goalId: string): Record<string, unknown> {
   const goal = backendMocks.goals.get(goalId)
   return goal ? { state: goal.state, ...goal.extra } : {}
 }

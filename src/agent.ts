@@ -4,7 +4,6 @@ import { query } from "@anthropic-ai/claude-agent-sdk"
 import { ensureStableClaudeBinary } from "./claudeBinary.js"
 import {
   getAnthropicApiKeyOrDummy,
-  type KodyConfig,
   litellmModelGroup,
   type ProviderModel,
   REASONING_BUDGETS,
@@ -381,10 +380,7 @@ export function stripAgentSecrets(env: Record<string, string>): Record<string, s
 }
 
 /** Build the SDK child environment, applying a request-scoped repo token last. */
-export function buildAgentEnvironment(
-  baseEnv: Record<string, string>,
-  repoToken?: string,
-): Record<string, string> {
+export function buildAgentEnvironment(baseEnv: Record<string, string>, repoToken?: string): Record<string, string> {
   const env = stripAgentSecrets({
     ...baseEnv,
     SKIP_HOOKS: "1",

@@ -28,7 +28,8 @@ function words(value: string): string[] {
   return value.trim().split(/\s+/).filter(Boolean)
 }
 
-const FORBIDDEN_REVIEW_SECTION = /^(?:clean\b|strengths?\b|suggest(?:ion|ed)s?\b|follow[- ]?ups?\b|verification\b|notes?\b|nits?\b|non[- ]issues?\b)/i
+const FORBIDDEN_REVIEW_SECTION =
+  /^(?:clean\b|strengths?\b|suggest(?:ion|ed)s?\b|follow[- ]?ups?\b|verification\b|notes?\b|nits?\b|non[- ]issues?\b)/i
 
 function removeForbiddenReviewSections(body: string): string {
   const kept: string[] = []
@@ -41,7 +42,10 @@ function removeForbiddenReviewSections(body: string): string {
     }
     if (!skipping) kept.push(line)
   }
-  return kept.join("\n").replace(/\n{3,}/g, "\n\n").trim()
+  return kept
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
 }
 
 export function prepareReviewBody(rawBody: string): string {

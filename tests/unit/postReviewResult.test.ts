@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest"
-import {
-  MAX_REVIEW_WORDS,
-  detectVerdict,
-  prepareReviewBody,
-} from "../../src/scripts/postReviewResult.js"
+import { detectVerdict, MAX_REVIEW_WORDS, prepareReviewBody } from "../../src/scripts/postReviewResult.js"
 
 describe("postReviewResult: prepareReviewBody", () => {
   it("removes model preamble before the verdict", () => {
@@ -106,9 +102,9 @@ describe("postReviewResult: detectVerdict", () => {
     expect(detectVerdict("This introduces a regression and should not merge until fixed.")).toBe("FAIL")
   })
   it("does not treat an explicit non-blocking WARN status as FAIL", () => {
-    expect(
-      detectVerdict("**Status:** WARN — Ship-blocking issues: none. Two warnings and three nits."),
-    ).toBe("CONCERNS")
+    expect(detectVerdict("**Status:** WARN — Ship-blocking issues: none. Two warnings and three nits.")).toBe(
+      "CONCERNS",
+    )
   })
   it("infers PASS from a clean LGTM review without a verdict heading", () => {
     expect(detectVerdict("LGTM. The implementation is correct and no changes required.")).toBe("PASS")

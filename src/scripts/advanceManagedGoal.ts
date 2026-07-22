@@ -1,4 +1,3 @@
-import * as path from "node:path"
 import { capabilitiesRoot } from "../definition-paths.js"
 import {
   applySimpleGoalTaskSummary,
