@@ -74,9 +74,18 @@ export function readWorkflowDefinition(
   cwd: string | undefined,
   id: string,
 ): WorkflowDefinition | null {
-  const filePath = path.join(cwd ?? process.cwd(), ".kody-engine", "runtime", workflowDefinitionPath(id))
-  if (!fs.existsSync(filePath)) return null
-  return parseWorkflowDefinition(fs.readFileSync(filePath, "utf8"))
+  const root = cwd ?? process.cwd()
+  const relativePath = workflowDefinitionPath(id)
+  const candidates = [
+    path.join(root, ".kody-engine", "runtime", relativePath),
+    path.join(root, ".kody-engine", "definitions", relativePath),
+  ]
+  for (const filePath of candidates) {
+    if (!fs.existsSync(filePath)) continue
+    const workflow = parseWorkflowDefinition(fs.readFileSync(filePath, "utf8"))
+    if (workflow) return workflow
+  }
+  return null
 }
 
 export function workflowDefinitionToCapabilityFolder(
