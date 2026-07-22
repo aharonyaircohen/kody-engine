@@ -25,7 +25,11 @@ import type { Context, InputSpec, Job, Profile, ScriptEntry } from "./implementa
 import { KODY_NAMESPACE, removeLabel } from "./lifecycleLabels.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
-import { resolveImplementation, resolveImplementationCandidates } from "./registry.js"
+import {
+  getImplementationRootsForCwd,
+  resolveImplementation,
+  resolveImplementationCandidates,
+} from "./registry.js"
 import {
   finalizeStagedRunIndexRowsAsync,
   runIndexRowFromJobContext,
@@ -305,7 +309,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
     return out
   }
 
-  const resolved = loadRunnableProfile(profileName)
+  const resolved = loadRunnableProfile(profileName, input.cwd)
   const { profilePath, profile, missing } = resolved
   if (missing.length > 0) {
     return finishAndEnd({
@@ -1074,10 +1078,10 @@ function clearStampedLifecycleLabels(profile: Profile, ctx: Context): void {
 
 // ────────────────────────────────────────────────────────────────────────────
 
-export function resolveProfilePath(profileName: string): string {
+export function resolveProfilePath(profileName: string, cwd: string = process.cwd()): string {
   // Delegate to the registry, which knows about hydrated capability
   // implementation profiles and the engine-bundled fallback root.
-  const found = resolveImplementation(profileName)
+  const found = resolveImplementation(profileName, getImplementationRootsForCwd(cwd))
   if (found) return found
   // Fall back to the legacy engine-only search so the error surface (file
   // not found) points at the expected engine location, not a project path
@@ -1094,8 +1098,14 @@ export function resolveProfilePath(profileName: string): string {
   return candidates[0]!
 }
 
-function loadRunnableProfile(profileName: string): { profilePath: string; profile: Profile; missing: string[] } {
-  const candidates = resolveImplementationCandidates(profileName)
+function loadRunnableProfile(
+  profileName: string,
+  cwd: string,
+): { profilePath: string; profile: Profile; missing: string[] } {
+  const candidates = resolveImplementationCandidates(
+    profileName,
+    getImplementationRootsForCwd(cwd),
+  )
   const skipped: string[] = []
 
   for (const profilePath of candidates) {

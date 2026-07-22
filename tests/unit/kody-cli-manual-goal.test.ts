@@ -18,7 +18,7 @@ vi.mock("../../src/registry.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../src/registry.js")>()
   return {
     ...actual,
-    resolveCapabilityAction: vi.fn((action: string) =>
+    resolveCapabilityAction: vi.fn((action: string, projectCapabilitiesRoot?: string) =>
       action === "goal-manager"
         ? {
             action: "goal-manager",
@@ -27,7 +27,7 @@ vi.mock("../../src/registry.js", async (importOriginal) => {
             cliArgs: {},
             source: "builtin",
           }
-        : null,
+        : actual.resolveCapabilityAction(action, projectCapabilitiesRoot),
     ),
   }
 })
@@ -78,6 +78,23 @@ function writeScheduledImplementation(dir: string, name: string): void {
     }),
   )
   fs.writeFileSync(path.join(implementationDir, "capability.md"), `# ${name}\n`)
+}
+
+function writePublicCapability(dir: string, name: string): void {
+  const capabilityDir = path.join(dir, ".kody-engine", "definitions", "capabilities", name)
+  fs.mkdirSync(capabilityDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(capabilityDir, "profile.json"),
+    JSON.stringify({
+      name,
+      role: "primitive",
+      kind: "oneshot",
+      action: name,
+      implementations: [name],
+      scripts: { preflight: [], postflight: [] },
+    }),
+  )
+  fs.writeFileSync(path.join(capabilityDir, "capability.md"), `# ${name}\n`)
 }
 
 afterEach(() => {
@@ -222,6 +239,30 @@ describe("kody-cli manual goal dispatch", () => {
       flavor: "instant",
       force: true,
     })
+  })
+
+  it("resolves a public capability from the selected consumer cwd", async () => {
+    const dir = tmpDir()
+    writeConfig(dir)
+    writePublicCapability(dir, "dispatch-due-loops")
+    previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
+    previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
+    process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      inputs: { capability: "dispatch-due-loops" },
+    })
+
+    await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
+
+    expect(mocks.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "dispatch-due-loops",
+        capability: "dispatch-due-loops",
+        flavor: "instant",
+        force: true,
+      }),
+      expect.objectContaining({ cwd: dir }),
+    )
   })
 
   it("runs stored workflows from manual workflow dispatch", async () => {

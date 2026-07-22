@@ -4,6 +4,7 @@ import * as path from "node:path"
 import { mintAppInstallationToken, readAppCreds } from "./app-auth.js"
 import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
 import { autoDispatch, autoDispatchTyped, type DispatchResult, dispatchScheduledWatches } from "./dispatch.js"
+import { capabilitiesRoot } from "./definition-paths.js"
 import { reactToTriggerComment } from "./gha.js"
 import {
   postIssueComment as ghPostIssueComment,
@@ -490,7 +491,9 @@ export async function runCi(argv: string[]): Promise<number> {
   if (forceRunAction) {
     const config = earlyConfig ?? loadConfig(cwd)
     const manualGoalManager = forceRunAction === "goal-manager"
-    const capabilityRoute = manualGoalManager ? null : resolveCapabilityAction(forceRunAction)
+    const capabilityRoute = manualGoalManager
+      ? null
+      : resolveCapabilityAction(forceRunAction, capabilitiesRoot(cwd))
     const workflowRoute =
       manualGoalManager || capabilityRoute || !readWorkflowDefinition(config, cwd, forceRunAction)
         ? undefined
