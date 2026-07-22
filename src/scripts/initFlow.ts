@@ -17,6 +17,7 @@ import type { PreflightScript } from "../implementations/types.js"
 import { type EnsureLabelsResult, ensureLabels } from "../lifecycleLabels.js"
 import { loadProfile } from "../profile.js"
 import { listImplementations } from "../registry.js"
+import { loadKodyWorkflowTemplate } from "../workflow-template.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -84,68 +85,6 @@ function makeConfig(pm: PackageManager, ownerRepo: OwnerRepo | null, defaultBran
   }
 }
 
-const WORKFLOW_TEMPLATE = `# Drop this file at .github/workflows/kody.yml in your repo.
-#
-# Triggers: @kody comment on an issue or PR, or manual workflow_dispatch.
-# Everything else (install deps, set up LiteLLM, run the agent, open the PR)
-# is handled inside the @kody-ade/kody-engine package.
-#
-# Required repo secrets: at least one model provider key (e.g. MINIMAX_API_KEY,
-# ANTHROPIC_API_KEY). kody reads any *_API_KEY secret automatically via
-# toJSON(secrets) — no need to list them here.
-#
-# Recommended: KODY_TOKEN secret — a PAT or GitHub App token with repo
-# scope so kody's pushes trigger downstream CI and PR-body edits succeed.
-
-name: kody
-
-on:
-  workflow_dispatch:
-    inputs:
-      issue_number:
-        description: "GitHub issue number"
-        required: true
-        type: string
-      capability:
-        description: "Capability action to run (default: run)"
-        required: false
-        type: string
-        default: ""
-  issue_comment:
-    types: [created]
-
-jobs:
-  run:
-    if: >-
-      \${{ github.event_name == 'workflow_dispatch' ||
-          (github.event_name == 'issue_comment' &&
-            contains(github.event.comment.body, '@kody')) }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      issues: write
-      pull-requests: write
-      contents: write
-      actions: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: \${{ secrets.KODY_TOKEN || github.token }}
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - env:
-          ALL_SECRETS: \${{ toJSON(secrets) }}
-        run: npx -y -p @kody-ade/kody-engine@latest kody-engine ci
-`
-
 function defaultBranchFromGit(cwd: string): string {
   try {
     const ref = execFileSync("git", ["symbolic-ref", "refs/remotes/origin/HEAD"], {
@@ -200,7 +139,7 @@ export function performInit(cwd: string, force: boolean): InitResult {
     skipped.push(".github/workflows/kody.yml")
   } else {
     fs.mkdirSync(workflowDir, { recursive: true })
-    fs.writeFileSync(workflowPath, WORKFLOW_TEMPLATE)
+    fs.writeFileSync(workflowPath, loadKodyWorkflowTemplate())
     wrote.push(".github/workflows/kody.yml")
   }
 

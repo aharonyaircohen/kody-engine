@@ -192,9 +192,23 @@ function recoverCheckoutToken(env: NodeJS.ProcessEnv = process.env, cwd = proces
 }
 
 export async function resolveAuthToken(env: NodeJS.ProcessEnv = process.env): Promise<string | undefined> {
-  // App credentials are the modern Kody auth path. Prefer minting here over
-  // a workflow-provided token because the workflow token may only cover the
-  // current repo, while Kody state can live in a sibling repo.
+  // Prefer ready-made user credentials, then App auth, then GitHub's built-in
+  // workflow token. This keeps existing App installs working while allowing
+  // new consumer repos to start without App secrets.
+  const readySources: Array<[string, string | undefined]> = [
+    ["GH_PAT", env.GH_PAT],
+    ["KODY_TOKEN", env.KODY_TOKEN],
+    ["GH_TOKEN", env.GH_TOKEN],
+  ]
+  const ready = readySources.find(([, value]) => !!value?.trim())
+  if (ready?.[1]) {
+    const token = ready[1].trim()
+    env.GH_TOKEN = token
+    recoverCheckoutToken(env)
+    process.stdout.write(`→ kody: GH_TOKEN sourced from env.${ready[0]}\n`)
+    return token
+  }
+
   const creds = readAppCreds(env)
   if (creds) {
     try {
@@ -208,12 +222,7 @@ export async function resolveAuthToken(env: NodeJS.ProcessEnv = process.env): Pr
     }
   }
 
-  const sources: Array<[string, string | undefined]> = [
-    ["KODY_TOKEN", env.KODY_TOKEN],
-    ["GH_TOKEN", env.GH_TOKEN],
-    ["GITHUB_TOKEN", env.GITHUB_TOKEN],
-    ["GH_PAT", env.GH_PAT],
-  ]
+  const sources: Array<[string, string | undefined]> = [["GITHUB_TOKEN", env.GITHUB_TOKEN]]
   const picked = sources.find(([, v]) => !!v)
   const token = picked?.[1]
   if (token && !env.GH_TOKEN) env.GH_TOKEN = token
