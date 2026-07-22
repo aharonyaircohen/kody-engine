@@ -21,13 +21,13 @@ export interface DispatchPolicyResolution {
   operation: DefinitionRecord<OperationDefinition>
   intents: Array<DefinitionRecord<IntentDefinition>>
   trace: PinnedDefinitionRef[]
+  requiresApproval: boolean
 }
 
 export function resolveDispatchPolicy(input: {
   catalog: AgencyDefinitionCatalog
   owner: DefinitionRecord<GoalDefinition | LoopDefinition>
   target: PinnedDefinitionRef
-  approved?: boolean
 }): DispatchPolicyResolution {
   const operation = input.catalog.operations.get(input.owner.definition.operationId)
   if (!operation) throw new Error(`Dispatch blocked: Operation "${input.owner.definition.operationId}" is unresolved`)
@@ -41,7 +41,7 @@ export function resolveDispatchPolicy(input: {
   })
   const policy = mergePolicies(intents.map(({ definition }) => definition.policy))
   const constraints = intents.flatMap(({ definition }) => definition.constraints)
-  assertAuthorized(policy, constraints, input.target, input.approved === true)
+  const requiresApproval = assertAuthorized(policy, constraints, input.target)
   const snapshotValue = { policy, constraints }
   return {
     snapshot: {
@@ -54,6 +54,7 @@ export function resolveDispatchPolicy(input: {
       pinned("trigger" in input.owner.definition ? "loop" : "goal", input.owner),
       input.target,
     ],
+    requiresApproval,
   }
 }
 
@@ -84,8 +85,7 @@ function assertAuthorized(
   policy: Policy,
   constraints: readonly Constraint[],
   target: PinnedDefinitionRef,
-  approved: boolean,
-): void {
+): boolean {
   const action = `${target.kind}:${target.id}`
   const matches = (patterns: readonly string[]) => patterns.some((pattern) => pattern === "*" || pattern === target.id || pattern === action)
   if (matches(policy.authority.deny)) throw new Error(`Dispatch blocked: authority denies "${action}"`)
@@ -97,7 +97,7 @@ function assertAuthorized(
     policy.approval === "all-actions" ||
     (policy.approval === "risky-actions" && matches(policy.riskyActions)) ||
     matchingConstraints.some(({ effect }) => effect === "require-approval")
-  if (requiresApproval && !approved) throw new Error(`Dispatch blocked: approval is required for "${action}"`)
+  return requiresApproval
 }
 
 function pinned<T extends { definition: { id: string }; revision: string }>(

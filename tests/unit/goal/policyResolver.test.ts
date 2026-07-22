@@ -82,8 +82,9 @@ describe("dispatch policy resolution", () => {
       target: { kind: "workflow" as const, id: "refresh-knowledge", revision: "workflow-rev" },
     }
 
-    expect(() => resolveDispatchPolicy(input)).toThrow(/approval is required/)
-    expect(resolveDispatchPolicy({ ...input, approved: true }).snapshot.policy.approval).toBe("risky-actions")
+    const resolution = resolveDispatchPolicy(input)
+    expect(resolution.requiresApproval).toBe(true)
+    expect(resolution.snapshot.policy.approval).toBe("risky-actions")
   })
 })
 

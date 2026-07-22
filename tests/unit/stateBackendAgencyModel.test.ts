@@ -67,11 +67,23 @@ describe("Agency Model state backend", () => {
     await expect(
       backend.reserveAgencyDispatch(
         "acme/widgets",
-        "loop-1:schedule:2026-07-22T12:00:00.000Z",
-        "loop-1",
-        decision,
-        "2026-07-22T12:15:00.000Z",
-        "2026-07-22T12:00:00.000Z",
+        {
+          idempotencyKey: "loop-1:schedule:2026-07-22T12:00:00.000Z",
+          loopId: "loop-1",
+          decision,
+          leaseUntil: "2026-07-22T12:15:00.000Z",
+          reservationId: "reservation-1",
+          correlationId: "correlation-1",
+          policyHash: "policy-1",
+          effectivePolicy: {},
+          definitionRefs: [],
+          maxConcurrentRuns: 1,
+          requiresApproval: false,
+          approvalScopeKind: "loop",
+          approvalScopeId: "loop-1",
+          approvalAction: "workflow:refresh-knowledge",
+          now: "2026-07-22T12:00:00.000Z",
+        },
       ),
     ).resolves.toMatchObject({ acquired: true })
 

@@ -90,16 +90,39 @@ export async function dispatchAgencyLoopsWith(input: {
     }
 
     const leaseUntil = new Date(input.now.getTime() + 15 * 60_000).toISOString()
-    const reservation = await input.backend.reserveAgencyDispatch(
-      input.tenantId,
-      decision.idempotencyKey,
-      record.definition.id,
+    const reservationId = `reservation-${randomUUID()}`
+    const correlationId = `corr-${randomUUID()}`
+    const trace = [policy.trace[0], ...target.intermediate, target.reference]
+    const reservation = await input.backend.reserveAgencyDispatch(input.tenantId, {
+      idempotencyKey: decision.idempotencyKey,
+      loopId: record.definition.id,
       decision,
       leaseUntil,
+      reservationId,
+      correlationId,
+      policyHash: policy.snapshot.hash,
+      effectivePolicy: policy.snapshot,
+      definitionRefs: trace,
+      maxConcurrentRuns: policy.snapshot.policy.maxConcurrentRuns,
+      requiresApproval: policy.requiresApproval,
+      approvalScopeKind: "loop",
+      approvalScopeId: record.definition.id,
+      approvalAction: `${target.reference.kind}:${target.reference.id}`,
       now,
-    )
+    })
     if (!reservation.acquired) {
-      results.push({ loopId: record.definition.id, decision: "duplicate", reason: "trigger firing already reserved" })
+      const duplicate = reservation.reason === "duplicate"
+      const reason =
+        reservation.reason === "approval-required"
+          ? "dispatch is waiting for approval"
+          : reservation.reason === "concurrency-limit"
+            ? "dispatch is waiting for policy capacity"
+            : "trigger firing already reserved"
+      results.push({
+        loopId: record.definition.id,
+        decision: duplicate ? "duplicate" : "skipped",
+        reason,
+      })
       continue
     }
 
@@ -113,13 +136,12 @@ export async function dispatchAgencyLoopsWith(input: {
     })
     await repository.saveState(runningState, "loop", now)
     const runId = `run-${randomUUID()}`
-    const correlationId = `corr-${randomUUID()}`
     const activeRun = createRun({
       id: runId,
       status: "running",
       origin: { kind: "loop", id: record.definition.id, revision: record.revision },
       target: target.reference,
-      trace: [policy.trace[0], ...target.intermediate, target.reference],
+      trace,
       effectivePolicy: policy.snapshot,
       correlationId,
       startedAt: now,
@@ -144,6 +166,7 @@ export async function dispatchAgencyLoopsWith(input: {
       await input.backend.finishAgencyDispatch(
         input.tenantId,
         decision.idempotencyKey,
+        reservationId,
         succeeded ? "dispatched" : "failed",
         finishedAt,
         runId,
@@ -169,7 +192,14 @@ export async function dispatchAgencyLoopsWith(input: {
       await input.backend
         .finishAgencyModelRun(input.tenantId, terminalRun(activeRun, "failed", finishedAt), finishedAt)
         .catch(() => undefined)
-      await input.backend.finishAgencyDispatch(input.tenantId, decision.idempotencyKey, "failed", finishedAt, runId)
+      await input.backend.finishAgencyDispatch(
+        input.tenantId,
+        decision.idempotencyKey,
+        reservationId,
+        "failed",
+        finishedAt,
+        runId,
+      )
       results.push({ loopId: record.definition.id, decision: "failed", reason })
     }
   }

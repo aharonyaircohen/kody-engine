@@ -119,11 +119,19 @@ describe("Agency Loop runtime dispatch", () => {
     expect(results).toMatchObject([{ loopId: "refresh-knowledge", decision: "dispatched" }])
     expect(reserveAgencyDispatch).toHaveBeenCalledWith(
       tenantId,
-      "refresh-knowledge:schedule:2026-07-22T11:00:00.000Z",
-      "refresh-knowledge",
-      expect.objectContaining({ kind: "fire" }),
-      "2026-07-22T11:20:00.000Z",
-      now,
+      expect.objectContaining({
+        idempotencyKey: "refresh-knowledge:schedule:2026-07-22T11:00:00.000Z",
+        loopId: "refresh-knowledge",
+        decision: expect.objectContaining({ kind: "fire" }),
+        leaseUntil: "2026-07-22T11:20:00.000Z",
+        policyHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        maxConcurrentRuns: 1,
+        requiresApproval: false,
+        approvalScopeKind: "loop",
+        approvalScopeId: "refresh-knowledge",
+        approvalAction: "workflow:refresh-knowledge-system",
+        now,
+      }),
     )
     expect(run).toHaveBeenCalledWith({ workflow: "refresh-knowledge-system", cliArgs: {}, flavor: "scheduled" })
     expect(reserveAgencyDispatch.mock.invocationCallOrder[0]).toBeLessThan(run.mock.invocationCallOrder[0]!)
@@ -279,6 +287,71 @@ describe("Agency Loop runtime dispatch", () => {
 
     expect(results).toMatchObject([{ decision: "skipped", reason: expect.stringMatching(/authority denies/) }])
     expect(recordSkippedAgencyDispatch).toHaveBeenCalled()
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it("keeps an approved-policy firing waiting until the backend grants it", async () => {
+    const definitions = supportingDefinitions({ approval: "all-actions" })
+    const reserveAgencyDispatch = vi.fn().mockResolvedValue({
+      acquired: false,
+      reason: "approval-required",
+    })
+    const run = vi.fn()
+    const backend = {
+      listAgencyDefinitions: vi.fn().mockResolvedValue([
+        ...definitions,
+        {
+          tenantId,
+          recordId: "approval-loop",
+          kind: "loop",
+          schemaVersion: 1,
+          data: {
+            id: "approval-loop",
+            operationId: "knowledge",
+            objective: {
+              desiredState: "Knowledge stays current",
+              requiredEvidence: [],
+              scope: { include: {}, exclude: {} },
+            },
+            trigger: { type: "schedule", every: "1h" },
+            targetRef: { kind: "workflow", id: "refresh-knowledge-system" },
+            reconciliationPolicy: { overlap: "skip", missed: "coalesce" },
+          },
+          createdAt: now,
+        },
+      ]),
+      getAgencyState: vi.fn().mockResolvedValue({
+        tenantId,
+        definitionId: "approval-loop",
+        kind: "loop",
+        schemaVersion: 1,
+        data: {
+          definitionId: "approval-loop",
+          lifecycle: "active",
+          health: "healthy",
+          failures: 0,
+          lastFiredAt: "2026-07-22T10:00:00.000Z",
+          updatedAt: "2026-07-22T10:00:00.000Z",
+        },
+        updatedAt: "2026-07-22T10:00:00.000Z",
+      }),
+      putAgencyState: vi.fn(),
+      appendAgencyOutput: vi.fn(),
+      listAgencyOutputs: vi.fn().mockResolvedValue([]),
+      reserveAgencyDispatch,
+      recordSkippedAgencyDispatch: vi.fn(),
+      finishAgencyDispatch: vi.fn(),
+      createAgencyModelRun: vi.fn(),
+      finishAgencyModelRun: vi.fn(),
+    } as unknown as StateBackend
+
+    const results = await dispatchAgencyLoopsWith({ tenantId, backend, now: new Date(now), run })
+
+    expect(results).toMatchObject([{ decision: "skipped", reason: "dispatch is waiting for approval" }])
+    expect(reserveAgencyDispatch).toHaveBeenCalledWith(
+      tenantId,
+      expect.objectContaining({ requiresApproval: true, approvalScopeId: "approval-loop" }),
+    )
     expect(run).not.toHaveBeenCalled()
   })
 })
