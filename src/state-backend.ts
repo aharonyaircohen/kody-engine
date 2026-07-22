@@ -61,6 +61,15 @@ export interface AgencyDispatchDecision {
   nextEligibleAt?: string
 }
 
+function serializeAgencyDispatchDecision(decision: AgencyDispatchDecision): AgencyDispatchDecision {
+  return {
+    kind: decision.kind,
+    reason: decision.reason,
+    ...(decision.scheduledAt ? { scheduledAt: decision.scheduledAt } : {}),
+    ...(decision.nextEligibleAt ? { nextEligibleAt: decision.nextEligibleAt } : {}),
+  }
+}
+
 export interface AgencyDispatchReservation {
   idempotencyKey: string
   loopId: string
@@ -372,6 +381,7 @@ export function createStateBackendFromEnv(
       const result = await transport.mutation(anyApi.agencyModel.reserveDispatch, {
         tenantId: requireTenant(tenantId),
         ...reservation,
+        decision: serializeAgencyDispatchDecision(reservation.decision),
         idempotencyKey: requireNonEmpty(reservation.idempotencyKey, "idempotencyKey"),
         loopId: requireNonEmpty(reservation.loopId, "loopId"),
         reservationId: requireNonEmpty(reservation.reservationId, "reservationId"),
@@ -390,7 +400,7 @@ export function createStateBackendFromEnv(
         tenantId: requireTenant(tenantId),
         idempotencyKey: requireNonEmpty(idempotencyKey, "idempotencyKey"),
         loopId: requireNonEmpty(loopId, "loopId"),
-        decision,
+        decision: serializeAgencyDispatchDecision(decision),
         now,
       })
     },

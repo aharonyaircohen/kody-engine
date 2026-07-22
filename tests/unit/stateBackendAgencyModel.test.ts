@@ -62,6 +62,7 @@ describe("Agency Model state backend", () => {
       kind: "fire" as const,
       reason: "scheduled trigger is due",
       scheduledAt: "2026-07-22T12:00:00.000Z",
+      idempotencyKey: "internal-only",
     }
 
     await expect(
@@ -90,8 +91,13 @@ describe("Agency Model state backend", () => {
     expect(mutation.mock.calls[0]?.[1]).toMatchObject({
       tenantId: "acme/widgets",
       loopId: "loop-1",
-      decision,
+      decision: {
+        kind: "fire",
+        reason: "scheduled trigger is due",
+        scheduledAt: "2026-07-22T12:00:00.000Z",
+      },
     })
+    expect(mutation.mock.calls[0]?.[1].decision).not.toHaveProperty("idempotencyKey")
   })
 
   it("persists clean Run records through dedicated lifecycle operations", async () => {
