@@ -537,6 +537,28 @@ describe("Agency Loop runtime dispatch", () => {
     ])
   })
 
+  it("finishes the Run when target execution throws", async () => {
+    const finishAgencyModelRun = vi.fn()
+    const finishAgencyDispatch = vi.fn()
+    const backend = loopBackend({
+      failure: { maxAttempts: 1, backoffSeconds: 0, timeoutSeconds: 60 },
+      finishAgencyModelRun,
+      finishAgencyDispatch,
+    })
+    const run = vi.fn().mockRejectedValue(new Error("workflow crashed"))
+
+    const results = await dispatchAgencyLoopsWith({ tenantId, backend, now: new Date(now), run })
+
+    expect(finishAgencyModelRun).toHaveBeenCalledWith(
+      tenantId,
+      expect.objectContaining({ status: "failed" }),
+      expect.any(String),
+    )
+    expect(results).toMatchObject([
+      { decision: "failed", reason: expect.stringMatching(/workflow crashed; dead-lettered/) },
+    ])
+  })
+
   it("aborts and dead-letters a target that exceeds its hard timeout", async () => {
     vi.useFakeTimers()
     try {

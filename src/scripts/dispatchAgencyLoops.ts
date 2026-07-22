@@ -353,7 +353,10 @@ async function runAttempt(
   let timer: NodeJS.Timeout | undefined
   try {
     return await Promise.race([
-      run(job, abortController),
+      run(job, abortController).catch((error) => ({
+        exitCode: 99,
+        reason: error instanceof Error ? error.message : String(error),
+      })),
       new Promise<{ exitCode: number; reason: string }>((resolve) => {
         timer = setTimeout(() => {
           abortController.abort()
