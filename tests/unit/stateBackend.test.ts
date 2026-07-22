@@ -18,7 +18,7 @@ function client(): StateBackendClient {
 describe("state backend", () => {
   it("fails closed when backend credentials are incomplete", () => {
     expect(() => createStateBackendFromEnv({ CONVEX_URL: "https://example.convex.cloud" })).toThrow(
-      "CONVEX_URL and KODY_SERVICE_KEY are required",
+      "GitHub Actions identity or direct Kody backend credentials are required",
     )
   })
 

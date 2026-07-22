@@ -119,6 +119,6 @@ describe("definition hydration", () => {
         GITHUB_ACTIONS: "true",
         GITHUB_REPOSITORY: "acme/widgets",
       }),
-    ).rejects.toThrow(/CONVEX_URL and KODY_SERVICE_KEY/)
+    ).rejects.toThrow(/GitHub Actions workflow identity/)
   })
 })

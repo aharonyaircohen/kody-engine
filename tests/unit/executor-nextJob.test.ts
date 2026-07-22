@@ -44,6 +44,7 @@ vi.mock("../../src/issue.js", async (orig) => {
 })
 vi.mock("../../src/state-backend.js", () => ({
   createStateBackendFromEnv: () => ({ save: vi.fn(async () => undefined) }),
+  hasStateBackendConfig: () => false,
 }))
 
 import type { KodyConfig } from "../../src/config.js"

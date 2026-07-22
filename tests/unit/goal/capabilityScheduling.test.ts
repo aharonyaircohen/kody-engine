@@ -17,6 +17,7 @@ const backendMocks = vi.hoisted(() => ({
   trust: null as Record<string, unknown> | null,
 }))
 vi.mock("../../../src/state-backend.js", () => ({
+  hasStateBackendConfig: () => true,
   createStateBackendFromEnv: () => ({
     getGoal: async (_tenantId: string, goalId: string) => {
       const state = backendMocks.goals.get(goalId)

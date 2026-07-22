@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const { saveReport } = vi.hoisted(() => ({ saveReport: vi.fn() }))
 vi.mock("../../src/state-backend.js", () => ({
   createStateBackendFromEnv: () => ({ saveReport }),
+  hasStateBackendConfig: () => true,
 }))
 
 import { buildRuntimeReportMarkdown, publishReport } from "../../src/scripts/publishReport.js"
