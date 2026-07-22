@@ -19,7 +19,11 @@ describe("Agency Loop runtime dispatch", () => {
           data: {
             id: "refresh-knowledge",
             operationId: "knowledge",
-            objective: { desiredState: "Knowledge stays current", requiredEvidence: [], scope: {} },
+            objective: {
+              desiredState: "Knowledge stays current",
+              requiredEvidence: [],
+              scope: { include: {}, exclude: {} },
+            },
             trigger: { type: "schedule", every: "1h" },
             targetRef: { kind: "workflow", id: "refresh-knowledge-system" },
             reconciliationPolicy: { overlap: "skip", missed: "coalesce" },
@@ -78,7 +82,11 @@ describe("Agency Loop runtime dispatch", () => {
           data: {
             id: "refresh-goal",
             operationId: "knowledge",
-            objective: { desiredState: "Knowledge stays current", requiredEvidence: [], scope: {} },
+            objective: {
+              desiredState: "Knowledge stays current",
+              requiredEvidence: [],
+              scope: { include: {}, exclude: {} },
+            },
             executionRef: { kind: "workflow", id: "refresh-knowledge-system" },
           },
           createdAt: now,
@@ -91,7 +99,11 @@ describe("Agency Loop runtime dispatch", () => {
           data: {
             id: "refresh-loop",
             operationId: "knowledge",
-            objective: { desiredState: "Knowledge stays current", requiredEvidence: [], scope: {} },
+            objective: {
+              desiredState: "Knowledge stays current",
+              requiredEvidence: [],
+              scope: { include: {}, exclude: {} },
+            },
             trigger: { type: "schedule", every: "1h" },
             targetRef: { kind: "goal", id: "refresh-goal" },
             reconciliationPolicy: { overlap: "skip", missed: "coalesce" },

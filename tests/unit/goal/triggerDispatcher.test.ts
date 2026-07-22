@@ -4,7 +4,7 @@ import { decideTrigger } from "../../../src/goal/triggerDispatcher.js"
 const loop = {
   id: "refresh-knowledge",
   operationId: "knowledge",
-  objective: { desiredState: "Knowledge stays current", requiredEvidence: [], scope: {} },
+  objective: { desiredState: "Knowledge stays current", requiredEvidence: [], scope: { include: {}, exclude: {} } },
   trigger: { type: "schedule" as const, every: "1h" },
   targetRef: { kind: "workflow" as const, id: "refresh-knowledge-system" },
   reconciliationPolicy: { overlap: "skip" as const, missed: "coalesce" as const },

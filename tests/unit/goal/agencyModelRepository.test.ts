@@ -4,7 +4,11 @@ import { AgencyModelRepository, goalProgressFromOutputs } from "../../../src/goa
 const goal = {
   id: "refresh-graph",
   operationId: "knowledge",
-  objective: { desiredState: "Graph is current", requiredEvidence: ["published"], scope: {} },
+  objective: {
+    desiredState: "Graph is current",
+    requiredEvidence: ["published"],
+    scope: { include: {}, exclude: {} },
+  },
   executionRef: { kind: "workflow" as const, id: "refresh-graph" },
 }
 const now = "2026-07-22T00:00:00.000Z"
