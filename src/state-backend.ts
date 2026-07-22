@@ -28,6 +28,24 @@ export interface AgencyRunDocument {
   updatedAt: string
 }
 
+export interface AgencyDefinitionDocument {
+  tenantId: string
+  recordId: string
+  kind: "intent" | "operation" | "goal" | "loop" | "workflow" | "capability"
+  schemaVersion: number
+  data: unknown
+  createdAt: string
+}
+
+export interface AgencyStateDocument {
+  tenantId: string
+  definitionId: string
+  kind: "goal" | "loop"
+  schemaVersion: number
+  data: unknown
+  updatedAt: string
+}
+
 export interface DefinitionDocument {
   slug: string
   version: string
@@ -78,6 +96,16 @@ export interface StateBackend {
     subjectType: AgencyRunDocument["subjectType"],
     subjectId: string,
     run: unknown,
+    updatedAt: string,
+  ): Promise<void>
+  listAgencyDefinitions(tenantId: string): Promise<AgencyDefinitionDocument[]>
+  getAgencyState(tenantId: string, definitionId: string): Promise<AgencyStateDocument | null>
+  putAgencyState(
+    tenantId: string,
+    definitionId: string,
+    kind: AgencyStateDocument["kind"],
+    schemaVersion: number,
+    data: unknown,
     updatedAt: string,
   ): Promise<void>
   appendRunEvent(
@@ -225,6 +253,29 @@ export function createStateBackendFromEnv(
         subjectType,
         subjectId: requireNonEmpty(subjectId, "subjectId"),
         run,
+        updatedAt,
+      })
+    },
+    async listAgencyDefinitions(tenantId) {
+      const result = await transport.query(anyApi.agencyModel.listDefinitions, {
+        tenantId: requireTenant(tenantId),
+      })
+      return Array.isArray(result) ? (result as AgencyDefinitionDocument[]) : []
+    },
+    async getAgencyState(tenantId, definitionId) {
+      const result = await transport.query(anyApi.agencyModel.getState, {
+        tenantId: requireTenant(tenantId),
+        definitionId: requireNonEmpty(definitionId, "definitionId"),
+      })
+      return (result as AgencyStateDocument | null) ?? null
+    },
+    async putAgencyState(tenantId, definitionId, kind, schemaVersion, data, updatedAt) {
+      await transport.mutation(anyApi.agencyModel.putState, {
+        tenantId: requireTenant(tenantId),
+        definitionId: requireNonEmpty(definitionId, "definitionId"),
+        kind,
+        schemaVersion,
+        data,
         updatedAt,
       })
     },
