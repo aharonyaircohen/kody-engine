@@ -244,6 +244,25 @@ describe("Agency Loop runtime dispatch", () => {
   })
 
   it("resolves a Goal target to its declared execution reference", async () => {
+    const outputs: Array<{
+      tenantId: string
+      recordId: string
+      schemaVersion: number
+      runId: string
+      data: unknown
+    }> = []
+    const appendAgencyOutput = vi.fn(
+      async (storedTenantId: string, recordId: string, schemaVersion: number, data: unknown) => {
+        outputs.push({
+          tenantId: storedTenantId,
+          recordId,
+          schemaVersion,
+          runId: (data as { runId: string }).runId,
+          data,
+        })
+      },
+    )
+    const putAgencyState = vi.fn()
     const backend = {
       listAgencyDefinitions: vi.fn().mockResolvedValue([
         ...supportingDefinitions(),
@@ -257,7 +276,7 @@ describe("Agency Loop runtime dispatch", () => {
             operationId: "knowledge",
             objective: {
               desiredState: "Knowledge stays current",
-              requiredEvidence: [],
+              requiredEvidence: ["graph-published"],
               scope: { include: {}, exclude: {} },
             },
             executionRef: { kind: "workflow", id: "refresh-knowledge-system" },
@@ -303,22 +322,57 @@ describe("Agency Loop runtime dispatch", () => {
             }
           : null,
       ),
-      putAgencyState: vi.fn(),
-      appendAgencyOutput: vi.fn(),
-      listAgencyOutputs: vi.fn().mockResolvedValue([]),
+      putAgencyState,
+      appendAgencyOutput,
+      listAgencyOutputs: vi.fn(async () => outputs),
       reserveAgencyDispatch: vi.fn().mockResolvedValue({ acquired: true, dispatchId: "dispatch-2" }),
       recordSkippedAgencyDispatch: vi.fn(),
       finishAgencyDispatch: vi.fn(),
       createAgencyModelRun: vi.fn(),
       finishAgencyModelRun: vi.fn(),
     } as unknown as StateBackend
-    const run = vi.fn().mockResolvedValue({ exitCode: 0 })
+    const run = vi.fn().mockResolvedValue({
+      exitCode: 0,
+      capabilityResults: [
+        {
+          version: 1,
+          status: "pass",
+          summary: "Knowledge graph published",
+          evidence: { "graph-published": true },
+          facts: { nodeCount: 42 },
+          artifacts: [{ label: "knowledge-graph", path: "graph.json" }],
+          missingEvidence: [],
+          blockers: [],
+        },
+      ],
+    })
 
     await dispatchAgencyLoopsWith({ tenantId, backend, now: new Date(now), run })
 
     expect(run).toHaveBeenCalledWith(
       { workflow: "refresh-knowledge-system", cliArgs: {}, flavor: "scheduled" },
       expect.any(AbortController),
+    )
+    expect(appendAgencyOutput).toHaveBeenCalledTimes(3)
+    expect(appendAgencyOutput).toHaveBeenCalledWith(
+      tenantId,
+      expect.stringMatching(/^output-/),
+      1,
+      expect.objectContaining({
+        kind: "evidence",
+        key: "graph-published",
+        value: true,
+        producer: { kind: "workflow", id: "refresh-knowledge-system" },
+        contract: "capability-result/v1",
+      }),
+    )
+    expect(putAgencyState).toHaveBeenCalledWith(
+      tenantId,
+      "refresh-goal",
+      "goal",
+      1,
+      expect.objectContaining({ definitionId: "refresh-goal", progress: 1 }),
+      expect.any(String),
     )
   })
 

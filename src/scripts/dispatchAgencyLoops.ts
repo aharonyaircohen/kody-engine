@@ -8,6 +8,7 @@ import {
   type Run,
 } from "@kody-ade/agency-domain"
 import type { KodyConfig } from "../config.js"
+import type { CapabilityResult } from "../capabilityResult.js"
 import { AgencyModelRepository } from "../goal/agencyModelRepository.js"
 import { decideTrigger } from "../goal/triggerDispatcher.js"
 import { resolveDispatchPolicy } from "../goal/policyResolver.js"
@@ -53,6 +54,7 @@ export async function dispatchAgencyLoopsWith(input: {
     exitCode: number
     reason?: string
     usage?: { tokens: number; costUsd: number }
+    capabilityResults?: CapabilityResult[]
   }>
 }): Promise<DispatchResult[]> {
   const repository = new AgencyModelRepository(input.backend, input.tenantId)
@@ -169,6 +171,7 @@ export async function dispatchAgencyLoopsWith(input: {
       let succeeded = false
       let reason = "target failed"
       let finalRunId: string | undefined
+      let finalCapabilityResults: CapabilityResult[] = []
       const budgetDeadline = Date.now() + budget.maxDurationSeconds * 1_000
       for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         const remainingMilliseconds = budgetDeadline - Date.now()
@@ -206,6 +209,7 @@ export async function dispatchAgencyLoopsWith(input: {
         costUsd += attemptResult.usage?.costUsd ?? 0
         const finishedAt = new Date().toISOString()
         succeeded = attemptResult.exitCode === 0
+        finalCapabilityResults = attemptResult.capabilityResults ?? []
         reason = attemptResult.reason ?? (succeeded ? "target dispatched" : "target failed")
         const usage = {
           tokens: attemptResult.usage?.tokens ?? 0,
@@ -231,6 +235,24 @@ export async function dispatchAgencyLoopsWith(input: {
         await wait(backoffMilliseconds)
       }
       const finishedAt = new Date().toISOString()
+      const goalRecord =
+        record.definition.targetRef.kind === "goal"
+          ? records.find(
+              (candidate) =>
+                "executionRef" in candidate.definition &&
+                candidate.definition.id === record.definition.targetRef.id,
+            )
+          : undefined
+      if (succeeded && goalRecord && finalRunId) {
+        await appendCapabilityOutputs(
+          repository,
+          finalRunId,
+          target.reference,
+          finalCapabilityResults,
+          finishedAt,
+        )
+        await repository.refreshGoalProgress(goalRecord, finishedAt)
+      }
       await input.backend.finishAgencyDispatch(
         input.tenantId,
         decision.idempotencyKey,
@@ -313,13 +335,19 @@ async function runAttempt(
   run: (
     job: Job,
     abortController: AbortController,
-  ) => Promise<{ exitCode: number; reason?: string; usage?: { tokens: number; costUsd: number } }>,
+  ) => Promise<{
+    exitCode: number
+    reason?: string
+    usage?: { tokens: number; costUsd: number }
+    capabilityResults?: CapabilityResult[]
+  }>,
   job: Job,
   timeoutSeconds: number,
 ): Promise<{
   exitCode: number
   reason?: string
   usage?: { tokens: number; costUsd: number }
+  capabilityResults?: CapabilityResult[]
 }> {
   const abortController = new AbortController()
   let timer: NodeJS.Timeout | undefined
@@ -335,6 +363,39 @@ async function runAttempt(
     ])
   } finally {
     if (timer) clearTimeout(timer)
+  }
+}
+
+async function appendCapabilityOutputs(
+  repository: AgencyModelRepository,
+  runId: string,
+  producer: ResolvedTarget["reference"],
+  results: readonly CapabilityResult[],
+  createdAt: string,
+): Promise<void> {
+  for (const result of results) {
+    const outputs: Array<{ kind: "fact" | "evidence" | "artifact"; key: string; value: unknown }> = [
+      ...Object.entries(result.facts).map(([key, value]) => ({ kind: "fact" as const, key, value })),
+      ...Object.entries(result.evidence ?? {}).map(([key, value]) => ({
+        kind: "evidence" as const,
+        key,
+        value,
+      })),
+      ...result.artifacts.map((artifact, index) => ({
+        kind: "artifact" as const,
+        key: artifact.label || `artifact-${index + 1}`,
+        value: artifact,
+      })),
+    ]
+    for (const output of outputs) {
+      await repository.appendOutput(`output-${randomUUID()}`, {
+        ...output,
+        runId,
+        producer: { kind: producer.kind, id: producer.id },
+        contract: "capability-result/v1",
+        createdAt,
+      })
+    }
   }
 }
 
