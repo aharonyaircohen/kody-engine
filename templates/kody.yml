@@ -79,6 +79,8 @@ jobs:
           cache: pip
           cache-dependency-path: .kody-pip-requirements.txt
 
+      - uses: astral-sh/setup-uv@v6
+
       - name: Hydrate Kody Store definitions
         uses: actions/checkout@v4
         with:

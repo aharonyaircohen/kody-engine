@@ -41,6 +41,7 @@ describe("initFlow: performInit", () => {
     expect(workflow).toContain("id-token: write")
     expect(workflow).toContain("secrets.GH_PAT || secrets.KODY_TOKEN || github.token")
     expect(workflow).toContain("name: Hydrate Kody Store definitions")
+    expect(workflow).toContain("uses: astral-sh/setup-uv@v6")
     expect(workflow).toContain("vars.KODY_STORE_REPOSITORY")
     expect(workflow).toContain("path: .kody-engine/definitions")
     expect(workflow).not.toContain("create-github-app-token")
