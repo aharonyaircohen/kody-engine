@@ -101,7 +101,11 @@ export class AgencyModelRepository {
         left.createdAt.localeCompare(right.createdAt) ||
         left.recordId.localeCompare(right.recordId),
     )
-    for (const document of ordered) addDefinition(catalog, document)
+    const latest = new Map<string, AgencyDefinitionDocument>()
+    for (const document of ordered) {
+      latest.set(`${document.kind}:${definitionId(document)}`, document)
+    }
+    for (const document of latest.values()) addDefinition(catalog, document)
     validateRelationships(catalog)
     return catalog
   }
@@ -141,6 +145,14 @@ export class AgencyModelRepository {
     await this.saveState(state, "goal", updatedAt)
     return state
   }
+}
+
+function definitionId(document: AgencyDefinitionDocument): string {
+  const data = document.data as { id?: unknown }
+  if (typeof data.id !== "string" || !data.id.trim()) {
+    throw new Error(`Agency Definition is missing id: ${document.recordId}`)
+  }
+  return data.id
 }
 
 function parseState(
