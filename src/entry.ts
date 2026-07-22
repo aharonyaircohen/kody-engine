@@ -3,6 +3,7 @@ import { brainProxy } from "./bin/brain-proxy.js"
 import { mcpHttpServer } from "./bin/mcp-http-server.js"
 import { runChat } from "./chat-cli.js"
 import { loadConfig } from "./config.js"
+import { hasExplicitDefinitionsRoot } from "./definition-paths.js"
 import { hydrateDefinitionsFromEnv } from "./definition-hydration.js"
 import { runJob } from "./job.js"
 import { runCi, unpackAllSecrets } from "./kody-cli.js"
@@ -192,8 +193,9 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   const cwdFlag = argv.indexOf("--cwd")
   const definitionCwd = cwdFlag >= 0 && argv[cwdFlag + 1] ? argv[cwdFlag + 1]! : process.cwd()
   const shouldHydrate =
-    Boolean(process.env.CONVEX_URL?.trim()) ||
-    (process.env.GITHUB_ACTIONS === "true" && Boolean(process.env.GITHUB_EVENT_NAME))
+    !hasExplicitDefinitionsRoot(definitionCwd) &&
+    (Boolean(process.env.CONVEX_URL?.trim()) ||
+      (process.env.GITHUB_ACTIONS === "true" && Boolean(process.env.GITHUB_EVENT_NAME)))
   if (shouldHydrate) {
     try {
       await hydrateDefinitionsFromEnv(definitionCwd)

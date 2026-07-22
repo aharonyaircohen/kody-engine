@@ -2,7 +2,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { definitionsRoot } from "../../src/definition-paths.js"
+import { definitionsRoot, hasExplicitDefinitionsRoot } from "../../src/definition-paths.js"
 
 describe("definition paths", () => {
   let cwd: string
@@ -33,6 +33,14 @@ describe("definition paths", () => {
     fs.mkdirSync(local, { recursive: true })
 
     expect(definitionsRoot(other)).toBe(local)
+    fs.rmSync(other, { recursive: true, force: true })
+  })
+
+  it("recognizes the scoped override as an explicit definition source", () => {
+    expect(hasExplicitDefinitionsRoot(cwd)).toBe(true)
+
+    const other = fs.mkdtempSync(path.join(os.tmpdir(), "kody-definitions-other-"))
+    expect(hasExplicitDefinitionsRoot(other)).toBe(false)
     fs.rmSync(other, { recursive: true, force: true })
   })
 })
