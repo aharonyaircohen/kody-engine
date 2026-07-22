@@ -79,6 +79,14 @@ jobs:
           cache: pip
           cache-dependency-path: .kody-pip-requirements.txt
 
+      - name: Hydrate Kody Store definitions
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.KODY_STORE_REPOSITORY || 'aharonyaircohen/kody-company-store' }}
+          ref: ${{ vars.KODY_STORE_REF || 'main' }}
+          path: .kody-engine/definitions
+          token: ${{ secrets.GH_PAT || secrets.KODY_TOKEN || github.token }}
+
       - env:
           ALL_SECRETS: ${{ toJSON(secrets) }}
           SESSION_ID: ${{ inputs.sessionId }}
