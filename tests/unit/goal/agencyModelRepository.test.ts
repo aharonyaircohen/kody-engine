@@ -1,15 +1,40 @@
 import { describe, expect, it, vi } from "vitest"
-import { AgencyModelRepository } from "../../../src/goal/agencyModelRepository.js"
+import { AgencyModelRepository, goalProgressFromOutputs } from "../../../src/goal/agencyModelRepository.js"
 
 const goal = {
   id: "refresh-graph",
   operationId: "knowledge",
   objective: { desiredState: "Graph is current", requiredEvidence: ["published"], scope: {} },
-  executionRef: { kind: "workflow", id: "refresh-graph" },
+  executionRef: { kind: "workflow" as const, id: "refresh-graph" },
 }
 const now = "2026-07-22T00:00:00.000Z"
 
 describe("AgencyModelRepository", () => {
+  it("derives Goal progress only from required evidence outputs", () => {
+    expect(
+      goalProgressFromOutputs(goal, [
+        {
+          kind: "evidence",
+          key: "published",
+          value: true,
+          runId: "run-1",
+          producer: { kind: "capability", id: "build-knowledge-graph" },
+          contract: "knowledge-graph",
+          createdAt: now,
+        },
+        {
+          kind: "fact",
+          key: "unrelated",
+          value: true,
+          runId: "run-1",
+          producer: { kind: "capability", id: "build-knowledge-graph" },
+          contract: "knowledge-graph",
+          createdAt: now,
+        },
+      ]),
+    ).toBe(1)
+  })
+
   it("loads and validates clean Definitions separately from mutable State", async () => {
     const backend = {
       listAgencyDefinitions: vi.fn().mockResolvedValue([
@@ -24,6 +49,8 @@ describe("AgencyModelRepository", () => {
         updatedAt: now,
       }),
       putAgencyState: vi.fn(),
+      appendAgencyOutput: vi.fn(),
+      listAgencyOutputs: vi.fn().mockResolvedValue([]),
     }
 
     const records = await new AgencyModelRepository(backend, "acme/widgets").listManagedWork()
@@ -48,6 +75,8 @@ describe("AgencyModelRepository", () => {
         updatedAt: now,
       }),
       putAgencyState: vi.fn(),
+      appendAgencyOutput: vi.fn(),
+      listAgencyOutputs: vi.fn().mockResolvedValue([]),
     }
 
     await expect(new AgencyModelRepository(backend, "acme/widgets").listManagedWork()).rejects.toThrow(

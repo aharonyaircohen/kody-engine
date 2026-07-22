@@ -6,11 +6,13 @@ import {
   createLoopDefinition,
   createLoopState,
   createOperationDefinition,
+  createRunOutput,
   createWorkflowDefinition,
   type GoalDefinition,
   type GoalState,
   type LoopDefinition,
   type LoopState,
+  type RunOutput,
 } from "@kody-ade/agency-domain"
 import type { AgencyDefinitionDocument, AgencyStateDocument, StateBackend } from "../state-backend.js"
 
@@ -21,9 +23,27 @@ export interface ManagedWorkRecord {
   state: GoalState | LoopState | null
 }
 
+export function goalProgressFromOutputs(definition: GoalDefinition, outputs: readonly RunOutput[]): number {
+  const required = definition.objective.requiredEvidence
+  if (required.length === 0) return 1
+  const satisfied = new Set(
+    outputs
+      .filter((output) => output.kind === "evidence" && output.value === true)
+      .map((output) => output.key),
+  )
+  return required.filter((key) => satisfied.has(key)).length / required.length
+}
+
 export class AgencyModelRepository {
   constructor(
-    private readonly backend: Pick<StateBackend, "listAgencyDefinitions" | "getAgencyState" | "putAgencyState">,
+    private readonly backend: Pick<
+      StateBackend,
+      | "listAgencyDefinitions"
+      | "getAgencyState"
+      | "putAgencyState"
+      | "appendAgencyOutput"
+      | "listAgencyOutputs"
+    >,
     private readonly tenantId: string,
   ) {}
 
@@ -45,6 +65,37 @@ export class AgencyModelRepository {
   async saveState(state: GoalState | LoopState, kind: "goal" | "loop", updatedAt: string): Promise<void> {
     const data = kind === "goal" ? createGoalState(state) : createLoopState(state)
     await this.backend.putAgencyState(this.tenantId, state.definitionId, kind, 1, data, updatedAt)
+  }
+
+  async appendOutput(recordId: string, output: RunOutput): Promise<void> {
+    await this.backend.appendAgencyOutput(this.tenantId, recordId, 1, createRunOutput(output))
+  }
+
+  async listOutputs(runId?: string): Promise<RunOutput[]> {
+    const documents = await this.backend.listAgencyOutputs(this.tenantId, runId)
+    return documents.map((document) => {
+      if (document.schemaVersion !== 1) {
+        throw new Error(`Unsupported Agency Output schema: ${document.schemaVersion}`)
+      }
+      const output = createRunOutput(document.data)
+      if (output.runId !== document.runId) throw new Error(`Agency Output does not match Run: ${document.recordId}`)
+      return output
+    })
+  }
+
+  async refreshGoalProgress(record: ManagedWorkRecord, updatedAt: string): Promise<GoalState> {
+    if (!("executionRef" in record.definition)) throw new Error("Only a Goal has progress")
+    const previous = record.state
+    if (previous && !("progress" in previous)) throw new Error("Goal Definition has Loop State")
+    const state = createGoalState({
+      definitionId: record.definition.id,
+      lifecycle: previous?.lifecycle ?? "draft",
+      progress: goalProgressFromOutputs(record.definition, await this.listOutputs()),
+      blockers: previous?.blockers ?? [],
+      updatedAt,
+    })
+    await this.saveState(state, "goal", updatedAt)
+    return state
   }
 }
 

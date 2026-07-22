@@ -39,4 +39,19 @@ describe("Agency Model state backend", () => {
     })
     expect(data).not.toHaveProperty("version")
   })
+
+  it("appends and reads Run outputs through the Agency Model", async () => {
+    const query = vi.fn().mockResolvedValue([{ recordId: "output-1" }])
+    const mutation = vi.fn()
+    const backend = createStateBackendFromEnv({}, { query, mutation })
+    const output = { kind: "evidence", runId: "run-1" }
+
+    await backend.appendAgencyOutput("acme/widgets", "output-1", 1, output)
+    await expect(backend.listAgencyOutputs("acme/widgets", "run-1")).resolves.toEqual([{ recordId: "output-1" }])
+
+    expect(mutation.mock.calls[0]?.[1]).toMatchObject({
+      tenantId: "acme/widgets",
+      envelope: { schemaVersion: 1, recordId: "output-1", data: output },
+    })
+  })
 })

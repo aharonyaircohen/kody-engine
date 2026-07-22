@@ -46,6 +46,14 @@ export interface AgencyStateDocument {
   updatedAt: string
 }
 
+export interface AgencyOutputDocument {
+  tenantId: string
+  recordId: string
+  schemaVersion: number
+  runId: string
+  data: unknown
+}
+
 export interface DefinitionDocument {
   slug: string
   version: string
@@ -108,6 +116,13 @@ export interface StateBackend {
     data: unknown,
     updatedAt: string,
   ): Promise<void>
+  appendAgencyOutput(
+    tenantId: string,
+    recordId: string,
+    schemaVersion: number,
+    data: unknown,
+  ): Promise<void>
+  listAgencyOutputs(tenantId: string, runId?: string): Promise<AgencyOutputDocument[]>
   appendRunEvent(
     tenantId: string,
     runId: string,
@@ -278,6 +293,23 @@ export function createStateBackendFromEnv(
         data,
         updatedAt,
       })
+    },
+    async appendAgencyOutput(tenantId, recordId, schemaVersion, data) {
+      await transport.mutation(anyApi.agencyModel.appendOutput, {
+        tenantId: requireTenant(tenantId),
+        envelope: {
+          schemaVersion,
+          recordId: requireNonEmpty(recordId, "recordId"),
+          data,
+        },
+      })
+    },
+    async listAgencyOutputs(tenantId, runId) {
+      const result = await transport.query(anyApi.agencyModel.listOutputs, {
+        tenantId: requireTenant(tenantId),
+        ...(runId ? { runId: requireNonEmpty(runId, "runId") } : {}),
+      })
+      return Array.isArray(result) ? (result as AgencyOutputDocument[]) : []
     },
     async appendRunEvent(tenantId, runId, goalId, event, time) {
       await transport.mutation(anyApi.runEvents.append, {
