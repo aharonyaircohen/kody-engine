@@ -10,7 +10,38 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { ensureRepoCwd, fetchRepo } from "../../src/repoWorkspace.js"
+import {
+  GIT_CREDENTIAL_HELPER,
+  buildCloneProcess,
+  ensureRepoCwd,
+  fetchRepo,
+} from "../../src/repoWorkspace.js"
+
+describe("authenticated clone security", () => {
+  it("keeps the token out of the clone URL and persistent git configuration", () => {
+    const token = "github-secret-token"
+    const clone = buildCloneProcess("octocat/Hello-World", token, { PATH: "/usr/bin" })
+
+    expect(clone.url).toBe("https://github.com/octocat/Hello-World.git")
+    expect(clone.url).not.toContain(token)
+    expect(GIT_CREDENTIAL_HELPER).toContain("$GITHUB_TOKEN")
+    expect(GIT_CREDENTIAL_HELPER).not.toContain(token)
+  })
+
+  it("passes clone authentication through transient git process configuration", () => {
+    const clone = buildCloneProcess("octocat/Hello-World", "github-secret-token", {
+      PATH: "/usr/bin",
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: "safe.existing",
+      GIT_CONFIG_VALUE_0: "value",
+    })
+
+    expect(clone.env.GIT_CONFIG_COUNT).toBe("2")
+    expect(clone.env.GIT_CONFIG_KEY_0).toBe("safe.existing")
+    expect(clone.env.GIT_CONFIG_KEY_1).toBe("http.https://github.com/.extraHeader")
+    expect(clone.env.GIT_CONFIG_VALUE_1).toMatch(/^Authorization: Basic /)
+  })
+})
 
 describe("fetchRepo (strict, for the fetch_repo tool)", () => {
   let tmp: string

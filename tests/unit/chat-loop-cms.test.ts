@@ -79,4 +79,24 @@ describe("chat/loop Dashboard CMS wiring", () => {
     expect(String(opts.systemPromptAppend)).toContain("Dashboard CMS tools")
     expect(String(opts.systemPromptAppend)).toContain("Dashboard is the source of truth")
   })
+
+  it("forwards the selected repo token without enabling cross-repo access", async () => {
+    const sessionFile = path.join(tmp, "repo-token.jsonl")
+    appendTurn(sessionFile, { role: "user", content: "inspect this repo", timestamp: "t1" })
+
+    await runChatTurn({
+      sessionId: "repo-token",
+      sessionFile,
+      cwd: tmp,
+      model: MODEL,
+      litellmUrl: null,
+      sink: new MemSink(),
+      store: testStore(sessionFile),
+      repoToken: "request-scoped-token",
+    })
+
+    const opts = runAgentMock.mock.calls[0]![0] as Record<string, unknown>
+    expect(opts.repoToken).toBe("request-scoped-token")
+    expect(opts.enableFetchRepoTool).toBeUndefined()
+  })
 })

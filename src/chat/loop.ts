@@ -384,6 +384,7 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
         ],
         systemPromptAppend: systemPrompt,
         ...(opts.reasoningEffort ? { reasoningEffort: opts.reasoningEffort } : {}),
+        ...(opts.repoToken ? { repoToken: opts.repoToken } : {}),
         // Cross-repo work is opt-in. Repo Brain's default path remains focused
         // on the selected repo even though the server stores clones under
         // reposRoot.

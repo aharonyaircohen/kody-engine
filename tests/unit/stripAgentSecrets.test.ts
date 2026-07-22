@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { stripAgentSecrets } from "../../src/agent.js"
+import { buildAgentEnvironment, stripAgentSecrets } from "../../src/agent.js"
 
 describe("stripAgentSecrets", () => {
   it("removes ALL_SECRETS-derived keys but keeps the agent's allowlist", () => {
@@ -62,5 +62,17 @@ describe("stripAgentSecrets", () => {
   it("is a no-op (minus nothing) when there is no ALL_SECRETS blob", () => {
     const env = { PATH: "/bin", GH_TOKEN: "t" }
     expect(stripAgentSecrets(env)).toEqual({ PATH: "/bin", GH_TOKEN: "t" })
+  })
+})
+
+describe("buildAgentEnvironment", () => {
+  it("exposes a request-scoped repo token to git without persisting it", () => {
+    const out = buildAgentEnvironment(
+      { PATH: "/bin", GH_TOKEN: "ambient", GITHUB_TOKEN: "ambient" },
+      "request-token",
+    )
+
+    expect(out.GH_TOKEN).toBe("request-token")
+    expect(out.GITHUB_TOKEN).toBe("request-token")
   })
 })

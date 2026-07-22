@@ -380,25 +380,34 @@ export function stripAgentSecrets(env: Record<string, string>): Record<string, s
   return out
 }
 
+/** Build the SDK child environment, applying a request-scoped repo token last. */
+export function buildAgentEnvironment(
+  baseEnv: Record<string, string>,
+  repoToken?: string,
+): Record<string, string> {
+  const env = stripAgentSecrets({
+    ...baseEnv,
+    SKIP_HOOKS: "1",
+    HUSKY: "0",
+    CI: baseEnv.CI ?? "1",
+    MCP_CONNECTION_NONBLOCKING: baseEnv.MCP_CONNECTION_NONBLOCKING ?? "false",
+    MCP_TIMEOUT: baseEnv.MCP_TIMEOUT ?? "60000",
+  })
+  if (repoToken) {
+    env.GITHUB_TOKEN = repoToken
+    env.GH_TOKEN = repoToken
+  }
+  return env
+}
+
 export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const ndjsonDir = opts.ndjsonDir ?? agentRunDir(opts.cwd)
   fs.mkdirSync(ndjsonDir, { recursive: true })
   const ndjsonPath = path.join(ndjsonDir, "last-run.jsonl")
 
-  const env: Record<string, string> = stripAgentSecrets({
-    ...(process.env as Record<string, string>),
-    SKIP_HOOKS: "1",
-    HUSKY: "0",
-    CI: process.env.CI ?? "1",
-    // MCP servers are spawned asynchronously by the SDK. With the default
-    // non-blocking behavior, the SDK announces its tool list at session
-    // init while servers are still in `pending`, so their tools never
-    // reach the model. Block until each MCP completes its handshake (or
-    // the timeout below elapses) so the tool list is complete on first
-    // turn.
-    MCP_CONNECTION_NONBLOCKING: process.env.MCP_CONNECTION_NONBLOCKING ?? "false",
-    MCP_TIMEOUT: process.env.MCP_TIMEOUT ?? "60000",
-  })
+  // MCP servers are spawned asynchronously by the SDK. Blocking until each
+  // handshake completes keeps the tool list complete on the first turn.
+  const env = buildAgentEnvironment(process.env as Record<string, string>, opts.repoToken)
   if (opts.litellmUrl) {
     env.ANTHROPIC_BASE_URL = opts.litellmUrl
     env.ANTHROPIC_API_KEY = getAnthropicApiKeyOrDummy()

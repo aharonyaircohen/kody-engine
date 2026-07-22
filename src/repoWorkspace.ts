@@ -22,6 +22,32 @@ export type CloneRepoFn = (repo: string, token: string | undefined, dir: string)
 const repoClones = new Map<string, Promise<void>>()
 
 /**
+ * Git asks this helper for credentials during later pushes. The helper stores
+ * only an environment-variable reference in `.git/config`; the token itself
+ * remains in the short-lived agent process environment.
+ */
+export const GIT_CREDENTIAL_HELPER =
+  '!f() { if [ "$1" = get ] && [ -n "$GITHUB_TOKEN" ]; then printf \'%s\\n\' username=x-access-token "password=$GITHUB_TOKEN"; fi; }; f'
+
+/** Build a clean clone URL plus transient process-only Git authentication. */
+export function buildCloneProcess(
+  repo: string,
+  token: string | undefined,
+  baseEnv: NodeJS.ProcessEnv = process.env,
+): { url: string; env: NodeJS.ProcessEnv } {
+  const url = `https://github.com/${repo}.git`
+  const env = { ...baseEnv }
+  if (!token) return { url, env }
+
+  const parsedCount = Number.parseInt(env.GIT_CONFIG_COUNT ?? "0", 10)
+  const count = Number.isInteger(parsedCount) && parsedCount >= 0 ? parsedCount : 0
+  env.GIT_CONFIG_COUNT = String(count + 1)
+  env[`GIT_CONFIG_KEY_${count}`] = "http.https://github.com/.extraHeader"
+  env[`GIT_CONFIG_VALUE_${count}`] = `Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`
+  return { url, env }
+}
+
+/**
  * Resolve `<reposRoot>/<repo>` and clone it on first use. Returns null when
  * `repo` is missing/malformed or would escape `reposRoot`. Shared core for
  * both `ensureRepoCwd` and `fetchRepo`. Clone errors propagate to the caller.
@@ -91,15 +117,16 @@ export async function fetchRepo(opts: {
 }
 
 /**
- * Default clone: shallow-clone the repo's default branch into `dir` (token
- * embedded in the remote so a later approved push works) and set a committer
- * identity. The token is never logged. Replaceable in tests.
+ * Default clone: shallow-clone the repo's default branch into `dir` with
+ * process-only authentication, then set a clean runtime credential helper and
+ * committer identity. No token is written into the remote URL or git config.
  */
 export const defaultCloneRepo: CloneRepoFn = (repo, token, dir) => {
   fs.mkdirSync(path.dirname(dir), { recursive: true })
-  const authUrl = token ? `https://x-access-token:${token}@github.com/${repo}.git` : `https://github.com/${repo}.git`
+  const clone = buildCloneProcess(repo, token)
   return new Promise<void>((resolve, reject) => {
-    const child = spawn("git", ["clone", "--depth=1", authUrl, dir], {
+    const child = spawn("git", ["clone", "--depth=1", clone.url, dir], {
+      env: clone.env,
       stdio: "inherit",
     })
     child.on("exit", (code) => {
@@ -112,6 +139,9 @@ export const defaultCloneRepo: CloneRepoFn = (repo, token, dir) => {
         const email = process.env.GIT_AUTHOR_EMAIL ?? "kody-bot@users.noreply.github.com"
         spawnSync("git", ["-C", dir, "config", "user.name", name])
         spawnSync("git", ["-C", dir, "config", "user.email", email])
+        if (token) {
+          spawnSync("git", ["-C", dir, "config", "credential.helper", GIT_CREDENTIAL_HELPER])
+        }
       } catch {
         /* best effort — identity only matters once the agent commits */
       }
