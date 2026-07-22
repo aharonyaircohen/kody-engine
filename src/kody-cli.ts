@@ -4,6 +4,7 @@ import * as path from "node:path"
 import { mintAppInstallationToken, readAppCreds } from "./app-auth.js"
 import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
 import { autoDispatch, autoDispatchTyped, type DispatchResult, dispatchScheduledWatches } from "./dispatch.js"
+import { listCapabilityFolderSlugs, readCapabilityFolder } from "./capabilityFolders.js"
 import { capabilitiesRoot } from "./definition-paths.js"
 import { reactToTriggerComment } from "./gha.js"
 import {
@@ -14,7 +15,12 @@ import {
 } from "./issue.js"
 import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
 import { setKodyLabel } from "./lifecycleLabels.js"
-import { listCapabilityActions, resolveCapabilityAction } from "./registry.js"
+import {
+  listCapabilityActions,
+  resolveCapabilityAction,
+  resolveCapabilityExecution,
+  resolveCapabilityFolder,
+} from "./registry.js"
 import { type RunRequest, readRunRequestFromEnv } from "./run-request.js"
 import { lastRunLogPath } from "./runtimePaths.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
@@ -491,9 +497,21 @@ export async function runCi(argv: string[]): Promise<number> {
   if (forceRunAction) {
     const config = earlyConfig ?? loadConfig(cwd)
     const manualGoalManager = forceRunAction === "goal-manager"
+    const capabilityRoot = capabilitiesRoot(cwd)
+    const directCapability = manualGoalManager ? null : resolveCapabilityFolder(forceRunAction, capabilityRoot)
+    const directExecution = directCapability ? resolveCapabilityExecution(directCapability, cwd) : null
     const capabilityRoute = manualGoalManager
       ? null
-      : resolveCapabilityAction(forceRunAction, capabilitiesRoot(cwd))
+      : (resolveCapabilityAction(forceRunAction, capabilityRoot) ??
+        (directCapability && directExecution && (directCapability.config.action ?? directCapability.slug) === forceRunAction
+          ? {
+              action: forceRunAction,
+              capability: directCapability.slug,
+              implementation: directExecution.implementation,
+              cliArgs: directExecution.cliArgs,
+              source: "project-folder" as const,
+            }
+          : null))
     const workflowRoute =
       manualGoalManager || capabilityRoute || !readWorkflowDefinition(config, cwd, forceRunAction)
         ? undefined
@@ -521,9 +539,14 @@ export async function runCi(argv: string[]): Promise<number> {
     if (!route) {
       const root = capabilitiesRoot(cwd)
       const available = listCapabilityActions(root).map((item) => item.action)
+      const folders = listCapabilityFolderSlugs(root).map((slug) => {
+        const folder = readCapabilityFolder(root, slug)
+        return folder ? `${slug}:${folder.config.action ?? slug}:${folder.config.role ?? "no-role"}` : `${slug}:unreadable`
+      })
       process.stderr.write(
         `[kody] manual one-shot action '${forceRunAction}' has no capability action or workflow ` +
-          `(capabilitiesRoot=${root}, available=${available.join(",") || "none"})\n`,
+          `(capabilitiesRoot=${root}, available=${available.join(",") || "none"}, ` +
+          `folders=${folders.join(",") || "none"})\n`,
       )
       return 64
     }
