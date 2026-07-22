@@ -104,13 +104,13 @@ export function derivePreviewVerifyKey(masterKeyRaw: string): string {
 
 export function previewRuntimeEnv(args: {
   buildEnv: Record<string, string>
-  masterKey: string
+  previewVerifyKey: string
   pr: number
   repo: string
 }): Record<string, string> {
   return {
     ...args.buildEnv,
-    KODY_PREVIEW_VERIFY_KEY: derivePreviewVerifyKey(args.masterKey),
+    KODY_PREVIEW_VERIFY_KEY: args.previewVerifyKey,
     KODY_REPO_CONTEXT: args.repo,
     KODY_PR: String(args.pr),
   }

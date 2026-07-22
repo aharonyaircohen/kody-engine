@@ -18,7 +18,7 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type { PreflightScript } from "../implementations/types.js"
-import { createStateBackendFromEnv, type TaskDocument } from "../state-backend.js"
+import { createStateBackendFromEnv, hasStateBackendConfig, type TaskDocument } from "../state-backend.js"
 
 const MEMORY_DIR_RELATIVE = ".kody-engine/runtime/memory"
 const MAX_PAGES = 8
@@ -43,7 +43,7 @@ export const loadMemoryContext: PreflightScript = async (ctx) => {
     ctx.config.github?.owner && ctx.config.github.repo
       ? `${ctx.config.github.owner}/${ctx.config.github.repo}`
       : process.env.GITHUB_REPOSITORY?.trim()
-  if (process.env.CONVEX_URL && process.env.KODY_SERVICE_KEY && tenantId) {
+  if (hasStateBackendConfig() && tenantId) {
     try {
       const backend = createStateBackendFromEnv()
       const docs = await backend.listRepoDocs(tenantId, "memory:")

@@ -1,7 +1,7 @@
 import type { AgentResult } from "../agent.js"
 import { type CapabilityResult, parseCapabilityResult, parseCapabilityResultsFromText } from "../capabilityResult.js"
 import type { PostflightScript, ReportPublicationConfig } from "../implementations/types.js"
-import { createStateBackendFromEnv } from "../state-backend.js"
+import { createStateBackendFromEnv, hasStateBackendConfig } from "../state-backend.js"
 
 const SAFE_SLUG = /^[a-z0-9][a-z0-9_-]{0,79}$/
 
@@ -71,7 +71,7 @@ export const publishReport: PostflightScript = async (ctx, _profile, agentResult
     ctx.config.github?.owner && ctx.config.github.repo
       ? `${ctx.config.github.owner}/${ctx.config.github.repo}`
       : process.env.GITHUB_REPOSITORY
-  if (process.env.CONVEX_URL?.trim() && process.env.KODY_SERVICE_KEY?.trim() && tenantId) {
+  if (hasStateBackendConfig() && tenantId) {
     await createStateBackendFromEnv().saveReport(
       tenantId,
       slug,
@@ -87,7 +87,7 @@ export const publishReport: PostflightScript = async (ctx, _profile, agentResult
       generatedAt,
     )
   } else if (process.env.GITHUB_ACTIONS === "true") {
-    throw new Error("Convex backend is required for reports in GitHub Actions")
+    throw new Error("Kody backend access is required for reports in GitHub Actions")
   }
 }
 

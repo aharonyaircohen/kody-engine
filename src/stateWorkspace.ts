@@ -9,7 +9,12 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type { KodyConfig } from "./config.js"
-import { createStateBackendFromEnv, type StateBackend, type TaskDocument } from "./state-backend.js"
+import {
+  createStateBackendFromEnv,
+  hasStateBackendConfig,
+  type StateBackend,
+  type TaskDocument,
+} from "./state-backend.js"
 
 const RUNTIME_ROOT = path.join(".kody-engine", "runtime")
 const hydratedWorkspaces = new Set<string>()
@@ -108,10 +113,10 @@ export async function hydrateStateWorkspace(
   backendOverride?: StateBackend,
 ): Promise<void> {
   const tenant = tenantId(config)
-  const configured = Boolean(process.env.CONVEX_URL?.trim()) && Boolean(process.env.KODY_SERVICE_KEY?.trim())
+  const configured = hasStateBackendConfig()
   if (!tenant || !configured) {
     if (process.env.GITHUB_ACTIONS === "true")
-      throw new Error("Convex backend is required for runtime workspace documents")
+      throw new Error("Kody backend access is required for runtime workspace documents")
     return
   }
   const key = `${path.resolve(cwd)}|${tenant}`

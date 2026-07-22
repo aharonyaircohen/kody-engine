@@ -24,6 +24,7 @@ import type { PreflightScript } from "../implementations/types.js"
 
 import { gh } from "../issue.js"
 import { resolveCapabilityFolder } from "../registry.js"
+import { hasStateBackendConfig } from "../state-backend.js"
 import { readTrustModeOverrideAsync, type TrustModeOverride, type TrustSubject } from "../trustPolicy.js"
 import { readWorkflowDefinition } from "../workflowDefinitions.js"
 import {
@@ -489,7 +490,7 @@ async function firstTrustOverride(
   ctx: Parameters<PreflightScript>[0],
   subjects: TrustSubject[],
 ): Promise<TrustModeOverride> {
-  const backendConfigured = Boolean(process.env.CONVEX_URL?.trim() && process.env.KODY_SERVICE_KEY?.trim())
+  const backendConfigured = hasStateBackendConfig()
   if (!backendConfigured) return null
   const repoSlug =
     ctx.config.github?.owner && ctx.config.github?.repo ? `${ctx.config.github.owner}/${ctx.config.github.repo}` : ""

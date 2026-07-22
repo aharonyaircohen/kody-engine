@@ -171,7 +171,7 @@ describe("previewRuntimeEnv", () => {
   it("adds doorman runtime auth without losing app env", () => {
     const env = previewRuntimeEnv({
       buildEnv: { DATABASE_URL: "postgres://example" },
-      masterKey: TEST_KEY_HEX,
+      previewVerifyKey: derivePreviewVerifyKey(TEST_KEY_HEX),
       pr: 678,
       repo: "A-Guy-educ/A-Guy-Web",
     })
@@ -191,7 +191,7 @@ describe("previewRuntimeEnv", () => {
         KODY_REPO_CONTEXT: "wrong/repo",
         KODY_PR: "1",
       },
-      masterKey: TEST_KEY_HEX,
+      previewVerifyKey: derivePreviewVerifyKey(TEST_KEY_HEX),
       pr: 678,
       repo: "A-Guy-educ/A-Guy-Web",
     })

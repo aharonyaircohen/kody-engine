@@ -25,7 +25,7 @@ import fs from "node:fs"
 import path from "node:path"
 import posixPath from "node:path/posix"
 import { runtimeStatePath } from "./runtimePaths.js"
-import { createStateBackendFromEnv } from "./state-backend.js"
+import { createStateBackendFromEnv, hasStateBackendConfig } from "./state-backend.js"
 
 interface RuntimeTenantConfig {
   github?: { owner?: string; repo?: string }
@@ -125,15 +125,10 @@ export async function persistTaskArtifactsToState(
     config.github?.owner && config.github.repo
       ? `${config.github.owner}/${config.github.repo}`
       : process.env.GITHUB_REPOSITORY?.trim()
-  if (
-    process.env.GITHUB_ACTIONS === "true" &&
-    (!process.env.CONVEX_URL || !process.env.KODY_SERVICE_KEY || !tenantId)
-  ) {
-    throw new Error(
-      "Convex artifact backend is required in GitHub Actions (CONVEX_URL, KODY_SERVICE_KEY, and repository identity)",
-    )
+  if (process.env.GITHUB_ACTIONS === "true" && (!hasStateBackendConfig() || !tenantId)) {
+    throw new Error("Kody backend access and repository identity are required in GitHub Actions")
   }
-  if (process.env.CONVEX_URL && process.env.KODY_SERVICE_KEY && tenantId) {
+  if (hasStateBackendConfig() && tenantId) {
     const backend = createStateBackendFromEnv()
     for (const file of TASK_ARTIFACT_FILES) {
       const full = path.join(artifacts.absDir, file)

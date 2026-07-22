@@ -6,7 +6,7 @@
 
 import { getRunUrl } from "../gha.js"
 import type { PostflightScript } from "../implementations/types.js"
-import { createStateBackendFromEnv } from "../state-backend.js"
+import { createStateBackendFromEnv, hasStateBackendConfig } from "../state-backend.js"
 
 interface ActivityRecord {
   ts: string
@@ -37,12 +37,12 @@ async function appendActivity(ctx: Parameters<PostflightScript>[0], record: Acti
     ctx.config.github?.owner && ctx.config.github.repo
       ? `${ctx.config.github.owner}/${ctx.config.github.repo}`
       : process.env.GITHUB_REPOSITORY
-  if (process.env.CONVEX_URL?.trim() && process.env.KODY_SERVICE_KEY?.trim() && tenantId) {
+  if (hasStateBackendConfig() && tenantId) {
     await createStateBackendFromEnv().appendDailyLog(tenantId, "activity", record.ts.slice(0, 10), record)
     return
   }
   if (process.env.GITHUB_ACTIONS === "true") {
-    throw new Error("Convex backend is required for company activity in GitHub Actions")
+    throw new Error("Kody backend access is required for company activity in GitHub Actions")
   }
 }
 

@@ -15,7 +15,7 @@
  *   FLY_API_TOKEN       Fly org token (from consumer's vault)
  *   FLY_ORG_SLUG        defaults to "personal"
  *   FLY_REGION          defaults to "fra"
- *   KODY_MASTER_KEY     vault decryption key
+ *   GitHub Actions OIDC workflow identity (provided by GitHub)
  *   KODY_PREVIEW_GHCR_OWNER (optional) — enables base-image inheritance
  *
  * Optional vault key:
@@ -32,16 +32,13 @@ import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 
 import type { PreflightScript } from "../implementations/types.js"
-import { createStateBackendFromEnv } from "../state-backend.js"
+import { readPreviewContextFromKody } from "../kody-api-client.js"
 import {
   basePreviewAppName,
-  buildEnvFromVault,
-  decryptVaultPayload,
   defaultImageTag,
   formatPreviewComment,
   previewAppName,
   previewRuntimeEnv,
-  type VaultDoc,
 } from "./previewBuildHelpers.js"
 import { setupNamespaceBuilder } from "./previewBuildNamespace.js"
 import { runCmd } from "./previewBuildRun.js"
@@ -73,23 +70,6 @@ function flyHeaders(token: string): HeadersInit {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
   }
-}
-
-async function fetchVaultDoc(repo: string, masterKey: string): Promise<VaultDoc> {
-  const [owner, name] = repo.split("/", 2)
-  if (!owner || !name) throw new Error(`invalid GITHUB_REPOSITORY "${repo}"`)
-  const record = await createStateBackendFromEnv().getRepoDoc(`${owner}/${name}`, "secrets.enc")
-  const raw = record?.doc
-  const payload =
-    raw &&
-    typeof raw === "object" &&
-    !Array.isArray(raw) &&
-    typeof (raw as { ciphertext?: unknown }).ciphertext === "string"
-      ? (raw as { ciphertext: string }).ciphertext
-      : ""
-  if (!payload) throw new Error("backend vault is empty — save secrets from the dashboard first")
-  const plaintext = decryptVaultPayload(payload, masterKey)
-  return JSON.parse(plaintext) as VaultDoc
 }
 
 async function flyAppExists(name: string, token: string): Promise<boolean> {
@@ -307,12 +287,10 @@ export const runPreviewBuild: PreflightScript = async (ctx, _profile, _args) => 
   }
   let repo: string
   let ref: string
-  let masterKey: string
   let ghToken: string
   try {
     repo = required("GITHUB_REPOSITORY")
     ref = required("GITHUB_SHA")
-    masterKey = required("KODY_MASTER_KEY")
     // Engine's resolveAuthToken sets GH_TOKEN; the kody.yml workflow
     // exposes KODY_TOKEN. Match the same fallback chain the engine
     // uses everywhere else (KODY_TOKEN | GH_TOKEN | GITHUB_TOKEN | GH_PAT).
@@ -340,20 +318,20 @@ export const runPreviewBuild: PreflightScript = async (ctx, _profile, _args) => 
     // 1. Vault → build env. Single source of truth for FLY_API_TOKEN
     //    too — pulled from the doc here so we don't need it as a
     //    separate repo secret.
-    const doc = await fetchVaultDoc(repo, masterKey)
-    const { buildEnv, buildMode } = buildEnvFromVault(doc)
-    const flyToken = doc.secrets?.FLY_API_TOKEN?.value?.trim()
+    const previewContext = await readPreviewContextFromKody()
+    const { buildEnv, buildMode } = previewContext
+    const flyToken = previewContext.flyApiToken?.trim()
     if (!flyToken) {
       ctx.output.exitCode = 99
       ctx.output.reason = "runPreviewBuild: vault has no FLY_API_TOKEN — add it via the dashboard's /secrets page"
       return
     }
-    const orgSlug = doc.secrets?.FLY_ORG_SLUG?.value?.trim() || (process.env.FLY_ORG_SLUG ?? "personal").trim()
-    const region = doc.secrets?.FLY_DEFAULT_REGION?.value?.trim() || (process.env.FLY_REGION ?? "fra").trim()
+    const orgSlug = previewContext.flyOrgSlug?.trim() || (process.env.FLY_ORG_SLUG ?? "personal").trim()
+    const region = previewContext.flyRegion?.trim() || (process.env.FLY_REGION ?? "fra").trim()
     // Opt-in: when the vault carries a Namespace tenant id, build on a
     // Namespace remote builder (faster, cached) instead of the local
     // GHA docker daemon. Empty → unchanged local-build behaviour.
-    const nscTenantId = doc.secrets?.NSC_TENANT_ID?.value?.trim() || ""
+    const nscTenantId = previewContext.namespaceTenantId?.trim() || ""
     console.log(`[preview-build] vault: ${Object.keys(buildEnv).length} secrets, mode=${buildMode}`)
 
     // 2. Write .env.production.local for Next.js build-time read.
@@ -461,7 +439,7 @@ export const runPreviewBuild: PreflightScript = async (ctx, _profile, _args) => 
         appName,
         region,
         image: `registry.fly.io/${appName}:${tag}`,
-        env: previewRuntimeEnv({ buildEnv, masterKey, pr, repo }),
+        env: previewRuntimeEnv({ buildEnv, previewVerifyKey: previewContext.previewVerifyKey, pr, repo }),
       },
       flyToken,
     )

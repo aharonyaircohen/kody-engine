@@ -2,6 +2,7 @@ import type { ConvexHttpClient } from "convex/browser"
 import type { FunctionReference } from "convex/server"
 import { anyApi } from "convex/server"
 import { createConvexClientFromEnv } from "./chat/convex-client.js"
+import { createKodyApiBackendClient, hasGitHubActionsIdentity } from "./kody-api-client.js"
 
 export interface TaskDocument {
   tenantId: string
@@ -130,11 +131,16 @@ export function createStateBackendFromEnv(
   env: NodeJS.ProcessEnv = process.env,
   client?: StateBackendClient,
 ): StateBackend {
-  const url = env.CONVEX_URL?.trim()
-  const serviceKey = env.KODY_SERVICE_KEY?.trim()
-  if (!url || !serviceKey) throw new Error("CONVEX_URL and KODY_SERVICE_KEY are required")
-
-  const transport = client ?? (createConvexClientFromEnv(env) as ConvexHttpClient)
+  let transport = client
+  if (!transport && hasGitHubActionsIdentity(env)) transport = createKodyApiBackendClient(env)
+  if (!transport) {
+    const url = env.CONVEX_URL?.trim()
+    const serviceKey = env.KODY_SERVICE_KEY?.trim()
+    if (!url || !serviceKey) {
+      throw new Error("GitHub Actions identity or direct Kody backend credentials are required")
+    }
+    transport = createConvexClientFromEnv(env) as ConvexHttpClient
+  }
   return {
     async get(tenantId, taskKey, kind) {
       const result = await transport.query(anyApi.taskState.get, {
@@ -306,4 +312,8 @@ export function createStateBackendFromEnv(
       })
     },
   }
+}
+
+export function hasStateBackendConfig(env: NodeJS.ProcessEnv = process.env): boolean {
+  return hasGitHubActionsIdentity(env) || Boolean(env.CONVEX_URL?.trim() && env.KODY_SERVICE_KEY?.trim())
 }

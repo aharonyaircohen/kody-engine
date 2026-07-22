@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { createStateBackendFromEnv, type DefinitionDocument } from "./state-backend.js"
+import { createStateBackendFromEnv, type DefinitionDocument, hasStateBackendConfig } from "./state-backend.js"
 
 export interface DefinitionBundle {
   schemaVersion: 1
@@ -138,10 +138,9 @@ export async function hydrateDefinitionsFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<HydratedDefinitions | null> {
   const tenantId = env.GITHUB_REPOSITORY?.trim()
-  const hasCredentials = Boolean(env.CONVEX_URL?.trim()) && Boolean(env.KODY_SERVICE_KEY?.trim())
-  if (!hasCredentials) {
+  if (!hasStateBackendConfig(env)) {
     if (env.GITHUB_ACTIONS === "true") {
-      throw new Error("CONVEX_URL and KODY_SERVICE_KEY are required for backend definitions in GitHub Actions")
+      throw new Error("GitHub Actions workflow identity is required for backend definitions")
     }
     return null
   }
