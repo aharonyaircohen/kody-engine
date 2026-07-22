@@ -11,6 +11,7 @@ export default defineConfig({
       KODY_DEFINITIONS_ROOT: path.resolve(here, "../kody-store"),
       KODY_DEFINITIONS_ROOT_CWD: here,
       KODY_TEST_LOCAL_JOB_STATE: "1",
+      GITHUB_ACTIONS: "false",
     },
     coverage: {
       provider: "v8",
