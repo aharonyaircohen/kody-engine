@@ -132,7 +132,7 @@ describe("kody-cli: unpackAllSecrets", () => {
 })
 
 describe("kody-cli: resolveAuthToken", () => {
-  it("prefers GitHub App mint over a prefilled workflow token", async () => {
+  it("prefers a configured PAT over GitHub App credentials", async () => {
     const fetchMock = vi.fn(async (url: string | URL) => {
       const body = String(url).endsWith("/installation")
         ? JSON.stringify({ id: 12345 })
@@ -145,7 +145,28 @@ describe("kody-cli: resolveAuthToken", () => {
       KODY_APP_ID: "42",
       KODY_APP_PRIVATE_KEY: appPrivateKey,
       GITHUB_REPOSITORY: "A-Guy-educ/A-Guy-Web",
-      KODY_TOKEN: "ghs_current_repo",
+      GH_PAT: "pat_repo_token",
+    }
+
+    expect(await resolveAuthToken(env)).toBe("pat_repo_token")
+    expect(env.GH_TOKEN).toBe("pat_repo_token")
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("uses GitHub App credentials when no PAT is configured", async () => {
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      const body = String(url).endsWith("/installation")
+        ? JSON.stringify({ id: 12345 })
+        : JSON.stringify({ token: "ghs_installation" })
+      return new Response(body, { status: 200 })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const env: NodeJS.ProcessEnv = {
+      KODY_APP_ID: "42",
+      KODY_APP_PRIVATE_KEY: appPrivateKey,
+      GITHUB_REPOSITORY: "A-Guy-educ/A-Guy-Web",
+      GITHUB_TOKEN: "built_in_token",
     }
 
     expect(await resolveAuthToken(env)).toBe("ghs_installation")
@@ -153,10 +174,10 @@ describe("kody-cli: resolveAuthToken", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  it("picks KODY_TOKEN first", async () => {
+  it("picks GH_PAT before legacy ready-made tokens", async () => {
     const env: NodeJS.ProcessEnv = { KODY_TOKEN: "k", GH_TOKEN: "g", GITHUB_TOKEN: "gh", GH_PAT: "p" }
-    expect(await resolveAuthToken(env)).toBe("k")
-    expect(env.GH_TOKEN).toBe("g")
+    expect(await resolveAuthToken(env)).toBe("p")
+    expect(env.GH_TOKEN).toBe("p")
   })
 
   it("falls back to GH_TOKEN", async () => {

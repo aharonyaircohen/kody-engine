@@ -259,7 +259,7 @@ function buildGoalRunLogEvent(
 function enrichGoalRunLogEvent(
   config: KodyConfig,
   data: Record<string, unknown>,
-  logPath: string,
+  _logPath: string,
   event: GoalRunLogEvent,
 ): GoalRunLogEvent {
   const trigger = event.trigger ?? triggerContext()

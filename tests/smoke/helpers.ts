@@ -20,13 +20,21 @@ export interface CliResult {
 }
 
 export function runCli(args: string[], opts: { cwd?: string; env?: Record<string, string> } = {}): CliResult {
+  const childEnv = { ...process.env, ...opts.env }
+  if (!opts.env?.GITHUB_ACTIONS) {
+    delete childEnv.GITHUB_ACTIONS
+    delete childEnv.GITHUB_EVENT_NAME
+    delete childEnv.GITHUB_EVENT_PATH
+    delete childEnv.ACTIONS_ID_TOKEN_REQUEST_URL
+    delete childEnv.ACTIONS_ID_TOKEN_REQUEST_TOKEN
+  }
   try {
     const stdout = execFileSync(TSX, [ENTRY, ...args], {
       cwd: opts.cwd ?? REPO_ROOT,
       encoding: "utf8",
       timeout: 60_000,
       stdio: ["ignore", "pipe", "pipe"],
-      env: opts.env ? { ...process.env, ...opts.env } : process.env,
+      env: childEnv,
     })
     return { status: 0, stdout, stderr: "" }
   } catch (err) {

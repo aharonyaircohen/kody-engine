@@ -189,7 +189,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
   unpackAllSecrets()
-  const cwdFlag = argv.findIndex((value) => value === "--cwd")
+  const cwdFlag = argv.indexOf("--cwd")
   const definitionCwd = cwdFlag >= 0 && argv[cwdFlag + 1] ? argv[cwdFlag + 1]! : process.cwd()
   const shouldHydrate =
     Boolean(process.env.CONVEX_URL?.trim()) ||

@@ -67,10 +67,7 @@ describe("stripAgentSecrets", () => {
 
 describe("buildAgentEnvironment", () => {
   it("exposes a request-scoped repo token to git without persisting it", () => {
-    const out = buildAgentEnvironment(
-      { PATH: "/bin", GH_TOKEN: "ambient", GITHUB_TOKEN: "ambient" },
-      "request-token",
-    )
+    const out = buildAgentEnvironment({ PATH: "/bin", GH_TOKEN: "ambient", GITHUB_TOKEN: "ambient" }, "request-token")
 
     expect(out.GH_TOKEN).toBe("request-token")
     expect(out.GITHUB_TOKEN).toBe("request-token")

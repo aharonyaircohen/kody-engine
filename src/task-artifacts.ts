@@ -65,25 +65,24 @@ export function initializeTaskArtifacts(
 ): void {
   const startedAt = new Date().toISOString()
   const defaults: Record<TaskArtifactFile, string> = {
-    "context.json":
-      JSON.stringify(
-        {
-          taskId: artifacts.taskId,
-          taskType: metadata.taskType,
-          target: metadata.target ?? artifacts.taskId,
-          outcome: "partial",
-          exitCode: null,
-          reason: "Baseline created; agent details not provided",
-          prUrl: null,
-          runUrl: process.env.GITHUB_RUN_URL ?? null,
-          filesTouched: [],
-          sessionLog: null,
-          startedAt,
-          finishedAt: null,
-        },
-        null,
-        2,
-      ) + "\n",
+    "context.json": `${JSON.stringify(
+      {
+        taskId: artifacts.taskId,
+        taskType: metadata.taskType,
+        target: metadata.target ?? artifacts.taskId,
+        outcome: "partial",
+        exitCode: null,
+        reason: "Baseline created; agent details not provided",
+        prUrl: null,
+        runUrl: process.env.GITHUB_RUN_URL ?? null,
+        filesTouched: [],
+        sessionLog: null,
+        startedAt,
+        finishedAt: null,
+      },
+      null,
+      2,
+    )}\n`,
     "memory-recs.json": "[]\n",
     "followups.json": "[]\n",
     "handoff-notes.md": "Baseline handoff: the agent did not provide additional notes.\n",

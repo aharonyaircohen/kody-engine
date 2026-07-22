@@ -38,6 +38,9 @@ describe("initFlow: performInit", () => {
     const workflow = fs.readFileSync(path.join(dir, ".github/workflows/kody.yml"), "utf-8")
     expect(workflow).toContain("      capability:")
     expect(workflow).not.toContain("      implementation:")
+    expect(workflow).toContain("id-token: write")
+    expect(workflow).toContain("secrets.GH_PAT || secrets.KODY_TOKEN || github.token")
+    expect(workflow).not.toContain("create-github-app-token")
 
     expect(result.wrote.some((file) => file.startsWith(".kody-engine/definitions/capabilities/"))).toBe(false)
     expect(fs.existsSync(path.join(dir, ".kody-engine/definitions/capabilities"))).toBe(false)

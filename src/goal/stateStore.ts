@@ -16,7 +16,7 @@ function backendTenant(config: GoalBackendConfig): string | null {
 }
 
 function decodeGoal(doc: GoalDocument | null): GoalState | null {
-  if (!doc || !doc.state || typeof doc.state !== "object" || Array.isArray(doc.state)) return null
+  if (!doc?.state || typeof doc.state !== "object" || Array.isArray(doc.state)) return null
   const state = doc.state as GoalState
   if (typeof state.state !== "string" || !state.extra || typeof state.extra !== "object") return null
   return state

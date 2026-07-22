@@ -10,12 +10,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import {
-  GIT_CREDENTIAL_HELPER,
-  buildCloneProcess,
-  ensureRepoCwd,
-  fetchRepo,
-} from "../../src/repoWorkspace.js"
+import { buildCloneProcess, ensureRepoCwd, fetchRepo, GIT_CREDENTIAL_HELPER } from "../../src/repoWorkspace.js"
 
 describe("authenticated clone security", () => {
   it("keeps the token out of the clone URL and persistent git configuration", () => {
