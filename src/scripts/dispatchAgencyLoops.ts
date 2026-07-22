@@ -29,7 +29,15 @@ export const dispatchAgencyLoops: PreflightScript = async (ctx) => {
     tenantId,
     backend,
     now: new Date(),
-    run: (job) => runJob(job, { cwd: ctx.cwd, config: ctx.config, verbose: ctx.verbose, quiet: ctx.quiet, chain: false }),
+    run: (job, abortController) =>
+      runJob(job, {
+        cwd: ctx.cwd,
+        config: ctx.config,
+        verbose: ctx.verbose,
+        quiet: ctx.quiet,
+        chain: false,
+        abortController,
+      }),
   })
   ctx.data.agencyLoopDispatchResults = results
 }
@@ -38,7 +46,14 @@ export async function dispatchAgencyLoopsWith(input: {
   tenantId: string
   backend: StateBackend
   now: Date
-  run: (job: Job) => Promise<{ exitCode: number; reason?: string; data?: Record<string, unknown> }>
+  run: (
+    job: Job,
+    abortController: AbortController,
+  ) => Promise<{
+    exitCode: number
+    reason?: string
+    usage?: { tokens: number; costUsd: number }
+  }>
 }): Promise<DispatchResult[]> {
   const repository = new AgencyModelRepository(input.backend, input.tenantId)
   const catalog = await repository.loadCatalog()
@@ -89,7 +104,19 @@ export async function dispatchAgencyLoopsWith(input: {
       continue
     }
 
-    const leaseUntil = new Date(input.now.getTime() + 15 * 60_000).toISOString()
+    const failurePolicy = record.definition.reconciliationPolicy.failure
+    const budget = policy.snapshot.policy.budget
+    const maxAttempts = Math.min(failurePolicy.maxAttempts, budget.maxRuns)
+    const timeoutSeconds = Math.min(failurePolicy.timeoutSeconds, budget.maxDurationSeconds)
+    const backoffBudgetSeconds = Array.from(
+      { length: Math.max(0, maxAttempts - 1) },
+      (_, index) => failurePolicy.backoffSeconds * 2 ** index,
+    ).reduce((sum, seconds) => sum + seconds, 0)
+    const leaseSeconds = Math.min(
+      budget.maxDurationSeconds,
+      maxAttempts * timeoutSeconds + backoffBudgetSeconds,
+    )
+    const leaseUntil = new Date(input.now.getTime() + leaseSeconds * 1_000).toISOString()
     const reservationId = `reservation-${randomUUID()}`
     const correlationId = `corr-${randomUUID()}`
     const trace = [policy.trace[0], ...target.intermediate, target.reference]
@@ -135,41 +162,82 @@ export async function dispatchAgencyLoopsWith(input: {
       updatedAt: now,
     })
     await repository.saveState(runningState, "loop", now)
-    const runId = `run-${randomUUID()}`
-    const activeRun = createRun({
-      id: runId,
-      status: "running",
-      origin: { kind: "loop", id: record.definition.id, revision: record.revision },
-      target: target.reference,
-      trace,
-      effectivePolicy: policy.snapshot,
-      correlationId,
-      startedAt: now,
-    })
-
     try {
-      await input.backend.createAgencyModelRun(
-        input.tenantId,
-        target.reference.kind,
-        target.reference.id,
-        activeRun,
-        now,
-      )
-      const output = await input.run(target.job)
-      const succeeded = output.exitCode === 0
+      let attempts = 0
+      let tokens = 0
+      let costUsd = 0
+      let succeeded = false
+      let reason = "target failed"
+      let finalRunId: string | undefined
+      const budgetDeadline = Date.now() + budget.maxDurationSeconds * 1_000
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        const remainingMilliseconds = budgetDeadline - Date.now()
+        if (remainingMilliseconds <= 0) {
+          reason = "policy duration budget exhausted"
+          break
+        }
+        attempts = attempt
+        const startedAt = new Date().toISOString()
+        const runId = `run-${randomUUID()}`
+        finalRunId = runId
+        const activeRun = createRun({
+          id: runId,
+          status: "running",
+          origin: { kind: "loop", id: record.definition.id, revision: record.revision },
+          target: target.reference,
+          trace,
+          effectivePolicy: policy.snapshot,
+          correlationId,
+          startedAt,
+        })
+        await input.backend.createAgencyModelRun(
+          input.tenantId,
+          target.reference.kind,
+          target.reference.id,
+          activeRun,
+          startedAt,
+        )
+        const attemptResult = await runAttempt(
+          input.run,
+          target.job,
+          Math.min(timeoutSeconds, remainingMilliseconds / 1_000),
+        )
+        tokens += attemptResult.usage?.tokens ?? 0
+        costUsd += attemptResult.usage?.costUsd ?? 0
+        const finishedAt = new Date().toISOString()
+        succeeded = attemptResult.exitCode === 0
+        reason = attemptResult.reason ?? (succeeded ? "target dispatched" : "target failed")
+        const usage = {
+          tokens: attemptResult.usage?.tokens ?? 0,
+          costUsd: attemptResult.usage?.costUsd ?? 0,
+          durationSeconds: Math.max(0, (Date.parse(finishedAt) - Date.parse(startedAt)) / 1_000),
+        }
+        if (tokens > budget.maxTokens || costUsd > budget.maxCostUsd) {
+          succeeded = false
+          reason = tokens > budget.maxTokens ? "policy token budget exhausted" : "policy cost budget exhausted"
+        }
+        await input.backend.finishAgencyModelRun(
+          input.tenantId,
+          terminalRun(activeRun, succeeded ? "succeeded" : "failed", finishedAt, usage),
+          finishedAt,
+        )
+        if (tokens > budget.maxTokens || costUsd > budget.maxCostUsd) break
+        if (succeeded || attempt === maxAttempts) break
+        const backoffMilliseconds = failurePolicy.backoffSeconds * 2 ** (attempt - 1) * 1_000
+        if (Date.now() + backoffMilliseconds >= budgetDeadline) {
+          reason = "policy duration budget exhausted during retry backoff"
+          break
+        }
+        await wait(backoffMilliseconds)
+      }
       const finishedAt = new Date().toISOString()
-      await input.backend.finishAgencyModelRun(
-        input.tenantId,
-        terminalRun(activeRun, succeeded ? "succeeded" : "failed", finishedAt),
-        finishedAt,
-      )
       await input.backend.finishAgencyDispatch(
         input.tenantId,
         decision.idempotencyKey,
         reservationId,
-        succeeded ? "dispatched" : "failed",
+        succeeded ? "dispatched" : "dead-letter",
         finishedAt,
-        runId,
+        finalRunId,
       )
       await repository.saveState(
         createLoopState({
@@ -184,21 +252,17 @@ export async function dispatchAgencyLoopsWith(input: {
       results.push({
         loopId: record.definition.id,
         decision: succeeded ? "dispatched" : "failed",
-        reason: output.reason ?? (succeeded ? "target dispatched" : "target failed"),
+        reason: succeeded ? reason : `${reason}; dead-lettered after ${attempts} attempt${attempts === 1 ? "" : "s"}`,
       })
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
       const finishedAt = new Date().toISOString()
-      await input.backend
-        .finishAgencyModelRun(input.tenantId, terminalRun(activeRun, "failed", finishedAt), finishedAt)
-        .catch(() => undefined)
       await input.backend.finishAgencyDispatch(
         input.tenantId,
         decision.idempotencyKey,
         reservationId,
-        "failed",
+        "dead-letter",
         finishedAt,
-        runId,
       )
       results.push({ loopId: record.definition.id, decision: "failed", reason })
     }
@@ -236,8 +300,47 @@ function resolveTarget(
   }
 }
 
-function terminalRun(active: Run, status: "succeeded" | "failed", finishedAt: string): Run {
-  return createRun({ ...active, status, finishedAt })
+function terminalRun(
+  active: Run,
+  status: "succeeded" | "failed",
+  finishedAt: string,
+  usage: NonNullable<Run["usage"]>,
+): Run {
+  return createRun({ ...active, status, finishedAt, usage })
+}
+
+async function runAttempt(
+  run: (
+    job: Job,
+    abortController: AbortController,
+  ) => Promise<{ exitCode: number; reason?: string; usage?: { tokens: number; costUsd: number } }>,
+  job: Job,
+  timeoutSeconds: number,
+) {
+  const abortController = new AbortController()
+  let timer: NodeJS.Timeout | undefined
+  try {
+    return await Promise.race([
+      run(job, abortController),
+      new Promise<{ exitCode: number; reason: string }>((resolve) => {
+        timer = setTimeout(() => {
+          abortController.abort()
+          resolve({ exitCode: 124, reason: `target timed out after ${formatSeconds(timeoutSeconds)}s` })
+        }, timeoutSeconds * 1_000)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+function formatSeconds(seconds: number): string {
+  return Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(3).replace(/0+$/, "").replace(/\.$/, "")
+}
+
+async function wait(milliseconds: number): Promise<void> {
+  if (milliseconds <= 0) return
+  await new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
 
 function repositoryTenant(config: KodyConfig): string | null {

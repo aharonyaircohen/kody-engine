@@ -168,7 +168,7 @@ export interface StateBackend {
     tenantId: string,
     idempotencyKey: string,
     reservationId: string,
-    status: "dispatched" | "failed",
+    status: "dispatched" | "failed" | "dead-letter",
     now: string,
     runId?: string,
   ): Promise<void>

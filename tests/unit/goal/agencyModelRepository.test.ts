@@ -115,6 +115,36 @@ describe("AgencyModelRepository", () => {
     expect(records[0]?.state).toMatchObject({ definitionId: goal.id, lifecycle: "active" })
   })
 
+  it("selects the newest immutable revision without treating history as duplicate ownership", async () => {
+    const previous = {
+      tenantId: "acme/widgets",
+      recordId: "goal:refresh-graph:old",
+      kind: "goal",
+      schemaVersion: 1,
+      data: { ...goal, objective: { ...goal.objective, desiredState: "Old graph is current" } },
+      createdAt: "2026-07-21T00:00:00.000Z",
+    }
+    const current = {
+      tenantId: "acme/widgets",
+      recordId: "goal:refresh-graph:new",
+      kind: "goal",
+      schemaVersion: 1,
+      data: goal,
+      createdAt: now,
+    }
+    const backend = {
+      listAgencyDefinitions: vi.fn().mockResolvedValue([current, ...supportingDefinitions, previous]),
+      getAgencyState: vi.fn().mockResolvedValue(null),
+      putAgencyState: vi.fn(),
+      appendAgencyOutput: vi.fn(),
+      listAgencyOutputs: vi.fn().mockResolvedValue([]),
+    }
+
+    const catalog = await new AgencyModelRepository(backend, "acme/widgets").loadCatalog()
+
+    expect(catalog.goals.get(goal.id)).toMatchObject({ definition: goal, revision: current.recordId })
+  })
+
   it("rejects mismatched State instead of silently joining the wrong record", async () => {
     const backend = {
       listAgencyDefinitions: vi.fn().mockResolvedValue([

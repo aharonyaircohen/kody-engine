@@ -154,6 +154,8 @@ export interface RunJobBase {
   skipConfig?: boolean
   verbose?: boolean
   quiet?: boolean
+  /** Cancels every nested implementation in this Job. */
+  abortController?: AbortController
   preloadedData?: Record<string, unknown>
   /**
    * Follow in-process stage hand-offs (`runImplementationChain`) by default,
@@ -328,6 +330,7 @@ async function runCapabilityImplementationStep(
     skipConfig: base.skipConfig,
     verbose: base.verbose,
     quiet: base.quiet,
+    abortController: base.abortController,
     preloadedData: Object.keys(preloadedData).length > 0 ? preloadedData : undefined,
   }
   const shouldApplyResolvedCapabilityArgs =

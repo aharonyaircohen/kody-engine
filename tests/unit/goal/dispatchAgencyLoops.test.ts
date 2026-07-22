@@ -60,10 +60,73 @@ function supportingDefinitions(policyOverrides: Partial<Policy> = {}) {
   ]
 }
 
+function loopBackend(input: {
+  policyOverrides?: Partial<Policy>
+  failure?: { maxAttempts: number; backoffSeconds: number; timeoutSeconds: number }
+  finishAgencyDispatch: ReturnType<typeof vi.fn>
+  createAgencyModelRun?: ReturnType<typeof vi.fn>
+  finishAgencyModelRun?: ReturnType<typeof vi.fn>
+}) {
+  const loopId = "bounded-loop"
+  return {
+    listAgencyDefinitions: vi.fn().mockResolvedValue([
+      ...supportingDefinitions(input.policyOverrides),
+      {
+        tenantId,
+        recordId: loopId,
+        kind: "loop",
+        schemaVersion: 1,
+        data: {
+          id: loopId,
+          operationId: "knowledge",
+          objective: {
+            desiredState: "Knowledge stays current",
+            requiredEvidence: [],
+            scope: { include: {}, exclude: {} },
+          },
+          trigger: { type: "schedule", every: "1h" },
+          targetRef: { kind: "workflow", id: "refresh-knowledge-system" },
+          reconciliationPolicy: {
+            overlap: "skip",
+            missed: "coalesce",
+            failure: input.failure ?? { maxAttempts: 3, backoffSeconds: 0, timeoutSeconds: 60 },
+          },
+        },
+        createdAt: now,
+      },
+    ]),
+    getAgencyState: vi.fn().mockResolvedValue({
+      tenantId,
+      definitionId: loopId,
+      kind: "loop",
+      schemaVersion: 1,
+      data: {
+        definitionId: loopId,
+        lifecycle: "active",
+        health: "healthy",
+        failures: 0,
+        lastFiredAt: "2026-07-22T10:00:00.000Z",
+        updatedAt: "2026-07-22T10:00:00.000Z",
+      },
+      updatedAt: "2026-07-22T10:00:00.000Z",
+    }),
+    putAgencyState: vi.fn(),
+    appendAgencyOutput: vi.fn(),
+    listAgencyOutputs: vi.fn().mockResolvedValue([]),
+    reserveAgencyDispatch: vi.fn().mockResolvedValue({ acquired: true, dispatchId: "dispatch-bounded" }),
+    recordSkippedAgencyDispatch: vi.fn(),
+    finishAgencyDispatch: input.finishAgencyDispatch,
+    createAgencyModelRun: input.createAgencyModelRun ?? vi.fn(),
+    finishAgencyModelRun: input.finishAgencyModelRun ?? vi.fn(),
+  } as unknown as StateBackend
+}
+
 describe("Agency Loop runtime dispatch", () => {
   it("reserves a due firing before dispatching its Workflow", async () => {
     const reserveAgencyDispatch = vi.fn().mockResolvedValue({ acquired: true, dispatchId: "dispatch-1" })
     const createAgencyModelRun = vi.fn()
+    const finishAgencyModelRun = vi.fn()
+    const finishAgencyDispatch = vi.fn()
     const putAgencyState = vi.fn()
     const backend = {
       listAgencyDefinitions: vi.fn().mockResolvedValue([
@@ -83,7 +146,7 @@ describe("Agency Loop runtime dispatch", () => {
             },
             trigger: { type: "schedule", every: "1h" },
             targetRef: { kind: "workflow", id: "refresh-knowledge-system" },
-            reconciliationPolicy: { overlap: "skip", missed: "coalesce" },
+      reconciliationPolicy: { overlap: "skip", missed: "coalesce", failure: { maxAttempts: 3, backoffSeconds: 0, timeoutSeconds: 60 } },
           },
           createdAt: now,
         },
@@ -108,11 +171,14 @@ describe("Agency Loop runtime dispatch", () => {
       listAgencyOutputs: vi.fn().mockResolvedValue([]),
       reserveAgencyDispatch,
       recordSkippedAgencyDispatch: vi.fn(),
-      finishAgencyDispatch: vi.fn(),
+      finishAgencyDispatch,
       createAgencyModelRun,
-      finishAgencyModelRun: vi.fn(),
+      finishAgencyModelRun,
     } as unknown as StateBackend
-    const run = vi.fn().mockResolvedValue({ exitCode: 0 })
+    const run = vi
+      .fn()
+      .mockResolvedValueOnce({ exitCode: 1, reason: "temporary failure", usage: { tokens: 10, costUsd: 0.01 } })
+      .mockResolvedValueOnce({ exitCode: 0, reason: "recovered", usage: { tokens: 20, costUsd: 0.02 } })
 
     const results = await dispatchAgencyLoopsWith({ tenantId, backend, now: new Date(now), run })
 
@@ -123,7 +189,7 @@ describe("Agency Loop runtime dispatch", () => {
         idempotencyKey: "refresh-knowledge:schedule:2026-07-22T11:00:00.000Z",
         loopId: "refresh-knowledge",
         decision: expect.objectContaining({ kind: "fire" }),
-        leaseUntil: "2026-07-22T11:20:00.000Z",
+        leaseUntil: "2026-07-22T11:08:00.000Z",
         policyHash: expect.stringMatching(/^[a-f0-9]{64}$/),
         maxConcurrentRuns: 1,
         requiresApproval: false,
@@ -133,7 +199,29 @@ describe("Agency Loop runtime dispatch", () => {
         now,
       }),
     )
-    expect(run).toHaveBeenCalledWith({ workflow: "refresh-knowledge-system", cliArgs: {}, flavor: "scheduled" })
+    expect(run).toHaveBeenCalledWith(
+      { workflow: "refresh-knowledge-system", cliArgs: {}, flavor: "scheduled" },
+      expect.any(AbortController),
+    )
+    expect(run).toHaveBeenCalledTimes(2)
+    expect(createAgencyModelRun).toHaveBeenCalledTimes(2)
+    expect(finishAgencyModelRun).toHaveBeenCalledTimes(2)
+    expect(finishAgencyModelRun).toHaveBeenLastCalledWith(
+      tenantId,
+      expect.objectContaining({
+        status: "succeeded",
+        usage: expect.objectContaining({ tokens: 20, costUsd: 0.02 }),
+      }),
+      expect.any(String),
+    )
+    expect(finishAgencyDispatch).toHaveBeenCalledWith(
+      tenantId,
+      expect.any(String),
+      expect.any(String),
+      "dispatched",
+      expect.any(String),
+      expect.any(String),
+    )
     expect(reserveAgencyDispatch.mock.invocationCallOrder[0]).toBeLessThan(run.mock.invocationCallOrder[0]!)
     expect(createAgencyModelRun.mock.invocationCallOrder[0]).toBeLessThan(run.mock.invocationCallOrder[0]!)
     expect(createAgencyModelRun).toHaveBeenCalledWith(
@@ -150,7 +238,7 @@ describe("Agency Loop runtime dispatch", () => {
         },
         effectivePolicy: expect.objectContaining({ hash: expect.stringMatching(/^[a-f0-9]{64}$/) }),
       }),
-      now,
+      expect.any(String),
     )
     expect(putAgencyState).toHaveBeenCalledTimes(2)
   })
@@ -191,7 +279,7 @@ describe("Agency Loop runtime dispatch", () => {
             },
             trigger: { type: "schedule", every: "1h" },
             targetRef: { kind: "goal", id: "refresh-goal" },
-            reconciliationPolicy: { overlap: "skip", missed: "coalesce" },
+      reconciliationPolicy: { overlap: "skip", missed: "coalesce", failure: { maxAttempts: 3, backoffSeconds: 0, timeoutSeconds: 60 } },
           },
           createdAt: now,
         },
@@ -228,7 +316,10 @@ describe("Agency Loop runtime dispatch", () => {
 
     await dispatchAgencyLoopsWith({ tenantId, backend, now: new Date(now), run })
 
-    expect(run).toHaveBeenCalledWith({ workflow: "refresh-knowledge-system", cliArgs: {}, flavor: "scheduled" })
+    expect(run).toHaveBeenCalledWith(
+      { workflow: "refresh-knowledge-system", cliArgs: {}, flavor: "scheduled" },
+      expect.any(AbortController),
+    )
   })
 
   it("records a policy rejection without starting a Run", async () => {
@@ -253,7 +344,7 @@ describe("Agency Loop runtime dispatch", () => {
             },
             trigger: { type: "schedule", every: "1h" },
             targetRef: { kind: "workflow", id: "refresh-knowledge-system" },
-            reconciliationPolicy: { overlap: "skip", missed: "coalesce" },
+      reconciliationPolicy: { overlap: "skip", missed: "coalesce", failure: { maxAttempts: 3, backoffSeconds: 0, timeoutSeconds: 60 } },
           },
           createdAt: now,
         },
@@ -315,7 +406,7 @@ describe("Agency Loop runtime dispatch", () => {
             },
             trigger: { type: "schedule", every: "1h" },
             targetRef: { kind: "workflow", id: "refresh-knowledge-system" },
-            reconciliationPolicy: { overlap: "skip", missed: "coalesce" },
+      reconciliationPolicy: { overlap: "skip", missed: "coalesce", failure: { maxAttempts: 3, backoffSeconds: 0, timeoutSeconds: 60 } },
           },
           createdAt: now,
         },
@@ -353,5 +444,108 @@ describe("Agency Loop runtime dispatch", () => {
       expect.objectContaining({ requiresApproval: true, approvalScopeId: "approval-loop" }),
     )
     expect(run).not.toHaveBeenCalled()
+  })
+
+  it("dead-letters an exhausted firing and never exceeds the policy run budget", async () => {
+    const finishAgencyDispatch = vi.fn()
+    const createAgencyModelRun = vi.fn()
+    const finishAgencyModelRun = vi.fn()
+    const backend = loopBackend({
+      policyOverrides: {
+        budget: { maxRuns: 2, maxTokens: 100, maxCostUsd: 1, maxDurationSeconds: 120 },
+      },
+      failure: { maxAttempts: 5, backoffSeconds: 0, timeoutSeconds: 60 },
+      finishAgencyDispatch,
+      createAgencyModelRun,
+      finishAgencyModelRun,
+    })
+    const run = vi.fn().mockResolvedValue({
+      exitCode: 1,
+      reason: "still failing",
+      usage: { tokens: 10, costUsd: 0.1 },
+    })
+
+    const results = await dispatchAgencyLoopsWith({ tenantId, backend, now: new Date(now), run })
+
+    expect(run).toHaveBeenCalledTimes(2)
+    expect(createAgencyModelRun).toHaveBeenCalledTimes(2)
+    expect(finishAgencyModelRun).toHaveBeenCalledTimes(2)
+    expect(finishAgencyDispatch).toHaveBeenCalledWith(
+      tenantId,
+      expect.any(String),
+      expect.any(String),
+      "dead-letter",
+      expect.any(String),
+      expect.any(String),
+    )
+    expect(results).toMatchObject([
+      { loopId: "bounded-loop", decision: "failed", reason: expect.stringMatching(/dead-lettered after 2 attempts/) },
+    ])
+  })
+
+  it("aborts and dead-letters a target that exceeds its hard timeout", async () => {
+    vi.useFakeTimers()
+    try {
+      const finishAgencyDispatch = vi.fn()
+      const backend = loopBackend({
+        policyOverrides: {
+          budget: { maxRuns: 1, maxTokens: 100, maxCostUsd: 1, maxDurationSeconds: 10 },
+        },
+        failure: { maxAttempts: 1, backoffSeconds: 0, timeoutSeconds: 1 },
+        finishAgencyDispatch,
+      })
+      let controller: AbortController | undefined
+      const run = vi.fn((_job, current: AbortController) => {
+        controller = current
+        return new Promise<never>(() => undefined)
+      })
+
+      const pending = dispatchAgencyLoopsWith({ tenantId, backend, now: new Date(now), run })
+      await vi.advanceTimersByTimeAsync(1_000)
+      const results = await pending
+
+      expect(controller?.signal.aborted).toBe(true)
+      expect(finishAgencyDispatch).toHaveBeenCalledWith(
+        tenantId,
+        expect.any(String),
+        expect.any(String),
+        "dead-letter",
+        expect.any(String),
+        expect.any(String),
+      )
+      expect(results).toMatchObject([{ decision: "failed", reason: expect.stringMatching(/timed out after 1s/) }])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("rejects a nominally successful target when measured usage exceeds policy", async () => {
+    const finishAgencyDispatch = vi.fn()
+    const backend = loopBackend({
+      policyOverrides: {
+        budget: { maxRuns: 1, maxTokens: 5, maxCostUsd: 1, maxDurationSeconds: 60 },
+      },
+      failure: { maxAttempts: 1, backoffSeconds: 0, timeoutSeconds: 60 },
+      finishAgencyDispatch,
+    })
+    const run = vi.fn().mockResolvedValue({
+      exitCode: 0,
+      reason: "work completed",
+      usage: { tokens: 6, costUsd: 0.1 },
+    })
+
+    const results = await dispatchAgencyLoopsWith({ tenantId, backend, now: new Date(now), run })
+
+    expect(finishAgencyDispatch).toHaveBeenCalledWith(
+      tenantId,
+      expect.any(String),
+      expect.any(String),
+      "dead-letter",
+      expect.any(String),
+      expect.any(String),
+    )
+    expect(results).toMatchObject([
+      { decision: "failed", reason: expect.stringMatching(/token budget exhausted/) },
+    ])
   })
 })

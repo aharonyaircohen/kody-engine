@@ -92,7 +92,16 @@ export class AgencyModelRepository {
   async loadCatalog(): Promise<AgencyDefinitionCatalog> {
     const documents = await this.backend.listAgencyDefinitions(this.tenantId)
     const catalog = emptyCatalog()
-    for (const document of documents) addDefinition(catalog, document)
+    // Definitions are append-only. Resolve the current authored revision at
+    // the repository boundary instead of making immutable history look like a
+    // duplicate domain entity. The record id is a deterministic tie-breaker
+    // for imports that preserve identical creation times.
+    const ordered = [...documents].sort(
+      (left, right) =>
+        left.createdAt.localeCompare(right.createdAt) ||
+        left.recordId.localeCompare(right.recordId),
+    )
+    for (const document of ordered) addDefinition(catalog, document)
     validateRelationships(catalog)
     return catalog
   }
@@ -176,7 +185,6 @@ function add<T extends { id: string }>(
   revision: string,
 ): void {
   const mutable = collection as Map<string, DefinitionRecord<T>>
-  if (mutable.has(definition.id)) throw new Error(`Duplicate Agency Definition: ${definition.id}`)
   mutable.set(definition.id, { definition, revision })
 }
 

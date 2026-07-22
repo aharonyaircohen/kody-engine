@@ -57,6 +57,8 @@ export interface AgentResult {
   durationMs?: number
   /** Cumulative token usage across all `result` messages. */
   tokens?: AgentTokenUsage
+  /** Provider-reported cost for the completed attempt. */
+  costUsd?: number
   /** Number of SDK messages observed (proxy for turn count). */
   messageCount?: number
 }
@@ -85,6 +87,8 @@ export interface AgentOptions {
   litellmUrl?: string | null
   verbose?: boolean
   quiet?: boolean
+  /** Cancels the SDK session when the owning Run reaches its hard deadline. */
+  abortController?: AbortController
   ndjsonDir?: string
   /** Override the default allowed tool list (e.g. read-only for review). */
   allowedToolsOverride?: string[]
@@ -417,6 +421,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   let outcomeKind: AgentOutcomeKind = "generic_failed"
   let errorMessage: string | undefined
   let tokens: AgentTokenUsage = { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 }
+  let costUsd = 0
   let messageCount = 0
   let finalText = ""
   let getSubmitted: (() => { cursor: string; data: Record<string, unknown>; done: boolean } | undefined) | undefined
@@ -441,6 +446,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     outcomeKind = "generic_failed"
     errorMessage = undefined
     tokens = { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 }
+    costUsd = 0
     messageCount = 0
     // Flips once the session runs a tool that could change durable state —
     // gates the connection retry so we never replay a mutating turn.
@@ -606,6 +612,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         }
       }
       queryOptions.settingSources = opts.settingSources ?? ["project", "local"]
+      if (opts.abortController) queryOptions.abortController = opts.abortController
       // Pin the SDK's native binary to a job-stable path so npm pruning the
       // `_npx` cache mid-job (during a long run phase) can't make a later
       // phase fail with "native binary not found". Null => SDK default.
@@ -768,6 +775,8 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
           }
         }
         if (m.type === "result") {
+          const reportedCost = Number((m as { total_cost_usd?: unknown }).total_cost_usd ?? 0)
+          if (Number.isFinite(reportedCost) && reportedCost >= 0) costUsd = reportedCost
           if (m.subtype === "success") {
             outcome = "completed"
             outcomeKind = "ok"
@@ -889,6 +898,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     ndjsonPath,
     durationMs: Date.now() - startedAt,
     tokens,
+    costUsd,
     messageCount,
   }
 }

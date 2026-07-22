@@ -202,6 +202,8 @@ export interface ExecutorInput {
   skipConfig?: boolean
   verbose?: boolean
   quiet?: boolean
+  /** Run-level cancellation owned by the dispatch boundary. */
+  abortController?: AbortController
   /**
    * Test seam: how a container resolves child invocations. Defaults to
    * `runImplementation` (so containers truly nest). Tests inject a stub to
@@ -235,6 +237,7 @@ export interface ExecutorOutput {
   exitCode: number
   prUrl?: string
   reason?: string
+  usage?: { tokens: number; costUsd: number }
   /**
    * In-process stage hand-off. When a stage (e.g. `classify`) decides which
    * stage runs next, it sets `ctx.output.nextDispatch` instead of posting an
@@ -525,6 +528,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       isBackendHealthy: lm ? () => lm.isHealthy() : undefined,
       verbose: input.verbose,
       quiet: input.quiet,
+      abortController: input.abortController,
       ndjsonDir,
       additionalDirectories: agentTaskArtifacts ? [agentTaskArtifacts.absDir] : undefined,
       allowedToolsOverride: profile.claudeCode.tools,
@@ -667,6 +671,15 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
           exitCode: 99,
           reason: err instanceof Error ? err.message : String(err),
         })
+      }
+      ctx.output.usage = {
+        tokens: agentResult.tokens
+          ? agentResult.tokens.input +
+            agentResult.tokens.output +
+            agentResult.tokens.cacheRead +
+            agentResult.tokens.cacheCreate
+          : 0,
+        costUsd: agentResult.costUsd ?? 0,
       }
       emitEvent(input.cwd, {
         implementation: profileName,

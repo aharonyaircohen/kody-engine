@@ -114,7 +114,7 @@ function loop(intentIds = ["quality", "safety"]): DefinitionRecord<LoopDefinitio
       },
       trigger: { type: "schedule", every: "1h" },
       targetRef: { kind: "workflow", id: "refresh-knowledge" },
-      reconciliationPolicy: { overlap: "skip", missed: "coalesce" },
+    reconciliationPolicy: { overlap: "skip", missed: "coalesce", failure: { maxAttempts: 3, backoffSeconds: 0, timeoutSeconds: 60 } },
     },
   }
 }

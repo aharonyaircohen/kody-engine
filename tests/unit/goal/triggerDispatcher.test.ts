@@ -7,7 +7,11 @@ const loop = {
   objective: { desiredState: "Knowledge stays current", requiredEvidence: [], scope: { include: {}, exclude: {} } },
   trigger: { type: "schedule" as const, every: "1h" },
   targetRef: { kind: "workflow" as const, id: "refresh-knowledge-system" },
-  reconciliationPolicy: { overlap: "skip" as const, missed: "coalesce" as const },
+  reconciliationPolicy: {
+    overlap: "skip" as const,
+    missed: "coalesce" as const,
+    failure: { maxAttempts: 3, backoffSeconds: 0, timeoutSeconds: 60 },
+  },
 }
 
 describe("Trigger dispatcher", () => {

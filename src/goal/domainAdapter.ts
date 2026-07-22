@@ -41,7 +41,11 @@ export function migrateLegacyManagedWork(id: string, legacy: GoalState): Migrate
         objective,
         trigger: triggerFromSchedule(legacy.extra.schedule),
         targetRef: { kind: targetKind, id: requiredString(target.id, `Loop "${id}" has no target id`) },
-        reconciliationPolicy: { overlap: "skip", missed: "coalesce" },
+    reconciliationPolicy: {
+      overlap: "skip",
+      missed: "coalesce",
+      failure: { maxAttempts: 3, backoffSeconds: 30, timeoutSeconds: 900 },
+    },
       }),
       state: createLoopState({
         definitionId: id,
