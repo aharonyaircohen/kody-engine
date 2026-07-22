@@ -22,7 +22,7 @@ export interface GoalDocument {
 export interface AgencyRunDocument {
   tenantId: string
   runId: string
-  subjectType: "goal" | "loop" | "workflow"
+  subjectType: "goal" | "loop" | "workflow" | "capability"
   subjectId: string
   run: unknown
   updatedAt: string
@@ -31,7 +31,7 @@ export interface AgencyRunDocument {
 export interface AgencyDefinitionDocument {
   tenantId: string
   recordId: string
-  kind: "intent" | "operation" | "goal" | "loop" | "workflow" | "capability"
+  kind: "intent" | "operation" | "goal" | "loop" | "workflow" | "capability" | "agent"
   schemaVersion: number
   data: unknown
   createdAt: string
@@ -152,6 +152,14 @@ export interface StateBackend {
     now: string,
     runId?: string,
   ): Promise<void>
+  createAgencyModelRun(
+    tenantId: string,
+    subjectType: AgencyRunDocument["subjectType"],
+    subjectId: string,
+    run: unknown,
+    now: string,
+  ): Promise<void>
+  finishAgencyModelRun(tenantId: string, run: unknown, now: string): Promise<void>
   appendRunEvent(
     tenantId: string,
     runId: string,
@@ -367,6 +375,22 @@ export function createStateBackendFromEnv(
         status,
         now,
         ...(runId ? { runId: requireNonEmpty(runId, "runId") } : {}),
+      })
+    },
+    async createAgencyModelRun(tenantId, subjectType, subjectId, run, now) {
+      await transport.mutation(anyApi.agencyModel.createRunRecord, {
+        tenantId: requireTenant(tenantId),
+        subjectType,
+        subjectId: requireNonEmpty(subjectId, "subjectId"),
+        run,
+        now,
+      })
+    },
+    async finishAgencyModelRun(tenantId, run, now) {
+      await transport.mutation(anyApi.agencyModel.finishRunRecord, {
+        tenantId: requireTenant(tenantId),
+        run,
+        now,
       })
     },
     async appendRunEvent(tenantId, runId, goalId, event, time) {

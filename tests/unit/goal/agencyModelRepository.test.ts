@@ -12,6 +12,55 @@ const goal = {
   executionRef: { kind: "workflow" as const, id: "refresh-graph" },
 }
 const now = "2026-07-22T00:00:00.000Z"
+const supportingDefinitions = [
+  {
+    tenantId: "acme/widgets",
+    recordId: "quality",
+    kind: "intent",
+    schemaVersion: 1,
+    data: {
+      id: "quality",
+      direction: "Keep knowledge trustworthy",
+      priorities: ["evidence"],
+      policy: {
+        approval: "none",
+        authority: { allow: ["refresh-graph"], deny: [] },
+        budget: { maxRuns: 10, maxTokens: 10000, maxCostUsd: 10, maxDurationSeconds: 600 },
+        maxConcurrentRuns: 1,
+        riskyActions: [],
+      },
+      constraints: [],
+    },
+    createdAt: now,
+  },
+  {
+    tenantId: "acme/widgets",
+    recordId: "knowledge",
+    kind: "operation",
+    schemaVersion: 1,
+    data: { id: "knowledge", name: "Knowledge", responsibility: "Keep knowledge current", intentIds: ["quality"] },
+    createdAt: now,
+  },
+  {
+    tenantId: "acme/widgets",
+    recordId: "refresh-graph-workflow",
+    kind: "workflow",
+    schemaVersion: 1,
+    data: {
+      id: "refresh-graph",
+      steps: [{ id: "build", capabilityRef: { kind: "capability", id: "build-graph" }, dependsOn: [] }],
+    },
+    createdAt: now,
+  },
+  {
+    tenantId: "acme/widgets",
+    recordId: "build-graph",
+    kind: "capability",
+    schemaVersion: 1,
+    data: { id: "build-graph", action: "Build graph", input: "repository", output: "graph" },
+    createdAt: now,
+  },
+] as const
 
 describe("AgencyModelRepository", () => {
   it("derives Goal progress only from required evidence outputs", () => {
@@ -42,6 +91,7 @@ describe("AgencyModelRepository", () => {
   it("loads and validates clean Definitions separately from mutable State", async () => {
     const backend = {
       listAgencyDefinitions: vi.fn().mockResolvedValue([
+        ...supportingDefinitions,
         { tenantId: "acme/widgets", recordId: goal.id, kind: "goal", schemaVersion: 1, data: goal, createdAt: now },
       ]),
       getAgencyState: vi.fn().mockResolvedValue({
@@ -68,6 +118,7 @@ describe("AgencyModelRepository", () => {
   it("rejects mismatched State instead of silently joining the wrong record", async () => {
     const backend = {
       listAgencyDefinitions: vi.fn().mockResolvedValue([
+        ...supportingDefinitions,
         { tenantId: "acme/widgets", recordId: goal.id, kind: "goal", schemaVersion: 1, data: goal, createdAt: now },
       ]),
       getAgencyState: vi.fn().mockResolvedValue({

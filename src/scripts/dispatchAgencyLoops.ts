@@ -1,7 +1,16 @@
-import { createLoopState, type GoalDefinition, type LoopDefinition, type LoopState } from "@kody-ade/agency-domain"
+import { randomUUID } from "node:crypto"
+import {
+  createLoopState,
+  createRun,
+  type LoopDefinition,
+  type LoopState,
+  type PinnedDefinitionRef,
+  type Run,
+} from "@kody-ade/agency-domain"
 import type { KodyConfig } from "../config.js"
 import { AgencyModelRepository } from "../goal/agencyModelRepository.js"
 import { decideTrigger } from "../goal/triggerDispatcher.js"
+import { resolveDispatchPolicy } from "../goal/policyResolver.js"
 import type { Job, PreflightScript } from "../implementations/types.js"
 import { runJob } from "../job.js"
 import { createStateBackendFromEnv, type StateBackend } from "../state-backend.js"
@@ -32,16 +41,12 @@ export async function dispatchAgencyLoopsWith(input: {
   run: (job: Job) => Promise<{ exitCode: number; reason?: string; data?: Record<string, unknown> }>
 }): Promise<DispatchResult[]> {
   const repository = new AgencyModelRepository(input.backend, input.tenantId)
-  const records = await repository.listManagedWork()
-  const goals = new Map(
-    records
-      .filter((record): record is { definition: GoalDefinition; state: typeof record.state } =>
-        "executionRef" in record.definition,
-      )
-      .map((record) => [record.definition.id, record.definition]),
-  )
-  const loops = records.filter(
-    (record): record is { definition: LoopDefinition; state: LoopState | null } => "trigger" in record.definition,
+  const catalog = await repository.loadCatalog()
+  const records = await repository.listManagedWork(catalog)
+  const loops = records.flatMap((record) =>
+    "trigger" in record.definition
+      ? [{ ...record, definition: record.definition, state: record.state as LoopState | null }]
+      : [],
   )
   const results: DispatchResult[] = []
 
@@ -59,6 +64,28 @@ export async function dispatchAgencyLoopsWith(input: {
         )
       }
       results.push({ loopId: record.definition.id, decision: "skipped", reason: decision.reason })
+      continue
+    }
+
+    let target: ResolvedTarget
+    let policy: ReturnType<typeof resolveDispatchPolicy>
+    try {
+      target = resolveTarget(record.definition, catalog)
+      policy = resolveDispatchPolicy({
+        catalog,
+        owner: { definition: record.definition, revision: record.revision },
+        target: target.reference,
+      })
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      await input.backend.recordSkippedAgencyDispatch(
+        input.tenantId,
+        decision.idempotencyKey,
+        record.definition.id,
+        { kind: "skip", reason, scheduledAt: decision.scheduledAt },
+        now,
+      )
+      results.push({ loopId: record.definition.id, decision: "skipped", reason })
       continue
     }
 
@@ -85,15 +112,41 @@ export async function dispatchAgencyLoopsWith(input: {
       updatedAt: now,
     })
     await repository.saveState(runningState, "loop", now)
+    const runId = `run-${randomUUID()}`
+    const correlationId = `corr-${randomUUID()}`
+    const activeRun = createRun({
+      id: runId,
+      status: "running",
+      origin: { kind: "loop", id: record.definition.id, revision: record.revision },
+      target: target.reference,
+      trace: [policy.trace[0], ...target.intermediate, target.reference],
+      effectivePolicy: policy.snapshot,
+      correlationId,
+      startedAt: now,
+    })
 
     try {
-      const output = await input.run(jobForTarget(record.definition, goals))
+      await input.backend.createAgencyModelRun(
+        input.tenantId,
+        target.reference.kind,
+        target.reference.id,
+        activeRun,
+        now,
+      )
+      const output = await input.run(target.job)
       const succeeded = output.exitCode === 0
+      const finishedAt = new Date().toISOString()
+      await input.backend.finishAgencyModelRun(
+        input.tenantId,
+        terminalRun(activeRun, succeeded ? "succeeded" : "failed", finishedAt),
+        finishedAt,
+      )
       await input.backend.finishAgencyDispatch(
         input.tenantId,
         decision.idempotencyKey,
         succeeded ? "dispatched" : "failed",
-        new Date().toISOString(),
+        finishedAt,
+        runId,
       )
       await repository.saveState(
         createLoopState({
@@ -112,20 +165,49 @@ export async function dispatchAgencyLoopsWith(input: {
       })
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
-      await input.backend.finishAgencyDispatch(input.tenantId, decision.idempotencyKey, "failed", new Date().toISOString())
+      const finishedAt = new Date().toISOString()
+      await input.backend
+        .finishAgencyModelRun(input.tenantId, terminalRun(activeRun, "failed", finishedAt), finishedAt)
+        .catch(() => undefined)
+      await input.backend.finishAgencyDispatch(input.tenantId, decision.idempotencyKey, "failed", finishedAt, runId)
       results.push({ loopId: record.definition.id, decision: "failed", reason })
     }
   }
   return results
 }
 
-function jobForTarget(loop: LoopDefinition, goals: ReadonlyMap<string, GoalDefinition>): Job {
-  const target = loop.targetRef.kind === "goal" ? goals.get(loop.targetRef.id)?.executionRef : loop.targetRef
-  if (!target) throw new Error(`Loop target Goal is missing: ${loop.targetRef.id}`)
-  if (target.kind === "workflow") {
-    return { workflow: target.id, cliArgs: {}, flavor: "scheduled" }
+interface ResolvedTarget {
+  reference: PinnedDefinitionRef & { kind: "workflow" | "capability" }
+  intermediate: PinnedDefinitionRef[]
+  job: Job
+}
+
+function resolveTarget(
+  loop: LoopDefinition,
+  catalog: Awaited<ReturnType<AgencyModelRepository["loadCatalog"]>>,
+): ResolvedTarget {
+  const goal = loop.targetRef.kind === "goal" ? catalog.goals.get(loop.targetRef.id) : undefined
+  if (loop.targetRef.kind === "goal" && !goal) throw new Error(`Loop target Goal is missing: ${loop.targetRef.id}`)
+  if (goal && goal.definition.operationId !== loop.operationId) {
+    throw new Error(`Loop and target Goal must belong to the same Operation`)
   }
-  return { capability: target.id, cliArgs: {}, flavor: "scheduled" }
+  const target = goal?.definition.executionRef ?? loop.targetRef
+  if (target.kind === "goal") throw new Error("Nested Goal target is invalid")
+  const record = target.kind === "workflow" ? catalog.workflows.get(target.id) : catalog.capabilities.get(target.id)
+  if (!record) throw new Error(`Loop execution target is missing: ${target.kind}:${target.id}`)
+  const reference = { kind: target.kind, id: target.id, revision: record.revision } as ResolvedTarget["reference"]
+  return {
+    reference,
+    intermediate: goal ? [{ kind: "goal", id: goal.definition.id, revision: goal.revision }] : [],
+    job:
+      target.kind === "workflow"
+        ? { workflow: target.id, cliArgs: {}, flavor: "scheduled" }
+        : { capability: target.id, cliArgs: {}, flavor: "scheduled" },
+  }
+}
+
+function terminalRun(active: Run, status: "succeeded" | "failed", finishedAt: string): Run {
+  return createRun({ ...active, status, finishedAt })
 }
 
 function repositoryTenant(config: KodyConfig): string | null {

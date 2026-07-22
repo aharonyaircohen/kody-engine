@@ -81,4 +81,34 @@ describe("Agency Model state backend", () => {
       decision,
     })
   })
+
+  it("persists clean Run records through dedicated lifecycle operations", async () => {
+    const mutation = vi.fn()
+    const backend = createStateBackendFromEnv({}, { query: vi.fn(), mutation })
+    const run = { id: "run-1", status: "running" }
+
+    await backend.createAgencyModelRun(
+      "acme/widgets",
+      "workflow",
+      "refresh-knowledge",
+      run,
+      "2026-07-22T12:00:00.000Z",
+    )
+    await backend.finishAgencyModelRun(
+      "acme/widgets",
+      { ...run, status: "succeeded" },
+      "2026-07-22T12:01:00.000Z",
+    )
+
+    expect(mutation.mock.calls.map(([fn]) => getFunctionName(fn))).toEqual([
+      "agencyModel:createRunRecord",
+      "agencyModel:finishRunRecord",
+    ])
+    expect(mutation.mock.calls[0]?.[1]).toMatchObject({
+      tenantId: "acme/widgets",
+      subjectType: "workflow",
+      subjectId: "refresh-knowledge",
+      run,
+    })
+  })
 })
