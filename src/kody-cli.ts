@@ -14,7 +14,7 @@ import {
 } from "./issue.js"
 import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
 import { setKodyLabel } from "./lifecycleLabels.js"
-import { resolveCapabilityAction } from "./registry.js"
+import { listCapabilityActions, resolveCapabilityAction } from "./registry.js"
 import { type RunRequest, readRunRequestFromEnv } from "./run-request.js"
 import { lastRunLogPath } from "./runtimePaths.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
@@ -519,7 +519,12 @@ export async function runCi(argv: string[]): Promise<number> {
         }
       : (capabilityRoute ?? workflowRoute ?? scheduledWatchRoute)
     if (!route) {
-      process.stderr.write(`[kody] manual one-shot action '${forceRunAction}' has no capability action or workflow\n`)
+      const root = capabilitiesRoot(cwd)
+      const available = listCapabilityActions(root).map((item) => item.action)
+      process.stderr.write(
+        `[kody] manual one-shot action '${forceRunAction}' has no capability action or workflow ` +
+          `(capabilitiesRoot=${root}, available=${available.join(",") || "none"})\n`,
+      )
       return 64
     }
     if (route.implementation === "goal-manager" && typeof forceRunCliArgs.goal !== "string") {

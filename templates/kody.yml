@@ -93,6 +93,8 @@ jobs:
           INIT_MESSAGE: ${{ inputs.message }}
           MODEL: ${{ inputs.model }}
           DASHBOARD_URL: ${{ inputs.dashboardUrl }}
+          KODY_DEFINITIONS_ROOT: ${{ github.workspace }}/.kody-engine/definitions
+          KODY_DEFINITIONS_ROOT_CWD: ${{ github.workspace }}
         working-directory: ${{ github.workspace }}
         run: |
           test -d .kody-engine/definitions/capabilities
