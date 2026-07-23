@@ -38,17 +38,20 @@ ENV PATH="/opt/venv/bin:${PATH}"
 # would otherwise be empty and the `kody` bin would be missing. Once
 # brain-serve lands in a published version this can revert to
 # `npm install -g @kody-ade/kody-engine@<version>`.
-ARG KODY_ENGINE_REF=main
+ARG KODY_ENGINE_REF
 # Build → pack → install via tarball. `npm install -g /local/path` on a
 # pnpm-managed repo doesn't reliably include the dist/ directory at the
 # install root (the file made it into the layer at build time but not into
 # the installed package). Going through `npm pack` honors the package's
 # `files` field deterministically, and `npm install -g <tarball>` then
 # behaves the same way a published package would.
-RUN corepack enable \
- && git clone --depth=1 --branch "${KODY_ENGINE_REF}" \
-      https://github.com/aharonyaircohen/kody-engine.git /tmp/kody-engine \
+RUN test -n "${KODY_ENGINE_REF}" \
+ && corepack enable \
+ && git init /tmp/kody-engine \
  && cd /tmp/kody-engine \
+ && git remote add origin https://github.com/aharonyaircohen/kody-engine.git \
+ && git fetch --depth=1 origin "${KODY_ENGINE_REF}" \
+ && git checkout --detach FETCH_HEAD \
  && pnpm install --frozen-lockfile --ignore-scripts \
  && pnpm build \
  && test -f dist/bin/kody.js \
