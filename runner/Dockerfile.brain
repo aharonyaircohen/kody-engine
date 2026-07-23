@@ -39,6 +39,7 @@ ENV PATH="/opt/venv/bin:${PATH}"
 # brain-serve lands in a published version this can revert to
 # `npm install -g @kody-ade/kody-engine@<version>`.
 ARG KODY_ENGINE_REF
+ARG PNPM_VERSION=10.33.0
 # Build → pack → install via tarball. `npm install -g /local/path` on a
 # pnpm-managed repo doesn't reliably include the dist/ directory at the
 # install root (the file made it into the layer at build time but not into
@@ -47,6 +48,7 @@ ARG KODY_ENGINE_REF
 # behaves the same way a published package would.
 RUN test -n "${KODY_ENGINE_REF}" \
  && corepack enable \
+ && corepack prepare "pnpm@${PNPM_VERSION}" --activate \
  && git init /tmp/kody-engine \
  && cd /tmp/kody-engine \
  && git remote add origin https://github.com/aharonyaircohen/kody-engine.git \
@@ -64,7 +66,7 @@ RUN test -n "${KODY_ENGINE_REF}" \
 # Package managers — same rationale as the runner: chat loop can run repo
 # scripts, so pnpm/yarn/npm need to be on PATH.
 RUN corepack enable \
- && corepack prepare pnpm@latest --activate
+ && corepack prepare "pnpm@${PNPM_VERSION}" --activate
 
 # Codex is part of the immutable Brain image. The user's subscription login is
 # kept on the mounted /root/.codex Fly volume, so replacing a machine does not
