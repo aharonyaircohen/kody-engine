@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -17,6 +18,7 @@ function makeRepo(opts: { sameName?: boolean } = {}): { root: string; eventPath:
   const capabilityName = opts.sameName ? "noop" : "noop-capability"
   const exeName = opts.sameName ? "noop" : "noop-impl"
   fs.mkdirSync(path.join(root, ".kody-engine", "definitions", "capabilities"), { recursive: true })
+  fs.mkdirSync(path.join(root, ".kody-engine", "definitions", "implementations"), { recursive: true })
   fs.mkdirSync(path.join(root, ".kody-engine", "definitions", "agents"), { recursive: true })
   fs.copyFileSync(
     path.join(process.env.KODY_DEFINITIONS_ROOT!, "agents", "kody.md"),
@@ -60,31 +62,61 @@ function makeRepo(opts: { sameName?: boolean } = {}): { root: string; eventPath:
 
   const capabilityDir = path.join(root, ".kody-engine", "definitions", "capabilities", capabilityName)
   fs.mkdirSync(capabilityDir, { recursive: true })
+  const capability = {
+    id: capabilityName,
+    action: "noop",
+    purpose: "Offline capability-action integration fixture",
+    inputSchema: { type: "object", additionalProperties: true },
+    outputSchema: { type: "object", additionalProperties: true },
+    effects: [],
+    permissions: [],
+    success: "success",
+    failure: "failure",
+  }
+  const canonical = (value: unknown): string => {
+    if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`
+    if (value && typeof value === "object") {
+      return `{${Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`)
+        .join(",")}}`
+    }
+    return JSON.stringify(value)
+  }
+  fs.writeFileSync(path.join(capabilityDir, "definition.json"), JSON.stringify(capability, null, 2))
+  fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Noop\n")
+
+  const implementationDir = path.join(root, ".kody-engine", "definitions", "implementations", exeName)
+  fs.mkdirSync(implementationDir, { recursive: true })
   fs.writeFileSync(
-    path.join(capabilityDir, "profile.json"),
+    path.join(implementationDir, "definition.json"),
     JSON.stringify(
       {
-        name: capabilityName,
-        action: "noop",
-        implementation: exeName,
-        agent: "kody",
-        ...(opts.sameName ? implementationProfile : {}),
+        id: exeName,
+        capabilityRef: { kind: "capability", id: capabilityName },
+        compatibleCapabilityRevision: createHash("sha256").update(canonical(capability)).digest("hex"),
+        type: "script",
       },
       null,
       2,
     ),
   )
-  fs.writeFileSync(path.join(capabilityDir, "capability.md"), "# Noop\n")
-
-  if (!opts.sameName) {
-    const implementationDir = path.join(root, ".kody-engine", "definitions", "capabilities", exeName)
-    fs.mkdirSync(implementationDir, { recursive: true })
-    fs.writeFileSync(
-      path.join(implementationDir, "profile.json"),
-      JSON.stringify({ name: exeName, internal: true, ...implementationProfile }, null, 2),
-    )
-    fs.writeFileSync(path.join(implementationDir, "capability.md"), "# Noop implementation\n")
-  }
+  fs.writeFileSync(
+    path.join(implementationDir, "runtime.json"),
+    JSON.stringify(
+      {
+        adapter: "kody-engine-profile",
+        inputBindings: {},
+        outputBindings: {},
+        requirements: {},
+        name: exeName,
+        internal: true,
+        ...implementationProfile,
+      },
+      null,
+      2,
+    ),
+  )
   const eventPath = path.join(root, "event.json")
   fs.writeFileSync(
     eventPath,

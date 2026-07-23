@@ -37,7 +37,9 @@ import {
   resolveCapabilityAction,
   resolveCapabilityFolder,
 } from "./registry.js"
+import { type RunIndexRow, upsertRunIndexRowBestEffortAsync } from "./runIndex.js"
 import type { Action } from "./state.js"
+import { hasStateBackendConfig } from "./state-backend.js"
 import {
   isWorkflowDefinitionId,
   readWorkflowDefinition,
@@ -236,7 +238,52 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
         ? (state: WorkflowRunState) =>
             writeWorkflowRunState(base.config!, base.cwd, workflowIdentity, valid.workflowRunId!, state)
         : undefined
-    const result = await runCapabilityWorkflow(workflowJob, workflow, workflowCapability, base, checkpoint)
+    const parentRunId = `workflow:${workflowIdentity}:${valid.workflowRunId ?? newJobId(valid.flavor)}`
+    const startedAt = new Date().toISOString()
+    const parentRow: RunIndexRow = {
+      version: 1,
+      id: parentRunId,
+      subjectType: "workflow",
+      subjectId: workflowIdentity!,
+      subjectLabel: workflowCapability.title,
+      status: "running",
+      title: workflowCapability.title,
+      startedAt,
+      updatedAt: startedAt,
+      workflow: workflowIdentity,
+      kodyRunId: valid.workflowRunId,
+      sourceType: "job",
+    }
+    const persistRun = Boolean(base.config && !base.skipConfig && hasStateBackendConfig())
+    if (base.config && persistRun) {
+      await upsertRunIndexRowBestEffortAsync(base.config, base.cwd, parentRow)
+    }
+    const workflowBase: RunJobBase = {
+      ...base,
+      preloadedData: { ...(base.preloadedData ?? {}), parentRunId },
+    }
+    let result: ExecutorOutput
+    try {
+      result = await runCapabilityWorkflow(workflowJob, workflow, workflowCapability, workflowBase, checkpoint)
+    } catch (error) {
+      if (base.config && persistRun) {
+        await upsertRunIndexRowBestEffortAsync(base.config, base.cwd, {
+          ...parentRow,
+          status: "failed",
+          summary: error instanceof Error ? error.message : String(error),
+          updatedAt: new Date().toISOString(),
+        })
+      }
+      throw error
+    }
+    if (base.config && persistRun) {
+      await upsertRunIndexRowBestEffortAsync(base.config, base.cwd, {
+        ...parentRow,
+        status: result.exitCode === 0 ? "success" : "failed",
+        summary: result.reason,
+        updatedAt: new Date().toISOString(),
+      })
+    }
     if (valid.workflowRunId && workflowIdentity && base.config && result.workflowState) {
       await writeWorkflowRunState(base.config, base.cwd, workflowIdentity, valid.workflowRunId, result.workflowState)
     }
@@ -431,6 +478,9 @@ async function runLinearCapabilityWorkflow(
       ...base,
       preloadedData: {
         ...chainData,
+        runSubjectType: "capability",
+        runSubjectId: step.capability,
+        runSubjectLabel: label,
         workflowStep: label,
         workflowStepIndex: index + 1,
         workflowStepReason: step.reason,
@@ -607,6 +657,9 @@ async function runGraphCapabilityWorkflow(
       ...base,
       preloadedData: {
         ...chainData,
+        runSubjectType: "capability",
+        runSubjectId: step.capability,
+        runSubjectLabel: step.id,
         workflowStep: step.id,
         workflowStepIndex: index + 1,
         workflowStepReason: step.reason,
@@ -923,7 +976,7 @@ function hydratedCapabilitiesRoot(cwd: string): string {
 }
 
 function loadWorkflowContext(slug: string | undefined, base: RunJobBase): CapabilityFolder | null {
-  if (!slug || !base.config || !isWorkflowDefinitionId(slug)) return null
+  if (!slug || !isWorkflowDefinitionId(slug)) return null
   const workflow = readWorkflowDefinition(base.config, base.cwd, slug)
   return workflow ? workflowDefinitionToCapabilityFolder(slug, workflow) : null
 }

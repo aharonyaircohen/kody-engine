@@ -40,6 +40,14 @@ export interface AuthSpec {
 }
 
 export interface Profile {
+  canonicalContract?: {
+    capabilityId: string
+    capabilityRevision: string
+    implementationId: string
+    implementationRevision: string
+    inputSchema: Record<string, unknown>
+    outputSchema: Record<string, unknown>
+  }
   name: string
   /**
    * Public action name owned by a capability. A user may type `@kody <action>`;

@@ -14,11 +14,14 @@
  * `dist/` layouts work identically.
  */
 
+import { createHash } from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { type ImplementationDefinition, resolveCapabilityImplementation } from "./agency/implementation-resolution.js"
 import type { CapabilityFolder } from "./capabilityFolders.js"
 import { CAPABILITY_PROFILE_FILE, listCapabilityFolderSlugs, readCapabilityFolder } from "./capabilityFolders.js"
-import { capabilitiesRoot } from "./definition-paths.js"
+import { loadConfig } from "./config.js"
+import { capabilitiesRoot, implementationsRoot } from "./definition-paths.js"
 import type { InputSpec } from "./implementations/types.js"
 
 const PUBLIC_IMPLEMENTATION_ROLES = new Set(["primitive", "orchestrator", "container", "watch", "utility"])
@@ -91,7 +94,7 @@ export function getImplementationRoots(): string[] {
 }
 
 export function getImplementationRootsForCwd(cwd: string): string[] {
-  return [capabilitiesRoot(cwd), getImplementationsRoot()]
+  return [implementationsRoot(cwd), getImplementationsRoot()]
 }
 
 export function getCapabilityRoots(projectCapabilitiesRoot: string = getProjectCapabilitiesRoot()): string[] {
@@ -100,7 +103,7 @@ export function getCapabilityRoots(projectCapabilitiesRoot: string = getProjectC
 
 /**
  * Names of the engine-bundled implementations (the dir names under the engine root
- * that contain a profile.json). Cached — the engine root never changes within a
+ * that contain a runtime document). Cached — the engine root never changes within a
  * process. Used to stop a hydrated `.kody-engine/definitions/capabilities/<name>/` folder from silently
  * shadowing an engine builtin (run/merge/serve/capability-scheduler/…).
  */
@@ -111,7 +114,9 @@ export function builtinImplementationNames(): Set<string> {
   const root = getImplementationsRoot()
   try {
     for (const ent of fs.readdirSync(root, { withFileTypes: true })) {
-      if (ent.isDirectory() && fs.existsSync(path.join(root, ent.name, "profile.json"))) out.add(ent.name)
+      if (ent.isDirectory() && fs.existsSync(implementationRuntimePath(root, ent.name))) {
+        out.add(ent.name)
+      }
     }
   } catch {
     /* engine root unreadable — leave empty (no shadow protection, fail-open) */
@@ -142,7 +147,7 @@ export function listImplementations(roots: string | string[] = getImplementation
     for (const ent of entries) {
       if (!ent.isDirectory()) continue
       if (seen.has(ent.name)) continue // earlier root wins
-      const profilePath = path.join(root, ent.name, CAPABILITY_PROFILE_FILE)
+      const profilePath = implementationRuntimePath(root, ent.name)
       if (
         fs.existsSync(profilePath) &&
         fs.statSync(profilePath).isFile() &&
@@ -181,7 +186,7 @@ export function resolveImplementationCandidates(
   const rootList = typeof roots === "string" ? [roots] : roots
   const out: string[] = []
   for (const root of rootList) {
-    const profilePath = path.join(root, name, "profile.json")
+    const profilePath = implementationRuntimePath(root, name)
     if (
       fs.existsSync(profilePath) &&
       fs.statSync(profilePath).isFile() &&
@@ -255,6 +260,40 @@ export function getCapabilityActionInputs(
 ): InputSpec[] | null {
   const resolved = resolveCapabilityAction(action, projectCapabilitiesRoot)
   if (!resolved) return null
+  const capability = resolveCapabilityFolder(resolved.capability, projectCapabilitiesRoot)
+  if (capability && path.basename(capability.profilePath) === "definition.json") {
+    const schema = capability.rawProfile.inputSchema
+    if (!schema || typeof schema !== "object" || Array.isArray(schema)) return []
+    const properties = (schema as { properties?: unknown }).properties
+    if (!properties || typeof properties !== "object" || Array.isArray(properties)) return []
+    const required = new Set(
+      Array.isArray((schema as { required?: unknown }).required)
+        ? (schema as { required: unknown[] }).required.filter((value): value is string => typeof value === "string")
+        : [],
+    )
+    return Object.entries(properties).map(([name, value]) => {
+      const property =
+        value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
+      const type =
+        property.type === "integer"
+          ? "int"
+          : property.type === "boolean"
+            ? "bool"
+            : Array.isArray(property.enum)
+              ? "enum"
+              : "string"
+      return {
+        name,
+        flag: `--${name}`,
+        type,
+        required: required.has(name),
+        ...(type === "enum" && Array.isArray(property.enum)
+          ? { values: property.enum.filter((item: unknown): item is string => typeof item === "string") }
+          : {}),
+        describe: typeof property.description === "string" ? property.description : name,
+      } as InputSpec
+    })
+  }
   return getProfileInputs(resolved.implementation)
 }
 
@@ -265,6 +304,18 @@ export function resolveCapabilityExecution(
   implementation: string
   cliArgs: Record<string, unknown>
 } {
+  if (path.basename(capability.profilePath) === "definition.json") {
+    const implementations = readExternalImplementations(cwd)
+    const definition = JSON.parse(fs.readFileSync(capability.profilePath, "utf-8")) as Record<string, unknown>
+    const capabilityRevision = createHash("sha256").update(canonical(definition)).digest("hex")
+    const selected = resolveCapabilityImplementation({
+      capabilityId: capability.slug,
+      capabilityRevision,
+      implementations,
+      repositoryBinding: repositoryImplementationBinding(capability.slug, cwd),
+    })
+    return { implementation: selected.id, cliArgs: {} }
+  }
   const firstWorkflowStep = capability.config.workflow?.steps[0]
   if (firstWorkflowStep) {
     const implementation = firstWorkflowStep.implementation ?? firstWorkflowStep.capability
@@ -279,11 +330,50 @@ export function resolveCapabilityExecution(
   return { implementation, cliArgs }
 }
 
+function repositoryImplementationBinding(capabilityId: string, cwd: string): string | undefined {
+  try {
+    return loadConfig(cwd).execution?.capabilityBindings[capabilityId]
+  } catch {
+    return undefined
+  }
+}
+
+function readExternalImplementations(cwd: string): ImplementationDefinition[] {
+  const root = implementationsRoot(cwd)
+  if (!fs.existsSync(root)) return []
+  const definitions: ImplementationDefinition[] = []
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !isSafeName(entry.name)) continue
+    const definitionPath = path.join(root, entry.name, "definition.json")
+    if (!fs.existsSync(definitionPath)) continue
+    try {
+      const definition = JSON.parse(fs.readFileSync(definitionPath, "utf-8")) as ImplementationDefinition
+      definitions.push(definition)
+    } catch {}
+  }
+  return definitions
+}
+
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`)
+      .join(",")}}`
+  }
+  return JSON.stringify(value)
+}
+
 function implementationDeclaresInput(implementation: string, inputName: string, cwd: string = process.cwd()): boolean {
   const profilePath = resolveImplementation(implementation, getImplementationRootsForCwd(cwd))
   if (!profilePath) return false
   try {
-    const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as { inputs?: unknown }
+    const document = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as {
+      inputs?: unknown
+      config?: { inputs?: unknown }
+    }
+    const raw = document.config ?? document
     if (!Array.isArray(raw.inputs)) return false
     return raw.inputs.some((entry) => {
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false
@@ -306,6 +396,11 @@ function isCapabilityRoot(root: string): boolean {
 
   const knownRoots = [getProjectCapabilitiesRoot(), getBuiltinCapabilitiesRoot()]
   return knownRoots.some((candidate) => candidate && path.normalize(candidate) === normalized)
+}
+
+function implementationRuntimePath(root: string, name: string): string {
+  const runtimePath = path.join(root, name, "runtime.json")
+  return fs.existsSync(runtimePath) ? runtimePath : path.join(root, name, CAPABILITY_PROFILE_FILE)
 }
 
 function isImplementationProfile(profilePath: string, requireImplementationProfile: boolean): boolean {
@@ -389,9 +484,12 @@ export function getProfileInputs(
   const profilePath = resolveImplementation(name, roots)
   if (!profilePath) return null
   try {
-    const raw = JSON.parse(fs.readFileSync(profilePath, "utf-8"))
-    if (!raw || typeof raw !== "object" || !Array.isArray(raw.inputs)) return []
-    return raw.inputs as InputSpec[]
+    const document = JSON.parse(fs.readFileSync(profilePath, "utf-8"))
+    if (!document || typeof document !== "object") return []
+    const raw =
+      "config" in document && document.config && typeof document.config === "object" ? document.config : document
+    if (!Array.isArray((raw as { inputs?: unknown }).inputs)) return []
+    return (raw as { inputs: InputSpec[] }).inputs
   } catch {
     return null
   }

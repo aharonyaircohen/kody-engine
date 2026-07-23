@@ -16,7 +16,7 @@ import { runImplementation } from "../../src/executor.js"
 
 function makeFixture(exeName: string, scriptBody: string): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-shell-output-"))
-  const exeDir = path.join(root, ".kody-engine", "definitions", "capabilities", exeName)
+  const exeDir = path.join(root, ".kody-engine", "definitions", "implementations", exeName)
   fs.mkdirSync(exeDir, { recursive: true })
   fs.writeFileSync(path.join(exeDir, "side.sh"), `#!/usr/bin/env bash\n${scriptBody}\n`, { mode: 0o755 })
   const profile = {

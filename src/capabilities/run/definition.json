@@ -1,0 +1,42 @@
+{
+  "id": "run",
+  "action": "run",
+  "purpose": "Implement one GitHub issue end-to-end.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "issue": {
+        "type": "integer",
+        "description": "GitHub issue number to implement."
+      },
+      "base": {
+        "type": "string",
+        "description": "Optional safe base branch override for manual branch targeting (see resolveBaseOverride in runFlow.ts)."
+      }
+    },
+    "required": [
+      "issue"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "reason": {
+        "type": "string"
+      },
+      "summary": {
+        "type": "string"
+      },
+      "data": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "additionalProperties": true
+  },
+  "effects": [],
+  "permissions": [],
+  "success": "The requested issue is implemented and the canonical result is returned.",
+  "failure": "The issue cannot be implemented safely or no valid canonical result is returned."
+}

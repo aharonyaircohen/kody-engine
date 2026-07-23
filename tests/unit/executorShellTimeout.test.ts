@@ -15,7 +15,7 @@ import { runImplementation } from "../../src/executor.js"
 
 function makeFixture(opts: { exeName: string; timeoutSec?: number; sleepSec: number }): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-shell-timeout-"))
-  const exeDir = path.join(root, ".kody-engine", "definitions", "capabilities", opts.exeName)
+  const exeDir = path.join(root, ".kody-engine", "definitions", "implementations", opts.exeName)
   fs.mkdirSync(exeDir, { recursive: true })
   fs.writeFileSync(
     path.join(exeDir, "slow.sh"),
@@ -105,7 +105,7 @@ describe("executor: shell entry timeout", () => {
   it("kills backgrounded descendants on timeout (process group)", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-shell-timeout-pg-"))
     const exeName = "timeout-fixture-pg"
-    const exeDir = path.join(root, ".kody-engine", "definitions", "capabilities", exeName)
+    const exeDir = path.join(root, ".kody-engine", "definitions", "implementations", exeName)
     fs.mkdirSync(exeDir, { recursive: true })
     const markerPath = path.join(root, "leaked.marker")
     fs.writeFileSync(

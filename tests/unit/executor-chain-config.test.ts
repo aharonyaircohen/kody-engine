@@ -30,7 +30,7 @@ function writeConfig(dir: string): void {
 }
 
 function writeDispatchingProfile(dir: string): void {
-  const profileDir = path.join(dir, ".kody-engine", "definitions", "capabilities", "parent")
+  const profileDir = path.join(dir, ".kody-engine", "definitions", "implementations", "parent")
   fs.mkdirSync(profileDir, { recursive: true })
   fs.writeFileSync(path.join(profileDir, "capability.md"), "# Parent\n")
   fs.writeFileSync(

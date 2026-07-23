@@ -89,15 +89,21 @@ describe("run index backend", () => {
       startedAt: "2026-07-05T10:00:00.000Z",
       updatedAt: "2026-07-05T10:01:00.000Z",
       data: {
-        runSubjectType: "workflow",
-        runSubjectId: "web-release",
+        runSubjectType: "capability",
+        runSubjectId: "prepare-release",
         jobId: "job-1",
+        parentRunId: "workflow:web-release:run-1",
+        capabilityRevision: "cap-rev",
+        implementationRevision: "impl-rev",
       },
     })
     expect(row).toMatchObject({
-      subjectType: "workflow",
-      subjectId: "web-release",
+      subjectType: "capability",
+      subjectId: "prepare-release",
       implementation: "release-prepare",
+      parentRunId: "workflow:web-release:run-1",
+      capabilityRevision: "cap-rev",
+      implementationRevision: "impl-rev",
     })
   })
 })

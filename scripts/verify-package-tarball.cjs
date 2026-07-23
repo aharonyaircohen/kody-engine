@@ -1,4 +1,5 @@
 const { execFileSync } = require("node:child_process")
+const { createHash } = require("node:crypto")
 const fs = require("node:fs")
 const os = require("node:os")
 const path = require("node:path")
@@ -41,8 +42,9 @@ try {
 
   for (const required of [
     "package/dist/bin/kody.js",
-    "package/dist/implementations/run/profile.json",
-    "package/dist/capabilities/run/profile.json",
+    "package/dist/implementations/run/definition.json",
+    "package/dist/implementations/run/runtime.json",
+    "package/dist/capabilities/run/definition.json",
   ]) {
     assert(hasEntry(required), `package tarball is missing ${required}`)
   }
@@ -60,64 +62,77 @@ try {
   fs.mkdirSync(install, { recursive: true })
 
   writeJson(path.join(store, "kody-store.json"), {
-    assetRoots: { capabilities: "capabilities" },
-  })
-  writeJson(path.join(store, "capabilities", "feature", "profile.json"), {
-    name: "feature",
-    action: "feature",
-    workflow: {
-      steps: [{ capability: "noop", target: "issue" }],
+    assetRoots: {
+      capabilities: "capabilities",
+      implementations: "implementations",
+      workflows: "workflows",
     },
   })
-  writeFile(path.join(store, "capabilities", "feature", "capability.md"), "# Feature\n")
-  writeJson(path.join(store, "capabilities", "classify", "profile.json"), {
-    name: "classify",
-    action: "classify",
-    role: "utility",
-    describe: "No-op classify package verification fixture.",
-    inputs: [{ name: "issue", flag: "--issue", type: "int", required: true, describe: "Issue number." }],
-    claudeCode: {
-      model: "inherit",
-      permissionMode: "default",
-      maxTurns: 0,
-      maxThinkingTokens: null,
-      systemPromptAppend: null,
-      tools: [],
-      hooks: [],
-      skills: [],
-      commands: [],
-      subagents: [],
-      plugins: [],
-      mcpServers: [],
-    },
-    cliTools: [],
-    scripts: { preflight: [{ script: "skipAgent" }], postflight: [] },
+  const canonical = (value) => {
+    if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`
+    if (value && typeof value === "object") {
+      return `{${Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`)
+        .join(",")}}`
+    }
+    return JSON.stringify(value)
+  }
+  const writeSeparatedAsset = (id) => {
+    const capability = {
+      id,
+      action: id,
+      purpose: `No-op ${id} package verification fixture.`,
+      inputSchema: {
+        type: "object",
+        properties: { issue: { type: "integer" } },
+        required: ["issue"],
+        additionalProperties: false,
+      },
+      outputSchema: { type: "object", additionalProperties: true },
+      effects: [],
+      permissions: [],
+      success: `${id} succeeds`,
+      failure: `${id} fails`,
+    }
+    writeJson(path.join(store, "capabilities", id, "definition.json"), capability)
+    writeFile(path.join(store, "capabilities", id, "capability.md"), `# ${id}\n`)
+    writeJson(path.join(store, "implementations", id, "definition.json"), {
+      id,
+      capabilityRef: { kind: "capability", id },
+      compatibleCapabilityRevision: createHash("sha256")
+        .update(canonical(capability))
+        .digest("hex"),
+      type: "script",
+    })
+    writeJson(path.join(store, "implementations", id, "runtime.json"), {
+      adapter: "kody-engine-profile",
+      role: "utility",
+      inputs: [{ name: "issue", flag: "--issue", type: "int", required: true, describe: "Issue number." }],
+      claudeCode: {
+        model: "inherit",
+        permissionMode: "default",
+        maxTurns: 0,
+        maxThinkingTokens: null,
+        systemPromptAppend: null,
+        tools: [],
+        hooks: [],
+        skills: [],
+        commands: [],
+        subagents: [],
+        plugins: [],
+        mcpServers: [],
+      },
+      cliTools: [],
+      scripts: { preflight: [{ script: "skipAgent" }], postflight: [] },
+    })
+  }
+  writeSeparatedAsset("classify")
+  writeSeparatedAsset("noop")
+  writeJson(path.join(store, "workflows", "feature", "workflow.json"), {
+    id: "feature",
+    steps: [{ id: "run", capability: "noop" }],
   })
-  writeFile(path.join(store, "capabilities", "classify", "capability.md"), "# Classify\n")
-  writeJson(path.join(store, "capabilities", "noop", "profile.json"), {
-    name: "noop",
-    action: "noop",
-    role: "utility",
-    describe: "No-op package verification fixture.",
-    inputs: [{ name: "issue", flag: "--issue", type: "int", required: true, describe: "Issue number." }],
-    claudeCode: {
-      model: "inherit",
-      permissionMode: "default",
-      maxTurns: 0,
-      maxThinkingTokens: null,
-      systemPromptAppend: null,
-      tools: [],
-      hooks: [],
-      skills: [],
-      commands: [],
-      subagents: [],
-      plugins: [],
-      mcpServers: [],
-    },
-    cliTools: [],
-    scripts: { preflight: [{ script: "skipAgent" }], postflight: [] },
-  })
-  writeFile(path.join(store, "capabilities", "noop", "capability.md"), "# Noop\n")
   writeJson(path.join(consumer, "kody.config.json"), {
     quality: { typecheck: "", lint: "", format: "", testUnit: "" },
     git: { defaultBranch: "main" },

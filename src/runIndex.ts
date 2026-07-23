@@ -5,7 +5,7 @@ interface RunBackendConfig {
   github?: { owner?: string; repo?: string }
 }
 
-export type RunIndexSubjectType = "goal" | "loop" | "workflow"
+export type RunIndexSubjectType = "goal" | "loop" | "workflow" | "capability"
 export type RunIndexStatus = "running" | "waiting" | "success" | "failed" | "blocked" | "cancelled" | "recorded"
 
 export interface RunIndexRow {
@@ -33,6 +33,9 @@ export interface RunIndexRow {
   capability?: string
   workflow?: string
   implementation?: string
+  parentRunId?: string
+  capabilityRevision?: string
+  implementationRevision?: string
   agent?: string
   model?: string
   modelProvider?: string
@@ -176,6 +179,9 @@ export function runIndexRowFromJobContext(input: {
     capability: stringValue(input.data.jobCapability) ?? undefined,
     workflow: workflow ?? undefined,
     implementation: stringValue(input.data.selectedImplementation) ?? input.profileName,
+    parentRunId: stringValue(input.data.parentRunId) ?? undefined,
+    capabilityRevision: stringValue(input.data.capabilityRevision) ?? undefined,
+    implementationRevision: stringValue(input.data.implementationRevision) ?? undefined,
     agent: stringValue(input.data.jobAgent) ?? input.profile.agent ?? undefined,
     model: stringValue(input.data.jobModel) ?? undefined,
     modelProvider: stringValue(input.data.jobModelProvider) ?? undefined,
@@ -281,7 +287,7 @@ function isRunIndexRow(value: unknown): value is RunIndexRow {
 }
 
 function isRunSubjectType(value: unknown): value is RunIndexSubjectType {
-  return value === "goal" || value === "loop" || value === "workflow"
+  return value === "goal" || value === "loop" || value === "workflow" || value === "capability"
 }
 
 function stagedRunIndexRows(data: Record<string, unknown>): Record<string, RunIndexRow> {

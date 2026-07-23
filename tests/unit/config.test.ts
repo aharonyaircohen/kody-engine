@@ -355,6 +355,24 @@ describe("config: loadConfig", () => {
     expect(loadConfig(dir).defaultImplementation).toBe("run")
   })
 
+  it("loads repository Capability to Implementation bindings", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "m/x" },
+      execution: {
+        capabilityBindings: {
+          "build-knowledge-graph": "graphify-script",
+        },
+      },
+    })
+    expect(loadConfig(dir).execution).toEqual({
+      capabilityBindings: {
+        "build-knowledge-graph": "graphify-script",
+      },
+    })
+  })
+
   it("loads defaultPrImplementation when set", () => {
     const dir = tmpDir()
     writeConfig(dir, {

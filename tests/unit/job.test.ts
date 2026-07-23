@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -322,6 +323,16 @@ describe("runJob (Phase 1 seam)", () => {
         name: "reproduce",
         action: "reproduce",
         implementation: "reproduce",
+        inputs: [
+          { name: "issue", flag: "--issue", type: "int", required: true },
+          { name: "base", flag: "--base", type: "string", required: false },
+        ],
+      })
+      writeCapability(cwd, "run", {
+        inputs: [
+          { name: "issue", flag: "--issue", type: "int", required: true },
+          { name: "base", flag: "--base", type: "string", required: false },
+        ],
       })
       process.chdir(cwd)
 
@@ -367,7 +378,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it("emits an agency boundary trace for workflow capabilities", async () => {
+  it("does not misreport a Workflow as a Capability boundary", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-trace-job-"))
     const originalCwd = process.cwd()
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
@@ -393,9 +404,8 @@ describe("runJob (Phase 1 seam)", () => {
       )
 
       const out = write.mock.calls.map((call) => String(call[0])).join("")
-      expect(out).toContain("KODY_AGENCY_BOUNDARY_EVAL=")
-      expect(out).toContain('"capability":"feature"')
-      expect(out).toContain('"capabilityKind":"act"')
+      expect(out).not.toContain("KODY_AGENCY_BOUNDARY_EVAL=")
+      expect(out).toContain("workflow feature")
     } finally {
       write.mockRestore()
       process.chdir(originalCwd)
@@ -598,7 +608,7 @@ describe("runJob (Phase 1 seam)", () => {
       expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({ issue: 42, pr: 10 })
       expect(runImplementationChain.mock.calls[2]![1].cliArgs).toEqual({ issue: 42 })
       expect(runImplementationChain.mock.calls[3]![1].cliArgs).toEqual({ issue: 42, pr: 11 })
-      expect(runImplementationChain.mock.calls[4]![1].cliArgs).toEqual({ issue: 42 })
+      expect(runImplementationChain.mock.calls[4]![1].cliArgs).toEqual({})
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
@@ -735,7 +745,7 @@ describe("runJob (Phase 1 seam)", () => {
         evidence: "releaseBranchMerged",
       })
       expect(runImplementationChain.mock.calls[1]![0]).toBe("vercel-production-deploy")
-      expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({ issue: 756 })
+      expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({})
       expect(runImplementationChain.mock.calls[1]![1].preloadedData?.capabilityResultTarget).toEqual({
         type: "goal",
         id: "web-release-2026-07-06",
@@ -749,7 +759,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it("runs a workflow when the public route includes the selected implementation", async () => {
+  it("resolves each workflow step instead of pinning one Implementation on the Workflow", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-route-"))
     const originalCwd = process.cwd()
     try {
@@ -762,6 +772,10 @@ describe("runJob (Phase 1 seam)", () => {
         name: "reproduce",
         action: "reproduce",
         implementation: "reproduce",
+        inputs: [{ name: "issue", flag: "--issue", type: "int", required: true }],
+      })
+      writeCapability(cwd, "run", {
+        inputs: [{ name: "issue", flag: "--issue", type: "int", required: true }],
       })
       process.chdir(cwd)
 
@@ -769,7 +783,6 @@ describe("runJob (Phase 1 seam)", () => {
         {
           action: "bug",
           capability: "bug",
-          implementation: "reproduce",
           cliArgs: { issue: 42 },
           target: 42,
           flavor: "instant",
@@ -1473,10 +1486,112 @@ describe("runJob (Phase 1 seam)", () => {
 })
 
 function writeCapability(cwd: string, slug: string, profile: Record<string, unknown>): void {
-  const dir = path.join(cwd, ".kody-engine", "definitions", "capabilities", slug)
-  fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify(profile))
-  fs.writeFileSync(path.join(dir, "capability.md"), `# ${slug}\n`)
+  if (profile.workflow && typeof profile.workflow === "object") {
+    writeWorkflowDefinition(cwd, slug, {
+      version: 1,
+      name: slug,
+      ...(profile.workflow as Record<string, unknown>),
+    })
+    return
+  }
+  const implementationId = typeof profile.implementation === "string" ? profile.implementation : slug
+  const builtinPath = path.resolve(__dirname, "../../src/implementations", implementationId, "profile.json")
+  const builtinProfile = fs.existsSync(builtinPath) ? JSON.parse(fs.readFileSync(builtinPath, "utf8")) : {}
+  const effectiveProfile = { ...builtinProfile, ...profile }
+  const declaredFacts =
+    effectiveProfile.output &&
+    typeof effectiveProfile.output === "object" &&
+    effectiveProfile.output.result &&
+    typeof effectiveProfile.output.result === "object" &&
+    Array.isArray(effectiveProfile.output.result.facts)
+      ? effectiveProfile.output.result.facts.filter((fact: unknown): fact is string => typeof fact === "string")
+      : []
+  const capability = {
+    id: slug,
+    action: typeof effectiveProfile.action === "string" ? effectiveProfile.action : slug,
+    purpose: typeof effectiveProfile.describe === "string" ? effectiveProfile.describe : slug,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: Object.fromEntries(
+        (Array.isArray(effectiveProfile.inputs) ? effectiveProfile.inputs : []).flatMap((input: unknown) => {
+          const record = input && typeof input === "object" ? (input as Record<string, unknown>) : null
+          return record && typeof record.name === "string" ? [[record.name, {}]] : []
+        }),
+      ),
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        status: { type: "string" },
+        summary: { type: "string" },
+        resultClass: { type: "string" },
+        facts: {
+          type: "object",
+          properties: Object.fromEntries(declaredFacts.map((fact: string) => [fact, {}])),
+        },
+      },
+      additionalProperties: true,
+    },
+    effects: [],
+    permissions: [],
+    success: "success",
+    failure: "failure",
+  }
+  const canonical = (value: unknown): string => {
+    if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`
+    if (value && typeof value === "object") {
+      return `{${Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`)
+        .join(",")}}`
+    }
+    return JSON.stringify(value)
+  }
+  const capabilityDir = path.join(cwd, ".kody-engine", "definitions", "capabilities", slug)
+  const implementationDir = path.join(cwd, ".kody-engine", "definitions", "implementations", implementationId)
+  fs.mkdirSync(capabilityDir, { recursive: true })
+  fs.mkdirSync(implementationDir, { recursive: true })
+  fs.writeFileSync(path.join(capabilityDir, "definition.json"), JSON.stringify(capability))
+  fs.writeFileSync(path.join(capabilityDir, "capability.md"), `# ${slug}\n`)
+  fs.writeFileSync(
+    path.join(implementationDir, "definition.json"),
+    JSON.stringify({
+      id: implementationId,
+      capabilityRef: { kind: "capability", id: slug },
+      compatibleCapabilityRevision: createHash("sha256").update(canonical(capability)).digest("hex"),
+      type: "agent",
+      agentRef: { kind: "agent", id: "kody" },
+    }),
+  )
+  fs.writeFileSync(
+    path.join(implementationDir, "runtime.json"),
+    JSON.stringify({
+      adapter: "kody-engine-profile",
+      inputBindings: {},
+      outputBindings: {},
+      requirements: {},
+      role: "utility",
+      inputs: [],
+      claudeCode: {
+        model: "inherit",
+        permissionMode: "default",
+        maxTurns: 0,
+        maxThinkingTokens: null,
+        systemPromptAppend: null,
+        tools: [],
+        hooks: [],
+        skills: [],
+        commands: [],
+        subagents: [],
+        plugins: [],
+        mcpServers: [],
+      },
+      cliTools: [],
+      scripts: { preflight: [], postflight: [] },
+      ...effectiveProfile,
+    }),
+  )
 }
 
 function writeWorkflowDefinition(cwd: string, slug: string, workflow: Record<string, unknown>): void {

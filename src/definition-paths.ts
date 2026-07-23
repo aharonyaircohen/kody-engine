@@ -12,10 +12,7 @@ export function definitionsRoot(cwd: string = process.cwd()): string {
   return override ? path.resolve(override) : hydrated
 }
 
-export function hasExplicitDefinitionsRoot(
-  cwd: string = process.cwd(),
-  env: NodeJS.ProcessEnv = process.env,
-): boolean {
+export function hasExplicitDefinitionsRoot(cwd: string = process.cwd(), env: NodeJS.ProcessEnv = process.env): boolean {
   const root = env.KODY_DEFINITIONS_ROOT?.trim()
   const rootCwd = env.KODY_DEFINITIONS_ROOT_CWD?.trim()
   return Boolean(root && rootCwd && path.resolve(cwd) === path.resolve(rootCwd))
@@ -23,6 +20,10 @@ export function hasExplicitDefinitionsRoot(
 
 export function capabilitiesRoot(cwd: string = process.cwd()): string {
   return path.join(definitionsRoot(cwd), "capabilities")
+}
+
+export function implementationsRoot(cwd: string = process.cwd()): string {
+  return path.join(definitionsRoot(cwd), "implementations")
 }
 
 export function agentsRoot(cwd: string = process.cwd()): string {

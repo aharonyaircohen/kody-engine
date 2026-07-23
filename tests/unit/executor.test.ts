@@ -180,7 +180,7 @@ describe("executor: split pipeline profiles are loadable + valid", () => {
   const EXE_ROOT = path.resolve(__dirname, "../../src/implementations")
 
   it("run profile loads cleanly with the expected shape", () => {
-    const profile = loadProfile(path.join(EXE_ROOT, "run/profile.json"))
+    const profile = loadProfile(path.join(EXE_ROOT, "run/runtime.json"))
     expect(profile.name).toBe("run")
     expect(profile.inputs.map((i) => i.name)).toEqual(["issue", "base"])
     const preScripts = profile.scripts.preflight.map((p) => p.script)
@@ -234,7 +234,7 @@ describe("executor: stale hydrated capability overrides", () => {
       tmp,
       ".kody-engine",
       "definitions",
-      "capabilities",
+      "implementations",
       "no-active-intents",
       "profile.json",
     )
@@ -269,7 +269,7 @@ describe("executor: stale hydrated capability overrides", () => {
       tmp,
       ".kody-engine",
       "definitions",
-      "capabilities",
+      "implementations",
       "ai-agency-health-matrix",
       "profile.json",
     )

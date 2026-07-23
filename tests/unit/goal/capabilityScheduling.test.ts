@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -49,10 +50,72 @@ afterEach(() => {
 })
 
 function writeCapability(slug: string, profile: Record<string, unknown>): void {
-  const dir = path.join(tmp, ".kody-engine", "definitions", "capabilities", slug)
-  fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
-  fs.writeFileSync(path.join(dir, "capability.md"), `# ${slug}\n\nKeep ${slug} healthy.\n`)
+  const implementationId = typeof profile.implementation === "string" ? profile.implementation : slug
+  const capability = {
+    id: slug,
+    action: slug,
+    purpose: `Keep ${slug} healthy.`,
+    inputSchema: { type: "object", additionalProperties: true },
+    outputSchema: { type: "object", additionalProperties: true },
+    effects: [],
+    permissions: [],
+    success: "success",
+    failure: "failure",
+  }
+  const canonical = (value: unknown): string => {
+    if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`
+    if (value && typeof value === "object") {
+      return `{${Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`)
+        .join(",")}}`
+    }
+    return JSON.stringify(value)
+  }
+  const capabilityDir = path.join(tmp, ".kody-engine", "definitions", "capabilities", slug)
+  const implementationDir = path.join(tmp, ".kody-engine", "definitions", "implementations", implementationId)
+  fs.mkdirSync(capabilityDir, { recursive: true })
+  fs.mkdirSync(implementationDir, { recursive: true })
+  fs.writeFileSync(path.join(capabilityDir, "definition.json"), JSON.stringify(capability))
+  fs.writeFileSync(path.join(capabilityDir, "capability.md"), `# ${slug}\n\nKeep ${slug} healthy.\n`)
+  fs.writeFileSync(
+    path.join(implementationDir, "definition.json"),
+    JSON.stringify({
+      id: implementationId,
+      capabilityRef: { kind: "capability", id: slug },
+      compatibleCapabilityRevision: createHash("sha256").update(canonical(capability)).digest("hex"),
+      type: "agent",
+      agentRef: { kind: "agent", id: "kody" },
+    }),
+  )
+  fs.writeFileSync(
+    path.join(implementationDir, "runtime.json"),
+    JSON.stringify({
+      adapter: "kody-engine-profile",
+      inputBindings: {},
+      outputBindings: {},
+      requirements: {},
+      role: "utility",
+      inputs: [],
+      claudeCode: {
+        model: "inherit",
+        permissionMode: "default",
+        maxTurns: 0,
+        maxThinkingTokens: null,
+        systemPromptAppend: null,
+        tools: [],
+        hooks: [],
+        skills: [],
+        commands: [],
+        subagents: [],
+        plugins: [],
+        mcpServers: [],
+      },
+      cliTools: [],
+      scripts: { preflight: [], postflight: [] },
+      ...profile,
+    }),
+  )
 }
 
 function writeCapabilityState(slug: string, lastFiredAt: string): void {
@@ -1037,7 +1100,7 @@ describe("standing goal capability scheduling", () => {
     })
   })
 
-  it("passes capability slug when implementation inputs declare capability", async () => {
+  it("does not invent canonical input from Implementation runtime fields", async () => {
     writeCapability("auto-fix-ci", {
       agent: "kody",
       implementation: "auto-fix-ci",
@@ -1052,7 +1115,7 @@ describe("standing goal capability scheduling", () => {
     expect(ctx.output.nextDispatch).toEqual({
       capability: "auto-fix-ci",
       implementation: "auto-fix-ci",
-      cliArgs: { capability: "auto-fix-ci" },
+      cliArgs: {},
     })
     const updatedGoal = ctx.data.goal as GoalCtx
     expect(updatedGoal.raw!.extra.scheduleState).toMatchObject({

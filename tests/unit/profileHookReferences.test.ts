@@ -14,7 +14,10 @@ function listImplementations(): { name: string; dir: string; profile: ProfileSha
   const out: { name: string; dir: string; profile: ProfileShape }[] = []
   for (const entry of fs.readdirSync(IMPLEMENTATIONS_ROOT, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue
-    const profilePath = path.join(IMPLEMENTATIONS_ROOT, entry.name, "profile.json")
+    const runtimePath = path.join(IMPLEMENTATIONS_ROOT, entry.name, "runtime.json")
+    const profilePath = fs.existsSync(runtimePath)
+      ? runtimePath
+      : path.join(IMPLEMENTATIONS_ROOT, entry.name, "profile.json")
     if (!fs.existsSync(profilePath)) continue
     const profile = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as ProfileShape
     out.push({ name: entry.name, dir: path.join(IMPLEMENTATIONS_ROOT, entry.name), profile })

@@ -1,9 +1,10 @@
+import { createHash } from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { KodyConfig } from "../../src/config.js"
-import { autoDispatch, dispatchScheduledWatches } from "../../src/dispatch.js"
+import { autoDispatch } from "../../src/dispatch.js"
 
 function writeEvent(body: unknown): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-dispatch-"))
@@ -16,71 +17,114 @@ function testConfig(config: Partial<KodyConfig>): KodyConfig {
   return config as KodyConfig
 }
 
-function writeLocalReleaseAsset(root: string): void {
-  const implementationDir = path.join(root, ".kody-engine", "definitions", "capabilities", "release")
+function writeSeparatedAsset(
+  root: string,
+  name: string,
+  runtime: Record<string, unknown>,
+  options: { action?: string; implementationId?: string } = {},
+): void {
+  const implementationId = options.implementationId ?? name
+  const capability = {
+    id: name,
+    action: options.action ?? name,
+    purpose: String(runtime.describe ?? name),
+    inputSchema: { type: "object", additionalProperties: true },
+    outputSchema: { type: "object", additionalProperties: true },
+    effects: [],
+    permissions: [],
+    success: "success",
+    failure: "failure",
+  }
+  const canonical = (value: unknown): string => {
+    if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`
+    if (value && typeof value === "object") {
+      return `{${Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`)
+        .join(",")}}`
+    }
+    return JSON.stringify(value)
+  }
+  const capabilityDir = path.join(root, ".kody-engine", "definitions", "capabilities", name)
+  const implementationDir = path.join(root, ".kody-engine", "definitions", "implementations", implementationId)
+  fs.mkdirSync(capabilityDir, { recursive: true })
   fs.mkdirSync(implementationDir, { recursive: true })
+  fs.writeFileSync(path.join(capabilityDir, "definition.json"), JSON.stringify(capability))
+  fs.writeFileSync(path.join(capabilityDir, "capability.md"), `# ${name}\n`)
   fs.writeFileSync(
-    path.join(implementationDir, "profile.json"),
+    path.join(implementationDir, "definition.json"),
     JSON.stringify({
-      name: "release",
-      action: "release",
-      role: "primitive",
-      describe: "Run release flow.",
-      inputs: [
-        { name: "issue", flag: "--issue", type: "int", required: true, describe: "Release issue number." },
-        { name: "bump", flag: "--bump", type: "enum", values: ["patch", "minor", "major"], describe: "Version bump." },
-      ],
-      claudeCode: {
-        model: "inherit",
-        permissionMode: "acceptEdits",
-        maxTurns: null,
-        maxThinkingTokens: null,
-        systemPromptAppend: null,
-        tools: [],
-        hooks: [],
-        skills: [],
-        commands: [],
-        subagents: [],
-        plugins: [],
-        mcpServers: [],
-      },
-      cliTools: [],
-      scripts: { preflight: [], postflight: [] },
+      id: implementationId,
+      capabilityRef: { kind: "capability", id: name },
+      compatibleCapabilityRevision: createHash("sha256").update(canonical(capability)).digest("hex"),
+      type: "agent",
+      agentRef: { kind: "agent", id: "kody" },
     }),
   )
-  fs.writeFileSync(path.join(implementationDir, "capability.md"), "# Release\n\nRun release flow.\n")
+  fs.writeFileSync(
+    path.join(implementationDir, "runtime.json"),
+    JSON.stringify({
+      adapter: "kody-engine-profile",
+      inputBindings: {},
+      outputBindings: {},
+      requirements: {},
+      name: implementationId,
+      ...runtime,
+    }),
+  )
+}
+
+function writeLocalReleaseAsset(root: string): void {
+  writeSeparatedAsset(root, "release", {
+    action: "release",
+    role: "primitive",
+    describe: "Run release flow.",
+    inputs: [
+      { name: "issue", flag: "--issue", type: "int", required: true, describe: "Release issue number." },
+      { name: "bump", flag: "--bump", type: "enum", values: ["patch", "minor", "major"], describe: "Version bump." },
+    ],
+    claudeCode: {
+      model: "inherit",
+      permissionMode: "acceptEdits",
+      maxTurns: null,
+      maxThinkingTokens: null,
+      systemPromptAppend: null,
+      tools: [],
+      hooks: [],
+      skills: [],
+      commands: [],
+      subagents: [],
+      plugins: [],
+      mcpServers: [],
+    },
+    cliTools: [],
+    scripts: { preflight: [], postflight: [] },
+  })
 }
 
 function writeLocalInputlessAsset(root: string, name: string): void {
-  const implementationDir = path.join(root, ".kody-engine", "definitions", "capabilities", name)
-  fs.mkdirSync(implementationDir, { recursive: true })
-  fs.writeFileSync(
-    path.join(implementationDir, "profile.json"),
-    JSON.stringify({
-      name,
-      action: name,
-      role: "primitive",
-      describe: "Run without a numeric target input.",
-      inputs: [],
-      claudeCode: {
-        model: "inherit",
-        permissionMode: "default",
-        maxTurns: null,
-        maxThinkingTokens: null,
-        systemPromptAppend: null,
-        tools: [],
-        hooks: [],
-        skills: [],
-        commands: [],
-        subagents: [],
-        plugins: [],
-        mcpServers: [],
-      },
-      cliTools: [],
-      scripts: { preflight: [], postflight: [] },
-    }),
-  )
-  fs.writeFileSync(path.join(implementationDir, "capability.md"), `# ${name}\n`)
+  writeSeparatedAsset(root, name, {
+    action: name,
+    role: "primitive",
+    describe: "Run without a numeric target input.",
+    inputs: [],
+    claudeCode: {
+      model: "inherit",
+      permissionMode: "default",
+      maxTurns: null,
+      maxThinkingTokens: null,
+      systemPromptAppend: null,
+      tools: [],
+      hooks: [],
+      skills: [],
+      commands: [],
+      subagents: [],
+      plugins: [],
+      mcpServers: [],
+    },
+    cliTools: [],
+    scripts: { preflight: [], postflight: [] },
+  })
 }
 
 describe("dispatch: explicit override", () => {
@@ -231,45 +275,6 @@ describe("dispatch: schedule event", () => {
     process.env.GITHUB_EVENT_NAME = "schedule"
     process.env.GITHUB_EVENT_PATH = writeEvent({ schedule: "*/5 * * * *" })
     expect(autoDispatch()).toBeNull()
-  })
-
-  it("fans out internal scheduled watch capabilities even without public actions", () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-scheduled-watch-"))
-    const prevCwd = process.cwd()
-    try {
-      process.chdir(tmp)
-      const dir = path.join(tmp, ".kody-engine", "definitions", "capabilities", "goal-scheduler")
-      fs.mkdirSync(dir, { recursive: true })
-      fs.writeFileSync(
-        path.join(dir, "profile.json"),
-        JSON.stringify({
-          name: "goal-scheduler",
-          internal: true,
-          role: "watch",
-          kind: "scheduled",
-          schedule: "*/5 * * * *",
-          scripts: { preflight: [], postflight: [] },
-        }),
-      )
-      fs.writeFileSync(path.join(dir, "capability.md"), "# Goal scheduler\n")
-
-      const matches = dispatchScheduledWatches({
-        now: new Date("2026-06-22T07:00:30Z"),
-        windowSec: 300,
-      })
-      expect(matches).toContainEqual(
-        expect.objectContaining({
-          action: "goal-scheduler",
-          capability: "goal-scheduler",
-          implementation: "goal-scheduler",
-          cliArgs: {},
-          target: 0,
-        }),
-      )
-    } finally {
-      process.chdir(prevCwd)
-      fs.rmSync(tmp, { recursive: true, force: true })
-    }
   })
 })
 
@@ -425,29 +430,15 @@ describe("dispatch: issue_comment on issue", () => {
     const prevCwd = process.cwd()
     try {
       process.chdir(tmp)
-      fs.mkdirSync(path.join(tmp, ".kody-engine", "definitions", "capabilities", "custom-impl"), { recursive: true })
-      fs.mkdirSync(path.join(tmp, ".kody-engine", "definitions", "capabilities", "remember"), { recursive: true })
-      fs.writeFileSync(
-        path.join(tmp, ".kody-engine", "definitions", "capabilities", "remember", "profile.json"),
-        JSON.stringify({
-          name: "remember",
-          action: "remember",
-          implementation: "custom-impl",
-          agent: "kody",
-        }),
-      )
-      fs.writeFileSync(
-        path.join(tmp, ".kody-engine", "definitions", "capabilities", "remember", "capability.md"),
-        "# Remember\n",
-      )
-      fs.writeFileSync(
-        path.join(tmp, ".kody-engine", "definitions", "capabilities", "custom-impl", "profile.json"),
-        JSON.stringify({
-          name: "custom-impl",
+      writeSeparatedAsset(
+        tmp,
+        "remember",
+        {
           role: "utility",
           describe: "Custom implementation.",
           inputs: [{ name: "issue", flag: "--issue", type: "int", required: true }],
-        }),
+        },
+        { implementationId: "custom-impl" },
       )
       process.env.GITHUB_EVENT_PATH = writeEvent({
         comment: { body: "@kody remember" },
@@ -770,6 +761,11 @@ describe("dispatch: release orchestrator + sibling primitives", () => {
       fs.cpSync(
         path.join(process.env.KODY_DEFINITIONS_ROOT!, "capabilities", slug),
         path.join(tmp, ".kody-engine", "definitions", "capabilities", slug),
+        { recursive: true },
+      )
+      fs.cpSync(
+        path.join(process.env.KODY_DEFINITIONS_ROOT!, "implementations", slug),
+        path.join(tmp, ".kody-engine", "definitions", "implementations", slug),
         { recursive: true },
       )
     }

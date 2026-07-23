@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -9,17 +10,7 @@ let root: string
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-actions-"))
-  fs.mkdirSync(path.join(root, ".kody-engine", "definitions", "capabilities", "impl"), { recursive: true })
-  fs.writeFileSync(
-    path.join(root, ".kody-engine", "definitions", "capabilities", "impl", "profile.json"),
-    JSON.stringify({
-      name: "impl",
-      role: "utility",
-      kind: "oneshot",
-      describe: "Implementation fixture.",
-      inputs: [],
-    }),
-  )
+  process.chdir(root)
 })
 
 afterEach(() => {
@@ -27,154 +18,107 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true })
 })
 
-function writeFolderCapability(slug: string, profile: Record<string, unknown>): void {
-  const dir = path.join(root, ".kody-engine", "definitions", "capabilities", slug)
-  fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, ...profile }, null, 2))
-  fs.writeFileSync(path.join(dir, "capability.md"), `# ${slug}\n`)
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`)
+      .join(",")}}`
+  }
+  return JSON.stringify(value)
 }
 
-function writeImplementation(slug: string, profile: Record<string, unknown>): void {
-  const dir = path.join(root, ".kody", "implementations", slug)
-  fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(path.join(dir, "profile.json"), JSON.stringify({ name: slug, inputs: [], ...profile }, null, 2))
+function writeSeparatedCapability(slug: string, action: string, implementationId: string): void {
+  const capability = {
+    id: slug,
+    action,
+    purpose: `Test ${action}`,
+    inputSchema: { type: "object", additionalProperties: true },
+    outputSchema: { type: "object", additionalProperties: true },
+    effects: [],
+    permissions: [],
+    success: "success",
+    failure: "failure",
+  }
+  const revision = createHash("sha256").update(canonical(capability)).digest("hex")
+  const capabilityDir = path.join(root, ".kody-engine", "definitions", "capabilities", slug)
+  const implementationDir = path.join(root, ".kody-engine", "definitions", "implementations", implementationId)
+  fs.mkdirSync(capabilityDir, { recursive: true })
+  fs.mkdirSync(implementationDir, { recursive: true })
+  fs.writeFileSync(path.join(capabilityDir, "definition.json"), JSON.stringify(capability))
+  fs.writeFileSync(path.join(capabilityDir, "capability.md"), `# ${slug}\n`)
+  fs.writeFileSync(
+    path.join(implementationDir, "definition.json"),
+    JSON.stringify({
+      id: implementationId,
+      capabilityRef: { kind: "capability", id: slug },
+      compatibleCapabilityRevision: revision,
+      type: "script",
+    }),
+  )
+  fs.writeFileSync(
+    path.join(implementationDir, "runtime.json"),
+    JSON.stringify({
+      adapter: "kody-engine-profile",
+      role: "utility",
+      kind: "oneshot",
+      describe: "Implementation fixture.",
+      inputs: [],
+      claudeCode: {
+        model: "inherit",
+        permissionMode: "default",
+        maxTurns: 0,
+        maxThinkingTokens: null,
+        systemPromptAppend: null,
+        tools: [],
+        hooks: [],
+        skills: [],
+        commands: [],
+        subagents: [],
+        plugins: [],
+        mcpServers: [],
+      },
+      cliTools: [],
+      scripts: { preflight: [{ script: "skipAgent" }], postflight: [] },
+    }),
+  )
 }
 
 describe("capability actions", () => {
-  it("resolves folder capability action to its declared implementation", () => {
-    process.chdir(root)
-    writeFolderCapability("memorize", { action: "remember", implementation: "impl", agent: "kody" })
+  it("resolves a public action through its compatible Implementation", () => {
+    writeSeparatedCapability("memorize", "remember", "memory-script")
 
     expect(resolveCapabilityAction("remember")).toMatchObject({
       action: "remember",
       capability: "memorize",
-      implementation: "impl",
+      implementation: "memory-script",
       source: "project-folder",
     })
   })
 
-  it("defaults folder capability action to the capability slug and first implementation", () => {
-    process.chdir(root)
-    writeFolderCapability("ship", { implementations: ["impl"], agent: "kody" })
+  it("does not require Capability and Implementation ids to match", () => {
+    writeSeparatedCapability("ship", "ship", "release-script")
 
     expect(resolveCapabilityAction("ship")).toMatchObject({
-      action: "ship",
       capability: "ship",
-      implementation: "impl",
-      source: "project-folder",
+      implementation: "release-script",
     })
   })
 
-  it("defaults folder capability execution to capability-tick", () => {
-    process.chdir(root)
-    writeFolderCapability("watch", { agent: "kody" })
-
-    expect(resolveCapabilityAction("watch")).toMatchObject({
-      action: "watch",
-      capability: "watch",
-      implementation: "capability-tick",
-      source: "project-folder",
-    })
+  it("keeps Implementation runtime profiles out of public actions", () => {
+    writeSeparatedCapability("ship", "ship", "release-script")
+    expect(listCapabilityActions().map((entry) => entry.action)).toContain("ship")
+    expect(listCapabilityActions().map((entry) => entry.action)).not.toContain("release-script")
   })
 
-  it("uses capability-tick-scripted for scripted folder capabilities", () => {
-    process.chdir(root)
-    writeFolderCapability("scripted", { tickScript: "node tick.mjs" })
-
-    expect(resolveCapabilityAction("scripted")).toMatchObject({
-      action: "scripted",
-      capability: "scripted",
-      implementation: "capability-tick-scripted",
-      source: "project-folder",
-    })
-  })
-
-  it("keeps internal capability implementation profiles out of public actions", () => {
-    process.chdir(root)
-    writeFolderCapability("goal-scheduler", {
-      internal: true,
-      role: "watch",
-      kind: "scheduled",
-      schedule: "*/5 * * * *",
-      inputs: [],
-    })
-
-    expect(resolveCapabilityAction("goal-scheduler")).toBeNull()
-    expect(listCapabilityActions().map((action) => action.action)).not.toContain("goal-scheduler")
-  })
-
-  it("ignores legacy single-file markdown capabilities", () => {
-    process.chdir(root)
-    fs.mkdirSync(path.join(root, ".kody-engine", "definitions", "capabilities"), { recursive: true })
+  it("ignores legacy single-file Capability definitions", () => {
+    const capabilityRoot = path.join(root, ".kody-engine", "definitions", "capabilities")
+    fs.mkdirSync(capabilityRoot, { recursive: true })
     fs.writeFileSync(
-      path.join(root, ".kody-engine", "definitions", "capabilities", "legacy.md"),
-      "---\naction: legacy\nimplementation: impl\nagent: kody\n---\n# Legacy\n",
+      path.join(capabilityRoot, "legacy.md"),
+      "---\naction: legacy\nimplementation: impl\n---\n# Legacy\n",
     )
-
     expect(resolveCapabilityAction("legacy")).toBeNull()
-  })
-
-  it("resolves folder capability action before the same action on an implementation profile", () => {
-    process.chdir(root)
-    writeFolderCapability("daily-impl", { action: "ship", implementation: "impl", agent: "kody" })
-    writeImplementation("direct-ship", {
-      action: "ship",
-      role: "utility",
-      kind: "oneshot",
-      describe: "Ship directly.",
-    })
-
-    expect(resolveCapabilityAction("ship")).toMatchObject({
-      action: "ship",
-      capability: "daily-impl",
-      implementation: "impl",
-      source: "project-folder",
-    })
-  })
-
-  it("does not resolve public actions declared directly on obsolete implementation profiles", () => {
-    process.chdir(root)
-    writeImplementation("direct-ship", {
-      action: "ship",
-      role: "utility",
-      kind: "oneshot",
-      describe: "Ship directly.",
-    })
-
-    expect(resolveCapabilityAction("ship")).toBeNull()
-  })
-
-  it("ignores all direct implementation actions", () => {
-    process.chdir(root)
-    writeImplementation("direct-ship", {
-      action: "ship",
-      role: "utility",
-      kind: "oneshot",
-      describe: "Ship directly.",
-    })
-    writeImplementation("chatty", { action: "chatty", role: "chat" })
-    writeImplementation("untyped", { action: "untyped", role: "utility" })
-    writeImplementation("floating", { action: "floating", role: "utility", inputs: undefined })
-
-    expect(resolveCapabilityAction("ship")).toBeNull()
-    expect(resolveCapabilityAction("chatty")).toBeNull()
-    expect(resolveCapabilityAction("untyped")).toBeNull()
-    expect(resolveCapabilityAction("floating")).toBeNull()
-  })
-
-  it("lists built-in public actions from engine capability definitions", () => {
-    const emptyDefinitions = fs.mkdtempSync(path.join(os.tmpdir(), "kody-empty-definitions-"))
-    try {
-      const actions = listCapabilityActions(emptyDefinitions).map((d) => d.action)
-      expect(actions).toContain("run")
-      expect(actions).not.toContain("agent-factory")
-      expect(actions).not.toContain("agent-creator")
-      expect(actions).not.toContain("goal-creator")
-      expect(actions).not.toContain("loop-creator")
-      expect(actions).not.toContain("workflow-creator")
-      expect(actions).not.toContain("capability-creator")
-    } finally {
-      fs.rmSync(emptyDefinitions, { recursive: true, force: true })
-    }
   })
 })

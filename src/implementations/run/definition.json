@@ -1,0 +1,13 @@
+{
+  "id": "run",
+  "capabilityRef": {
+    "kind": "capability",
+    "id": "run"
+  },
+  "compatibleCapabilityRevision": "c50fdcd64daedbcde4428b2985a68a8a11ece518f00a0f5a0c0a2c9d38b5e9c1",
+  "type": "agent",
+  "agentRef": {
+    "kind": "agent",
+    "id": "kody"
+  }
+}

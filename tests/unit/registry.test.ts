@@ -208,7 +208,7 @@ describe("registry: capabilities root", () => {
     })
   })
 
-  it("uses full hydrated capability implementation profiles and ignores project implementations", () => {
+  it("never treats a Capability profile as an Implementation", () => {
     const capabilityDir = path.join(root, ".kody-engine", "definitions", "capabilities", "ship")
     const implementationDir = path.join(root, ".kody", "implementations", "ship")
     fs.mkdirSync(capabilityDir, { recursive: true })
@@ -223,12 +223,8 @@ describe("registry: capabilities root", () => {
       JSON.stringify({ name: "implementation-ship", role: "primitive" }),
     )
 
-    expect(fs.realpathSync(resolveImplementation("ship")!)).toBe(
-      fs.realpathSync(path.join(capabilityDir, "profile.json")),
-    )
-    expect(fs.realpathSync(listImplementations().find((item) => item.name === "ship")!.profilePath)).toBe(
-      fs.realpathSync(path.join(capabilityDir, "profile.json")),
-    )
+    expect(resolveImplementation("ship")).toBeNull()
+    expect(listImplementations().find((item) => item.name === "ship")).toBeUndefined()
   })
 
   it("does not treat thin hydrated capability contracts or obsolete implementations as implementation profiles", () => {

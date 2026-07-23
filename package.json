@@ -1,6 +1,6 @@
 {
   "name": "@kody-ade/kody-engine",
-  "version": "0.4.430",
+  "version": "0.4.431",
   "description": "kody — autonomous development engine. Single-session Claude Code agent behind a generic executor + declarative implementation profiles.",
   "license": "MIT",
   "type": "module",
@@ -39,6 +39,7 @@
     "@anthropic-ai/claude-agent-sdk": "0.2.119",
     "@kody-ade/agency-domain": "0.5.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "ajv": "^8.18.0",
     "convex": "^1.17.0",
     "zod": "^4.0.0"
   },

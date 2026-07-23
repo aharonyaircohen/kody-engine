@@ -70,6 +70,10 @@ export interface KodyConfig {
      */
     perImplementationReasoningEffort?: Record<string, ReasoningEffort>
   }
+  execution?: {
+    /** Repository-owned deterministic Capability to Implementation bindings. */
+    capabilityBindings: Record<string, string>
+  }
   issueContext?: {
     commentLimit?: number
     commentMaxBytes?: number
@@ -326,6 +330,7 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
       ...parsePerImplementationReasoningEffort(agent.perImplementationReasoningEffort),
       ...parseAgentReasoningEffort(agent.reasoningEffort),
     },
+    execution: parseExecutionConfig(raw.execution),
     issueContext: parseIssueContext(raw.issueContext),
     testRequirements: parseTestRequirements(raw.testRequirements),
     defaultImplementation:
@@ -344,6 +349,23 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     company: parseCompanyConfig(raw.company),
     access: parseAccessConfig(raw.access),
   }
+}
+
+function parseExecutionConfig(value: unknown): KodyConfig["execution"] {
+  const execution = recordValue(value)
+  const bindings = recordValue(execution?.capabilityBindings)
+  if (!bindings) return undefined
+  const capabilityBindings: Record<string, string> = {}
+  for (const [capabilityId, implementationId] of Object.entries(bindings)) {
+    if (
+      /^[a-z][a-z0-9-]*$/.test(capabilityId) &&
+      typeof implementationId === "string" &&
+      /^[a-z][a-z0-9-]*$/.test(implementationId)
+    ) {
+      capabilityBindings[capabilityId] = implementationId
+    }
+  }
+  return Object.keys(capabilityBindings).length > 0 ? { capabilityBindings } : undefined
 }
 
 /**

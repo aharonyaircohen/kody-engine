@@ -7,6 +7,7 @@
  * Profile as trustworthy.
  */
 
+import { createHash } from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { CAPABILITY_MCP_TOOL_NAMES } from "./capabilityMcp.js"
@@ -42,6 +43,7 @@ const VALID_PHASES = new Set(["research", "planning", "implementing", "reviewing
  * — operators can still ship a profile with experimental fields.
  */
 const KNOWN_PROFILE_KEYS = new Set([
+  "canonicalContract",
   "name",
   "action",
   "implementation",
@@ -103,7 +105,8 @@ export function loadProfile(profilePath: string): Profile {
     throw new ProfileError(profilePath, "profile must be a JSON object")
   }
 
-  const r = raw as Record<string, unknown>
+  const document = raw as Record<string, unknown>
+  const r = compileRuntimeDocument(profilePath, document)
 
   // Phase 4g: surface unknown top-level keys. Silently-dropped typos in
   // profile.json (e.g. `mcpServer` instead of `mcpServers` at the wrong
@@ -293,6 +296,84 @@ export function loadProfile(profilePath: string): Profile {
   profile.subagentTemplates = captureSubagentTemplates(profile)
 
   return profile
+}
+
+function compileRuntimeDocument(runtimePath: string, document: Record<string, unknown>): Record<string, unknown> {
+  if (path.basename(runtimePath) !== "runtime.json") return document
+  if (document.adapter !== "kody-engine-profile") {
+    throw new ProfileError(runtimePath, "unsupported runtime adapter document")
+  }
+  const implementationDir = path.dirname(runtimePath)
+  const implementation = readJsonObject(path.join(implementationDir, "definition.json"), "Implementation definition")
+  const definitionsRoot = path.dirname(path.dirname(implementationDir))
+  const capabilityId =
+    implementation.capabilityRef &&
+    typeof implementation.capabilityRef === "object" &&
+    !Array.isArray(implementation.capabilityRef)
+      ? (implementation.capabilityRef as Record<string, unknown>).id
+      : undefined
+  if (typeof capabilityId !== "string" || !capabilityId) {
+    throw new ProfileError(runtimePath, "Implementation capabilityRef is invalid")
+  }
+  const capability = readJsonObject(
+    path.join(definitionsRoot, "capabilities", capabilityId, "definition.json"),
+    "Capability definition",
+  )
+  const {
+    adapter: _adapter,
+    inputBindings: _inputBindings,
+    outputBindings: _outputBindings,
+    requirements: _requirements,
+    config: nestedConfig,
+    ...inlineConfig
+  } = document
+  const config =
+    nestedConfig && typeof nestedConfig === "object" && !Array.isArray(nestedConfig)
+      ? (nestedConfig as Record<string, unknown>)
+      : inlineConfig
+  const agentRef =
+    implementation.agentRef && typeof implementation.agentRef === "object" && !Array.isArray(implementation.agentRef)
+      ? (implementation.agentRef as Record<string, unknown>).id
+      : undefined
+  return {
+    ...config,
+    name: implementation.id,
+    action: capability.action,
+    describe: capability.purpose,
+    inputs: config.inputs ?? [],
+    agent: agentRef,
+    canonicalContract: {
+      capabilityId,
+      capabilityRevision: createHash("sha256").update(canonical(capability)).digest("hex"),
+      implementationId: String(implementation.id),
+      implementationRevision: createHash("sha256").update(canonical(implementation)).digest("hex"),
+      inputSchema: capability.inputSchema,
+      outputSchema: capability.outputSchema,
+    },
+  }
+}
+
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`)
+      .join(",")}}`
+  }
+  return JSON.stringify(value)
+}
+
+function readJsonObject(filePath: string, label: string): Record<string, unknown> {
+  try {
+    const value = JSON.parse(fs.readFileSync(filePath, "utf-8"))
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("must be an object")
+    }
+    return value as Record<string, unknown>
+  } catch (error) {
+    throw new ProfileError(filePath, `${label} is invalid: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 function parseCapabilityToolMode(profilePath: string, raw: unknown): Profile["capabilityToolMode"] {

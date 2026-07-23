@@ -32,7 +32,7 @@ function writeJson(file: string, value: unknown): void {
 }
 
 function writeProbeProfile(claudeCode: Record<string, unknown> = {}): void {
-  const probeDir = path.join(dir, ".kody-engine", "definitions", "capabilities", "probe")
+  const probeDir = path.join(dir, ".kody-engine", "definitions", "implementations", "probe")
   writeJson(path.join(probeDir, "profile.json"), {
     name: "probe",
     role: "primitive",

@@ -11,6 +11,7 @@ import { spawn } from "node:child_process"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
+import { validateCapabilityContractValue } from "./agency/capability-contract-validation.js"
 import type { AgentResult } from "./agent.js"
 import { runAgent } from "./agent.js"
 import { frameAgentIdentity, loadAgentIdentity } from "./agents.js"
@@ -25,11 +26,7 @@ import type { Context, InputSpec, Job, Profile, ScriptEntry } from "./implementa
 import { KODY_NAMESPACE, removeLabel } from "./lifecycleLabels.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
-import {
-  getImplementationRootsForCwd,
-  resolveImplementation,
-  resolveImplementationCandidates,
-} from "./registry.js"
+import { getImplementationRootsForCwd, resolveImplementation, resolveImplementationCandidates } from "./registry.js"
 import {
   finalizeStagedRunIndexRowsAsync,
   runIndexRowFromJobContext,
@@ -323,6 +320,9 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
   let args: Record<string, unknown>
   try {
     args = validateInputs(profile.inputs, input.cliArgs)
+    if (profile.canonicalContract) {
+      validateCapabilityContractValue("input", profile.canonicalContract.inputSchema, args)
+    }
   } catch (err) {
     return finishAndEnd({ exitCode: 64, reason: err instanceof Error ? err.message : String(err) })
   }
@@ -410,6 +410,12 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
   ctx.data.jobModelProvider = model.provider
   ctx.data.jobModelName = model.model
   if (reasoningEffort) ctx.data.jobReasoningEffort = reasoningEffort
+  if (profile.canonicalContract) {
+    ctx.data.jobCapability = profile.canonicalContract.capabilityId
+    ctx.data.selectedImplementation = profile.canonicalContract.implementationId
+    ctx.data.capabilityRevision = profile.canonicalContract.capabilityRevision
+    ctx.data.implementationRevision = profile.canonicalContract.implementationRevision
+  }
 
   const runIndexStartedAt = new Date(stageStartedAt).toISOString()
   if (!input.skipConfig) {
@@ -822,6 +828,27 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       })
     }
 
+    const capabilityResults = Array.isArray(ctx.data.capabilityResults)
+      ? (ctx.data.capabilityResults as CapabilityResult[])
+      : undefined
+    if (profile.canonicalContract) {
+      try {
+        validateCapabilityContractValue(
+          "output",
+          profile.canonicalContract.outputSchema,
+          capabilityResults?.at(-1) ?? {
+            exitCode: ctx.output.exitCode ?? 0,
+            reason: ctx.output.reason,
+            prUrl: ctx.output.prUrl,
+          },
+        )
+      } catch (error) {
+        return finishAndEnd({
+          exitCode: 99,
+          reason: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
     return finishAndEnd({
       exitCode: ctx.output.exitCode ?? 0,
       prUrl: ctx.output.prUrl,
@@ -830,9 +857,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       nextJob: ctx.output.nextJob,
       afterNextJob: ctx.output.afterNextJob,
       taskState: ctx.data.taskState as TaskState | undefined,
-      capabilityResults: Array.isArray(ctx.data.capabilityResults)
-        ? (ctx.data.capabilityResults as CapabilityResult[])
-        : undefined,
+      capabilityResults,
     })
   } catch (err) {
     // A throwing preflight (or any other escape from the main flow) must
@@ -1102,10 +1127,7 @@ function loadRunnableProfile(
   profileName: string,
   cwd: string,
 ): { profilePath: string; profile: Profile; missing: string[] } {
-  const candidates = resolveImplementationCandidates(
-    profileName,
-    getImplementationRootsForCwd(cwd),
-  )
+  const candidates = resolveImplementationCandidates(profileName, getImplementationRootsForCwd(cwd))
   const skipped: string[] = []
 
   for (const profilePath of candidates) {

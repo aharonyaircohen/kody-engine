@@ -218,7 +218,8 @@ function buildUsageMap(): Map<string, Set<string>> {
   // into the lifecycle module.
   const usage = new Map<string, Set<string>>()
   for (const name of listImplementationNames()) {
-    const profilePath = path.join(IMPLEMENTATIONS_DIR, name, "profile.json")
+    const runtimePath = path.join(IMPLEMENTATIONS_DIR, name, "runtime.json")
+    const profilePath = fs.existsSync(runtimePath) ? runtimePath : path.join(IMPLEMENTATIONS_DIR, name, "profile.json")
     if (!fs.existsSync(profilePath)) continue
     let profile: ReturnType<typeof loadProfile>
     try {

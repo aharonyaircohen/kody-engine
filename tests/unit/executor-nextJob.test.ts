@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -59,16 +60,45 @@ const config: KodyConfig = {
 }
 
 function writeProfile(root: string, name: string, preflight: unknown[], postflight: unknown[] = []): void {
-  const dir = path.join(root, ".kody-engine", "definitions", "capabilities", name)
-  fs.mkdirSync(dir, { recursive: true })
+  const definitionsRoot = path.join(root, ".kody-engine", "definitions")
+  const capabilityDir = path.join(definitionsRoot, "capabilities", name)
+  const implementationDir = path.join(definitionsRoot, "implementations", name)
+  fs.mkdirSync(capabilityDir, { recursive: true })
+  fs.mkdirSync(implementationDir, { recursive: true })
+  const capability = {
+    id: name,
+    kind: "Capability",
+    action: name,
+    inputSchema: {
+      type: "object",
+      properties: { issue: { type: "integer" } },
+      required: ["issue"],
+      additionalProperties: false,
+    },
+    outputSchema: { type: "object", additionalProperties: true },
+  }
+  fs.writeFileSync(path.join(capabilityDir, "definition.json"), JSON.stringify(capability, null, 2))
+  fs.writeFileSync(path.join(capabilityDir, "capability.md"), `# ${name}\n\nRun ${name}.\n`)
   fs.writeFileSync(
-    path.join(dir, "profile.json"),
+    path.join(implementationDir, "definition.json"),
     JSON.stringify(
       {
-        name,
-        action: name,
+        id: name,
+        kind: "Implementation",
+        capabilityRef: { kind: "capability", id: name },
+        compatibleCapabilityRevision: createHash("sha256").update(stableJson(capability)).digest("hex"),
+        type: "script",
+      },
+      null,
+      2,
+    ),
+  )
+  fs.writeFileSync(
+    path.join(implementationDir, "runtime.json"),
+    JSON.stringify(
+      {
+        adapter: "kody-engine-profile",
         role: "utility",
-        describe: "",
         inputs: [{ name: "issue", flag: "--issue", type: "int", required: true, describe: "" }],
         claudeCode: {
           model: "inherit",
@@ -91,8 +121,17 @@ function writeProfile(root: string, name: string, preflight: unknown[], postflig
       2,
     ),
   )
-  fs.writeFileSync(path.join(dir, "capability.md"), `# ${name}\n\nRun ${name}.\n`)
-  fs.writeFileSync(path.join(dir, "prompt.md"), "")
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
+      .join(",")}}`
+  }
+  return JSON.stringify(value)
 }
 
 describe("executor: nextJob chain", () => {

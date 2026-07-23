@@ -151,6 +151,7 @@ export async function planGoalCapabilitySchedule(
       capability,
       slug,
       backend,
+      opts.cwd,
       opts.previousScheduleState?.capabilities[slug],
     )
     statuses[slug] = status
@@ -219,23 +220,22 @@ async function describeCapabilitySchedule(
   capability: CapabilityFolder | null,
   slug: string,
   backend: ReturnType<typeof resolveBackend>,
+  cwd: string,
   previous?: GoalCapabilityScheduleStatus,
 ): Promise<GoalCapabilityScheduleStatus> {
   if (!capability) return { slug, state: "blocked", reason: "capability folder missing" }
 
-  const { config } = capability
-  if (config.disabled === true) {
+  if (capability.config.disabled === true) {
     return { slug, title: capability.title, state: "disabled", reason: "disabled" }
   }
-  if (!config.agent || config.agent.trim().length === 0) {
-    return { slug, title: capability.title, state: "blocked", reason: "no agent assigned" }
-  }
-  if (config.implementations && config.implementations.length > 1) {
+  try {
+    resolveCapabilityExecution(capability, cwd)
+  } catch (error) {
     return {
       slug,
       title: capability.title,
       state: "blocked",
-      reason: "multi-implementation capability needs task-jobs route",
+      reason: error instanceof Error ? error.message : "Implementation unavailable",
     }
   }
 

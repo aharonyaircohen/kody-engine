@@ -3,6 +3,7 @@ import * as path from "node:path"
 import type { ReportPublicationConfig } from "./implementations/types.js"
 
 export const CAPABILITY_PROFILE_FILE = "profile.json"
+export const CAPABILITY_DEFINITION_FILE = "definition.json"
 export const CAPABILITY_BODY_FILE = "capability.md"
 
 export interface CapabilityFolderConfig {
@@ -25,6 +26,7 @@ export interface CapabilityFolderConfig {
   readsFrom?: string[]
   writesTo?: string[]
   output?: CapabilityOutputConfig
+  outputSchema?: Record<string, unknown>
   workflow?: CapabilityWorkflowConfig
 }
 
@@ -35,6 +37,17 @@ export interface CapabilityOutputConfig {
 }
 
 export function capabilityOutputConditionPaths(config: CapabilityFolderConfig): Set<string> {
+  if (config.outputSchema) {
+    const properties = isPlainObject(config.outputSchema.properties) ? config.outputSchema.properties : undefined
+    const factContract = isPlainObject(properties?.facts) ? properties.facts : undefined
+    const facts = isPlainObject(factContract?.properties) ? factContract.properties : undefined
+    return new Set([
+      ...(properties?.status ? ["result.status"] : []),
+      ...(properties?.summary ? ["result.summary"] : []),
+      ...(properties?.resultClass ? ["result.resultClass"] : []),
+      ...Object.keys(facts ?? {}).map((fact) => `result.facts.${fact}`),
+    ])
+  }
   const result = config.output?.result
   if (!result) return new Set()
   return new Set([
@@ -108,17 +121,24 @@ export function listCapabilityFolderSlugs(absDir: string): string[] {
 }
 
 export function isCapabilityFolder(dir: string): boolean {
-  return fs.existsSync(path.join(dir, CAPABILITY_PROFILE_FILE)) && fs.existsSync(path.join(dir, CAPABILITY_BODY_FILE))
+  return (
+    (fs.existsSync(path.join(dir, CAPABILITY_DEFINITION_FILE)) ||
+      fs.existsSync(path.join(dir, CAPABILITY_PROFILE_FILE))) &&
+    fs.existsSync(path.join(dir, CAPABILITY_BODY_FILE))
+  )
 }
 
 export function readCapabilityFolder(root: string, slug: string): CapabilityFolder | null {
   const dir = path.join(root, slug)
-  const profilePath = path.join(dir, CAPABILITY_PROFILE_FILE)
+  const definitionPath = path.join(dir, CAPABILITY_DEFINITION_FILE)
+  const legacyProfilePath = path.join(dir, CAPABILITY_PROFILE_FILE)
+  const profilePath = fs.existsSync(definitionPath) ? definitionPath : legacyProfilePath
   const bodyPath = path.join(dir, CAPABILITY_BODY_FILE)
   if (!fs.existsSync(profilePath) || !fs.statSync(profilePath).isFile()) return null
   if (!fs.existsSync(bodyPath) || !fs.statSync(bodyPath).isFile()) return null
   try {
-    const rawProfile = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as Record<string, unknown>
+    const rawDefinition = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as Record<string, unknown>
+    const rawProfile = rawDefinition
     const rawBody = fs.readFileSync(bodyPath, "utf-8")
     const { title, body } = parseCapabilityBody(rawBody, slug)
     return {
@@ -155,11 +175,12 @@ export function parseCapabilityConfig(raw: Record<string, unknown>): CapabilityF
     capabilityToolMode: parseCapabilityToolMode(raw.capabilityToolMode),
     implementations,
     role: stringField(raw.role),
-    describe: stringField(raw.describe),
+    describe: stringField(raw.describe) ?? stringField(raw.purpose),
     stage: stringField(raw.stage),
     readsFrom: stringList(raw.readsFrom ?? raw.reads_from),
     writesTo: stringList(raw.writesTo ?? raw.writes_to),
     output: parseCapabilityOutput(raw.output),
+    outputSchema: isPlainObject(raw.outputSchema) ? raw.outputSchema : undefined,
     workflow: parseCapabilityWorkflow(raw.workflow),
   }
 }

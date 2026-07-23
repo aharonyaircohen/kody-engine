@@ -1,7 +1,6 @@
 {
-  "name": "run",
+  "adapter": "kody-engine-profile",
   "role": "primitive",
-  "describe": "Implement a GitHub issue end-to-end: branch, code, commit, open PR.",
   "inputs": [
     {
       "name": "issue",
