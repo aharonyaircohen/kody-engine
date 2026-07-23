@@ -17,6 +17,7 @@ import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
 import { setKodyLabel } from "./lifecycleLabels.js"
 import {
   listCapabilityActions,
+  getProfileInputs,
   resolveCapabilityAction,
   resolveCapabilityExecution,
   resolveCapabilityFolder,
@@ -484,8 +485,20 @@ export async function runCi(argv: string[]): Promise<number> {
       // watch capability (capability-scheduler et al.).
       if (noTarget && capabilityInput) {
         forceRunAction = capabilityInput
-        if (capabilityInput === "goal-manager" && messageInput) {
-          forceRunCliArgs = { goal: messageInput }
+        if (messageInput) {
+          const route = resolveCapabilityAction(capabilityInput)
+          const textInputs = route?.implementation
+            ? (getProfileInputs(route.implementation) ?? []).filter(
+                (input) => input.type === "string",
+              )
+            : []
+          if (textInputs.length === 1) {
+            forceRunCliArgs = { [textInputs[0]!.name]: messageInput }
+          } else if (capabilityInput === "goal-manager") {
+            // Compatibility for the legacy built-in route until its profile
+            // declares the same generic text input contract.
+            forceRunCliArgs = { goal: messageInput }
+          }
         }
       } else {
         manualWorkflowDispatch = noTarget

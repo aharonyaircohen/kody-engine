@@ -13,7 +13,9 @@ describe("Agency Model state backend", () => {
     const backend = createStateBackendFromEnv({}, { query, mutation })
 
     await expect(backend.listAgencyDefinitions("acme/widgets")).resolves.toEqual([{ recordId: "goal-1" }])
-    await expect(backend.getAgencyState("acme/widgets", "goal-1")).resolves.toEqual({ definitionId: "goal-1" })
+    await expect(
+      backend.getAgencyState("acme/widgets", "goal", "goal-1"),
+    ).resolves.toEqual({ definitionId: "goal-1" })
 
     expect(query.mock.calls.map(([fn]) => getFunctionName(fn))).toEqual([
       "agencyModel:listDefinitions",

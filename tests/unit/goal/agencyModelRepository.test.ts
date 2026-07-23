@@ -65,13 +65,18 @@ const supportingDefinitions = [
 describe("AgencyModelRepository", () => {
   it("derives Goal progress only from required evidence outputs", () => {
     expect(
-      goalProgressFromOutputs(goal, [
+      goalProgressFromOutputs(goal, "goal-revision", [
         {
           kind: "evidence",
           key: "published",
           value: true,
           runId: "run-1",
           producer: { kind: "capability", id: "build-knowledge-graph" },
+          parentRef: {
+            kind: "goal",
+            id: "refresh-graph",
+            revision: "goal-revision",
+          },
           contract: "knowledge-graph",
           createdAt: now,
         },
@@ -81,11 +86,37 @@ describe("AgencyModelRepository", () => {
           value: true,
           runId: "run-1",
           producer: { kind: "capability", id: "build-knowledge-graph" },
+          parentRef: {
+            kind: "goal",
+            id: "refresh-graph",
+            revision: "goal-revision",
+          },
           contract: "knowledge-graph",
           createdAt: now,
         },
       ]),
     ).toBe(1)
+  })
+
+  it("ignores matching evidence produced for another Goal or revision", () => {
+    expect(
+      goalProgressFromOutputs(goal, "goal-revision", [
+        {
+          kind: "evidence",
+          key: "published",
+          value: true,
+          runId: "run-other",
+          producer: { kind: "capability", id: "build-knowledge-graph" },
+          parentRef: {
+            kind: "goal",
+            id: "other-goal",
+            revision: "other-revision",
+          },
+          contract: "knowledge-graph",
+          createdAt: now,
+        },
+      ]),
+    ).toBe(0)
   })
 
   it("loads and validates clean Definitions separately from mutable State", async () => {
@@ -113,6 +144,11 @@ describe("AgencyModelRepository", () => {
     expect(records[0]?.definition).toEqual(goal)
     expect(records[0]?.definition).not.toHaveProperty("version")
     expect(records[0]?.state).toMatchObject({ definitionId: goal.id, lifecycle: "active" })
+    expect(backend.getAgencyState).toHaveBeenCalledWith(
+      "acme/widgets",
+      "goal",
+      goal.id,
+    )
   })
 
   it("selects the newest immutable revision without treating history as duplicate ownership", async () => {

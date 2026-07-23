@@ -16,14 +16,16 @@ export function decideTrigger(input: {
   }
 
   const trigger = input.definition.trigger
-  if (trigger.type === "manual") {
-    if (!input.manualRequestId?.trim()) return { kind: "skip", reason: "manual trigger was not requested" }
+  if (input.manualRequestId?.trim()) {
     return {
       kind: "fire",
       reason: "manual trigger was requested",
       scheduledAt: input.now.toISOString(),
       idempotencyKey: `${input.definition.id}:manual:${input.manualRequestId.trim()}`,
     }
+  }
+  if (trigger.type === "manual") {
+    return { kind: "skip", reason: "manual trigger was not requested" }
   }
 
   if (trigger.type !== "schedule") {

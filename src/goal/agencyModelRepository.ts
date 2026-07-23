@@ -46,12 +46,23 @@ export interface AgencyDefinitionCatalog {
   agents: ReadonlyMap<string, DefinitionRecord<AgentDefinition>>
 }
 
-export function goalProgressFromOutputs(definition: GoalDefinition, outputs: readonly RunOutput[]): number {
+export function goalProgressFromOutputs(
+  definition: GoalDefinition,
+  revision: string,
+  outputs: readonly RunOutput[],
+): number {
   const required = definition.objective.requiredEvidence
   if (required.length === 0) return 1
   const satisfied = new Set(
     outputs
-      .filter((output) => output.kind === "evidence" && output.value === true)
+      .filter(
+        (output) =>
+          output.kind === "evidence" &&
+          output.value === true &&
+          output.parentRef?.kind === "goal" &&
+          output.parentRef.id === definition.id &&
+          output.parentRef.revision === revision,
+      )
       .map((output) => output.key),
   )
   return required.filter((key) => satisfied.has(key)).length / required.length
@@ -81,7 +92,11 @@ export class AgencyModelRepository {
         definition: record.definition,
         revision: record.revision,
         state: parseState(
-          await this.backend.getAgencyState(this.tenantId, record.definition.id),
+          await this.backend.getAgencyState(
+            this.tenantId,
+            record.kind,
+            record.definition.id,
+          ),
           record.definition,
           record.kind,
         ),
@@ -138,7 +153,11 @@ export class AgencyModelRepository {
     const state = createGoalState({
       definitionId: record.definition.id,
       lifecycle: previous?.lifecycle ?? "draft",
-      progress: goalProgressFromOutputs(record.definition, await this.listOutputs()),
+      progress: goalProgressFromOutputs(
+        record.definition,
+        record.revision,
+        await this.listOutputs(),
+      ),
       blockers: previous?.blockers ?? [],
       updatedAt,
     })

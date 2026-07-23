@@ -26,10 +26,22 @@ export const dispatchAgencyLoops: PreflightScript = async (ctx) => {
   const tenantId = repositoryTenant(ctx.config)
   if (!tenantId) throw new Error("Repository identity is required for Agency Loop dispatch")
   const backend = createStateBackendFromEnv()
+  const requestedLoopId =
+    typeof ctx.args.loop === "string" ? ctx.args.loop.trim() : ""
   const results = await dispatchAgencyLoopsWith({
     tenantId,
     backend,
     now: new Date(),
+    ...(requestedLoopId
+      ? {
+          manualRequest: {
+            loopId: requestedLoopId,
+            requestId:
+              process.env.GITHUB_RUN_ID?.trim() ||
+              `local-${randomUUID()}`,
+          },
+        }
+      : {}),
     run: (job, abortController) =>
       runJob(job, {
         cwd: ctx.cwd,
@@ -47,6 +59,7 @@ export async function dispatchAgencyLoopsWith(input: {
   tenantId: string
   backend: StateBackend
   now: Date
+  manualRequest?: { loopId: string; requestId: string }
   run: (
     job: Job,
     abortController: AbortController,
@@ -68,7 +81,20 @@ export async function dispatchAgencyLoopsWith(input: {
   const results: DispatchResult[] = []
 
   for (const record of loops) {
-    const decision = decideTrigger({ definition: record.definition, state: record.state, now: input.now })
+    if (
+      input.manualRequest &&
+      record.definition.id !== input.manualRequest.loopId
+    ) {
+      continue
+    }
+    const decision = decideTrigger({
+      definition: record.definition,
+      state: record.state,
+      now: input.now,
+      ...(input.manualRequest
+        ? { manualRequestId: input.manualRequest.requestId }
+        : {}),
+    })
     const now = input.now.toISOString()
     if (decision.kind === "skip") {
       const key = `${record.definition.id}:skip:${now}`
@@ -243,14 +269,27 @@ export async function dispatchAgencyLoopsWith(input: {
                 candidate.definition.id === record.definition.targetRef.id,
             )
           : undefined
-      if (succeeded && goalRecord && finalRunId) {
+      if (succeeded && finalRunId) {
         await appendCapabilityOutputs(
           repository,
           finalRunId,
           target.reference,
+          goalRecord
+            ? {
+                kind: "goal",
+                id: goalRecord.definition.id,
+                revision: goalRecord.revision,
+              }
+            : {
+                kind: "loop",
+                id: record.definition.id,
+                revision: record.revision,
+              },
           finalCapabilityResults,
           finishedAt,
         )
+      }
+      if (succeeded && goalRecord) {
         await repository.refreshGoalProgress(goalRecord, finishedAt)
       }
       await input.backend.finishAgencyDispatch(
@@ -373,6 +412,7 @@ async function appendCapabilityOutputs(
   repository: AgencyModelRepository,
   runId: string,
   producer: ResolvedTarget["reference"],
+  parentRef: PinnedDefinitionRef & { kind: "goal" | "loop" },
   results: readonly CapabilityResult[],
   createdAt: string,
 ): Promise<void> {
@@ -395,6 +435,7 @@ async function appendCapabilityOutputs(
         ...output,
         runId,
         producer: { kind: producer.kind, id: producer.id },
+        parentRef,
         contract: "capability-result/v1",
         createdAt,
       })

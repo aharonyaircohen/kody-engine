@@ -122,6 +122,79 @@ function loopBackend(input: {
 }
 
 describe("Agency Loop runtime dispatch", () => {
+  it("persists outputs for a direct Workflow target under the Loop parent", async () => {
+    const appendAgencyOutput = vi.fn()
+    const backend = loopBackend({
+      finishAgencyDispatch: vi.fn(),
+    })
+    backend.appendAgencyOutput = appendAgencyOutput
+    const run = vi.fn().mockResolvedValue({
+      exitCode: 0,
+      capabilityResults: [
+        {
+          version: 1,
+          status: "pass",
+          summary: "Graph built",
+          evidence: { published: true },
+          facts: {},
+          artifacts: [],
+          missingEvidence: [],
+          blockers: [],
+        },
+      ],
+    })
+
+    await dispatchAgencyLoopsWith({
+      tenantId,
+      backend,
+      now: new Date(now),
+      run,
+    })
+
+    expect(appendAgencyOutput).toHaveBeenCalledWith(
+      tenantId,
+      expect.stringMatching(/^output-/),
+      1,
+      expect.objectContaining({
+        key: "published",
+        parentRef: {
+          kind: "loop",
+          id: "bounded-loop",
+          revision: "bounded-loop",
+        },
+      }),
+    )
+  })
+
+  it("force-fires one selected Loop with a stable manual request id", async () => {
+    const reserveAgencyDispatch = vi.fn().mockResolvedValue({
+      acquired: true,
+      dispatchId: "dispatch-manual",
+    })
+    const backend = loopBackend({
+      finishAgencyDispatch: vi.fn(),
+    })
+    backend.reserveAgencyDispatch = reserveAgencyDispatch
+
+    await dispatchAgencyLoopsWith({
+      tenantId,
+      backend,
+      now: new Date(now),
+      manualRequest: {
+        loopId: "bounded-loop",
+        requestId: "github-run-123",
+      },
+      run: vi.fn().mockResolvedValue({ exitCode: 0 }),
+    })
+
+    expect(reserveAgencyDispatch).toHaveBeenCalledWith(
+      tenantId,
+      expect.objectContaining({
+        idempotencyKey: "bounded-loop:manual:github-run-123",
+      }),
+    )
+  })
+
   it("reserves a due firing before dispatching its Workflow", async () => {
     const reserveAgencyDispatch = vi.fn().mockResolvedValue({ acquired: true, dispatchId: "dispatch-1" })
     const createAgencyModelRun = vi.fn()
@@ -303,7 +376,11 @@ describe("Agency Loop runtime dispatch", () => {
           createdAt: now,
         },
       ]),
-      getAgencyState: vi.fn(async (_tenant: string, id: string) =>
+      getAgencyState: vi.fn(async (
+        _tenant: string,
+        _kind: "goal" | "loop",
+        id: string,
+      ) =>
         id === "refresh-loop"
           ? {
               tenantId,

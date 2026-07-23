@@ -70,6 +70,26 @@ describe("Trigger dispatcher", () => {
     ).toMatchObject({ kind: "fire", idempotencyKey: "refresh-knowledge:manual:operator-42" })
   })
 
+  it("allows an operator request to force a scheduled Loop through the same dispatcher", () => {
+    expect(
+      decideTrigger({
+        definition: loop,
+        state: {
+          definitionId: loop.id,
+          lifecycle: "active",
+          health: "healthy",
+          failures: 0,
+          updatedAt: "2026-07-22T10:00:00.000Z",
+        },
+        now: new Date("2026-07-22T10:05:00.000Z"),
+        manualRequestId: "operator-43",
+      }),
+    ).toMatchObject({
+      kind: "fire",
+      idempotencyKey: "refresh-knowledge:manual:operator-43",
+    })
+  })
+
   it("does not activate a Definition that has no runtime State", () => {
     expect(decideTrigger({ definition: loop, state: null, now: new Date("2026-07-22T11:05:00.000Z") })).toEqual({
       kind: "skip",

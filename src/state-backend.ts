@@ -141,7 +141,11 @@ export interface StateBackend {
     updatedAt: string,
   ): Promise<void>
   listAgencyDefinitions(tenantId: string): Promise<AgencyDefinitionDocument[]>
-  getAgencyState(tenantId: string, definitionId: string): Promise<AgencyStateDocument | null>
+  getAgencyState(
+    tenantId: string,
+    kind: AgencyStateDocument["kind"],
+    definitionId: string,
+  ): Promise<AgencyStateDocument | null>
   putAgencyState(
     tenantId: string,
     definitionId: string,
@@ -343,9 +347,10 @@ export function createStateBackendFromEnv(
       })
       return Array.isArray(result) ? (result as AgencyDefinitionDocument[]) : []
     },
-    async getAgencyState(tenantId, definitionId) {
+    async getAgencyState(tenantId, kind, definitionId) {
       const result = await transport.query(anyApi.agencyModel.getState, {
         tenantId: requireTenant(tenantId),
+        kind,
         definitionId: requireNonEmpty(definitionId, "definitionId"),
       })
       return (result as AgencyStateDocument | null) ?? null
