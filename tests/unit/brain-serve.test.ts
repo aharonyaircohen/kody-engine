@@ -11,7 +11,7 @@ import * as fs from "node:fs"
 import type { AddressInfo } from "node:net"
 import * as os from "node:os"
 import * as path from "node:path"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { ChatEvent } from "../../src/chat/events.js"
 import type { ChatTurnOptions, ChatTurnResult } from "../../src/chat/loop.js"
 import type { ChatTurn } from "../../src/chat/session.js"
@@ -25,10 +25,42 @@ import {
   buildServer,
   ensureRepoCwd,
   hasStateBackendConfig,
+  hydrateBrainDefinitions,
 } from "../../src/servers/brain-serve.js"
 
 const MODEL = { provider: "anthropic" as const, model: "claude-haiku-4-5-20251001" }
 const KEY = "test-key-do-not-leak"
+
+describe("repo-scoped definition hydration", () => {
+  it("hydrates definitions inside the request repository workspace", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-brain-definitions-"))
+    const listDefinitions = vi.fn().mockResolvedValue([])
+
+    try {
+      await hydrateBrainDefinitions({
+        cwd,
+        repo: "acme/widgets",
+        env: {
+          CONVEX_URL: "https://example.convex.cloud",
+          KODY_SERVICE_KEY: "service-key",
+        },
+        backend: { listDefinitions },
+      })
+
+      expect(listDefinitions).toHaveBeenCalledTimes(5)
+      expect(
+        JSON.parse(
+          fs.readFileSync(
+            path.join(cwd, ".kody-engine/definitions/manifest.json"),
+            "utf8",
+          ),
+        ),
+      ).toMatchObject({ tenantId: "acme/widgets" })
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+})
 
 function memoryStoreFactory(): (opts: SessionStoreOptions) => SessionStore {
   const sessions = new Map<string, ChatTurn[]>()

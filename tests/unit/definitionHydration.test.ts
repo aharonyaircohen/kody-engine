@@ -163,4 +163,13 @@ describe("definition hydration", () => {
       }),
     ).rejects.toThrow(/GitHub Actions workflow identity/)
   })
+
+  it("requires repository identity when a backend is configured", async () => {
+    await expect(
+      hydrateDefinitionsFromEnv(cwd, {
+        CONVEX_URL: "https://example.convex.cloud",
+        KODY_SERVICE_KEY: "service-key",
+      }),
+    ).rejects.toThrow(/GITHUB_REPOSITORY/)
+  })
 })

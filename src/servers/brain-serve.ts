@@ -35,6 +35,7 @@ import { resolveBrainDriver } from "../chat/runtime-drivers.js"
 import { sessionFilePath } from "../chat/session.js"
 import { createSessionStore, type SessionStore, type SessionStoreOptions } from "../chat/session-store.js"
 import { LITELLM_DEFAULT_URL, needsLitellmProxy, type ProviderModel, parseModelRuntimeConfig } from "../config.js"
+import { hydrateDefinitions, type DefinitionSource } from "../definition-hydration.js"
 import { unpackAllSecrets } from "../kody-cli.js"
 import { type LitellmHandle, startLitellmIfNeeded } from "../litellm.js"
 import { type CloneRepoFn, defaultCloneRepo, ensureRepoCwd } from "../repoWorkspace.js"
@@ -240,6 +241,36 @@ export function hasStateBackendConfig(env: NodeJS.ProcessEnv = process.env): boo
   return Boolean(env.CONVEX_URL?.trim() && env.KODY_SERVICE_KEY?.trim())
 }
 
+const definitionHydrations = new Map<string, Promise<void>>()
+
+export async function hydrateBrainDefinitions(options: {
+  cwd: string
+  repo: string | undefined
+  env?: NodeJS.ProcessEnv
+  backend?: DefinitionSource
+}): Promise<void> {
+  const env = options.env ?? process.env
+  if (!options.repo || !hasStateBackendConfig(env)) return
+
+  const key = `${options.cwd}\0${options.repo}`
+  const running = definitionHydrations.get(key)
+  if (running) return running
+
+  const hydration = hydrateDefinitions({
+    cwd: options.cwd,
+    tenantId: options.repo,
+    backend: options.backend ?? createStateBackendFromEnv(env),
+  })
+    .then(() => undefined)
+    .finally(() => {
+      if (definitionHydrations.get(key) === hydration) {
+        definitionHydrations.delete(key)
+      }
+    })
+  definitionHydrations.set(key, hydration)
+  return hydration
+}
+
 // Per-chat turn serialization — a chat's turns must not interleave (shared
 // session JSONL + worktree). Mirrors the VPS brain's enqueue().
 const chatQueues = new Map<string, Promise<unknown>>()
@@ -404,6 +435,18 @@ async function handleChatTurn(
       type: "error",
       chatId,
       error: err instanceof Error ? err.message : String(err),
+    })
+    res.end()
+    return
+  }
+
+  try {
+    await hydrateBrainDefinitions({ cwd: agentCwd, repo })
+  } catch (err) {
+    emitSse(res, {
+      type: "error",
+      chatId,
+      error: `Definition hydration failed: ${err instanceof Error ? err.message : String(err)}`,
     })
     res.end()
     return

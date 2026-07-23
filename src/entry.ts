@@ -190,9 +190,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
   unpackAllSecrets()
+  const args = parseArgs(argv)
   const cwdFlag = argv.indexOf("--cwd")
   const definitionCwd = cwdFlag >= 0 && argv[cwdFlag + 1] ? argv[cwdFlag + 1]! : process.cwd()
   const shouldHydrate =
+    !(args.command === "server" && args.serverName === "brain-serve") &&
     !hasExplicitDefinitionsRoot(definitionCwd) &&
     (Boolean(process.env.CONVEX_URL?.trim()) ||
       (process.env.GITHUB_ACTIONS === "true" && Boolean(process.env.GITHUB_EVENT_NAME)))
@@ -205,8 +207,6 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       return 99
     }
   }
-  const args = parseArgs(argv)
-
   if (args.errors.length > 0) {
     for (const e of args.errors) process.stderr.write(`error: ${e}\n`)
     process.stderr.write(`\n${HELP_TEXT}`)

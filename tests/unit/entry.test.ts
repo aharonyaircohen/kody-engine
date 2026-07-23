@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { parseArgs } from "../../src/entry.js"
+
+const brainServeMock = vi.hoisted(() => vi.fn(async () => 0))
+
+vi.mock("../../src/servers/brain-serve.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/servers/brain-serve.js")>()),
+  brainServe: brainServeMock,
+}))
+
+import { main, parseArgs } from "../../src/entry.js"
 
 describe("entry: parseArgs", () => {
   // Isolate from GitHub Actions and chat-session env vars: parseArgs has
@@ -14,6 +22,7 @@ describe("entry: parseArgs", () => {
     vi.stubEnv("ISSUE_NUMBER", "")
   })
   afterEach(() => {
+    vi.clearAllMocks()
     vi.unstubAllEnvs()
   })
 
@@ -166,5 +175,14 @@ describe("entry: parseArgs", () => {
 
     expect(a.command).toBe("ci")
     expect(a.ciArgv).toEqual([])
+  })
+
+  it("starts a repo-less Brain without global definition hydration", async () => {
+    vi.stubEnv("CONVEX_URL", "https://example.convex.cloud")
+    vi.stubEnv("KODY_SERVICE_KEY", "service-key")
+    vi.stubEnv("GITHUB_REPOSITORY", "")
+
+    await expect(main(["brain-serve"])).resolves.toBe(0)
+    expect(brainServeMock).toHaveBeenCalledTimes(1)
   })
 })
