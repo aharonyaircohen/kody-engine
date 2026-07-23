@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "kind": "template",
+  "template": true,
+  "templateId": "ai-agency-health",
+  "state": "inactive",
+  "type": "monitor",
+  "scheduleMode": "agentLoop",
+  "schedule": "15m",
+  "title": "AI Agency stays healthy",
+  "description": "Run the AI Agency health matrix and keep broken agency wiring visible.",
+  "destination": {
+    "outcome": "The current repo's AI Agency is checked regularly and broken wiring is visible before work runs.",
+    "evidence": []
+  },
+  "capabilities": [
+    "ai-agency-health-matrix"
+  ],
+  "route": [],
+  "stage": "watching",
+  "facts": {},
+  "blockers": []
+}

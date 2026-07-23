@@ -28,6 +28,21 @@ describe("definition hydration", () => {
       schemaVersion: 1 as const,
       files: { "agent.md": "# CTO\n\nGuard architecture.\n" },
     }
+    const implementationBundle = {
+      schemaVersion: 1 as const,
+      files: {
+        "definition.json": '{"id":"audit-with-claude"}\n',
+        "runtime.json": '{"adapter":"kody-engine-profile"}\n',
+        "prompt.md": "Run the audit.\n",
+        "scripts/check.sh": "#!/usr/bin/env bash\n",
+      },
+    }
+    const assetBundle = {
+      schemaVersion: 1 as const,
+      files: {
+        "skills/architecture-audit/SKILL.md": "# Architecture audit\n",
+      },
+    }
     const backend = {
       listDefinitions: vi
         .fn()
@@ -47,7 +62,23 @@ describe("definition hydration", () => {
             updatedAt: "2026-07-18T00:00:00.000Z",
           },
         ])
-        .mockResolvedValueOnce([]),
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            slug: "audit-with-claude",
+            version: definitionVersion(implementationBundle),
+            bundle: implementationBundle,
+            updatedAt: "2026-07-18T00:00:00.000Z",
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            slug: "skill-architecture-audit",
+            version: definitionVersion(assetBundle),
+            bundle: assetBundle,
+            updatedAt: "2026-07-18T00:00:00.000Z",
+          },
+        ]),
     }
 
     const result = await hydrateDefinitions({
@@ -60,10 +91,21 @@ describe("definition hydration", () => {
       "Audit carefully.\n",
     )
     expect(fs.readFileSync(path.join(result.root, "agents/cto.md"), "utf8")).toContain("Guard architecture.")
+    expect(fs.readFileSync(path.join(result.root, "implementations/audit-with-claude/prompt.md"), "utf8")).toBe(
+      "Run the audit.\n",
+    )
+    expect(fs.readFileSync(path.join(result.root, "implementations/audit-with-claude/scripts/check.sh"), "utf8")).toContain(
+      "bash",
+    )
+    expect(fs.readFileSync(path.join(result.root, "shared/skills/architecture-audit/SKILL.md"), "utf8")).toContain(
+      "Architecture audit",
+    )
     expect(fs.existsSync(path.join(cwd, ".kody"))).toBe(false)
     expect(result.versions).toEqual({
       "agent:cto": definitionVersion(agentBundle),
+      "asset:skill-architecture-audit": definitionVersion(assetBundle),
       "capability:audit": definitionVersion(capabilityBundle),
+      "implementation:audit-with-claude": definitionVersion(implementationBundle),
     })
   })
 

@@ -1,0 +1,56 @@
+{
+  "internal": true,
+  "role": "primitive",
+  "kind": "oneshot",
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": 0,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "inputArtifacts": [],
+  "outputArtifacts": [],
+  "scripts": {
+    "preflight": [
+      {
+        "script": "loadGoalState"
+      },
+      {
+        "script": "advanceManagedGoal",
+        "runWhen": {
+          "data.goal.state": "active"
+        }
+      },
+      {
+        "script": "saveManagedGoalState"
+      },
+      {
+        "script": "skipAgent"
+      }
+    ],
+    "postflight": [
+      {
+        "script": "commitGoalState"
+      }
+    ]
+  },
+  "inputs": [
+    {
+      "name": "goal",
+      "flag": "--goal",
+      "type": "string",
+      "required": true,
+      "describe": "Goal id — directory name under <statePath>/goals/instances/ in the configured state repo."
+    }
+  ],
+  "name": "goal-manager"
+}

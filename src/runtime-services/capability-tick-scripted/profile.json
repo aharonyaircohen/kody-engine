@@ -1,0 +1,76 @@
+{
+  "internal": true,
+  "role": "utility",
+  "kind": "oneshot",
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": null,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [
+    {
+      "name": "gh",
+      "install": {
+        "required": true,
+        "checkCommand": "command -v gh"
+      },
+      "verify": "gh auth status",
+      "usage": "Available to the tickScript via PATH; this implementation shells out to `bash <tickScript>`. Scripts use `gh pr list`, `gh pr comment`, etc.",
+      "allowedUses": [
+        "pr",
+        "api",
+        "issue"
+      ]
+    }
+  ],
+  "inputArtifacts": [],
+  "outputArtifacts": [],
+  "scripts": {
+    "preflight": [
+      {
+        "script": "runTickScript",
+        "with": {
+          "jobsDir": ".kody/capabilities",
+          "slugArg": "capability",
+          "fenceLabel": "kody-job-next-state"
+        }
+      }
+    ],
+    "postflight": [
+      {
+        "script": "writeJobStateFile",
+        "with": {
+          "jobsDir": ".kody/capabilities"
+        }
+      },
+      {
+        "script": "appendCompanyActivity"
+      }
+    ]
+  },
+  "inputs": [
+    {
+      "name": "capability",
+      "flag": "--capability",
+      "type": "string",
+      "required": true,
+      "describe": "Capability slug — folder name under .kody/capabilities/."
+    },
+    {
+      "name": "force",
+      "flag": "--force",
+      "type": "bool",
+      "describe": "Accepted for parity with `capability-tick`. Scripted ticks have no agent-side schedule guard to bypass. Forwarded to the script via env if it cares."
+    }
+  ],
+  "name": "capability-tick-scripted"
+}

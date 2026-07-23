@@ -1,0 +1,86 @@
+{
+  "internal": true,
+  "role": "primitive",
+  "kind": "oneshot",
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": 100,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "enableSubmitTool": true,
+    "tools": [
+      "Bash",
+      "Read",
+      "mcp__kody-submit"
+    ],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [
+    {
+      "name": "gh",
+      "install": {
+        "required": true,
+        "checkCommand": "command -v gh"
+      },
+      "verify": "gh auth status",
+      "usage": "Use `gh` for all GitHub actions: `gh pr list ...` to enumerate candidate PRs, `gh pr comment <n> --body \"...\"` to issue a Kody command, `gh pr view <n> --json mergeable,statusCheckRollup,headRefOid` to inspect state, `gh api ...` for anything else. NEVER edit files in the working tree.",
+      "allowedUses": [
+        "pr",
+        "api",
+        "issue"
+      ]
+    }
+  ],
+  "inputArtifacts": [],
+  "outputArtifacts": [],
+  "scripts": {
+    "preflight": [
+      {
+        "script": "loadJobFromFile",
+        "with": {
+          "jobsDir": ".kody/capabilities",
+          "slugArg": "capability"
+        }
+      },
+      {
+        "script": "composePrompt"
+      }
+    ],
+    "postflight": [
+      {
+        "script": "parseJobStateFromAgentResult",
+        "with": {
+          "fenceLabel": "kody-job-next-state"
+        }
+      },
+      {
+        "script": "writeJobStateFile"
+      },
+      {
+        "script": "appendCompanyActivity"
+      }
+    ]
+  },
+  "inputs": [
+    {
+      "name": "capability",
+      "flag": "--capability",
+      "type": "string",
+      "required": true,
+      "describe": "Capability slug — folder name under .kody/capabilities/."
+    },
+    {
+      "name": "force",
+      "flag": "--force",
+      "type": "bool",
+      "describe": "When true, this is an operator-forced run. All body rules (allowed commands, restrictions, state schema) still apply. Used for manual triggers from the dashboard's 'Run now' button."
+    }
+  ],
+  "name": "capability-tick"
+}

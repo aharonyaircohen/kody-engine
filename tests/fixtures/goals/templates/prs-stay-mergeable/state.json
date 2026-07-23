@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "kind": "template",
+  "template": true,
+  "templateId": "prs-stay-mergeable",
+  "state": "inactive",
+  "type": "maintain",
+  "scheduleMode": "agentLoop",
+  "schedule": "15m",
+  "title": "PRs stay mergeable",
+  "description": "Keep pull requests current, green, and repairable.",
+  "destination": {
+    "outcome": "Pull requests stay mergeable and blocked PRs are surfaced quickly.",
+    "evidence": []
+  },
+  "capabilities": [
+    "pr-health-triage",
+    "redispatch"
+  ],
+  "route": [],
+  "stage": "watching",
+  "facts": {},
+  "blockers": []
+}

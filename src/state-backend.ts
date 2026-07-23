@@ -98,6 +98,8 @@ export interface DefinitionDocument {
   updatedAt: string
 }
 
+export type DefinitionKind = "agent" | "capability" | "goal" | "implementation" | "asset"
+
 export interface WorkflowDocument {
   workflowId: string
   definition: unknown
@@ -217,7 +219,7 @@ export interface StateBackend {
   ): Promise<{ intentId: string; intent: unknown; updatedAt: string } | null>
   saveIntent(tenantId: string, intentId: string, intent: unknown, updatedAt: string): Promise<void>
   appendIntentDecision(tenantId: string, intentId: string, decision: unknown): Promise<void>
-  listDefinitions(tenantId: string, kind: "agent" | "capability" | "goal"): Promise<DefinitionDocument[]>
+  listDefinitions(tenantId: string, kind: DefinitionKind): Promise<DefinitionDocument[]>
   listWorkflows(tenantId: string): Promise<WorkflowDocument[]>
   getWorkflowRun(tenantId: string, workflowId: string, runId: string): Promise<{ state: unknown } | null>
   saveWorkflowRun(tenantId: string, workflowId: string, runId: string, state: unknown, updatedAt: string): Promise<void>

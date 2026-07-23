@@ -13,7 +13,11 @@ function ciCheckProfilePath(): string {
 }
 
 function ciCheckScriptPath(): string {
-  return path.join(path.dirname(ciCheckProfilePath()), "check.sh")
+  const profilePath = ciCheckProfilePath()
+  const profile = loadProfile(profilePath)
+  const shell = profile.scripts.preflight.find((step) => step.shell)?.shell
+  if (!shell) throw new Error("ci-check shell is not declared")
+  return path.join(path.dirname(profilePath), shell)
 }
 
 function tmpDir(): string {

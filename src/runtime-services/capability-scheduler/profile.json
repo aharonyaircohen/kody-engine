@@ -1,0 +1,61 @@
+{
+  "internal": true,
+  "role": "watch",
+  "kind": "oneshot",
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": null,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": [],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [
+    {
+      "name": "gh",
+      "install": {
+        "required": true,
+        "checkCommand": "command -v gh"
+      },
+      "verify": "gh auth status",
+      "usage": "",
+      "allowedUses": [
+        "api",
+        "issue",
+        "pr"
+      ]
+    }
+  ],
+  "inputArtifacts": [],
+  "outputArtifacts": [],
+  "scripts": {
+    "preflight": [
+      {
+        "script": "dispatchCapabilityFileTicks",
+        "with": {
+          "jobsDir": ".kody/capabilities",
+          "targetImplementation": "capability-tick",
+          "slugArg": "capability",
+          "requireExplicitCapability": true
+        }
+      }
+    ],
+    "postflight": []
+  },
+  "inputs": [
+    {
+      "name": "capability",
+      "flag": "--capability",
+      "type": "string",
+      "required": false,
+      "describe": "Optional capability slug for legacy explicit runs. Scheduled fan-out belongs to goals and loops."
+    }
+  ],
+  "name": "capability-scheduler"
+}

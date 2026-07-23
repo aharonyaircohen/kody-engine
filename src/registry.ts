@@ -63,6 +63,20 @@ export function getImplementationsRoot(): string {
   return candidates[0]!
 }
 
+/** Engine-owned scheduler, dispatcher, worker, and state-controller profiles. */
+export function getRuntimeServicesRoot(): string {
+  const here = path.dirname(new URL(import.meta.url).pathname)
+  const candidates = [
+    path.join(here, "runtime-services"),
+    path.join(here, "..", "runtime-services"),
+    path.join(here, "..", "src", "runtime-services"),
+  ]
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) return candidate
+  }
+  return candidates[0]!
+}
+
 /**
  * Resolve the canonical hydrated capabilities root. Capabilities are the new
  * public model and may also carry implementation profile data during migration.
@@ -95,6 +109,10 @@ export function getImplementationRoots(): string[] {
 
 export function getImplementationRootsForCwd(cwd: string): string[] {
   return [implementationsRoot(cwd), getImplementationsRoot()]
+}
+
+export function getRuntimeProfileRootsForCwd(cwd: string): string[] {
+  return [...getImplementationRootsForCwd(cwd), getRuntimeServicesRoot()]
 }
 
 export function getCapabilityRoots(projectCapabilitiesRoot: string = getProjectCapabilitiesRoot()): string[] {
@@ -162,12 +180,24 @@ export function listImplementations(roots: string | string[] = getImplementation
 }
 
 /**
+ * List every runnable profile, including Engine-owned runtime services.
+ *
+ * Keep this separate from listImplementations(): scheduler, dispatcher,
+ * worker, and state-controller services are executable infrastructure, but
+ * they are not agency Implementations and must not appear in the public
+ * catalog.
+ */
+export function listRuntimeProfilesForCwd(cwd: string): DiscoveredImplementation[] {
+  return listImplementations(getRuntimeProfileRootsForCwd(cwd))
+}
+
+/**
  * Resolve a single implementation profile by name across all roots. Returns
  * the first matching `profile.json` path, or null if nothing matches.
  */
 export function resolveImplementation(
   name: string,
-  roots: string | string[] = getImplementationRoots(),
+  roots: string | string[] = getRuntimeProfileRootsForCwd(process.cwd()),
 ): string | null {
   return resolveImplementationCandidates(name, roots)[0] ?? null
 }
@@ -180,7 +210,7 @@ export function resolveImplementation(
  */
 export function resolveImplementationCandidates(
   name: string,
-  roots: string | string[] = getImplementationRoots(),
+  roots: string | string[] = getRuntimeProfileRootsForCwd(process.cwd()),
 ): string[] {
   if (!isSafeName(name)) return []
   const rootList = typeof roots === "string" ? [roots] : roots
@@ -199,7 +229,10 @@ export function resolveImplementationCandidates(
 }
 
 /** Convenience: true iff `<name>/profile.json` exists in any root. */
-export function hasImplementation(name: string, roots: string | string[] = getImplementationRoots()): boolean {
+export function hasImplementation(
+  name: string,
+  roots: string | string[] = getRuntimeProfileRootsForCwd(process.cwd()),
+): boolean {
   return resolveImplementation(name, roots) !== null
 }
 
@@ -366,7 +399,7 @@ function canonical(value: unknown): string {
 }
 
 function implementationDeclaresInput(implementation: string, inputName: string, cwd: string = process.cwd()): boolean {
-  const profilePath = resolveImplementation(implementation, getImplementationRootsForCwd(cwd))
+  const profilePath = resolveImplementation(implementation, getRuntimeProfileRootsForCwd(cwd))
   if (!profilePath) return false
   try {
     const document = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as {

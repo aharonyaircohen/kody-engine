@@ -145,4 +145,21 @@ describe("loadSubagents", () => {
       if (createdDir) fs.rmSync(catalogAgents, { recursive: true, force: true })
     }
   })
+
+  it("loads a hydrated Store shared subagent before the engine catalog", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-subagents-shared-"))
+    cleanups.push(root)
+    const implementationDir = path.join(root, "implementations", "review")
+    const sharedAgents = path.join(root, "shared", "agents")
+    fs.mkdirSync(implementationDir, { recursive: true })
+    fs.mkdirSync(sharedAgents, { recursive: true })
+    fs.writeFileSync(
+      path.join(sharedAgents, "scout.md"),
+      "---\nname: scout\ndescription: shared scout\n---\nshared body\n",
+    )
+
+    expect(loadSubagents(makeProfile(["scout"], implementationDir))).toEqual({
+      scout: { description: "shared scout", prompt: "shared body" },
+    })
+  })
 })

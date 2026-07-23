@@ -8,8 +8,8 @@
  * them directly via the SDK `agents` option is the reliable path.
  *
  * Resolution mirrors buildSyntheticPlugin: the implementation's own
- * `<profile.dir>/agents/<name>.md` wins, then the shared catalog at
- * `src/plugins/agents/<name>.md`.
+ * `<profile.dir>/agents/<name>.md` wins, then hydrated Store shared assets,
+ * then the engine catalog at `src/plugins/agents/<name>.md`.
  */
 
 import * as fs from "node:fs"
@@ -41,9 +41,13 @@ function splitFrontmatter(raw: string): { fm: Record<string, string>; body: stri
 function resolveAgentFile(profileDir: string, name: string): string {
   const local = path.join(profileDir, "agents", `${name}.md`)
   if (fs.existsSync(local)) return local
+  const shared = path.resolve(profileDir, "..", "..", "shared", "agents", `${name}.md`)
+  if (fs.existsSync(shared)) return shared
   const central = path.join(getPluginsCatalogRoot(), "agents", `${name}.md`)
   if (fs.existsSync(central)) return central
-  throw new Error(`loadSubagents: agent '${name}' not found in ${profileDir}/agents/ or shared catalog`)
+  throw new Error(
+    `loadSubagents: agent '${name}' not found in ${profileDir}/agents/, hydrated shared assets, or engine catalog`,
+  )
 }
 
 /**

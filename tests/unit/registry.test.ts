@@ -4,16 +4,28 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
   builtinImplementationNames,
+  getRuntimeServicesRoot,
   hasImplementation,
   isBuiltinImplementation,
   isSafeName,
   listCapabilityActions,
   listImplementations,
+  listRuntimeProfilesForCwd,
   parseGenericFlags,
   resolveCapabilityAction,
   resolveCapabilityFolder,
   resolveImplementation,
 } from "../../src/registry.js"
+
+describe("registry: runtime services", () => {
+  it("resolves internal runtime services without listing them as Implementations", () => {
+    expect(resolveImplementation("goal-manager")).toBe(
+      path.join(getRuntimeServicesRoot(), "goal-manager", "profile.json"),
+    )
+    expect(listImplementations().some((item) => item.name === "goal-manager")).toBe(false)
+    expect(listRuntimeProfilesForCwd(process.cwd()).some((item) => item.name === "goal-manager")).toBe(true)
+  })
+})
 
 function mkFixture(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-registry-"))

@@ -8,8 +8,10 @@ export interface DefinitionBundle {
   files: Record<string, string>
 }
 
+export type DefinitionKind = "agent" | "capability" | "goal" | "implementation" | "asset"
+
 export interface DefinitionSource {
-  listDefinitions(tenantId: string, kind: "agent" | "capability" | "goal"): Promise<DefinitionDocument[]>
+  listDefinitions(tenantId: string, kind: DefinitionKind): Promise<DefinitionDocument[]>
 }
 
 export interface HydratedDefinitions {
@@ -18,7 +20,7 @@ export interface HydratedDefinitions {
   versions: Record<string, string>
 }
 
-const SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
+const SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,127}$/
 
 function assertSafeDefinitionPath(filePath: string): void {
   const segments = filePath.split("/")
@@ -61,7 +63,15 @@ function verifyDefinition(definition: DefinitionDocument): DefinitionBundle {
   return bundle
 }
 
-function writeDefinition(root: string, kind: "agent" | "capability" | "goal", definition: DefinitionDocument): void {
+function writeBundle(root: string, bundle: DefinitionBundle): void {
+  for (const [filePath, contents] of Object.entries(bundle.files)) {
+    const target = path.join(root, filePath)
+    fs.mkdirSync(path.dirname(target), { recursive: true })
+    fs.writeFileSync(target, contents, "utf8")
+  }
+}
+
+function writeDefinition(root: string, kind: DefinitionKind, definition: DefinitionDocument): void {
   const bundle = verifyDefinition(definition)
   if (kind === "agent") {
     const raw = bundle.files["agent.md"]
@@ -70,20 +80,18 @@ function writeDefinition(root: string, kind: "agent" | "capability" | "goal", de
     return
   }
   if (kind === "goal") {
-    const goalRoot = path.join(root, "goals", definition.slug)
-    for (const [filePath, contents] of Object.entries(bundle.files)) {
-      const target = path.join(goalRoot, filePath)
-      fs.mkdirSync(path.dirname(target), { recursive: true })
-      fs.writeFileSync(target, contents, "utf8")
-    }
+    writeBundle(path.join(root, "goals", definition.slug), bundle)
     return
   }
-  const capabilityRoot = path.join(root, "capabilities", definition.slug)
-  for (const [filePath, contents] of Object.entries(bundle.files)) {
-    const target = path.join(capabilityRoot, filePath)
-    fs.mkdirSync(path.dirname(target), { recursive: true })
-    fs.writeFileSync(target, contents, "utf8")
+  if (kind === "implementation") {
+    writeBundle(path.join(root, "implementations", definition.slug), bundle)
+    return
   }
+  if (kind === "asset") {
+    writeBundle(path.join(root, "shared"), bundle)
+    return
+  }
+  writeBundle(path.join(root, "capabilities", definition.slug), bundle)
 }
 
 export async function hydrateDefinitions(options: {
@@ -97,12 +105,16 @@ export async function hydrateDefinitions(options: {
   fs.mkdirSync(path.join(staging, "agents"), { recursive: true })
   fs.mkdirSync(path.join(staging, "capabilities"), { recursive: true })
   fs.mkdirSync(path.join(staging, "goals"), { recursive: true })
+  fs.mkdirSync(path.join(staging, "implementations"), { recursive: true })
+  fs.mkdirSync(path.join(staging, "shared"), { recursive: true })
 
   try {
-    const [capabilities, agents, goals] = await Promise.all([
+    const [capabilities, agents, goals, implementations, assets] = await Promise.all([
       options.backend.listDefinitions(options.tenantId, "capability"),
       options.backend.listDefinitions(options.tenantId, "agent"),
       options.backend.listDefinitions(options.tenantId, "goal"),
+      options.backend.listDefinitions(options.tenantId, "implementation"),
+      options.backend.listDefinitions(options.tenantId, "asset"),
     ])
     const versions: Record<string, string> = {}
     for (const definition of capabilities) {
@@ -116,6 +128,14 @@ export async function hydrateDefinitions(options: {
     for (const definition of goals) {
       writeDefinition(staging, "goal", definition)
       versions[`goal:${definition.slug}`] = definition.version
+    }
+    for (const definition of implementations) {
+      writeDefinition(staging, "implementation", definition)
+      versions[`implementation:${definition.slug}`] = definition.version
+    }
+    for (const definition of assets) {
+      writeDefinition(staging, "asset", definition)
+      versions[`asset:${definition.slug}`] = definition.version
     }
     const manifest = {
       schemaVersion: 1,

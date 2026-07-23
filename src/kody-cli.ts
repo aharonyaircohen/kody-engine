@@ -18,6 +18,7 @@ import { setKodyLabel } from "./lifecycleLabels.js"
 import {
   listCapabilityActions,
   getProfileInputs,
+  getRuntimeProfileRootsForCwd,
   resolveCapabilityAction,
   resolveCapabilityExecution,
   resolveCapabilityFolder,
@@ -486,9 +487,17 @@ export async function runCi(argv: string[]): Promise<number> {
       if (noTarget && capabilityInput) {
         forceRunAction = capabilityInput
         if (messageInput) {
-          const route = resolveCapabilityAction(capabilityInput)
+          const route = resolveCapabilityAction(
+            capabilityInput,
+            capabilitiesRoot(cwd),
+          )
           const textInputs = route?.implementation
-            ? (getProfileInputs(route.implementation) ?? []).filter(
+            ? (
+                getProfileInputs(
+                  route.implementation,
+                  getRuntimeProfileRootsForCwd(cwd),
+                ) ?? []
+              ).filter(
                 (input) => input.type === "string",
               )
             : []
@@ -535,7 +544,7 @@ export async function runCi(argv: string[]): Promise<number> {
     const scheduledWatchRoute =
       manualGoalManager || capabilityRoute || workflowRoute
         ? undefined
-        : dispatchScheduledWatches({ force: true }).find(
+        : dispatchScheduledWatches({ force: true, cwd }).find(
             (match) =>
               match.action === forceRunAction ||
               match.capability === forceRunAction ||
@@ -826,7 +835,10 @@ export async function runCi(argv: string[]): Promise<number> {
  * Aggregate exit code: 0 iff every watch returned 0.
  */
 async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: boolean }): Promise<number> {
-  const matches: DispatchResult[] = dispatchScheduledWatches({ force: opts.force })
+  const matches: DispatchResult[] = dispatchScheduledWatches({
+    force: opts.force,
+    cwd,
+  })
   if (matches.length === 0) {
     process.stdout.write(
       `→ kody: scheduled wake — no watches matched ${opts.force ? "(force mode, no watches discovered)" : "(window)"}, exiting cleanly\n`,

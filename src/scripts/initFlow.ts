@@ -16,7 +16,7 @@ import pkg from "../../package.json"
 import type { PreflightScript } from "../implementations/types.js"
 import { type EnsureLabelsResult, ensureLabels } from "../lifecycleLabels.js"
 import { loadProfile } from "../profile.js"
-import { listImplementations } from "../registry.js"
+import { listRuntimeProfilesForCwd } from "../registry.js"
 import { loadKodyWorkflowTemplate } from "../workflow-template.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
@@ -144,7 +144,7 @@ export function performInit(cwd: string, force: boolean): InitResult {
   }
 
   // 3. .github/workflows/kody-<name>.yml for every discovered scheduled implementation profile.
-  for (const exe of listImplementations()) {
+  for (const exe of listRuntimeProfilesForCwd(cwd)) {
     let profile: ReturnType<typeof loadProfile>
     try {
       profile = loadProfile(exe.profilePath)

@@ -21,7 +21,7 @@ import {
   type DiscoveredCapabilityAction,
   getProfileInputs,
   listCapabilityActions,
-  listImplementations,
+  listRuntimeProfilesForCwd,
   resolveCapabilityAction,
 } from "./registry.js"
 
@@ -474,12 +474,17 @@ export function autoDispatchTyped(opts?: {
  * The list is sorted by name for deterministic ordering. The CLI runs each
  * sequentially; per-watch failures don't stop the rest.
  */
-export function dispatchScheduledWatches(opts?: { now?: Date; windowSec?: number; force?: boolean }): DispatchResult[] {
+export function dispatchScheduledWatches(opts?: {
+  now?: Date
+  windowSec?: number
+  force?: boolean
+  cwd?: string
+}): DispatchResult[] {
   const now = opts?.now ?? new Date()
   const envWindow = Number(process.env.KODY_SCHEDULE_WINDOW_SEC)
   const windowSec = opts?.windowSec ?? (Number.isFinite(envWindow) && envWindow > 0 ? envWindow : 300)
   const out: DispatchResult[] = []
-  for (const exe of listImplementations()) {
+  for (const exe of listRuntimeProfilesForCwd(opts?.cwd ?? process.cwd())) {
     let raw: string
     try {
       raw = fs.readFileSync(exe.profilePath, "utf-8")

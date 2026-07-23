@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "kind": "template",
+  "template": true,
+  "templateId": "product-quality",
+  "state": "inactive",
+  "type": "monitor",
+  "scheduleMode": "agentLoop",
+  "schedule": "15m",
+  "title": "Product quality stays good",
+  "description": "Keep QA, design review, previews, and product health visible.",
+  "destination": {
+    "outcome": "Product quality is checked regularly and regressions are visible.",
+    "evidence": []
+  },
+  "capabilities": [
+    "design-review",
+    "preview-health",
+    "qa",
+    "qa-engineer",
+    "qa-sweep",
+    "qa-verify",
+    "security-audit",
+    "coverage-floor",
+    "flaky-test-quarantine"
+  ],
+  "route": [],
+  "stage": "watching",
+  "facts": {},
+  "blockers": []
+}

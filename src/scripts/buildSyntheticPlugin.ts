@@ -58,10 +58,12 @@ export const buildSyntheticPlugin: PreflightScript = async (ctx, profile) => {
   const resolvePart = (bucket: "skills" | "commands" | "agents" | "hooks", entry: string): string => {
     const local = path.join(profile.dir, bucket, entry)
     if (fs.existsSync(local)) return local
+    const shared = path.resolve(profile.dir, "..", "..", "shared", bucket, entry)
+    if (fs.existsSync(shared)) return shared
     const central = path.join(catalog, bucket, entry)
     if (fs.existsSync(central)) return central
     throw new Error(
-      `buildSyntheticPlugin: ${bucket} entry '${entry}' not found in implementation dir (${profile.dir}/${bucket}/) or catalog (${catalog}/${bucket}/)`,
+      `buildSyntheticPlugin: ${bucket} entry '${entry}' not found in implementation dir (${profile.dir}/${bucket}/), Store shared assets (${path.dirname(shared)}/), or catalog (${catalog}/${bucket}/)`,
     )
   }
 

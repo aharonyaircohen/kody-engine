@@ -79,7 +79,7 @@ describe("buildSyntheticPlugin: skill copy", () => {
   it("throws a clear error for unknown skill", async () => {
     const ctx = makeCtx()
     await expect(buildSyntheticPlugin(ctx, makeProfile({ skills: ["does-not-exist"] }))).rejects.toThrow(
-      /skills entry 'does-not-exist' not found in implementation dir .* or catalog/,
+      /skills entry 'does-not-exist' not found in implementation dir .* Store shared assets .* or catalog/,
     )
   })
 
@@ -119,6 +119,43 @@ describe("buildSyntheticPlugin: skill copy", () => {
       expect(fs.existsSync(path.join(root, "skills", "exec-only-skill", "SKILL.md"))).toBe(true)
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  it("loads a Store-shared skill when the Implementation declares it", async () => {
+    const ctx = makeCtx()
+    const definitionsRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "kody-shared-skill-"),
+    )
+    try {
+      const implementationDir = path.join(
+        definitionsRoot,
+        "implementations",
+        "review",
+      )
+      const skillDir = path.join(
+        definitionsRoot,
+        "shared",
+        "skills",
+        "shared-review-guidance",
+      )
+      fs.mkdirSync(implementationDir, { recursive: true })
+      fs.mkdirSync(skillDir, { recursive: true })
+      fs.writeFileSync(path.join(skillDir, "SKILL.md"), "# shared\n")
+
+      const profile = makeProfile({ skills: ["shared-review-guidance"] })
+      profile.dir = implementationDir
+      await buildSyntheticPlugin(ctx, profile)
+
+      const root = ctx.data.syntheticPluginPath as string
+      expect(
+        fs.readFileSync(
+          path.join(root, "skills", "shared-review-guidance", "SKILL.md"),
+          "utf-8",
+        ),
+      ).toBe("# shared\n")
+    } finally {
+      fs.rmSync(definitionsRoot, { recursive: true, force: true })
     }
   })
 })
