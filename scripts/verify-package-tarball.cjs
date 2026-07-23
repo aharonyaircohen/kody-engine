@@ -39,6 +39,10 @@ try {
   const tarball = path.join(tmp, packed.filename)
   const entries = run("tar", ["-tf", tarball], { cwd: tmp }).trim().split("\n")
   const hasEntry = (entry) => entries.includes(entry)
+  assert(
+    !entries.some((entry) => entry.includes("/__pycache__/") || entry.endsWith(".pyc")),
+    "package tarball includes Python cache artifacts",
+  )
 
   for (const required of [
     "package/dist/bin/kody.js",

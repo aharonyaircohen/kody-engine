@@ -2,6 +2,8 @@ node_modules/
 dist/
 .env
 *.tsbuildinfo
+__pycache__/
+*.pyc
 
 # Logs
 logs
