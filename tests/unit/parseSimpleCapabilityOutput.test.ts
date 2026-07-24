@@ -22,7 +22,7 @@ describe("parseSimpleCapabilityOutput", () => {
   it("accepts a fenced JSON contract value", async () => {
     const ctx = { data: {}, output: {} } as Parameters<typeof parseSimpleCapabilityOutput>[0]
     await parseSimpleCapabilityOutput(ctx, {} as Parameters<typeof parseSimpleCapabilityOutput>[1], {
-      finalText: "```json\n{\"result\":{\"summary\":\"Done\",\"data\":{}}}\n```",
+      finalText: "Capability completed.\n\n```json\n{\"result\":{\"summary\":\"Done\",\"data\":{}}}\n```",
     } as Parameters<typeof parseSimpleCapabilityOutput>[2])
     expect(ctx.output.exitCode).toBeUndefined()
   })

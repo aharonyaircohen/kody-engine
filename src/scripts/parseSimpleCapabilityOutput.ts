@@ -31,7 +31,7 @@ export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profil
 
 function parseEnvelope(text: string | undefined): { result: Record<string, unknown> } | null {
   if (!text) return null
-  const candidate = text.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)?.[1] ?? text
+  const candidate = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)?.[1] ?? text
   try {
     const parsed = JSON.parse(candidate)
     if (!isObject(parsed) || !isObject(parsed.result)) return null
