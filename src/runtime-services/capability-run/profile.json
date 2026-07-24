@@ -36,7 +36,7 @@
   "cliTools": [],
   "scripts": {
     "preflight": [{ "script": "loadSimpleCapability" }],
-    "postflight": []
+    "postflight": [{ "script": "parseSimpleCapabilityOutput" }]
   },
   "inputArtifacts": [],
   "outputArtifacts": []
