@@ -229,6 +229,9 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
         : null
     const workflowJob = {
       ...(workflowContext && !valid.why ? { ...valid, why: workflowContext.body } : valid),
+      ...(workflowCapability.config.agent
+        ? { agent: workflowCapability.config.agent }
+        : {}),
       ...((valid.workflowState ?? persistedState)
         ? { workflowState: valid.workflowState ?? persistedState ?? undefined }
         : {}),
@@ -832,7 +835,7 @@ function workflowStepToJob(step: CapabilityWorkflowStepConfig, parent: Job, chai
     capability: step.capability,
     ...(step.implementation ? { implementation: step.implementation } : {}),
     ...(composeStepWhy(parent.why, step) ? { why: composeStepWhy(parent.why, step) } : {}),
-    ...((step.agent ?? parent.agent) ? { agent: step.agent ?? parent.agent } : {}),
+    ...(parent.agent ? { agent: parent.agent } : {}),
     ...(parent.schedule ? { schedule: parent.schedule } : {}),
     ...(typeof target === "number" ? { target } : {}),
     cliArgs,

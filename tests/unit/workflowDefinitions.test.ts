@@ -21,7 +21,7 @@ function writeWorkflow(root: string, source: "runtime" | "definitions", name: st
   fs.mkdirSync(directory, { recursive: true })
   fs.writeFileSync(
     path.join(directory, "workflow.json"),
-    `${JSON.stringify({ version: 1, name, capabilities: ["build-knowledge-graph"] })}\n`,
+    `${JSON.stringify({ version: 1, name, agent: "developer", capabilities: ["build-knowledge-graph"] })}\n`,
   )
 }
 
@@ -31,6 +31,18 @@ describe("readWorkflowDefinition", () => {
     writeWorkflow(root, "definitions", "Store workflow")
 
     expect(readWorkflowDefinition({}, root, "refresh-knowledge-system")?.name).toBe("Store workflow")
+    expect(readWorkflowDefinition({}, root, "refresh-knowledge-system")?.agent).toBe("developer")
+  })
+
+  it("defaults migrated workflows to Kody", () => {
+    const root = workspace()
+    const directory = path.join(root, ".kody-engine", "definitions", "workflows", "legacy")
+    fs.mkdirSync(directory, { recursive: true })
+    fs.writeFileSync(
+      path.join(directory, "workflow.json"),
+      `${JSON.stringify({ name: "Legacy", capabilities: ["inspect"] })}\n`,
+    )
+    expect(readWorkflowDefinition({}, root, "legacy")?.agent).toBe("kody")
   })
 
   it("keeps the backend runtime workflow authoritative when both sources exist", () => {

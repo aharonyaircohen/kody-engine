@@ -25,6 +25,7 @@ import {
 } from "./registry.js"
 import { type RunRequest, readRunRequestFromEnv } from "./run-request.js"
 import { lastRunLogPath } from "./runtimePaths.js"
+import { readLoopDefinition } from "./loopDefinitions.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
 import { readWorkflowDefinition } from "./workflowDefinitions.js"
 
@@ -541,8 +542,14 @@ export async function runCi(argv: string[]): Promise<number> {
             workflow: forceRunAction,
             cliArgs: {},
           }
+    const loop = manualGoalManager || capabilityRoute || workflowRoute ? null : readLoopDefinition(cwd, forceRunAction)
+    const loopRoute: ManualOneShotRoute | undefined = loop
+      ? loop.target.kind === "workflow"
+        ? { workflow: loop.target.id, cliArgs: loop.input }
+        : { capability: loop.target.id, action: loop.target.id, cliArgs: loop.input }
+      : undefined
     const scheduledWatchRoute =
-      manualGoalManager || capabilityRoute || workflowRoute
+      manualGoalManager || capabilityRoute || workflowRoute || loopRoute
         ? undefined
         : dispatchScheduledWatches({ force: true, cwd }).find(
             (match) =>
@@ -557,7 +564,7 @@ export async function runCi(argv: string[]): Promise<number> {
           implementation: "goal-manager",
           cliArgs: forceRunCliArgs,
         }
-      : (capabilityRoute ?? workflowRoute ?? scheduledWatchRoute)
+      : (capabilityRoute ?? workflowRoute ?? loopRoute ?? scheduledWatchRoute)
     if (!route) {
       const root = capabilitiesRoot(cwd)
       const available = listCapabilityActions(root).map((item) => item.action)

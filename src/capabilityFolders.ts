@@ -2,11 +2,13 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { ReportPublicationConfig } from "./implementations/types.js"
 
-export const CAPABILITY_PROFILE_FILE = "profile.json"
-export const CAPABILITY_DEFINITION_FILE = "definition.json"
-export const CAPABILITY_BODY_FILE = "capability.md"
+export const CAPABILITY_PROFILE_FILE = "contract.json"
+export const CAPABILITY_DEFINITION_FILE = "contract.json"
+export const CAPABILITY_BODY_FILE = "instructions.md"
 
 export interface CapabilityFolderConfig {
+  /** Internal workflow adapter only. Simple Capability folders never set an Agent. */
+  agent?: string
   action?: string
   implementation?: string
   tickScript?: string
@@ -14,7 +16,6 @@ export interface CapabilityFolderConfig {
   disabled?: boolean
   internal?: boolean
   public?: boolean
-  agent?: string
   mentions?: string[]
   tools?: string[]
   capabilityTools?: string[]
@@ -83,7 +84,6 @@ export interface CapabilityWorkflowStepConfig {
   target?: "issue" | "pr"
   targetFact?: string
   reason?: string
-  agent?: string
   cliArgs?: Record<string, unknown>
   inputs?: Record<string, CapabilityWorkflowInputConfig>
   next?: CapabilityWorkflowTransitionConfig[]
@@ -105,6 +105,16 @@ export interface CapabilityFolder {
   rawProfile: Record<string, unknown>
 }
 
+export interface CapabilityContractValue {
+  name: string
+  schema: Record<string, unknown>
+}
+
+export interface CapabilityContract {
+  input: CapabilityContractValue
+  output: CapabilityContractValue
+}
+
 export function listCapabilityFolderSlugs(absDir: string): string[] {
   if (!fs.existsSync(absDir)) return []
   let entries: fs.Dirent[]
@@ -121,24 +131,33 @@ export function listCapabilityFolderSlugs(absDir: string): string[] {
 }
 
 export function isCapabilityFolder(dir: string): boolean {
-  return (
-    (fs.existsSync(path.join(dir, CAPABILITY_DEFINITION_FILE)) ||
-      fs.existsSync(path.join(dir, CAPABILITY_PROFILE_FILE))) &&
-    fs.existsSync(path.join(dir, CAPABILITY_BODY_FILE))
+  if (!fs.existsSync(path.join(dir, CAPABILITY_DEFINITION_FILE))) return false
+  if (!fs.existsSync(path.join(dir, CAPABILITY_BODY_FILE))) return false
+  const entries = fs.readdirSync(dir, { withFileTypes: true })
+  return entries.every(
+    (entry) =>
+      entry.name === CAPABILITY_DEFINITION_FILE ||
+      entry.name === CAPABILITY_BODY_FILE ||
+      (entry.isDirectory() && (entry.name === "skills" || entry.name === "tools")),
   )
 }
 
 export function readCapabilityFolder(root: string, slug: string): CapabilityFolder | null {
   const dir = path.join(root, slug)
   const definitionPath = path.join(dir, CAPABILITY_DEFINITION_FILE)
-  const legacyProfilePath = path.join(dir, CAPABILITY_PROFILE_FILE)
-  const profilePath = fs.existsSync(definitionPath) ? definitionPath : legacyProfilePath
+  const profilePath = definitionPath
   const bodyPath = path.join(dir, CAPABILITY_BODY_FILE)
   if (!fs.existsSync(profilePath) || !fs.statSync(profilePath).isFile()) return null
   if (!fs.existsSync(bodyPath) || !fs.statSync(bodyPath).isFile()) return null
   try {
     const rawDefinition = JSON.parse(fs.readFileSync(profilePath, "utf-8")) as Record<string, unknown>
-    const rawProfile = rawDefinition
+    const contract = parseCapabilityContract(rawDefinition)
+    if (!contract) return null
+    const rawProfile = {
+      inputSchema: contract.input.schema,
+      outputSchema: contract.output.schema,
+      contract,
+    }
     const rawBody = fs.readFileSync(bodyPath, "utf-8")
     const { title, body } = parseCapabilityBody(rawBody, slug)
     return {
@@ -149,12 +168,34 @@ export function readCapabilityFolder(root: string, slug: string): CapabilityFold
       title,
       body,
       rawBody,
-      config: parseCapabilityConfig(rawProfile),
+      config: {
+        action: slug,
+        describe: title,
+        outputSchema: contract.output.schema,
+      },
       rawProfile,
     }
   } catch {
     return null
   }
+}
+
+export function parseCapabilityContract(raw: Record<string, unknown>): CapabilityContract | null {
+  if (Object.keys(raw).length !== 2 || !isPlainObject(raw.input) || !isPlainObject(raw.output)) return null
+  const parseValue = (value: Record<string, unknown>): CapabilityContractValue | null => {
+    if (
+      Object.keys(value).some((key) => key !== "name" && key !== "schema") ||
+      typeof value.name !== "string" ||
+      !/^[a-z][a-z0-9-]*$/.test(value.name) ||
+      !isPlainObject(value.schema)
+    ) {
+      return null
+    }
+    return { name: value.name, schema: value.schema }
+  }
+  const input = parseValue(raw.input)
+  const output = parseValue(raw.output)
+  return input && output ? { input, output } : null
 }
 
 export function parseCapabilityConfig(raw: Record<string, unknown>): CapabilityFolderConfig {
@@ -168,7 +209,6 @@ export function parseCapabilityConfig(raw: Record<string, unknown>): CapabilityF
     disabled: typeof raw.disabled === "boolean" ? raw.disabled : undefined,
     internal: typeof raw.internal === "boolean" ? raw.internal : undefined,
     public: typeof raw.public === "boolean" ? raw.public : undefined,
-    agent: stringField(raw.agent),
     mentions: stringList(raw.mentions).map((m) => m.replace(/^@/, "")),
     tools,
     capabilityTools: tools,
@@ -279,7 +319,6 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
   const id = stringField(raw.id)
   const action = stringField(raw.action)
   const evidence = stringField(raw.evidence)
-  const agent = stringField(raw.agent)
   const reason = stringField(raw.reason)
   const target = stringField(raw.target)
   const targetFact = stringField(raw.targetFact ?? raw.target_fact)
@@ -295,7 +334,6 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
     ...(evidence ? { evidence } : {}),
     ...(target === "issue" || target === "pr" ? { target } : {}),
     ...(targetFact ? { targetFact } : {}),
-    ...(agent && isSafeSlug(agent) ? { agent } : {}),
     ...(reason ? { reason } : {}),
     ...(cliArgs && typeof cliArgs === "object" && !Array.isArray(cliArgs)
       ? { cliArgs: cliArgs as Record<string, unknown> }

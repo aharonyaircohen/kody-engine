@@ -1,0 +1,43 @@
+{
+  "name": "capability-run",
+  "internal": true,
+  "role": "primitive",
+  "kind": "oneshot",
+  "inputs": [
+    {
+      "name": "capability",
+      "flag": "--capability",
+      "type": "string",
+      "required": true,
+      "describe": "Capability folder slug."
+    },
+    {
+      "name": "input",
+      "flag": "--input",
+      "type": "string",
+      "required": false,
+      "describe": "The capability's single JSON input."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": null,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "tools": ["Read", "Bash"],
+    "hooks": [],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "scripts": {
+    "preflight": [{ "script": "loadSimpleCapability" }],
+    "postflight": []
+  },
+  "inputArtifacts": [],
+  "outputArtifacts": []
+}

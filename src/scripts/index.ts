@@ -36,6 +36,7 @@ import { fixFlow } from "./fixFlow.js"
 import { initFlow } from "./initFlow.js"
 import { loadAgentAdhoc } from "./loadAgentAdhoc.js"
 import { loadCapabilityState } from "./loadCapabilityState.js"
+import { loadSimpleCapability } from "./loadSimpleCapability.js"
 import { loadCompanyIntents } from "./loadCompanyIntents.js"
 import { loadCompanyPortfolio } from "./loadCompanyPortfolio.js"
 import { loadConventions } from "./loadConventions.js"
@@ -121,6 +122,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   loadIssueStateComment,
   loadJobFromFile,
   loadCapabilityState,
+  loadSimpleCapability,
   loadCompanyIntents,
   loadCompanyPortfolio,
   loadAgentAdhoc,

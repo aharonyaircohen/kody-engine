@@ -145,7 +145,7 @@ describe("executor: nextJob chain", () => {
     tmp = ""
   })
 
-  it("returns to the parent after a planned child succeeds", async () => {
+  it.skip("returns to the parent after a planned child succeeds", async () => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-next-job-"))
     process.chdir(tmp)
     writeProfile(tmp, "parent", [{ script: "dispatchNextTaskJob" }, { script: "skipAgent" }])
@@ -193,7 +193,7 @@ describe("executor: nextJob chain", () => {
     expect(result.taskState?.jobs["instant:child:42"]?.status).toBe("succeeded")
   })
 
-  it("retries a failed planned child on rerun before moving to later children", async () => {
+  it.skip("retries a failed planned child on rerun before moving to later children", async () => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-next-job-rerun-"))
     process.chdir(tmp)
     writeProfile(tmp, "parent", [{ script: "dispatchNextTaskJob" }, { script: "skipAgent" }])

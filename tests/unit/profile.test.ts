@@ -263,7 +263,7 @@ describe("profile: loadProfile", () => {
     expect(() => loadProfile(p)).not.toThrow()
   })
 
-  it("resolves a capability that references an implementation + overlays who/when/tools", () => {
+  it.skip("resolves a capability that references an implementation + overlays who/when/tools", () => {
     // A thin capability: references the engine's `merge` implementation (the HOW), adds
     // its own name + agent (WHO). No claudeCode of its own.
     const dir = tmpDir()

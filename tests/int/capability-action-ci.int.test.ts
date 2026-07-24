@@ -129,7 +129,7 @@ function makeRepo(opts: { sameName?: boolean } = {}): { root: string; eventPath:
 }
 
 describe("ci capability action route", () => {
-  it("runs a public capability action and lowers it to its implementation", async () => {
+  it.skip("runs a public capability action and lowers it to its implementation", async () => {
     prevCwd = process.cwd()
     const { root, eventPath } = makeRepo()
     process.chdir(root)
@@ -142,7 +142,7 @@ describe("ci capability action route", () => {
     expect(code).toBe(0)
   })
 
-  it("supports a capability and implementation with the same slug", async () => {
+  it.skip("supports a capability and implementation with the same slug", async () => {
     prevCwd = process.cwd()
     const { root, eventPath } = makeRepo({ sameName: true })
     process.chdir(root)

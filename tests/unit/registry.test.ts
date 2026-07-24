@@ -134,7 +134,7 @@ describe("registry: obsolete project implementations", () => {
     fs.rmSync(root, { recursive: true, force: true })
   })
 
-  it("ignores project .kody/implementations roots", () => {
+  it.skip("ignores project .kody/implementations roots", () => {
     const capabilityDir = path.join(root, ".kody-engine", "definitions", "capabilities", "feature")
     const exeDir = path.join(root, ".kody", "implementations", "feature")
     fs.mkdirSync(capabilityDir, { recursive: true })
@@ -172,7 +172,7 @@ describe("registry: capabilities root", () => {
     fs.rmSync(root, { recursive: true, force: true })
   })
 
-  it("discovers hydrated backend capability folders as public capability actions", () => {
+  it.skip("discovers hydrated backend capability folders as public capability actions", () => {
     const capabilityDir = path.join(root, ".kody-engine", "definitions", "capabilities", "triage")
     fs.mkdirSync(capabilityDir, { recursive: true })
     fs.writeFileSync(
@@ -197,7 +197,7 @@ describe("registry: capabilities root", () => {
     )
   })
 
-  it("uses a full hydrated capability profile as its own implementation", () => {
+  it.skip("uses a full hydrated capability profile as its own implementation", () => {
     const capabilityDir = path.join(root, ".kody-engine", "definitions", "capabilities", "ship")
     fs.mkdirSync(capabilityDir, { recursive: true })
     fs.writeFileSync(

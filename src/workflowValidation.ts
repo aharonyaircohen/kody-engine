@@ -28,7 +28,6 @@ const SUPPORTED_STEP_FIELDS = new Set([
   "target",
   "targetFact",
   "reason",
-  "agent",
   "cliArgs",
   "inputs",
   "next",

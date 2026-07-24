@@ -6,6 +6,13 @@ function codes(workflow: unknown): string[] {
 }
 
 describe("validateWorkflow", () => {
+  it("rejects per-step Agent selection", () => {
+    expect(
+      validateWorkflow({
+        steps: [{ id: "inspect", capability: "inspect", agent: "reviewer" }],
+      }).map((issue) => issue.path),
+    ).toContain("steps[0].agent")
+  })
   it("accepts a linear workflow and a complete branching loop", () => {
     expect(validateWorkflow({ steps: [{ capability: "inspect" }, { capability: "publish" }] })).toEqual([])
     expect(

@@ -5,8 +5,8 @@ import { parseCapabilityWorkflow } from "./capabilityFolders.js"
 import { validateWorkflow } from "./workflowValidation.js"
 
 export interface WorkflowDefinition {
-  version: 1
   name: string
+  agent: string
   capabilities: string[]
   runWithoutApproval?: boolean
   steps?: CapabilityWorkflowStepConfig[]
@@ -33,6 +33,8 @@ export function normalizeWorkflowDefinition(value: unknown): WorkflowDefinition 
   if (!value || typeof value !== "object" || Array.isArray(value)) return null
   const raw = value as Record<string, unknown>
   const name = typeof raw.name === "string" ? raw.name.trim() : ""
+  const requestedAgent = typeof raw.agent === "string" ? raw.agent.trim() : ""
+  const agent = /^[a-z][a-z0-9-]*$/.test(requestedAgent) ? requestedAgent : "kody"
   const hasGraphConnections =
     Array.isArray(raw.steps) &&
     raw.steps.some(
@@ -58,8 +60,8 @@ export function normalizeWorkflowDefinition(value: unknown): WorkflowDefinition 
   const capabilities = steps ? steps.map((step) => step.capability) : normalizeWorkflowCapabilities(raw.capabilities)
   if (!name || capabilities.length === 0) return null
   return {
-    version: 1,
     name,
+    agent,
     capabilities,
     ...(raw.runWithoutApproval === true ? { runWithoutApproval: true } : {}),
     ...(steps ? { steps } : {}),
@@ -106,6 +108,7 @@ export function workflowDefinitionToCapabilityFolder(
       action: id,
       workflow: workflowDefinitionToConfig(workflow),
       describe: workflow.name,
+      agent: workflow.agent,
     },
   }
 }
