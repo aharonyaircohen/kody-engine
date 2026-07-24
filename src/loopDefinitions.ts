@@ -59,6 +59,9 @@ export function readLoopDefinition(cwd: string, id: string): LoopDefinition | nu
       process.stderr.write(`[kody] unreadable simple Loop definition: ${filePath}\n`)
     }
   }
+  process.stderr.write(
+    `[kody] simple Loop not found: ${id} (${roots.map((root) => path.join(root, "loops", id, "loop.json")).join(", ")})\n`,
+  )
   return null
 }
 
