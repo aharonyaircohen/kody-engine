@@ -54,7 +54,9 @@ export function readLoopDefinition(cwd: string, id: string): LoopDefinition | nu
     try {
       const loop = normalizeLoopDefinition(JSON.parse(fs.readFileSync(filePath, "utf8")))
       if (loop?.id === id) return loop
+      process.stderr.write(`[kody] invalid simple Loop definition: ${filePath}\n`)
     } catch {
+      process.stderr.write(`[kody] unreadable simple Loop definition: ${filePath}\n`)
     }
   }
   return null
