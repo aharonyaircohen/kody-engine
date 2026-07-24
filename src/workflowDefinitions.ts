@@ -2,6 +2,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { CapabilityFolder, CapabilityWorkflowConfig, CapabilityWorkflowStepConfig } from "./capabilityFolders.js"
 import { parseCapabilityWorkflow } from "./capabilityFolders.js"
+import { definitionsRoot } from "./definition-paths.js"
 import { validateWorkflow } from "./workflowValidation.js"
 
 export interface WorkflowDefinition {
@@ -80,7 +81,7 @@ export function readWorkflowDefinition(
   const relativePath = workflowDefinitionPath(id)
   const candidates = [
     path.join(root, ".kody-engine", "runtime", relativePath),
-    path.join(root, ".kody-engine", "definitions", relativePath),
+    path.join(definitionsRoot(root), relativePath),
   ]
   for (const filePath of candidates) {
     if (!fs.existsSync(filePath)) continue
