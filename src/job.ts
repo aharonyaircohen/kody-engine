@@ -388,6 +388,20 @@ async function runCapabilityImplementationStep(
   input.cliArgs = shouldApplyResolvedCapabilityArgs
     ? { ...resolvedCapability.cliArgs, ...input.cliArgs }
     : input.cliArgs
+  if (profileName === "capability-run" && capabilityIdentity) {
+    const capabilityInput = { ...valid.cliArgs }
+    input.cliArgs = {
+      capability: capabilityIdentity,
+      ...(Object.keys(capabilityInput).length > 0
+        ? {
+            input:
+              Object.keys(capabilityInput).length === 1 && typeof capabilityInput.input === "string"
+                ? capabilityInput.input
+                : JSON.stringify(capabilityInput),
+          }
+        : {}),
+    }
+  }
 
   const run = base.chain === false ? runImplementation : runImplementationChain
   return run(profileName, input)

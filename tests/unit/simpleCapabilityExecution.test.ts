@@ -116,6 +116,31 @@ describe("simple Capability execution", () => {
     }
   })
 
+  it("passes Workflow step arguments through the Capability input", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-workflow-input-"))
+    roots.push(cwd)
+    writeCapability(cwd, "prepare")
+    const workflowDir = path.join(cwd, ".kody-engine", "definitions", "workflows", "release")
+    fs.mkdirSync(workflowDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(workflowDir, "workflow.json"),
+      JSON.stringify({
+        name: "Release",
+        agent: "kody",
+        steps: [{ capability: "prepare", cliArgs: { prefer: "ours" } }],
+      }),
+    )
+
+    await runJob({ workflow: "release", cliArgs: {}, flavor: "instant" }, { cwd })
+
+    expect(executor.runImplementationChain.mock.calls[0]?.[1]).toMatchObject({
+      cliArgs: {
+        capability: "prepare",
+        input: JSON.stringify({ prefer: "ours" }),
+      },
+    })
+  })
+
   it("preserves Workflow conditions with simple Capability folders", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-workflow-condition-"))
     roots.push(cwd)
