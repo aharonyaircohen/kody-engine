@@ -3,22 +3,26 @@ import type { PostflightScript } from "../implementations/types.js"
 export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profile, agentResult) => {
   const output = parseOutput(agentResult?.finalText)
   if (output === undefined) {
-    const failure = {
-      status: "failed",
-      summary: "Capability did not return one JSON value",
+    const reason =
+      agentResult?.outcomeKind === "out_of_turns"
+        ? "Capability execution limit reached"
+        : "Capability execution ended before returning a result"
+    const blocked = {
+      status: "blocked",
+      reason,
+      summary: reason,
     }
-    ctx.output.exitCode = 64
-    ctx.output.reason = failure.summary
-    ctx.data.capabilityOutput = failure
+    ctx.output.reason = reason
+    ctx.data.capabilityOutput = blocked
     ctx.data.capabilityResults = [
       {
         version: 1,
         status: "blocked",
-        summary: failure.summary,
-        facts: failure,
+        summary: reason,
+        facts: blocked,
         artifacts: [],
         missingEvidence: [],
-        blockers: [failure.summary],
+        blockers: [reason],
       },
     ]
     return

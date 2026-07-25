@@ -10,16 +10,43 @@ describe("parseSimpleCapabilityOutput", () => {
       null,
     )
 
-    expect(ctx.output.exitCode).toBe(64)
-    expect(ctx.output.reason).toBe("Capability did not return one JSON value")
+    expect(ctx.output.exitCode).toBeUndefined()
+    expect(ctx.output.reason).toBe("Capability execution ended before returning a result")
     expect(ctx.data.capabilityOutput).toEqual({
-      status: "failed",
-      summary: "Capability did not return one JSON value",
+      status: "blocked",
+      reason: "Capability execution ended before returning a result",
+      summary: "Capability execution ended before returning a result",
     })
     expect(ctx.data.capabilityResults).toEqual([
       expect.objectContaining({
         status: "blocked",
-        blockers: ["Capability did not return one JSON value"],
+        blockers: ["Capability execution ended before returning a result"],
+      }),
+    ])
+  })
+
+  it("turns an execution limit into a normal blocked result", async () => {
+    const ctx = { data: {}, output: {} } as Parameters<typeof parseSimpleCapabilityOutput>[0]
+    await parseSimpleCapabilityOutput(
+      ctx,
+      {} as Parameters<typeof parseSimpleCapabilityOutput>[1],
+      {
+        finalText: "",
+        outcome: "failed",
+        outcomeKind: "out_of_turns",
+      } as Parameters<typeof parseSimpleCapabilityOutput>[2],
+    )
+
+    expect(ctx.output.exitCode).toBeUndefined()
+    expect(ctx.data.capabilityOutput).toEqual({
+      status: "blocked",
+      reason: "Capability execution limit reached",
+      summary: "Capability execution limit reached",
+    })
+    expect(ctx.data.capabilityResults).toEqual([
+      expect.objectContaining({
+        status: "blocked",
+        blockers: ["Capability execution limit reached"],
       }),
     ])
   })
