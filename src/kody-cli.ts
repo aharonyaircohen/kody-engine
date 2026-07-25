@@ -903,6 +903,7 @@ async function runScheduledFanOut(cwd: string, args: CiArgs, opts: { force: bool
           capability: match.capability,
           implementation: match.implementation,
           cliArgs: match.cliArgs,
+          force: opts.force,
         }),
         {
           cwd,

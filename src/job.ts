@@ -1065,6 +1065,8 @@ export interface ScheduledJobInput {
   cliArgs?: Record<string, unknown>
   /** Ask the owning goal/loop to write a report run after its persisted decision. */
   saveReport?: boolean
+  /** Bypass cadence deduplication for an explicit manual "Run now". */
+  force?: boolean
 }
 
 /**
@@ -1081,6 +1083,7 @@ export function mintScheduledJob(input: ScheduledJobInput): Job {
     agent: input.agent,
     cliArgs: input.cliArgs ?? {},
     flavor: "scheduled",
+    force: input.force === true,
     saveReport: input.saveReport === true,
   }
 }

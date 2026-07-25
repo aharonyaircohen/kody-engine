@@ -9,19 +9,29 @@ export const dispatchSimpleLoops: PreflightScript = async (ctx) => {
   const tenantId = repositoryTenant(ctx.config)
   if (!tenantId) throw new Error("Repository identity is required for Loop dispatch")
   const now = new Date()
-  const due = listLoopDefinitions(ctx.cwd).filter((loop) => dueSlot(loop, now) !== null)
+  const force = ctx.data.jobForce === true
+  const due = listLoopDefinitions(ctx.cwd).filter(
+    (loop) =>
+      loop.enabled &&
+      loop.trigger.type === "schedule" &&
+      (force || dueSlot(loop, now) !== null),
+  )
   const backend = createStateBackendFromEnv()
   const results: Array<{ loopId: string; status: string; reason: string }> = []
 
   for (const loop of due) {
-    const slot = dueSlot(loop, now)
+    const slot = loopDispatchSlot(loop, now, force, randomUUID())
     if (!slot) continue
     const reservationId = `reservation-${randomUUID()}`
     const idempotencyKey = `${loop.id}:${slot}`
     const claimed = await backend.reserveAgencyDispatch(tenantId, {
       idempotencyKey,
       loopId: loop.id,
-      decision: { kind: "fire", reason: "local Loop schedule is due", scheduledAt: slot },
+      decision: {
+        kind: "fire",
+        reason: force ? "manual Loop run requested" : "local Loop schedule is due",
+        scheduledAt: slot,
+      },
       leaseUntil: new Date(now.getTime() + 6 * 60 * 60 * 1_000).toISOString(),
       reservationId,
       correlationId: `corr-${randomUUID()}`,
@@ -52,6 +62,15 @@ export const dispatchSimpleLoops: PreflightScript = async (ctx) => {
     results.push({ loopId: loop.id, status, reason: result.reason ?? status })
   }
   ctx.data.simpleLoopDispatchResults = results
+}
+
+export function loopDispatchSlot(
+  loop: LoopDefinition,
+  now: Date,
+  force: boolean,
+  nonce: string,
+): string | null {
+  return force ? `manual:${now.toISOString()}:${nonce}` : dueSlot(loop, now)
 }
 
 export function dueSlot(loop: LoopDefinition, now: Date): string | null {
