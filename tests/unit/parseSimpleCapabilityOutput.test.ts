@@ -42,6 +42,29 @@ describe("parseSimpleCapabilityOutput", () => {
     ])
   })
 
+  it("uses the JSON fence when an earlier non-JSON fence explains the result", async () => {
+    const ctx = { data: {}, output: {} } as Parameters<typeof parseSimpleCapabilityOutput>[0]
+    await parseSimpleCapabilityOutput(
+      ctx,
+      {} as Parameters<typeof parseSimpleCapabilityOutput>[1],
+      {
+        finalText: [
+          "The capability skipped cleanly:",
+          "```",
+          "KODY_REASON=nothing to promote",
+          "KODY_SKIP_AGENT=true",
+          "```",
+          "```json",
+          '{"status":"skipped","reason":"nothing to promote"}',
+          "```",
+        ].join("\n"),
+      } as Parameters<typeof parseSimpleCapabilityOutput>[2],
+    )
+
+    expect(ctx.output.exitCode).toBeUndefined()
+    expect(ctx.data.capabilityOutput).toEqual({ status: "skipped", reason: "nothing to promote" })
+  })
+
   it("uses a plain object output as Workflow facts", async () => {
     const ctx = { data: {}, output: {} } as Parameters<typeof parseSimpleCapabilityOutput>[0]
     await parseSimpleCapabilityOutput(

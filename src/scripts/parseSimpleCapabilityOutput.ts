@@ -34,12 +34,32 @@ export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profil
 
 function parseOutput(text: string | undefined): unknown | undefined {
   if (!text) return undefined
-  const candidate = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)?.[1] ?? text
   try {
-    return JSON.parse(candidate)
+    return JSON.parse(text)
   } catch {
-    return undefined
+    // Continue with fenced output.
   }
+
+  const fences = [...text.matchAll(/```([a-z0-9_-]+)?\s*([\s\S]*?)\s*```/gi)]
+  const jsonFences = fences.filter((match) => match[1]?.toLowerCase() === "json")
+  const labelledOutput = parseSingleJsonCandidate(jsonFences.map((match) => match[2]))
+  if (labelledOutput.found) return labelledOutput.value
+
+  const plainOutput = parseSingleJsonCandidate(fences.filter((match) => !match[1]).map((match) => match[2]))
+  return plainOutput.found ? plainOutput.value : undefined
+}
+
+function parseSingleJsonCandidate(candidates: Array<string | undefined>): { found: boolean; value?: unknown } {
+  const parsed: unknown[] = []
+  for (const candidate of candidates) {
+    if (!candidate) continue
+    try {
+      parsed.push(JSON.parse(candidate))
+    } catch {
+      // Non-JSON fences may explain the result; they are not capability output.
+    }
+  }
+  return parsed.length === 1 ? { found: true, value: parsed[0] } : { found: false }
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
