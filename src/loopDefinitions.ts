@@ -48,7 +48,7 @@ export function normalizeLoopDefinition(value: unknown): LoopDefinition | null {
 
 export function readLoopDefinition(cwd: string, id: string): LoopDefinition | null {
   if (!ID.test(id)) return null
-  const roots = [path.join(cwd, ".kody-engine", "runtime"), definitionsRoot(cwd)]
+  const roots = loopRoots(cwd)
   for (const root of roots) {
     const filePath = path.join(root, "loops", id, "loop.json")
     if (!fs.existsSync(filePath)) continue
@@ -67,7 +67,7 @@ export function readLoopDefinition(cwd: string, id: string): LoopDefinition | nu
 }
 
 export function listLoopDefinitions(cwd: string): LoopDefinition[] {
-  const roots = [path.join(cwd, ".kody-engine", "runtime"), definitionsRoot(cwd)]
+  const roots = loopRoots(cwd)
   const byId = new Map<string, LoopDefinition>()
   for (const root of roots.reverse()) {
     const loopsDir = path.join(root, "loops")
@@ -85,6 +85,14 @@ export function listLoopDefinitions(cwd: string): LoopDefinition[] {
     }
   }
   return [...byId.values()].sort((left, right) => left.id.localeCompare(right.id))
+}
+
+function loopRoots(cwd: string): string[] {
+  return [
+    path.join(cwd, ".kody-engine", "runtime"),
+    path.join(cwd, ".kody-engine", "definitions"),
+    definitionsRoot(cwd),
+  ].filter((root, index, roots) => roots.indexOf(root) === index)
 }
 
 function normalizeTrigger(raw: Record<string, unknown>): LoopTrigger | null {
