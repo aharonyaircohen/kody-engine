@@ -16,6 +16,9 @@ export const dispatchSimpleLoops: PreflightScript = async (ctx) => {
       loop.trigger.type === "schedule" &&
       (force || dueSlot(loop, now) !== null),
   )
+  process.stdout.write(
+    `→ kody: Loop scheduler found ${due.length} runnable Loop(s)${force ? " (manual)" : ""}\n`,
+  )
   const backend = createStateBackendFromEnv()
   const results: Array<{ loopId: string; status: string; reason: string }> = []
 
@@ -60,6 +63,11 @@ export const dispatchSimpleLoops: PreflightScript = async (ctx) => {
     const status = result.exitCode === 0 ? "dispatched" : "failed"
     await backend.finishAgencyDispatch(tenantId, idempotencyKey, reservationId, status, new Date().toISOString())
     results.push({ loopId: loop.id, status, reason: result.reason ?? status })
+  }
+  for (const result of results) {
+    process.stdout.write(
+      `→ kody: Loop ${result.loopId} ${result.status}: ${result.reason}\n`,
+    )
   }
   ctx.data.simpleLoopDispatchResults = results
 }
