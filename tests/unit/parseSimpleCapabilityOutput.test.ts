@@ -84,4 +84,19 @@ describe("parseSimpleCapabilityOutput", () => {
       }),
     ])
   })
+
+  it("normalizes legacy prose output instead of failing the workflow step", async () => {
+    const ctx = { data: {}, output: {} } as Parameters<typeof parseSimpleCapabilityOutput>[0]
+    await parseSimpleCapabilityOutput(
+      ctx,
+      {} as Parameters<typeof parseSimpleCapabilityOutput>[1],
+      { finalText: "DONE\\nPR_SUMMARY=No changes were needed" } as Parameters<typeof parseSimpleCapabilityOutput>[2],
+    )
+
+    expect(ctx.output.exitCode).toBeUndefined()
+    expect(ctx.data.capabilityOutput).toEqual({
+      summary: "DONE\\nPR_SUMMARY=No changes were needed",
+      output: "DONE\\nPR_SUMMARY=No changes were needed",
+    })
+  })
 })
