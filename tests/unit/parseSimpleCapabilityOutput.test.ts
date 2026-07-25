@@ -2,6 +2,28 @@ import { describe, expect, it } from "vitest"
 import { parseSimpleCapabilityOutput } from "../../src/scripts/parseSimpleCapabilityOutput.js"
 
 describe("parseSimpleCapabilityOutput", () => {
+  it("returns a structured blocked result when the agent returns nothing", async () => {
+    const ctx = { data: {}, output: {} } as Parameters<typeof parseSimpleCapabilityOutput>[0]
+    await parseSimpleCapabilityOutput(
+      ctx,
+      {} as Parameters<typeof parseSimpleCapabilityOutput>[1],
+      null,
+    )
+
+    expect(ctx.output.exitCode).toBe(64)
+    expect(ctx.output.reason).toBe("Capability did not return one JSON value")
+    expect(ctx.data.capabilityOutput).toEqual({
+      status: "failed",
+      summary: "Capability did not return one JSON value",
+    })
+    expect(ctx.data.capabilityResults).toEqual([
+      expect.objectContaining({
+        status: "blocked",
+        blockers: ["Capability did not return one JSON value"],
+      }),
+    ])
+  })
+
   it("keeps the capability output and derives Workflow facts and a PR target", async () => {
     const ctx = { data: {}, output: {} } as Parameters<typeof parseSimpleCapabilityOutput>[0]
     await parseSimpleCapabilityOutput(
