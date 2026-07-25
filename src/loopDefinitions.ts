@@ -28,7 +28,11 @@ export function normalizeLoopDefinition(value: unknown): LoopDefinition | null {
   if (!isObject(raw.input) || !isObject(raw.trigger) || !isObject(raw.target)) return null
   const targetKind = raw.target.kind
   const targetId = raw.target.id
-  if ((targetKind !== "workflow" && targetKind !== "capability") || typeof targetId !== "string" || !ID.test(targetId)) {
+  if (
+    (targetKind !== "workflow" && targetKind !== "capability") ||
+    typeof targetId !== "string" ||
+    !ID.test(targetId)
+  ) {
     return null
   }
   const trigger = normalizeTrigger(raw.trigger)
@@ -44,10 +48,7 @@ export function normalizeLoopDefinition(value: unknown): LoopDefinition | null {
 
 export function readLoopDefinition(cwd: string, id: string): LoopDefinition | null {
   if (!ID.test(id)) return null
-  const roots = [
-    path.join(cwd, ".kody-engine", "runtime"),
-    definitionsRoot(cwd),
-  ]
+  const roots = [path.join(cwd, ".kody-engine", "runtime"), definitionsRoot(cwd)]
   for (const root of roots) {
     const filePath = path.join(root, "loops", id, "loop.json")
     if (!fs.existsSync(filePath)) continue
@@ -63,6 +64,27 @@ export function readLoopDefinition(cwd: string, id: string): LoopDefinition | nu
     `[kody] simple Loop not found: ${id} (${roots.map((root) => path.join(root, "loops", id, "loop.json")).join(", ")})\n`,
   )
   return null
+}
+
+export function listLoopDefinitions(cwd: string): LoopDefinition[] {
+  const roots = [path.join(cwd, ".kody-engine", "runtime"), definitionsRoot(cwd)]
+  const byId = new Map<string, LoopDefinition>()
+  for (const root of roots.reverse()) {
+    const loopsDir = path.join(root, "loops")
+    if (!fs.existsSync(loopsDir)) continue
+    for (const id of fs.readdirSync(loopsDir).sort()) {
+      if (!ID.test(id)) continue
+      const filePath = path.join(loopsDir, id, "loop.json")
+      if (!fs.existsSync(filePath)) continue
+      try {
+        const loop = normalizeLoopDefinition(JSON.parse(fs.readFileSync(filePath, "utf8")))
+        if (loop?.id === id) byId.set(id, loop)
+      } catch {
+        process.stderr.write(`[kody] unreadable simple Loop definition: ${filePath}\n`)
+      }
+    }
+  }
+  return [...byId.values()].sort((left, right) => left.id.localeCompare(right.id))
 }
 
 function normalizeTrigger(raw: Record<string, unknown>): LoopTrigger | null {

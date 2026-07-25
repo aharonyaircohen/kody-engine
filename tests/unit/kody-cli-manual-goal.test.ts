@@ -80,11 +80,7 @@ function writeScheduledImplementation(dir: string, name: string): void {
   fs.writeFileSync(path.join(implementationDir, "capability.md"), `# ${name}\n`)
 }
 
-function writePublicCapability(
-  dir: string,
-  name: string,
-  inputs: Array<Record<string, unknown>> = [],
-): void {
+function writePublicCapability(dir: string, name: string, inputs: Array<Record<string, unknown>> = []): void {
   const capabilityDir = path.join(dir, ".kody-engine", "definitions", "capabilities", name)
   fs.mkdirSync(capabilityDir, { recursive: true })
   fs.writeFileSync(
@@ -225,20 +221,19 @@ describe("kody-cli manual goal dispatch", () => {
   it("runs scheduled watch capabilities from manual workflow dispatch", async () => {
     const dir = tmpDir()
     writeConfig(dir)
-    writeScheduledImplementation(dir, "goal-scheduler")
     previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
     previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
     process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
     process.env.GITHUB_EVENT_PATH = writeEvent({
-      inputs: { capability: "goal-scheduler" },
+      inputs: { capability: "loop-scheduler" },
     })
 
     await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
 
     expect(mocks.runJob).toHaveBeenCalledTimes(1)
     expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
-      action: "goal-scheduler",
-      capability: "goal-scheduler",
+      action: "loop-scheduler",
+      capability: "loop-scheduler",
 
       cliArgs: {},
       flavor: "instant",
@@ -292,9 +287,7 @@ describe("kody-cli manual goal dispatch", () => {
       },
     })
 
-    await expect(
-      runCi(["--cwd", dir, "--skip-install", "--skip-litellm"]),
-    ).resolves.toBe(0)
+    await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
 
     expect(mocks.runJob).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -342,10 +335,9 @@ describe("kody-cli manual goal dispatch", () => {
     })
   })
 
-  it("chains scheduled goal-scheduler ticks from schedule events", async () => {
+  it("runs the local Loop scheduler from schedule events", async () => {
     const dir = tmpDir()
     writeConfig(dir)
-    writeScheduledImplementation(dir, "goal-scheduler")
     previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
     previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
     process.env.GITHUB_EVENT_NAME = "schedule"
@@ -356,15 +348,15 @@ describe("kody-cli manual goal dispatch", () => {
     expect(mocks.runJob).toHaveBeenCalledTimes(1)
     expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
       dispatch: {
-        action: "goal-scheduler",
-        capability: "goal-scheduler",
+        action: "loop-scheduler",
+        capability: "loop-scheduler",
 
         cliArgs: {},
       },
     })
     expect(mocks.runJob.mock.calls[0]?.[1]).toMatchObject({
       cwd: dir,
-      chain: true,
+      chain: false,
     })
   })
 

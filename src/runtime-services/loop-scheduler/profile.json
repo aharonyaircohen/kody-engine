@@ -1,5 +1,8 @@
 {
   "internal": true,
+  "role": "watch",
+  "kind": "scheduled",
+  "schedule": "*/5 * * * *",
   "claudeCode": {
     "model": "inherit",
     "permissionMode": "default",
@@ -14,32 +17,16 @@
     "plugins": [],
     "mcpServers": []
   },
-  "cliTools": [
-    {
-      "name": "python3",
-      "install": {
-        "required": true,
-        "checkCommand": "command -v python3"
-      },
-      "verify": "python3 --version",
-      "usage": "scheduler.sh parses each managed goal todo file",
-      "allowedUses": []
-    }
-  ],
+  "cliTools": [],
   "inputArtifacts": [],
   "outputArtifacts": [],
   "scripts": {
     "preflight": [
-      {
-        "shell": "scheduler.sh",
-        "timeoutSec": 1800
-      },
-      {
-        "script": "skipAgent"
-      }
+      { "script": "dispatchSimpleLoops" },
+      { "script": "skipAgent" }
     ],
     "postflight": []
   },
   "inputs": [],
-  "name": "goal-scheduler"
+  "name": "loop-scheduler"
 }
