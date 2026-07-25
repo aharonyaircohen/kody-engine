@@ -22,11 +22,11 @@
   ],
   "claudeCode": {
     "model": "inherit",
-    "permissionMode": "default",
+    "permissionMode": "acceptEdits",
     "maxTurns": 60,
     "maxThinkingTokens": null,
     "systemPromptAppend": null,
-    "tools": ["Read", "Bash"],
+    "tools": ["Read", "Bash", "Edit", "Write", "Glob", "Grep"],
     "hooks": [],
     "skills": [],
     "commands": [],
