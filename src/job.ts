@@ -714,6 +714,13 @@ async function runGraphCapabilityWorkflow(
       const key = `${step.id}->${transition.to}`
       state.transitionCounts[key] = (state.transitionCounts[key] ?? 0) + 1
     }
+    if (transition.to === "$end") {
+      state.status = "done"
+      delete state.currentStepId
+      delete state.blocker
+      await checkpoint?.(state)
+      return withWorkflowBoundaryEval(capability, { ...result, workflowState: state })
+    }
     state.currentStepId = transition.to
     state.status = "running"
     delete state.blocker
@@ -937,7 +944,7 @@ function workflowStepTargetNumber(
   chainData: Record<string, unknown>,
 ): number | undefined {
   if (step.target === "pr") return workflowPrNumber(chainData) ?? workflowTargetFactNumber(step, chainData)
-  if (step.target === "issue") return workflowIssueNumber(parent)
+  if (step.target === "issue") return workflowIssueNumber(parent) ?? workflowTargetFactNumber(step, chainData)
   return typeof parent.target === "number" ? parent.target : targetFromCliArgs(parent.cliArgs)
 }
 

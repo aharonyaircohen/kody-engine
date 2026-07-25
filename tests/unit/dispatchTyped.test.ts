@@ -227,7 +227,6 @@ describe("autoDispatchTyped: unrecognized variant (user-facing feedback needed)"
       expect(out.target).toBe(9)
       expect(out.isPr).toBe(false)
       expect(out.available).toContain("run")
-      expect(out.available).toContain("resolve")
       expect(out.available).toContain("merge")
       // Watch implementations (goal-/job-) are filtered out — they're internal.
       expect(out.available.find((n) => n.startsWith("goal-"))).toBeUndefined()

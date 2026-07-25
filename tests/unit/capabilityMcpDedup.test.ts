@@ -317,7 +317,7 @@ describe("start_capability — public dispatch primitive", () => {
     }).find((candidate) => candidate.name === "start_capability")
     if (!tool) throw new Error("start_capability tool missing")
 
-    await tool.handler({ name: "dev-ci-health", issue: 687 })
+    await tool.handler({ name: "ci-health-check", issue: 687 })
 
     expect(vi.mocked(gh).mock.calls.map((call) => call[0] as string[])).toContainEqual([
       "workflow",
@@ -326,7 +326,7 @@ describe("start_capability — public dispatch primitive", () => {
       "--ref",
       "dev",
       "-f",
-      "capability=dev-ci-health",
+      "capability=ci-health-check",
     ])
   })
 
@@ -345,7 +345,7 @@ describe("start_capability — public dispatch primitive", () => {
     }).find((candidate) => candidate.name === "start_capability")
     if (!tool) throw new Error("start_capability tool missing")
 
-    const result = await tool.handler({ name: "dev-ci-health", issue: 55 })
+    const result = await tool.handler({ name: "ci-health-check", issue: 55 })
 
     expect(result.content[0]?.text).toBe('{"ok":true,"runId":123456}')
     expect(vi.mocked(gh).mock.calls.map((call) => call[0] as string[])).toContainEqual([
@@ -355,7 +355,7 @@ describe("start_capability — public dispatch primitive", () => {
       "--ref",
       "dev",
       "-f",
-      "capability=dev-ci-health",
+      "capability=ci-health-check",
     ])
   })
 })

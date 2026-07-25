@@ -302,11 +302,11 @@ function parseWorkflowTransitions(value: unknown): CapabilityWorkflowTransitionC
     .map((raw): CapabilityWorkflowTransitionConfig | null => {
       if (typeof raw === "string") {
         const to = raw.trim()
-        return isSafeStepId(to) ? { to } : null
+        return to === "$end" || isSafeStepId(to) ? { to } : null
       }
       if (!isPlainObject(raw)) return null
       const to = stringField(raw.to)
-      if (!to || !isSafeStepId(to)) return null
+      if (!to || (to !== "$end" && !isSafeStepId(to))) return null
       const maxIterations =
         typeof raw.maxIterations === "number" && Number.isInteger(raw.maxIterations) && raw.maxIterations > 0
           ? raw.maxIterations

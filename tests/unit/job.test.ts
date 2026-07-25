@@ -1025,6 +1025,48 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("ends a workflow through an explicit $end connection", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-end-"))
+    try {
+      writeSimpleCapability(cwd, "check")
+      writeSimpleCapability(cwd, "repair")
+      writeWorkflowDefinition(cwd, "health", {
+        name: "Health",
+        agent: "kody",
+        startAt: "check",
+        steps: [
+          {
+            id: "check",
+            capability: "check",
+            next: [
+              { to: "repair", when: { "result.needsRepair": true } },
+              { to: "$end", default: true },
+            ],
+          },
+          { id: "repair", capability: "repair" },
+        ],
+      })
+      runImplementationChain.mockResolvedValueOnce({
+        exitCode: 0,
+        capabilityOutput: { needsRepair: false },
+        capabilityResults: [capabilityResult({ needsRepair: false })],
+      })
+
+      const result = await runJob(
+        { workflow: "health", cliArgs: {}, flavor: "instant" },
+        { cwd },
+      )
+
+      expect(runImplementationChain).toHaveBeenCalledTimes(1)
+      expect(result.workflowState).toMatchObject({
+        status: "done",
+        completedStepIds: ["check"],
+      })
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it("keeps direct capability text as the request when routing adds a target", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-simple-capability-input-"))
     try {

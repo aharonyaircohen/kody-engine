@@ -180,8 +180,11 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
         }
       }
       const target = text(raw.to)
-      if (!target || !SAFE_STEP_ID.test(target)) {
+      if (!target || (target !== "$end" && !SAFE_STEP_ID.test(target))) {
         issue(issues, "invalid_transition_target", `${base}.to`, "workflow connection must name a valid target step")
+        return
+      }
+      if (target === "$end") {
         return
       }
       if (!seen.has(target)) {

@@ -35,4 +35,23 @@ describe("parseCapabilityWorkflow", () => {
 
     expect(config.output).toEqual({ result: { facts: ["observation", "finding"] } })
   })
+
+  it("allows a conditional workflow connection to end", () => {
+    const workflow = parseCapabilityWorkflow({
+      startAt: "check",
+      steps: [
+        {
+          id: "check",
+          capability: "ci-health-check",
+          next: [
+            { to: "repair", when: { "result.needsRepair": true } },
+            { to: "$end", default: true },
+          ],
+        },
+        { id: "repair", capability: "run" },
+      ],
+    })
+
+    expect(workflow?.steps[0]?.next?.[1]?.to).toBe("$end")
+  })
 })

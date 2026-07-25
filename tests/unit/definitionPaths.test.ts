@@ -43,4 +43,19 @@ describe("definition paths", () => {
     expect(hasExplicitDefinitionsRoot(other)).toBe(false)
     fs.rmSync(other, { recursive: true, force: true })
   })
+
+  it("uses the installable catalog roots declared by a Store manifest", () => {
+    fs.writeFileSync(
+      path.join(override, "kody-store.json"),
+      JSON.stringify({
+        assetRoots: {
+          capabilities: "catalog/capabilities",
+          workflows: "catalog/workflows",
+          loops: "catalog/loops",
+        },
+      }),
+    )
+
+    expect(definitionsRoot(cwd)).toBe(path.join(override, "catalog"))
+  })
 })
