@@ -21,6 +21,7 @@ import type {
 import { capabilityOutputConditionPaths } from "./capabilityFolders.js"
 import type { CapabilityResult } from "./capabilityResult.js"
 import type { KodyConfig } from "./config.js"
+import { capabilitiesRoot } from "./definition-paths.js"
 import type { DispatchResult } from "./dispatch.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
 import { runImplementation, runImplementationChain } from "./executor.js"
@@ -1013,7 +1014,7 @@ function loadCapabilityContext(slug: string | undefined, cwd: string): ReturnTyp
 }
 
 function hydratedCapabilitiesRoot(cwd: string): string {
-  return path.join(cwd, ".kody-engine", "definitions", "capabilities")
+  return capabilitiesRoot(cwd)
 }
 
 function loadWorkflowContext(slug: string | undefined, base: RunJobBase): CapabilityFolder | null {
