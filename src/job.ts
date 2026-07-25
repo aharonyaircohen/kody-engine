@@ -229,9 +229,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
         : null
     const workflowJob = {
       ...(workflowContext && !valid.why ? { ...valid, why: workflowContext.body } : valid),
-      ...(workflowCapability.config.agent
-        ? { agent: workflowCapability.config.agent }
-        : {}),
+      ...(workflowCapability.config.agent ? { agent: workflowCapability.config.agent } : {}),
       ...((valid.workflowState ?? persistedState)
         ? { workflowState: valid.workflowState ?? persistedState ?? undefined }
         : {}),
@@ -389,17 +387,10 @@ async function runCapabilityImplementationStep(
     ? { ...resolvedCapability.cliArgs, ...input.cliArgs }
     : input.cliArgs
   if (profileName === "capability-run" && capabilityIdentity) {
-    const capabilityInput = { ...valid.cliArgs }
+    const capabilityInput = Object.keys(valid.cliArgs).length > 0 ? genericInputFromArgs(valid.cliArgs) : undefined
     input.cliArgs = {
       capability: capabilityIdentity,
-      ...(Object.keys(capabilityInput).length > 0
-        ? {
-            input:
-              Object.keys(capabilityInput).length === 1 && typeof capabilityInput.input === "string"
-                ? capabilityInput.input
-                : JSON.stringify(capabilityInput),
-          }
-        : {}),
+      ...(capabilityInput !== undefined ? { input: JSON.stringify(capabilityInput) } : {}),
     }
   }
 
@@ -487,7 +478,7 @@ async function runLinearCapabilityWorkflow(
       )
       continue
     }
-    const child = workflowStepToJob(step, parent, chainData)
+    const child = workflowStepToJob(step, parent, chainData, base.cwd)
     process.stdout.write(
       `→ kody: workflow ${capability.slug} step ${index + 1}/${workflow.steps.length} → ${label}\n\n`,
     )
@@ -513,6 +504,7 @@ async function runLinearCapabilityWorkflow(
       ...chainData,
       ...(result.taskState ? { taskState: result.taskState } : {}),
       ...(outcome ? { workflowLastOutcome: outcome } : {}),
+      ...(result.capabilityOutput !== undefined ? { workflowLastOutput: result.capabilityOutput } : {}),
       ...(prUrl ? { workflowPrUrl: prUrl } : {}),
       ...(parsePrNumber(prUrl) ? { workflowPrNumber: parsePrNumber(prUrl) } : {}),
     }
@@ -531,15 +523,13 @@ async function runLinearCapabilityWorkflow(
 
 function isGraphWorkflow(workflow: CapabilityWorkflowConfig): boolean {
   return (
-    workflow.startAt !== undefined ||
-    workflow.steps.some((step) => step.id !== undefined || step.next !== undefined || step.inputs !== undefined)
+    workflow.startAt !== undefined || workflow.steps.some((step) => step.id !== undefined || step.next !== undefined)
   )
 }
 
 function workflowError(workflow: CapabilityWorkflowConfig, base: RunJobBase): string | null {
   const projectCapabilitiesRoot = hydratedCapabilitiesRoot(base.cwd)
   const knownCapabilities = new Set<string>()
-  const capabilityInputs = new Map<string, Set<string>>()
   const capabilityOutputs = new Map<string, Set<string>>()
   for (const step of workflow.steps) {
     const action = step.action ?? step.capability
@@ -547,23 +537,10 @@ function workflowError(workflow: CapabilityWorkflowConfig, base: RunJobBase): st
     const resolvedFolder = resolveCapabilityFolder(step.capability, projectCapabilitiesRoot)
     if (!resolvedAction && !resolvedFolder) continue
     knownCapabilities.add(step.capability)
-    capabilityOutputs.set(
-      step.capability,
-      resolvedFolder ? capabilityOutputConditionPaths(resolvedFolder.config) : new Set(),
-    )
-    const inputs = getCapabilityActionInputs(action, projectCapabilitiesRoot)
-    if (inputs) {
-      capabilityInputs.set(
-        step.capability,
-        new Set(inputs.flatMap((input) => [input.name, input.flag.replace(/^--/, "")])),
-      )
-    }
+    const outputPaths = resolvedFolder ? capabilityOutputConditionPaths(resolvedFolder.config) : new Set<string>()
+    if (outputPaths.size > 0) capabilityOutputs.set(step.capability, outputPaths)
   }
-  return (
-    formatWorkflowValidationIssues(
-      validateWorkflow(workflow, { knownCapabilities, capabilityInputs, capabilityOutputs }),
-    )[0] ?? null
-  )
+  return formatWorkflowValidationIssues(validateWorkflow(workflow, { knownCapabilities, capabilityOutputs }))[0] ?? null
 }
 
 function initialWorkflowState(parent: Job, workflow: CapabilityWorkflowConfig): WorkflowRunState {
@@ -658,7 +635,7 @@ async function runGraphCapabilityWorkflow(
     await checkpoint?.(state)
     let child: Job
     try {
-      child = workflowStepToJob(step, parent, chainData)
+      child = workflowStepToJob(step, parent, chainData, base.cwd)
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
       state.status = "blocked"
@@ -695,6 +672,7 @@ async function runGraphCapabilityWorkflow(
       ...(result.taskState ? { taskState: result.taskState } : {}),
       ...(outcome ? { workflowLastOutcome: outcome } : {}),
       ...(result.capabilityResults?.at(-1) ? { workflowLastResult: result.capabilityResults.at(-1) } : {}),
+      ...(result.capabilityOutput !== undefined ? { workflowLastOutput: result.capabilityOutput } : {}),
       ...(prUrl ? { workflowPrUrl: prUrl } : {}),
       ...(parsePrNumber(prUrl) ? { workflowPrNumber: parsePrNumber(prUrl) } : {}),
     }
@@ -812,23 +790,17 @@ function withWorkflowBoundaryEval(capability: CapabilityFolder, result: Executor
   }
 }
 
-function workflowStepToJob(step: CapabilityWorkflowStepConfig, parent: Job, chainData: Record<string, unknown>): Job {
+function workflowStepToJob(
+  step: CapabilityWorkflowStepConfig,
+  parent: Job,
+  chainData: Record<string, unknown>,
+  cwd: string,
+): Job {
   const action = step.action ?? step.capability
-  const mappedArgs: Record<string, unknown> = {}
-  const conditionContext = workflowConditionContext(chainData)
-  for (const [name, mapping] of Object.entries(step.inputs ?? {})) {
-    const value = resolveDottedPath(conditionContext, mapping.from)
-    if (value === undefined) {
-      throw new InvalidJobError(`workflow step ${step.id ?? action} needs missing input ${mapping.from}`)
-    }
-    mappedArgs[name] = value
-  }
+  const targetNumber = workflowStepTargetNumber(step, parent, chainData)
   const rawArgs = {
     ...parent.cliArgs,
-    ...mappedArgs,
-    ...(step.cliArgs ?? {}),
   }
-  const targetNumber = workflowStepTargetNumber(step, parent, chainData)
   if (step.target === "pr") {
     if (typeof targetNumber !== "number") {
       throw new InvalidJobError(`workflow step ${action} needs a PR target but no prior PR URL is available`)
@@ -837,7 +809,16 @@ function workflowStepToJob(step: CapabilityWorkflowStepConfig, parent: Job, chai
   } else if (step.target === "issue" && typeof targetNumber === "number") {
     rawArgs.issue = targetNumber
   }
-  const cliArgs = filterCliArgsForStep(action, rawArgs)
+  const genericInput = capabilityStepInput(
+    step.input ?? chainData.workflowLastOutput ?? genericInputFromArgs(rawArgs),
+    step.target,
+    targetNumber,
+  )
+  const cliArgs = usesGenericCapabilityInput(action, cwd)
+    ? genericInput === undefined
+      ? {}
+      : { input: JSON.stringify(genericInput) }
+    : filterCliArgsForStep(action, rawArgs)
   const target =
     typeof targetNumber === "number"
       ? targetNumber
@@ -847,7 +828,6 @@ function workflowStepToJob(step: CapabilityWorkflowStepConfig, parent: Job, chai
   return {
     action,
     capability: step.capability,
-    ...(step.implementation ? { implementation: step.implementation } : {}),
     ...(composeStepWhy(parent.why, step) ? { why: composeStepWhy(parent.why, step) } : {}),
     ...(parent.agent ? { agent: parent.agent } : {}),
     ...(parent.schedule ? { schedule: parent.schedule } : {}),
@@ -860,6 +840,46 @@ function workflowStepToJob(step: CapabilityWorkflowStepConfig, parent: Job, chai
     ...(step.report ? { report: step.report } : {}),
     ...(parent.resultTarget ? { resultTarget: parent.resultTarget } : {}),
   }
+}
+
+function usesGenericCapabilityInput(action: string, cwd: string): boolean {
+  const inputs = getCapabilityActionInputs(action, hydratedCapabilitiesRoot(cwd))
+  return Boolean(inputs?.length === 1 && inputs[0]?.name === "input" && inputs[0]?.flag === "--input")
+}
+
+function genericInputFromArgs(args: Record<string, unknown>): unknown {
+  if (Object.hasOwn(args, "input")) {
+    const { input, ...routing } = args
+    const parsed = parseGenericInput(input)
+    if (Object.keys(routing).length === 0) return parsed
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return { ...(parsed as Record<string, unknown>), ...routing }
+    }
+    return { request: parsed, ...routing }
+  }
+  return args
+}
+
+function parseGenericInput(value: unknown): unknown {
+  if (typeof value !== "string") return value
+  try {
+    return JSON.parse(value)
+  } catch {
+    return value
+  }
+}
+
+function capabilityStepInput(
+  input: unknown,
+  target: CapabilityWorkflowStepConfig["target"],
+  targetNumber: number | undefined,
+): unknown {
+  if (!target || targetNumber === undefined) return input
+  const routing = { [target]: targetNumber }
+  if (input && typeof input === "object" && !Array.isArray(input)) {
+    return { ...(input as Record<string, unknown>), ...routing }
+  }
+  return input === undefined ? routing : { request: input, ...routing }
 }
 
 function shouldRunWorkflowStep(step: CapabilityWorkflowStepConfig, data: Record<string, unknown>): boolean {
@@ -880,15 +900,17 @@ function workflowOutcome(result: ExecutorOutput): Action | null {
 function workflowConditionContext(data: Record<string, unknown>): Record<string, unknown> {
   const lastOutcome = data.workflowLastOutcome
   const lastResult = data.workflowLastResult
+  const lastOutput = data.workflowLastOutput
   return {
     ...data,
     facts: data.workflowFacts ?? {},
     evidence: data.workflowEvidence ?? {},
     artifacts: data.workflowArtifacts ?? [],
-    result: lastResult,
+    result: lastOutput === undefined ? lastResult : lastOutput,
     workflow: {
       lastOutcome,
       lastResult,
+      lastOutput,
       issueNumber: data.workflowIssueNumber,
       prNumber: data.workflowPrNumber,
       prUrl: data.workflowPrUrl,
@@ -914,14 +936,9 @@ function workflowStepTargetNumber(
   parent: Job,
   chainData: Record<string, unknown>,
 ): number | undefined {
-  if (step.target === "pr")
-    return (
-      workflowPrNumber(chainData) ?? workflowTargetFactNumber(step, chainData) ?? targetFromCliArgs(step.cliArgs ?? {})
-    )
+  if (step.target === "pr") return workflowPrNumber(chainData) ?? workflowTargetFactNumber(step, chainData)
   if (step.target === "issue") return workflowIssueNumber(parent)
-  return typeof parent.target === "number"
-    ? parent.target
-    : targetFromCliArgs({ ...parent.cliArgs, ...(step.cliArgs ?? {}) })
+  return typeof parent.target === "number" ? parent.target : targetFromCliArgs(parent.cliArgs)
 }
 
 function workflowResumeStartIndex(steps: CapabilityWorkflowStepConfig[], evidence: string | undefined): number {

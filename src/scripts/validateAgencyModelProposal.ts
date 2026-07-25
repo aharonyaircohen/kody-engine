@@ -5,7 +5,7 @@ import {
   readCapabilityFolder,
 } from "../capabilityFolders.js"
 import type { PostflightScript, ScriptArgs } from "../implementations/types.js"
-import { getCapabilityActionInputs, getCapabilityRoots } from "../registry.js"
+import { getCapabilityRoots } from "../registry.js"
 import { formatWorkflowValidationIssues, validateWorkflow } from "../workflowValidation.js"
 import { parseAgencyModelProposal } from "./openAgencyModelReviewPr.js"
 
@@ -171,28 +171,20 @@ function validateFilesForKind(
           ? getCapabilityRoots(options.capabilityRoot).flatMap((root) => listCapabilityFolderSlugs(root))
           : []
         const uniqueKnown = [...new Set(known)]
-        const capabilityInputs = new Map<string, Set<string>>()
         const capabilityOutputs = new Map<string, Set<string>>()
         if (options.capabilityRoot) {
           for (const capability of uniqueKnown) {
             const folder = getCapabilityRoots(options.capabilityRoot)
               .map((root) => readCapabilityFolder(root, capability))
               .find((entry) => entry !== null)
-            capabilityOutputs.set(capability, folder ? capabilityOutputConditionPaths(folder.config) : new Set())
-            const inputs = getCapabilityActionInputs(capability, options.capabilityRoot)
-            if (inputs) {
-              capabilityInputs.set(
-                capability,
-                new Set(inputs.flatMap((input) => [input.name, input.flag.replace(/^--/, "")])),
-              )
-            }
+            const outputPaths = folder ? capabilityOutputConditionPaths(folder.config) : new Set<string>()
+            if (outputPaths.size > 0) capabilityOutputs.set(capability, outputPaths)
           }
         }
         failures.push(
           ...formatWorkflowValidationIssues(
             validateWorkflow(workflow, {
               ...(uniqueKnown.length > 0 ? { knownCapabilities: new Set(uniqueKnown) } : {}),
-              ...(capabilityInputs.size > 0 ? { capabilityInputs } : {}),
               ...(capabilityOutputs.size > 0 ? { capabilityOutputs } : {}),
             }),
           ),

@@ -13,7 +13,6 @@ export interface WorkflowValidationOptions {
   maxTransitionsPerStep?: number
   maxLoopIterations?: number
   knownCapabilities?: ReadonlySet<string>
-  capabilityInputs?: ReadonlyMap<string, ReadonlySet<string>>
   capabilityOutputs?: ReadonlyMap<string, ReadonlySet<string>>
 }
 
@@ -22,14 +21,12 @@ type Raw = Record<string, unknown>
 const SUPPORTED_STEP_FIELDS = new Set([
   "id",
   "capability",
+  "input",
   "action",
-  "implementation",
   "evidence",
   "target",
   "targetFact",
   "reason",
-  "cliArgs",
-  "inputs",
   "next",
   "runWhen",
   "continueOn",
@@ -58,7 +55,7 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
     workflow?.startAt !== undefined ||
     rawSteps.some((entry) => {
       const step = asRecord(entry)
-      return Boolean(step && (step.id !== undefined || step.next !== undefined || step.inputs !== undefined))
+      return Boolean(step && (step.id !== undefined || step.next !== undefined))
     })
   const steps: Array<Raw | null> = rawSteps.map((entry) =>
     typeof entry === "string" ? { capability: entry } : asRecord(entry),
@@ -98,33 +95,8 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
     }
 
     validateDataMatch(step.runWhen, `${base}.runWhen`, issues)
-    const inputs = asRecord(step.inputs)
-    if (step.inputs !== undefined && !inputs) {
-      issue(issues, "invalid_inputs", `${base}.inputs`, "workflow step inputs must be an object")
-    }
-    if (inputs) {
-      for (const [name, mapping] of Object.entries(inputs)) {
-        const inputPath = `${base}.inputs.${name}`
-        if (!SAFE_NAME.test(name)) issue(issues, "invalid_input_name", inputPath, `invalid input name ${name}`)
-        const from = text(asRecord(mapping)?.from)
-        if (!from || !SAFE_DATA_PATH.test(from)) {
-          issue(
-            issues,
-            "invalid_data_path",
-            `${inputPath}.from`,
-            `workflow input ${name} must read from facts, evidence, artifacts, result, workflow, or lastOutcome`,
-          )
-        }
-        const declared = capability ? options.capabilityInputs?.get(capability) : undefined
-        if (declared && !declared.has(name)) {
-          issue(
-            issues,
-            "unknown_capability_input",
-            inputPath,
-            `capability ${capability} does not declare input ${name}`,
-          )
-        }
-      }
+    if (step.input !== undefined && !isJsonValue(step.input)) {
+      issue(issues, "invalid_input", `${base}.input`, "workflow step input must be one JSON value")
     }
   })
 
@@ -328,6 +300,13 @@ function text(value: unknown): string | undefined {
 function isComparable(value: unknown): boolean {
   if (value === null || ["string", "number", "boolean"].includes(typeof value)) return true
   return Array.isArray(value) && value.length > 0 && value.every((item) => isComparable(item) && !Array.isArray(item))
+}
+
+function isJsonValue(value: unknown): boolean {
+  if (value === null || ["string", "number", "boolean"].includes(typeof value)) return true
+  if (Array.isArray(value)) return value.every(isJsonValue)
+  if (!value || typeof value !== "object") return false
+  return Object.values(value as Record<string, unknown>).every(isJsonValue)
 }
 
 function issue(issues: WorkflowValidationIssue[], code: string, path: string, message: string): void {

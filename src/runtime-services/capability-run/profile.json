@@ -16,6 +16,7 @@
       "flag": "--input",
       "type": "string",
       "required": false,
+      "bindsCommentRest": true,
       "describe": "The capability's single JSON input."
     }
   ],

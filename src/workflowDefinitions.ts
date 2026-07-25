@@ -36,17 +36,7 @@ export function normalizeWorkflowDefinition(value: unknown): WorkflowDefinition 
   const name = typeof raw.name === "string" ? raw.name.trim() : ""
   const requestedAgent = typeof raw.agent === "string" ? raw.agent.trim() : ""
   const agent = /^[a-z][a-z0-9-]*$/.test(requestedAgent) ? requestedAgent : "kody"
-  const hasGraphConnections =
-    Array.isArray(raw.steps) &&
-    raw.steps.some(
-      (step) =>
-        step &&
-        typeof step === "object" &&
-        !Array.isArray(step) &&
-        ((step as Record<string, unknown>).next !== undefined ||
-          (step as Record<string, unknown>).inputs !== undefined),
-    )
-  if (hasGraphConnections) {
+  if (Array.isArray(raw.steps)) {
     if (
       validateWorkflow({ steps: raw.steps, ...(raw.startAt !== undefined ? { startAt: raw.startAt } : {}) }).length > 0
     ) {

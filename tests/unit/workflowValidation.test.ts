@@ -177,30 +177,29 @@ describe("validateWorkflow", () => {
       {
         steps: [{ id: "inspect", capability: "inspect", inputs: { prompt: { from: "unknown.value" } } }],
       },
-      "invalid_data_path",
+      "unsupported_step_field",
     ],
   ] as const)("rejects invalid agent output %#", (workflow, expectedCode) => {
     expect(codes(workflow)).toContain(expectedCode)
   })
 
-  it("rejects unknown capabilities and unsupported mapped inputs when contracts are supplied", () => {
+  it("rejects unknown capabilities and removed Workflow fields", () => {
     const workflow = {
       steps: [
         {
           id: "inspect",
           capability: "missing",
           inputs: { unexpected: { from: "facts.value" } },
+          implementation: "legacy-profile",
         },
       ],
     }
     const issues = validateWorkflow(workflow, {
       knownCapabilities: new Set(["inspect"]),
-      capabilityInputs: new Map([["missing", new Set(["prompt"])]]),
     })
 
-    expect(issues.map((issue) => issue.code)).toEqual(
-      expect.arrayContaining(["unknown_capability", "unknown_capability_input"]),
-    )
+    expect(issues.filter((issue) => issue.code === "unsupported_step_field")).toHaveLength(2)
+    expect(issues.map((issue) => issue.code)).toContain("unknown_capability")
   })
 
   it("rejects invented workflow fields instead of silently ignoring them", () => {

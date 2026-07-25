@@ -84,6 +84,8 @@ export interface AgentOptions {
   prompt: string
   model: ProviderModel
   cwd: string
+  /** Explicit non-secret values exposed only to this agent process. */
+  environment?: Record<string, string>
   litellmUrl?: string | null
   verbose?: boolean
   quiet?: boolean
@@ -383,8 +385,12 @@ export function stripAgentSecrets(env: Record<string, string>): Record<string, s
   return out
 }
 
-/** Build the SDK child environment, applying a request-scoped repo token last. */
-export function buildAgentEnvironment(baseEnv: Record<string, string>, repoToken?: string): Record<string, string> {
+/** Build the SDK child environment, applying explicit request values last. */
+export function buildAgentEnvironment(
+  baseEnv: Record<string, string>,
+  repoToken?: string,
+  requestEnvironment?: Record<string, string>,
+): Record<string, string> {
   const env = stripAgentSecrets({
     ...baseEnv,
     SKIP_HOOKS: "1",
@@ -397,6 +403,7 @@ export function buildAgentEnvironment(baseEnv: Record<string, string>, repoToken
     env.GITHUB_TOKEN = repoToken
     env.GH_TOKEN = repoToken
   }
+  Object.assign(env, requestEnvironment)
   return env
 }
 
@@ -407,7 +414,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
 
   // MCP servers are spawned asynchronously by the SDK. Blocking until each
   // handshake completes keeps the tool list complete on the first turn.
-  const env = buildAgentEnvironment(process.env as Record<string, string>, opts.repoToken)
+  const env = buildAgentEnvironment(process.env as Record<string, string>, opts.repoToken, opts.environment)
   if (opts.litellmUrl) {
     env.ANTHROPIC_BASE_URL = opts.litellmUrl
     env.ANTHROPIC_API_KEY = getAnthropicApiKeyOrDummy()

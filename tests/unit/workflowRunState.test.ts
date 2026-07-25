@@ -39,10 +39,7 @@ describe("workflow run state", () => {
         version: 1,
         name: "Pilot",
         startAt: "verify",
-        steps: [
-          { id: "inspect", capability: "run" },
-          { id: "verify", capability: "review" },
-        ],
+        steps: [{ id: "verify", capability: "review" }],
       })?.startAt,
     ).toBe("verify")
   })

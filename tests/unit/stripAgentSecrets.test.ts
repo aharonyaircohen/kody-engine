@@ -72,4 +72,16 @@ describe("buildAgentEnvironment", () => {
     expect(out.GH_TOKEN).toBe("request-token")
     expect(out.GITHUB_TOKEN).toBe("request-token")
   })
+
+  it("adds only the explicit capability environment after secrets are stripped", () => {
+    const out = buildAgentEnvironment(
+      { PATH: "/bin", ALL_SECRETS: '{"NPM_TOKEN":"secret"}', NPM_TOKEN: "secret" },
+      undefined,
+      { KODY_CAPABILITY_INPUT: '{"bump":"patch"}', KODY_ARG_BUMP: "patch" },
+    )
+
+    expect(out.NPM_TOKEN).toBeUndefined()
+    expect(out.KODY_CAPABILITY_INPUT).toBe('{"bump":"patch"}')
+    expect(out.KODY_ARG_BUMP).toBe("patch")
+  })
 })

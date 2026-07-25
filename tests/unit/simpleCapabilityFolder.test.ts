@@ -19,35 +19,25 @@ function capability(extra: Record<string, string> = {}) {
   fs.mkdirSync(path.join(dir, "skills"), { recursive: true })
   fs.mkdirSync(path.join(dir, "tools"), { recursive: true })
   fs.writeFileSync(path.join(dir, "instructions.md"), "Inspect the supplied request.\n")
-  fs.writeFileSync(
-    path.join(dir, "contract.json"),
-    JSON.stringify({
-      input: { name: "request", schema: { type: "object" } },
-      output: { name: "result", schema: { type: "object" } },
-    }),
-  )
   for (const [name, content] of Object.entries(extra)) fs.writeFileSync(path.join(dir, name), content)
   return { root, dir }
 }
 
 describe("simple Capability folder", () => {
-  it("loads instructions and one input/output contract", () => {
+  it("loads instructions as the complete capability definition", () => {
     const { root, dir } = capability()
     const loaded = readCapabilityFolder(root, "inspect")
     expect(isCapabilityFolder(dir)).toBe(true)
     expect(loaded?.bodyPath).toBe(path.join(dir, "instructions.md"))
-    expect(loaded?.rawProfile.contract).toMatchObject({
-      input: { name: "request" },
-      output: { name: "result" },
-    })
+    expect(loaded?.rawProfile).toEqual({})
     expect(resolveCapabilityExecution(loaded!, root)).toEqual({
       implementation: "capability-run",
       cliArgs: { capability: "inspect" },
     })
   })
 
-  it("rejects hidden runtime and orchestration files", () => {
-    const { dir } = capability({ "profile.json": "{}" })
+  it("rejects hidden schemas, runtime, and orchestration files", () => {
+    const { dir } = capability({ "contract.json": "{}" })
     expect(isCapabilityFolder(dir)).toBe(false)
   })
 
@@ -68,13 +58,6 @@ describe("simple Capability folder", () => {
     fs.mkdirSync(path.join(dir, "skills"), { recursive: true })
     fs.mkdirSync(path.join(dir, "tools"), { recursive: true })
     fs.writeFileSync(path.join(dir, "instructions.md"), "Inspect the supplied request.\n")
-    fs.writeFileSync(
-      path.join(dir, "contract.json"),
-      JSON.stringify({
-        input: { name: "request", schema: { type: "object" } },
-        output: { name: "result", schema: { type: "object" } },
-      }),
-    )
     fs.writeFileSync(path.join(dir, "skills", "review.md"), "Check the evidence carefully.")
     fs.writeFileSync(path.join(dir, "tools", "check.sh"), "#!/bin/sh\necho checked\n")
     fs.symlinkSync(path.join(dir, "instructions.md"), path.join(dir, "tools", "unsafe-link"))
@@ -87,8 +70,42 @@ describe("simple Capability folder", () => {
     await loadSimpleCapability(ctx, {} as never)
 
     const prompt = String((ctx as { data: Record<string, unknown> }).data.prompt)
+    const environment = (ctx as { data: { capabilityEnvironment: Record<string, string> } }).data.capabilityEnvironment
     expect(prompt).toContain("Check the evidence carefully.")
     expect(prompt).toContain(path.join(dir, "tools", "check.sh"))
     expect(prompt).not.toContain("unsafe-link")
+    expect(prompt).toContain('"subject": "change"')
+    expect(prompt).toContain("Return one JSON value.")
+    expect(prompt).not.toContain("output contract")
+    expect(environment).toEqual({
+      KODY_CAPABILITY_INPUT: '{"subject":"change"}',
+      KODY_ARG_SUBJECT: "change",
+    })
+  })
+
+  it("keeps old capability flags as fields in the one generic input", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-runtime-"))
+    roots.push(cwd)
+    const root = path.join(cwd, ".kody-engine", "definitions", "capabilities")
+    const dir = path.join(root, "release-prepare")
+    fs.mkdirSync(path.join(dir, "skills"), { recursive: true })
+    fs.mkdirSync(path.join(dir, "tools"), { recursive: true })
+    fs.writeFileSync(path.join(dir, "instructions.md"), "Prepare the release.\n")
+
+    const ctx = {
+      cwd,
+      args: { capability: "release-prepare", input: "--bump minor --dry-run --prefer=ours" },
+      data: {},
+    } as never
+    await loadSimpleCapability(ctx, {} as never)
+
+    const data = (ctx as { data: Record<string, unknown> }).data
+    expect(data.capabilityInput).toEqual({ bump: "minor", "dry-run": true, prefer: "ours" })
+    expect(data.capabilityEnvironment).toEqual({
+      KODY_CAPABILITY_INPUT: '{"bump":"minor","dry-run":true,"prefer":"ours"}',
+      KODY_ARG_BUMP: "minor",
+      KODY_ARG_DRY_RUN: "true",
+      KODY_ARG_PREFER: "ours",
+    })
   })
 })

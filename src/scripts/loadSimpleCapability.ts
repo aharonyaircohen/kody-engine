@@ -1,8 +1,8 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { PreflightScript } from "../implementations/types.js"
-import { capabilitiesRoot } from "../definition-paths.js"
 import { readCapabilityFolder } from "../capabilityFolders.js"
+import { capabilitiesRoot } from "../definition-paths.js"
+import type { PreflightScript } from "../implementations/types.js"
 
 export const loadSimpleCapability: PreflightScript = async (ctx) => {
   const slug = typeof ctx.args.capability === "string" ? ctx.args.capability.trim() : ""
@@ -13,40 +13,24 @@ export const loadSimpleCapability: PreflightScript = async (ctx) => {
   if (!capability) {
     throw new Error(`Capability "${slug}" is not a valid simple capability folder`)
   }
-  const contract = capability.rawProfile.contract as {
-    input: { name: string; schema: Record<string, unknown> }
-    output: { name: string; schema: Record<string, unknown> }
-  }
   const toolRoot = path.join(capability.dir, "tools")
   const skillRoot = path.join(capability.dir, "skills")
   const toolFiles = listFiles(toolRoot)
   const skillFiles = listFiles(skillRoot)
-  const supplied = ctx.args.input
-  let input: unknown = supplied
-  if (typeof supplied === "string") {
-    try {
-      input = JSON.parse(supplied)
-    } catch {
-      input = supplied
-    }
-  }
+  const input = parseInput(ctx.args.input)
   ctx.data.jobCapability = slug
   ctx.data.capabilityInput = input
-  ctx.data.capabilityContract = contract
+  ctx.data.capabilityEnvironment = capabilityEnvironment(input)
   ctx.data.prompt = [
     capability.rawBody.trim(),
     "",
     "## Input",
     "",
     "```json",
-    JSON.stringify({ [contract.input.name]: input }, null, 2),
+    JSON.stringify(input ?? null, null, 2),
     "```",
     "",
-    "Return one JSON value matching the output contract:",
-    "",
-    "```json",
-    JSON.stringify({ [contract.output.name]: contract.output.schema }, null, 2),
-    "```",
+    "Return one JSON value.",
     ...(skillFiles.length
       ? [
           "",
@@ -70,6 +54,55 @@ export const loadSimpleCapability: PreflightScript = async (ctx) => {
         ]
       : []),
   ].join("\n")
+}
+
+function parseInput(supplied: unknown): unknown {
+  if (typeof supplied !== "string") return supplied
+  try {
+    return JSON.parse(supplied)
+  } catch {
+    return parseFlagInput(supplied) ?? supplied
+  }
+}
+
+function parseFlagInput(value: string): Record<string, unknown> | null {
+  const tokens = value.trim().split(/\s+/).filter(Boolean)
+  if (!tokens.some((token) => token.startsWith("--"))) return null
+  const input: Record<string, unknown> = {}
+  const text: string[] = []
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]!
+    if (!token.startsWith("--") || token.length === 2) {
+      text.push(token)
+      continue
+    }
+    const equalAt = token.indexOf("=")
+    const name = equalAt >= 0 ? token.slice(2, equalAt) : token.slice(2)
+    const next = equalAt >= 0 ? token.slice(equalAt + 1) : tokens[index + 1]
+    if (equalAt < 0 && next && !next.startsWith("--")) index += 1
+    input[name] = next && !next.startsWith("--") ? scalar(next) : true
+  }
+  if (text.length > 0) input.request = text.join(" ")
+  return input
+}
+
+function scalar(value: string): string | number | boolean {
+  if (value === "true" || value === "false") return value === "true"
+  if (/^-?\d+$/.test(value)) return Number(value)
+  return value
+}
+
+function capabilityEnvironment(input: unknown): Record<string, string> {
+  const environment: Record<string, string> = {
+    KODY_CAPABILITY_INPUT: JSON.stringify(input ?? null),
+  }
+  if (!input || typeof input !== "object" || Array.isArray(input)) return environment
+  for (const [name, value] of Object.entries(input)) {
+    if (value === undefined || value === null) continue
+    const key = name.toUpperCase().replace(/[^A-Z0-9]+/g, "_")
+    environment[`KODY_ARG_${key}`] = typeof value === "string" ? value : JSON.stringify(value)
+  }
+  return environment
 }
 
 function listFiles(root: string): string[] {

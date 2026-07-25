@@ -114,9 +114,7 @@ export function getRuntimeProfileRootsForCwd(cwd: string): string[] {
   // Executor tests build temporary internal profiles to exercise shell and
   // container mechanics. Production never discovers repository
   // Implementations; this root exists only inside the test process.
-  return process.env.NODE_ENV === "test"
-    ? [implementationsRoot(cwd), ...roots]
-    : roots
+  return process.env.NODE_ENV === "test" ? [implementationsRoot(cwd), ...roots] : roots
 }
 
 export function getCapabilityRoots(projectCapabilitiesRoot: string = getProjectCapabilitiesRoot()): string[] {
@@ -290,7 +288,7 @@ export function resolveCapabilityFolder(
   return null
 }
 
-/** Read the implementation profile inputs for a public capability action. */
+/** Every simple capability has one generic input. */
 export function getCapabilityActionInputs(
   action: string,
   projectCapabilitiesRoot: string = getProjectCapabilitiesRoot(),
@@ -298,38 +296,17 @@ export function getCapabilityActionInputs(
   const resolved = resolveCapabilityAction(action, projectCapabilitiesRoot)
   if (!resolved) return null
   const capability = resolveCapabilityFolder(resolved.capability, projectCapabilitiesRoot)
-  if (capability && path.basename(capability.profilePath) === "contract.json") {
-    const schema = capability.rawProfile.inputSchema
-    if (!schema || typeof schema !== "object" || Array.isArray(schema)) return []
-    const properties = (schema as { properties?: unknown }).properties
-    if (!properties || typeof properties !== "object" || Array.isArray(properties)) return []
-    const required = new Set(
-      Array.isArray((schema as { required?: unknown }).required)
-        ? (schema as { required: unknown[] }).required.filter((value): value is string => typeof value === "string")
-        : [],
-    )
-    return Object.entries(properties).map(([name, value]) => {
-      const property =
-        value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
-      const type =
-        property.type === "integer"
-          ? "int"
-          : property.type === "boolean"
-            ? "bool"
-            : Array.isArray(property.enum)
-              ? "enum"
-              : "string"
-      return {
-        name,
-        flag: `--${name}`,
-        type,
-        required: required.has(name),
-        ...(type === "enum" && Array.isArray(property.enum)
-          ? { values: property.enum.filter((item: unknown): item is string => typeof item === "string") }
-          : {}),
-        describe: typeof property.description === "string" ? property.description : name,
-      } as InputSpec
-    })
+  if (capability && !capability.config.workflow) {
+    return [
+      {
+        name: "input",
+        flag: "--input",
+        type: "string",
+        required: false,
+        bindsCommentRest: true,
+        describe: "One JSON-compatible input value.",
+      },
+    ]
   }
   return getProfileInputs(resolved.implementation)
 }
@@ -341,12 +318,12 @@ export function resolveCapabilityExecution(
   implementation: string
   cliArgs: Record<string, unknown>
 } {
-  if (path.basename(capability.profilePath) === "contract.json") {
+  if (!capability.config.workflow) {
     return { implementation: "capability-run", cliArgs: { capability: capability.slug } }
   }
   const firstWorkflowStep = capability.config.workflow?.steps[0]
   if (firstWorkflowStep) {
-    const implementation = firstWorkflowStep.implementation ?? firstWorkflowStep.capability
+    const implementation = firstWorkflowStep.capability
     return { implementation, cliArgs: {} }
   }
   const implementation =

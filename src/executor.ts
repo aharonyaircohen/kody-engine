@@ -26,11 +26,7 @@ import type { Context, InputSpec, Job, Profile, ScriptEntry } from "./implementa
 import { KODY_NAMESPACE, removeLabel } from "./lifecycleLabels.js"
 import { startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
-import {
-  getRuntimeProfileRootsForCwd,
-  resolveImplementation,
-  resolveImplementationCandidates,
-} from "./registry.js"
+import { getRuntimeProfileRootsForCwd, resolveImplementation, resolveImplementationCandidates } from "./registry.js"
 import {
   finalizeStagedRunIndexRowsAsync,
   runIndexRowFromJobContext,
@@ -277,6 +273,8 @@ export interface ExecutorOutput {
   taskState?: TaskState
   /** Neutral capability output exposed to a parent workflow in the same process. */
   capabilityResults?: CapabilityResult[]
+  /** The capability's one unvalidated JSON output value. */
+  capabilityOutput?: unknown
   /** Durable graph cursor returned by workflow execution. */
   workflowState?: Job["workflowState"]
 }
@@ -533,6 +531,12 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       prompt,
       model,
       cwd: input.cwd,
+      environment:
+        ctx.data.capabilityEnvironment &&
+        typeof ctx.data.capabilityEnvironment === "object" &&
+        !Array.isArray(ctx.data.capabilityEnvironment)
+          ? (ctx.data.capabilityEnvironment as Record<string, string>)
+          : undefined,
       litellmUrl: lm?.url ?? null,
       // On a connection drop mid-run, restart the (possibly crashed) proxy
       // before the agent retries. No-op for direct-Anthropic runs (lm null).
@@ -862,6 +866,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       afterNextJob: ctx.output.afterNextJob,
       taskState: ctx.data.taskState as TaskState | undefined,
       capabilityResults,
+      ...(Object.hasOwn(ctx.data, "capabilityOutput") ? { capabilityOutput: ctx.data.capabilityOutput } : {}),
     })
   } catch (err) {
     // A throwing preflight (or any other escape from the main flow) must
