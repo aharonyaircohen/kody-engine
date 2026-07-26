@@ -335,6 +335,48 @@ describe("kody-cli manual goal dispatch", () => {
     })
   })
 
+  it("binds a targeted workflow dispatch through its declared start-step target", async () => {
+    const dir = tmpDir()
+    writeConfig(dir)
+    previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
+    previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
+    process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      inputs: {
+        capability: "quality-flow",
+        issue_number: "3923",
+      },
+    })
+    mocks.readWorkflowDefinition.mockReturnValue({
+      name: "Quality flow",
+      capabilities: ["implement", "review"],
+      startAt: "implement",
+      steps: [
+        {
+          id: "implement",
+          capability: "implement",
+          target: "issue",
+        },
+        {
+          id: "review",
+          capability: "review",
+          target: "pr",
+        },
+      ],
+      agent: "kody",
+    })
+
+    await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
+
+    expect(mocks.runJob).toHaveBeenCalledTimes(1)
+    expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
+      workflow: "quality-flow",
+      cliArgs: { issue: 3923 },
+      flavor: "instant",
+      force: true,
+    })
+  })
+
   it("runs the local Loop scheduler from schedule events", async () => {
     const dir = tmpDir()
     writeConfig(dir)

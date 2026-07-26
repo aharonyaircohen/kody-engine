@@ -2,10 +2,10 @@ import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { mintAppInstallationToken, readAppCreds } from "./app-auth.js"
-import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
-import { autoDispatch, autoDispatchTyped, type DispatchResult, dispatchScheduledWatches } from "./dispatch.js"
 import { listCapabilityFolderSlugs, readCapabilityFolder } from "./capabilityFolders.js"
+import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
 import { capabilitiesRoot } from "./definition-paths.js"
+import { autoDispatch, autoDispatchTyped, type DispatchResult, dispatchScheduledWatches } from "./dispatch.js"
 import { reactToTriggerComment } from "./gha.js"
 import {
   postIssueComment as ghPostIssueComment,
@@ -15,19 +15,19 @@ import {
 } from "./issue.js"
 import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
 import { setKodyLabel } from "./lifecycleLabels.js"
+import { readLoopDefinition } from "./loopDefinitions.js"
 import {
-  listCapabilityActions,
   getProfileInputs,
   getRuntimeProfileRootsForCwd,
+  listCapabilityActions,
   resolveCapabilityAction,
   resolveCapabilityExecution,
   resolveCapabilityFolder,
 } from "./registry.js"
 import { type RunRequest, readRunRequestFromEnv } from "./run-request.js"
 import { lastRunLogPath } from "./runtimePaths.js"
-import { readLoopDefinition } from "./loopDefinitions.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
-import { readWorkflowDefinition } from "./workflowDefinitions.js"
+import { readWorkflowDefinition, type WorkflowDefinition } from "./workflowDefinitions.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
 
@@ -47,6 +47,14 @@ type ManualOneShotRoute = {
 
 function objectValue(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : undefined
+}
+
+function workflowDispatchTargetArgs(workflow: WorkflowDefinition, target: number): Record<string, unknown> {
+  const steps = workflow.steps ?? []
+  const startStep = workflow.startAt
+    ? steps.find((step) => (step.id ?? step.capability) === workflow.startAt)
+    : steps[0]
+  return { [startStep?.target ?? "issue"]: target }
 }
 
 export interface CiArgs {
@@ -481,24 +489,21 @@ export async function runCi(argv: string[]): Promise<number> {
       const capabilityInput = String(inputs?.capability ?? "").trim()
       const messageInput = String(inputs?.message ?? "").trim()
       const noTarget = !sessionInput && !(Number.isFinite(issueInput) && issueInput > 0)
+      const targetedWorkflow =
+        !noTarget && capabilityInput ? readWorkflowDefinition(earlyConfig, cwd, capabilityInput) : null
       // Explicit `capability` + no target → manual one-shot "Run now" of that
       // single capability (a scheduled / no-target folder-capability), bypassing the
       // cadence guard. A bare dispatch (no capability) still fans out to every
       // watch capability (capability-scheduler et al.).
-      if (noTarget && capabilityInput) {
+      if (targetedWorkflow) {
+        forceRunAction = capabilityInput
+        forceRunCliArgs = workflowDispatchTargetArgs(targetedWorkflow, issueInput)
+      } else if (noTarget && capabilityInput) {
         forceRunAction = capabilityInput
         if (messageInput) {
-          const route = resolveCapabilityAction(
-            capabilityInput,
-            capabilitiesRoot(cwd),
-          )
+          const route = resolveCapabilityAction(capabilityInput, capabilitiesRoot(cwd))
           const textInputs = route?.implementation
-            ? (
-                getProfileInputs(
-                  route.implementation,
-                  getRuntimeProfileRootsForCwd(cwd),
-                ) ?? []
-              ).filter(
+            ? (getProfileInputs(route.implementation, getRuntimeProfileRootsForCwd(cwd)) ?? []).filter(
                 (input) => input.type === "string",
               )
             : []
@@ -526,7 +531,9 @@ export async function runCi(argv: string[]): Promise<number> {
     const capabilityRoute = manualGoalManager
       ? null
       : (resolveCapabilityAction(forceRunAction, capabilityRoot) ??
-        (directCapability && directExecution && (directCapability.config.action ?? directCapability.slug) === forceRunAction
+        (directCapability &&
+        directExecution &&
+        (directCapability.config.action ?? directCapability.slug) === forceRunAction
           ? {
               action: forceRunAction,
               capability: directCapability.slug,
@@ -570,7 +577,9 @@ export async function runCi(argv: string[]): Promise<number> {
       const available = listCapabilityActions(root).map((item) => item.action)
       const folders = listCapabilityFolderSlugs(root).map((slug) => {
         const folder = readCapabilityFolder(root, slug)
-        return folder ? `${slug}:${folder.config.action ?? slug}:${folder.config.role ?? "no-role"}` : `${slug}:unreadable`
+        return folder
+          ? `${slug}:${folder.config.action ?? slug}:${folder.config.role ?? "no-role"}`
+          : `${slug}:unreadable`
       })
       process.stderr.write(
         `[kody] manual one-shot action '${forceRunAction}' has no capability action or workflow ` +
