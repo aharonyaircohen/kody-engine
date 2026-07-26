@@ -97,12 +97,7 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
 
     validateDataMatch(step.runWhen, `${base}.runWhen`, issues)
     if (step.delivery !== undefined && step.delivery !== "pull-request") {
-      issue(
-        issues,
-        "invalid_delivery",
-        `${base}.delivery`,
-        "workflow step delivery must be pull-request",
-      )
+      issue(issues, "invalid_delivery", `${base}.delivery`, "workflow step delivery must be pull-request")
     }
     if (step.input !== undefined && !isJsonValue(step.input)) {
       issue(issues, "invalid_input", `${base}.input`, "workflow step input must be one JSON value")
@@ -251,9 +246,7 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
     ids.forEach((id, index) => {
       if (!reachable.has(id)) issue(issues, "unreachable_step", `steps[${index}]`, `workflow step ${id} is unreachable`)
     })
-    if (
-      ![...reachable].some((id) => (adjacency.get(id) ?? []).length === 0 || explicitEndSources.has(id))
-    ) {
+    if (![...reachable].some((id) => (adjacency.get(id) ?? []).length === 0 || explicitEndSources.has(id))) {
       issue(issues, "missing_terminal_step", "steps", "workflow has no reachable final step")
     }
   }

@@ -18,10 +18,7 @@ describe("simple Capability runtime profile", () => {
 
   it("keeps pull-request delivery in a separate internal runtime", () => {
     const profile = JSON.parse(
-      fs.readFileSync(
-        new URL("../../src/runtime-services/capability-delivery/profile.json", import.meta.url),
-        "utf8",
-      ),
+      fs.readFileSync(new URL("../../src/runtime-services/capability-delivery/profile.json", import.meta.url), "utf8"),
     ) as {
       lifecycle: string
       lifecycleConfig: { advance: boolean; sync: boolean }
@@ -40,8 +37,6 @@ describe("simple Capability runtime profile", () => {
       "loadSimpleCapability",
       "prepareCapabilityDelivery",
     ])
-    expect(profile.scripts.postflight.map(({ script }) => script)).toEqual([
-      "parseSimpleCapabilityOutput",
-    ])
+    expect(profile.scripts.postflight.map(({ script }) => script)).toEqual(["parseSimpleCapabilityOutput"])
   })
 })

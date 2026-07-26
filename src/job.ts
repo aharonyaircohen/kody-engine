@@ -10,7 +10,6 @@
  * and validates at boundaries the same way config.ts does.
  */
 
-import * as path from "node:path"
 import { evaluateAgencyBoundaries } from "./agencyBoundaryEval.js"
 import { capabilityDeliveryTarget } from "./capabilityDelivery.js"
 import type {
@@ -220,11 +219,11 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   const capabilitySelectedImplementation =
     valid.delivery === "pull-request" && resolvedCapability?.implementation === "capability-run"
       ? "capability-delivery"
-      : resolvedCapability?.implementation ??
-    capabilityContext?.config.implementation ??
-    capabilityContext?.config.implementations?.[0] ??
-    (capabilityContext?.config.role ? capabilityContext.slug : undefined) ??
-    (capabilityContext?.config.tickScript ? "capability-tick-scripted" : undefined)
+      : (resolvedCapability?.implementation ??
+        capabilityContext?.config.implementation ??
+        capabilityContext?.config.implementations?.[0] ??
+        (capabilityContext?.config.role ? capabilityContext.slug : undefined) ??
+        (capabilityContext?.config.tickScript ? "capability-tick-scripted" : undefined))
   const profileName = explicitImplementation ?? capabilitySelectedImplementation
   if (
     workflow &&

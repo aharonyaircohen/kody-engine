@@ -22,10 +22,12 @@ interface MockExecutorOutput {
 
 const executor = vi.hoisted(() => ({
   runImplementation: vi.fn(),
-  runImplementationChain: vi.fn(async (_runtime: string, _input: unknown): Promise<MockExecutorOutput> => ({
-    exitCode: 0,
-    capabilityResults: [],
-  })),
+  runImplementationChain: vi.fn(
+    async (_runtime: string, _input: unknown): Promise<MockExecutorOutput> => ({
+      exitCode: 0,
+      capabilityResults: [],
+    }),
+  ),
 }))
 
 vi.mock("../../src/executor.js", () => executor)

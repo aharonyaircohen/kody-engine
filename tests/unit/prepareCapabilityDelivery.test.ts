@@ -9,10 +9,14 @@ describe("capability delivery target", () => {
     expect(capabilityDeliveryTarget(input)).toEqual(expected)
   })
 
-  it.each([undefined, null, {}, { issue: "7" }, { pr: 0 }, { issue: 7, pr: 42 }])(
-    "rejects missing or ambiguous delivery input",
-    (input) => {
-      expect(capabilityDeliveryTarget(input)).toBeNull()
-    },
-  )
+  it.each([
+    undefined,
+    null,
+    {},
+    { issue: "7" },
+    { pr: 0 },
+    { issue: 7, pr: 42 },
+  ])("rejects missing or ambiguous delivery input", (input) => {
+    expect(capabilityDeliveryTarget(input)).toBeNull()
+  })
 })
