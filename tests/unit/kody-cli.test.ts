@@ -6,6 +6,7 @@ import * as path from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   detectPackageManager,
+  installLitellmIfNeeded,
   parseCiArgs,
   resolveAuthToken,
   runCi,
@@ -258,6 +259,33 @@ describe("kody-cli: detectPackageManager", () => {
     fs.writeFileSync(path.join(d, "pnpm-lock.yaml"), "")
     fs.writeFileSync(path.join(d, "yarn.lock"), "")
     expect(detectPackageManager(d)).toBe("pnpm")
+  })
+})
+
+describe("kody-cli: installLitellmIfNeeded", () => {
+  it("continues when pip reports failure after making litellm importable", () => {
+    const d = tmpDir()
+    const bin = path.join(d, "bin")
+    const marker = path.join(d, "litellm-installed")
+    fs.mkdirSync(bin)
+    fs.writeFileSync(
+      path.join(d, "kody.config.json"),
+      JSON.stringify({ agent: { model: "minimax/MiniMax-M3" } }),
+    )
+    fs.writeFileSync(
+      path.join(bin, "python3"),
+      `#!/bin/sh\n[ -f "${marker}" ]\n`,
+      { mode: 0o755 },
+    )
+    fs.writeFileSync(
+      path.join(bin, "pip"),
+      `#!/bin/sh\ntouch "${marker}"\nexit 7\n`,
+      { mode: 0o755 },
+    )
+    prevEnv.PATH = process.env.PATH
+    process.env.PATH = `${bin}:${process.env.PATH ?? ""}`
+
+    expect(installLitellmIfNeeded(d)).toBe(0)
   })
 })
 

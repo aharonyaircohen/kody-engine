@@ -348,7 +348,22 @@ export function installLitellmIfNeeded(cwd: string): number {
     // not installed
   }
   process.stdout.write("→ kody: installing litellm (pip install 'litellm[proxy]')\n")
-  return shellOut("pip", ["install", "litellm[proxy]"], cwd)
+  const installCode = shellOut("pip", ["install", "litellm[proxy]"], cwd)
+  if (installCode === 0) return 0
+
+  // Some pip environments report a non-zero status after completing the
+  // install (for example, during post-install cleanup). The capability only
+  // depends on LiteLLM being importable, so verify the required outcome before
+  // failing the entire run.
+  try {
+    execFileSync("python3", ["-c", "import litellm"], { stdio: "pipe" })
+    process.stderr.write(
+      `→ kody: pip exited ${installCode}, but litellm is importable; continuing\n`,
+    )
+    return 0
+  } catch {
+    return installCode
+  }
 }
 
 export function configureGitIdentity(cwd: string): void {
