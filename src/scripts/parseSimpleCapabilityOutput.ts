@@ -2,7 +2,9 @@ import { validateCapabilityContractValue } from "../agency/capability-contract-v
 import type { PostflightScript } from "../implementations/types.js"
 
 export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profile, agentResult) => {
-  const output = parseOutput(agentResult?.finalText)
+  const output = Object.hasOwn(ctx.data, "capabilityScriptOutput")
+    ? ctx.data.capabilityScriptOutput
+    : parseOutput(agentResult?.finalText)
   if (output === undefined) {
     const reason =
       agentResult?.outcomeKind === "out_of_turns"

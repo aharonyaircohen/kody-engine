@@ -36,7 +36,13 @@
   },
   "cliTools": [],
   "scripts": {
-    "preflight": [{ "script": "loadSimpleCapability" }],
+    "preflight": [
+      { "script": "loadSimpleCapability" },
+      {
+        "script": "runSimpleCapabilityScript",
+        "runWhen": { "data.capabilityExecution": "script" }
+      }
+    ],
     "postflight": [{ "script": "parseSimpleCapabilityOutput" }]
   },
   "inputArtifacts": [],

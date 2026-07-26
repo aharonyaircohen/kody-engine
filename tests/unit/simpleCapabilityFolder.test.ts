@@ -26,6 +26,7 @@ function capability(extra: Record<string, string> = {}) {
 describe("simple Capability folder", () => {
   it("loads instructions and an optional machine-readable contract", () => {
     const contract = {
+      execution: "agent" as const,
       input: {
         type: "object",
         properties: { pr: { type: "integer" } },
@@ -49,6 +50,46 @@ describe("simple Capability folder", () => {
       implementation: "capability-run",
       cliArgs: { capability: "inspect" },
     })
+  })
+
+  it("selects deterministic execution from the Capability contract", () => {
+    const { root, dir } = capability({
+      "contract.json": JSON.stringify({
+        execution: "script",
+        input: { type: "object" },
+        output: { type: "object" },
+      }),
+    })
+    fs.writeFileSync(path.join(dir, "tools", "run.sh"), "#!/bin/sh\nprintf '{}'\n")
+
+    const loaded = readCapabilityFolder(root, "inspect")
+
+    expect(loaded?.contract?.execution).toBe("script")
+    expect(loaded?.config.execution).toBe("script")
+    expect(resolveCapabilityExecution(loaded!, root)).toEqual({
+      implementation: "capability-run",
+      cliArgs: { capability: "inspect" },
+    })
+  })
+
+  it("rejects unsupported execution values and scripted Capabilities without an entrypoint", () => {
+    const unsupported = capability({
+      "contract.json": JSON.stringify({
+        execution: "automatic",
+        input: {},
+        output: {},
+      }),
+    })
+    expect(readCapabilityFolder(unsupported.root, "inspect")).toBeNull()
+
+    const missingScript = capability({
+      "contract.json": JSON.stringify({
+        execution: "script",
+        input: {},
+        output: {},
+      }),
+    })
+    expect(readCapabilityFolder(missingScript.root, "inspect")).toBeNull()
   })
 
   it("rejects runtime files and malformed contracts", () => {

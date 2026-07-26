@@ -7,11 +7,13 @@ export const CAPABILITY_CONTRACT_FILE = "contract.json"
 export const CAPABILITY_PROFILE_FILE = CAPABILITY_BODY_FILE
 
 export interface CapabilityContract {
+  execution?: "agent" | "script"
   input: Record<string, unknown>
   output: Record<string, unknown>
 }
 
 export interface CapabilityFolderConfig {
+  execution?: "agent" | "script"
   /** Internal workflow adapter only. Simple Capability folders never set an Agent. */
   agent?: string
   action?: string
@@ -139,6 +141,9 @@ export function readCapabilityFolder(root: string, slug: string): CapabilityFold
     const contract = fs.existsSync(contractPath)
       ? parseCapabilityContract(fs.readFileSync(contractPath, "utf-8"))
       : undefined
+    if (contract?.execution === "script" && !isRegularFile(path.join(dir, "tools", "run.sh"))) {
+      throw new Error('script-backed Capability requires a regular "tools/run.sh" file')
+    }
     const { title, body } = parseCapabilityBody(rawBody, slug)
     return {
       slug,
@@ -152,6 +157,7 @@ export function readCapabilityFolder(root: string, slug: string): CapabilityFold
       config: {
         action: slug,
         describe: title,
+        ...(contract?.execution ? { execution: contract.execution } : {}),
         ...(contract
           ? {
               inputSchema: contract.input,
@@ -159,7 +165,13 @@ export function readCapabilityFolder(root: string, slug: string): CapabilityFold
             }
           : {}),
       },
-      rawProfile: contract ? { input: contract.input, output: contract.output } : {},
+      rawProfile: contract
+        ? {
+            ...(contract.execution ? { execution: contract.execution } : {}),
+            input: contract.input,
+            output: contract.output,
+          }
+        : {},
       ...(contract ? { contract } : {}),
     }
   } catch {
@@ -172,11 +184,29 @@ function parseCapabilityContract(raw: string): CapabilityContract {
   if (!isPlainObject(parsed) || !isPlainObject(parsed.input) || !isPlainObject(parsed.output)) {
     throw new Error("contract.json must contain input and output JSON schemas")
   }
-  const unsupported = Object.keys(parsed).filter((key) => key !== "input" && key !== "output")
+  if (parsed.execution !== undefined && parsed.execution !== "agent" && parsed.execution !== "script") {
+    throw new Error('contract.json execution must be "agent" or "script"')
+  }
+  const unsupported = Object.keys(parsed).filter(
+    (key) => key !== "execution" && key !== "input" && key !== "output",
+  )
   if (unsupported.length > 0) {
     throw new Error(`contract.json contains unsupported fields: ${unsupported.join(", ")}`)
   }
-  return { input: parsed.input, output: parsed.output }
+  return {
+    ...(parsed.execution ? { execution: parsed.execution } : {}),
+    input: parsed.input,
+    output: parsed.output,
+  }
+}
+
+function isRegularFile(filePath: string): boolean {
+  try {
+    const stat = fs.lstatSync(filePath)
+    return stat.isFile() && !stat.isSymbolicLink()
+  } catch {
+    return false
+  }
 }
 
 function schemaPropertyPaths(schema: Record<string, unknown>, prefix: string): string[] {

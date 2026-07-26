@@ -91,6 +91,7 @@ import { runFlow } from "./runFlow.js"
 import { runPreviewBuild } from "./runPreviewBuild.js"
 import { runScheduledImplementationTick } from "./runScheduledImplementationTick.js"
 import { runTickScript } from "./runTickScript.js"
+import { runSimpleCapabilityScript } from "./runSimpleCapabilityScript.js"
 import { saveManagedGoalState } from "./saveManagedGoalState.js"
 import { saveTaskState } from "./saveTaskState.js"
 import { setCommentTarget } from "./setCommentTarget.js"
@@ -160,6 +161,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   runScheduledImplementationTick,
   runScheduledExecutableTick: runScheduledImplementationTick,
   runTickScript,
+  runSimpleCapabilityScript,
   runPreviewBuild,
   advanceManagedGoal,
   loadGoalState,

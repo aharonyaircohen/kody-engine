@@ -74,7 +74,11 @@
   "scripts": {
     "preflight": [
       { "script": "loadSimpleCapability" },
-      { "script": "prepareCapabilityDelivery" }
+      { "script": "prepareCapabilityDelivery" },
+      {
+        "script": "runSimpleCapabilityScript",
+        "runWhen": { "data.capabilityExecution": "script" }
+      }
     ],
     "postflight": [
       { "script": "parseSimpleCapabilityOutput" }
