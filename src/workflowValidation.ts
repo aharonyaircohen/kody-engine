@@ -113,6 +113,7 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
   }
 
   const adjacency = new Map<string, string[]>()
+  const explicitEndSources = new Set<string>()
   steps.forEach((step, index) => {
     if (!step) return
     const id = text(step.id)
@@ -185,6 +186,7 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
         return
       }
       if (target === "$end") {
+        explicitEndSources.add(id)
         return
       }
       if (!seen.has(target)) {
@@ -240,7 +242,9 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
     ids.forEach((id, index) => {
       if (!reachable.has(id)) issue(issues, "unreachable_step", `steps[${index}]`, `workflow step ${id} is unreachable`)
     })
-    if (![...reachable].some((id) => (adjacency.get(id) ?? []).length === 0)) {
+    if (
+      ![...reachable].some((id) => (adjacency.get(id) ?? []).length === 0 || explicitEndSources.has(id))
+    ) {
       issue(issues, "missing_terminal_step", "steps", "workflow has no reachable final step")
     }
   }

@@ -34,6 +34,29 @@ describe("validateWorkflow", () => {
     ).toEqual([])
   })
 
+  it("accepts an explicit end connection as a reachable workflow ending", () => {
+    expect(
+      validateWorkflow({
+        startAt: "review",
+        steps: [
+          {
+            id: "review",
+            capability: "review",
+            next: [
+              { to: "$end", when: { "lastOutcome.type": "REVIEW_PASS" } },
+              { to: "fix", default: true },
+            ],
+          },
+          {
+            id: "fix",
+            capability: "fix",
+            next: [{ to: "review", default: true, maxIterations: 3 }],
+          },
+        ],
+      }),
+    ).toEqual([])
+  })
+
   it("accepts only structured result fields declared by the source capability", () => {
     const capabilityOutputs = new Map([["inspect", new Set(["result.status", "result.facts.needsFix"])]] as const)
     expect(
