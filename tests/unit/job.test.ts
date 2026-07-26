@@ -1317,6 +1317,9 @@ describe("runJob (Phase 1 seam)", () => {
 
       expect(result.workflowState).toMatchObject({ status: "done", transitionCounts: expectedCounts })
       expect(runImplementationChain.mock.calls.map((call) => String(call[1].cliArgs.capability))).toEqual(expectedSteps)
+      const executionKeys = runImplementationChain.mock.calls.map((call) => call[1].preloadedData?.workflowExecutionKey)
+      expect(executionKeys.every((key) => typeof key === "string" && key.length > 0)).toBe(true)
+      expect(new Set(executionKeys).size).toBe(expectedSteps.length)
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })

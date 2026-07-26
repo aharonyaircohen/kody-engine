@@ -497,6 +497,7 @@ async function runLinearCapabilityWorkflow(
         runSubjectLabel: label,
         workflowStep: label,
         workflowStepIndex: index + 1,
+        workflowExecutionKey: [capability.slug, label, index + 1].join(":"),
         workflowStepReason: step.reason,
         workflowContinueOn: step.continueOn ?? [],
       },
@@ -662,6 +663,12 @@ async function runGraphCapabilityWorkflow(
         runSubjectLabel: step.id,
         workflowStep: step.id,
         workflowStepIndex: index + 1,
+        workflowExecutionKey: graphWorkflowExecutionKey(
+          base.preloadedData?.workflowExecutionKey,
+          capability.slug,
+          step.id!,
+          state.transitionCounts,
+        ),
         workflowStepReason: step.reason,
         workflowContinueOn: step.continueOn ?? [],
       },
@@ -736,6 +743,27 @@ async function runGraphCapabilityWorkflow(
   state.status = "done"
   await checkpoint?.(state)
   return withWorkflowBoundaryEval(capability, { ...result, workflowState: state })
+}
+
+function graphWorkflowExecutionKey(
+  parentExecutionKey: unknown,
+  workflowSlug: string,
+  stepId: string,
+  transitionCounts: Record<string, number>,
+): string {
+  const transitionHistory = Object.entries(transitionCounts)
+    .filter(([, count]) => count > 0)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([transition, count]) => `${transition}=${count}`)
+    .join(",")
+  return [
+    typeof parentExecutionKey === "string" && parentExecutionKey.length > 0 ? parentExecutionKey : undefined,
+    workflowSlug,
+    stepId,
+    transitionHistory || "initial",
+  ]
+    .filter((part): part is string => part !== undefined)
+    .join(":")
 }
 
 function mergeWorkflowResults(state: WorkflowRunState, results: CapabilityResult[] | undefined): void {

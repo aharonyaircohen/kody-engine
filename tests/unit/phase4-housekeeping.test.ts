@@ -197,4 +197,39 @@ describe("Phase 4f: commitAndPush idempotency", () => {
     await commitAndPush(ctx, profile, null)
     expect(ctx.data.commitIdempotencyReplay).toBeUndefined()
   })
+
+  it("does not replay a sibling workflow step's commit result", async () => {
+    const sentinelDir = runtimeStatePath(tmp, "agent-runs", "phase4f-run")
+    fs.mkdirSync(sentinelDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(sentinelDir, "commit-test-exec.lock"),
+      JSON.stringify({
+        commitResult: { committed: true, pushed: true, sha: "prior-step" },
+        writtenAt: "2026-05-11T00:00:00.000Z",
+      }),
+    )
+
+    const { commitAndPush } = await import("../../src/scripts/commitAndPush.js")
+    const ctx = {
+      args: {},
+      cwd: tmp,
+      config: {
+        quality: { typecheck: "", lint: "", testUnit: "", format: "" },
+        git: { defaultBranch: "main" },
+        github: { owner: "x", repo: "y" },
+        agent: { model: "claude/claude-sonnet-4-6" },
+      },
+      data: {
+        branch: "feature-branch",
+        agentDone: false,
+        workflowExecutionKey: "chore:fix:review-to-fix-1",
+      } as Record<string, unknown>,
+      output: { exitCode: 0 } as { exitCode: number; prUrl?: string; reason?: string },
+    }
+    const profile = { name: "test-exec" } as Parameters<typeof commitAndPush>[1]
+    await commitAndPush(ctx, profile, null)
+
+    expect(ctx.data.commitIdempotencyReplay).toBeUndefined()
+    expect(ctx.data.commitResult).toMatchObject({ committed: false, skippedReason: "agentDone=false" })
+  })
 })

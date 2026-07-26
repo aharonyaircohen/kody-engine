@@ -13,6 +13,7 @@
  *   2. generic fallback ("chore: kody changes")
  */
 
+import { createHash } from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import {
@@ -29,17 +30,20 @@ import { runtimeStatePath } from "../runtimePaths.js"
 const DEFAULT_COMMIT_MESSAGE = "chore: kody changes"
 
 /**
- * Sentinel file written by commitAndPush on its first successful execution
- * per task run. A second invocation within the same run (e.g. an
- * accidentally double-wired postflight or a container retry) sees the
- * sentinel, replays the recorded result, and short-circuits — preventing
- * duplicate commits on the agent's branch.
+ * Sentinel file written by commitAndPush on its first successful execution.
+ * Workflow executions are scoped independently so a later repair step can
+ * commit to the same PR, while a retry of the same logical step still replays
+ * its recorded result and avoids duplicate commits.
  *
  * Disabled when KODY_COMMIT_IDEMPOTENCY=0.
  */
-function sentinelPathForStage(cwd: string, profileName: string): string {
+function sentinelPathForStage(cwd: string, profileName: string, workflowExecutionKey: unknown): string {
   const runId = resolveRunId()
-  return runtimeStatePath(cwd, "agent-runs", runId, `commit-${profileName}.lock`)
+  const executionSuffix =
+    typeof workflowExecutionKey === "string" && workflowExecutionKey.length > 0
+      ? `-${createHash("sha256").update(workflowExecutionKey).digest("hex").slice(0, 16)}`
+      : ""
+  return runtimeStatePath(cwd, "agent-runs", runId, `commit-${profileName}${executionSuffix}.lock`)
 }
 
 export const commitAndPush: PostflightScript = async (ctx, profile) => {
@@ -52,7 +56,9 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
   // Idempotency sentinel — short-circuit if this commitAndPush has
   // already run successfully for the same (runId, implementation) tuple.
   const idempotencyEnabled = process.env.KODY_COMMIT_IDEMPOTENCY !== "0"
-  const sentinel = idempotencyEnabled ? sentinelPathForStage(ctx.cwd, profile.name) : null
+  const sentinel = idempotencyEnabled
+    ? sentinelPathForStage(ctx.cwd, profile.name, ctx.data.workflowExecutionKey)
+    : null
   if (sentinel && fs.existsSync(sentinel)) {
     try {
       const replay = JSON.parse(fs.readFileSync(sentinel, "utf-8")) as {
