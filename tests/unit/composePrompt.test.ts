@@ -45,6 +45,15 @@ describe("composePrompt", () => {
     expect(ctx.data.prompt).toBe("Fix o/r on main.")
   })
 
+  it("can preserve a prompt composed by an earlier preflight", async () => {
+    fs.writeFileSync(path.join(dir, "prompt.md"), "{{prompt}}")
+    const ctx = makeCtx(dir, { prompt: "Capability-owned instructions." })
+
+    await composePrompt(ctx, makeProfile(dir))
+
+    expect(ctx.data.prompt).toBe("Capability-owned instructions.")
+  })
+
   it("throws a self-diagnosing error when no template exists (cwd + dir contents)", async () => {
     // dir exists but has no prompt.md — the diagnostic must list what IS there.
     fs.writeFileSync(path.join(dir, "profile.json"), "{}")

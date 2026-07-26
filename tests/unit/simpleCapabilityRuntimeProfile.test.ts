@@ -39,4 +39,13 @@ describe("simple Capability runtime profile", () => {
     ])
     expect(profile.scripts.postflight.map(({ script }) => script)).toEqual(["parseSimpleCapabilityOutput"])
   })
+
+  it("passes the capability-owned prompt through the pull-request lifecycle composer", () => {
+    const template = fs.readFileSync(
+      new URL("../../src/runtime-services/capability-delivery/prompt.md", import.meta.url),
+      "utf8",
+    )
+
+    expect(template.trim()).toBe("{{prompt}}")
+  })
 })
