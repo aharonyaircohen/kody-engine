@@ -66,13 +66,18 @@ describe("run index backend", () => {
       status: "failed",
       updatedAt: "2026-07-05T10:05:00.000Z",
       reason: "failed",
+      output: { verdict: "retry" },
     })
     expect(backend.saveAgencyRun).toHaveBeenCalledWith(
       "o/r",
       "goal:release:run-1",
       "goal",
       "release",
-      expect.objectContaining({ status: "failed", summary: "failed" }),
+      expect.objectContaining({
+        status: "failed",
+        summary: "failed",
+        output: { verdict: "retry" },
+      }),
       "2026-07-05T10:05:00.000Z",
     )
   })
@@ -95,6 +100,7 @@ describe("run index backend", () => {
         parentRunId: "workflow:web-release:run-1",
         capabilityRevision: "cap-rev",
         implementationRevision: "impl-rev",
+        capabilityOutput: { lesson: "Use signed releases." },
       },
     })
     expect(row).toMatchObject({
@@ -104,6 +110,7 @@ describe("run index backend", () => {
       parentRunId: "workflow:web-release:run-1",
       capabilityRevision: "cap-rev",
       implementationRevision: "impl-rev",
+      output: { lesson: "Use signed releases." },
     })
   })
 })

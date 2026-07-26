@@ -453,6 +453,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
         status,
         updatedAt: finishedAt,
         reason: out.reason,
+        output: ctx.data.capabilityOutput,
       })
     }
   }

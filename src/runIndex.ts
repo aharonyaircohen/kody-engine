@@ -46,12 +46,20 @@ export interface RunIndexRow {
   sourcePath?: string
   detailUrl?: string
   statePath?: string
+  output?: unknown
 }
 
 export interface RunIndexFile {
   version: 1
   updatedAt: string
   runs: RunIndexRow[]
+}
+
+interface RunIndexFinalization {
+  status: RunIndexStatus
+  updatedAt: string
+  reason?: string
+  output?: unknown
 }
 
 const RUN_INDEX_PATH = "runs/index.json"
@@ -83,7 +91,7 @@ export async function finalizeStagedRunIndexRowsAsync(
   config: RunBackendConfig,
   cwd: string | undefined,
   data: Record<string, unknown>,
-  result: { status: RunIndexStatus; updatedAt: string; reason?: string },
+  result: RunIndexFinalization,
 ): Promise<void> {
   const rows = stagedRunIndexRows(data)
   for (const row of Object.values(rows)) {
@@ -92,10 +100,7 @@ export async function finalizeStagedRunIndexRowsAsync(
   data[STAGED_RUN_INDEX_ROWS_KEY] = {}
 }
 
-function finalizedRunIndexRow(
-  row: RunIndexRow,
-  result: { status: RunIndexStatus; updatedAt: string; reason?: string },
-): RunIndexRow {
+function finalizedRunIndexRow(row: RunIndexRow, result: RunIndexFinalization): RunIndexRow {
   const target = recordValue(row.target)
   const targetType = stringValue(target?.type)
   const targetId = stringValue(target?.id)
@@ -119,6 +124,7 @@ function finalizedRunIndexRow(
     status: result.status,
     updatedAt: result.updatedAt,
     summary: result.reason ?? row.summary,
+    ...(result.output === undefined ? {} : { output: result.output }),
   }
 }
 
@@ -189,6 +195,7 @@ export function runIndexRowFromJobContext(input: {
     reasoningEffort: stringValue(input.data.jobReasoningEffort) ?? undefined,
     target: input.data.jobTarget,
     sourceType: "job" as const,
+    output: input.data.capabilityOutput,
   })
 }
 
