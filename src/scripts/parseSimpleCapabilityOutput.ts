@@ -1,3 +1,4 @@
+import { validateCapabilityContractValue } from "../agency/capability-contract-validation.js"
 import type { PostflightScript } from "../implementations/types.js"
 
 export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profile, agentResult) => {
@@ -26,6 +27,29 @@ export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profil
       },
     ]
     return
+  }
+  const outputSchema = isObject(ctx.data.capabilityOutputSchema) ? ctx.data.capabilityOutputSchema : undefined
+  if (outputSchema) {
+    try {
+      validateCapabilityContractValue("output", outputSchema, output)
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      ctx.output.exitCode = 64
+      ctx.output.reason = reason
+      ctx.data.capabilityOutput = output
+      ctx.data.capabilityResults = [
+        {
+          version: 1,
+          status: "blocked",
+          summary: reason,
+          facts: {},
+          artifacts: [],
+          missingEvidence: [],
+          blockers: [reason],
+        },
+      ]
+      return
+    }
   }
   ctx.data.capabilityOutput = output
   const result = isObject(output) ? output : {}

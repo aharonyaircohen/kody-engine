@@ -24,21 +24,39 @@ function capability(extra: Record<string, string> = {}) {
 }
 
 describe("simple Capability folder", () => {
-  it("loads instructions as the complete capability definition", () => {
-    const { root, dir } = capability()
+  it("loads instructions and an optional machine-readable contract", () => {
+    const contract = {
+      input: {
+        type: "object",
+        properties: { pr: { type: "integer" } },
+        required: ["pr"],
+      },
+      output: {
+        type: "object",
+        properties: { verdict: { enum: ["pass", "fix"] } },
+        required: ["verdict"],
+      },
+    }
+    const { root, dir } = capability({ "contract.json": JSON.stringify(contract) })
     const loaded = readCapabilityFolder(root, "inspect")
     expect(isCapabilityFolder(dir)).toBe(true)
     expect(loaded?.bodyPath).toBe(path.join(dir, "instructions.md"))
-    expect(loaded?.rawProfile).toEqual({})
+    expect(loaded?.contractPath).toBe(path.join(dir, "contract.json"))
+    expect(loaded?.contract).toEqual(contract)
+    expect(loaded?.config.inputSchema).toEqual(contract.input)
+    expect(loaded?.config.outputSchema).toEqual(contract.output)
     expect(resolveCapabilityExecution(loaded!, root)).toEqual({
       implementation: "capability-run",
       cliArgs: { capability: "inspect" },
     })
   })
 
-  it("rejects hidden schemas, runtime, and orchestration files", () => {
-    const { dir } = capability({ "contract.json": "{}" })
+  it("rejects runtime files and malformed contracts", () => {
+    const { dir } = capability({ "profile.json": "{}" })
     expect(isCapabilityFolder(dir)).toBe(false)
+
+    const invalid = capability({ "contract.json": "{}" })
+    expect(readCapabilityFolder(invalid.root, "inspect")).toBeNull()
   })
 
   it("does not discover repository Implementation definitions", () => {
@@ -76,14 +94,14 @@ describe("simple Capability folder", () => {
     expect(prompt).not.toContain("unsafe-link")
     expect(prompt).toContain('"subject": "change"')
     expect(prompt).toContain("Return one JSON value.")
-    expect(prompt).not.toContain("output contract")
+    expect(prompt).not.toContain("Output contract")
     expect(environment).toEqual({
       KODY_CAPABILITY_INPUT: '{"subject":"change"}',
       KODY_ARG_SUBJECT: "change",
     })
   })
 
-  it("adds the wrapper-owned delivery protocol only for delivery runs", async () => {
+  it("does not mix delivery policy into capability loading", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-runtime-"))
     roots.push(cwd)
     const root = path.join(cwd, ".kody-engine", "definitions", "capabilities")
@@ -100,11 +118,71 @@ describe("simple Capability folder", () => {
     await loadSimpleCapability(ctx, {} as never)
 
     const prompt = String((ctx as { data: Record<string, unknown> }).data.prompt)
-    expect(prompt).toContain("The wrapper owns git commits, pushes, and pull requests.")
-    expect(prompt).toContain("DONE")
-    expect(prompt).toContain("COMMIT_MSG:")
-    expect(prompt).toContain("PR_SUMMARY:")
-    expect(prompt).toContain("```json")
+    expect(prompt).not.toContain("The wrapper owns git commits, pushes, and pull requests.")
+    expect(prompt).not.toContain("COMMIT_MSG:")
+    expect(prompt).toContain("Return one JSON value.")
+  })
+
+  it("places the declared output contract after capability-owned skills", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-runtime-"))
+    roots.push(cwd)
+    const root = path.join(cwd, ".kody-engine", "definitions", "capabilities")
+    const dir = path.join(root, "inspect")
+    fs.mkdirSync(path.join(dir, "skills"), { recursive: true })
+    fs.mkdirSync(path.join(dir, "tools"), { recursive: true })
+    fs.writeFileSync(path.join(dir, "instructions.md"), "Inspect the supplied request.\n")
+    fs.writeFileSync(path.join(dir, "skills", "review.md"), "Return markdown.")
+    fs.writeFileSync(
+      path.join(dir, "contract.json"),
+      JSON.stringify({
+        input: {},
+        output: {
+          type: "object",
+          properties: { verdict: { enum: ["pass", "fix"] } },
+          required: ["verdict"],
+        },
+      }),
+    )
+
+    const ctx = {
+      cwd,
+      args: { capability: "inspect", input: "{}" },
+      data: {},
+    } as never
+    await loadSimpleCapability(ctx, {} as never)
+
+    const prompt = String((ctx as { data: Record<string, unknown> }).data.prompt)
+    expect(prompt.indexOf("Return markdown.")).toBeLessThan(prompt.indexOf("## Output contract"))
+    expect(prompt).toContain('"verdict"')
+  })
+
+  it("rejects input that violates the capability contract before execution", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-runtime-"))
+    roots.push(cwd)
+    const root = path.join(cwd, ".kody-engine", "definitions", "capabilities")
+    const dir = path.join(root, "inspect")
+    fs.mkdirSync(path.join(dir, "skills"), { recursive: true })
+    fs.mkdirSync(path.join(dir, "tools"), { recursive: true })
+    fs.writeFileSync(path.join(dir, "instructions.md"), "Inspect a PR.\n")
+    fs.writeFileSync(
+      path.join(dir, "contract.json"),
+      JSON.stringify({
+        input: {
+          type: "object",
+          properties: { pr: { type: "integer" } },
+          required: ["pr"],
+        },
+        output: {},
+      }),
+    )
+
+    const ctx = {
+      cwd,
+      args: { capability: "inspect", input: '{"issue":7}' },
+      data: {},
+    } as never
+
+    await expect(loadSimpleCapability(ctx, {} as never)).rejects.toThrow(/Capability input does not match/)
   })
 
   it("keeps old capability flags as fields in the one generic input", async () => {

@@ -3,7 +3,13 @@ import * as path from "node:path"
 import type { ReportPublicationConfig } from "./implementations/types.js"
 
 export const CAPABILITY_BODY_FILE = "instructions.md"
+export const CAPABILITY_CONTRACT_FILE = "contract.json"
 export const CAPABILITY_PROFILE_FILE = CAPABILITY_BODY_FILE
+
+export interface CapabilityContract {
+  input: Record<string, unknown>
+  output: Record<string, unknown>
+}
 
 export interface CapabilityFolderConfig {
   /** Internal workflow adapter only. Simple Capability folders never set an Agent. */
@@ -26,6 +32,7 @@ export interface CapabilityFolderConfig {
   readsFrom?: string[]
   writesTo?: string[]
   output?: CapabilityOutputConfig
+  inputSchema?: Record<string, unknown>
   outputSchema?: Record<string, unknown>
   workflow?: CapabilityWorkflowConfig
 }
@@ -38,15 +45,7 @@ export interface CapabilityOutputConfig {
 
 export function capabilityOutputConditionPaths(config: CapabilityFolderConfig): Set<string> {
   if (config.outputSchema) {
-    const properties = isPlainObject(config.outputSchema.properties) ? config.outputSchema.properties : undefined
-    const factContract = isPlainObject(properties?.facts) ? properties.facts : undefined
-    const facts = isPlainObject(factContract?.properties) ? factContract.properties : undefined
-    return new Set([
-      ...(properties?.status ? ["result.status"] : []),
-      ...(properties?.summary ? ["result.summary"] : []),
-      ...(properties?.resultClass ? ["result.resultClass"] : []),
-      ...Object.keys(facts ?? {}).map((fact) => `result.facts.${fact}`),
-    ])
+    return new Set(schemaPropertyPaths(config.outputSchema, "result"))
   }
   const result = config.output?.result
   if (!result) return new Set()
@@ -94,11 +93,13 @@ export interface CapabilityFolder {
   dir: string
   profilePath: string
   bodyPath: string
+  contractPath?: string
   title: string
   body: string
   rawBody: string
   config: CapabilityFolderConfig
   rawProfile: Record<string, unknown>
+  contract?: CapabilityContract
 }
 
 export function listCapabilityFolderSlugs(absDir: string): string[] {
@@ -122,6 +123,7 @@ export function isCapabilityFolder(dir: string): boolean {
   return entries.every(
     (entry) =>
       entry.name === CAPABILITY_BODY_FILE ||
+      entry.name === CAPABILITY_CONTRACT_FILE ||
       (entry.isDirectory() && (entry.name === "skills" || entry.name === "tools")),
   )
 }
@@ -129,28 +131,60 @@ export function isCapabilityFolder(dir: string): boolean {
 export function readCapabilityFolder(root: string, slug: string): CapabilityFolder | null {
   const dir = path.join(root, slug)
   const bodyPath = path.join(dir, CAPABILITY_BODY_FILE)
+  const contractPath = path.join(dir, CAPABILITY_CONTRACT_FILE)
   if (!fs.existsSync(bodyPath) || !fs.statSync(bodyPath).isFile()) return null
   if (!isCapabilityFolder(dir)) return null
   try {
     const rawBody = fs.readFileSync(bodyPath, "utf-8")
+    const contract = fs.existsSync(contractPath)
+      ? parseCapabilityContract(fs.readFileSync(contractPath, "utf-8"))
+      : undefined
     const { title, body } = parseCapabilityBody(rawBody, slug)
     return {
       slug,
       dir,
       profilePath: bodyPath,
       bodyPath,
+      ...(contract ? { contractPath } : {}),
       title,
       body,
       rawBody,
       config: {
         action: slug,
         describe: title,
+        ...(contract
+          ? {
+              inputSchema: contract.input,
+              outputSchema: contract.output,
+            }
+          : {}),
       },
-      rawProfile: {},
+      rawProfile: contract ? { input: contract.input, output: contract.output } : {},
+      ...(contract ? { contract } : {}),
     }
   } catch {
     return null
   }
+}
+
+function parseCapabilityContract(raw: string): CapabilityContract {
+  const parsed = JSON.parse(raw) as unknown
+  if (!isPlainObject(parsed) || !isPlainObject(parsed.input) || !isPlainObject(parsed.output)) {
+    throw new Error("contract.json must contain input and output JSON schemas")
+  }
+  const unsupported = Object.keys(parsed).filter((key) => key !== "input" && key !== "output")
+  if (unsupported.length > 0) {
+    throw new Error(`contract.json contains unsupported fields: ${unsupported.join(", ")}`)
+  }
+  return { input: parsed.input, output: parsed.output }
+}
+
+function schemaPropertyPaths(schema: Record<string, unknown>, prefix: string): string[] {
+  const properties = isPlainObject(schema.properties) ? schema.properties : {}
+  return Object.entries(properties).flatMap(([name, property]) => {
+    const path = `${prefix}.${name}`
+    return isPlainObject(property) ? [path, ...schemaPropertyPaths(property, path)] : [path]
+  })
 }
 
 export function parseCapabilityConfig(raw: Record<string, unknown>): CapabilityFolderConfig {
@@ -175,6 +209,7 @@ export function parseCapabilityConfig(raw: Record<string, unknown>): CapabilityF
     readsFrom: stringList(raw.readsFrom ?? raw.reads_from),
     writesTo: stringList(raw.writesTo ?? raw.writes_to),
     output: parseCapabilityOutput(raw.output),
+    inputSchema: isPlainObject(raw.inputSchema) ? raw.inputSchema : undefined,
     outputSchema: isPlainObject(raw.outputSchema) ? raw.outputSchema : undefined,
     workflow: parseCapabilityWorkflow(raw.workflow),
   }

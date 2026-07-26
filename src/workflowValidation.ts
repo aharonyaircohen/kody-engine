@@ -189,6 +189,13 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
         issue(issues, "invalid_transition_target", `${base}.to`, "workflow connection must name a valid target step")
         return
       }
+      if (raw.default === true && raw.when !== undefined) {
+        issue(issues, "conflicting_transition", base, "workflow connection cannot be both conditional and default")
+      }
+      if (raw.when !== undefined) {
+        const outputPaths = options.capabilityOutputs?.get(sourceCapability ?? "")
+        validateDataMatch(raw.when, `${base}.when`, issues, outputPaths)
+      }
       if (target === "$end") {
         explicitEndSources.add(id)
         return
@@ -202,13 +209,6 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
         )
       } else {
         adjacency.get(id)?.push(target)
-      }
-      if (raw.default === true && raw.when !== undefined) {
-        issue(issues, "conflicting_transition", base, "workflow connection cannot be both conditional and default")
-      }
-      if (raw.when !== undefined) {
-        const outputPaths = options.capabilityOutputs?.get(sourceCapability ?? "")
-        validateDataMatch(raw.when, `${base}.when`, issues, outputPaths)
       }
       const targetIndex = ids.indexOf(target ?? "")
       const iterations = raw.maxIterations

@@ -12,7 +12,7 @@ export class CapabilityContractValidationError extends Error {
     readonly errors: readonly ErrorObject[],
   ) {
     super(
-      `Capability ${boundary} does not match its canonical contract: ${validator.errorsText([...errors], {
+      `Capability ${boundary} does not match its declared contract: ${validator.errorsText([...errors], {
         separator: "; ",
       })}`,
     )

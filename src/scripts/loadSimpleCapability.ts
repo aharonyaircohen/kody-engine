@@ -1,5 +1,6 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { validateCapabilityContractValue } from "../agency/capability-contract-validation.js"
 import { readCapabilityFolder } from "../capabilityFolders.js"
 import { capabilitiesRoot } from "../definition-paths.js"
 import type { PreflightScript } from "../implementations/types.js"
@@ -18,9 +19,14 @@ export const loadSimpleCapability: PreflightScript = async (ctx) => {
   const toolFiles = listFiles(toolRoot)
   const skillFiles = listFiles(skillRoot)
   const input = parseInput(ctx.args.input)
-  const delivery = ctx.data.jobDelivery === "pull-request"
+  if (capability.config.inputSchema) {
+    validateCapabilityContractValue("input", capability.config.inputSchema, input)
+  }
   ctx.data.jobCapability = slug
   ctx.data.capabilityInput = input
+  if (capability.config.outputSchema) {
+    ctx.data.capabilityOutputSchema = capability.config.outputSchema
+  }
   ctx.data.capabilityEnvironment = capabilityEnvironment(input)
   ctx.data.prompt = [
     capability.rawBody.trim(),
@@ -31,23 +37,6 @@ export const loadSimpleCapability: PreflightScript = async (ctx) => {
     JSON.stringify(input ?? null, null, 2),
     "```",
     "",
-    ...(delivery
-      ? [
-          "## Delivery",
-          "",
-          "The wrapper owns git commits, pushes, and pull requests. Do not run git or gh write commands.",
-          "Finish with exactly this structure:",
-          "",
-          "DONE",
-          "PLAN_DEVIATIONS: none",
-          "COMMIT_MSG: <conventional commit message>",
-          "PR_SUMMARY:",
-          "- <what changed>",
-          "```json",
-          '{"summary":"<result>","status":"changed"}',
-          "```",
-        ]
-      : ["Return one JSON value."]),
     ...(skillFiles.length
       ? [
           "",
@@ -70,6 +59,18 @@ export const loadSimpleCapability: PreflightScript = async (ctx) => {
           ...toolFiles.map((file) => `- ${path.join(toolRoot, file)}`),
         ]
       : []),
+    "",
+    ...(capability.config.outputSchema
+      ? [
+          "## Output contract",
+          "",
+          "Produce one JSON result matching this schema:",
+          "",
+          "```json",
+          JSON.stringify(capability.config.outputSchema, null, 2),
+          "```",
+        ]
+      : ["Return one JSON value."]),
   ].join("\n")
 }
 

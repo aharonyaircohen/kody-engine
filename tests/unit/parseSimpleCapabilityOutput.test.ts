@@ -4,11 +4,7 @@ import { parseSimpleCapabilityOutput } from "../../src/scripts/parseSimpleCapabi
 describe("parseSimpleCapabilityOutput", () => {
   it("returns a structured blocked result when the agent returns nothing", async () => {
     const ctx = { data: {}, output: {} } as Parameters<typeof parseSimpleCapabilityOutput>[0]
-    await parseSimpleCapabilityOutput(
-      ctx,
-      {} as Parameters<typeof parseSimpleCapabilityOutput>[1],
-      null,
-    )
+    await parseSimpleCapabilityOutput(ctx, {} as Parameters<typeof parseSimpleCapabilityOutput>[1], null)
 
     expect(ctx.output.exitCode).toBeUndefined()
     expect(ctx.output.reason).toBe("Capability execution ended before returning a result")
@@ -130,6 +126,61 @@ describe("parseSimpleCapabilityOutput", () => {
           releasePr: 42,
           releasePrUrl: "https://github.com/acme/repo/pull/42",
         },
+      }),
+    ])
+  })
+
+  it("accepts output that matches the capability contract", async () => {
+    const ctx = {
+      data: {
+        capabilityOutputSchema: {
+          type: "object",
+          properties: { verdict: { enum: ["pass", "fix"] } },
+          required: ["verdict"],
+          additionalProperties: false,
+        },
+      },
+      output: {},
+    } as unknown as Parameters<typeof parseSimpleCapabilityOutput>[0]
+
+    await parseSimpleCapabilityOutput(
+      ctx,
+      {} as Parameters<typeof parseSimpleCapabilityOutput>[1],
+      {
+        finalText: JSON.stringify({ verdict: "pass" }),
+      } as Parameters<typeof parseSimpleCapabilityOutput>[2],
+    )
+
+    expect(ctx.output.exitCode).toBeUndefined()
+    expect(ctx.data.capabilityOutput).toEqual({ verdict: "pass" })
+  })
+
+  it("blocks output that violates the capability contract", async () => {
+    const ctx = {
+      data: {
+        capabilityOutputSchema: {
+          type: "object",
+          properties: { verdict: { enum: ["pass", "fix"] } },
+          required: ["verdict"],
+        },
+      },
+      output: {},
+    } as unknown as Parameters<typeof parseSimpleCapabilityOutput>[0]
+
+    await parseSimpleCapabilityOutput(
+      ctx,
+      {} as Parameters<typeof parseSimpleCapabilityOutput>[1],
+      {
+        finalText: JSON.stringify({ summary: "markdown won" }),
+      } as Parameters<typeof parseSimpleCapabilityOutput>[2],
+    )
+
+    expect(ctx.output.exitCode).toBe(64)
+    expect(ctx.output.reason).toMatch(/Capability output does not match/)
+    expect(ctx.data.capabilityResults).toEqual([
+      expect.objectContaining({
+        status: "blocked",
+        blockers: [expect.stringMatching(/Capability output does not match/)],
       }),
     ])
   })

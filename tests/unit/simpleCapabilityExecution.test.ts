@@ -2,6 +2,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { capabilityOutputConditionPaths, readCapabilityFolder } from "../../src/capabilityFolders.js"
 
 interface MockCapabilityResult {
   version: 1
@@ -43,11 +44,16 @@ afterEach(() => {
   }
 })
 
-function writeCapability(cwd: string, slug: string): void {
+function writeCapability(
+  cwd: string,
+  slug: string,
+  contract?: { input: Record<string, unknown>; output: Record<string, unknown> },
+): void {
   const dir = path.join(cwd, ".kody-engine", "definitions", "capabilities", slug)
   fs.mkdirSync(path.join(dir, "skills"), { recursive: true })
   fs.mkdirSync(path.join(dir, "tools"), { recursive: true })
   fs.writeFileSync(path.join(dir, "instructions.md"), "Inspect the request.\n")
+  if (contract) fs.writeFileSync(path.join(dir, "contract.json"), JSON.stringify(contract))
 }
 
 describe("simple Capability execution", () => {
@@ -251,5 +257,48 @@ describe("simple Capability execution", () => {
         }),
       },
     })
+  })
+
+  it("validates Workflow result paths against the source Capability contract", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-workflow-contract-"))
+    roots.push(cwd)
+    writeCapability(cwd, "inspect", {
+      input: {},
+      output: {
+        type: "object",
+        properties: { verdict: { enum: ["pass", "fix"] } },
+        required: ["verdict"],
+      },
+    })
+    writeCapability(cwd, "repair")
+    const loaded = readCapabilityFolder(path.join(cwd, ".kody-engine", "definitions", "capabilities"), "inspect")
+    expect(capabilityOutputConditionPaths(loaded!.config)).toContain("result.verdict")
+    const workflowDir = path.join(cwd, ".kody-engine", "definitions", "workflows", "quality")
+    fs.mkdirSync(workflowDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(workflowDir, "workflow.json"),
+      JSON.stringify({
+        name: "Quality",
+        agent: "kody",
+        startAt: "inspect",
+        steps: [
+          {
+            id: "inspect",
+            capability: "inspect",
+            next: [
+              { to: "$end", when: { "result.unknown": true } },
+              { to: "repair", default: true },
+            ],
+          },
+          { id: "repair", capability: "repair" },
+        ],
+      }),
+    )
+
+    await expect(runJob({ workflow: "quality", cliArgs: {}, flavor: "instant" }, { cwd })).resolves.toMatchObject({
+      exitCode: 64,
+      reason: expect.stringMatching(/does not declare it/),
+    })
+    expect(executor.runImplementationChain).not.toHaveBeenCalled()
   })
 })

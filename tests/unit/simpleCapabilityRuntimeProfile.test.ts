@@ -40,12 +40,15 @@ describe("simple Capability runtime profile", () => {
     expect(profile.scripts.postflight.map(({ script }) => script)).toEqual(["parseSimpleCapabilityOutput"])
   })
 
-  it("passes the capability-owned prompt through the pull-request lifecycle composer", () => {
+  it("owns the pull-request delivery protocol around the capability prompt", () => {
     const template = fs.readFileSync(
       new URL("../../src/runtime-services/capability-delivery/prompt.md", import.meta.url),
       "utf8",
     )
 
-    expect(template.trim()).toBe("{{prompt}}")
+    expect(template).toContain("{{prompt}}")
+    expect(template).toContain("The delivery wrapper owns git commits, pushes, and pull requests.")
+    expect(template).toContain("COMMIT_MSG:")
+    expect(template.indexOf("{{prompt}}")).toBeLessThan(template.indexOf("## Delivery"))
   })
 })

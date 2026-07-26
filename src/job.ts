@@ -11,7 +11,6 @@
  */
 
 import { evaluateAgencyBoundaries } from "./agencyBoundaryEval.js"
-import { capabilityDeliveryTarget } from "./capabilityDelivery.js"
 import type {
   CapabilityFolder,
   CapabilityWorkflowConfig,
@@ -39,6 +38,7 @@ import {
   resolveCapabilityFolder,
 } from "./registry.js"
 import { type RunIndexRow, upsertRunIndexRowBestEffortAsync } from "./runIndex.js"
+import { resolveSimpleCapabilityRuntime, simpleCapabilityRuntimeArgs } from "./simpleCapabilityRuntime.js"
 import type { Action } from "./state.js"
 import { hasStateBackendConfig } from "./state-backend.js"
 import {
@@ -216,14 +216,14 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
 
   const workflow = capabilityContext?.config.workflow ?? workflowContext?.config.workflow
   const workflowIdentity = valid.workflow ?? capabilityIdentity ?? workflowContext?.slug
+  const simpleCapabilityRuntime = resolveSimpleCapabilityRuntime(resolvedCapability?.implementation, valid.delivery)
   const capabilitySelectedImplementation =
-    valid.delivery === "pull-request" && resolvedCapability?.implementation === "capability-run"
-      ? "capability-delivery"
-      : (resolvedCapability?.implementation ??
-        capabilityContext?.config.implementation ??
-        capabilityContext?.config.implementations?.[0] ??
-        (capabilityContext?.config.role ? capabilityContext.slug : undefined) ??
-        (capabilityContext?.config.tickScript ? "capability-tick-scripted" : undefined))
+    simpleCapabilityRuntime?.implementation ??
+    resolvedCapability?.implementation ??
+    capabilityContext?.config.implementation ??
+    capabilityContext?.config.implementations?.[0] ??
+    (capabilityContext?.config.role ? capabilityContext.slug : undefined) ??
+    (capabilityContext?.config.tickScript ? "capability-tick-scripted" : undefined)
   const profileName = explicitImplementation ?? capabilitySelectedImplementation
   if (
     workflow &&
@@ -338,6 +338,7 @@ async function runCapabilityImplementationStep(
   resolvedCapability: DiscoveredCapabilityAction | null,
   base: RunJobBase,
 ): Promise<ExecutorOutput> {
+  const simpleCapabilityRuntime = resolveSimpleCapabilityRuntime(resolvedCapability?.implementation, valid.delivery)
   const preloadedData: Record<string, unknown> = { ...(base.preloadedData ?? {}) }
   // Stamp both identities: jobKey is stable required work on the task; jobId is
   // this execution attempt.
@@ -394,17 +395,9 @@ async function runCapabilityImplementationStep(
   input.cliArgs = shouldApplyResolvedCapabilityArgs
     ? { ...resolvedCapability.cliArgs, ...input.cliArgs }
     : input.cliArgs
-  if ((profileName === "capability-run" || profileName === "capability-delivery") && capabilityIdentity) {
+  if (simpleCapabilityRuntime && profileName === simpleCapabilityRuntime.implementation && capabilityIdentity) {
     const capabilityInput = Object.keys(valid.cliArgs).length > 0 ? genericInputFromArgs(valid.cliArgs) : undefined
-    const deliveryTarget =
-      profileName === "capability-delivery" && capabilityInput && typeof capabilityInput === "object"
-        ? capabilityDeliveryArgs(capabilityInput)
-        : {}
-    input.cliArgs = {
-      capability: capabilityIdentity,
-      ...(capabilityInput !== undefined ? { input: JSON.stringify(capabilityInput) } : {}),
-      ...deliveryTarget,
-    }
+    input.cliArgs = simpleCapabilityRuntimeArgs(simpleCapabilityRuntime, capabilityIdentity, capabilityInput)
   }
 
   const run = base.chain === false ? runImplementation : runImplementationChain
@@ -861,11 +854,6 @@ function workflowStepToJob(
     ...(step.report ? { report: step.report } : {}),
     ...(parent.resultTarget ? { resultTarget: parent.resultTarget } : {}),
   }
-}
-
-function capabilityDeliveryArgs(input: unknown): Record<string, number> {
-  const target = capabilityDeliveryTarget(input)
-  return target ? { [target.kind]: target.number } : {}
 }
 
 function usesGenericCapabilityInput(action: string, cwd: string): boolean {

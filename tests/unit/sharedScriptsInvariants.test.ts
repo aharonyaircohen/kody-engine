@@ -92,6 +92,14 @@ describe("shared scripts: invariant — no implementation-name branching", () =>
   })
 })
 
+describe("simple Capability runtime boundary", () => {
+  it("keeps internal runtime names out of Workflow orchestration", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "../../src/job.ts"), "utf-8")
+    expect(source).not.toContain('"capability-run"')
+    expect(source).not.toContain('"capability-delivery"')
+  })
+})
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Modularity invariant: src/scripts/ is for CROSS-CUTTING utilities. Single-
 // implementation scripts must be explicitly allowlisted as "known solo" until

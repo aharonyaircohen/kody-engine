@@ -134,6 +134,57 @@ describe("validateWorkflow", () => {
     ])
   })
 
+  it("validates result contracts on explicit end connections", () => {
+    const issues = validateWorkflow(
+      {
+        startAt: "inspect",
+        steps: [
+          {
+            id: "inspect",
+            capability: "inspect",
+            next: [
+              { to: "$end", when: { "result.unknown": true } },
+              { to: "repair", default: true },
+            ],
+          },
+          { id: "repair", capability: "repair" },
+        ],
+      },
+      { capabilityOutputs: new Map([["inspect", new Set(["result.verdict"])]]) },
+    )
+
+    expect(issues).toEqual([
+      expect.objectContaining({
+        code: "undeclared_result_path",
+        path: "steps[0].next[0].when.result.unknown",
+      }),
+    ])
+  })
+
+  it("accepts arbitrary result fields declared by a capability JSON schema", () => {
+    expect(
+      validateWorkflow(
+        {
+          startAt: "inspect",
+          steps: [
+            {
+              id: "inspect",
+              capability: "inspect",
+              next: [
+                { to: "$end", when: { "result.verdict": "pass" } },
+                { to: "repair", default: true },
+              ],
+            },
+            { id: "repair", capability: "repair" },
+          ],
+        },
+        {
+          capabilityOutputs: new Map([["inspect", new Set(["result.verdict", "result.feedback"])]]),
+        },
+      ),
+    ).toEqual([])
+  })
+
   it("accepts documented camelCase step ids in graph workflows", () => {
     expect(
       validateWorkflow({
