@@ -44,6 +44,7 @@ describe("initFlow: performInit", () => {
     expect(workflow).toContain("uses: astral-sh/setup-uv@v6")
     expect(workflow).toContain("vars.KODY_STORE_REPOSITORY")
     expect(workflow).toContain("path: .kody-engine/definitions")
+    expect(workflow).not.toContain("test -d .kody-engine/definitions/capabilities")
     expect(workflow).not.toContain("create-github-app-token")
 
     expect(result.wrote.some((file) => file.startsWith(".kody-engine/definitions/capabilities/"))).toBe(false)

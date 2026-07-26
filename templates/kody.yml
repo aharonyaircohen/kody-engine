@@ -99,5 +99,4 @@ jobs:
           KODY_DEFINITIONS_ROOT_CWD: ${{ github.workspace }}
         working-directory: ${{ github.workspace }}
         run: |
-          test -d .kody-engine/definitions/capabilities
           npx -y -p @kody-ade/kody-engine@latest kody-engine ci --cwd "$GITHUB_WORKSPACE"
