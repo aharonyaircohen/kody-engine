@@ -78,6 +78,8 @@ export interface CapabilityWorkflowStepConfig {
   action?: string
   evidence?: string
   target?: "issue" | "pr"
+  /** Wrapper-owned delivery required after this capability completes. */
+  delivery?: "pull-request"
   targetFact?: string
   reason?: string
   next?: CapabilityWorkflowTransitionConfig[]
@@ -273,6 +275,7 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
   const evidence = stringField(raw.evidence)
   const reason = stringField(raw.reason)
   const target = stringField(raw.target)
+  const delivery = stringField(raw.delivery)
   const targetFact = stringField(raw.targetFact ?? raw.target_fact)
   const hasInput = Object.hasOwn(raw, "input")
   const next = parseWorkflowTransitions(raw.next)
@@ -284,6 +287,7 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
     ...(action && isSafeSlug(action) ? { action } : {}),
     ...(evidence ? { evidence } : {}),
     ...(target === "issue" || target === "pr" ? { target } : {}),
+    ...(delivery === "pull-request" ? { delivery } : {}),
     ...(targetFact ? { targetFact } : {}),
     ...(reason ? { reason } : {}),
     ...(next ? { next } : {}),

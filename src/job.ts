@@ -12,6 +12,7 @@
 
 import * as path from "node:path"
 import { evaluateAgencyBoundaries } from "./agencyBoundaryEval.js"
+import { capabilityDeliveryTarget } from "./capabilityDelivery.js"
 import type {
   CapabilityFolder,
   CapabilityWorkflowConfig,
@@ -99,6 +100,9 @@ export function validateJob(input: unknown): Job {
   if (j.cliArgs !== undefined && (typeof j.cliArgs !== "object" || j.cliArgs === null)) {
     throw new InvalidJobError("job.cliArgs must be an object when present")
   }
+  if (j.delivery !== undefined && j.delivery !== "pull-request") {
+    throw new InvalidJobError(`job.delivery must be "pull-request" (got ${String(j.delivery)})`)
+  }
   return {
     action: typeof j.action === "string" ? j.action : undefined,
     implementation: typeof j.implementation === "string" ? j.implementation : undefined,
@@ -108,6 +112,7 @@ export function validateJob(input: unknown): Job {
     agent: typeof j.agent === "string" ? j.agent : undefined,
     schedule: typeof j.schedule === "string" ? j.schedule : undefined,
     target: typeof j.target === "number" ? j.target : undefined,
+    delivery: j.delivery === "pull-request" ? j.delivery : undefined,
     cliArgs: (j.cliArgs as Record<string, unknown> | undefined) ?? {},
     workflowFacts:
       j.workflowFacts && typeof j.workflowFacts === "object" && !Array.isArray(j.workflowFacts)
@@ -213,7 +218,9 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
   const workflow = capabilityContext?.config.workflow ?? workflowContext?.config.workflow
   const workflowIdentity = valid.workflow ?? capabilityIdentity ?? workflowContext?.slug
   const capabilitySelectedImplementation =
-    resolvedCapability?.implementation ??
+    valid.delivery === "pull-request" && resolvedCapability?.implementation === "capability-run"
+      ? "capability-delivery"
+      : resolvedCapability?.implementation ??
     capabilityContext?.config.implementation ??
     capabilityContext?.config.implementations?.[0] ??
     (capabilityContext?.config.role ? capabilityContext.slug : undefined) ??
@@ -339,6 +346,7 @@ async function runCapabilityImplementationStep(
   preloadedData.jobKey = stableJobKey(valid)
   preloadedData.jobFlavor = valid.flavor
   if (valid.target !== undefined) preloadedData.jobTarget = valid.target
+  if (valid.delivery !== undefined) preloadedData.jobDelivery = valid.delivery
   if (valid.action !== undefined && valid.action.length > 0) preloadedData.jobAction = valid.action
   if (capabilityIdentity !== undefined && capabilityIdentity.length > 0)
     preloadedData.jobCapability = capabilityIdentity
@@ -387,11 +395,16 @@ async function runCapabilityImplementationStep(
   input.cliArgs = shouldApplyResolvedCapabilityArgs
     ? { ...resolvedCapability.cliArgs, ...input.cliArgs }
     : input.cliArgs
-  if (profileName === "capability-run" && capabilityIdentity) {
+  if ((profileName === "capability-run" || profileName === "capability-delivery") && capabilityIdentity) {
     const capabilityInput = Object.keys(valid.cliArgs).length > 0 ? genericInputFromArgs(valid.cliArgs) : undefined
+    const deliveryTarget =
+      profileName === "capability-delivery" && capabilityInput && typeof capabilityInput === "object"
+        ? capabilityDeliveryArgs(capabilityInput)
+        : {}
     input.cliArgs = {
       capability: capabilityIdentity,
       ...(capabilityInput !== undefined ? { input: JSON.stringify(capabilityInput) } : {}),
+      ...deliveryTarget,
     }
   }
 
@@ -840,6 +853,7 @@ function workflowStepToJob(
     ...(parent.agent ? { agent: parent.agent } : {}),
     ...(parent.schedule ? { schedule: parent.schedule } : {}),
     ...(typeof target === "number" ? { target } : {}),
+    ...(step.delivery ? { delivery: step.delivery } : {}),
     cliArgs,
     ...(step.evidence ? { evidence: step.evidence } : parent.evidence ? { evidence: parent.evidence } : {}),
     flavor: parent.flavor,
@@ -848,6 +862,11 @@ function workflowStepToJob(
     ...(step.report ? { report: step.report } : {}),
     ...(parent.resultTarget ? { resultTarget: parent.resultTarget } : {}),
   }
+}
+
+function capabilityDeliveryArgs(input: unknown): Record<string, number> {
+  const target = capabilityDeliveryTarget(input)
+  return target ? { [target.kind]: target.number } : {}
 }
 
 function usesGenericCapabilityInput(action: string, cwd: string): boolean {

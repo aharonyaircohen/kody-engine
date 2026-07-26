@@ -57,6 +57,34 @@ describe("validateWorkflow", () => {
     ).toEqual([])
   })
 
+  it("accepts the generic pull-request delivery policy", () => {
+    expect(
+      validateWorkflow({
+        steps: [
+          {
+            id: "change",
+            capability: "any-change-capability",
+            delivery: "pull-request",
+          },
+        ],
+      }),
+    ).toEqual([])
+  })
+
+  it("rejects unknown delivery policies", () => {
+    expect(
+      validateWorkflow({
+        steps: [
+          {
+            id: "change",
+            capability: "any-change-capability",
+            delivery: "direct-push",
+          },
+        ],
+      }).map((issue) => issue.code),
+    ).toContain("invalid_delivery")
+  })
+
   it("accepts only structured result fields declared by the source capability", () => {
     const capabilityOutputs = new Map([["inspect", new Set(["result.status", "result.facts.needsFix"])]] as const)
     expect(

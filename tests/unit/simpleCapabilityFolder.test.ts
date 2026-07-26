@@ -83,6 +83,30 @@ describe("simple Capability folder", () => {
     })
   })
 
+  it("adds the wrapper-owned delivery protocol only for delivery runs", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-runtime-"))
+    roots.push(cwd)
+    const root = path.join(cwd, ".kody-engine", "definitions", "capabilities")
+    const dir = path.join(root, "change")
+    fs.mkdirSync(path.join(dir, "skills"), { recursive: true })
+    fs.mkdirSync(path.join(dir, "tools"), { recursive: true })
+    fs.writeFileSync(path.join(dir, "instructions.md"), "Make the requested change.\n")
+
+    const ctx = {
+      cwd,
+      args: { capability: "change", input: '{"issue":7}' },
+      data: { jobDelivery: "pull-request" },
+    } as never
+    await loadSimpleCapability(ctx, {} as never)
+
+    const prompt = String((ctx as { data: Record<string, unknown> }).data.prompt)
+    expect(prompt).toContain("The wrapper owns git commits, pushes, and pull requests.")
+    expect(prompt).toContain("DONE")
+    expect(prompt).toContain("COMMIT_MSG:")
+    expect(prompt).toContain("PR_SUMMARY:")
+    expect(prompt).toContain("```json")
+  })
+
   it("keeps old capability flags as fields in the one generic input", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-runtime-"))
     roots.push(cwd)

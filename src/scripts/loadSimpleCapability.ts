@@ -18,6 +18,7 @@ export const loadSimpleCapability: PreflightScript = async (ctx) => {
   const toolFiles = listFiles(toolRoot)
   const skillFiles = listFiles(skillRoot)
   const input = parseInput(ctx.args.input)
+  const delivery = ctx.data.jobDelivery === "pull-request"
   ctx.data.jobCapability = slug
   ctx.data.capabilityInput = input
   ctx.data.capabilityEnvironment = capabilityEnvironment(input)
@@ -30,7 +31,23 @@ export const loadSimpleCapability: PreflightScript = async (ctx) => {
     JSON.stringify(input ?? null, null, 2),
     "```",
     "",
-    "Return one JSON value.",
+    ...(delivery
+      ? [
+          "## Delivery",
+          "",
+          "The wrapper owns git commits, pushes, and pull requests. Do not run git or gh write commands.",
+          "Finish with exactly this structure:",
+          "",
+          "DONE",
+          "PLAN_DEVIATIONS: none",
+          "COMMIT_MSG: <conventional commit message>",
+          "PR_SUMMARY:",
+          "- <what changed>",
+          "```json",
+          '{"summary":"<result>","status":"changed"}',
+          "```",
+        ]
+      : ["Return one JSON value."]),
     ...(skillFiles.length
       ? [
           "",

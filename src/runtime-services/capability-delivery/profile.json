@@ -1,0 +1,85 @@
+{
+  "name": "capability-delivery",
+  "internal": true,
+  "role": "primitive",
+  "kind": "oneshot",
+  "inputs": [
+    {
+      "name": "capability",
+      "flag": "--capability",
+      "type": "string",
+      "required": true,
+      "describe": "Capability folder slug."
+    },
+    {
+      "name": "input",
+      "flag": "--input",
+      "type": "string",
+      "required": false,
+      "describe": "The capability's one JSON input."
+    },
+    {
+      "name": "issue",
+      "flag": "--issue",
+      "type": "int",
+      "required": false,
+      "describe": "Issue receiving a new pull request."
+    },
+    {
+      "name": "pr",
+      "flag": "--pr",
+      "type": "int",
+      "required": false,
+      "describe": "Existing pull request receiving changes."
+    }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "acceptEdits",
+    "maxTurns": 60,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "enableVerifyTool": true,
+    "verifyAttempts": 4,
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Bash",
+      "Grep",
+      "Glob",
+      "mcp__kody-verify"
+    ],
+    "hooks": ["block-git"],
+    "skills": [],
+    "commands": [],
+    "subagents": [],
+    "plugins": [],
+    "mcpServers": []
+  },
+  "cliTools": [],
+  "lifecycle": "pr-branch",
+  "lifecycleConfig": {
+    "label": {
+      "name": "kody:working",
+      "color": "fbca04",
+      "description": "kody: delivering capability work"
+    },
+    "context": "task",
+    "sync": false,
+    "advance": false,
+    "mirrorState": false,
+    "finalize": false
+  },
+  "scripts": {
+    "preflight": [
+      { "script": "loadSimpleCapability" },
+      { "script": "prepareCapabilityDelivery" }
+    ],
+    "postflight": [
+      { "script": "parseSimpleCapabilityOutput" }
+    ]
+  },
+  "inputArtifacts": [],
+  "outputArtifacts": []
+}

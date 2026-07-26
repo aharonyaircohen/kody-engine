@@ -569,6 +569,8 @@ export interface Job {
   schedule?: string
   /** The issue/PR number this job acts on, when applicable. */
   target?: number
+  /** Workflow-owned delivery policy applied by a generic runtime adapter. */
+  delivery?: "pull-request"
   /** Args passed through to the implementation (mirrors DispatchResult.cliArgs). */
   cliArgs: Record<string, unknown>
   /** Internal workflow resume context. Not passed to capability CLI args. */

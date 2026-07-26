@@ -3,19 +3,28 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+interface MockCapabilityResult {
+  version: 1
+  status: "pass" | "fail" | "blocked" | "changed" | "noop"
+  summary: string
+  facts: Record<string, unknown>
+  artifacts: Array<{ label: string; url?: string; path?: string }>
+  missingEvidence: string[]
+  blockers: string[]
+}
+
+interface MockExecutorOutput {
+  exitCode: number
+  prUrl?: string
+  capabilityOutput?: unknown
+  capabilityResults: MockCapabilityResult[]
+}
+
 const executor = vi.hoisted(() => ({
   runImplementation: vi.fn(),
-  runImplementationChain: vi.fn(async (_runtime: string, _input: unknown) => ({
+  runImplementationChain: vi.fn(async (_runtime: string, _input: unknown): Promise<MockExecutorOutput> => ({
     exitCode: 0,
-    capabilityResults: [] as Array<{
-      version: 1
-      status: "pass" | "fail" | "blocked" | "changed" | "noop"
-      summary: string
-      facts: Record<string, unknown>
-      artifacts: Array<{ label: string; url?: string; path?: string }>
-      missingEvidence: string[]
-      blockers: string[]
-    }>,
+    capabilityResults: [],
   })),
 }))
 
@@ -171,5 +180,74 @@ describe("simple Capability execution", () => {
         ([runtime, input]) => `${runtime}:${(input as { cliArgs: { capability: string } }).cliArgs.capability}`,
       ),
     ).toEqual(["capability-run:inspect", "capability-run:repair", "capability-run:verify"])
+  })
+
+  it("uses the generic delivery runtime for any pull-request-producing step", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-workflow-delivery-"))
+    roots.push(cwd)
+    writeCapability(cwd, "make-change")
+    writeCapability(cwd, "inspect")
+    const workflowDir = path.join(cwd, ".kody-engine", "definitions", "workflows", "delivery")
+    fs.mkdirSync(workflowDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(workflowDir, "workflow.json"),
+      JSON.stringify({
+        name: "Delivery",
+        agent: "kody",
+        startAt: "change",
+        steps: [
+          {
+            id: "change",
+            capability: "make-change",
+            target: "issue",
+            delivery: "pull-request",
+            next: "inspect",
+          },
+          {
+            id: "inspect",
+            capability: "inspect",
+            target: "pr",
+          },
+        ],
+      }),
+    )
+    executor.runImplementationChain
+      .mockResolvedValueOnce({
+        exitCode: 0,
+        prUrl: "https://github.com/acme/widgets/pull/42",
+        capabilityOutput: { prUrl: "https://github.com/acme/widgets/pull/42" },
+        capabilityResults: [],
+      })
+      .mockResolvedValueOnce({ exitCode: 0, capabilityResults: [] })
+
+    await runJob(
+      {
+        workflow: "delivery",
+        target: 7,
+        cliArgs: { issue: 7 },
+        flavor: "instant",
+      },
+      { cwd },
+    )
+
+    expect(executor.runImplementationChain.mock.calls.map(([runtime]) => runtime)).toEqual([
+      "capability-delivery",
+      "capability-run",
+    ])
+    expect(executor.runImplementationChain.mock.calls[0]?.[1]).toMatchObject({
+      cliArgs: {
+        capability: "make-change",
+        issue: 7,
+      },
+    })
+    expect(executor.runImplementationChain.mock.calls[1]?.[1]).toMatchObject({
+      cliArgs: {
+        capability: "inspect",
+        input: JSON.stringify({
+          prUrl: "https://github.com/acme/widgets/pull/42",
+          pr: 42,
+        }),
+      },
+    })
   })
 })

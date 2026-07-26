@@ -25,6 +25,7 @@ const SUPPORTED_STEP_FIELDS = new Set([
   "action",
   "evidence",
   "target",
+  "delivery",
   "targetFact",
   "reason",
   "next",
@@ -95,6 +96,14 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
     }
 
     validateDataMatch(step.runWhen, `${base}.runWhen`, issues)
+    if (step.delivery !== undefined && step.delivery !== "pull-request") {
+      issue(
+        issues,
+        "invalid_delivery",
+        `${base}.delivery`,
+        "workflow step delivery must be pull-request",
+      )
+    }
     if (step.input !== undefined && !isJsonValue(step.input)) {
       issue(issues, "invalid_input", `${base}.input`, "workflow step input must be one JSON value")
     }
