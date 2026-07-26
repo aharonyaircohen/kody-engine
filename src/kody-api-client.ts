@@ -1,7 +1,7 @@
 import { type FunctionReference, getFunctionName } from "convex/server"
 import type { StateBackendClient } from "./state-backend.js"
 
-const DEFAULT_KODY_API_URL = "https://kody-dashboard-khaki.vercel.app"
+const DEFAULT_KODY_API_URL = "https://dashboard-six-alpha-46.vercel.app"
 const OIDC_AUDIENCE = "kody-api"
 
 interface CachedToken {
@@ -12,7 +12,12 @@ interface CachedToken {
 let cachedToken: CachedToken | null = null
 
 function apiUrl(env: NodeJS.ProcessEnv): string {
-  return (env.KODY_API_URL?.trim() || DEFAULT_KODY_API_URL).replace(/\/$/, "")
+  return (
+    env.KODY_API_URL?.trim() ||
+    env.KODY_DASHBOARD_URL?.trim() ||
+    env.DASHBOARD_URL?.trim() ||
+    DEFAULT_KODY_API_URL
+  ).replace(/\/$/, "")
 }
 
 function oidcRequestUrl(env: NodeJS.ProcessEnv): URL {
