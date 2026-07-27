@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   detectPackageManager,
   installLitellmIfNeeded,
+  isScheduledActionsWake,
   parseCiArgs,
   resolveAuthToken,
   runCi,
@@ -79,6 +80,20 @@ describe("kody-cli: parseCiArgs", () => {
   it("rejects unknown --flags", () => {
     const a = parseCiArgs(["--issue", "1", "--bogus"])
     expect(a.errors.some((e) => e.includes("--bogus"))).toBe(true)
+  })
+})
+
+describe("kody-cli: scheduled Actions wake detection", () => {
+  it("recognizes an explicit scheduled event without an issue", () => {
+    expect(isScheduledActionsWake({ GITHUB_EVENT_NAME: "schedule" })).toBe(true)
+  })
+
+  it("recognizes the Actions fallback when event metadata is absent", () => {
+    expect(isScheduledActionsWake({ GITHUB_ACTIONS: "true" })).toBe(true)
+  })
+
+  it("does not classify ordinary local execution as scheduled", () => {
+    expect(isScheduledActionsWake({})).toBe(false)
   })
 })
 

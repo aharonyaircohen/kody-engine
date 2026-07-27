@@ -129,6 +129,12 @@ export function parseCiArgs(argv: string[]): CiArgs {
   return result
 }
 
+/** GitHub's scheduled runner should not need a synthetic issue number. */
+export function isScheduledActionsWake(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.GITHUB_EVENT_NAME === "schedule" ||
+    (env.GITHUB_ACTIONS === "true" && !env.GITHUB_EVENT_NAME && !env.GITHUB_EVENT_PATH)
+}
+
 type RunRequestRoute =
   | { kind: "action"; action: string; cliArgs: Record<string, unknown>; workflowRunId?: string }
   | { kind: "fanout"; force: boolean }
@@ -450,6 +456,7 @@ export async function runCi(argv: string[]): Promise<number> {
   // path; nightly suites and any future watch implementations join naturally,
   // no kody.yml or config edits.
   const eventName = process.env.GITHUB_EVENT_NAME
+  const scheduledActionsWake = isScheduledActionsWake()
   const dispatchEventPath = process.env.GITHUB_EVENT_PATH
   let manualWorkflowDispatch = false
   let forceRunAction: string | null = null
@@ -661,7 +668,7 @@ export async function runCi(argv: string[]): Promise<number> {
   if (!args.issueNumber && !autoFallback && runRequestFanOut) {
     return runScheduledFanOut(cwd, args, { force: runRequestFanOutForce })
   }
-  if (!args.issueNumber && !autoFallback && (eventName === "schedule" || manualWorkflowDispatch)) {
+  if (!args.issueNumber && !autoFallback && (scheduledActionsWake || manualWorkflowDispatch)) {
     return runScheduledFanOut(cwd, args, { force: manualWorkflowDispatch })
   }
 
