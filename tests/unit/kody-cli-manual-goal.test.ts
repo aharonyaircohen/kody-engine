@@ -187,6 +187,7 @@ describe("kody-cli manual goal dispatch", () => {
 
   it("routes a first-class Loop request through the Loop scheduler", async () => {
     const dir = tmpDir()
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true)
     writeConfig(dir)
     writeScheduledImplementation(dir, "loop-scheduler")
     previousEnv.KODY_RUN_REQUEST_JSON = process.env.KODY_RUN_REQUEST_JSON
@@ -207,6 +208,8 @@ describe("kody-cli manual goal dispatch", () => {
       flavor: "instant",
       force: true,
     })
+    expect(stderr).not.toHaveBeenCalledWith(expect.stringContaining("simple Loop not found"))
+    stderr.mockRestore()
   })
 
   it("keeps legacy env action/message as a compatibility fallback", async () => {

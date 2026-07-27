@@ -483,6 +483,10 @@ export async function runCi(argv: string[]): Promise<number> {
   }
   if (parsedRunRequest && "request" in parsedRunRequest) {
   }
+  const explicitLoopRequest =
+    parsedRunRequest &&
+    "request" in parsedRunRequest &&
+    parsedRunRequest.request.target.type === "loop"
   if (!args.issueNumber && !autoFallback && parsedRunRequest && "request" in parsedRunRequest) {
     const route = routeRunRequest(parsedRunRequest.request)
     if (route.kind === "error") {
@@ -577,13 +581,19 @@ export async function runCi(argv: string[]): Promise<number> {
             }
           : null))
     const workflowRoute =
-      manualGoalManager || capabilityRoute || !readWorkflowDefinition(config, cwd, forceRunAction)
+      manualGoalManager ||
+      capabilityRoute ||
+      explicitLoopRequest ||
+      !readWorkflowDefinition(config, cwd, forceRunAction)
         ? undefined
         : {
             workflow: forceRunAction,
             cliArgs: {},
           }
-    const loop = manualGoalManager || capabilityRoute || workflowRoute ? null : readLoopDefinition(cwd, forceRunAction)
+    const loop =
+      manualGoalManager || capabilityRoute || workflowRoute || explicitLoopRequest
+        ? null
+        : readLoopDefinition(cwd, forceRunAction)
     const loopRoute: ManualOneShotRoute | undefined = loop
       ? loop.target.kind === "workflow"
         ? { workflow: loop.target.id, cliArgs: loop.input }
