@@ -156,6 +156,17 @@ function routeRunRequest(request: RunRequest): RunRequestRoute {
     }
   }
 
+  if (target.type === "loop") {
+    if (intent !== "run" && intent !== "tick") {
+      return { kind: "error", error: `loop target does not support intent '${intent}'` }
+    }
+    return {
+      kind: "action",
+      action: "loop-scheduler",
+      cliArgs: { loop: target.id },
+    }
+  }
+
   if (target.type === "workflow") {
     if (target.id === "scheduled-fanout") {
       return { kind: "fanout", force: intent === "run" }
@@ -163,10 +174,11 @@ function routeRunRequest(request: RunRequest): RunRequestRoute {
     if (intent !== "run" && intent !== "tick") {
       return { kind: "error", error: `workflow target does not support intent '${intent}'` }
     }
-    const workflowRunId =
-      typeof request.input?.runId === "string" && /^[a-z0-9][a-z0-9_-]{0,79}$/.test(request.input.runId)
-        ? request.input.runId
-        : undefined
+    const requestedRunId =
+      typeof request.input?.runId === "string" ? request.input.runId : request.requestId
+    const workflowRunId = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(requestedRunId)
+      ? requestedRunId
+      : undefined
     return { kind: "action", action: target.id, cliArgs: {}, ...(workflowRunId ? { workflowRunId } : {}) }
   }
 

@@ -78,6 +78,7 @@ function makeReq(over: Partial<ClaimRequest> = {}): ClaimRequest {
     jobId: "job-1",
     repo: "o/r",
     runRequest: {
+      requestId: "job-1",
       target: { type: "issue", id: 1 },
       intent: "run",
       source: "dashboard",
@@ -118,6 +119,7 @@ describe("PoolRegistry.claim — happy path with injected resolvers", () => {
       makeReq({
         issueNumber: 9,
         runRequest: {
+          requestId: "j2",
           target: { type: "issue", id: 9 },
           intent: "run",
           source: "dashboard",
@@ -157,6 +159,7 @@ describe("PoolRegistry.claim — happy path with injected resolvers", () => {
       jobId: "j2",
       repo: "o/r",
       runRequest: {
+        requestId: "j2",
         target: { type: "chat", id: "sess-1" },
         intent: "continue",
         source: "dashboard",

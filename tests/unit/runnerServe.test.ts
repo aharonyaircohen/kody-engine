@@ -10,8 +10,13 @@ describe("runnerServe: parseJob", () => {
   const valid = {
     jobId: "vibe-issue-7-123",
     repo: "owner/name",
-    issueNumber: 7,
     githubToken: "ghp_x",
+    runRequest: {
+      requestId: "vibe-issue-7-123",
+      target: { type: "issue", id: 7 },
+      intent: "run",
+      source: "github",
+    },
   }
 
   it("accepts a minimal valid job", () => {
@@ -43,8 +48,8 @@ describe("runnerServe: parseJob", () => {
   it.each([
     [{}, /jobId required/],
     [{ ...valid, repo: "noslash" }, /owner\/name/],
-    [{ ...valid, issueNumber: 0 }, /issueNumber/],
-    [{ ...valid, issueNumber: -3 }, /issueNumber/],
+    [{ ...valid, runRequest: undefined }, /runRequest required/],
+    [{ ...valid, runRequest: { ...valid.runRequest, requestId: "" } }, /requestId/],
     [{ ...valid, githubToken: "" }, /githubToken required/],
   ])("rejects invalid body %#", (body, re) => {
     const out = parseJob(body)
@@ -62,8 +67,12 @@ describe("runnerServe: parseJob", () => {
       jobId: "j1",
       repo: "o/r",
       githubToken: "ghp_x",
-      mode: "interactive",
-      sessionId: "sess-1",
+      runRequest: {
+        requestId: "chat-sess-1",
+        target: { type: "chat", id: "sess-1" },
+        intent: "continue",
+        source: "dashboard",
+      },
       idleExitMs: 600000,
     })
     expect("job" in out).toBe(true)
@@ -77,14 +86,24 @@ describe("runnerServe: parseJob", () => {
     }
   })
 
-  it("rejects interactive mode without a sessionId", () => {
-    const out = parseJob({ jobId: "j1", repo: "o/r", githubToken: "ghp_x", mode: "interactive" })
+  it("rejects requests without the canonical run request", () => {
+    const out = parseJob({ jobId: "j1", repo: "o/r", githubToken: "ghp_x" })
     expect("error" in out).toBe(true)
-    if ("error" in out) expect(out.error).toMatch(/sessionId/)
+    if ("error" in out) expect(out.error).toMatch(/runRequest required/)
   })
 
-  it("accepts scheduled mode with no issueNumber/sessionId (runs the fan-out)", () => {
-    const out = parseJob({ jobId: "j1", repo: "o/r", githubToken: "ghp_x", mode: "scheduled" })
+  it("accepts a canonical scheduled fan-out request", () => {
+    const out = parseJob({
+      jobId: "j1",
+      repo: "o/r",
+      githubToken: "ghp_x",
+      runRequest: {
+        requestId: "j1",
+        target: { type: "workflow", id: "scheduled-fanout" },
+        intent: "tick",
+        source: "schedule",
+      },
+    })
     expect("job" in out).toBe(true)
     if ("job" in out) {
       expect(out.job.runRequest).toMatchObject({
@@ -96,14 +115,17 @@ describe("runnerServe: parseJob", () => {
     }
   })
 
-  it("normalizes a legacy forced scheduled action payload to a goal target", () => {
+  it("accepts a canonical goal request", () => {
     const out = parseJob({
       jobId: "j1",
       repo: "o/r",
       githubToken: "ghp_x",
-      mode: "scheduled",
-      action: "goal-manager",
-      message: "weekly-docs",
+      runRequest: {
+        requestId: "j1",
+        target: { type: "goal", id: "weekly-docs" },
+        intent: "manage",
+        source: "dashboard",
+      },
       reasoningEffort: "low",
     })
     expect("job" in out).toBe(true)
@@ -123,6 +145,7 @@ describe("runnerServe: parseJob", () => {
       repo: "o/r",
       githubToken: "ghp_x",
       runRequest: {
+        requestId: "j1",
         target: { type: "workflow", id: "cms-content-editor" },
         intent: "run",
         source: "dashboard",
@@ -175,8 +198,13 @@ describe("runnerServe: buildServer routes", () => {
   const validBody = {
     jobId: "j1",
     repo: "owner/name",
-    issueNumber: 7,
     githubToken: "ghp_x",
+    runRequest: {
+      requestId: "j1",
+      target: { type: "issue", id: 7 },
+      intent: "run",
+      source: "github",
+    },
   }
 
   it("GET /healthz is unauthenticated and reports busy=false", async () => {

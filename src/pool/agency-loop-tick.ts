@@ -18,6 +18,7 @@ export interface AgencyLoopTickDeps {
       jobId: string
       repo: string
       runRequest: {
+        requestId: string
         target: { type: "workflow"; id: "scheduled-fanout" }
         intent: "tick"
         source: "schedule"
@@ -57,10 +58,12 @@ export async function runAgencyLoopTick(deps: AgencyLoopTickDeps): Promise<Agenc
   for (const repository of repositories) {
     const [owner, repo] = repository.split("/")
     try {
+      const jobId = `sched-${owner}-${repo}-${clock()}`
       const result = await deps.claim(owner!, repo!, {
-        jobId: `sched-${owner}-${repo}-${clock()}`,
+        jobId,
         repo: repository,
         runRequest: {
+          requestId: jobId,
           target: { type: "workflow", id: "scheduled-fanout" },
           intent: "tick",
           source: "schedule",

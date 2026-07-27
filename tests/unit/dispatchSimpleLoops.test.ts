@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   dueSlot,
   loopDispatchSlot,
+  selectRunnableLoops,
 } from "../../src/scripts/dispatchSimpleLoops.js"
 import type { LoopDefinition } from "../../src/loopDefinitions.js"
 
@@ -44,5 +45,29 @@ describe("loopDispatchSlot", () => {
     expect(loopDispatchSlot(loop, now, true, "run-123")).toBe(
       "manual:2026-07-25T09:07:00.000Z:run-123",
     )
+  })
+})
+
+describe("selectRunnableLoops", () => {
+  it("forces only the requested Loop", () => {
+    const other = { ...loop, id: "other" }
+
+    expect(
+      selectRunnableLoops(
+        [loop, other],
+        new Date("2026-07-25T09:07:00.000Z"),
+        { force: true, loopId: "daily-check" },
+      ),
+    ).toEqual([loop])
+  })
+
+  it("does not silently run every Loop when a requested Loop is missing", () => {
+    expect(
+      selectRunnableLoops(
+        [loop],
+        new Date("2026-07-25T09:07:00.000Z"),
+        { force: true, loopId: "missing" },
+      ),
+    ).toEqual([])
   })
 })

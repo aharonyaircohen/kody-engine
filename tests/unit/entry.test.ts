@@ -115,6 +115,7 @@ describe("entry: parseArgs", () => {
     vi.stubEnv(
       "KODY_RUN_REQUEST_JSON",
       JSON.stringify({
+        requestId: "issue-request-42",
         target: { type: "issue", id: 42 },
         intent: "run",
         source: "dashboard",
@@ -131,6 +132,7 @@ describe("entry: parseArgs", () => {
     vi.stubEnv(
       "KODY_RUN_REQUEST_JSON",
       JSON.stringify({
+        requestId: "chat-request-1",
         target: { type: "chat", id: "sess-1" },
         intent: "continue",
         source: "dashboard",
@@ -147,6 +149,7 @@ describe("entry: parseArgs", () => {
     vi.stubEnv(
       "KODY_RUN_REQUEST_JSON",
       JSON.stringify({
+        requestId: "goal-request-1",
         target: { type: "goal", id: "weekly-docs" },
         intent: "manage",
         source: "dashboard",

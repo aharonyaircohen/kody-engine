@@ -79,19 +79,8 @@ export function parseClaimRequest(body: unknown): { req: ClaimRequest } | { erro
   const repo = typeof b.repo === "string" ? b.repo.trim() : ""
   if (!/^[^/\s]+\/[^/\s]+$/.test(repo)) return { error: "repo must be 'owner/name'" }
 
-  const mode = b.mode === "interactive" ? "interactive" : b.mode === "scheduled" ? "scheduled" : "issue"
-  const action = typeof b.action === "string" && b.action.trim() ? b.action.trim() : undefined
-  const message = typeof b.message === "string" && b.message.trim() ? b.message.trim() : undefined
-  const runRequest =
-    b.runRequest !== undefined
-      ? parseRunRequest(b.runRequest)
-      : synthesizeLegacyClaimRequest({
-          mode,
-          issueNumber: b.issueNumber,
-          sessionId: b.sessionId,
-          action,
-          message,
-        })
+  if (b.runRequest === undefined) return { error: "runRequest required" }
+  const runRequest = parseRunRequest(b.runRequest)
   if ("error" in runRequest) return { error: runRequest.error }
   const req: ClaimRequest = { jobId, repo, runRequest: runRequest.request }
   if (req.runRequest.target.type === "issue") {
@@ -105,62 +94,6 @@ export function parseClaimRequest(body: unknown): { req: ClaimRequest } | { erro
   if (typeof b.model === "string" && b.model.trim()) req.model = b.model.trim()
   if (typeof b.dashboardUrl === "string" && b.dashboardUrl.trim()) req.dashboardUrl = b.dashboardUrl.trim()
   return { req }
-}
-
-function synthesizeLegacyClaimRequest(input: {
-  mode: "issue" | "interactive" | "scheduled"
-  issueNumber: unknown
-  sessionId: unknown
-  action?: string
-  message?: string
-}): { request: RunRequest } | { error: string } {
-  if (input.mode === "issue") {
-    const issueNumber = Number(input.issueNumber)
-    if (!Number.isInteger(issueNumber) || issueNumber <= 0) return { error: "issueNumber required for issue mode" }
-    return {
-      request: {
-        target: { type: "issue", id: issueNumber },
-        intent: "run",
-        source: "dashboard",
-      },
-    }
-  }
-  if (input.mode === "interactive") {
-    const sessionId = typeof input.sessionId === "string" ? input.sessionId.trim() : ""
-    if (!sessionId) return { error: "sessionId required for interactive mode" }
-    return {
-      request: {
-        target: { type: "chat", id: sessionId },
-        intent: "continue",
-        source: "dashboard",
-      },
-    }
-  }
-  if (input.action === "goal-manager" && input.message) {
-    return {
-      request: {
-        target: { type: "goal", id: input.message },
-        intent: "manage",
-        source: "dashboard",
-      },
-    }
-  }
-  if (input.action) {
-    return {
-      request: {
-        target: { type: "workflow", id: input.action },
-        intent: "run",
-        source: "dashboard",
-      },
-    }
-  }
-  return {
-    request: {
-      target: { type: "workflow", id: "scheduled-fanout" },
-      intent: "tick",
-      source: "schedule",
-    },
-  }
 }
 
 export async function poolServe(): Promise<number> {

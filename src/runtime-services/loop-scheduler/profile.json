@@ -27,6 +27,14 @@
     ],
     "postflight": []
   },
-  "inputs": [],
+  "inputs": [
+    {
+      "name": "loop",
+      "flag": "--loop",
+      "type": "string",
+      "required": false,
+      "description": "Optional Loop id to run without dispatching other Loops."
+    }
+  ],
   "name": "loop-scheduler"
 }

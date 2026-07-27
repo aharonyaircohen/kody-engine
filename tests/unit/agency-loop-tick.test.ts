@@ -14,6 +14,7 @@ describe("runAgencyLoopTick", () => {
       jobId: "sched-acme-widgets-999",
       repo: "acme/widgets",
       runRequest: {
+        requestId: "sched-acme-widgets-999",
         target: { type: "workflow", id: "scheduled-fanout" },
         intent: "tick",
         source: "schedule",

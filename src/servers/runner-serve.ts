@@ -39,11 +39,11 @@ export interface RunnerJob {
   jobId: string
   repo: string
   githubToken: string
-  /** Canonical work request. Legacy mode/action fields are normalized into this. */
+  /** Canonical provider-neutral work request. */
   runRequest: RunRequest
-  /** Legacy mirror for old tests/callers; issue target id is canonical. */
+  /** Derived convenience value for issue execution. */
   issueNumber?: number
-  /** Legacy mirror for old tests/callers; chat target id is canonical. */
+  /** Derived convenience value for interactive chat execution. */
   sessionId?: string
   /** Interactive idle/hard-cap (ms) — mirrors spawnRunner. */
   idleExitMs?: number
@@ -117,19 +117,8 @@ export function parseJob(body: unknown): { job: RunnerJob } | { error: string } 
   const githubToken = typeof b.githubToken === "string" ? b.githubToken.trim() : ""
   if (!githubToken) return { error: "githubToken required" }
 
-  const action = typeof b.action === "string" && b.action.trim() ? b.action.trim() : undefined
-  const message = typeof b.message === "string" && b.message.trim() ? b.message.trim() : undefined
-  const mode = b.mode === "interactive" ? "interactive" : b.mode === "scheduled" ? "scheduled" : "issue"
-  const runRequest =
-    b.runRequest !== undefined
-      ? parseRunRequest(b.runRequest)
-      : synthesizeLegacyRunRequest({
-          mode,
-          issueNumber: b.issueNumber,
-          sessionId: b.sessionId,
-          action,
-          message,
-        })
+  if (b.runRequest === undefined) return { error: "runRequest required" }
+  const runRequest = parseRunRequest(b.runRequest)
   if ("error" in runRequest) return { error: runRequest.error }
   const job: RunnerJob = { jobId, repo, githubToken, runRequest: runRequest.request }
 
@@ -149,66 +138,6 @@ export function parseJob(body: unknown): { job: RunnerJob } | { error: string } 
     job.allSecrets = b.allSecrets as Record<string, string> | string
   }
   return { job }
-}
-
-function synthesizeLegacyRunRequest(input: {
-  mode: "issue" | "interactive" | "scheduled"
-  issueNumber: unknown
-  sessionId: unknown
-  action?: string
-  message?: string
-}): { request: RunRequest } | { error: string } {
-  if (input.mode === "issue") {
-    const issueNumber = Number(input.issueNumber)
-    if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
-      return { error: "issueNumber (positive integer) required for issue mode" }
-    }
-    return {
-      request: {
-        target: { type: "issue", id: issueNumber },
-        intent: "run",
-        source: "dashboard",
-      },
-    }
-  }
-
-  if (input.mode === "interactive") {
-    const sessionId = typeof input.sessionId === "string" ? input.sessionId.trim() : ""
-    if (!sessionId) return { error: "sessionId required for interactive mode" }
-    return {
-      request: {
-        target: { type: "chat", id: sessionId },
-        intent: "continue",
-        source: "dashboard",
-      },
-    }
-  }
-
-  if (input.action === "goal-manager" && input.message) {
-    return {
-      request: {
-        target: { type: "goal", id: input.message },
-        intent: "manage",
-        source: "dashboard",
-      },
-    }
-  }
-  if (input.action) {
-    return {
-      request: {
-        target: { type: "workflow", id: input.action },
-        intent: "run",
-        source: "dashboard",
-      },
-    }
-  }
-  return {
-    request: {
-      target: { type: "workflow", id: "scheduled-fanout" },
-      intent: "tick",
-      source: "schedule",
-    },
-  }
 }
 
 /**

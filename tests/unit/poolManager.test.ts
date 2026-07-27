@@ -20,6 +20,7 @@ const JOB: PoolJob = {
   issueNumber: 3,
   githubToken: "ghp_x",
   runRequest: {
+    requestId: "j1",
     target: { type: "issue", id: 3 },
     intent: "run",
     source: "dashboard",

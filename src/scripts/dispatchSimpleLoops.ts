@@ -10,12 +10,12 @@ export const dispatchSimpleLoops: PreflightScript = async (ctx) => {
   if (!tenantId) throw new Error("Repository identity is required for Loop dispatch")
   const now = new Date()
   const force = ctx.data.jobForce === true
-  const due = listLoopDefinitions(ctx.cwd).filter(
-    (loop) =>
-      loop.enabled &&
-      loop.trigger.type === "schedule" &&
-      (force || dueSlot(loop, now) !== null),
-  )
+  const requestedLoopId =
+    typeof ctx.args.loop === "string" ? ctx.args.loop.trim() : ""
+  const due = selectRunnableLoops(listLoopDefinitions(ctx.cwd), now, {
+    force,
+    ...(requestedLoopId ? { loopId: requestedLoopId } : {}),
+  })
   process.stdout.write(
     `→ kody: Loop scheduler found ${due.length} runnable Loop(s)${force ? " (manual)" : ""}\n`,
   )
@@ -70,6 +70,20 @@ export const dispatchSimpleLoops: PreflightScript = async (ctx) => {
     )
   }
   ctx.data.simpleLoopDispatchResults = results
+}
+
+export function selectRunnableLoops(
+  loops: readonly LoopDefinition[],
+  now: Date,
+  options: { force: boolean; loopId?: string },
+): LoopDefinition[] {
+  return loops.filter(
+    (loop) =>
+      loop.enabled &&
+      loop.trigger.type === "schedule" &&
+      (!options.loopId || loop.id === options.loopId) &&
+      (options.force || dueSlot(loop, now) !== null),
+  )
 }
 
 export function loopDispatchSlot(
