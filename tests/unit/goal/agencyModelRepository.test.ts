@@ -121,10 +121,12 @@ describe("AgencyModelRepository", () => {
 
   it("loads and validates clean Definitions separately from mutable State", async () => {
     const backend = {
-      listAgencyDefinitions: vi.fn().mockResolvedValue([
-        ...supportingDefinitions,
-        { tenantId: "acme/widgets", recordId: goal.id, kind: "goal", schemaVersion: 1, data: goal, createdAt: now },
-      ]),
+      listAgencyDefinitions: vi
+        .fn()
+        .mockResolvedValue([
+          ...supportingDefinitions,
+          { tenantId: "acme/widgets", recordId: goal.id, kind: "goal", schemaVersion: 1, data: goal, createdAt: now },
+        ]),
       getAgencyState: vi.fn().mockResolvedValue({
         tenantId: "acme/widgets",
         definitionId: goal.id,
@@ -144,11 +146,7 @@ describe("AgencyModelRepository", () => {
     expect(records[0]?.definition).toEqual(goal)
     expect(records[0]?.definition).not.toHaveProperty("version")
     expect(records[0]?.state).toMatchObject({ definitionId: goal.id, lifecycle: "active" })
-    expect(backend.getAgencyState).toHaveBeenCalledWith(
-      "acme/widgets",
-      "goal",
-      goal.id,
-    )
+    expect(backend.getAgencyState).toHaveBeenCalledWith("acme/widgets", "goal", goal.id)
   })
 
   it("selects the newest immutable revision without treating history as duplicate ownership", async () => {
@@ -183,10 +181,12 @@ describe("AgencyModelRepository", () => {
 
   it("rejects mismatched State instead of silently joining the wrong record", async () => {
     const backend = {
-      listAgencyDefinitions: vi.fn().mockResolvedValue([
-        ...supportingDefinitions,
-        { tenantId: "acme/widgets", recordId: goal.id, kind: "goal", schemaVersion: 1, data: goal, createdAt: now },
-      ]),
+      listAgencyDefinitions: vi
+        .fn()
+        .mockResolvedValue([
+          ...supportingDefinitions,
+          { tenantId: "acme/widgets", recordId: goal.id, kind: "goal", schemaVersion: 1, data: goal, createdAt: now },
+        ]),
       getAgencyState: vi.fn().mockResolvedValue({
         tenantId: "acme/widgets",
         definitionId: "other",

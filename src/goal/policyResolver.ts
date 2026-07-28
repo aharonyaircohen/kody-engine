@@ -5,8 +5,8 @@ import type {
   IntentDefinition,
   LoopDefinition,
   OperationDefinition,
-  Policy,
   PinnedDefinitionRef,
+  Policy,
 } from "@kody-ade/agency-domain"
 import type { AgencyDefinitionCatalog, DefinitionRecord } from "./agencyModelRepository.js"
 
@@ -50,10 +50,7 @@ export function resolveDispatchPolicy(input: {
     },
     operation,
     intents,
-    trace: [
-      pinned("trigger" in input.owner.definition ? "loop" : "goal", input.owner),
-      input.target,
-    ],
+    trace: [pinned("trigger" in input.owner.definition ? "loop" : "goal", input.owner), input.target],
     requiresApproval,
   }
 }
@@ -81,13 +78,10 @@ function mergePolicies(policies: readonly Policy[]): Policy {
   }
 }
 
-function assertAuthorized(
-  policy: Policy,
-  constraints: readonly Constraint[],
-  target: PinnedDefinitionRef,
-): boolean {
+function assertAuthorized(policy: Policy, constraints: readonly Constraint[], target: PinnedDefinitionRef): boolean {
   const action = `${target.kind}:${target.id}`
-  const matches = (patterns: readonly string[]) => patterns.some((pattern) => pattern === "*" || pattern === target.id || pattern === action)
+  const matches = (patterns: readonly string[]) =>
+    patterns.some((pattern) => pattern === "*" || pattern === target.id || pattern === action)
   if (matches(policy.authority.deny)) throw new Error(`Dispatch blocked: authority denies "${action}"`)
   if (!matches(policy.authority.allow)) throw new Error(`Dispatch blocked: authority does not allow "${action}"`)
   const matchingConstraints = constraints.filter(({ actions }) => matches(actions))

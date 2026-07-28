@@ -12,13 +12,15 @@ afterEach(() => {
 
 describe("simple Loop definitions", () => {
   it("accepts the five-field Loop contract", () => {
-    expect(normalizeLoopDefinition({
-      id: "daily-web-release-loop",
-      trigger: { type: "schedule", every: "1d" },
-      target: { kind: "workflow", id: "web-release" },
-      input: {},
-      enabled: false,
-    })).toEqual({
+    expect(
+      normalizeLoopDefinition({
+        id: "daily-web-release-loop",
+        trigger: { type: "schedule", every: "1d" },
+        target: { kind: "workflow", id: "web-release" },
+        input: {},
+        enabled: false,
+      }),
+    ).toEqual({
       id: "daily-web-release-loop",
       trigger: { type: "schedule", every: "1d" },
       target: { kind: "workflow", id: "web-release" },
@@ -32,13 +34,16 @@ describe("simple Loop definitions", () => {
     roots.push(cwd)
     const dir = path.join(cwd, ".kody-engine", "definitions", "loops", "daily")
     fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(path.join(dir, "loop.json"), JSON.stringify({
-      id: "daily",
-      trigger: { type: "manual" },
-      target: { kind: "capability", id: "inspect" },
-      input: { request: "now" },
-      enabled: true,
-    }))
+    fs.writeFileSync(
+      path.join(dir, "loop.json"),
+      JSON.stringify({
+        id: "daily",
+        trigger: { type: "manual" },
+        target: { kind: "capability", id: "inspect" },
+        input: { request: "now" },
+        enabled: true,
+      }),
+    )
     expect(readLoopDefinition(cwd, "daily")?.target).toEqual({ kind: "capability", id: "inspect" })
   })
 })

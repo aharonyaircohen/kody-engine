@@ -124,21 +124,10 @@ describe("buildSyntheticPlugin: skill copy", () => {
 
   it("loads a Store-shared skill when the Implementation declares it", async () => {
     const ctx = makeCtx()
-    const definitionsRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "kody-shared-skill-"),
-    )
+    const definitionsRoot = fs.mkdtempSync(path.join(os.tmpdir(), "kody-shared-skill-"))
     try {
-      const implementationDir = path.join(
-        definitionsRoot,
-        "implementations",
-        "review",
-      )
-      const skillDir = path.join(
-        definitionsRoot,
-        "shared",
-        "skills",
-        "shared-review-guidance",
-      )
+      const implementationDir = path.join(definitionsRoot, "implementations", "review")
+      const skillDir = path.join(definitionsRoot, "shared", "skills", "shared-review-guidance")
       fs.mkdirSync(implementationDir, { recursive: true })
       fs.mkdirSync(skillDir, { recursive: true })
       fs.writeFileSync(path.join(skillDir, "SKILL.md"), "# shared\n")
@@ -148,12 +137,9 @@ describe("buildSyntheticPlugin: skill copy", () => {
       await buildSyntheticPlugin(ctx, profile)
 
       const root = ctx.data.syntheticPluginPath as string
-      expect(
-        fs.readFileSync(
-          path.join(root, "skills", "shared-review-guidance", "SKILL.md"),
-          "utf-8",
-        ),
-      ).toBe("# shared\n")
+      expect(fs.readFileSync(path.join(root, "skills", "shared-review-guidance", "SKILL.md"), "utf-8")).toBe(
+        "# shared\n",
+      )
     } finally {
       fs.rmSync(definitionsRoot, { recursive: true, force: true })
     }

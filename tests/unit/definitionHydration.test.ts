@@ -94,9 +94,9 @@ describe("definition hydration", () => {
     expect(fs.readFileSync(path.join(result.root, "implementations/audit-with-claude/prompt.md"), "utf8")).toBe(
       "Run the audit.\n",
     )
-    expect(fs.readFileSync(path.join(result.root, "implementations/audit-with-claude/scripts/check.sh"), "utf8")).toContain(
-      "bash",
-    )
+    expect(
+      fs.readFileSync(path.join(result.root, "implementations/audit-with-claude/scripts/check.sh"), "utf8"),
+    ).toContain("bash")
     expect(fs.readFileSync(path.join(result.root, "shared/skills/architecture-audit/SKILL.md"), "utf8")).toContain(
       "Architecture audit",
     )

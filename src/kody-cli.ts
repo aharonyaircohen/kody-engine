@@ -131,8 +131,10 @@ export function parseCiArgs(argv: string[]): CiArgs {
 
 /** GitHub's scheduled runner should not need a synthetic issue number. */
 export function isScheduledActionsWake(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.GITHUB_EVENT_NAME === "schedule" ||
+  return (
+    env.GITHUB_EVENT_NAME === "schedule" ||
     (env.GITHUB_ACTIONS === "true" && !env.GITHUB_EVENT_NAME && !env.GITHUB_EVENT_PATH)
+  )
 }
 
 type RunRequestRoute =
@@ -174,11 +176,8 @@ function routeRunRequest(request: RunRequest): RunRequestRoute {
     if (intent !== "run" && intent !== "tick") {
       return { kind: "error", error: `workflow target does not support intent '${intent}'` }
     }
-    const requestedRunId =
-      typeof request.input?.runId === "string" ? request.input.runId : request.requestId
-    const workflowRunId = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(requestedRunId)
-      ? requestedRunId
-      : undefined
+    const requestedRunId = typeof request.input?.runId === "string" ? request.input.runId : request.requestId
+    const workflowRunId = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(requestedRunId) ? requestedRunId : undefined
     return { kind: "action", action: target.id, cliArgs: {}, ...(workflowRunId ? { workflowRunId } : {}) }
   }
 
@@ -375,9 +374,7 @@ export function installLitellmIfNeeded(cwd: string): number {
   // failing the entire run.
   try {
     execFileSync("python3", ["-c", "import litellm"], { stdio: "pipe" })
-    process.stderr.write(
-      `→ kody: pip exited ${installCode}, but litellm is importable; continuing\n`,
-    )
+    process.stderr.write(`→ kody: pip exited ${installCode}, but litellm is importable; continuing\n`)
     return 0
   } catch {
     return installCode
@@ -484,9 +481,7 @@ export async function runCi(argv: string[]): Promise<number> {
   if (parsedRunRequest && "request" in parsedRunRequest) {
   }
   const explicitLoopRequest =
-    parsedRunRequest &&
-    "request" in parsedRunRequest &&
-    parsedRunRequest.request.target.type === "loop"
+    parsedRunRequest && "request" in parsedRunRequest && parsedRunRequest.request.target.type === "loop"
   if (!args.issueNumber && !autoFallback && parsedRunRequest && "request" in parsedRunRequest) {
     const route = routeRunRequest(parsedRunRequest.request)
     if (route.kind === "error") {

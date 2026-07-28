@@ -13,9 +13,7 @@ describe("Agency Model state backend", () => {
     const backend = createStateBackendFromEnv({}, { query, mutation })
 
     await expect(backend.listAgencyDefinitions("acme/widgets")).resolves.toEqual([{ recordId: "goal-1" }])
-    await expect(
-      backend.getAgencyState("acme/widgets", "goal", "goal-1"),
-    ).resolves.toEqual({ definitionId: "goal-1" })
+    await expect(backend.getAgencyState("acme/widgets", "goal", "goal-1")).resolves.toEqual({ definitionId: "goal-1" })
 
     expect(query.mock.calls.map(([fn]) => getFunctionName(fn))).toEqual([
       "agencyModel:listDefinitions",
@@ -68,26 +66,23 @@ describe("Agency Model state backend", () => {
     }
 
     await expect(
-      backend.reserveAgencyDispatch(
-        "acme/widgets",
-        {
-          idempotencyKey: "loop-1:schedule:2026-07-22T12:00:00.000Z",
-          loopId: "loop-1",
-          decision,
-          leaseUntil: "2026-07-22T12:15:00.000Z",
-          reservationId: "reservation-1",
-          correlationId: "correlation-1",
-          policyHash: "policy-1",
-          effectivePolicy: {},
-          definitionRefs: [],
-          maxConcurrentRuns: 1,
-          requiresApproval: false,
-          approvalScopeKind: "loop",
-          approvalScopeId: "loop-1",
-          approvalAction: "workflow:refresh-knowledge",
-          now: "2026-07-22T12:00:00.000Z",
-        },
-      ),
+      backend.reserveAgencyDispatch("acme/widgets", {
+        idempotencyKey: "loop-1:schedule:2026-07-22T12:00:00.000Z",
+        loopId: "loop-1",
+        decision,
+        leaseUntil: "2026-07-22T12:15:00.000Z",
+        reservationId: "reservation-1",
+        correlationId: "correlation-1",
+        policyHash: "policy-1",
+        effectivePolicy: {},
+        definitionRefs: [],
+        maxConcurrentRuns: 1,
+        requiresApproval: false,
+        approvalScopeKind: "loop",
+        approvalScopeId: "loop-1",
+        approvalAction: "workflow:refresh-knowledge",
+        now: "2026-07-22T12:00:00.000Z",
+      }),
     ).resolves.toMatchObject({ acquired: true })
 
     expect(mutation.mock.calls[0]?.[1]).toMatchObject({
@@ -107,18 +102,8 @@ describe("Agency Model state backend", () => {
     const backend = createStateBackendFromEnv({}, { query: vi.fn(), mutation })
     const run = { id: "run-1", status: "running" }
 
-    await backend.createAgencyModelRun(
-      "acme/widgets",
-      "workflow",
-      "refresh-knowledge",
-      run,
-      "2026-07-22T12:00:00.000Z",
-    )
-    await backend.finishAgencyModelRun(
-      "acme/widgets",
-      { ...run, status: "succeeded" },
-      "2026-07-22T12:01:00.000Z",
-    )
+    await backend.createAgencyModelRun("acme/widgets", "workflow", "refresh-knowledge", run, "2026-07-22T12:00:00.000Z")
+    await backend.finishAgencyModelRun("acme/widgets", { ...run, status: "succeeded" }, "2026-07-22T12:01:00.000Z")
 
     expect(mutation.mock.calls.map(([fn]) => getFunctionName(fn))).toEqual([
       "agencyModel:createRunRecord",

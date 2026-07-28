@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest"
-import {
-  dueSlot,
-  loopDispatchSlot,
-  selectRunnableLoops,
-} from "../../src/scripts/dispatchSimpleLoops.js"
 import type { LoopDefinition } from "../../src/loopDefinitions.js"
+import { dueSlot, loopDispatchSlot, selectRunnableLoops } from "../../src/scripts/dispatchSimpleLoops.js"
 
 const loop: LoopDefinition = {
   id: "daily-check",
@@ -39,12 +35,8 @@ describe("loopDispatchSlot", () => {
   it("gives manual runs a unique slot without changing scheduled slots", () => {
     const now = new Date("2026-07-25T09:07:00.000Z")
 
-    expect(loopDispatchSlot(loop, now, false, "ignored")).toBe(
-      "2026-07-25T09:00:00.000Z",
-    )
-    expect(loopDispatchSlot(loop, now, true, "run-123")).toBe(
-      "manual:2026-07-25T09:07:00.000Z:run-123",
-    )
+    expect(loopDispatchSlot(loop, now, false, "ignored")).toBe("2026-07-25T09:00:00.000Z")
+    expect(loopDispatchSlot(loop, now, true, "run-123")).toBe("manual:2026-07-25T09:07:00.000Z:run-123")
   })
 })
 
@@ -53,21 +45,13 @@ describe("selectRunnableLoops", () => {
     const other = { ...loop, id: "other" }
 
     expect(
-      selectRunnableLoops(
-        [loop, other],
-        new Date("2026-07-25T09:07:00.000Z"),
-        { force: true, loopId: "daily-check" },
-      ),
+      selectRunnableLoops([loop, other], new Date("2026-07-25T09:07:00.000Z"), { force: true, loopId: "daily-check" }),
     ).toEqual([loop])
   })
 
   it("does not silently run every Loop when a requested Loop is missing", () => {
     expect(
-      selectRunnableLoops(
-        [loop],
-        new Date("2026-07-25T09:07:00.000Z"),
-        { force: true, loopId: "missing" },
-      ),
+      selectRunnableLoops([loop], new Date("2026-07-25T09:07:00.000Z"), { force: true, loopId: "missing" }),
     ).toEqual([])
   })
 })

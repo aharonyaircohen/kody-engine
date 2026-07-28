@@ -187,9 +187,7 @@ function parseCapabilityContract(raw: string): CapabilityContract {
   if (parsed.execution !== undefined && parsed.execution !== "agent" && parsed.execution !== "script") {
     throw new Error('contract.json execution must be "agent" or "script"')
   }
-  const unsupported = Object.keys(parsed).filter(
-    (key) => key !== "execution" && key !== "input" && key !== "output",
-  )
+  const unsupported = Object.keys(parsed).filter((key) => key !== "execution" && key !== "input" && key !== "output")
   if (unsupported.length > 0) {
     throw new Error(`contract.json contains unsupported fields: ${unsupported.join(", ")}`)
   }
