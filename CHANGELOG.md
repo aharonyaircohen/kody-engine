@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reduced consumer Actions configuration to one generic launcher: Engine-owned
+  definition hydration, runtime setup, and scheduled fan-out no longer generate
+  or require capability-specific workflow machinery.
+- Offset the shared 15-minute GitHub wake-up to minute 7 to avoid the
+  top-of-hour scheduler congestion window.
 - Restored the engine-owned Kody identity required by built-in task execution while keeping tenant agent definitions backend-authoritative.
 
 ### Added

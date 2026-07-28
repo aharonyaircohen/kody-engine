@@ -3,7 +3,6 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { loadProfile, ProfileError } from "../../src/profile.js"
-import { renderScheduledWorkflow } from "../../src/scripts/initFlow.js"
 
 function writeProfile(body: object): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-sched-"))
@@ -62,20 +61,5 @@ describe("profile: kind / schedule", () => {
     p = writeProfile({ ...VALID_BASE, kind: "bogus" })
     const loaded = loadProfile(p)
     expect(loaded.kind).toBe("oneshot")
-  })
-})
-
-describe("renderScheduledWorkflow", () => {
-  it("emits a workflow with the declared cron", () => {
-    const yaml = renderScheduledWorkflow("watch-stale-prs", "0 8 * * MON")
-    expect(yaml).toMatch(/name: kody watch-stale-prs/)
-    expect(yaml).toMatch(/cron: "0 8 \* \* MON"/)
-    expect(yaml).toMatch(/kody watch-stale-prs/)
-    expect(yaml).toMatch(/@kody-ade\/kody-engine@latest/)
-  })
-
-  it("includes workflow_dispatch for manual firing", () => {
-    const yaml = renderScheduledWorkflow("watch-x", "*/30 * * * *")
-    expect(yaml).toMatch(/workflow_dispatch:/)
   })
 })

@@ -3,7 +3,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import { performInit, renderScheduledWorkflow } from "../../src/scripts/initFlow.js"
+import { performInit } from "../../src/scripts/initFlow.js"
 
 function mkRepo(opts: { lockFile?: "pnpm-lock.yaml" | "yarn.lock" | "bun.lockb"; gitInit?: boolean } = {}): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-init-"))
@@ -23,15 +23,14 @@ describe("initFlow: performInit", () => {
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
-  it("writes core files + scheduled workflows on a clean repo", () => {
+  it("writes only the config and single generic workflow on a clean repo", () => {
     dir = mkRepo({ lockFile: "pnpm-lock.yaml", gitInit: true })
     const result = performInit(dir, false)
     expect(result.wrote).toContain("kody.config.json")
     expect(result.wrote).toContain(".github/workflows/kody.yml")
     expect(result.wrote.some((file) => file.startsWith(".kody/"))).toBe(false)
-    // Every discovered scheduled implementation also gets its own workflow file.
     const scheduledWorkflows = result.wrote.filter((f) => /\.github\/workflows\/kody-.+\.yml$/.test(f))
-    expect(scheduledWorkflows.length).toBeGreaterThanOrEqual(1)
+    expect(scheduledWorkflows).toEqual([])
     expect(result.skipped).toEqual([])
     expect(fs.existsSync(path.join(dir, "kody.config.json"))).toBe(true)
     expect(fs.existsSync(path.join(dir, ".github/workflows/kody.yml"))).toBe(true)
@@ -40,12 +39,13 @@ describe("initFlow: performInit", () => {
     expect(workflow).not.toContain("      implementation:")
     expect(workflow).toContain("id-token: write")
     expect(workflow).toContain("secrets.GH_PAT || secrets.KODY_TOKEN || github.token")
-    expect(workflow).toContain("name: Hydrate Kody Store definitions")
-    expect(workflow).toContain("uses: astral-sh/setup-uv@v6")
-    expect(workflow).not.toContain("cache: pip")
-    expect(workflow).toContain("vars.KODY_STORE_REPOSITORY")
-    expect(workflow).toContain("path: .kody-engine/definitions")
-    expect(workflow).not.toContain("test -d .kody-engine/definitions/capabilities")
+    expect(workflow).toContain('cron: "7/15 * * * *"')
+    expect(workflow).not.toContain("Hydrate Kody Store definitions")
+    expect(workflow).not.toContain("actions/setup-python")
+    expect(workflow).not.toContain("astral-sh/setup-uv")
+    expect(workflow).not.toContain(".kody-pip-requirements.txt")
+    expect(workflow).not.toContain("KODY_DEFINITIONS_ROOT")
+    expect(workflow).not.toContain("KODY_STORE_REPOSITORY")
     expect(workflow).not.toContain("create-github-app-token")
 
     expect(result.wrote.some((file) => file.startsWith(".kody-engine/definitions/capabilities/"))).toBe(false)
@@ -139,19 +139,5 @@ describe("initFlow: performInit", () => {
     const result = performInit(dir, false)
     expect(result.wrote).not.toContain(".kody/qa-guide.md")
     expect(fs.existsSync(path.join(dir, ".kody/qa-guide.md"))).toBe(false)
-  })
-})
-
-describe("renderScheduledWorkflow", () => {
-  it("sets up Python so non-Anthropic models (litellm) work on the scheduled path", () => {
-    // Regression: scheduled workflows omitted Python, so litellm couldn't
-    // install and scheduled capabilities failed on MiniMax/other non-Anthropic models.
-    const yml = renderScheduledWorkflow("capability-scheduler", "*/5 * * * *")
-    expect(yml).toMatch(/uses: actions\/setup-python/)
-    expect(yml).toMatch(/python-version:/)
-    expect(yml).toContain("kody-engine implementation capability-scheduler")
-    expect(yml).toContain(
-      "\n        run: npx -y -p @kody-ade/kody-engine@latest kody-engine implementation capability-scheduler",
-    )
   })
 })

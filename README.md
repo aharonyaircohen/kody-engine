@@ -101,10 +101,11 @@ TypeScript lives in [src/scripts/](src/scripts/); it can't import from
 npx -y -p @kody-ade/kody-engine@latest kody-engine init
 ```
 
-`kody-engine init` scaffolds [kody.config.json](kody.config.schema.json),
-`.github/workflows/kody.yml` (generated from `WORKFLOW_TEMPLATE` in
-[src/scripts/initFlow.ts](src/scripts/initFlow.ts)), and scheduled capability
-workflow files. Idempotent — pass `--force` to overwrite.
+`kody-engine init` scaffolds [kody.config.json](kody.config.schema.json) and the
+single generic `.github/workflows/kody.yml` launcher. The Engine discovers and
+fans out scheduled capabilities at runtime, so capability schedules never
+generate additional GitHub workflow files. Idempotent — pass `--force` to
+overwrite.
 
 Required repo secrets: at least one model provider key (e.g. `MINIMAX_API_KEY`, `ANTHROPIC_API_KEY`). Recommended: `KODY_TOKEN` PAT so kody's commits trigger downstream CI and can modify `.github/workflows/*`.
 

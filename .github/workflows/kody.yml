@@ -43,7 +43,7 @@ on:
   pull_request:
     types: [opened, synchronize, closed]
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "7/15 * * * *"
 
 jobs:
   run:
@@ -70,31 +70,12 @@ jobs:
         with:
           node-version: 22
 
-      - name: Write pip cache key for LiteLLM
-        run: echo "litellm[proxy]" > .kody-pip-requirements.txt
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - uses: astral-sh/setup-uv@v6
-
-      - name: Hydrate Kody Store definitions
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ vars.KODY_STORE_REPOSITORY || 'aharonyaircohen/kody-company-store' }}
-          ref: ${{ vars.KODY_STORE_REF || 'main' }}
-          path: .kody-engine/definitions
-          token: ${{ secrets.GH_PAT || secrets.KODY_TOKEN || github.token }}
-
       - env:
           ALL_SECRETS: ${{ toJSON(secrets) }}
           SESSION_ID: ${{ inputs.sessionId }}
           INIT_MESSAGE: ${{ inputs.message }}
           MODEL: ${{ inputs.model }}
           DASHBOARD_URL: ${{ inputs.dashboardUrl }}
-          KODY_DEFINITIONS_ROOT: ${{ github.workspace }}/.kody-engine/definitions
-          KODY_DEFINITIONS_ROOT_CWD: ${{ github.workspace }}
         working-directory: ${{ github.workspace }}
         run: |
           npx -y -p @kody-ade/kody-engine@latest kody-engine ci --cwd "$GITHUB_WORKSPACE"

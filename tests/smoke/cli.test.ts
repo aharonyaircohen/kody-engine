@@ -53,7 +53,10 @@ describe("smoke: CLI boots and validates args", () => {
     expect(r.status).toBe(0)
     const workflow = fs.readFileSync(path.join(root, ".github", "workflows", "kody.yml"), "utf8")
     expect(workflow).toContain("kody-engine ci --cwd")
-    expect(workflow).toContain("KODY_DEFINITIONS_ROOT:")
+    expect(workflow).toContain('cron: "7/15 * * * *"')
+    expect(workflow).not.toContain("KODY_DEFINITIONS_ROOT:")
+    expect(workflow).not.toContain("Hydrate Kody Store definitions")
+    expect(workflow).not.toContain("actions/setup-python")
     expect(workflow).not.toContain("test -d .kody-engine/definitions/capabilities")
   })
 
