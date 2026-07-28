@@ -7,11 +7,11 @@ import {
   type PinnedDefinitionRef,
   type Run,
 } from "@kody-ade/agency-domain"
-import type { KodyConfig } from "../config.js"
 import type { CapabilityResult } from "../capabilityResult.js"
+import type { KodyConfig } from "../config.js"
 import { AgencyModelRepository } from "../goal/agencyModelRepository.js"
-import { decideTrigger } from "../goal/triggerDispatcher.js"
 import { resolveDispatchPolicy } from "../goal/policyResolver.js"
+import { decideTrigger } from "../goal/triggerDispatcher.js"
 import type { Job, PreflightScript } from "../implementations/types.js"
 import { runJob } from "../job.js"
 import { createStateBackendFromEnv, type StateBackend } from "../state-backend.js"
@@ -26,8 +26,7 @@ export const dispatchAgencyLoops: PreflightScript = async (ctx) => {
   const tenantId = repositoryTenant(ctx.config)
   if (!tenantId) throw new Error("Repository identity is required for Agency Loop dispatch")
   const backend = createStateBackendFromEnv()
-  const requestedLoopId =
-    typeof ctx.args.loop === "string" ? ctx.args.loop.trim() : ""
+  const requestedLoopId = typeof ctx.args.loop === "string" ? ctx.args.loop.trim() : ""
   const results = await dispatchAgencyLoopsWith({
     tenantId,
     backend,
@@ -36,9 +35,7 @@ export const dispatchAgencyLoops: PreflightScript = async (ctx) => {
       ? {
           manualRequest: {
             loopId: requestedLoopId,
-            requestId:
-              process.env.GITHUB_RUN_ID?.trim() ||
-              `local-${randomUUID()}`,
+            requestId: process.env.GITHUB_RUN_ID?.trim() || `local-${randomUUID()}`,
           },
         }
       : {}),
@@ -81,19 +78,14 @@ export async function dispatchAgencyLoopsWith(input: {
   const results: DispatchResult[] = []
 
   for (const record of loops) {
-    if (
-      input.manualRequest &&
-      record.definition.id !== input.manualRequest.loopId
-    ) {
+    if (input.manualRequest && record.definition.id !== input.manualRequest.loopId) {
       continue
     }
     const decision = decideTrigger({
       definition: record.definition,
       state: record.state,
       now: input.now,
-      ...(input.manualRequest
-        ? { manualRequestId: input.manualRequest.requestId }
-        : {}),
+      ...(input.manualRequest ? { manualRequestId: input.manualRequest.requestId } : {}),
     })
     const now = input.now.toISOString()
     if (decision.kind === "skip") {
@@ -140,10 +132,7 @@ export async function dispatchAgencyLoopsWith(input: {
       { length: Math.max(0, maxAttempts - 1) },
       (_, index) => failurePolicy.backoffSeconds * 2 ** index,
     ).reduce((sum, seconds) => sum + seconds, 0)
-    const leaseSeconds = Math.min(
-      budget.maxDurationSeconds,
-      maxAttempts * timeoutSeconds + backoffBudgetSeconds,
-    )
+    const leaseSeconds = Math.min(budget.maxDurationSeconds, maxAttempts * timeoutSeconds + backoffBudgetSeconds)
     const leaseUntil = new Date(input.now.getTime() + leaseSeconds * 1_000).toISOString()
     const reservationId = `reservation-${randomUUID()}`
     const correlationId = `corr-${randomUUID()}`
@@ -265,8 +254,7 @@ export async function dispatchAgencyLoopsWith(input: {
         record.definition.targetRef.kind === "goal"
           ? records.find(
               (candidate) =>
-                "executionRef" in candidate.definition &&
-                candidate.definition.id === record.definition.targetRef.id,
+                "executionRef" in candidate.definition && candidate.definition.id === record.definition.targetRef.id,
             )
           : undefined
       if (succeeded && finalRunId) {

@@ -1,4 +1,6 @@
 import {
+  type AgentDefinition,
+  type CapabilityDefinition,
   createAgentDefinition,
   createCapabilityDefinition,
   createGoalDefinition,
@@ -9,9 +11,6 @@ import {
   createOperationDefinition,
   createRunOutput,
   createWorkflowDefinition,
-  relationshipIssues,
-  type AgentDefinition,
-  type CapabilityDefinition,
   type GoalDefinition,
   type GoalState,
   type IntentDefinition,
@@ -19,6 +18,7 @@ import {
   type LoopState,
   type OperationDefinition,
   type RunOutput,
+  relationshipIssues,
   type WorkflowDefinition,
 } from "@kody-ade/agency-domain"
 import type { AgencyDefinitionDocument, AgencyStateDocument, StateBackend } from "../state-backend.js"
@@ -72,11 +72,7 @@ export class AgencyModelRepository {
   constructor(
     private readonly backend: Pick<
       StateBackend,
-      | "listAgencyDefinitions"
-      | "getAgencyState"
-      | "putAgencyState"
-      | "appendAgencyOutput"
-      | "listAgencyOutputs"
+      "listAgencyDefinitions" | "getAgencyState" | "putAgencyState" | "appendAgencyOutput" | "listAgencyOutputs"
     >,
     private readonly tenantId: string,
   ) {}
@@ -84,19 +80,23 @@ export class AgencyModelRepository {
   async listManagedWork(catalog?: AgencyDefinitionCatalog): Promise<ManagedWorkRecord[]> {
     const definitions = catalog ?? (await this.loadCatalog())
     const managed = [
-      ...Array.from(definitions.goals.values(), ({ definition, revision }) => ({ definition, revision, kind: "goal" as const })),
-      ...Array.from(definitions.loops.values(), ({ definition, revision }) => ({ definition, revision, kind: "loop" as const })),
+      ...Array.from(definitions.goals.values(), ({ definition, revision }) => ({
+        definition,
+        revision,
+        kind: "goal" as const,
+      })),
+      ...Array.from(definitions.loops.values(), ({ definition, revision }) => ({
+        definition,
+        revision,
+        kind: "loop" as const,
+      })),
     ]
     return Promise.all(
       managed.map(async (record) => ({
         definition: record.definition,
         revision: record.revision,
         state: parseState(
-          await this.backend.getAgencyState(
-            this.tenantId,
-            record.kind,
-            record.definition.id,
-          ),
+          await this.backend.getAgencyState(this.tenantId, record.kind, record.definition.id),
           record.definition,
           record.kind,
         ),
@@ -112,9 +112,7 @@ export class AgencyModelRepository {
     // duplicate domain entity. The record id is a deterministic tie-breaker
     // for imports that preserve identical creation times.
     const ordered = [...documents].sort(
-      (left, right) =>
-        left.createdAt.localeCompare(right.createdAt) ||
-        left.recordId.localeCompare(right.recordId),
+      (left, right) => left.createdAt.localeCompare(right.createdAt) || left.recordId.localeCompare(right.recordId),
     )
     const latest = new Map<string, AgencyDefinitionDocument>()
     for (const document of ordered) {
@@ -153,11 +151,7 @@ export class AgencyModelRepository {
     const state = createGoalState({
       definitionId: record.definition.id,
       lifecycle: previous?.lifecycle ?? "draft",
-      progress: goalProgressFromOutputs(
-        record.definition,
-        record.revision,
-        await this.listOutputs(),
-      ),
+      progress: goalProgressFromOutputs(record.definition, record.revision, await this.listOutputs()),
       blockers: previous?.blockers ?? [],
       updatedAt,
     })
@@ -202,11 +196,14 @@ function emptyCatalog(): AgencyDefinitionCatalog {
 function addDefinition(catalog: AgencyDefinitionCatalog, document: AgencyDefinitionDocument): void {
   if (document.schemaVersion !== 1) throw new Error(`Unsupported Agency Definition schema: ${document.schemaVersion}`)
   if (document.kind === "intent") add(catalog.intents, createIntentDefinition(document.data), document.recordId)
-  else if (document.kind === "operation") add(catalog.operations, createOperationDefinition(document.data), document.recordId)
+  else if (document.kind === "operation")
+    add(catalog.operations, createOperationDefinition(document.data), document.recordId)
   else if (document.kind === "goal") add(catalog.goals, createGoalDefinition(document.data), document.recordId)
   else if (document.kind === "loop") add(catalog.loops, createLoopDefinition(document.data), document.recordId)
-  else if (document.kind === "workflow") add(catalog.workflows, createWorkflowDefinition(document.data), document.recordId)
-  else if (document.kind === "capability") add(catalog.capabilities, createCapabilityDefinition(document.data), document.recordId)
+  else if (document.kind === "workflow")
+    add(catalog.workflows, createWorkflowDefinition(document.data), document.recordId)
+  else if (document.kind === "capability")
+    add(catalog.capabilities, createCapabilityDefinition(document.data), document.recordId)
   else add(catalog.agents, createAgentDefinition(document.data), document.recordId)
 }
 

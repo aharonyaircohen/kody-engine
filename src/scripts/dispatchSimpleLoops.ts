@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto"
 import type { KodyConfig } from "../config.js"
-import { listLoopDefinitions, type LoopDefinition } from "../loopDefinitions.js"
 import type { Job, PreflightScript } from "../implementations/types.js"
 import { runJob } from "../job.js"
+import { type LoopDefinition, listLoopDefinitions } from "../loopDefinitions.js"
 import { createStateBackendFromEnv } from "../state-backend.js"
 
 export const dispatchSimpleLoops: PreflightScript = async (ctx) => {
@@ -10,15 +10,12 @@ export const dispatchSimpleLoops: PreflightScript = async (ctx) => {
   if (!tenantId) throw new Error("Repository identity is required for Loop dispatch")
   const now = new Date()
   const force = ctx.data.jobForce === true
-  const requestedLoopId =
-    typeof ctx.args.loop === "string" ? ctx.args.loop.trim() : ""
+  const requestedLoopId = typeof ctx.args.loop === "string" ? ctx.args.loop.trim() : ""
   const due = selectRunnableLoops(listLoopDefinitions(ctx.cwd), now, {
     force,
     ...(requestedLoopId ? { loopId: requestedLoopId } : {}),
   })
-  process.stdout.write(
-    `→ kody: Loop scheduler found ${due.length} runnable Loop(s)${force ? " (manual)" : ""}\n`,
-  )
+  process.stdout.write(`→ kody: Loop scheduler found ${due.length} runnable Loop(s)${force ? " (manual)" : ""}\n`)
   const backend = createStateBackendFromEnv()
   const results: Array<{ loopId: string; status: string; reason: string }> = []
 
@@ -65,9 +62,7 @@ export const dispatchSimpleLoops: PreflightScript = async (ctx) => {
     results.push({ loopId: loop.id, status, reason: result.reason ?? status })
   }
   for (const result of results) {
-    process.stdout.write(
-      `→ kody: Loop ${result.loopId} ${result.status}: ${result.reason}\n`,
-    )
+    process.stdout.write(`→ kody: Loop ${result.loopId} ${result.status}: ${result.reason}\n`)
   }
   ctx.data.simpleLoopDispatchResults = results
 }
@@ -86,12 +81,7 @@ export function selectRunnableLoops(
   )
 }
 
-export function loopDispatchSlot(
-  loop: LoopDefinition,
-  now: Date,
-  force: boolean,
-  nonce: string,
-): string | null {
+export function loopDispatchSlot(loop: LoopDefinition, now: Date, force: boolean, nonce: string): string | null {
   return force ? `manual:${now.toISOString()}:${nonce}` : dueSlot(loop, now)
 }
 

@@ -49,12 +49,7 @@ describe("repo-scoped definition hydration", () => {
 
       expect(listDefinitions).toHaveBeenCalledTimes(5)
       expect(
-        JSON.parse(
-          fs.readFileSync(
-            path.join(cwd, ".kody-engine/definitions/manifest.json"),
-            "utf8",
-          ),
-        ),
+        JSON.parse(fs.readFileSync(path.join(cwd, ".kody-engine/definitions/manifest.json"), "utf8")),
       ).toMatchObject({ tenantId: "acme/widgets" })
     } finally {
       fs.rmSync(cwd, { recursive: true, force: true })

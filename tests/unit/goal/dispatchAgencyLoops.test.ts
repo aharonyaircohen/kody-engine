@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest"
 import type { Policy } from "@kody-ade/agency-domain"
+import { describe, expect, it, vi } from "vitest"
 import { dispatchAgencyLoopsWith } from "../../../src/scripts/dispatchAgencyLoops.js"
 import type { StateBackend } from "../../../src/state-backend.js"
 
@@ -219,7 +219,11 @@ describe("Agency Loop runtime dispatch", () => {
             },
             trigger: { type: "schedule", every: "1h" },
             targetRef: { kind: "workflow", id: "refresh-knowledge-system" },
-      reconciliationPolicy: { overlap: "skip", missed: "coalesce", failure: { maxAttempts: 3, backoffSeconds: 0, timeoutSeconds: 60 } },
+            reconciliationPolicy: {
+              overlap: "skip",
+              missed: "coalesce",
+              failure: { maxAttempts: 3, backoffSeconds: 0, timeoutSeconds: 60 },
+            },
           },
           createdAt: now,
         },
@@ -371,16 +375,16 @@ describe("Agency Loop runtime dispatch", () => {
             },
             trigger: { type: "schedule", every: "1h" },
             targetRef: { kind: "goal", id: "refresh-goal" },
-      reconciliationPolicy: { overlap: "skip", missed: "coalesce", failure: { maxAttempts: 3, backoffSeconds: 0, timeoutSeconds: 60 } },
+            reconciliationPolicy: {
+              overlap: "skip",
+              missed: "coalesce",
+              failure: { maxAttempts: 3, backoffSeconds: 0, timeoutSeconds: 60 },
+            },
           },
           createdAt: now,
         },
       ]),
-      getAgencyState: vi.fn(async (
-        _tenant: string,
-        _kind: "goal" | "loop",
-        id: string,
-      ) =>
+      getAgencyState: vi.fn(async (_tenant: string, _kind: "goal" | "loop", id: string) =>
         id === "refresh-loop"
           ? {
               tenantId,
@@ -475,7 +479,11 @@ describe("Agency Loop runtime dispatch", () => {
             },
             trigger: { type: "schedule", every: "1h" },
             targetRef: { kind: "workflow", id: "refresh-knowledge-system" },
-      reconciliationPolicy: { overlap: "skip", missed: "coalesce", failure: { maxAttempts: 3, backoffSeconds: 0, timeoutSeconds: 60 } },
+            reconciliationPolicy: {
+              overlap: "skip",
+              missed: "coalesce",
+              failure: { maxAttempts: 3, backoffSeconds: 0, timeoutSeconds: 60 },
+            },
           },
           createdAt: now,
         },
@@ -537,7 +545,11 @@ describe("Agency Loop runtime dispatch", () => {
             },
             trigger: { type: "schedule", every: "1h" },
             targetRef: { kind: "workflow", id: "refresh-knowledge-system" },
-      reconciliationPolicy: { overlap: "skip", missed: "coalesce", failure: { maxAttempts: 3, backoffSeconds: 0, timeoutSeconds: 60 } },
+            reconciliationPolicy: {
+              overlap: "skip",
+              missed: "coalesce",
+              failure: { maxAttempts: 3, backoffSeconds: 0, timeoutSeconds: 60 },
+            },
           },
           createdAt: now,
         },
@@ -697,8 +709,6 @@ describe("Agency Loop runtime dispatch", () => {
       expect.any(String),
       expect.any(String),
     )
-    expect(results).toMatchObject([
-      { decision: "failed", reason: expect.stringMatching(/token budget exhausted/) },
-    ])
+    expect(results).toMatchObject([{ decision: "failed", reason: expect.stringMatching(/token budget exhausted/) }])
   })
 })

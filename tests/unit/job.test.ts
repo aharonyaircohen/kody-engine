@@ -1052,10 +1052,7 @@ describe("runJob (Phase 1 seam)", () => {
         capabilityResults: [capabilityResult({ needsRepair: false })],
       })
 
-      const result = await runJob(
-        { workflow: "health", cliArgs: {}, flavor: "instant" },
-        { cwd },
-      )
+      const result = await runJob({ workflow: "health", cliArgs: {}, flavor: "instant" }, { cwd })
 
       expect(runImplementationChain).toHaveBeenCalledTimes(1)
       expect(result.workflowState).toMatchObject({

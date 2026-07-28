@@ -10,17 +10,14 @@ const SCRIPT_MAX_OUTPUT_BYTES = 1024 * 1024
 export const runSimpleCapabilityScript: PreflightScript = async (ctx) => {
   ctx.skipAgent = true
 
-  const scriptPath =
-    typeof ctx.data.capabilityScriptPath === "string" ? ctx.data.capabilityScriptPath : ""
+  const scriptPath = typeof ctx.data.capabilityScriptPath === "string" ? ctx.data.capabilityScriptPath : ""
   if (!scriptPath || !isRegularFile(scriptPath)) {
     ctx.output.exitCode = 99
     ctx.output.reason = 'Script-backed Capability requires a regular "tools/run.sh" entrypoint'
     return
   }
 
-  const capabilityEnvironment = isStringRecord(ctx.data.capabilityEnvironment)
-    ? ctx.data.capabilityEnvironment
-    : {}
+  const capabilityEnvironment = isStringRecord(ctx.data.capabilityEnvironment) ? ctx.data.capabilityEnvironment : {}
   const result = spawnSync("bash", [scriptPath], {
     cwd: ctx.cwd,
     env: {

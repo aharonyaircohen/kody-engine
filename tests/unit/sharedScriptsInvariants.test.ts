@@ -136,6 +136,10 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   },
   ensurePr: { owner: "run", reason: "run-only PR creation step." },
   finalizeTerminal: { owner: "run", reason: "run-only terminal notification step." },
+  initFlow: {
+    owner: "init",
+    reason: "init is the engine-owned bootstrap that must run before consumer definitions or config exist.",
+  },
   loadConventions: { owner: "run", reason: "run-only prompt context loader after catalog moved to store." },
   loadCoverageRules: { owner: "run", reason: "run-only coverage rule context loader." },
   loadTaskState: { owner: "run", reason: "run-only task state loader in minimal engine surface." },
@@ -184,7 +188,6 @@ const CONSUMER_LIBRARY_SCRIPTS: Record<string, string> = {
   finishFlow: "release",
   fixCiFlow: "fix-ci",
   fixFlow: "fix",
-  initFlow: "init",
   loadCapabilityState: "job-live-verify",
   loadCompanyIntents: "company management capabilities",
   loadCompanyPortfolio: "company management capabilities",

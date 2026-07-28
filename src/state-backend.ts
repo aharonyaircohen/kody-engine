@@ -156,12 +156,7 @@ export interface StateBackend {
     data: unknown,
     updatedAt: string,
   ): Promise<void>
-  appendAgencyOutput(
-    tenantId: string,
-    recordId: string,
-    schemaVersion: number,
-    data: unknown,
-  ): Promise<void>
+  appendAgencyOutput(tenantId: string, recordId: string, schemaVersion: number, data: unknown): Promise<void>
   listAgencyOutputs(tenantId: string, runId?: string): Promise<AgencyOutputDocument[]>
   reserveAgencyDispatch(
     tenantId: string,

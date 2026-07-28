@@ -58,9 +58,7 @@ function scriptedCapability(script: string): {
 
 describe("script-backed simple Capability", () => {
   it("runs without an agent and returns the same validated Capability output shape", async () => {
-    const { ctx } = scriptedCapability(
-      '#!/bin/sh\nprintf \'{"greeting":"Hello %s"}\' "$KODY_ARG_NAME"\n',
-    )
+    const { ctx } = scriptedCapability('#!/bin/sh\nprintf \'{"greeting":"Hello %s"}\' "$KODY_ARG_NAME"\n')
 
     await loadSimpleCapability(ctx as never, {} as never)
     await runSimpleCapabilityScript(ctx as never, {} as never)
