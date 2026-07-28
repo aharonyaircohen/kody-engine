@@ -33,14 +33,14 @@ describe("smoke: CLI boots and validates args", () => {
     expect(r.stdout + r.stderr).toMatch(/unknown command/)
   })
 
-  it("rejects `run` without --issue with exit 64", () => {
-    const r = runCli(["run"])
+  it("rejects the internal `run` implementation without --issue with exit 64", () => {
+    const r = runCli(["implementation", "run"])
     expect(r.status).toBe(64)
     expect(r.stderr).toMatch(/--issue/)
   })
 
   it("rejects an unknown flag with exit 64", () => {
-    const r = runCli(["run", "--issue", "1", "--bogus"])
+    const r = runCli(["init", "--bogus"])
     expect(r.status).toBe(64)
     expect(r.stderr).toMatch(/--bogus/)
   })
@@ -59,9 +59,6 @@ describe("smoke: CLI boots and validates args", () => {
 
   it("runs a project capability action through its implementation", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-cli-smoke-"))
-    fs.mkdirSync(path.join(root, ".kody-engine", "definitions", "capabilities"), { recursive: true })
-    fs.mkdirSync(path.join(root, ".kody-engine", "definitions", "capabilities", "smoke-impl"), { recursive: true })
-    fs.mkdirSync(path.join(root, ".kody-engine", "definitions", "agents"), { recursive: true })
     fs.writeFileSync(
       path.join(root, "kody.config.json"),
       JSON.stringify({
@@ -71,55 +68,20 @@ describe("smoke: CLI boots and validates args", () => {
         agent: { model: "anthropic/test" },
       }),
     )
-    fs.mkdirSync(path.join(root, ".kody-engine", "definitions", "capabilities", "smoke-capability"), {
-      recursive: true,
-    })
-    fs.writeFileSync(path.join(root, ".kody-engine", "definitions", "agents", "kody.md"), "# Kody\n")
+    const capabilityDir = path.join(root, ".kody-engine", "definitions", "capabilities", "smoke-capability")
+    fs.mkdirSync(path.join(capabilityDir, "tools"), { recursive: true })
     fs.writeFileSync(
-      path.join(root, ".kody-engine", "definitions", "capabilities", "smoke-capability", "profile.json"),
+      path.join(capabilityDir, "contract.json"),
       JSON.stringify({
-        name: "smoke-capability",
-        action: "smoke-action",
-        implementation: "smoke-impl",
-        agent: "kody",
+        execution: "script",
+        input: { type: "object" },
+        output: { type: "object" },
       }),
     )
-    fs.writeFileSync(
-      path.join(root, ".kody-engine", "definitions", "capabilities", "smoke-capability", "capability.md"),
-      "# Smoke\n",
-    )
-    fs.writeFileSync(
-      path.join(root, ".kody-engine", "definitions", "capabilities", "smoke-impl", "profile.json"),
-      JSON.stringify({
-        name: "smoke-impl",
-        role: "utility",
-        describe: "smoke impl",
-        kind: "oneshot",
-        inputs: [],
-        claudeCode: {
-          model: "inherit",
-          permissionMode: "default",
-          maxTurns: 0,
-          maxThinkingTokens: null,
-          systemPromptAppend: null,
-          tools: [],
-          hooks: [],
-          skills: [],
-          commands: [],
-          subagents: [],
-          plugins: [],
-          mcpServers: [],
-        },
-        cliTools: [],
-        scripts: { preflight: [{ script: "skipAgent" }], postflight: [] },
-      }),
-    )
-    fs.writeFileSync(
-      path.join(root, ".kody-engine", "definitions", "capabilities", "smoke-impl", "capability.md"),
-      "# Smoke impl\n",
-    )
+    fs.writeFileSync(path.join(capabilityDir, "instructions.md"), "# Smoke capability\n")
+    fs.writeFileSync(path.join(capabilityDir, "tools", "run.sh"), "#!/bin/sh\nprintf '{}'\n", { mode: 0o755 })
 
-    const r = runCli(["smoke-action"], { cwd: root })
+    const r = runCli(["smoke-capability"], { cwd: root })
     expect(r.status).toBe(0)
   })
 })
