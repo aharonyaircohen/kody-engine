@@ -45,6 +45,18 @@ describe("smoke: CLI boots and validates args", () => {
     expect(r.stderr).toMatch(/--bogus/)
   })
 
+  it("scaffolds the current Kody workflow through the published CLI path", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-init-cli-smoke-"))
+
+    const r = runCli(["init", "--force"], { cwd: root })
+
+    expect(r.status).toBe(0)
+    const workflow = fs.readFileSync(path.join(root, ".github", "workflows", "kody.yml"), "utf8")
+    expect(workflow).toContain("kody-engine ci --cwd")
+    expect(workflow).toContain("KODY_DEFINITIONS_ROOT:")
+    expect(workflow).not.toContain("test -d .kody-engine/definitions/capabilities")
+  })
+
   it("runs a project capability action through its implementation", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-cli-smoke-"))
     fs.mkdirSync(path.join(root, ".kody-engine", "definitions", "capabilities"), { recursive: true })
