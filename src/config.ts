@@ -142,6 +142,15 @@ export interface KodyConfig {
      */
     releaseBranch?: string
     timeoutMs?: number
+    /**
+     * Explicit repository validation to request after release preparation.
+     * This avoids relying on workflow-generated pushes to recursively trigger
+     * another GitHub Actions workflow.
+     */
+    validation?: {
+      workflow: string
+      inputs?: Record<string, string | number | boolean>
+    }
   }
   company?: {
     activeCapabilities?: string[]
@@ -617,6 +626,33 @@ function parseReleaseConfig(raw: unknown): KodyConfig["release"] {
   if (typeof r.allowAdminMerge === "boolean") out.allowAdminMerge = r.allowAdminMerge
   if (typeof r.releaseBranch === "string") out.releaseBranch = r.releaseBranch
   if (typeof r.timeoutMs === "number" && r.timeoutMs > 0) out.timeoutMs = Math.floor(r.timeoutMs)
+  if (r.validation && typeof r.validation === "object") {
+    const validation = r.validation as Record<string, unknown>
+    const workflow =
+      typeof validation.workflow === "string"
+        ? validation.workflow.trim()
+        : ""
+    if (workflow) {
+      const inputs =
+        validation.inputs && typeof validation.inputs === "object"
+          ? Object.fromEntries(
+              Object.entries(
+                validation.inputs as Record<string, unknown>,
+              ).filter(
+                (entry): entry is [string, string | number | boolean] =>
+                  /^[a-z][a-z0-9_]*$/.test(entry[0]) &&
+                  (typeof entry[1] === "string" ||
+                    typeof entry[1] === "number" ||
+                    typeof entry[1] === "boolean"),
+              ),
+            )
+          : undefined
+      out.validation = {
+        workflow,
+        ...(inputs && Object.keys(inputs).length > 0 ? { inputs } : {}),
+      }
+    }
+  }
   return Object.keys(out).length > 0 ? out : undefined
 }
 

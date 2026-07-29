@@ -257,6 +257,12 @@ describe("config: loadConfig", () => {
         allowAdminMerge: true,
         productionUrl: "https://www.example.com",
         smokeCommand: "pnpm smoke",
+        validation: {
+          workflow: "ci.yml",
+          inputs: {
+            release_gate: true,
+          },
+        },
       },
     })
 
@@ -265,6 +271,12 @@ describe("config: loadConfig", () => {
       allowAdminMerge: true,
       productionUrl: "https://www.example.com",
       smokeCommand: "pnpm smoke",
+      validation: {
+        workflow: "ci.yml",
+        inputs: {
+          release_gate: true,
+        },
+      },
     })
   })
 
