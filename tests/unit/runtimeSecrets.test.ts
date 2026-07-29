@@ -147,4 +147,35 @@ describe("resolveRuntimeSecret", () => {
       }),
     })
   })
+
+  it("serializes multi-secret migration to preserve the shared vault document", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ value: "signed-oidc-token" }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+    vi.stubGlobal("fetch", fetchMock)
+    const env = {
+      GITHUB_ACTIONS: "true",
+      ACTIONS_ID_TOKEN_REQUEST_URL: "https://github.example/oidc",
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: "request-token",
+      VERCEL_ACCESS_TOKEN: "token",
+      VERCEL_PROJECT_ID: "project",
+    } as NodeJS.ProcessEnv
+
+    await resolveRuntimeSecrets(["VERCEL_ACCESS_TOKEN", "VERCEL_PROJECT_ID"], makeCtx(), { env })
+
+    expect(fetchMock.mock.calls.slice(1).map((call) => call[1]?.method ?? "GET")).toEqual([
+      "POST",
+      "PUT",
+      "POST",
+      "PUT",
+    ])
+  })
 })

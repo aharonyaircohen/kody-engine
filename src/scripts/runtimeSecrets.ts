@@ -87,9 +87,10 @@ export async function resolveRuntimeSecrets(
   const declared = Array.isArray(names)
     ? [...new Set(names.filter((name): name is string => typeof name === "string" && /^[A-Z][A-Z0-9_]*$/.test(name)))]
     : []
-  const resolved = await Promise.all(
-    declared.map(async (name) => ({ name, result: await resolveRuntimeSecret(name, ctx, opts) })),
-  )
+  const resolved: Array<{ name: string; result: RuntimeSecretResult }> = []
+  for (const name of declared) {
+    resolved.push({ name, result: await resolveRuntimeSecret(name, ctx, opts) })
+  }
   return {
     environment: Object.fromEntries(
       resolved.flatMap(({ name, result }) => (result.value ? [[name, result.value]] : [])),
