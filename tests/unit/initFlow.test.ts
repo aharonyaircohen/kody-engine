@@ -39,7 +39,7 @@ describe("initFlow: performInit", () => {
     expect(workflow).not.toContain("      implementation:")
     expect(workflow).toContain("id-token: write")
     expect(workflow).toContain("secrets.GH_PAT || secrets.KODY_TOKEN || github.token")
-    expect(workflow).toContain('cron: "7/15 * * * *"')
+    expect(workflow).toContain("cron: '7/15 * * * *'")
     expect(workflow).not.toContain("Hydrate Kody Store definitions")
     expect(workflow).not.toContain("actions/setup-python")
     expect(workflow).not.toContain("astral-sh/setup-uv")

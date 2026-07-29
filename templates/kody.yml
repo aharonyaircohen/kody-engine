@@ -11,43 +11,43 @@ on:
   workflow_dispatch:
     inputs:
       issue_number:
-        description: "GitHub issue number (agent mode)"
+        description: 'GitHub issue number (agent mode)'
         type: string
-        default: ""
+        default: ''
       sessionId:
-        description: "Chat session ID (chat mode, from Kody Dashboard)"
+        description: 'Chat session ID (chat mode, from Kody Dashboard)'
         type: string
-        default: ""
+        default: ''
       message:
-        description: "Initial chat message (optional)"
+        description: 'Initial chat message (optional)'
         type: string
-        default: ""
+        default: ''
       model:
-        description: "Model override (optional)"
+        description: 'Model override (optional)'
         type: string
-        default: ""
+        default: ''
       dashboardUrl:
-        description: "Dashboard event ingest URL (chat mode)"
+        description: 'Dashboard event ingest URL (chat mode)'
         type: string
-        default: ""
+        default: ''
       capability:
-        description: "Capability action to run"
+        description: 'Capability action to run'
         type: string
-        default: ""
+        default: ''
       base:
-        description: "Optional base branch"
+        description: 'Optional base branch'
         type: string
-        default: ""
+        default: ''
       runRequest:
-        description: "Canonical Kody execution request JSON"
+        description: 'Canonical Kody execution request JSON'
         type: string
-        default: ""
+        default: ''
   issue_comment:
     types: [created]
   pull_request:
     types: [opened, synchronize, closed]
   schedule:
-    - cron: "7/15 * * * *"
+    - cron: '7/15 * * * *'
 
 jobs:
   run:
