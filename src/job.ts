@@ -397,7 +397,11 @@ async function runCapabilityImplementationStep(
     ? { ...resolvedCapability.cliArgs, ...input.cliArgs }
     : input.cliArgs
   if (simpleCapabilityRuntime && profileName === simpleCapabilityRuntime.implementation && capabilityIdentity) {
-    const capabilityInput = Object.keys(valid.cliArgs).length > 0 ? genericInputFromArgs(valid.cliArgs) : undefined
+    const businessArgs = { ...valid.cliArgs }
+    if (businessArgs.capability === capabilityIdentity) {
+      delete businessArgs.capability
+    }
+    const capabilityInput = Object.keys(businessArgs).length > 0 ? genericInputFromArgs(businessArgs) : undefined
     input.cliArgs = simpleCapabilityRuntimeArgs(simpleCapabilityRuntime, capabilityIdentity, capabilityInput)
   }
 
