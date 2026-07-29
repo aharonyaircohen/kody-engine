@@ -4,6 +4,10 @@ import { validateCapabilityContractValue } from "../agency/capability-contract-v
 import { readCapabilityFolder } from "../capabilityFolders.js"
 import { capabilitiesRoot } from "../definition-paths.js"
 import type { PreflightScript } from "../implementations/types.js"
+import {
+  capabilityConfigEnvironment,
+  capabilityInputEnvironment,
+} from "./capabilityExecutionEnvironment.js"
 
 export const loadSimpleCapability: PreflightScript = async (ctx) => {
   const slug = typeof ctx.args.capability === "string" ? ctx.args.capability.trim() : ""
@@ -33,7 +37,10 @@ export const loadSimpleCapability: PreflightScript = async (ctx) => {
   if (capability.config.outputSchema) {
     ctx.data.capabilityOutputSchema = capability.config.outputSchema
   }
-  ctx.data.capabilityEnvironment = capabilityEnvironment(input)
+  ctx.data.capabilityEnvironment = {
+    ...capabilityInputEnvironment(input),
+    ...capabilityConfigEnvironment(ctx.config),
+  }
   ctx.data.prompt = [
     capability.rawBody.trim(),
     "",
@@ -114,19 +121,6 @@ function scalar(value: string): string | number | boolean {
   if (value === "true" || value === "false") return value === "true"
   if (/^-?\d+$/.test(value)) return Number(value)
   return value
-}
-
-function capabilityEnvironment(input: unknown): Record<string, string> {
-  const environment: Record<string, string> = {
-    KODY_CAPABILITY_INPUT: JSON.stringify(input ?? null),
-  }
-  if (!input || typeof input !== "object" || Array.isArray(input)) return environment
-  for (const [name, value] of Object.entries(input)) {
-    if (value === undefined || value === null) continue
-    const key = name.toUpperCase().replace(/[^A-Z0-9]+/g, "_")
-    environment[`KODY_ARG_${key}`] = typeof value === "string" ? value : JSON.stringify(value)
-  }
-  return environment
 }
 
 function listFiles(root: string): string[] {

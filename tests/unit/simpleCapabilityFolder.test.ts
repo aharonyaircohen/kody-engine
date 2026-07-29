@@ -253,6 +253,16 @@ describe("simple Capability folder", () => {
     const ctx = {
       cwd,
       args: { capability: "release-prepare", input: "--bump minor --dry-run --prefer=ours" },
+      config: {
+        git: { defaultBranch: "dev" },
+        release: {
+          releaseBranch: "main",
+          validation: {
+            workflow: "ci.yml",
+            inputs: { release_gate: true },
+          },
+        },
+      },
       data: {},
     } as never
     await loadSimpleCapability(ctx, {} as never)
@@ -264,6 +274,10 @@ describe("simple Capability folder", () => {
       KODY_ARG_BUMP: "minor",
       KODY_ARG_DRY_RUN: "true",
       KODY_ARG_PREFER: "ours",
+      KODY_CFG_GIT_DEFAULTBRANCH: "dev",
+      KODY_CFG_RELEASE_RELEASEBRANCH: "main",
+      KODY_CFG_RELEASE_VALIDATION_INPUTS_RELEASE_GATE: "true",
+      KODY_CFG_RELEASE_VALIDATION_WORKFLOW: "ci.yml",
     })
   })
 })

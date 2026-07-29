@@ -80,6 +80,22 @@ describe("script-backed simple Capability", () => {
     ])
   })
 
+  it("passes repository Engine configuration through the trusted script boundary", async () => {
+    const { ctx } = scriptedCapability(
+      '#!/bin/sh\nprintf \'{"greeting":"%s -> %s"}\' "$KODY_CFG_GIT_DEFAULTBRANCH" "$KODY_CFG_RELEASE_RELEASEBRANCH"\n',
+    )
+    ;(ctx as typeof ctx & { config: Record<string, unknown> }).config = {
+      git: { defaultBranch: "dev" },
+      release: { releaseBranch: "main" },
+    }
+
+    await loadSimpleCapability(ctx as never, {} as never)
+    await runSimpleCapabilityScript(ctx as never, {} as never)
+    await parseSimpleCapabilityOutput(ctx as never, {} as never, null)
+
+    expect(ctx.data.capabilityOutput).toEqual({ greeting: "dev -> main" })
+  })
+
   it("fails when the script does not return JSON", async () => {
     const { ctx } = scriptedCapability("#!/bin/sh\nprintf 'not-json'\n")
 

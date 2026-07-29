@@ -8,6 +8,10 @@
  */
 
 import { spawn } from "node:child_process"
+import {
+  capabilityConfigEnvironment,
+  capabilityInputEnvironment,
+} from "./scripts/capabilityExecutionEnvironment.js"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -1320,13 +1324,8 @@ async function runShellEntry(entry: ScriptEntry, ctx: Context, profile: Profile)
     `kody-shell-output-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   )
   const env: NodeJS.ProcessEnv = { ...process.env, HUSKY: "0", SKIP_HOOKS: "1", KODY_OUTPUT: outputFile }
-  for (const [k, v] of Object.entries(ctx.args)) {
-    if (v === undefined || v === null) continue
-    env[`KODY_ARG_${envKey(k)}`] = String(v)
-  }
-  for (const [k, v] of flattenConfig(ctx.config as unknown as Record<string, unknown>)) {
-    env[`KODY_CFG_${k}`] = v
-  }
+  Object.assign(env, capabilityInputEnvironment(ctx.args))
+  Object.assign(env, capabilityConfigEnvironment(ctx.config))
 
   const timeoutMs = resolveShellTimeoutMs(entry)
 
@@ -1446,30 +1445,4 @@ async function runShellEntry(entry: ScriptEntry, ctx: Context, profile: Profile)
       ctx.output.reason = `shell '${shellName}' exited ${exit}${tail ? `: ${tail}` : ""}`
     }
   }
-}
-
-function envKey(name: string): string {
-  return name.toUpperCase().replace(/-/g, "_")
-}
-
-/**
- * Flatten a config object into [DOTTED_KEY, value] pairs for env-var export.
- * Leaves (string/number/boolean) emit a single entry per dotted path.
- * Arrays are JSON-stringified so shells can `jq -r` them when needed.
- * Nested objects recurse. Skips null/undefined values.
- */
-function flattenConfig(obj: Record<string, unknown>, prefix = ""): Array<[string, string]> {
-  const out: Array<[string, string]> = []
-  for (const [k, v] of Object.entries(obj)) {
-    if (v === null || v === undefined) continue
-    const key = prefix ? `${prefix}_${envKey(k)}` : envKey(k)
-    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
-      out.push([key, String(v)])
-    } else if (Array.isArray(v)) {
-      out.push([key, JSON.stringify(v)])
-    } else if (typeof v === "object") {
-      out.push(...flattenConfig(v as Record<string, unknown>, key))
-    }
-  }
-  return out
 }
