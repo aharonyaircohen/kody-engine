@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   CapabilityContractValidationError,
+  capabilityContractInput,
   validateCapabilityContractValue,
 } from "../../src/agency/capability-contract-validation.js"
 
@@ -26,5 +27,21 @@ describe("Capability contract validation", () => {
 
   it("validates output through the same portable contract boundary", () => {
     expect(() => validateCapabilityContractValue("output", schema, {})).toThrow(/Capability output/)
+  })
+
+  it("unwraps and parses the generic runner input before contract validation", () => {
+    expect(
+      capabilityContractInput(
+        [{ name: "capability" }, { name: "input" }],
+        { capability: "inspect", input: '{"issue":42}' },
+      ),
+    ).toEqual({ issue: 42 })
+  })
+
+  it("keeps ordinary named capability inputs unchanged", () => {
+    const args = { issue: 42 }
+    expect(
+      capabilityContractInput([{ name: "issue" }], args),
+    ).toBe(args)
   })
 })

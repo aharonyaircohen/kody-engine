@@ -30,3 +30,21 @@ export function validateCapabilityContractValue(
     throw new CapabilityContractValidationError(boundary, validate.errors ?? [])
   }
 }
+
+export function capabilityContractInput(
+  inputs: readonly { name: string }[],
+  args: Record<string, unknown>,
+): unknown {
+  const isGenericRunnerInput =
+    inputs.some((input) => input.name === "capability") &&
+    inputs.some((input) => input.name === "input")
+  if (!isGenericRunnerInput) return args
+
+  const value = args.input
+  if (typeof value !== "string") return value
+  try {
+    return JSON.parse(value)
+  } catch {
+    return value
+  }
+}

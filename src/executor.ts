@@ -15,7 +15,10 @@ import {
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { validateCapabilityContractValue } from "./agency/capability-contract-validation.js"
+import {
+  capabilityContractInput,
+  validateCapabilityContractValue,
+} from "./agency/capability-contract-validation.js"
 import type { AgentResult } from "./agent.js"
 import { runAgent } from "./agent.js"
 import { frameAgentIdentity, loadAgentIdentity } from "./agents.js"
@@ -327,7 +330,11 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
   try {
     args = validateInputs(profile.inputs, input.cliArgs)
     if (profile.canonicalContract) {
-      validateCapabilityContractValue("input", profile.canonicalContract.inputSchema, args)
+      validateCapabilityContractValue(
+        "input",
+        profile.canonicalContract.inputSchema,
+        capabilityContractInput(profile.inputs, args),
+      )
     }
   } catch (err) {
     return finishAndEnd({ exitCode: 64, reason: err instanceof Error ? err.message : String(err) })
