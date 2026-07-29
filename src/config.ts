@@ -162,14 +162,6 @@ export interface KodyConfig {
       workflow: string
       inputs?: Record<string, string | number | boolean>
     }
-    /**
-     * Provider-neutral production deployment workflow owned by the consumer.
-     * The shared release bundle dispatches and verifies the exact run.
-     */
-    deployment?: {
-      workflow: string
-      inputs?: Record<string, string | number | boolean>
-    }
   }
   company?: {
     activeCapabilities?: string[]
@@ -637,19 +629,15 @@ function parseReleaseConfig(raw: unknown): KodyConfig["release"] {
   const out: NonNullable<KodyConfig["release"]> = {}
   if (r.version !== undefined) {
     const version = recordValue(r.version)
-    const readCommand =
-      typeof version?.readCommand === "string" ? version.readCommand.trim() : ""
-    const writeCommand =
-      typeof version?.writeCommand === "string" ? version.writeCommand.trim() : ""
+    const readCommand = typeof version?.readCommand === "string" ? version.readCommand.trim() : ""
+    const writeCommand = typeof version?.writeCommand === "string" ? version.writeCommand.trim() : ""
     const files = Array.isArray(version?.files)
-      ? version.files.filter(
-          (file): file is string => typeof file === "string" && file.trim().length > 0,
-        ).map((file) => file.trim())
+      ? version.files
+          .filter((file): file is string => typeof file === "string" && file.trim().length > 0)
+          .map((file) => file.trim())
       : []
     if (!readCommand || !writeCommand || files.length === 0) {
-      throw new Error(
-        "kody.config.json: release.version requires readCommand, writeCommand, and files",
-      )
+      throw new Error("kody.config.json: release.version requires readCommand, writeCommand, and files")
     }
     out.version = { readCommand, writeCommand, files: [...new Set(files)] }
   }
@@ -663,32 +651,23 @@ function parseReleaseConfig(raw: unknown): KodyConfig["release"] {
   if (typeof r.allowAdminMerge === "boolean") out.allowAdminMerge = r.allowAdminMerge
   if (typeof r.releaseBranch === "string") out.releaseBranch = r.releaseBranch
   if (typeof r.timeoutMs === "number" && r.timeoutMs > 0) out.timeoutMs = Math.floor(r.timeoutMs)
-  if (typeof r.productionDeployRequired === "boolean")
-    out.productionDeployRequired = r.productionDeployRequired
-  out.validation = parseReleaseWorkflowRequest(r.validation, "validation")
-  out.deployment = parseReleaseWorkflowRequest(
-    r.deployment,
-    "deployment",
-    true,
-  )
+  if (typeof r.productionDeployRequired === "boolean") out.productionDeployRequired = r.productionDeployRequired
+  if (r.deployment !== undefined) {
+    throw new Error(
+      "kody.config.json: release.deployment is workflow-owned and cannot be configured by a consumer repository",
+    )
+  }
+  out.validation = parseReleaseWorkflowRequest(r.validation)
   return Object.keys(out).length > 0 ? out : undefined
 }
 
 function parseReleaseWorkflowRequest(
   raw: unknown,
-  field: "validation" | "deployment",
-  requiredWhenConfigured = false,
 ): { workflow: string; inputs?: Record<string, string | number | boolean> } | undefined {
   if (raw === undefined) return undefined
   const request = recordValue(raw)
-  const workflow =
-    typeof request?.workflow === "string" ? request.workflow.trim() : ""
-  if (!workflow) {
-    if (requiredWhenConfigured) {
-      throw new Error(`kody.config.json: release.${field}.workflow is required`)
-    }
-    return undefined
-  }
+  const workflow = typeof request?.workflow === "string" ? request.workflow.trim() : ""
+  if (!workflow) return undefined
 
   const rawInputs = recordValue(request?.inputs)
   const inputs = rawInputs
@@ -696,9 +675,7 @@ function parseReleaseWorkflowRequest(
         Object.entries(rawInputs).filter(
           (entry): entry is [string, string | number | boolean] =>
             /^[a-z][a-z0-9_]*$/.test(entry[0]) &&
-            (typeof entry[1] === "string" ||
-              typeof entry[1] === "number" ||
-              typeof entry[1] === "boolean"),
+            (typeof entry[1] === "string" || typeof entry[1] === "number" || typeof entry[1] === "boolean"),
         ),
       )
     : undefined

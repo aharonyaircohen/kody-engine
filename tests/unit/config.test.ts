@@ -268,12 +268,6 @@ describe("config: loadConfig", () => {
             release_gate: true,
           },
         },
-        deployment: {
-          workflow: "deploy.yml",
-          inputs: {
-            environment: "production",
-          },
-        },
       },
     })
 
@@ -293,12 +287,6 @@ describe("config: loadConfig", () => {
           release_gate: true,
         },
       },
-      deployment: {
-        workflow: "deploy.yml",
-        inputs: {
-          environment: "production",
-        },
-      },
     })
   })
 
@@ -315,23 +303,23 @@ describe("config: loadConfig", () => {
       },
     })
 
-    expect(() => loadConfig(dir)).toThrow(
-      "release.version requires readCommand, writeCommand, and files",
-    )
+    expect(() => loadConfig(dir)).toThrow("release.version requires readCommand, writeCommand, and files")
   })
 
-  it("rejects a deployment request without a workflow", () => {
+  it("rejects repository-owned deployment configuration", () => {
     const dir = tmpDir()
     writeConfig(dir, {
       github: { owner: "o", repo: "r" },
       agent: { model: "m/x" },
       release: {
-        deployment: {},
+        deployment: {
+          workflow: "deploy.yml",
+        },
       },
     })
 
     expect(() => loadConfig(dir)).toThrow(
-      "release.deployment.workflow is required",
+      "release.deployment is workflow-owned and cannot be configured by a consumer repository",
     )
   })
 

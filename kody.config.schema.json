@@ -188,26 +188,6 @@
             }
           }
         },
-        "deployment": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["workflow"],
-          "properties": {
-            "workflow": {
-              "type": "string",
-              "minLength": 1
-            },
-            "inputs": {
-              "type": "object",
-              "propertyNames": {
-                "pattern": "^[a-z][a-z0-9_]*$"
-              },
-              "additionalProperties": {
-                "type": ["string", "number", "boolean"]
-              }
-            }
-          }
-        },
         "timeoutMs": {
           "type": "integer",
           "minimum": 1
