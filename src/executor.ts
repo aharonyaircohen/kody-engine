@@ -337,6 +337,11 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
           profile.inputs,
           args,
           profile.canonicalContract.capabilityId,
+          Object.keys(
+            (profile.canonicalContract.inputSchema.properties as
+              | Record<string, unknown>
+              | undefined) ?? {},
+          ),
         ),
       )
     }

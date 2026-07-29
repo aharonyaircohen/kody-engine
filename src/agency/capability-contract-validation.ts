@@ -44,6 +44,7 @@ export function capabilityContractInput(
   inputs: readonly { name: string }[],
   args: Record<string, unknown>,
   capabilityId?: string,
+  contractProperties: readonly string[] = [],
 ): unknown {
   const isGenericRunnerInput =
     inputs.some((input) => input.name === "input") &&
@@ -51,9 +52,12 @@ export function capabilityContractInput(
   if (!isGenericRunnerInput) {
     const isParameterlessGenericRunner =
       (inputs.some((input) => input.name === "capability") ||
-        args.capability === capabilityId) &&
+        args.capability === capabilityId ||
+        !contractProperties.includes("capability")) &&
       Object.hasOwn(args, "capability")
-    return isParameterlessGenericRunner ? {} : args
+    if (!isParameterlessGenericRunner) return args
+    const { capability: _routingCapability, ...businessArgs } = args
+    return businessArgs
   }
 
   const value = args.input

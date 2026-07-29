@@ -66,6 +66,13 @@ describe("Capability contract validation", () => {
     ).toEqual({})
   })
 
+  it("keeps capability when the business contract explicitly declares it", () => {
+    const args = { capability: "business-value" }
+    expect(
+      capabilityContractInput([], args, "runner", ["capability"]),
+    ).toBe(args)
+  })
+
   it("keeps ordinary named capability inputs unchanged", () => {
     const args = { issue: 42 }
     expect(
