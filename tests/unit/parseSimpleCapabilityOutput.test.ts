@@ -6,7 +6,7 @@ describe("parseSimpleCapabilityOutput", () => {
     const ctx = { data: {}, output: {} } as Parameters<typeof parseSimpleCapabilityOutput>[0]
     await parseSimpleCapabilityOutput(ctx, {} as Parameters<typeof parseSimpleCapabilityOutput>[1], null)
 
-    expect(ctx.output.exitCode).toBeUndefined()
+    expect(ctx.output.exitCode).toBe(1)
     expect(ctx.output.reason).toBe("Capability execution ended before returning a result")
     expect(ctx.data.capabilityOutput).toEqual({
       status: "blocked",
@@ -33,7 +33,7 @@ describe("parseSimpleCapabilityOutput", () => {
       } as Parameters<typeof parseSimpleCapabilityOutput>[2],
     )
 
-    expect(ctx.output.exitCode).toBeUndefined()
+    expect(ctx.output.exitCode).toBe(1)
     expect(ctx.data.capabilityOutput).toEqual({
       status: "blocked",
       reason: "Capability execution limit reached",

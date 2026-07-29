@@ -1,6 +1,7 @@
 import { createCipheriv } from "node:crypto"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { Context } from "../../src/implementations/types.js"
+import { resetKodyApiTokenForTests } from "../../src/kody-api-client.js"
 import { resolveRuntimeSecret, resolveRuntimeSecrets } from "../../src/scripts/runtimeSecrets.js"
 
 const mocks = vi.hoisted(() => ({ getRepoDoc: vi.fn() }))
@@ -30,6 +31,8 @@ function encryptVault(doc: unknown, key: Buffer): string {
 describe("resolveRuntimeSecret", () => {
   beforeEach(() => {
     mocks.getRepoDoc.mockReset()
+    vi.unstubAllGlobals()
+    resetKodyApiTokenForTests()
   })
 
   it("reads repo vault secrets before env fallback", async () => {
@@ -108,6 +111,40 @@ describe("resolveRuntimeSecret", () => {
     expect(result).toEqual({
       environment: { VERCEL_ACCESS_TOKEN: "allowed" },
       warnings: [],
+    })
+  })
+
+  it("migrates an Actions fallback into the repository vault", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ value: "signed-oidc-token" }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "secret_not_found" }), { status: 404 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await resolveRuntimeSecret("VERCEL_ACCESS_TOKEN", makeCtx(), {
+      env: {
+        GITHUB_ACTIONS: "true",
+        ACTIONS_ID_TOKEN_REQUEST_URL: "https://github.example/oidc",
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: "request-token",
+        VERCEL_ACCESS_TOKEN: "legacy-actions-value",
+      } as NodeJS.ProcessEnv,
+    })
+
+    expect(result).toEqual({
+      value: "legacy-actions-value",
+      source: "env",
+    })
+    expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
+      method: "PUT",
+      body: JSON.stringify({
+        name: "VERCEL_ACCESS_TOKEN",
+        value: "legacy-actions-value",
+      }),
     })
   })
 })

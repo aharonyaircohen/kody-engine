@@ -1,6 +1,6 @@
 import { readRepoSecret } from "../backendVault.js"
 import type { Context } from "../implementations/types.js"
-import { hasGitHubActionsIdentity, readRuntimeSecretFromKody } from "../kody-api-client.js"
+import { hasGitHubActionsIdentity, readRuntimeSecretFromKody, writeRuntimeSecretToKody } from "../kody-api-client.js"
 import { masterKeyBytes } from "../pool/keys.js"
 
 export type RuntimeSecretSource = "vault" | "env" | "missing"
@@ -38,7 +38,10 @@ export async function resolveRuntimeSecret(
   if (hasGitHubActionsIdentity(env)) {
     try {
       const value = await readRuntimeSecretFromKody(name, env)
-      return value ? { value, source: "vault" } : envSecret(name, env)
+      if (value) return { value, source: "vault" }
+      const fallback = envSecret(name, env)
+      if (fallback.value) await writeRuntimeSecretToKody(name, fallback.value, env)
+      return fallback
     } catch (err) {
       const fallback = envSecret(name, env)
       return {

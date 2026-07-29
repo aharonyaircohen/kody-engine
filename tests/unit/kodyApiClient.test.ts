@@ -3,6 +3,7 @@ import {
   readRuntimeSecretFromKody,
   resetKodyApiTokenForTests,
   resolveKodyApiUrl,
+  writeRuntimeSecretToKody,
 } from "../../src/kody-api-client.js"
 
 afterEach(() => {
@@ -16,9 +17,7 @@ describe("resolveKodyApiUrl", () => {
   })
 
   it("keeps an explicit deployment override and removes its trailing slash", () => {
-    expect(resolveKodyApiUrl({ KODY_API_URL: "https://control.example.test/" })).toBe(
-      "https://control.example.test",
-    )
+    expect(resolveKodyApiUrl({ KODY_API_URL: "https://control.example.test/" })).toBe("https://control.example.test")
   })
 })
 
@@ -47,5 +46,30 @@ describe("Kody API client", () => {
     ).resolves.toBe("secret-value")
 
     expect(fetchMock.mock.calls[1]?.[0]).toBe("https://current-dashboard.example/api/kody/engine/secret")
+  })
+
+  it("upserts one declared runtime secret through workflow identity", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ value: "signed-oidc-token" }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await writeRuntimeSecretToKody("VERCEL_ACCESS_TOKEN", "secret-value", {
+      ACTIONS_ID_TOKEN_REQUEST_URL: "https://github.example/oidc",
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: "request-token",
+    })
+
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+      method: "PUT",
+      body: JSON.stringify({
+        name: "VERCEL_ACCESS_TOKEN",
+        value: "secret-value",
+      }),
+    })
   })
 })

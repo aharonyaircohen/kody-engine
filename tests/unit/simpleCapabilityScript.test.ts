@@ -190,6 +190,7 @@ describe("script-backed simple Capability", () => {
     await parseSimpleCapabilityOutput(ctx as never, {} as never, null)
 
     expect(ctx.data.capabilityResults).toEqual([structuredResult])
+    expect(ctx.output.exitCode).toBe(1)
     expect(ctx.output.reason).toBe("Production deployment failed")
   })
 

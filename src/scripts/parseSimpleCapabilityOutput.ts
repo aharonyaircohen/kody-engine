@@ -16,6 +16,7 @@ export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profil
       reason,
       summary: reason,
     }
+    ctx.output.exitCode = 1
     ctx.output.reason = reason
     ctx.data.capabilityOutput = blocked
     ctx.data.capabilityResults = [
@@ -57,6 +58,12 @@ export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profil
   ctx.data.capabilityOutput = output
   const structuredResult = parseCapabilityResult(output)
   if (structuredResult) {
+    if (
+      (structuredResult.status === "fail" || structuredResult.status === "blocked") &&
+      (ctx.output.exitCode === undefined || ctx.output.exitCode === 0)
+    ) {
+      ctx.output.exitCode = 1
+    }
     ctx.output.reason = structuredResult.summary
     ctx.data.capabilityResults = [structuredResult]
     return
