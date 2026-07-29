@@ -14,7 +14,7 @@ afterEach(() => {
 
 function scriptedCapability(
   script: string,
-  options: { secrets?: string[]; output?: Record<string, unknown> } = {},
+  options: { secrets?: string[]; timeoutMs?: number; output?: Record<string, unknown> } = {},
 ): {
   cwd: string
   ctx: {
@@ -36,6 +36,7 @@ function scriptedCapability(
     JSON.stringify({
       execution: "script",
       ...(options.secrets ? { secrets: options.secrets } : {}),
+      ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
       input: {
         type: "object",
         properties: { name: { type: "string" } },

@@ -57,6 +57,7 @@ describe("simple Capability folder", () => {
       "contract.json": JSON.stringify({
         execution: "script",
         secrets: ["VERCEL_ACCESS_TOKEN"],
+        timeoutMs: 1_800_000,
         input: { type: "object" },
         output: { type: "object" },
       }),
@@ -67,6 +68,7 @@ describe("simple Capability folder", () => {
 
     expect(loaded?.contract?.execution).toBe("script")
     expect(loaded?.contract?.secrets).toEqual(["VERCEL_ACCESS_TOKEN"])
+    expect(loaded?.contract?.timeoutMs).toBe(1_800_000)
     expect(loaded?.config.execution).toBe("script")
     expect(resolveCapabilityExecution(loaded!, root)).toEqual({
       implementation: "capability-run",

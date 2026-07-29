@@ -28,6 +28,7 @@ export const loadSimpleCapability: PreflightScript = async (ctx) => {
   if (capability.contract?.execution === "script") {
     ctx.data.capabilityScriptPath = path.join(capability.dir, "tools", "run.sh")
     ctx.data.capabilitySecretNames = capability.contract.secrets ?? []
+    ctx.data.capabilityScriptTimeoutMs = capability.contract.timeoutMs
   }
   if (capability.config.outputSchema) {
     ctx.data.capabilityOutputSchema = capability.config.outputSchema

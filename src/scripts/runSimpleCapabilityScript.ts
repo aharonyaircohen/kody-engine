@@ -5,7 +5,7 @@ import { parseCapabilityResultsFromText } from "../capabilityResult.js"
 import type { PreflightScript } from "../implementations/types.js"
 import { buildTickChildEnv } from "./tickShellRunner.js"
 
-const SCRIPT_TIMEOUT_MS = 5 * 60 * 1000
+const DEFAULT_SCRIPT_TIMEOUT_MS = 5 * 60 * 1000
 const SCRIPT_MAX_OUTPUT_BYTES = 1024 * 1024
 
 export const runSimpleCapabilityScript: PreflightScript = async (ctx) => {
@@ -20,6 +20,10 @@ export const runSimpleCapabilityScript: PreflightScript = async (ctx) => {
 
   const capabilityEnvironment = isStringRecord(ctx.data.capabilityEnvironment) ? ctx.data.capabilityEnvironment : {}
   const capabilitySecrets = declaredSecrets(ctx.data.capabilitySecretNames, process.env)
+  const timeoutMs =
+    typeof ctx.data.capabilityScriptTimeoutMs === "number"
+      ? ctx.data.capabilityScriptTimeoutMs
+      : DEFAULT_SCRIPT_TIMEOUT_MS
   const result = spawnSync("bash", [scriptPath], {
     cwd: ctx.cwd,
     env: {
@@ -29,7 +33,7 @@ export const runSimpleCapabilityScript: PreflightScript = async (ctx) => {
     },
     stdio: ["ignore", "pipe", "pipe"],
     encoding: "utf-8",
-    timeout: SCRIPT_TIMEOUT_MS,
+    timeout: timeoutMs,
     maxBuffer: SCRIPT_MAX_OUTPUT_BYTES,
   })
 
@@ -38,7 +42,7 @@ export const runSimpleCapabilityScript: PreflightScript = async (ctx) => {
     const timedOut = (result.error as NodeJS.ErrnoException).code === "ETIMEDOUT"
     ctx.output.exitCode = timedOut ? 124 : 99
     ctx.output.reason = timedOut
-      ? "Capability script timed out after 5 minutes"
+      ? `Capability script timed out after ${formatDuration(timeoutMs)}`
       : `Capability script failed to start: ${result.error.message}`
     return
   }
@@ -66,6 +70,10 @@ export const runSimpleCapabilityScript: PreflightScript = async (ctx) => {
     ctx.output.reason =
       "Capability script must return exactly one valid JSON value or emit a valid KODY_CAPABILITY_RESULT marker"
   }
+}
+
+function formatDuration(timeoutMs: number): string {
+  return timeoutMs % 60_000 === 0 ? `${timeoutMs / 60_000} minutes` : `${timeoutMs}ms`
 }
 
 function declaredSecrets(names: unknown, parent: NodeJS.ProcessEnv): Record<string, string> {

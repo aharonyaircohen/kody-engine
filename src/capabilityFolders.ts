@@ -10,6 +10,8 @@ export interface CapabilityContract {
   execution?: "agent" | "script"
   /** Secret names exposed only to this trusted script process. */
   secrets?: string[]
+  /** Maximum trusted script runtime. Defaults to five minutes. */
+  timeoutMs?: number
   input: Record<string, unknown>
   output: Record<string, unknown>
 }
@@ -202,8 +204,28 @@ function parseCapabilityContract(raw: string): CapabilityContract {
   if (secrets && parsed.execution !== "script") {
     throw new Error('contract.json secrets are supported only when execution is "script"')
   }
+  const timeoutMs =
+    parsed.timeoutMs === undefined
+      ? undefined
+      : typeof parsed.timeoutMs === "number" &&
+          Number.isInteger(parsed.timeoutMs) &&
+          parsed.timeoutMs >= 1_000 &&
+          parsed.timeoutMs <= 6 * 60 * 60 * 1_000
+        ? parsed.timeoutMs
+        : null
+  if (timeoutMs === null) {
+    throw new Error("contract.json timeoutMs must be an integer from 1000 to 21600000")
+  }
+  if (timeoutMs !== undefined && parsed.execution !== "script") {
+    throw new Error('contract.json timeoutMs is supported only when execution is "script"')
+  }
   const unsupported = Object.keys(parsed).filter(
-    (key) => key !== "execution" && key !== "secrets" && key !== "input" && key !== "output",
+    (key) =>
+      key !== "execution" &&
+      key !== "secrets" &&
+      key !== "timeoutMs" &&
+      key !== "input" &&
+      key !== "output",
   )
   if (unsupported.length > 0) {
     throw new Error(`contract.json contains unsupported fields: ${unsupported.join(", ")}`)
@@ -211,6 +233,7 @@ function parseCapabilityContract(raw: string): CapabilityContract {
   return {
     ...(parsed.execution ? { execution: parsed.execution } : {}),
     ...(secrets ? { secrets } : {}),
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
     input: parsed.input,
     output: parsed.output,
   }
