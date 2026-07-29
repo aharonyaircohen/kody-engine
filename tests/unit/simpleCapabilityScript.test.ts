@@ -175,4 +175,26 @@ describe("script-backed simple Capability", () => {
     expect(ctx.data.capabilityResults).toEqual([structuredResult])
     expect(ctx.output.reason).toBe("Production deployment failed")
   })
+
+  it("accepts the standard Capability result marker alongside script logs", async () => {
+    const structuredResult = {
+      version: 1,
+      status: "pass",
+      summary: "Promotion PR opened",
+      facts: { promotionPr: 992 },
+      artifacts: [],
+      missingEvidence: [],
+      blockers: [],
+    }
+    const { ctx } = scriptedCapability(
+      `#!/bin/sh\nprintf 'opening promotion\\nKODY_CAPABILITY_RESULT=%s\\n' '${JSON.stringify(structuredResult)}'\n`,
+      { output: { type: "object" } },
+    )
+
+    await loadSimpleCapability(ctx as never, {} as never)
+    await runSimpleCapabilityScript(ctx as never, {} as never)
+    await parseSimpleCapabilityOutput(ctx as never, {} as never, null)
+
+    expect(ctx.data.capabilityResults).toEqual([structuredResult])
+  })
 })

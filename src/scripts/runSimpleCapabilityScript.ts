@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 
+import { parseCapabilityResultsFromText } from "../capabilityResult.js"
 import type { PreflightScript } from "../implementations/types.js"
 import { buildTickChildEnv } from "./tickShellRunner.js"
 
@@ -52,11 +53,18 @@ export const runSimpleCapabilityScript: PreflightScript = async (ctx) => {
     return
   }
 
+  const stdout = result.stdout ?? ""
   try {
-    ctx.data.capabilityScriptOutput = JSON.parse(result.stdout ?? "")
+    ctx.data.capabilityScriptOutput = JSON.parse(stdout)
   } catch {
+    const structuredResult = parseCapabilityResultsFromText(stdout).at(-1)
+    if (structuredResult) {
+      ctx.data.capabilityScriptOutput = structuredResult
+      return
+    }
     ctx.output.exitCode = 64
-    ctx.output.reason = "Capability script must return exactly one valid JSON value on stdout"
+    ctx.output.reason =
+      "Capability script must return exactly one valid JSON value or emit a valid KODY_CAPABILITY_RESULT marker"
   }
 }
 

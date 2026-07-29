@@ -1025,6 +1025,44 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("uses an explicit workflow target fact instead of a stale prior PR URL", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-target-fact-"))
+    try {
+      for (const capability of ["prepare", "promote", "merge"]) {
+        writeSimpleCapability(cwd, capability)
+      }
+      writeWorkflowDefinition(cwd, "release", {
+        name: "Release",
+        agent: "kody",
+        steps: [
+          { id: "prepare", capability: "prepare", target: "issue", next: "promote" },
+          { id: "promote", capability: "promote", next: "merge" },
+          { id: "merge", capability: "merge", target: "pr", targetFact: "promotionPr" },
+        ],
+      })
+      runImplementationChain
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          prUrl: "https://github.com/acme/web/pull/991",
+          capabilityResults: [capabilityResult({ releasePr: 991 })],
+        })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityResults: [capabilityResult({ promotionPr: 992 })],
+        })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityResults: [capabilityResult({ mergedPr: 992 })],
+        })
+
+      await runJob({ workflow: "release", target: 7, cliArgs: {}, flavor: "instant" }, { cwd })
+
+      expect(JSON.parse(String(runImplementationChain.mock.calls[2]![1].cliArgs.input))).toEqual({ pr: 992 })
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it("ends a workflow through an explicit $end connection", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-end-"))
     try {
