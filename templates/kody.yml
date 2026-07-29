@@ -83,4 +83,4 @@ jobs:
           KODY_RUN_REQUEST_JSON: ${{ inputs.runRequest }}
         working-directory: ${{ github.workspace }}
         run: |
-          npx -y -p @kody-ade/kody-engine@latest kody-engine ci --cwd "$GITHUB_WORKSPACE"
+          npx -y -p @kody-ade/kody-engine@latest kody-engine
