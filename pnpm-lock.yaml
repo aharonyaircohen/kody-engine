@@ -14,9 +14,6 @@ importers:
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.2.119
         version: 0.2.119(zod@4.3.6)
-      '@kody-ade/agency-domain':
-        specifier: 0.5.1
-        version: 0.5.1
       '@kody-ade/engine-contracts':
         specifier: 0.1.0
         version: 0.1.0
@@ -610,9 +607,6 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
-
-  '@kody-ade/agency-domain@0.5.1':
-    resolution: {integrity: sha512-z02/7geaasV5nbMbcYC3LxKyiMR79oIyka+bQ0NUxXU+qnFVPxxfjYSMIIJZqDkCK2LIlTmJxULKdmMD2F8gYA==}
 
   '@kody-ade/engine-contracts@0.1.0':
     resolution: {integrity: sha512-AblO4lLeX5z2sNSGPN0gMyQBu9XZeohH2upbU4pAdf4tvb+OLhPRLeKzMNBf2VSYesSf6agB50L6+HfZravjcA==}
@@ -2299,8 +2293,6 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
-
-  '@kody-ade/agency-domain@0.5.1': {}
 
   '@kody-ade/engine-contracts@0.1.0': {}
 

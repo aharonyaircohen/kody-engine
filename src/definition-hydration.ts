@@ -21,6 +21,7 @@ export interface HydratedDefinitions {
 }
 
 const SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,127}$/
+const REPOSITORY_OWNED_NAMESPACES = ["loops"] as const
 
 function assertSafeDefinitionPath(filePath: string): void {
   const segments = filePath.split("/")
@@ -94,6 +95,14 @@ function writeDefinition(root: string, kind: DefinitionKind, definition: Definit
   writeBundle(path.join(root, "capabilities", definition.slug), bundle)
 }
 
+function preserveRepositoryDefinitions(root: string, staging: string): void {
+  for (const namespace of REPOSITORY_OWNED_NAMESPACES) {
+    const source = path.join(root, namespace)
+    if (!fs.existsSync(source)) continue
+    fs.cpSync(source, path.join(staging, namespace), { recursive: true })
+  }
+}
+
 export async function hydrateDefinitions(options: {
   cwd: string
   tenantId: string
@@ -137,6 +146,7 @@ export async function hydrateDefinitions(options: {
       writeDefinition(staging, "asset", definition)
       versions[`asset:${definition.slug}`] = definition.version
     }
+    preserveRepositoryDefinitions(root, staging)
     const manifest = {
       schemaVersion: 1,
       tenantId: options.tenantId,

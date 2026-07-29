@@ -260,6 +260,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
       updatedAt: startedAt,
       workflow: workflowIdentity,
       kodyRunId: valid.workflowRunId,
+      parentRunId: typeof base.preloadedData?.parentRunId === "string" ? base.preloadedData.parentRunId : undefined,
       sourceType: "job",
     }
     const persistRun = Boolean(base.config && !base.skipConfig && hasStateBackendConfig())

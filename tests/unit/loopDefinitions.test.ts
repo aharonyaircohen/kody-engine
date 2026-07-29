@@ -10,7 +10,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true })
 })
 
-describe("simple Loop definitions", () => {
+describe("Loop definitions", () => {
   it("accepts the five-field Loop contract", () => {
     expect(
       normalizeLoopDefinition({

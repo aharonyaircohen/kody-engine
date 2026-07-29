@@ -4,6 +4,8 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { definitionVersion, hydrateDefinitions, hydrateDefinitionsFromEnv } from "../../src/definition-hydration.js"
+import { listLoopDefinitions } from "../../src/loopDefinitions.js"
+import { selectRunnableLoops } from "../../src/scripts/dispatchLoops.js"
 
 let cwd: string
 
@@ -107,6 +109,37 @@ describe("definition hydration", () => {
       "capability:audit": definitionVersion(capabilityBundle),
       "implementation:audit-with-claude": definitionVersion(implementationBundle),
     })
+  })
+
+  it("preserves repository-owned Loops while refreshing backend-owned definitions", async () => {
+    const loopDirectory = path.join(cwd, ".kody-engine", "definitions", "loops", "daily-web-release-loop")
+    fs.mkdirSync(loopDirectory, { recursive: true })
+    fs.writeFileSync(
+      path.join(loopDirectory, "loop.json"),
+      `${JSON.stringify(
+        {
+          id: "daily-web-release-loop",
+          trigger: { type: "schedule", every: "1d" },
+          target: { kind: "workflow", id: "web-release" },
+          input: {},
+          enabled: true,
+        },
+        null,
+        2,
+      )}\n`,
+    )
+
+    await hydrateDefinitions({
+      cwd,
+      tenantId: "acme/widgets",
+      backend: {
+        listDefinitions: vi.fn().mockResolvedValue([]),
+      },
+    })
+
+    const loops = listLoopDefinitions(cwd)
+    expect(loops).toHaveLength(1)
+    expect(selectRunnableLoops(loops, new Date("2026-07-29T08:00:00.000Z"), { force: false })).toEqual(loops)
   })
 
   it("rejects a hash mismatch and unsafe bundle path", async () => {

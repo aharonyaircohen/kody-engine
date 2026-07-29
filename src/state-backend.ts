@@ -28,52 +28,24 @@ export interface AgencyRunDocument {
   updatedAt: string
 }
 
-export interface AgencyDefinitionDocument {
-  tenantId: string
-  recordId: string
-  kind: "intent" | "operation" | "goal" | "loop" | "workflow" | "capability" | "agent"
-  schemaVersion: number
-  data: unknown
-  createdAt: string
-}
-
-export interface AgencyStateDocument {
-  tenantId: string
-  definitionId: string
-  kind: "goal" | "loop"
-  schemaVersion: number
-  data: unknown
-  updatedAt: string
-}
-
-export interface AgencyOutputDocument {
-  tenantId: string
-  recordId: string
-  schemaVersion: number
-  runId: string
-  data: unknown
-}
-
-export interface AgencyDispatchDecision {
-  kind: "fire" | "skip"
+export interface LoopDispatchDecision {
+  kind: "fire"
   reason: string
   scheduledAt?: string
-  nextEligibleAt?: string
 }
 
-function serializeAgencyDispatchDecision(decision: AgencyDispatchDecision): AgencyDispatchDecision {
+function serializeLoopDispatchDecision(decision: LoopDispatchDecision): LoopDispatchDecision {
   return {
     kind: decision.kind,
     reason: decision.reason,
     ...(decision.scheduledAt ? { scheduledAt: decision.scheduledAt } : {}),
-    ...(decision.nextEligibleAt ? { nextEligibleAt: decision.nextEligibleAt } : {}),
   }
 }
 
-export interface AgencyDispatchReservation {
+export interface LoopDispatchReservation {
   idempotencyKey: string
   loopId: string
-  decision: AgencyDispatchDecision
+  decision: LoopDispatchDecision
   leaseUntil: string
   reservationId: string
   correlationId: string
@@ -142,54 +114,31 @@ export interface StateBackend {
     run: unknown,
     updatedAt: string,
   ): Promise<void>
-  listAgencyDefinitions(tenantId: string): Promise<AgencyDefinitionDocument[]>
-  getAgencyState(
+  reserveLoopDispatch(
     tenantId: string,
-    kind: AgencyStateDocument["kind"],
-    definitionId: string,
-  ): Promise<AgencyStateDocument | null>
-  putAgencyState(
-    tenantId: string,
-    definitionId: string,
-    kind: AgencyStateDocument["kind"],
-    schemaVersion: number,
-    data: unknown,
-    updatedAt: string,
-  ): Promise<void>
-  appendAgencyOutput(tenantId: string, recordId: string, schemaVersion: number, data: unknown): Promise<void>
-  listAgencyOutputs(tenantId: string, runId?: string): Promise<AgencyOutputDocument[]>
-  reserveAgencyDispatch(
-    tenantId: string,
-    reservation: AgencyDispatchReservation,
+    reservation: LoopDispatchReservation,
   ): Promise<{
     acquired: boolean
     dispatchId?: string
     reason?: "duplicate" | "concurrency-limit" | "approval-required"
     reclaimed?: boolean
   }>
-  recordSkippedAgencyDispatch(
-    tenantId: string,
-    idempotencyKey: string,
-    loopId: string,
-    decision: AgencyDispatchDecision,
-    now: string,
-  ): Promise<void>
-  finishAgencyDispatch(
+  finishLoopDispatch(
     tenantId: string,
     idempotencyKey: string,
     reservationId: string,
-    status: "dispatched" | "failed" | "dead-letter",
+    status: "dispatched" | "failed",
     now: string,
     runId?: string,
   ): Promise<void>
-  createAgencyModelRun(
+  createAgencyRun(
     tenantId: string,
     subjectType: AgencyRunDocument["subjectType"],
     subjectId: string,
     run: unknown,
     now: string,
   ): Promise<void>
-  finishAgencyModelRun(tenantId: string, run: unknown, now: string): Promise<void>
+  finishAgencyRun(tenantId: string, run: unknown, now: string): Promise<void>
   appendRunEvent(
     tenantId: string,
     runId: string,
@@ -338,52 +287,11 @@ export function createStateBackendFromEnv(
         updatedAt,
       })
     },
-    async listAgencyDefinitions(tenantId) {
-      const result = await transport.query(anyApi.agencyModel.listDefinitions, {
-        tenantId: requireTenant(tenantId),
-      })
-      return Array.isArray(result) ? (result as AgencyDefinitionDocument[]) : []
-    },
-    async getAgencyState(tenantId, kind, definitionId) {
-      const result = await transport.query(anyApi.agencyModel.getState, {
-        tenantId: requireTenant(tenantId),
-        kind,
-        definitionId: requireNonEmpty(definitionId, "definitionId"),
-      })
-      return (result as AgencyStateDocument | null) ?? null
-    },
-    async putAgencyState(tenantId, definitionId, kind, schemaVersion, data, updatedAt) {
-      await transport.mutation(anyApi.agencyModel.putState, {
-        tenantId: requireTenant(tenantId),
-        definitionId: requireNonEmpty(definitionId, "definitionId"),
-        kind,
-        schemaVersion,
-        data,
-        updatedAt,
-      })
-    },
-    async appendAgencyOutput(tenantId, recordId, schemaVersion, data) {
-      await transport.mutation(anyApi.agencyModel.appendOutput, {
-        tenantId: requireTenant(tenantId),
-        envelope: {
-          schemaVersion,
-          recordId: requireNonEmpty(recordId, "recordId"),
-          data,
-        },
-      })
-    },
-    async listAgencyOutputs(tenantId, runId) {
-      const result = await transport.query(anyApi.agencyModel.listOutputs, {
-        tenantId: requireTenant(tenantId),
-        ...(runId ? { runId: requireNonEmpty(runId, "runId") } : {}),
-      })
-      return Array.isArray(result) ? (result as AgencyOutputDocument[]) : []
-    },
-    async reserveAgencyDispatch(tenantId, reservation) {
+    async reserveLoopDispatch(tenantId, reservation) {
       const result = await transport.mutation(anyApi.agencyModel.reserveDispatch, {
         tenantId: requireTenant(tenantId),
         ...reservation,
-        decision: serializeAgencyDispatchDecision(reservation.decision),
+        decision: serializeLoopDispatchDecision(reservation.decision),
         idempotencyKey: requireNonEmpty(reservation.idempotencyKey, "idempotencyKey"),
         loopId: requireNonEmpty(reservation.loopId, "loopId"),
         reservationId: requireNonEmpty(reservation.reservationId, "reservationId"),
@@ -397,16 +305,7 @@ export function createStateBackendFromEnv(
         reclaimed?: boolean
       }
     },
-    async recordSkippedAgencyDispatch(tenantId, idempotencyKey, loopId, decision, now) {
-      await transport.mutation(anyApi.agencyModel.recordSkippedDispatch, {
-        tenantId: requireTenant(tenantId),
-        idempotencyKey: requireNonEmpty(idempotencyKey, "idempotencyKey"),
-        loopId: requireNonEmpty(loopId, "loopId"),
-        decision: serializeAgencyDispatchDecision(decision),
-        now,
-      })
-    },
-    async finishAgencyDispatch(tenantId, idempotencyKey, reservationId, status, now, runId) {
+    async finishLoopDispatch(tenantId, idempotencyKey, reservationId, status, now, runId) {
       await transport.mutation(anyApi.agencyModel.finishDispatch, {
         tenantId: requireTenant(tenantId),
         idempotencyKey: requireNonEmpty(idempotencyKey, "idempotencyKey"),
@@ -416,7 +315,7 @@ export function createStateBackendFromEnv(
         ...(runId ? { runId: requireNonEmpty(runId, "runId") } : {}),
       })
     },
-    async createAgencyModelRun(tenantId, subjectType, subjectId, run, now) {
+    async createAgencyRun(tenantId, subjectType, subjectId, run, now) {
       await transport.mutation(anyApi.agencyModel.createRunRecord, {
         tenantId: requireTenant(tenantId),
         subjectType,
@@ -425,7 +324,7 @@ export function createStateBackendFromEnv(
         now,
       })
     },
-    async finishAgencyModelRun(tenantId, run, now) {
+    async finishAgencyRun(tenantId, run, now) {
       await transport.mutation(anyApi.agencyModel.finishRunRecord, {
         tenantId: requireTenant(tenantId),
         run,

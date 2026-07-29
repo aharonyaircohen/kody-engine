@@ -55,13 +55,13 @@ export function readLoopDefinition(cwd: string, id: string): LoopDefinition | nu
     try {
       const loop = normalizeLoopDefinition(JSON.parse(fs.readFileSync(filePath, "utf8")))
       if (loop?.id === id) return loop
-      process.stderr.write(`[kody] invalid simple Loop definition: ${filePath}\n`)
+      process.stderr.write(`[kody] invalid Loop definition: ${filePath}\n`)
     } catch {
-      process.stderr.write(`[kody] unreadable simple Loop definition: ${filePath}\n`)
+      process.stderr.write(`[kody] unreadable Loop definition: ${filePath}\n`)
     }
   }
   process.stderr.write(
-    `[kody] simple Loop not found: ${id} (${roots.map((root) => path.join(root, "loops", id, "loop.json")).join(", ")})\n`,
+    `[kody] Loop not found: ${id} (${roots.map((root) => path.join(root, "loops", id, "loop.json")).join(", ")})\n`,
   )
   return null
 }
@@ -80,7 +80,7 @@ export function listLoopDefinitions(cwd: string): LoopDefinition[] {
         const loop = normalizeLoopDefinition(JSON.parse(fs.readFileSync(filePath, "utf8")))
         if (loop?.id === id) byId.set(id, loop)
       } catch {
-        process.stderr.write(`[kody] unreadable simple Loop definition: ${filePath}\n`)
+        process.stderr.write(`[kody] unreadable Loop definition: ${filePath}\n`)
       }
     }
   }

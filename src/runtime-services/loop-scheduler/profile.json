@@ -22,7 +22,7 @@
   "outputArtifacts": [],
   "scripts": {
     "preflight": [
-      { "script": "dispatchSimpleLoops" },
+      { "script": "dispatchLoops" },
       { "script": "skipAgent" }
     ],
     "postflight": []

@@ -21,12 +21,11 @@ import { deriveQaScopeFromIssue } from "./deriveQaScopeFromIssue.js"
 import { diagMcp } from "./diagMcp.js"
 import { discoverQaContext } from "./discoverQaContext.js"
 import { dispatch } from "./dispatch.js"
-import { dispatchAgencyLoops } from "./dispatchAgencyLoops.js"
 import { dispatchCapabilityFileTicks } from "./dispatchCapabilityFileTicks.js"
 import { dispatchCapabilityTicks } from "./dispatchCapabilityTicks.js"
 import { dispatchClassified } from "./dispatchClassified.js"
+import { dispatchLoops } from "./dispatchLoops.js"
 import { dispatchNextTaskJob } from "./dispatchNextTaskJob.js"
-import { dispatchSimpleLoops } from "./dispatchSimpleLoops.js"
 import { ensurePr } from "./ensurePr.js"
 import { evaluateAgencyBoundariesScript } from "./evaluateAgencyBoundaries.js"
 import { failOnceTaskJob } from "./failOnceTaskJob.js"
@@ -153,8 +152,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   diagMcp,
   warmupMcp,
   dispatchCapabilityTicks,
-  dispatchAgencyLoops,
-  dispatchSimpleLoops,
+  dispatchLoops,
   dispatchCapabilityFileTicks,
   planTaskJobs,
   dispatchNextTaskJob,

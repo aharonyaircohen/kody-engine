@@ -61,6 +61,9 @@ const BANNED: Array<string | RegExp> = [
   "agency-architect",
   "AgencyArchitect",
   "agencyArchitect",
+  "dispatchAgencyLoops",
+  "dispatchSimpleLoops",
+  "dispatch-due-loops",
 ]
 
 function walk(dir: string): string[] {
@@ -86,5 +89,12 @@ describe("dead vocabulary", () => {
       }
     }
     expect(offenders, `retired vocabulary found:\n${offenders.join("\n")}`).toEqual([])
+  })
+
+  it("does not depend on the removed versioned Agency model", () => {
+    const packageJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../package.json"), "utf8")) as {
+      dependencies?: Record<string, string>
+    }
+    expect(packageJson.dependencies).not.toHaveProperty("@kody-ade/agency-domain")
   })
 })

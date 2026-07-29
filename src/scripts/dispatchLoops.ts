@@ -3,9 +3,22 @@ import type { KodyConfig } from "../config.js"
 import type { Job, PreflightScript } from "../implementations/types.js"
 import { runJob } from "../job.js"
 import { type LoopDefinition, listLoopDefinitions } from "../loopDefinitions.js"
-import { createStateBackendFromEnv } from "../state-backend.js"
+import { createStateBackendFromEnv, type StateBackend } from "../state-backend.js"
 
-export const dispatchSimpleLoops: PreflightScript = async (ctx) => {
+interface LoopDispatchResult {
+  loopId: string
+  status: "skipped" | "dispatched" | "failed"
+  reason: string
+}
+
+type LoopDispatchBackend = Pick<
+  StateBackend,
+  "createAgencyRun" | "finishAgencyRun" | "finishLoopDispatch" | "reserveLoopDispatch"
+>
+
+const LOOP_DISPATCH_LEASE_MS = 6 * 60 * 60 * 1_000
+
+export const dispatchLoops: PreflightScript = async (ctx) => {
   const tenantId = repositoryTenant(ctx.config)
   if (!tenantId) throw new Error("Repository identity is required for Loop dispatch")
   const now = new Date()
@@ -17,24 +30,55 @@ export const dispatchSimpleLoops: PreflightScript = async (ctx) => {
   })
   process.stdout.write(`→ kody: Loop scheduler found ${due.length} runnable Loop(s)${force ? " (manual)" : ""}\n`)
   const backend = createStateBackendFromEnv()
-  const results: Array<{ loopId: string; status: string; reason: string }> = []
+  const results = await dispatchLoopsWith({
+    loops: due,
+    tenantId,
+    backend,
+    now,
+    force,
+    nonce: randomUUID,
+    run: (job, parentRunId) =>
+      runJob(job, {
+        cwd: ctx.cwd,
+        config: ctx.config,
+        verbose: ctx.verbose,
+        quiet: ctx.quiet,
+        chain: false,
+        preloadedData: { parentRunId },
+      }),
+  })
+  for (const result of results) {
+    process.stdout.write(`→ kody: Loop ${result.loopId} ${result.status}: ${result.reason}\n`)
+  }
+  ctx.data.loopDispatchResults = results
+}
 
-  for (const loop of due) {
-    const slot = loopDispatchSlot(loop, now, force, randomUUID())
+export async function dispatchLoopsWith(input: {
+  loops: readonly LoopDefinition[]
+  tenantId: string
+  backend: LoopDispatchBackend
+  now: Date
+  force: boolean
+  run: (job: Job, parentRunId: string) => Promise<{ exitCode: number; reason?: string }>
+  nonce: () => string
+}): Promise<LoopDispatchResult[]> {
+  const results: LoopDispatchResult[] = []
+  for (const loop of input.loops) {
+    const slot = loopDispatchSlot(loop, input.now, input.force, input.nonce())
     if (!slot) continue
-    const reservationId = `reservation-${randomUUID()}`
+    const reservationId = `reservation-${input.nonce()}`
     const idempotencyKey = `${loop.id}:${slot}`
-    const claimed = await backend.reserveAgencyDispatch(tenantId, {
+    const claimed = await input.backend.reserveLoopDispatch(input.tenantId, {
       idempotencyKey,
       loopId: loop.id,
       decision: {
         kind: "fire",
-        reason: force ? "manual Loop run requested" : "local Loop schedule is due",
+        reason: input.force ? "manual Loop run requested" : "local Loop schedule is due",
         scheduledAt: slot,
       },
-      leaseUntil: new Date(now.getTime() + 6 * 60 * 60 * 1_000).toISOString(),
+      leaseUntil: new Date(input.now.getTime() + LOOP_DISPATCH_LEASE_MS).toISOString(),
       reservationId,
-      correlationId: `corr-${randomUUID()}`,
+      correlationId: `corr-${input.nonce()}`,
       policyHash: `loop:${loop.id}`,
       effectivePolicy: { source: "repository" },
       definitionRefs: [{ kind: "loop", id: loop.id }],
@@ -43,28 +87,52 @@ export const dispatchSimpleLoops: PreflightScript = async (ctx) => {
       approvalScopeKind: "loop",
       approvalScopeId: loop.id,
       approvalAction: `${loop.target.kind}:${loop.target.id}`,
-      now: now.toISOString(),
+      now: input.now.toISOString(),
     })
     if (!claimed.acquired) {
       results.push({ loopId: loop.id, status: "skipped", reason: claimed.reason ?? "already claimed" })
       continue
     }
 
-    const result = await runJob(loopJob(loop), {
-      cwd: ctx.cwd,
-      config: ctx.config,
-      verbose: ctx.verbose,
-      quiet: ctx.quiet,
-      chain: false,
-    })
-    const status = result.exitCode === 0 ? "dispatched" : "failed"
-    await backend.finishAgencyDispatch(tenantId, idempotencyKey, reservationId, status, new Date().toISOString())
-    results.push({ loopId: loop.id, status, reason: result.reason ?? status })
+    const runId = `loop-${loop.id}-${input.nonce()}`
+    const startedAt = input.now.toISOString()
+    const running = {
+      id: runId,
+      status: "running" as const,
+      target: loop.target,
+      agent: "kody",
+      startedAt,
+    }
+    await input.backend.createAgencyRun(input.tenantId, "loop", loop.id, running, startedAt)
+
+    let exitCode: number
+    let reason: string
+    try {
+      const result = await input.run(loopJob(loop), runId)
+      exitCode = result.exitCode
+      reason = result.reason ?? (exitCode === 0 ? "dispatched" : "target failed")
+    } catch (error) {
+      exitCode = 1
+      reason = error instanceof Error ? error.message : String(error)
+    }
+
+    const finishedAt = new Date().toISOString()
+    const succeeded = exitCode === 0
+    await input.backend.finishAgencyRun(
+      input.tenantId,
+      {
+        ...running,
+        status: succeeded ? "succeeded" : "failed",
+        finishedAt,
+        ...(succeeded ? { output: { summary: reason } } : { error: reason }),
+      },
+      finishedAt,
+    )
+    const status = succeeded ? "dispatched" : "failed"
+    await input.backend.finishLoopDispatch(input.tenantId, idempotencyKey, reservationId, status, finishedAt, runId)
+    results.push({ loopId: loop.id, status, reason })
   }
-  for (const result of results) {
-    process.stdout.write(`→ kody: Loop ${result.loopId} ${result.status}: ${result.reason}\n`)
-  }
-  ctx.data.simpleLoopDispatchResults = results
+  return results
 }
 
 export function selectRunnableLoops(
@@ -75,9 +143,8 @@ export function selectRunnableLoops(
   return loops.filter(
     (loop) =>
       loop.enabled &&
-      loop.trigger.type === "schedule" &&
       (!options.loopId || loop.id === options.loopId) &&
-      (options.force || dueSlot(loop, now) !== null),
+      (options.force || (loop.trigger.type === "schedule" && dueSlot(loop, now) !== null)),
   )
 }
 
