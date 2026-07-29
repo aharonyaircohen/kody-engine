@@ -12,7 +12,10 @@ afterEach(() => {
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true })
 })
 
-function scriptedCapability(script: string): {
+function scriptedCapability(
+  script: string,
+  options: { secrets?: string[]; output?: Record<string, unknown> } = {},
+): {
   cwd: string
   ctx: {
     cwd: string
@@ -32,12 +35,13 @@ function scriptedCapability(script: string): {
     path.join(dir, "contract.json"),
     JSON.stringify({
       execution: "script",
+      ...(options.secrets ? { secrets: options.secrets } : {}),
       input: {
         type: "object",
         properties: { name: { type: "string" } },
         required: ["name"],
       },
-      output: {
+      output: options.output ?? {
         type: "object",
         properties: { greeting: { type: "string" } },
         required: ["greeting"],
@@ -112,5 +116,63 @@ describe("script-backed simple Capability", () => {
       exitCode: 7,
       reason: expect.stringMatching(/exited 7/i),
     })
+  })
+
+  it("passes only explicitly declared Capability secrets to the script", async () => {
+    const priorAllowed = process.env.KODY_TEST_ALLOWED_SECRET
+    const priorDenied = process.env.KODY_TEST_DENIED_SECRET
+    process.env.KODY_TEST_ALLOWED_SECRET = "allowed-value"
+    process.env.KODY_TEST_DENIED_SECRET = "denied-value"
+    try {
+      const { ctx } = scriptedCapability(
+        '#!/bin/sh\nprintf \'{"allowed":"%s","denied":"%s"}\' "${KODY_TEST_ALLOWED_SECRET:-}" "${KODY_TEST_DENIED_SECRET:-}"\n',
+        {
+          secrets: ["KODY_TEST_ALLOWED_SECRET"],
+          output: {
+            type: "object",
+            properties: {
+              allowed: { type: "string" },
+              denied: { type: "string" },
+            },
+            required: ["allowed", "denied"],
+          },
+        },
+      )
+
+      await loadSimpleCapability(ctx as never, {} as never)
+      await runSimpleCapabilityScript(ctx as never, {} as never)
+
+      expect(ctx.data.capabilityScriptOutput).toEqual({
+        allowed: "allowed-value",
+        denied: "",
+      })
+    } finally {
+      if (priorAllowed === undefined) delete process.env.KODY_TEST_ALLOWED_SECRET
+      else process.env.KODY_TEST_ALLOWED_SECRET = priorAllowed
+      if (priorDenied === undefined) delete process.env.KODY_TEST_DENIED_SECRET
+      else process.env.KODY_TEST_DENIED_SECRET = priorDenied
+    }
+  })
+
+  it("preserves a structured Capability result returned by a script", async () => {
+    const structuredResult = {
+      version: 1,
+      status: "fail",
+      summary: "Production deployment failed",
+      facts: {},
+      artifacts: [],
+      missingEvidence: ["productionDeployed"],
+      blockers: ["Production deployment failed"],
+    }
+    const { ctx } = scriptedCapability(`#!/bin/sh\nprintf '%s' '${JSON.stringify(structuredResult)}'\n`, {
+      output: { type: "object" },
+    })
+
+    await loadSimpleCapability(ctx as never, {} as never)
+    await runSimpleCapabilityScript(ctx as never, {} as never)
+    await parseSimpleCapabilityOutput(ctx as never, {} as never, null)
+
+    expect(ctx.data.capabilityResults).toEqual([structuredResult])
+    expect(ctx.output.reason).toBe("Production deployment failed")
   })
 })

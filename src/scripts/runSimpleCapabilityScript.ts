@@ -18,10 +18,12 @@ export const runSimpleCapabilityScript: PreflightScript = async (ctx) => {
   }
 
   const capabilityEnvironment = isStringRecord(ctx.data.capabilityEnvironment) ? ctx.data.capabilityEnvironment : {}
+  const capabilitySecrets = declaredSecrets(ctx.data.capabilitySecretNames, process.env)
   const result = spawnSync("bash", [scriptPath], {
     cwd: ctx.cwd,
     env: {
       ...buildTickChildEnv(process.env, false),
+      ...capabilitySecrets,
       ...capabilityEnvironment,
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -56,6 +58,17 @@ export const runSimpleCapabilityScript: PreflightScript = async (ctx) => {
     ctx.output.exitCode = 64
     ctx.output.reason = "Capability script must return exactly one valid JSON value on stdout"
   }
+}
+
+function declaredSecrets(names: unknown, parent: NodeJS.ProcessEnv): Record<string, string> {
+  if (!Array.isArray(names)) return {}
+  const secrets: Record<string, string> = {}
+  for (const name of names) {
+    if (typeof name !== "string" || !/^[A-Z][A-Z0-9_]*$/.test(name)) continue
+    const value = parent[name]
+    if (value !== undefined) secrets[name] = value
+  }
+  return secrets
 }
 
 function isRegularFile(filePath: string): boolean {

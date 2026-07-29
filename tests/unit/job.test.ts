@@ -1064,6 +1064,49 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it.each([
+    { status: "fail", workflowStatus: "failed", exitCode: 1 },
+    { status: "blocked", workflowStatus: "blocked", exitCode: 64 },
+  ])(
+    "propagates a terminal structured $status result to the workflow boundary",
+    async ({ status, workflowStatus, exitCode }) => {
+      const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-terminal-result-"))
+      try {
+        writeSimpleCapability(cwd, "deploy")
+        writeWorkflowDefinition(cwd, "release", {
+          name: "Release",
+          agent: "kody",
+          steps: [{ id: "deploy", capability: "deploy" }],
+        })
+        runImplementationChain.mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: { status },
+          capabilityResults: [
+            {
+              ...capabilityResult({ productionDeployed: false }),
+              status,
+              summary: "Production deployment failed",
+              blockers: ["Production deployment failed"],
+            },
+          ],
+        })
+
+        const result = await runJob({ workflow: "release", cliArgs: {}, flavor: "instant" }, { cwd })
+
+        expect(result).toMatchObject({
+          exitCode,
+          reason: "Production deployment failed",
+          workflowState: {
+            status: workflowStatus,
+            blocker: "Production deployment failed",
+          },
+        })
+      } finally {
+        fs.rmSync(cwd, { recursive: true, force: true })
+      }
+    },
+  )
+
   it("keeps direct capability text as the request when routing adds a target", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-simple-capability-input-"))
     try {

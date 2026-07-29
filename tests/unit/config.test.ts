@@ -254,6 +254,7 @@ describe("config: loadConfig", () => {
       agent: { model: "m/x" },
       release: {
         releaseBranch: "main",
+        allowAdminMerge: true,
         productionUrl: "https://www.example.com",
         smokeCommand: "pnpm smoke",
       },
@@ -261,6 +262,7 @@ describe("config: loadConfig", () => {
 
     expect(loadConfig(dir).release).toMatchObject({
       releaseBranch: "main",
+      allowAdminMerge: true,
       productionUrl: "https://www.example.com",
       smokeCommand: "pnpm smoke",
     })

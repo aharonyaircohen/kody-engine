@@ -8,6 +8,8 @@ export const CAPABILITY_PROFILE_FILE = CAPABILITY_BODY_FILE
 
 export interface CapabilityContract {
   execution?: "agent" | "script"
+  /** Secret names exposed only to this trusted script process. */
+  secrets?: string[]
   input: Record<string, unknown>
   output: Record<string, unknown>
 }
@@ -187,12 +189,28 @@ function parseCapabilityContract(raw: string): CapabilityContract {
   if (parsed.execution !== undefined && parsed.execution !== "agent" && parsed.execution !== "script") {
     throw new Error('contract.json execution must be "agent" or "script"')
   }
-  const unsupported = Object.keys(parsed).filter((key) => key !== "execution" && key !== "input" && key !== "output")
+  const secrets =
+    parsed.secrets === undefined
+      ? undefined
+      : Array.isArray(parsed.secrets) &&
+          parsed.secrets.every((name) => typeof name === "string" && /^[A-Z][A-Z0-9_]*$/.test(name))
+        ? [...new Set(parsed.secrets as string[])]
+        : null
+  if (secrets === null) {
+    throw new Error("contract.json secrets must contain valid environment variable names")
+  }
+  if (secrets && parsed.execution !== "script") {
+    throw new Error('contract.json secrets are supported only when execution is "script"')
+  }
+  const unsupported = Object.keys(parsed).filter(
+    (key) => key !== "execution" && key !== "secrets" && key !== "input" && key !== "output",
+  )
   if (unsupported.length > 0) {
     throw new Error(`contract.json contains unsupported fields: ${unsupported.join(", ")}`)
   }
   return {
     ...(parsed.execution ? { execution: parsed.execution } : {}),
+    ...(secrets ? { secrets } : {}),
     input: parsed.input,
     output: parsed.output,
   }

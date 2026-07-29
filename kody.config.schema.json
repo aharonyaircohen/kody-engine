@@ -149,6 +149,7 @@
         "e2eCommand": { "type": "string" },
         "draftRelease": { "type": "boolean" },
         "releaseBranch": { "type": "string" },
+        "allowAdminMerge": { "type": "boolean" },
         "timeoutMs": {
           "type": "integer",
           "minimum": 1

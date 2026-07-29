@@ -700,11 +700,7 @@ async function runGraphCapabilityWorkflow(
     }
 
     if (!step.next || step.next.length === 0) {
-      state.status = "done"
-      delete state.currentStepId
-      delete state.blocker
-      await checkpoint?.(state)
-      return withWorkflowBoundaryEval(capability, { ...result, workflowState: state })
+      return completeWorkflowAtTerminal(capability, state, result, checkpoint)
     }
 
     const resultConditionPaths = workflowResultConditionPaths(step.next)
@@ -729,11 +725,7 @@ async function runGraphCapabilityWorkflow(
       state.transitionCounts[key] = (state.transitionCounts[key] ?? 0) + 1
     }
     if (transition.to === "$end") {
-      state.status = "done"
-      delete state.currentStepId
-      delete state.blocker
-      await checkpoint?.(state)
-      return withWorkflowBoundaryEval(capability, { ...result, workflowState: state })
+      return completeWorkflowAtTerminal(capability, state, result, checkpoint)
     }
     state.currentStepId = transition.to
     state.status = "running"
@@ -744,6 +736,31 @@ async function runGraphCapabilityWorkflow(
   state.status = "done"
   await checkpoint?.(state)
   return withWorkflowBoundaryEval(capability, { ...result, workflowState: state })
+}
+
+async function completeWorkflowAtTerminal(
+  capability: CapabilityFolder,
+  state: WorkflowRunState,
+  output: ExecutorOutput,
+  checkpoint?: (state: WorkflowRunState) => Promise<void>,
+): Promise<ExecutorOutput> {
+  const result = output.capabilityResults?.at(-1)
+  if (result?.status === "fail" || result?.status === "blocked") {
+    state.status = result.status === "fail" ? "failed" : "blocked"
+    state.blocker = result.summary
+    await checkpoint?.(state)
+    return withWorkflowBoundaryEval(capability, {
+      ...output,
+      exitCode: result.status === "fail" ? 1 : 64,
+      reason: result.summary,
+      workflowState: state,
+    })
+  }
+  state.status = "done"
+  delete state.currentStepId
+  delete state.blocker
+  await checkpoint?.(state)
+  return withWorkflowBoundaryEval(capability, { ...output, workflowState: state })
 }
 
 function graphWorkflowExecutionKey(

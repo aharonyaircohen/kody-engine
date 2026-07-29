@@ -130,6 +130,11 @@ export interface KodyConfig {
     smokeCommand?: string
     draftRelease?: boolean
     /**
+     * Allows the release promotion Capability to use GitHub's explicit admin
+     * merge for the configured defaultBranch → releaseBranch PR only.
+     */
+    allowAdminMerge?: boolean
+    /**
      * Production target. release-promote opens a PR
      * `git.defaultBranch → releaseBranch` and stops. Unset (or equal to
      * `git.defaultBranch`) → promotion is a no-op success (single-branch repos
@@ -609,6 +614,7 @@ function parseReleaseConfig(raw: unknown): KodyConfig["release"] {
   if (typeof r.productionUrl === "string") out.productionUrl = r.productionUrl
   if (typeof r.smokeCommand === "string") out.smokeCommand = r.smokeCommand
   if (typeof r.draftRelease === "boolean") out.draftRelease = r.draftRelease
+  if (typeof r.allowAdminMerge === "boolean") out.allowAdminMerge = r.allowAdminMerge
   if (typeof r.releaseBranch === "string") out.releaseBranch = r.releaseBranch
   if (typeof r.timeoutMs === "number" && r.timeoutMs > 0) out.timeoutMs = Math.floor(r.timeoutMs)
   return Object.keys(out).length > 0 ? out : undefined

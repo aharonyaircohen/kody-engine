@@ -56,6 +56,7 @@ describe("simple Capability folder", () => {
     const { root, dir } = capability({
       "contract.json": JSON.stringify({
         execution: "script",
+        secrets: ["VERCEL_ACCESS_TOKEN"],
         input: { type: "object" },
         output: { type: "object" },
       }),
@@ -65,6 +66,7 @@ describe("simple Capability folder", () => {
     const loaded = readCapabilityFolder(root, "inspect")
 
     expect(loaded?.contract?.execution).toBe("script")
+    expect(loaded?.contract?.secrets).toEqual(["VERCEL_ACCESS_TOKEN"])
     expect(loaded?.config.execution).toBe("script")
     expect(resolveCapabilityExecution(loaded!, root)).toEqual({
       implementation: "capability-run",
@@ -90,6 +92,17 @@ describe("simple Capability folder", () => {
       }),
     })
     expect(readCapabilityFolder(missingScript.root, "inspect")).toBeNull()
+
+    const invalidSecretName = capability({
+      "contract.json": JSON.stringify({
+        execution: "script",
+        secrets: ["bad-secret"],
+        input: {},
+        output: {},
+      }),
+    })
+    fs.writeFileSync(path.join(invalidSecretName.dir, "tools", "run.sh"), "#!/bin/sh\nprintf '{}'\n")
+    expect(readCapabilityFolder(invalidSecretName.root, "inspect")).toBeNull()
   })
 
   it("rejects runtime files and malformed contracts", () => {

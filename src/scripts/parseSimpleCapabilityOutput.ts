@@ -1,4 +1,5 @@
 import { validateCapabilityContractValue } from "../agency/capability-contract-validation.js"
+import { parseCapabilityResult } from "../capabilityResult.js"
 import type { PostflightScript } from "../implementations/types.js"
 
 export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profile, agentResult) => {
@@ -54,6 +55,12 @@ export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profil
     }
   }
   ctx.data.capabilityOutput = output
+  const structuredResult = parseCapabilityResult(output)
+  if (structuredResult) {
+    ctx.output.reason = structuredResult.summary
+    ctx.data.capabilityResults = [structuredResult]
+    return
+  }
   const result = isObject(output) ? output : {}
   const data = isObject(result.data) ? result.data : isObject(output) ? output : { output }
   const summary = typeof result.summary === "string" ? result.summary : "Capability completed"
