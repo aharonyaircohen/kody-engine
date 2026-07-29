@@ -179,13 +179,18 @@ export async function startLitellmIfNeeded(
   model: ProviderModel,
   projectDir: string,
   url: string = LITELLM_DEFAULT_URL,
+  runtimeEnvironment: Record<string, string> = {},
 ): Promise<LitellmHandle | null> {
   if (!needsLitellmProxy(model)) return null
 
   const cmd = resolveLitellmCommand()
   let activeUrl = url.replace(/\/+$/, "")
   const modelGroups = litellmModelGroups(model)
-  const childEnv = stripBlockingEnv({ ...process.env, ...readDotenvApiKeys(projectDir) })
+  const childEnv = stripBlockingEnv({
+    ...process.env,
+    ...readDotenvApiKeys(projectDir),
+    ...runtimeEnvironment,
+  })
 
   // Mutable handle state. `ensureHealthy` can replace `child` when it respawns
   // a crashed proxy; `kill` and the log-tail dump always act on whatever is

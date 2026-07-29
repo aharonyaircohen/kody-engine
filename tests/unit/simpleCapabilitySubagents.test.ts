@@ -3,13 +3,18 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-const { runAgentSpy } = vi.hoisted(() => ({
+const { runAgentSpy, resolveRuntimeModelEnvironmentSpy, startLitellmIfNeededSpy } = vi.hoisted(() => ({
   runAgentSpy: vi.fn(async (_opts: Record<string, unknown>) => ({
     outcome: "completed" as const,
     outcomeKind: "ok" as const,
     finalText: "{}",
     durationMs: 1,
   })),
+  resolveRuntimeModelEnvironmentSpy: vi.fn(async () => ({
+    environment: { TEST_MODEL_API_KEY: "vault-key" },
+    warnings: [],
+  })),
+  startLitellmIfNeededSpy: vi.fn(async () => null),
 }))
 
 vi.mock("../../src/agent.js", async () => {
@@ -18,7 +23,10 @@ vi.mock("../../src/agent.js", async () => {
 })
 
 vi.mock("../../src/litellm.js", () => ({
-  startLitellmIfNeeded: vi.fn(async () => null),
+  startLitellmIfNeeded: startLitellmIfNeededSpy,
+}))
+vi.mock("../../src/runtimeModelEnvironment.js", () => ({
+  resolveRuntimeModelEnvironment: resolveRuntimeModelEnvironmentSpy,
 }))
 
 import { runImplementation } from "../../src/executor.js"
@@ -30,6 +38,8 @@ const roots: string[] = []
 
 beforeEach(() => {
   runAgentSpy.mockClear()
+  resolveRuntimeModelEnvironmentSpy.mockClear()
+  startLitellmIfNeededSpy.mockClear()
 })
 
 afterEach(() => {
@@ -133,6 +143,25 @@ describe("simple Capability private subagents", () => {
     expect(loadSubagents(profile)).toBeUndefined()
   })
 
+  it("does not request a model credential for a script-backed capability", async () => {
+    const { ctx } = fixture("script")
+
+    const result = await runImplementation("capability-run", {
+      cwd: ctx.cwd,
+      cliArgs: { ...ctx.args, input: "{}" },
+      config: {
+        github: { owner: "trusted", repo: "repo" },
+        git: { defaultBranch: "main" },
+        quality: { typecheck: "", lint: "", testUnit: "", format: "" },
+        agent: { model: "claude/test" },
+      },
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(resolveRuntimeModelEnvironmentSpy).not.toHaveBeenCalled()
+    expect(runAgentSpy).not.toHaveBeenCalled()
+  })
+
   it("passes discovered subagents and the Agent tool to the real Capability execution boundary", async () => {
     const { capabilityDir, ctx } = fixture()
     fs.writeFileSync(
@@ -147,13 +176,21 @@ describe("simple Capability private subagents", () => {
         github: { owner: "", repo: "" },
         git: { defaultBranch: "main" },
         quality: { typecheck: "", lint: "", testUnit: "", format: "" },
-        agent: { model: "claude/test" },
+        agent: { model: "minimax/test" },
       },
     })
 
     expect(result.exitCode).toBe(0)
     expect(runAgentSpy).toHaveBeenCalledOnce()
+    expect(resolveRuntimeModelEnvironmentSpy).toHaveBeenCalledOnce()
+    expect(startLitellmIfNeededSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "minimax", model: "test" }),
+      ctx.cwd,
+      undefined,
+      { TEST_MODEL_API_KEY: "vault-key" },
+    )
     expect(runAgentSpy.mock.calls[0]![0]).toMatchObject({
+      environment: { TEST_MODEL_API_KEY: "vault-key" },
       allowedToolsOverride: expect.arrayContaining(["Agent"]),
       agents: {
         researcher: {

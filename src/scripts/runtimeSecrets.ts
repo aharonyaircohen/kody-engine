@@ -24,8 +24,8 @@ function envSecret(name: string, env: NodeJS.ProcessEnv): RuntimeSecretResult {
 /**
  * Resolve a repo-scoped runtime secret.
  *
- * Order is intentionally vault first, then env fallback for local/dev or older
- * workflows that still expose mirrored Actions secrets.
+ * Order is intentionally vault first, then env fallback for local development
+ * and explicitly configured legacy runtimes.
  */
 export async function resolveRuntimeSecret(
   name: string,

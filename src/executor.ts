@@ -8,24 +8,17 @@
  */
 
 import { spawn } from "node:child_process"
-import {
-  capabilityConfigEnvironment,
-  capabilityInputEnvironment,
-} from "./scripts/capabilityExecutionEnvironment.js"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import {
-  capabilityContractInput,
-  validateCapabilityContractValue,
-} from "./agency/capability-contract-validation.js"
+import { capabilityContractInput, validateCapabilityContractValue } from "./agency/capability-contract-validation.js"
 import type { AgentResult } from "./agent.js"
 import { runAgent } from "./agent.js"
 import { frameAgentIdentity, loadAgentIdentity } from "./agents.js"
 import { parseCapabilityReportsFromText } from "./capabilityReport.js"
 import { type CapabilityResult, parseCapabilityResultsFromText } from "./capabilityResult.js"
 import type { KodyConfig } from "./config.js"
-import { loadConfig, parseProviderModel } from "./config.js"
+import { loadConfig, needsLitellmProxy, parseProviderModel } from "./config.js"
 import { runContainerLoop } from "./container.js"
 import { DISCIPLINE } from "./discipline.js"
 import { emitEvent } from "./events.js"
@@ -41,7 +34,9 @@ import {
   upsertRunIndexRowBestEffortAsync,
 } from "./runIndex.js"
 import { runRuntimeCleanup } from "./runtimeCleanup.js"
+import { resolveRuntimeModelEnvironment } from "./runtimeModelEnvironment.js"
 import { agentRunDir } from "./runtimePaths.js"
+import { capabilityConfigEnvironment, capabilityInputEnvironment } from "./scripts/capabilityExecutionEnvironment.js"
 import { shouldEvaluateAgencyBoundaries } from "./scripts/evaluateAgencyBoundaries.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
 import type { TaskState, TaskTarget } from "./state.js"
@@ -414,6 +409,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
   // set ctx.skipAgent during preflight, so starting provider infrastructure
   // before preflight makes no-agent implementations depend on agent-only setup.
   let litellm: Awaited<ReturnType<typeof startLitellmIfNeeded>> | undefined
+  let runtimeModelEnvironment: Record<string, string> | undefined
 
   const ctx: Context = {
     args,
@@ -540,9 +536,18 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
     const pluginPaths = [...externalPlugins, ...(syntheticPath ? [syntheticPath] : [])]
     const agents = loadSubagents(profile)
 
+    if (runtimeModelEnvironment === undefined) {
+      runtimeModelEnvironment = {}
+      if (needsLitellmProxy(model)) {
+        const resolved = await resolveRuntimeModelEnvironment(model, ctx)
+        runtimeModelEnvironment = resolved.environment
+        for (const warning of resolved.warnings) process.stderr.write(`⚠ ${warning}\n`)
+      }
+    }
+
     if (litellm === undefined) {
       try {
-        litellm = await startLitellmIfNeeded(model, input.cwd)
+        litellm = await startLitellmIfNeeded(model, input.cwd, undefined, runtimeModelEnvironment)
       } catch (err) {
         throw new Error(`litellm startup failed: ${err instanceof Error ? err.message : String(err)}`)
       }
@@ -552,12 +557,14 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       prompt,
       model,
       cwd: input.cwd,
-      environment:
-        ctx.data.capabilityEnvironment &&
+      environment: {
+        ...(ctx.data.capabilityEnvironment &&
         typeof ctx.data.capabilityEnvironment === "object" &&
         !Array.isArray(ctx.data.capabilityEnvironment)
           ? (ctx.data.capabilityEnvironment as Record<string, string>)
-          : undefined,
+          : {}),
+        ...runtimeModelEnvironment,
+      },
       litellmUrl: lm?.url ?? null,
       // On a connection drop mid-run, restart the (possibly crashed) proxy
       // before the agent retries. No-op for direct-Anthropic runs (lm null).
