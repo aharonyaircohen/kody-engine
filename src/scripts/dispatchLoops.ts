@@ -5,7 +5,7 @@ import { runJob } from "../job.js"
 import { type LoopDefinition, listLoopDefinitions } from "../loopDefinitions.js"
 import { createStateBackendFromEnv, type StateBackend } from "../state-backend.js"
 
-interface LoopDispatchResult {
+export interface LoopDispatchResult {
   loopId: string
   status: "skipped" | "dispatched" | "failed"
   reason: string
@@ -51,6 +51,15 @@ export const dispatchLoops: PreflightScript = async (ctx) => {
     process.stdout.write(`→ kody: Loop ${result.loopId} ${result.status}: ${result.reason}\n`)
   }
   ctx.data.loopDispatchResults = results
+  assertLoopDispatchesSucceeded(results)
+}
+
+export function assertLoopDispatchesSucceeded(results: readonly LoopDispatchResult[]): void {
+  const failed = results.filter((result) => result.status === "failed")
+  if (failed.length === 0) return
+  throw new Error(
+    `Loop dispatch failed: ${failed.map((result) => `${result.loopId}: ${result.reason}`).join("; ")}`,
+  )
 }
 
 export async function dispatchLoopsWith(input: {

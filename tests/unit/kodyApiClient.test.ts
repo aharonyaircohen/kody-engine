@@ -1,9 +1,25 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { readRuntimeSecretFromKody, resetKodyApiTokenForTests } from "../../src/kody-api-client.js"
+import {
+  readRuntimeSecretFromKody,
+  resetKodyApiTokenForTests,
+  resolveKodyApiUrl,
+} from "../../src/kody-api-client.js"
 
 afterEach(() => {
   vi.unstubAllGlobals()
   resetKodyApiTokenForTests()
+})
+
+describe("resolveKodyApiUrl", () => {
+  it("uses the Engine-owned production control plane by default", () => {
+    expect(resolveKodyApiUrl({})).toBe("https://kody-dashboard-aguy.vercel.app")
+  })
+
+  it("keeps an explicit deployment override and removes its trailing slash", () => {
+    expect(resolveKodyApiUrl({ KODY_API_URL: "https://control.example.test/" })).toBe(
+      "https://control.example.test",
+    )
+  })
 })
 
 describe("Kody API client", () => {

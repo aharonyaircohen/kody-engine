@@ -1,7 +1,7 @@
 import { type FunctionReference, getFunctionName } from "convex/server"
 import type { StateBackendClient } from "./state-backend.js"
 
-const DEFAULT_KODY_API_URL = "https://dashboard-six-alpha-46.vercel.app"
+const DEFAULT_KODY_API_URL = "https://kody-dashboard-aguy.vercel.app"
 const OIDC_AUDIENCE = "kody-api"
 
 interface CachedToken {
@@ -11,7 +11,7 @@ interface CachedToken {
 
 let cachedToken: CachedToken | null = null
 
-function apiUrl(env: NodeJS.ProcessEnv): string {
+export function resolveKodyApiUrl(env: NodeJS.ProcessEnv): string {
   return (
     env.KODY_API_URL?.trim() ||
     env.KODY_DASHBOARD_URL?.trim() ||
@@ -68,7 +68,7 @@ async function callKodyApi(
 ): Promise<unknown> {
   const call = async (forceToken: boolean) => {
     const token = await githubOidcToken(env, forceToken)
-    return fetch(`${apiUrl(env)}/api/kody/engine/backend`, {
+    return fetch(`${resolveKodyApiUrl(env)}/api/kody/engine/backend`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -107,7 +107,7 @@ export async function readRuntimeSecretFromKody(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<string | null> {
   const token = await githubOidcToken(env)
-  const response = await fetch(`${apiUrl(env)}/api/kody/engine/secret`, {
+  const response = await fetch(`${resolveKodyApiUrl(env)}/api/kody/engine/secret`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ name }),
@@ -131,7 +131,7 @@ export interface KodyPreviewContext {
 
 export async function readPreviewContextFromKody(env: NodeJS.ProcessEnv = process.env): Promise<KodyPreviewContext> {
   const token = await githubOidcToken(env)
-  const response = await fetch(`${apiUrl(env)}/api/kody/engine/preview-context`, {
+  const response = await fetch(`${resolveKodyApiUrl(env)}/api/kody/engine/preview-context`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(30_000),

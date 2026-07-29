@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest"
 import type { LoopDefinition } from "../../src/loopDefinitions.js"
-import { dispatchLoopsWith, dueSlot, loopDispatchSlot, selectRunnableLoops } from "../../src/scripts/dispatchLoops.js"
+import {
+  assertLoopDispatchesSucceeded,
+  dispatchLoopsWith,
+  dueSlot,
+  loopDispatchSlot,
+  selectRunnableLoops,
+} from "../../src/scripts/dispatchLoops.js"
 
 const loop: LoopDefinition = {
   id: "daily-check",
@@ -177,5 +183,24 @@ describe("dispatchLoopsWith", () => {
     expect(run).not.toHaveBeenCalled()
     expect(backend.createAgencyRun).not.toHaveBeenCalled()
     expect(backend.finishAgencyRun).not.toHaveBeenCalled()
+  })
+})
+
+describe("assertLoopDispatchesSucceeded", () => {
+  it("fails the outer CI run when any Loop target failed", () => {
+    expect(() =>
+      assertLoopDispatchesSucceeded([
+        { loopId: "daily-check", status: "failed", reason: "target missing" },
+      ]),
+    ).toThrow("Loop dispatch failed: daily-check: target missing")
+  })
+
+  it("allows dispatched and idempotently skipped Loops", () => {
+    expect(() =>
+      assertLoopDispatchesSucceeded([
+        { loopId: "daily-check", status: "dispatched", reason: "completed" },
+        { loopId: "other", status: "skipped", reason: "duplicate" },
+      ]),
+    ).not.toThrow()
   })
 })
