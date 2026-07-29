@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { createStateBackendFromEnv, type DefinitionDocument, hasStateBackendConfig } from "./state-backend.js"
+import {
+  createStateBackendFromEnv,
+  type DefinitionDocument,
+  hasStateBackendConfig,
+  type WorkflowDocument,
+} from "./state-backend.js"
+import { normalizeWorkflowDefinition, workflowDefinitionPath } from "./workflowDefinitions.js"
 
 export interface DefinitionBundle {
   schemaVersion: 1
@@ -12,6 +18,7 @@ export type DefinitionKind = "agent" | "capability" | "goal" | "implementation" 
 
 export interface DefinitionSource {
   listDefinitions(tenantId: string, kind: DefinitionKind): Promise<DefinitionDocument[]>
+  listWorkflows?(tenantId: string): Promise<WorkflowDocument[]>
 }
 
 export interface HydratedDefinitions {
@@ -95,6 +102,17 @@ function writeDefinition(root: string, kind: DefinitionKind, definition: Definit
   writeBundle(path.join(root, "capabilities", definition.slug), bundle)
 }
 
+function writeWorkflow(root: string, document: WorkflowDocument): string {
+  const workflow = normalizeWorkflowDefinition(document.definition)
+  if (!workflow) throw new Error(`invalid workflow definition: ${document.workflowId}`)
+  const contents = `${JSON.stringify(workflow, null, 2)}\n`
+  const bundle = { schemaVersion: 1 as const, files: { "workflow.json": contents } }
+  const target = path.join(root, workflowDefinitionPath(document.workflowId))
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+  fs.writeFileSync(target, contents, "utf8")
+  return definitionVersion(bundle)
+}
+
 function preserveRepositoryDefinitions(root: string, staging: string): void {
   for (const namespace of REPOSITORY_OWNED_NAMESPACES) {
     const source = path.join(root, namespace)
@@ -116,14 +134,16 @@ export async function hydrateDefinitions(options: {
   fs.mkdirSync(path.join(staging, "goals"), { recursive: true })
   fs.mkdirSync(path.join(staging, "implementations"), { recursive: true })
   fs.mkdirSync(path.join(staging, "shared"), { recursive: true })
+  fs.mkdirSync(path.join(staging, "workflows"), { recursive: true })
 
   try {
-    const [capabilities, agents, goals, implementations, assets] = await Promise.all([
+    const [capabilities, agents, goals, implementations, assets, workflows] = await Promise.all([
       options.backend.listDefinitions(options.tenantId, "capability"),
       options.backend.listDefinitions(options.tenantId, "agent"),
       options.backend.listDefinitions(options.tenantId, "goal"),
       options.backend.listDefinitions(options.tenantId, "implementation"),
       options.backend.listDefinitions(options.tenantId, "asset"),
+      options.backend.listWorkflows?.(options.tenantId) ?? Promise.resolve([]),
     ])
     const versions: Record<string, string> = {}
     for (const definition of capabilities) {
@@ -145,6 +165,9 @@ export async function hydrateDefinitions(options: {
     for (const definition of assets) {
       writeDefinition(staging, "asset", definition)
       versions[`asset:${definition.slug}`] = definition.version
+    }
+    for (const workflow of workflows) {
+      versions[`workflow:${workflow.workflowId}`] = writeWorkflow(staging, workflow)
     }
     preserveRepositoryDefinitions(root, staging)
     const manifest = {

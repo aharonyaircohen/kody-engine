@@ -142,6 +142,37 @@ describe("definition hydration", () => {
     expect(selectRunnableLoops(loops, new Date("2026-07-29T08:00:00.000Z"), { force: false })).toEqual(loops)
   })
 
+  it("materializes backend workflows as runnable definitions", async () => {
+    const workflow = {
+      name: "Documentation Agency",
+      agent: "documentation-lead",
+      capabilities: ["documentation-draft"],
+      startAt: "draft",
+      steps: [{ id: "draft", capability: "documentation-draft" }],
+    }
+
+    const result = await hydrateDefinitions({
+      cwd,
+      tenantId: "acme/widgets",
+      backend: {
+        listDefinitions: vi.fn().mockResolvedValue([]),
+        listWorkflows: vi.fn().mockResolvedValue([
+          {
+            workflowId: "documentation-agency",
+            definition: workflow,
+            source: "store",
+            updatedAt: "2026-07-29T00:00:00.000Z",
+          },
+        ]),
+      },
+    })
+
+    expect(
+      JSON.parse(fs.readFileSync(path.join(result.root, "workflows/documentation-agency/workflow.json"), "utf8")),
+    ).toEqual(workflow)
+    expect(result.versions["workflow:documentation-agency"]).toMatch(/^sha256:/)
+  })
+
   it("rejects a hash mismatch and unsafe bundle path", async () => {
     const validBundle = {
       schemaVersion: 1 as const,

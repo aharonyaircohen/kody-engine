@@ -35,6 +35,7 @@ describe("repo-scoped definition hydration", () => {
   it("hydrates definitions inside the request repository workspace", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-brain-definitions-"))
     const listDefinitions = vi.fn().mockResolvedValue([])
+    const listWorkflows = vi.fn().mockResolvedValue([])
 
     try {
       await hydrateBrainDefinitions({
@@ -44,10 +45,11 @@ describe("repo-scoped definition hydration", () => {
           CONVEX_URL: "https://example.convex.cloud",
           KODY_SERVICE_KEY: "service-key",
         },
-        backend: { listDefinitions },
+        backend: { listDefinitions, listWorkflows },
       })
 
       expect(listDefinitions).toHaveBeenCalledTimes(5)
+      expect(listWorkflows).toHaveBeenCalledWith("acme/widgets")
       expect(
         JSON.parse(fs.readFileSync(path.join(cwd, ".kody-engine/definitions/manifest.json"), "utf8")),
       ).toMatchObject({ tenantId: "acme/widgets" })
