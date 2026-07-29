@@ -40,6 +40,7 @@ import {
   statusFromExitCode,
   upsertRunIndexRowBestEffortAsync,
 } from "./runIndex.js"
+import { resolveRuntimeModelEnvironment } from "./runtimeModelEnvironment.js"
 import { runRuntimeCleanup } from "./runtimeCleanup.js"
 import { agentRunDir } from "./runtimePaths.js"
 import { shouldEvaluateAgencyBoundaries } from "./scripts/evaluateAgencyBoundaries.js"
@@ -333,7 +334,11 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       validateCapabilityContractValue(
         "input",
         profile.canonicalContract.inputSchema,
-        capabilityContractInput(profile.inputs, args),
+        capabilityContractInput(
+          profile.inputs,
+          args,
+          profile.canonicalContract.capabilityId,
+        ),
       )
     }
   } catch (err) {
@@ -405,6 +410,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
   // set ctx.skipAgent during preflight, so starting provider infrastructure
   // before preflight makes no-agent implementations depend on agent-only setup.
   let litellm: Awaited<ReturnType<typeof startLitellmIfNeeded>> | undefined
+  let modelEnvironment: Record<string, string> | undefined
 
   const ctx: Context = {
     args,
@@ -531,9 +537,22 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
     const pluginPaths = [...externalPlugins, ...(syntheticPath ? [syntheticPath] : [])]
     const agents = loadSubagents(profile)
 
+    if (modelEnvironment === undefined) {
+      const resolved = await resolveRuntimeModelEnvironment(model, ctx)
+      modelEnvironment = resolved.environment
+      for (const warning of resolved.warnings) {
+        process.stderr.write(`→ kody: WARNING ${warning}\n`)
+      }
+    }
+
     if (litellm === undefined) {
       try {
-        litellm = await startLitellmIfNeeded(model, input.cwd)
+        litellm = await startLitellmIfNeeded(
+          model,
+          input.cwd,
+          undefined,
+          modelEnvironment,
+        )
       } catch (err) {
         throw new Error(`litellm startup failed: ${err instanceof Error ? err.message : String(err)}`)
       }
@@ -544,11 +563,14 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       model,
       cwd: input.cwd,
       environment:
-        ctx.data.capabilityEnvironment &&
-        typeof ctx.data.capabilityEnvironment === "object" &&
-        !Array.isArray(ctx.data.capabilityEnvironment)
-          ? (ctx.data.capabilityEnvironment as Record<string, string>)
-          : undefined,
+        {
+          ...(ctx.data.capabilityEnvironment &&
+          typeof ctx.data.capabilityEnvironment === "object" &&
+          !Array.isArray(ctx.data.capabilityEnvironment)
+            ? (ctx.data.capabilityEnvironment as Record<string, string>)
+            : {}),
+          ...modelEnvironment,
+        },
       litellmUrl: lm?.url ?? null,
       // On a connection drop mid-run, restart the (possibly crashed) proxy
       // before the agent retries. No-op for direct-Anthropic runs (lm null).

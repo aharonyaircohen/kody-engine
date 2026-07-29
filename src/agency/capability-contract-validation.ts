@@ -43,13 +43,15 @@ export function validateCapabilityContractValue(
 export function capabilityContractInput(
   inputs: readonly { name: string }[],
   args: Record<string, unknown>,
+  capabilityId?: string,
 ): unknown {
   const isGenericRunnerInput =
     inputs.some((input) => input.name === "input") &&
     Object.hasOwn(args, "input")
   if (!isGenericRunnerInput) {
     const isParameterlessGenericRunner =
-      inputs.some((input) => input.name === "capability") &&
+      (inputs.some((input) => input.name === "capability") ||
+        args.capability === capabilityId) &&
       Object.hasOwn(args, "capability")
     return isParameterlessGenericRunner ? {} : args
   }

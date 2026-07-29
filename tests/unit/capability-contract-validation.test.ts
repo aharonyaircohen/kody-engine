@@ -59,8 +59,9 @@ describe("Capability contract validation", () => {
   it("uses empty business input for a parameterless generic runner invocation", () => {
     expect(
       capabilityContractInput(
-        [{ name: "capability" }, { name: "input" }],
+        [{ name: "input" }],
         { capability: "inspect" },
+        "inspect",
       ),
     ).toEqual({})
   })
