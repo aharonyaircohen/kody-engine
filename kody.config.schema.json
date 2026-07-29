@@ -140,6 +140,21 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "version": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["readCommand", "writeCommand", "files"],
+          "properties": {
+            "readCommand": { "type": "string", "minLength": 1 },
+            "writeCommand": { "type": "string", "minLength": 1 },
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
         "versionFiles": {
           "type": "array",
           "items": { "type": "string" }
@@ -147,10 +162,33 @@
         "publishCommand": { "type": "string" },
         "notifyCommand": { "type": "string" },
         "e2eCommand": { "type": "string" },
+        "productionUrl": { "type": "string" },
+        "smokeCommand": { "type": "string" },
+        "productionDeployRequired": { "type": "boolean" },
         "draftRelease": { "type": "boolean" },
         "releaseBranch": { "type": "string" },
         "allowAdminMerge": { "type": "boolean" },
         "validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["workflow"],
+          "properties": {
+            "workflow": {
+              "type": "string",
+              "minLength": 1
+            },
+            "inputs": {
+              "type": "object",
+              "propertyNames": {
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "additionalProperties": {
+                "type": ["string", "number", "boolean"]
+              }
+            }
+          }
+        },
+        "deployment": {
           "type": "object",
           "additionalProperties": false,
           "required": ["workflow"],

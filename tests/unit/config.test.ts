@@ -257,10 +257,21 @@ describe("config: loadConfig", () => {
         allowAdminMerge: true,
         productionUrl: "https://www.example.com",
         smokeCommand: "pnpm smoke",
+        version: {
+          readCommand: "cat VERSION",
+          writeCommand: "printf '%s\\n' \"$KODY_RELEASE_VERSION\" > VERSION",
+          files: ["VERSION"],
+        },
         validation: {
           workflow: "ci.yml",
           inputs: {
             release_gate: true,
+          },
+        },
+        deployment: {
+          workflow: "deploy.yml",
+          inputs: {
+            environment: "production",
           },
         },
       },
@@ -271,13 +282,57 @@ describe("config: loadConfig", () => {
       allowAdminMerge: true,
       productionUrl: "https://www.example.com",
       smokeCommand: "pnpm smoke",
+      version: {
+        readCommand: "cat VERSION",
+        writeCommand: "printf '%s\\n' \"$KODY_RELEASE_VERSION\" > VERSION",
+        files: ["VERSION"],
+      },
       validation: {
         workflow: "ci.yml",
         inputs: {
           release_gate: true,
         },
       },
+      deployment: {
+        workflow: "deploy.yml",
+        inputs: {
+          environment: "production",
+        },
+      },
     })
+  })
+
+  it("rejects incomplete repository-owned release adapters", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "m/x" },
+      release: {
+        version: {
+          readCommand: "cat VERSION",
+          files: ["VERSION"],
+        },
+      },
+    })
+
+    expect(() => loadConfig(dir)).toThrow(
+      "release.version requires readCommand, writeCommand, and files",
+    )
+  })
+
+  it("rejects a deployment request without a workflow", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "m/x" },
+      release: {
+        deployment: {},
+      },
+    })
+
+    expect(() => loadConfig(dir)).toThrow(
+      "release.deployment.workflow is required",
+    )
   })
 
   it("rejects invalid scheduled goal intervals", () => {

@@ -122,6 +122,16 @@ export interface KodyConfig {
     labelMap?: Record<string, string>
   }
   release?: {
+    /**
+     * Repository-owned version adapter. Commands run in the checked-out
+     * consumer repository; the Store release capability owns orchestration.
+     * Unset preserves the package.json behavior for existing consumers.
+     */
+    version?: {
+      readCommand: string
+      writeCommand: string
+      files: string[]
+    }
     versionFiles?: string[]
     publishCommand?: string
     notifyCommand?: string
@@ -142,12 +152,21 @@ export interface KodyConfig {
      */
     releaseBranch?: string
     timeoutMs?: number
+    productionDeployRequired?: boolean
     /**
      * Explicit repository validation to request after release preparation.
      * This avoids relying on workflow-generated pushes to recursively trigger
      * another GitHub Actions workflow.
      */
     validation?: {
+      workflow: string
+      inputs?: Record<string, string | number | boolean>
+    }
+    /**
+     * Provider-neutral production deployment workflow owned by the consumer.
+     * The shared release bundle dispatches and verifies the exact run.
+     */
+    deployment?: {
       workflow: string
       inputs?: Record<string, string | number | boolean>
     }
@@ -616,6 +635,24 @@ function parseReleaseConfig(raw: unknown): KodyConfig["release"] {
   if (!raw || typeof raw !== "object") return undefined
   const r = raw as Record<string, unknown>
   const out: NonNullable<KodyConfig["release"]> = {}
+  if (r.version !== undefined) {
+    const version = recordValue(r.version)
+    const readCommand =
+      typeof version?.readCommand === "string" ? version.readCommand.trim() : ""
+    const writeCommand =
+      typeof version?.writeCommand === "string" ? version.writeCommand.trim() : ""
+    const files = Array.isArray(version?.files)
+      ? version.files.filter(
+          (file): file is string => typeof file === "string" && file.trim().length > 0,
+        ).map((file) => file.trim())
+      : []
+    if (!readCommand || !writeCommand || files.length === 0) {
+      throw new Error(
+        "kody.config.json: release.version requires readCommand, writeCommand, and files",
+      )
+    }
+    out.version = { readCommand, writeCommand, files: [...new Set(files)] }
+  }
   if (Array.isArray(r.versionFiles)) out.versionFiles = r.versionFiles.filter((f): f is string => typeof f === "string")
   if (typeof r.publishCommand === "string") out.publishCommand = r.publishCommand
   if (typeof r.notifyCommand === "string") out.notifyCommand = r.notifyCommand
@@ -626,34 +663,49 @@ function parseReleaseConfig(raw: unknown): KodyConfig["release"] {
   if (typeof r.allowAdminMerge === "boolean") out.allowAdminMerge = r.allowAdminMerge
   if (typeof r.releaseBranch === "string") out.releaseBranch = r.releaseBranch
   if (typeof r.timeoutMs === "number" && r.timeoutMs > 0) out.timeoutMs = Math.floor(r.timeoutMs)
-  if (r.validation && typeof r.validation === "object") {
-    const validation = r.validation as Record<string, unknown>
-    const workflow =
-      typeof validation.workflow === "string"
-        ? validation.workflow.trim()
-        : ""
-    if (workflow) {
-      const inputs =
-        validation.inputs && typeof validation.inputs === "object"
-          ? Object.fromEntries(
-              Object.entries(
-                validation.inputs as Record<string, unknown>,
-              ).filter(
-                (entry): entry is [string, string | number | boolean] =>
-                  /^[a-z][a-z0-9_]*$/.test(entry[0]) &&
-                  (typeof entry[1] === "string" ||
-                    typeof entry[1] === "number" ||
-                    typeof entry[1] === "boolean"),
-              ),
-            )
-          : undefined
-      out.validation = {
-        workflow,
-        ...(inputs && Object.keys(inputs).length > 0 ? { inputs } : {}),
-      }
-    }
-  }
+  if (typeof r.productionDeployRequired === "boolean")
+    out.productionDeployRequired = r.productionDeployRequired
+  out.validation = parseReleaseWorkflowRequest(r.validation, "validation")
+  out.deployment = parseReleaseWorkflowRequest(
+    r.deployment,
+    "deployment",
+    true,
+  )
   return Object.keys(out).length > 0 ? out : undefined
+}
+
+function parseReleaseWorkflowRequest(
+  raw: unknown,
+  field: "validation" | "deployment",
+  requiredWhenConfigured = false,
+): { workflow: string; inputs?: Record<string, string | number | boolean> } | undefined {
+  if (raw === undefined) return undefined
+  const request = recordValue(raw)
+  const workflow =
+    typeof request?.workflow === "string" ? request.workflow.trim() : ""
+  if (!workflow) {
+    if (requiredWhenConfigured) {
+      throw new Error(`kody.config.json: release.${field}.workflow is required`)
+    }
+    return undefined
+  }
+
+  const rawInputs = recordValue(request?.inputs)
+  const inputs = rawInputs
+    ? Object.fromEntries(
+        Object.entries(rawInputs).filter(
+          (entry): entry is [string, string | number | boolean] =>
+            /^[a-z][a-z0-9_]*$/.test(entry[0]) &&
+            (typeof entry[1] === "string" ||
+              typeof entry[1] === "number" ||
+              typeof entry[1] === "boolean"),
+        ),
+      )
+    : undefined
+  return {
+    workflow,
+    ...(inputs && Object.keys(inputs).length > 0 ? { inputs } : {}),
+  }
 }
 
 function parseIssueContext(raw: unknown): KodyConfig["issueContext"] {
