@@ -147,7 +147,7 @@ describe("kody-cli manual goal dispatch", () => {
       target: { type: "workflow", id: "pilot-flow" },
       intent: "run",
       source: "dashboard",
-      input: { runId: "pilot-run-1" },
+      input: { runId: "pilot-run-1", issue: 3935 },
     })
     mocks.readWorkflowDefinition.mockReturnValue({
       version: 1,
@@ -161,7 +161,7 @@ describe("kody-cli manual goal dispatch", () => {
     expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
       workflow: "pilot-flow",
       workflowRunId: "pilot-run-1",
-      cliArgs: {},
+      cliArgs: { issue: 3935 },
       flavor: "instant",
       force: true,
     })

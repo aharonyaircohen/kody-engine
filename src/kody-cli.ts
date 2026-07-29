@@ -178,7 +178,13 @@ function routeRunRequest(request: RunRequest): RunRequestRoute {
     }
     const requestedRunId = typeof request.input?.runId === "string" ? request.input.runId : request.requestId
     const workflowRunId = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(requestedRunId) ? requestedRunId : undefined
-    return { kind: "action", action: target.id, cliArgs: {}, ...(workflowRunId ? { workflowRunId } : {}) }
+    const { runId: _runId, ...workflowInput } = objectValue(request.input) ?? {}
+    return {
+      kind: "action",
+      action: target.id,
+      cliArgs: workflowInput,
+      ...(workflowRunId ? { workflowRunId } : {}),
+    }
   }
 
   return { kind: "error", error: "unsupported run request target" }
