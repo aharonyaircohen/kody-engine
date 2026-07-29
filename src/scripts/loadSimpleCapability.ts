@@ -19,7 +19,11 @@ export const loadSimpleCapability: PreflightScript = async (ctx, profile) => {
   const skillRoot = path.join(capability.dir, "skills")
   const toolFiles = listFiles(toolRoot)
   const skillFiles = listFiles(skillRoot)
-  const input = parseInput(ctx.args.input)
+  const parsedInput = parseInput(ctx.args.input)
+  const input =
+    parsedInput === undefined && capability.config.inputSchema?.type === "object"
+      ? {}
+      : parsedInput
   if (capability.config.inputSchema) {
     validateCapabilityContractValue("input", capability.config.inputSchema, input)
   }

@@ -212,6 +212,27 @@ describe("simple Capability folder", () => {
     expect(prompt).toContain('"verdict"')
   })
 
+  it("defaults omitted input to an empty object for an object contract", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-runtime-"))
+    roots.push(cwd)
+    const dir = path.join(cwd, ".kody-engine", "definitions", "capabilities", "inspect")
+    fs.mkdirSync(path.join(dir, "tools"), { recursive: true })
+    fs.writeFileSync(path.join(dir, "instructions.md"), "Inspect the repository.\n")
+    fs.writeFileSync(
+      path.join(dir, "contract.json"),
+      JSON.stringify({ input: { type: "object", additionalProperties: false }, output: {} }),
+    )
+
+    const ctx = {
+      cwd,
+      args: { capability: "inspect" },
+      data: {},
+    } as never
+    await loadSimpleCapability(ctx, {} as never)
+
+    expect((ctx as { data: { capabilityInput: unknown } }).data.capabilityInput).toEqual({})
+  })
+
   it("rejects input that violates the capability contract before execution", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-runtime-"))
     roots.push(cwd)
