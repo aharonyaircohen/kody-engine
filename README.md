@@ -107,7 +107,11 @@ fans out scheduled capabilities at runtime, so capability schedules never
 generate additional GitHub workflow files. Idempotent — pass `--force` to
 overwrite.
 
-Required repo secrets: at least one model provider key (e.g. `MINIMAX_API_KEY`, `ANTHROPIC_API_KEY`). Recommended: `KODY_TOKEN` PAT so kody's commits trigger downstream CI and can modify `.github/workflows/*`.
+Store model provider keys (for example `MINIMAX_API_KEY`) in the connected
+repository's Kody vault. GitHub Actions uses OIDC to request only the selected
+model key at runtime; user secrets are not copied into Actions. `KODY_TOKEN`
+remains an optional GitHub authentication fallback when Kody must trigger
+downstream workflows or modify `.github/workflows/*`.
 
 The consumer workflow listens on `issue_comment` for `@kody ...` dispatch and `workflow_dispatch` for manual runs, chat mode, and scheduled wakeups.
 
