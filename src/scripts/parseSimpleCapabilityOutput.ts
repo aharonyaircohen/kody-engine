@@ -1,11 +1,17 @@
+import * as fs from "node:fs"
 import { validateCapabilityContractValue } from "../agency/capability-contract-validation.js"
 import { parseCapabilityResult } from "../capabilityResult.js"
 import type { PostflightScript } from "../implementations/types.js"
 
 export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profile, agentResult) => {
-  const output = Object.hasOwn(ctx.data, "capabilityScriptOutput")
-    ? ctx.data.capabilityScriptOutput
-    : parseOutput(agentResult?.finalText)
+  const outputPath =
+    typeof ctx.data.capabilityOutputPath === "string" ? ctx.data.capabilityOutputPath : undefined
+  const fileOutput = readOutputFile(outputPath)
+  const output = fileOutput.found
+    ? fileOutput.value
+    : Object.hasOwn(ctx.data, "capabilityScriptOutput")
+      ? ctx.data.capabilityScriptOutput
+      : parseOutput(agentResult?.finalText)
   if (output === undefined) {
     const reason =
       agentResult?.outcomeKind === "out_of_turns"
@@ -90,6 +96,15 @@ export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profil
       blockers: [],
     },
   ]
+}
+
+function readOutputFile(outputPath: string | undefined): { found: boolean; value?: unknown } {
+  if (!outputPath || !fs.existsSync(outputPath)) return { found: false }
+  try {
+    return { found: true, value: JSON.parse(fs.readFileSync(outputPath, "utf-8")) }
+  } finally {
+    fs.rmSync(outputPath, { force: true })
+  }
 }
 
 function parseOutput(text: string | undefined): unknown | undefined {

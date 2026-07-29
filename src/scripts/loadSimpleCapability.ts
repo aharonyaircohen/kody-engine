@@ -1,5 +1,7 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
+import * as os from "node:os"
+import { randomUUID } from "node:crypto"
 import { validateCapabilityContractValue } from "../agency/capability-contract-validation.js"
 import { readCapabilityFolder } from "../capabilityFolders.js"
 import { capabilitiesRoot } from "../definition-paths.js"
@@ -41,9 +43,15 @@ export const loadSimpleCapability: PreflightScript = async (ctx, profile) => {
   if (capability.config.outputSchema) {
     ctx.data.capabilityOutputSchema = capability.config.outputSchema
   }
+  const outputPath =
+    ctx.data.capabilityExecution === "agent" && capability.config.outputSchema
+      ? path.join(os.tmpdir(), `kody-capability-output-${randomUUID()}.json`)
+      : undefined
+  if (outputPath) ctx.data.capabilityOutputPath = outputPath
   ctx.data.capabilityEnvironment = {
     ...capabilityInputEnvironment(input),
     ...capabilityConfigEnvironment(ctx.config),
+    ...(outputPath ? { KODY_CAPABILITY_OUTPUT: outputPath } : {}),
   }
   ctx.data.prompt = [
     capability.rawBody.trim(),
@@ -86,6 +94,14 @@ export const loadSimpleCapability: PreflightScript = async (ctx, profile) => {
           "```json",
           JSON.stringify(capability.config.outputSchema, null, 2),
           "```",
+          ...(outputPath
+            ? [
+                "",
+                "Write the final JSON value to this file before your final response:",
+                outputPath,
+                "The Engine reads this file as the authoritative result. Do not write markdown to it.",
+              ]
+            : []),
         ]
       : ["Return one JSON value."]),
   ].join("\n")

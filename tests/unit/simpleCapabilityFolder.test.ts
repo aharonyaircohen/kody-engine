@@ -157,6 +157,40 @@ describe("simple Capability folder", () => {
     })
   })
 
+  it("gives contracted agent output a dedicated machine-readable handoff file", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-runtime-"))
+    roots.push(cwd)
+    const root = path.join(cwd, ".kody-engine", "definitions", "capabilities")
+    const dir = path.join(root, "inspect")
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, "instructions.md"), "Inspect the repository.\n")
+    fs.writeFileSync(
+      path.join(dir, "contract.json"),
+      JSON.stringify({
+        execution: "agent",
+        input: { type: "object" },
+        output: {
+          type: "object",
+          properties: { verdict: { type: "string" } },
+          required: ["verdict"],
+        },
+      }),
+    )
+
+    const ctx = {
+      cwd,
+      args: { capability: "inspect" },
+      data: {},
+    } as never
+    await loadSimpleCapability(ctx, {} as never)
+
+    const data = (ctx as { data: Record<string, unknown> }).data
+    const outputPath = String(data.capabilityOutputPath)
+    expect(outputPath).toContain("kody-capability-output-")
+    expect(String(data.prompt)).toContain(outputPath)
+    expect(String(data.prompt)).toContain("Write the final JSON value to this file")
+  })
+
   it("does not mix delivery policy into capability loading", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-runtime-"))
     roots.push(cwd)

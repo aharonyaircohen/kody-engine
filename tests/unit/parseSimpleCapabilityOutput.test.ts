@@ -1,3 +1,6 @@
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
 import { describe, expect, it } from "vitest"
 import { parseSimpleCapabilityOutput } from "../../src/scripts/parseSimpleCapabilityOutput.js"
 
@@ -153,6 +156,33 @@ describe("parseSimpleCapabilityOutput", () => {
 
     expect(ctx.output.exitCode).toBeUndefined()
     expect(ctx.data.capabilityOutput).toEqual({ verdict: "pass" })
+  })
+
+  it("prefers the dedicated handoff file over a prose final response", async () => {
+    const outputPath = path.join(os.tmpdir(), `capability-output-${crypto.randomUUID()}.json`)
+    fs.writeFileSync(outputPath, JSON.stringify({ verdict: "pass" }))
+    const ctx = {
+      data: {
+        capabilityOutputPath: outputPath,
+        capabilityOutputSchema: {
+          type: "object",
+          properties: { verdict: { enum: ["pass", "fix"] } },
+          required: ["verdict"],
+        },
+      },
+      output: {},
+    } as unknown as Parameters<typeof parseSimpleCapabilityOutput>[0]
+
+    await parseSimpleCapabilityOutput(
+      ctx,
+      {} as Parameters<typeof parseSimpleCapabilityOutput>[1],
+      {
+        finalText: "The capability completed successfully.",
+      } as Parameters<typeof parseSimpleCapabilityOutput>[2],
+    )
+
+    expect(ctx.data.capabilityOutput).toEqual({ verdict: "pass" })
+    expect(fs.existsSync(outputPath)).toBe(false)
   })
 
   it("blocks output that violates the capability contract", async () => {
