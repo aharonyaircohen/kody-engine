@@ -38,6 +38,10 @@ on:
         description: "Optional base branch"
         type: string
         default: ""
+      runRequest:
+        description: "Canonical Kody execution request JSON"
+        type: string
+        default: ""
   issue_comment:
     types: [created]
   pull_request:
@@ -76,6 +80,7 @@ jobs:
           INIT_MESSAGE: ${{ inputs.message }}
           MODEL: ${{ inputs.model }}
           DASHBOARD_URL: ${{ inputs.dashboardUrl }}
+          KODY_RUN_REQUEST_JSON: ${{ inputs.runRequest }}
         working-directory: ${{ github.workspace }}
         run: |
           npx -y -p @kody-ade/kody-engine@latest kody-engine ci --cwd "$GITHUB_WORKSPACE"
