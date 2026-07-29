@@ -36,8 +36,8 @@ export function capabilityContractInput(
   args: Record<string, unknown>,
 ): unknown {
   const isGenericRunnerInput =
-    inputs.some((input) => input.name === "capability") &&
-    inputs.some((input) => input.name === "input")
+    inputs.some((input) => input.name === "input") &&
+    (inputs.length === 1 || inputs.some((input) => input.name === "capability"))
   if (!isGenericRunnerInput) return args
 
   const value = args.input

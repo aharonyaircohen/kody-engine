@@ -38,6 +38,15 @@ describe("Capability contract validation", () => {
     ).toEqual({ issue: 42 })
   })
 
+  it("unwraps the single generic input used by hydrated Store capabilities", () => {
+    expect(
+      capabilityContractInput(
+        [{ name: "input" }],
+        { input: '{"issue":42}' },
+      ),
+    ).toEqual({ issue: 42 })
+  })
+
   it("keeps ordinary named capability inputs unchanged", () => {
     const args = { issue: 42 }
     expect(
