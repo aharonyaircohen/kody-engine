@@ -3,7 +3,7 @@ import {
   readRuntimeSecretFromKody,
   resetKodyApiTokenForTests,
   resolveKodyApiUrl,
-  writeRuntimeSecretToKody,
+  writeRuntimeSecretsToKody,
 } from "../../src/kody-api-client.js"
 
 afterEach(() => {
@@ -48,7 +48,7 @@ describe("Kody API client", () => {
     expect(fetchMock.mock.calls[1]?.[0]).toBe("https://current-dashboard.example/api/kody/engine/secret")
   })
 
-  it("upserts one declared runtime secret through workflow identity", async () => {
+  it("upserts declared runtime secrets as one atomic vault update", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -59,16 +59,24 @@ describe("Kody API client", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
     vi.stubGlobal("fetch", fetchMock)
 
-    await writeRuntimeSecretToKody("VERCEL_ACCESS_TOKEN", "secret-value", {
-      ACTIONS_ID_TOKEN_REQUEST_URL: "https://github.example/oidc",
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: "request-token",
-    })
+    await writeRuntimeSecretsToKody(
+      {
+        VERCEL_ACCESS_TOKEN: "secret-value",
+        VERCEL_PROJECT_ID: "project-id",
+      },
+      {
+        ACTIONS_ID_TOKEN_REQUEST_URL: "https://github.example/oidc",
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: "request-token",
+      },
+    )
 
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
       method: "PUT",
       body: JSON.stringify({
-        name: "VERCEL_ACCESS_TOKEN",
-        value: "secret-value",
+        secrets: {
+          VERCEL_ACCESS_TOKEN: "secret-value",
+          VERCEL_PROJECT_ID: "project-id",
+        },
       }),
     })
   })

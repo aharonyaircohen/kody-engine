@@ -1,6 +1,6 @@
 import { readRepoSecret } from "../backendVault.js"
 import type { Context } from "../implementations/types.js"
-import { hasGitHubActionsIdentity, readRuntimeSecretFromKody, writeRuntimeSecretToKody } from "../kody-api-client.js"
+import { hasGitHubActionsIdentity, readRuntimeSecretFromKody, writeRuntimeSecretsToKody } from "../kody-api-client.js"
 import { masterKeyBytes } from "../pool/keys.js"
 
 export type RuntimeSecretSource = "vault" | "env" | "missing"
@@ -39,9 +39,7 @@ export async function resolveRuntimeSecret(
     try {
       const value = await readRuntimeSecretFromKody(name, env)
       if (value) return { value, source: "vault" }
-      const fallback = envSecret(name, env)
-      if (fallback.value) await writeRuntimeSecretToKody(name, fallback.value, env)
-      return fallback
+      return envSecret(name, env)
     } catch (err) {
       const fallback = envSecret(name, env)
       return {
@@ -91,10 +89,21 @@ export async function resolveRuntimeSecrets(
   for (const name of declared) {
     resolved.push({ name, result: await resolveRuntimeSecret(name, ctx, opts) })
   }
+  const warnings = resolved.flatMap(({ result }) => (result.warning ? [result.warning] : []))
+  const fallbackSecrets = Object.fromEntries(
+    resolved.flatMap(({ name, result }) => (result.source === "env" && result.value ? [[name, result.value]] : [])),
+  )
+  if (hasGitHubActionsIdentity(opts.env ?? process.env) && Object.keys(fallbackSecrets).length > 0) {
+    try {
+      await writeRuntimeSecretsToKody(fallbackSecrets, opts.env ?? process.env)
+    } catch (err) {
+      warnings.push(`Kody secret migration failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
   return {
     environment: Object.fromEntries(
       resolved.flatMap(({ name, result }) => (result.value ? [[name, result.value]] : [])),
     ),
-    warnings: resolved.flatMap(({ result }) => (result.warning ? [result.warning] : [])),
+    warnings,
   }
 }

@@ -119,16 +119,15 @@ export async function readRuntimeSecretFromKody(
   return typeof body.value === "string" ? body.value : null
 }
 
-export async function writeRuntimeSecretToKody(
-  name: string,
-  value: string,
+export async function writeRuntimeSecretsToKody(
+  secrets: Record<string, string>,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
   const token = await githubOidcToken(env)
   const response = await fetch(`${resolveKodyApiUrl(env)}/api/kody/engine/secret`, {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ name, value }),
+    body: JSON.stringify({ secrets }),
     signal: AbortSignal.timeout(30_000),
   })
   if (!response.ok) throw new Error(`Kody secret upsert failed (${response.status})`)

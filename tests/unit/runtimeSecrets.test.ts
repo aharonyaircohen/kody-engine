@@ -114,7 +114,7 @@ describe("resolveRuntimeSecret", () => {
     })
   })
 
-  it("migrates an Actions fallback into the repository vault", async () => {
+  it("migrates Actions fallbacks into the repository vault as one update", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -126,7 +126,7 @@ describe("resolveRuntimeSecret", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
     vi.stubGlobal("fetch", fetchMock)
 
-    const result = await resolveRuntimeSecret("VERCEL_ACCESS_TOKEN", makeCtx(), {
+    const result = await resolveRuntimeSecrets(["VERCEL_ACCESS_TOKEN"], makeCtx(), {
       env: {
         GITHUB_ACTIONS: "true",
         ACTIONS_ID_TOKEN_REQUEST_URL: "https://github.example/oidc",
@@ -136,19 +136,18 @@ describe("resolveRuntimeSecret", () => {
     })
 
     expect(result).toEqual({
-      value: "legacy-actions-value",
-      source: "env",
+      environment: { VERCEL_ACCESS_TOKEN: "legacy-actions-value" },
+      warnings: [],
     })
     expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
       method: "PUT",
       body: JSON.stringify({
-        name: "VERCEL_ACCESS_TOKEN",
-        value: "legacy-actions-value",
+        secrets: { VERCEL_ACCESS_TOKEN: "legacy-actions-value" },
       }),
     })
   })
 
-  it("serializes multi-secret migration to preserve the shared vault document", async () => {
+  it("batches multi-secret migration to preserve the shared vault document", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -157,7 +156,6 @@ describe("resolveRuntimeSecret", () => {
         }),
       )
       .mockResolvedValueOnce(new Response(null, { status: 404 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
       .mockResolvedValueOnce(new Response(null, { status: 404 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
     vi.stubGlobal("fetch", fetchMock)
@@ -171,11 +169,14 @@ describe("resolveRuntimeSecret", () => {
 
     await resolveRuntimeSecrets(["VERCEL_ACCESS_TOKEN", "VERCEL_PROJECT_ID"], makeCtx(), { env })
 
-    expect(fetchMock.mock.calls.slice(1).map((call) => call[1]?.method ?? "GET")).toEqual([
-      "POST",
-      "PUT",
-      "POST",
-      "PUT",
-    ])
+    expect(fetchMock.mock.calls.slice(1).map((call) => call[1]?.method ?? "GET")).toEqual(["POST", "POST", "PUT"])
+    expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({
+      body: JSON.stringify({
+        secrets: {
+          VERCEL_ACCESS_TOKEN: "token",
+          VERCEL_PROJECT_ID: "project",
+        },
+      }),
+    })
   })
 })
