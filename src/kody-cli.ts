@@ -456,7 +456,10 @@ export async function runCi(argv: string[]): Promise<number> {
   }
 
   // --issue is only required when autoDispatch can't infer from GHA env.
-  const autoFallback = !args.issueNumber ? autoDispatch({ config: earlyConfig }) : null
+  const dispatchCapabilitiesRoot = capabilitiesRoot(cwd)
+  const autoFallback = !args.issueNumber
+    ? autoDispatch({ config: earlyConfig, projectCapabilitiesRoot: dispatchCapabilitiesRoot })
+    : null
 
   // Schedule wakes and parameterless workflow_dispatch fan out to every
   // watch implementation whose `schedule` cron matches the wake window
@@ -696,7 +699,10 @@ export async function runCi(argv: string[]): Promise<number> {
   // turns the previously-silent "I typed @kody xyz and nothing happened"
   // into an observable, actionable signal.
   if (!args.issueNumber && !autoFallback && process.env.GITHUB_EVENT_NAME) {
-    const outcome = autoDispatchTyped({ config: earlyConfig })
+    const outcome = autoDispatchTyped({
+      config: earlyConfig,
+      projectCapabilitiesRoot: dispatchCapabilitiesRoot,
+    })
     if (outcome.kind === "rejected") {
       try {
         unpackAllSecrets()

@@ -19,6 +19,7 @@ import { cronMatchesInWindow } from "./cron-match.js"
 import type { InputSpec } from "./implementations/types.js"
 import {
   type DiscoveredCapabilityAction,
+  getCapabilityActionInputs,
   getProfileInputs,
   listCapabilityActions,
   listRuntimeProfilesForCwd,
@@ -72,16 +73,16 @@ function primaryNumericInputName(implementation: string): string | null {
   return intInput?.name ?? null
 }
 
-function resolveOperatorAction(action: string): DiscoveredCapabilityAction | null {
-  return resolveCapabilityAction(action)
+function resolveOperatorAction(action: string, projectCapabilitiesRoot?: string): DiscoveredCapabilityAction | null {
+  return resolveCapabilityAction(action, projectCapabilitiesRoot)
 }
 
-function resolveConfiguredAction(action: string): DiscoveredCapabilityAction | null {
-  return resolveCapabilityAction(action)
+function resolveConfiguredAction(action: string, projectCapabilitiesRoot?: string): DiscoveredCapabilityAction | null {
+  return resolveCapabilityAction(action, projectCapabilitiesRoot)
 }
 
-function requiredRoute(action: string): DiscoveredCapabilityAction {
-  const route = resolveConfiguredAction(action)
+function requiredRoute(action: string, projectCapabilitiesRoot?: string): DiscoveredCapabilityAction {
+  const route = resolveConfiguredAction(action, projectCapabilitiesRoot)
   if (!route) throw new Error(`required capability action not found: ${action}`)
   return route
 }
@@ -141,10 +142,16 @@ export type DispatchOutcome =
 export function autoDispatch(opts?: {
   explicit?: { issueNumber?: number }
   config?: KodyConfig
+  projectCapabilitiesRoot?: string
 }): DispatchResult | null {
+  const projectCapabilitiesRoot = opts?.projectCapabilitiesRoot
   const explicit = opts?.explicit
   if (explicit?.issueNumber && explicit.issueNumber > 0) {
-    return routeResult(requiredRoute("run"), { issue: explicit.issueNumber }, explicit.issueNumber)
+    return routeResult(
+      requiredRoute("run", projectCapabilitiesRoot),
+      { issue: explicit.issueNumber },
+      explicit.issueNumber,
+    )
   }
 
   const eventName = process.env.GITHUB_EVENT_NAME
@@ -166,7 +173,7 @@ export function autoDispatch(opts?: {
       // and optional safe branch base without posting bot-authored comments.
       // manual dispatch with just an issue number.
       const actionName = String(inputs?.capability ?? "").trim() || "run"
-      const route = resolveConfiguredAction(actionName)
+      const route = resolveConfiguredAction(actionName, projectCapabilitiesRoot)
       if (!route) return null
       const base = String(inputs?.base ?? "").trim()
       const profileInputs = getProfileInputs(route.implementation)
@@ -212,7 +219,7 @@ export function autoDispatch(opts?: {
     if (actionName && (action === "opened" || action === "synchronize" || action === "reopened")) {
       const pullRequest = objectValue(event.pull_request)
       if (isReleasePullRequest(pullRequest, opts?.config)) return null
-      const route = resolveConfiguredAction(actionName)
+      const route = resolveConfiguredAction(actionName, projectCapabilitiesRoot)
       if (!route) return null
       const prNum = Number(pullRequest?.number ?? event.number ?? 0)
       if (prNum > 0) {
@@ -282,7 +289,7 @@ export function autoDispatch(opts?: {
   let route: DiscoveredCapabilityAction | null = null
   let consumedFirstToken = false
   if (aliased) {
-    route = resolveOperatorAction(aliased)
+    route = resolveOperatorAction(aliased, projectCapabilitiesRoot)
     if (route) {
       consumedFirstToken = true
     } else if (firstToken && aliases[firstToken] && aliases[firstToken] === aliased) {
@@ -307,7 +314,7 @@ export function autoDispatch(opts?: {
     const defaultAction = isPr
       ? (opts?.config?.defaultPrImplementation ?? null)
       : (opts?.config?.defaultImplementation ?? null)
-    route = defaultAction ? resolveConfiguredAction(defaultAction) : null
+    route = defaultAction ? resolveConfiguredAction(defaultAction, projectCapabilitiesRoot) : null
   }
   if (isBotAuthor && !consumedFirstToken) {
     process.stderr.write(
@@ -323,7 +330,7 @@ export function autoDispatch(opts?: {
     // the capability action wasn't found, the alias was missing, or there's no
     // default. This breadcrumb makes the gate observable without changing
     // behavior.
-    const profileMissing = aliased ? resolveOperatorAction(aliased) === null : true
+    const profileMissing = aliased ? resolveOperatorAction(aliased, projectCapabilitiesRoot) === null : true
     process.stderr.write(
       `[kody] dispatch: no capability action resolved for issue_comment ` +
         `(firstToken=${firstToken ?? "<none>"}, aliased=${aliased ?? "<none>"}, ` +
@@ -336,7 +343,7 @@ export function autoDispatch(opts?: {
   // Inputs drive arg parsing and injection. If the profile isn't registered
   // (e.g. a consumer-configured default pointing at something not bundled),
   // fall back to event-shape injection so context isn't silently dropped.
-  const inputs = getProfileInputs(route.implementation)
+  const inputs = getCapabilityActionInputs(route.action, projectCapabilitiesRoot)
   const effectiveInputs = inputs ?? []
   const unknownProfile = inputs === null
   const rest = extractCommentRest(afterTag, consumedFirstToken ? firstToken : null)
@@ -377,6 +384,7 @@ export function autoDispatch(opts?: {
 export function autoDispatchTyped(opts?: {
   explicit?: { issueNumber?: number }
   config?: KodyConfig
+  projectCapabilitiesRoot?: string
 }): DispatchOutcome {
   // Reuse the legacy resolver: for every code path EXCEPT the
   // unrecognized-token branch, the existing logic is right. We only need
@@ -452,7 +460,7 @@ export function autoDispatchTyped(opts?: {
     }
   }
 
-  const available = listCapabilityActions()
+  const available = listCapabilityActions(opts?.projectCapabilitiesRoot)
     .map((e) => e.action)
     .filter((n) => !n.startsWith("goal-") && !n.startsWith("job-"))
     .sort()

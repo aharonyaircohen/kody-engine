@@ -383,6 +383,38 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
+  it("discovers a capability from the requested consumer root instead of process.cwd()", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kody-dispatch-consumer-root-"))
+    try {
+      const capabilityRoot = path.join(tmp, "capabilities")
+      const reviewRoot = path.join(capabilityRoot, "private-helper-proof")
+      fs.mkdirSync(reviewRoot, { recursive: true })
+      fs.writeFileSync(path.join(reviewRoot, "instructions.md"), "Review the supplied pull request.\n")
+      fs.writeFileSync(
+        path.join(reviewRoot, "contract.json"),
+        JSON.stringify({
+          execution: "agent",
+          input: { type: "object", additionalProperties: true },
+          output: { type: "object", additionalProperties: true },
+        }),
+      )
+      process.env.GITHUB_EVENT_PATH = writeEvent({
+        comment: { body: '@kody private-helper-proof {"pr":42}' },
+        issue: { number: 42, pull_request: {} },
+      })
+
+      expect(autoDispatch({ projectCapabilitiesRoot: capabilityRoot })).toEqual({
+        action: "private-helper-proof",
+        capability: "private-helper-proof",
+        implementation: "capability-run",
+        cliArgs: { capability: "private-helper-proof", input: '{"pr":42}' },
+        target: 42,
+      })
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
   it("ignores a bare @kody substring inside an email (no real mention) → null", () => {
     // Regression (#5): the gate was `.includes("@kody")`, so an email like
     // `me@kody.dev` launched the default capability action on an unrelated comment.
