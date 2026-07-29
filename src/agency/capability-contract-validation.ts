@@ -11,10 +11,19 @@ export class CapabilityContractValidationError extends Error {
     readonly boundary: "input" | "output",
     readonly errors: readonly ErrorObject[],
   ) {
+    const details = errors
+      .map((error) => {
+        const location = error.instancePath || "$"
+        const property =
+          error.keyword === "additionalProperties" &&
+          typeof error.params.additionalProperty === "string"
+            ? ` (${error.params.additionalProperty})`
+            : ""
+        return `${location}: ${error.message ?? error.keyword}${property}`
+      })
+      .join("; ")
     super(
-      `Capability ${boundary} does not match its declared contract: ${validator.errorsText([...errors], {
-        separator: "; ",
-      })}`,
+      `Capability ${boundary} does not match its declared contract: ${details}`,
     )
     this.name = "CapabilityContractValidationError"
   }
