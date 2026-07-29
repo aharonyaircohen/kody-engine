@@ -139,6 +139,7 @@ export function isScheduledActionsWake(env: NodeJS.ProcessEnv = process.env): bo
 
 type RunRequestRoute =
   | { kind: "action"; action: string; cliArgs: Record<string, unknown>; workflowRunId?: string }
+  | { kind: "workflow"; workflow: string; cliArgs: Record<string, unknown>; workflowRunId?: string }
   | { kind: "fanout"; force: boolean }
   | { kind: "ignore" }
   | { kind: "error"; error: string }
@@ -180,8 +181,8 @@ function routeRunRequest(request: RunRequest): RunRequestRoute {
     const workflowRunId = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(requestedRunId) ? requestedRunId : undefined
     const { runId: _runId, ...workflowInput } = objectValue(request.input) ?? {}
     return {
-      kind: "action",
-      action: target.id,
+      kind: "workflow",
+      workflow: target.id,
       cliArgs: workflowInput,
       ...(workflowRunId ? { workflowRunId } : {}),
     }
@@ -480,14 +481,13 @@ export async function runCi(argv: string[]): Promise<number> {
   let forceRunAction: string | null = null
   let forceRunCliArgs: Record<string, unknown> = {}
   let forceWorkflowRunId: string | undefined
+  let forceRunTargetKind: "action" | "workflow" = "action"
   let runRequestFanOut = false
   let runRequestFanOutForce = false
   const parsedRunRequest = readRunRequestFromEnv()
   if (parsedRunRequest && "error" in parsedRunRequest) {
     process.stderr.write(`[kody] ${parsedRunRequest.error}\n`)
     return 64
-  }
-  if (parsedRunRequest && "request" in parsedRunRequest) {
   }
   const explicitLoopRequest =
     parsedRunRequest && "request" in parsedRunRequest && parsedRunRequest.request.target.type === "loop"
@@ -502,6 +502,11 @@ export async function runCi(argv: string[]): Promise<number> {
       runRequestFanOutForce = route.force
     } else if (route.kind === "action") {
       forceRunAction = route.action
+      forceRunCliArgs = route.cliArgs
+      forceWorkflowRunId = route.workflowRunId
+    } else if (route.kind === "workflow") {
+      forceRunAction = route.workflow
+      forceRunTargetKind = "workflow"
       forceRunCliArgs = route.cliArgs
       forceWorkflowRunId = route.workflowRunId
     }
@@ -570,7 +575,7 @@ export async function runCi(argv: string[]): Promise<number> {
     const capabilityRoot = capabilitiesRoot(cwd)
     const directCapability = manualGoalManager ? null : resolveCapabilityFolder(forceRunAction, capabilityRoot)
     const directExecution = directCapability ? resolveCapabilityExecution(directCapability, cwd) : null
-    const capabilityRoute = manualGoalManager
+    const capabilityRoute = manualGoalManager || forceRunTargetKind === "workflow"
       ? null
       : (resolveCapabilityAction(forceRunAction, capabilityRoot) ??
         (directCapability &&

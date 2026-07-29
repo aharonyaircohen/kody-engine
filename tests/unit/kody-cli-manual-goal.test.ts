@@ -167,6 +167,49 @@ describe("kody-cli manual goal dispatch", () => {
     })
   })
 
+  it("keeps an explicit workflow target when a capability has the same id", async () => {
+    const dir = tmpDir()
+    writeConfig(dir)
+    const capabilityDir = path.join(
+      dir,
+      ".kody-engine",
+      "definitions",
+      "capabilities",
+      "build-knowledge",
+    )
+    fs.mkdirSync(capabilityDir, { recursive: true })
+    fs.writeFileSync(path.join(capabilityDir, "instructions.md"), "Build knowledge.\n")
+    fs.writeFileSync(
+      path.join(capabilityDir, "contract.json"),
+      JSON.stringify({
+        execution: "agent",
+        input: { type: "object" },
+        output: { type: "object" },
+      }),
+    )
+    previousEnv.KODY_RUN_REQUEST_JSON = process.env.KODY_RUN_REQUEST_JSON
+    process.env.KODY_RUN_REQUEST_JSON = JSON.stringify({
+      requestId: "workflow-request-ambiguous",
+      target: { type: "workflow", id: "build-knowledge" },
+      intent: "run",
+      source: "dashboard",
+    })
+    mocks.readWorkflowDefinition.mockReturnValue({
+      version: 1,
+      name: "Build knowledge",
+      capabilities: ["build-knowledge", "publish-knowledge"],
+    })
+
+    await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
+
+    expect(mocks.runJob).toHaveBeenCalledTimes(1)
+    expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
+      workflow: "build-knowledge",
+      workflowRunId: "workflow-request-ambiguous",
+    })
+    expect(mocks.runJob.mock.calls[0]?.[0]).toHaveProperty("capability", undefined)
+  })
+
   it("routes a first-class Loop request through the Loop scheduler", async () => {
     const dir = tmpDir()
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true)
