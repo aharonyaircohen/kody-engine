@@ -4,12 +4,9 @@ import { validateCapabilityContractValue } from "../agency/capability-contract-v
 import { readCapabilityFolder } from "../capabilityFolders.js"
 import { capabilitiesRoot } from "../definition-paths.js"
 import type { PreflightScript } from "../implementations/types.js"
-import {
-  capabilityConfigEnvironment,
-  capabilityInputEnvironment,
-} from "./capabilityExecutionEnvironment.js"
+import { capabilityConfigEnvironment, capabilityInputEnvironment } from "./capabilityExecutionEnvironment.js"
 
-export const loadSimpleCapability: PreflightScript = async (ctx) => {
+export const loadSimpleCapability: PreflightScript = async (ctx, profile) => {
   const slug = typeof ctx.args.capability === "string" ? ctx.args.capability.trim() : ""
   if (!/^[a-z][a-z0-9-]*$/.test(slug)) {
     throw new Error("capability-run requires a valid capability slug")
@@ -29,6 +26,9 @@ export const loadSimpleCapability: PreflightScript = async (ctx) => {
   ctx.data.jobCapability = slug
   ctx.data.capabilityInput = input
   ctx.data.capabilityExecution = capability.contract?.execution ?? "agent"
+  if (ctx.data.capabilityExecution === "agent") {
+    registerCapabilitySubagents(profile, toolRoot, toolFiles)
+  }
   if (capability.contract?.execution === "script") {
     ctx.data.capabilityScriptPath = path.join(capability.dir, "tools", "run.sh")
     ctx.data.capabilitySecretNames = capability.contract.secrets ?? []
@@ -85,6 +85,31 @@ export const loadSimpleCapability: PreflightScript = async (ctx) => {
         ]
       : ["Return one JSON value."]),
   ].join("\n")
+}
+
+function registerCapabilitySubagents(
+  profile: Parameters<PreflightScript>[1],
+  toolRoot: string,
+  toolFiles: string[],
+): void {
+  const subagentFiles = toolFiles.flatMap((file) => {
+    const match = /^agents\/([a-z][a-z0-9-]{0,63})\.md$/.exec(file)
+    return match ? [{ name: match[1]!, file }] : []
+  })
+  if (subagentFiles.length === 0) return
+
+  profile.claudeCode.subagents = [
+    ...new Set([...profile.claudeCode.subagents, ...subagentFiles.map(({ name }) => name)]),
+  ]
+  profile.subagentTemplates = {
+    ...(profile.subagentTemplates ?? {}),
+    ...Object.fromEntries(
+      subagentFiles.map(({ name, file }) => [name, fs.readFileSync(path.join(toolRoot, file), "utf-8")]),
+    ),
+  }
+  if (!profile.claudeCode.tools.includes("Agent")) {
+    profile.claudeCode.tools = [...profile.claudeCode.tools, "Agent"]
+  }
 }
 
 function parseInput(supplied: unknown): unknown {
