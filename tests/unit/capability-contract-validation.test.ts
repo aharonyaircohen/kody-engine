@@ -47,6 +47,15 @@ describe("Capability contract validation", () => {
     ).toEqual({ issue: 42 })
   })
 
+  it("unwraps generic input when the implementation also declares routing inputs", () => {
+    expect(
+      capabilityContractInput(
+        [{ name: "input" }, { name: "base" }],
+        { input: '{"issue":42}', base: "main" },
+      ),
+    ).toEqual({ issue: 42 })
+  })
+
   it("keeps ordinary named capability inputs unchanged", () => {
     const args = { issue: 42 }
     expect(

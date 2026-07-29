@@ -37,7 +37,7 @@ export function capabilityContractInput(
 ): unknown {
   const isGenericRunnerInput =
     inputs.some((input) => input.name === "input") &&
-    (inputs.length === 1 || inputs.some((input) => input.name === "capability"))
+    Object.hasOwn(args, "input")
   if (!isGenericRunnerInput) return args
 
   const value = args.input
