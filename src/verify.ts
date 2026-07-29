@@ -34,12 +34,11 @@ const SENSITIVE_ENV_NAME =
 /**
  * Build the environment inherited by consumer quality commands.
  *
- * The CI launcher passes every repository secret through ALL_SECRETS, and the
- * engine unpacks that blob into process.env for its own runtime integrations.
- * Verification executes agent-edited repository code, so it must not inherit
- * those credentials. Preserve normal build variables while removing the raw
- * blob, every key named by it, and credential-shaped variables from other
- * runtime sources.
+ * Older launchers may pass repository secrets through ALL_SECRETS. Verification
+ * executes agent-edited repository code, so it must not inherit those
+ * credentials. Preserve normal build variables while removing the raw blob,
+ * every key named by it, and credential-shaped variables from other runtime
+ * sources.
  */
 export function buildVerifyEnv(source: Record<string, string | undefined> = process.env): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...source }

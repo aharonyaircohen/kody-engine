@@ -75,7 +75,10 @@ jobs:
           node-version: 22
 
       - env:
-          ALL_SECRETS: ${{ toJSON(secrets) }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          KODY_TOKEN: ${{ secrets.KODY_TOKEN }}
+          KODY_APP_ID: ${{ secrets.KODY_APP_ID }}
+          KODY_APP_PRIVATE_KEY: ${{ secrets.KODY_APP_PRIVATE_KEY }}
           SESSION_ID: ${{ inputs.sessionId }}
           INIT_MESSAGE: ${{ inputs.message }}
           MODEL: ${{ inputs.model }}

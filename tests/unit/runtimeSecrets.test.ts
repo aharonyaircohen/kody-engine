@@ -1,7 +1,7 @@
 import { createCipheriv } from "node:crypto"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { Context } from "../../src/implementations/types.js"
-import { resolveRuntimeSecret } from "../../src/scripts/runtimeSecrets.js"
+import { resolveRuntimeSecret, resolveRuntimeSecrets } from "../../src/scripts/runtimeSecrets.js"
 
 const mocks = vi.hoisted(() => ({ getRepoDoc: vi.fn() }))
 vi.mock("../../src/state-backend.js", () => ({
@@ -91,5 +91,23 @@ describe("resolveRuntimeSecret", () => {
     expect(result.value).toBe("from-env")
     expect(result.source).toBe("env")
     expect(result.warning).toContain("vault read failed for LOGIN_PASSWORD")
+  })
+
+  it("resolves only declared Capability secrets", async () => {
+    const result = await resolveRuntimeSecrets(
+      ["VERCEL_ACCESS_TOKEN", "VERCEL_ACCESS_TOKEN", "invalid-name", 42],
+      makeCtx(),
+      {
+        env: {
+          VERCEL_ACCESS_TOKEN: "allowed",
+          UNDECLARED_SECRET: "denied",
+        } as NodeJS.ProcessEnv,
+      },
+    )
+
+    expect(result).toEqual({
+      environment: { VERCEL_ACCESS_TOKEN: "allowed" },
+      warnings: [],
+    })
   })
 })

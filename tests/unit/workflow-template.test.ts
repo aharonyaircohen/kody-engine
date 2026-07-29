@@ -16,4 +16,10 @@ describe("consumer workflow template", () => {
     expect(workflow).toContain("cron: '7/15 * * * *'")
     expect(workflow).not.toMatch(/(?:description|default|cron): "/)
   })
+
+  it("never exposes the repository-wide secret collection", () => {
+    expect(workflow).not.toContain("toJSON(secrets)")
+    expect(workflow).not.toContain("ALL_SECRETS:")
+    expect(workflow).toContain("KODY_TOKEN: ${{ secrets.KODY_TOKEN }}")
+  })
 })

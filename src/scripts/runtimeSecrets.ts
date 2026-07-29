@@ -11,6 +11,11 @@ export interface RuntimeSecretResult {
   warning?: string
 }
 
+export interface RuntimeSecretsResult {
+  environment: Record<string, string>
+  warnings: string[]
+}
+
 function envSecret(name: string, env: NodeJS.ProcessEnv): RuntimeSecretResult {
   const value = env[name]?.trim() ? env[name]! : ""
   return value ? { value, source: "env" } : { value: "", source: "missing" }
@@ -66,4 +71,26 @@ export async function resolveRuntimeSecret(
   }
 
   return envSecret(name, env)
+}
+
+/** Resolve only the secret names declared by a trusted script Capability. */
+export async function resolveRuntimeSecrets(
+  names: unknown,
+  ctx: Pick<Context, "config">,
+  opts: {
+    env?: NodeJS.ProcessEnv
+  } = {},
+): Promise<RuntimeSecretsResult> {
+  const declared = Array.isArray(names)
+    ? [...new Set(names.filter((name): name is string => typeof name === "string" && /^[A-Z][A-Z0-9_]*$/.test(name)))]
+    : []
+  const resolved = await Promise.all(
+    declared.map(async (name) => ({ name, result: await resolveRuntimeSecret(name, ctx, opts) })),
+  )
+  return {
+    environment: Object.fromEntries(
+      resolved.flatMap(({ name, result }) => (result.value ? [[name, result.value]] : [])),
+    ),
+    warnings: resolved.flatMap(({ result }) => (result.warning ? [result.warning] : [])),
+  }
 }

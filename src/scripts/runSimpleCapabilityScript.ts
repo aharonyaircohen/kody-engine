@@ -3,6 +3,7 @@ import * as fs from "node:fs"
 
 import { parseCapabilityResultsFromText } from "../capabilityResult.js"
 import type { PreflightScript } from "../implementations/types.js"
+import { resolveRuntimeSecrets } from "./runtimeSecrets.js"
 import { buildTickChildEnv } from "./tickShellRunner.js"
 
 const DEFAULT_SCRIPT_TIMEOUT_MS = 5 * 60 * 1000
@@ -19,7 +20,10 @@ export const runSimpleCapabilityScript: PreflightScript = async (ctx) => {
   }
 
   const capabilityEnvironment = isStringRecord(ctx.data.capabilityEnvironment) ? ctx.data.capabilityEnvironment : {}
-  const capabilitySecrets = declaredSecrets(ctx.data.capabilitySecretNames, process.env)
+  const capabilitySecrets = await resolveRuntimeSecrets(ctx.data.capabilitySecretNames, ctx)
+  for (const warning of capabilitySecrets.warnings) {
+    process.stderr.write(`→ kody: WARNING ${warning}\n`)
+  }
   const timeoutMs =
     typeof ctx.data.capabilityScriptTimeoutMs === "number"
       ? ctx.data.capabilityScriptTimeoutMs
@@ -28,7 +32,7 @@ export const runSimpleCapabilityScript: PreflightScript = async (ctx) => {
     cwd: ctx.cwd,
     env: {
       ...buildTickChildEnv(process.env, false),
-      ...capabilitySecrets,
+      ...capabilitySecrets.environment,
       ...capabilityEnvironment,
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -74,17 +78,6 @@ export const runSimpleCapabilityScript: PreflightScript = async (ctx) => {
 
 function formatDuration(timeoutMs: number): string {
   return timeoutMs % 60_000 === 0 ? `${timeoutMs / 60_000} minutes` : `${timeoutMs}ms`
-}
-
-function declaredSecrets(names: unknown, parent: NodeJS.ProcessEnv): Record<string, string> {
-  if (!Array.isArray(names)) return {}
-  const secrets: Record<string, string> = {}
-  for (const name of names) {
-    if (typeof name !== "string" || !/^[A-Z][A-Z0-9_]*$/.test(name)) continue
-    const value = parent[name]
-    if (value !== undefined) secrets[name] = value
-  }
-  return secrets
 }
 
 function isRegularFile(filePath: string): boolean {

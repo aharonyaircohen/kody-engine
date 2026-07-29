@@ -360,12 +360,11 @@ const AGENT_KEEP_SECRETS: ReadonlySet<string> = new Set([
 ])
 
 /**
- * Remove repo secrets the agent must never see from its child env. The engine
- * unpacks the consumer's `ALL_SECRETS` JSON into `process.env` (kody-cli.ts),
- * so a naive `...process.env` would hand every secret (npm/Fly tokens, the
- * vault master key, custom PATs) to a Bash-running agent — one `printenv` away
- * from exfiltration. Strip every key that came from `ALL_SECRETS` (except the
- * few the agent needs) plus the raw blob itself. Returns a new object.
+ * Remove repo secrets the agent must never see from its child env. Older
+ * launchers may unpack an `ALL_SECRETS` JSON blob into `process.env`, so a
+ * naive `...process.env` could hand every secret to a Bash-running agent.
+ * Strip every key that came from that legacy blob (except the few the agent
+ * needs) plus the raw blob itself. Returns a new object.
  */
 export function stripAgentSecrets(env: Record<string, string>): Record<string, string> {
   const out = { ...env }
