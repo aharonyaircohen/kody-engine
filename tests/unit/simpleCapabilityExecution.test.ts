@@ -133,6 +133,56 @@ describe("simple Capability execution", () => {
     })
   })
 
+  it("preserves prior Capability outputs as context for later Workflow steps", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-workflow-context-"))
+    roots.push(cwd)
+    writeCapability(cwd, "draft")
+    writeCapability(cwd, "test")
+    writeCapability(cwd, "publish")
+    const workflowDir = path.join(cwd, ".kody-engine", "definitions", "workflows", "documentation")
+    fs.mkdirSync(workflowDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(workflowDir, "workflow.json"),
+      JSON.stringify({
+        name: "Documentation",
+        agent: "documentation-lead",
+        steps: [{ capability: "draft" }, { capability: "test" }, { capability: "publish" }],
+      }),
+    )
+    executor.runImplementationChain
+      .mockResolvedValueOnce({
+        exitCode: 0,
+        capabilityOutput: { status: "approved", document: "# Draft" },
+        capabilityResults: [],
+      })
+      .mockResolvedValueOnce({
+        exitCode: 0,
+        capabilityOutput: { status: "approved", tests: ["example passes"] },
+        capabilityResults: [],
+      })
+      .mockResolvedValueOnce({ exitCode: 0, capabilityResults: [] })
+
+    await runJob({ workflow: "documentation", cliArgs: { issue: 42 }, flavor: "instant" }, { cwd })
+
+    expect(executor.runImplementationChain.mock.calls[1]?.[1]).toMatchObject({
+      cliArgs: {
+        capability: "test",
+        input: JSON.stringify({ issue: 42, status: "approved", document: "# Draft" }),
+      },
+    })
+    expect(executor.runImplementationChain.mock.calls[2]?.[1]).toMatchObject({
+      cliArgs: {
+        capability: "publish",
+        input: JSON.stringify({
+          issue: 42,
+          status: "approved",
+          document: "# Draft",
+          tests: ["example passes"],
+        }),
+      },
+    })
+  })
+
   it("preserves Workflow conditions with simple Capability folders", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-workflow-condition-"))
     roots.push(cwd)
@@ -252,6 +302,7 @@ describe("simple Capability execution", () => {
       cliArgs: {
         capability: "inspect",
         input: JSON.stringify({
+          issue: 7,
           prUrl: "https://github.com/acme/widgets/pull/42",
           pr: 42,
         }),

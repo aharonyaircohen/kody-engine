@@ -469,6 +469,7 @@ async function runLinearCapabilityWorkflow(
     workflowTitle: capability.title,
     workflowStepCount: workflow.steps.length,
     workflowIssueNumber: workflowIssueNumber(parent),
+    workflowContext: workflowInputContext(parent.cliArgs),
     workflowFacts: parent.workflowFacts ?? {},
     workflowStack: [
       ...(Array.isArray(base.preloadedData?.workflowStack)
@@ -516,7 +517,12 @@ async function runLinearCapabilityWorkflow(
       ...chainData,
       ...(result.taskState ? { taskState: result.taskState } : {}),
       ...(outcome ? { workflowLastOutcome: outcome } : {}),
-      ...(result.capabilityOutput !== undefined ? { workflowLastOutput: result.capabilityOutput } : {}),
+      ...(result.capabilityOutput !== undefined
+        ? {
+            workflowLastOutput: result.capabilityOutput,
+            workflowContext: mergeWorkflowContext(chainData.workflowContext, result.capabilityOutput),
+          }
+        : {}),
       ...(prUrl ? { workflowPrUrl: prUrl } : {}),
       ...(parsePrNumber(prUrl) ? { workflowPrNumber: parsePrNumber(prUrl) } : {}),
     }
@@ -597,6 +603,7 @@ function workflowChainData(
     workflowTitle: capability.title,
     workflowStepCount: capability.config.workflow?.steps.length ?? 0,
     workflowIssueNumber: workflowIssueNumber(parent),
+    workflowContext: base.preloadedData?.workflowContext ?? workflowInputContext(parent.cliArgs),
     workflowFacts: state.facts,
     workflowEvidence: state.evidence,
     workflowArtifacts: state.artifacts,
@@ -690,7 +697,12 @@ async function runGraphCapabilityWorkflow(
       ...(result.taskState ? { taskState: result.taskState } : {}),
       ...(outcome ? { workflowLastOutcome: outcome } : {}),
       ...(result.capabilityResults?.at(-1) ? { workflowLastResult: result.capabilityResults.at(-1) } : {}),
-      ...(result.capabilityOutput !== undefined ? { workflowLastOutput: result.capabilityOutput } : {}),
+      ...(result.capabilityOutput !== undefined
+        ? {
+            workflowLastOutput: result.capabilityOutput,
+            workflowContext: mergeWorkflowContext(chainData.workflowContext, result.capabilityOutput),
+          }
+        : {}),
       ...(prUrl ? { workflowPrUrl: prUrl } : {}),
       ...(parsePrNumber(prUrl) ? { workflowPrNumber: parsePrNumber(prUrl) } : {}),
     }
@@ -873,7 +885,7 @@ function workflowStepToJob(
     rawArgs.issue = targetNumber
   }
   const genericInput = capabilityStepInput(
-    step.input ?? chainData.workflowLastOutput ?? genericInputFromArgs(rawArgs),
+    step.input ?? chainData.workflowContext ?? chainData.workflowLastOutput ?? genericInputFromArgs(rawArgs),
     step.target,
     targetNumber,
   )
@@ -922,6 +934,19 @@ function genericInputFromArgs(args: Record<string, unknown>): unknown {
     return { request: parsed, ...routing }
   }
   return args
+}
+
+function workflowInputContext(args: Record<string, unknown>): Record<string, unknown> {
+  const input = genericInputFromArgs(args)
+  if (input && typeof input === "object" && !Array.isArray(input)) return { ...(input as Record<string, unknown>) }
+  return input === undefined ? {} : { request: input }
+}
+
+function mergeWorkflowContext(current: unknown, output: unknown): Record<string, unknown> {
+  const context =
+    current && typeof current === "object" && !Array.isArray(current) ? (current as Record<string, unknown>) : {}
+  if (!output || typeof output !== "object" || Array.isArray(output)) return { ...context }
+  return { ...context, ...(output as Record<string, unknown>) }
 }
 
 function parseGenericInput(value: unknown): unknown {
