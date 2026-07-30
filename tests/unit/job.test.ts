@@ -1429,6 +1429,48 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("blocks a workflow when no conditional connection matches", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-unmatched-condition-"))
+    const originalCwd = process.cwd()
+    try {
+      for (const capability of ["run", "fix"]) {
+        writeSimpleCapability(cwd, capability)
+      }
+      writeWorkflowDefinition(cwd, "conditional-block-pilot", {
+        name: "Conditional block pilot",
+        agent: "kody",
+        startAt: "inspect",
+        steps: [
+          {
+            id: "inspect",
+            capability: "run",
+            next: [{ to: "repair", when: { "result.status": "changed" } }],
+          },
+          { id: "repair", capability: "fix" },
+        ],
+      })
+      process.chdir(cwd)
+      runImplementationChain.mockResolvedValueOnce({
+        exitCode: 0,
+        capabilityOutput: { status: "blocked" },
+        capabilityResults: [capabilityResult({ status: "blocked" })],
+      })
+
+      const result = await runJob({ workflow: "conditional-block-pilot", cliArgs: {}, flavor: "instant" }, { cwd })
+
+      expect(result.exitCode).toBe(64)
+      expect(result.reason).toBe("workflow step inspect has no available connection")
+      expect(result.workflowState).toMatchObject({
+        status: "blocked",
+        blocker: "workflow step inspect has no available connection",
+      })
+      expect(runImplementationChain).toHaveBeenCalledTimes(1)
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it.skip("does not replay a workflow whose persisted state is already done", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-idempotent-"))
     const originalCwd = process.cwd()

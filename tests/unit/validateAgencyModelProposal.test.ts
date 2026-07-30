@@ -351,14 +351,6 @@ describe("validateModelBundle", () => {
       ],
       failure: "must set maxIterations",
     },
-    {
-      name: "a conditional branch without an otherwise path",
-      steps: [
-        { id: "inspect", capability: "inspect", next: [{ to: "repair", when: { "facts.needsFix": true } }] },
-        { id: "repair", capability: "repair" },
-      ],
-      failure: "needs one default connection",
-    },
   ])("rejects a workflow proposal with $name", ({ steps, failure }) => {
     const workflow = bundle({
       model: {

@@ -134,7 +134,6 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
       )
     }
     const defaults = transitions.filter((transition) => asRecord(transition)?.default === true)
-    const conditionals = transitions.filter((transition) => asRecord(transition)?.when !== undefined)
     const unconditional = transitions.filter((transition) => {
       const raw = asRecord(transition)
       return (
@@ -148,14 +147,6 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
         "multiple_default_transitions",
         `steps[${index}].next`,
         `workflow step ${id} has more than one default connection`,
-      )
-    }
-    if (conditionals.length > 0 && defaults.length !== 1) {
-      issue(
-        issues,
-        "missing_default_transition",
-        `steps[${index}].next`,
-        `workflow step ${id} has conditions and needs one default connection`,
       )
     }
     if (unconditional.length > 1 || (unconditional.length > 0 && transitions.length > 1)) {

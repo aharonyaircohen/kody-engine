@@ -244,15 +244,6 @@ describe("validateWorkflow", () => {
     [
       {
         steps: [
-          { id: "inspect", capability: "inspect", next: [{ to: "repair", when: { "facts.needsFix": true } }] },
-          { id: "repair", capability: "repair" },
-        ],
-      },
-      "missing_default_transition",
-    ],
-    [
-      {
-        steps: [
           { id: "inspect", capability: "inspect", next: "repair" },
           { id: "repair", capability: "repair", next: "inspect" },
         ],
@@ -283,6 +274,22 @@ describe("validateWorkflow", () => {
     ],
   ] as const)("rejects invalid agent output %#", (workflow, expectedCode) => {
     expect(codes(workflow)).toContain(expectedCode)
+  })
+
+  it("allows conditional-only connections so an unmatched result can block", () => {
+    expect(
+      validateWorkflow({
+        startAt: "inspect",
+        steps: [
+          {
+            id: "inspect",
+            capability: "inspect",
+            next: [{ to: "repair", when: { "result.status": "changed" } }],
+          },
+          { id: "repair", capability: "repair" },
+        ],
+      }),
+    ).toEqual([])
   })
 
   it("rejects unknown capabilities and removed Workflow fields", () => {
