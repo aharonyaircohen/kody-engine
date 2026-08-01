@@ -68,7 +68,9 @@ function envRunRequest(env: NodeJS.ProcessEnv = process.env): ParsedArgs | null 
   const { target } = parsed.request
   if (target.type === "chat") return { ...result, command: "chat", chatArgv: [] }
   if (target.type === "issue") return { ...result, command: "ci", ciArgv: ["--issue", String(target.id)] }
-  if (target.type === "goal" || target.type === "workflow") return { ...result, command: "ci", ciArgv: [] }
+  if (target.type === "goal" || target.type === "loop" || target.type === "workflow") {
+    return { ...result, command: "ci", ciArgv: [] }
+  }
 
   return { ...result, errors: [`unsupported runRequest target: ${(target as { type?: string }).type ?? "unknown"}`] }
 }
