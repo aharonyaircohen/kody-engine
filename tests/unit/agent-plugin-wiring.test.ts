@@ -55,6 +55,51 @@ describe("agent plugin-path forwarding", () => {
   })
 })
 
+describe("agent subagent model inheritance", () => {
+  beforeEach(() => vi.mocked(query).mockClear())
+  afterEach(() => vi.clearAllMocks())
+
+  it("removes model overrides from Agent tool calls", async () => {
+    const { runAgent } = await import("../../src/agent.js")
+    await runAgent({
+      ...baseOpts,
+      agents: {
+        writer: { description: "Writes", prompt: "Write the document", model: "inherit" },
+      },
+    })
+
+    const opts = vi.mocked(query).mock.calls[0]![0].options as {
+      hooks: {
+        PreToolUse: Array<{
+          matcher: string
+          hooks: Array<(input: Record<string, unknown>) => Promise<Record<string, unknown>>>
+        }>
+      }
+    }
+    const matcher = opts.hooks.PreToolUse[0]!
+    expect(matcher.matcher).toBe("Agent")
+
+    const output = await matcher.hooks[0]!({
+      hook_event_name: "PreToolUse",
+      tool_name: "Agent",
+      tool_input: {
+        subagent_type: "writer",
+        prompt: "Draft it",
+        model: "sonnet",
+      },
+    })
+    expect(output).toEqual({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        updatedInput: {
+          subagent_type: "writer",
+          prompt: "Draft it",
+        },
+      },
+    })
+  })
+})
+
 describe("agent maxTurns forwarding", () => {
   beforeEach(() => vi.mocked(query).mockClear())
   afterEach(() => vi.clearAllMocks())

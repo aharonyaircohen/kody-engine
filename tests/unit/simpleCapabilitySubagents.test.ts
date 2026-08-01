@@ -121,10 +121,12 @@ describe("simple Capability private subagents", () => {
         description: "Find source evidence.",
         prompt: "Research every claim.",
         tools: ["Read", "Grep", "Glob"],
+        model: "inherit",
       },
       reviewer: {
         description: "Independently review the draft.",
         prompt: "Reject unsupported claims.",
+        model: "inherit",
       },
     })
   })

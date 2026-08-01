@@ -45,7 +45,7 @@ describe("format: renderEvent", () => {
     }
 
     const result = renderEvent(msg)
-    expect(result).toBe("→ Agent: documentation-writer model=sonnet")
+    expect(result).toBe("→ Agent: documentation-writer model=inherit (ignored override=sonnet)")
     expect(result).not.toContain("private task instructions")
   })
 

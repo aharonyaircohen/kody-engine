@@ -11,6 +11,7 @@ import {
 } from "./config.js"
 import { renderEvent, type SdkMessageLike } from "./format.js"
 import { agentRunDir } from "./runtimePaths.js"
+import { enforceSubagentModelInheritance } from "./subagents.js"
 
 export interface AgentTokenUsage {
   input: number
@@ -483,6 +484,14 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         allowedTools: [...(opts.allowedToolsOverride ?? DEFAULT_ALLOWED_TOOLS)],
         permissionMode: opts.permissionModeOverride ?? "acceptEdits",
         env,
+        hooks: {
+          PreToolUse: [
+            {
+              matcher: "Agent",
+              hooks: [enforceSubagentModelInheritance],
+            },
+          ],
+        },
       }
       const additionalDirectories = new Set(opts.additionalDirectories ?? [])
       const mcpEntries: Array<[string, Record<string, unknown>]> = []

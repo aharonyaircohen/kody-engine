@@ -103,8 +103,9 @@ function formatResult(msg: SdkMessageLike): string {
 function summarizeToolInput(toolName: string, input: Record<string, unknown> = {}): string {
   if (toolName === "Agent") {
     const agent = summarizeSingleLineValue(input.subagent_type, "unknown", 80)
-    const model = summarizeSingleLineValue(input.model, "inherit", 80)
-    return `: ${agent} model=${model}`
+    const requestedModel = summarizeSingleLineValue(input.model, "inherit", 80)
+    const ignoredOverride = requestedModel === "inherit" ? "" : ` (ignored override=${requestedModel})`
+    return `: ${agent} model=inherit${ignoredOverride}`
   }
   if (toolName === "Bash" && typeof input.command === "string") {
     const cmd = input.command.split("\n")[0]

@@ -21,8 +21,26 @@ export interface LoadedAgent {
   description: string
   prompt: string
   tools?: string[]
-  /** Model alias ('sonnet'|'opus'|'haiku') or full ID; omitted = inherit. */
-  model?: string
+  /** Subagents always use the parent run's active model. */
+  model: "inherit"
+}
+
+interface AgentPreToolUseInput {
+  tool_input?: unknown
+}
+
+/** Remove model-generated overrides before the SDK starts a subagent. */
+export async function enforceSubagentModelInheritance(input: AgentPreToolUseInput): Promise<Record<string, unknown>> {
+  const toolInput = input.tool_input
+  if (!toolInput || typeof toolInput !== "object" || Array.isArray(toolInput)) return {}
+  const updatedInput = { ...(toolInput as Record<string, unknown>) }
+  delete updatedInput.model
+  return {
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      updatedInput,
+    },
+  }
 }
 
 /** Split `---\n<frontmatter>\n---\n<body>` into [frontmatter, body]. */
@@ -92,6 +110,7 @@ export function loadSubagents(profile: Profile): Record<string, LoadedAgent> | u
     const def: LoadedAgent = {
       description: fm.description ?? `Subagent ${name}`,
       prompt: body,
+      model: "inherit",
     }
     if (fm.tools) {
       const tools = fm.tools
@@ -100,9 +119,6 @@ export function loadSubagents(profile: Profile): Record<string, LoadedAgent> | u
         .filter(Boolean)
       if (tools.length > 0) def.tools = tools
     }
-    // A declared `model` lets a subagent run on a cheaper/faster model than the
-    // lead (e.g. review-* scouts on haiku). Dropped silently before this.
-    if (fm.model) def.model = fm.model
     // Key by the frontmatter `name` when present so the invocable type
     // matches the file's declared identity, else fall back to the filename.
     agents[fm.name || name] = def

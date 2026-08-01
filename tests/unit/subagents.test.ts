@@ -54,7 +54,7 @@ describe("loadSubagents", () => {
     expect(loadSubagents(makeProfile([], "/tmp/none"))).toBeUndefined()
   })
 
-  it("loads a local agent and parses description, prompt, tools, and model", () => {
+  it("loads a local agent but always forces its model to inherit", () => {
     const tmp = withLocalAgent(
       "scout",
       "---\nname: scout\ndescription: A read-only scout.\ntools: Read, Grep, Glob\nmodel: haiku\n---\nYou are a scout. Investigate and report.\n",
@@ -66,7 +66,7 @@ describe("loadSubagents", () => {
       description: "A read-only scout.",
       prompt: "You are a scout. Investigate and report.",
       tools: ["Read", "Grep", "Glob"],
-      model: "haiku",
+      model: "inherit",
     })
   })
 
@@ -84,18 +84,22 @@ describe("loadSubagents", () => {
     expect(Object.keys(agents)).toEqual(["anon"])
   })
 
-  it("defaults the description and omits tools/model when frontmatter lacks them", () => {
+  it("defaults the description and explicitly inherits the model", () => {
     const tmp = withLocalAgent("bare", "---\nname: bare\n---\njust a body\n")
     cleanups.push(tmp)
     const agents = loadSubagents(makeProfile(["bare"], tmp))!
-    expect(agents.bare).toEqual({ description: "Subagent bare", prompt: "just a body" })
+    expect(agents.bare).toEqual({ description: "Subagent bare", prompt: "just a body", model: "inherit" })
   })
 
   it("treats a file with no frontmatter as an all-body prompt", () => {
     const tmp = withLocalAgent("raw", "You are a raw-prompt agent.")
     cleanups.push(tmp)
     const agents = loadSubagents(makeProfile(["raw"], tmp))!
-    expect(agents.raw).toEqual({ description: "Subagent raw", prompt: "You are a raw-prompt agent." })
+    expect(agents.raw).toEqual({
+      description: "Subagent raw",
+      prompt: "You are a raw-prompt agent.",
+      model: "inherit",
+    })
   })
 
   it("throws when an agent file is found in neither the local dir nor the catalog", () => {
@@ -118,7 +122,7 @@ describe("loadSubagents", () => {
     profile.subagentTemplates = captureSubagentTemplates(profile)
     fs.rmSync(tmp, { recursive: true, force: true }) // dir gone, like a PR-branch checkout
     const agents = loadSubagents(profile)!
-    expect(agents.scout).toEqual({ description: "snap", prompt: "snapshot body" })
+    expect(agents.scout).toEqual({ description: "snap", prompt: "snapshot body", model: "inherit" })
   })
 
   it("captureSubagentTemplates skips unresolved names (best-effort)", () => {
@@ -139,7 +143,7 @@ describe("loadSubagents", () => {
     cleanups.push(emptyExec)
     try {
       const agents = loadSubagents(makeProfile([name], emptyExec))!
-      expect(agents[name]).toEqual({ description: "from catalog", prompt: "catalog body" })
+      expect(agents[name]).toEqual({ description: "from catalog", prompt: "catalog body", model: "inherit" })
     } finally {
       fs.rmSync(file, { force: true })
       if (createdDir) fs.rmSync(catalogAgents, { recursive: true, force: true })
@@ -159,7 +163,7 @@ describe("loadSubagents", () => {
     )
 
     expect(loadSubagents(makeProfile(["scout"], implementationDir))).toEqual({
-      scout: { description: "shared scout", prompt: "shared body" },
+      scout: { description: "shared scout", prompt: "shared body", model: "inherit" },
     })
   })
 })
