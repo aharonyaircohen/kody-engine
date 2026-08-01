@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
 import { loadConfig } from "../../src/config.js"
+import { readLoopDefinition } from "../../src/loopDefinitions.js"
 
 describe("package release loop configuration", () => {
   it("activates the Store package release bundle", () => {
@@ -17,5 +18,16 @@ describe("package release loop configuration", () => {
     const workflow = readFileSync(".github/workflows/ci.yml", "utf8")
 
     expect(workflow).toMatch(/workflow_dispatch:/)
+  })
+
+  it("enables the repository-owned daily package release loop", () => {
+    const loop = readLoopDefinition(process.cwd(), "daily-package-release-loop")
+
+    expect(loop).toMatchObject({
+      id: "daily-package-release-loop",
+      enabled: true,
+      trigger: { type: "schedule", every: "1d" },
+      target: { kind: "workflow", id: "package-release" },
+    })
   })
 })
