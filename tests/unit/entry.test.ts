@@ -162,6 +162,23 @@ describe("entry: parseArgs", () => {
     expect(a.ciArgv).toEqual([])
   })
 
+  it("routes bare runner loop requests to ci", () => {
+    vi.stubEnv(
+      "KODY_RUN_REQUEST_JSON",
+      JSON.stringify({
+        requestId: "loop-request-1",
+        target: { type: "loop", id: "daily-web-release-loop" },
+        intent: "run",
+        source: "dashboard",
+      }),
+    )
+
+    const a = parseArgs([])
+
+    expect(a.command).toBe("ci")
+    expect(a.ciArgv).toEqual([])
+  })
+
   it("routes bare runner interactive mode to chat", () => {
     vi.stubEnv("KODY_RUN_MODE", "interactive")
 
