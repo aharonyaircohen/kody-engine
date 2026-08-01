@@ -1,0 +1,13 @@
+{
+  "id": "daily-package-release-loop",
+  "trigger": {
+    "type": "schedule",
+    "every": "1d"
+  },
+  "target": {
+    "kind": "workflow",
+    "id": "package-release"
+  },
+  "input": {},
+  "enabled": true
+}
