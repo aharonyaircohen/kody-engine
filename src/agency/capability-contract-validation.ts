@@ -15,16 +15,13 @@ export class CapabilityContractValidationError extends Error {
       .map((error) => {
         const location = error.instancePath || "$"
         const property =
-          error.keyword === "additionalProperties" &&
-          typeof error.params.additionalProperty === "string"
+          error.keyword === "additionalProperties" && typeof error.params.additionalProperty === "string"
             ? ` (${error.params.additionalProperty})`
             : ""
         return `${location}: ${error.message ?? error.keyword}${property}`
       })
       .join("; ")
-    super(
-      `Capability ${boundary} does not match its declared contract: ${details}`,
-    )
+    super(`Capability ${boundary} does not match its declared contract: ${details}`)
     this.name = "CapabilityContractValidationError"
   }
 }
@@ -46,9 +43,7 @@ export function capabilityContractInput(
   capabilityId?: string,
   contractProperties: readonly string[] = [],
 ): unknown {
-  const isGenericRunnerInput =
-    inputs.some((input) => input.name === "input") &&
-    Object.hasOwn(args, "input")
+  const isGenericRunnerInput = inputs.some((input) => input.name === "input") && Object.hasOwn(args, "input")
   if (!isGenericRunnerInput) {
     const isParameterlessGenericRunner =
       (inputs.some((input) => input.name === "capability") ||

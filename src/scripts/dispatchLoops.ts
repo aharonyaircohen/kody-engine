@@ -57,9 +57,7 @@ export const dispatchLoops: PreflightScript = async (ctx) => {
 export function assertLoopDispatchesSucceeded(results: readonly LoopDispatchResult[]): void {
   const failed = results.filter((result) => result.status === "failed")
   if (failed.length === 0) return
-  throw new Error(
-    `Loop dispatch failed: ${failed.map((result) => `${result.loopId}: ${result.reason}`).join("; ")}`,
-  )
+  throw new Error(`Loop dispatch failed: ${failed.map((result) => `${result.loopId}: ${result.reason}`).join("; ")}`)
 }
 
 export async function dispatchLoopsWith(input: {

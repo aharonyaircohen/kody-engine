@@ -1,7 +1,7 @@
-import * as fs from "node:fs"
-import * as path from "node:path"
-import * as os from "node:os"
 import { randomUUID } from "node:crypto"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
 import { validateCapabilityContractValue } from "../agency/capability-contract-validation.js"
 import { readCapabilityFolder } from "../capabilityFolders.js"
 import { capabilitiesRoot } from "../definition-paths.js"
@@ -22,10 +22,7 @@ export const loadSimpleCapability: PreflightScript = async (ctx, profile) => {
   const toolFiles = listFiles(toolRoot)
   const skillFiles = listFiles(skillRoot)
   const parsedInput = parseInput(ctx.args.input)
-  const input =
-    parsedInput === undefined && capability.config.inputSchema?.type === "object"
-      ? {}
-      : parsedInput
+  const input = parsedInput === undefined && capability.config.inputSchema?.type === "object" ? {} : parsedInput
   if (capability.config.inputSchema) {
     validateCapabilityContractValue("input", capability.config.inputSchema, input)
   }

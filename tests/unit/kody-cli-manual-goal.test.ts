@@ -170,13 +170,7 @@ describe("kody-cli manual goal dispatch", () => {
   it("keeps an explicit workflow target when a capability has the same id", async () => {
     const dir = tmpDir()
     writeConfig(dir)
-    const capabilityDir = path.join(
-      dir,
-      ".kody-engine",
-      "definitions",
-      "capabilities",
-      "build-knowledge",
-    )
+    const capabilityDir = path.join(dir, ".kody-engine", "definitions", "capabilities", "build-knowledge")
     fs.mkdirSync(capabilityDir, { recursive: true })
     fs.writeFileSync(path.join(capabilityDir, "instructions.md"), "Build knowledge.\n")
     fs.writeFileSync(

@@ -226,9 +226,7 @@ function parseCapabilityContract(raw: string): CapabilityContract {
       ? undefined
       : Array.isArray(parsed.requiredSubagents) &&
           parsed.requiredSubagents.length > 0 &&
-          parsed.requiredSubagents.every(
-            (name) => typeof name === "string" && /^[a-z][a-z0-9-]{0,63}$/.test(name),
-          )
+          parsed.requiredSubagents.every((name) => typeof name === "string" && /^[a-z][a-z0-9-]{0,63}$/.test(name))
         ? [...new Set(parsed.requiredSubagents as string[])]
         : null
   if (requiredSubagents === null) {
