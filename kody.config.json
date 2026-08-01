@@ -14,10 +14,30 @@
     "typecheck": "pnpm typecheck",
     "testUnit": "pnpm test"
   },
+  "release": {
+    "validation": {
+      "workflow": "ci.yml"
+    },
+    "versionFiles": [
+      "package.json"
+    ],
+    "productionDeployRequired": false,
+    "timeoutMs": 1800000
+  },
   "company": {
+    "activeCapabilities": [
+      "release-prepare",
+      "release-validate",
+      "release-merge",
+      "npm-publish"
+    ],
     "activeGoals": [
       "ci-health",
-      "prs-stay-mergeable"
+      "prs-stay-mergeable",
+      "daily-package-release-loop"
+    ],
+    "activeWorkflows": [
+      "package-release"
     ]
   }
 }
