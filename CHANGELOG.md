@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.511 — 2026-08-01
+
+### Fixes
+- restore release validation gates (#74) (d5075de)
 All notable changes to `@kody-ade/kody-engine` are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
