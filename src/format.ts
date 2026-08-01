@@ -101,6 +101,11 @@ function formatResult(msg: SdkMessageLike): string {
 }
 
 function summarizeToolInput(toolName: string, input: Record<string, unknown> = {}): string {
+  if (toolName === "Agent") {
+    const agent = summarizeSingleLineValue(input.subagent_type, "unknown", 80)
+    const model = summarizeSingleLineValue(input.model, "inherit", 80)
+    return `: ${agent} model=${model}`
+  }
   if (toolName === "Bash" && typeof input.command === "string") {
     const cmd = input.command.split("\n")[0]
     return `: ${truncate(cmd, 120)}`
@@ -112,6 +117,11 @@ function summarizeToolInput(toolName: string, input: Record<string, unknown> = {
     return `: ${truncate(input.pattern, 80)}`
   }
   return ""
+}
+
+function summarizeSingleLineValue(value: unknown, fallback: string, max: number): string {
+  if (typeof value !== "string" || value.trim() === "") return fallback
+  return truncate(value.trim().split(/\r?\n/, 1)[0], max)
 }
 
 function stringifyToolContent(content: unknown): string {

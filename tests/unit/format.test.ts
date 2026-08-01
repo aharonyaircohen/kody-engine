@@ -26,6 +26,46 @@ describe("format: renderEvent", () => {
     expect(renderEvent(msg)).toBe("→ Bash: pnpm typecheck")
   })
 
+  it("summarizes an explicit Agent model without exposing its prompt", () => {
+    const msg: SdkMessageLike = {
+      type: "assistant",
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            name: "Agent",
+            input: {
+              subagent_type: "documentation-writer",
+              model: "sonnet",
+              prompt: "private task instructions",
+            },
+          },
+        ],
+      },
+    }
+
+    const result = renderEvent(msg)
+    expect(result).toBe("→ Agent: documentation-writer model=sonnet")
+    expect(result).not.toContain("private task instructions")
+  })
+
+  it("shows that an Agent model is inherited when no override is provided", () => {
+    const msg: SdkMessageLike = {
+      type: "assistant",
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            name: "Agent",
+            input: { subagent_type: "documentation-writer" },
+          },
+        ],
+      },
+    }
+
+    expect(renderEvent(msg)).toBe("→ Agent: documentation-writer model=inherit")
+  })
+
   it("renders tool_result as size summary by default", () => {
     const msg: SdkMessageLike = {
       type: "user",
