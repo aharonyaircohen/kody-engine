@@ -26,8 +26,7 @@ export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profil
     ]
     return
   }
-  const outputPath =
-    typeof ctx.data.capabilityOutputPath === "string" ? ctx.data.capabilityOutputPath : undefined
+  const outputPath = typeof ctx.data.capabilityOutputPath === "string" ? ctx.data.capabilityOutputPath : undefined
   const fileOutput = readOutputFile(outputPath)
   const output = fileOutput.found
     ? fileOutput.value

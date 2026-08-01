@@ -582,20 +582,21 @@ export async function runCi(argv: string[]): Promise<number> {
     const capabilityRoot = capabilitiesRoot(cwd)
     const directCapability = manualGoalManager ? null : resolveCapabilityFolder(forceRunAction, capabilityRoot)
     const directExecution = directCapability ? resolveCapabilityExecution(directCapability, cwd) : null
-    const capabilityRoute = manualGoalManager || forceRunTargetKind === "workflow"
-      ? null
-      : (resolveCapabilityAction(forceRunAction, capabilityRoot) ??
-        (directCapability &&
-        directExecution &&
-        (directCapability.config.action ?? directCapability.slug) === forceRunAction
-          ? {
-              action: forceRunAction,
-              capability: directCapability.slug,
-              implementation: directExecution.implementation,
-              cliArgs: directExecution.cliArgs,
-              source: "project-folder" as const,
-            }
-          : null))
+    const capabilityRoute =
+      manualGoalManager || forceRunTargetKind === "workflow"
+        ? null
+        : (resolveCapabilityAction(forceRunAction, capabilityRoot) ??
+          (directCapability &&
+          directExecution &&
+          (directCapability.config.action ?? directCapability.slug) === forceRunAction
+            ? {
+                action: forceRunAction,
+                capability: directCapability.slug,
+                implementation: directExecution.implementation,
+                cliArgs: directExecution.cliArgs,
+                source: "project-folder" as const,
+              }
+            : null))
     const workflowRoute =
       manualGoalManager ||
       capabilityRoute ||

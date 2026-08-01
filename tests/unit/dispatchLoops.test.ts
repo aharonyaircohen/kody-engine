@@ -189,9 +189,7 @@ describe("dispatchLoopsWith", () => {
 describe("assertLoopDispatchesSucceeded", () => {
   it("fails the outer CI run when any Loop target failed", () => {
     expect(() =>
-      assertLoopDispatchesSucceeded([
-        { loopId: "daily-check", status: "failed", reason: "target missing" },
-      ]),
+      assertLoopDispatchesSucceeded([{ loopId: "daily-check", status: "failed", reason: "target missing" }]),
     ).toThrow("Loop dispatch failed: daily-check: target missing")
   })
 
