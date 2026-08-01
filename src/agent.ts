@@ -11,7 +11,7 @@ import {
 } from "./config.js"
 import { renderEvent, type SdkMessageLike } from "./format.js"
 import { agentRunDir } from "./runtimePaths.js"
-import { enforceSubagentModelInheritance } from "./subagents.js"
+import { createSubagentInvocationHook, enforceSubagentModelInheritance } from "./subagents.js"
 
 export interface AgentTokenUsage {
   input: number
@@ -62,6 +62,8 @@ export interface AgentResult {
   costUsd?: number
   /** Number of SDK messages observed (proxy for turn count). */
   messageCount?: number
+  /** Private specialists actually started through the Agent tool. */
+  invokedSubagents?: string[]
 }
 
 /** Map an SDK result subtype string into a structured outcome kind. */
@@ -432,6 +434,8 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   let messageCount = 0
   let finalText = ""
   let getSubmitted: (() => { cursor: string; data: Record<string, unknown>; done: boolean } | undefined) | undefined
+  const invokedSubagents = new Set<string>()
+  const subagentInvocationHook = createSubagentInvocationHook(invokedSubagents)
 
   for (let attempt = 0; ; attempt++) {
     // The SDK message log reflects the final attempt — truncate on each try.
@@ -489,6 +493,12 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
             {
               matcher: "Agent",
               hooks: [enforceSubagentModelInheritance],
+            },
+          ],
+          PostToolUse: [
+            {
+              matcher: "Agent",
+              hooks: [subagentInvocationHook],
             },
           ],
         },
@@ -915,5 +925,6 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     tokens,
     costUsd,
     messageCount,
+    invokedSubagents: [...invokedSubagents],
   }
 }

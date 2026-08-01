@@ -43,6 +43,20 @@ export async function enforceSubagentModelInheritance(input: AgentPreToolUseInpu
   }
 }
 
+/** Track a specialist after its Agent tool call completes successfully. */
+export function createSubagentInvocationHook(
+  invokedSubagents: Set<string>,
+): (input: AgentPreToolUseInput) => Promise<Record<string, unknown>> {
+  return async (input) => {
+    const toolInput = input.tool_input
+    if (toolInput && typeof toolInput === "object" && !Array.isArray(toolInput)) {
+      const subagentType = (toolInput as Record<string, unknown>).subagent_type
+      if (typeof subagentType === "string" && subagentType.length > 0) invokedSubagents.add(subagentType)
+    }
+    return {}
+  }
+}
+
 /** Split `---\n<frontmatter>\n---\n<body>` into [frontmatter, body]. */
 function splitFrontmatter(raw: string): { fm: Record<string, string>; body: string } {
   const match = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(raw)

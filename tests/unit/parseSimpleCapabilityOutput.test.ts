@@ -5,6 +5,50 @@ import { describe, expect, it } from "vitest"
 import { parseSimpleCapabilityOutput } from "../../src/scripts/parseSimpleCapabilityOutput.js"
 
 describe("parseSimpleCapabilityOutput", () => {
+  it("blocks when a required specialist was not invoked", async () => {
+    const ctx = {
+      data: { requiredSubagents: ["documentation-researcher"] },
+      output: {},
+    } as unknown as Parameters<typeof parseSimpleCapabilityOutput>[0]
+
+    await parseSimpleCapabilityOutput(
+      ctx,
+      {} as Parameters<typeof parseSimpleCapabilityOutput>[1],
+      {
+        finalText: JSON.stringify({ version: 1, status: "pass", summary: "Research complete" }),
+        invokedSubagents: [],
+      } as unknown as Parameters<typeof parseSimpleCapabilityOutput>[2],
+    )
+
+    expect(ctx.output.exitCode).toBe(64)
+    expect(ctx.output.reason).toBe("Required specialist was not invoked: documentation-researcher")
+    expect(ctx.data.capabilityResults).toEqual([
+      expect.objectContaining({
+        status: "blocked",
+        blockers: ["Required specialist was not invoked: documentation-researcher"],
+      }),
+    ])
+  })
+
+  it("accepts output when every required specialist was invoked", async () => {
+    const ctx = {
+      data: { requiredSubagents: ["documentation-researcher"] },
+      output: {},
+    } as unknown as Parameters<typeof parseSimpleCapabilityOutput>[0]
+
+    await parseSimpleCapabilityOutput(
+      ctx,
+      {} as Parameters<typeof parseSimpleCapabilityOutput>[1],
+      {
+        finalText: JSON.stringify({ version: 1, status: "pass", summary: "Research complete" }),
+        invokedSubagents: ["documentation-researcher"],
+      } as unknown as Parameters<typeof parseSimpleCapabilityOutput>[2],
+    )
+
+    expect(ctx.output.exitCode).toBeUndefined()
+    expect(ctx.data.capabilityOutput).toEqual({ version: 1, status: "pass", summary: "Research complete" })
+  })
+
   it("returns a structured blocked result when the agent returns nothing", async () => {
     const ctx = { data: {}, output: {} } as Parameters<typeof parseSimpleCapabilityOutput>[0]
     await parseSimpleCapabilityOutput(ctx, {} as Parameters<typeof parseSimpleCapabilityOutput>[1], null)

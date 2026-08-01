@@ -46,7 +46,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true })
 })
 
-function fixture(execution: "agent" | "script" = "agent") {
+function fixture(execution: "agent" | "script" = "agent", requiredSubagents?: string[]) {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-capability-subagents-"))
   roots.push(cwd)
   const capabilityDir = path.join(cwd, ".kody-engine", "definitions", "capabilities", "document")
@@ -57,6 +57,7 @@ function fixture(execution: "agent" | "script" = "agent") {
     path.join(capabilityDir, "contract.json"),
     JSON.stringify({
       execution,
+      ...(requiredSubagents ? { requiredSubagents } : {}),
       input: { type: "object" },
       output: { type: "object" },
     }),
@@ -101,6 +102,27 @@ function fixture(execution: "agent" | "script" = "agent") {
 }
 
 describe("simple Capability private subagents", () => {
+  it("loads required specialists as an enforceable runtime contract", async () => {
+    const { capabilityDir, ctx, profile } = fixture("agent", ["documentation-researcher"])
+    fs.writeFileSync(
+      path.join(capabilityDir, "tools", "agents", "documentation-researcher.md"),
+      "---\nname: documentation-researcher\ndescription: Find source evidence.\n---\nResearch every claim.\n",
+    )
+
+    await loadSimpleCapability(ctx as never, profile)
+
+    expect(ctx.data).toMatchObject({ requiredSubagents: ["documentation-researcher"] })
+    expect(profile.claudeCode.subagents).toContain("documentation-researcher")
+  })
+
+  it("rejects a required specialist without a capability-owned agent file", async () => {
+    const { ctx, profile } = fixture("agent", ["documentation-researcher"])
+
+    await expect(loadSimpleCapability(ctx as never, profile)).rejects.toThrow(
+      /required specialist documentation-researcher is not available/,
+    )
+  })
+
   it("registers capability-owned agent files as callable subagents", async () => {
     const { capabilityDir, ctx, profile } = fixture()
     fs.writeFileSync(

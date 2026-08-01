@@ -4,7 +4,12 @@ import * as path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import type { Profile } from "../../src/implementations/types.js"
 import { getPluginsCatalogRoot } from "../../src/scripts/buildSyntheticPlugin.js"
-import { captureSubagentTemplates, loadSubagents } from "../../src/subagents.js"
+import {
+  captureSubagentTemplates,
+  createSubagentInvocationHook,
+  enforceSubagentModelInheritance,
+  loadSubagents,
+} from "../../src/subagents.js"
 
 function makeProfile(subagents: string[], dir: string): Profile {
   return {
@@ -164,6 +169,35 @@ describe("loadSubagents", () => {
 
     expect(loadSubagents(makeProfile(["scout"], implementationDir))).toEqual({
       scout: { description: "shared scout", prompt: "shared body", model: "inherit" },
+    })
+  })
+})
+
+describe("subagent hooks", () => {
+  it("records a completed specialist separately from enforcing model inheritance", async () => {
+    const invoked = new Set<string>()
+    const recordCompletedInvocation = createSubagentInvocationHook(invoked)
+    const input = {
+      tool_input: {
+        subagent_type: "documentation-researcher",
+        description: "Inspect the declared sources",
+        model: "sonnet",
+      },
+    }
+
+    const preToolResult = await enforceSubagentModelInheritance(input)
+    const postToolResult = await recordCompletedInvocation(input)
+
+    expect(invoked).toEqual(new Set(["documentation-researcher"]))
+    expect(postToolResult).toEqual({})
+    expect(preToolResult).toEqual({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        updatedInput: {
+          subagent_type: "documentation-researcher",
+          description: "Inspect the declared sources",
+        },
+      },
     })
   })
 })

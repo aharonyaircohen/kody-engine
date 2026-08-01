@@ -730,7 +730,11 @@ async function runGraphCapabilityWorkflow(
 
     const transition = selectWorkflowTransition(step, chainData, state.transitionCounts)
     if (!transition) {
-      const reason = `workflow step ${step.id} has no available connection`
+      const exhausted = exhaustedWorkflowTransitions(step, chainData, state.transitionCounts)
+      const reason =
+        exhausted.length > 0
+          ? `workflow step ${step.id} reached iteration limit: ${exhausted.join(", ")}`
+          : `workflow step ${step.id} has no available connection`
       state.status = "blocked"
       state.blocker = reason
       await checkpoint?.(state)
@@ -833,6 +837,23 @@ function selectWorkflowTransition(
     if (!transition.when || conditionMatches(transition.when, workflowConditionContext(data))) return transition
   }
   return fallback
+}
+
+function exhaustedWorkflowTransitions(
+  step: CapabilityWorkflowStepConfig,
+  data: Record<string, unknown>,
+  counts: Record<string, number>,
+): string[] {
+  return (step.next ?? []).flatMap((transition) => {
+    if (transition.maxIterations === undefined) return []
+    const key = `${step.id}->${transition.to}`
+    if ((counts[key] ?? 0) < transition.maxIterations) return []
+    const matches =
+      transition.default === true ||
+      !transition.when ||
+      conditionMatches(transition.when, workflowConditionContext(data))
+    return matches ? [`${key} (${transition.maxIterations})`] : []
+  })
 }
 
 function workflowResultConditionPaths(transitions: CapabilityWorkflowTransitionConfig[]): string[] {

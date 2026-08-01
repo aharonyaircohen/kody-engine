@@ -94,8 +94,15 @@ Exit codes (inherited from kody run):
   2   verify failed (no PR opened — branch pushed for inspection)
   3   no commits to ship
   4   PR creation failed
+  64  capability or workflow blocked by an invalid or exhausted route
+  124 execution timed out
   99  wrapper crashed
 `
+
+/** Preserve meaningful job outcomes; reserve 99 for invalid wrapper results. */
+export function normalizeJobExitCode(exitCode: number): number {
+  return Number.isInteger(exitCode) && exitCode >= 0 && exitCode <= 255 ? exitCode : 99
+}
 
 export function parseCiArgs(argv: string[]): CiArgs {
   const result: CiArgs = { errors: [] }
@@ -694,7 +701,8 @@ export async function runCi(argv: string[]): Promise<number> {
       },
     )
     const ec = result.exitCode
-    return ec === 0 || ec === 1 || ec === 2 ? ec : 99
+    if (ec !== 0 && result.reason) process.stderr.write(`[kody] ${result.reason}\n`)
+    return normalizeJobExitCode(ec)
   }
   if (!args.issueNumber && !autoFallback && runRequestFanOut) {
     return runScheduledFanOut(cwd, args, { force: runRequestFanOutForce })

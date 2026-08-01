@@ -35,6 +35,13 @@ export const loadSimpleCapability: PreflightScript = async (ctx, profile) => {
   if (ctx.data.capabilityExecution === "agent") {
     registerCapabilitySubagents(profile, toolRoot, toolFiles)
   }
+  const requiredSubagents = capability.contract?.requiredSubagents ?? []
+  for (const required of requiredSubagents) {
+    if (!profile.claudeCode.subagents.includes(required)) {
+      throw new Error(`Capability "${slug}" required specialist ${required} is not available`)
+    }
+  }
+  if (requiredSubagents.length > 0) ctx.data.requiredSubagents = requiredSubagents
   if (capability.contract?.execution === "script") {
     ctx.data.capabilityScriptPath = path.join(capability.dir, "tools", "run.sh")
     ctx.data.capabilitySecretNames = capability.contract.secrets ?? []
@@ -104,6 +111,15 @@ export const loadSimpleCapability: PreflightScript = async (ctx, profile) => {
             : []),
         ]
       : ["Return one JSON value."]),
+    ...(requiredSubagents.length > 0
+      ? [
+          "",
+          "## Required specialists",
+          "",
+          `You must invoke each of these private specialists before returning: ${requiredSubagents.join(", ")}.`,
+          "The Engine verifies the actual Agent calls and blocks the capability if any are skipped.",
+        ]
+      : []),
   ].join("\n")
 }
 

@@ -1471,6 +1471,59 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("reports the exhausted connection when a workflow reaches its revision limit", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-exhausted-loop-"))
+    const originalCwd = process.cwd()
+    try {
+      for (const capability of ["run", "fix", "review"]) writeSimpleCapability(cwd, capability)
+      writeWorkflowDefinition(cwd, "revision-limit-pilot", {
+        name: "Revision limit pilot",
+        agent: "kody",
+        startAt: "review",
+        steps: [
+          {
+            id: "review",
+            capability: "run",
+            next: [
+              { to: "revise", when: { "result.status": "changed" } },
+              { to: "finish", default: true },
+            ],
+          },
+          {
+            id: "revise",
+            capability: "fix",
+            next: [{ to: "review", default: true, maxIterations: 1 }],
+          },
+          { id: "finish", capability: "review" },
+        ],
+      })
+      process.chdir(cwd)
+      runImplementationChain
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityResults: [capabilityResult({ status: "changed" })],
+        })
+        .mockResolvedValueOnce({ exitCode: 0, capabilityResults: [capabilityResult({ status: "changed" })] })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityResults: [capabilityResult({ status: "changed" })],
+        })
+        .mockResolvedValueOnce({ exitCode: 0, capabilityResults: [capabilityResult({ status: "changed" })] })
+
+      const result = await runJob({ workflow: "revision-limit-pilot", cliArgs: {}, flavor: "instant" }, { cwd })
+
+      expect(result.exitCode).toBe(64)
+      expect(result.reason).toBe("workflow step revise reached iteration limit: revise->review (1)")
+      expect(result.workflowState).toMatchObject({
+        status: "blocked",
+        blocker: "workflow step revise reached iteration limit: revise->review (1)",
+      })
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it.skip("does not replay a workflow whose persisted state is already done", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-idempotent-"))
     const originalCwd = process.cwd()

@@ -8,6 +8,8 @@ export const CAPABILITY_PROFILE_FILE = CAPABILITY_BODY_FILE
 
 export interface CapabilityContract {
   execution?: "agent" | "script"
+  /** Private specialists that an agent-backed capability must actually invoke. */
+  requiredSubagents?: string[]
   /** Secret names exposed only to this trusted script process. */
   secrets?: string[]
   /** Maximum trusted script runtime. Defaults to five minutes. */
@@ -219,11 +221,28 @@ function parseCapabilityContract(raw: string): CapabilityContract {
   if (timeoutMs !== undefined && parsed.execution !== "script") {
     throw new Error('contract.json timeoutMs is supported only when execution is "script"')
   }
+  const requiredSubagents =
+    parsed.requiredSubagents === undefined
+      ? undefined
+      : Array.isArray(parsed.requiredSubagents) &&
+          parsed.requiredSubagents.length > 0 &&
+          parsed.requiredSubagents.every(
+            (name) => typeof name === "string" && /^[a-z][a-z0-9-]{0,63}$/.test(name),
+          )
+        ? [...new Set(parsed.requiredSubagents as string[])]
+        : null
+  if (requiredSubagents === null) {
+    throw new Error("contract.json requiredSubagents must contain valid specialist names")
+  }
+  if (requiredSubagents && parsed.execution !== "agent") {
+    throw new Error('contract.json requiredSubagents are supported only when execution is "agent"')
+  }
   const unsupported = Object.keys(parsed).filter(
     (key) =>
       key !== "execution" &&
       key !== "secrets" &&
       key !== "timeoutMs" &&
+      key !== "requiredSubagents" &&
       key !== "input" &&
       key !== "output",
   )
@@ -234,6 +253,7 @@ function parseCapabilityContract(raw: string): CapabilityContract {
     ...(parsed.execution ? { execution: parsed.execution } : {}),
     ...(secrets ? { secrets } : {}),
     ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+    ...(requiredSubagents ? { requiredSubagents } : {}),
     input: parsed.input,
     output: parsed.output,
   }

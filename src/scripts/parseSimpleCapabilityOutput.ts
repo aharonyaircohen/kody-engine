@@ -4,6 +4,28 @@ import { parseCapabilityResult } from "../capabilityResult.js"
 import type { PostflightScript } from "../implementations/types.js"
 
 export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profile, agentResult) => {
+  const requiredSubagents = stringList(ctx.data.requiredSubagents)
+  const invokedSubagents = new Set(agentResult?.invokedSubagents ?? [])
+  const missingSubagents = requiredSubagents.filter((name) => !invokedSubagents.has(name))
+  if (missingSubagents.length > 0) {
+    const label = missingSubagents.length === 1 ? "specialist was" : "specialists were"
+    const reason = `Required ${label} not invoked: ${missingSubagents.join(", ")}`
+    ctx.output.exitCode = 64
+    ctx.output.reason = reason
+    ctx.data.capabilityOutput = { status: "blocked", reason, summary: reason }
+    ctx.data.capabilityResults = [
+      {
+        version: 1,
+        status: "blocked",
+        summary: reason,
+        facts: {},
+        artifacts: [],
+        missingEvidence: [],
+        blockers: [reason],
+      },
+    ]
+    return
+  }
   const outputPath =
     typeof ctx.data.capabilityOutputPath === "string" ? ctx.data.capabilityOutputPath : undefined
   const fileOutput = readOutputFile(outputPath)
@@ -96,6 +118,10 @@ export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profil
       blockers: [],
     },
   ]
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
 }
 
 function readOutputFile(outputPath: string | undefined): { found: boolean; value?: unknown } {
