@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.4.522 — 2026-08-02
+
+### Features
+- publish run summary reports (2a0878c)
+
+### Fixes
+- publish readable markdown only (0b72c53)
+- preserve summary report config (006dfe7)
+- keep publish gate self-contained (c9f11e1)
+- isolate prepublish tests (ed8fc29)
+
+### Chores
+- restore release lint gate (00c4bec)
 ## v0.4.521 — 2026-08-02
 
 ### Features
