@@ -12,7 +12,7 @@
   },
   "quality": {
     "typecheck": "pnpm typecheck",
-    "testUnit": "KODY_DEFINITIONS_ROOT=src KODY_DEFINITIONS_ROOT_CWD=. pnpm test",
+    "testUnit": "if [ ! -d ../kody-store/.git ]; then git clone --depth 1 --branch main https://github.com/aharonyaircohen/kody-ai-agency-catalog.git ../kody-store; fi && pnpm test",
     "coverage": "pnpm tsx scripts/check-coverage-floor.ts"
   },
   "release": {
