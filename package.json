@@ -33,7 +33,7 @@
     "format": "biome format --write",
     "verify:package": "node scripts/verify-package-tarball.cjs",
     "brain:publish": "docker buildx build --platform linux/amd64 -f runner/Dockerfile.brain --build-arg KODY_ENGINE_REF=$(git rev-parse HEAD) -t ghcr.io/${KODY_BRAIN_GHCR_OWNER:-aharonyaircohen}/kody-brain:latest --push runner",
-    "prepublishOnly": "pnpm typecheck && vitest run tests/unit tests/int --no-coverage && pnpm test:runtime-services && pnpm build && pnpm verify:package"
+    "prepublishOnly": "pnpm typecheck && vitest run tests/unit tests/int --no-coverage --maxWorkers=1 && pnpm test:runtime-services && pnpm build && pnpm verify:package"
   },
   "dependencies": {
     "@actions/cache": "^6.0.0",
