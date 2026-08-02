@@ -22,6 +22,7 @@ export interface KodyConfig {
     lint: string
     format: string
     testUnit: string
+    coverage?: string
   }
   git: {
     defaultBranch: string
@@ -341,6 +342,7 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
       lint: typeof quality.lint === "string" ? quality.lint : "",
       format: typeof quality.format === "string" ? quality.format : "",
       testUnit: typeof quality.testUnit === "string" ? quality.testUnit : "",
+      coverage: typeof quality.coverage === "string" ? quality.coverage : "",
     },
     git: {
       defaultBranch: typeof git.defaultBranch === "string" ? git.defaultBranch : "main",

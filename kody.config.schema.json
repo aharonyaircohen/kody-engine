@@ -17,7 +17,8 @@
         "typecheck": { "type": "string", "default": "" },
         "lint": { "type": "string", "default": "" },
         "format": { "type": "string", "default": "" },
-        "testUnit": { "type": "string", "default": "" }
+        "testUnit": { "type": "string", "default": "" },
+        "coverage": { "type": "string", "default": "" }
       }
     },
     "git": {

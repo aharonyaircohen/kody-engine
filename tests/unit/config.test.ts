@@ -211,10 +211,16 @@ describe("config: loadConfig", () => {
     writeConfig(dir, {
       github: { owner: "o", repo: "r" },
       agent: { model: "m/x" },
-      quality: { typecheck: "tc", testUnit: "tu", lint: "ln" },
+      quality: { typecheck: "tc", testUnit: "tu", lint: "ln", coverage: "cov" },
     })
     const cfg = loadConfig(dir)
-    expect(cfg.quality).toEqual({ typecheck: "tc", testUnit: "tu", lint: "ln", format: "" })
+    expect(cfg.quality).toEqual({
+      typecheck: "tc",
+      testUnit: "tu",
+      lint: "ln",
+      format: "",
+      coverage: "cov",
+    })
   })
 
   it("preserves string goal activations", () => {

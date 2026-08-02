@@ -12,7 +12,8 @@
   },
   "quality": {
     "typecheck": "pnpm typecheck",
-    "testUnit": "pnpm test"
+    "testUnit": "pnpm test",
+    "coverage": "pnpm tsx scripts/check-coverage-floor.ts"
   },
   "release": {
     "validation": {
