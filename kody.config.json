@@ -29,7 +29,9 @@
       "release-prepare",
       "release-validate",
       "release-merge",
-      "npm-publish"
+      "npm-publish",
+      "release-promote",
+      "vercel-production-deploy"
     ],
     "activeGoals": [
       "ci-health",
@@ -37,7 +39,8 @@
       "daily-package-release-loop"
     ],
     "activeWorkflows": [
-      "package-release"
+      "package-release",
+      "web-release"
     ],
     "activeAgents": [
       "kody"
