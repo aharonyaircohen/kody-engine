@@ -12,7 +12,7 @@
   },
   "quality": {
     "typecheck": "pnpm typecheck",
-    "testUnit": "pnpm test",
+    "testUnit": "KODY_DEFINITIONS_ROOT=src KODY_DEFINITIONS_ROOT_CWD=. pnpm test",
     "coverage": "pnpm tsx scripts/check-coverage-floor.ts"
   },
   "release": {
