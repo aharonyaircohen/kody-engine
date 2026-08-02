@@ -123,12 +123,23 @@ function tryLoadConfig(cwd: string): ReturnType<typeof loadConfig> | null {
   }
 }
 
+function conversationTenantId(dashboardUrl?: string): string | undefined {
+  if (!dashboardUrl) return undefined
+  try {
+    const value = new URL(dashboardUrl).searchParams.get("conversationTenantId")?.trim()
+    return value && /^user:\d+$/.test(value) ? value : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function buildSink(cwd: string, sessionId: string, dashboardUrl?: string): EventSink {
   const backend = createStateBackendFromEnv()
+  const tenantId = conversationTenantId(dashboardUrl) ?? "global"
   const sinks: EventSink[] = [
     new BackendEventSink(
       (tenantId, targetSessionId, event) => backend.appendChatEvent(tenantId, targetSessionId, event),
-      "global",
+      tenantId,
       sessionId,
     ),
     new FileSink(eventsFilePath(cwd, sessionId)),
@@ -212,7 +223,11 @@ export async function runChat(argv: string[]): Promise<number> {
   process.stdout.write(`→ kody:chat: litellm proxy ready (url=${litellm?.url ?? "skipped"})\n`)
 
   const sessionFile = sessionFilePath(cwd, sessionId)
-  const store = createSessionStore({ sessionId, sessionFile })
+  const store = createSessionStore({
+    sessionId,
+    sessionFile,
+    tenantId: conversationTenantId(args.dashboardUrl),
+  })
   if (args.initMessage) {
     await store.appendTurn({
       role: "user",

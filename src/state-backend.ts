@@ -177,6 +177,7 @@ function requireTenant(tenantId: string): string {
 
 function requireChatTenant(tenantId: string): string {
   const value = tenantId.trim()
+  if (/^user:\d+$/.test(value)) return value
   return value === "global" ? value : requireTenant(value)
 }
 
