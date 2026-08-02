@@ -1,7 +1,8 @@
 {
   "id": "agency-observer",
   "trigger": {
-    "type": "manual"
+    "type": "schedule",
+    "every": "1d"
   },
   "target": {
     "kind": "workflow",

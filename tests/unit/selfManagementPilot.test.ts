@@ -16,7 +16,7 @@ describe("self-management Observer pilot", () => {
     )
   })
 
-  it("installs the Observer as manual-only until its first run is proven", () => {
+  it("schedules the proven Observer to run daily", () => {
     expect(
       JSON.parse(
         readFileSync(
@@ -26,7 +26,7 @@ describe("self-management Observer pilot", () => {
       ),
     ).toEqual({
       id: "agency-observer",
-      trigger: { type: "manual" },
+      trigger: { type: "schedule", every: "1d" },
       target: { kind: "workflow", id: "agency-observer" },
       input: {},
       enabled: true,
