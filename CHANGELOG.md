@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.514 — 2026-08-02
+
+### Fixes
+- keep LiteLLM on a compatible FastAPI release during runner bootstrap
+
 ## v0.4.513 — 2026-08-02
 
 ### Fixes

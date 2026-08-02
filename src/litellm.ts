@@ -11,6 +11,11 @@ import {
   providerApiKeyEnvVar,
 } from "./config.js"
 
+// LiteLLM 1.95 imports FastAPI's get_flat_dependant, which FastAPI 0.141
+// removed. Keep the resolver inside LiteLLM's declared >=0.136.3 range while
+// excluding the incompatible release until LiteLLM removes that import.
+export const LITELLM_PIP_PACKAGES = ["litellm[proxy]", "fastapi>=0.136.3,<0.141"] as const
+
 export async function checkLitellmHealth(url: string): Promise<boolean> {
   try {
     const response = await fetch(`${url}/health`, { signal: AbortSignal.timeout(3000) })
@@ -154,11 +159,11 @@ export function resolveLitellmCommand(): string {
     return "litellm"
   } catch {
     if (!litellmImportable()) {
-      process.stderr.write("→ kody: litellm not found — installing (pip install 'litellm[proxy]')\n")
+      process.stderr.write(`→ kody: litellm not found — installing (pip install ${LITELLM_PIP_PACKAGES.join(" ")})\n`)
       let installed = false
       for (const pip of ["pip", "pip3"]) {
         try {
-          execFileSync(pip, ["install", "litellm[proxy]"], { timeout: 300_000, stdio: "inherit" })
+          execFileSync(pip, ["install", ...LITELLM_PIP_PACKAGES], { timeout: 300_000, stdio: "inherit" })
           installed = true
           break
         } catch {
@@ -166,7 +171,7 @@ export function resolveLitellmCommand(): string {
         }
       }
       if (!installed || !litellmImportable()) {
-        throw new Error("litellm not installed and auto-install failed — run: pip install 'litellm[proxy]'")
+        throw new Error(`litellm not installed and auto-install failed — run: pip install ${LITELLM_PIP_PACKAGES.join(" ")}`)
       }
     }
     const script = locateLitellmScript()

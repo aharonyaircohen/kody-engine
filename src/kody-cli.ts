@@ -15,6 +15,7 @@ import {
 } from "./issue.js"
 import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
 import { setKodyLabel } from "./lifecycleLabels.js"
+import { LITELLM_PIP_PACKAGES } from "./litellm.js"
 import { readLoopDefinition } from "./loopDefinitions.js"
 import {
   getProfileInputs,
@@ -378,8 +379,8 @@ export function installLitellmIfNeeded(cwd: string): number {
   } catch {
     // not installed
   }
-  process.stdout.write("→ kody: installing litellm (pip install 'litellm[proxy]')\n")
-  const installCode = shellOut("pip", ["install", "litellm[proxy]"], cwd)
+  process.stdout.write(`→ kody: installing litellm (pip install ${LITELLM_PIP_PACKAGES.join(" ")})\n`)
+  const installCode = shellOut("pip", ["install", ...LITELLM_PIP_PACKAGES], cwd)
   if (installCode === 0) return 0
 
   // Some pip environments report a non-zero status after completing the

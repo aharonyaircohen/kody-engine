@@ -282,14 +282,16 @@ describe("kody-cli: installLitellmIfNeeded", () => {
     const d = tmpDir()
     const bin = path.join(d, "bin")
     const marker = path.join(d, "litellm-installed")
+    const argsFile = path.join(d, "pip-args")
     fs.mkdirSync(bin)
     fs.writeFileSync(path.join(d, "kody.config.json"), JSON.stringify({ agent: { model: "minimax/MiniMax-M3" } }))
     fs.writeFileSync(path.join(bin, "python3"), `#!/bin/sh\n[ -f "${marker}" ]\n`, { mode: 0o755 })
-    fs.writeFileSync(path.join(bin, "pip"), `#!/bin/sh\ntouch "${marker}"\nexit 7\n`, { mode: 0o755 })
+    fs.writeFileSync(path.join(bin, "pip"), `#!/bin/sh\nprintf '%s\\n' "$*" > "${argsFile}"\ntouch "${marker}"\nexit 7\n`, { mode: 0o755 })
     prevEnv.PATH = process.env.PATH
     process.env.PATH = `${bin}:${process.env.PATH ?? ""}`
 
     expect(installLitellmIfNeeded(d)).toBe(0)
+    expect(fs.readFileSync(argsFile, "utf8")).toContain("litellm[proxy] fastapi>=0.136.3,<0.141")
   })
 })
 
