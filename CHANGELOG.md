@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.513 — 2026-08-02
+
+### Fixes
+- route legacy manual Loop dispatches to only the requested Loop
+
 ## v0.4.512 — 2026-08-02
 
 ### Features

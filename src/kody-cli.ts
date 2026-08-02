@@ -555,7 +555,14 @@ export async function runCi(argv: string[]): Promise<number> {
       } else if (noTarget && capabilityInput) {
         forceRunAction = capabilityInput
         if (messageInput) {
-          const route = resolveCapabilityAction(capabilityInput, capabilitiesRoot(cwd))
+          const route =
+            resolveCapabilityAction(capabilityInput, capabilitiesRoot(cwd)) ??
+            dispatchScheduledWatches({ force: true, cwd }).find(
+              (match) =>
+                match.action === capabilityInput ||
+                match.capability === capabilityInput ||
+                match.implementation === capabilityInput,
+            )
           const textInputs = route?.implementation
             ? (getProfileInputs(route.implementation, getRuntimeProfileRootsForCwd(cwd)) ?? []).filter(
                 (input) => input.type === "string",

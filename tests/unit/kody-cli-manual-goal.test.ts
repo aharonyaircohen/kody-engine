@@ -289,6 +289,28 @@ describe("kody-cli manual goal dispatch", () => {
     })
   })
 
+  it("targets one Loop when legacy workflow dispatch passes its id as the message", async () => {
+    const dir = tmpDir()
+    writeConfig(dir)
+    previousEnv.GITHUB_EVENT_NAME = process.env.GITHUB_EVENT_NAME
+    previousEnv.GITHUB_EVENT_PATH = process.env.GITHUB_EVENT_PATH
+    process.env.GITHUB_EVENT_NAME = "workflow_dispatch"
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      inputs: { capability: "loop-scheduler", message: "agency-observer" },
+    })
+
+    await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
+
+    expect(mocks.runJob).toHaveBeenCalledTimes(1)
+    expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
+      action: "loop-scheduler",
+      capability: "loop-scheduler",
+      cliArgs: { loop: "agency-observer" },
+      flavor: "instant",
+      force: true,
+    })
+  })
+
   it("runs stored workflows from manual workflow dispatch", async () => {
     const dir = tmpDir()
     writeConfig(dir)
