@@ -1,5 +1,67 @@
 # Changelog
 
+## v0.4.512 — 2026-08-02
+
+### Features
+- enable package release loop (#72) (0f2608b)
+- activate daily package releases (#71) (0665bde)
+- load model credentials from Kody vault (dd1acea)
+- generalize release adapters (05b7cdd)
+- configure explicit release validation (24004eb)
+
+### Fixes
+- restore release validation gates (#74) (d5075de)
+- enforce required specialists (2e8429c)
+- route loop run requests (10a0b8f)
+- enforce subagent model inheritance (b30f502)
+- block unmatched conditional routes (ce119a4)
+- preserve capability artifacts (f017bd2)
+- preserve explicit run target (ae58ee5)
+- persist structured agent output (3e3a3ff)
+- forward workflow request input (eb16827)
+- default object input (b53b100)
+- hydrate backend workflows (e354f0f)
+- keep routing fields out of capability input (b077910)
+- exclude routing from contract input (4039180)
+- batch workflow secret migration (9f08bd3)
+- keep capability fix isolated (d640d6a)
+- identify parameterless runner by contract (19094f4)
+- validate parameterless runner input (225aabb)
+- serialize vault secret migration (94bbaf5)
+- identify contract mismatch fields (8ede98b)
+- isolate generic payload from routing (7e60015)
+- migrate declared secrets into vault (d81ba32)
+- unwrap hydrated store input (0cd3394)
+- scope runtime secrets per capability (81dcceb)
+- resolve CI capabilities from target workspace (de07ab3)
+- validate canonical generic input (664311d)
+- keep generated workflow formatter-safe (9f1a45c)
+- restore capability-owned subagents (309764f)
+- keep deployment workflow-owned (28ce34c)
+- route workflow dispatch requests (d29eb28)
+- forward generic run requests (2831a30)
+- pass config to trusted capabilities (10ed001)
+- declare script execution timeouts (4bf3623)
+- preserve typed workflow targets (c97b609)
+- enforce trusted release boundaries (63c458b)
+- use canonical control plane for loops (90ab600)
+- unify loop scheduling architecture (e580dde)
+
+### Docs
+- document direct vault credentials (9a6d4f3)
+
+### Chores
+- remove store loop daily-web-release-loop (fbb5492)
+- add store loop daily-web-release-loop (a8bd0dc)
+- add store workflow web-release (b53648c)
+- add store workflow package-release (5137f2f)
+- expose delegated model in logs (24878db)
+- 0.4.504 (fde4807)
+- 0.4.503 (a08c62d)
+- 0.4.501 (fd72c0b)
+- 0.4.488 (c71de79)
+- 0.4.486 (943a806)
+- 0.4.485 (73de179)
 ## v0.4.511 — 2026-08-01
 
 ### Fixes
