@@ -27,11 +27,17 @@
   },
   "company": {
     "activeCapabilities": [
-      "release-prepare",
-      "release-validate",
-      "release-merge",
+      "ci-health-check",
+      "fix",
+      "merge",
       "npm-publish",
+      "release-merge",
+      "release-prepare",
       "release-promote",
+      "release-validate",
+      "review",
+      "run",
+      "test-health-check",
       "vercel-production-deploy"
     ],
     "activeGoals": [
@@ -41,6 +47,7 @@
     ],
     "activeWorkflows": [
       "package-release",
+      "test-health",
       "web-release"
     ],
     "activeAgents": [

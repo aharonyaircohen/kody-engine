@@ -1,0 +1,16 @@
+{
+  "id": "daily-test-health-loop",
+  "trigger": {
+    "type": "schedule",
+    "every": "1d"
+  },
+  "target": {
+    "kind": "workflow",
+    "id": "test-health"
+  },
+  "input": {
+    "repeat": 2,
+    "slowTestMs": 300000
+  },
+  "enabled": true
+}
