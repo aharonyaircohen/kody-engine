@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Checkout company store for tests
-        run: git clone --depth 1 --branch main https://github.com/aharonyaircohen/kody-company-store.git ../kody-store
+        run: git clone --depth 1 --branch main https://github.com/aharonyaircohen/kody-ai-agency-catalog.git ../kody-store
       - uses: pnpm/action-setup@v6
         with: { version: 11 }
       - uses: actions/setup-node@v4

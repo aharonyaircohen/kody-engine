@@ -90,8 +90,8 @@ Shared company assets can come from a remote company store before engine
 built-ins. Defaults:
 
 ```bash
-KODY_COMPANY_STORE=aharonyaircohen/kody-company-store
-KODY_COMPANY_STORE_REF=stable
+KODY_COMPANY_STORE=aharonyaircohen/kody-ai-agency-catalog
+KODY_COMPANY_STORE_REF=main
 ```
 
 `KODY_COMPANY_STORE_REF` is a Git ref, so it may be a branch, tag, or SHA.
@@ -102,7 +102,7 @@ Resolution order:
 2. Company Store capability and agent catalog assets
 3. Engine built-ins (`run` only)
 
-Local repo assets are overrides. Store assets are shared defaults. `stable`
+Local repo assets are overrides. Store assets are shared defaults. `main`
 should publish one canonical shared asset per slug; repo-specific variants stay
 local or use explicit names.
 
