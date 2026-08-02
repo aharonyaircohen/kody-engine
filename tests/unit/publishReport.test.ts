@@ -6,7 +6,7 @@ vi.mock("../../src/state-backend.js", () => ({
   hasStateBackendConfig: () => true,
 }))
 
-import { buildRuntimeReportMarkdown, publishReport } from "../../src/scripts/publishReport.js"
+import { buildRuntimeReportMarkdown, publishReport, publishWorkflowReport } from "../../src/scripts/publishReport.js"
 
 describe("publishReport", () => {
   beforeEach(() => {
@@ -150,5 +150,33 @@ describe("publishReport", () => {
     expect(saveReport.mock.calls[0]![1]).toBe("learning-finding-repo-ci-main")
     expect(saveReport.mock.calls[0]![4]).toContain("reportType: learning")
     expect(saveReport.mock.calls[0]![4]).toContain("# The repository recovered after its CI fix")
+  })
+
+  it("publishes one workflow summary report for a completed healthy run", async () => {
+    await publishWorkflowReport({
+      config: { github: { owner: "o", repo: "r" } } as never,
+      publication: {
+        type: "agency-observer",
+        owner: "agency-observer",
+        slug: "agency-observer",
+        title: "Agency Observer",
+      },
+      workflowId: "agency-observer",
+      workflowTitle: "Agency Observer",
+      state: {
+        status: "done",
+        completedStepIds: ["source-health", "observe-ci", "observe-flow"],
+        transitionCounts: {},
+        facts: { finding: { status: "open" } },
+        evidence: {},
+        artifacts: [{ label: "Stale issue", url: "https://github.com/o/r/issues/63" }],
+      },
+    })
+
+    expect(saveReport).toHaveBeenCalledOnce()
+    expect(saveReport.mock.calls[0]![1]).toBe("agency-observer")
+    expect(saveReport.mock.calls[0]![4]).toContain("# Agency Observer")
+    expect(saveReport.mock.calls[0]![4]).toContain('"completedStepIds"')
+    expect(saveReport.mock.calls[0]![4]).toContain("source-health")
   })
 })

@@ -19,7 +19,7 @@ import type {
 } from "./capabilityFolders.js"
 import { capabilityOutputConditionPaths } from "./capabilityFolders.js"
 import type { CapabilityResult } from "./capabilityResult.js"
-import type { KodyConfig } from "./config.js"
+import { type KodyConfig, loadConfig } from "./config.js"
 import { capabilitiesRoot } from "./definition-paths.js"
 import type { DispatchResult } from "./dispatch.js"
 import type { ExecutorInput, ExecutorOutput } from "./executor.js"
@@ -38,6 +38,7 @@ import {
   resolveCapabilityFolder,
 } from "./registry.js"
 import { type RunIndexRow, upsertRunIndexRowBestEffortAsync } from "./runIndex.js"
+import { publishWorkflowReport } from "./scripts/publishReport.js"
 import { resolveSimpleCapabilityRuntime, simpleCapabilityRuntimeArgs } from "./simpleCapabilityRuntime.js"
 import type { Action } from "./state.js"
 import { hasStateBackendConfig } from "./state-backend.js"
@@ -449,7 +450,19 @@ async function runCapabilityWorkflow(
     }
     return { exitCode: 64, reason: invalid }
   }
-  if (isGraphWorkflow(workflow)) return runGraphCapabilityWorkflow(parent, workflow, capability, base, checkpoint)
+  if (isGraphWorkflow(workflow)) {
+    const result = await runGraphCapabilityWorkflow(parent, workflow, capability, base, checkpoint)
+    if (workflow.report && result.workflowState) {
+      await publishWorkflowReport({
+        config: base.config ?? loadConfig(base.cwd),
+        publication: workflow.report,
+        workflowId: capability.slug,
+        workflowTitle: capability.title,
+        state: result.workflowState,
+      })
+    }
+    return result
+  }
   return runLinearCapabilityWorkflow(parent, workflow, capability, base)
 }
 

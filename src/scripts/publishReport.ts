@@ -1,6 +1,7 @@
 import type { AgentResult } from "../agent.js"
 import { type CapabilityResult, parseCapabilityResult, parseCapabilityResultsFromText } from "../capabilityResult.js"
-import type { PostflightScript, ReportPublicationConfig } from "../implementations/types.js"
+import type { KodyConfig } from "../config.js"
+import type { PostflightScript, ReportPublicationConfig, WorkflowRunState } from "../implementations/types.js"
 import { createStateBackendFromEnv, hasStateBackendConfig } from "../state-backend.js"
 
 const SAFE_SLUG = /^[a-z0-9][a-z0-9_-]{0,79}$/
@@ -16,6 +17,14 @@ interface RuntimeReportInput {
   data: Record<string, unknown>
   reviewStatus?: string
   reviewArea?: string
+}
+
+interface WorkflowReportInput {
+  config: KodyConfig
+  publication: ReportPublicationConfig
+  workflowId: string
+  workflowTitle: string
+  state: WorkflowRunState
 }
 
 export function buildRuntimeReportMarkdown(input: RuntimeReportInput): string {
@@ -83,6 +92,65 @@ export const publishReport: PostflightScript = async (ctx, _profile, agentResult
         reportTypeVersion: publication.version ?? 1,
         owner: publication.owner,
         capability: stringValue(ctx.data.jobCapability) ?? stringValue(ctx.data.capabilitySlug) ?? "unknown",
+      },
+      generatedAt,
+    )
+  } else if (process.env.GITHUB_ACTIONS === "true") {
+    throw new Error("Kody backend access is required for reports in GitHub Actions")
+  }
+}
+
+export async function publishWorkflowReport(input: WorkflowReportInput): Promise<void> {
+  const slug = input.publication.slug
+  if (!slug || !SAFE_SLUG.test(slug)) return
+  const tenantId =
+    input.config.github?.owner && input.config.github.repo
+      ? `${input.config.github.owner}/${input.config.github.repo}`
+      : process.env.GITHUB_REPOSITORY
+  if (!tenantId) return
+
+  const generatedAt = new Date().toISOString()
+  const title = input.publication.title ?? input.workflowTitle
+  const summary =
+    input.state.status === "done"
+      ? `${input.workflowTitle} completed`
+      : `${input.workflowTitle} ${input.state.status}${input.state.blocker ? `: ${input.state.blocker}` : ""}`
+  const markdown = buildRuntimeReportMarkdown({
+    generatedAt,
+    reportType: input.publication.type,
+    reportTypeVersion: input.publication.version ?? 1,
+    owner: input.publication.owner,
+    capability: input.workflowId,
+    title,
+    summary,
+    data: {
+      workflow: {
+        id: input.workflowId,
+        status: input.state.status,
+        completedStepIds: input.state.completedStepIds,
+        transitionCounts: input.state.transitionCounts,
+        facts: input.state.facts,
+        evidence: input.state.evidence,
+        artifacts: input.state.artifacts,
+        ...(input.state.blocker ? { blocker: input.state.blocker } : {}),
+      },
+    },
+    ...(input.publication.reviewStatus ? { reviewStatus: input.publication.reviewStatus } : {}),
+    ...(input.publication.reviewArea ? { reviewArea: input.publication.reviewArea } : {}),
+  })
+  const runId = generatedAt.replace(/\.\d{3}Z$/, "Z").replace(/:/g, "-")
+  if (hasStateBackendConfig()) {
+    await createStateBackendFromEnv().saveReport(
+      tenantId,
+      slug,
+      runId,
+      title,
+      markdown,
+      {
+        reportType: input.publication.type,
+        reportTypeVersion: input.publication.version ?? 1,
+        owner: input.publication.owner,
+        capability: input.workflowId,
       },
       generatedAt,
     )

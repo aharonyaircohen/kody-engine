@@ -68,6 +68,7 @@ export function capabilityOutputConditionPaths(config: CapabilityFolderConfig): 
 export interface CapabilityWorkflowConfig {
   steps: CapabilityWorkflowStepConfig[]
   startAt?: string
+  report?: ReportPublicationConfig
 }
 
 export interface CapabilityWorkflowTransitionConfig {
@@ -377,9 +378,14 @@ export function parseCapabilityWorkflow(value: unknown): CapabilityWorkflowConfi
     value && typeof value === "object" && !Array.isArray(value)
       ? stringField((value as Record<string, unknown>).startAt)
       : undefined
+  const report =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? parseReportPublication((value as Record<string, unknown>).report)
+      : undefined
   return {
     steps,
     ...(startAt && isSafeStepId(startAt) ? { startAt } : {}),
+    ...(report ? { report } : {}),
   }
 }
 

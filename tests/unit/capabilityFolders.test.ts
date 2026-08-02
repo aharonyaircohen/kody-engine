@@ -5,6 +5,12 @@ describe("parseCapabilityWorkflow", () => {
   it("preserves documented camelCase graph ids and transition targets", () => {
     const workflow = parseCapabilityWorkflow({
       startAt: "healthCheck",
+      report: {
+        type: "agency-observer",
+        owner: "agency-observer",
+        slug: "agency-observer",
+        title: "Agency Observer",
+      },
       steps: [
         { id: "healthCheck", capability: "dev-ci-health", next: "inspect" },
         {
@@ -21,6 +27,12 @@ describe("parseCapabilityWorkflow", () => {
     })
 
     expect(workflow?.startAt).toBe("healthCheck")
+    expect(workflow?.report).toEqual({
+      type: "agency-observer",
+      owner: "agency-observer",
+      slug: "agency-observer",
+      title: "Agency Observer",
+    })
     expect(workflow?.steps.map((step) => step.id)).toEqual(["healthCheck", "inspect", "repair", "finish"])
     expect(workflow?.steps[2]?.next?.[0]?.to).toBe("healthCheck")
   })
