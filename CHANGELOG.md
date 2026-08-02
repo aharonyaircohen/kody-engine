@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.4.513 — 2026-08-02
+
+### Features
+- install observer self-management pilot (532bb4a)
+- support test coverage gates (4be311c)
+
+### Chores
+- update catalog repository (7cd192b)
+- install test health solution (59a501c)
 ## v0.4.512 — 2026-08-02
 
 ### Features
