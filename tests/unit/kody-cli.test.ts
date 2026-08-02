@@ -286,7 +286,11 @@ describe("kody-cli: installLitellmIfNeeded", () => {
     fs.mkdirSync(bin)
     fs.writeFileSync(path.join(d, "kody.config.json"), JSON.stringify({ agent: { model: "minimax/MiniMax-M3" } }))
     fs.writeFileSync(path.join(bin, "python3"), `#!/bin/sh\n[ -f "${marker}" ]\n`, { mode: 0o755 })
-    fs.writeFileSync(path.join(bin, "pip"), `#!/bin/sh\nprintf '%s\\n' "$*" > "${argsFile}"\ntouch "${marker}"\nexit 7\n`, { mode: 0o755 })
+    fs.writeFileSync(
+      path.join(bin, "pip"),
+      `#!/bin/sh\nprintf '%s\\n' "$*" > "${argsFile}"\ntouch "${marker}"\nexit 7\n`,
+      { mode: 0o755 },
+    )
     prevEnv.PATH = process.env.PATH
     process.env.PATH = `${bin}:${process.env.PATH ?? ""}`
 

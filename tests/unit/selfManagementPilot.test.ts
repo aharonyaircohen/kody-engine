@@ -17,14 +17,7 @@ describe("self-management Observer pilot", () => {
   })
 
   it("schedules the proven Observer to run daily", () => {
-    expect(
-      JSON.parse(
-        readFileSync(
-          ".kody-engine/definitions/loops/agency-observer/loop.json",
-          "utf8",
-        ),
-      ),
-    ).toEqual({
+    expect(JSON.parse(readFileSync(".kody-engine/definitions/loops/agency-observer/loop.json", "utf8"))).toEqual({
       id: "agency-observer",
       trigger: { type: "schedule", every: "1d" },
       target: { kind: "workflow", id: "agency-observer" },

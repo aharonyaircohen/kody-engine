@@ -171,7 +171,9 @@ export function resolveLitellmCommand(): string {
         }
       }
       if (!installed || !litellmImportable()) {
-        throw new Error(`litellm not installed and auto-install failed — run: pip install ${LITELLM_PIP_PACKAGES.join(" ")}`)
+        throw new Error(
+          `litellm not installed and auto-install failed — run: pip install ${LITELLM_PIP_PACKAGES.join(" ")}`,
+        )
       }
     }
     const script = locateLitellmScript()

@@ -166,11 +166,7 @@ describe("litellm: resolveLitellmCommand (auto-install)", () => {
       (c) => (c[0] === "pip" || c[0] === "pip3") && Array.isArray(c[1]) && c[1].includes("install"),
     )
     expect(installed).toBe(true)
-    expect(mockExec).toHaveBeenCalledWith(
-      "pip",
-      ["install", "litellm[proxy]", "fastapi==0.140.1"],
-      expect.anything(),
-    )
+    expect(mockExec).toHaveBeenCalledWith("pip", ["install", "litellm[proxy]", "fastapi==0.140.1"], expect.anything())
   })
 
   it("throws a clear error when install fails", () => {
