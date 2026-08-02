@@ -3,6 +3,7 @@ import * as path from "node:path"
 import type { CapabilityFolder, CapabilityWorkflowConfig, CapabilityWorkflowStepConfig } from "./capabilityFolders.js"
 import { parseCapabilityWorkflow } from "./capabilityFolders.js"
 import { definitionsRoot } from "./definition-paths.js"
+import type { ReportPublicationConfig } from "./implementations/types.js"
 import { validateWorkflow } from "./workflowValidation.js"
 
 export interface WorkflowDefinition {
@@ -12,6 +13,7 @@ export interface WorkflowDefinition {
   runWithoutApproval?: boolean
   steps?: CapabilityWorkflowStepConfig[]
   startAt?: string
+  report?: ReportPublicationConfig
   createdAt?: string
   updatedAt?: string
 }
@@ -46,6 +48,7 @@ export function normalizeWorkflowDefinition(value: unknown): WorkflowDefinition 
   const workflow = parseCapabilityWorkflow({
     steps: raw.steps,
     startAt: raw.startAt,
+    report: raw.report,
   })
   const steps = workflow?.steps
   const capabilities = steps ? steps.map((step) => step.capability) : normalizeWorkflowCapabilities(raw.capabilities)
@@ -57,6 +60,7 @@ export function normalizeWorkflowDefinition(value: unknown): WorkflowDefinition 
     ...(raw.runWithoutApproval === true ? { runWithoutApproval: true } : {}),
     ...(steps ? { steps } : {}),
     ...(workflow?.startAt ? { startAt: workflow.startAt } : {}),
+    ...(workflow?.report ? { report: workflow.report } : {}),
     ...(typeof raw.createdAt === "string" ? { createdAt: raw.createdAt } : {}),
     ...(typeof raw.updatedAt === "string" ? { updatedAt: raw.updatedAt } : {}),
   }
@@ -122,6 +126,7 @@ function workflowDefinitionToConfig(workflow: WorkflowDefinition): CapabilityWor
   return {
     steps: workflow.steps ?? workflow.capabilities.map((capability) => ({ capability })),
     ...(workflow.startAt ? { startAt: workflow.startAt } : {}),
+    ...(workflow.report ? { report: workflow.report } : {}),
   }
 }
 
