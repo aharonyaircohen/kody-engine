@@ -38,17 +38,16 @@
       "review",
       "run",
       "test-health-check",
-      "vercel-production-deploy"
-    ],
-    "activeGoals": [
-      "ci-health",
-      "prs-stay-mergeable",
-      "daily-package-release-loop"
+      "vercel-production-deploy",
+      "repo-source-health",
+      "observe-repo-ci",
+      "observe-agency-flow"
     ],
     "activeWorkflows": [
       "package-release",
       "test-health",
-      "web-release"
+      "web-release",
+      "agency-observer"
     ],
     "activeAgents": [
       "kody"

@@ -1,0 +1,12 @@
+{
+  "id": "agency-observer",
+  "trigger": {
+    "type": "manual"
+  },
+  "target": {
+    "kind": "workflow",
+    "id": "agency-observer"
+  },
+  "input": {},
+  "enabled": true
+}

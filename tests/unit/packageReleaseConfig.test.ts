@@ -6,8 +6,10 @@ import { readLoopDefinition } from "../../src/loopDefinitions.js"
 describe("package release loop configuration", () => {
   it("activates the Store package release bundle", () => {
     const config = loadConfig(process.cwd())
+    const raw = JSON.parse(readFileSync("kody.config.json", "utf8"))
 
-    expect(config.company?.activeGoals).toContain("daily-package-release-loop")
+    expect(config.company?.activeGoals).toBeUndefined()
+    expect(raw.company.activeWorkflows).toContain("package-release")
     expect(config.company?.activeCapabilities).toEqual(
       expect.arrayContaining(["release-prepare", "release-validate", "release-merge", "npm-publish"]),
     )
