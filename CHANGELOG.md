@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.516 — 2026-08-02
+
+### Fixes
+- publish workflow-selected reports after deterministic script capabilities run
+
 ## v0.4.515 — 2026-08-02
 
 ### Fixes
