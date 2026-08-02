@@ -11,10 +11,10 @@ import {
   providerApiKeyEnvVar,
 } from "./config.js"
 
-// LiteLLM 1.95 imports FastAPI's get_flat_dependant, which FastAPI 0.141
-// removed. Keep the resolver inside LiteLLM's declared >=0.136.3 range while
-// excluding the incompatible release until LiteLLM removes that import.
-export const LITELLM_PIP_PACKAGES = ["litellm[proxy]", "fastapi>=0.136.3,<0.141"] as const
+// LiteLLM 1.95 imports FastAPI's get_flat_dependant, which later 0.140.x
+// releases removed. Pin the verified compatible release until LiteLLM removes
+// that import.
+export const LITELLM_PIP_PACKAGES = ["litellm[proxy]", "fastapi==0.140.1"] as const
 
 export async function checkLitellmHealth(url: string): Promise<boolean> {
   try {

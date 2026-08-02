@@ -291,7 +291,7 @@ describe("kody-cli: installLitellmIfNeeded", () => {
     process.env.PATH = `${bin}:${process.env.PATH ?? ""}`
 
     expect(installLitellmIfNeeded(d)).toBe(0)
-    expect(fs.readFileSync(argsFile, "utf8")).toContain("litellm[proxy] fastapi>=0.136.3,<0.141")
+    expect(fs.readFileSync(argsFile, "utf8")).toContain("litellm[proxy] fastapi==0.140.1")
   })
 })
 

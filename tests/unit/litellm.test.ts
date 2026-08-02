@@ -168,7 +168,7 @@ describe("litellm: resolveLitellmCommand (auto-install)", () => {
     expect(installed).toBe(true)
     expect(mockExec).toHaveBeenCalledWith(
       "pip",
-      ["install", "litellm[proxy]", "fastapi>=0.136.3,<0.141"],
+      ["install", "litellm[proxy]", "fastapi==0.140.1"],
       expect.anything(),
     )
   })

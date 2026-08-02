@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.515 — 2026-08-02
+
+### Fixes
+- pin the verified FastAPI release required by LiteLLM 1.95
+
 ## v0.4.514 — 2026-08-02
 
 ### Fixes
