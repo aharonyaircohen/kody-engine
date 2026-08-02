@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.4.519 — 2026-08-02
+
+### Features
+- publish run summary reports (2a0878c)
+
+### Fixes
+- isolate prepublish tests (ed8fc29)
+
+### Chores
+- restore release lint gate (00c4bec)
 ## v0.4.518 — 2026-08-02
 
 ### Features
