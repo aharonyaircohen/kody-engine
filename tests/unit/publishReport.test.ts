@@ -81,6 +81,55 @@ describe("publishReport", () => {
     expect(saveReport.mock.calls[0]![4]).not.toContain("```json")
   })
 
+  it("publishes visible facts returned by a simple capability contract", async () => {
+    const finding = {
+      id: "finding-test-health",
+      title: "Test health needs attention",
+      status: "open",
+    }
+    const capabilityOutput = {
+      status: "concern",
+      needsRepair: false,
+      summary: "Found disabled tests",
+      facts: { finding, disabledOrFocusedTests: 2 },
+      blockers: [],
+    }
+    const ctx = {
+      config: { github: { owner: "o", repo: "r" } },
+      cwd: "/repo",
+      data: {
+        jobCapability: "test-health-check",
+        reportPublication: {
+          type: "finding",
+          owner: "test-health",
+          slugFact: "finding.id",
+          titleFact: "finding.title",
+          publishWhenFact: "finding.id",
+        },
+        capabilityOutput,
+        capabilityResults: [
+          {
+            version: 1,
+            status: "changed",
+            summary: capabilityOutput.summary,
+            facts: capabilityOutput,
+            artifacts: [],
+            missingEvidence: [],
+            blockers: [],
+          },
+        ],
+      },
+      output: { exitCode: 0 },
+    }
+
+    await publishReport(ctx as never, {} as never, null)
+
+    expect(saveReport).toHaveBeenCalledOnce()
+    expect(saveReport.mock.calls[0]![1]).toBe("finding-test-health")
+    expect(saveReport.mock.calls[0]![4]).toContain("# Test health needs attention")
+    expect(saveReport.mock.calls[0]![4]).toContain("- **Disabled Or Focused Tests:** 2")
+  })
+
   it("does nothing when a conditional report has no matching fact", async () => {
     const ctx = {
       config: { github: { owner: "o", repo: "r" } },

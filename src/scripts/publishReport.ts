@@ -218,7 +218,8 @@ export const publishReport: PostflightScript = async (ctx, _profile, agentResult
   if (!publication) return
   const result = latestResult(ctx.data.capabilityResults, agentResult)
   const stateData = recordField(recordField(ctx.data.nextJobState)?.data) ?? {}
-  const data = { ...stateData, ...(result?.facts ?? {}) }
+  const capabilityFacts = recordField(recordField(ctx.data.capabilityOutput)?.facts) ?? {}
+  const data = { ...stateData, ...(result?.facts ?? {}), ...capabilityFacts }
   if (publication.publishWhenFact && resolveDotted(data, publication.publishWhenFact) === undefined) return
 
   const slug = publication.slug ?? stringValue(resolveDotted(data, publication.slugFact))
