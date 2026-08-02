@@ -43,7 +43,10 @@
         "runWhen": { "data.capabilityExecution": "script" }
       }
     ],
-    "postflight": [{ "script": "parseSimpleCapabilityOutput" }]
+    "postflight": [
+      { "script": "parseSimpleCapabilityOutput" },
+      { "script": "publishReport" }
+    ]
   },
   "inputArtifacts": [],
   "outputArtifacts": []

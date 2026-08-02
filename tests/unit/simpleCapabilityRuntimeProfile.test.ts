@@ -14,16 +14,19 @@ describe("simple Capability runtime profile", () => {
 
     expect(profile.claudeCode.permissionMode).toBe("acceptEdits")
     expect(profile.claudeCode.tools).toEqual(["Read", "Bash", "Edit", "Write", "Glob", "Grep"])
-    expect(
-      (
-        profile as typeof profile & {
-          scripts: { preflight: Array<{ script: string; runWhen?: Record<string, unknown> }> }
+    const scripts = (
+      profile as typeof profile & {
+        scripts: {
+          preflight: Array<{ script: string; runWhen?: Record<string, unknown> }>
+          postflight: Array<{ script: string }>
         }
-      ).scripts.preflight,
-    ).toContainEqual({
+      }
+    ).scripts
+    expect(scripts.preflight).toContainEqual({
       script: "runSimpleCapabilityScript",
       runWhen: { "data.capabilityExecution": "script" },
     })
+    expect(scripts.postflight.map(({ script }) => script)).toEqual(["parseSimpleCapabilityOutput", "publishReport"])
   })
 
   it("keeps pull-request delivery in a separate internal runtime", () => {
