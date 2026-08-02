@@ -27,12 +27,15 @@ describe("publishReport", () => {
       data: { riskCount: 2 },
     })
 
-    expect(markdown).toContain("reportType: security-audit")
-    expect(markdown).toContain("reportTypeVersion: 2")
-    expect(markdown).toContain("  model: security-loop")
-    expect(markdown).toContain("  capability: scan-repository")
     expect(markdown).toContain("# Repository security audit")
-    expect(markdown).toContain('"riskCount": 2')
+    expect(markdown).toContain("- **Type:** security-audit")
+    expect(markdown).toContain("- **Version:** 2")
+    expect(markdown).toContain("- **Owner:** security-loop")
+    expect(markdown).toContain("- **Capability:** scan-repository")
+    expect(markdown).toContain("## Results")
+    expect(markdown).toContain("- **Risk Count:** 2")
+    expect(markdown).not.toContain("```json")
+    expect(markdown).not.toContain("## Report data")
   })
 
   it("publishes only when the workflow-selected fact exists", async () => {
@@ -73,7 +76,9 @@ describe("publishReport", () => {
 
     expect(saveReport).toHaveBeenCalledOnce()
     expect(saveReport.mock.calls[0]![1]).toBe("finding-repo-ci-main")
-    expect(saveReport.mock.calls[0]![4]).toContain("reportType: finding")
+    expect(saveReport.mock.calls[0]![4]).toContain("- **Type:** finding")
+    expect(saveReport.mock.calls[0]![4]).toContain("## Finding")
+    expect(saveReport.mock.calls[0]![4]).not.toContain("```json")
   })
 
   it("does nothing when a conditional report has no matching fact", async () => {
@@ -148,7 +153,7 @@ describe("publishReport", () => {
 
     expect(saveReport).toHaveBeenCalledOnce()
     expect(saveReport.mock.calls[0]![1]).toBe("learning-finding-repo-ci-main")
-    expect(saveReport.mock.calls[0]![4]).toContain("reportType: learning")
+    expect(saveReport.mock.calls[0]![4]).toContain("- **Type:** learning")
     expect(saveReport.mock.calls[0]![4]).toContain("# The repository recovered after its CI fix")
   })
 
@@ -176,7 +181,8 @@ describe("publishReport", () => {
     expect(saveReport).toHaveBeenCalledOnce()
     expect(saveReport.mock.calls[0]![1]).toBe("agency-observer")
     expect(saveReport.mock.calls[0]![4]).toContain("# Agency Observer")
-    expect(saveReport.mock.calls[0]![4]).toContain('"completedStepIds"')
-    expect(saveReport.mock.calls[0]![4]).toContain("source-health")
+    expect(saveReport.mock.calls[0]![4]).toContain("## Completed checks")
+    expect(saveReport.mock.calls[0]![4]).toContain("- Source Health")
+    expect(saveReport.mock.calls[0]![4]).not.toContain("```json")
   })
 })

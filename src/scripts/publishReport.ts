@@ -28,27 +28,189 @@ interface WorkflowReportInput {
 }
 
 export function buildRuntimeReportMarkdown(input: RuntimeReportInput): string {
-  return [
-    "---",
-    `generatedAt: ${yamlString(input.generatedAt)}`,
-    `reportType: ${input.reportType}`,
-    `reportTypeVersion: ${input.reportTypeVersion}`,
-    "producer:",
-    `  model: ${input.owner}`,
-    `  capability: ${input.capability}`,
-    ...(input.reviewStatus ? [`reviewStatus: ${input.reviewStatus}`] : []),
-    ...(input.reviewArea ? [`reviewArea: ${input.reviewArea}`] : []),
-    "---",
+  const lines = [
     `# ${input.title}`,
     "",
     input.summary,
     "",
-    "## Report data",
-    "```json",
-    JSON.stringify(input.data, null, 2),
-    "```",
+    "## About",
+    markdownField("Type", input.reportType),
+    markdownField("Version", input.reportTypeVersion),
+    markdownField("Generated", input.generatedAt),
+    markdownField("Owner", input.owner),
+    markdownField("Capability", input.capability),
+    ...(input.reviewStatus ? [markdownField("Review status", input.reviewStatus)] : []),
+    ...(input.reviewArea ? [markdownField("Review area", input.reviewArea)] : []),
     "",
-  ].join("\n")
+    ...renderReportData(input.data),
+  ]
+  return `${lines.join("\n").trimEnd()}\n`
+}
+
+function renderReportData(data: Record<string, unknown>): string[] {
+  const lines: string[] = []
+  const workflow = recordField(data.workflow)
+  const finding = recordField(data.finding)
+  const observation = recordField(data.observation)
+  const learning = recordField(data.learning)
+
+  if (workflow) lines.push(...renderWorkflow(workflow))
+  if (finding) lines.push(...renderFinding(finding))
+  if (observation) lines.push(...renderObservation(observation))
+  if (learning) lines.push(...renderLearning(learning))
+
+  const rest = omitKeys(data, ["workflow", "finding", "observation", "learning"])
+  if (Object.keys(rest).length > 0) {
+    lines.push("## Results", ...renderObjectFields(rest, 3), "")
+  }
+  return lines
+}
+
+function renderWorkflow(workflow: Record<string, unknown>): string[] {
+  const lines = ["## Run"]
+  pushField(lines, "Status", workflow.status)
+  pushField(lines, "Blocker", workflow.blocker)
+
+  const completed = stringArray(workflow.completedStepIds)
+  if (completed.length > 0) {
+    lines.push("", "## Completed checks", ...completed.map((step) => `- ${humanize(step)}`))
+  }
+
+  const facts = recordField(workflow.facts) ?? {}
+  const finding = recordField(facts.finding)
+  const observation = recordField(facts.observation)
+  if (finding) lines.push("", ...renderFinding(finding))
+  if (observation) lines.push("", ...renderObservation(observation))
+
+  const remainingFacts = omitKeys(facts, ["finding", "observation"])
+  if (Object.keys(remainingFacts).length > 0) {
+    lines.push("", "## Results", ...renderObjectFields(remainingFacts, 3))
+  }
+
+  const artifacts = Array.isArray(workflow.artifacts) ? workflow.artifacts : []
+  const evidence = renderEvidence(artifacts)
+  if (evidence.length > 0) lines.push("", "## Evidence", ...evidence)
+  lines.push("")
+  return lines
+}
+
+function renderFinding(finding: Record<string, unknown>): string[] {
+  const lines = ["## Finding"]
+  for (const [label, key] of [
+    ["ID", "id"],
+    ["Status", "status"],
+    ["Severity", "severity"],
+    ["Observer", "observerId"],
+    ["Subject", "subject"],
+    ["Expected", "expectation"],
+    ["Actual", "actual"],
+    ["Observation ID", "observationId"],
+    ["Observed", "observedAt"],
+    ["Operator activity", "operatorActivityAt"],
+  ] as const) {
+    pushField(lines, label, finding[key])
+  }
+  lines.push("")
+  return lines
+}
+
+function renderObservation(observation: Record<string, unknown>): string[] {
+  const lines = ["## Observation"]
+  for (const [label, key] of [
+    ["ID", "id"],
+    ["Status", "status"],
+    ["Summary", "summary"],
+    ["Observer", "observerId"],
+    ["Capability", "capability"],
+    ["Subject", "subject"],
+    ["Observed", "observedAt"],
+  ] as const) {
+    pushField(lines, label, observation[key])
+  }
+  const evidence = renderEvidence(Array.isArray(observation.evidence) ? observation.evidence : [])
+  if (evidence.length > 0) lines.push("", "### Evidence", ...evidence)
+  lines.push("")
+  return lines
+}
+
+function renderLearning(learning: Record<string, unknown>): string[] {
+  const lines = ["## Learning"]
+  for (const [label, key] of [
+    ["ID", "id"],
+    ["Finding ID", "findingId"],
+    ["Summary", "summary"],
+    ["Change", "change"],
+    ["Evidence", "evidence"],
+  ] as const) {
+    pushField(lines, label, learning[key])
+  }
+  lines.push("")
+  return lines
+}
+
+function renderObjectFields(value: Record<string, unknown>, headingLevel: number): string[] {
+  const lines: string[] = []
+  for (const [key, item] of Object.entries(value)) {
+    const label = humanize(key)
+    if (isScalar(item)) {
+      lines.push(markdownField(label, item))
+      continue
+    }
+    if (Array.isArray(item)) {
+      if (item.length === 0) continue
+      lines.push(`${"#".repeat(Math.min(headingLevel, 6))} ${label}`)
+      for (const entry of item) {
+        if (isScalar(entry)) lines.push(`- ${markdownValue(entry)}`)
+        else if (recordField(entry)) lines.push(...renderObjectFields(recordField(entry)!, headingLevel + 1))
+      }
+      continue
+    }
+    const record = recordField(item)
+    if (!record || Object.keys(record).length === 0) continue
+    lines.push(`${"#".repeat(Math.min(headingLevel, 6))} ${label}`, ...renderObjectFields(record, headingLevel + 1))
+  }
+  return lines
+}
+
+function renderEvidence(items: unknown[]): string[] {
+  return items.flatMap((item) => {
+    const record = recordField(item)
+    if (!record) return []
+    const label = stringValue(record.label) ?? stringValue(record.kind) ?? "Evidence"
+    const url = stringValue(record.url)
+    const status = stringValue(record.status)
+    const suffix = status ? ` — ${humanize(status)}` : ""
+    return [`- ${url ? `[${label}](${url})` : label}${suffix}`]
+  })
+}
+
+function omitKeys(value: Record<string, unknown>, keys: string[]): Record<string, unknown> {
+  const omitted = new Set(keys)
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !omitted.has(key)))
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
+}
+
+function isScalar(value: unknown): value is string | number | boolean | null | undefined {
+  return value === null || value === undefined || ["string", "number", "boolean"].includes(typeof value)
+}
+
+function pushField(lines: string[], label: string, value: unknown): void {
+  if (isScalar(value) && value !== undefined && value !== null && value !== "") {
+    lines.push(markdownField(label, value))
+  }
+}
+
+function markdownField(label: string, value: string | number | boolean | null | undefined): string {
+  return `- **${label}:** ${markdownValue(value)}`
+}
+
+function markdownValue(value: string | number | boolean | null | undefined): string {
+  if (value === null || value === undefined) return "None"
+  if (typeof value === "boolean") return value ? "Yes" : "No"
+  return String(value).replace(/\r?\n/g, " ").trim()
 }
 
 export const publishReport: PostflightScript = async (ctx, _profile, agentResult) => {
@@ -194,12 +356,9 @@ function stringValue(value: unknown): string | null {
 
 function humanize(value: string): string {
   return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .split(/[-_]+/)
     .filter(Boolean)
     .map((part) => part[0]!.toUpperCase() + part.slice(1))
     .join(" ")
-}
-
-function yamlString(value: string): string {
-  return JSON.stringify(value)
 }
