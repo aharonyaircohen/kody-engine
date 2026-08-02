@@ -128,6 +128,8 @@ describe("publishReport", () => {
     expect(saveReport.mock.calls[0]![1]).toBe("finding-test-health")
     expect(saveReport.mock.calls[0]![4]).toContain("# Test health needs attention")
     expect(saveReport.mock.calls[0]![4]).toContain("- **Disabled Or Focused Tests:** 2")
+    expect(saveReport.mock.calls[0]![4]).not.toContain("### Facts")
+    expect(saveReport.mock.calls[0]![4].match(/Disabled Or Focused Tests/g)).toHaveLength(1)
   })
 
   it("does nothing when a conditional report has no matching fact", async () => {
