@@ -38,6 +38,9 @@
     ],
     "activeWorkflows": [
       "package-release"
+    ],
+    "activeAgents": [
+      "kody"
     ]
   }
 }
