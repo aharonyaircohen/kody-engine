@@ -192,9 +192,7 @@ export function dueSlot(loop: LoopDefinition, now: Date): string | null {
 }
 
 function loopJob(loop: LoopDefinition): Job {
-  const cliArgs = Object.fromEntries(
-    Object.entries(loop.input).map(([key, value]) => [key, typeof value === "string" ? value : JSON.stringify(value)]),
-  )
+  const cliArgs = { ...loop.input }
   return loop.target.kind === "workflow"
     ? { workflow: loop.target.id, cliArgs, flavor: "scheduled" }
     : { capability: loop.target.id, cliArgs, flavor: "scheduled" }

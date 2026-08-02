@@ -83,7 +83,13 @@ describe("dispatchLoopsWith", () => {
     }
 
     const results = await dispatchLoopsWith({
-      loops: [{ ...loop, trigger: { type: "schedule", every: "1d" } }],
+      loops: [
+        {
+          ...loop,
+          trigger: { type: "schedule", every: "1d" },
+          input: { repeat: 2, slowTestMs: 300_000, repair: true },
+        },
+      ],
       tenantId: "acme/widgets",
       backend,
       now: new Date("2026-07-29T08:00:00.000Z"),
@@ -94,7 +100,14 @@ describe("dispatchLoopsWith", () => {
 
     expect(results).toEqual([{ loopId: "daily-check", status: "dispatched", reason: "workflow completed" }])
     const parentRunId = createAgencyRun.mock.calls[0]?.[3]?.id
-    expect(run).toHaveBeenCalledWith({ workflow: "quality", cliArgs: {}, flavor: "scheduled" }, parentRunId)
+    expect(run).toHaveBeenCalledWith(
+      {
+        workflow: "quality",
+        cliArgs: { repeat: 2, slowTestMs: 300_000, repair: true },
+        flavor: "scheduled",
+      },
+      parentRunId,
+    )
     expect(createAgencyRun).toHaveBeenCalledWith(
       "acme/widgets",
       "loop",
