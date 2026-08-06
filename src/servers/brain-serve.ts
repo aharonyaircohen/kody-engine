@@ -403,7 +403,9 @@ async function handleChatTurn(
     try {
       turnDriver = resolveBrainDriver(runtime)
     } catch (err) {
-      sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) })
+      sendJson(res, 400, {
+        error: err instanceof Error ? err.message : String(err),
+      })
       return
     }
   }
@@ -479,6 +481,7 @@ async function handleChatTurn(
         sessionId: chatId,
         sessionFile,
         cwd: agentCwd,
+        workspaceKind: repo ? "repository" : "host",
         model: opts.model,
         litellmUrl: opts.litellmUrl,
         sink,

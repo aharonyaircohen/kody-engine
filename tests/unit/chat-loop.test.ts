@@ -3,7 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { ChatEvent, EventSink } from "../../src/chat/events.js"
-import { buildPrompt, runChatTurn, shouldWriteTaskArtifacts } from "../../src/chat/loop.js"
+import { buildPrompt, resolveChatSystemPrompt, runChatTurn, shouldWriteTaskArtifacts } from "../../src/chat/loop.js"
 import { appendTurn, readSession } from "../../src/chat/session.js"
 import type { SessionStore } from "../../src/chat/session-store.js"
 
@@ -42,6 +42,18 @@ describe("chat/loop", () => {
     expect(shouldWriteTaskArtifacts(undefined)).toBe(true)
   })
 
+  it("uses a general host prompt when Brain is not attached to a repository", () => {
+    const prompt = resolveChatSystemPrompt({
+      cwd: tmp,
+      protocol: "anthropic",
+      workspaceKind: "host",
+    })
+
+    expect(prompt).toContain("machine hosting Brain")
+    expect(prompt).toMatch(/not\s+limited to a repository/)
+    expect(prompt).not.toContain("full clone of the user's repository")
+  })
+
   it("buildPrompt interleaves turns and tags assistant as the next speaker", () => {
     const prompt = buildPrompt([
       { role: "user", content: "hi", timestamp: "t1" },
@@ -78,7 +90,11 @@ describe("chat/loop", () => {
   it("emits chat.error and returns 64 when last turn is assistant", async () => {
     const sessionFile = path.join(tmp, "s.jsonl")
     appendTurn(sessionFile, { role: "user", content: "hi", timestamp: "t1" })
-    appendTurn(sessionFile, { role: "assistant", content: "hello", timestamp: "t2" })
+    appendTurn(sessionFile, {
+      role: "assistant",
+      content: "hello",
+      timestamp: "t2",
+    })
     const sink = new MemSink()
     const res = await runChatTurn({
       sessionId: "s1",
@@ -134,7 +150,12 @@ describe("chat/loop", () => {
       sessionFile,
       store: testStore(sessionFile),
       cwd: tmp,
-      model: { provider: "custom", model: "MiniMax-M3", protocol: "openai", spec: "minimax/MiniMax-M3" },
+      model: {
+        provider: "custom",
+        model: "MiniMax-M3",
+        protocol: "openai",
+        spec: "minimax/MiniMax-M3",
+      },
       litellmUrl: "http://localhost:4000",
       sink,
       fetchImpl: async (url, init) => {
@@ -161,7 +182,11 @@ describe("chat/loop", () => {
 
   it("injects a selected agent identity into Brain chat prompts", async () => {
     const sessionFile = path.join(tmp, "s.jsonl")
-    appendTurn(sessionFile, { role: "user", content: "who are you?", timestamp: "t1" })
+    appendTurn(sessionFile, {
+      role: "user",
+      content: "who are you?",
+      timestamp: "t1",
+    })
     const sink = new MemSink()
     const calls: Array<{ body: Record<string, unknown> }> = []
     const res = await runChatTurn({
@@ -169,7 +194,12 @@ describe("chat/loop", () => {
       sessionFile,
       store: testStore(sessionFile),
       cwd: tmp,
-      model: { provider: "custom", model: "MiniMax-M3", protocol: "openai", spec: "minimax/MiniMax-M3" },
+      model: {
+        provider: "custom",
+        model: "MiniMax-M3",
+        protocol: "openai",
+        spec: "minimax/MiniMax-M3",
+      },
       litellmUrl: "http://localhost:4000",
       sink,
       agentIdentity: {
@@ -196,7 +226,11 @@ describe("chat/loop", () => {
 
   it("does not advertise cross-repo tools just because reposRoot is present", async () => {
     const sessionFile = path.join(tmp, "s.jsonl")
-    appendTurn(sessionFile, { role: "user", content: "which repos can you access?", timestamp: "t1" })
+    appendTurn(sessionFile, {
+      role: "user",
+      content: "which repos can you access?",
+      timestamp: "t1",
+    })
     const sink = new MemSink()
     const calls: Array<{ body: Record<string, unknown> }> = []
     const res = await runChatTurn({
@@ -204,7 +238,12 @@ describe("chat/loop", () => {
       sessionFile,
       store: testStore(sessionFile),
       cwd: tmp,
-      model: { provider: "custom", model: "MiniMax-M3", protocol: "openai", spec: "minimax/MiniMax-M3" },
+      model: {
+        provider: "custom",
+        model: "MiniMax-M3",
+        protocol: "openai",
+        spec: "minimax/MiniMax-M3",
+      },
       litellmUrl: "http://localhost:4000",
       sink,
       reposRoot: path.join(tmp, "repos"),
@@ -228,7 +267,11 @@ describe("chat/loop", () => {
 
   it("advertises cross-repo tools only when explicitly enabled", async () => {
     const sessionFile = path.join(tmp, "s.jsonl")
-    appendTurn(sessionFile, { role: "user", content: "compare repos", timestamp: "t1" })
+    appendTurn(sessionFile, {
+      role: "user",
+      content: "compare repos",
+      timestamp: "t1",
+    })
     const sink = new MemSink()
     const calls: Array<{ body: Record<string, unknown> }> = []
     const res = await runChatTurn({
@@ -236,7 +279,12 @@ describe("chat/loop", () => {
       sessionFile,
       store: testStore(sessionFile),
       cwd: tmp,
-      model: { provider: "custom", model: "MiniMax-M3", protocol: "openai", spec: "minimax/MiniMax-M3" },
+      model: {
+        provider: "custom",
+        model: "MiniMax-M3",
+        protocol: "openai",
+        spec: "minimax/MiniMax-M3",
+      },
       litellmUrl: "http://localhost:4000",
       sink,
       reposRoot: path.join(tmp, "repos"),

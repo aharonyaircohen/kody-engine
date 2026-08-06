@@ -113,6 +113,29 @@ export const CHAT_SYSTEM_PROMPT = [
   "cite something concrete, you must have just read or run it in this session.",
 ].join("\n")
 
+export const HOST_CHAT_SYSTEM_PROMPT = [
+  "You are Kody, a general-purpose assistant running on the machine hosting Brain.",
+  "Reply to the user's latest message using the full conversation as context.",
+  "Keep replies short and simple, and use plain terms rather than jargon.",
+  "",
+  "# Your environment and capabilities",
+  "You can work across the host environment available to this process. You are not",
+  "limited to a repository or an opened project. Start from the current working",
+  "directory, and use `pwd`, `uname`, and other real commands before describing",
+  "the machine. Read, Edit, Write, Glob, Grep, and Bash can inspect and change",
+  "files or run programs with the same permissions as the Brain host user.",
+  "",
+  "Do not assume a repository exists. When a task concerns a project, first locate",
+  "the relevant directory from the user's words and the machine's actual filesystem.",
+  "Never print secrets or credential values. Be careful with destructive operations",
+  "and explain their effect before running them.",
+  "",
+  "# Ground answers in the machine",
+  "Use the real filesystem, process state, and command output before making claims",
+  "about this host. If the request is ambiguous and choosing a target could modify",
+  "the wrong data, ask a direct clarification before acting.",
+].join("\n")
+
 export const OPENAI_CHAT_SYSTEM_PROMPT = [
   "You are Kody, an AI assistant for the Kody Operations Dashboard. Reply to the",
   "user's latest message using the full conversation below as context. Keep replies",
@@ -190,6 +213,8 @@ export interface ChatTurnOptions {
   sessionId: string
   sessionFile: string
   cwd: string
+  /** Whether this turn is scoped to a selected repo or the general Brain host. */
+  workspaceKind?: "repository" | "host"
   model: ProviderModel
   litellmUrl: string | null
   sink: EventSink
@@ -261,8 +286,30 @@ export function shouldWriteTaskArtifacts(driver: ChatTurnOptions["driver"]): boo
   return driver !== "codex-app-server"
 }
 
+export function resolveChatSystemPrompt(input: {
+  cwd: string
+  protocol?: ProviderModel["protocol"]
+  workspaceKind?: ChatTurnOptions["workspaceKind"]
+  systemPrompt?: string
+}): string {
+  return (
+    input.systemPrompt ??
+    readSystemPromptOverride(input.cwd) ??
+    (input.workspaceKind === "host"
+      ? HOST_CHAT_SYSTEM_PROMPT
+      : input.protocol === "openai"
+        ? OPENAI_CHAT_SYSTEM_PROMPT
+        : CHAT_SYSTEM_PROMPT)
+  )
+}
+
 export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult> {
-  const store = opts.store ?? createSessionStore({ sessionId: opts.sessionId, sessionFile: opts.sessionFile })
+  const store =
+    opts.store ??
+    createSessionStore({
+      sessionId: opts.sessionId,
+      sessionFile: opts.sessionFile,
+    })
   const turns = await store.readTurns()
   if (turns.length === 0) {
     const error = "session file is empty — nothing to reply to"
@@ -281,10 +328,12 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
   // (the model sees a flat string otherwise, so a data URL is unreadable).
   const { turns: promptTurns, imagePaths } = prepareAttachments(turns, opts.cwd, opts.sessionId)
 
-  const basePrompt =
-    opts.systemPrompt ??
-    readSystemPromptOverride(opts.cwd) ??
-    (opts.model.protocol === "openai" ? OPENAI_CHAT_SYSTEM_PROMPT : CHAT_SYSTEM_PROMPT)
+  const basePrompt = resolveChatSystemPrompt({
+    cwd: opts.cwd,
+    protocol: opts.model.protocol,
+    workspaceKind: opts.workspaceKind,
+    systemPrompt: opts.systemPrompt,
+  })
   const activeAgent = await store.readActiveAgent()
   const agentIdentityBlock = readAgentIdentityBlock(opts.cwd, opts.agentIdentity ?? { slug: activeAgent.slug })
   const catalog = buildImplementationCatalog()
@@ -295,7 +344,10 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
     ...prepareTaskArtifactsDir(opts.cwd, opts.sessionId),
     taskKey: `sessions/${opts.sessionId}`,
   }
-  initializeTaskArtifacts(taskArtifactsPaths, { taskType: "chat", target: opts.sessionId })
+  initializeTaskArtifacts(taskArtifactsPaths, {
+    taskType: "chat",
+    target: opts.sessionId,
+  })
   const artifactAddendum = shouldWriteTaskArtifacts(opts.driver)
     ? taskArtifactsPromptAddendum({
         taskId: taskArtifactsPaths.taskId,
@@ -471,7 +523,9 @@ export async function runChatTurn(opts: ChatTurnOptions): Promise<ChatTurnResult
     content: reply,
     timestamp: now,
   })
-  await emit(opts.sink, "chat.done", opts.sessionId, "done", { sessionId: opts.sessionId })
+  await emit(opts.sink, "chat.done", opts.sessionId, "done", {
+    sessionId: opts.sessionId,
+  })
 
   // Best-effort artifact verification — never fails the chat turn.
   try {
@@ -561,7 +615,9 @@ async function runOpenAIChatTurn(args: {
       content: reply,
       timestamp: now,
     })
-    await emit(opts.sink, "chat.done", opts.sessionId, "done", { sessionId: opts.sessionId })
+    await emit(opts.sink, "chat.done", opts.sessionId, "done", {
+      sessionId: opts.sessionId,
+    })
     return { exitCode: 0, reply }
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err)

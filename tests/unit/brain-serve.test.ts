@@ -28,7 +28,10 @@ import {
   hydrateBrainDefinitions,
 } from "../../src/servers/brain-serve.js"
 
-const MODEL = { provider: "anthropic" as const, model: "claude-haiku-4-5-20251001" }
+const MODEL = {
+  provider: "anthropic" as const,
+  model: "claude-haiku-4-5-20251001",
+}
 const KEY = "test-key-do-not-leak"
 
 describe("repo-scoped definition hydration", () => {
@@ -168,7 +171,13 @@ describe("BrainSseSink", () => {
   it("translates chat.tool (phase=use) into tool_use; ignores phase=result", async () => {
     const res = new CaptureRes()
     const sink = new BrainSseSink(res as unknown as import("node:http").ServerResponse, "c1")
-    await sink.emit(makeEvent("chat.tool", { phase: "use", name: "Read", input: { p: "x.ts" } }))
+    await sink.emit(
+      makeEvent("chat.tool", {
+        phase: "use",
+        name: "Read",
+        input: { p: "x.ts" },
+      }),
+    )
     await sink.emit(makeEvent("chat.tool", { phase: "result", content: "ok" }))
     const out = parseSse(res.chunks)
     expect(out).toEqual([{ type: "tool_use", name: "Read", input: { p: "x.ts" }, chatId: "c1" }])
@@ -219,9 +228,12 @@ describe("hasStateBackendConfig", () => {
     expect(hasStateBackendConfig({})).toBe(false)
     expect(hasStateBackendConfig({ CONVEX_URL: "https://example.convex.cloud" })).toBe(false)
     expect(hasStateBackendConfig({ KODY_SERVICE_KEY: "service-key" })).toBe(false)
-    expect(hasStateBackendConfig({ CONVEX_URL: "https://example.convex.cloud", KODY_SERVICE_KEY: "service-key" })).toBe(
-      true,
-    )
+    expect(
+      hasStateBackendConfig({
+        CONVEX_URL: "https://example.convex.cloud",
+        KODY_SERVICE_KEY: "service-key",
+      }),
+    ).toBe(true)
   })
 })
 
@@ -382,7 +394,11 @@ describe("buildServer routes", () => {
     // Turn now flows through the broker: handshake is unsequenced, every
     // subsequent event carries a per-chat monotonic seq.
     expect(events[0]).toEqual({ type: "chat", chatId: "c1" })
-    expect(events[1]).toMatchObject({ type: "text", text: "hi back", chatId: "c1" })
+    expect(events[1]).toMatchObject({
+      type: "text",
+      text: "hi back",
+      chatId: "c1",
+    })
     expect(events[2]).toMatchObject({ type: "done", chatId: "c1" })
     expect(events[1]!.seq).toBe(1)
     expect(events[2]!.seq).toBe(2)
@@ -834,7 +850,13 @@ describe("ensureRepoCwd", () => {
       cloneRepo,
     })
     expect(dir).toBe(path.join(reposRoot, "acme/widgets"))
-    expect(calls).toEqual([{ repo: "acme/widgets", token: "tok", dir: path.join(reposRoot, "acme/widgets") }])
+    expect(calls).toEqual([
+      {
+        repo: "acme/widgets",
+        token: "tok",
+        dir: path.join(reposRoot, "acme/widgets"),
+      },
+    ])
   })
 
   it("skips cloning when the repo is already present", async () => {
@@ -859,8 +881,18 @@ describe("ensureRepoCwd", () => {
       fs.mkdirSync(path.join(dir, ".git"), { recursive: true })
     }
     const [a, b] = await Promise.all([
-      ensureRepoCwd({ baseCwd: tmp, reposRoot, repo: "acme/widgets", cloneRepo }),
-      ensureRepoCwd({ baseCwd: tmp, reposRoot, repo: "acme/widgets", cloneRepo }),
+      ensureRepoCwd({
+        baseCwd: tmp,
+        reposRoot,
+        repo: "acme/widgets",
+        cloneRepo,
+      }),
+      ensureRepoCwd({
+        baseCwd: tmp,
+        reposRoot,
+        repo: "acme/widgets",
+        cloneRepo,
+      }),
     ])
     expect(a).toBe(b)
     expect(calls).toBe(1)
@@ -910,7 +942,11 @@ describe("buildServer multi-repo", () => {
     const res = await fetch(`${booted.url}/chats/c1/messages`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": KEY },
-      body: JSON.stringify({ message: "hi", repo: "acme/widgets", repoToken: "tok" }),
+      body: JSON.stringify({
+        message: "hi",
+        repo: "acme/widgets",
+        repoToken: "tok",
+      }),
     })
     expect(res.status).toBe(200)
     await readSseBody(res)
@@ -969,6 +1005,26 @@ describe("buildServer multi-repo", () => {
     expect(cms?.cmsToken).toBe("repo-token")
     expect(cms?.cmsStoreRepoUrl).toBe("https://github.com/acme/kody-store")
     expect(cms?.cmsStoreRef).toBe("stable")
+  })
+
+  it("marks a turn without a repo as general host access", async () => {
+    const observed: ChatTurnOptions[] = []
+    booted = await boot(async (opts) => {
+      observed.push(opts)
+      await opts.sink.emit(makeEvent("chat.done", {}))
+      return { exitCode: 0 }
+    }, tmp)
+
+    const res = await fetch(`${booted.url}/chats/host-chat/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": KEY },
+      body: JSON.stringify({ message: "inspect this machine" }),
+    })
+
+    expect(res.status).toBe(200)
+    await readSseBody(res)
+    expect(observed[0]?.workspaceKind).toBe("host")
+    expect(observed[0]?.cwd).toBe(tmp)
   })
 
   it("passes a selected agent identity into the chat turn", async () => {
