@@ -302,7 +302,6 @@ describe("simple Capability execution", () => {
       cliArgs: {
         capability: "inspect",
         input: JSON.stringify({
-          issue: 7,
           prUrl: "https://github.com/acme/widgets/pull/42",
           pr: 42,
         }),

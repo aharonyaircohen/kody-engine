@@ -77,8 +77,19 @@ export async function upsertRunIndexRowBestEffortAsync(
 ): Promise<void> {
   if (!row) return
   const tenantId = tenantIdForRun(config)
-  if (!tenantId) throw new Error("Repository identity is required for the run index")
-  await createStateBackendFromEnv().saveAgencyRun(tenantId, row.id, row.subjectType, row.subjectId, row, row.updatedAt)
+  if (!tenantId) return
+  try {
+    await createStateBackendFromEnv().saveAgencyRun(
+      tenantId,
+      row.id,
+      row.subjectType,
+      row.subjectId,
+      row,
+      row.updatedAt,
+    )
+  } catch {
+    process.stderr.write("→ kody: run index persistence unavailable; continuing\n")
+  }
 }
 
 export function stageRunIndexFinalization(data: Record<string, unknown>, row: RunIndexRow | null): void {

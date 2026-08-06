@@ -1063,6 +1063,58 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("removes a stale issue when a workflow step explicitly targets a PR", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-pr-routing-"))
+    try {
+      for (const capability of ["check", "check-pr", "fix"]) {
+        writeSimpleCapability(cwd, capability)
+      }
+      writeWorkflowDefinition(cwd, "repair", {
+        name: "Repair",
+        agent: "kody",
+        startAt: "check",
+        steps: [
+          {
+            id: "check",
+            capability: "check",
+            next: [{ to: "check-pr", when: { "result.hasOpenPr": true } }],
+          },
+          {
+            id: "check-pr",
+            capability: "check-pr",
+            target: "pr",
+            targetFact: "pr",
+            next: [{ to: "fix", when: { "result.status": "red" } }],
+          },
+          { id: "fix", capability: "fix", target: "pr", targetFact: "pr", delivery: "pull-request" },
+        ],
+      })
+      runImplementationChain
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: { status: "red", hasOpenPr: true, issue: 3942, pr: 3943 },
+          capabilityResults: [capabilityResult({ status: "red", hasOpenPr: true, issue: 3942, pr: 3943 })],
+        })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: { status: "red" },
+          capabilityResults: [capabilityResult({ status: "red" })],
+        })
+        .mockResolvedValueOnce({ exitCode: 0, capabilityOutput: { status: "changed" } })
+
+      const result = await runJob({ workflow: "repair", cliArgs: {}, flavor: "instant" }, { cwd })
+
+      expect(result.exitCode).toBe(0)
+      for (const callIndex of [1, 2]) {
+        const input = JSON.parse(String(runImplementationChain.mock.calls[callIndex]![1].cliArgs.input))
+        expect(input).toMatchObject({ pr: 3943 })
+        expect(input).not.toHaveProperty("issue")
+      }
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it("ends a workflow through an explicit $end connection", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-end-"))
     try {

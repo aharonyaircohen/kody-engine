@@ -51,6 +51,21 @@ describe("run index backend", () => {
     expect(backend.saveAgencyRun).toHaveBeenCalledWith("o/r", row.id, "goal", "release", row, row.updatedAt)
   })
 
+  it("does not fail the agency when best-effort run persistence is temporarily unavailable", async () => {
+    backend.saveAgencyRun.mockRejectedValueOnce(new Error("GitHub Actions identity request failed (503)"))
+    const row = {
+      version: 1 as const,
+      id: "workflow:ci-repair:run-1",
+      subjectType: "workflow" as const,
+      subjectId: "ci-repair",
+      status: "running" as const,
+      title: "CI Repair",
+      updatedAt: "2026-08-06T15:37:01.000Z",
+    }
+
+    await expect(upsertRunIndexRowBestEffortAsync(config, "/repo", row)).resolves.toBeUndefined()
+  })
+
   it("finalizes staged rows through the backend", async () => {
     const data: Record<string, unknown> = {}
     stageRunIndexFinalization(data, {

@@ -1000,7 +1000,9 @@ function capabilityStepInput(
   if (!target || targetNumber === undefined) return input
   const routing = { [target]: targetNumber }
   if (input && typeof input === "object" && !Array.isArray(input)) {
-    return { ...(input as Record<string, unknown>), ...routing }
+    const context = { ...(input as Record<string, unknown>) }
+    delete context[target === "pr" ? "issue" : "pr"]
+    return { ...context, ...routing }
   }
   return input === undefined ? routing : { request: input, ...routing }
 }
