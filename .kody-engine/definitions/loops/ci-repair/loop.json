@@ -1,0 +1,13 @@
+{
+  "id": "ci-repair",
+  "trigger": {
+    "type": "schedule",
+    "every": "15m"
+  },
+  "target": {
+    "kind": "workflow",
+    "id": "ci-repair"
+  },
+  "input": {},
+  "enabled": false
+}
