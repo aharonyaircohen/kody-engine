@@ -9,5 +9,5 @@
     "id": "ci-repair"
   },
   "input": {},
-  "enabled": false
+  "enabled": true
 }
