@@ -47,7 +47,8 @@
       "package-release",
       "test-health",
       "web-release",
-      "agency-observer"
+      "agency-observer",
+      "ci-repair"
     ],
     "activeAgents": [
       "kody"
