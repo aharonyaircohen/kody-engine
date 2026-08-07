@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.4.531 — 2026-08-07
+
+### Features
+- support host-wide chat sessions (1382843)
+- support user-owned conversation tenants (4bab9b6)
+- publish run summary reports (2a0878c)
+
+### Fixes
+- preserve PR targets across retries (b9dd663)
+- avoid repeated capability facts (d6c39a7)
+- publish simple capability facts (3592d99)
+- preserve typed inputs (615b72e)
+- publish readable markdown only (0b72c53)
+- preserve summary report config (006dfe7)
+- keep publish gate self-contained (c9f11e1)
+- isolate prepublish tests (ed8fc29)
+
+### Chores
+- update loop ci-repair (813fac1)
+- add store loop ci-repair (6fe8b0c)
+- add store workflow ci-repair (fb15946)
+- set engine model (5eb07a5)
+- restore release lint gate (00c4bec)
 ## v0.4.529 — 2026-08-06
 
 ### Features
