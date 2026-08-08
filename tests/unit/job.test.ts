@@ -1072,7 +1072,7 @@ describe("runJob (Phase 1 seam)", () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-input-pr-"))
     try {
       writeSimpleCapability(cwd, "check-pr")
-      writeWorkflowDefinition(cwd, "review-merge", {
+      writeWorkflowDefinition(cwd, "review-fix", {
         name: "Review and Merge",
         agent: "kody",
         steps: [{ capability: "check-pr", target: "pr" }],
@@ -1083,7 +1083,7 @@ describe("runJob (Phase 1 seam)", () => {
       })
 
       const result = await runJob(
-        { workflow: "review-merge", cliArgs: { pr: 3947, headSha: "abc1234" }, flavor: "instant" },
+        { workflow: "review-fix", cliArgs: { pr: 3947, headSha: "abc1234" }, flavor: "instant" },
         { cwd },
       )
 
@@ -1138,7 +1138,7 @@ describe("runJob (Phase 1 seam)", () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-completion-blocked-"))
     try {
       writeSimpleCapability(cwd, "ui-review")
-      writeWorkflowDefinition(cwd, "review-merge", {
+      writeWorkflowDefinition(cwd, "review-fix", {
         name: "Review and Fix",
         agent: "kody",
         startAt: "ui-review",
@@ -1172,7 +1172,7 @@ describe("runJob (Phase 1 seam)", () => {
 
       await runJob(
         {
-          workflow: "review-merge",
+          workflow: "review-fix",
           workflowRunId: "run-8",
           cliArgs: { pr: 3947 },
           flavor: "instant",
@@ -1181,7 +1181,7 @@ describe("runJob (Phase 1 seam)", () => {
       )
 
       expect(notifyWorkflowCompleted).toHaveBeenCalledWith({
-        workflowId: "review-merge",
+        workflowId: "review-fix",
         runId: "run-8",
         status: "blocked",
         summary: "UI Review could not run because LOGIN_PASSWORD is missing.",
