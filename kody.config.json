@@ -41,7 +41,8 @@
       "vercel-production-deploy",
       "repo-source-health",
       "observe-repo-ci",
-      "observe-agency-flow"
+      "observe-agency-flow",
+      "prepare-ci-repair"
     ],
     "activeWorkflows": [
       "package-release",
