@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import type { LoopDefinition } from "../../src/loopDefinitions.js"
 import {
   assertLoopDispatchesSucceeded,
@@ -15,6 +15,10 @@ const loop: LoopDefinition = {
   target: { kind: "workflow", id: "quality" },
   input: {},
 }
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 describe("dueSlot", () => {
   it("creates one stable schedule slot", () => {
@@ -77,6 +81,7 @@ describe("dispatchLoopsWith", () => {
     const run = vi.fn().mockResolvedValue({ exitCode: 0, reason: "workflow completed" })
     const backend = {
       reserveLoopDispatch: vi.fn().mockResolvedValue({ acquired: true }),
+      renewLoopDispatch: vi.fn(),
       finishLoopDispatch,
       createAgencyRun,
       finishAgencyRun,
@@ -136,12 +141,61 @@ describe("dispatchLoopsWith", () => {
       expect.any(String),
       parentRunId,
     )
+    expect(backend.reserveLoopDispatch).toHaveBeenCalledWith(
+      "acme/widgets",
+      expect.objectContaining({
+        leaseUntil: "2026-07-29T08:10:00.000Z",
+      }),
+    )
+  })
+
+  it("renews the reservation while a Loop target is still running", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-07-29T08:00:00.000Z"))
+    let finishRun!: (result: { exitCode: number; reason: string }) => void
+    const run = vi.fn(
+      () =>
+        new Promise<{ exitCode: number; reason: string }>((resolve) => {
+          finishRun = resolve
+        }),
+    )
+    const backend = {
+      reserveLoopDispatch: vi.fn().mockResolvedValue({ acquired: true }),
+      renewLoopDispatch: vi.fn().mockResolvedValue(undefined),
+      finishLoopDispatch: vi.fn(),
+      createAgencyRun: vi.fn(),
+      finishAgencyRun: vi.fn(),
+    }
+
+    const pending = dispatchLoopsWith({
+      loops: [loop],
+      tenantId: "acme/widgets",
+      backend,
+      now: new Date(),
+      force: true,
+      run,
+      nonce: () => "renewed",
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(backend.renewLoopDispatch).toHaveBeenCalledWith(
+      "acme/widgets",
+      "daily-check:manual:2026-07-29T08:00:00.000Z:renewed",
+      "reservation-renewed",
+      "2026-07-29T08:11:00.000Z",
+      "2026-07-29T08:01:00.000Z",
+    )
+
+    finishRun({ exitCode: 0, reason: "workflow completed" })
+    await pending
   })
 
   it("records a failed Loop run when the target throws", async () => {
     const finishAgencyRun = vi.fn()
     const backend = {
       reserveLoopDispatch: vi.fn().mockResolvedValue({ acquired: true }),
+      renewLoopDispatch: vi.fn(),
       finishLoopDispatch: vi.fn(),
       createAgencyRun: vi.fn(),
       finishAgencyRun,
@@ -176,6 +230,7 @@ describe("dispatchLoopsWith", () => {
   it("does not create a second Run when the schedule slot is already reserved", async () => {
     const backend = {
       reserveLoopDispatch: vi.fn().mockResolvedValue({ acquired: false, reason: "duplicate" }),
+      renewLoopDispatch: vi.fn(),
       finishLoopDispatch: vi.fn(),
       createAgencyRun: vi.fn(),
       finishAgencyRun: vi.fn(),
@@ -197,13 +252,38 @@ describe("dispatchLoopsWith", () => {
     expect(backend.createAgencyRun).not.toHaveBeenCalled()
     expect(backend.finishAgencyRun).not.toHaveBeenCalled()
   })
+
+  it("reports capacity refusal as blocked instead of a successful skip", async () => {
+    const backend = {
+      reserveLoopDispatch: vi.fn().mockResolvedValue({ acquired: false, reason: "concurrency-limit" }),
+      renewLoopDispatch: vi.fn(),
+      finishLoopDispatch: vi.fn(),
+      createAgencyRun: vi.fn(),
+      finishAgencyRun: vi.fn(),
+    }
+
+    const results = await dispatchLoopsWith({
+      loops: [loop],
+      tenantId: "acme/widgets",
+      backend,
+      now: new Date("2026-07-29T08:07:00.000Z"),
+      force: true,
+      run: vi.fn(),
+      nonce: () => "blocked",
+    })
+
+    expect(results).toEqual([{ loopId: "daily-check", status: "blocked", reason: "concurrency-limit" }])
+    expect(() => assertLoopDispatchesSucceeded(results)).toThrow(
+      "Loop dispatch did not run: daily-check: concurrency-limit",
+    )
+  })
 })
 
 describe("assertLoopDispatchesSucceeded", () => {
   it("fails the outer CI run when any Loop target failed", () => {
     expect(() =>
       assertLoopDispatchesSucceeded([{ loopId: "daily-check", status: "failed", reason: "target missing" }]),
-    ).toThrow("Loop dispatch failed: daily-check: target missing")
+    ).toThrow("Loop dispatch did not run: daily-check: target missing")
   })
 
   it("allows dispatched and idempotently skipped Loops", () => {

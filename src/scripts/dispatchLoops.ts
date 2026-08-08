@@ -7,16 +7,17 @@ import { createStateBackendFromEnv, type StateBackend } from "../state-backend.j
 
 export interface LoopDispatchResult {
   loopId: string
-  status: "skipped" | "dispatched" | "failed"
+  status: "skipped" | "blocked" | "dispatched" | "failed"
   reason: string
 }
 
 type LoopDispatchBackend = Pick<
   StateBackend,
-  "createAgencyRun" | "finishAgencyRun" | "finishLoopDispatch" | "reserveLoopDispatch"
+  "createAgencyRun" | "finishAgencyRun" | "finishLoopDispatch" | "renewLoopDispatch" | "reserveLoopDispatch"
 >
 
-const LOOP_DISPATCH_LEASE_MS = 6 * 60 * 60 * 1_000
+const LOOP_DISPATCH_LEASE_MS = 10 * 60 * 1_000
+const LOOP_DISPATCH_RENEW_INTERVAL_MS = 60 * 1_000
 
 export const dispatchLoops: PreflightScript = async (ctx) => {
   const tenantId = repositoryTenant(ctx.config)
@@ -55,9 +56,11 @@ export const dispatchLoops: PreflightScript = async (ctx) => {
 }
 
 export function assertLoopDispatchesSucceeded(results: readonly LoopDispatchResult[]): void {
-  const failed = results.filter((result) => result.status === "failed")
-  if (failed.length === 0) return
-  throw new Error(`Loop dispatch failed: ${failed.map((result) => `${result.loopId}: ${result.reason}`).join("; ")}`)
+  const didNotRun = results.filter((result) => result.status === "failed" || result.status === "blocked")
+  if (didNotRun.length === 0) return
+  throw new Error(
+    `Loop dispatch did not run: ${didNotRun.map((result) => `${result.loopId}: ${result.reason}`).join("; ")}`,
+  )
 }
 
 export async function dispatchLoopsWith(input: {
@@ -97,7 +100,9 @@ export async function dispatchLoopsWith(input: {
       now: input.now.toISOString(),
     })
     if (!claimed.acquired) {
-      results.push({ loopId: loop.id, status: "skipped", reason: claimed.reason ?? "already claimed" })
+      const reason = claimed.reason ?? "already claimed"
+      const status = reason === "duplicate" ? "skipped" : "blocked"
+      results.push({ loopId: loop.id, status, reason })
       continue
     }
 
@@ -112,15 +117,32 @@ export async function dispatchLoopsWith(input: {
     }
     await input.backend.createAgencyRun(input.tenantId, "loop", loop.id, running, startedAt)
 
-    let exitCode: number
-    let reason: string
+    const stopLeaseRenewal = startLoopLeaseRenewal({
+      backend: input.backend,
+      tenantId: input.tenantId,
+      idempotencyKey,
+      reservationId,
+    })
+    let exitCode = 1
+    let reason = "target did not complete"
+    let runFailed = false
     try {
       const result = await input.run(loopJob(loop), runId)
       exitCode = result.exitCode
       reason = result.reason ?? (exitCode === 0 ? "dispatched" : "target failed")
     } catch (error) {
+      runFailed = true
       exitCode = 1
       reason = error instanceof Error ? error.message : String(error)
+    } finally {
+      try {
+        await stopLeaseRenewal()
+      } catch (error) {
+        if (!runFailed && exitCode === 0) {
+          exitCode = 1
+          reason = `Loop reservation renewal failed: ${error instanceof Error ? error.message : String(error)}`
+        }
+      }
     }
 
     const finishedAt = new Date().toISOString()
@@ -140,6 +162,43 @@ export async function dispatchLoopsWith(input: {
     results.push({ loopId: loop.id, status, reason })
   }
   return results
+}
+
+function startLoopLeaseRenewal(input: {
+  backend: LoopDispatchBackend
+  tenantId: string
+  idempotencyKey: string
+  reservationId: string
+}): () => Promise<void> {
+  let stopped = false
+  let renewalError: unknown
+  let pending = Promise.resolve()
+  const timer = setInterval(() => {
+    pending = pending.then(async () => {
+      const now = new Date()
+      try {
+        await input.backend.renewLoopDispatch(
+          input.tenantId,
+          input.idempotencyKey,
+          input.reservationId,
+          new Date(now.getTime() + LOOP_DISPATCH_LEASE_MS).toISOString(),
+          now.toISOString(),
+        )
+      } catch (error) {
+        renewalError ??= error
+      }
+    })
+  }, LOOP_DISPATCH_RENEW_INTERVAL_MS)
+  timer.unref?.()
+
+  return async () => {
+    if (!stopped) {
+      stopped = true
+      clearInterval(timer)
+    }
+    await pending
+    if (renewalError) throw renewalError
+  }
 }
 
 export function selectRunnableLoops(

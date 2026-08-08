@@ -123,6 +123,13 @@ export interface StateBackend {
     reason?: "duplicate" | "concurrency-limit" | "approval-required"
     reclaimed?: boolean
   }>
+  renewLoopDispatch(
+    tenantId: string,
+    idempotencyKey: string,
+    reservationId: string,
+    leaseUntil: string,
+    now: string,
+  ): Promise<void>
   finishLoopDispatch(
     tenantId: string,
     idempotencyKey: string,
@@ -305,6 +312,15 @@ export function createStateBackendFromEnv(
         reason?: "duplicate" | "concurrency-limit" | "approval-required"
         reclaimed?: boolean
       }
+    },
+    async renewLoopDispatch(tenantId, idempotencyKey, reservationId, leaseUntil, now) {
+      await transport.mutation(anyApi.agencyModel.renewDispatch, {
+        tenantId: requireTenant(tenantId),
+        idempotencyKey: requireNonEmpty(idempotencyKey, "idempotencyKey"),
+        reservationId: requireNonEmpty(reservationId, "reservationId"),
+        leaseUntil: requireNonEmpty(leaseUntil, "leaseUntil"),
+        now: requireNonEmpty(now, "now"),
+      })
     },
     async finishLoopDispatch(tenantId, idempotencyKey, reservationId, status, now, runId) {
       await transport.mutation(anyApi.agencyModel.finishDispatch, {

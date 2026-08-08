@@ -68,4 +68,26 @@ describe("Loop runtime state backend", () => {
       run: running,
     })
   })
+
+  it("renews only the reservation held by the running Loop", async () => {
+    const mutation = vi.fn()
+    const backend = createStateBackendFromEnv({}, { query: vi.fn(), mutation })
+
+    await backend.renewLoopDispatch(
+      "acme/widgets",
+      "loop-1:2026-07-22T12:00:00.000Z",
+      "reservation-1",
+      "2026-07-22T12:11:00.000Z",
+      "2026-07-22T12:01:00.000Z",
+    )
+
+    expect(getFunctionName(mutation.mock.calls[0]?.[0])).toBe("agencyModel:renewDispatch")
+    expect(mutation.mock.calls[0]?.[1]).toEqual({
+      tenantId: "acme/widgets",
+      idempotencyKey: "loop-1:2026-07-22T12:00:00.000Z",
+      reservationId: "reservation-1",
+      leaseUntil: "2026-07-22T12:11:00.000Z",
+      now: "2026-07-22T12:01:00.000Z",
+    })
+  })
 })
