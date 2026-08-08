@@ -1089,6 +1089,11 @@ function workflowIssueNumber(parent: Job): number | undefined {
 
 function workflowPrNumber(data: Record<string, unknown>): number | undefined {
   if (typeof data.workflowPrNumber === "number" && Number.isFinite(data.workflowPrNumber)) return data.workflowPrNumber
+  const workflowContext =
+    data.workflowContext && typeof data.workflowContext === "object" && !Array.isArray(data.workflowContext)
+      ? (data.workflowContext as Record<string, unknown>)
+      : undefined
+  if (typeof workflowContext?.pr === "number" && Number.isFinite(workflowContext.pr)) return workflowContext.pr
   const prUrl =
     typeof data.workflowPrUrl === "string"
       ? data.workflowPrUrl

@@ -1063,6 +1063,35 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("uses the workflow PR input for a PR-targeted first step", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-input-pr-"))
+    try {
+      writeSimpleCapability(cwd, "check-pr")
+      writeWorkflowDefinition(cwd, "review-merge", {
+        name: "Review and Merge",
+        agent: "kody",
+        steps: [{ capability: "check-pr", target: "pr" }],
+      })
+      runImplementationChain.mockResolvedValueOnce({
+        exitCode: 0,
+        capabilityResults: [capabilityResult({ status: "healthy" })],
+      })
+
+      const result = await runJob(
+        { workflow: "review-merge", cliArgs: { pr: 3947, headSha: "abc1234" }, flavor: "instant" },
+        { cwd },
+      )
+
+      expect(result.exitCode).toBe(0)
+      expect(JSON.parse(String(runImplementationChain.mock.calls[0]![1].cliArgs.input))).toEqual({
+        pr: 3947,
+        headSha: "abc1234",
+      })
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it("removes a stale issue when a workflow step explicitly targets a PR", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-pr-routing-"))
     try {
