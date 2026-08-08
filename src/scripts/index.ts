@@ -72,6 +72,7 @@ import { postPlanComment } from "./postPlanComment.js"
 import { postResearchComment } from "./postResearchComment.js"
 import { postReviewResult } from "./postReviewResult.js"
 import { prepareBrowserAuth } from "./prepareBrowserAuth.js"
+import { prepareSimpleCapabilityRuntime } from "./prepareSimpleCapabilityRuntime.js"
 import { prepareCapabilityDelivery } from "./prepareCapabilityDelivery.js"
 import { promoteQaGoal } from "./promoteQaGoal.js"
 import { publishReport } from "./publishReport.js"
@@ -136,6 +137,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   loadPriorArt,
   loadQaContext,
   prepareBrowserAuth,
+  prepareSimpleCapabilityRuntime,
   prepareCapabilityDelivery,
   buildSyntheticPlugin,
   resolveArtifacts,

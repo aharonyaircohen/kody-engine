@@ -1134,6 +1134,64 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("preserves a blocked Workflow outcome and reason in the platform notification", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-completion-blocked-"))
+    try {
+      writeSimpleCapability(cwd, "ui-review")
+      writeWorkflowDefinition(cwd, "review-merge", {
+        name: "Review and Fix",
+        agent: "kody",
+        startAt: "ui-review",
+        steps: [{ id: "ui-review", capability: "ui-review" }],
+      })
+      hasGitHubActionsIdentity.mockReturnValue(true)
+      runImplementationChain.mockResolvedValueOnce({
+        exitCode: 0,
+        reason: "UI Review could not run because LOGIN_PASSWORD is missing.",
+        capabilityOutput: {
+          status: "blocked",
+          feedback: "",
+          summary: "UI Review could not run because LOGIN_PASSWORD is missing.",
+        },
+        capabilityResults: [
+          {
+            version: 1,
+            status: "changed",
+            summary: "UI Review could not run because LOGIN_PASSWORD is missing.",
+            facts: {
+              status: "blocked",
+              feedback: "",
+              summary: "UI Review could not run because LOGIN_PASSWORD is missing.",
+            },
+            artifacts: [],
+            missingEvidence: [],
+            blockers: [],
+          },
+        ],
+      })
+
+      await runJob(
+        {
+          workflow: "review-merge",
+          workflowRunId: "run-8",
+          cliArgs: { pr: 3947 },
+          flavor: "instant",
+        },
+        { cwd },
+      )
+
+      expect(notifyWorkflowCompleted).toHaveBeenCalledWith({
+        workflowId: "review-merge",
+        runId: "run-8",
+        status: "blocked",
+        summary: "UI Review could not run because LOGIN_PASSWORD is missing.",
+        output: { pr: 3947 },
+      })
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it("removes a stale issue when a workflow step explicitly targets a PR", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-pr-routing-"))
     try {

@@ -39,6 +39,10 @@
     "preflight": [
       { "script": "loadSimpleCapability" },
       {
+        "script": "prepareSimpleCapabilityRuntime",
+        "runWhen": { "data.capabilityExecution": "agent" }
+      },
+      {
         "script": "runSimpleCapabilityScript",
         "runWhen": { "data.capabilityExecution": "script" }
       }

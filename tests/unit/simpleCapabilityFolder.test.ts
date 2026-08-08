@@ -27,6 +27,10 @@ describe("simple Capability folder", () => {
   it("loads instructions and an optional machine-readable contract", () => {
     const contract = {
       execution: "agent" as const,
+      requirements: {
+        browser: true,
+        qaCredentials: true,
+      },
       input: {
         type: "object",
         properties: { pr: { type: "integer" } },
@@ -44,6 +48,10 @@ describe("simple Capability folder", () => {
     expect(loaded?.bodyPath).toBe(path.join(dir, "instructions.md"))
     expect(loaded?.contractPath).toBe(path.join(dir, "contract.json"))
     expect(loaded?.contract).toEqual(contract)
+    expect(loaded?.contract?.requirements).toEqual({
+      browser: true,
+      qaCredentials: true,
+    })
     expect(loaded?.config.inputSchema).toEqual(contract.input)
     expect(loaded?.config.outputSchema).toEqual(contract.output)
     expect(resolveCapabilityExecution(loaded!, root)).toEqual({

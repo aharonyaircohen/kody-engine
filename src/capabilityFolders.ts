@@ -8,6 +8,8 @@ export const CAPABILITY_PROFILE_FILE = CAPABILITY_BODY_FILE
 
 export interface CapabilityContract {
   execution?: "agent" | "script"
+  /** Runtime services required by an agent-backed Capability. */
+  requirements?: CapabilityRuntimeRequirements
   /** Private specialists that an agent-backed capability must actually invoke. */
   requiredSubagents?: string[]
   /** Secret names exposed only to this trusted script process. */
@@ -16,6 +18,11 @@ export interface CapabilityContract {
   timeoutMs?: number
   input: Record<string, unknown>
   output: Record<string, unknown>
+}
+
+export interface CapabilityRuntimeRequirements {
+  browser?: boolean
+  qaCredentials?: boolean
 }
 
 export interface CapabilityFolderConfig {
@@ -194,6 +201,7 @@ function parseCapabilityContract(raw: string): CapabilityContract {
   if (parsed.execution !== undefined && parsed.execution !== "agent" && parsed.execution !== "script") {
     throw new Error('contract.json execution must be "agent" or "script"')
   }
+  const requirements = parseCapabilityRequirements(parsed.requirements)
   const secrets =
     parsed.secrets === undefined
       ? undefined
@@ -239,6 +247,7 @@ function parseCapabilityContract(raw: string): CapabilityContract {
   const unsupported = Object.keys(parsed).filter(
     (key) =>
       key !== "execution" &&
+      key !== "requirements" &&
       key !== "secrets" &&
       key !== "timeoutMs" &&
       key !== "requiredSubagents" &&
@@ -250,12 +259,36 @@ function parseCapabilityContract(raw: string): CapabilityContract {
   }
   return {
     ...(parsed.execution ? { execution: parsed.execution } : {}),
+    ...(requirements ? { requirements } : {}),
     ...(secrets ? { secrets } : {}),
     ...(timeoutMs !== undefined ? { timeoutMs } : {}),
     ...(requiredSubagents ? { requiredSubagents } : {}),
     input: parsed.input,
     output: parsed.output,
   }
+}
+
+function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirements | undefined {
+  if (raw === undefined) return undefined
+  if (!isPlainObject(raw)) throw new Error("contract.json requirements must be an object")
+  const unsupported = Object.keys(raw).filter((key) => key !== "browser" && key !== "qaCredentials")
+  if (unsupported.length > 0) {
+    throw new Error(`contract.json requirements contains unsupported fields: ${unsupported.join(", ")}`)
+  }
+  if (raw.browser !== undefined && typeof raw.browser !== "boolean") {
+    throw new Error("contract.json requirements.browser must be boolean")
+  }
+  if (raw.qaCredentials !== undefined && typeof raw.qaCredentials !== "boolean") {
+    throw new Error("contract.json requirements.qaCredentials must be boolean")
+  }
+  if (raw.qaCredentials === true && raw.browser !== true) {
+    throw new Error("contract.json requirements.qaCredentials requires browser")
+  }
+  const requirements = {
+    ...(raw.browser === true ? { browser: true } : {}),
+    ...(raw.qaCredentials === true ? { qaCredentials: true } : {}),
+  }
+  return Object.keys(requirements).length > 0 ? requirements : undefined
 }
 
 function isRegularFile(filePath: string): boolean {

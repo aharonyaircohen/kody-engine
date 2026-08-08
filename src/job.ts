@@ -310,7 +310,13 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
       await notifyWorkflowCompleted({
         workflowId: workflowIdentity,
         runId: valid.workflowRunId,
-        status: result.exitCode === 0 ? "success" : "failed",
+        status:
+          result.workflowState?.status === "blocked"
+            ? "blocked"
+            : result.exitCode === 0
+              ? "success"
+              : "failed",
+        ...(result.reason ? { summary: result.reason } : {}),
         ...(pr !== undefined || headSha !== undefined ? { output: { ...(pr !== undefined ? { pr } : {}), ...(headSha ? { headSha } : {}) } } : {}),
       })
     }
@@ -739,7 +745,8 @@ async function runGraphCapabilityWorkflow(
 
     if (!state.completedStepIds.includes(step.id!)) state.completedStepIds.push(step.id!)
     if (result.exitCode !== 0 && !canContinueWorkflow(step, outcome)) {
-      state.status = "failed"
+      const lastResult = result.capabilityResults?.at(-1)
+      state.status = lastResult?.status === "blocked" ? "blocked" : "failed"
       state.blocker = result.reason ?? `workflow step ${step.id} failed`
       await checkpoint?.(state)
       return withWorkflowBoundaryEval(capability, { ...result, workflowState: state })
@@ -795,14 +802,32 @@ async function completeWorkflowAtTerminal(
   checkpoint?: (state: WorkflowRunState) => Promise<void>,
 ): Promise<ExecutorOutput> {
   const result = output.capabilityResults?.at(-1)
-  if (result?.status === "fail" || result?.status === "blocked") {
-    state.status = result.status === "fail" ? "failed" : "blocked"
-    state.blocker = result.summary
+  const customStatus =
+    output.capabilityOutput &&
+    typeof output.capabilityOutput === "object" &&
+    !Array.isArray(output.capabilityOutput) &&
+    typeof (output.capabilityOutput as Record<string, unknown>).status === "string"
+      ? (output.capabilityOutput as Record<string, unknown>).status
+      : undefined
+  const terminalFailure =
+    result?.status === "fail" || customStatus === "fail"
+      ? "failed"
+      : result?.status === "blocked" || customStatus === "blocked"
+        ? "blocked"
+        : null
+  if (terminalFailure) {
+    const summary =
+      result?.summary ??
+      (typeof (output.capabilityOutput as Record<string, unknown> | undefined)?.summary === "string"
+        ? ((output.capabilityOutput as Record<string, unknown>).summary as string)
+        : "Workflow ended without a usable result")
+    state.status = terminalFailure
+    state.blocker = summary
     await checkpoint?.(state)
     return withWorkflowBoundaryEval(capability, {
       ...output,
-      exitCode: result.status === "fail" ? 1 : 64,
-      reason: result.summary,
+      exitCode: terminalFailure === "failed" ? 1 : 64,
+      reason: summary,
       workflowState: state,
     })
   }

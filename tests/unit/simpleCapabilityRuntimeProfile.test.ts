@@ -26,6 +26,10 @@ describe("simple Capability runtime profile", () => {
       script: "runSimpleCapabilityScript",
       runWhen: { "data.capabilityExecution": "script" },
     })
+    expect(scripts.preflight).toContainEqual({
+      script: "prepareSimpleCapabilityRuntime",
+      runWhen: { "data.capabilityExecution": "agent" },
+    })
     expect(scripts.postflight.map(({ script }) => script)).toEqual(["parseSimpleCapabilityOutput", "publishReport"])
   })
 
