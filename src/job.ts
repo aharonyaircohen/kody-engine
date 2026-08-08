@@ -39,6 +39,7 @@ import {
 } from "./registry.js"
 import { type RunIndexRow, upsertRunIndexRowBestEffortAsync } from "./runIndex.js"
 import { publishWorkflowReport } from "./scripts/publishReport.js"
+import { hasGitHubActionsIdentity, notifyWorkflowCompleted } from "./kody-api-client.js"
 import { resolveSimpleCapabilityRuntime, simpleCapabilityRuntimeArgs } from "./simpleCapabilityRuntime.js"
 import type { Action } from "./state.js"
 import { hasStateBackendConfig } from "./state-backend.js"
@@ -296,6 +297,22 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     }
     if (valid.workflowRunId && workflowIdentity && base.config && result.workflowState) {
       await writeWorkflowRunState(base.config, base.cwd, workflowIdentity, valid.workflowRunId, result.workflowState)
+    }
+    if (valid.workflowRunId && workflowIdentity && hasGitHubActionsIdentity()) {
+      const facts = result.workflowState?.facts ?? {}
+      const pr = typeof facts.pr === "number" ? facts.pr : typeof valid.cliArgs.pr === "number" ? valid.cliArgs.pr : undefined
+      const headSha =
+        typeof facts.headSha === "string"
+          ? facts.headSha
+          : typeof valid.cliArgs.headSha === "string"
+            ? valid.cliArgs.headSha
+            : undefined
+      await notifyWorkflowCompleted({
+        workflowId: workflowIdentity,
+        runId: valid.workflowRunId,
+        status: result.exitCode === 0 ? "success" : "failed",
+        ...(pr !== undefined || headSha !== undefined ? { output: { ...(pr !== undefined ? { pr } : {}), ...(headSha ? { headSha } : {}) } } : {}),
+      })
     }
     return result
   }

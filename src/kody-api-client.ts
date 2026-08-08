@@ -102,6 +102,27 @@ export function createKodyApiBackendClient(env: NodeJS.ProcessEnv = process.env)
   }
 }
 
+export interface WorkflowCompletedNotification {
+  workflowId: string
+  runId: string
+  status: "success" | "failed"
+  output?: { pr?: number; headSha?: string }
+}
+
+export async function notifyWorkflowCompleted(
+  notification: WorkflowCompletedNotification,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<void> {
+  const token = await githubOidcToken(env)
+  const response = await fetch(`${resolveKodyApiUrl(env)}/api/kody/engine/workflow-completed`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(notification),
+    signal: AbortSignal.timeout(30_000),
+  })
+  if (!response.ok) throw new Error(`Kody workflow completion request failed (${response.status})`)
+}
+
 export async function readRuntimeSecretFromKody(
   name: string,
   env: NodeJS.ProcessEnv = process.env,

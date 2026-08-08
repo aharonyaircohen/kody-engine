@@ -6,12 +6,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // Hoist-safe mock of the executor so runJob is tested in isolation (no real
 // implementation spins up). Mirrors tests/unit/dispatchCapabilityFileTicks.routing.test.ts.
-const { gh, runImplementationChain } = vi.hoisted(() => ({
+const { gh, runImplementationChain, hasGitHubActionsIdentity, notifyWorkflowCompleted } = vi.hoisted(() => ({
   gh: vi.fn(),
   runImplementationChain: vi.fn(),
+  hasGitHubActionsIdentity: vi.fn(() => false),
+  notifyWorkflowCompleted: vi.fn(),
 }))
 vi.mock("../../src/executor.js", () => ({ runImplementationChain }))
 vi.mock("../../src/issue.js", () => ({ gh }))
+vi.mock("../../src/kody-api-client.js", () => ({ hasGitHubActionsIdentity, notifyWorkflowCompleted }))
 
 import {
   DEFAULT_INSTANT_AGENT,
@@ -27,6 +30,8 @@ describe("runJob (Phase 1 seam)", () => {
   beforeEach(() => {
     runImplementationChain.mockReset()
     runImplementationChain.mockResolvedValue({ exitCode: 0 })
+    hasGitHubActionsIdentity.mockReturnValue(false)
+    notifyWorkflowCompleted.mockReset()
     gh.mockReset()
     gh.mockImplementation(() => {
       throw new Error("HTTP 404 Not Found")
@@ -1086,6 +1091,43 @@ describe("runJob (Phase 1 seam)", () => {
       expect(JSON.parse(String(runImplementationChain.mock.calls[0]![1].cliArgs.input))).toEqual({
         pr: 3947,
         headSha: "abc1234",
+      })
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("notifies the platform when a dispatched workflow completes", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-completion-"))
+    try {
+      writeSimpleCapability(cwd, "check")
+      writeWorkflowDefinition(cwd, "ci-repair", {
+        name: "CI Repair",
+        agent: "kody",
+        steps: [{ capability: "check" }],
+      })
+      hasGitHubActionsIdentity.mockReturnValue(true)
+      runImplementationChain.mockResolvedValueOnce({
+        exitCode: 0,
+        capabilityOutput: { pr: 3947, headSha: "abcdef1234567" },
+        capabilityResults: [capabilityResult({ pr: 3947, headSha: "abcdef1234567" })],
+      })
+
+      await runJob(
+        {
+          workflow: "ci-repair",
+          workflowRunId: "run-7",
+          cliArgs: { pr: 3947, headSha: "abcdef1234567" },
+          flavor: "instant",
+        },
+        { cwd },
+      )
+
+      expect(notifyWorkflowCompleted).toHaveBeenCalledWith({
+        workflowId: "ci-repair",
+        runId: "run-7",
+        status: "success",
+        output: { pr: 3947, headSha: "abcdef1234567" },
       })
     } finally {
       fs.rmSync(cwd, { recursive: true, force: true })
