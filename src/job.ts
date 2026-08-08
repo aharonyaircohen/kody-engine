@@ -300,13 +300,6 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     }
     if (valid.workflowRunId && workflowIdentity && hasGitHubActionsIdentity()) {
       const facts = result.workflowState?.facts ?? {}
-      const pr = typeof facts.pr === "number" ? facts.pr : typeof valid.cliArgs.pr === "number" ? valid.cliArgs.pr : undefined
-      const headSha =
-        typeof facts.headSha === "string"
-          ? facts.headSha
-          : typeof valid.cliArgs.headSha === "string"
-            ? valid.cliArgs.headSha
-            : undefined
       await notifyWorkflowCompleted({
         workflowId: workflowIdentity,
         runId: valid.workflowRunId,
@@ -317,7 +310,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
               ? "success"
               : "failed",
         ...(result.reason ? { summary: result.reason } : {}),
-        ...(pr !== undefined || headSha !== undefined ? { output: { ...(pr !== undefined ? { pr } : {}), ...(headSha ? { headSha } : {}) } } : {}),
+        ...(Object.keys(facts).length > 0 ? { output: facts } : {}),
       })
     }
     return result
@@ -486,7 +479,7 @@ async function runCapabilityWorkflow(
     }
     return result
   }
-  return runLinearCapabilityWorkflow(parent, workflow, capability, base)
+  return runLinearCapabilityWorkflow(parent, workflow, capability, base, checkpoint)
 }
 
 async function runLinearCapabilityWorkflow(
@@ -494,7 +487,9 @@ async function runLinearCapabilityWorkflow(
   workflow: CapabilityWorkflowConfig,
   capability: CapabilityFolder,
   base: RunJobBase,
+  checkpoint?: (state: WorkflowRunState) => Promise<void>,
 ): Promise<ExecutorOutput> {
+  const state = initialWorkflowState(parent, workflow)
   let chainData: Record<string, unknown> = {
     ...(base.preloadedData ?? {}),
     runSubjectType: "workflow",
@@ -544,6 +539,14 @@ async function runLinearCapabilityWorkflow(
         workflowContinueOn: step.continueOn ?? [],
       },
     })
+    mergeWorkflowResults(state, result.capabilityResults)
+    if (
+      result.capabilityOutput &&
+      typeof result.capabilityOutput === "object" &&
+      !Array.isArray(result.capabilityOutput)
+    ) {
+      Object.assign(state.facts, result.capabilityOutput)
+    }
     const outcome = workflowOutcome(result)
     const prUrl =
       result.prUrl ??
@@ -563,16 +566,22 @@ async function runLinearCapabilityWorkflow(
       ...(parsePrNumber(prUrl) ? { workflowPrNumber: parsePrNumber(prUrl) } : {}),
     }
     if (result.exitCode !== 0 && !canContinueWorkflow(step, outcome)) {
+      state.status = result.capabilityResults?.at(-1)?.status === "blocked" ? "blocked" : "failed"
+      state.blocker =
+        result.reason ?? `workflow ${capability.slug} stopped at step ${index + 1}/${workflow.steps.length}: ${label}`
+      await checkpoint?.(state)
       return withWorkflowBoundaryEval(capability, {
         ...result,
-        reason:
-          result.reason ??
-          `workflow ${capability.slug} stopped at step ${index + 1}/${workflow.steps.length}: ${label}`,
+        reason: state.blocker,
+        workflowState: state,
       })
     }
   }
 
-  return withWorkflowBoundaryEval(capability, result)
+  state.status = "done"
+  delete state.blocker
+  await checkpoint?.(state)
+  return withWorkflowBoundaryEval(capability, { ...result, workflowState: state })
 }
 
 function isGraphWorkflow(workflow: CapabilityWorkflowConfig): boolean {
@@ -617,7 +626,11 @@ function initialWorkflowState(parent: Job, workflow: CapabilityWorkflowConfig): 
     ...(currentStepId ? { currentStepId } : {}),
     completedStepIds: [...(prior?.completedStepIds ?? [])],
     transitionCounts: { ...(prior?.transitionCounts ?? {}) },
-    facts: { ...(parent.workflowFacts ?? {}), ...(prior?.facts ?? {}) },
+    facts: {
+      ...workflowInputContext(parent.cliArgs),
+      ...(parent.workflowFacts ?? {}),
+      ...(prior?.facts ?? {}),
+    },
     evidence: { ...(prior?.evidence ?? {}) },
     artifacts: (prior?.artifacts ?? []).map((artifact) => ({ ...artifact })),
   }
@@ -723,6 +736,13 @@ async function runGraphCapabilityWorkflow(
     })
 
     mergeWorkflowResults(state, result.capabilityResults)
+    if (
+      result.capabilityOutput &&
+      typeof result.capabilityOutput === "object" &&
+      !Array.isArray(result.capabilityOutput)
+    ) {
+      Object.assign(state.facts, result.capabilityOutput)
+    }
     const outcome = workflowOutcome(result)
     const prUrl =
       result.prUrl ??

@@ -107,7 +107,7 @@ export interface WorkflowCompletedNotification {
   runId: string
   status: "success" | "failed" | "blocked"
   summary?: string
-  output?: { pr?: number; headSha?: string }
+  output?: Record<string, unknown>
 }
 
 export async function notifyWorkflowCompleted(

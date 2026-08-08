@@ -27,7 +27,11 @@ describe("notifyWorkflowCompleted", () => {
         workflowId: "ci-repair",
         runId: "run-7",
         status: "success",
-        output: { pr: 3947, headSha: "abcdef1234567" },
+        output: {
+          pr: 3947,
+          headSha: "abcdef1234567",
+          verdict: "pass",
+        },
       },
       env,
     )
@@ -40,7 +44,11 @@ describe("notifyWorkflowCompleted", () => {
           workflowId: "ci-repair",
           runId: "run-7",
           status: "success",
-          output: { pr: 3947, headSha: "abcdef1234567" },
+          output: {
+            pr: 3947,
+            headSha: "abcdef1234567",
+            verdict: "pass",
+          },
         }),
       }),
     )

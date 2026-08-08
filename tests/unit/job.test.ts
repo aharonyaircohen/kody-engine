@@ -1109,8 +1109,17 @@ describe("runJob (Phase 1 seam)", () => {
       hasGitHubActionsIdentity.mockReturnValue(true)
       runImplementationChain.mockResolvedValueOnce({
         exitCode: 0,
-        capabilityOutput: { pr: 3947, headSha: "abcdef1234567" },
-        capabilityResults: [capabilityResult({ pr: 3947, headSha: "abcdef1234567" })],
+        capabilityOutput: {
+          pr: 3947,
+          headSha: "abcdef1234567",
+          verdict: "pass",
+        },
+        capabilityResults: [
+          capabilityResult({
+            pr: 3947,
+            headSha: "abcdef1234567",
+          }),
+        ],
       })
 
       await runJob(
@@ -1127,7 +1136,11 @@ describe("runJob (Phase 1 seam)", () => {
         workflowId: "ci-repair",
         runId: "run-7",
         status: "success",
-        output: { pr: 3947, headSha: "abcdef1234567" },
+        output: {
+          pr: 3947,
+          headSha: "abcdef1234567",
+          verdict: "pass",
+        },
       })
     } finally {
       fs.rmSync(cwd, { recursive: true, force: true })
@@ -1185,7 +1198,12 @@ describe("runJob (Phase 1 seam)", () => {
         runId: "run-8",
         status: "blocked",
         summary: "UI Review could not run because LOGIN_PASSWORD is missing.",
-        output: { pr: 3947 },
+        output: {
+          pr: 3947,
+          status: "blocked",
+          feedback: "",
+          summary: "UI Review could not run because LOGIN_PASSWORD is missing.",
+        },
       })
     } finally {
       fs.rmSync(cwd, { recursive: true, force: true })
