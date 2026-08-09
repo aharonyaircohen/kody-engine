@@ -22,7 +22,15 @@ export const requireDeliveryArtifacts: PostflightScript = async (ctx) => {
 
   const commitResult = ctx.data.commitResult as { committed?: boolean } | undefined
   const hasCommits = ctx.data.hasCommitsAhead === true
-  if (!commitResult?.committed && !hasCommits) return
+  if (!commitResult?.committed && !hasCommits) {
+    if (ctx.data.jobDelivery === "pull-request") {
+      const reason = "pull-request delivery produced no commit"
+      ctx.data.agentFailureReason = reason
+      ctx.output.exitCode = 4
+      ctx.output.reason = reason
+    }
+    return
+  }
 
   const commitMessage = String(ctx.data.commitMessage ?? "").trim()
   const prSummary = String(ctx.data.prSummary ?? "").trim()

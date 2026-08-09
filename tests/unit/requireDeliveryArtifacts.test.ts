@@ -15,6 +15,21 @@ function makeCtx(data: Record<string, unknown>): Context {
 const profile = { name: "opaque-pr-capability" } as Profile
 
 describe("requireDeliveryArtifacts", () => {
+  it("fails a workflow-owned PR delivery that produced no commit", async () => {
+    const ctx = makeCtx({
+      agentDone: true,
+      jobDelivery: "pull-request",
+      commitResult: { committed: false, pushed: false },
+      hasCommitsAhead: false,
+    })
+
+    await requireDeliveryArtifacts(ctx, profile, null)
+
+    expect(ctx.output.exitCode).toBe(4)
+    expect(ctx.output.reason).toMatch(/produced no commit/i)
+    expect(ctx.data.agentFailureReason).toMatch(/produced no commit/i)
+  })
+
   it("accepts complete commit and PR summary artifacts without requiring DONE", async () => {
     const ctx = makeCtx({
       agentDone: true,
