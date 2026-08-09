@@ -2,8 +2,10 @@
 
 ## Delivery
 
-The delivery wrapper owns git commits, pushes, and pull requests. Do not run
-git or GitHub write commands.
+The delivery wrapper has already checked out the requested target before you
+start. Inspect and edit the current working tree. Do not fetch, checkout, sync,
+merge, commit, push, or run any other git or GitHub write command; the wrapper
+owns those operations.
 
 After completing the capability work, finish with exactly this structure:
 

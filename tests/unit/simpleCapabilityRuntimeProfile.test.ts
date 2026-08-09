@@ -68,7 +68,8 @@ describe("simple Capability runtime profile", () => {
     )
 
     expect(template).toContain("{{prompt}}")
-    expect(template).toContain("The delivery wrapper owns git commits, pushes, and pull requests.")
+    expect(template).toContain("already checked out the requested target")
+    expect(template).toContain("Do not fetch, checkout, sync,")
     expect(template).toContain("COMMIT_MSG:")
     expect(template.indexOf("{{prompt}}")).toBeLessThan(template.indexOf("## Delivery"))
   })
