@@ -595,9 +595,25 @@ export interface Job {
 
 export interface WorkflowRunState {
   status: "running" | "blocked" | "failed" | "done"
+  /** Immutable input supplied when this workflow run started. */
+  input?: Record<string, unknown>
+  /** Hash of the workflow definition used by this run. */
+  definitionHash?: string
   currentStepId?: string
   completedStepIds: string[]
   transitionCounts: Record<string, number>
+  /** Exact per-step handoffs for audit, resume, and debugging. */
+  steps?: Record<
+    string,
+    {
+      capability?: string
+      status: "running" | "completed" | "blocked" | "failed"
+      input?: unknown
+      output?: unknown
+      startedAt?: string
+      completedAt?: string
+    }
+  >
   facts: Record<string, unknown>
   evidence: Record<string, boolean>
   artifacts: Array<{ label: string; url?: string; path?: string }>

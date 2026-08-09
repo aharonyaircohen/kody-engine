@@ -10,6 +10,7 @@
  * and validates at boundaries the same way config.ts does.
  */
 
+import { createHash } from "node:crypto"
 import { evaluateAgencyBoundaries } from "./agencyBoundaryEval.js"
 import type {
   CapabilityFolder,
@@ -31,6 +32,7 @@ import type {
   ReportPublicationConfig,
   WorkflowRunState,
 } from "./implementations/types.js"
+import { hasGitHubActionsIdentity, notifyWorkflowCompleted } from "./kody-api-client.js"
 import {
   type DiscoveredCapabilityAction,
   getCapabilityActionInputs,
@@ -39,7 +41,6 @@ import {
 } from "./registry.js"
 import { type RunIndexRow, upsertRunIndexRowBestEffortAsync } from "./runIndex.js"
 import { publishWorkflowReport } from "./scripts/publishReport.js"
-import { hasGitHubActionsIdentity, notifyWorkflowCompleted } from "./kody-api-client.js"
 import { resolveSimpleCapabilityRuntime, simpleCapabilityRuntimeArgs } from "./simpleCapabilityRuntime.js"
 import type { Action } from "./state.js"
 import { hasStateBackendConfig } from "./state-backend.js"
@@ -303,12 +304,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
       await notifyWorkflowCompleted({
         workflowId: workflowIdentity,
         runId: valid.workflowRunId,
-        status:
-          result.workflowState?.status === "blocked"
-            ? "blocked"
-            : result.exitCode === 0
-              ? "success"
-              : "failed",
+        status: result.workflowState?.status === "blocked" ? "blocked" : result.exitCode === 0 ? "success" : "failed",
         ...(result.reason ? { summary: result.reason } : {}),
         ...(Object.keys(facts).length > 0 ? { output: facts } : {}),
       })
@@ -501,6 +497,8 @@ async function runLinearCapabilityWorkflow(
     workflowStepCount: workflow.steps.length,
     workflowIssueNumber: workflowIssueNumber(parent),
     workflowContext: workflowInputContext(parent.cliArgs),
+    workflowInput: state.input ?? {},
+    workflowStepResults: workflowStepResults(state.steps),
     workflowFacts: parent.workflowFacts ?? {},
     workflowStack: [
       ...(Array.isArray(base.preloadedData?.workflowStack)
@@ -522,6 +520,8 @@ async function runLinearCapabilityWorkflow(
       continue
     }
     const child = workflowStepToJob(step, parent, chainData, base.cwd)
+    beginWorkflowStep(state, step, child)
+    await checkpoint?.(state)
     process.stdout.write(
       `→ kody: workflow ${capability.slug} step ${index + 1}/${workflow.steps.length} → ${label}\n\n`,
     )
@@ -539,6 +539,7 @@ async function runLinearCapabilityWorkflow(
         workflowContinueOn: step.continueOn ?? [],
       },
     })
+    finishWorkflowStep(state, step, result)
     mergeWorkflowResults(state, result.capabilityResults)
     if (
       result.capabilityOutput &&
@@ -554,6 +555,7 @@ async function runLinearCapabilityWorkflow(
       (typeof chainData.workflowPrUrl === "string" ? chainData.workflowPrUrl : undefined)
     chainData = {
       ...chainData,
+      workflowStepResults: workflowStepResults(state.steps),
       ...(result.taskState ? { taskState: result.taskState } : {}),
       ...(outcome ? { workflowLastOutcome: outcome } : {}),
       ...(result.capabilityOutput !== undefined
@@ -593,6 +595,7 @@ function isGraphWorkflow(workflow: CapabilityWorkflowConfig): boolean {
 function workflowError(workflow: CapabilityWorkflowConfig, base: RunJobBase): string | null {
   const projectCapabilitiesRoot = hydratedCapabilitiesRoot(base.cwd)
   const knownCapabilities = new Set<string>()
+  const capabilityInputs = new Map<string, Set<string>>()
   const capabilityOutputs = new Map<string, Set<string>>()
   for (const step of workflow.steps) {
     const action = step.action ?? step.capability
@@ -600,10 +603,16 @@ function workflowError(workflow: CapabilityWorkflowConfig, base: RunJobBase): st
     const resolvedFolder = resolveCapabilityFolder(step.capability, projectCapabilitiesRoot)
     if (!resolvedAction && !resolvedFolder) continue
     knownCapabilities.add(step.capability)
+    const inputNames = resolvedFolder ? capabilityInputNames(resolvedFolder) : new Set<string>()
+    if (inputNames.size > 0) capabilityInputs.set(step.capability, inputNames)
     const outputPaths = resolvedFolder ? capabilityOutputConditionPaths(resolvedFolder.config) : new Set<string>()
     if (outputPaths.size > 0) capabilityOutputs.set(step.capability, outputPaths)
   }
-  return formatWorkflowValidationIssues(validateWorkflow(workflow, { knownCapabilities, capabilityOutputs }))[0] ?? null
+  return (
+    formatWorkflowValidationIssues(
+      validateWorkflow(workflow, { knownCapabilities, capabilityInputs, capabilityOutputs }),
+    )[0] ?? null
+  )
 }
 
 function initialWorkflowState(parent: Job, workflow: CapabilityWorkflowConfig): WorkflowRunState {
@@ -614,6 +623,8 @@ function initialWorkflowState(parent: Job, workflow: CapabilityWorkflowConfig): 
       status: "done",
       completedStepIds: [...prior.completedStepIds],
       transitionCounts: { ...prior.transitionCounts },
+      ...(prior.input ? { input: { ...prior.input } } : {}),
+      ...(prior.steps ? { steps: cloneWorkflowSteps(prior.steps) } : {}),
       facts: { ...prior.facts },
       evidence: { ...prior.evidence },
       artifacts: prior.artifacts.map((artifact) => ({ ...artifact })),
@@ -623,9 +634,12 @@ function initialWorkflowState(parent: Job, workflow: CapabilityWorkflowConfig): 
   const currentStepId = prior?.currentStepId ?? firstStepId
   return {
     status: "running",
+    input: { ...(prior?.input ?? workflowInputContext(parent.cliArgs)) },
+    definitionHash: prior?.definitionHash ?? workflowDefinitionHash(workflow),
     ...(currentStepId ? { currentStepId } : {}),
     completedStepIds: [...(prior?.completedStepIds ?? [])],
     transitionCounts: { ...(prior?.transitionCounts ?? {}) },
+    steps: cloneWorkflowSteps(prior?.steps ?? {}),
     facts: {
       ...workflowInputContext(parent.cliArgs),
       ...(parent.workflowFacts ?? {}),
@@ -653,6 +667,8 @@ function workflowChainData(
     workflowStepCount: capability.config.workflow?.steps.length ?? 0,
     workflowIssueNumber: workflowIssueNumber(parent),
     workflowContext: base.preloadedData?.workflowContext ?? workflowInputContext(parent.cliArgs),
+    workflowInput: state.input ?? {},
+    workflowStepResults: workflowStepResults(state.steps),
     workflowFacts: state.facts,
     workflowEvidence: state.evidence,
     workflowArtifacts: state.artifacts,
@@ -708,9 +724,19 @@ async function runGraphCapabilityWorkflow(
       const reason = error instanceof Error ? error.message : String(error)
       state.status = "blocked"
       state.blocker = reason
+      state.steps = state.steps ?? {}
+      state.steps[step.id!] = {
+        capability: step.capability,
+        status: "blocked",
+        output: { status: "blocked", summary: reason },
+        completedAt: new Date().toISOString(),
+      }
       await checkpoint?.(state)
       return { exitCode: 64, reason, workflowState: state }
     }
+
+    beginWorkflowStep(state, step, child)
+    await checkpoint?.(state)
 
     process.stdout.write(
       `→ kody: workflow ${capability.slug} step ${index + 1}/${workflow.steps.length} → ${label}\n\n`,
@@ -734,6 +760,8 @@ async function runGraphCapabilityWorkflow(
         workflowContinueOn: step.continueOn ?? [],
       },
     })
+
+    finishWorkflowStep(state, step, result)
 
     mergeWorkflowResults(state, result.capabilityResults)
     if (
@@ -969,9 +997,8 @@ function workflowStepToJob(
 ): Job {
   const action = step.action ?? step.capability
   const targetNumber = workflowStepTargetNumber(step, parent, chainData)
-  const rawArgs = {
-    ...parent.cliArgs,
-  }
+  const mappedInputs = resolveWorkflowStepInputs(step, chainData)
+  const rawArgs = mappedInputs ? { ...mappedInputs } : { ...parent.cliArgs }
   if (step.target === "pr") {
     if (typeof targetNumber !== "number") {
       throw new InvalidJobError(`workflow step ${action} needs a PR target but no prior PR URL is available`)
@@ -981,7 +1008,7 @@ function workflowStepToJob(
     rawArgs.issue = targetNumber
   }
   const genericInput = capabilityStepInput(
-    step.input ?? chainData.workflowContext ?? chainData.workflowLastOutput ?? genericInputFromArgs(rawArgs),
+    step.input ?? mappedInputs ?? chainData.workflowInput ?? genericInputFromArgs(rawArgs),
     step.target,
     targetNumber,
   )
@@ -1011,6 +1038,94 @@ function workflowStepToJob(
     saveReport: step.saveReport === true || parent.saveReport === true,
     ...(step.report ? { report: step.report } : {}),
     ...(parent.resultTarget ? { resultTarget: parent.resultTarget } : {}),
+  }
+}
+
+function resolveWorkflowStepInputs(
+  step: CapabilityWorkflowStepConfig,
+  chainData: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  if (!step.inputs) return undefined
+  const source = {
+    workflow: {
+      input: chainData.workflowInput ?? {},
+      facts: chainData.workflowFacts ?? {},
+      evidence: chainData.workflowEvidence ?? {},
+    },
+    steps: chainData.workflowStepResults ?? {},
+  }
+  const input: Record<string, unknown> = {}
+  for (const [name, binding] of Object.entries(step.inputs)) {
+    const value = resolveDottedPath(source, binding.from)
+    if (value === undefined) {
+      throw new InvalidJobError(`workflow step ${step.id ?? step.capability} needs missing input ${binding.from}`)
+    }
+    input[name] = value
+  }
+  return input
+}
+
+function capabilityInputNames(folder: CapabilityFolder): Set<string> {
+  const properties = folder.config.inputSchema?.properties
+  if (!properties || typeof properties !== "object" || Array.isArray(properties)) return new Set()
+  return new Set(Object.keys(properties))
+}
+
+function workflowDefinitionHash(workflow: CapabilityWorkflowConfig): string {
+  return createHash("sha256").update(stableJson(workflow)).digest("hex")
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
+      .join(",")}}`
+  }
+  return JSON.stringify(value)
+}
+
+function cloneWorkflowSteps(steps: NonNullable<WorkflowRunState["steps"]>): NonNullable<WorkflowRunState["steps"]> {
+  return Object.fromEntries(Object.entries(steps).map(([id, step]) => [id, { ...step }]))
+}
+
+function workflowStepResults(steps: WorkflowRunState["steps"]): Record<string, { result?: unknown }> {
+  return Object.fromEntries(
+    Object.entries(steps ?? {}).map(([id, step]) => [id, Object.hasOwn(step, "output") ? { result: step.output } : {}]),
+  )
+}
+
+function workflowStepAuditInput(job: Job): unknown {
+  if (Object.hasOwn(job.cliArgs, "input")) return genericInputFromArgs(job.cliArgs)
+  return { ...job.cliArgs }
+}
+
+function beginWorkflowStep(state: WorkflowRunState, step: CapabilityWorkflowStepConfig, job: Job): void {
+  const id = step.id ?? step.action ?? step.capability
+  state.steps = state.steps ?? {}
+  state.steps[id] = {
+    capability: step.capability,
+    status: "running",
+    input: workflowStepAuditInput(job),
+    startedAt: new Date().toISOString(),
+  }
+}
+
+function finishWorkflowStep(state: WorkflowRunState, step: CapabilityWorkflowStepConfig, result: ExecutorOutput): void {
+  const id = step.id ?? step.action ?? step.capability
+  const prior = state.steps?.[id]
+  state.steps = state.steps ?? {}
+  state.steps[id] = {
+    ...(prior ?? { capability: step.capability, status: "running" as const }),
+    status:
+      result.exitCode === 0
+        ? "completed"
+        : result.capabilityResults?.at(-1)?.status === "blocked"
+          ? "blocked"
+          : "failed",
+    ...(result.capabilityOutput !== undefined ? { output: result.capabilityOutput } : {}),
+    completedAt: new Date().toISOString(),
   }
 }
 

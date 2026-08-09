@@ -81,8 +81,7 @@
       }
     ],
     "postflight": [
-      { "script": "parseSimpleCapabilityOutput" },
-      { "script": "retryMissingDeliveryChange" }
+      { "script": "parseSimpleCapabilityOutput" }
     ]
   },
   "inputArtifacts": [],

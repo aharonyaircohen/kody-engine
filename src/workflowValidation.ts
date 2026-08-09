@@ -1,6 +1,8 @@
 const SAFE_NAME = /^[a-z][a-z0-9-]*$/
 const SAFE_STEP_ID = /^[A-Za-z][A-Za-z0-9_-]*$/
 const SAFE_DATA_PATH = /^(facts|evidence|artifacts|result|workflow|lastOutcome)(?:\.[A-Za-z_][A-Za-z0-9_-]*)+$/
+const SAFE_INPUT_SOURCE =
+  /^(?:workflow\.(?:input|facts|evidence)(?:\.[A-Za-z_][A-Za-z0-9_-]*)+|steps\.[A-Za-z][A-Za-z0-9_-]*\.result(?:\.[A-Za-z_][A-Za-z0-9_-]*)+)$/
 
 export interface WorkflowValidationIssue {
   code: string
@@ -13,6 +15,7 @@ export interface WorkflowValidationOptions {
   maxTransitionsPerStep?: number
   maxLoopIterations?: number
   knownCapabilities?: ReadonlySet<string>
+  capabilityInputs?: ReadonlyMap<string, ReadonlySet<string>>
   capabilityOutputs?: ReadonlyMap<string, ReadonlySet<string>>
 }
 
@@ -22,6 +25,7 @@ const SUPPORTED_STEP_FIELDS = new Set([
   "id",
   "capability",
   "input",
+  "inputs",
   "action",
   "evidence",
   "target",
@@ -102,6 +106,15 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
     if (step.input !== undefined && !isJsonValue(step.input)) {
       issue(issues, "invalid_input", `${base}.input`, "workflow step input must be one JSON value")
     }
+    if (step.input !== undefined && step.inputs !== undefined) {
+      issue(issues, "conflicting_inputs", base, "workflow step cannot declare both input and inputs")
+    }
+    validateInputBindings(
+      step.inputs,
+      `${base}.inputs`,
+      issues,
+      capability ? options.capabilityInputs?.get(capability) : undefined,
+    )
   })
 
   if (!graphMode) return issues
@@ -118,11 +131,24 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
 
   const adjacency = new Map<string, string[]>()
   const explicitEndSources = new Set<string>()
+  const capabilitiesByStep = new Map<string, string>()
+  steps.forEach((step) => {
+    const id = text(step?.id)
+    const capability = text(step?.capability ?? step?.action)
+    if (id && capability) capabilitiesByStep.set(id, capability)
+  })
   steps.forEach((step, index) => {
     if (!step) return
     const id = text(step.id)
     if (!id) return
     const sourceCapability = text(step.capability ?? step.action)
+    validateInputBindingSources(
+      step.inputs,
+      `steps[${index}].inputs`,
+      issues,
+      capabilitiesByStep,
+      options.capabilityOutputs,
+    )
     const transitions = transitionList(step.next)
     adjacency.set(id, [])
     if (transitions.length > maxTransitions) {
@@ -243,6 +269,76 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
   }
 
   return issues
+}
+
+function validateInputBindings(
+  value: unknown,
+  path: string,
+  issues: WorkflowValidationIssue[],
+  declaredInputs?: ReadonlySet<string>,
+): void {
+  if (value === undefined) return
+  const bindings = asRecord(value)
+  if (!bindings || Object.keys(bindings).length === 0) {
+    issue(issues, "invalid_inputs", path, "workflow step inputs must contain at least one named mapping")
+    return
+  }
+  for (const [name, value] of Object.entries(bindings)) {
+    const bindingPath = `${path}.${name}`
+    if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(name)) {
+      issue(issues, "invalid_input_name", bindingPath, `workflow input name ${name} is invalid`)
+    }
+    if (declaredInputs && !declaredInputs.has(name)) {
+      issue(issues, "undeclared_input", bindingPath, `target capability does not declare input ${name}`)
+    }
+    const binding = asRecord(value)
+    const from = text(binding?.from)
+    if (!binding || Object.keys(binding).some((field) => field !== "from") || !from || !SAFE_INPUT_SOURCE.test(from)) {
+      issue(
+        issues,
+        "invalid_input_source",
+        `${bindingPath}.from`,
+        "workflow input mapping must read from workflow input/state or a prior step result",
+      )
+    }
+  }
+}
+
+function validateInputBindingSources(
+  value: unknown,
+  path: string,
+  issues: WorkflowValidationIssue[],
+  capabilitiesByStep: ReadonlyMap<string, string>,
+  capabilityOutputs?: ReadonlyMap<string, ReadonlySet<string>>,
+): void {
+  const bindings = asRecord(value)
+  if (!bindings) return
+  for (const [name, rawBinding] of Object.entries(bindings)) {
+    const from = text(asRecord(rawBinding)?.from)
+    if (!from?.startsWith("steps.")) continue
+    const parts = from.split(".")
+    const sourceStep = parts[1]
+    const sourceCapability = sourceStep ? capabilitiesByStep.get(sourceStep) : undefined
+    if (!sourceStep || !sourceCapability) {
+      issue(
+        issues,
+        "missing_input_step",
+        `${path}.${name}.from`,
+        `workflow input mapping references missing step ${sourceStep ?? "<none>"}`,
+      )
+      continue
+    }
+    const outputPath = parts.slice(2).join(".")
+    const declaredOutputs = capabilityOutputs?.get(sourceCapability)
+    if (declaredOutputs && !declaredOutputs.has(outputPath)) {
+      issue(
+        issues,
+        "undeclared_step_output",
+        `${path}.${name}.from`,
+        `workflow input mapping reads ${outputPath}, but step ${sourceStep} does not declare it`,
+      )
+    }
+  }
 }
 
 export function formatWorkflowValidationIssues(issues: readonly WorkflowValidationIssue[]): string[] {

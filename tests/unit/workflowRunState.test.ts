@@ -15,6 +15,15 @@ describe("workflow run state", () => {
         completedStepIds: ["prepare"],
         transitionCounts: { "repair->review": 1 },
         facts: { releasePr: 42 },
+        input: { pr: 42 },
+        definitionHash: "abc123",
+        steps: {
+          prepare: {
+            input: { pr: 42 },
+            output: { status: "pass", releasePr: 42 },
+            status: "completed",
+          },
+        },
         evidence: { releasePrExists: true },
         artifacts: [{ label: "Release PR", url: "https://github.com/o/r/pull/42" }],
       }),
@@ -24,6 +33,15 @@ describe("workflow run state", () => {
       completedStepIds: ["prepare"],
       transitionCounts: { "repair->review": 1 },
       facts: { releasePr: 42 },
+      input: { pr: 42 },
+      definitionHash: "abc123",
+      steps: {
+        prepare: {
+          input: { pr: 42 },
+          output: { status: "pass", releasePr: 42 },
+          status: "completed",
+        },
+      },
       evidence: { releasePrExists: true },
       artifacts: [{ label: "Release PR", url: "https://github.com/o/r/pull/42" }],
     })

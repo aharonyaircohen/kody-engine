@@ -185,6 +185,60 @@ describe("validateWorkflow", () => {
     ).toEqual([])
   })
 
+  it("accepts explicit mappings from workflow input and prior step output", () => {
+    expect(
+      validateWorkflow(
+        {
+          startAt: "check",
+          steps: [
+            { id: "check", capability: "inspect", next: "repair" },
+            {
+              id: "repair",
+              capability: "repair",
+              inputs: {
+                pr: { from: "workflow.input.pr" },
+                failureLog: { from: "steps.check.result.failureLog" },
+              },
+            },
+          ],
+        },
+        {
+          capabilityInputs: new Map([["repair", new Set(["pr", "failureLog"])]]),
+          capabilityOutputs: new Map([["inspect", new Set(["result.failureLog"])]]),
+        },
+      ),
+    ).toEqual([])
+  })
+
+  it("rejects undeclared targets and source fields in explicit mappings", () => {
+    const issues = validateWorkflow(
+      {
+        startAt: "check",
+        steps: [
+          { id: "check", capability: "inspect", next: "repair" },
+          {
+            id: "repair",
+            capability: "repair",
+            inputs: {
+              unknown: { from: "steps.check.result.missing" },
+            },
+          },
+        ],
+      },
+      {
+        capabilityInputs: new Map([["repair", new Set(["pr", "failureLog"])]]),
+        capabilityOutputs: new Map([["inspect", new Set(["result.failureLog"])]]),
+      },
+    )
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "undeclared_input", path: "steps[1].inputs.unknown" }),
+        expect.objectContaining({ code: "undeclared_step_output", path: "steps[1].inputs.unknown.from" }),
+      ]),
+    )
+  })
+
   it("accepts documented camelCase step ids in graph workflows", () => {
     expect(
       validateWorkflow({
@@ -270,7 +324,7 @@ describe("validateWorkflow", () => {
       {
         steps: [{ id: "inspect", capability: "inspect", inputs: { prompt: { from: "unknown.value" } } }],
       },
-      "unsupported_step_field",
+      "invalid_input_source",
     ],
   ] as const)("rejects invalid agent output %#", (workflow, expectedCode) => {
     expect(codes(workflow)).toContain(expectedCode)
@@ -307,7 +361,8 @@ describe("validateWorkflow", () => {
       knownCapabilities: new Set(["inspect"]),
     })
 
-    expect(issues.filter((issue) => issue.code === "unsupported_step_field")).toHaveLength(2)
+    expect(issues.filter((issue) => issue.code === "unsupported_step_field")).toHaveLength(1)
+    expect(issues.map((issue) => issue.code)).toContain("invalid_input_source")
     expect(issues.map((issue) => issue.code)).toContain("unknown_capability")
   })
 

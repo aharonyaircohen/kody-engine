@@ -55,10 +55,7 @@ describe("simple Capability runtime profile", () => {
       "prepareCapabilityDelivery",
       "runSimpleCapabilityScript",
     ])
-    expect(profile.scripts.postflight.map(({ script }) => script)).toEqual([
-      "parseSimpleCapabilityOutput",
-      "retryMissingDeliveryChange",
-    ])
+    expect(profile.scripts.postflight.map(({ script }) => script)).toEqual(["parseSimpleCapabilityOutput"])
   })
 
   it("owns the pull-request delivery protocol around the capability prompt", () => {

@@ -85,11 +85,17 @@ export interface CapabilityWorkflowTransitionConfig {
   maxIterations?: number
 }
 
+export interface CapabilityWorkflowInputBinding {
+  from: string
+}
+
 export interface CapabilityWorkflowStepConfig {
   id?: string
   capability: string
   /** One capability input value. If absent, the previous capability output is used. */
   input?: unknown
+  /** Explicit named inputs resolved from workflow input/state or a prior step result. */
+  inputs?: Record<string, CapabilityWorkflowInputBinding>
   action?: string
   evidence?: string
   target?: "issue" | "pr"
@@ -439,11 +445,13 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
   const delivery = stringField(raw.delivery)
   const targetFact = stringField(raw.targetFact ?? raw.target_fact)
   const hasInput = Object.hasOwn(raw, "input")
+  const inputs = parseWorkflowInputBindings(raw.inputs)
   const next = parseWorkflowTransitions(raw.next)
   const report = parseReportPublication(raw.report)
   return {
     capability,
     ...(hasInput ? { input: raw.input } : {}),
+    ...(inputs ? { inputs } : {}),
     ...(id && isSafeStepId(id) ? { id } : {}),
     ...(action && isSafeSlug(action) ? { action } : {}),
     ...(evidence ? { evidence } : {}),
@@ -459,6 +467,16 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
     ...(raw.saveReport === true ? { saveReport: true } : {}),
     ...(report ? { report } : {}),
   }
+}
+
+function parseWorkflowInputBindings(value: unknown): Record<string, CapabilityWorkflowInputBinding> | undefined {
+  if (!isPlainObject(value)) return undefined
+  const entries = Object.entries(value).flatMap(([name, binding]) => {
+    if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(name) || !isPlainObject(binding)) return []
+    const from = stringField(binding.from)
+    return from ? [[name, { from }] as const] : []
+  })
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined
 }
 
 function parseWorkflowTransitions(value: unknown): CapabilityWorkflowTransitionConfig[] | undefined {

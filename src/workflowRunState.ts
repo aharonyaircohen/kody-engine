@@ -31,6 +31,8 @@ export function parseWorkflowRunState(raw: unknown): WorkflowRunState | null {
         )
       : {}
   const facts = state.facts && typeof state.facts === "object" && !Array.isArray(state.facts) ? state.facts : {}
+  const input = state.input && typeof state.input === "object" && !Array.isArray(state.input) ? state.input : undefined
+  const steps = parseWorkflowSteps(state.steps)
   const evidenceEntries =
     state.evidence && typeof state.evidence === "object" && !Array.isArray(state.evidence)
       ? Object.entries(state.evidence).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean")
@@ -52,11 +54,42 @@ export function parseWorkflowRunState(raw: unknown): WorkflowRunState | null {
     ...(typeof state.currentStepId === "string" ? { currentStepId: state.currentStepId } : {}),
     completedStepIds,
     transitionCounts,
+    ...(input ? { input: { ...(input as Record<string, unknown>) } } : {}),
+    ...(typeof state.definitionHash === "string" && state.definitionHash.trim()
+      ? { definitionHash: state.definitionHash.trim() }
+      : {}),
+    ...(steps ? { steps } : {}),
     facts: { ...(facts as Record<string, unknown>) },
     evidence: Object.fromEntries(evidenceEntries),
     artifacts: artifacts.map((artifact) => ({ ...artifact })),
     ...(typeof state.blocker === "string" ? { blocker: state.blocker } : {}),
   }
+}
+
+function parseWorkflowSteps(value: unknown): WorkflowRunState["steps"] | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+  const steps: NonNullable<WorkflowRunState["steps"]> = {}
+  for (const [stepId, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue
+    const step = raw as Record<string, unknown>
+    if (
+      step.status !== "running" &&
+      step.status !== "completed" &&
+      step.status !== "blocked" &&
+      step.status !== "failed"
+    ) {
+      continue
+    }
+    steps[stepId] = {
+      status: step.status,
+      ...(typeof step.capability === "string" ? { capability: step.capability } : {}),
+      ...(Object.hasOwn(step, "input") ? { input: step.input } : {}),
+      ...(Object.hasOwn(step, "output") ? { output: step.output } : {}),
+      ...(typeof step.startedAt === "string" ? { startedAt: step.startedAt } : {}),
+      ...(typeof step.completedAt === "string" ? { completedAt: step.completedAt } : {}),
+    }
+  }
+  return Object.keys(steps).length > 0 ? steps : undefined
 }
 
 export async function readWorkflowRunState(

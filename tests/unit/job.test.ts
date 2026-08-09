@@ -994,7 +994,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it("passes one explicit input, then the prior output, through a simple workflow", async () => {
+  it("does not implicitly pass one step output into the next step", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-simple-workflow-"))
     const originalCwd = process.cwd()
     try {
@@ -1021,9 +1021,7 @@ describe("runJob (Phase 1 seam)", () => {
         prefer: "ours",
         issue: 7,
       })
-      expect(JSON.parse(String(runImplementationChain.mock.calls[1]![1].cliArgs.input))).toEqual({
-        releasePr: 42,
-      })
+      expect(JSON.parse(String(runImplementationChain.mock.calls[1]![1].cliArgs.input))).toEqual({})
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
@@ -1865,7 +1863,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it.skip("resumes a graph workflow from its saved current step and facts", async () => {
+  it("resumes a graph workflow from its saved current step and explicitly mapped input", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-resume-"))
     const originalCwd = process.cwd()
     try {
@@ -1879,12 +1877,13 @@ describe("runJob (Phase 1 seam)", () => {
             {
               id: "repair",
               capability: "fix",
-              inputs: { feedback: { from: "facts.feedback" } },
+              inputs: { feedback: { from: "workflow.facts.feedback" } },
             },
           ],
         },
       })
-      writeWorkflowStages(cwd)
+      writeContractCapability(cwd, "run", ["issue"], ["needsFix"])
+      writeContractCapability(cwd, "fix", ["pr", "feedback"])
       process.chdir(cwd)
       runImplementationChain.mockResolvedValueOnce({
         exitCode: 0,
@@ -1912,8 +1911,11 @@ describe("runJob (Phase 1 seam)", () => {
       )
 
       expect(runImplementationChain).toHaveBeenCalledTimes(1)
-      expect(runImplementationChain.mock.calls[0]![0]).toBe("fix")
-      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({ feedback: "continue here" })
+      expect(runImplementationChain.mock.calls[0]![0]).toBe("capability-run")
+      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({
+        capability: "fix",
+        input: JSON.stringify({ feedback: "continue here" }),
+      })
       expect(result.workflowState).toMatchObject({
         status: "done",
         facts: { feedback: "continue here", repaired: true },
@@ -1924,7 +1926,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it.skip("returns a clear blocked workflow state when a mapped input is missing", async () => {
+  it("returns a clear blocked workflow state when a mapped input is missing", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-missing-input-"))
     const originalCwd = process.cwd()
     try {
@@ -1937,12 +1939,12 @@ describe("runJob (Phase 1 seam)", () => {
             {
               id: "repair",
               capability: "fix",
-              inputs: { feedback: { from: "facts.feedback" } },
+              inputs: { feedback: { from: "workflow.input.feedback" } },
             },
           ],
         },
       })
-      writeWorkflowStages(cwd)
+      writeContractCapability(cwd, "fix", ["pr", "feedback"])
       process.chdir(cwd)
 
       const result = await runJob(
@@ -1952,7 +1954,7 @@ describe("runJob (Phase 1 seam)", () => {
 
       expect(result).toMatchObject({
         exitCode: 64,
-        reason: "workflow step repair needs missing input facts.feedback",
+        reason: "workflow step repair needs missing input workflow.input.feedback",
         workflowState: { status: "blocked", currentStepId: "repair" },
       })
       expect(runImplementationChain).not.toHaveBeenCalled()
@@ -1962,7 +1964,63 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it.skip("rejects a mapped input that the target capability does not accept", async () => {
+  it("passes an exact prior step result to the next capability", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-explicit-handoff-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "handoff-pilot", {
+        name: "handoff-pilot",
+        action: "handoff-pilot",
+        workflow: {
+          startAt: "check",
+          steps: [
+            { id: "check", capability: "inspect", next: "repair" },
+            {
+              id: "repair",
+              capability: "fix",
+              inputs: {
+                pr: { from: "workflow.input.pr" },
+                failureLog: { from: "steps.check.result.failureLog" },
+              },
+            },
+          ],
+        },
+      })
+      writeContractCapability(cwd, "inspect", ["pr"], ["failureLog"])
+      writeContractCapability(cwd, "fix", ["pr", "failureLog"])
+      process.chdir(cwd)
+      runImplementationChain
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: { status: "red", failureLog: "expected Approve, received Approved" },
+        })
+        .mockResolvedValueOnce({ exitCode: 0, capabilityOutput: { status: "fixed" } })
+
+      const result = await runJob(
+        { action: "handoff-pilot", capability: "handoff-pilot", cliArgs: { pr: 19 }, flavor: "instant" },
+        { cwd },
+      )
+
+      expect(runImplementationChain).toHaveBeenCalledTimes(2)
+      expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({
+        capability: "fix",
+        input: JSON.stringify({ pr: 19, failureLog: "expected Approve, received Approved" }),
+      })
+      expect(result.workflowState).toMatchObject({
+        status: "done",
+        input: { pr: 19 },
+        steps: {
+          check: { input: { pr: 19 }, output: { status: "red", failureLog: "expected Approve, received Approved" } },
+          repair: { input: { pr: 19, failureLog: "expected Approve, received Approved" }, output: { status: "fixed" } },
+        },
+      })
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("rejects a mapped input that the target capability does not accept", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-invalid-input-"))
     const originalCwd = process.cwd()
     try {
@@ -1975,12 +2033,12 @@ describe("runJob (Phase 1 seam)", () => {
             {
               id: "repair",
               capability: "fix",
-              inputs: { unsupported: { from: "facts.feedback" } },
+              inputs: { unsupported: { from: "workflow.facts.feedback" } },
             },
           ],
         },
       })
-      writeWorkflowStages(cwd)
+      writeContractCapability(cwd, "fix", ["pr", "feedback"])
       process.chdir(cwd)
 
       const result = await runJob(
@@ -1996,7 +2054,7 @@ describe("runJob (Phase 1 seam)", () => {
 
       expect(result).toMatchObject({
         exitCode: 64,
-        reason: expect.stringContaining("does not declare input unsupported"),
+        reason: expect.stringContaining("target capability does not declare input unsupported"),
         workflowState: { status: "blocked" },
       })
       expect(runImplementationChain).not.toHaveBeenCalled()
@@ -2157,6 +2215,28 @@ function writeSimpleCapability(cwd: string, slug: string): void {
   fs.mkdirSync(path.join(dir, "skills"), { recursive: true })
   fs.mkdirSync(path.join(dir, "tools"), { recursive: true })
   fs.writeFileSync(path.join(dir, "instructions.md"), `# ${slug}\n\nDo the work.\n`)
+}
+
+function writeContractCapability(cwd: string, slug: string, inputs: string[], outputs: string[] = []): void {
+  const dir = path.join(cwd, ".kody-engine", "definitions", "capabilities", slug)
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, "instructions.md"), `# ${slug}\n\nDo the work.\n`)
+  fs.writeFileSync(
+    path.join(dir, "contract.json"),
+    JSON.stringify({
+      execution: "agent",
+      input: {
+        type: "object",
+        properties: Object.fromEntries(inputs.map((name) => [name, {}])),
+        additionalProperties: false,
+      },
+      output: {
+        type: "object",
+        properties: Object.fromEntries(outputs.map((name) => [name, {}])),
+        additionalProperties: true,
+      },
+    }),
+  )
 }
 
 function writeWorkflowStages(cwd: string): void {
