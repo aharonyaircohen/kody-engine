@@ -147,6 +147,23 @@ describe("postIssueComment message wording", () => {
     expect(vi.mocked(setKodyLabel)).not.toHaveBeenCalled()
   })
 
+  it("no commits + prior delivery failure: preserves the failure", async () => {
+    const ctx = makeCtx({
+      commitResult: { committed: false },
+      hasCommitsAhead: false,
+      prAction: "updated",
+      agentDone: true,
+      exitCode: 4,
+    })
+    ctx.output.reason = "pull-request delivery produced no commit"
+
+    await postIssueComment(ctx, profile, null)
+
+    expect(lastPrBody()).toBe("⚠️ kody FAILED: pull-request delivery produced no commit")
+    expect(ctx.output.exitCode).toBe(4)
+    expect(ctx.data.deliveryOutcome).toBeUndefined()
+  })
+
   // Regression: previously this branch always reported "no changes to commit"
   // even when the agent had failed for a more specific reason (missing DONE
   // marker, agent SDK error, etc.). That hid the real cause from operators —

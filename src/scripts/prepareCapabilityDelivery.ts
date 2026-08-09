@@ -15,7 +15,7 @@ export const prepareCapabilityDelivery: PreflightScript = async (ctx, profile) =
     return
   }
 
-  checkoutPrBranch(target.number, ctx.cwd)
+  ctx.data.branch = checkoutPrBranch(target.number, ctx.cwd)
   ctx.data.commentTargetType = "pr"
   ctx.data.commentTargetNumber = target.number
 }

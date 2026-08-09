@@ -25,11 +25,13 @@ function makeCtx(input: Record<string, unknown>): Context {
 describe("prepareCapabilityDelivery", () => {
   it("checks out an existing PR without merging its base branch", async () => {
     const ctx = makeCtx({ pr: 19 })
+    vi.mocked(checkoutPrBranch).mockReturnValue("codex/ci-repair-live-proof")
 
     await prepareCapabilityDelivery(ctx, profile)
 
     expect(ctx.args.pr).toBe(19)
     expect(checkoutPrBranch).toHaveBeenCalledWith(19, "/tmp/repo")
+    expect(ctx.data.branch).toBe("codex/ci-repair-live-proof")
     expect(ctx.data.commentTargetType).toBe("pr")
     expect(ctx.data.commentTargetNumber).toBe(19)
     expect(syncFlow).not.toHaveBeenCalled()

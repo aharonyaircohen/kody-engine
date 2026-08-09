@@ -46,6 +46,13 @@ export const postIssueComment: PostflightScript = async (ctx, profile) => {
     // paths.
     const specific = computeFailureReason(ctx)
     if (specific.length === 0) {
+      if ((ctx.output.exitCode ?? 0) !== 0) {
+        const reason = ctx.output.reason || "delivery failed before producing a commit"
+        postWith(targetType, targetNumber, `⚠️ kody FAILED: ${truncate(reason, 1500)}`, ctx.cwd)
+        markRunFailed(ctx)
+        ctx.output.reason = reason
+        return
+      }
       const reason = "work already satisfied; no PR needed"
       setDeliveryNotRequired(ctx.data, reason)
       postWith(targetType, targetNumber, `ℹ️ kody made no changes — ${reason}`, ctx.cwd)
