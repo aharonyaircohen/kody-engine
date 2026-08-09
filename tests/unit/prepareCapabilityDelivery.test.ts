@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from "vitest"
 
 vi.mock("../../src/scripts/runFlow.js", () => ({ runFlow: vi.fn() }))
 vi.mock("../../src/scripts/syncFlow.js", () => ({ syncFlow: vi.fn() }))
+vi.mock("../../src/branch.js", () => ({ checkoutPrBranch: vi.fn() }))
 
 import type { Context, Profile } from "../../src/implementations/types.js"
+import { checkoutPrBranch } from "../../src/branch.js"
 import { prepareCapabilityDelivery } from "../../src/scripts/prepareCapabilityDelivery.js"
 import { runFlow } from "../../src/scripts/runFlow.js"
 import { syncFlow } from "../../src/scripts/syncFlow.js"
@@ -27,6 +29,7 @@ describe("prepareCapabilityDelivery", () => {
     await prepareCapabilityDelivery(ctx, profile)
 
     expect(ctx.args.pr).toBe(19)
+    expect(checkoutPrBranch).toHaveBeenCalledWith(19, "/tmp/repo")
     expect(ctx.data.commentTargetType).toBe("pr")
     expect(ctx.data.commentTargetNumber).toBe(19)
     expect(syncFlow).not.toHaveBeenCalled()
