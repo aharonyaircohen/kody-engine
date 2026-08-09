@@ -3,6 +3,7 @@ import type { StateBackendClient } from "./state-backend.js"
 
 const DEFAULT_KODY_API_URL = "https://kody-dashboard-aguy.vercel.app"
 const OIDC_AUDIENCE = "kody-api"
+const WORKFLOW_COMPLETION_SUMMARY_MAX_LENGTH = 1_000
 
 interface CachedToken {
   value: string
@@ -115,10 +116,15 @@ export async function notifyWorkflowCompleted(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
   const token = await githubOidcToken(env)
+  const { summary: rawSummary, ...completion } = notification
+  const summary = rawSummary?.trim()
   const response = await fetch(`${resolveKodyApiUrl(env)}/api/kody/engine/workflow-completed`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(notification),
+    body: JSON.stringify({
+      ...completion,
+      ...(summary ? { summary: summary.slice(0, WORKFLOW_COMPLETION_SUMMARY_MAX_LENGTH) } : {}),
+    }),
     signal: AbortSignal.timeout(30_000),
   })
   if (!response.ok) throw new Error(`Kody workflow completion request failed (${response.status})`)
