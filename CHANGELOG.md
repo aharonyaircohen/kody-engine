@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.538 — 2026-08-09
+
+### Features
+- expose generic workflow facts (8d11828)
+
+### Other
+- use review fix workflow name (eb93b15)
 ## v0.4.532 — 2026-08-08
 
 ### Features
