@@ -1124,7 +1124,7 @@ function workflowStepTargetNumber(
   chainData: Record<string, unknown>,
 ): number | undefined {
   if (step.target === "pr") return workflowTargetFactNumber(step, chainData) ?? workflowPrNumber(chainData)
-  if (step.target === "issue") return workflowIssueNumber(parent) ?? workflowTargetFactNumber(step, chainData)
+  if (step.target === "issue") return workflowTargetFactNumber(step, chainData) ?? workflowIssueNumber(parent)
   return typeof parent.target === "number" ? parent.target : targetFromCliArgs(parent.cliArgs)
 }
 

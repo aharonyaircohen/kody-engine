@@ -1262,6 +1262,48 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("uses an explicit issue fact instead of reusing the workflow PR number", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-issue-routing-"))
+    try {
+      for (const capability of ["prepare", "run"]) {
+        writeSimpleCapability(cwd, capability)
+      }
+      writeWorkflowDefinition(cwd, "repair", {
+        name: "Repair",
+        agent: "kody",
+        startAt: "prepare",
+        steps: [
+          { id: "prepare", capability: "prepare", next: "run" },
+          { id: "run", capability: "run", target: "issue", targetFact: "issue" },
+        ],
+      })
+      runImplementationChain
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: { status: "ready", issue: 42 },
+          capabilityResults: [capabilityResult({ status: "ready", issue: 42 })],
+        })
+        .mockResolvedValueOnce({ exitCode: 0, capabilityOutput: { status: "changed" } })
+
+      const result = await runJob(
+        {
+          workflow: "repair",
+          target: 19,
+          cliArgs: { input: JSON.stringify({ pr: 19 }) },
+          flavor: "instant",
+        },
+        { cwd },
+      )
+
+      expect(result.exitCode).toBe(0)
+      const input = JSON.parse(String(runImplementationChain.mock.calls[1]![1].cliArgs.input))
+      expect(input).toMatchObject({ issue: 42 })
+      expect(input).not.toHaveProperty("pr")
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it("ends a workflow through an explicit $end connection", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-end-"))
     try {
