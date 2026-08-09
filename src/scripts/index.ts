@@ -81,6 +81,7 @@ import { recordOutcome } from "./recordOutcome.js"
 import { requireDeliveryArtifacts } from "./requireDeliveryArtifacts.js"
 import { requireFeedbackActions } from "./requireFeedbackActions.js"
 import { requirePlanDeviations } from "./requirePlanDeviations.js"
+import { retryMissingDeliveryChange } from "./retryMissingDeliveryChange.js"
 import { resolveArtifacts } from "./resolveArtifacts.js"
 import { resolveFlow } from "./resolveFlow.js"
 import { resolvePreviewUrl } from "./resolvePreviewUrl.js"
@@ -181,6 +182,7 @@ export const postflightScripts: Record<string, PostflightScript> = {
   requireFeedbackActions,
   requireDeliveryArtifacts,
   requirePlanDeviations,
+  retryMissingDeliveryChange,
   verify,
   verifyWithRetry,
   verifyReproFails,
