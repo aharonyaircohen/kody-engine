@@ -20,15 +20,16 @@ export const requireDeliveryArtifacts: PostflightScript = async (ctx) => {
   // never become salvageable merely because they also lack delivery fields.
   if (ctx.data.agentDone !== true) return
 
-  const commitResult = ctx.data.commitResult as { committed?: boolean } | undefined
+  const commitResult = ctx.data.commitResult as { committed?: boolean; pushed?: boolean } | undefined
   const hasCommits = ctx.data.hasCommitsAhead === true
+  if (ctx.data.jobDelivery === "pull-request" && (!commitResult?.committed || !commitResult.pushed)) {
+    const reason = "pull-request delivery produced no commit"
+    ctx.data.agentFailureReason = reason
+    ctx.output.exitCode = 4
+    ctx.output.reason = reason
+    return
+  }
   if (!commitResult?.committed && !hasCommits) {
-    if (ctx.data.jobDelivery === "pull-request") {
-      const reason = "pull-request delivery produced no commit"
-      ctx.data.agentFailureReason = reason
-      ctx.output.exitCode = 4
-      ctx.output.reason = reason
-    }
     return
   }
 

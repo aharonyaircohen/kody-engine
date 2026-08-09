@@ -1,7 +1,6 @@
 import { capabilityDeliveryTarget } from "../capabilityDelivery.js"
 import type { PreflightScript } from "../implementations/types.js"
 import { runFlow } from "./runFlow.js"
-import { syncFlow } from "./syncFlow.js"
 
 export const prepareCapabilityDelivery: PreflightScript = async (ctx, profile) => {
   const target = capabilityDeliveryTarget(ctx.data.capabilityInput)
@@ -17,5 +16,4 @@ export const prepareCapabilityDelivery: PreflightScript = async (ctx, profile) =
 
   ctx.data.commentTargetType = "pr"
   ctx.data.commentTargetNumber = target.number
-  await syncFlow(ctx, profile)
 }

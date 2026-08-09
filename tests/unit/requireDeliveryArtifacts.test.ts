@@ -20,7 +20,7 @@ describe("requireDeliveryArtifacts", () => {
       agentDone: true,
       jobDelivery: "pull-request",
       commitResult: { committed: false, pushed: false },
-      hasCommitsAhead: false,
+      hasCommitsAhead: true,
     })
 
     await requireDeliveryArtifacts(ctx, profile, null)

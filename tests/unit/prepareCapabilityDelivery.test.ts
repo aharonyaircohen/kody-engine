@@ -1,22 +1,44 @@
-import { describe, expect, it } from "vitest"
-import { capabilityDeliveryTarget } from "../../src/capabilityDelivery.js"
+import { describe, expect, it, vi } from "vitest"
 
-describe("capability delivery target", () => {
-  it.each([
-    [{ issue: 7 }, { kind: "issue", number: 7 }],
-    [{ pr: 42 }, { kind: "pr", number: 42 }],
-  ] as const)("reads a supported target from capability input", (input, expected) => {
-    expect(capabilityDeliveryTarget(input)).toEqual(expected)
+vi.mock("../../src/scripts/runFlow.js", () => ({ runFlow: vi.fn() }))
+vi.mock("../../src/scripts/syncFlow.js", () => ({ syncFlow: vi.fn() }))
+
+import type { Context, Profile } from "../../src/implementations/types.js"
+import { prepareCapabilityDelivery } from "../../src/scripts/prepareCapabilityDelivery.js"
+import { runFlow } from "../../src/scripts/runFlow.js"
+import { syncFlow } from "../../src/scripts/syncFlow.js"
+
+const profile = {} as Profile
+
+function makeCtx(input: Record<string, unknown>): Context {
+  return {
+    args: {},
+    cwd: "/tmp/repo",
+    config: {} as Context["config"],
+    data: { capabilityInput: input },
+    output: { exitCode: 0 },
+  } as Context
+}
+
+describe("prepareCapabilityDelivery", () => {
+  it("checks out an existing PR without merging its base branch", async () => {
+    const ctx = makeCtx({ pr: 19 })
+
+    await prepareCapabilityDelivery(ctx, profile)
+
+    expect(ctx.args.pr).toBe(19)
+    expect(ctx.data.commentTargetType).toBe("pr")
+    expect(ctx.data.commentTargetNumber).toBe(19)
+    expect(syncFlow).not.toHaveBeenCalled()
+    expect(runFlow).not.toHaveBeenCalled()
   })
 
-  it.each([
-    undefined,
-    null,
-    {},
-    { issue: "7" },
-    { pr: 0 },
-    { issue: 7, pr: 42 },
-  ])("rejects missing or ambiguous delivery input", (input) => {
-    expect(capabilityDeliveryTarget(input)).toBeNull()
+  it("keeps issue delivery on the issue-to-PR flow", async () => {
+    const ctx = makeCtx({ issue: 42 })
+
+    await prepareCapabilityDelivery(ctx, profile)
+
+    expect(ctx.args.issue).toBe(42)
+    expect(runFlow).toHaveBeenCalledWith(ctx, profile)
   })
 })
