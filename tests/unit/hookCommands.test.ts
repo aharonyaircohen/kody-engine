@@ -34,11 +34,21 @@ describe("hooks: block-git PreToolUse command", () => {
   })
 
   it.each([
-    ["git status", true],
+    ["git status", false],
+    ["git log --oneline -10", false],
+    ["git diff -- src/file.ts", false],
+    ["git show HEAD:file.ts", false],
+    ["git rev-parse HEAD", false],
+    ["git ls-files", false],
     ["git", true],
-    ["  git status", true],
+    ["  git status", false],
+    ["git add .", true],
+    ["git commit -m fix", true],
+    ["git checkout main", true],
+    ["git reset --hard", true],
+    ["git status && git push", true],
     ["gh pr list", true],
-    ["cd foo && git diff", true],
+    ["cd foo && git diff", false],
     ["pnpm test || git push", true],
     ["echo hello", false],
     ["pnpm run something-with-git-in-name", false],
@@ -59,7 +69,7 @@ describe("hooks: block-git PreToolUse command", () => {
     const stdin = JSON.stringify({ tool_name: "Bash", tool_input: { command: "git push" } })
     const { code, stderr } = runCommand(hook.command, stdin)
     expect(code).toBe(2)
-    expect(stderr).toContain("kody blocks git/gh")
+    expect(stderr).toContain("delivery wrapper owns VCS mutations")
   })
 
   it("does not block on malformed JSON input (fails open, exit 0)", () => {
