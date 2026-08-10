@@ -148,6 +148,11 @@ function parseOutput(text: string | undefined): unknown | undefined {
   const plainOutput = parseSingleJsonCandidate(fences.filter((match) => !match[1]).map((match) => match[2]))
   if (plainOutput.found) return plainOutput.value
 
+  const finalStatusOutput = parseSingleJsonCandidate(
+    [...text.matchAll(/<final_status>\s*([\s\S]*?)\s*<\/final_status>/gi)].map((match) => match[1]),
+  )
+  if (finalStatusOutput.found) return finalStatusOutput.value
+
   // Older capabilities return useful prose (for example DONE/PR_SUMMARY)
   // instead of the newer JSON envelope. Preserve that result at the engine
   // boundary so one legacy capability cannot abort an entire workflow.

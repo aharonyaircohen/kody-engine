@@ -157,6 +157,42 @@ describe("parseSimpleCapabilityOutput", () => {
     expect(ctx.data.capabilityOutput).toEqual({ status: "skipped", reason: "nothing to promote" })
   })
 
+  it("accepts a single JSON result wrapped in final_status tags", async () => {
+    const ctx = {
+      data: {
+        capabilityOutputSchema: {
+          type: "object",
+          properties: {
+            status: { enum: ["fixed", "blocked"] },
+            summary: { type: "string" },
+          },
+          required: ["status", "summary"],
+          additionalProperties: true,
+        },
+      },
+      output: {},
+    } as unknown as Parameters<typeof parseSimpleCapabilityOutput>[0]
+
+    await parseSimpleCapabilityOutput(
+      ctx,
+      {} as Parameters<typeof parseSimpleCapabilityOutput>[1],
+      {
+        finalText: [
+          "Repair complete.",
+          "<final_status>",
+          '{"status":"fixed","summary":"Repaired the failing check"}',
+          "</final_status>",
+        ].join("\n"),
+      } as Parameters<typeof parseSimpleCapabilityOutput>[2],
+    )
+
+    expect(ctx.output.exitCode).toBeUndefined()
+    expect(ctx.data.capabilityOutput).toEqual({
+      status: "fixed",
+      summary: "Repaired the failing check",
+    })
+  })
+
   it("uses a plain object output as Workflow facts", async () => {
     const ctx = { data: {}, output: {} } as Parameters<typeof parseSimpleCapabilityOutput>[0]
     await parseSimpleCapabilityOutput(
