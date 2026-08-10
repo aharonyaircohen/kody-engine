@@ -30,6 +30,8 @@ describe("simple Capability folder", () => {
       requirements: {
         browser: true,
         qaCredentials: true,
+        githubTestToken: true,
+        browserOnly: true,
       },
       input: {
         type: "object",
@@ -51,6 +53,8 @@ describe("simple Capability folder", () => {
     expect(loaded?.contract?.requirements).toEqual({
       browser: true,
       qaCredentials: true,
+      githubTestToken: true,
+      browserOnly: true,
     })
     expect(loaded?.config.inputSchema).toEqual(contract.input)
     expect(loaded?.config.outputSchema).toEqual(contract.output)

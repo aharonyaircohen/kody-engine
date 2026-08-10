@@ -23,6 +23,8 @@ export interface CapabilityContract {
 export interface CapabilityRuntimeRequirements {
   browser?: boolean
   qaCredentials?: boolean
+  githubTestToken?: boolean
+  browserOnly?: boolean
 }
 
 export interface CapabilityFolderConfig {
@@ -277,7 +279,9 @@ function parseCapabilityContract(raw: string): CapabilityContract {
 function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirements | undefined {
   if (raw === undefined) return undefined
   if (!isPlainObject(raw)) throw new Error("contract.json requirements must be an object")
-  const unsupported = Object.keys(raw).filter((key) => key !== "browser" && key !== "qaCredentials")
+  const unsupported = Object.keys(raw).filter(
+    (key) => key !== "browser" && key !== "qaCredentials" && key !== "githubTestToken" && key !== "browserOnly",
+  )
   if (unsupported.length > 0) {
     throw new Error(`contract.json requirements contains unsupported fields: ${unsupported.join(", ")}`)
   }
@@ -287,12 +291,23 @@ function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirement
   if (raw.qaCredentials !== undefined && typeof raw.qaCredentials !== "boolean") {
     throw new Error("contract.json requirements.qaCredentials must be boolean")
   }
-  if (raw.qaCredentials === true && raw.browser !== true) {
-    throw new Error("contract.json requirements.qaCredentials requires browser")
+  if (raw.githubTestToken !== undefined && typeof raw.githubTestToken !== "boolean") {
+    throw new Error("contract.json requirements.githubTestToken must be boolean")
+  }
+  if (raw.browserOnly !== undefined && typeof raw.browserOnly !== "boolean") {
+    throw new Error("contract.json requirements.browserOnly must be boolean")
+  }
+  if (
+    (raw.qaCredentials === true || raw.githubTestToken === true || raw.browserOnly === true) &&
+    raw.browser !== true
+  ) {
+    throw new Error("contract.json authentication requirements require browser")
   }
   const requirements = {
     ...(raw.browser === true ? { browser: true } : {}),
     ...(raw.qaCredentials === true ? { qaCredentials: true } : {}),
+    ...(raw.githubTestToken === true ? { githubTestToken: true } : {}),
+    ...(raw.browserOnly === true ? { browserOnly: true } : {}),
   }
   return Object.keys(requirements).length > 0 ? requirements : undefined
 }

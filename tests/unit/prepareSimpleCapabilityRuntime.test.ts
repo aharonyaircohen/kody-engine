@@ -9,6 +9,7 @@ const roots: string[] = []
 
 afterEach(() => {
   delete process.env.LOGIN_PASSWORD
+  delete process.env.E2E_GITHUB_TOKEN
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true })
 })
 
@@ -25,7 +26,11 @@ function fixture(): { ctx: Context; profile: Profile } {
       agent: { model: "claude/haiku" },
     },
     data: {
-      capabilityRequirements: { browser: true, qaCredentials: true },
+      capabilityRequirements: {
+        browser: true,
+        qaCredentials: true,
+        githubTestToken: true,
+      },
       prompt: "Review the UI.",
     },
     output: { exitCode: 0 },
@@ -74,5 +79,54 @@ describe("prepareSimpleCapabilityRuntime", () => {
     expect(ctx.data.prompt).toContain("qa@example.com")
     expect(ctx.data.prompt).toContain("private-password")
     expect(ctx.data.capabilityEnvironment).toBeUndefined()
+  })
+
+  it("provides the protected GitHub test token only inside the private agent prompt", async () => {
+    const { ctx, profile } = fixture()
+    process.env.E2E_GITHUB_TOKEN = "protected-github-token"
+
+    await prepareSimpleCapabilityRuntime(ctx, profile)
+
+    expect(ctx.data.prompt).toContain("protected-github-token")
+    expect(ctx.data.prompt).toContain("never include the token")
+    expect(ctx.data.capabilityEnvironment).toBeUndefined()
+  })
+
+  it("blocks authenticated Quality work when the protected token is missing", async () => {
+    const { ctx, profile } = fixture()
+
+    await prepareSimpleCapabilityRuntime(ctx, profile)
+
+    expect(ctx.data.prompt).toContain("E2E_GITHUB_TOKEN is not configured")
+    expect(ctx.data.prompt).toContain("return a blocked result")
+  })
+
+  it("restricts an agent-driven Quality browser to the selected deployment", async () => {
+    const { ctx, profile } = fixture()
+    ctx.data.capabilityRequirements = { browser: true, browserOnly: true }
+    ctx.data.capabilityInput = {
+      qualityRunId: "run-safe",
+      targetUrl: "https://quality.example.com/path",
+    }
+
+    await prepareSimpleCapabilityRuntime(ctx, profile)
+
+    expect(profile.claudeCode.tools).toEqual(["Write", "mcp__playwright"])
+    expect(profile.claudeCode.maxTurns).toBe(50)
+    expect(profile.claudeCode.mcpServers[0]?.args).toContain("--allowed-origins")
+    expect(profile.claudeCode.mcpServers[0]?.args).toContain("https://quality.example.com")
+    expect(profile.claudeCode.mcpServers[0]?.args).toContain("--output-dir")
+    expect(profile.claudeCode.mcpServers[0]?.args?.join(" ")).toContain("test-results/quality-runs/run-safe")
+  })
+
+  it("rejects private targets for a restricted Quality browser", async () => {
+    const { ctx, profile } = fixture()
+    ctx.data.capabilityRequirements = { browser: true, browserOnly: true }
+    ctx.data.capabilityInput = {
+      qualityRunId: "run-safe",
+      targetUrl: "https://127.0.0.1/internal",
+    }
+
+    await expect(prepareSimpleCapabilityRuntime(ctx, profile)).rejects.toThrow("public HTTPS targetUrl")
   })
 })
