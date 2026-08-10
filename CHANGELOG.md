@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.549 — 2026-08-10
+
+_No notable commits since the last release._
 ## v0.4.532 — 2026-08-08
 
 ### Features
