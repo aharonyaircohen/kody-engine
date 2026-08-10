@@ -12,7 +12,6 @@ import {
 import { renderEvent, type SdkMessageLike } from "./format.js"
 import {
   createOutputContractPostWriteHook,
-  createOutputContractStopHook,
   type OutputContract,
 } from "./outputContractHooks.js"
 import { agentRunDir } from "./runtimePaths.js"
@@ -448,7 +447,6 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const outputContractPostWriteHook = opts.outputContract
     ? createOutputContractPostWriteHook(opts.outputContract)
     : null
-  const outputContractStopHook = opts.outputContract ? createOutputContractStopHook(opts.outputContract) : null
 
   for (let attempt = 0; ; attempt++) {
     // The SDK message log reflects the final attempt — truncate on each try.
@@ -523,15 +521,6 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
                 ]
               : []),
           ],
-          ...(outputContractStopHook
-            ? {
-                Stop: [
-                  {
-                    hooks: [outputContractStopHook],
-                  },
-                ],
-              }
-            : {}),
         },
       }
       const additionalDirectories = new Set(opts.additionalDirectories ?? [])

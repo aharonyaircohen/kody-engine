@@ -4,7 +4,6 @@ import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import {
   createOutputContractPostWriteHook,
-  createOutputContractStopHook,
 } from "../../src/outputContractHooks.js"
 
 const schema = {
@@ -55,24 +54,4 @@ describe("output contract hooks", () => {
     expect(await hook({ tool_input: { file_path: file } })).toEqual({})
   })
 
-  it("prevents the agent from finishing while the required output is invalid", async () => {
-    const file = outputFile()
-    fs.writeFileSync(file, "not json")
-    const hook = createOutputContractStopHook({ path: file, schema })
-
-    const result = await hook()
-
-    expect(result).toMatchObject({
-      decision: "block",
-      reason: expect.stringContaining("overwrite"),
-    })
-  })
-
-  it("allows the agent to finish after the output satisfies the contract", async () => {
-    const file = outputFile()
-    fs.writeFileSync(file, JSON.stringify({ version: 1, status: "blocked" }))
-    const hook = createOutputContractStopHook({ path: file, schema })
-
-    expect(await hook()).toEqual({})
-  })
 })

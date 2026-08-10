@@ -73,7 +73,7 @@ describe("runAgent: settingSources passthrough", () => {
 })
 
 describe("runAgent: output contract hooks", () => {
-  it("wires write feedback and stop enforcement only for contracted output", async () => {
+  it("wires write feedback without interrupting the agent between browser decisions", async () => {
     querySpy.mockClear()
     const outputPath = path.join(ndjsonDir, "result.json")
     fs.writeFileSync(outputPath, JSON.stringify({ version: 1 }))
@@ -94,7 +94,7 @@ describe("runAgent: output contract hooks", () => {
       options: { hooks: { PostToolUse: Array<{ matcher?: string }>; Stop?: Array<unknown> } }
     }
     expect(args.options.hooks.PostToolUse.map((entry) => entry.matcher)).toContain("Write")
-    expect(args.options.hooks.Stop).toHaveLength(1)
+    expect(args.options.hooks.Stop).toBeUndefined()
   })
 })
 

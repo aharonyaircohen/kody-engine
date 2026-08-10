@@ -51,16 +51,3 @@ export function createOutputContractPostWriteHook(
     }
   }
 }
-
-export function createOutputContractStopHook(
-  contract: OutputContract,
-): () => Promise<Record<string, unknown>> {
-  return async () => {
-    const error = outputContractError(contract)
-    if (!error) return {}
-    return {
-      decision: "block",
-      reason: correctionMessage(contract, error),
-    }
-  }
-}
