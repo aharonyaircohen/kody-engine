@@ -626,6 +626,16 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       verifyConfig: profile.claudeCode.enableVerifyTool ? config : undefined,
       implementationName: profileName,
       settingSources: (profile.claudeCode as { settingSources?: Array<"user" | "project" | "local"> }).settingSources,
+      outputContract:
+        typeof ctx.data.capabilityOutputPath === "string" &&
+        ctx.data.capabilityOutputSchema &&
+        typeof ctx.data.capabilityOutputSchema === "object" &&
+        !Array.isArray(ctx.data.capabilityOutputSchema)
+          ? {
+              path: ctx.data.capabilityOutputPath,
+              schema: ctx.data.capabilityOutputSchema as Record<string, unknown>,
+            }
+          : undefined,
     })
   }
 

@@ -10,6 +10,11 @@ import {
   type ReasoningEffort,
 } from "./config.js"
 import { renderEvent, type SdkMessageLike } from "./format.js"
+import {
+  createOutputContractPostWriteHook,
+  createOutputContractStopHook,
+  type OutputContract,
+} from "./outputContractHooks.js"
 import { agentRunDir } from "./runtimePaths.js"
 import { createSubagentInvocationHook, enforceSubagentModelInheritance } from "./subagents.js"
 
@@ -242,6 +247,8 @@ export interface AgentOptions {
    * configuration is picked up. Pass `[]` for SDK isolation.
    */
   settingSources?: Array<"user" | "project" | "local">
+  /** Validate the authoritative capability result while the agent can still correct it. */
+  outputContract?: OutputContract
   /**
    * Per-turn progress callback. Invoked with structured events as the
    * SDK streams messages back from the model. Chat mode wires this to
@@ -438,6 +445,10 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   let getSubmitted: (() => { cursor: string; data: Record<string, unknown>; done: boolean } | undefined) | undefined
   const invokedSubagents = new Set<string>()
   const subagentInvocationHook = createSubagentInvocationHook(invokedSubagents)
+  const outputContractPostWriteHook = opts.outputContract
+    ? createOutputContractPostWriteHook(opts.outputContract)
+    : null
+  const outputContractStopHook = opts.outputContract ? createOutputContractStopHook(opts.outputContract) : null
 
   for (let attempt = 0; ; attempt++) {
     // The SDK message log reflects the final attempt — truncate on each try.
@@ -503,7 +514,24 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
               matcher: "Agent",
               hooks: [subagentInvocationHook],
             },
+            ...(outputContractPostWriteHook
+              ? [
+                  {
+                    matcher: "Write",
+                    hooks: [outputContractPostWriteHook],
+                  },
+                ]
+              : []),
           ],
+          ...(outputContractStopHook
+            ? {
+                Stop: [
+                  {
+                    hooks: [outputContractStopHook],
+                  },
+                ],
+              }
+            : {}),
         },
       }
       const additionalDirectories = new Set(opts.additionalDirectories ?? [])

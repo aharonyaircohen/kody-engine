@@ -72,6 +72,32 @@ describe("runAgent: settingSources passthrough", () => {
   })
 })
 
+describe("runAgent: output contract hooks", () => {
+  it("wires write feedback and stop enforcement only for contracted output", async () => {
+    querySpy.mockClear()
+    const outputPath = path.join(ndjsonDir, "result.json")
+    fs.writeFileSync(outputPath, JSON.stringify({ version: 1 }))
+
+    await runAgent({
+      ...baseOpts(),
+      outputContract: {
+        path: outputPath,
+        schema: {
+          type: "object",
+          required: ["version"],
+          properties: { version: { const: 1 } },
+        },
+      },
+    })
+
+    const args = querySpy.mock.calls[0]![0] as {
+      options: { hooks: { PostToolUse: Array<{ matcher?: string }>; Stop?: Array<unknown> } }
+    }
+    expect(args.options.hooks.PostToolUse.map((entry) => entry.matcher)).toContain("Write")
+    expect(args.options.hooks.Stop).toHaveLength(1)
+  })
+})
+
 describe("runAgent: maxThinkingTokens passthrough", () => {
   beforeEach(() => {
     querySpy.mockClear()
