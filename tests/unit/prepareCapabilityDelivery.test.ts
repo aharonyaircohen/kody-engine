@@ -4,8 +4,8 @@ vi.mock("../../src/scripts/runFlow.js", () => ({ runFlow: vi.fn() }))
 vi.mock("../../src/scripts/syncFlow.js", () => ({ syncFlow: vi.fn() }))
 vi.mock("../../src/branch.js", () => ({ checkoutPrBranch: vi.fn() }))
 
-import type { Context, Profile } from "../../src/implementations/types.js"
 import { checkoutPrBranch } from "../../src/branch.js"
+import type { Context, Profile } from "../../src/implementations/types.js"
 import { prepareCapabilityDelivery } from "../../src/scripts/prepareCapabilityDelivery.js"
 import { runFlow } from "../../src/scripts/runFlow.js"
 import { syncFlow } from "../../src/scripts/syncFlow.js"

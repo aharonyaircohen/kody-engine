@@ -1,5 +1,5 @@
-import { capabilityDeliveryTarget } from "../capabilityDelivery.js"
 import { checkoutPrBranch } from "../branch.js"
+import { capabilityDeliveryTarget } from "../capabilityDelivery.js"
 import type { PreflightScript } from "../implementations/types.js"
 import { runFlow } from "./runFlow.js"
 
