@@ -36,7 +36,7 @@
   "claudeCode": {
     "model": "inherit",
     "permissionMode": "acceptEdits",
-    "maxTurns": 60,
+    "maxTurns": 144,
     "maxThinkingTokens": null,
     "systemPromptAppend": null,
     "enableVerifyTool": true,

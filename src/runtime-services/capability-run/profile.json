@@ -23,7 +23,7 @@
   "claudeCode": {
     "model": "inherit",
     "permissionMode": "acceptEdits",
-    "maxTurns": 60,
+    "maxTurns": 144,
     "maxThinkingTokens": null,
     "systemPromptAppend": null,
     "tools": ["Read", "Bash", "Edit", "Write", "Glob", "Grep"],
