@@ -15,7 +15,6 @@ describe("postflight failure-safety: which scripts are state-mutating", () => {
     expect(isMutatingPostflight("commitAndPush")).toBe(true)
     expect(isMutatingPostflight("ensurePr")).toBe(true)
     expect(isMutatingPostflight("applyCapabilityReports")).toBe(true)
-    expect(isMutatingPostflight("publishReport")).toBe(true)
     expect(isMutatingPostflight("openAgencyModelReviewPr")).toBe(true)
   })
 
@@ -26,6 +25,7 @@ describe("postflight failure-safety: which scripts are state-mutating", () => {
       "postIssueComment",
       "writeAgentRunSummary",
       "recordOutcome",
+      "publishReport",
       "saveTaskState",
       "notifyTerminal",
     ]) {
@@ -44,7 +44,6 @@ describe("postflight failure-safety: which scripts are state-mutating", () => {
       "commitAndPush",
       "ensurePr",
       "applyCapabilityReports",
-      "publishReport",
       "openAgencyModelReviewPr",
     ]) {
       expect(Object.keys(postflightScripts)).toContain(name)
@@ -69,6 +68,7 @@ describe("postflight failure-safety: shouldBlockMutatingPostflight", () => {
   it("never blocks a non-mutating postflight, even on failure", () => {
     expect(shouldBlockMutatingPostflight("postIssueComment", 2)).toBe(false)
     expect(shouldBlockMutatingPostflight("recordOutcome", 99)).toBe(false)
+    expect(shouldBlockMutatingPostflight("publishReport", 1)).toBe(false)
     expect(shouldBlockMutatingPostflight(undefined, 1)).toBe(false)
   })
 })

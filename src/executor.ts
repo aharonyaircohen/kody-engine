@@ -64,7 +64,6 @@ const MUTATING_POSTFLIGHTS: ReadonlySet<string> = new Set([
   "commitAndPush",
   "ensurePr",
   "applyCapabilityReports",
-  "publishReport",
   "openAgencyModelReviewPr",
 ])
 
