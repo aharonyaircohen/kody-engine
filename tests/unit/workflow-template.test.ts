@@ -22,4 +22,11 @@ describe("consumer workflow template", () => {
     expect(workflow).not.toContain("ALL_SECRETS:")
     expect(workflow).toContain("KODY_TOKEN: ${{ secrets.KODY_TOKEN }}")
   })
+
+  it("uploads Quality Run evidence even when the exact test fails", () => {
+    expect(workflow).toContain("uses: actions/upload-artifact@v4")
+    expect(workflow).toContain("if: ${{ always() }}")
+    expect(workflow).toContain("test-results/quality-runs/")
+    expect(workflow).toContain("if-no-files-found: ignore")
+  })
 })
