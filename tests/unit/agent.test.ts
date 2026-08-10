@@ -227,4 +227,15 @@ describe("runAgent: Dashboard CMS MCP wiring", () => {
     expect(allowedTools).toContain("mcp__kody-cms__cms_list_documents")
     expect(allowedTools).toContain("mcp__kody-cms__cms_get_document")
   })
+
+  it("forwards a hard tool denylist to the SDK", async () => {
+    await runAgent({
+      ...baseOpts(),
+      allowedToolsOverride: ["Write", "mcp__playwright"],
+      disallowedToolsOverride: ["Bash", "Read", "TodoWrite"],
+    })
+
+    const args = querySpy.mock.calls[0]![0] as { options: Record<string, unknown> }
+    expect(args.options.disallowedTools).toEqual(["Bash", "Read", "TodoWrite"])
+  })
 })

@@ -585,6 +585,7 @@ function parseClaudeCode(p: string, raw: unknown): ClaudeCodeSpec {
   }
 
   const tools = Array.isArray(r.tools) ? (r.tools as string[]) : []
+  const disallowedTools = Array.isArray(r.disallowedTools) ? (r.disallowedTools as string[]) : []
   // An empty tools array is permitted for configless / agentless implementations
   // (e.g. `init`, `release`). Such implementations must set ctx.skipAgent in a
   // preflight script — the executor refuses to invoke the agent without tools
@@ -594,6 +595,7 @@ function parseClaudeCode(p: string, raw: unknown): ClaudeCodeSpec {
     model: typeof r.model === "string" ? r.model : "inherit",
     permissionMode,
     maxTurns: typeof r.maxTurns === "number" ? r.maxTurns : null,
+    disallowedTools,
     maxThinkingTokens: typeof r.maxThinkingTokens === "number" ? r.maxThinkingTokens : null,
     reasoningEffort: typeof r.reasoningEffort === "string" ? parseReasoningEffort(r.reasoningEffort) : null,
     maxTurnTimeoutSec: typeof r.maxTurnTimeoutSec === "number" ? r.maxTurnTimeoutSec : null,

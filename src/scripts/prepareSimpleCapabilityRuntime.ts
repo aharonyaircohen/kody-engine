@@ -72,8 +72,21 @@ function configureBrowser(ctx: Context, profile: Profile, requirements: Capabili
   const server = browserRuntime(ctx, requirements)
   if (requirements.browserOnly) {
     profile.claudeCode.tools = ["Write"]
+    profile.claudeCode.disallowedTools = [
+      "Agent",
+      "Bash",
+      "Edit",
+      "Glob",
+      "Grep",
+      "NotebookEdit",
+      "Read",
+      "Task",
+      "TodoWrite",
+      "WebFetch",
+      "WebSearch",
+    ]
     profile.claudeCode.permissionMode = "default"
-    profile.claudeCode.maxTurns = Math.min(profile.claudeCode.maxTurns ?? 50, 50)
+    profile.claudeCode.maxTurns = Math.min(profile.claudeCode.maxTurns ?? 100, 100)
   }
   if (!profile.claudeCode.tools.includes("mcp__playwright")) {
     profile.claudeCode.tools = [...profile.claudeCode.tools, "mcp__playwright"]

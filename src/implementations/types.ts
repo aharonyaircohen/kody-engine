@@ -297,6 +297,8 @@ export interface ClaudeCodeSpec {
   permissionMode: "default" | "acceptEdits" | "plan" | "bypassPermissions"
   /** null = unbounded. */
   maxTurns: number | null
+  /** Tools the SDK must reject even when the model requests them. */
+  disallowedTools?: string[]
   /** Extended-thinking token budget. null = SDK default. */
   maxThinkingTokens: number | null
   /** User-facing effort level. When set, preferred over maxThinkingTokens. */

@@ -112,8 +112,11 @@ describe("prepareSimpleCapabilityRuntime", () => {
     await prepareSimpleCapabilityRuntime(ctx, profile)
 
     expect(profile.claudeCode.tools).toEqual(["Write", "mcp__playwright"])
+    expect(profile.claudeCode.disallowedTools).toEqual(
+      expect.arrayContaining(["Agent", "Bash", "Edit", "Read", "TodoWrite", "WebFetch", "WebSearch"]),
+    )
     expect(profile.claudeCode.permissionMode).toBe("default")
-    expect(profile.claudeCode.maxTurns).toBe(50)
+    expect(profile.claudeCode.maxTurns).toBe(100)
     expect(profile.claudeCode.mcpServers[0]?.args).toContain("--allowed-origins")
     expect(profile.claudeCode.mcpServers[0]?.args).toContain("https://quality.example.com")
     expect(profile.claudeCode.mcpServers[0]?.args).toContain("--output-dir")

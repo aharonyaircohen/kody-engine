@@ -97,6 +97,8 @@ export interface AgentOptions {
   ndjsonDir?: string
   /** Override the default allowed tool list (e.g. read-only for review). */
   allowedToolsOverride?: string[]
+  /** Tools the SDK must always reject for this run. */
+  disallowedToolsOverride?: string[]
   /** Override the default permissionMode (e.g. "default" for read-only flows). */
   permissionModeOverride?: "default" | "acceptEdits" | "plan" | "bypassPermissions"
   /**
@@ -486,6 +488,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         // Fresh array (never mutate the shared DEFAULT_ALLOWED_TOOLS const) so
         // opt-in tools like fetch_repo can be appended below.
         allowedTools: [...(opts.allowedToolsOverride ?? DEFAULT_ALLOWED_TOOLS)],
+        ...(opts.disallowedToolsOverride?.length ? { disallowedTools: [...opts.disallowedToolsOverride] } : {}),
         permissionMode: opts.permissionModeOverride ?? "acceptEdits",
         env,
         hooks: {

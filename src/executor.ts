@@ -574,6 +574,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       ndjsonDir,
       additionalDirectories: agentTaskArtifacts ? [agentTaskArtifacts.absDir] : undefined,
       allowedToolsOverride: profile.claudeCode.tools,
+      disallowedToolsOverride: profile.claudeCode.disallowedTools,
       permissionModeOverride: profile.claudeCode.permissionMode,
       mcpServers: profile.claudeCode.mcpServers.length > 0 ? profile.claudeCode.mcpServers : undefined,
       pluginPaths: pluginPaths.length > 0 ? pluginPaths : undefined,
