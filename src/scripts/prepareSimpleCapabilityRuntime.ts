@@ -72,6 +72,7 @@ function configureBrowser(ctx: Context, profile: Profile, requirements: Capabili
   const server = browserRuntime(ctx, requirements)
   if (requirements.browserOnly) {
     profile.claudeCode.tools = ["Write"]
+    profile.claudeCode.permissionMode = "default"
     profile.claudeCode.maxTurns = Math.min(profile.claudeCode.maxTurns ?? 50, 50)
   }
   if (!profile.claudeCode.tools.includes("mcp__playwright")) {
