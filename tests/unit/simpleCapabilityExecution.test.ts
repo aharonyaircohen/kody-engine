@@ -133,7 +133,7 @@ describe("simple Capability execution", () => {
     })
   })
 
-  it("preserves prior Capability outputs as context for later Workflow steps", async () => {
+  it("does not pass prior Capability outputs without explicit Workflow mappings", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-workflow-context-"))
     roots.push(cwd)
     writeCapability(cwd, "draft")
@@ -167,18 +167,13 @@ describe("simple Capability execution", () => {
     expect(executor.runImplementationChain.mock.calls[1]?.[1]).toMatchObject({
       cliArgs: {
         capability: "test",
-        input: JSON.stringify({ issue: 42, status: "approved", document: "# Draft" }),
+        input: JSON.stringify({ issue: 42 }),
       },
     })
     expect(executor.runImplementationChain.mock.calls[2]?.[1]).toMatchObject({
       cliArgs: {
         capability: "publish",
-        input: JSON.stringify({
-          issue: 42,
-          status: "approved",
-          document: "# Draft",
-          tests: ["example passes"],
-        }),
+        input: JSON.stringify({ issue: 42 }),
       },
     })
   })
@@ -302,7 +297,6 @@ describe("simple Capability execution", () => {
       cliArgs: {
         capability: "inspect",
         input: JSON.stringify({
-          prUrl: "https://github.com/acme/widgets/pull/42",
           pr: 42,
         }),
       },
