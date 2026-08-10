@@ -51,3 +51,24 @@ export function createOutputContractPostWriteHook(
     }
   }
 }
+
+export function createOutputContractStopHook(
+  contract: OutputContract,
+): () => Promise<Record<string, unknown>> {
+  return async () => {
+    if (!fs.existsSync(contract.path)) {
+      return {
+        decision: "block",
+        reason:
+          "Continue the Journey from the current page and complete the next unresolved user outcome. Do not write the result merely because you paused; write it only after the Journey passes, fails, or cannot safely continue.",
+      }
+    }
+
+    const error = outputContractError(contract)
+    if (!error) return {}
+    return {
+      decision: "block",
+      reason: correctionMessage(contract, error),
+    }
+  }
+}

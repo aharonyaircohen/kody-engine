@@ -4,6 +4,7 @@ import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import {
   createOutputContractPostWriteHook,
+  createOutputContractStopHook,
 } from "../../src/outputContractHooks.js"
 
 const schema = {
@@ -52,6 +53,39 @@ describe("output contract hooks", () => {
 
     fs.writeFileSync(file, JSON.stringify({ version: 1, status: "pass" }))
     expect(await hook({ tool_input: { file_path: file } })).toEqual({})
+  })
+
+  it("continues an unfinished journey instead of asking for an early result", async () => {
+    const hook = createOutputContractStopHook({ path: outputFile(), schema })
+
+    const result = await hook()
+
+    expect(result).toMatchObject({
+      decision: "block",
+      reason: expect.stringContaining("Continue the Journey"),
+    })
+    expect(JSON.stringify(result)).not.toContain("overwrite")
+  })
+
+  it("asks for correction only after an invalid result was written", async () => {
+    const file = outputFile()
+    fs.writeFileSync(file, "not json")
+    const hook = createOutputContractStopHook({ path: file, schema })
+
+    const result = await hook()
+
+    expect(result).toMatchObject({
+      decision: "block",
+      reason: expect.stringContaining("overwrite"),
+    })
+  })
+
+  it("allows finishing after a valid result was written", async () => {
+    const file = outputFile()
+    fs.writeFileSync(file, JSON.stringify({ version: 1, status: "blocked" }))
+    const hook = createOutputContractStopHook({ path: file, schema })
+
+    expect(await hook()).toEqual({})
   })
 
 })
