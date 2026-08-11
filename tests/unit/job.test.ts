@@ -1668,6 +1668,67 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("blocks instead of taking the fallback when a matching conditional connection is exhausted", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-exhausted-conditional-loop-"))
+    const originalCwd = process.cwd()
+    try {
+      for (const capability of ["run", "fix", "review"]) writeSimpleCapability(cwd, capability)
+      writeWorkflowDefinition(cwd, "exhausted-loop-pilot", {
+        name: "Exhausted conditional loop pilot",
+        agent: "kody",
+        startAt: "inspect",
+        steps: [
+          { id: "repair", capability: "fix", next: "inspect" },
+          {
+            id: "inspect",
+            capability: "run",
+            next: [
+              { to: "repair", when: { "result.needsFix": true }, maxIterations: 1 },
+              { to: "$end", default: true },
+            ],
+          },
+        ],
+      })
+      process.chdir(cwd)
+      runImplementationChain
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: { needsFix: true },
+          capabilityResults: [capabilityResult({ needsFix: true })],
+        })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: { repaired: true },
+          capabilityResults: [capabilityResult({ repaired: true })],
+        })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: { needsFix: true },
+          capabilityResults: [capabilityResult({ needsFix: true })],
+        })
+
+      const result = await runJob(
+        { workflow: "exhausted-loop-pilot", cliArgs: {}, flavor: "instant" },
+        { cwd },
+      )
+
+      expect(result.exitCode).toBe(64)
+      expect(result.reason).toBe("workflow step inspect reached iteration limit: inspect->repair (1)")
+      expect(result.workflowState).toMatchObject({
+        status: "blocked",
+        blocker: "workflow step inspect reached iteration limit: inspect->repair (1)",
+      })
+      expect(runImplementationChain.mock.calls.map((call) => String(call[1].cliArgs.capability))).toEqual([
+        "run",
+        "fix",
+        "run",
+      ])
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it("blocks a workflow when no conditional connection matches", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-unmatched-condition-"))
     const originalCwd = process.cwd()

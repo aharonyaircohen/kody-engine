@@ -932,12 +932,16 @@ function selectWorkflowTransition(
   let fallback: CapabilityWorkflowTransitionConfig | null = null
   for (const transition of step.next ?? []) {
     const key = `${step.id}->${transition.to}`
-    if (transition.maxIterations !== undefined && (counts[key] ?? 0) >= transition.maxIterations) continue
+    const exhausted = transition.maxIterations !== undefined && (counts[key] ?? 0) >= transition.maxIterations
     if (transition.default === true) {
-      fallback ??= transition
+      if (!exhausted) fallback ??= transition
       continue
     }
-    if (!transition.when || conditionMatches(transition.when, workflowConditionContext(data))) return transition
+    if (transition.when) {
+      if (!conditionMatches(transition.when, workflowConditionContext(data))) continue
+      return exhausted ? null : transition
+    }
+    if (!exhausted) return transition
   }
   return fallback
 }
