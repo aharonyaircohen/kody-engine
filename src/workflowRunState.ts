@@ -98,7 +98,7 @@ export async function readWorkflowRunState(
   workflowId: string,
   runId: string,
 ): Promise<WorkflowRunState | null> {
-  const tenantId = runtimeTenant(config)
+  const tenantId = workflowRuntimeTenant(config)
   const row = await createStateBackendFromEnv().getWorkflowRun(tenantId, workflowId, runId)
   return row ? parseWorkflowRunState(row.state) : null
 }
@@ -112,7 +112,7 @@ export async function writeWorkflowRunState(
 ): Promise<void> {
   workflowRunStatePath(workflowId, runId)
   await createStateBackendFromEnv().saveWorkflowRun(
-    runtimeTenant(config),
+    workflowRuntimeTenant(config),
     workflowId,
     runId,
     state,
@@ -120,7 +120,7 @@ export async function writeWorkflowRunState(
   )
 }
 
-function runtimeTenant(config: WorkflowBackendConfig): string {
+export function workflowRuntimeTenant(config: WorkflowBackendConfig): string {
   if (config.github?.owner && config.github.repo) return `${config.github.owner}/${config.github.repo}`
   const tenantId = process.env.GITHUB_REPOSITORY?.trim()
   if (!tenantId) throw new Error("Repository identity is required for workflow run state")

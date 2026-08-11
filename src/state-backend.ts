@@ -174,6 +174,23 @@ export interface StateBackend {
   listWorkflows(tenantId: string): Promise<WorkflowDocument[]>
   getWorkflowRun(tenantId: string, workflowId: string, runId: string): Promise<{ state: unknown } | null>
   saveWorkflowRun(tenantId: string, workflowId: string, runId: string, state: unknown, updatedAt: string): Promise<void>
+  acquireWorkflowRunLease(
+    tenantId: string,
+    workflowId: string,
+    runId: string,
+    ownerId: string,
+    nowMs: number,
+    leaseDurationMs: number,
+  ): Promise<{ acquired: boolean; ownerId: string; expiresAtMs: number }>
+  renewWorkflowRunLease(
+    tenantId: string,
+    workflowId: string,
+    runId: string,
+    ownerId: string,
+    nowMs: number,
+    leaseDurationMs: number,
+  ): Promise<boolean>
+  releaseWorkflowRunLease(tenantId: string, workflowId: string, runId: string, ownerId: string): Promise<boolean>
 }
 
 function requireTenant(tenantId: string): string {
@@ -430,6 +447,39 @@ export function createStateBackendFromEnv(
         state,
         updatedAt,
       })
+    },
+    async acquireWorkflowRunLease(tenantId, workflowId, runId, ownerId, nowMs, leaseDurationMs) {
+      const result = await transport.mutation(anyApi.workflowRunLeases.acquire, {
+        tenantId: requireTenant(tenantId),
+        workflowId: requireNonEmpty(workflowId, "workflowId"),
+        runId: requireNonEmpty(runId, "runId"),
+        ownerId: requireNonEmpty(ownerId, "ownerId"),
+        nowMs,
+        leaseDurationMs,
+      })
+      return result as { acquired: boolean; ownerId: string; expiresAtMs: number }
+    },
+    async renewWorkflowRunLease(tenantId, workflowId, runId, ownerId, nowMs, leaseDurationMs) {
+      return Boolean(
+        await transport.mutation(anyApi.workflowRunLeases.renew, {
+          tenantId: requireTenant(tenantId),
+          workflowId: requireNonEmpty(workflowId, "workflowId"),
+          runId: requireNonEmpty(runId, "runId"),
+          ownerId: requireNonEmpty(ownerId, "ownerId"),
+          nowMs,
+          leaseDurationMs,
+        }),
+      )
+    },
+    async releaseWorkflowRunLease(tenantId, workflowId, runId, ownerId) {
+      return Boolean(
+        await transport.mutation(anyApi.workflowRunLeases.release, {
+          tenantId: requireTenant(tenantId),
+          workflowId: requireNonEmpty(workflowId, "workflowId"),
+          runId: requireNonEmpty(runId, "runId"),
+          ownerId: requireNonEmpty(ownerId, "ownerId"),
+        }),
+      )
     },
   }
 }

@@ -1,0 +1,19 @@
+name: live release gate
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v6
+        with: { version: 11 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify:live-release
+        env:
+          KODY_RELEASE_GATE_TOKEN: ${{ secrets.KODY_RELEASE_GATE_TOKEN }}

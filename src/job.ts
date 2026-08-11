@@ -10,7 +10,7 @@
  * and validates at boundaries the same way config.ts does.
  */
 
-import { createHash } from "node:crypto"
+import { randomUUID } from "node:crypto"
 import { evaluateAgencyBoundaries } from "./agencyBoundaryEval.js"
 import type {
   CapabilityFolder,
@@ -43,13 +43,20 @@ import { type RunIndexRow, upsertRunIndexRowBestEffortAsync } from "./runIndex.j
 import { publishWorkflowReport } from "./scripts/publishReport.js"
 import { resolveSimpleCapabilityRuntime, simpleCapabilityRuntimeArgs } from "./simpleCapabilityRuntime.js"
 import type { Action } from "./state.js"
-import { hasStateBackendConfig } from "./state-backend.js"
+import { createStateBackendFromEnv, hasStateBackendConfig } from "./state-backend.js"
+import { workflowDefinitionHash, workflowResumeBlocker } from "./workflowDefinitionIdentity.js"
 import {
   isWorkflowDefinitionId,
   readWorkflowDefinition,
   workflowDefinitionToCapabilityFolder,
 } from "./workflowDefinitions.js"
-import { parseWorkflowRunState, readWorkflowRunState, writeWorkflowRunState } from "./workflowRunState.js"
+import { acquireWorkflowRunLease } from "./workflowRunLease.js"
+import {
+  parseWorkflowRunState,
+  readWorkflowRunState,
+  workflowRuntimeTenant,
+  writeWorkflowRunState,
+} from "./workflowRunState.js"
 import { formatWorkflowValidationIssues, validateWorkflow } from "./workflowValidation.js"
 
 export { stableJobKey } from "./jobIdentity.js"
@@ -232,84 +239,110 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
     workflow &&
     shouldRunCapabilityWorkflow(valid, workflow, workflowIdentity, capabilitySelectedImplementation, base)
   ) {
-    const workflowCapability = capabilityContext ?? workflowContext!
-    const persistedState =
-      valid.workflowRunId && workflowIdentity && base.config
-        ? await readWorkflowRunState(base.config, base.cwd, workflowIdentity, valid.workflowRunId)
+    const leaseResult =
+      valid.workflowRunId && workflowIdentity && base.config && hasStateBackendConfig()
+        ? await acquireWorkflowRunLease(createStateBackendFromEnv(), {
+            tenantId: workflowRuntimeTenant(base.config),
+            workflowId: workflowIdentity,
+            runId: valid.workflowRunId,
+            ownerId: `${process.env.GITHUB_RUN_ID ?? "local"}:${process.env.GITHUB_RUN_ATTEMPT ?? "1"}:${randomUUID()}`,
+            nowMs: Date.now(),
+          })
         : null
-    const workflowJob = {
-      ...(workflowContext && !valid.why ? { ...valid, why: workflowContext.body } : valid),
-      ...(workflowCapability.config.agent ? { agent: workflowCapability.config.agent } : {}),
-      ...((valid.workflowState ?? persistedState)
-        ? { workflowState: valid.workflowState ?? persistedState ?? undefined }
-        : {}),
+    if (leaseResult && !leaseResult.acquired) {
+      return {
+        exitCode: 75,
+        reason: `Workflow ${workflowIdentity} run ${valid.workflowRunId} is already running.`,
+      }
     }
-    const checkpoint =
-      valid.workflowRunId && workflowIdentity && base.config
-        ? (state: WorkflowRunState) =>
-            writeWorkflowRunState(base.config!, base.cwd, workflowIdentity, valid.workflowRunId!, state)
-        : undefined
-    const parentRunId = `workflow:${workflowIdentity}:${valid.workflowRunId ?? newJobId(valid.flavor)}`
-    const startedAt = new Date().toISOString()
-    const parentRow: RunIndexRow = {
-      version: 1,
-      id: parentRunId,
-      subjectType: "workflow",
-      subjectId: workflowIdentity!,
-      subjectLabel: workflowCapability.title,
-      status: "running",
-      title: workflowCapability.title,
-      startedAt,
-      updatedAt: startedAt,
-      workflow: workflowIdentity,
-      kodyRunId: valid.workflowRunId,
-      parentRunId: typeof base.preloadedData?.parentRunId === "string" ? base.preloadedData.parentRunId : undefined,
-      sourceType: "job",
-    }
-    const persistRun = Boolean(base.config && !base.skipConfig && hasStateBackendConfig())
-    if (base.config && persistRun) {
-      await upsertRunIndexRowBestEffortAsync(base.config, base.cwd, parentRow)
-    }
-    const workflowBase: RunJobBase = {
-      ...base,
-      preloadedData: { ...(base.preloadedData ?? {}), parentRunId },
-    }
-    let result: ExecutorOutput
+    const lease = leaseResult?.acquired ? leaseResult.lease : null
     try {
-      result = await runCapabilityWorkflow(workflowJob, workflow, workflowCapability, workflowBase, checkpoint)
-    } catch (error) {
+      const workflowCapability = capabilityContext ?? workflowContext!
+      const persistedState =
+        valid.workflowRunId && workflowIdentity && base.config
+          ? await readWorkflowRunState(base.config, base.cwd, workflowIdentity, valid.workflowRunId)
+          : null
+      const workflowJob = {
+        ...(workflowContext && !valid.why ? { ...valid, why: workflowContext.body } : valid),
+        ...(workflowCapability.config.agent ? { agent: workflowCapability.config.agent } : {}),
+        ...((valid.workflowState ?? persistedState)
+          ? { workflowState: valid.workflowState ?? persistedState ?? undefined }
+          : {}),
+      }
+      const checkpoint =
+        valid.workflowRunId && workflowIdentity && base.config
+          ? async (state: WorkflowRunState) => {
+              await lease?.checkpoint()
+              await writeWorkflowRunState(base.config!, base.cwd, workflowIdentity, valid.workflowRunId!, state)
+            }
+          : undefined
+      const parentRunId = `workflow:${workflowIdentity}:${valid.workflowRunId ?? newJobId(valid.flavor)}`
+      const startedAt = new Date().toISOString()
+      const parentRow: RunIndexRow = {
+        version: 1,
+        id: parentRunId,
+        subjectType: "workflow",
+        subjectId: workflowIdentity!,
+        subjectLabel: workflowCapability.title,
+        status: "running",
+        title: workflowCapability.title,
+        startedAt,
+        updatedAt: startedAt,
+        workflow: workflowIdentity,
+        kodyRunId: valid.workflowRunId,
+        parentRunId: typeof base.preloadedData?.parentRunId === "string" ? base.preloadedData.parentRunId : undefined,
+        sourceType: "job",
+      }
+      const persistRun = Boolean(base.config && !base.skipConfig && hasStateBackendConfig())
+      if (base.config && persistRun) {
+        await upsertRunIndexRowBestEffortAsync(base.config, base.cwd, parentRow)
+      }
+      const workflowBase: RunJobBase = {
+        ...base,
+        preloadedData: { ...(base.preloadedData ?? {}), parentRunId },
+      }
+      let result: ExecutorOutput
+      try {
+        result = await runCapabilityWorkflow(workflowJob, workflow, workflowCapability, workflowBase, checkpoint)
+      } catch (error) {
+        if (base.config && persistRun) {
+          await upsertRunIndexRowBestEffortAsync(base.config, base.cwd, {
+            ...parentRow,
+            status: "failed",
+            summary: error instanceof Error ? error.message : String(error),
+            updatedAt: new Date().toISOString(),
+          })
+        }
+        throw error
+      }
       if (base.config && persistRun) {
         await upsertRunIndexRowBestEffortAsync(base.config, base.cwd, {
           ...parentRow,
-          status: "failed",
-          summary: error instanceof Error ? error.message : String(error),
+          status: result.exitCode === 0 ? "success" : "failed",
+          summary: result.reason,
           updatedAt: new Date().toISOString(),
         })
       }
-      throw error
-    }
-    if (base.config && persistRun) {
-      await upsertRunIndexRowBestEffortAsync(base.config, base.cwd, {
-        ...parentRow,
-        status: result.exitCode === 0 ? "success" : "failed",
-        summary: result.reason,
-        updatedAt: new Date().toISOString(),
+      if (valid.workflowRunId && workflowIdentity && base.config && result.workflowState) {
+        await lease?.checkpoint()
+        await writeWorkflowRunState(base.config, base.cwd, workflowIdentity, valid.workflowRunId, result.workflowState)
+      }
+      if (valid.workflowRunId && workflowIdentity && hasGitHubActionsIdentity()) {
+        const facts = result.workflowState?.facts ?? {}
+        await notifyWorkflowCompleted({
+          workflowId: workflowIdentity,
+          runId: valid.workflowRunId,
+          status: result.workflowState?.status === "blocked" ? "blocked" : result.exitCode === 0 ? "success" : "failed",
+          ...(result.reason ? { summary: result.reason } : {}),
+          ...(Object.keys(facts).length > 0 ? { output: facts } : {}),
+        })
+      }
+      return result
+    } finally {
+      await lease?.release().catch((error: unknown) => {
+        process.stderr.write(`warning: failed to release Workflow run ownership: ${String(error)}\n`)
       })
     }
-    if (valid.workflowRunId && workflowIdentity && base.config && result.workflowState) {
-      await writeWorkflowRunState(base.config, base.cwd, workflowIdentity, valid.workflowRunId, result.workflowState)
-    }
-    if (valid.workflowRunId && workflowIdentity && hasGitHubActionsIdentity()) {
-      const facts = result.workflowState?.facts ?? {}
-      await notifyWorkflowCompleted({
-        workflowId: workflowIdentity,
-        runId: valid.workflowRunId,
-        status: result.workflowState?.status === "blocked" ? "blocked" : result.exitCode === 0 ? "success" : "failed",
-        ...(result.reason ? { summary: result.reason } : {}),
-        ...(Object.keys(facts).length > 0 ? { output: facts } : {}),
-      })
-    }
-    return result
   }
 
   if (!profileName) {
@@ -461,6 +494,14 @@ async function runCapabilityWorkflow(
       return { exitCode: 64, reason: invalid, workflowState: state }
     }
     return { exitCode: 64, reason: invalid }
+  }
+  const resumeBlocker = workflowResumeBlocker(parent.workflowState, workflow)
+  if (resumeBlocker) {
+    const state = initialWorkflowState(parent, workflow)
+    state.status = "blocked"
+    state.blocker = resumeBlocker
+    await checkpoint?.(state)
+    return { exitCode: 64, reason: resumeBlocker, workflowState: state }
   }
   if (isGraphWorkflow(workflow)) {
     const result = await runGraphCapabilityWorkflow(parent, workflow, capability, base, checkpoint)
@@ -1073,21 +1114,6 @@ function capabilityInputNames(folder: CapabilityFolder): Set<string> {
   const properties = folder.config.inputSchema?.properties
   if (!properties || typeof properties !== "object" || Array.isArray(properties)) return new Set()
   return new Set(Object.keys(properties))
-}
-
-function workflowDefinitionHash(workflow: CapabilityWorkflowConfig): string {
-  return createHash("sha256").update(stableJson(workflow)).digest("hex")
-}
-
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`
-  if (value && typeof value === "object") {
-    return `{${Object.entries(value as Record<string, unknown>)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
-      .join(",")}}`
-  }
-  return JSON.stringify(value)
 }
 
 function cloneWorkflowSteps(steps: NonNullable<WorkflowRunState["steps"]>): NonNullable<WorkflowRunState["steps"]> {

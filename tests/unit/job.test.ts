@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -6,15 +5,36 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // Hoist-safe mock of the executor so runJob is tested in isolation (no real
 // implementation spins up). Mirrors tests/unit/dispatchCapabilityFileTicks.routing.test.ts.
-const { gh, runImplementationChain, hasGitHubActionsIdentity, notifyWorkflowCompleted } = vi.hoisted(() => ({
-  gh: vi.fn(),
-  runImplementationChain: vi.fn(),
-  hasGitHubActionsIdentity: vi.fn(() => false),
-  notifyWorkflowCompleted: vi.fn(),
-}))
+const {
+  gh,
+  runImplementationChain,
+  hasGitHubActionsIdentity,
+  notifyWorkflowCompleted,
+  hasStateBackendConfig,
+  createStateBackendFromEnv,
+  stateBackend,
+} = vi.hoisted(() => {
+  const stateBackend = {
+    acquireWorkflowRunLease: vi.fn(),
+    renewWorkflowRunLease: vi.fn(),
+    releaseWorkflowRunLease: vi.fn(),
+    getWorkflowRun: vi.fn(),
+    saveWorkflowRun: vi.fn(),
+  }
+  return {
+    gh: vi.fn(),
+    runImplementationChain: vi.fn(),
+    hasGitHubActionsIdentity: vi.fn(() => false),
+    notifyWorkflowCompleted: vi.fn(),
+    hasStateBackendConfig: vi.fn(() => false),
+    createStateBackendFromEnv: vi.fn(() => stateBackend),
+    stateBackend,
+  }
+})
 vi.mock("../../src/executor.js", () => ({ runImplementationChain }))
 vi.mock("../../src/issue.js", () => ({ gh }))
 vi.mock("../../src/kody-api-client.js", () => ({ hasGitHubActionsIdentity, notifyWorkflowCompleted }))
+vi.mock("../../src/state-backend.js", () => ({ hasStateBackendConfig, createStateBackendFromEnv }))
 
 import {
   DEFAULT_INSTANT_AGENT,
@@ -32,6 +52,23 @@ describe("runJob (Phase 1 seam)", () => {
     runImplementationChain.mockResolvedValue({ exitCode: 0 })
     hasGitHubActionsIdentity.mockReturnValue(false)
     notifyWorkflowCompleted.mockReset()
+    hasStateBackendConfig.mockReset()
+    hasStateBackendConfig.mockReturnValue(false)
+    createStateBackendFromEnv.mockClear()
+    stateBackend.acquireWorkflowRunLease.mockReset()
+    stateBackend.acquireWorkflowRunLease.mockResolvedValue({
+      acquired: true,
+      ownerId: "worker-a",
+      expiresAtMs: Date.now() + 60_000,
+    })
+    stateBackend.renewWorkflowRunLease.mockReset()
+    stateBackend.renewWorkflowRunLease.mockResolvedValue(true)
+    stateBackend.releaseWorkflowRunLease.mockReset()
+    stateBackend.releaseWorkflowRunLease.mockResolvedValue(true)
+    stateBackend.getWorkflowRun.mockReset()
+    stateBackend.getWorkflowRun.mockResolvedValue(null)
+    stateBackend.saveWorkflowRun.mockReset()
+    stateBackend.saveWorkflowRun.mockResolvedValue(undefined)
     gh.mockReset()
     gh.mockImplementation(() => {
       throw new Error("HTTP 404 Not Found")
@@ -310,7 +347,7 @@ describe("runJob (Phase 1 seam)", () => {
     expect(j.cliArgs).toEqual({})
   })
 
-  it.skip("runs a workflow capability as ordered child capability jobs", async () => {
+  it("runs a workflow capability as ordered child capability jobs", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-job-"))
     const originalCwd = process.cwd()
     try {
@@ -354,28 +391,28 @@ describe("runJob (Phase 1 seam)", () => {
       )
 
       expect(runImplementationChain).toHaveBeenCalledTimes(2)
-      expect(runImplementationChain.mock.calls[0]![0]).toBe("reproduce")
-      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42, base: "feature/base" })
+      expect(runImplementationChain.mock.calls[0]![0]).toBe("capability-run")
+      expect(capabilityCallInput(0)).toEqual({ issue: 42, base: "feature/base" })
       expect(runImplementationChain.mock.calls[0]![1].preloadedData).toMatchObject({
         workflowCapability: "bug",
         workflowStep: "reproduce",
         workflowStepIndex: 1,
         workflowStepCount: 2,
         jobCapability: "reproduce",
-        selectedImplementation: "reproduce",
+        selectedImplementation: "capability-run",
       })
       expect(runImplementationChain.mock.calls[0]![1].preloadedData?.jobWhy).toContain("operator note")
       expect(runImplementationChain.mock.calls[0]![1].preloadedData?.jobWhy).toContain("capture the failing test")
 
-      expect(runImplementationChain.mock.calls[1]![0]).toBe("run")
-      expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({ issue: 42, base: "feature/base" })
+      expect(runImplementationChain.mock.calls[1]![0]).toBe("capability-run")
+      expect(capabilityCallInput(1)).toEqual({ issue: 42, base: "feature/base" })
       expect(runImplementationChain.mock.calls[1]![1].preloadedData).toMatchObject({
         workflowCapability: "bug",
         workflowStep: "run",
         workflowStepIndex: 2,
         workflowStepCount: 2,
         jobCapability: "run",
-        selectedImplementation: "run",
+        selectedImplementation: "capability-run",
       })
     } finally {
       process.chdir(originalCwd)
@@ -383,7 +420,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it.skip("does not misreport a Workflow as a Capability boundary", async () => {
+  it("does not misreport a Workflow as a Capability boundary", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-trace-job-"))
     const originalCwd = process.cwd()
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
@@ -418,7 +455,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it.skip("runs an action-only workflow capability without treating the action as an implementation", async () => {
+  it("runs an action-only workflow capability without treating the action as an implementation", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-action-workflow-job-"))
     const originalCwd = process.cwd()
     try {
@@ -442,13 +479,13 @@ describe("runJob (Phase 1 seam)", () => {
       )
 
       expect(runImplementationChain).toHaveBeenCalledTimes(1)
-      expect(runImplementationChain.mock.calls[0]![0]).toBe("run")
-      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42 })
+      expect(runImplementationChain.mock.calls[0]![0]).toBe("capability-run")
+      expect(capabilityCallInput(0)).toEqual({ issue: 42 })
       expect(runImplementationChain.mock.calls[0]![1].preloadedData).toMatchObject({
         workflowCapability: "feature",
         workflowStep: "run",
         jobCapability: "run",
-        selectedImplementation: "run",
+        selectedImplementation: "capability-run",
       })
     } finally {
       process.chdir(originalCwd)
@@ -456,7 +493,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it.skip("runs a stored workflow definition as ordered child capability jobs", async () => {
+  it("runs a stored workflow definition as ordered child capability jobs", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-definition-job-"))
     const originalCwd = process.cwd()
     try {
@@ -504,7 +541,7 @@ describe("runJob (Phase 1 seam)", () => {
 
       expect(gh).not.toHaveBeenCalled()
       expect(runImplementationChain).toHaveBeenCalledTimes(2)
-      expect(runImplementationChain.mock.calls[0]![0]).toBe("reproduce")
+      expect(runImplementationChain.mock.calls[0]![0]).toBe("capability-run")
       expect(runImplementationChain.mock.calls[0]![1].preloadedData).toMatchObject({
         workflowCapability: "bug-flow",
         workflowTitle: "Bug workflow",
@@ -513,7 +550,7 @@ describe("runJob (Phase 1 seam)", () => {
         workflowStepCount: 2,
       })
       expect(runImplementationChain.mock.calls[0]![1].preloadedData).not.toHaveProperty("jobWhy")
-      expect(runImplementationChain.mock.calls[1]![0]).toBe("run")
+      expect(runImplementationChain.mock.calls[1]![0]).toBe("capability-run")
       expect(runImplementationChain.mock.calls[1]![1].preloadedData).toMatchObject({
         workflowCapability: "bug-flow",
         workflowStep: "run",
@@ -526,7 +563,53 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it.skip("preserves stored workflow step order, duplicate capabilities, and PR handoff", async () => {
+  it("does not execute a dispatched Workflow run owned by another worker", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-owned-run-"))
+    try {
+      writeContractCapability(cwd, "check", [])
+      writeWorkflowDefinition(cwd, "health", {
+        name: "Health",
+        agent: "kody",
+        steps: [{ capability: "check" }],
+      })
+      hasStateBackendConfig.mockReturnValue(true)
+      stateBackend.acquireWorkflowRunLease.mockResolvedValue({
+        acquired: false,
+        ownerId: "other-worker",
+        expiresAtMs: Date.now() + 60_000,
+      })
+
+      const result = await runJob(
+        {
+          workflow: "health",
+          workflowRunId: "health-run-1",
+          cliArgs: {},
+          flavor: "instant",
+        },
+        {
+          cwd,
+          skipConfig: true,
+          config: {
+            quality: { typecheck: "", lint: "", testUnit: "", format: "" },
+            git: { defaultBranch: "main" },
+            github: { owner: "o", repo: "r" },
+            agent: { model: "anthropic/claude-haiku-4-5-20251001" },
+          },
+        },
+      )
+
+      expect(result).toMatchObject({
+        exitCode: 75,
+        reason: expect.stringContaining("already running"),
+      })
+      expect(runImplementationChain).not.toHaveBeenCalled()
+      expect(stateBackend.releaseWorkflowRunLease).not.toHaveBeenCalled()
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("preserves stored workflow step order, duplicate capabilities, and PR handoff", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-web-release-workflow-job-"))
     const originalCwd = process.cwd()
     try {
@@ -603,24 +686,24 @@ describe("runJob (Phase 1 seam)", () => {
 
       expect(runImplementationChain).toHaveBeenCalledTimes(5)
       expect(runImplementationChain.mock.calls.map((call) => call[0])).toEqual([
-        "release-prepare",
-        "release-merge",
-        "release-promote",
-        "release-merge",
-        "vercel-production-deploy",
+        "capability-run",
+        "capability-run",
+        "capability-run",
+        "capability-run",
+        "capability-run",
       ])
-      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42 })
-      expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({ issue: 42, pr: 10 })
-      expect(runImplementationChain.mock.calls[2]![1].cliArgs).toEqual({ issue: 42 })
-      expect(runImplementationChain.mock.calls[3]![1].cliArgs).toEqual({ issue: 42, pr: 11 })
-      expect(runImplementationChain.mock.calls[4]![1].cliArgs).toEqual({})
+      expect(capabilityCallInput(0)).toEqual({ issue: 42 })
+      expect(capabilityCallInput(1)).toEqual({ pr: 10 })
+      expect(capabilityCallInput(2)).toEqual({ issue: 42 })
+      expect(capabilityCallInput(3)).toEqual({ pr: 11 })
+      expect(capabilityCallInput(4)).toEqual({ issue: 42 })
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
     }
   })
 
-  it.skip("lets the workflow request a typed report without changing the capability contract", async () => {
+  it("lets the workflow request a typed report without changing the capability contract", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-report-job-"))
     const originalCwd = process.cwd()
     try {
@@ -672,7 +755,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it.skip("resumes a workflow at the step that owns the pending goal evidence", async () => {
+  it("resumes a workflow at the step that owns the pending goal evidence", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-web-release-resume-job-"))
     const originalCwd = process.cwd()
     try {
@@ -740,8 +823,8 @@ describe("runJob (Phase 1 seam)", () => {
       )
 
       expect(runImplementationChain).toHaveBeenCalledTimes(2)
-      expect(runImplementationChain.mock.calls[0]![0]).toBe("release-merge")
-      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 756, pr: 763 })
+      expect(runImplementationChain.mock.calls[0]![0]).toBe("capability-run")
+      expect(capabilityCallInput(0)).toEqual({ pr: 763 })
       expect(runImplementationChain.mock.calls[0]![1].preloadedData?.capabilityResultTarget).toEqual({
         type: "goal",
         id: "web-release-2026-07-06",
@@ -749,8 +832,8 @@ describe("runJob (Phase 1 seam)", () => {
       expect(runImplementationChain.mock.calls[0]![1].preloadedData?.capabilityEvidence).toEqual({
         evidence: "releaseBranchMerged",
       })
-      expect(runImplementationChain.mock.calls[1]![0]).toBe("vercel-production-deploy")
-      expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({})
+      expect(runImplementationChain.mock.calls[1]![0]).toBe("capability-run")
+      expect(capabilityCallInput(1)).toEqual({ issue: 756 })
       expect(runImplementationChain.mock.calls[1]![1].preloadedData?.capabilityResultTarget).toEqual({
         type: "goal",
         id: "web-release-2026-07-06",
@@ -764,7 +847,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it.skip("resolves each workflow step instead of pinning one Implementation on the Workflow", async () => {
+  it("resolves each workflow step instead of pinning one Implementation on the Workflow", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-route-"))
     const originalCwd = process.cwd()
     try {
@@ -796,15 +879,15 @@ describe("runJob (Phase 1 seam)", () => {
       )
 
       expect(runImplementationChain).toHaveBeenCalledTimes(2)
-      expect(runImplementationChain.mock.calls[0]![0]).toBe("reproduce")
-      expect(runImplementationChain.mock.calls[1]![0]).toBe("run")
+      expect(runImplementationChain.mock.calls[0]![0]).toBe("capability-run")
+      expect(runImplementationChain.mock.calls[1]![0]).toBe("capability-run")
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
     }
   })
 
-  it.skip("passes workflow issue and PR targets to matching steps", async () => {
+  it("passes workflow issue and PR targets to matching steps", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-targets-"))
     const originalCwd = process.cwd()
     try {
@@ -842,9 +925,9 @@ describe("runJob (Phase 1 seam)", () => {
       )
 
       expect(runImplementationChain).toHaveBeenCalledTimes(3)
-      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({ issue: 42, base: "feature/base" })
-      expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({ pr: 99 })
-      expect(runImplementationChain.mock.calls[2]![1].cliArgs).toEqual({ pr: 99 })
+      expect(capabilityCallInput(0)).toEqual({ issue: 42, base: "feature/base" })
+      expect(capabilityCallInput(1)).toEqual({ base: "feature/base", pr: 99 })
+      expect(capabilityCallInput(2)).toEqual({ base: "feature/base", pr: 99 })
       expect(runImplementationChain.mock.calls[1]![1].preloadedData?.workflowStep).toBe("review")
       expect(runImplementationChain.mock.calls[2]![1].preloadedData?.workflowStep).toBe("fix")
     } finally {
@@ -853,7 +936,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it.skip("skips conditional workflow steps when runWhen does not match", async () => {
+  it("skips conditional workflow steps when runWhen does not match", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-skip-"))
     const originalCwd = process.cwd()
     try {
@@ -884,15 +967,15 @@ describe("runJob (Phase 1 seam)", () => {
       )
 
       expect(runImplementationChain).toHaveBeenCalledTimes(2)
-      expect(runImplementationChain.mock.calls[0]![0]).toBe("run")
-      expect(runImplementationChain.mock.calls[1]![0]).toBe("review")
+      expect(runImplementationChain.mock.calls[0]![0]).toBe("capability-run")
+      expect(runImplementationChain.mock.calls[1]![0]).toBe("capability-run")
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
     }
   })
 
-  it.skip("can continue a workflow after an allowed non-zero action outcome", async () => {
+  it("can continue a workflow after an allowed non-zero action outcome", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-continue-"))
     const originalCwd = process.cwd()
     try {
@@ -926,14 +1009,14 @@ describe("runJob (Phase 1 seam)", () => {
       expect(result).toMatchObject({ exitCode: 0 })
       expect(runImplementationChain).toHaveBeenCalledTimes(3)
       expect(runImplementationChain.mock.calls[1]![1].preloadedData?.workflowContinueOn).toEqual(["REVIEW_FAIL"])
-      expect(runImplementationChain.mock.calls[2]![0]).toBe("fix")
+      expect(runImplementationChain.mock.calls[2]![0]).toBe("capability-run")
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
     }
   })
 
-  it.skip("follows explicit workflow connections and maps prior facts into the next capability", async () => {
+  it("follows explicit workflow connections and maps prior facts into the next capability", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-graph-"))
     const originalCwd = process.cwd()
     try {
@@ -948,15 +1031,15 @@ describe("runJob (Phase 1 seam)", () => {
               capability: "run",
               target: "issue",
               next: [
-                { to: "repair", when: { "result.facts.needsFix": true } },
+                { to: "repair", when: { "result.needsFix": true } },
                 { to: "verify", default: true },
               ],
             },
             {
               id: "repair",
               capability: "fix",
-              inputs: { feedback: { from: "facts.feedback" } },
-              next: "verify",
+              inputs: { feedback: { from: "workflow.facts.feedback" } },
+              next: [{ to: "verify" }],
             },
             { id: "verify", capability: "review", target: "pr" },
           ],
@@ -968,14 +1051,31 @@ describe("runJob (Phase 1 seam)", () => {
         .mockResolvedValueOnce({
           exitCode: 0,
           prUrl: "https://github.com/o/r/pull/99",
+          capabilityOutput: { needsFix: true, feedback: "repair the failing check" },
           capabilityResults: [capabilityResult({ needsFix: true, feedback: "repair the failing check" })],
         })
-        .mockResolvedValueOnce({ exitCode: 0, capabilityResults: [capabilityResult({ repaired: true })] })
-        .mockResolvedValueOnce({ exitCode: 0, capabilityResults: [capabilityResult({ verified: true })] })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: { repaired: true },
+          capabilityResults: [capabilityResult({ repaired: true })],
+        })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: { verified: true },
+          capabilityResults: [capabilityResult({ verified: true })],
+        })
 
       const result = await runJob(
-        { action: "graph-pilot", capability: "graph-pilot", cliArgs: { issue: 42 }, target: 42, flavor: "instant" },
-        { cwd },
+        { workflow: "graph-pilot", cliArgs: { issue: 42 }, target: 42, flavor: "instant" },
+        {
+          cwd,
+          config: {
+            quality: { typecheck: "", lint: "", testUnit: "", format: "" },
+            git: { defaultBranch: "main" },
+            github: { owner: "o", repo: "r" },
+            agent: { model: "anthropic/claude-haiku-4-5-20251001" },
+          },
+        },
       )
 
       expect(result).toMatchObject({
@@ -985,9 +1085,13 @@ describe("runJob (Phase 1 seam)", () => {
           facts: { needsFix: true, feedback: "repair the failing check", repaired: true, verified: true },
         },
       })
-      expect(runImplementationChain.mock.calls.map((call) => call[0])).toEqual(["run", "fix", "review"])
-      expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({ feedback: "repair the failing check" })
-      expect(runImplementationChain.mock.calls[2]![1].cliArgs).toEqual({ pr: 99 })
+      expect(runImplementationChain.mock.calls.map((call) => call[0])).toEqual([
+        "capability-run",
+        "capability-run",
+        "capability-run",
+      ])
+      expect(capabilityCallInput(1)).toEqual({ feedback: "repair the failing check" })
+      expect(capabilityCallInput(2)).toEqual({ pr: 99 })
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
@@ -1433,7 +1537,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it.skip("blocks a conditional workflow when the source step declares a result but emits none", async () => {
+  it("blocks a conditional workflow before execution when the source output is undeclared", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-missing-result-"))
     const originalCwd = process.cwd()
     try {
@@ -1466,21 +1570,18 @@ describe("runJob (Phase 1 seam)", () => {
       process.chdir(cwd)
       runImplementationChain.mockResolvedValueOnce({ exitCode: 0 })
 
-      const result = await runJob(
-        { action: "graph-pilot", capability: "graph-pilot", cliArgs: {}, flavor: "instant" },
-        { cwd },
-      )
+      const result = await runJob({ workflow: "graph-pilot", cliArgs: {}, flavor: "instant" }, { cwd })
 
       expect(result).toMatchObject({ exitCode: 64 })
-      expect(result.reason).toContain("did not emit the structured result")
-      expect(runImplementationChain).toHaveBeenCalledTimes(1)
+      expect(result.reason).toContain("does not declare")
+      expect(runImplementationChain).not.toHaveBeenCalled()
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
     }
   })
 
-  it.skip("rejects every unknown workflow capability before executing the first step", async () => {
+  it("rejects every unknown workflow capability before executing the first step", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-preflight-"))
     const originalCwd = process.cwd()
     try {
@@ -1515,7 +1616,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it.skip("preflights every capability in a linear workflow before executing it", async () => {
+  it("preflights every capability in a linear workflow before executing it", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-linear-workflow-preflight-"))
     const originalCwd = process.cwd()
     try {
@@ -1707,10 +1808,7 @@ describe("runJob (Phase 1 seam)", () => {
           capabilityResults: [capabilityResult({ needsFix: true })],
         })
 
-      const result = await runJob(
-        { workflow: "exhausted-loop-pilot", cliArgs: {}, flavor: "instant" },
-        { cwd },
-      )
+      const result = await runJob({ workflow: "exhausted-loop-pilot", cliArgs: {}, flavor: "instant" }, { cwd })
 
       expect(result.exitCode).toBe(64)
       expect(result.reason).toBe("workflow step inspect reached iteration limit: inspect->repair (1)")
@@ -1824,7 +1922,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it.skip("does not replay a workflow whose persisted state is already done", async () => {
+  it("does not replay a workflow whose persisted state is already done", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-idempotent-"))
     const originalCwd = process.cwd()
     try {
@@ -1864,7 +1962,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it.skip("limits backward workflow connections and takes the default exit", async () => {
+  it("limits backward workflow connections and takes the default exit", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-loop-"))
     const originalCwd = process.cwd()
     try {
@@ -1917,7 +2015,13 @@ describe("runJob (Phase 1 seam)", () => {
         status: "done",
         transitionCounts: { "repair->inspect": 1 },
       })
-      expect(runImplementationChain.mock.calls.map((call) => call[0])).toEqual(["run", "fix", "run", "fix", "review"])
+      expect(runImplementationChain.mock.calls.map((call) => call[0])).toEqual([
+        "capability-run",
+        "capability-run",
+        "capability-run",
+        "capability-run",
+        "capability-run",
+      ])
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
@@ -1981,6 +2085,58 @@ describe("runJob (Phase 1 seam)", () => {
         status: "done",
         facts: { feedback: "continue here", repaired: true },
       })
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("blocks a saved graph workflow when its definition changed", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-stale-resume-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "resume-pilot", {
+        name: "resume-pilot",
+        action: "resume-pilot",
+        workflow: {
+          startAt: "inspect",
+          steps: [
+            { id: "inspect", capability: "run", next: "repair" },
+            { id: "repair", capability: "fix" },
+          ],
+        },
+      })
+      writeContractCapability(cwd, "run", ["issue"])
+      writeContractCapability(cwd, "fix", ["pr"])
+      process.chdir(cwd)
+
+      const result = await runJob(
+        {
+          action: "resume-pilot",
+          capability: "resume-pilot",
+          cliArgs: { issue: 42 },
+          target: 42,
+          flavor: "instant",
+          workflowState: {
+            status: "running",
+            currentStepId: "repair",
+            completedStepIds: ["inspect"],
+            transitionCounts: {},
+            definitionHash: "definition-before-edit",
+            facts: {},
+            evidence: {},
+            artifacts: [],
+          },
+        },
+        { cwd },
+      )
+
+      expect(result).toMatchObject({
+        exitCode: 64,
+        workflowState: { status: "blocked" },
+      })
+      expect(result.reason).toMatch(/definition changed/i)
+      expect(runImplementationChain).not.toHaveBeenCalled()
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
@@ -2125,7 +2281,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it.skip("stops a workflow when a child capability fails", async () => {
+  it("stops a workflow when a child capability fails", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-fail-"))
     const originalCwd = process.cwd()
     try {
@@ -2139,6 +2295,7 @@ describe("runJob (Phase 1 seam)", () => {
         action: "reproduce",
         implementation: "reproduce",
       })
+      writeContractCapability(cwd, "run", ["issue"])
       process.chdir(cwd)
       runImplementationChain.mockResolvedValueOnce({ exitCode: 1, reason: "repro failed" })
 
@@ -2165,104 +2322,21 @@ function writeCapability(cwd: string, slug: string, profile: Record<string, unkn
     })
     return
   }
-  const implementationId = typeof profile.implementation === "string" ? profile.implementation : slug
-  const builtinPath = path.resolve(__dirname, "../../src/implementations", implementationId, "profile.json")
-  const builtinProfile = fs.existsSync(builtinPath) ? JSON.parse(fs.readFileSync(builtinPath, "utf8")) : {}
-  const effectiveProfile = { ...builtinProfile, ...profile }
+  const inputs = (Array.isArray(profile.inputs) ? profile.inputs : []).flatMap((input: unknown) => {
+    const value = input && typeof input === "object" ? (input as Record<string, unknown>).name : undefined
+    return typeof value === "string" ? [value] : []
+  })
   const declaredFacts =
-    effectiveProfile.output &&
-    typeof effectiveProfile.output === "object" &&
-    effectiveProfile.output.result &&
-    typeof effectiveProfile.output.result === "object" &&
-    Array.isArray(effectiveProfile.output.result.facts)
-      ? effectiveProfile.output.result.facts.filter((fact: unknown): fact is string => typeof fact === "string")
+    profile.output &&
+    typeof profile.output === "object" &&
+    (profile.output as Record<string, unknown>).result &&
+    typeof (profile.output as Record<string, unknown>).result === "object" &&
+    Array.isArray(((profile.output as Record<string, unknown>).result as Record<string, unknown>).facts)
+      ? (((profile.output as Record<string, unknown>).result as Record<string, unknown>).facts as unknown[]).filter(
+          (fact: unknown): fact is string => typeof fact === "string",
+        )
       : []
-  const capability = {
-    id: slug,
-    action: typeof effectiveProfile.action === "string" ? effectiveProfile.action : slug,
-    purpose: typeof effectiveProfile.describe === "string" ? effectiveProfile.describe : slug,
-    inputSchema: {
-      type: "object",
-      additionalProperties: false,
-      properties: Object.fromEntries(
-        (Array.isArray(effectiveProfile.inputs) ? effectiveProfile.inputs : []).flatMap((input: unknown) => {
-          const record = input && typeof input === "object" ? (input as Record<string, unknown>) : null
-          return record && typeof record.name === "string" ? [[record.name, {}]] : []
-        }),
-      ),
-    },
-    outputSchema: {
-      type: "object",
-      properties: {
-        status: { type: "string" },
-        summary: { type: "string" },
-        resultClass: { type: "string" },
-        facts: {
-          type: "object",
-          properties: Object.fromEntries(declaredFacts.map((fact: string) => [fact, {}])),
-        },
-      },
-      additionalProperties: true,
-    },
-    effects: [],
-    permissions: [],
-    success: "success",
-    failure: "failure",
-  }
-  const canonical = (value: unknown): string => {
-    if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`
-    if (value && typeof value === "object") {
-      return `{${Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`)
-        .join(",")}}`
-    }
-    return JSON.stringify(value)
-  }
-  const capabilityDir = path.join(cwd, ".kody-engine", "definitions", "capabilities", slug)
-  const implementationDir = path.join(cwd, ".kody-engine", "definitions", "implementations", implementationId)
-  fs.mkdirSync(capabilityDir, { recursive: true })
-  fs.mkdirSync(implementationDir, { recursive: true })
-  fs.writeFileSync(path.join(capabilityDir, "definition.json"), JSON.stringify(capability))
-  fs.writeFileSync(path.join(capabilityDir, "capability.md"), `# ${slug}\n`)
-  fs.writeFileSync(
-    path.join(implementationDir, "definition.json"),
-    JSON.stringify({
-      id: implementationId,
-      capabilityRef: { kind: "capability", id: slug },
-      compatibleCapabilityRevision: createHash("sha256").update(canonical(capability)).digest("hex"),
-      type: "agent",
-      agentRef: { kind: "agent", id: "kody" },
-    }),
-  )
-  fs.writeFileSync(
-    path.join(implementationDir, "runtime.json"),
-    JSON.stringify({
-      adapter: "kody-engine-profile",
-      inputBindings: {},
-      outputBindings: {},
-      requirements: {},
-      role: "utility",
-      inputs: [],
-      claudeCode: {
-        model: "inherit",
-        permissionMode: "default",
-        maxTurns: 0,
-        maxThinkingTokens: null,
-        systemPromptAppend: null,
-        tools: [],
-        hooks: [],
-        skills: [],
-        commands: [],
-        subagents: [],
-        plugins: [],
-        mcpServers: [],
-      },
-      cliTools: [],
-      scripts: { preflight: [], postflight: [] },
-      ...effectiveProfile,
-    }),
-  )
+  writeContractCapability(cwd, slug, inputs, declaredFacts)
 }
 
 function writeWorkflowDefinition(cwd: string, slug: string, workflow: Record<string, unknown>): void {
@@ -2326,6 +2400,11 @@ function writeWorkflowStages(cwd: string): void {
       { name: "feedback", flag: "--feedback", type: "string", required: false },
     ],
   })
+}
+
+function capabilityCallInput(index: number): Record<string, unknown> {
+  const input = runImplementationChain.mock.calls[index]?.[1].cliArgs.input
+  return JSON.parse(String(input)) as Record<string, unknown>
 }
 
 function taskState(type: string, prUrl?: string): Record<string, unknown> {

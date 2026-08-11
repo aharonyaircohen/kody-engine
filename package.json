@@ -1,6 +1,6 @@
 {
   "name": "@kody-ade/kody-engine",
-  "version": "0.4.559",
+  "version": "0.4.560",
   "description": "kody — autonomous development engine. Single-session Claude Code agent behind a generic executor + declarative implementation profiles.",
   "license": "MIT",
   "type": "module",
@@ -25,6 +25,7 @@
     "posttest": "tsx scripts/check-coverage-floor.ts",
     "test:smoke": "vitest run tests/smoke --no-coverage",
     "test:e2e": "vitest run tests/e2e --no-coverage",
+    "verify:live-release": "tsx scripts/live-release-gate.ts",
     "test:runtime-services": "node --test \"tests/runtime-services/*.test.mjs\"",
     "test:all": "vitest run tests --no-coverage",
     "typecheck": "tsc --noEmit",
