@@ -71,6 +71,19 @@ describe("validateWorkflow", () => {
     ).toEqual([])
   })
 
+  it("accepts a bounded workflow step and rejects invalid deadlines", () => {
+    expect(
+      validateWorkflow({
+        steps: [{ id: "repair", capability: "run", timeoutSeconds: 600 }],
+      }),
+    ).toEqual([])
+    expect(
+      codes({
+        steps: [{ id: "repair", capability: "run", timeoutSeconds: 0 }],
+      }),
+    ).toContain("invalid_step_timeout")
+  })
+
   it("rejects unknown delivery policies", () => {
     expect(
       validateWorkflow({

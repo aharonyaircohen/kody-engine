@@ -2415,6 +2415,70 @@ describe("runJob (Phase 1 seam)", () => {
       fs.rmSync(cwd, { recursive: true, force: true })
     }
   })
+
+  it("aborts a bounded step and continues to its failure-report step", async () => {
+    vi.useFakeTimers()
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-timeout-"))
+    const originalCwd = process.cwd()
+    try {
+      for (const slug of ["check", "repair", "finalize"]) writeSimpleCapability(cwd, slug)
+      writeWorkflowDefinition(cwd, "ci-repair", {
+        name: "CI Repair",
+        agent: "kody",
+        startAt: "check",
+        steps: [
+          { id: "check", capability: "check", next: [{ to: "repair" }] },
+          {
+            id: "repair",
+            capability: "repair",
+            timeoutSeconds: 1,
+            continueOn: ["RUN_FAILED"],
+            next: [{ to: "finalize" }],
+          },
+          { id: "finalize", capability: "finalize" },
+        ],
+      })
+      process.chdir(cwd)
+      runImplementationChain
+        .mockResolvedValueOnce({ exitCode: 0, capabilityOutput: { status: "red" } })
+        .mockImplementationOnce((_profile, input) => {
+          if (!input.abortController) {
+            return Promise.resolve({ exitCode: 1, reason: "missing step deadline" })
+          }
+          return new Promise((resolve) => {
+            input.abortController.signal.addEventListener(
+              "abort",
+              () =>
+                resolve({
+                  exitCode: 1,
+                  reason: "repair timed out",
+                  taskState: taskState("RUN_FAILED"),
+                }),
+              { once: true },
+            )
+          })
+        })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: { status: "blocked", report: { whyStopped: "repair timed out" } },
+        })
+
+      const pending = runJob(
+        { workflow: "ci-repair", cliArgs: {}, flavor: "instant" },
+        { cwd },
+      )
+      await vi.advanceTimersByTimeAsync(1_000)
+      const result = await pending
+
+      expect(runImplementationChain).toHaveBeenCalledTimes(3)
+      expect(runImplementationChain.mock.calls[1]?.[1].abortController?.signal.aborted).toBe(true)
+      expect(result).toMatchObject({ exitCode: 64, capabilityOutput: { status: "blocked" } })
+    } finally {
+      vi.useRealTimers()
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
 })
 
 function writeCapability(cwd: string, slug: string, profile: Record<string, unknown>): void {

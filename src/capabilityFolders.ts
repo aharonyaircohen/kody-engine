@@ -107,6 +107,8 @@ export interface CapabilityWorkflowStepConfig {
   delivery?: "pull-request"
   targetFact?: string
   reason?: string
+  /** Hard wall-clock deadline for this step. */
+  timeoutSeconds?: number
   next?: CapabilityWorkflowTransitionConfig[]
   runWhen?: Record<string, unknown>
   continueOn?: string[]
@@ -493,6 +495,13 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
   const target = stringField(raw.target)
   const delivery = stringField(raw.delivery)
   const targetFact = stringField(raw.targetFact ?? raw.target_fact)
+  const timeoutSeconds =
+    typeof raw.timeoutSeconds === "number" &&
+    Number.isInteger(raw.timeoutSeconds) &&
+    raw.timeoutSeconds > 0 &&
+    raw.timeoutSeconds <= 3600
+      ? raw.timeoutSeconds
+      : undefined
   const hasInput = Object.hasOwn(raw, "input")
   const inputs = parseWorkflowInputBindings(raw.inputs)
   const next = parseWorkflowTransitions(raw.next)
@@ -508,6 +517,7 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
     ...(delivery === "pull-request" ? { delivery } : {}),
     ...(targetFact ? { targetFact } : {}),
     ...(reason ? { reason } : {}),
+    ...(timeoutSeconds ? { timeoutSeconds } : {}),
     ...(next ? { next } : {}),
     ...(isPlainObject(raw.runWhen) ? { runWhen: raw.runWhen as Record<string, unknown> } : {}),
     ...(stringList(raw.continueOn ?? raw.continue_on).length > 0

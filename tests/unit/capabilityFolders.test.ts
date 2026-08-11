@@ -66,4 +66,18 @@ describe("parseCapabilityWorkflow", () => {
 
     expect(workflow?.steps[0]?.next?.[1]?.to).toBe("$end")
   })
+
+  it("preserves a workflow step deadline", () => {
+    const workflow = parseCapabilityWorkflow({
+      steps: [
+        {
+          id: "repair",
+          capability: "run",
+          timeoutSeconds: 600,
+        },
+      ],
+    })
+
+    expect(workflow?.steps[0]?.timeoutSeconds).toBe(600)
+  })
 })

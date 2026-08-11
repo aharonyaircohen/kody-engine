@@ -32,6 +32,7 @@ const SUPPORTED_STEP_FIELDS = new Set([
   "delivery",
   "targetFact",
   "reason",
+  "timeoutSeconds",
   "next",
   "runWhen",
   "continueOn",
@@ -108,6 +109,21 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
     }
     if (step.input !== undefined && step.inputs !== undefined) {
       issue(issues, "conflicting_inputs", base, "workflow step cannot declare both input and inputs")
+    }
+    const timeoutSeconds = step.timeoutSeconds
+    if (
+      timeoutSeconds !== undefined &&
+      (typeof timeoutSeconds !== "number" ||
+        !Number.isInteger(timeoutSeconds) ||
+        timeoutSeconds < 1 ||
+        timeoutSeconds > 3600)
+    ) {
+      issue(
+        issues,
+        "invalid_step_timeout",
+        `${base}.timeoutSeconds`,
+        "workflow step timeoutSeconds must be an integer from 1 to 3600",
+      )
     }
     validateInputBindings(
       step.inputs,

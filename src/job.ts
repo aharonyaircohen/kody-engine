@@ -812,25 +812,31 @@ async function runGraphCapabilityWorkflow(
     process.stdout.write(
       `→ kody: workflow ${capability.slug} step ${index + 1}/${workflow.steps.length} → ${label}\n\n`,
     )
-    result = await runJob(child, {
-      ...base,
-      preloadedData: {
-        ...chainData,
-        runSubjectType: "capability",
-        runSubjectId: step.capability,
-        runSubjectLabel: step.id,
-        workflowStep: step.id,
-        workflowStepIndex: index + 1,
-        workflowExecutionKey: graphWorkflowExecutionKey(
-          base.preloadedData?.workflowExecutionKey,
-          capability.slug,
-          step.id!,
-          state.transitionCounts,
-        ),
-        workflowStepReason: step.reason,
-        workflowContinueOn: step.continueOn ?? [],
-      },
-    })
+    const stepAbort = workflowStepAbortController(base.abortController, step.timeoutSeconds)
+    try {
+      result = await runJob(child, {
+        ...base,
+        abortController: stepAbort.controller,
+        preloadedData: {
+          ...chainData,
+          runSubjectType: "capability",
+          runSubjectId: step.capability,
+          runSubjectLabel: step.id,
+          workflowStep: step.id,
+          workflowStepIndex: index + 1,
+          workflowExecutionKey: graphWorkflowExecutionKey(
+            base.preloadedData?.workflowExecutionKey,
+            capability.slug,
+            step.id!,
+            state.transitionCounts,
+          ),
+          workflowStepReason: step.reason,
+          workflowContinueOn: step.continueOn ?? [],
+        },
+      })
+    } finally {
+      stepAbort.cleanup()
+    }
 
     finishWorkflowStep(state, step, result)
 
@@ -1253,6 +1259,31 @@ function shouldRunWorkflowStep(step: CapabilityWorkflowStepConfig, data: Record<
 function canContinueWorkflow(step: CapabilityWorkflowStepConfig, outcome: Action | null): boolean {
   if (!outcome || !step.continueOn || step.continueOn.length === 0) return false
   return step.continueOn.includes(outcome.type)
+}
+
+function workflowStepAbortController(
+  parent: AbortController | undefined,
+  timeoutSeconds: number | undefined,
+): { controller: AbortController | undefined; cleanup: () => void } {
+  if (!timeoutSeconds) return { controller: parent, cleanup: () => undefined }
+
+  const controller = new AbortController()
+  const forwardParentAbort = () => controller.abort(parent?.signal.reason)
+  if (parent?.signal.aborted) forwardParentAbort()
+  else parent?.signal.addEventListener("abort", forwardParentAbort, { once: true })
+
+  const timer = setTimeout(() => {
+    controller.abort(new Error(`workflow step timed out after ${timeoutSeconds}s`))
+  }, timeoutSeconds * 1000)
+  timer.unref?.()
+
+  return {
+    controller,
+    cleanup: () => {
+      clearTimeout(timer)
+      parent?.signal.removeEventListener("abort", forwardParentAbort)
+    },
+  }
 }
 
 function workflowOutcome(result: ExecutorOutput): Action | null {
