@@ -343,7 +343,10 @@ export function autoDispatch(opts?: {
   // Inputs drive arg parsing and injection. If the profile isn't registered
   // (e.g. a consumer-configured default pointing at something not bundled),
   // fall back to event-shape injection so context isn't silently dropped.
-  const inputs = getCapabilityActionInputs(route.action, projectCapabilitiesRoot)
+  const inputs =
+    route.source === "builtin"
+      ? getProfileInputs(route.implementation)
+      : getCapabilityActionInputs(route.action, projectCapabilitiesRoot)
   const effectiveInputs = inputs ?? []
   const unknownProfile = inputs === null
   const rest = extractCommentRest(afterTag, consumedFirstToken ? firstToken : null)

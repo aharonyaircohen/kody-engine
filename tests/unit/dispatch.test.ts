@@ -565,6 +565,45 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
+  it("binds the built-in run issue even when a stale hydrated run exists", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "kody-stale-run-dispatch-"))
+    const runDir = path.join(root, "run")
+    fs.mkdirSync(runDir, { recursive: true })
+    fs.writeFileSync(path.join(runDir, "instructions.md"), "# Stale Store run\n")
+    fs.writeFileSync(
+      path.join(runDir, "contract.json"),
+      JSON.stringify({
+        input: {
+          type: "object",
+          properties: { issue: { type: "integer" } },
+          required: ["issue"],
+        },
+        output: { type: "object" },
+      }),
+    )
+    process.env.GITHUB_EVENT_PATH = writeEvent({
+      comment: { body: "@kody" },
+      issue: { number: 22 },
+    })
+
+    try {
+      expect(
+        autoDispatch({
+          config: testConfig({ defaultImplementation: "run" }),
+          projectCapabilitiesRoot: root,
+        }),
+      ).toEqual({
+        action: "run",
+        capability: "run",
+        implementation: "run",
+        cliArgs: { issue: 22 },
+        target: 22,
+      })
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it.skip("falls back to defaultImplementation for natural-language openings (please/kindly/...)", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody please fix the failing test" },
