@@ -269,6 +269,22 @@ export function resolveCapabilityAction(
   return listCapabilityActions(projectCapabilitiesRoot).find((d) => d.action === action) ?? null
 }
 
+/**
+ * Resolve a user-facing command while keeping Engine-owned commands immutable.
+ * Internal workflow steps still use resolveCapabilityAction so project and
+ * Store capabilities retain their normal precedence there.
+ */
+export function resolveOperatorCapabilityAction(
+  action: string,
+  projectCapabilitiesRoot: string = getProjectCapabilitiesRoot(),
+): DiscoveredCapabilityAction | null {
+  if (!isSafeName(action)) return null
+  return (
+    listBuiltinCapabilityActions(getBuiltinCapabilitiesRoot()).find((candidate) => candidate.action === action) ??
+    resolveCapabilityAction(action, projectCapabilitiesRoot)
+  )
+}
+
 export function hasCapabilityAction(
   action: string,
   projectCapabilitiesRoot: string = getProjectCapabilitiesRoot(),

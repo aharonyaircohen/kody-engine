@@ -15,6 +15,7 @@ import {
   resolveCapabilityAction,
   resolveCapabilityFolder,
   resolveImplementation,
+  resolveOperatorCapabilityAction,
 } from "../../src/registry.js"
 
 describe("registry: runtime services", () => {
@@ -59,6 +60,35 @@ describe("registry: builtin implementations", () => {
       implementation: "run",
       source: "builtin",
     })
+  })
+
+  it("does not let a stale hydrated capability shadow Engine-owned run", () => {
+    const root = mkFixture()
+    const runDir = path.join(root, "run")
+    fs.mkdirSync(runDir, { recursive: true })
+    fs.writeFileSync(path.join(runDir, "instructions.md"), "# Stale Store run\n")
+    fs.writeFileSync(
+      path.join(runDir, "contract.json"),
+      JSON.stringify({
+        input: {
+          type: "object",
+          properties: { issue: { type: "integer" } },
+          required: ["issue"],
+        },
+        output: { type: "object" },
+      }),
+    )
+
+    try {
+      expect(resolveOperatorCapabilityAction("run", root)).toMatchObject({
+        action: "run",
+        capability: "run",
+        implementation: "run",
+        source: "builtin",
+      })
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
   })
 })
 

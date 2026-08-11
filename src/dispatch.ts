@@ -23,7 +23,7 @@ import {
   getProfileInputs,
   listCapabilityActions,
   listRuntimeProfilesForCwd,
-  resolveCapabilityAction,
+  resolveOperatorCapabilityAction,
 } from "./registry.js"
 
 /**
@@ -74,11 +74,11 @@ function primaryNumericInputName(implementation: string): string | null {
 }
 
 function resolveOperatorAction(action: string, projectCapabilitiesRoot?: string): DiscoveredCapabilityAction | null {
-  return resolveCapabilityAction(action, projectCapabilitiesRoot)
+  return resolveOperatorCapabilityAction(action, projectCapabilitiesRoot)
 }
 
 function resolveConfiguredAction(action: string, projectCapabilitiesRoot?: string): DiscoveredCapabilityAction | null {
-  return resolveCapabilityAction(action, projectCapabilitiesRoot)
+  return resolveOperatorCapabilityAction(action, projectCapabilitiesRoot)
 }
 
 function requiredRoute(action: string, projectCapabilitiesRoot?: string): DiscoveredCapabilityAction {
