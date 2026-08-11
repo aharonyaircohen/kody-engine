@@ -49,7 +49,7 @@ import {
 describe("runJob (Phase 1 seam)", () => {
   beforeEach(() => {
     runImplementationChain.mockReset()
-    runImplementationChain.mockResolvedValue({ exitCode: 0 })
+    runImplementationChain.mockResolvedValue({ exitCode: 0, capabilityOutput: {} })
     hasGitHubActionsIdentity.mockReturnValue(false)
     notifyWorkflowCompleted.mockReset()
     hasStateBackendConfig.mockReset()
@@ -657,14 +657,20 @@ describe("runJob (Phase 1 seam)", () => {
         .mockResolvedValueOnce({
           exitCode: 0,
           prUrl: "https://github.com/o/r/pull/10",
+          capabilityOutput: {},
         })
-        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("RELEASE_MERGED") })
+        .mockResolvedValueOnce({ exitCode: 0, capabilityOutput: {}, taskState: taskState("RELEASE_MERGED") })
         .mockResolvedValueOnce({
           exitCode: 0,
           prUrl: "https://github.com/o/r/pull/11",
+          capabilityOutput: {},
         })
-        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("RELEASE_BRANCH_MERGED") })
-        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("VERCEL_PRODUCTION_DEPLOY_COMPLETED") })
+        .mockResolvedValueOnce({ exitCode: 0, capabilityOutput: {}, taskState: taskState("RELEASE_BRANCH_MERGED") })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: {},
+          taskState: taskState("VERCEL_PRODUCTION_DEPLOY_COMPLETED"),
+        })
 
       await runJob(
         {
@@ -799,7 +805,11 @@ describe("runJob (Phase 1 seam)", () => {
       }
       writeWorkflowDefinition(cwd, "web-release", workflow)
       process.chdir(cwd)
-      runImplementationChain.mockResolvedValueOnce({ exitCode: 0, taskState: taskState("RELEASE_BRANCH_MERGED") })
+      runImplementationChain.mockResolvedValueOnce({
+        exitCode: 0,
+        capabilityOutput: {},
+        taskState: taskState("RELEASE_BRANCH_MERGED"),
+      })
 
       await runJob(
         {
@@ -909,9 +919,13 @@ describe("runJob (Phase 1 seam)", () => {
       })
       process.chdir(cwd)
       runImplementationChain
-        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("RUN_COMPLETED", "https://github.com/o/r/pull/99") })
-        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("REVIEW_CONCERNS") })
-        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("FIX_COMPLETED") })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: {},
+          taskState: taskState("RUN_COMPLETED", "https://github.com/o/r/pull/99"),
+        })
+        .mockResolvedValueOnce({ exitCode: 0, capabilityOutput: {}, taskState: taskState("REVIEW_CONCERNS") })
+        .mockResolvedValueOnce({ exitCode: 0, capabilityOutput: {}, taskState: taskState("FIX_COMPLETED") })
 
       await runJob(
         {
@@ -958,8 +972,12 @@ describe("runJob (Phase 1 seam)", () => {
       })
       process.chdir(cwd)
       runImplementationChain
-        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("RUN_COMPLETED", "https://github.com/o/r/pull/99") })
-        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("REVIEW_PASS") })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: {},
+          taskState: taskState("RUN_COMPLETED", "https://github.com/o/r/pull/99"),
+        })
+        .mockResolvedValueOnce({ exitCode: 0, capabilityOutput: {}, taskState: taskState("REVIEW_PASS") })
 
       await runJob(
         { action: "feature", capability: "feature", cliArgs: { issue: 42 }, target: 42, flavor: "instant" },
@@ -997,9 +1015,13 @@ describe("runJob (Phase 1 seam)", () => {
       })
       process.chdir(cwd)
       runImplementationChain
-        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("RUN_COMPLETED", "https://github.com/o/r/pull/99") })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: {},
+          taskState: taskState("RUN_COMPLETED", "https://github.com/o/r/pull/99"),
+        })
         .mockResolvedValueOnce({ exitCode: 1, reason: "blocking review", taskState: taskState("REVIEW_FAIL") })
-        .mockResolvedValueOnce({ exitCode: 0, taskState: taskState("FIX_COMPLETED") })
+        .mockResolvedValueOnce({ exitCode: 0, capabilityOutput: {}, taskState: taskState("FIX_COMPLETED") })
 
       const result = await runJob(
         { action: "feature", capability: "feature", cliArgs: { issue: 42 }, target: 42, flavor: "instant" },
@@ -1136,14 +1158,7 @@ describe("runJob (Phase 1 seam)", () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-output-contract-"))
     try {
       writeContractCapability(cwd, "review", ["pr"], ["verdict", "headSha"])
-      const contractPath = path.join(
-        cwd,
-        ".kody-engine",
-        "definitions",
-        "capabilities",
-        "review",
-        "contract.json",
-      )
+      const contractPath = path.join(cwd, ".kody-engine", "definitions", "capabilities", "review", "contract.json")
       const contract = JSON.parse(fs.readFileSync(contractPath, "utf8")) as {
         output: Record<string, unknown>
       }
@@ -1169,6 +1184,33 @@ describe("runJob (Phase 1 seam)", () => {
       expect(result).toMatchObject({
         exitCode: 64,
         reason: expect.stringMatching(/Capability output does not match.*headSha/),
+        capabilityResults: [expect.objectContaining({ status: "blocked" })],
+      })
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("blocks a successful capability that omits its contracted output", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-missing-output-"))
+    try {
+      writeContractCapability(cwd, "review", ["pr"], ["verdict"])
+      runImplementationChain.mockResolvedValueOnce({ exitCode: 0 })
+
+      const result = await runJob(
+        {
+          action: "review",
+          capability: "review",
+          cliArgs: { input: JSON.stringify({ pr: 3956 }) },
+          target: 3956,
+          flavor: "instant",
+        },
+        { cwd },
+      )
+
+      expect(result).toMatchObject({
+        exitCode: 64,
+        reason: expect.stringMatching(/Capability output.*missing/),
         capabilityResults: [expect.objectContaining({ status: "blocked" })],
       })
     } finally {
@@ -2043,12 +2085,29 @@ describe("runJob (Phase 1 seam)", () => {
         .mockResolvedValueOnce({
           exitCode: 0,
           prUrl: "https://github.com/o/r/pull/99",
+          capabilityOutput: { needsFix: true },
           capabilityResults: [capabilityResult({ needsFix: true })],
         })
-        .mockResolvedValueOnce({ exitCode: 0, capabilityResults: [capabilityResult({ repaired: true })] })
-        .mockResolvedValueOnce({ exitCode: 0, capabilityResults: [capabilityResult({ needsFix: true })] })
-        .mockResolvedValueOnce({ exitCode: 0, capabilityResults: [capabilityResult({ repairedAgain: true })] })
-        .mockResolvedValueOnce({ exitCode: 0, capabilityResults: [capabilityResult({ verified: true })] })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: { repaired: true },
+          capabilityResults: [capabilityResult({ repaired: true })],
+        })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: { needsFix: true },
+          capabilityResults: [capabilityResult({ needsFix: true })],
+        })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: { repairedAgain: true },
+          capabilityResults: [capabilityResult({ repairedAgain: true })],
+        })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: { verified: true },
+          capabilityResults: [capabilityResult({ verified: true })],
+        })
 
       const result = await runJob(
         { action: "loop-pilot", capability: "loop-pilot", cliArgs: { issue: 42 }, target: 42, flavor: "instant" },
@@ -2096,6 +2155,7 @@ describe("runJob (Phase 1 seam)", () => {
       process.chdir(cwd)
       runImplementationChain.mockResolvedValueOnce({
         exitCode: 0,
+        capabilityOutput: { repaired: true },
         capabilityResults: [capabilityResult({ repaired: true })],
       })
 

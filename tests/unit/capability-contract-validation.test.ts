@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest"
 import {
   CapabilityContractValidationError,
   capabilityContractInput,
+  createCapabilityContractValueValidator,
+  validateCapabilityContractOutput,
   validateCapabilityContractValue,
 } from "../../src/agency/capability-contract-validation.js"
 
@@ -27,6 +29,23 @@ describe("Capability contract validation", () => {
 
   it("validates output through the same portable contract boundary", () => {
     expect(() => validateCapabilityContractValue("output", schema, {})).toThrow(/Capability output/)
+  })
+
+  it("rejects a missing output even when the declared schema would accept any value", () => {
+    expect(() => validateCapabilityContractOutput({}, undefined)).toThrow(/Capability output.*missing/)
+  })
+
+  it("reuses a compiled validator for repeated checks of the same contract", () => {
+    let compileCount = 0
+    const validate = createCapabilityContractValueValidator(() => {
+      compileCount += 1
+      return Object.assign(() => true, { errors: null })
+    })
+
+    validate("input", schema, { issue: 42 })
+    validate("output", schema, { issue: 42 })
+
+    expect(compileCount).toBe(1)
   })
 
   it("unwraps and parses the generic runner input before contract validation", () => {

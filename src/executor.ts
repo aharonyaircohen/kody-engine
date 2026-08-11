@@ -11,7 +11,11 @@ import { spawn } from "node:child_process"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { capabilityContractInput, validateCapabilityContractValue } from "./agency/capability-contract-validation.js"
+import {
+  capabilityContractInput,
+  validateCapabilityContractOutput,
+  validateCapabilityContractValue,
+} from "./agency/capability-contract-validation.js"
 import type { AgentResult } from "./agent.js"
 import { runAgent } from "./agent.js"
 import { frameAgentIdentity, loadAgentIdentity } from "./agents.js"
@@ -875,8 +879,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       : undefined
     if (profile.canonicalContract) {
       try {
-        validateCapabilityContractValue(
-          "output",
+        validateCapabilityContractOutput(
           profile.canonicalContract.outputSchema,
           capabilityResults?.at(-1) ?? {
             exitCode: ctx.output.exitCode ?? 0,

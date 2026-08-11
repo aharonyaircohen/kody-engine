@@ -1,6 +1,6 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { validateCapabilityContractValue } from "./agency/capability-contract-validation.js"
+import { validateCapabilityContractOutput } from "./agency/capability-contract-validation.js"
 
 export interface OutputContract {
   path: string
@@ -20,7 +20,7 @@ function outputContractError(contract: OutputContract): string | null {
   }
 
   try {
-    validateCapabilityContractValue("output", contract.schema, value)
+    validateCapabilityContractOutput(contract.schema, value)
     return null
   } catch (error) {
     return error instanceof Error ? error.message : String(error)
@@ -52,9 +52,7 @@ export function createOutputContractPostWriteHook(
   }
 }
 
-export function createOutputContractStopHook(
-  contract: OutputContract,
-): () => Promise<Record<string, unknown>> {
+export function createOutputContractStopHook(contract: OutputContract): () => Promise<Record<string, unknown>> {
   return async () => {
     if (!fs.existsSync(contract.path)) {
       return {

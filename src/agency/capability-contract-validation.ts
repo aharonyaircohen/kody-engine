@@ -6,6 +6,17 @@ const validator = new Ajv({
   validateFormats: false,
 })
 
+type ContractValidator = ((value: unknown) => boolean) & {
+  errors?: readonly ErrorObject[] | null
+}
+
+type ContractCompiler = (schema: Record<string, unknown>) => ContractValidator
+type CapabilityContractValueValidator = (
+  boundary: "input" | "output",
+  schema: Record<string, unknown>,
+  value: unknown,
+) => void
+
 export class CapabilityContractValidationError extends Error {
   constructor(
     readonly boundary: "input" | "output",
@@ -26,15 +37,34 @@ export class CapabilityContractValidationError extends Error {
   }
 }
 
-export function validateCapabilityContractValue(
-  boundary: "input" | "output",
-  schema: Record<string, unknown>,
-  value: unknown,
-): void {
-  const validate = validator.compile(schema)
-  if (!validate(value)) {
-    throw new CapabilityContractValidationError(boundary, validate.errors ?? [])
+export class CapabilityContractMissingOutputError extends Error {
+  constructor() {
+    super("Capability output is missing despite its declared contract")
+    this.name = "CapabilityContractMissingOutputError"
   }
+}
+
+export function createCapabilityContractValueValidator(compile: ContractCompiler): CapabilityContractValueValidator {
+  const compiled = new WeakMap<Record<string, unknown>, ContractValidator>()
+  return (boundary, schema, value) => {
+    let validate = compiled.get(schema)
+    if (!validate) {
+      validate = compile(schema)
+      compiled.set(schema, validate)
+    }
+    if (!validate(value)) {
+      throw new CapabilityContractValidationError(boundary, validate.errors ?? [])
+    }
+  }
+}
+
+export const validateCapabilityContractValue: CapabilityContractValueValidator = createCapabilityContractValueValidator(
+  (schema) => validator.compile(schema),
+)
+
+export function validateCapabilityContractOutput(schema: Record<string, unknown>, value: unknown): void {
+  if (value === undefined) throw new CapabilityContractMissingOutputError()
+  validateCapabilityContractValue("output", schema, value)
 }
 
 export function capabilityContractInput(

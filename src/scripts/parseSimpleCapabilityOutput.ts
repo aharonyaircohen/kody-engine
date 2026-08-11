@@ -1,5 +1,5 @@
 import * as fs from "node:fs"
-import { validateCapabilityContractValue } from "../agency/capability-contract-validation.js"
+import { validateCapabilityContractOutput } from "../agency/capability-contract-validation.js"
 import { parseCapabilityResult } from "../capabilityResult.js"
 import type { PostflightScript } from "../implementations/types.js"
 
@@ -62,7 +62,7 @@ export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profil
   const outputSchema = isObject(ctx.data.capabilityOutputSchema) ? ctx.data.capabilityOutputSchema : undefined
   if (outputSchema) {
     try {
-      validateCapabilityContractValue("output", outputSchema, output)
+      validateCapabilityContractOutput(outputSchema, output)
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
       ctx.output.exitCode = 64
