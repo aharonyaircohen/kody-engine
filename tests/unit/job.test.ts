@@ -455,7 +455,7 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it("runs an action-only workflow capability without treating the action as an implementation", async () => {
+  it("uses the Engine built-in run when a workflow references run without a Store copy", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-action-workflow-job-"))
     const originalCwd = process.cwd()
     try {
@@ -479,13 +479,13 @@ describe("runJob (Phase 1 seam)", () => {
       )
 
       expect(runImplementationChain).toHaveBeenCalledTimes(1)
-      expect(runImplementationChain.mock.calls[0]![0]).toBe("capability-run")
-      expect(capabilityCallInput(0)).toEqual({ issue: 42 })
+      expect(runImplementationChain.mock.calls[0]![0]).toBe("run")
+      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toMatchObject({ issue: 42 })
       expect(runImplementationChain.mock.calls[0]![1].preloadedData).toMatchObject({
         workflowCapability: "feature",
         workflowStep: "run",
         jobCapability: "run",
-        selectedImplementation: "capability-run",
+        selectedImplementation: "run",
       })
     } finally {
       process.chdir(originalCwd)

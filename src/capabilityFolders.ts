@@ -5,6 +5,8 @@ import type { ReportPublicationConfig } from "./implementations/types.js"
 export const CAPABILITY_BODY_FILE = "instructions.md"
 export const CAPABILITY_CONTRACT_FILE = "contract.json"
 export const CAPABILITY_PROFILE_FILE = CAPABILITY_BODY_FILE
+const CANONICAL_CAPABILITY_BODY_FILE = "capability.md"
+const CANONICAL_CAPABILITY_DEFINITION_FILE = "definition.json"
 
 export interface CapabilityContract {
   execution?: "agent" | "script"
@@ -142,24 +144,56 @@ export function listCapabilityFolderSlugs(absDir: string): string[] {
 }
 
 export function isCapabilityFolder(dir: string): boolean {
-  if (!fs.existsSync(path.join(dir, CAPABILITY_BODY_FILE))) return false
   const entries = fs.readdirSync(dir, { withFileTypes: true })
+  const legacyBody = path.join(dir, CAPABILITY_BODY_FILE)
+  if (fs.existsSync(legacyBody)) {
+    return entries.every(
+      (entry) =>
+        entry.name === CAPABILITY_BODY_FILE ||
+        entry.name === CAPABILITY_CONTRACT_FILE ||
+        (entry.isDirectory() && (entry.name === "skills" || entry.name === "tools")),
+    )
+  }
+  const canonicalBody = path.join(dir, CANONICAL_CAPABILITY_BODY_FILE)
+  const canonicalDefinition = path.join(dir, CANONICAL_CAPABILITY_DEFINITION_FILE)
+  if (!fs.existsSync(canonicalBody) || !fs.existsSync(canonicalDefinition)) return false
   return entries.every(
-    (entry) =>
-      entry.name === CAPABILITY_BODY_FILE ||
-      entry.name === CAPABILITY_CONTRACT_FILE ||
-      (entry.isDirectory() && (entry.name === "skills" || entry.name === "tools")),
+    (entry) => entry.name === CANONICAL_CAPABILITY_BODY_FILE || entry.name === CANONICAL_CAPABILITY_DEFINITION_FILE,
   )
 }
 
 export function readCapabilityFolder(root: string, slug: string): CapabilityFolder | null {
   const dir = path.join(root, slug)
-  const bodyPath = path.join(dir, CAPABILITY_BODY_FILE)
+  const legacyBodyPath = path.join(dir, CAPABILITY_BODY_FILE)
+  const canonicalBodyPath = path.join(dir, CANONICAL_CAPABILITY_BODY_FILE)
+  const bodyPath = fs.existsSync(legacyBodyPath) ? legacyBodyPath : canonicalBodyPath
   const contractPath = path.join(dir, CAPABILITY_CONTRACT_FILE)
   if (!fs.existsSync(bodyPath) || !fs.statSync(bodyPath).isFile()) return null
   if (!isCapabilityFolder(dir)) return null
   try {
     const rawBody = fs.readFileSync(bodyPath, "utf-8")
+    if (bodyPath === canonicalBodyPath) {
+      const definitionPath = path.join(dir, CANONICAL_CAPABILITY_DEFINITION_FILE)
+      const definition = JSON.parse(fs.readFileSync(definitionPath, "utf-8")) as Record<string, unknown>
+      if (definition.id !== slug || typeof definition.action !== "string") return null
+      const { title, body } = parseCapabilityBody(rawBody, slug)
+      return {
+        slug,
+        dir,
+        profilePath: definitionPath,
+        bodyPath,
+        title,
+        body,
+        rawBody,
+        config: {
+          action: definition.action,
+          describe: typeof definition.purpose === "string" ? definition.purpose : title,
+          ...(isPlainObject(definition.inputSchema) ? { inputSchema: definition.inputSchema } : {}),
+          ...(isPlainObject(definition.outputSchema) ? { outputSchema: definition.outputSchema } : {}),
+        },
+        rawProfile: definition,
+      }
+    }
     const contract = fs.existsSync(contractPath)
       ? parseCapabilityContract(fs.readFileSync(contractPath, "utf-8"))
       : undefined

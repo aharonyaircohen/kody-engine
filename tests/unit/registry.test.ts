@@ -51,6 +51,15 @@ describe("registry: builtin implementations", () => {
     expect(isBuiltinImplementation("merge")).toBe(false)
     expect(isBuiltinImplementation("a-custom-consumer-capability-xyz")).toBe(false)
   })
+
+  it("resolves run as an Engine-owned capability", () => {
+    expect(resolveCapabilityAction("run")).toMatchObject({
+      action: "run",
+      capability: "run",
+      implementation: "run",
+      source: "builtin",
+    })
+  })
 })
 
 describe("registry: isSafeName", () => {

@@ -369,7 +369,7 @@ describe("dispatch: issue_comment on issue", () => {
     process.env.GITHUB_EVENT_PATH = prev.EVENT_PATH
   })
 
-  it.skip("routes '@kody run' to the run capability", () => {
+  it("routes '@kody run' to the built-in run capability with its issue input", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody run" },
       issue: { number: 8 },
@@ -547,7 +547,7 @@ describe("dispatch: issue_comment on issue", () => {
     })
   })
 
-  it.skip("falls back to defaultImplementation for `@kody` alone (no typo to surface)", () => {
+  it("falls back to built-in run for bare `@kody` and binds the issue", () => {
     process.env.GITHUB_EVENT_PATH = writeEvent({
       comment: { body: "@kody" },
       issue: { number: 11 },

@@ -295,6 +295,7 @@ export function getCapabilityActionInputs(
 ): InputSpec[] | null {
   const resolved = resolveCapabilityAction(action, projectCapabilitiesRoot)
   if (!resolved) return null
+  if (resolved.source === "builtin") return getProfileInputs(resolved.implementation)
   const capability = resolveCapabilityFolder(resolved.capability, projectCapabilitiesRoot)
   if (capability && !capability.config.workflow) {
     return [
