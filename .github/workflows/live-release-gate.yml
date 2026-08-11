@@ -1,4 +1,4 @@
-name: live release gate
+name: retry live release gate
 
 on:
   workflow_dispatch:
@@ -16,4 +16,4 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify:live-release
         env:
-          KODY_RELEASE_GATE_TOKEN: ${{ secrets.KODY_RELEASE_GATE_TOKEN }}
+          KODY_RELEASE_GATE_TOKEN: ${{ secrets.KODY_TOKEN }}

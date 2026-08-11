@@ -1,0 +1,34 @@
+name: release
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: kody-engine-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v6
+        with: { version: 11 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - name: Publish Engine
+        run: pnpm publish --access public --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Verify released Engine end to end
+        run: pnpm verify:live-release
+        env:
+          KODY_RELEASE_GATE_TOKEN: ${{ secrets.KODY_TOKEN }}
