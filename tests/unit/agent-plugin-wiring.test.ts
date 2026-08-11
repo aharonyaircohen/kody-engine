@@ -100,6 +100,23 @@ describe("agent subagent model inheritance", () => {
   })
 })
 
+describe("agent file-write guard", () => {
+  beforeEach(() => vi.mocked(query).mockClear())
+  afterEach(() => vi.clearAllMocks())
+
+  it("guards Write calls before the SDK creates files", async () => {
+    const { runAgent } = await import("../../src/agent.js")
+    await runAgent({ ...baseOpts })
+
+    const opts = vi.mocked(query).mock.calls[0]![0].options as {
+      hooks: {
+        PreToolUse: Array<{ matcher: string }>
+      }
+    }
+    expect(opts.hooks.PreToolUse.map((entry) => entry.matcher)).toContain("Write")
+  })
+})
+
 describe("agent maxTurns forwarding", () => {
   beforeEach(() => vi.mocked(query).mockClear())
   afterEach(() => vi.clearAllMocks())

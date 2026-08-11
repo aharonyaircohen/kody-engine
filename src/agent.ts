@@ -10,6 +10,7 @@ import {
   type ReasoningEffort,
 } from "./config.js"
 import { renderEvent, type SdkMessageLike } from "./format.js"
+import { createMissingParentWriteGuard } from "./fileEditGuards.js"
 import {
   createOutputContractPostWriteHook,
   createOutputContractStopHook,
@@ -445,6 +446,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   let getSubmitted: (() => { cursor: string; data: Record<string, unknown>; done: boolean } | undefined) | undefined
   const invokedSubagents = new Set<string>()
   const subagentInvocationHook = createSubagentInvocationHook(invokedSubagents)
+  const missingParentWriteGuard = createMissingParentWriteGuard(opts.cwd)
   const outputContractPostWriteHook = opts.outputContract
     ? createOutputContractPostWriteHook(opts.outputContract)
     : null
@@ -507,6 +509,10 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
             {
               matcher: "Agent",
               hooks: [enforceSubagentModelInheritance],
+            },
+            {
+              matcher: "Write",
+              hooks: [missingParentWriteGuard],
             },
           ],
           PostToolUse: [
