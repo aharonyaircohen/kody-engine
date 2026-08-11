@@ -16,6 +16,7 @@ import {
 } from "./registry.js"
 import { readRunRequestFromEnv } from "./run-request.js"
 import { brainServe } from "./servers/brain-serve.js"
+import { brainTerminalAgent } from "./servers/brain-terminal-agent.js"
 import { poolServe } from "./servers/pool-serve.js"
 import { runnerServe } from "./servers/runner-serve.js"
 import { serve } from "./servers/serve.js"
@@ -25,7 +26,14 @@ interface ParsedArgs {
   command: "ci" | "chat" | "help" | "version" | "stats" | "server" | "__capability__" | "__implementation__"
   actionName?: string
   implementationName?: string
-  serverName?: "serve" | "pool-serve" | "runner-serve" | "brain-serve" | "brain-proxy" | "mcp-http-server"
+  serverName?:
+    | "serve"
+    | "pool-serve"
+    | "runner-serve"
+    | "brain-serve"
+    | "brain-terminal-agent"
+    | "brain-proxy"
+    | "mcp-http-server"
   serverArgs?: string[]
   cliArgs?: Record<string, unknown>
   cwd?: string
@@ -161,7 +169,15 @@ export function parseArgs(argv: string[]): ParsedArgs {
   // Long-running servers are engine plumbing, not user work-verbs. They route
   // to src/servers/ as hardcoded CLI verbs (like ci/help/version), so the
   // implementation registry never lists them and dispatch never treats them as verbs.
-  const SERVER_VERBS = new Set(["serve", "pool-serve", "runner-serve", "brain-serve", "brain-proxy", "mcp-http-server"])
+  const SERVER_VERBS = new Set([
+    "serve",
+    "pool-serve",
+    "runner-serve",
+    "brain-serve",
+    "brain-terminal-agent",
+    "brain-proxy",
+    "mcp-http-server",
+  ])
   if (SERVER_VERBS.has(cmd)) {
     result.command = "server"
     result.serverName = cmd as ParsedArgs["serverName"]
@@ -265,6 +281,8 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
           return await runnerServe()
         case "brain-serve":
           return await brainServe({ cwd })
+        case "brain-terminal-agent":
+          return await brainTerminalAgent({ cwd })
         case "brain-proxy":
           return await brainProxy()
         case "mcp-http-server":
