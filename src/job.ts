@@ -12,6 +12,7 @@
 
 import { randomUUID } from "node:crypto"
 import { evaluateAgencyBoundaries } from "./agencyBoundaryEval.js"
+import { validateCapabilityContractValue } from "./agency/capability-contract-validation.js"
 import type {
   CapabilityFolder,
   CapabilityWorkflowConfig,
@@ -452,7 +453,43 @@ async function runCapabilityImplementationStep(
   }
 
   const run = base.chain === false ? runImplementation : runImplementationChain
-  return run(profileName, input)
+  const result = await run(profileName, input)
+  return enforceCapabilityOutputContract(capabilityContext, result)
+}
+
+function enforceCapabilityOutputContract(
+  capability: CapabilityFolder | null,
+  result: ExecutorOutput,
+): ExecutorOutput {
+  const schema = capability?.config.outputSchema
+  if (
+    result.exitCode !== 0 ||
+    !schema ||
+    !Object.hasOwn(result, "capabilityOutput")
+  ) {
+    return result
+  }
+  try {
+    validateCapabilityContractValue("output", schema, result.capabilityOutput)
+    return result
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    const blocked: CapabilityResult = {
+      version: 1,
+      status: "blocked",
+      summary: reason,
+      facts: {},
+      artifacts: [],
+      missingEvidence: [],
+      blockers: [reason],
+    }
+    return {
+      ...result,
+      exitCode: 64,
+      reason,
+      capabilityResults: [blocked],
+    }
+  }
 }
 
 function shouldRunCapabilityWorkflow(

@@ -1132,6 +1132,50 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("blocks a capability result that violates its hydrated output contract", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-output-contract-"))
+    try {
+      writeContractCapability(cwd, "review", ["pr"], ["verdict", "headSha"])
+      const contractPath = path.join(
+        cwd,
+        ".kody-engine",
+        "definitions",
+        "capabilities",
+        "review",
+        "contract.json",
+      )
+      const contract = JSON.parse(fs.readFileSync(contractPath, "utf8")) as {
+        output: Record<string, unknown>
+      }
+      contract.output.required = ["verdict", "headSha"]
+      fs.writeFileSync(contractPath, JSON.stringify(contract))
+      runImplementationChain.mockResolvedValueOnce({
+        exitCode: 0,
+        capabilityOutput: { verdict: "pass" },
+        capabilityResults: [capabilityResult({ verdict: "pass" })],
+      })
+
+      const result = await runJob(
+        {
+          action: "review",
+          capability: "review",
+          cliArgs: { input: JSON.stringify({ pr: 3956 }) },
+          target: 3956,
+          flavor: "instant",
+        },
+        { cwd },
+      )
+
+      expect(result).toMatchObject({
+        exitCode: 64,
+        reason: expect.stringMatching(/Capability output does not match.*headSha/),
+        capabilityResults: [expect.objectContaining({ status: "blocked" })],
+      })
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it("uses an explicit workflow target fact instead of a stale prior PR URL", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-target-fact-"))
     try {
