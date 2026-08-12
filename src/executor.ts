@@ -43,7 +43,7 @@ import { agentRunDir } from "./runtimePaths.js"
 import { capabilityConfigEnvironment, capabilityInputEnvironment } from "./scripts/capabilityExecutionEnvironment.js"
 import { shouldEvaluateAgencyBoundaries } from "./scripts/evaluateAgencyBoundaries.js"
 import { allScriptNames, postflightScripts, preflightScripts } from "./scripts/index.js"
-import type { TaskState, TaskTarget } from "./state.js"
+import type { Action, TaskState, TaskTarget } from "./state.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
 import { loadSubagents } from "./subagents.js"
 import {
@@ -241,6 +241,8 @@ export interface ExecutorInput {
 
 export interface ExecutorOutput {
   exitCode: number
+  /** Typed result emitted by the implementation, even when no task state exists. */
+  action?: Action
   prUrl?: string
   reason?: string
   usage?: { tokens: number; costUsd: number }
@@ -903,6 +905,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       exitCode: ctx.output.exitCode ?? 0,
       prUrl: ctx.output.prUrl,
       reason: ctx.output.reason,
+      action: ctx.data.action as Action | undefined,
       nextDispatch: ctx.output.nextDispatch,
       nextJob: ctx.output.nextJob,
       afterNextJob: ctx.output.afterNextJob,

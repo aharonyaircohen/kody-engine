@@ -2452,7 +2452,11 @@ describe("runJob (Phase 1 seam)", () => {
                 resolve({
                   exitCode: 1,
                   reason: "repair timed out",
-                  taskState: taskState("RUN_FAILED"),
+                  action: {
+                    type: "RUN_FAILED",
+                    payload: { reason: "workflow step timed out after 1s" },
+                    timestamp: new Date().toISOString(),
+                  },
                 }),
               { once: true },
             )

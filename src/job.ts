@@ -1287,7 +1287,7 @@ function workflowStepAbortController(
 }
 
 function workflowOutcome(result: ExecutorOutput): Action | null {
-  return result.taskState?.core.lastOutcome ?? null
+  return result.taskState?.core.lastOutcome ?? result.action ?? null
 }
 
 function workflowConditionContext(data: Record<string, unknown>): Record<string, unknown> {
