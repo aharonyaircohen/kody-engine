@@ -30,7 +30,7 @@ type Invoker = (prompt: string) => Promise<AgentResult>
 
 async function runVerify(ctx: Context): Promise<void> {
   try {
-    const result = await verifyAllWithRetry(ctx.config, ctx.cwd)
+    const result = await verifyAllWithRetry(ctx.config, ctx.cwd, { signal: ctx.abortSignal })
     ctx.data.verifyOk = result.ok
     ctx.data.verifyReason = result.ok ? "" : summarizeFailure(result)
     ctx.data.verifyRecovered = result.recovered ?? []
@@ -72,6 +72,10 @@ export const verifyWithRetry: PostflightScript = async (ctx) => {
   await runVerify(ctx)
 
   if (ctx.data.verifyOk !== false) return
+  if (ctx.abortSignal?.aborted) {
+    downgradeActionOnFailure(ctx)
+    return
+  }
   if (!ctx.data.agentDone) {
     downgradeActionOnFailure(ctx)
     return
@@ -109,6 +113,11 @@ export const verifyWithRetry: PostflightScript = async (ctx) => {
     }
   } catch (err) {
     process.stderr.write(`[kody] verify retry crashed: ${err instanceof Error ? err.message : String(err)}\n`)
+  }
+
+  if (ctx.abortSignal?.aborted) {
+    downgradeActionOnFailure(ctx)
+    return
   }
 
   await runVerify(ctx)

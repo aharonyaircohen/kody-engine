@@ -158,6 +158,27 @@ describe("verifyWithRetry", () => {
     expect((ctx.data.action as Action).type).toBe("RUN_FAILED")
   })
 
+  it("does not start the agent retry after the workflow deadline", async () => {
+    const controller = new AbortController()
+    controller.abort(new Error("workflow step timed out after 600s"))
+    const invoker = vi.fn<(p: string) => Promise<AgentResult>>()
+    const action: Action = {
+      type: "RUN_COMPLETED",
+      payload: {},
+      timestamp: new Date().toISOString(),
+    }
+    const ctx = makeCtx({
+      config: { ...baseConfig, quality: { ...baseConfig.quality, typecheck: "false" } },
+      abortSignal: controller.signal,
+      data: { agentDone: true, __invokeAgent: invoker, prompt: "BASE", action },
+    })
+
+    await verifyWithRetry(ctx, profile, null)
+
+    expect(invoker).not.toHaveBeenCalled()
+    expect((ctx.data.action as Action).type).toBe("RUN_FAILED")
+  })
+
   it("leaves non-_COMPLETED actions untouched on failure", async () => {
     const action: Action = {
       type: "REPRODUCE_FAILED",

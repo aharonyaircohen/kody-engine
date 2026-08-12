@@ -416,6 +416,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
     config,
     verbose: input.verbose,
     quiet: input.quiet,
+    abortSignal: input.abortController?.signal,
     // Phase 5 foundation: seed ctx.data with any preloaded values handed
     // in by a parent (typically a container loop). Loaders that see
     // their field already populated take the fast path and skip the
@@ -527,6 +528,10 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
   const jobWhyBlock = typeof ctx.data.jobWhy === "string" ? operatorRequestBlock(ctx.data.jobWhy) : null
   const jobRefBlock = jobReferenceBlock(profileName, profile, ctx.data)
   const invokeAgent = async (prompt: string): Promise<AgentResult> => {
+    if (input.abortController?.signal.aborted) {
+      const reason = input.abortController.signal.reason
+      throw reason instanceof Error ? reason : new Error("agent invocation aborted")
+    }
     // Resolve at call time — ctx.data.syntheticPluginPath is set during preflight.
     const externalPlugins = (profile.claudeCode.plugins ?? [])
       .map((p) => (path.isAbsolute(p) ? p : path.resolve(profile.dir, p)))

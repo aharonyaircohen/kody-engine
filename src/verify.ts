@@ -66,14 +66,24 @@ export function buildVerifyEnv(source: Record<string, string | undefined> = proc
   return env
 }
 
-function runCommand(command: string, cwd?: string): Promise<RunResult> {
+function abortMessage(signal: AbortSignal): string {
+  const reason = signal.reason
+  return reason instanceof Error ? reason.message : typeof reason === "string" ? reason : "verification aborted"
+}
+
+function runCommand(command: string, cwd?: string, signal?: AbortSignal): Promise<RunResult> {
   return new Promise((resolve) => {
     const start = Date.now()
+    if (signal?.aborted) {
+      resolve({ exitCode: -1, durationMs: 0, tail: abortMessage(signal) })
+      return
+    }
     const child = spawn(command, {
       cwd,
       shell: true,
       env: buildVerifyEnv(),
       stdio: ["ignore", "pipe", "pipe"],
+      detached: process.platform !== "win32",
     })
 
     const buffers: Buffer[] = []
@@ -90,26 +100,53 @@ function runCommand(command: string, cwd?: string): Promise<RunResult> {
     child.stdout?.on("data", collect)
     child.stderr?.on("data", collect)
 
+    let settled = false
+    const killTree = (killSignal: NodeJS.Signals): void => {
+      try {
+        if (process.platform !== "win32" && child.pid) process.kill(-child.pid, killSignal)
+        else child.kill(killSignal)
+      } catch {
+        child.kill(killSignal)
+      }
+    }
+    const finish = (exitCode: number, extraTail = ""): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      signal?.removeEventListener("abort", onAbort)
+      const output = Buffer.concat(buffers).toString("utf-8")
+      const tail = [output, extraTail].filter(Boolean).join("\n").slice(-TAIL_CHARS)
+      resolve({ exitCode, durationMs: Date.now() - start, tail })
+    }
+    const terminate = (): void => {
+      killTree("SIGTERM")
+      setTimeout(() => killTree("SIGKILL"), 5000).unref()
+    }
+    const onAbort = (): void => {
+      terminate()
+      finish(-1, signal ? abortMessage(signal) : "verification aborted")
+    }
+    signal?.addEventListener("abort", onAbort, { once: true })
+
     const timer = setTimeout(() => {
-      child.kill("SIGTERM")
-      setTimeout(() => {
-        if (!child.killed) child.kill("SIGKILL")
-      }, 5000)
+      terminate()
+      finish(-1, "verification command timed out")
     }, COMMAND_TIMEOUT_MS)
 
     child.on("exit", (code) => {
-      clearTimeout(timer)
-      const tail = Buffer.concat(buffers).toString("utf-8").slice(-TAIL_CHARS)
-      resolve({ exitCode: code ?? -1, durationMs: Date.now() - start, tail })
+      finish(code ?? -1)
     })
     child.on("error", (err) => {
-      clearTimeout(timer)
-      resolve({ exitCode: -1, durationMs: Date.now() - start, tail: err.message })
+      finish(-1, err.message)
     })
   })
 }
 
-export async function verifyAll(config: KodyConfig, cwd?: string): Promise<VerifyResult> {
+export async function verifyAll(
+  config: KodyConfig,
+  cwd?: string,
+  opts?: { signal?: AbortSignal },
+): Promise<VerifyResult> {
   const commands: { name: string; cmd: string }[] = []
   if (config.quality.typecheck) commands.push({ name: "typecheck", cmd: config.quality.typecheck })
   if (config.quality.testUnit) commands.push({ name: "test", cmd: config.quality.testUnit })
@@ -120,7 +157,7 @@ export async function verifyAll(config: KodyConfig, cwd?: string): Promise<Verif
   const details: Record<string, RunResult> = {}
 
   for (const { name, cmd } of commands) {
-    const result = await runCommand(cmd, cwd)
+    const result = await runCommand(cmd, cwd, opts?.signal)
     details[name] = result
     if (result.exitCode !== 0) failed.push(name)
   }
@@ -143,8 +180,9 @@ export async function applyTestRetries(
   initial: VerifyResult,
   testCommand: string | undefined,
   cwd: string | undefined,
-  runner: (cmd: string, cwd?: string) => Promise<RunResult>,
+  runner: (cmd: string, cwd?: string, signal?: AbortSignal) => Promise<RunResult>,
   testRetries: number = DEFAULT_TEST_RETRIES,
+  signal?: AbortSignal,
 ): Promise<VerifyResult> {
   if (initial.ok) return { ...initial, recovered: [] }
   const recovered: string[] = []
@@ -153,7 +191,8 @@ export async function applyTestRetries(
 
   if (failed.includes("test") && testCommand && testRetries > 0) {
     for (let attempt = 1; attempt <= testRetries; attempt++) {
-      const retry = await runner(testCommand, cwd)
+      if (signal?.aborted) break
+      const retry = await runner(testCommand, cwd, signal)
       details[`test (retry ${attempt})`] = retry
       if (retry.exitCode === 0) {
         failed = failed.filter((f) => f !== "test")
@@ -178,10 +217,10 @@ export async function applyTestRetries(
 export async function verifyAllWithRetry(
   config: KodyConfig,
   cwd?: string,
-  opts?: { testRetries?: number },
+  opts?: { testRetries?: number; signal?: AbortSignal },
 ): Promise<VerifyResult> {
-  const initial = await verifyAll(config, cwd)
-  return applyTestRetries(initial, config.quality.testUnit, cwd, runCommand, opts?.testRetries)
+  const initial = await verifyAll(config, cwd, { signal: opts?.signal })
+  return applyTestRetries(initial, config.quality.testUnit, cwd, runCommand, opts?.testRetries, opts?.signal)
 }
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: ESC (0x1B) is required to match ANSI escape sequences.

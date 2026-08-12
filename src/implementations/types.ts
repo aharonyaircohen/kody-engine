@@ -456,6 +456,8 @@ export interface Context {
   /** Stream-output verbosity. */
   verbose?: boolean
   quiet?: boolean
+  /** Cancellation owned by the enclosing job or workflow step. */
+  abortSignal?: AbortSignal
   /** Opaque bag scripts populate during preflight (issue, pr, diff, logs, …). */
   data: Record<string, unknown>
   /** Final output the executor returns. */

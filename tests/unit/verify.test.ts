@@ -50,6 +50,25 @@ describe("verify: verifyAll", () => {
     expect(result.failed).toEqual(["format"])
   })
 
+  it("stops an active verification command when the workflow is aborted", async () => {
+    const controller = new AbortController()
+    const cfg: KodyConfig = {
+      ...baseConfig,
+      quality: {
+        ...baseConfig.quality,
+        typecheck: 'node -e "setTimeout(() => {}, 30000)"',
+      },
+    }
+    const startedAt = Date.now()
+    setTimeout(() => controller.abort(new Error("step deadline reached")), 25)
+
+    const result = await verifyAll(cfg, undefined, { signal: controller.signal })
+
+    expect(Date.now() - startedAt).toBeLessThan(2_000)
+    expect(result.ok).toBe(false)
+    expect(result.details.typecheck?.tail).toContain("step deadline reached")
+  })
+
   it("does not expose unpacked consumer secrets to verification commands", async () => {
     const previousBlob = process.env.ALL_SECRETS
     const previousServiceKey = process.env.KODY_SERVICE_KEY
