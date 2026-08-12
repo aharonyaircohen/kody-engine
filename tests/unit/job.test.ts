@@ -2452,6 +2452,7 @@ describe("runJob (Phase 1 seam)", () => {
                 resolve({
                   exitCode: 1,
                   reason: "agent produced no final message",
+                  taskState: taskState("AGENT_NOT_RUN"),
                 }),
               { once: true },
             )

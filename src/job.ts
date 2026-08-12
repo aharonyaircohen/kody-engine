@@ -1288,7 +1288,7 @@ function workflowStepAbortController(
 }
 
 function workflowOutcome(result: ExecutorOutput): Action | null {
-  return result.taskState?.core.lastOutcome ?? result.action ?? null
+  return result.action ?? result.taskState?.core.lastOutcome ?? null
 }
 
 function workflowStepDeadlineResult(
