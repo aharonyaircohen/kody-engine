@@ -439,7 +439,11 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const turnTimeoutMs = resolveTurnTimeoutMs(opts)
   const completionGuard =
     typeof opts.deadlineAtMs === "number"
-      ? createCompletionToolGuard(completionToolCutoffAt(startedAt, opts.deadlineAtMs))
+      ? createCompletionToolGuard(
+          completionToolCutoffAt(startedAt, opts.deadlineAtMs),
+          Date.now,
+          opts.outputContract?.path,
+        )
       : null
   // Results live across attempts so the connection retry below can overwrite
   // them; the final loop iteration's values are what we return.
