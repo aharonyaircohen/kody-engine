@@ -69,6 +69,12 @@ function upgradeActionOnPass(ctx: Context): void {
 }
 
 export const verifyWithRetry: PostflightScript = async (ctx) => {
+  if (ctx.data.capabilityDeliveryPolicy === "checkpoint") {
+    ctx.data.verificationDeferred = true
+    delete ctx.data.verifyOk
+    delete ctx.data.verifyReason
+    return
+  }
   await runVerify(ctx)
 
   if (ctx.data.verifyOk !== false) return

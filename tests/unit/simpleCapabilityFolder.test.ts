@@ -27,6 +27,7 @@ describe("simple Capability folder", () => {
   it("loads instructions and an optional machine-readable contract", () => {
     const contract = {
       execution: "agent" as const,
+      deliveryPolicy: "checkpoint" as const,
       requirements: {
         browser: true,
         qaCredentials: true,
@@ -50,6 +51,7 @@ describe("simple Capability folder", () => {
     expect(loaded?.bodyPath).toBe(path.join(dir, "instructions.md"))
     expect(loaded?.contractPath).toBe(path.join(dir, "contract.json"))
     expect(loaded?.contract).toEqual(contract)
+    expect(loaded?.contract?.deliveryPolicy).toBe("checkpoint")
     expect(loaded?.contract?.requirements).toEqual({
       browser: true,
       qaCredentials: true,
@@ -117,6 +119,17 @@ describe("simple Capability folder", () => {
     })
     fs.writeFileSync(path.join(invalidSecretName.dir, "tools", "run.sh"), "#!/bin/sh\nprintf '{}'\n")
     expect(readCapabilityFolder(invalidSecretName.root, "inspect")).toBeNull()
+
+    const scriptedCheckpoint = capability({
+      "contract.json": JSON.stringify({
+        execution: "script",
+        deliveryPolicy: "checkpoint",
+        input: {},
+        output: {},
+      }),
+    })
+    fs.writeFileSync(path.join(scriptedCheckpoint.dir, "tools", "run.sh"), "#!/bin/sh\nprintf '{}'\n")
+    expect(readCapabilityFolder(scriptedCheckpoint.root, "inspect")).toBeNull()
   })
 
   it("rejects runtime files and malformed contracts", () => {
@@ -201,6 +214,30 @@ describe("simple Capability folder", () => {
     expect(outputPath).toContain("kody-capability-output-")
     expect(String(data.prompt)).toContain(outputPath)
     expect(String(data.prompt)).toContain("Write the final JSON value to this file")
+  })
+
+  it("loads an opt-in checkpoint delivery policy without changing the prompt", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-runtime-"))
+    roots.push(cwd)
+    const dir = path.join(cwd, ".kody-engine", "definitions", "capabilities", "change")
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, "instructions.md"), "Make the focused change.\n")
+    fs.writeFileSync(
+      path.join(dir, "contract.json"),
+      JSON.stringify({
+        execution: "agent",
+        deliveryPolicy: "checkpoint",
+        input: { type: "object" },
+        output: { type: "object" },
+      }),
+    )
+
+    const ctx = { cwd, args: { capability: "change", input: "{}" }, data: {} } as never
+    await loadSimpleCapability(ctx, {} as never)
+
+    const data = (ctx as { data: Record<string, unknown> }).data
+    expect(data.capabilityDeliveryPolicy).toBe("checkpoint")
+    expect(String(data.prompt)).not.toContain("checkpoint")
   })
 
   it("does not mix delivery policy into capability loading", async () => {

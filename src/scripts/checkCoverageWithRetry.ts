@@ -17,6 +17,11 @@ import { parseAgentResult } from "../prompt.js"
 type Invoker = (prompt: string) => Promise<AgentResult>
 
 export const checkCoverageWithRetry: PostflightScript = async (ctx) => {
+  if (ctx.data.capabilityDeliveryPolicy === "checkpoint") {
+    ctx.data.verificationDeferred = true
+    ctx.data.coverageMisses = []
+    return
+  }
   const reqs = (ctx.data.coverageRules as { pattern: string; requireSibling: string }[]) ?? []
   if (reqs.length === 0) {
     ctx.data.coverageMisses = []

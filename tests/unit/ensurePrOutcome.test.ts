@@ -47,6 +47,14 @@ describe("ensurePr export shape", () => {
   })
 })
 
+describe("checkpoint delivery", () => {
+  it("provides the reason that keeps the pull request in draft", async () => {
+    const { deliveryCheckpointReason } = await import("../../src/scripts/ensurePr.js")
+    expect(deliveryCheckpointReason({ capabilityDeliveryPolicy: "checkpoint" })).toMatch(/deferred to pull request CI/i)
+    expect(deliveryCheckpointReason({})).toBe("")
+  })
+})
+
 // Anti-regression: when ensurePr's preconditions aren't met (e.g. no commits),
 // the typed outcome must still be set. Imports the real module and runs it
 // with a minimal ctx.

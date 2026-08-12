@@ -33,6 +33,25 @@ function makeAgentResult(completed: boolean, finalText = ""): AgentResult {
 }
 
 describe("verifyWithRetry", () => {
+  it("defers the broad quality gate for checkpoint delivery", async () => {
+    const invoker = vi.fn<(p: string) => Promise<AgentResult>>()
+    const ctx = makeCtx({
+      config: { ...baseConfig, quality: { ...baseConfig.quality, typecheck: "false" } },
+      data: {
+        capabilityDeliveryPolicy: "checkpoint",
+        agentDone: true,
+        __invokeAgent: invoker,
+        prompt: "BASE",
+      },
+    })
+
+    await verifyWithRetry(ctx, profile, null)
+
+    expect(ctx.data.verificationDeferred).toBe(true)
+    expect(ctx.data.verifyOk).toBeUndefined()
+    expect(invoker).not.toHaveBeenCalled()
+  })
+
   it("passes through when verify is green (no commands → ok)", async () => {
     const ctx = makeCtx()
     await verifyWithRetry(ctx, profile, null)

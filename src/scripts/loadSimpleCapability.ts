@@ -29,6 +29,9 @@ export const loadSimpleCapability: PreflightScript = async (ctx, profile) => {
   ctx.data.jobCapability = slug
   ctx.data.capabilityInput = input
   ctx.data.capabilityExecution = capability.contract?.execution ?? "agent"
+  if (capability.contract?.deliveryPolicy) {
+    ctx.data.capabilityDeliveryPolicy = capability.contract.deliveryPolicy
+  }
   if (capability.contract?.requirements) {
     ctx.data.capabilityRequirements = capability.contract.requirements
   }

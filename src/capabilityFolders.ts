@@ -10,6 +10,8 @@ const CANONICAL_CAPABILITY_DEFINITION_FILE = "definition.json"
 
 export interface CapabilityContract {
   execution?: "agent" | "script"
+  /** Opt in to shipping a draft checkpoint before repository-wide verification. */
+  deliveryPolicy?: "checkpoint"
   /** Runtime services required by an agent-backed Capability. */
   requirements?: CapabilityRuntimeRequirements
   /** Private specialists that an agent-backed capability must actually invoke. */
@@ -226,6 +228,7 @@ export function readCapabilityFolder(root: string, slug: string): CapabilityFold
       rawProfile: contract
         ? {
             ...(contract.execution ? { execution: contract.execution } : {}),
+            ...(contract.deliveryPolicy ? { deliveryPolicy: contract.deliveryPolicy } : {}),
             input: contract.input,
             output: contract.output,
           }
@@ -291,6 +294,7 @@ function parseCapabilityContract(raw: string): CapabilityContract {
   const unsupported = Object.keys(parsed).filter(
     (key) =>
       key !== "execution" &&
+      key !== "deliveryPolicy" &&
       key !== "requirements" &&
       key !== "secrets" &&
       key !== "timeoutMs" &&
@@ -301,8 +305,15 @@ function parseCapabilityContract(raw: string): CapabilityContract {
   if (unsupported.length > 0) {
     throw new Error(`contract.json contains unsupported fields: ${unsupported.join(", ")}`)
   }
+  if (parsed.deliveryPolicy !== undefined && parsed.deliveryPolicy !== "checkpoint") {
+    throw new Error('contract.json deliveryPolicy must be "checkpoint"')
+  }
+  if (parsed.deliveryPolicy === "checkpoint" && parsed.execution !== "agent") {
+    throw new Error('contract.json deliveryPolicy "checkpoint" is supported only when execution is "agent"')
+  }
   return {
     ...(parsed.execution ? { execution: parsed.execution } : {}),
+    ...(parsed.deliveryPolicy === "checkpoint" ? { deliveryPolicy: "checkpoint" as const } : {}),
     ...(requirements ? { requirements } : {}),
     ...(secrets ? { secrets } : {}),
     ...(timeoutMs !== undefined ? { timeoutMs } : {}),

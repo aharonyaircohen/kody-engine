@@ -63,7 +63,8 @@ export const ensurePr: PostflightScript = async (ctx) => {
     return
   }
 
-  const failureReason = computeFailureReason(ctx)
+  const checkpointReason = deliveryCheckpointReason(ctx.data)
+  const failureReason = computeFailureReason(ctx) || checkpointReason
   const isFailure = failureReason.length > 0
   const changedFiles = (ctx.data.changedFiles as string[] | undefined) ?? []
 
@@ -117,6 +118,12 @@ export const ensurePr: PostflightScript = async (ctx) => {
     ctx.output.reason = reason
     setOutcome(ctx, { kind: "crashed", reason })
   }
+}
+
+export function deliveryCheckpointReason(data: Record<string, unknown>): string {
+  return data.capabilityDeliveryPolicy === "checkpoint"
+    ? "Repository-wide verification is deferred to pull request CI."
+    : ""
 }
 
 function computeFailureReason(ctx: { data: Record<string, unknown> }): string {
