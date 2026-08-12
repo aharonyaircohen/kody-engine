@@ -210,6 +210,8 @@ export interface ExecutorInput {
   quiet?: boolean
   /** Run-level cancellation owned by the dispatch boundary. */
   abortController?: AbortController
+  /** Absolute hard deadline owned by the enclosing workflow step. */
+  deadlineAtMs?: number
   /**
    * Test seam: how a container resolves child invocations. Defaults to
    * `runImplementation` (so containers truly nest). Tests inject a stub to
@@ -581,6 +583,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       verbose: input.verbose,
       quiet: input.quiet,
       abortController: input.abortController,
+      deadlineAtMs: input.deadlineAtMs,
       ndjsonDir,
       additionalDirectories: agentTaskArtifacts ? [agentTaskArtifacts.absDir] : undefined,
       allowedToolsOverride: profile.claudeCode.tools,

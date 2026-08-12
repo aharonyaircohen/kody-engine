@@ -2,6 +2,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { query } from "@anthropic-ai/claude-agent-sdk"
 import { ensureStableClaudeBinary } from "./claudeBinary.js"
+import { completionToolCutoffAt, createCompletionToolGuard } from "./completionGuard.js"
 import {
   getAnthropicApiKeyOrDummy,
   litellmModelGroup,
@@ -9,8 +10,8 @@ import {
   REASONING_BUDGETS,
   type ReasoningEffort,
 } from "./config.js"
-import { renderEvent, type SdkMessageLike } from "./format.js"
 import { createMissingParentWriteGuard } from "./fileEditGuards.js"
+import { renderEvent, type SdkMessageLike } from "./format.js"
 import {
   createOutputContractPostWriteHook,
   createOutputContractStopHook,
@@ -100,6 +101,8 @@ export interface AgentOptions {
   quiet?: boolean
   /** Cancels the SDK session when the owning Run reaches its hard deadline. */
   abortController?: AbortController
+  /** Absolute hard deadline inherited from the owning workflow step. */
+  deadlineAtMs?: number
   ndjsonDir?: string
   /** Override the default allowed tool list (e.g. read-only for review). */
   allowedToolsOverride?: string[]
@@ -434,6 +437,10 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
 
   const startedAt = Date.now()
   const turnTimeoutMs = resolveTurnTimeoutMs(opts)
+  const completionGuard =
+    typeof opts.deadlineAtMs === "number"
+      ? createCompletionToolGuard(completionToolCutoffAt(startedAt, opts.deadlineAtMs))
+      : null
   // Results live across attempts so the connection retry below can overwrite
   // them; the final loop iteration's values are what we return.
   let outcome: "completed" | "failed" = "failed"
@@ -506,6 +513,13 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         env,
         hooks: {
           PreToolUse: [
+            ...(completionGuard
+              ? [
+                  {
+                    hooks: [completionGuard],
+                  },
+                ]
+              : []),
             {
               matcher: "Agent",
               hooks: [enforceSubagentModelInheritance],
@@ -656,11 +670,17 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       } else if (typeof opts.maxThinkingTokens === "number" && opts.maxThinkingTokens > 0) {
         queryOptions.maxThinkingTokens = opts.maxThinkingTokens
       }
-      if (typeof opts.systemPromptAppend === "string" && opts.systemPromptAppend.length > 0) {
+      const completionNotice = completionGuard
+        ? "Work within the enforced run time. Tool access closes before the hard deadline to reserve time for a final response. When that happens, stop using tools and finish immediately."
+        : null
+      const systemPromptAppend = [opts.systemPromptAppend, completionNotice]
+        .filter((value): value is string => typeof value === "string" && value.length > 0)
+        .join("\n\n")
+      if (systemPromptAppend.length > 0) {
         const systemPrompt: Record<string, unknown> = {
           type: "preset",
           preset: "claude_code",
-          append: opts.systemPromptAppend,
+          append: systemPromptAppend,
         }
         if (opts.cacheable) systemPrompt.excludeDynamicSections = true
         queryOptions.systemPrompt = systemPrompt

@@ -71,7 +71,7 @@ describe("agent subagent model inheritance", () => {
     const opts = vi.mocked(query).mock.calls[0]![0].options as {
       hooks: {
         PreToolUse: Array<{
-          matcher: string
+          matcher?: string
           hooks: Array<(input: Record<string, unknown>) => Promise<Record<string, unknown>>>
         }>
       }
@@ -114,6 +114,28 @@ describe("agent file-write guard", () => {
       }
     }
     expect(opts.hooks.PreToolUse.map((entry) => entry.matcher)).toContain("Write")
+  })
+})
+
+describe("agent completion guard", () => {
+  beforeEach(() => vi.mocked(query).mockClear())
+  afterEach(() => vi.clearAllMocks())
+
+  it("blocks every new tool once the completion window begins", async () => {
+    const { runAgent } = await import("../../src/agent.js")
+    await runAgent({ ...baseOpts, deadlineAtMs: Date.now() })
+
+    const opts = vi.mocked(query).mock.calls[0]![0].options as {
+      hooks: {
+        PreToolUse: Array<{
+          matcher: string
+          hooks: Array<() => Promise<Record<string, unknown>>>
+        }>
+      }
+    }
+    const entry = opts.hooks.PreToolUse.find((candidate) => candidate.matcher === undefined)
+    expect(entry).toBeDefined()
+    await expect(entry!.hooks[0]!()).resolves.toMatchObject({ decision: "block" })
   })
 })
 

@@ -174,6 +174,8 @@ export interface RunJobBase {
   quiet?: boolean
   /** Cancels every nested implementation in this Job. */
   abortController?: AbortController
+  /** Absolute hard deadline inherited by nested implementations. */
+  deadlineAtMs?: number
   preloadedData?: Record<string, unknown>
   /**
    * Follow in-process stage hand-offs (`runImplementationChain`) by default,
@@ -436,6 +438,7 @@ async function runCapabilityImplementationStep(
     verbose: base.verbose,
     quiet: base.quiet,
     abortController: base.abortController,
+    deadlineAtMs: base.deadlineAtMs,
     preloadedData: Object.keys(preloadedData).length > 0 ? preloadedData : undefined,
   }
   const shouldApplyResolvedCapabilityArgs =
@@ -817,6 +820,7 @@ async function runGraphCapabilityWorkflow(
       result = await runJob(child, {
         ...base,
         abortController: stepAbort.controller,
+        deadlineAtMs: stepAbort.deadlineAtMs,
         preloadedData: {
           ...chainData,
           runSubjectType: "capability",
@@ -1265,10 +1269,11 @@ function canContinueWorkflow(step: CapabilityWorkflowStepConfig, outcome: Action
 function workflowStepAbortController(
   parent: AbortController | undefined,
   timeoutSeconds: number | undefined,
-): { controller: AbortController | undefined; cleanup: () => void } {
-  if (!timeoutSeconds) return { controller: parent, cleanup: () => undefined }
+): { controller: AbortController | undefined; deadlineAtMs: number | undefined; cleanup: () => void } {
+  if (!timeoutSeconds) return { controller: parent, deadlineAtMs: undefined, cleanup: () => undefined }
 
   const controller = new AbortController()
+  const deadlineAtMs = Date.now() + timeoutSeconds * 1000
   const forwardParentAbort = () => controller.abort(parent?.signal.reason)
   if (parent?.signal.aborted) forwardParentAbort()
   else parent?.signal.addEventListener("abort", forwardParentAbort, { once: true })
@@ -1280,6 +1285,7 @@ function workflowStepAbortController(
 
   return {
     controller,
+    deadlineAtMs,
     cleanup: () => {
       clearTimeout(timer)
       parent?.signal.removeEventListener("abort", forwardParentAbort)

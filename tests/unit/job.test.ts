@@ -2472,6 +2472,7 @@ describe("runJob (Phase 1 seam)", () => {
 
       expect(runImplementationChain).toHaveBeenCalledTimes(3)
       expect(runImplementationChain.mock.calls[1]?.[1].abortController?.signal.aborted).toBe(true)
+      expect(runImplementationChain.mock.calls[1]?.[1].deadlineAtMs).toBeTypeOf("number")
       expect(runImplementationChain.mock.calls[2]?.[1].preloadedData).toMatchObject({
         workflowFacts: { status: "blocked", summary: "workflow step timed out after 1s" },
       })
