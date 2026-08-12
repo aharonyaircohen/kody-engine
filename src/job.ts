@@ -834,6 +834,7 @@ async function runGraphCapabilityWorkflow(
           workflowContinueOn: step.continueOn ?? [],
         },
       })
+      result = workflowStepDeadlineResult(result, stepAbort.controller, step.timeoutSeconds)
     } finally {
       stepAbort.cleanup()
     }
@@ -1288,6 +1289,36 @@ function workflowStepAbortController(
 
 function workflowOutcome(result: ExecutorOutput): Action | null {
   return result.taskState?.core.lastOutcome ?? result.action ?? null
+}
+
+function workflowStepDeadlineResult(
+  result: ExecutorOutput,
+  controller: AbortController | undefined,
+  timeoutSeconds: number | undefined,
+): ExecutorOutput {
+  if (!timeoutSeconds || !controller?.signal.aborted || result.exitCode === 0) return result
+  const reason = `workflow step timed out after ${timeoutSeconds}s`
+  const action: Action = {
+    type: "RUN_FAILED",
+    payload: { reason },
+    timestamp: new Date().toISOString(),
+  }
+  const timeoutResult: CapabilityResult = {
+    version: 1,
+    status: "blocked",
+    summary: reason,
+    facts: { status: "blocked", summary: reason },
+    artifacts: [],
+    missingEvidence: [],
+    blockers: [reason],
+  }
+  return {
+    ...result,
+    reason,
+    action,
+    capabilityResults: [...(result.capabilityResults ?? []), timeoutResult],
+    capabilityOutput: { status: "blocked", summary: reason },
+  }
 }
 
 function workflowConditionContext(data: Record<string, unknown>): Record<string, unknown> {

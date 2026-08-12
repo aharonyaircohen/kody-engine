@@ -2451,12 +2451,7 @@ describe("runJob (Phase 1 seam)", () => {
               () =>
                 resolve({
                   exitCode: 1,
-                  reason: "repair timed out",
-                  action: {
-                    type: "RUN_FAILED",
-                    payload: { reason: "workflow step timed out after 1s" },
-                    timestamp: new Date().toISOString(),
-                  },
+                  reason: "agent produced no final message",
                 }),
               { once: true },
             )
@@ -2476,6 +2471,9 @@ describe("runJob (Phase 1 seam)", () => {
 
       expect(runImplementationChain).toHaveBeenCalledTimes(3)
       expect(runImplementationChain.mock.calls[1]?.[1].abortController?.signal.aborted).toBe(true)
+      expect(runImplementationChain.mock.calls[2]?.[1].preloadedData).toMatchObject({
+        workflowFacts: { status: "blocked", summary: "workflow step timed out after 1s" },
+      })
       expect(result).toMatchObject({ exitCode: 64, capabilityOutput: { status: "blocked" } })
     } finally {
       vi.useRealTimers()
