@@ -42,7 +42,9 @@
       "repo-source-health",
       "observe-repo-ci",
       "observe-agency-flow",
-      "prepare-ci-repair"
+      "prepare-ci-repair",
+      "fix-ci",
+      "finalize-ci-repair"
     ],
     "activeWorkflows": [
       "package-release",
