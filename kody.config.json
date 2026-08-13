@@ -44,14 +44,16 @@
       "observe-agency-flow",
       "prepare-ci-repair",
       "fix-ci",
-      "finalize-ci-repair"
+      "finalize-ci-repair",
+      "ui-review"
     ],
     "activeWorkflows": [
       "package-release",
       "test-health",
       "web-release",
       "agency-observer",
-      "ci-repair"
+      "ci-repair",
+      "review-fix"
     ],
     "activeAgents": [
       "kody"
