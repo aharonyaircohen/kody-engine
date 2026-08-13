@@ -53,7 +53,8 @@
       "web-release",
       "agency-observer",
       "ci-repair",
-      "review-fix"
+      "review-fix",
+      "merge"
     ],
     "activeAgents": [
       "kody"
