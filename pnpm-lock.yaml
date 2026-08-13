@@ -15,8 +15,8 @@ importers:
         specifier: 0.2.119
         version: 0.2.119(zod@4.3.6)
       '@kody-ade/engine-contracts':
-        specifier: 0.1.0
-        version: 0.1.0
+        specifier: ^0.2.0
+        version: 0.2.0
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@4.3.6)
@@ -608,8 +608,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@kody-ade/engine-contracts@0.1.0':
-    resolution: {integrity: sha512-AblO4lLeX5z2sNSGPN0gMyQBu9XZeohH2upbU4pAdf4tvb+OLhPRLeKzMNBf2VSYesSf6agB50L6+HfZravjcA==}
+  '@kody-ade/engine-contracts@0.2.0':
+    resolution: {integrity: sha512-sM2d/TZT8SvNiU9+/XcG2EY4hl+H+6Im44lJCmNUA6f4RDsnHbr+kJm0z2NEm6dSqKgcY2D4Ejz5wkJyg3xMBw==}
 
   '@modelcontextprotocol/sdk@1.29.0':
     resolution: {integrity: sha512-zo37mZA9hJWpULgkRpowewez1y6ML5GsXJPY8FI0tBBCd77HEvza4jDqRKOXgHNn867PVGCyTdzqpz0izu5ZjQ==}
@@ -2294,7 +2294,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@kody-ade/engine-contracts@0.1.0': {}
+  '@kody-ade/engine-contracts@0.2.0': {}
 
   '@modelcontextprotocol/sdk@1.29.0(zod@4.3.6)':
     dependencies:

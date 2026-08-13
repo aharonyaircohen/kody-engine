@@ -1,3 +1,5 @@
+import { validateExecutableWorkflow } from "@kody-ade/engine-contracts"
+
 const SAFE_NAME = /^[a-z][a-z0-9-]*$/
 const SAFE_STEP_ID = /^[A-Za-z][A-Za-z0-9_-]*$/
 const SAFE_DATA_PATH = /^(facts|evidence|artifacts|result|workflow|lastOutcome)(?:\.[A-Za-z_][A-Za-z0-9_-]*)+$/
@@ -63,6 +65,9 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
       const step = asRecord(entry)
       return Boolean(step && (step.id !== undefined || step.next !== undefined))
     })
+  const sharedIssues = graphMode
+    ? validateExecutableWorkflow(value, options)
+    : []
   const steps: Array<Raw | null> = rawSteps.map((entry) =>
     typeof entry === "string" ? { capability: entry } : asRecord(entry),
   )
@@ -133,7 +138,7 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
     )
   })
 
-  if (!graphMode) return issues
+  if (!graphMode) return uniqueIssues([...issues, ...sharedIssues])
 
   const seen = new Set<string>()
   ids.forEach((id, index) => {
@@ -284,7 +289,17 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
     }
   }
 
-  return issues
+  return uniqueIssues([...issues, ...sharedIssues])
+}
+
+function uniqueIssues(issues: WorkflowValidationIssue[]): WorkflowValidationIssue[] {
+  const seen = new Set<string>()
+  return issues.filter((entry) => {
+    const key = `${entry.code}\u0000${entry.path}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 function validateInputBindings(
