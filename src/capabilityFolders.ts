@@ -12,6 +12,8 @@ export interface CapabilityContract {
   execution?: "agent" | "script"
   /** Opt in to shipping a draft checkpoint before repository-wide verification. */
   deliveryPolicy?: "checkpoint"
+  /** Protected repository paths this trusted Capability may deliver. */
+  deliveryPathAllowlist?: string[]
   /** Runtime services required by an agent-backed Capability. */
   requirements?: CapabilityRuntimeRequirements
   /** Private specialists that an agent-backed capability must actually invoke. */
@@ -229,6 +231,9 @@ export function readCapabilityFolder(root: string, slug: string): CapabilityFold
         ? {
             ...(contract.execution ? { execution: contract.execution } : {}),
             ...(contract.deliveryPolicy ? { deliveryPolicy: contract.deliveryPolicy } : {}),
+            ...(contract.deliveryPathAllowlist
+              ? { deliveryPathAllowlist: contract.deliveryPathAllowlist }
+              : {}),
             input: contract.input,
             output: contract.output,
           }
@@ -291,10 +296,15 @@ function parseCapabilityContract(raw: string): CapabilityContract {
   if (requiredSubagents && parsed.execution !== "agent") {
     throw new Error('contract.json requiredSubagents are supported only when execution is "agent"')
   }
+  const deliveryPathAllowlist = parseDeliveryPathAllowlist(parsed.deliveryPathAllowlist)
+  if (deliveryPathAllowlist && parsed.execution !== "agent") {
+    throw new Error('contract.json deliveryPathAllowlist is supported only when execution is "agent"')
+  }
   const unsupported = Object.keys(parsed).filter(
     (key) =>
       key !== "execution" &&
       key !== "deliveryPolicy" &&
+      key !== "deliveryPathAllowlist" &&
       key !== "requirements" &&
       key !== "secrets" &&
       key !== "timeoutMs" &&
@@ -314,6 +324,7 @@ function parseCapabilityContract(raw: string): CapabilityContract {
   return {
     ...(parsed.execution ? { execution: parsed.execution } : {}),
     ...(parsed.deliveryPolicy === "checkpoint" ? { deliveryPolicy: "checkpoint" as const } : {}),
+    ...(deliveryPathAllowlist ? { deliveryPathAllowlist } : {}),
     ...(requirements ? { requirements } : {}),
     ...(secrets ? { secrets } : {}),
     ...(timeoutMs !== undefined ? { timeoutMs } : {}),
@@ -321,6 +332,36 @@ function parseCapabilityContract(raw: string): CapabilityContract {
     input: parsed.input,
     output: parsed.output,
   }
+}
+
+function parseDeliveryPathAllowlist(raw: unknown): string[] | undefined {
+  if (raw === undefined) return undefined
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > 64) {
+    throw new Error("contract.json deliveryPathAllowlist must contain 1 to 64 paths")
+  }
+  if (!raw.every((value) => typeof value === "string")) {
+    throw new Error("contract.json deliveryPathAllowlist must contain paths")
+  }
+  const paths = [...new Set(raw as string[])]
+  for (const value of paths) {
+    const subtree = value.endsWith("/**")
+    const base = subtree ? value.slice(0, -3) : value
+    const segments = base.split("/")
+    if (
+      !base ||
+      base.startsWith("/") ||
+      (base.startsWith(".") && !base.startsWith(".github/")) ||
+      base.includes("\\") ||
+      base.includes("..") ||
+      base.includes("*") ||
+      segments.some((segment) => !segment) ||
+      (subtree && segments.length < 2) ||
+      value === ".github/**"
+    ) {
+      throw new Error(`contract.json deliveryPathAllowlist contains an unsafe path: ${value}`)
+    }
+  }
+  return paths
 }
 
 function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirements | undefined {

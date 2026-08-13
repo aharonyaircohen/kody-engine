@@ -69,6 +69,23 @@ describe("commitAndPush: gate on agentDone", () => {
     expect((ctx.data.commitResult as { committed: boolean }).committed).toBe(true)
   })
 
+  it("passes the capability delivery allowlist only to the commit boundary", async () => {
+    vi.mocked(doCommitAndPush).mockClear()
+    const allowlist = [".github/workflows/**"]
+    const ctx = makeCtx({
+      agentDone: true,
+      commitMessage: "ci: add healthy checks",
+      deliveryPathAllowlist: allowlist,
+    })
+    await commitAndPush(ctx as never, profile, null)
+    expect(doCommitAndPush).toHaveBeenCalledWith(
+      "feat-x",
+      "ci: add healthy checks",
+      "/x",
+      allowlist,
+    )
+  })
+
   it("proceeds when agentDone is undefined (legacy profiles without the flag)", async () => {
     vi.mocked(doCommitAndPush).mockClear()
     const ctx = makeCtx({ commitMessage: "fix: x" })

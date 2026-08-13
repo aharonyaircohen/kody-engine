@@ -28,6 +28,7 @@ describe("simple Capability folder", () => {
     const contract = {
       execution: "agent" as const,
       deliveryPolicy: "checkpoint" as const,
+      deliveryPathAllowlist: [".github/workflows/**"],
       requirements: {
         browser: true,
         qaCredentials: true,
@@ -52,6 +53,7 @@ describe("simple Capability folder", () => {
     expect(loaded?.contractPath).toBe(path.join(dir, "contract.json"))
     expect(loaded?.contract).toEqual(contract)
     expect(loaded?.contract?.deliveryPolicy).toBe("checkpoint")
+    expect(loaded?.contract?.deliveryPathAllowlist).toEqual([".github/workflows/**"])
     expect(loaded?.contract?.requirements).toEqual({
       browser: true,
       qaCredentials: true,
@@ -238,6 +240,43 @@ describe("simple Capability folder", () => {
     const data = (ctx as { data: Record<string, unknown> }).data
     expect(data.capabilityDeliveryPolicy).toBe("checkpoint")
     expect(String(data.prompt)).not.toContain("checkpoint")
+  })
+
+  it("loads a narrow delivery path allowlist for the commit wrapper", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-runtime-"))
+    roots.push(cwd)
+    const dir = path.join(cwd, ".kody-engine", "definitions", "capabilities", "change")
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, "instructions.md"), "Change the approved workflow.\n")
+    fs.writeFileSync(
+      path.join(dir, "contract.json"),
+      JSON.stringify({
+        execution: "agent",
+        deliveryPathAllowlist: [".github/workflows/**"],
+        input: { type: "object" },
+        output: { type: "object" },
+      }),
+    )
+
+    const ctx = { cwd, args: { capability: "change", input: "{}" }, data: {} } as never
+    await loadSimpleCapability(ctx, {} as never)
+
+    const data = (ctx as { data: Record<string, unknown> }).data
+    expect(data.deliveryPathAllowlist).toEqual([".github/workflows/**"])
+  })
+
+  it("rejects broad, absolute, and traversing delivery path allowlists", () => {
+    for (const value of ["**", ".github/**", "/.github/workflows/**", "../secrets/**"]) {
+      const invalid = capability({
+        "contract.json": JSON.stringify({
+          execution: "agent",
+          deliveryPathAllowlist: [value],
+          input: {},
+          output: {},
+        }),
+      })
+      expect(readCapabilityFolder(invalid.root, "inspect")).toBeNull()
+    }
   })
 
   it("does not mix delivery policy into capability loading", async () => {

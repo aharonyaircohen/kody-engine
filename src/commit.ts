@@ -147,14 +147,21 @@ export function abortUnfinishedGitOps(cwd?: string): string[] {
   return aborted
 }
 
-export function isForbiddenPath(p: string): boolean {
+function isExplicitlyAllowed(p: string, allowlist: readonly string[]): boolean {
+  return allowlist.some((entry) =>
+    entry.endsWith("/**") ? p.startsWith(entry.slice(0, -2)) : p === entry,
+  )
+}
+
+export function isForbiddenPath(p: string, deliveryPathAllowlist: readonly string[] = []): boolean {
   if (FORBIDDEN_PATH_EXACT.has(p)) return true
+  for (const pre of FORBIDDEN_PATH_PREFIXES) if (p.startsWith(pre)) return true
+  for (const suf of FORBIDDEN_PATH_SUFFIXES) if (p.endsWith(suf)) return true
+  if (isExplicitlyAllowed(p, deliveryPathAllowlist)) return false
   // GitHub configuration is operator-owned. Kody may inspect it to diagnose
   // failures, but no agent-produced commit may create or modify GitHub YAML.
   if (isGitHubYamlPath(p)) return true
   for (const pre of ALLOWED_PATH_PREFIXES) if (p.startsWith(pre)) return false
-  for (const pre of FORBIDDEN_PATH_PREFIXES) if (p.startsWith(pre)) return true
-  for (const suf of FORBIDDEN_PATH_SUFFIXES) if (p.endsWith(suf)) return true
   return false
 }
 
@@ -211,13 +218,18 @@ export function normalizeCommitMessage(raw: string): string {
   return `chore: ${trimmed}`
 }
 
-export function commitAndPush(branch: string, agentMessage: string, cwd?: string): CommitResult {
+export function commitAndPush(
+  branch: string,
+  agentMessage: string,
+  cwd?: string,
+  deliveryPathAllowlist: readonly string[] = [],
+): CommitResult {
   // Note: abortUnfinishedGitOps() is intentionally NOT called here anymore.
   // The postflight script (src/scripts/commitAndPush.ts) decides when to
   // abort (non-resolve modes) vs preserve (resolve mode keeps MERGE_HEAD so
   // the merge commit can be created from it).
   const allChanged = listChangedFiles(cwd)
-  const allowedFiles = allChanged.filter((f) => !isForbiddenPath(f))
+  const allowedFiles = allChanged.filter((f) => !isForbiddenPath(f, deliveryPathAllowlist))
 
   // Detect in-progress merge (resolve mode): even if no files changed
   // vs HEAD (agent accepted one side verbatim), we still need to finalize
@@ -236,7 +248,7 @@ export function commitAndPush(branch: string, agentMessage: string, cwd?: string
   // is silently bypassed and those files land in the commit. Reset is per-file
   // (leaves MERGE_HEAD and resolved-file staging intact) and a harmless no-op
   // in non-resolve modes where nothing pre-staged them.
-  const forbiddenFiles = allChanged.filter((f) => isForbiddenPath(f))
+  const forbiddenFiles = allChanged.filter((f) => isForbiddenPath(f, deliveryPathAllowlist))
   for (const f of forbiddenFiles) {
     try {
       git(["reset", "-q", "--", f], cwd)

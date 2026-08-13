@@ -39,6 +39,20 @@ describe("commit: isForbiddenPath", () => {
     expect(isForbiddenPath(".github/ISSUE_TEMPLATE/config.yaml")).toBe(true)
   })
 
+  it("allows only explicitly approved protected delivery paths", () => {
+    const allowlist = [".github/workflows/**"]
+    expect(isForbiddenPath(".github/workflows/ci.yml", allowlist)).toBe(false)
+    expect(isForbiddenPath(".github/workflows/nested/ci.yaml", allowlist)).toBe(false)
+    expect(isForbiddenPath(".github/dependabot.yml", allowlist)).toBe(true)
+  })
+
+  it("never lets a delivery allowlist override permanent safety blocks", () => {
+    const allowlist = [".env", ".kody-engine/**", "node_modules/**"]
+    expect(isForbiddenPath(".env", allowlist)).toBe(true)
+    expect(isForbiddenPath(".kody-engine/state.json", allowlist)).toBe(true)
+    expect(isForbiddenPath("node_modules/pkg/index.js", allowlist)).toBe(true)
+  })
+
   it("does not block non-YAML GitHub files or YAML outside .github", () => {
     expect(isForbiddenPath(".github/CODEOWNERS")).toBe(false)
     expect(isForbiddenPath(".github/ISSUE_TEMPLATE/bug.md")).toBe(false)
