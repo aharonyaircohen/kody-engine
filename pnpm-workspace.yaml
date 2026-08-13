@@ -1,6 +1,11 @@
 packages:
   - '**'
 
+# pnpm 11 normally waits 24 hours before installing a new release. This exact
+# internal package version is approved for immediate use by this repository.
+minimumReleaseAgeExclude:
+  - '@kody-ade/engine-contracts@0.2.0'
+
 # esbuild ships a postinstall build script. pnpm blocks unapproved build scripts
 # and (in CI / pnpm 11) FAILS install with ERR_PNPM_IGNORED_BUILDS. The approval
 # key differs by pnpm major: pnpm 11 reads `allowBuilds` (a map), pnpm 10 reads
