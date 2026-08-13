@@ -26,11 +26,14 @@ describe("self-management Observer pilot", () => {
     })
   })
 
-  it("uses the immutable launcher inputs to target only the Observer loop", () => {
+  it("uses the current generic launcher contract", () => {
     const launcher = readFileSync(".github/workflows/kody.yml", "utf8")
 
     expect(launcher).toContain("capability:")
     expect(launcher).toContain("message:")
-    expect(launcher).toContain("kody-engine ci --cwd")
+    expect(launcher).toContain("runRequest:")
+    expect(launcher).toContain("KODY_RUN_REQUEST_JSON: ${{ inputs.runRequest }}")
+    expect(launcher).not.toContain("ALL_SECRETS:")
+    expect(launcher).not.toContain("kody-engine ci")
   })
 })
