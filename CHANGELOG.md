@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.4.575 — 2026-08-13
+
+### Fixes
+- accept pipeline run requests (7c77ba9)
+- enforce shared execution contract (f00a724)
+- support draft checkpoints (cd6fe15)
+- preserve finalization window (26b085d)
+- reserve time for completion (d12c9a3)
+
+### Chores
+- add store pipeline ci-repair (d92461e)
+- add store workflow merge (6784bea)
+- add store workflow review-fix (1e2c929)
+- add store workflow ci-repair (b52c915)
+
+### Other
+- require repeatable CI repair proof (93cc4fd)
 ## v0.4.532 — 2026-08-08
 
 ### Features
