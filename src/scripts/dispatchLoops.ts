@@ -18,6 +18,13 @@ type LoopDispatchBackend = Pick<
 
 const LOOP_DISPATCH_LEASE_MS = 10 * 60 * 1_000
 const LOOP_DISPATCH_RENEW_INTERVAL_MS = 60 * 1_000
+const MAX_WORKFLOW_RUN_ID_LENGTH = 80
+
+export function loopRunId(loopId: string, nonce: string): string {
+  const safeNonce = nonce.toLowerCase().replace(/[^a-z0-9_-]/g, "-")
+  const loopPrefixLength = MAX_WORKFLOW_RUN_ID_LENGTH - "loop--".length - safeNonce.length
+  return `loop-${loopId.slice(0, Math.max(1, loopPrefixLength))}-${safeNonce}`
+}
 
 export const dispatchLoops: PreflightScript = async (ctx) => {
   const tenantId = repositoryTenant(ctx.config)
@@ -107,7 +114,7 @@ export async function dispatchLoopsWith(input: {
       continue
     }
 
-    const runId = `loop-${loop.id}-${input.nonce()}`
+    const runId = loopRunId(loop.id, input.nonce())
     const startedAt = input.now.toISOString()
     const running = {
       id: runId,

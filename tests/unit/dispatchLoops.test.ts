@@ -5,6 +5,7 @@ import {
   dispatchLoopsWith,
   dueSlot,
   loopDispatchSlot,
+  loopRunId,
   mergeLoopDefinitions,
   selectRunnableLoops,
 } from "../../src/scripts/dispatchLoops.js"
@@ -48,6 +49,20 @@ describe("loopDispatchSlot", () => {
 
     expect(loopDispatchSlot(loop, now, false, "ignored")).toBe("2026-07-25T09:00:00.000Z")
     expect(loopDispatchSlot(loop, now, true, "run-123")).toBe("manual:2026-07-25T09:07:00.000Z:run-123")
+  })
+})
+
+describe("loopRunId", () => {
+  it("keeps Todo-derived Loop run ids within the workflow state limit", () => {
+    const id = loopRunId(
+      "agency-request-build-repository-specific-healthy-ci-from-the-approved-blueprint",
+      "fbe4851e-20c3-4f58-b4a3-458ae473a3ea",
+    )
+
+    expect(id).toHaveLength(80)
+    expect(id).toMatch(
+      /^loop-agency-request-build-repository-specif-fbe4851e-20c3-4f58-b4a3-458ae473a3ea$/,
+    )
   })
 })
 
