@@ -279,6 +279,32 @@ describe("simple Capability folder", () => {
     }
   })
 
+  it("allows only the repository-owned Loop subtree inside the engine namespace", () => {
+    const allowed = capability({
+      "contract.json": JSON.stringify({
+        execution: "agent",
+        deliveryPolicy: "checkpoint",
+        deliveryPathAllowlist: [".kody-engine/definitions/loops/**"],
+        input: { type: "object" },
+        output: { type: "object" },
+      }),
+    })
+    expect(readCapabilityFolder(allowed.root, "inspect")?.contract?.deliveryPathAllowlist).toEqual([
+      ".kody-engine/definitions/loops/**",
+    ])
+
+    const rejected = capability({
+      "contract.json": JSON.stringify({
+        execution: "agent",
+        deliveryPolicy: "checkpoint",
+        deliveryPathAllowlist: [".kody-engine/definitions/workflows/**"],
+        input: { type: "object" },
+        output: { type: "object" },
+      }),
+    })
+    expect(readCapabilityFolder(rejected.root, "inspect")).toBeNull()
+  })
+
   it("does not mix delivery policy into capability loading", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-runtime-"))
     roots.push(cwd)

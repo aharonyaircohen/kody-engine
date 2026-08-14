@@ -347,10 +347,11 @@ function parseDeliveryPathAllowlist(raw: unknown): string[] | undefined {
     const subtree = value.endsWith("/**")
     const base = subtree ? value.slice(0, -3) : value
     const segments = base.split("/")
+    const trustedRepositoryDefinitions = base === ".kody-engine/definitions/loops"
     if (
       !base ||
       base.startsWith("/") ||
-      (base.startsWith(".") && !base.startsWith(".github/")) ||
+      (base.startsWith(".") && !base.startsWith(".github/") && !trustedRepositoryDefinitions) ||
       base.includes("\\") ||
       base.includes("..") ||
       base.includes("*") ||
