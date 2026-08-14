@@ -85,6 +85,7 @@ export interface StateBackendClient {
 }
 
 export interface StateBackend {
+  listLoops(tenantId: string): Promise<unknown[]>
   get(tenantId: string, taskKey: string, kind: string): Promise<TaskDocument | null>
   save(tenantId: string, taskKey: string, kind: string, doc: unknown, expectedUpdatedAt?: string): Promise<void>
   getRepoDoc(tenantId: string, kind: string): Promise<TaskDocument | null>
@@ -226,6 +227,12 @@ export function createStateBackendFromEnv(
     transport = createConvexClientFromEnv(env) as ConvexHttpClient
   }
   return {
+    async listLoops(tenantId) {
+      const result = await transport.query(anyApi.agencyRequestLoops.list, {
+        tenantId: requireTenant(tenantId),
+      })
+      return Array.isArray(result) ? result : []
+    },
     async get(tenantId, taskKey, kind) {
       const result = await transport.query(anyApi.taskState.get, {
         tenantId: requireTenant(tenantId),

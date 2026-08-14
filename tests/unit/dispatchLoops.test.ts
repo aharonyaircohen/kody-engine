@@ -5,6 +5,7 @@ import {
   dispatchLoopsWith,
   dueSlot,
   loopDispatchSlot,
+  mergeLoopDefinitions,
   selectRunnableLoops,
 } from "../../src/scripts/dispatchLoops.js"
 
@@ -73,6 +74,18 @@ describe("selectRunnableLoops", () => {
   })
 })
 
+describe("mergeLoopDefinitions", () => {
+  it("adds Todo-derived runtime Loops without replacing repository Loops", () => {
+    const runtime = {
+      ...loop,
+      id: "agency-request-build-healthy-ci",
+      input: { todoSlug: "build-healthy-ci" },
+    }
+
+    expect(mergeLoopDefinitions([loop], [runtime, { invalid: true }])).toEqual([runtime, loop])
+  })
+})
+
 describe("dispatchLoopsWith", () => {
   it("persists the Loop parent and links the target run to it", async () => {
     const createAgencyRun = vi.fn()
@@ -108,10 +121,12 @@ describe("dispatchLoopsWith", () => {
     expect(run).toHaveBeenCalledWith(
       {
         workflow: "quality",
+        workflowRunId: parentRunId,
         cliArgs: { repeat: 2, slowTestMs: 300_000, repair: true },
         flavor: "scheduled",
       },
       parentRunId,
+      "daily-check",
     )
     expect(createAgencyRun).toHaveBeenCalledWith(
       "acme/widgets",

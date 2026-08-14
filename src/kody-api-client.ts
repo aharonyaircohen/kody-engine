@@ -106,6 +106,7 @@ export function createKodyApiBackendClient(env: NodeJS.ProcessEnv = process.env)
 export interface WorkflowCompletedNotification {
   workflowId: string
   runId: string
+  loopId?: string
   status: "success" | "failed" | "blocked"
   summary?: string
   output?: Record<string, unknown>

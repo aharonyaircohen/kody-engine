@@ -1317,12 +1317,13 @@ describe("runJob (Phase 1 seam)", () => {
           cliArgs: { pr: 3947, headSha: "abcdef1234567" },
           flavor: "instant",
         },
-        { cwd },
+        { cwd, preloadedData: { loopId: "agency-request-build-healthy-ci" } },
       )
 
       expect(notifyWorkflowCompleted).toHaveBeenCalledWith({
         workflowId: "ci-repair",
         runId: "run-7",
+        loopId: "agency-request-build-healthy-ci",
         status: "success",
         output: {
           pr: 3947,

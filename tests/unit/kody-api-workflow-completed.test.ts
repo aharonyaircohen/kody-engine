@@ -26,6 +26,7 @@ describe("notifyWorkflowCompleted", () => {
       {
         workflowId: "ci-repair",
         runId: "run-7",
+        loopId: "agency-request-build-healthy-ci",
         status: "success",
         output: {
           pr: 3947,
@@ -43,6 +44,7 @@ describe("notifyWorkflowCompleted", () => {
         body: JSON.stringify({
           workflowId: "ci-repair",
           runId: "run-7",
+          loopId: "agency-request-build-healthy-ci",
           status: "success",
           output: {
             pr: 3947,

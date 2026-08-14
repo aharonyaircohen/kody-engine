@@ -3,6 +3,23 @@ import { describe, expect, it, vi } from "vitest"
 import { createStateBackendFromEnv } from "../../src/state-backend.js"
 
 describe("Loop runtime state backend", () => {
+  it("loads Todo-derived runtime Loops", async () => {
+    const query = vi.fn().mockResolvedValue([
+      {
+        id: "agency-request-build-healthy-ci",
+        trigger: { type: "schedule", every: "15m" },
+        target: { kind: "workflow", id: "apply-strategy" },
+        input: { blueprintId: "healthy-ci" },
+        enabled: true,
+      },
+    ])
+    const backend = createStateBackendFromEnv({}, { query, mutation: vi.fn() })
+
+    await expect(backend.listLoops("acme/widgets")).resolves.toHaveLength(1)
+    expect(getFunctionName(query.mock.calls[0]?.[0])).toBe("agencyRequestLoops:list")
+    expect(query.mock.calls[0]?.[1]).toEqual({ tenantId: "acme/widgets" })
+  })
+
   it("uses one atomic reservation for each schedule slot", async () => {
     const mutation = vi.fn().mockResolvedValue({ acquired: true, dispatchId: "dispatch-1" })
     const backend = createStateBackendFromEnv({}, { query: vi.fn(), mutation })

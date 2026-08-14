@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 import type { KodyConfig } from "../config.js"
 import type { Job, PreflightScript } from "../implementations/types.js"
 import { runJob } from "../job.js"
-import { type LoopDefinition, listLoopDefinitions } from "../loopDefinitions.js"
+import { type LoopDefinition, listLoopDefinitions, normalizeLoopDefinition } from "../loopDefinitions.js"
 import { createStateBackendFromEnv, type StateBackend } from "../state-backend.js"
 
 export interface LoopDispatchResult {
@@ -25,12 +25,13 @@ export const dispatchLoops: PreflightScript = async (ctx) => {
   const now = new Date()
   const force = ctx.data.jobForce === true
   const requestedLoopId = typeof ctx.args.loop === "string" ? ctx.args.loop.trim() : ""
-  const due = selectRunnableLoops(listLoopDefinitions(ctx.cwd), now, {
+  const backend = createStateBackendFromEnv()
+  const loops = mergeLoopDefinitions(listLoopDefinitions(ctx.cwd), await backend.listLoops(tenantId))
+  const due = selectRunnableLoops(loops, now, {
     force,
     ...(requestedLoopId ? { loopId: requestedLoopId } : {}),
   })
   process.stdout.write(`→ kody: Loop scheduler found ${due.length} runnable Loop(s)${force ? " (manual)" : ""}\n`)
-  const backend = createStateBackendFromEnv()
   const results = await dispatchLoopsWith({
     loops: due,
     tenantId,
@@ -38,14 +39,14 @@ export const dispatchLoops: PreflightScript = async (ctx) => {
     now,
     force,
     nonce: randomUUID,
-    run: (job, parentRunId) =>
+    run: (job, parentRunId, loopId) =>
       runJob(job, {
         cwd: ctx.cwd,
         config: ctx.config,
         verbose: ctx.verbose,
         quiet: ctx.quiet,
         chain: false,
-        preloadedData: { parentRunId },
+        preloadedData: { parentRunId, loopId },
       }),
   })
   for (const result of results) {
@@ -69,7 +70,7 @@ export async function dispatchLoopsWith(input: {
   backend: LoopDispatchBackend
   now: Date
   force: boolean
-  run: (job: Job, parentRunId: string) => Promise<{ exitCode: number; reason?: string }>
+  run: (job: Job, parentRunId: string, loopId: string) => Promise<{ exitCode: number; reason?: string }>
   nonce: () => string
 }): Promise<LoopDispatchResult[]> {
   const results: LoopDispatchResult[] = []
@@ -127,7 +128,7 @@ export async function dispatchLoopsWith(input: {
     let reason = "target did not complete"
     let runFailed = false
     try {
-      const result = await input.run(loopJob(loop), runId)
+      const result = await input.run(loopJob(loop, runId), runId, loop.id)
       exitCode = result.exitCode
       reason = result.reason ?? (exitCode === 0 ? "dispatched" : "target failed")
     } catch (error) {
@@ -214,6 +215,18 @@ export function selectRunnableLoops(
   )
 }
 
+export function mergeLoopDefinitions(
+  repositoryLoops: readonly LoopDefinition[],
+  runtimeLoops: readonly unknown[],
+): LoopDefinition[] {
+  const byId = new Map(repositoryLoops.map((loop) => [loop.id, loop]))
+  for (const candidate of runtimeLoops) {
+    const loop = normalizeLoopDefinition(candidate)
+    if (loop) byId.set(loop.id, loop)
+  }
+  return [...byId.values()].sort((left, right) => left.id.localeCompare(right.id))
+}
+
 export function loopDispatchSlot(loop: LoopDefinition, now: Date, force: boolean, nonce: string): string | null {
   return force ? `manual:${now.toISOString()}:${nonce}` : dueSlot(loop, now)
 }
@@ -250,10 +263,10 @@ export function dueSlot(loop: LoopDefinition, now: Date): string | null {
   return `${year}-${month}-${day}T${loop.trigger.at.time}[${loop.trigger.at.timezone}]`
 }
 
-function loopJob(loop: LoopDefinition): Job {
+function loopJob(loop: LoopDefinition, runId: string): Job {
   const cliArgs = { ...loop.input }
   return loop.target.kind === "workflow"
-    ? { workflow: loop.target.id, cliArgs, flavor: "scheduled" }
+    ? { workflow: loop.target.id, workflowRunId: runId, cliArgs, flavor: "scheduled" }
     : { capability: loop.target.id, cliArgs, flavor: "scheduled" }
 }
 
