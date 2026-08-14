@@ -265,6 +265,58 @@ describe("parseSimpleCapabilityOutput", () => {
     expect(fs.existsSync(outputPath)).toBe(false)
   })
 
+  it("treats a valid authoritative handoff file as completion without a final chat message", async () => {
+    const outputPath = path.join(os.tmpdir(), `capability-output-${crypto.randomUUID()}.json`)
+    fs.writeFileSync(
+      outputPath,
+      JSON.stringify({ status: "applied", summary: "Healthy CI prepared", evidence: ["npm test"] }),
+    )
+    const ctx = {
+      args: {},
+      data: {
+        capabilityOutputPath: outputPath,
+        capabilityOutputSchema: {
+          type: "object",
+          properties: {
+            status: { enum: ["applied", "blocked"] },
+            summary: { type: "string" },
+            evidence: { type: "array", items: { type: "string" } },
+          },
+          required: ["status", "summary", "evidence"],
+        },
+        agentDone: false,
+        agentMarkerMissing: false,
+        agentFailureReason: "agent produced no final message",
+        action: {
+          type: "CAPABILITY_DELIVERY_FAILED",
+          payload: { reason: "agent produced no final message" },
+          timestamp: "2026-08-14T00:00:00.000Z",
+        },
+      },
+      output: {},
+    } as unknown as Parameters<typeof parseSimpleCapabilityOutput>[0]
+
+    await parseSimpleCapabilityOutput(
+      ctx,
+      { name: "capability-delivery" } as Parameters<typeof parseSimpleCapabilityOutput>[1],
+      {
+        finalText: "",
+        outcome: "completed",
+      } as Parameters<typeof parseSimpleCapabilityOutput>[2],
+    )
+
+    expect(ctx.output.exitCode).toBeUndefined()
+    expect(ctx.data.agentDone).toBe(true)
+    expect(ctx.data.agentFailureReason).toBeUndefined()
+    expect(ctx.data.prSummary).toBe("Healthy CI prepared")
+    expect(ctx.data.action).toEqual(
+      expect.objectContaining({
+        type: "CAPABILITY_DELIVERY_COMPLETED",
+        payload: {},
+      }),
+    )
+  })
+
   it("blocks output that violates the capability contract", async () => {
     const ctx = {
       data: {

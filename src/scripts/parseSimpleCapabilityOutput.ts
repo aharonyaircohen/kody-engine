@@ -3,7 +3,7 @@ import { validateCapabilityContractOutput } from "../agency/capability-contract-
 import { parseCapabilityResult } from "../capabilityResult.js"
 import type { PostflightScript } from "../implementations/types.js"
 
-export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profile, agentResult) => {
+export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, profile, agentResult) => {
   const requiredSubagents = stringList(ctx.data.requiredSubagents)
   const invokedSubagents = new Set(agentResult?.invokedSubagents ?? [])
   const missingSubagents = requiredSubagents.filter((name) => !invokedSubagents.has(name))
@@ -82,6 +82,7 @@ export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profil
       return
     }
   }
+  if (fileOutput.found) acceptAuthoritativeFileOutput(ctx, profile, output)
   ctx.data.capabilityOutput = output
   const structuredResult = parseCapabilityResult(output)
   if (structuredResult) {
@@ -117,6 +118,23 @@ export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, _profil
       blockers: [],
     },
   ]
+}
+
+function acceptAuthoritativeFileOutput(
+  ctx: Parameters<PostflightScript>[0],
+  profile: Parameters<PostflightScript>[1],
+  output: unknown,
+): void {
+  ctx.data.agentDone = true
+  delete ctx.data.agentFailureReason
+  const summary = isObject(output) && typeof output.summary === "string" ? output.summary.trim() : ""
+  if (summary && !ctx.data.prSummary) ctx.data.prSummary = summary
+  const mode = typeof ctx.args?.mode === "string" ? ctx.args.mode : profile.name || "capability"
+  ctx.data.action = {
+    type: `${mode.replace(/-/g, "_").toUpperCase()}_COMPLETED`,
+    payload: {},
+    timestamp: new Date().toISOString(),
+  }
 }
 
 function stringList(value: unknown): string[] {
