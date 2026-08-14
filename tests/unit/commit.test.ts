@@ -40,10 +40,12 @@ describe("commit: isForbiddenPath", () => {
   })
 
   it("allows only explicitly approved protected delivery paths", () => {
-    const allowlist = [".github/workflows/**"]
+    const allowlist = [".github/workflows/**", ".kody-engine/definitions/loops/**"]
     expect(isForbiddenPath(".github/workflows/ci.yml", allowlist)).toBe(false)
     expect(isForbiddenPath(".github/workflows/nested/ci.yaml", allowlist)).toBe(false)
+    expect(isForbiddenPath(".kody-engine/definitions/loops/web-release/loop.json", allowlist)).toBe(false)
     expect(isForbiddenPath(".github/dependabot.yml", allowlist)).toBe(true)
+    expect(isForbiddenPath(".kody-engine/event-log.json", allowlist)).toBe(true)
   })
 
   it("never lets a delivery allowlist override permanent safety blocks", () => {

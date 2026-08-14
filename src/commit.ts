@@ -155,9 +155,17 @@ function isExplicitlyAllowed(p: string, allowlist: readonly string[]): boolean {
 
 export function isForbiddenPath(p: string, deliveryPathAllowlist: readonly string[] = []): boolean {
   if (FORBIDDEN_PATH_EXACT.has(p)) return true
-  for (const pre of FORBIDDEN_PATH_PREFIXES) if (p.startsWith(pre)) return true
   for (const suf of FORBIDDEN_PATH_SUFFIXES) if (p.endsWith(suf)) return true
-  if (isExplicitlyAllowed(p, deliveryPathAllowlist)) return false
+  // Store contracts may deliver declarative loop definitions and GitHub
+  // workflows through an explicit, loader-validated allowlist. Runtime state
+  // elsewhere under .kody-engine remains permanently forbidden.
+  if (
+    isExplicitlyAllowed(p, deliveryPathAllowlist) &&
+    (p.startsWith(".kody-engine/definitions/loops/") || isGitHubYamlPath(p))
+  ) {
+    return false
+  }
+  for (const pre of FORBIDDEN_PATH_PREFIXES) if (p.startsWith(pre)) return true
   // GitHub configuration is operator-owned. Kody may inspect it to diagnose
   // failures, but no agent-produced commit may create or modify GitHub YAML.
   if (isGitHubYamlPath(p)) return true
