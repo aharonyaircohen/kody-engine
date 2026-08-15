@@ -134,6 +134,29 @@ describe("integration: git flow", () => {
     expect(fs.existsSync(path.join(repo.workdir, ".github", "workflows", "ci.yml"))).toBe(true)
   })
 
+  it("commits an ignored Store file only when its delivery contract allows it", () => {
+    const branch = ensureFeatureBranch(92, "Install Store loop", "main", repo.workdir).branch
+    fs.writeFileSync(path.join(repo.workdir, ".gitignore"), ".kody-engine/\n")
+    git(repo.workdir, ["add", ".gitignore"])
+    git(repo.workdir, ["commit", "--no-gpg-sign", "-m", "chore: ignore runtime state"])
+    git(repo.workdir, ["push", "-u", "origin", branch])
+
+    const loopPath = ".kody-engine/definitions/loops/web-release/loop.json"
+    fs.mkdirSync(path.join(repo.workdir, path.dirname(loopPath)), { recursive: true })
+    fs.writeFileSync(path.join(repo.workdir, loopPath), '{"id":"web-release"}\n')
+
+    const withoutContract = commitAndPush(branch, "chore: install loop", repo.workdir)
+    expect(withoutContract.committed).toBe(false)
+
+    const withContract = commitAndPush(branch, "chore: install loop", repo.workdir, [
+      ".kody-engine/definitions/loops/**",
+    ])
+    expect(withContract.committed).toBe(true)
+    expect(git(repo.workdir, ["show", "--name-only", "--pretty=format:", "HEAD"]).split("\n")).toEqual([
+      loopPath,
+    ])
+  })
+
   it("normalizes commit prefix when missing", () => {
     const branch = ensureFeatureBranch(10, "Edit W", "main", repo.workdir).branch
     fs.writeFileSync(path.join(repo.workdir, "x.txt"), "y")

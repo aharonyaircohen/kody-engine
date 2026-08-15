@@ -250,6 +250,20 @@ export function listChangedFiles(cwd?: string): string[] {
   return entries.map((e) => e.slice(3)).filter(Boolean)
 }
 
+function listAllowlistedIgnoredFiles(deliveryPathAllowlist: readonly string[], cwd?: string): string[] {
+  if (deliveryPathAllowlist.length === 0) return []
+  const raw = execFileSync("git", ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"], {
+    encoding: "utf-8",
+    cwd,
+    env: { ...process.env, HUSKY: "0", SKIP_HOOKS: "1" },
+    stdio: ["pipe", "pipe", "pipe"],
+  })
+  return raw
+    .split("\0")
+    .filter(Boolean)
+    .filter((filePath) => isExplicitlyAllowed(filePath, deliveryPathAllowlist))
+}
+
 /**
  * Files modified in a specific commit (default HEAD). Unlike listChangedFiles
  * this works AFTER commit — the working tree is clean, but the commit still
@@ -296,7 +310,9 @@ export function commitAndPush(
   // The postflight script (src/scripts/commitAndPush.ts) decides when to
   // abort (non-resolve modes) vs preserve (resolve mode keeps MERGE_HEAD so
   // the merge commit can be created from it).
-  const allChanged = listChangedFiles(cwd)
+  const ignoredAllowedFiles = listAllowlistedIgnoredFiles(deliveryPathAllowlist, cwd)
+  const ignoredAllowedSet = new Set(ignoredAllowedFiles)
+  const allChanged = [...new Set([...listChangedFiles(cwd), ...ignoredAllowedFiles])]
   const allowedFiles = allChanged.filter(
     (f) =>
       !isForbiddenPath(f, deliveryPathAllowlist) ||
@@ -335,7 +351,7 @@ export function commitAndPush(
 
   for (const f of allowedFiles) {
     try {
-      git(["add", "--", f], cwd)
+      git(["add", ...(ignoredAllowedSet.has(f) ? ["--force"] : []), "--", f], cwd)
     } catch {
       /* skip individual file errors */
     }
