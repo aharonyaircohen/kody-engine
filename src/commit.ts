@@ -194,11 +194,20 @@ export function isSafeConfigActivationChange(before: unknown, after: unknown): b
   if (!isRecord(before) || !isRecord(after)) return false
   const beforeRest = { ...before }
   const afterRest = { ...after }
+  const beforeCompany = before.company
+  const afterCompany = after.company
+  if (!isRecord(beforeCompany) || !isRecord(afterCompany)) return false
+  delete beforeRest.company
+  delete afterRest.company
+  if (!isDeepStrictEqual(beforeRest, afterRest)) return false
+
+  const beforeCompanyRest = { ...beforeCompany }
+  const afterCompanyRest = { ...afterCompany }
   for (const field of ACTIVATION_FIELDS) {
-    const previous = before[field]
-    const next = after[field]
-    delete beforeRest[field]
-    delete afterRest[field]
+    const previous = beforeCompany[field]
+    const next = afterCompany[field]
+    delete beforeCompanyRest[field]
+    delete afterCompanyRest[field]
     if (previous === undefined && next === undefined) continue
     if (!Array.isArray(previous ?? []) || !Array.isArray(next)) return false
     if (!(next as unknown[]).every((value) => typeof value === "string")) return false
@@ -206,7 +215,7 @@ export function isSafeConfigActivationChange(before: unknown, after: unknown): b
     const nextValues = new Set(next as string[])
     if (!(previous as string[]).every((value) => nextValues.has(value))) return false
   }
-  return isDeepStrictEqual(beforeRest, afterRest)
+  return isDeepStrictEqual(beforeCompanyRest, afterCompanyRest)
 }
 
 function isTrustedConfigActivationChange(

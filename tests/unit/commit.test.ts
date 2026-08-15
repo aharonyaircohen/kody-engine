@@ -102,16 +102,22 @@ describe("commit: trusted Store config activation", () => {
   const before = {
     agent: { model: "minimax/MiniMax-M3" },
     access: { allowedAssociations: ["OWNER"] },
-    activeCapabilities: ["release-prepare"],
-    activeWorkflows: ["package-release"],
+    company: {
+      activeCapabilities: ["release-prepare"],
+      activeWorkflows: ["package-release"],
+      activePipelines: ["review-and-merge"],
+    },
   }
 
   it("allows only additive activation-list changes", () => {
     expect(
       isSafeConfigActivationChange(before, {
         ...before,
-        activeCapabilities: ["release-prepare", "release-promote"],
-        activeWorkflows: ["package-release", "web-release"],
+        company: {
+          ...before.company,
+          activeCapabilities: ["release-prepare", "release-promote"],
+          activeWorkflows: ["package-release", "web-release"],
+        },
       }),
     ).toBe(true)
   })
@@ -121,7 +127,10 @@ describe("commit: trusted Store config activation", () => {
       isSafeConfigActivationChange(before, {
         ...before,
         agent: { model: "attacker/model" },
-        activeWorkflows: ["package-release", "web-release"],
+        company: {
+          ...before.company,
+          activeWorkflows: ["package-release", "web-release"],
+        },
       }),
     ).toBe(false)
   })
@@ -130,7 +139,23 @@ describe("commit: trusted Store config activation", () => {
     expect(
       isSafeConfigActivationChange(before, {
         ...before,
-        activeCapabilities: [],
+        company: {
+          ...before.company,
+          activeCapabilities: [],
+        },
+      }),
+    ).toBe(false)
+  })
+
+  it("rejects changes to non-activation company configuration", () => {
+    expect(
+      isSafeConfigActivationChange(before, {
+        ...before,
+        company: {
+          ...before.company,
+          name: "Changed by agent",
+          activeWorkflows: ["package-release", "web-release"],
+        },
       }),
     ).toBe(false)
   })
