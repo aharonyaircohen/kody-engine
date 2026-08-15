@@ -70,6 +70,8 @@ describe("hooks: block-git PreToolUse command", () => {
     const { code, stderr } = runCommand(hook.command, stdin)
     expect(code).toBe(2)
     expect(stderr).toContain("delivery wrapper owns VCS mutations")
+    expect(stderr).toContain("Do not treat this expected block as a task failure")
+    expect(stderr).toContain("finish your result normally")
   })
 
   it("does not block on malformed JSON input (fails open, exit 0)", () => {
