@@ -67,6 +67,7 @@
     },
     "context": "task",
     "sync": false,
+    "verify": false,
     "advance": false,
     "mirrorState": false,
     "finalize": false

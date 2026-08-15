@@ -54,7 +54,7 @@ describe("simple Capability runtime profile", () => {
       fs.readFileSync(new URL("../../src/runtime-services/capability-delivery/profile.json", import.meta.url), "utf8"),
     ) as {
       lifecycle: string
-      lifecycleConfig: { advance: boolean; sync: boolean }
+      lifecycleConfig: { advance: boolean; sync: boolean; verify: boolean }
       scripts: {
         preflight: Array<{ script: string }>
         postflight: Array<{ script: string }>
@@ -65,6 +65,7 @@ describe("simple Capability runtime profile", () => {
     expect(profile.lifecycleConfig).toMatchObject({
       advance: false,
       sync: false,
+      verify: false,
     })
     expect(profile.scripts.preflight.map(({ script }) => script)).toEqual([
       "loadSimpleCapability",
