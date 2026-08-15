@@ -14,6 +14,8 @@ export interface CapabilityContract {
   deliveryPolicy?: "checkpoint"
   /** Protected repository paths this trusted Capability may deliver. */
   deliveryPathAllowlist?: string[]
+  /** Config sections this trusted Capability may change inside an allowlisted config file. */
+  deliveryConfigAllowlist?: Record<string, string[]>
   /** Runtime services required by an agent-backed Capability. */
   requirements?: CapabilityRuntimeRequirements
   /** Private specialists that an agent-backed capability must actually invoke. */
@@ -234,6 +236,9 @@ export function readCapabilityFolder(root: string, slug: string): CapabilityFold
             ...(contract.deliveryPathAllowlist
               ? { deliveryPathAllowlist: contract.deliveryPathAllowlist }
               : {}),
+            ...(contract.deliveryConfigAllowlist
+              ? { deliveryConfigAllowlist: contract.deliveryConfigAllowlist }
+              : {}),
             input: contract.input,
             output: contract.output,
           }
@@ -297,14 +302,25 @@ function parseCapabilityContract(raw: string): CapabilityContract {
     throw new Error('contract.json requiredSubagents are supported only when execution is "agent"')
   }
   const deliveryPathAllowlist = parseDeliveryPathAllowlist(parsed.deliveryPathAllowlist)
+  const deliveryConfigAllowlist = parseDeliveryConfigAllowlist(parsed.deliveryConfigAllowlist)
   if (deliveryPathAllowlist && parsed.execution !== "agent") {
     throw new Error('contract.json deliveryPathAllowlist is supported only when execution is "agent"')
+  }
+  if (deliveryConfigAllowlist && parsed.execution !== "agent") {
+    throw new Error('contract.json deliveryConfigAllowlist is supported only when execution is "agent"')
+  }
+  if (
+    deliveryConfigAllowlist &&
+    Object.keys(deliveryConfigAllowlist).some((filePath) => !deliveryPathAllowlist?.includes(filePath))
+  ) {
+    throw new Error("contract.json deliveryConfigAllowlist files must also be deliveryPathAllowlist entries")
   }
   const unsupported = Object.keys(parsed).filter(
     (key) =>
       key !== "execution" &&
       key !== "deliveryPolicy" &&
       key !== "deliveryPathAllowlist" &&
+      key !== "deliveryConfigAllowlist" &&
       key !== "requirements" &&
       key !== "secrets" &&
       key !== "timeoutMs" &&
@@ -325,6 +341,7 @@ function parseCapabilityContract(raw: string): CapabilityContract {
     ...(parsed.execution ? { execution: parsed.execution } : {}),
     ...(parsed.deliveryPolicy === "checkpoint" ? { deliveryPolicy: "checkpoint" as const } : {}),
     ...(deliveryPathAllowlist ? { deliveryPathAllowlist } : {}),
+    ...(deliveryConfigAllowlist ? { deliveryConfigAllowlist } : {}),
     ...(requirements ? { requirements } : {}),
     ...(secrets ? { secrets } : {}),
     ...(timeoutMs !== undefined ? { timeoutMs } : {}),
@@ -332,6 +349,24 @@ function parseCapabilityContract(raw: string): CapabilityContract {
     input: parsed.input,
     output: parsed.output,
   }
+}
+
+function parseDeliveryConfigAllowlist(raw: unknown): Record<string, string[]> | undefined {
+  if (raw === undefined) return undefined
+  if (!isPlainObject(raw) || Object.keys(raw).length === 0) {
+    throw new Error("contract.json deliveryConfigAllowlist must be a non-empty object")
+  }
+  const parsed: Record<string, string[]> = {}
+  for (const [filePath, paths] of Object.entries(raw)) {
+    if (filePath !== "kody.config.json" || !Array.isArray(paths) || paths.length === 0 || paths.length > 32) {
+      throw new Error("contract.json deliveryConfigAllowlist contains an unsupported config file or path list")
+    }
+    if (!paths.every((value) => typeof value === "string" && /^[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)*$/.test(value))) {
+      throw new Error("contract.json deliveryConfigAllowlist must contain safe dotted config paths")
+    }
+    parsed[filePath] = [...new Set(paths as string[])]
+  }
+  return parsed
 }
 
 function parseDeliveryPathAllowlist(raw: unknown): string[] | undefined {

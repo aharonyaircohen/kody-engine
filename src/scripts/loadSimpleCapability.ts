@@ -35,6 +35,9 @@ export const loadSimpleCapability: PreflightScript = async (ctx, profile) => {
   if (capability.contract?.deliveryPathAllowlist) {
     ctx.data.deliveryPathAllowlist = capability.contract.deliveryPathAllowlist
   }
+  if (capability.contract?.deliveryConfigAllowlist) {
+    ctx.data.deliveryConfigAllowlist = capability.contract.deliveryConfigAllowlist
+  }
   if (capability.contract?.requirements) {
     ctx.data.capabilityRequirements = capability.contract.requirements
   }

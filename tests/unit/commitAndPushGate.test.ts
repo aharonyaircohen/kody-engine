@@ -83,6 +83,7 @@ describe("commitAndPush: gate on agentDone", () => {
       "ci: add healthy checks",
       "/x",
       allowlist,
+      {},
     )
   })
 

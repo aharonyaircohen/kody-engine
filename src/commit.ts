@@ -221,16 +221,43 @@ export function isSafeConfigActivationChange(before: unknown, after: unknown): b
   return isDeepStrictEqual(beforeCompanyRest, afterCompanyRest)
 }
 
+export function isSafeConfigChange(
+  before: unknown,
+  after: unknown,
+  allowedPaths: readonly string[] = [],
+): boolean {
+  if (!isRecord(before) || !isRecord(after)) return false
+  const beforeCopy = structuredClone(before)
+  const afterCopy = structuredClone(after)
+  for (const dottedPath of allowedPaths) {
+    deleteConfigPath(beforeCopy, dottedPath)
+    deleteConfigPath(afterCopy, dottedPath)
+  }
+  return isSafeConfigActivationChange(beforeCopy, afterCopy)
+}
+
+function deleteConfigPath(value: Record<string, unknown>, dottedPath: string): void {
+  const segments = dottedPath.split(".")
+  let cursor: Record<string, unknown> | undefined = value
+  for (const segment of segments.slice(0, -1)) {
+    const next: unknown = cursor[segment]
+    if (!isRecord(next)) return
+    cursor = next
+  }
+  delete cursor[segments.at(-1)!]
+}
+
 function isTrustedConfigActivationChange(
   filePath: string,
   deliveryPathAllowlist: readonly string[],
+  deliveryConfigAllowlist: Readonly<Record<string, readonly string[]>>,
   cwd?: string,
 ): boolean {
   if (filePath !== "kody.config.json" || !deliveryPathAllowlist.includes(filePath)) return false
   try {
     const before = JSON.parse(git(["show", "HEAD:kody.config.json"], cwd)) as unknown
     const after = JSON.parse(fs.readFileSync(path.join(cwd ?? process.cwd(), filePath), "utf-8")) as unknown
-    return isSafeConfigActivationChange(before, after)
+    return isSafeConfigChange(before, after, deliveryConfigAllowlist[filePath] ?? [])
   } catch {
     return false
   }
@@ -311,6 +338,7 @@ export function commitAndPush(
   agentMessage: string,
   cwd?: string,
   deliveryPathAllowlist: readonly string[] = [],
+  deliveryConfigAllowlist: Readonly<Record<string, readonly string[]>> = {},
 ): CommitResult {
   // Note: abortUnfinishedGitOps() is intentionally NOT called here anymore.
   // The postflight script (src/scripts/commitAndPush.ts) decides when to
@@ -322,7 +350,7 @@ export function commitAndPush(
   const allowedFiles = allChanged.filter(
     (f) =>
       !isForbiddenPath(f, deliveryPathAllowlist) ||
-      isTrustedConfigActivationChange(f, deliveryPathAllowlist, cwd),
+      isTrustedConfigActivationChange(f, deliveryPathAllowlist, deliveryConfigAllowlist, cwd),
   )
 
   // Detect in-progress merge (resolve mode): even if no files changed
@@ -345,7 +373,7 @@ export function commitAndPush(
   const forbiddenFiles = allChanged.filter(
     (f) =>
       isForbiddenPath(f, deliveryPathAllowlist) &&
-      !isTrustedConfigActivationChange(f, deliveryPathAllowlist, cwd),
+      !isTrustedConfigActivationChange(f, deliveryPathAllowlist, deliveryConfigAllowlist, cwd),
   )
   for (const f of forbiddenFiles) {
     try {

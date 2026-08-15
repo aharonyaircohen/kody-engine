@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   FORBIDDEN_PATH_PREFIXES,
   isForbiddenPath,
+  isSafeConfigChange,
   isSafeConfigActivationChange,
   normalizeCommitMessage,
 } from "../../src/commit.js"
@@ -157,6 +158,22 @@ describe("commit: trusted Store config activation", () => {
           activeWorkflows: ["package-release", "web-release"],
         },
       }),
+    ).toBe(false)
+  })
+
+  it("allows only capability-declared configuration sections", () => {
+    const after = {
+      ...before,
+      release: { releaseBranch: "main", validation: { workflow: "Release Validation" } },
+      company: {
+        ...before.company,
+        activeWorkflows: ["package-release", "web-release"],
+      },
+    }
+
+    expect(isSafeConfigChange(before, after, ["release"])).toBe(true)
+    expect(
+      isSafeConfigChange(before, { ...after, agent: { model: "attacker/model" } }, ["release"]),
     ).toBe(false)
   })
 })

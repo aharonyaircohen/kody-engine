@@ -28,7 +28,8 @@ describe("simple Capability folder", () => {
     const contract = {
       execution: "agent" as const,
       deliveryPolicy: "checkpoint" as const,
-      deliveryPathAllowlist: [".github/workflows/**"],
+      deliveryPathAllowlist: [".github/workflows/**", "kody.config.json"],
+      deliveryConfigAllowlist: { "kody.config.json": ["release"] },
       requirements: {
         browser: true,
         qaCredentials: true,
@@ -53,7 +54,8 @@ describe("simple Capability folder", () => {
     expect(loaded?.contractPath).toBe(path.join(dir, "contract.json"))
     expect(loaded?.contract).toEqual(contract)
     expect(loaded?.contract?.deliveryPolicy).toBe("checkpoint")
-    expect(loaded?.contract?.deliveryPathAllowlist).toEqual([".github/workflows/**"])
+    expect(loaded?.contract?.deliveryPathAllowlist).toEqual([".github/workflows/**", "kody.config.json"])
+    expect(loaded?.contract?.deliveryConfigAllowlist).toEqual({ "kody.config.json": ["release"] })
     expect(loaded?.contract?.requirements).toEqual({
       browser: true,
       qaCredentials: true,

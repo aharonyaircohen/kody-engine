@@ -140,9 +140,19 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
   const deliveryPathAllowlist = Array.isArray(ctx.data.deliveryPathAllowlist)
     ? (ctx.data.deliveryPathAllowlist as string[])
     : []
+  const deliveryConfigAllowlist =
+    ctx.data.deliveryConfigAllowlist && typeof ctx.data.deliveryConfigAllowlist === "object"
+      ? (ctx.data.deliveryConfigAllowlist as Record<string, string[]>)
+      : {}
 
   try {
-    const result = doCommitAndPush(branch, message, ctx.cwd, deliveryPathAllowlist)
+    const result = doCommitAndPush(
+      branch,
+      message,
+      ctx.cwd,
+      deliveryPathAllowlist,
+      deliveryConfigAllowlist,
+    )
     ctx.data.commitResult = result
     // After a successful commit the working tree is clean, so listChangedFiles
     // (which reads `git status`) returns []. Use the commit's own file list
