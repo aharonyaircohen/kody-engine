@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { FORBIDDEN_PATH_PREFIXES, isForbiddenPath, normalizeCommitMessage } from "../../src/commit.js"
+import {
+  FORBIDDEN_PATH_PREFIXES,
+  isForbiddenPath,
+  isSafeConfigActivationChange,
+  normalizeCommitMessage,
+} from "../../src/commit.js"
 
 describe("commit: isForbiddenPath", () => {
   it("blocks .kody/ artifacts", () => {
@@ -90,6 +95,44 @@ describe("commit: FORBIDDEN_PATH_PREFIXES shape", () => {
       seen.add(p)
     }
     expect(dups).toEqual([])
+  })
+})
+
+describe("commit: trusted Store config activation", () => {
+  const before = {
+    agent: { model: "minimax/MiniMax-M3" },
+    access: { allowedAssociations: ["OWNER"] },
+    activeCapabilities: ["release-prepare"],
+    activeWorkflows: ["package-release"],
+  }
+
+  it("allows only additive activation-list changes", () => {
+    expect(
+      isSafeConfigActivationChange(before, {
+        ...before,
+        activeCapabilities: ["release-prepare", "release-promote"],
+        activeWorkflows: ["package-release", "web-release"],
+      }),
+    ).toBe(true)
+  })
+
+  it("rejects changes to security or command-bearing configuration", () => {
+    expect(
+      isSafeConfigActivationChange(before, {
+        ...before,
+        agent: { model: "attacker/model" },
+        activeWorkflows: ["package-release", "web-release"],
+      }),
+    ).toBe(false)
+  })
+
+  it("rejects removal of an existing activation", () => {
+    expect(
+      isSafeConfigActivationChange(before, {
+        ...before,
+        activeCapabilities: [],
+      }),
+    ).toBe(false)
   })
 })
 

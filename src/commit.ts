@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process"
+import { isDeepStrictEqual } from "node:util"
 import { pushWithRetry } from "./pushWithRetry.js"
 
 export const FORBIDDEN_PATH_PREFIXES = [
@@ -23,6 +24,14 @@ const ALLOWED_PATH_PREFIXES: string[] = []
 // it already controls — so it is never an agent-writable path.
 const FORBIDDEN_PATH_EXACT = new Set([".env", ".kody-pip-requirements.txt", "kody.config.json"])
 const FORBIDDEN_PATH_SUFFIXES = [".log"]
+const ACTIVATION_FIELDS = [
+  "activeAgents",
+  "activeCapabilities",
+  "activeWorkflows",
+  "activePipelines",
+  "activeCommands",
+  "activeFeatures",
+] as const
 
 function isGitHubYamlPath(filePath: string): boolean {
   const normalized = filePath.replace(/^\.\/+/, "")
@@ -173,6 +182,48 @@ export function isForbiddenPath(p: string, deliveryPathAllowlist: readonly strin
   return false
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+/**
+ * A Store installer may only add names to activation lists. Every other
+ * `kody.config.json` field remains byte-semantically owned by the operator.
+ */
+export function isSafeConfigActivationChange(before: unknown, after: unknown): boolean {
+  if (!isRecord(before) || !isRecord(after)) return false
+  const beforeRest = { ...before }
+  const afterRest = { ...after }
+  for (const field of ACTIVATION_FIELDS) {
+    const previous = before[field]
+    const next = after[field]
+    delete beforeRest[field]
+    delete afterRest[field]
+    if (previous === undefined && next === undefined) continue
+    if (!Array.isArray(previous ?? []) || !Array.isArray(next)) return false
+    if (!(next as unknown[]).every((value) => typeof value === "string")) return false
+    if (!(previous as unknown[]).every((value) => typeof value === "string")) return false
+    const nextValues = new Set(next as string[])
+    if (!(previous as string[]).every((value) => nextValues.has(value))) return false
+  }
+  return isDeepStrictEqual(beforeRest, afterRest)
+}
+
+function isTrustedConfigActivationChange(
+  filePath: string,
+  deliveryPathAllowlist: readonly string[],
+  cwd?: string,
+): boolean {
+  if (filePath !== "kody.config.json" || !deliveryPathAllowlist.includes(filePath)) return false
+  try {
+    const before = JSON.parse(git(["show", "HEAD:kody.config.json"], cwd)) as unknown
+    const after = JSON.parse(fs.readFileSync(path.join(cwd ?? process.cwd(), filePath), "utf-8")) as unknown
+    return isSafeConfigActivationChange(before, after)
+  } catch {
+    return false
+  }
+}
+
 export function listChangedFiles(cwd?: string): string[] {
   // List every untracked file instead of collapsing a new directory to one
   // entry. Path safety is file-specific (for example GitHub YAML), so staging
@@ -237,7 +288,11 @@ export function commitAndPush(
   // abort (non-resolve modes) vs preserve (resolve mode keeps MERGE_HEAD so
   // the merge commit can be created from it).
   const allChanged = listChangedFiles(cwd)
-  const allowedFiles = allChanged.filter((f) => !isForbiddenPath(f, deliveryPathAllowlist))
+  const allowedFiles = allChanged.filter(
+    (f) =>
+      !isForbiddenPath(f, deliveryPathAllowlist) ||
+      isTrustedConfigActivationChange(f, deliveryPathAllowlist, cwd),
+  )
 
   // Detect in-progress merge (resolve mode): even if no files changed
   // vs HEAD (agent accepted one side verbatim), we still need to finalize
@@ -256,7 +311,11 @@ export function commitAndPush(
   // is silently bypassed and those files land in the commit. Reset is per-file
   // (leaves MERGE_HEAD and resolved-file staging intact) and a harmless no-op
   // in non-resolve modes where nothing pre-staged them.
-  const forbiddenFiles = allChanged.filter((f) => isForbiddenPath(f, deliveryPathAllowlist))
+  const forbiddenFiles = allChanged.filter(
+    (f) =>
+      isForbiddenPath(f, deliveryPathAllowlist) &&
+      !isTrustedConfigActivationChange(f, deliveryPathAllowlist, cwd),
+  )
   for (const f of forbiddenFiles) {
     try {
       git(["reset", "-q", "--", f], cwd)
