@@ -20,7 +20,7 @@ function setOutcome(ctx: Parameters<PostflightScript>[0], outcome: PrOutcome): v
 }
 
 export const ensurePr: PostflightScript = async (ctx) => {
-  if (ctx.skipAgent && ctx.output.exitCode !== undefined) {
+  if (shouldSkipPrForPreflight(ctx)) {
     // Preflight was authoritative — either it refused to start (exit != 0)
     // or it did the work itself and short-circuited (exit === 0).
     setOutcome(ctx, { kind: "skipped", reason: "preflight short-circuited (skipAgent)" })
@@ -118,6 +118,18 @@ export const ensurePr: PostflightScript = async (ctx) => {
     ctx.output.reason = reason
     setOutcome(ctx, { kind: "crashed", reason })
   }
+}
+
+export function shouldSkipPrForPreflight(ctx: {
+  skipAgent?: boolean
+  output: { exitCode?: number }
+  data: Record<string, unknown>
+}): boolean {
+  return (
+    ctx.skipAgent === true &&
+    ctx.output.exitCode !== undefined &&
+    ctx.data.capabilityExecution !== "script"
+  )
 }
 
 export function deliveryCheckpointReason(data: Record<string, unknown>): string {

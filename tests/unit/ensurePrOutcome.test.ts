@@ -59,6 +59,24 @@ describe("checkpoint delivery", () => {
 // the typed outcome must still be set. Imports the real module and runs it
 // with a minimal ctx.
 describe("ensurePr precondition-skip path", () => {
+  it("does not treat successful script execution as a preflight failure", async () => {
+    const { shouldSkipPrForPreflight } = await import("../../src/scripts/ensurePr.js")
+    expect(
+      shouldSkipPrForPreflight({
+        skipAgent: true,
+        output: { exitCode: 0 },
+        data: { capabilityExecution: "script" },
+      }),
+    ).toBe(false)
+    expect(
+      shouldSkipPrForPreflight({
+        skipAgent: true,
+        output: { exitCode: 64 },
+        data: {},
+      }),
+    ).toBe(true)
+  })
+
   it("sets prResult.kind=skipped when there is nothing to ship", async () => {
     const { ensurePr } = await import("../../src/scripts/ensurePr.js")
     const ctx = {
