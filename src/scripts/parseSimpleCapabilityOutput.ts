@@ -28,9 +28,10 @@ export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, profile
   }
   const outputPath = typeof ctx.data.capabilityOutputPath === "string" ? ctx.data.capabilityOutputPath : undefined
   const fileOutput = readOutputFile(outputPath)
+  const hasScriptOutput = Object.hasOwn(ctx.data, "capabilityScriptOutput")
   const output = fileOutput.found
     ? fileOutput.value
-    : Object.hasOwn(ctx.data, "capabilityScriptOutput")
+    : hasScriptOutput
       ? ctx.data.capabilityScriptOutput
       : parseOutput(agentResult?.finalText)
   if (output === undefined) {
@@ -82,7 +83,7 @@ export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, profile
       return
     }
   }
-  if (fileOutput.found) acceptAuthoritativeFileOutput(ctx, profile, output)
+  if (fileOutput.found || hasScriptOutput) acceptAuthoritativeCapabilityOutput(ctx, profile, output)
   ctx.data.capabilityOutput = output
   const structuredResult = parseCapabilityResult(output)
   if (structuredResult) {
@@ -120,7 +121,7 @@ export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, profile
   ]
 }
 
-function acceptAuthoritativeFileOutput(
+function acceptAuthoritativeCapabilityOutput(
   ctx: Parameters<PostflightScript>[0],
   profile: Parameters<PostflightScript>[1],
   output: unknown,

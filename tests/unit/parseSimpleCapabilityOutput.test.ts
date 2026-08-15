@@ -317,6 +317,37 @@ describe("parseSimpleCapabilityOutput", () => {
     )
   })
 
+  it("treats successful script output as completed delivery work", async () => {
+    const ctx = {
+      args: {},
+      data: {
+        capabilityScriptOutput: {
+          status: "ready",
+          summary: "Blueprint bundle installed",
+        },
+        agentDone: false,
+        agentFailureReason: "agent did not run",
+      },
+      output: {},
+    } as unknown as Parameters<typeof parseSimpleCapabilityOutput>[0]
+
+    await parseSimpleCapabilityOutput(
+      ctx,
+      { name: "capability-delivery" } as Parameters<typeof parseSimpleCapabilityOutput>[1],
+      null,
+    )
+
+    expect(ctx.data.agentDone).toBe(true)
+    expect(ctx.data.agentFailureReason).toBeUndefined()
+    expect(ctx.data.prSummary).toBe("Blueprint bundle installed")
+    expect(ctx.data.action).toEqual(
+      expect.objectContaining({
+        type: "CAPABILITY_DELIVERY_COMPLETED",
+        payload: {},
+      }),
+    )
+  })
+
   it("blocks output that violates the capability contract", async () => {
     const ctx = {
       data: {
