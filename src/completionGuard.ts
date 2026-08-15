@@ -1,6 +1,6 @@
 import * as path from "node:path"
 
-const MAX_COMPLETION_RESERVE_MS = 15 * 60_000
+const MAX_COMPLETION_RESERVE_MS = 2 * 60_000
 
 interface CompletionToolInput {
   tool_name?: unknown
@@ -8,8 +8,10 @@ interface CompletionToolInput {
 }
 
 /**
- * Leave the final half of a bounded run for concluding the model turn and
- * running deterministic postflights, capped at fifteen minutes.
+ * Leave a small final window for concluding the model turn and running
+ * deterministic postflights. Reserving a percentage of a long run can remove
+ * most of the agent's implementation time, so the reserve is capped at two
+ * minutes.
  */
 export function completionToolCutoffAt(startedAtMs: number, deadlineAtMs: number): number {
   const availableMs = Math.max(0, deadlineAtMs - startedAtMs)

@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest"
 import { completionToolCutoffAt, createCompletionToolGuard } from "../../src/completionGuard.js"
 
 describe("agent completion guard", () => {
-  it("reserves up to fifteen minutes of a long run for finishing and deterministic postflights", () => {
-    expect(completionToolCutoffAt(0, 30 * 60_000)).toBe(15 * 60_000)
+  it("reserves no more than two minutes of a long run for finishing and deterministic postflights", () => {
+    expect(completionToolCutoffAt(0, 30 * 60_000)).toBe(28 * 60_000)
   })
 
-  it("reserves half of a shorter run for finishing", () => {
-    expect(completionToolCutoffAt(0, 9 * 60_000)).toBe(4.5 * 60_000)
+  it("also caps the reserve for a shorter run", () => {
+    expect(completionToolCutoffAt(0, 9 * 60_000)).toBe(7 * 60_000)
+  })
+
+  it("reserves half when the entire run is shorter than the cap", () => {
+    expect(completionToolCutoffAt(0, 60_000)).toBe(30_000)
   })
 
   it("allows tools before the completion window", async () => {
