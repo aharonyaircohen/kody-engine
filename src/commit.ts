@@ -2,6 +2,8 @@ import { execFileSync } from "node:child_process"
 import { isDeepStrictEqual } from "node:util"
 import { pushWithRetry } from "./pushWithRetry.js"
 
+const GIT_MAX_BUFFER_BYTES = 64 * 1024 * 1024
+
 export const FORBIDDEN_PATH_PREFIXES = [
   ".kody/", // legacy consumer state must never be reintroduced or committed
   ".kody-engine/",
@@ -72,6 +74,7 @@ function git(args: string[], cwd?: string): string {
     return execFileSync("git", args, {
       encoding: "utf-8",
       timeout: 120_000,
+      maxBuffer: GIT_MAX_BUFFER_BYTES,
       cwd,
       env: { ...process.env, HUSKY: "0", SKIP_HOOKS: "1" },
       stdio: ["pipe", "pipe", "pipe"],
@@ -241,6 +244,7 @@ export function listChangedFiles(cwd?: string): string[] {
   // Each entry begins with a 2-char status code + 1 space, then the path.
   const raw = execFileSync("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all"], {
     encoding: "utf-8",
+    maxBuffer: GIT_MAX_BUFFER_BYTES,
     cwd,
     env: { ...process.env, HUSKY: "0", SKIP_HOOKS: "1" },
     stdio: ["pipe", "pipe", "pipe"],
@@ -254,6 +258,7 @@ function listAllowlistedIgnoredFiles(deliveryPathAllowlist: readonly string[], c
   if (deliveryPathAllowlist.length === 0) return []
   const raw = execFileSync("git", ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"], {
     encoding: "utf-8",
+    maxBuffer: GIT_MAX_BUFFER_BYTES,
     cwd,
     env: { ...process.env, HUSKY: "0", SKIP_HOOKS: "1" },
     stdio: ["pipe", "pipe", "pipe"],
@@ -274,6 +279,7 @@ export function listFilesInCommit(ref: string = "HEAD", cwd?: string): string[] 
   try {
     const raw = execFileSync("git", ["show", "--name-only", "--pretty=format:", "-z", ref], {
       encoding: "utf-8",
+      maxBuffer: GIT_MAX_BUFFER_BYTES,
       cwd,
       env: { ...process.env, HUSKY: "0", SKIP_HOOKS: "1" },
       stdio: ["pipe", "pipe", "pipe"],
