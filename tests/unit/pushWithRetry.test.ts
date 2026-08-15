@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 interface Call {
   args: string[]
+  env?: NodeJS.ProcessEnv
 }
 
 const calls: Call[] = []
@@ -16,8 +17,8 @@ vi.mock("node:child_process", async (orig) => {
   const actual = (await orig()) as typeof import("node:child_process")
   return {
     ...actual,
-    execFileSync: vi.fn((cmd: string, args: string[]) => {
-      calls.push({ args: [cmd, ...args] })
+    execFileSync: vi.fn((cmd: string, args: string[], options?: { env?: NodeJS.ProcessEnv }) => {
+      calls.push({ args: [cmd, ...args], env: options?.env })
       // Branch resolution always succeeds with a stable name unless overridden.
       if (args[0] === "symbolic-ref" && args[1] === "--short") {
         return "main\n"
@@ -35,6 +36,10 @@ vi.mock("node:child_process", async (orig) => {
 beforeEach(() => {
   calls.length = 0
   behaviors = []
+  delete process.env.GH_PAT
+  delete process.env.KODY_TOKEN
+  delete process.env.GH_TOKEN
+  delete process.env.GITHUB_TOKEN
 })
 
 const NON_FF_STDERR = "! [rejected]        main -> main (non-fast-forward)\nfetch first"
@@ -129,6 +134,34 @@ describe("pushWithRetry", () => {
 
     const pushCall = calls.find((c) => c.args[0] === "git" && c.args[1] === "push")
     expect(pushCall?.args).toEqual(["git", "push", "-u", "origin", "HEAD:feature/x"])
+  })
+
+  it("overrides the checkout credential with Kody's explicit token without putting it in git arguments", async () => {
+    process.env.GITHUB_TOKEN = "workflow-token"
+    process.env.KODY_TOKEN = "configured-token"
+    behaviors = [{ ok: true }]
+    const { pushWithRetry } = await import("../../src/pushWithRetry.js")
+
+    pushWithRetry({ cwd: "/tmp/repo", branch: "main", backoffMs: 1 })
+
+    const pushCall = calls.find((c) => c.args[0] === "git" && c.args[1] === "push")
+    expect(pushCall?.args.join(" ")).not.toContain("configured-token")
+    expect(pushCall?.env?.GIT_CONFIG_COUNT).toBe("2")
+    expect(pushCall?.env?.GIT_CONFIG_VALUE_0).toBe("")
+    expect(pushCall?.env?.GIT_CONFIG_VALUE_1).toMatch(/^Authorization: Basic /)
+    expect(pushCall?.env?.GIT_CONFIG_VALUE_1).not.toContain("configured-token")
+  })
+
+  it("keeps checkout authentication unchanged when no explicit token exists", async () => {
+    process.env.GITHUB_TOKEN = "workflow-token"
+    process.env.GH_TOKEN = "workflow-token"
+    behaviors = [{ ok: true }]
+    const { pushWithRetry } = await import("../../src/pushWithRetry.js")
+
+    pushWithRetry({ cwd: "/tmp/repo", branch: "main", backoffMs: 1 })
+
+    const pushCall = calls.find((c) => c.args[0] === "git" && c.args[1] === "push")
+    expect(pushCall?.env?.GIT_CONFIG_COUNT).toBeUndefined()
   })
 
   it("gives up after maxRetries persistent rejections", async () => {

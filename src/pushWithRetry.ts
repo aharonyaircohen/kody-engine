@@ -62,7 +62,7 @@ function runGit(args: string[], cwd: string): GitResult {
     const stdout = execFileSync("git", args, {
       cwd,
       encoding: "utf-8",
-      env: { ...process.env, HUSKY: "0", SKIP_HOOKS: "1" },
+      env: gitProcessEnvironment(),
       stdio: ["ignore", "pipe", "pipe"],
     })
     return { ok: true, stdout: stdout?.toString() ?? "", stderr: "" }
@@ -72,6 +72,34 @@ function runGit(args: string[], cwd: string): GitResult {
     const stdout = e.stdout?.toString() ?? ""
     return { ok: false, stdout, stderr }
   }
+}
+
+/**
+ * actions/checkout persists GitHub's built-in workflow credential as a local
+ * extraHeader. That credential can push, but GitHub intentionally suppresses
+ * workflows caused by it. When Kody has an explicit user or App token, make
+ * Git use that token for delivery pushes as well as `gh` commands. The first
+ * empty header clears checkout's persisted value; the credential itself stays
+ * in the child process environment and is never written to the repository.
+ */
+function gitProcessEnvironment(baseEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...baseEnv, HUSKY: "0", SKIP_HOOKS: "1" }
+  const token =
+    baseEnv.GH_PAT?.trim() ||
+    baseEnv.KODY_TOKEN?.trim() ||
+    (baseEnv.GH_TOKEN?.trim() && baseEnv.GH_TOKEN.trim() !== baseEnv.GITHUB_TOKEN?.trim()
+      ? baseEnv.GH_TOKEN.trim()
+      : "")
+  if (!token) return env
+
+  const parsedCount = Number.parseInt(env.GIT_CONFIG_COUNT ?? "0", 10)
+  const count = Number.isInteger(parsedCount) && parsedCount >= 0 ? parsedCount : 0
+  env.GIT_CONFIG_COUNT = String(count + 2)
+  env[`GIT_CONFIG_KEY_${count}`] = "http.https://github.com/.extraHeader"
+  env[`GIT_CONFIG_VALUE_${count}`] = ""
+  env[`GIT_CONFIG_KEY_${count + 1}`] = "http.https://github.com/.extraHeader"
+  env[`GIT_CONFIG_VALUE_${count + 1}`] = `Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`
+  return env
 }
 
 function resolveBranch(cwd: string, explicit?: string): string {
