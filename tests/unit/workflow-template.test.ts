@@ -12,6 +12,13 @@ describe("consumer workflow template", () => {
     expect(workflow).not.toContain("kody-engine ci")
   })
 
+  it("uses the generic request id to keep independent runs separate", () => {
+    expect(workflow).toContain("requestId:")
+    expect(workflow).toContain(
+      "inputs.requestId || inputs.sessionId || inputs.issue_number",
+    )
+  })
+
   it("uses portable YAML quoting accepted by strict consumer formatters", () => {
     expect(workflow).toContain("cron: '7/15 * * * *'")
     expect(workflow).not.toMatch(/(?:description|default|cron): "/)
