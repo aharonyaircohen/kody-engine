@@ -79,6 +79,9 @@ describe("runAgent: typed AgentOutcomeKind", () => {
     expect(res.outcomeKind).toBe("rate_limit")
     expect(res.safeToReplay).toBe(true)
     expect(Date.now() - startedAt).toBeLessThan(1_000)
+    expect(querySpy.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({ options: expect.objectContaining({ env: expect.objectContaining({ CLAUDE_CODE_MAX_RETRIES: "0" }) }) }),
+    )
   })
 
   it("keeps the SDK retry behavior for a normal concrete model", async () => {
@@ -91,6 +94,7 @@ describe("runAgent: typed AgentOutcomeKind", () => {
 
     expect(res.outcome).toBe("completed")
     expect(res.outcomeKind).toBe("ok")
+    expect(querySpy.mock.calls.at(-1)?.[0]?.options.env.CLAUDE_CODE_MAX_RETRIES).toBeUndefined()
   })
 
   it("returns outcomeKind=tool_error for tool failures", async () => {

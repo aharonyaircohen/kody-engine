@@ -438,6 +438,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     env.ANTHROPIC_BASE_URL = opts.litellmUrl
     env.ANTHROPIC_API_KEY = getAnthropicApiKeyOrDummy()
   }
+  if (opts.stopOnRateLimit) env.CLAUDE_CODE_MAX_RETRIES = "0"
 
   const startedAt = Date.now()
   const turnTimeoutMs = resolveTurnTimeoutMs(opts)
