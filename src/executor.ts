@@ -28,7 +28,7 @@ import { DISCIPLINE } from "./discipline.js"
 import { emitEvent } from "./events.js"
 import type { Context, InputSpec, Job, Profile, ScriptEntry } from "./implementations/types.js"
 import { KODY_NAMESPACE, removeLabel } from "./lifecycleLabels.js"
-import { startLitellmIfNeeded } from "./litellm.js"
+import { startAutomaticLitellm, startLitellmIfNeeded } from "./litellm.js"
 import { loadProfile, validateScriptReferences } from "./profile.js"
 import { getRuntimeProfileRootsForCwd, resolveImplementation, resolveImplementationCandidates } from "./registry.js"
 import {
@@ -545,6 +545,19 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
     const pluginPaths = [...externalPlugins, ...(syntheticPath ? [syntheticPath] : [])]
     const agents = loadSubagents(profile)
 
+    if (modelSpec === "automatic") {
+      const automaticEnvironment: Record<string, string> = {}
+      for (const candidate of modelCandidates) {
+        const resolved = await resolveRuntimeModelEnvironment(candidate, ctx)
+        Object.assign(automaticEnvironment, resolved.environment)
+        for (const warning of resolved.warnings) process.stderr.write(`⚠ ${warning}\n`)
+      }
+      const lm = await startAutomaticLitellm(modelCandidates, input.cwd, automaticEnvironment)
+      activeLiteLLM.add(lm)
+      const result = await invokeModel(modelCandidates[0]!, lm, automaticEnvironment, lm.modelGroup)
+      return result
+    }
+
     let finalResult: AgentResult | undefined
     for (let candidateIndex = 0; candidateIndex < modelCandidates.length; candidateIndex++) {
       const candidate = modelCandidates[candidateIndex]!
@@ -563,7 +576,29 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       }
       ctx.data.jobModelProvider = candidate.provider
       ctx.data.jobModelName = candidate.model
-      const result = await runAgent({
+      const result = await invokeModel(candidate, lm, runtimeModelEnvironment)
+      finalResult = result
+      const next = modelCandidates[candidateIndex + 1]
+      if (!next || result.outcome !== "failed" || result.outcomeKind !== "rate_limit" || result.safeToReplay !== true) {
+        return result
+      }
+      process.stderr.write(
+        `[kody agent] ${candidate.spec ?? candidate.model} is rate limited; continuing with ${next.spec ?? next.model}\n`,
+      )
+      if (lm) {
+        lm.kill()
+        activeLiteLLM.delete(lm)
+      }
+    }
+    return finalResult!
+
+    async function invokeModel(
+      candidate: ReturnType<typeof parseProviderModel>,
+      lm: Awaited<ReturnType<typeof startLitellmIfNeeded>>,
+      runtimeModelEnvironment: Record<string, string>,
+      litellmModelGroupOverride?: string,
+    ): Promise<AgentResult> {
+      return runAgent({
         prompt,
         model: candidate,
         cwd: input.cwd,
@@ -576,6 +611,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
           ...runtimeModelEnvironment,
         },
         litellmUrl: lm?.url ?? null,
+        litellmModelGroupOverride,
         // On a connection drop mid-run, restart the (possibly crashed) proxy
         // before the agent retries. No-op for direct-Anthropic runs (lm null).
         ensureBackend: lm ? () => lm.ensureHealthy().then(() => undefined) : undefined,
@@ -585,7 +621,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
         verbose: input.verbose,
         quiet: input.quiet,
         abortController: input.abortController,
-        stopOnRateLimit: candidateIndex < modelCandidates.length - 1,
+        stopOnRateLimit: false,
         deadlineAtMs: input.deadlineAtMs,
         ndjsonDir,
         additionalDirectories: agentTaskArtifacts ? [agentTaskArtifacts.absDir] : undefined,
@@ -653,20 +689,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
               }
             : undefined,
       })
-      finalResult = result
-      const next = modelCandidates[candidateIndex + 1]
-      if (!next || result.outcome !== "failed" || result.outcomeKind !== "rate_limit" || result.safeToReplay !== true) {
-        return result
-      }
-      process.stderr.write(
-        `[kody agent] ${candidate.spec ?? candidate.model} is rate limited; continuing with ${next.spec ?? next.model}\n`,
-      )
-      if (lm) {
-        lm.kill()
-        activeLiteLLM.delete(lm)
-      }
     }
-    return finalResult!
   }
 
   // Stash for checkCoverageWithRetry.

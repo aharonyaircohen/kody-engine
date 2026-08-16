@@ -99,6 +99,8 @@ export interface AgentOptions {
   /** Explicit non-secret values exposed only to this agent process. */
   environment?: Record<string, string>
   litellmUrl?: string | null
+  /** Gateway model group override used by ordered Automatic routing. */
+  litellmModelGroupOverride?: string
   verbose?: boolean
   quiet?: boolean
   /** Cancels the SDK session when the owning Run reaches its hard deadline. */
@@ -518,7 +520,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
 
     try {
       const queryOptions: Record<string, unknown> = {
-        model: opts.litellmUrl ? litellmModelGroup(opts.model) : opts.model.model,
+        model: opts.litellmUrl ? (opts.litellmModelGroupOverride ?? litellmModelGroup(opts.model)) : opts.model.model,
         cwd: opts.cwd,
         // Fresh array (never mutate the shared DEFAULT_ALLOWED_TOOLS const) so
         // opt-in tools like fetch_repo can be appended below.

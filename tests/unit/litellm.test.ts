@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
+  generateAutomaticLitellmConfigYaml,
   generateLitellmConfigYaml,
   litellmModelGroups,
   litellmServesModel,
@@ -95,6 +96,55 @@ describe("litellm: generateLitellmConfigYaml", () => {
   it("does not add an API base unless the model config supplies one", () => {
     const yaml = generateLitellmConfigYaml({ provider: "openai", model: "gpt-4o" })
     expect(yaml).not.toMatch(/api_base:/)
+  })
+})
+
+describe("litellm: Automatic fallback config", () => {
+  it("keeps the user order and falls through each model without retrying one provider", () => {
+    const yaml = generateAutomaticLitellmConfigYaml([
+      {
+        spec: "anthropic/first",
+        provider: "anthropic",
+        protocol: "anthropic",
+        model: "first",
+        apiKeyEnvVar: "ANTHROPIC_API_KEY",
+      },
+      {
+        spec: "openai/second",
+        provider: "openai",
+        protocol: "openai",
+        model: "second",
+        apiKeyEnvVar: "OPENAI_API_KEY",
+        baseURL: "https://api.openai.com/v1",
+      },
+      {
+        spec: "openrouter/third",
+        provider: "openrouter",
+        protocol: "openai",
+        model: "third",
+        apiKeyEnvVar: "OPENROUTER_API_KEY",
+      },
+    ])
+
+    expect(yaml).toContain("model_name: kody-automatic-0")
+    expect(yaml).toContain("model_name: kody-automatic-1")
+    expect(yaml).toContain("model_name: kody-automatic-2")
+    expect(yaml.indexOf("model: anthropic/first")).toBeLessThan(yaml.indexOf("model: openai/second"))
+    expect(yaml.indexOf("model: openai/second")).toBeLessThan(yaml.indexOf("model: openrouter/third"))
+    expect(yaml).toContain("num_retries: 0")
+    expect(yaml).toContain("- kody-automatic-0: [kody-automatic-1, kody-automatic-2]")
+    expect(yaml).toContain("- kody-automatic-1: [kody-automatic-2]")
+  })
+
+  it("maps Claude Code model aliases through the same ordered fallback chain", () => {
+    const yaml = generateAutomaticLitellmConfigYaml([
+      { provider: "minimax", model: "MiniMax-M3" },
+      { provider: "openrouter", model: "openrouter/free" },
+    ])
+
+    expect(yaml).toContain("model_name: claude-haiku-4-5-20251001")
+    expect(yaml).toContain("- claude-haiku-4-5-20251001: [kody-automatic-1]")
+    expect(yaml).toContain("- haiku: [kody-automatic-1]")
   })
 })
 

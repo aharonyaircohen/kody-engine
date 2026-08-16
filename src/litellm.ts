@@ -34,6 +34,7 @@ export async function checkLitellmHealth(url: string): Promise<boolean> {
 const DEFAULT_LITELLM_STARTUP_TIMEOUT_SEC = 150
 const LITELLM_HEALTH_POLL_INTERVAL_MS = 2000
 const CLAUDE_CODE_PROXY_MODEL_ALIASES = ["claude-haiku-4-5-20251001", "haiku"] as const
+export const AUTOMATIC_LITELLM_MODEL_GROUP = "kody-automatic-0"
 
 /**
  * Resolve the LiteLLM startup deadline. Precedence:
@@ -62,6 +63,47 @@ export function generateLitellmConfigYaml(model: ProviderModel): string {
   return ["model_list:", ...modelEntries, "", "litellm_settings:", "  drop_params: true", ""].join("\n")
 }
 
+function modelEntry(modelName: string, model: ProviderModel): string[] {
+  const apiKeyVar = model.apiKeyEnvVar ?? providerApiKeyEnvVar(model.provider)
+  const litellmProvider = model.litellmProvider ?? model.provider
+  return [
+    `  - model_name: ${modelName}`,
+    `    litellm_params:`,
+    `      model: ${litellmProvider}/${model.model}`,
+    `      api_key: os.environ/${apiKeyVar}`,
+    ...(model.baseURL ? [`      api_base: ${model.baseURL}`] : []),
+  ]
+}
+
+/** Build one ordered gateway so a provider 429 is handled before the SDK retries it. */
+export function generateAutomaticLitellmConfigYaml(models: readonly ProviderModel[]): string {
+  if (models.length < 2) throw new Error("Automatic LiteLLM requires at least two models")
+  const groups = models.map((_, index) => `kody-automatic-${index}`)
+  const entries = models.flatMap((model, index) => modelEntry(groups[index]!, model))
+  for (const alias of CLAUDE_CODE_PROXY_MODEL_ALIASES) entries.push(...modelEntry(alias, models[0]!))
+
+  const fallbackSources = [groups[0]!, ...CLAUDE_CODE_PROXY_MODEL_ALIASES, ...groups.slice(1, -1)]
+  const fallbacks = fallbackSources.map((source) => {
+    const sourceIndex = source.startsWith("kody-automatic-") ? Number(source.slice("kody-automatic-".length)) : 0
+    return `    - ${source}: [${groups.slice(sourceIndex + 1).join(", ")}]`
+  })
+  return [
+    "model_list:",
+    ...entries,
+    "",
+    "litellm_settings:",
+    "  drop_params: true",
+    "",
+    "router_settings:",
+    "  num_retries: 0",
+    "  allowed_fails: 0",
+    "  disable_cooldowns: true",
+    "  fallbacks:",
+    ...fallbacks,
+    "",
+  ].join("\n")
+}
+
 export function litellmModelGroups(model: ProviderModel): string[] {
   const primary = litellmModelGroup(model)
   return Array.from(new Set([primary, ...CLAUDE_CODE_PROXY_MODEL_ALIASES]))
@@ -87,6 +129,8 @@ export async function litellmServesModels(url: string, modelGroups: readonly str
 
 export interface LitellmHandle {
   url: string
+  /** Model group the caller must send to this proxy. */
+  modelGroup?: string
   kill: () => void
   /**
    * Pure liveness probe — hits `/health` and returns the result with NO side
@@ -190,9 +234,43 @@ export async function startLitellmIfNeeded(
 ): Promise<LitellmHandle | null> {
   if (!needsLitellmProxy(model)) return null
 
+  return startLitellmProxy({
+    projectDir,
+    url,
+    runtimeEnvironment,
+    configYaml: generateLitellmConfigYaml(model),
+    requiredModelGroups: litellmModelGroups(model),
+  })
+}
+
+export async function startAutomaticLitellm(
+  models: readonly ProviderModel[],
+  projectDir: string,
+  runtimeEnvironment: Record<string, string> = {},
+  url: string = LITELLM_DEFAULT_URL,
+): Promise<LitellmHandle> {
+  const handle = await startLitellmProxy({
+    projectDir,
+    url,
+    runtimeEnvironment,
+    configYaml: generateAutomaticLitellmConfigYaml(models),
+    requiredModelGroups: [AUTOMATIC_LITELLM_MODEL_GROUP, ...CLAUDE_CODE_PROXY_MODEL_ALIASES],
+  })
+  return { ...handle, modelGroup: AUTOMATIC_LITELLM_MODEL_GROUP }
+}
+
+async function startLitellmProxy(input: {
+  projectDir: string
+  url: string
+  runtimeEnvironment: Record<string, string>
+  configYaml: string
+  requiredModelGroups: readonly string[]
+}): Promise<LitellmHandle> {
+  const { projectDir, runtimeEnvironment } = input
+
   const cmd = resolveLitellmCommand()
-  let activeUrl = url.replace(/\/+$/, "")
-  const modelGroups = litellmModelGroups(model)
+  let activeUrl = input.url.replace(/\/+$/, "")
+  const modelGroups = input.requiredModelGroups
   const childEnv = stripBlockingEnv({
     ...process.env,
     ...readDotenvApiKeys(projectDir),
@@ -210,7 +288,7 @@ export async function startLitellmIfNeeded(
     const portMatch = activeUrl.match(/:(\d+)/)
     const port = portMatch ? portMatch[1] : "4000"
     const configPath = path.join(os.tmpdir(), `kody-local-litellm-${Date.now()}.yaml`)
-    fs.writeFileSync(configPath, generateLitellmConfigYaml(model))
+    fs.writeFileSync(configPath, input.configYaml)
     // `cmd` is always a runnable litellm CLI (the bare command or an absolute
     // path to the console script), so the proxy args are uniform.
     const args = ["--config", configPath, "--port", port]

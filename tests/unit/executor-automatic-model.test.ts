@@ -3,7 +3,11 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-const { runAgentSpy } = vi.hoisted(() => ({ runAgentSpy: vi.fn() }))
+const { runAgentSpy, startAutomaticLitellmSpy, startLitellmIfNeededSpy } = vi.hoisted(() => ({
+  runAgentSpy: vi.fn(),
+  startAutomaticLitellmSpy: vi.fn(),
+  startLitellmIfNeededSpy: vi.fn(async () => null),
+}))
 
 vi.mock("../../src/agent.js", async () => {
   const actual = await vi.importActual<typeof import("../../src/agent.js")>("../../src/agent.js")
@@ -11,7 +15,8 @@ vi.mock("../../src/agent.js", async () => {
 })
 
 vi.mock("../../src/litellm.js", () => ({
-  startLitellmIfNeeded: vi.fn(async () => null),
+  startAutomaticLitellm: startAutomaticLitellmSpy,
+  startLitellmIfNeeded: startLitellmIfNeededSpy,
 }))
 
 vi.mock("../../src/runtimeModelEnvironment.js", () => ({
@@ -84,6 +89,15 @@ beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-executor-automatic-"))
   process.chdir(dir)
   runAgentSpy.mockReset()
+  startAutomaticLitellmSpy.mockReset()
+  startAutomaticLitellmSpy.mockResolvedValue({
+    url: "http://127.0.0.1:4010",
+    modelGroup: "kody-automatic-0",
+    kill: vi.fn(),
+    isHealthy: vi.fn(async () => true),
+    ensureHealthy: vi.fn(async () => true),
+  })
+  startLitellmIfNeededSpy.mockClear()
   writeFixture()
 })
 
@@ -93,33 +107,36 @@ afterEach(() => {
 })
 
 describe("executor: Automatic model fallback", () => {
-  it("tries the next configured model after a safe rate-limit failure", async () => {
-    runAgentSpy
-      .mockResolvedValueOnce({
-        outcome: "failed",
-        outcomeKind: "rate_limit",
-        safeToReplay: true,
-        finalText: "",
-      })
-      .mockResolvedValueOnce({
-        outcome: "completed",
-        outcomeKind: "ok",
-        safeToReplay: false,
-        finalText: "done",
-      })
+  it("runs one agent session through the ordered Automatic gateway", async () => {
+    runAgentSpy.mockResolvedValue({
+      outcome: "completed",
+      outcomeKind: "ok",
+      safeToReplay: false,
+      finalText: "done",
+    })
 
     const out = await runImplementation("probe", { cliArgs: {}, cwd: dir })
 
     expect(out.exitCode).toBe(0)
-    expect(runAgentSpy).toHaveBeenCalledTimes(2)
-    expect(runAgentSpy.mock.calls.map((call) => call[0].model)).toEqual([
-      expect.objectContaining({ provider: "anthropic", model: "first" }),
-      expect.objectContaining({ provider: "openai", model: "second" }),
-    ])
-    expect(runAgentSpy.mock.calls.map((call) => call[0].stopOnRateLimit)).toEqual([true, false])
+    expect(startAutomaticLitellmSpy).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({ provider: "anthropic", model: "first" }),
+        expect.objectContaining({ provider: "openai", model: "second" }),
+      ],
+      dir,
+      expect.any(Object),
+    )
+    expect(startLitellmIfNeededSpy).not.toHaveBeenCalled()
+    expect(runAgentSpy).toHaveBeenCalledTimes(1)
+    expect(runAgentSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        litellmUrl: "http://127.0.0.1:4010",
+        litellmModelGroupOverride: "kody-automatic-0",
+      }),
+    )
   })
 
-  it("does not switch models after side effects or for a non-rate-limit error", async () => {
+  it("returns the gateway result without replaying the agent session", async () => {
     runAgentSpy.mockResolvedValue({
       outcome: "failed",
       outcomeKind: "rate_limit",
@@ -129,14 +146,32 @@ describe("executor: Automatic model fallback", () => {
     await runImplementation("probe", { cliArgs: {}, cwd: dir })
     expect(runAgentSpy).toHaveBeenCalledTimes(1)
 
-    runAgentSpy.mockReset()
-    runAgentSpy.mockResolvedValue({
-      outcome: "failed",
-      outcomeKind: "model_error",
-      safeToReplay: true,
-      finalText: "",
-    })
-    await runImplementation("probe", { cliArgs: {}, cwd: dir })
     expect(runAgentSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it("leaves an explicitly selected model on the existing direct path", async () => {
+    writeJson(path.join(dir, "kody.config.json"), {
+      github: { owner: "o", repo: "r" },
+      git: { defaultBranch: "main" },
+      quality: {},
+      agent: { model: "anthropic/first" },
+    })
+    runAgentSpy.mockResolvedValue({
+      outcome: "completed",
+      outcomeKind: "ok",
+      safeToReplay: false,
+      finalText: "done",
+    })
+
+    await runImplementation("probe", { cliArgs: {}, cwd: dir })
+
+    expect(startAutomaticLitellmSpy).not.toHaveBeenCalled()
+    expect(startLitellmIfNeededSpy).toHaveBeenCalledTimes(1)
+    expect(runAgentSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: expect.objectContaining({ provider: "anthropic", model: "first" }),
+        litellmUrl: null,
+      }),
+    )
   })
 })
