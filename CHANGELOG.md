@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.4.593 — 2026-08-16
+
+### Features
+- verify trusted blueprint config delivery (0000fa0)
+- schedule Todo-backed Agency loops (146e260)
+- allow scoped protected paths (b4aebb8)
+
+### Fixes
+- trigger checks after PR updates (740d2b4)
+- preserve implementation time (237158f)
+- defer delivery verification to CI (9e09d3e)
+- create PRs for script delivery (1a3782e)
+- deliver trusted script changes (80d0c72)
+- deliver script changes through pull requests (99c4507)
+- isolate execution request concurrency (0796f22)
+- tolerate large git delivery output (ba8b2d7)
+- deliver allowlisted ignored Store files (5d47827)
+- validate nested Store activations (b248297)
+- clarify guarded delivery ownership (ab7093e)
+- allow safe Store config activation (783fea9)
+- commit trusted loop definitions (142e866)
+- allow blueprint loop delivery (b3d6ca2)
+- honor authoritative capability output (e7d458a)
+- bound scheduled loop run ids (cec9ca0)
+- approve engine contracts release (ae7bc08)
+- accept pipeline run requests (7c77ba9)
+- enforce shared execution contract (f00a724)
+- support draft checkpoints (cd6fe15)
+- preserve finalization window (26b085d)
+- reserve time for completion (d12c9a3)
+
+### Chores
+- add store pipeline ci-repair (d92461e)
+- add store workflow merge (6784bea)
+- add store workflow review-fix (1e2c929)
+- add store workflow ci-repair (b52c915)
+
+### Other
+- require repeatable CI repair proof (93cc4fd)
 ## v0.4.532 — 2026-08-08
 
 ### Features
