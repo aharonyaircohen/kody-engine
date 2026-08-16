@@ -398,21 +398,22 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
     config.agent.perImplementationReasoningEffort?.[profileName] ??
     profile.claudeCode.reasoningEffort ??
     (profileHasThinkingTokens ? undefined : config.agent.reasoningEffort)
-  let model: ReturnType<typeof parseProviderModel>
+  let modelCandidates: ReturnType<typeof parseProviderModel>[]
   try {
-    model = parseProviderModel(modelSpec)
+    modelCandidates = modelSpec === "automatic" ? (config.agent.automaticModels ?? []) : [parseProviderModel(modelSpec)]
+    if (modelCandidates.length === 0) throw new Error("Automatic has no configured models")
   } catch (err) {
     return finishAndEnd({
       exitCode: 99,
       reason: `agent.model invalid: ${err instanceof Error ? err.message : String(err)}`,
     })
   }
+  const model = modelCandidates[0]!
 
   // Lazily initialized on first real agent invocation. Mechanical profiles can
   // set ctx.skipAgent during preflight, so starting provider infrastructure
   // before preflight makes no-agent implementations depend on agent-only setup.
-  let litellm: Awaited<ReturnType<typeof startLitellmIfNeeded>> | undefined
-  let runtimeModelEnvironment: Record<string, string> | undefined
+  const activeLiteLLM = new Set<NonNullable<Awaited<ReturnType<typeof startLitellmIfNeeded>>>>()
 
   const ctx: Context = {
     args,
@@ -544,112 +545,127 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
     const pluginPaths = [...externalPlugins, ...(syntheticPath ? [syntheticPath] : [])]
     const agents = loadSubagents(profile)
 
-    if (runtimeModelEnvironment === undefined) {
-      runtimeModelEnvironment = {}
-      if (needsLitellmProxy(model)) {
-        const resolved = await resolveRuntimeModelEnvironment(model, ctx)
+    let finalResult: AgentResult | undefined
+    for (let candidateIndex = 0; candidateIndex < modelCandidates.length; candidateIndex++) {
+      const candidate = modelCandidates[candidateIndex]!
+      let runtimeModelEnvironment: Record<string, string> = {}
+      if (needsLitellmProxy(candidate)) {
+        const resolved = await resolveRuntimeModelEnvironment(candidate, ctx)
         runtimeModelEnvironment = resolved.environment
         for (const warning of resolved.warnings) process.stderr.write(`⚠ ${warning}\n`)
       }
-    }
-
-    if (litellm === undefined) {
+      let lm: Awaited<ReturnType<typeof startLitellmIfNeeded>>
       try {
-        litellm = await startLitellmIfNeeded(model, input.cwd, undefined, runtimeModelEnvironment)
+        lm = await startLitellmIfNeeded(candidate, input.cwd, undefined, runtimeModelEnvironment)
+        if (lm) activeLiteLLM.add(lm)
       } catch (err) {
         throw new Error(`litellm startup failed: ${err instanceof Error ? err.message : String(err)}`)
       }
+      ctx.data.jobModelProvider = candidate.provider
+      ctx.data.jobModelName = candidate.model
+      const result = await runAgent({
+        prompt,
+        model: candidate,
+        cwd: input.cwd,
+        environment: {
+          ...(ctx.data.capabilityEnvironment &&
+          typeof ctx.data.capabilityEnvironment === "object" &&
+          !Array.isArray(ctx.data.capabilityEnvironment)
+            ? (ctx.data.capabilityEnvironment as Record<string, string>)
+            : {}),
+          ...runtimeModelEnvironment,
+        },
+        litellmUrl: lm?.url ?? null,
+        // On a connection drop mid-run, restart the (possibly crashed) proxy
+        // before the agent retries. No-op for direct-Anthropic runs (lm null).
+        ensureBackend: lm ? () => lm.ensureHealthy().then(() => undefined) : undefined,
+        // Pure liveness probe so the agent can spot a hollow "success" (proxy
+        // crashed mid-request, SDK still reported success). No-op when lm null.
+        isBackendHealthy: lm ? () => lm.isHealthy() : undefined,
+        verbose: input.verbose,
+        quiet: input.quiet,
+        abortController: input.abortController,
+        deadlineAtMs: input.deadlineAtMs,
+        ndjsonDir,
+        additionalDirectories: agentTaskArtifacts ? [agentTaskArtifacts.absDir] : undefined,
+        allowedToolsOverride: profile.claudeCode.tools,
+        disallowedToolsOverride: profile.claudeCode.disallowedTools,
+        permissionModeOverride: profile.claudeCode.permissionMode,
+        mcpServers: profile.claudeCode.mcpServers.length > 0 ? profile.claudeCode.mcpServers : undefined,
+        pluginPaths: pluginPaths.length > 0 ? pluginPaths : undefined,
+        agents,
+        maxTurns: profile.claudeCode.maxTurns,
+        reasoningEffort,
+        maxThinkingTokens: profile.claudeCode.maxThinkingTokens,
+        maxTurnTimeoutMs:
+          typeof profile.claudeCode.maxTurnTimeoutSec === "number"
+            ? Math.floor(profile.claudeCode.maxTurnTimeoutSec * 1000)
+            : undefined,
+        // DISCIPLINE leads so the stable, role-agnostic block sits at the front
+        // of the cacheable system-prompt prefix; profile/task appends follow.
+        systemPromptAppend:
+          [
+            DISCIPLINE,
+            agentIdentityBlock,
+            jobRefBlock,
+            jobWhyBlock,
+            profile.claudeCode.systemPromptAppend,
+            agentTaskArtifacts?.promptAddendum,
+          ]
+            .filter((s): s is string => typeof s === "string" && s.length > 0)
+            .join("\n\n") || undefined,
+        cacheable: profile.claudeCode.cacheable,
+        enableVerifyTool: profile.claudeCode.enableVerifyTool,
+        enableSubmitTool: profile.claudeCode.enableSubmitTool,
+        // Locked-toolbox capability mode: `loadJobFromFile` flips `ctx.data.capabilityTools`
+        // when a capability declares `tools` in profile.json. The executor doesn't need
+        // to know the palette — it just forwards the flag so agent.ts can spin
+        // up the in-process `kody-capability` MCP server with the right context.
+        enableCapabilityTool: Array.isArray(ctx.data.capabilityTools) && ctx.data.capabilityTools.length > 0,
+        capabilityOperatorMention:
+          typeof ctx.data.capabilityOperatorMention === "string"
+            ? (ctx.data.capabilityOperatorMention as string)
+            : undefined,
+        // Stamp the running capability's slug onto recommendations so the dashboard
+        // keys trust per capability (not per agent). `jobSlug` is set by loadJobFromFile.
+        capabilitySlug: typeof ctx.data.jobSlug === "string" ? (ctx.data.jobSlug as string) : undefined,
+        capabilityDefaultBranch: config.git.defaultBranch,
+        // owner/repo from kody.config.json; envelope falls back to GITHUB_REPOSITORY
+        // for tester repos that don't set config.github (the file isn't always
+        // checked in). Either way, capabilityMcp needs "owner/name" to hit the compare API.
+        capabilityRepoSlug:
+          config.github?.owner && config.github?.repo
+            ? `${config.github.owner}/${config.github.repo}`
+            : process.env.GITHUB_REPOSITORY?.trim() || undefined,
+        verifyToolMaxAttempts: profile.claudeCode.verifyAttempts ?? null,
+        verifyConfig: profile.claudeCode.enableVerifyTool ? config : undefined,
+        implementationName: profileName,
+        settingSources: (profile.claudeCode as { settingSources?: Array<"user" | "project" | "local"> }).settingSources,
+        outputContract:
+          typeof ctx.data.capabilityOutputPath === "string" &&
+          ctx.data.capabilityOutputSchema &&
+          typeof ctx.data.capabilityOutputSchema === "object" &&
+          !Array.isArray(ctx.data.capabilityOutputSchema)
+            ? {
+                path: ctx.data.capabilityOutputPath,
+                schema: ctx.data.capabilityOutputSchema as Record<string, unknown>,
+              }
+            : undefined,
+      })
+      finalResult = result
+      const next = modelCandidates[candidateIndex + 1]
+      if (!next || result.outcome !== "failed" || result.outcomeKind !== "rate_limit" || result.safeToReplay !== true) {
+        return result
+      }
+      process.stderr.write(
+        `[kody agent] ${candidate.spec ?? candidate.model} is rate limited; continuing with ${next.spec ?? next.model}\n`,
+      )
+      if (lm) {
+        lm.kill()
+        activeLiteLLM.delete(lm)
+      }
     }
-    const lm = litellm
-    return runAgent({
-      prompt,
-      model,
-      cwd: input.cwd,
-      environment: {
-        ...(ctx.data.capabilityEnvironment &&
-        typeof ctx.data.capabilityEnvironment === "object" &&
-        !Array.isArray(ctx.data.capabilityEnvironment)
-          ? (ctx.data.capabilityEnvironment as Record<string, string>)
-          : {}),
-        ...runtimeModelEnvironment,
-      },
-      litellmUrl: lm?.url ?? null,
-      // On a connection drop mid-run, restart the (possibly crashed) proxy
-      // before the agent retries. No-op for direct-Anthropic runs (lm null).
-      ensureBackend: lm ? () => lm.ensureHealthy().then(() => undefined) : undefined,
-      // Pure liveness probe so the agent can spot a hollow "success" (proxy
-      // crashed mid-request, SDK still reported success). No-op when lm null.
-      isBackendHealthy: lm ? () => lm.isHealthy() : undefined,
-      verbose: input.verbose,
-      quiet: input.quiet,
-      abortController: input.abortController,
-      deadlineAtMs: input.deadlineAtMs,
-      ndjsonDir,
-      additionalDirectories: agentTaskArtifacts ? [agentTaskArtifacts.absDir] : undefined,
-      allowedToolsOverride: profile.claudeCode.tools,
-      disallowedToolsOverride: profile.claudeCode.disallowedTools,
-      permissionModeOverride: profile.claudeCode.permissionMode,
-      mcpServers: profile.claudeCode.mcpServers.length > 0 ? profile.claudeCode.mcpServers : undefined,
-      pluginPaths: pluginPaths.length > 0 ? pluginPaths : undefined,
-      agents,
-      maxTurns: profile.claudeCode.maxTurns,
-      reasoningEffort,
-      maxThinkingTokens: profile.claudeCode.maxThinkingTokens,
-      maxTurnTimeoutMs:
-        typeof profile.claudeCode.maxTurnTimeoutSec === "number"
-          ? Math.floor(profile.claudeCode.maxTurnTimeoutSec * 1000)
-          : undefined,
-      // DISCIPLINE leads so the stable, role-agnostic block sits at the front
-      // of the cacheable system-prompt prefix; profile/task appends follow.
-      systemPromptAppend:
-        [
-          DISCIPLINE,
-          agentIdentityBlock,
-          jobRefBlock,
-          jobWhyBlock,
-          profile.claudeCode.systemPromptAppend,
-          agentTaskArtifacts?.promptAddendum,
-        ]
-          .filter((s): s is string => typeof s === "string" && s.length > 0)
-          .join("\n\n") || undefined,
-      cacheable: profile.claudeCode.cacheable,
-      enableVerifyTool: profile.claudeCode.enableVerifyTool,
-      enableSubmitTool: profile.claudeCode.enableSubmitTool,
-      // Locked-toolbox capability mode: `loadJobFromFile` flips `ctx.data.capabilityTools`
-      // when a capability declares `tools` in profile.json. The executor doesn't need
-      // to know the palette — it just forwards the flag so agent.ts can spin
-      // up the in-process `kody-capability` MCP server with the right context.
-      enableCapabilityTool: Array.isArray(ctx.data.capabilityTools) && ctx.data.capabilityTools.length > 0,
-      capabilityOperatorMention:
-        typeof ctx.data.capabilityOperatorMention === "string"
-          ? (ctx.data.capabilityOperatorMention as string)
-          : undefined,
-      // Stamp the running capability's slug onto recommendations so the dashboard
-      // keys trust per capability (not per agent). `jobSlug` is set by loadJobFromFile.
-      capabilitySlug: typeof ctx.data.jobSlug === "string" ? (ctx.data.jobSlug as string) : undefined,
-      capabilityDefaultBranch: config.git.defaultBranch,
-      // owner/repo from kody.config.json; envelope falls back to GITHUB_REPOSITORY
-      // for tester repos that don't set config.github (the file isn't always
-      // checked in). Either way, capabilityMcp needs "owner/name" to hit the compare API.
-      capabilityRepoSlug:
-        config.github?.owner && config.github?.repo
-          ? `${config.github.owner}/${config.github.repo}`
-          : process.env.GITHUB_REPOSITORY?.trim() || undefined,
-      verifyToolMaxAttempts: profile.claudeCode.verifyAttempts ?? null,
-      verifyConfig: profile.claudeCode.enableVerifyTool ? config : undefined,
-      implementationName: profileName,
-      settingSources: (profile.claudeCode as { settingSources?: Array<"user" | "project" | "local"> }).settingSources,
-      outputContract:
-        typeof ctx.data.capabilityOutputPath === "string" &&
-        ctx.data.capabilityOutputSchema &&
-        typeof ctx.data.capabilityOutputSchema === "object" &&
-        !Array.isArray(ctx.data.capabilityOutputSchema)
-          ? {
-              path: ctx.data.capabilityOutputPath,
-              schema: ctx.data.capabilityOutputSchema as Record<string, unknown>,
-            }
-          : undefined,
-    })
+    return finalResult!
   }
 
   // Stash for checkCoverageWithRetry.
@@ -948,7 +964,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       }
     }
     try {
-      litellm?.kill()
+      for (const proxy of activeLiteLLM) proxy.kill()
     } catch {
       /* best effort */
     }

@@ -97,6 +97,38 @@ describe("config: needsLitellmProxy / providerApiKeyEnvVar", () => {
 })
 
 describe("config: loadConfig", () => {
+  it("loads an ordered Automatic model queue", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: {
+        model: "automatic",
+        automaticModels: [
+          {
+            spec: "anthropic/claude-a",
+            provider: "anthropic",
+            protocol: "anthropic",
+            modelName: "claude-a",
+            apiKeyEnvVar: "ANTHROPIC_API_KEY",
+          },
+          {
+            spec: "openai/gpt-b",
+            provider: "openai",
+            protocol: "openai",
+            baseURL: "https://api.openai.com/v1",
+            modelName: "gpt-b",
+            apiKeyEnvVar: "OPENAI_API_KEY",
+          },
+        ],
+      },
+    })
+
+    expect(loadConfig(dir).agent.automaticModels).toEqual([
+      expect.objectContaining({ provider: "anthropic", model: "claude-a" }),
+      expect.objectContaining({ provider: "openai", model: "gpt-b" }),
+    ])
+  })
+
   it("loads minimal valid config", () => {
     const dir = tmpDir()
     writeConfig(dir, {

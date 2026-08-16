@@ -51,6 +51,8 @@ export interface AgentResult {
    * still compile; runAgent itself always populates it.
    */
   outcomeKind?: AgentOutcomeKind
+  /** True only when replaying the whole turn cannot repeat a durable mutation. */
+  safeToReplay?: boolean
   finalText: string
   /**
    * State the agent submitted via the in-process `submit_state` tool
@@ -463,6 +465,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     : null
   const outputContractStopHook = opts.outputContract ? createOutputContractStopHook(opts.outputContract) : null
 
+  let finalSafeToReplay = true
   for (let attempt = 0; ; attempt++) {
     // The SDK message log reflects the final attempt — truncate on each try.
     let ndjsonWriteFailed = false
@@ -886,7 +889,8 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         errorMessage = e instanceof Error ? e.message : String(e)
       } else {
         outcome = "failed"
-        outcomeKind = "model_error"
+        const message = e instanceof Error ? e.message : String(e)
+        outcomeKind = /\b429\b|rate[ _-]?limit|too many requests/i.test(message) ? "rate_limit" : "model_error"
         errorMessage = e instanceof Error ? e.message : String(e)
       }
     } finally {
@@ -956,6 +960,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       attempt < MAX_CONNECTION_RETRIES &&
       !sawMutatingTool &&
       (isTransientConnectionError(errorMessage) || noWorkSuccess)
+    finalSafeToReplay = !sawMutatingTool
     if (!shouldRetry) break
 
     const delayMs = CONNECTION_RETRY_BASE_MS * 2 ** attempt
@@ -978,6 +983,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   return {
     outcome,
     outcomeKind,
+    safeToReplay: finalSafeToReplay,
     finalText,
     ...(submittedState ? { submittedState } : {}),
     error: errorMessage,

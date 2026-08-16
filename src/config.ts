@@ -33,6 +33,8 @@ export interface KodyConfig {
   }
   agent: {
     model: string
+    /** Ordered candidates used only when model is the explicit `automatic` selection. */
+    automaticModels?: ProviderModel[]
     /**
      * Thinking effort. Maps to the Claude Agent SDK's `maxThinkingTokens`
      * (Anthropic extended thinking). When unset, the SDK runs without
@@ -296,6 +298,33 @@ export function parseModelRuntimeConfig(modelSpec: string, rawConfig: string | u
   return out
 }
 
+function parseAutomaticModels(raw: unknown): ProviderModel[] | undefined {
+  if (raw === undefined) return undefined
+  if (!Array.isArray(raw)) throw new Error("kody.config.json: agent.automaticModels must be an array")
+  const models = raw.map((entry, index) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new Error(`kody.config.json: agent.automaticModels[${index}] must be an object`)
+    }
+    const record = entry as Record<string, unknown>
+    const spec = optionalRuntimeString(record, "spec")
+    const modelName = optionalRuntimeString(record, "modelName")
+    const provider = optionalRuntimeString(record, "provider")
+    if (!spec || !modelName || !provider) {
+      throw new Error(`kody.config.json: agent.automaticModels[${index}] requires spec, provider, and modelName`)
+    }
+    const model: ProviderModel = { provider, model: modelName, spec }
+    const protocol = optionalRuntimeString(record, "protocol")
+    const baseURL = optionalRuntimeString(record, "baseURL")
+    const apiKeyEnvVar = optionalRuntimeString(record, "apiKeyEnvVar")
+    if (protocol) model.protocol = protocol
+    if (baseURL) model.baseURL = baseURL
+    if (apiKeyEnvVar) model.apiKeyEnvVar = apiKeyEnvVar
+    if (protocol === "openai") model.litellmProvider = "openai"
+    return model
+  })
+  return models.length > 0 ? models : undefined
+}
+
 export function litellmModelGroup(model: ProviderModel): string {
   return model.spec?.trim() || model.model
 }
@@ -335,6 +364,10 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
   if (!github.owner || !github.repo) {
     throw new Error(`kody.config.json: github.owner and github.repo are required`)
   }
+  const automaticModels = parseAutomaticModels(agent.automaticModels)
+  if (agent.model === "automatic" && (!automaticModels || automaticModels.length < 2)) {
+    throw new Error("kody.config.json: Automatic requires at least two agent.automaticModels")
+  }
 
   return {
     quality: {
@@ -353,6 +386,7 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     },
     agent: {
       model: String(agent.model),
+      ...(automaticModels ? { automaticModels } : {}),
       ...parsePerImplementation(agent.perImplementation),
       ...parsePerImplementationReasoningEffort(agent.perImplementationReasoningEffort),
       ...parseAgentReasoningEffort(agent.reasoningEffort),

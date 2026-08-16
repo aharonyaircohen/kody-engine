@@ -114,6 +114,21 @@ describe("runAgent: transient connection retry", () => {
     expect(res.outcome).toBe("failed")
   })
 
+  it("classifies a thrown 429 as rate limited and safe to replay before tools run", async () => {
+    attempts = [{ throw: "API Error 429: rate limit exceeded" }]
+    const res = await runFlushed()
+    expect(res.outcome).toBe("failed")
+    expect(res.outcomeKind).toBe("rate_limit")
+    expect(res.safeToReplay).toBe(true)
+  })
+
+  it("marks a rate-limited attempt unsafe after a mutating tool ran", async () => {
+    attempts = [{ messages: [writeToolUse], throw: "rate_limit_error" }]
+    const res = await runFlushed()
+    expect(res.outcomeKind).toBe("rate_limit")
+    expect(res.safeToReplay).toBe(false)
+  })
+
   it("latches a terminal success: a transient error after the success result does not replay", async () => {
     // The success `result` arrives, THEN the stream throws a connection drop on
     // its tail. The work is done — we must not downgrade to failed and replay
