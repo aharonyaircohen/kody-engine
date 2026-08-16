@@ -116,6 +116,7 @@ describe("executor: Automatic model fallback", () => {
       expect.objectContaining({ provider: "anthropic", model: "first" }),
       expect.objectContaining({ provider: "openai", model: "second" }),
     ])
+    expect(runAgentSpy.mock.calls.map((call) => call[0].stopOnRateLimit)).toEqual([true, false])
   })
 
   it("does not switch models after side effects or for a non-rate-limit error", async () => {

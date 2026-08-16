@@ -65,6 +65,34 @@ describe("runAgent: typed AgentOutcomeKind", () => {
     expect(res.outcomeKind).toBe("rate_limit")
   })
 
+  it("stops immediately on an SDK 429 when the caller owns fallback", async () => {
+    queryGenFactory = async function* () {
+      yield { type: "system", subtype: "api_retry", error_status: 429, retry_delay_ms: 60_000 }
+      await new Promise((resolve) => setTimeout(resolve, 60_000))
+      yield { type: "result", subtype: "success", result: "TOO LATE" }
+    }
+
+    const startedAt = Date.now()
+    const res = await runAgent({ ...baseOpts(), stopOnRateLimit: true })
+
+    expect(res.outcome).toBe("failed")
+    expect(res.outcomeKind).toBe("rate_limit")
+    expect(res.safeToReplay).toBe(true)
+    expect(Date.now() - startedAt).toBeLessThan(1_000)
+  })
+
+  it("keeps the SDK retry behavior for a normal concrete model", async () => {
+    queryGenFactory = async function* () {
+      yield { type: "system", subtype: "api_retry", error_status: 429, retry_delay_ms: 1 }
+      yield { type: "result", subtype: "success", result: "DONE" }
+    }
+
+    const res = await runAgent(baseOpts())
+
+    expect(res.outcome).toBe("completed")
+    expect(res.outcomeKind).toBe("ok")
+  })
+
   it("returns outcomeKind=tool_error for tool failures", async () => {
     queryGenFactory = async function* () {
       yield { type: "result", subtype: "tool_failed", result: "" }

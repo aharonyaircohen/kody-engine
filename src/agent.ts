@@ -103,6 +103,8 @@ export interface AgentOptions {
   quiet?: boolean
   /** Cancels the SDK session when the owning Run reaches its hard deadline. */
   abortController?: AbortController
+  /** Return the first 429 to an owner that has another model ready. */
+  stopOnRateLimit?: boolean
   /** Absolute hard deadline inherited from the owning workflow step. */
   deadlineAtMs?: number
   ndjsonDir?: string
@@ -507,6 +509,12 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     // log tail — and we get a real attempt, or an honest failure that blocks
     // the empty PR.
     let noWorkSuccess = false
+    const sdkAbortController = opts.stopOnRateLimit ? new AbortController() : opts.abortController
+    const forwardOwnerAbort = (): void => sdkAbortController?.abort(opts.abortController?.signal.reason)
+    if (opts.stopOnRateLimit && opts.abortController) {
+      if (opts.abortController.signal.aborted) forwardOwnerAbort()
+      else opts.abortController.signal.addEventListener("abort", forwardOwnerAbort, { once: true })
+    }
 
     try {
       const queryOptions: Record<string, unknown> = {
@@ -701,7 +709,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         }
       }
       queryOptions.settingSources = opts.settingSources ?? ["project", "local"]
-      if (opts.abortController) queryOptions.abortController = opts.abortController
+      if (sdkAbortController) queryOptions.abortController = sdkAbortController
       // Pin the SDK's native binary to a job-stable path so npm pruning the
       // `_npx` cache mid-job (during a long run phase) can't make a later
       // phase fail with "native binary not found". Null => SDK default.
@@ -784,6 +792,29 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         }
 
         const m = msg as SdkMessageLike
+
+        if (
+          opts.stopOnRateLimit &&
+          m.type === "system" &&
+          m.subtype === "api_retry" &&
+          Number((m as { error_status?: unknown }).error_status) === 429
+        ) {
+          outcome = "failed"
+          outcomeKind = "rate_limit"
+          errorMessage = "model rate limited (429)"
+          sdkAbortController?.abort(new Error(errorMessage))
+          if (typeof iterator.return === "function") {
+            try {
+              await Promise.race([
+                iterator.return(undefined).catch(() => undefined),
+                new Promise((resolve) => setTimeout(resolve, 1_000).unref()),
+              ])
+            } catch {
+              /* the typed rate-limit result already owns this exit */
+            }
+          }
+          break
+        }
 
         // Stream progress events (thinking / tool calls / text deltas) to
         // the consumer. Chat mode hooks this to push live updates to the
@@ -894,6 +925,9 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         errorMessage = e instanceof Error ? e.message : String(e)
       }
     } finally {
+      if (opts.stopOnRateLimit && opts.abortController) {
+        opts.abortController.signal.removeEventListener("abort", forwardOwnerAbort)
+      }
       try {
         fullLog.end()
       } catch {

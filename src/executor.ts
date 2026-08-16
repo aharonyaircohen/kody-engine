@@ -585,6 +585,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
         verbose: input.verbose,
         quiet: input.quiet,
         abortController: input.abortController,
+        stopOnRateLimit: candidateIndex < modelCandidates.length - 1,
         deadlineAtMs: input.deadlineAtMs,
         ndjsonDir,
         additionalDirectories: agentTaskArtifacts ? [agentTaskArtifacts.absDir] : undefined,
