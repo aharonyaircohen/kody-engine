@@ -71,6 +71,7 @@ describe("prepareBrowserAuth", () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
     fs.rmSync(tmp, { recursive: true, force: true })
     if (previousPass === undefined) delete process.env.KODY_LOGIN_PASS
@@ -158,18 +159,48 @@ describe("prepareBrowserAuth", () => {
   it("fails safely when GitHub rejects the credential", async () => {
     writeVariables(tmp, { KODY_LOGIN_REPO: "https://github.com/acme/widgets/" })
     process.env.KODY_LOGIN_PASS = "rejected-pat"
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("denied", { status: 401 })),
-    )
+    const fetchMock = vi.fn(async () => new Response("denied", { status: 401 }))
+    vi.stubGlobal("fetch", fetchMock)
     const ctx = makeCtx(tmp)
     const profile = makeProfile()
 
     await prepareBrowserAuth(ctx, profile)
 
-    expect(ctx.data.qaAuthBlock).toContain("could not prepare Kody repository login")
+    expect(ctx.data.qaAuthBlock).toContain("GitHub user check returned 401")
     expect(ctx.data.qaAuthBlock).not.toContain("rejected-pat")
     expect(profile.claudeCode.mcpServers[0]!.args).not.toContain("--storage-state")
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("retries temporary GitHub failures before preparing the browser session", async () => {
+    vi.useFakeTimers()
+    writeVariables(tmp, { KODY_LOGIN_REPO: "https://github.com/acme/widgets" })
+    process.env.KODY_LOGIN_PASS = "github-pat"
+    let userAttempts = 0
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url.endsWith("/user")) {
+        userAttempts += 1
+        if (userAttempts < 3) return new Response("unavailable", { status: 503 })
+        return new Response(JSON.stringify({ login: "qa-user", avatar_url: "https://img.test/qa", id: 42 }), {
+          status: 200,
+        })
+      }
+      return new Response(JSON.stringify({ full_name: "acme/widgets" }), { status: 200 })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const ctx = makeCtx(tmp)
+    const profile = makeProfile()
+    const pending = prepareBrowserAuth(ctx, profile)
+    await vi.runAllTimersAsync()
+    await pending
+
+    expect(userAttempts).toBe(3)
+    expect(ctx.data.qaAuthBlock).toContain("already authenticated")
+    expect(ctx.data.qaAuthBlock).not.toContain("github-pat")
+    const cleanup = ctx.data.__runtimeCleanup as Array<() => void>
+    cleanup[0]!()
   })
 
   it("rejects a non-GitHub repository URL without calling GitHub or exposing the PAT", async () => {

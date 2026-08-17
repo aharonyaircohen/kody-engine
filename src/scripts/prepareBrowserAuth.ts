@@ -42,16 +42,22 @@ function browserOrigin(raw: string): string {
   return parsed.origin
 }
 
-async function githubJson<T>(url: string, token: string): Promise<T> {
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${token}`,
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-  })
-  if (!response.ok) throw new Error(`GitHub returned ${response.status}`)
-  return (await response.json()) as T
+async function githubJson<T>(url: string, token: string, checkName: string): Promise<T> {
+  const retryDelaysMs = [250, 750]
+  for (let attempt = 0; attempt <= retryDelaysMs.length; attempt += 1) {
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    })
+    if (response.ok) return (await response.json()) as T
+    const canRetry = response.status >= 500 && response.status <= 599 && attempt < retryDelaysMs.length
+    if (!canRetry) throw new Error(`GitHub ${checkName} check returned ${response.status}`)
+    await new Promise((resolve) => setTimeout(resolve, retryDelaysMs[attempt]))
+  }
+  throw new Error(`GitHub ${checkName} check failed`)
 }
 
 function writeKodyStorageState(input: {
@@ -186,10 +192,11 @@ export async function prepareKodyRepositoryBrowserAuth(
   try {
     const requested = githubRepositoryParts(repositoryUrl)
     const [user, repository] = await Promise.all([
-      githubJson<GitHubUser>("https://api.github.com/user", credential.value),
+      githubJson<GitHubUser>("https://api.github.com/user", credential.value, "user"),
       githubJson<GitHubRepository>(
         `https://api.github.com/repos/${encodeURIComponent(requested.owner)}/${encodeURIComponent(requested.repo)}`,
         credential.value,
+        "repository",
       ),
     ])
     const [owner, repo] = repository.full_name.split("/")
