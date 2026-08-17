@@ -6,12 +6,6 @@ import { registerRuntimeCleanup } from "../runtimeCleanup.js"
 import { readKodyVariables } from "./kodyVariables.js"
 import { resolveRuntimeSecret } from "./runtimeSecrets.js"
 
-interface GitHubUser {
-  login: string
-  avatar_url: string
-  id: number
-}
-
 interface GitHubRepository {
   full_name: string
 }
@@ -66,7 +60,6 @@ function writeKodyStorageState(input: {
   owner: string
   repo: string
   token: string
-  user: GitHubUser
 }): { directory: string; file: string } {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "kody-browser-auth-"))
   fs.chmodSync(directory, 0o700)
@@ -79,14 +72,17 @@ function writeKodyStorageState(input: {
     token: input.token,
     addedAt: now,
     isLogin: true,
-    user: input.user,
   }
+  // Kody requires the top-level user shape while hydrating auth, but identity
+  // is not required for repository API headers. Leave it unresolved so the
+  // dashboard can refresh it through its own authenticated /auth/me route.
+  const unresolvedUser = { login: "", avatar_url: "", id: 0 }
   const auth = {
     repoUrl: input.repoUrl,
     owner: input.owner,
     repo: input.repo,
     token: input.token,
-    user: input.user,
+    user: unresolvedUser,
     loggedInAt: now,
     repos: [repoEntry],
     currentRepoIndex: 0,
@@ -191,25 +187,19 @@ export async function prepareKodyRepositoryBrowserAuth(
   let state: { directory: string; file: string } | undefined
   try {
     const requested = githubRepositoryParts(repositoryUrl)
-    const [user, repository] = await Promise.all([
-      githubJson<GitHubUser>("https://api.github.com/user", credential.value, "user"),
-      githubJson<GitHubRepository>(
-        `https://api.github.com/repos/${encodeURIComponent(requested.owner)}/${encodeURIComponent(requested.repo)}`,
-        credential.value,
-        "repository",
-      ),
-    ])
+    const repository = await githubJson<GitHubRepository>(
+      `https://api.github.com/repos/${encodeURIComponent(requested.owner)}/${encodeURIComponent(requested.repo)}`,
+      credential.value,
+      "repository",
+    )
     const [owner, repo] = repository.full_name.split("/")
-    if (!owner || !repo || !user.login || !user.avatar_url || typeof user.id !== "number") {
-      throw new Error("GitHub returned incomplete identity data")
-    }
+    if (!owner || !repo) throw new Error("GitHub returned incomplete repository data")
     state = writeKodyStorageState({
       origin: browserOrigin(input.targetUrl),
       repoUrl: `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
       owner,
       repo,
       token: credential.value,
-      user,
     })
     configurePlaywright(profile, state.file)
     const authDirectory = state.directory

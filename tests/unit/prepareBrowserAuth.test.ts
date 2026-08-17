@@ -87,11 +87,6 @@ describe("prepareBrowserAuth", () => {
       "fetch",
       vi.fn(async (input: string | URL | Request) => {
         const url = String(input)
-        if (url.endsWith("/user")) {
-          return new Response(JSON.stringify({ login: "qa-user", avatar_url: "https://img.test/qa", id: 42 }), {
-            status: 200,
-          })
-        }
         if (url.endsWith("/repos/acme/widgets")) {
           return new Response(
             JSON.stringify({ full_name: "acme/widgets", html_url: "https://untrusted.test/acme/widgets" }),
@@ -119,12 +114,20 @@ describe("prepareBrowserAuth", () => {
       origins: Array<{ localStorage: Array<{ name: string; value: string }> }>
     }
     const authValue = storageState.origins[0]!.localStorage.find((entry) => entry.name === "kody_auth")!.value
-    const auth = JSON.parse(authValue) as { token: string; repoUrl: string; user: { login: string } }
+    const auth = JSON.parse(authValue) as {
+      token: string
+      repoUrl: string
+      user: { login: string }
+      repos: Array<{ user?: unknown }>
+    }
     expect(auth).toMatchObject({
       token: "github-pat",
       repoUrl: "https://github.com/acme/widgets",
-      user: { login: "qa-user" },
+      user: { login: "" },
     })
+    expect(auth.repos[0]!.user).toBeUndefined()
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(fetch).not.toHaveBeenCalledWith("https://api.github.com/user", expect.anything())
 
     const cleanup = ctx.data.__runtimeCleanup as Array<() => void>
     expect(cleanup).toHaveLength(1)
@@ -166,25 +169,22 @@ describe("prepareBrowserAuth", () => {
 
     await prepareBrowserAuth(ctx, profile)
 
-    expect(ctx.data.qaAuthBlock).toContain("GitHub user check returned 401")
+    expect(ctx.data.qaAuthBlock).toContain("GitHub repository check returned 401")
     expect(ctx.data.qaAuthBlock).not.toContain("rejected-pat")
     expect(profile.claudeCode.mcpServers[0]!.args).not.toContain("--storage-state")
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it("retries temporary GitHub failures before preparing the browser session", async () => {
     vi.useFakeTimers()
     writeVariables(tmp, { KODY_LOGIN_REPO: "https://github.com/acme/widgets" })
     process.env.KODY_LOGIN_PASS = "github-pat"
-    let userAttempts = 0
+    let repositoryAttempts = 0
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = String(input)
-      if (url.endsWith("/user")) {
-        userAttempts += 1
-        if (userAttempts < 3) return new Response("unavailable", { status: 503 })
-        return new Response(JSON.stringify({ login: "qa-user", avatar_url: "https://img.test/qa", id: 42 }), {
-          status: 200,
-        })
+      if (url.endsWith("/repos/acme/widgets")) {
+        repositoryAttempts += 1
+        if (repositoryAttempts < 3) return new Response("unavailable", { status: 503 })
       }
       return new Response(JSON.stringify({ full_name: "acme/widgets" }), { status: 200 })
     })
@@ -196,7 +196,7 @@ describe("prepareBrowserAuth", () => {
     await vi.runAllTimersAsync()
     await pending
 
-    expect(userAttempts).toBe(3)
+    expect(repositoryAttempts).toBe(3)
     expect(ctx.data.qaAuthBlock).toContain("already authenticated")
     expect(ctx.data.qaAuthBlock).not.toContain("github-pat")
     const cleanup = ctx.data.__runtimeCleanup as Array<() => void>
@@ -224,11 +224,7 @@ describe("prepareBrowserAuth", () => {
     process.env.KODY_LOGIN_PASS = "github-pat"
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: string | URL | Request) => {
-        const user = { login: "qa-user", avatar_url: "https://img.test/qa", id: 42 }
-        const repository = { full_name: "acme/widgets", html_url: "https://github.com/acme/widgets" }
-        return new Response(JSON.stringify(String(input).endsWith("/user") ? user : repository), { status: 200 })
-      }),
+      vi.fn(async () => new Response(JSON.stringify({ full_name: "acme/widgets" }), { status: 200 })),
     )
     const ctx = makeCtx(tmp)
     const profile = makeProfile()
@@ -248,11 +244,7 @@ describe("prepareBrowserAuth", () => {
     process.env.KODY_LOGIN_PASS = "github-pat"
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: string | URL | Request) => {
-        const user = { login: "qa-user", avatar_url: "https://img.test/qa", id: 42 }
-        const repository = { full_name: "acme/widgets", html_url: "https://github.com/acme/widgets" }
-        return new Response(JSON.stringify(String(input).endsWith("/user") ? user : repository), { status: 200 })
-      }),
+      vi.fn(async () => new Response(JSON.stringify({ full_name: "acme/widgets" }), { status: 200 })),
     )
     const ctx = makeCtx(tmp)
     const profile = makeProfile()
