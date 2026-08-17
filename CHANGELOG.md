@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.598 — 2026-08-17
+
+### Fixes
+- route automatic models through fallback gateway (9979d17)
+
+### Chores
+- release 0.4.597 (2711d59)
 ## v0.4.532 — 2026-08-08
 
 ### Features
