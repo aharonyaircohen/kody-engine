@@ -2,10 +2,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import {
-  createOutputContractPostWriteHook,
-  createOutputContractStopHook,
-} from "../../src/outputContractHooks.js"
+import { createOutputContractPostWriteHook, createOutputContractStopHook } from "../../src/outputContractHooks.js"
 
 const schema = {
   type: "object",
@@ -88,4 +85,28 @@ describe("output contract hooks", () => {
     expect(await hook()).toEqual({})
   })
 
+  it("accepts a valid final JSON response as the authoritative output", async () => {
+    const file = outputFile()
+    const hook = createOutputContractStopHook({ path: file, schema })
+
+    const result = await hook({
+      last_assistant_message: JSON.stringify({ version: 1, status: "pass" }),
+    })
+
+    expect(result).toEqual({})
+    expect(JSON.parse(fs.readFileSync(file, "utf8"))).toEqual({ version: 1, status: "pass" })
+  })
+
+  it("rejects a final JSON response that does not match the contract", async () => {
+    const file = outputFile()
+    const hook = createOutputContractStopHook({ path: file, schema })
+
+    const result = await hook({ last_assistant_message: JSON.stringify({ status: "pass" }) })
+
+    expect(result).toMatchObject({
+      decision: "block",
+      reason: expect.stringContaining("required property 'version'"),
+    })
+    expect(fs.existsSync(file)).toBe(false)
+  })
 })

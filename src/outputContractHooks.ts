@@ -9,6 +9,7 @@ export interface OutputContract {
 
 interface ToolHookInput {
   tool_input?: unknown
+  last_assistant_message?: unknown
 }
 
 function outputContractError(contract: OutputContract): string | null {
@@ -52,9 +53,33 @@ export function createOutputContractPostWriteHook(
   }
 }
 
-export function createOutputContractStopHook(contract: OutputContract): () => Promise<Record<string, unknown>> {
-  return async () => {
+export function createOutputContractStopHook(
+  contract: OutputContract,
+): (input?: ToolHookInput) => Promise<Record<string, unknown>> {
+  return async (input = {}) => {
     if (!fs.existsSync(contract.path)) {
+      const message = input.last_assistant_message
+      if (typeof message === "string" && message.trim()) {
+        let value: unknown
+        try {
+          value = JSON.parse(message)
+        } catch {
+          value = undefined
+        }
+        if (value !== undefined) {
+          try {
+            validateCapabilityContractOutput(contract.schema, value)
+            fs.mkdirSync(path.dirname(contract.path), { recursive: true })
+            fs.writeFileSync(contract.path, JSON.stringify(value), { mode: 0o600 })
+            return {}
+          } catch (error) {
+            return {
+              decision: "block",
+              reason: `The final JSON response does not match its required contract: ${error instanceof Error ? error.message : String(error)}. Return one corrected JSON value and finish.`,
+            }
+          }
+        }
+      }
       return {
         decision: "block",
         reason:
