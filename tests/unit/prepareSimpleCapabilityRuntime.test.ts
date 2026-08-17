@@ -29,7 +29,9 @@ function fixture(): { ctx: Context; profile: Profile } {
       capabilityRequirements: {
         browser: true,
         qaCredentials: true,
-        githubTestToken: true,
+      },
+      capabilityInput: {
+        url: "https://dashboard.example.test/repo/acme/shop",
       },
       prompt: "Review the UI.",
     },
@@ -81,23 +83,45 @@ describe("prepareSimpleCapabilityRuntime", () => {
     expect(ctx.data.capabilityEnvironment).toBeUndefined()
   })
 
-  it("provides the protected GitHub test token only inside the private agent prompt", async () => {
+  it("prepares an authenticated browser session without putting the protected GitHub token in the prompt", async () => {
     const { ctx, profile } = fixture()
+    ctx.data.capabilityRequirements = { browser: true, qaCredentials: true, githubTestToken: true }
     process.env.E2E_GITHUB_TOKEN = "protected-github-token"
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url.endsWith("/user")) {
+        return new Response(JSON.stringify({ login: "qa-user", avatar_url: "https://img.test/qa", id: 42 }), {
+          status: 200,
+        })
+      }
+      if (url.endsWith("/repos/acme/shop")) {
+        return new Response(JSON.stringify({ full_name: "acme/shop" }), { status: 200 })
+      }
+      return new Response("not found", { status: 404 })
+    }
 
-    await prepareSimpleCapabilityRuntime(ctx, profile)
+    try {
+      await prepareSimpleCapabilityRuntime(ctx, profile)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
 
-    expect(ctx.data.prompt).toContain("protected-github-token")
-    expect(ctx.data.prompt).toContain("never include the token")
+    expect(ctx.data.prompt).toContain("already authenticated")
+    expect(ctx.data.prompt).not.toContain("protected-github-token")
+    expect(profile.claudeCode.mcpServers[0]?.args).toContain("--storage-state")
+    expect(profile.claudeCode.mcpServers[0]?.args).toContain("--isolated")
     expect(ctx.data.capabilityEnvironment).toBeUndefined()
+    for (const cleanup of (ctx.data.__runtimeCleanup as Array<() => void> | undefined) ?? []) cleanup()
   })
 
   it("blocks authenticated Quality work when the protected token is missing", async () => {
     const { ctx, profile } = fixture()
+    ctx.data.capabilityRequirements = { browser: true, qaCredentials: true, githubTestToken: true }
 
     await prepareSimpleCapabilityRuntime(ctx, profile)
 
-    expect(ctx.data.prompt).toContain("E2E_GITHUB_TOKEN is not configured")
+    expect(ctx.data.prompt).toContain("no `E2E_GITHUB_TOKEN` secret was found")
     expect(ctx.data.prompt).toContain("return a blocked result")
   })
 

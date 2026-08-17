@@ -33,8 +33,7 @@ function githubRepositoryParts(repoUrl: string): { owner: string; repo: string }
   return { owner: parts[0], repo }
 }
 
-function browserOrigin(ctx: Context): string {
-  const raw = typeof ctx.data.previewUrl === "string" ? ctx.data.previewUrl : ""
+function browserOrigin(raw: string): string {
   if (!raw) throw new Error("QA target URL is unavailable")
   const parsed = new URL(raw)
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
@@ -135,6 +134,28 @@ async function prepareMethod(ctx: Context, profile: Profile, method: AuthMethodS
   const { repositoryKey, credentialKey } = fieldsForKodyRepository(method)
   const variables = readKodyVariables(ctx.cwd)
   const repositoryUrl = variables[repositoryKey]?.trim() ?? ""
+  const targetUrl = typeof ctx.data.previewUrl === "string" ? ctx.data.previewUrl : ""
+  return prepareKodyRepositoryBrowserAuth(ctx, profile, {
+    repositoryUrl,
+    repositoryKey,
+    credentialKey,
+    methodName: method.name,
+    targetUrl,
+  })
+}
+
+export async function prepareKodyRepositoryBrowserAuth(
+  ctx: Context,
+  profile: Profile,
+  input: {
+    repositoryUrl: string
+    repositoryKey?: string
+    credentialKey: string
+    methodName: string
+    targetUrl: string
+  },
+): Promise<boolean> {
+  const { repositoryUrl, credentialKey } = input
   const credential = await resolveRuntimeSecret(credentialKey, ctx)
   ctx.data.qaAuthSecretSources = {
     ...((ctx.data.qaAuthSecretSources as Record<string, string> | undefined) ?? {}),
@@ -149,14 +170,14 @@ async function prepareMethod(ctx: Context, profile: Profile, method: AuthMethodS
   if (!repositoryUrl) {
     appendAuthMessage(
       ctx,
-      `Auth: ${method.name} is incomplete because no \`${repositoryKey}\` variable was found. Note this authenticated surface as a gap.`,
+      `Auth: ${input.methodName} is incomplete because no \`${input.repositoryKey ?? "repository"}\` variable was found. Note this authenticated surface as a gap.`,
     )
     return false
   }
   if (!credential.value) {
     appendAuthMessage(
       ctx,
-      `Auth: ${method.name} is incomplete because no \`${credentialKey}\` secret was found. Note this authenticated surface as a gap.`,
+      `Auth: ${input.methodName} is incomplete because no \`${credentialKey}\` secret was found. Note this authenticated surface as a gap.`,
     )
     return false
   }
@@ -176,7 +197,7 @@ async function prepareMethod(ctx: Context, profile: Profile, method: AuthMethodS
       throw new Error("GitHub returned incomplete identity data")
     }
     state = writeKodyStorageState({
-      origin: browserOrigin(ctx),
+      origin: browserOrigin(input.targetUrl),
       repoUrl: `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
       owner,
       repo,
@@ -190,7 +211,7 @@ async function prepareMethod(ctx: Context, profile: Profile, method: AuthMethodS
     })
     appendAuthMessage(
       ctx,
-      `Auth: ${method.name} is already authenticated by the engine-provided browser session. ` +
+      `Auth: ${input.methodName} is already authenticated by the engine-provided browser session. ` +
         "The credential is not available to you; never request, reveal, or report it.",
     )
     return true
@@ -199,7 +220,7 @@ async function prepareMethod(ctx: Context, profile: Profile, method: AuthMethodS
     const reason = error instanceof Error ? error.message : String(error)
     appendAuthMessage(
       ctx,
-      `Auth: the engine could not prepare ${method.name} (${reason}). Note this authenticated surface as a gap.`,
+      `Auth: the engine could not prepare ${input.methodName} (${reason}). Note this authenticated surface as a gap.`,
     )
     return false
   }

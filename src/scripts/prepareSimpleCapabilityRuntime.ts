@@ -2,7 +2,7 @@ import { isIP } from "node:net"
 import * as path from "node:path"
 import type { Context, PreflightScript, Profile } from "../implementations/types.js"
 import { loadQaContext } from "./loadQaContext.js"
-import { resolveRuntimeSecret } from "./runtimeSecrets.js"
+import { prepareKodyRepositoryBrowserAuth } from "./prepareBrowserAuth.js"
 
 const PLAYWRIGHT_SERVER = {
   name: "playwright",
@@ -108,6 +108,30 @@ export const prepareSimpleCapabilityRuntime: PreflightScript = async (ctx, profi
   configureBrowser(ctx, profile, requirements)
   if (requirements.qaCredentials) {
     await loadQaContext(ctx, profile)
+  }
+
+  if (requirements.githubTestToken) {
+    const capabilityInput =
+      ctx.data.capabilityInput &&
+      typeof ctx.data.capabilityInput === "object" &&
+      !Array.isArray(ctx.data.capabilityInput)
+        ? (ctx.data.capabilityInput as Record<string, unknown>)
+        : {}
+    const targetUrl =
+      typeof capabilityInput.url === "string"
+        ? capabilityInput.url
+        : typeof capabilityInput.targetUrl === "string"
+          ? capabilityInput.targetUrl
+          : ""
+    await prepareKodyRepositoryBrowserAuth(ctx, profile, {
+      repositoryUrl: `https://github.com/${ctx.config.github.owner}/${ctx.config.github.repo}`,
+      credentialKey: "E2E_GITHUB_TOKEN",
+      methodName: "Kody protected QA login",
+      targetUrl,
+    })
+  }
+
+  if (requirements.qaCredentials || requirements.githubTestToken) {
     appendPrompt(
       ctx,
       [
@@ -118,25 +142,6 @@ export const prepareSimpleCapabilityRuntime: PreflightScript = async (ctx, profi
         "If the changed surface requires authentication and the credentials are missing or the login is rejected, " +
           "return a blocked result with a safe explanation. Do not include usernames, passwords, tokens, or other credential values in the result.",
       ].join("\n"),
-    )
-  }
-
-  if (requirements.githubTestToken) {
-    const token = await resolveRuntimeSecret("E2E_GITHUB_TOKEN", ctx)
-    appendPrompt(
-      ctx,
-      token.value
-        ? [
-            "## Protected GitHub test login",
-            "",
-            `A protected GitHub test token is available: \`${token.value}\``,
-            "Use it only if the target application asks for a GitHub personal access token; never include the token in screenshots, output, logs, files, or messages.",
-          ].join("\n")
-        : [
-            "## Protected GitHub test login",
-            "",
-            "E2E_GITHUB_TOKEN is not configured. If this Quality Scenario requires GitHub token authentication, return a blocked result.",
-          ].join("\n"),
     )
   }
 }
