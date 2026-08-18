@@ -101,7 +101,8 @@ describe("prepareSimpleCapabilityRuntime", () => {
     process.env.LOGIN_PASSWORD = "private-password"
     process.env.E2E_GITHUB_TOKEN = "protected-github-token"
     const originalFetch = globalThis.fetch
-    globalThis.fetch = async (input: string | URL | Request) => {
+    let savedRepositoryAuth: unknown
+    globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input)
       if (url.endsWith("/api/auth/sign-in/email")) {
         const headers = new Headers()
@@ -115,6 +116,11 @@ describe("prepareSimpleCapabilityRuntime", () => {
       }
       if (url.endsWith("/repos/acme/shop")) {
         return new Response(JSON.stringify({ full_name: "acme/shop" }), { status: 200 })
+      }
+      if (url.endsWith("/api/kody/account/repositories")) {
+        expect(new Headers(init?.headers).get("cookie")).toContain("better-auth.session_token=session")
+        savedRepositoryAuth = JSON.parse(String(init?.body))
+        return new Response("{}", { status: 200 })
       }
       return new Response("not found", { status: 404 })
     }
@@ -137,6 +143,14 @@ describe("prepareSimpleCapabilityRuntime", () => {
     }
     expect(storageState.cookies.some(({ name }) => name === "better-auth.session_token")).toBe(true)
     expect(storageState.origins[0]?.localStorage.some(({ name }) => name === "kody_auth")).toBe(true)
+    expect(savedRepositoryAuth).toMatchObject({
+      auth: {
+        owner: "acme",
+        repo: "shop",
+        token: "protected-github-token",
+        user: { login: "qa-user" },
+      },
+    })
     expect(ctx.data.capabilityEnvironment).toBeUndefined()
     for (const cleanup of (ctx.data.__runtimeCleanup as Array<() => void> | undefined) ?? []) cleanup()
   })

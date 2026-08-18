@@ -10,6 +10,12 @@ interface GitHubRepository {
   full_name: string
 }
 
+interface GitHubUser {
+  login: string
+  avatar_url: string
+  id: number
+}
+
 function appendAuthMessage(ctx: Context, message: string): void {
   const current = typeof ctx.data.qaAuthBlock === "string" ? ctx.data.qaAuthBlock.trim() : ""
   ctx.data.qaAuthBlock = current ? `${current}\n\n${message}` : message
@@ -60,7 +66,8 @@ function writeKodyStorageState(input: {
   owner: string
   repo: string
   token: string
-}): { directory: string; file: string } {
+  user?: GitHubUser
+}): { directory: string; file: string; auth: Record<string, unknown> } {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "kody-browser-auth-"))
   fs.chmodSync(directory, 0o700)
   const file = path.join(directory, "storage-state.json")
@@ -72,6 +79,7 @@ function writeKodyStorageState(input: {
     token: input.token,
     addedAt: now,
     isLogin: true,
+    ...(input.user ? { user: input.user } : {}),
   }
   // Kody requires the top-level user shape while hydrating auth, but identity
   // is not required for repository API headers. Leave it unresolved so the
@@ -82,7 +90,7 @@ function writeKodyStorageState(input: {
     owner: input.owner,
     repo: input.repo,
     token: input.token,
-    user: unresolvedUser,
+    user: input.user ?? unresolvedUser,
     loggedInAt: now,
     repos: [repoEntry],
     currentRepoIndex: 0,
@@ -97,7 +105,7 @@ function writeKodyStorageState(input: {
     ],
   }
   fs.writeFileSync(file, JSON.stringify(storageState), { mode: 0o600 })
-  return { directory, file }
+  return { directory, file, auth }
 }
 
 function parseSetCookie(value: string, hostname: string) {
@@ -157,6 +165,34 @@ function currentStorageStatePath(args: string[]): string | undefined {
     if (arg.startsWith("--storage-state=")) return arg.slice("--storage-state=".length)
   }
   return undefined
+}
+
+function browserSessionCookieHeader(profile: Profile, targetUrl: string): string | undefined {
+  const playwright = profile.claudeCode.mcpServers.find((server) => server.name === "playwright")
+  const storagePath = currentStorageStatePath(playwright?.args ?? [])
+  if (!storagePath || !fs.existsSync(storagePath)) return undefined
+  const hostname = new URL(targetUrl).hostname
+  const state = JSON.parse(fs.readFileSync(storagePath, "utf-8")) as BrowserStorageState
+  const cookies = (state.cookies ?? []).filter((cookie) => {
+    const domain = cookie.domain.replace(/^\./, "")
+    return hostname === domain || hostname.endsWith(`.${domain}`)
+  })
+  if (cookies.length === 0) return undefined
+  return cookies.map((cookie) => `${cookie.name}=${String(cookie.value)}`).join("; ")
+}
+
+async function saveAccountRepositoryAuth(
+  targetUrl: string,
+  cookie: string,
+  auth: Record<string, unknown>,
+): Promise<void> {
+  const origin = browserOrigin(targetUrl)
+  const response = await fetch(`${origin}/api/kody/account/repositories`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", cookie, origin },
+    body: JSON.stringify({ auth }),
+  })
+  if (!response.ok) throw new Error(`app repository setup returned ${response.status}`)
 }
 
 function mergeStorageStates(existingPath: string, nextPath: string): void {
@@ -269,7 +305,7 @@ export async function prepareKodyRepositoryBrowserAuth(
     return false
   }
 
-  let state: { directory: string; file: string } | undefined
+  let state: { directory: string; file: string; auth: Record<string, unknown> } | undefined
   try {
     const requested = githubRepositoryParts(repositoryUrl)
     const repository = await githubJson<GitHubRepository>(
@@ -279,13 +315,19 @@ export async function prepareKodyRepositoryBrowserAuth(
     )
     const [owner, repo] = repository.full_name.split("/")
     if (!owner || !repo) throw new Error("GitHub returned incomplete repository data")
+    const appCookie = browserSessionCookieHeader(profile, input.targetUrl)
+    const user = appCookie
+      ? await githubJson<GitHubUser>("https://api.github.com/user", credential.value, "user")
+      : undefined
     state = writeKodyStorageState({
       origin: browserOrigin(input.targetUrl),
       repoUrl: `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
       owner,
       repo,
       token: credential.value,
+      user,
     })
+    if (appCookie) await saveAccountRepositoryAuth(input.targetUrl, appCookie, state.auth)
     configurePlaywright(profile, state.file)
     const authDirectory = state.directory
     registerRuntimeCleanup(ctx, () => {
