@@ -82,6 +82,7 @@ jobs:
           GH_PAT: ${{ secrets.GH_PAT }}
           KODY_TOKEN: ${{ secrets.KODY_TOKEN }}
           E2E_GITHUB_TOKEN: ${{ secrets.E2E_GITHUB_TOKEN }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           KODY_APP_ID: ${{ secrets.KODY_APP_ID }}
           KODY_APP_PRIVATE_KEY: ${{ secrets.KODY_APP_PRIVATE_KEY }}
           SESSION_ID: ${{ inputs.sessionId }}

@@ -3,6 +3,7 @@ import * as path from "node:path"
 import type { Context, PreflightScript, Profile } from "../implementations/types.js"
 import { loadQaContext } from "./loadQaContext.js"
 import {
+  prepareAccountCredentials,
   prepareEmailPasswordBrowserAuth,
   prepareKodyRepositoryBrowserAuth,
 } from "./prepareBrowserAuth.js"
@@ -17,6 +18,7 @@ interface CapabilityRequirements {
   browser?: boolean
   qaCredentials?: boolean
   githubTestToken?: boolean
+  qaAccountCredentials?: string[]
   browserOnly?: boolean
 }
 
@@ -127,6 +129,12 @@ export const prepareSimpleCapabilityRuntime: PreflightScript = async (ctx, profi
       login: String(ctx.data.qaLogin ?? ""),
       targetUrl,
     })
+    if (requirements.qaAccountCredentials?.length) {
+      await prepareAccountCredentials(ctx, profile, {
+        names: requirements.qaAccountCredentials,
+        targetUrl,
+      })
+    }
   }
 
   if (requirements.githubTestToken) {

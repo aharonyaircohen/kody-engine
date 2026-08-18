@@ -195,6 +195,41 @@ async function saveAccountRepositoryAuth(
   if (!response.ok) throw new Error(`app repository setup returned ${response.status}`)
 }
 
+export async function prepareAccountCredentials(
+  ctx: Context,
+  profile: Profile,
+  input: { names: string[]; targetUrl: string },
+): Promise<boolean> {
+  const cookie = browserSessionCookieHeader(profile, input.targetUrl)
+  if (!cookie) {
+    appendAuthMessage(ctx, "Auth: QA account credentials could not be prepared because the app session is missing.")
+    return false
+  }
+  const origin = browserOrigin(input.targetUrl)
+  for (const name of input.names) {
+    if (!/^[A-Z][A-Z0-9_]{0,127}$/.test(name)) {
+      appendAuthMessage(ctx, "Auth: QA account credentials contain an invalid credential name.")
+      return false
+    }
+    const credential = await resolveRuntimeSecret(name, ctx)
+    if (!credential.value) {
+      appendAuthMessage(ctx, `Auth: QA account setup is incomplete because no \`${name}\` secret was found.`)
+      return false
+    }
+    const response = await fetch(`${origin}/api/kody/account/credentials`, {
+      method: "PUT",
+      headers: { "content-type": "application/json", cookie, origin },
+      body: JSON.stringify({ name, value: credential.value }),
+    })
+    if (!response.ok) {
+      appendAuthMessage(ctx, `Auth: QA account credential setup returned ${response.status}.`)
+      return false
+    }
+  }
+  appendAuthMessage(ctx, "Auth: the QA account's required model credentials are already prepared by the engine.")
+  return true
+}
+
 function mergeStorageStates(existingPath: string, nextPath: string): void {
   if (existingPath === nextPath || !fs.existsSync(existingPath)) return
   const existing = JSON.parse(fs.readFileSync(existingPath, "utf-8")) as BrowserStorageState

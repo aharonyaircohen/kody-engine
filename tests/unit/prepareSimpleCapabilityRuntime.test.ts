@@ -10,6 +10,7 @@ const roots: string[] = []
 afterEach(() => {
   delete process.env.LOGIN_PASSWORD
   delete process.env.E2E_GITHUB_TOKEN
+  delete process.env.OPENROUTER_API_KEY
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true })
 })
 
@@ -96,10 +97,16 @@ describe("prepareSimpleCapabilityRuntime", () => {
 
   it("prepares an authenticated browser session without putting the protected GitHub token in the prompt", async () => {
     const { ctx, profile } = fixture()
-    ctx.data.capabilityRequirements = { browser: true, qaCredentials: true, githubTestToken: true }
+    ctx.data.capabilityRequirements = {
+      browser: true,
+      qaCredentials: true,
+      githubTestToken: true,
+      qaAccountCredentials: ["OPENROUTER_API_KEY"],
+    }
     writeLogin(ctx.cwd, "qa@example.com")
     process.env.LOGIN_PASSWORD = "private-password"
     process.env.E2E_GITHUB_TOKEN = "protected-github-token"
+    process.env.OPENROUTER_API_KEY = "protected-model-key"
     const originalFetch = globalThis.fetch
     let savedRepositoryAuth: unknown
     globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
@@ -122,6 +129,14 @@ describe("prepareSimpleCapabilityRuntime", () => {
         savedRepositoryAuth = JSON.parse(String(init?.body))
         return new Response("{}", { status: 200 })
       }
+      if (url.endsWith("/api/kody/account/credentials")) {
+        expect(new Headers(init?.headers).get("cookie")).toContain("better-auth.session_token=session")
+        expect(JSON.parse(String(init?.body))).toEqual({
+          name: "OPENROUTER_API_KEY",
+          value: "protected-model-key",
+        })
+        return new Response("{}", { status: 200 })
+      }
       return new Response("not found", { status: 404 })
     }
 
@@ -133,6 +148,7 @@ describe("prepareSimpleCapabilityRuntime", () => {
 
     expect(ctx.data.prompt).toContain("already authenticated")
     expect(ctx.data.prompt).not.toContain("protected-github-token")
+    expect(ctx.data.prompt).not.toContain("protected-model-key")
     expect(profile.claudeCode.mcpServers[0]?.args).toContain("--storage-state")
     expect(profile.claudeCode.mcpServers[0]?.args).toContain("--isolated")
     const args = profile.claudeCode.mcpServers[0]?.args ?? []
