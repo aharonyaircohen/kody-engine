@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.4.602 — 2026-08-18
+
+### Fixes
+- defer QA user identity lookup (bb888db)
+- retry temporary QA login failures (a55b70f)
+- stop after valid capability output (2c872bd)
+- prepare authenticated QA browser (d1dfe99)
+- route automatic models through fallback gateway (9979d17)
+
+### Chores
+- release 0.4.597 (2711d59)
 ## v0.4.532 — 2026-08-08
 
 ### Features
