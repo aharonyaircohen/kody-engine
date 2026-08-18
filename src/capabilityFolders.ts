@@ -32,6 +32,7 @@ export interface CapabilityRuntimeRequirements {
   browser?: boolean
   qaCredentials?: boolean
   githubTestToken?: boolean
+  qaAccountCredentials?: string[]
   browserOnly?: boolean
 }
 
@@ -398,7 +399,12 @@ function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirement
   if (raw === undefined) return undefined
   if (!isPlainObject(raw)) throw new Error("contract.json requirements must be an object")
   const unsupported = Object.keys(raw).filter(
-    (key) => key !== "browser" && key !== "qaCredentials" && key !== "githubTestToken" && key !== "browserOnly",
+    (key) =>
+      key !== "browser" &&
+      key !== "qaCredentials" &&
+      key !== "githubTestToken" &&
+      key !== "qaAccountCredentials" &&
+      key !== "browserOnly",
   )
   if (unsupported.length > 0) {
     throw new Error(`contract.json requirements contains unsupported fields: ${unsupported.join(", ")}`)
@@ -412,11 +418,24 @@ function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirement
   if (raw.githubTestToken !== undefined && typeof raw.githubTestToken !== "boolean") {
     throw new Error("contract.json requirements.githubTestToken must be boolean")
   }
+  if (
+    raw.qaAccountCredentials !== undefined &&
+    (!Array.isArray(raw.qaAccountCredentials) ||
+      raw.qaAccountCredentials.length === 0 ||
+      !raw.qaAccountCredentials.every(
+        (name) => typeof name === "string" && /^[A-Z][A-Z0-9_]{0,127}$/.test(name),
+      ))
+  ) {
+    throw new Error("contract.json requirements.qaAccountCredentials must contain valid credential names")
+  }
   if (raw.browserOnly !== undefined && typeof raw.browserOnly !== "boolean") {
     throw new Error("contract.json requirements.browserOnly must be boolean")
   }
   if (
-    (raw.qaCredentials === true || raw.githubTestToken === true || raw.browserOnly === true) &&
+    (raw.qaCredentials === true ||
+      raw.githubTestToken === true ||
+      raw.qaAccountCredentials !== undefined ||
+      raw.browserOnly === true) &&
     raw.browser !== true
   ) {
     throw new Error("contract.json authentication requirements require browser")
@@ -425,6 +444,9 @@ function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirement
     ...(raw.browser === true ? { browser: true } : {}),
     ...(raw.qaCredentials === true ? { qaCredentials: true } : {}),
     ...(raw.githubTestToken === true ? { githubTestToken: true } : {}),
+    ...(Array.isArray(raw.qaAccountCredentials)
+      ? { qaAccountCredentials: [...new Set(raw.qaAccountCredentials as string[])] }
+      : {}),
     ...(raw.browserOnly === true ? { browserOnly: true } : {}),
   }
   return Object.keys(requirements).length > 0 ? requirements : undefined

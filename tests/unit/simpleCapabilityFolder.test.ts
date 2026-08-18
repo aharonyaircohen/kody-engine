@@ -34,6 +34,7 @@ describe("simple Capability folder", () => {
         browser: true,
         qaCredentials: true,
         githubTestToken: true,
+        qaAccountCredentials: ["OPENROUTER_API_KEY"],
         browserOnly: true,
       },
       input: {
@@ -60,6 +61,7 @@ describe("simple Capability folder", () => {
       browser: true,
       qaCredentials: true,
       githubTestToken: true,
+      qaAccountCredentials: ["OPENROUTER_API_KEY"],
       browserOnly: true,
     })
     expect(loaded?.config.inputSchema).toEqual(contract.input)
