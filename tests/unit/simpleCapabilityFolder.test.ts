@@ -35,6 +35,7 @@ describe("simple Capability folder", () => {
         qaCredentials: true,
         githubTestToken: true,
         qaAccountCredentials: ["OPENROUTER_API_KEY"],
+        qaAccountModelSettings: { models: [{ id: "minimax/MiniMax-M3" }] },
         browserOnly: true,
       },
       input: {
@@ -62,6 +63,7 @@ describe("simple Capability folder", () => {
       qaCredentials: true,
       githubTestToken: true,
       qaAccountCredentials: ["OPENROUTER_API_KEY"],
+      qaAccountModelSettings: { models: [{ id: "minimax/MiniMax-M3" }] },
       browserOnly: true,
     })
     expect(loaded?.config.inputSchema).toEqual(contract.input)

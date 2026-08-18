@@ -230,6 +230,30 @@ export async function prepareAccountCredentials(
   return true
 }
 
+export async function prepareAccountModelSettings(
+  ctx: Context,
+  profile: Profile,
+  input: { settings: Record<string, unknown>; targetUrl: string },
+): Promise<boolean> {
+  const cookie = browserSessionCookieHeader(profile, input.targetUrl)
+  if (!cookie) {
+    appendAuthMessage(ctx, "Auth: QA Chat model setup could not run because the app session is missing.")
+    return false
+  }
+  const origin = browserOrigin(input.targetUrl)
+  const response = await fetch(`${origin}/api/kody/models`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", cookie, origin },
+    body: JSON.stringify(input.settings),
+  })
+  if (!response.ok) {
+    appendAuthMessage(ctx, `Auth: QA Chat model setup returned ${response.status}.`)
+    return false
+  }
+  appendAuthMessage(ctx, "Auth: the QA account's Chat model is already prepared by the engine.")
+  return true
+}
+
 function mergeStorageStates(existingPath: string, nextPath: string): void {
   if (existingPath === nextPath || !fs.existsSync(existingPath)) return
   const existing = JSON.parse(fs.readFileSync(existingPath, "utf-8")) as BrowserStorageState

@@ -10,7 +10,7 @@ const roots: string[] = []
 afterEach(() => {
   delete process.env.LOGIN_PASSWORD
   delete process.env.E2E_GITHUB_TOKEN
-  delete process.env.OPENROUTER_API_KEY
+  delete process.env.MINIMAX_API_KEY
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true })
 })
 
@@ -101,12 +101,16 @@ describe("prepareSimpleCapabilityRuntime", () => {
       browser: true,
       qaCredentials: true,
       githubTestToken: true,
-      qaAccountCredentials: ["OPENROUTER_API_KEY"],
+      qaAccountCredentials: ["MINIMAX_API_KEY"],
+      qaAccountModelSettings: {
+        models: [{ id: "minimax/MiniMax-M3", default: true }],
+        automatic: { default: false },
+      },
     }
     writeLogin(ctx.cwd, "qa@example.com")
     process.env.LOGIN_PASSWORD = "private-password"
     process.env.E2E_GITHUB_TOKEN = "protected-github-token"
-    process.env.OPENROUTER_API_KEY = "protected-model-key"
+    process.env.MINIMAX_API_KEY = "protected-model-key"
     const originalFetch = globalThis.fetch
     let savedRepositoryAuth: unknown
     globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
@@ -132,8 +136,16 @@ describe("prepareSimpleCapabilityRuntime", () => {
       if (url.endsWith("/api/kody/account/credentials")) {
         expect(new Headers(init?.headers).get("cookie")).toContain("better-auth.session_token=session")
         expect(JSON.parse(String(init?.body))).toEqual({
-          name: "OPENROUTER_API_KEY",
+          name: "MINIMAX_API_KEY",
           value: "protected-model-key",
+        })
+        return new Response("{}", { status: 200 })
+      }
+      if (url.endsWith("/api/kody/models")) {
+        expect(new Headers(init?.headers).get("cookie")).toContain("better-auth.session_token=session")
+        expect(JSON.parse(String(init?.body))).toEqual({
+          models: [{ id: "minimax/MiniMax-M3", default: true }],
+          automatic: { default: false },
         })
         return new Response("{}", { status: 200 })
       }

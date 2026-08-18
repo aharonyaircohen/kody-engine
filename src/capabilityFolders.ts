@@ -33,6 +33,7 @@ export interface CapabilityRuntimeRequirements {
   qaCredentials?: boolean
   githubTestToken?: boolean
   qaAccountCredentials?: string[]
+  qaAccountModelSettings?: Record<string, unknown>
   browserOnly?: boolean
 }
 
@@ -404,6 +405,7 @@ function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirement
       key !== "qaCredentials" &&
       key !== "githubTestToken" &&
       key !== "qaAccountCredentials" &&
+      key !== "qaAccountModelSettings" &&
       key !== "browserOnly",
   )
   if (unsupported.length > 0) {
@@ -428,6 +430,9 @@ function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirement
   ) {
     throw new Error("contract.json requirements.qaAccountCredentials must contain valid credential names")
   }
+  if (raw.qaAccountModelSettings !== undefined && !isPlainObject(raw.qaAccountModelSettings)) {
+    throw new Error("contract.json requirements.qaAccountModelSettings must be an object")
+  }
   if (raw.browserOnly !== undefined && typeof raw.browserOnly !== "boolean") {
     throw new Error("contract.json requirements.browserOnly must be boolean")
   }
@@ -435,6 +440,7 @@ function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirement
     (raw.qaCredentials === true ||
       raw.githubTestToken === true ||
       raw.qaAccountCredentials !== undefined ||
+      raw.qaAccountModelSettings !== undefined ||
       raw.browserOnly === true) &&
     raw.browser !== true
   ) {
@@ -446,6 +452,9 @@ function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirement
     ...(raw.githubTestToken === true ? { githubTestToken: true } : {}),
     ...(Array.isArray(raw.qaAccountCredentials)
       ? { qaAccountCredentials: [...new Set(raw.qaAccountCredentials as string[])] }
+      : {}),
+    ...(isPlainObject(raw.qaAccountModelSettings)
+      ? { qaAccountModelSettings: raw.qaAccountModelSettings }
       : {}),
     ...(raw.browserOnly === true ? { browserOnly: true } : {}),
   }

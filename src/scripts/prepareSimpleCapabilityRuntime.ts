@@ -4,6 +4,7 @@ import type { Context, PreflightScript, Profile } from "../implementations/types
 import { loadQaContext } from "./loadQaContext.js"
 import {
   prepareAccountCredentials,
+  prepareAccountModelSettings,
   prepareEmailPasswordBrowserAuth,
   prepareKodyRepositoryBrowserAuth,
 } from "./prepareBrowserAuth.js"
@@ -19,6 +20,7 @@ interface CapabilityRequirements {
   qaCredentials?: boolean
   githubTestToken?: boolean
   qaAccountCredentials?: string[]
+  qaAccountModelSettings?: Record<string, unknown>
   browserOnly?: boolean
 }
 
@@ -132,6 +134,12 @@ export const prepareSimpleCapabilityRuntime: PreflightScript = async (ctx, profi
     if (requirements.qaAccountCredentials?.length) {
       await prepareAccountCredentials(ctx, profile, {
         names: requirements.qaAccountCredentials,
+        targetUrl,
+      })
+    }
+    if (requirements.qaAccountModelSettings) {
+      await prepareAccountModelSettings(ctx, profile, {
+        settings: requirements.qaAccountModelSettings,
         targetUrl,
       })
     }
