@@ -142,12 +142,55 @@ function writeCookieStorageState(targetUrl: string, setCookies: string[]) {
   return { directory, file }
 }
 
+interface BrowserStorageState {
+  cookies: Array<{ name: string; domain: string; path: string; [key: string]: unknown }>
+  origins: Array<{
+    origin: string
+    localStorage: Array<{ name: string; value: string }>
+  }>
+}
+
+function currentStorageStatePath(args: string[]): string | undefined {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!
+    if (arg === "--storage-state") return args[index + 1]
+    if (arg.startsWith("--storage-state=")) return arg.slice("--storage-state=".length)
+  }
+  return undefined
+}
+
+function mergeStorageStates(existingPath: string, nextPath: string): void {
+  if (existingPath === nextPath || !fs.existsSync(existingPath)) return
+  const existing = JSON.parse(fs.readFileSync(existingPath, "utf-8")) as BrowserStorageState
+  const next = JSON.parse(fs.readFileSync(nextPath, "utf-8")) as BrowserStorageState
+  const cookies = new Map<string, BrowserStorageState["cookies"][number]>()
+  for (const cookie of [...(existing.cookies ?? []), ...(next.cookies ?? [])]) {
+    cookies.set(`${cookie.name}\0${cookie.domain}\0${cookie.path}`, cookie)
+  }
+  const origins = new Map<string, BrowserStorageState["origins"][number]>()
+  for (const entry of [...(existing.origins ?? []), ...(next.origins ?? [])]) {
+    const current = origins.get(entry.origin)
+    const localStorage = new Map<string, { name: string; value: string }>()
+    for (const item of [...(current?.localStorage ?? []), ...(entry.localStorage ?? [])]) {
+      localStorage.set(item.name, item)
+    }
+    origins.set(entry.origin, { origin: entry.origin, localStorage: [...localStorage.values()] })
+  }
+  fs.writeFileSync(
+    nextPath,
+    JSON.stringify({ cookies: [...cookies.values()], origins: [...origins.values()] }),
+    { mode: 0o600 },
+  )
+}
+
 function configurePlaywright(profile: Profile, storageStatePath: string): void {
   const playwright = profile.claudeCode.mcpServers.find((server) => server.name === "playwright")
   if (!playwright) throw new Error("Playwright MCP server is not configured")
 
   const args: string[] = []
   const currentArgs = playwright.args ?? []
+  const existingStorageStatePath = currentStorageStatePath(currentArgs)
+  if (existingStorageStatePath) mergeStorageStates(existingStorageStatePath, storageStatePath)
   for (let index = 0; index < currentArgs.length; index += 1) {
     const arg = currentArgs[index]!
     if (arg === "--storage-state") {

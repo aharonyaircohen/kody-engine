@@ -97,10 +97,17 @@ describe("prepareSimpleCapabilityRuntime", () => {
   it("prepares an authenticated browser session without putting the protected GitHub token in the prompt", async () => {
     const { ctx, profile } = fixture()
     ctx.data.capabilityRequirements = { browser: true, qaCredentials: true, githubTestToken: true }
+    writeLogin(ctx.cwd, "qa@example.com")
+    process.env.LOGIN_PASSWORD = "private-password"
     process.env.E2E_GITHUB_TOKEN = "protected-github-token"
     const originalFetch = globalThis.fetch
     globalThis.fetch = async (input: string | URL | Request) => {
       const url = String(input)
+      if (url.endsWith("/api/auth/sign-in/email")) {
+        const headers = new Headers()
+        headers.append("set-cookie", "better-auth.session_token=session; Path=/; HttpOnly; Secure; SameSite=Lax")
+        return new Response("{}", { status: 200, headers })
+      }
       if (url.endsWith("/user")) {
         return new Response(JSON.stringify({ login: "qa-user", avatar_url: "https://img.test/qa", id: 42 }), {
           status: 200,
@@ -122,6 +129,14 @@ describe("prepareSimpleCapabilityRuntime", () => {
     expect(ctx.data.prompt).not.toContain("protected-github-token")
     expect(profile.claudeCode.mcpServers[0]?.args).toContain("--storage-state")
     expect(profile.claudeCode.mcpServers[0]?.args).toContain("--isolated")
+    const args = profile.claudeCode.mcpServers[0]?.args ?? []
+    const storagePath = args[args.indexOf("--storage-state") + 1]!
+    const storageState = JSON.parse(fs.readFileSync(storagePath, "utf-8")) as {
+      cookies: Array<{ name: string }>
+      origins: Array<{ localStorage: Array<{ name: string }> }>
+    }
+    expect(storageState.cookies.some(({ name }) => name === "better-auth.session_token")).toBe(true)
+    expect(storageState.origins[0]?.localStorage.some(({ name }) => name === "kody_auth")).toBe(true)
     expect(ctx.data.capabilityEnvironment).toBeUndefined()
     for (const cleanup of (ctx.data.__runtimeCleanup as Array<() => void> | undefined) ?? []) cleanup()
   })
