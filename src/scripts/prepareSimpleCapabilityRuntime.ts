@@ -2,7 +2,10 @@ import { isIP } from "node:net"
 import * as path from "node:path"
 import type { Context, PreflightScript, Profile } from "../implementations/types.js"
 import { loadQaContext } from "./loadQaContext.js"
-import { prepareKodyRepositoryBrowserAuth } from "./prepareBrowserAuth.js"
+import {
+  prepareEmailPasswordBrowserAuth,
+  prepareKodyRepositoryBrowserAuth,
+} from "./prepareBrowserAuth.js"
 
 const PLAYWRIGHT_SERVER = {
   name: "playwright",
@@ -108,6 +111,22 @@ export const prepareSimpleCapabilityRuntime: PreflightScript = async (ctx, profi
   configureBrowser(ctx, profile, requirements)
   if (requirements.qaCredentials) {
     await loadQaContext(ctx, profile)
+    const capabilityInput =
+      ctx.data.capabilityInput &&
+      typeof ctx.data.capabilityInput === "object" &&
+      !Array.isArray(ctx.data.capabilityInput)
+        ? (ctx.data.capabilityInput as Record<string, unknown>)
+        : {}
+    const targetUrl =
+      typeof capabilityInput.url === "string"
+        ? capabilityInput.url
+        : typeof capabilityInput.targetUrl === "string"
+          ? capabilityInput.targetUrl
+          : ""
+    await prepareEmailPasswordBrowserAuth(ctx, profile, {
+      login: String(ctx.data.qaLogin ?? ""),
+      targetUrl,
+    })
   }
 
   if (requirements.githubTestToken) {

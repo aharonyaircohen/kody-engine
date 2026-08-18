@@ -1,7 +1,7 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import type { Context, Profile } from "../../src/implementations/types.js"
 import { prepareSimpleCapabilityRuntime } from "../../src/scripts/prepareSimpleCapabilityRuntime.js"
 
@@ -71,16 +71,27 @@ describe("prepareSimpleCapabilityRuntime", () => {
     expect(ctx.data.prompt).toContain("return a blocked result")
   })
 
-  it("provides configured credentials only inside the private agent prompt", async () => {
+  it("prepares the login without putting credentials in the agent prompt", async () => {
     const { ctx, profile } = fixture()
     writeLogin(ctx.cwd, "qa@example.com")
     process.env.LOGIN_PASSWORD = "private-password"
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        const headers = new Headers()
+        headers.append("set-cookie", "better-auth.session_token=session; Path=/; HttpOnly; Secure; SameSite=Lax")
+        return new Response("{}", { status: 200, headers })
+      }),
+    )
 
     await prepareSimpleCapabilityRuntime(ctx, profile)
 
-    expect(ctx.data.prompt).toContain("qa@example.com")
-    expect(ctx.data.prompt).toContain("private-password")
+    expect(ctx.data.prompt).toContain("already signed in")
+    expect(ctx.data.prompt).not.toContain("qa@example.com")
+    expect(ctx.data.prompt).not.toContain("private-password")
+    expect(profile.claudeCode.mcpServers[0]?.args).toContain("--storage-state")
     expect(ctx.data.capabilityEnvironment).toBeUndefined()
+    for (const cleanup of (ctx.data.__runtimeCleanup as Array<() => void> | undefined) ?? []) cleanup()
   })
 
   it("prepares an authenticated browser session without putting the protected GitHub token in the prompt", async () => {

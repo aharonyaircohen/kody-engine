@@ -100,6 +100,48 @@ function writeKodyStorageState(input: {
   return { directory, file }
 }
 
+function parseSetCookie(value: string, hostname: string) {
+  const parts = value.split(";").map((part) => part.trim())
+  const pair = parts.shift() ?? ""
+  const separator = pair.indexOf("=")
+  if (separator <= 0) throw new Error("login response returned an invalid session cookie")
+  const attributes = new Map<string, string>()
+  for (const part of parts) {
+    const index = part.indexOf("=")
+    attributes.set(
+      (index < 0 ? part : part.slice(0, index)).toLowerCase(),
+      index < 0 ? "" : part.slice(index + 1),
+    )
+  }
+  const sameSite = attributes.get("samesite")?.toLowerCase()
+  return {
+    name: pair.slice(0, separator),
+    value: pair.slice(separator + 1),
+    domain: attributes.get("domain")?.replace(/^\./, "") || hostname,
+    path: attributes.get("path") || "/",
+    expires: -1,
+    httpOnly: attributes.has("httponly"),
+    secure: attributes.has("secure"),
+    sameSite: sameSite === "strict" ? "Strict" : sameSite === "none" ? "None" : "Lax",
+  }
+}
+
+function writeCookieStorageState(targetUrl: string, setCookies: string[]) {
+  const target = new URL(targetUrl)
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "kody-browser-auth-"))
+  fs.chmodSync(directory, 0o700)
+  const file = path.join(directory, "storage-state.json")
+  fs.writeFileSync(
+    file,
+    JSON.stringify({
+      cookies: setCookies.map((cookie) => parseSetCookie(cookie, target.hostname)),
+      origins: [],
+    }),
+    { mode: 0o600 },
+  )
+  return { directory, file }
+}
+
 function configurePlaywright(profile: Profile, storageStatePath: string): void {
   const playwright = profile.claudeCode.mcpServers.find((server) => server.name === "playwright")
   if (!playwright) throw new Error("Playwright MCP server is not configured")
@@ -219,6 +261,41 @@ export async function prepareKodyRepositoryBrowserAuth(
       ctx,
       `Auth: the engine could not prepare ${input.methodName} (${reason}). Note this authenticated surface as a gap.`,
     )
+    return false
+  }
+}
+
+export async function prepareEmailPasswordBrowserAuth(
+  ctx: Context,
+  profile: Profile,
+  input: { login: string; targetUrl: string },
+): Promise<boolean> {
+  const password = await resolveRuntimeSecret("LOGIN_PASSWORD", ctx)
+  if (!input.login || !password.value) return false
+  let state: { directory: string; file: string } | undefined
+  try {
+    const origin = browserOrigin(input.targetUrl)
+    const response = await fetch(`${origin}/api/auth/sign-in/email`, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin },
+      body: JSON.stringify({ email: input.login, password: password.value }),
+    })
+    if (!response.ok) throw new Error(`app login returned ${response.status}`)
+    const headers = response.headers as Headers & { getSetCookie?: () => string[] }
+    const cookies = headers.getSetCookie?.() ?? (headers.get("set-cookie") ? [headers.get("set-cookie")!] : [])
+    if (cookies.length === 0) throw new Error("app login returned no session cookie")
+    state = writeCookieStorageState(input.targetUrl, cookies)
+    configurePlaywright(profile, state.file)
+    const authDirectory = state.directory
+    registerRuntimeCleanup(ctx, () => fs.rmSync(authDirectory, { recursive: true, force: true }))
+    ctx.data.qaAuthBlock =
+      "Auth: the app is already signed in through an engine-provided browser session. " +
+      "The login credentials are not available to you; never request, reveal, or report them."
+    return true
+  } catch (error) {
+    if (state) fs.rmSync(state.directory, { recursive: true, force: true })
+    const reason = error instanceof Error ? error.message : String(error)
+    ctx.data.qaAuthBlock = `Auth: the engine could not prepare the app login (${reason}). Note this authenticated surface as a gap.`
     return false
   }
 }

@@ -3,7 +3,10 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Context, Profile } from "../../src/implementations/types.js"
-import { prepareBrowserAuth } from "../../src/scripts/prepareBrowserAuth.js"
+import {
+  prepareBrowserAuth,
+  prepareEmailPasswordBrowserAuth,
+} from "../../src/scripts/prepareBrowserAuth.js"
 
 function makeCtx(cwd: string): Context {
   return {
@@ -133,6 +136,51 @@ describe("prepareBrowserAuth", () => {
     expect(cleanup).toHaveLength(1)
     cleanup[0]!()
     expect(fs.existsSync(storagePath)).toBe(false)
+  })
+
+  it("signs into the app before the agent starts without exposing the password", async () => {
+    process.env.LOGIN_PASSWORD = "private-password"
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+        expect(init?.body).toContain("qa@example.com")
+        expect(init?.body).toContain("private-password")
+        const headers = new Headers()
+        headers.append(
+          "set-cookie",
+          "__Secure-better-auth.session_token=session-value; Path=/; HttpOnly; Secure; SameSite=Lax",
+        )
+        return new Response(JSON.stringify({ user: { email: "qa@example.com" } }), {
+          status: 200,
+          headers,
+        })
+      }),
+    )
+    const ctx = makeCtx(tmp)
+    const profile = makeProfile()
+
+    const prepared = await prepareEmailPasswordBrowserAuth(ctx, profile, {
+      login: "qa@example.com",
+      targetUrl: "https://dashboard.example.test/repo/acme/widgets",
+    })
+
+    expect(prepared).toBe(true)
+    expect(ctx.data.qaAuthBlock).toContain("already signed in")
+    expect(ctx.data.qaAuthBlock).not.toContain("private-password")
+    const args = profile.claudeCode.mcpServers[0]!.args!
+    const storagePath = args[args.indexOf("--storage-state") + 1]!
+    const state = JSON.parse(fs.readFileSync(storagePath, "utf-8")) as {
+      cookies: Array<{ name: string; value: string; domain: string }>
+    }
+    expect(state.cookies).toContainEqual(
+      expect.objectContaining({
+        name: "__Secure-better-auth.session_token",
+        value: "session-value",
+        domain: "dashboard.example.test",
+      }),
+    )
+    const cleanup = ctx.data.__runtimeCleanup as Array<() => void>
+    cleanup[0]!()
   })
 
   it("does nothing when the profile declares no authentication", async () => {
