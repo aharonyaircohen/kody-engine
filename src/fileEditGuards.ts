@@ -5,9 +5,7 @@ interface ToolHookInput {
   tool_input?: unknown
 }
 
-export function createMissingParentWriteGuard(
-  cwd: string,
-): (input: ToolHookInput) => Promise<Record<string, unknown>> {
+export function createMissingParentWriteGuard(cwd: string): (input: ToolHookInput) => Promise<Record<string, unknown>> {
   return async (input) => {
     const toolInput = input.tool_input
     if (!toolInput || typeof toolInput !== "object" || Array.isArray(toolInput)) return {}
