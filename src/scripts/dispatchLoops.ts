@@ -4,7 +4,6 @@ import type { Job, PreflightScript } from "../implementations/types.js"
 import { runJob } from "../job.js"
 import { type LoopDefinition, listLoopDefinitions, normalizeLoopDefinition } from "../loopDefinitions.js"
 import { createStateBackendFromEnv, type StateBackend } from "../state-backend.js"
-import { runPipelineTarget } from "./runPipelineTarget.js"
 
 export interface LoopDispatchResult {
   loopId: string
@@ -12,15 +11,10 @@ export interface LoopDispatchResult {
   reason: string
 }
 
-type PipelineDispatchBackend = Pick<
-  StateBackend,
-  "getPipeline" | "reservePipelineRun" | "markPipelineStepDispatched" | "advancePipelineRun" | "failPipelineRun"
->
-
 type LoopDispatchBackend = Pick<
   StateBackend,
   "createAgencyRun" | "finishAgencyRun" | "finishLoopDispatch" | "renewLoopDispatch" | "reserveLoopDispatch"
-> & Partial<PipelineDispatchBackend>
+>
 
 const LOOP_DISPATCH_LEASE_MS = 10 * 60 * 1_000
 const LOOP_DISPATCH_RENEW_INTERVAL_MS = 60 * 1_000
@@ -141,18 +135,7 @@ export async function dispatchLoopsWith(input: {
     let reason = "target did not complete"
     let runFailed = false
     try {
-      const result = loop.target.kind === "pipeline"
-        ? await runPipelineTarget({
-            tenantId: input.tenantId,
-            pipelineId: loop.target.id,
-            runId,
-            facts: { ...loop.input },
-            backend: requirePipelineBackend(input.backend),
-            run: input.run,
-            parentRunId: runId,
-            loopId: loop.id,
-          })
-        : await input.run(loopJob(loop, runId), runId, loop.id)
+      const result = await input.run(loopJob(loop, runId), runId, loop.id)
       exitCode = result.exitCode
       reason = result.reason ?? (exitCode === 0 ? "dispatched" : "target failed")
     } catch (error) {
@@ -187,19 +170,6 @@ export async function dispatchLoopsWith(input: {
     results.push({ loopId: loop.id, status, reason })
   }
   return results
-}
-
-function requirePipelineBackend(backend: LoopDispatchBackend): PipelineDispatchBackend {
-  const methods: Array<keyof PipelineDispatchBackend> = [
-    "getPipeline",
-    "reservePipelineRun",
-    "markPipelineStepDispatched",
-    "advancePipelineRun",
-    "failPipelineRun",
-  ]
-  const missing = methods.find((method) => typeof backend[method] !== "function")
-  if (missing) throw new Error(`Pipeline Loop adapter is unavailable: ${missing}`)
-  return backend as PipelineDispatchBackend
 }
 
 function startLoopLeaseRenewal(input: {
@@ -302,22 +272,9 @@ export function dueSlot(loop: LoopDefinition, now: Date): string | null {
 
 function loopJob(loop: LoopDefinition, runId: string): Job {
   const cliArgs = { ...loop.input }
-  if (loop.target.kind === "workflow") {
-    return { workflow: loop.target.id, workflowRunId: runId, cliArgs, flavor: "scheduled" }
-  }
-  if (loop.target.kind === "capability") {
-    return { capability: loop.target.id, cliArgs, flavor: "scheduled" }
-  }
-  if (loop.target.kind === "agent") {
-    return {
-      action: "live-agent",
-      implementation: "live-agent",
-      agent: loop.target.id,
-      cliArgs: { ...cliArgs, agent: loop.target.id },
-      flavor: "scheduled",
-    }
-  }
-  throw new Error(`Loop target adapter is not installed: ${loop.target.kind}`)
+  return loop.target.kind === "workflow"
+    ? { workflow: loop.target.id, workflowRunId: runId, cliArgs, flavor: "scheduled" }
+    : { capability: loop.target.id, cliArgs, flavor: "scheduled" }
 }
 
 function repositoryTenant(config: KodyConfig): string | null {

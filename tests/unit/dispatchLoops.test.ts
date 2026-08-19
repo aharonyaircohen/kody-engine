@@ -102,60 +102,7 @@ describe("mergeLoopDefinitions", () => {
 })
 
 describe("dispatchLoopsWith", () => {
-  it("runs a Pipeline target as its ordered Workflow steps", async () => {
-    const run = vi.fn().mockResolvedValue({ exitCode: 0, reason: "workflow completed" })
-    const backend = {
-      reserveLoopDispatch: vi.fn().mockResolvedValue({ acquired: true }),
-      renewLoopDispatch: vi.fn(),
-      finishLoopDispatch: vi.fn(),
-      createAgencyRun: vi.fn(),
-      finishAgencyRun: vi.fn(),
-      getPipeline: vi.fn().mockResolvedValue({
-        pipelineId: "release-pipeline",
-        source: "local",
-        updatedAt: "2026-08-19T00:00:00.000Z",
-        definition: {
-          steps: [
-            { id: "prepare", workflow: "release-prepare" },
-            { id: "publish", workflow: "release-publish" },
-          ],
-        },
-      }),
-      reservePipelineRun: vi.fn().mockResolvedValue({ claimed: true }),
-      markPipelineStepDispatched: vi.fn(),
-      advancePipelineRun: vi
-        .fn()
-        .mockResolvedValueOnce({ kind: "next", facts: { prepared: true } })
-        .mockResolvedValueOnce({ kind: "done" }),
-      failPipelineRun: vi.fn(),
-    }
-
-    const results = await dispatchLoopsWith({
-      loops: [{ ...loop, target: { kind: "pipeline", id: "release-pipeline" }, input: { branch: "main" } }],
-      tenantId: "acme/widgets",
-      backend,
-      now: new Date("2026-08-19T08:00:00.000Z"),
-      force: true,
-      run,
-      nonce: () => "pipeline",
-    })
-
-    expect(results).toEqual([{ loopId: "daily-check", status: "dispatched", reason: "pipeline completed" }])
-    expect(run).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ workflow: "release-prepare", cliArgs: { branch: "main" } }),
-      expect.any(String),
-      "daily-check",
-    )
-    expect(run).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ workflow: "release-publish", cliArgs: { prepared: true } }),
-      expect.any(String),
-      "daily-check",
-    )
-  })
-
-  it("dispatches an Agent target through the generic live-Agent runtime", async () => {
+  it("dispatches the live-Agent capability through the generic Loop runtime", async () => {
     const run = vi.fn().mockResolvedValue({ exitCode: 0, reason: "agent cycle completed" })
     const backend = {
       reserveLoopDispatch: vi.fn().mockResolvedValue({ acquired: true }),
@@ -166,7 +113,11 @@ describe("dispatchLoopsWith", () => {
     }
 
     const results = await dispatchLoopsWith({
-      loops: [{ ...loop, target: { kind: "agent", id: "operations-agent" } }],
+      loops: [{
+        ...loop,
+        target: { kind: "capability", id: "live-agent" },
+        input: { agent: "operations-agent", intent: "agency" },
+      }],
       tenantId: "acme/widgets",
       backend,
       now: new Date("2026-08-19T08:00:00.000Z"),
@@ -181,10 +132,8 @@ describe("dispatchLoopsWith", () => {
     expect(results).toHaveLength(1)
     expect(run).toHaveBeenCalledWith(
       {
-        action: "live-agent",
-        implementation: "live-agent",
-        agent: "operations-agent",
-        cliArgs: { agent: "operations-agent" },
+        capability: "live-agent",
+        cliArgs: { agent: "operations-agent", intent: "agency" },
         flavor: "scheduled",
       },
       expect.any(String),

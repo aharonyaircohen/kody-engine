@@ -1,6 +1,5 @@
 {
   "name": "live-agent",
-  "internal": true,
   "role": "primitive",
   "kind": "oneshot",
   "inputs": [

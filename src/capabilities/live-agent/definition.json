@@ -1,0 +1,32 @@
+{
+  "id": "live-agent",
+  "action": "live-agent",
+  "purpose": "Run one continuation cycle for a selected persistent Agent.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "agent": {
+        "type": "string",
+        "description": "Selected Agent slug."
+      },
+      "intent": {
+        "type": "string",
+        "description": "Primary Intent slug recorded by the Loop."
+      }
+    },
+    "required": ["agent"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "cursor": { "type": "string" },
+      "data": { "type": "object", "additionalProperties": true }
+    },
+    "additionalProperties": true
+  },
+  "effects": ["agent-state"],
+  "permissions": [],
+  "success": "The Agent completes one cycle and persists its continuation state.",
+  "failure": "The Agent cycle fails or its continuation state cannot be persisted."
+}

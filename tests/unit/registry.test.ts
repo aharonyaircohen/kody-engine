@@ -62,6 +62,15 @@ describe("registry: builtin implementations", () => {
     })
   })
 
+  it("resolves live-agent as an Engine-owned capability", () => {
+    expect(resolveCapabilityAction("live-agent")).toMatchObject({
+      action: "live-agent",
+      capability: "live-agent",
+      implementation: "live-agent",
+      source: "builtin",
+    })
+  })
+
   it("does not let a stale hydrated capability shadow Engine-owned run", () => {
     const root = mkFixture()
     const runDir = path.join(root, "run")

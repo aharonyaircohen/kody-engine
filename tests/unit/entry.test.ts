@@ -49,7 +49,7 @@ describe("entry: parseArgs", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
 
     await expect(main(["version"])).resolves.toBe(0)
-    expect(write).toHaveBeenCalledWith(expect.stringMatching(/^kody 0\.4\.608/))
+    expect(write).toHaveBeenCalledWith(expect.stringMatching(/^kody 0\.4\.609/))
   })
 
   it("routes a discovered public action to __capability__", () => {
