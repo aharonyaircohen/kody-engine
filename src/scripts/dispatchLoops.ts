@@ -30,15 +30,20 @@ export const dispatchLoops: PreflightScript = async (ctx) => {
   const tenantId = repositoryTenant(ctx.config)
   if (!tenantId) throw new Error("Repository identity is required for Loop dispatch")
   const now = new Date()
-  const force = ctx.data.jobForce === true
+  const scheduledFor = typeof ctx.data.scheduledFor === "string" ? ctx.data.scheduledFor.trim() : ""
+  const force = ctx.data.jobForce === true && !scheduledFor
   const requestedLoopId = typeof ctx.args.loop === "string" ? ctx.args.loop.trim() : ""
   const backend = createStateBackendFromEnv()
+  const wakeId = typeof ctx.data.wakeId === "string" ? ctx.data.wakeId : ""
+  if (wakeId) {
+    await backend.markLoopWakeExecution(tenantId, wakeId, "running", "Engine started Loop", now.toISOString())
+  }
   const loops = mergeLoopDefinitions(listLoopDefinitions(ctx.cwd), await backend.listLoops(tenantId))
   await syncLoopWakeRegistrations(backend, tenantId, loops, now.toISOString(), (message) =>
     process.stderr.write(`${message}\n`),
   )
   const due = selectRunnableLoops(loops, now, {
-    force,
+    force: force || Boolean(scheduledFor),
     ...(requestedLoopId ? { loopId: requestedLoopId } : {}),
   })
   process.stdout.write(`→ kody: Loop scheduler found ${due.length} runnable Loop(s)${force ? " (manual)" : ""}\n`)
@@ -48,6 +53,7 @@ export const dispatchLoops: PreflightScript = async (ctx) => {
     backend,
     now,
     force,
+    scheduledFor: scheduledFor || undefined,
     nonce: randomUUID,
     run: (job, parentRunId, loopId) =>
       runJob(job, {
@@ -63,6 +69,16 @@ export const dispatchLoops: PreflightScript = async (ctx) => {
     process.stdout.write(`→ kody: Loop ${result.loopId} ${result.status}: ${result.reason}\n`)
   }
   ctx.data.loopDispatchResults = results
+  if (wakeId) {
+    const failed = results.find((result) => result.status === "failed" || result.status === "blocked")
+    await backend.markLoopWakeExecution(
+      tenantId,
+      wakeId,
+      failed ? "failed" : "succeeded",
+      failed?.reason ?? "Loop completed",
+      new Date().toISOString(),
+    )
+  }
   assertLoopDispatchesSucceeded(results)
 }
 
@@ -80,12 +96,13 @@ export async function dispatchLoopsWith(input: {
   backend: LoopDispatchBackend
   now: Date
   force: boolean
+  scheduledFor?: string
   run: (job: Job, parentRunId: string, loopId: string) => Promise<{ exitCode: number; reason?: string }>
   nonce: () => string
 }): Promise<LoopDispatchResult[]> {
   const results: LoopDispatchResult[] = []
   for (const loop of input.loops) {
-    const slot = loopDispatchSlot(loop, input.now, input.force, input.nonce())
+    const slot = input.scheduledFor ?? loopDispatchSlot(loop, input.now, input.force, input.nonce())
     if (!slot) continue
     const reservationId = `reservation-${input.nonce()}`
     const idempotencyKey = `${loop.id}:${slot}`
@@ -94,7 +111,7 @@ export async function dispatchLoopsWith(input: {
       loopId: loop.id,
       decision: {
         kind: "fire",
-        reason: input.force ? "manual Loop run requested" : "local Loop schedule is due",
+        reason: input.scheduledFor ? "Convex scheduled Loop run" : input.force ? "manual Loop run requested" : "local Loop schedule is due",
         scheduledAt: slot,
       },
       leaseUntil: new Date(input.now.getTime() + LOOP_DISPATCH_LEASE_MS).toISOString(),
@@ -252,7 +269,11 @@ export async function syncLoopWakeRegistrations(
   log: (message: string) => void,
 ): Promise<boolean> {
   try {
-    await backend.replaceLoopWakeRegistrations(tenantId, loopWakeRegistrationIds(loops), updatedAt)
+    await backend.replaceLoopWakeRegistrations(
+      tenantId,
+      loops.filter((loop) => loop.enabled && loop.trigger.type === "schedule"),
+      updatedAt,
+    )
     return true
   } catch {
     log("→ kody: Convex Loop wake registration backfill skipped; existing Loop execution continues")

@@ -231,6 +231,30 @@ describe("kody-cli manual goal dispatch", () => {
     stderr.mockRestore()
   })
 
+  it("preserves the reserved occurrence for a scheduled Loop request", async () => {
+    const dir = tmpDir()
+    writeConfig(dir)
+    writeScheduledImplementation(dir, "loop-scheduler")
+    previousEnv.KODY_RUN_REQUEST_JSON = process.env.KODY_RUN_REQUEST_JSON
+    process.env.KODY_RUN_REQUEST_JSON = JSON.stringify({
+      requestId: "loop-wake-1",
+      target: { type: "loop", id: "learn-from-runs" },
+      intent: "tick",
+      source: "schedule",
+      input: { scheduledFor: "2026-08-19T12:00:00.000Z" },
+    })
+
+    await expect(runCi(["--cwd", dir, "--skip-install", "--skip-litellm"])).resolves.toBe(0)
+
+    expect(mocks.runJob.mock.calls[0]?.[0]).toMatchObject({
+      action: "loop-scheduler",
+      cliArgs: { loop: "learn-from-runs" },
+    })
+    expect(mocks.runJob.mock.calls[0]?.[1]).toMatchObject({
+      preloadedData: { scheduledFor: "2026-08-19T12:00:00.000Z" },
+    })
+  })
+
   it("keeps legacy env action/message as a compatibility fallback", async () => {
     const dir = tmpDir()
     writeConfig(dir)

@@ -146,7 +146,7 @@ export function isScheduledActionsWake(env: NodeJS.ProcessEnv = process.env): bo
 }
 
 type RunRequestRoute =
-  | { kind: "action"; action: string; cliArgs: Record<string, unknown>; workflowRunId?: string }
+  | { kind: "action"; action: string; cliArgs: Record<string, unknown>; workflowRunId?: string; scheduledFor?: string }
   | { kind: "workflow"; workflow: string; cliArgs: Record<string, unknown>; workflowRunId?: string }
   | { kind: "fanout"; force: boolean }
   | { kind: "ignore" }
@@ -175,6 +175,9 @@ function routeRunRequest(request: RunRequest): RunRequestRoute {
       kind: "action",
       action: "loop-scheduler",
       cliArgs: { loop: target.id },
+      ...(typeof request.input?.scheduledFor === "string"
+        ? { scheduledFor: request.input.scheduledFor }
+        : {}),
     }
   }
 
@@ -489,6 +492,8 @@ export async function runCi(argv: string[]): Promise<number> {
   let forceRunAction: string | null = null
   let forceRunCliArgs: Record<string, unknown> = {}
   let forceWorkflowRunId: string | undefined
+  let forceRunScheduledFor: string | undefined
+  let forceRunWakeId: string | undefined
   let forceRunTargetKind: "action" | "workflow" = "action"
   let runRequestFanOut = false
   let runRequestFanOutForce = false
@@ -512,6 +517,8 @@ export async function runCi(argv: string[]): Promise<number> {
       forceRunAction = route.action
       forceRunCliArgs = route.cliArgs
       forceWorkflowRunId = route.workflowRunId
+      forceRunScheduledFor = route.scheduledFor
+      if (route.scheduledFor) forceRunWakeId = parsedRunRequest.request.requestId
     } else if (route.kind === "workflow") {
       forceRunAction = route.workflow
       forceRunTargetKind = "workflow"
@@ -707,6 +714,9 @@ export async function runCi(argv: string[]): Promise<number> {
         config,
         verbose: args.verbose,
         quiet: args.quiet,
+        ...(forceRunScheduledFor
+          ? { preloadedData: { scheduledFor: forceRunScheduledFor, wakeId: forceRunWakeId } }
+          : {}),
       },
     )
     const ec = result.exitCode

@@ -93,7 +93,8 @@ export interface StateBackendClient {
 
 export interface StateBackend {
   listLoops(tenantId: string): Promise<unknown[]>
-  replaceLoopWakeRegistrations(tenantId: string, loopIds: string[], updatedAt: string): Promise<void>
+  replaceLoopWakeRegistrations(tenantId: string, loops: unknown[], updatedAt: string): Promise<void>
+  markLoopWakeExecution(tenantId: string, wakeId: string, status: "running" | "succeeded" | "failed", detail: string, updatedAt: string): Promise<void>
   get(tenantId: string, taskKey: string, kind: string): Promise<TaskDocument | null>
   save(tenantId: string, taskKey: string, kind: string, doc: unknown, expectedUpdatedAt?: string): Promise<void>
   getAgentState(tenantId: string, agent: string): Promise<AgentStateDocument | null>
@@ -244,10 +245,19 @@ export function createStateBackendFromEnv(
       })
       return Array.isArray(result) ? result : []
     },
-    async replaceLoopWakeRegistrations(tenantId, loopIds, updatedAt) {
+    async replaceLoopWakeRegistrations(tenantId, loops, updatedAt) {
       await transport.mutation(anyApi.loopWakes.replaceRegistrations, {
         tenantId: requireTenant(tenantId),
-        loopIds: [...new Set(loopIds.map((id) => requireNonEmpty(id, "loopId")))],
+        loops,
+        updatedAt: requireNonEmpty(updatedAt, "updatedAt"),
+      })
+    },
+    async markLoopWakeExecution(tenantId, wakeId, status, detail, updatedAt) {
+      await transport.mutation(anyApi.loopWakes.markExecution, {
+        tenantId: requireTenant(tenantId),
+        wakeId: requireNonEmpty(wakeId, "wakeId"),
+        status,
+        detail,
         updatedAt: requireNonEmpty(updatedAt, "updatedAt"),
       })
     },

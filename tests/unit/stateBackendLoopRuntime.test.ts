@@ -26,14 +26,20 @@ describe("Loop runtime state backend", () => {
 
     await backend.replaceLoopWakeRegistrations(
       "acme/widgets",
-      ["ci-health", "docs-health"],
+      [
+        { id: "ci-health", enabled: true, trigger: { type: "schedule", every: "15m" } },
+        { id: "docs-health", enabled: true, trigger: { type: "schedule", every: "1h" } },
+      ],
       "2026-08-19T12:00:00.000Z",
     )
 
     expect(getFunctionName(mutation.mock.calls[0]?.[0])).toBe("loopWakes:replaceRegistrations")
     expect(mutation.mock.calls[0]?.[1]).toEqual({
       tenantId: "acme/widgets",
-      loopIds: ["ci-health", "docs-health"],
+      loops: [
+        { id: "ci-health", enabled: true, trigger: { type: "schedule", every: "15m" } },
+        { id: "docs-health", enabled: true, trigger: { type: "schedule", every: "1h" } },
+      ],
       updatedAt: "2026-08-19T12:00:00.000Z",
     })
   })
