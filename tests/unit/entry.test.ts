@@ -42,6 +42,16 @@ describe("entry: parseArgs", () => {
     expect(parseArgs(["-v"]).command).toBe("version")
   })
 
+  it("prints version in GitHub Actions without repository hydration", async () => {
+    vi.stubEnv("GITHUB_ACTIONS", "true")
+    vi.stubEnv("GITHUB_EVENT_NAME", "workflow_dispatch")
+    vi.stubEnv("GITHUB_REPOSITORY", "")
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
+
+    await expect(main(["version"])).resolves.toBe(0)
+    expect(write).toHaveBeenCalledWith(expect.stringMatching(/^kody 0\.4\.608/))
+  })
+
   it("routes a discovered public action to __capability__", () => {
     const a = parseArgs(["run", "--issue", "42"])
     expect(a.command).toBe("__capability__")

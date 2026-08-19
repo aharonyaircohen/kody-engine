@@ -212,6 +212,8 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   const cwdFlag = argv.indexOf("--cwd")
   const definitionCwd = cwdFlag >= 0 && argv[cwdFlag + 1] ? argv[cwdFlag + 1]! : process.cwd()
   const shouldHydrate =
+    args.command !== "help" &&
+    args.command !== "version" &&
     !(args.command === "server" && args.serverName === "brain-serve") &&
     !hasExplicitDefinitionsRoot(definitionCwd) &&
     (Boolean(process.env.CONVEX_URL?.trim()) ||
