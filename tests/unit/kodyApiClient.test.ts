@@ -13,7 +13,7 @@ afterEach(() => {
 
 describe("resolveKodyApiUrl", () => {
   it("uses the Engine-owned production control plane by default", () => {
-    expect(resolveKodyApiUrl({})).toBe("https://kody-dashboard-aguy.vercel.app")
+    expect(resolveKodyApiUrl({})).toBe("https://kody-dashboard-khaki.vercel.app")
   })
 
   it("keeps an explicit deployment override and removes its trailing slash", () => {

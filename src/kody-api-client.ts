@@ -1,7 +1,7 @@
 import { type FunctionReference, getFunctionName } from "convex/server"
 import type { StateBackendClient } from "./state-backend.js"
 
-const DEFAULT_KODY_API_URL = "https://kody-dashboard-aguy.vercel.app"
+const DEFAULT_KODY_API_URL = "https://kody-dashboard-khaki.vercel.app"
 const OIDC_AUDIENCE = "kody-api"
 const WORKFLOW_COMPLETION_SUMMARY_MAX_LENGTH = 1_000
 
