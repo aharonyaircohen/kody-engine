@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.4.608 — 2026-08-19
+
+### Fixes
+- select account chat model (e9900a6)
+- load account credential requirements (059d4e3)
+- provision account model credentials (ac62a0e)
+- persist repository login for test accounts (2facfbd)
+- preserve combined browser authentication (fe30022)
+- prepare app login before browser tests (fb22b96)
+- defer QA user identity lookup (bb888db)
+- retry temporary QA login failures (a55b70f)
+- stop after valid capability output (2c872bd)
+- prepare authenticated QA browser (d1dfe99)
+- route automatic models through fallback gateway (9979d17)
+
+### Chores
+- release 0.4.597 (2711d59)
 ## v0.4.532 — 2026-08-08
 
 ### Features
