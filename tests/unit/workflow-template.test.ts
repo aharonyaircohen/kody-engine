@@ -19,8 +19,9 @@ describe("consumer workflow template", () => {
     )
   })
 
-  it("uses portable YAML quoting accepted by strict consumer formatters", () => {
-    expect(workflow).toContain("cron: '7/15 * * * *'")
+  it("leaves automatic scheduling to Convex", () => {
+    expect(workflow).not.toMatch(/^\s*schedule:/m)
+    expect(workflow).not.toContain("cron:")
     expect(workflow).not.toMatch(/(?:description|default|cron): "/)
   })
 

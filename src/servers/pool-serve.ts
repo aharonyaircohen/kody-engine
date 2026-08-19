@@ -22,12 +22,11 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 
-import { discoverAppRepositories, mintAppInstallationToken, readAppCreds } from "../app-auth.js"
-import { runAgencyLoopTick } from "../pool/agency-loop-tick.js"
+import { mintAppInstallationToken, readAppCreds } from "../app-auth.js"
 import type { FlyGuest } from "../pool/fly.js"
 import { bearerOk, derivePoolApiKey, deriveRunnerApiKey, masterKeyBytes } from "../pool/keys.js"
 import { type ClaimRequest, PoolRegistry } from "../pool/registry.js"
-import { parseRunRequest, type RunRequest } from "../run-request.js"
+import { parseRunRequest } from "../run-request.js"
 
 const PERF_GUEST: Record<string, FlyGuest> = {
   low: { cpu_kind: "shared", cpus: 2, memory_mb: 2048 },
@@ -159,33 +158,6 @@ export async function poolServe(): Promise<number> {
     registry.resyncAll().catch((err) => log(`resync tick failed: ${err instanceof Error ? err.message : String(err)}`))
   }, refillMs)
 
-  const discoverAgencies = async (): Promise<string[]> => {
-    if (!appCreds) return registry.activeRepos()
-    const repositories = await discoverAppRepositories(appCreds)
-    for (const access of repositories) repoTokens.set(access.repo.toLowerCase(), access.token)
-    return [...new Set([...repositories.map((access) => access.repo), ...registry.activeRepos()])]
-  }
-  let agencyTickInFlight: Promise<unknown> | null = null
-  const runLoopTick = (): Promise<unknown> => {
-    if (agencyTickInFlight) return agencyTickInFlight
-    agencyTickInFlight = runAgencyLoopTick({
-      discover: discoverAgencies,
-      claim: (owner, repo, req) => registry.claim(owner, repo, req),
-      log,
-    })
-      .catch((err) => log(`agency Loop tick failed: ${err instanceof Error ? err.message : String(err)}`))
-      .finally(() => {
-        agencyTickInFlight = null
-      })
-    return agencyTickInFlight
-  }
-  const loopTickEnabled = (process.env.POOL_LOOP_TICK ?? process.env.POOL_CAPABILITY_TICK ?? "1") !== "0"
-  const loopTickMs = envInt(
-    process.env.POOL_LOOP_TICK_MS ? "POOL_LOOP_TICK_MS" : "POOL_CAPABILITY_TICK_MS",
-    15 * 60_000,
-  )
-  const loopTick = loopTickEnabled ? setInterval(() => void runLoopTick(), loopTickMs) : null
-
   const server = createServer(async (req, res) => {
     try {
       if (!req.method || !req.url) return sendJson(res, 400, { error: "bad request" })
@@ -251,12 +223,9 @@ export async function poolServe(): Promise<number> {
       resolve()
     })
   })
-  if (loopTickEnabled) void runLoopTick()
-
   const shutdown = (signal: string) => {
     log(`${signal} — shutting down`)
     clearInterval(tick)
-    if (loopTick) clearInterval(loopTick)
     server.close(() => process.exit(0))
   }
   process.once("SIGINT", () => shutdown("SIGINT"))

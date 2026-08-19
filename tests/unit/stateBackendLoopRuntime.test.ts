@@ -20,6 +20,24 @@ describe("Loop runtime state backend", () => {
     expect(query.mock.calls[0]?.[1]).toEqual({ tenantId: "acme/widgets" })
   })
 
+  it("replaces the Convex wake registrations discovered by the Engine", async () => {
+    const mutation = vi.fn()
+    const backend = createStateBackendFromEnv({}, { query: vi.fn(), mutation })
+
+    await backend.replaceLoopWakeRegistrations(
+      "acme/widgets",
+      ["ci-health", "docs-health"],
+      "2026-08-19T12:00:00.000Z",
+    )
+
+    expect(getFunctionName(mutation.mock.calls[0]?.[0])).toBe("loopWakes:replaceRegistrations")
+    expect(mutation.mock.calls[0]?.[1]).toEqual({
+      tenantId: "acme/widgets",
+      loopIds: ["ci-health", "docs-health"],
+      updatedAt: "2026-08-19T12:00:00.000Z",
+    })
+  })
+
   it("uses one atomic reservation for each schedule slot", async () => {
     const mutation = vi.fn().mockResolvedValue({ acquired: true, dispatchId: "dispatch-1" })
     const backend = createStateBackendFromEnv({}, { query: vi.fn(), mutation })

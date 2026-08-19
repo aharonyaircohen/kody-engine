@@ -93,6 +93,7 @@ export interface StateBackendClient {
 
 export interface StateBackend {
   listLoops(tenantId: string): Promise<unknown[]>
+  replaceLoopWakeRegistrations(tenantId: string, loopIds: string[], updatedAt: string): Promise<void>
   get(tenantId: string, taskKey: string, kind: string): Promise<TaskDocument | null>
   save(tenantId: string, taskKey: string, kind: string, doc: unknown, expectedUpdatedAt?: string): Promise<void>
   getAgentState(tenantId: string, agent: string): Promise<AgentStateDocument | null>
@@ -242,6 +243,13 @@ export function createStateBackendFromEnv(
         tenantId: requireTenant(tenantId),
       })
       return Array.isArray(result) ? result : []
+    },
+    async replaceLoopWakeRegistrations(tenantId, loopIds, updatedAt) {
+      await transport.mutation(anyApi.loopWakes.replaceRegistrations, {
+        tenantId: requireTenant(tenantId),
+        loopIds: [...new Set(loopIds.map((id) => requireNonEmpty(id, "loopId")))],
+        updatedAt: requireNonEmpty(updatedAt, "updatedAt"),
+      })
     },
     async get(tenantId, taskKey, kind) {
       const result = await transport.query(anyApi.taskState.get, {

@@ -46,8 +46,6 @@ on:
     types: [created]
   pull_request:
     types: [opened, synchronize, closed]
-  schedule:
-    - cron: "7/15 * * * *"
 
 jobs:
   run:

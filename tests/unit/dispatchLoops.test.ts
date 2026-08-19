@@ -6,8 +6,10 @@ import {
   dueSlot,
   loopDispatchSlot,
   loopRunId,
+  loopWakeRegistrationIds,
   mergeLoopDefinitions,
   selectRunnableLoops,
+  syncLoopWakeRegistrations,
 } from "../../src/scripts/dispatchLoops.js"
 
 const loop: LoopDefinition = {
@@ -98,6 +100,34 @@ describe("mergeLoopDefinitions", () => {
     }
 
     expect(mergeLoopDefinitions([loop], [runtime, { invalid: true }])).toEqual([runtime, loop])
+  })
+
+  it("registers only enabled scheduled Loops for Convex wakes", () => {
+    expect(
+      loopWakeRegistrationIds([
+        loop,
+        { ...loop, id: "disabled", enabled: false },
+        { ...loop, id: "manual", trigger: { type: "manual" } },
+      ]),
+    ).toEqual(["daily-check"])
+  })
+
+  it("does not block existing Loop execution while the backend rolls out", async () => {
+    const log = vi.fn()
+    const backend = {
+      replaceLoopWakeRegistrations: vi.fn().mockRejectedValue(new Error("unsupported operation")),
+    }
+
+    await expect(
+      syncLoopWakeRegistrations(
+        backend,
+        "acme/widgets",
+        [loop],
+        "2026-08-19T12:00:00.000Z",
+        log,
+      ),
+    ).resolves.toBe(false)
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("backfill skipped"))
   })
 })
 

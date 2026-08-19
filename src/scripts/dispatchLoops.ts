@@ -34,6 +34,9 @@ export const dispatchLoops: PreflightScript = async (ctx) => {
   const requestedLoopId = typeof ctx.args.loop === "string" ? ctx.args.loop.trim() : ""
   const backend = createStateBackendFromEnv()
   const loops = mergeLoopDefinitions(listLoopDefinitions(ctx.cwd), await backend.listLoops(tenantId))
+  await syncLoopWakeRegistrations(backend, tenantId, loops, now.toISOString(), (message) =>
+    process.stderr.write(`${message}\n`),
+  )
   const due = selectRunnableLoops(loops, now, {
     force,
     ...(requestedLoopId ? { loopId: requestedLoopId } : {}),
@@ -232,6 +235,29 @@ export function mergeLoopDefinitions(
     if (loop) byId.set(loop.id, loop)
   }
   return [...byId.values()].sort((left, right) => left.id.localeCompare(right.id))
+}
+
+export function loopWakeRegistrationIds(loops: readonly LoopDefinition[]): string[] {
+  return loops
+    .filter((loop) => loop.enabled && loop.trigger.type === "schedule")
+    .map((loop) => loop.id)
+    .sort()
+}
+
+export async function syncLoopWakeRegistrations(
+  backend: Pick<StateBackend, "replaceLoopWakeRegistrations">,
+  tenantId: string,
+  loops: readonly LoopDefinition[],
+  updatedAt: string,
+  log: (message: string) => void,
+): Promise<boolean> {
+  try {
+    await backend.replaceLoopWakeRegistrations(tenantId, loopWakeRegistrationIds(loops), updatedAt)
+    return true
+  } catch {
+    log("→ kody: Convex Loop wake registration backfill skipped; existing Loop execution continues")
+    return false
+  }
 }
 
 export function loopDispatchSlot(loop: LoopDefinition, now: Date, force: boolean, nonce: string): string | null {

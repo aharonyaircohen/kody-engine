@@ -113,7 +113,7 @@ model key at runtime; user secrets are not copied into Actions. `KODY_TOKEN`
 remains an optional GitHub authentication fallback when Kody must trigger
 downstream workflows or modify `.github/workflows/*`.
 
-The consumer workflow listens on `issue_comment` for `@kody ...` dispatch and `workflow_dispatch` for manual runs, chat mode, and scheduled wakeups.
+The consumer workflow listens on `issue_comment` for `@kody ...` dispatch and `workflow_dispatch` for manual runs and chat mode. Convex owns scheduled Loop wakeups.
 
 ## Commands
 
