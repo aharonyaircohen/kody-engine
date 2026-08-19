@@ -59,6 +59,41 @@ describe("state backend", () => {
     )
   })
 
+  it("uses the dedicated AgentState API instead of task state", async () => {
+    const transport = client()
+    const backend = createStateBackendFromEnv(
+      { CONVEX_URL: "https://example.convex.cloud", KODY_SERVICE_KEY: "secret" },
+      transport,
+    )
+    const state = {
+      version: 1,
+      agent: "operations-agent",
+      revision: 1,
+      cursor: "run-1",
+      summary: "Cycle complete.",
+      data: {},
+      updatedAt: "2026-08-19T00:00:00.000Z",
+    }
+
+    await backend.getAgentState("acme/app", "operations-agent")
+    await backend.saveAgentState("acme/app", state, 0)
+    await backend.resetAgentState("acme/app", "operations-agent")
+
+    expect(transport.query).toHaveBeenCalledWith(anyApi.agentStates.get, {
+      tenantId: "acme/app",
+      agent: "operations-agent",
+    })
+    expect(transport.mutation).toHaveBeenCalledWith(anyApi.agentStates.save, {
+      tenantId: "acme/app",
+      state,
+      expectedRevision: 0,
+    })
+    expect(transport.mutation).toHaveBeenCalledWith(anyApi.agentStates.reset, {
+      tenantId: "acme/app",
+      agent: "operations-agent",
+    })
+  })
+
   it("supports bounded repository-document reads and guarded writes", async () => {
     const transport = client()
     const backend = createStateBackendFromEnv(

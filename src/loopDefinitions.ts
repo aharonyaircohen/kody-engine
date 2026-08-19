@@ -12,7 +12,7 @@ export type LoopTrigger =
 export interface LoopDefinition {
   id: string
   trigger: LoopTrigger
-  target: { kind: "workflow" | "capability"; id: string }
+  target: { kind: "workflow" | "capability" | "pipeline" | "agent"; id: string }
   input: Record<string, unknown>
   enabled: boolean
 }
@@ -29,7 +29,7 @@ export function normalizeLoopDefinition(value: unknown): LoopDefinition | null {
   const targetKind = raw.target.kind
   const targetId = raw.target.id
   if (
-    (targetKind !== "workflow" && targetKind !== "capability") ||
+    !["workflow", "capability", "pipeline", "agent"].includes(String(targetKind)) ||
     typeof targetId !== "string" ||
     !ID.test(targetId)
   ) {
@@ -40,7 +40,7 @@ export function normalizeLoopDefinition(value: unknown): LoopDefinition | null {
   return {
     id: raw.id,
     trigger,
-    target: { kind: targetKind, id: targetId },
+    target: { kind: targetKind as LoopDefinition["target"]["kind"], id: targetId },
     input: raw.input,
     enabled: raw.enabled,
   }

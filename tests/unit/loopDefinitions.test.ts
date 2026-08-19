@@ -29,6 +29,21 @@ describe("Loop definitions", () => {
     })
   })
 
+  it.each(["workflow", "capability", "pipeline", "agent"] as const)(
+    "accepts a %s target",
+    (kind) => {
+      expect(
+        normalizeLoopDefinition({
+          id: `scheduled-${kind}`,
+          trigger: { type: "schedule", every: "1h" },
+          target: { kind, id: `${kind}-one` },
+          input: {},
+          enabled: true,
+        })?.target,
+      ).toEqual({ kind, id: `${kind}-one` })
+    },
+  )
+
   it("loads a Loop from the definitions folder", () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "simple-loop-"))
     roots.push(cwd)

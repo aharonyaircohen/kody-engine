@@ -1,0 +1,31 @@
+{
+  "name": "live-agent",
+  "internal": true,
+  "role": "primitive",
+  "kind": "oneshot",
+  "inputs": [
+    { "name": "agent", "flag": "--agent", "type": "string", "required": true, "describe": "Live Agent slug." },
+    { "name": "intent", "flag": "--intent", "type": "string", "required": false, "describe": "Primary Intent slug recorded by the Loop." }
+  ],
+  "claudeCode": {
+    "model": "inherit",
+    "permissionMode": "default",
+    "maxTurns": 100,
+    "maxThinkingTokens": null,
+    "systemPromptAppend": null,
+    "enableSubmitTool": true,
+    "tools": ["mcp__kody-capability__start_capability", "mcp__kody-submit__submit_state"],
+    "hooks": [], "skills": [], "commands": [], "subagents": [], "plugins": [], "mcpServers": []
+  },
+  "cliTools": [],
+  "scripts": {
+    "preflight": [{ "script": "loadLiveAgent" }, { "script": "composePrompt" }],
+    "postflight": [
+      { "script": "parseJobStateFromAgentResult", "with": { "fenceLabel": "kody-agent-next-state" } },
+      { "script": "saveLiveAgentState" },
+      { "script": "appendCompanyActivity" }
+    ]
+  },
+  "inputArtifacts": [],
+  "outputArtifacts": []
+}

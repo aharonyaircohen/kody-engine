@@ -19,6 +19,13 @@ export interface GoalDocument {
   updatedAt: string
 }
 
+export interface AgentStateDocument {
+  tenantId: string
+  agent: string
+  state: unknown
+  updatedAt: string
+}
+
 export interface AgencyRunDocument {
   tenantId: string
   runId: string
@@ -79,6 +86,13 @@ export interface WorkflowDocument {
   updatedAt: string
 }
 
+export interface PipelineDocument {
+  pipelineId: string
+  definition: unknown
+  source: "local" | "store"
+  updatedAt: string
+}
+
 export interface StateBackendClient {
   query: (fn: FunctionReference<"query">, args: Record<string, unknown>) => Promise<unknown>
   mutation: (fn: FunctionReference<"mutation">, args: Record<string, unknown>) => Promise<unknown>
@@ -88,6 +102,9 @@ export interface StateBackend {
   listLoops(tenantId: string): Promise<unknown[]>
   get(tenantId: string, taskKey: string, kind: string): Promise<TaskDocument | null>
   save(tenantId: string, taskKey: string, kind: string, doc: unknown, expectedUpdatedAt?: string): Promise<void>
+  getAgentState(tenantId: string, agent: string): Promise<AgentStateDocument | null>
+  saveAgentState(tenantId: string, state: unknown, expectedRevision?: number): Promise<void>
+  resetAgentState(tenantId: string, agent: string): Promise<void>
   getRepoDoc(tenantId: string, kind: string): Promise<TaskDocument | null>
   listRepoDocs(tenantId: string, prefix: string): Promise<TaskDocument[]>
   saveRepoDoc(tenantId: string, kind: string, doc: unknown, expectedUpdatedAt?: string): Promise<void>
@@ -173,6 +190,11 @@ export interface StateBackend {
   appendIntentDecision(tenantId: string, intentId: string, decision: unknown): Promise<void>
   listDefinitions(tenantId: string, kind: DefinitionKind): Promise<DefinitionDocument[]>
   listWorkflows(tenantId: string): Promise<WorkflowDocument[]>
+  getPipeline(tenantId: string, pipelineId: string): Promise<PipelineDocument | null>
+  reservePipelineRun(tenantId: string, input: Record<string, unknown>): Promise<unknown>
+  markPipelineStepDispatched(tenantId: string, input: Record<string, unknown>): Promise<unknown>
+  advancePipelineRun(tenantId: string, input: Record<string, unknown>): Promise<unknown>
+  failPipelineRun(tenantId: string, input: Record<string, unknown>): Promise<unknown>
   getWorkflowRun(tenantId: string, workflowId: string, runId: string): Promise<{ state: unknown } | null>
   saveWorkflowRun(tenantId: string, workflowId: string, runId: string, state: unknown, updatedAt: string): Promise<void>
   acquireWorkflowRunLease(
@@ -249,6 +271,26 @@ export function createStateBackendFromEnv(
         doc,
         updatedAt: new Date().toISOString(),
         ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}),
+      })
+    },
+    async getAgentState(tenantId, agent) {
+      const result = await transport.query(anyApi.agentStates.get, {
+        tenantId: requireTenant(tenantId),
+        agent: requireNonEmpty(agent, "agent"),
+      })
+      return (result as AgentStateDocument | null) ?? null
+    },
+    async saveAgentState(tenantId, state, expectedRevision) {
+      await transport.mutation(anyApi.agentStates.save, {
+        tenantId: requireTenant(tenantId),
+        state,
+        ...(expectedRevision === undefined ? {} : { expectedRevision }),
+      })
+    },
+    async resetAgentState(tenantId, agent) {
+      await transport.mutation(anyApi.agentStates.reset, {
+        tenantId: requireTenant(tenantId),
+        agent: requireNonEmpty(agent, "agent"),
       })
     },
     async getRepoDoc(tenantId, kind) {
@@ -437,6 +479,37 @@ export function createStateBackendFromEnv(
         tenantId: requireTenant(tenantId),
       })
       return Array.isArray(result) ? (result as WorkflowDocument[]) : []
+    },
+    async getPipeline(tenantId, pipelineId) {
+      const result = await transport.query(anyApi.pipelines.get, {
+        tenantId: requireTenant(tenantId),
+        pipelineId: requireNonEmpty(pipelineId, "pipelineId"),
+      })
+      return (result as PipelineDocument | null) ?? null
+    },
+    async reservePipelineRun(tenantId, input) {
+      return await transport.mutation(anyApi.pipelineRuns.reserve, {
+        tenantId: requireTenant(tenantId),
+        ...input,
+      })
+    },
+    async markPipelineStepDispatched(tenantId, input) {
+      return await transport.mutation(anyApi.pipelineRuns.markDispatched, {
+        tenantId: requireTenant(tenantId),
+        ...input,
+      })
+    },
+    async advancePipelineRun(tenantId, input) {
+      return await transport.mutation(anyApi.pipelineRuns.advance, {
+        tenantId: requireTenant(tenantId),
+        ...input,
+      })
+    },
+    async failPipelineRun(tenantId, input) {
+      return await transport.mutation(anyApi.pipelineRuns.failDispatch, {
+        tenantId: requireTenant(tenantId),
+        ...input,
+      })
     },
     async getWorkflowRun(tenantId, workflowId, runId) {
       const result = await transport.query(anyApi.workflowRuns.get, {

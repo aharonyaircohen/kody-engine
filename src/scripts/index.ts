@@ -45,6 +45,7 @@ import { loadIssueContext } from "./loadIssueContext.js"
 import { loadIssueStateComment } from "./loadIssueStateComment.js"
 import { loadJobFromFile } from "./loadJobFromFile.js"
 import { loadLinkedFinding } from "./loadLinkedFinding.js"
+import { loadLiveAgent } from "./loadLiveAgent.js"
 import { loadMemoryContext } from "./loadMemoryContext.js"
 import { loadPriorArt } from "./loadPriorArt.js"
 import { loadQaContext } from "./loadQaContext.js"
@@ -93,6 +94,7 @@ import { runScheduledImplementationTick } from "./runScheduledImplementationTick
 import { runSimpleCapabilityScript } from "./runSimpleCapabilityScript.js"
 import { runTickScript } from "./runTickScript.js"
 import { saveManagedGoalState } from "./saveManagedGoalState.js"
+import { saveLiveAgentState } from "./saveLiveAgentState.js"
 import { saveTaskState } from "./saveTaskState.js"
 import { setCommentTarget } from "./setCommentTarget.js"
 import { setLifecycleLabel } from "./setLifecycleLabel.js"
@@ -133,6 +135,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
   loadConventions,
   loadCoverageRules,
   loadLinkedFinding,
+  loadLiveAgent,
   loadMemoryContext,
   loadPriorArt,
   loadQaContext,
@@ -169,6 +172,7 @@ export const preflightScripts: Record<string, PreflightScript> = {
 }
 
 export const postflightScripts: Record<string, PostflightScript> = {
+  saveLiveAgentState,
   parseSimpleCapabilityOutput,
   parseAgentResult,
   parseIssueStateFromAgentResult,
