@@ -115,6 +115,10 @@ repository that adds its application after Kody onboarding still receives a
 real verification gate. Explicit `quality` commands in `kody.config.json`
 always override discovery. See [Repository quality gates](docs/quality-gates.md).
 
+Lifecycle labels stay attached to both the task and its pull request. A green
+delivery is `kody:reviewing`; after that PR merges, Kody changes the PR and each
+linked closing issue to `kody:done`. See [Pull request lifecycle](docs/pull-request-lifecycle.md).
+
 Store model provider keys (for example `MINIMAX_API_KEY`) in the connected
 repository's Kody vault. GitHub Actions uses OIDC to request only the selected
 model key at runtime; user secrets are not copied into Actions. `KODY_TOKEN`

@@ -28,6 +28,7 @@ import {
 import { type RunRequest, readRunRequestFromEnv } from "./run-request.js"
 import { lastRunLogPath } from "./runtimePaths.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
+import { finalizeMergedPullRequestEvent, readGitHubEvent } from "./mergedPrLifecycle.js"
 import { readWorkflowDefinition, type WorkflowDefinition } from "./workflowDefinitions.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
@@ -476,6 +477,25 @@ export async function runCi(argv: string[]): Promise<number> {
     await hydrateStateWorkspace(earlyConfig, cwd)
   } catch (err) {
     earlyConfigError = err instanceof Error ? err : new Error(String(err))
+  }
+
+  if (process.env.GITHUB_EVENT_NAME === "pull_request") {
+    try {
+      const finalized = finalizeMergedPullRequestEvent(readGitHubEvent(), cwd)
+      if (finalized) {
+        process.stdout.write(
+          `→ kody: merged PR #${finalized.pr} finalized as done${
+            finalized.issues.length > 0 ? ` (issues ${finalized.issues.map((n) => `#${n}`).join(", ")})` : ""
+          }\n`,
+        )
+        return 0
+      }
+    } catch (err) {
+      process.stderr.write(
+        `[kody] failed to finalize merged PR lifecycle: ${err instanceof Error ? err.message : String(err)}\n`,
+      )
+      return 99
+    }
   }
 
   // --issue is only required when autoDispatch can't infer from GHA env.
