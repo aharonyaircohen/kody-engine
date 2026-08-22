@@ -239,6 +239,18 @@ describe("profile: loadProfile", () => {
     expect(() => loadProfile(p)).not.toThrow()
   })
 
+  it("accepts state postflights when loadLiveAgent is in preflight", () => {
+    const dir = tmpDir()
+    const p = writeProfile(dir, {
+      ...VALID_MIN,
+      scripts: {
+        preflight: [{ script: "loadLiveAgent" }, { script: "composePrompt" }],
+        postflight: [{ script: "parseJobStateFromAgentResult" }, { script: "writeJobStateFile" }],
+      },
+    })
+    expect(() => loadProfile(p)).not.toThrow()
+  })
+
   it("accepts state postflights when runScheduledImplementationTick is in preflight", () => {
     const dir = tmpDir()
     const p = writeProfile(dir, {

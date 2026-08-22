@@ -1218,6 +1218,35 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("accepts a successful PR delivery as capability output when JSON output is omitted", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-pr-output-"))
+    try {
+      writeContractCapability(cwd, "publish", [])
+      runImplementationChain.mockResolvedValueOnce({
+        exitCode: 0,
+        prUrl: "https://github.com/o/r/pull/12",
+      })
+
+      const result = await runJob(
+        {
+          action: "publish",
+          capability: "publish",
+          cliArgs: {},
+          flavor: "instant",
+        },
+        { cwd },
+      )
+
+      expect(result).toMatchObject({
+        exitCode: 0,
+        prUrl: "https://github.com/o/r/pull/12",
+        capabilityOutput: { prUrl: "https://github.com/o/r/pull/12" },
+      })
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it("uses an explicit workflow target fact instead of a stale prior PR URL", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-target-fact-"))
     try {

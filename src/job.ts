@@ -468,9 +468,13 @@ function enforceCapabilityOutputContract(capability: CapabilityFolder | null, re
   if (result.exitCode !== 0 || !schema) {
     return result
   }
+  const contractOutput =
+    result.capabilityOutput === undefined && typeof result.prUrl === "string" && result.prUrl.trim().length > 0
+      ? { prUrl: result.prUrl }
+      : result.capabilityOutput
   try {
-    validateCapabilityContractOutput(schema, result.capabilityOutput)
-    return result
+    validateCapabilityContractOutput(schema, contractOutput)
+    return contractOutput === result.capabilityOutput ? result : { ...result, capabilityOutput: contractOutput }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
     const blocked: CapabilityResult = {

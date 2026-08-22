@@ -129,16 +129,19 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   advanceFlow: { owner: "run", reason: "run-only flow handoff after task branch work." },
   checkCoverageWithRetry: { owner: "run", reason: "run-only coverage gate." },
   commitAndPush: { owner: "run", reason: "run-only branch commit/push step." },
-  composePrompt: {
-    owner: "run",
-    reason:
-      "run is the only engine caller; Store-owned model creators also compose prompts through this shared script.",
+  appendCompanyActivity: {
+    owner: "live-agent",
+    reason: "live-agent-only activity projection for persisted AgentState updates.",
   },
   ensurePr: { owner: "run", reason: "run-only PR creation step." },
   finalizeTerminal: { owner: "run", reason: "run-only terminal notification step." },
   initFlow: {
     owner: "init",
     reason: "init is the engine-owned bootstrap that must run before consumer definitions or config exist.",
+  },
+  loadLiveAgent: {
+    owner: "live-agent",
+    reason: "live-agent-only loader that joins AgentState, Intent, and repository guidance.",
   },
   loadConventions: { owner: "run", reason: "run-only prompt context loader after catalog moved to store." },
   loadCoverageRules: { owner: "run", reason: "run-only coverage rule context loader." },
@@ -152,6 +155,10 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
     reason:
       "run is the only engine caller; Store-owned model creators also parse their structured result through this shared script.",
   },
+  parseJobStateFromAgentResult: {
+    owner: "live-agent",
+    reason: "live-agent-only parser for the AgentState submission fence.",
+  },
   requirePlanDeviations: { owner: "run", reason: "run-only plan-deviation check." },
   requireDeliveryArtifacts: {
     owner: "run",
@@ -161,6 +168,10 @@ const KNOWN_SOLO_SCRIPTS: Record<string, SoloEntry> = {
   resolveArtifacts: { owner: "run", reason: "run-only artifact resolver." },
   runFlow: { owner: "run", reason: "run bootstrap. Run is the only engine-bundled implementation." },
   saveTaskState: { owner: "run", reason: "run-only task state persistence." },
+  saveLiveAgentState: {
+    owner: "live-agent",
+    reason: "live-agent-only persistence of the submitted AgentState revision.",
+  },
   setLifecycleLabel: { owner: "run", reason: "run-only lifecycle label while engine keeps only run builtin." },
   verifyWithRetry: { owner: "run", reason: "run-only verification gate." },
   writeAgentRunSummary: { owner: "run", reason: "run-only summary writer." },

@@ -280,6 +280,7 @@ export function loadProfile(profilePath: string): Profile {
   const STATE_LOADERS = [
     "loadCapabilityState",
     "loadJobFromFile",
+    "loadLiveAgent",
     "runTickScript",
     "runScheduledImplementationTick",
     "runScheduledExecutableTick",

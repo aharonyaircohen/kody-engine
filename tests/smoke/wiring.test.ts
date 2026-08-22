@@ -24,7 +24,7 @@ const INPUT_TYPES = new Set(["string", "int", "bool", "enum"])
 describe("smoke: system wiring", () => {
   it("every shipped implementation profile loads and validates with well-formed inputs", () => {
     // Keep this list explicit so newly bundled implementations are reviewed.
-    expect(implementations.map((exe) => exe.name)).toEqual(["init", "run"])
+    expect(implementations.map((exe) => exe.name)).toEqual(["init", "live-agent", "run"])
     const failures: string[] = []
     for (const exe of implementations) {
       try {

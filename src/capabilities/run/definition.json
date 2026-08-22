@@ -22,6 +22,10 @@
   "outputSchema": {
     "type": "object",
     "properties": {
+      "prUrl": {
+        "type": "string",
+        "description": "Canonical pull request URL produced by the implementation."
+      },
       "reason": {
         "type": "string"
       },
