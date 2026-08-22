@@ -160,8 +160,8 @@ export const prepareSimpleCapabilityRuntime: PreflightScript = async (ctx, profi
           : ""
     await prepareKodyRepositoryBrowserAuth(ctx, profile, {
       repositoryUrl: `https://github.com/${ctx.config.github.owner}/${ctx.config.github.repo}`,
-      credentialKey: "E2E_GITHUB_TOKEN",
-      methodName: "Kody protected QA login",
+      credentialKey: "KODY_TOKEN",
+      methodName: "Kody repository QA login",
       targetUrl,
     })
   }

@@ -32,7 +32,7 @@ describe("consumer workflow template", () => {
     expect(workflow).not.toContain("toJSON(secrets)")
     expect(workflow).not.toContain("ALL_SECRETS:")
     expect(workflow).toContain("KODY_TOKEN: $" + "{{ secrets.KODY_TOKEN }}")
-    expect(workflow).toContain("E2E_GITHUB_TOKEN: $" + "{{ secrets.E2E_GITHUB_TOKEN }}")
+    expect(workflow).not.toContain("E2E_GITHUB_TOKEN")
   })
 
   it("uploads Quality Run evidence even when the exact test fails", () => {

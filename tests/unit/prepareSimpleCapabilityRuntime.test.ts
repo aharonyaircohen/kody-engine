@@ -9,7 +9,7 @@ const roots: string[] = []
 
 afterEach(() => {
   delete process.env.LOGIN_PASSWORD
-  delete process.env.E2E_GITHUB_TOKEN
+  delete process.env.KODY_TOKEN
   delete process.env.MINIMAX_API_KEY
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true })
 })
@@ -109,7 +109,7 @@ describe("prepareSimpleCapabilityRuntime", () => {
     }
     writeLogin(ctx.cwd, "qa@example.com")
     process.env.LOGIN_PASSWORD = "private-password"
-    process.env.E2E_GITHUB_TOKEN = "protected-github-token"
+    process.env.KODY_TOKEN = "protected-github-token"
     process.env.MINIMAX_API_KEY = "protected-model-key"
     const originalFetch = globalThis.fetch
     let savedRepositoryAuth: unknown
@@ -183,13 +183,13 @@ describe("prepareSimpleCapabilityRuntime", () => {
     for (const cleanup of (ctx.data.__runtimeCleanup as Array<() => void> | undefined) ?? []) cleanup()
   })
 
-  it("blocks authenticated Quality work when the protected token is missing", async () => {
+  it("blocks authenticated Quality work when the repository token is missing", async () => {
     const { ctx, profile } = fixture()
     ctx.data.capabilityRequirements = { browser: true, qaCredentials: true, githubTestToken: true }
 
     await prepareSimpleCapabilityRuntime(ctx, profile)
 
-    expect(ctx.data.prompt).toContain("no `E2E_GITHUB_TOKEN` secret was found")
+    expect(ctx.data.prompt).toContain("no `KODY_TOKEN` secret was found")
     expect(ctx.data.prompt).toContain("return a blocked result")
   })
 
