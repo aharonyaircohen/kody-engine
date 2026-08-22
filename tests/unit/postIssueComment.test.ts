@@ -36,6 +36,7 @@ function makeCtx(overrides: {
   exitCode?: number
   prCrashReason?: string
   commitCrash?: string
+  deliveryOmissions?: string[]
   action?: unknown
 }): Context {
   const {
@@ -53,6 +54,7 @@ function makeCtx(overrides: {
     exitCode = 0,
     prCrashReason,
     commitCrash,
+    deliveryOmissions,
     action,
   } = overrides
 
@@ -76,6 +78,7 @@ function makeCtx(overrides: {
       ...(verifyReason ? { verifyReason } : {}),
       ...(prCrashReason ? { prCrashReason } : {}),
       ...(commitCrash ? { commitCrash } : {}),
+      ...(deliveryOmissions ? { deliveryOmissions } : {}),
       ...(action ? { action } : {}),
     },
     output: { exitCode, prUrl },
@@ -228,6 +231,20 @@ describe("postIssueComment message wording", () => {
     })
     await postIssueComment(ctx, profile, null)
     expect(lastPrBody()).toBe("✅ kody pushed to https://github.com/x/y/pull/42")
+  })
+
+  it("reports protected files omitted from an otherwise successful commit", async () => {
+    const ctx = makeCtx({
+      prAction: "updated",
+      deliveryOmissions: [".github/workflows/ci.yml"],
+    })
+
+    await postIssueComment(ctx, profile, null)
+
+    expect(lastPrBody()).toBe(
+      "⚠️ kody FAILED: delivery blocked protected files: .github/workflows/ci.yml — PR: https://github.com/x/y/pull/42",
+    )
+    expect(ctx.output.exitCode).toBe(1)
   })
 })
 

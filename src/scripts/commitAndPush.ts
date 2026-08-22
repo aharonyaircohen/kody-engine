@@ -148,6 +148,7 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
   try {
     const result = doCommitAndPush(branch, message, ctx.cwd, deliveryPathAllowlist, deliveryConfigAllowlist)
     ctx.data.commitResult = result
+    if (result.omittedFiles?.length) ctx.data.deliveryOmissions = result.omittedFiles
     // After a successful commit the working tree is clean, so listChangedFiles
     // (which reads `git status`) returns []. Use the commit's own file list
     // so downstream postflights (verifyFixAlignment) know what we committed.

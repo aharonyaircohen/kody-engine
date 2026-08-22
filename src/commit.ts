@@ -59,6 +59,8 @@ export interface CommitResult {
   pushed: boolean
   sha: string
   message: string
+  /** Changed files deliberately excluded by the delivery security boundary. */
+  omittedFiles?: string[]
   /**
    * Set when commit succeeded but push failed (network blip, auth, branch
    * protection). Lets downstream postflights distinguish "no commits made"
@@ -346,6 +348,11 @@ export function commitAndPush(
       !isForbiddenPath(f, deliveryPathAllowlist) ||
       isTrustedConfigActivationChange(f, deliveryPathAllowlist, deliveryConfigAllowlist, cwd),
   )
+  const forbiddenFiles = allChanged.filter(
+    (f) =>
+      isForbiddenPath(f, deliveryPathAllowlist) &&
+      !isTrustedConfigActivationChange(f, deliveryPathAllowlist, deliveryConfigAllowlist, cwd),
+  )
 
   // Detect in-progress merge (resolve mode): even if no files changed
   // vs HEAD (agent accepted one side verbatim), we still need to finalize
@@ -353,7 +360,7 @@ export function commitAndPush(
   const mergeHeadExists = fs.existsSync(path.join(cwd ?? process.cwd(), ".git", "MERGE_HEAD"))
 
   if (allowedFiles.length === 0 && !mergeHeadExists) {
-    return { committed: false, pushed: false, sha: "", message: "" }
+    return { committed: false, pushed: false, sha: "", message: "", omittedFiles: forbiddenFiles }
   }
 
   // Unstage any forbidden paths an earlier postflight may have staged. In
@@ -364,11 +371,6 @@ export function commitAndPush(
   // is silently bypassed and those files land in the commit. Reset is per-file
   // (leaves MERGE_HEAD and resolved-file staging intact) and a harmless no-op
   // in non-resolve modes where nothing pre-staged them.
-  const forbiddenFiles = allChanged.filter(
-    (f) =>
-      isForbiddenPath(f, deliveryPathAllowlist) &&
-      !isTrustedConfigActivationChange(f, deliveryPathAllowlist, deliveryConfigAllowlist, cwd),
-  )
   for (const f of forbiddenFiles) {
     try {
       git(["reset", "-q", "--", f], cwd)
@@ -407,12 +409,12 @@ export function commitAndPush(
   // agent's run, retries kept failing because we never rebased.
   const pushResult = pushWithRetry({ cwd, branch, setUpstream: true })
   if (pushResult.ok) {
-    return { committed: true, pushed: true, sha, message }
+    return { committed: true, pushed: true, sha, message, omittedFiles: forbiddenFiles }
   }
 
   // Commit landed locally but push didn't. ensurePr will bail rather than
   // open a PR against a branch that's not on origin.
-  return { committed: true, pushed: false, sha, message, pushError: pushResult.reason }
+  return { committed: true, pushed: false, sha, message, pushError: pushResult.reason, omittedFiles: forbiddenFiles }
 }
 
 export function hasCommitsAhead(branch: string, defaultBranch: string, cwd?: string): boolean {

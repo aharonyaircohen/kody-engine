@@ -130,6 +130,7 @@ describe("integration: git flow", () => {
 
     expect(result.committed).toBe(true)
     expect(result.pushed).toBe(true)
+    expect(result.omittedFiles).toEqual([".github/workflows/ci.yml"])
     expect(git(repo.workdir, ["show", "--name-only", "--pretty=format:", "HEAD"]).split("\n")).toEqual(["src.txt"])
     expect(fs.existsSync(path.join(repo.workdir, ".github", "workflows", "ci.yml"))).toBe(true)
   })

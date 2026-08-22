@@ -69,6 +69,21 @@ describe("commitAndPush: gate on agentDone", () => {
     expect((ctx.data.commitResult as { committed: boolean }).committed).toBe(true)
   })
 
+  it("records protected files omitted by the commit boundary", async () => {
+    vi.mocked(doCommitAndPush).mockReturnValueOnce({
+      committed: true,
+      pushed: true,
+      sha: "abc1234",
+      message: "fix: x",
+      omittedFiles: [".github/workflows/ci.yml"],
+    })
+    const ctx = makeCtx({ agentDone: true, commitMessage: "fix: x" })
+
+    await commitAndPush(ctx as never, profile, null)
+
+    expect(ctx.data.deliveryOmissions).toEqual([".github/workflows/ci.yml"])
+  })
+
   it("passes the capability delivery allowlist only to the commit boundary", async () => {
     vi.mocked(doCommitAndPush).mockClear()
     const allowlist = [".github/workflows/**"]

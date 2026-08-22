@@ -134,7 +134,7 @@ export const postIssueComment: PostflightScript = async (ctx, profile) => {
   const agentDone = Boolean(ctx.data.agentDone)
   const verifyOk = ctx.data.verifyOk !== false
   const misses = (ctx.data.coverageMisses as unknown[] | undefined) ?? []
-  if (!agentDone || misses.length > 0) exitCode = 1
+  if (isFailure || !agentDone || misses.length > 0) exitCode = 1
   else if (!verifyOk) exitCode = 2
   // Never LOWER a non-zero exit a prior postflight already recorded (e.g. a
   // commit/push crash that the guards above didn't terminate on). Keeping the
@@ -251,6 +251,13 @@ export function renderMessage(input: {
 }
 
 function computeFailureReason(ctx: { data: Record<string, unknown> }): string {
+  const omissions = Array.isArray(ctx.data.deliveryOmissions)
+    ? ctx.data.deliveryOmissions.filter((file): file is string => typeof file === "string")
+    : []
+  if (omissions.length > 0) {
+    return `delivery blocked protected files: ${omissions.join(", ")}`
+  }
+
   const misses = (ctx.data.coverageMisses as { expectedTest: string }[] | undefined) ?? []
   if (misses.length > 0) return `missing tests: ${misses.map((m) => m.expectedTest).join(", ")}`
 
