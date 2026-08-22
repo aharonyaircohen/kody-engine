@@ -352,6 +352,13 @@ export function ensurePackageManagerInstalled(pm: PackageManager, cwd: string): 
 }
 
 export function installDeps(pm: PackageManager, cwd: string): number {
+  // A consumer repository may only contain Kody configuration and content.
+  // In that case there is no application dependency tree to install, and
+  // falling through to `npm ci` fails because npm requires a lockfile.
+  if (!fs.existsSync(path.join(cwd, "package.json"))) {
+    process.stdout.write("→ kody: no package.json found — skipping consumer dependency install\n")
+    return 0
+  }
   const ensureCode = ensurePackageManagerInstalled(pm, cwd)
   if (ensureCode !== 0) return ensureCode
   const args: Record<PackageManager, string[]> = {

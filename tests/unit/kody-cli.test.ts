@@ -6,6 +6,7 @@ import * as path from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   detectPackageManager,
+  installDeps,
   installLitellmIfNeeded,
   isScheduledActionsWake,
   parseCiArgs,
@@ -274,6 +275,13 @@ describe("kody-cli: detectPackageManager", () => {
     fs.writeFileSync(path.join(d, "pnpm-lock.yaml"), "")
     fs.writeFileSync(path.join(d, "yarn.lock"), "")
     expect(detectPackageManager(d)).toBe("pnpm")
+  })
+})
+
+describe("kody-cli: installDeps", () => {
+  it("skips dependency installation for configuration-only consumers", () => {
+    const d = tmpDir()
+    expect(installDeps("npm", d)).toBe(0)
   })
 })
 
