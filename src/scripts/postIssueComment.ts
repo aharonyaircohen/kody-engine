@@ -122,6 +122,7 @@ export const postIssueComment: PostflightScript = async (ctx, profile) => {
     branchPushed: commitResult?.committed === true,
     githubOwner: ctx.config.github?.owner,
     githubRepo: ctx.config.github?.repo,
+    deliveryProof: renderDeliveryProof(ctx),
   })
   postWith(targetType, targetNumber, msg, ctx.cwd)
 
@@ -223,6 +224,7 @@ export function renderMessage(input: {
   branchPushed: boolean
   githubOwner: string | undefined
   githubRepo: string | undefined
+  deliveryProof?: string
 }): string {
   const suffix = computeFailureSuffix(input)
   if (input.isFailure) {
@@ -233,10 +235,10 @@ export function renderMessage(input: {
   // require a url field at the type level.
   switch (input.prResult?.kind) {
     case "created":
-      return `✅ kody PR opened: ${input.prResult.url}`
+      return `✅ kody PR opened: ${input.prResult.url}${input.deliveryProof ?? ""}`
     case "updated":
       return input.justPushedToExistingPr
-        ? `✅ kody pushed to ${input.prResult.url}`
+        ? `✅ kody pushed to ${input.prResult.url}${input.deliveryProof ?? ""}`
         : `ℹ️ kody made no changes — PR: ${input.prResult.url}`
     case "skipped":
       return `⚠️ kody finished but did not open a PR — ${input.prResult.reason}${suffix}`
@@ -248,6 +250,29 @@ export function renderMessage(input: {
       // success without evidence.
       return `⚠️ kody finished but PR step did not run${suffix}`
   }
+}
+
+export function renderDeliveryProof(ctx: Context): string {
+  const quality = ctx.config.quality
+  const gates = quality
+    ? [
+        quality.typecheck ? "typecheck" : "",
+        quality.testUnit ? "tests" : "",
+        quality.lint ? "lint" : "",
+        quality.format ? "format" : "",
+      ].filter(Boolean)
+    : []
+  const verification =
+    gates.length === 0
+      ? "repository verification not configured"
+      : ctx.data.verifyOk === true
+        ? `repository verification passed: ${gates.join(", ")}`
+        : "repository verification was not proven"
+  const commit = ctx.data.commitResult as { pushed?: boolean; sha?: string } | undefined
+  const delivery = commit?.pushed
+    ? `commit pushed${commit.sha ? ` (${commit.sha.slice(0, 7)})` : ""}`
+    : "no new commit pushed"
+  return `\n\nProof: ${verification}; ${delivery}.`
 }
 
 function computeFailureReason(ctx: { data: Record<string, unknown> }): string {

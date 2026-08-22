@@ -4,6 +4,11 @@ Kody may inspect the whole checkout, but it does not commit every changed file.
 The postflight delivery step separates product work from runtime state and
 operator-owned configuration before creating the PR.
 
+Successful issue comments are generated from wrapper state. They distinguish
+whether repository verification was configured and passed and whether a commit
+was actually pushed. Agent-written prose cannot turn an unverified or unpushed
+result into a success claim.
+
 ## What happens to each kind of change
 
 | Change | Result |

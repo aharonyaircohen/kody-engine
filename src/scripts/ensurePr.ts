@@ -87,7 +87,7 @@ export const ensurePr: PostflightScript = async (ctx) => {
       draft: isFailure,
       failureReason: isFailure ? failureReason : undefined,
       changedFiles,
-      agentSummary: (ctx.data.prSummary as string | undefined) || (ctx.data.agentFallbackSummary as string | undefined),
+      agentSummary: buildEvidenceSummary(ctx.data),
       baseBranch,
       // No fresh commit this run → don't rebuild the body of an existing PR;
       // it would replace the original agent summary with the empty fallback.
@@ -118,6 +118,20 @@ export const ensurePr: PostflightScript = async (ctx) => {
     ctx.output.reason = reason
     setOutcome(ctx, { kind: "crashed", reason })
   }
+}
+
+export function buildEvidenceSummary(data: Record<string, unknown>): string | undefined {
+  const summary = String(data.prSummary ?? data.agentFallbackSummary ?? "").trim()
+  const acceptance = String(data.acceptanceEvidence ?? "").trim()
+  const tests = String(data.testEvidence ?? "").trim()
+  if (!summary && !acceptance && !tests) return undefined
+  return [
+    summary,
+    acceptance ? `## Acceptance evidence\n\n${acceptance}` : "",
+    tests ? `## Test evidence\n\n${tests}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n")
 }
 
 export function shouldSkipPrForPreflight(ctx: {

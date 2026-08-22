@@ -28,6 +28,7 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { extractAcceptanceCriteria, formatAcceptanceCriteria } from "../acceptanceCriteria.js"
 import type { PreflightScript, Profile } from "../implementations/types.js"
 import type { LoadedConvention } from "../prompt.js"
 
@@ -120,6 +121,10 @@ export const composePrompt: PreflightScript = async (ctx, profile) => {
     )
   }
 
+  const issueBody = String((ctx.data.issue as { body?: string } | undefined)?.body ?? "")
+  const acceptanceCriteria = extractAcceptanceCriteria(issueBody)
+  ctx.data.acceptanceCriteria = acceptanceCriteria
+
   const tokens: Record<string, string> = {
     ...stringifyAll(ctx.args, "args."),
     ...stringifyAll(ctx.data, ""),
@@ -133,6 +138,7 @@ export const composePrompt: PreflightScript = async (ctx, profile) => {
     repoName: ctx.config.github.repo,
     defaultBranch: ctx.config.git.defaultBranch,
     branch: (ctx.data.branch as string) ?? "",
+    acceptanceCriteriaBlock: formatAcceptanceCriteria(acceptanceCriteria),
     // The `{{capabilityReference}}` block is built from ctx.data.* (with legacy
     // jobSlug/jobTitle/agentSlug/jobSchedule fallbacks) so a capability prompt can
     // place a labeled summary at the top. The five underlying tokens are

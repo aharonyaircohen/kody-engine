@@ -47,6 +47,21 @@ describe("ensurePr export shape", () => {
   })
 })
 
+describe("ensurePr evidence summary", () => {
+  it("puts acceptance and behavior proof into the reviewable PR body", async () => {
+    const { buildEvidenceSummary } = await import("../../src/scripts/ensurePr.js")
+    expect(
+      buildEvidenceSummary({
+        prSummary: "- Changed delivery.",
+        acceptanceEvidence: "- A1 → verified",
+        testEvidence: "- failure path → delivery.test.ts",
+      }),
+    ).toBe(
+      "- Changed delivery.\n\n## Acceptance evidence\n\n- A1 → verified\n\n## Test evidence\n\n- failure path → delivery.test.ts",
+    )
+  })
+})
+
 describe("checkpoint delivery", () => {
   it("provides the reason that keeps the pull request in draft", async () => {
     const { deliveryCheckpointReason } = await import("../../src/scripts/ensurePr.js")

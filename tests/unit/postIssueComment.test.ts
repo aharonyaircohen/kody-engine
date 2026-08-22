@@ -17,7 +17,7 @@ import {
   postPrReviewComment as ghPostPrReviewComment,
 } from "../../src/issue.js"
 import { setKodyLabel } from "../../src/lifecycleLabels.js"
-import { postIssueComment } from "../../src/scripts/postIssueComment.js"
+import { postIssueComment, renderDeliveryProof } from "../../src/scripts/postIssueComment.js"
 
 const profile = {} as Profile
 
@@ -97,17 +97,37 @@ describe("postIssueComment message wording", () => {
     vi.mocked(setKodyLabel).mockClear()
   })
 
+  it("renders only wrapper-confirmed quality and push evidence", () => {
+    const ctx = makeCtx({})
+    ctx.config = {
+      quality: {
+        typecheck: "pnpm typecheck",
+        testUnit: "pnpm test",
+        lint: "pnpm lint",
+      },
+    } as Context["config"]
+    ctx.data.commitResult = { committed: true, pushed: true, sha: "abcdef123456" }
+
+    expect(renderDeliveryProof(ctx)).toBe(
+      "\n\nProof: repository verification passed: typecheck, tests, lint; commit pushed (abcdef1).",
+    )
+  })
+
   it("success + newly-created PR: says 'PR opened'", async () => {
     const ctx = makeCtx({ prAction: "created" })
     await postIssueComment(ctx, profile, null)
-    expect(lastPrBody()).toBe("✅ kody PR opened: https://github.com/x/y/pull/42")
+    expect(lastPrBody()).toBe(
+      "✅ kody PR opened: https://github.com/x/y/pull/42\n\nProof: repository verification not configured; no new commit pushed.",
+    )
   })
 
   it("success + existing PR (updated): says 'pushed to' — not 'PR opened'", async () => {
     const ctx = makeCtx({ prAction: "updated" })
     await postIssueComment(ctx, profile, null)
     const body = lastPrBody()
-    expect(body).toBe("✅ kody pushed to https://github.com/x/y/pull/42")
+    expect(body).toBe(
+      "✅ kody pushed to https://github.com/x/y/pull/42\n\nProof: repository verification not configured; no new commit pushed.",
+    )
     expect(body).not.toContain("PR opened")
   })
 
@@ -230,7 +250,9 @@ describe("postIssueComment message wording", () => {
       prAction: "updated",
     })
     await postIssueComment(ctx, profile, null)
-    expect(lastPrBody()).toBe("✅ kody pushed to https://github.com/x/y/pull/42")
+    expect(lastPrBody()).toBe(
+      "✅ kody pushed to https://github.com/x/y/pull/42\n\nProof: repository verification not configured; no new commit pushed.",
+    )
   })
 
   it("reports protected files omitted from an otherwise successful commit", async () => {

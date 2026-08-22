@@ -191,6 +191,25 @@ describe("prompt: buildPrompt with conventions", () => {
 })
 
 describe("prompt: parseAgentResult", () => {
+  it("extracts acceptance and changed-behavior test evidence separately from the PR summary", () => {
+    const result = parseAgentResult(
+      [
+        "DONE",
+        "ACCEPTANCE_EVIDENCE:",
+        "- A1 → npm test passed",
+        "TEST_EVIDENCE:",
+        "- rejected delivery → tests/unit/delivery.test.ts",
+        "COMMIT_MSG: fix: prove delivery",
+        "PR_SUMMARY:",
+        "- Added evidence gates.",
+      ].join("\n"),
+    )
+
+    expect(result.acceptanceEvidence).toBe("- A1 → npm test passed")
+    expect(result.testEvidence).toBe("- rejected delivery → tests/unit/delivery.test.ts")
+    expect(result.prSummary).toBe("- Added evidence gates.")
+  })
+
   it("parses DONE + COMMIT_MSG + PR_SUMMARY", () => {
     const result = parseAgentResult("DONE\nCOMMIT_MSG: feat: add X\nPR_SUMMARY:\n- Added X\n- Updated Y")
     expect(result.done).toBe(true)

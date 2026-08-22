@@ -53,3 +53,21 @@ The local Kody gate is the first delivery boundary, not a replacement for pull
 request CI. Browser tests, deployment checks, platform-specific jobs, and any
 other repository workflow still run on the pull request. A green local gate
 does not justify claiming those later checks passed.
+
+## Acceptance and behavior proof
+
+Passing repository commands is necessary but does not prove that Kody solved
+the requested problem. Before PR delivery, Kody must also provide two
+structured evidence blocks:
+
+- `ACCEPTANCE_EVIDENCE` maps every promised outcome to a fresh command, test,
+  or source location. Explicit Markdown bullets under an Acceptance,
+  Acceptance criteria, Requirements, or Expected behavior heading are numbered
+  `A1`, `A2`, and so on; delivery fails when any ID is missing.
+- `TEST_EVIDENCE` maps every changed behavior to the regression test that
+  exercises it. User-facing work must name the mounted journey or state why it
+  could not run.
+
+These blocks are copied into the pull-request body. They make the claim
+reviewable; the wrapper remains the authority for configured quality-command
+results and never treats agent prose as proof that a command passed.

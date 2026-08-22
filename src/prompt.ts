@@ -94,6 +94,10 @@ ${qualityLines.join("\n")}
 
    \`\`\`
    DONE
+   ACCEPTANCE_EVIDENCE:
+   - <each promised outcome> → <fresh command, test, or file:line proving it>
+   TEST_EVIDENCE:
+   - <changed behavior> → <regression test file and test name proving it>
    COMMIT_MSG: <conventional-commit message, e.g. "feat: add X" or "fix: handle Y">
    PR_SUMMARY:
    <2-6 short bullet points or sentences describing what you actually changed, why, and how the new code works at a high level. Reviewers will read THIS — not the issue body — to understand the change. Be concrete: name the files/functions/endpoints you added or modified. No marketing fluff. No restating the issue.>
@@ -105,6 +109,7 @@ ${qualityLines.join("\n")}
 - Do NOT modify files under: \`.kody-engine/\`, \`.kody-lean/\`, \`node_modules/\`, \`dist/\`, \`build/\`, \`.env\`, or any \`*.log\`.
 - Do NOT post issue comments — the wrapper handles that.
 - Pre-existing quality-gate failures: assume they are NOT yours unless your edits touched related code. If quality gates are red but your edits are unrelated, output \`DONE\` with a COMMIT_MSG describing only what you actually changed.
+- \`ACCEPTANCE_EVIDENCE\` and \`TEST_EVIDENCE\` are required for delivery. Map every promised outcome and changed behavior to specific proof; a generic "tests pass" claim is insufficient.
 - Keep the plan and reasoning concise. Long monologues waste turns.`
 }
 
@@ -157,6 +162,8 @@ export interface ParsedAgentResult {
   done: boolean
   commitMessage: string
   prSummary: string
+  acceptanceEvidence: string
+  testEvidence: string
   feedbackActions: string
   planDeviations: string
   /**
@@ -186,6 +193,8 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
       done: false,
       commitMessage: "",
       prSummary: "",
+      acceptanceEvidence: "",
+      testEvidence: "",
       feedbackActions: "",
       planDeviations: "",
       priorArt: "",
@@ -217,6 +226,8 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
       done: false,
       commitMessage: "",
       prSummary: "",
+      acceptanceEvidence: "",
+      testEvidence: "",
       feedbackActions: "",
       planDeviations: "",
       priorArt: "",
@@ -239,6 +250,17 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
 
   const commitMatch = text.match(/^[\s>*_#`~-]*COMMIT_MSG[\s>*_#`~-]*\s*:\s*(.+)$/im)
   const commitMessage = commitMatch ? stripMarkdownEmphasis(commitMatch[1]!) : ""
+
+  const acceptanceEvidence = extractBlock(
+    text,
+    /(?:^|\n)[ \t]*ACCEPTANCE_EVIDENCE\s*:[ \t]*\n/i,
+    /(?:^|\n)[ \t]*(?:TEST_EVIDENCE|PLAN_DEVIATIONS|COMMIT_MSG|PR_SUMMARY|FEEDBACK_ACTIONS|PRIOR_ART)\s*:/i,
+  )
+  const testEvidence = extractBlock(
+    text,
+    /(?:^|\n)[ \t]*TEST_EVIDENCE\s*:[ \t]*\n/i,
+    /(?:^|\n)[ \t]*(?:ACCEPTANCE_EVIDENCE|PLAN_DEVIATIONS|COMMIT_MSG|PR_SUMMARY|FEEDBACK_ACTIONS|PRIOR_ART)\s*:/i,
+  )
 
   // FEEDBACK_ACTIONS: spans from the marker to the next top-level marker.
   const feedbackActions = extractBlock(
@@ -281,6 +303,8 @@ export function parseAgentResult(finalText: string): ParsedAgentResult {
     done: true,
     commitMessage,
     prSummary,
+    acceptanceEvidence,
+    testEvidence,
     feedbackActions,
     planDeviations,
     priorArt,

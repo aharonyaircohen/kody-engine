@@ -35,9 +35,24 @@ export const requireDeliveryArtifacts: PostflightScript = async (ctx) => {
 
   const commitMessage = String(ctx.data.commitMessage ?? "").trim()
   const prSummary = String(ctx.data.prSummary ?? "").trim()
+  const acceptanceEvidence = String(ctx.data.acceptanceEvidence ?? "").trim()
+  const testEvidence = String(ctx.data.testEvidence ?? "").trim()
   const missing: string[] = []
   if (!commitMessage) missing.push("COMMIT_MSG")
   if (!prSummary) missing.push("PR_SUMMARY")
+  if (!acceptanceEvidence) missing.push("ACCEPTANCE_EVIDENCE")
+  if (!testEvidence) missing.push("TEST_EVIDENCE")
+  const criteria = Array.isArray(ctx.data.acceptanceCriteria)
+    ? ctx.data.acceptanceCriteria.filter(
+        (criterion): criterion is { id: string } =>
+          Boolean(criterion) && typeof criterion === "object" && typeof (criterion as { id?: unknown }).id === "string",
+      )
+    : []
+  for (const criterion of criteria) {
+    if (!new RegExp(`(?:^|\\W)${criterion.id}(?:\\W|$)`, "i").test(acceptanceEvidence)) {
+      missing.push(`ACCEPTANCE_EVIDENCE[${criterion.id}]`)
+    }
+  }
   if (missing.length === 0) return
 
   const reason = `agent omitted required delivery artifacts: ${missing.join(", ")}`

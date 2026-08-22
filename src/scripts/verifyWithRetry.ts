@@ -116,6 +116,8 @@ export const verifyWithRetry: PostflightScript = async (ctx) => {
       ctx.data.agentDone = true
       ctx.data.commitMessage = parsed.commitMessage || (ctx.data.commitMessage as string)
       ctx.data.prSummary = parsed.prSummary || (ctx.data.prSummary as string)
+      ctx.data.acceptanceEvidence = parsed.acceptanceEvidence || (ctx.data.acceptanceEvidence as string)
+      ctx.data.testEvidence = parsed.testEvidence || (ctx.data.testEvidence as string)
     }
   } catch (err) {
     process.stderr.write(`[kody] verify retry crashed: ${err instanceof Error ? err.message : String(err)}\n`)
