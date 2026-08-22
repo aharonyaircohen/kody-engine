@@ -83,17 +83,9 @@ jobs:
           MODEL: ${{ inputs.model }}
           DASHBOARD_URL: ${{ inputs.dashboardUrl }}
           KODY_RUN_REQUEST_JSON: ${{ inputs.runRequest }}
-          KODY_CAPABILITY: ${{ inputs.capability }}
         working-directory: ${{ github.workspace }}
         run: |
-          if [[ "$KODY_CAPABILITY" == "npm-publish" ]]; then
-            corepack enable
-            pnpm install --frozen-lockfile
-            pnpm build
-            node dist/bin/kody.js
-          else
-            npx -y -p @kody-ade/kody-engine@latest kody-engine
-          fi
+          npx -y -p @kody-ade/kody-engine@latest kody-engine
 
       - name: Upload Quality Run evidence
         if: ${{ always() }}
