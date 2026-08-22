@@ -13,6 +13,7 @@ describe("Engine release workflow", () => {
     expect(fs.existsSync(new URL("../../.github/workflows/release.yml", import.meta.url))).toBe(false)
     expect(kody).toContain("workflow_dispatch:")
     expect(kody).toContain("id-token: write")
+    expect(kody).toContain("Do not edit this workflow.")
     expect(kody).toContain('description: "Capability action to run"')
     expect(config).toContain('"npm-publish"')
     expect(config).toContain('"package-release"')

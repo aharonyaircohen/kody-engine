@@ -5,6 +5,11 @@ import { describe, expect, it } from "vitest"
 const workflow = readFileSync(resolve("templates/kody.yml"), "utf8")
 
 describe("consumer workflow template", () => {
+  it("directs fixes to their owning Kody source instead of this generated workflow", () => {
+    expect(workflow).toContain("Do not edit this workflow.")
+    expect(workflow).toContain("Fix behavior in Kody Engine or the Store definition that owns it")
+  })
+
   it("forwards the canonical generic run request to the engine", () => {
     expect(workflow).toContain("runRequest:")
     expect(workflow).toContain("KODY_RUN_REQUEST_JSON: $" + "{{ inputs.runRequest }}")
