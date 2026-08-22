@@ -468,7 +468,7 @@ function enforceCapabilityOutputContract(capability: CapabilityFolder | null, re
   }
   const contractOutput =
     result.capabilityOutput === undefined && typeof result.prUrl === "string" && result.prUrl.trim().length > 0
-      ? { prUrl: result.prUrl }
+      ? { status: "changed", summary: `Pull request opened: ${result.prUrl}` }
       : result.capabilityOutput
   try {
     validateCapabilityContractOutput(schema, contractOutput)

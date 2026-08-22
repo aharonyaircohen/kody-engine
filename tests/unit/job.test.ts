@@ -1218,10 +1218,10 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
-  it("accepts a successful PR delivery as capability output when JSON output is omitted", async () => {
+  it("maps a successful PR delivery to the canonical capability result when JSON output is omitted", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-capability-pr-output-"))
     try {
-      writeContractCapability(cwd, "publish", [])
+      writeContractCapability(cwd, "publish", [], ["status", "summary"], false, true)
       runImplementationChain.mockResolvedValueOnce({
         exitCode: 0,
         prUrl: "https://github.com/o/r/pull/12",
@@ -1240,7 +1240,10 @@ describe("runJob (Phase 1 seam)", () => {
       expect(result).toMatchObject({
         exitCode: 0,
         prUrl: "https://github.com/o/r/pull/12",
-        capabilityOutput: { prUrl: "https://github.com/o/r/pull/12" },
+        capabilityOutput: {
+          status: "changed",
+          summary: "Pull request opened: https://github.com/o/r/pull/12",
+        },
       })
     } finally {
       fs.rmSync(cwd, { recursive: true, force: true })
@@ -2551,7 +2554,14 @@ function writeSimpleCapability(cwd: string, slug: string): void {
   fs.writeFileSync(path.join(dir, "instructions.md"), `# ${slug}\n\nDo the work.\n`)
 }
 
-function writeContractCapability(cwd: string, slug: string, inputs: string[], outputs: string[] = []): void {
+function writeContractCapability(
+  cwd: string,
+  slug: string,
+  inputs: string[],
+  outputs: string[] = [],
+  additionalOutputProperties = true,
+  requireOutputs = false,
+): void {
   const dir = path.join(cwd, ".kody-engine", "definitions", "capabilities", slug)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, "instructions.md"), `# ${slug}\n\nDo the work.\n`)
@@ -2567,7 +2577,8 @@ function writeContractCapability(cwd: string, slug: string, inputs: string[], ou
       output: {
         type: "object",
         properties: Object.fromEntries(outputs.map((name) => [name, {}])),
-        additionalProperties: true,
+        ...(requireOutputs ? { required: outputs } : {}),
+        additionalProperties: additionalOutputProperties,
       },
     }),
   )

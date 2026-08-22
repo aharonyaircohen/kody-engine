@@ -9,6 +9,11 @@ whether repository verification was configured and passed and whether a commit
 was actually pushed. Agent-written prose cannot turn an unverified or unpushed
 result into a success claim.
 
+A successful PR delivery keeps the PR URL as delivery metadata and reports the
+capability result as `status: changed` with a plain summary. This lets strict
+repository-owned capability contracts validate the outcome without treating
+delivery metadata as undeclared business output.
+
 ## What happens to each kind of change
 
 | Change | Result |
