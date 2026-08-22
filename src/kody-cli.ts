@@ -17,6 +17,7 @@ import { mintInstantJob, mintScheduledJob, runJob } from "./job.js"
 import { setKodyLabel } from "./lifecycleLabels.js"
 import { LITELLM_PIP_PACKAGES } from "./litellm.js"
 import { readLoopDefinition } from "./loopDefinitions.js"
+import { finalizeMergedPullRequestEvent, readGitHubEvent } from "./mergedPrLifecycle.js"
 import {
   getProfileInputs,
   getRuntimeProfileRootsForCwd,
@@ -28,7 +29,6 @@ import {
 import { type RunRequest, readRunRequestFromEnv } from "./run-request.js"
 import { lastRunLogPath } from "./runtimePaths.js"
 import { hydrateStateWorkspace } from "./stateWorkspace.js"
-import { finalizeMergedPullRequestEvent, readGitHubEvent } from "./mergedPrLifecycle.js"
 import { readWorkflowDefinition, type WorkflowDefinition } from "./workflowDefinitions.js"
 
 type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
