@@ -29,6 +29,7 @@ export interface CapabilityContract {
 }
 
 export interface CapabilityRuntimeRequirements {
+  cms?: boolean
   browser?: boolean
   qaCredentials?: boolean
   githubTestToken?: boolean
@@ -401,6 +402,7 @@ function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirement
   if (!isPlainObject(raw)) throw new Error("contract.json requirements must be an object")
   const unsupported = Object.keys(raw).filter(
     (key) =>
+      key !== "cms" &&
       key !== "browser" &&
       key !== "qaCredentials" &&
       key !== "githubTestToken" &&
@@ -410,6 +412,9 @@ function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirement
   )
   if (unsupported.length > 0) {
     throw new Error(`contract.json requirements contains unsupported fields: ${unsupported.join(", ")}`)
+  }
+  if (raw.cms !== undefined && typeof raw.cms !== "boolean") {
+    throw new Error("contract.json requirements.cms must be boolean")
   }
   if (raw.browser !== undefined && typeof raw.browser !== "boolean") {
     throw new Error("contract.json requirements.browser must be boolean")
@@ -445,6 +450,7 @@ function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirement
     throw new Error("contract.json authentication requirements require browser")
   }
   const requirements = {
+    ...(raw.cms === true ? { cms: true } : {}),
     ...(raw.browser === true ? { browser: true } : {}),
     ...(raw.qaCredentials === true ? { qaCredentials: true } : {}),
     ...(raw.githubTestToken === true ? { githubTestToken: true } : {}),

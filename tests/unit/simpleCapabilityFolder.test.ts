@@ -31,6 +31,7 @@ describe("simple Capability folder", () => {
       deliveryPathAllowlist: [".github/workflows/**", "kody.config.json"],
       deliveryConfigAllowlist: { "kody.config.json": ["release"] },
       requirements: {
+        cms: true,
         browser: true,
         qaCredentials: true,
         githubTestToken: true,
@@ -59,6 +60,7 @@ describe("simple Capability folder", () => {
     expect(loaded?.contract?.deliveryPathAllowlist).toEqual([".github/workflows/**", "kody.config.json"])
     expect(loaded?.contract?.deliveryConfigAllowlist).toEqual({ "kody.config.json": ["release"] })
     expect(loaded?.contract?.requirements).toEqual({
+      cms: true,
       browser: true,
       qaCredentials: true,
       githubTestToken: true,

@@ -659,6 +659,16 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
         // to know the palette — it just forwards the flag so agent.ts can spin
         // up the in-process `kody-capability` MCP server with the right context.
         enableCapabilityTool: Array.isArray(ctx.data.capabilityTools) && ctx.data.capabilityTools.length > 0,
+        enableDashboardCmsTool: Boolean(
+          ctx.data.capabilityRequirements &&
+            typeof ctx.data.capabilityRequirements === "object" &&
+            !Array.isArray(ctx.data.capabilityRequirements) &&
+            (ctx.data.capabilityRequirements as { cms?: unknown }).cms === true,
+        ),
+        cmsRepoSlug:
+          config.github?.owner && config.github?.repo
+            ? `${config.github.owner}/${config.github.repo}`
+            : process.env.GITHUB_REPOSITORY?.trim() || undefined,
         capabilityOperatorMention:
           typeof ctx.data.capabilityOperatorMention === "string"
             ? (ctx.data.capabilityOperatorMention as string)
