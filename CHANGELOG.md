@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.4.615 — 2026-08-22
+
+### Fixes
+- preserve npm trusted publishing identity (b7061ad)
+- skip dependency install for config-only consumers (9750d2f)
+
+### Chores
+- restore release CI lint gate (89b89e4)
 ## v0.4.532 — 2026-08-08
 
 ### Features
