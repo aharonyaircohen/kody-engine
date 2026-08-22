@@ -12,6 +12,7 @@ describe("Engine release workflow", () => {
 
     expect(release).toContain("workflow_dispatch:")
     expect(release).toContain("concurrency:")
+    expect(release).toContain("id-token: write")
     expect(release).toContain("secrets.NPM_TOKEN")
     expect(release).toContain("secrets.KODY_TOKEN")
     expect(publishAt).toBeGreaterThan(0)
