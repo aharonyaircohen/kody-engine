@@ -26,6 +26,14 @@ const ALLOWED_PATH_PREFIXES: string[] = []
 // it already controls — so it is never an agent-writable path.
 const FORBIDDEN_PATH_EXACT = new Set([".env", ".kody-pip-requirements.txt", "kody.config.json"])
 const FORBIDDEN_PATH_SUFFIXES = [".log"]
+const GENERATED_PATH_PREFIXES = [
+  ".kody-engine/",
+  ".kody-lean/",
+  ".codegraph/",
+  "node_modules/",
+  "dist/",
+  "build/",
+] as const
 const ACTIVATION_FIELDS = [
   "activeAgents",
   "activeCapabilities",
@@ -183,6 +191,18 @@ export function isForbiddenPath(p: string, deliveryPathAllowlist: readonly strin
   if (isGitHubYamlPath(p)) return true
   for (const pre of ALLOWED_PATH_PREFIXES) if (p.startsWith(pre)) return false
   return false
+}
+
+/**
+ * Generated runtime/cache files are discarded silently. They are not a
+ * delivery Kody attempted on the user's behalf, so reporting them as blocked
+ * would turn successful source-code work into a false failure.
+ */
+function isReportableDeliveryOmission(p: string): boolean {
+  return (
+    !GENERATED_PATH_PREFIXES.some((prefix) => p.startsWith(prefix)) &&
+    !FORBIDDEN_PATH_SUFFIXES.some((suffix) => p.endsWith(suffix))
+  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -353,6 +373,7 @@ export function commitAndPush(
       isForbiddenPath(f, deliveryPathAllowlist) &&
       !isTrustedConfigActivationChange(f, deliveryPathAllowlist, deliveryConfigAllowlist, cwd),
   )
+  const omittedFiles = forbiddenFiles.filter(isReportableDeliveryOmission)
 
   // Detect in-progress merge (resolve mode): even if no files changed
   // vs HEAD (agent accepted one side verbatim), we still need to finalize
@@ -360,7 +381,7 @@ export function commitAndPush(
   const mergeHeadExists = fs.existsSync(path.join(cwd ?? process.cwd(), ".git", "MERGE_HEAD"))
 
   if (allowedFiles.length === 0 && !mergeHeadExists) {
-    return { committed: false, pushed: false, sha: "", message: "", omittedFiles: forbiddenFiles }
+    return { committed: false, pushed: false, sha: "", message: "", omittedFiles }
   }
 
   // Unstage any forbidden paths an earlier postflight may have staged. In
@@ -409,12 +430,12 @@ export function commitAndPush(
   // agent's run, retries kept failing because we never rebased.
   const pushResult = pushWithRetry({ cwd, branch, setUpstream: true })
   if (pushResult.ok) {
-    return { committed: true, pushed: true, sha, message, omittedFiles: forbiddenFiles }
+    return { committed: true, pushed: true, sha, message, omittedFiles }
   }
 
   // Commit landed locally but push didn't. ensurePr will bail rather than
   // open a PR against a branch that's not on origin.
-  return { committed: true, pushed: false, sha, message, pushError: pushResult.reason, omittedFiles: forbiddenFiles }
+  return { committed: true, pushed: false, sha, message, pushError: pushResult.reason, omittedFiles }
 }
 
 export function hasCommitsAhead(branch: string, defaultBranch: string, cwd?: string): boolean {

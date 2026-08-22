@@ -135,6 +135,25 @@ describe("integration: git flow", () => {
     expect(fs.existsSync(path.join(repo.workdir, ".github", "workflows", "ci.yml"))).toBe(true)
   })
 
+  it("does not report Engine-generated definition state as blocked delivery", () => {
+    const branch = ensureFeatureBranch(93, "Repair with hydrated definitions", "main", repo.workdir).branch
+    fs.writeFileSync(path.join(repo.workdir, "src.txt"), "repaired")
+    fs.mkdirSync(path.join(repo.workdir, ".kody-engine", "definitions"), { recursive: true })
+    fs.writeFileSync(
+      path.join(repo.workdir, ".kody-engine", "definitions", "manifest.json"),
+      '{"hydratedAt":"now"}\n',
+    )
+
+    const result = commitAndPush(branch, "fix: repair source", repo.workdir)
+
+    expect(result.committed).toBe(true)
+    expect(result.pushed).toBe(true)
+    expect(result.omittedFiles).toEqual([])
+    expect(git(repo.workdir, ["show", "--name-only", "--pretty=format:", "HEAD"]).split("\n")).toEqual([
+      "src.txt",
+    ])
+  })
+
   it("commits an ignored Store file only when its delivery contract allows it", () => {
     const branch = ensureFeatureBranch(92, "Install Store loop", "main", repo.workdir).branch
     fs.writeFileSync(path.join(repo.workdir, ".gitignore"), ".kody-engine/\n")
