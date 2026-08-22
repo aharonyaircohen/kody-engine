@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.4.618 — 2026-08-22
+
+### Fixes
+- keep engine workflow standard (52d3d83)
+- preserve npm provenance identity (bcd770d)
+- bootstrap trusted package publishing (76c3139)
+- remove duplicate package repository metadata (c272015)
+- identify engine package repository (a8674d1)
+- enable trusted npm publishing (6538e43)
+- use workflow identity for live chat storage (76ac32b)
+- preserve npm trusted publishing identity (b7061ad)
+- skip dependency install for config-only consumers (9750d2f)
+
+### Refactoring
+- publish engine through kody workflow (fe98ad5)
+
+### Docs
+- protect generated Kody workflow (114f280)
+
+### Chores
+- restore release CI lint gate (89b89e4)
+
+### Other
+- organize chat store imports (f75a2a2)
 ## v0.4.617 — 2026-08-22
 
 ### Fixes
