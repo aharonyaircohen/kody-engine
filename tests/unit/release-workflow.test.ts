@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest"
 
 const kody = fs.readFileSync(new URL("../../.github/workflows/kody.yml", import.meta.url), "utf8")
 const config = fs.readFileSync(new URL("../../kody.config.json", import.meta.url), "utf8")
+const packageJson = JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as {
+  repository?: { url?: string }
+}
 const retry = fs.readFileSync(new URL("../../.github/workflows/live-release-gate.yml", import.meta.url), "utf8")
 
 describe("Engine release workflow", () => {
@@ -13,6 +16,7 @@ describe("Engine release workflow", () => {
     expect(kody).toContain('description: "Capability action to run"')
     expect(config).toContain('"npm-publish"')
     expect(config).toContain('"package-release"')
+    expect(packageJson.repository?.url).toBe("git+https://github.com/aharonyaircohen/kody-engine.git")
   })
 
   it("uses the same existing token for a gate-only retry", () => {
