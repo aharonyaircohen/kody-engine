@@ -13,26 +13,10 @@ import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import pkg from "../../package.json"
+import { inferQualityCommands } from "../config.js"
 import type { PreflightScript } from "../implementations/types.js"
 import { type EnsureLabelsResult, ensureLabels } from "../lifecycleLabels.js"
 import { loadKodyWorkflowTemplate } from "../workflow-template.js"
-
-type PackageManager = "pnpm" | "yarn" | "bun" | "npm"
-
-function detectPackageManager(cwd: string): PackageManager {
-  if (fs.existsSync(path.join(cwd, "pnpm-lock.yaml"))) return "pnpm"
-  if (fs.existsSync(path.join(cwd, "yarn.lock"))) return "yarn"
-  if (fs.existsSync(path.join(cwd, "bun.lockb"))) return "bun"
-  return "npm"
-}
-
-function qualityCommandsFor(pm: PackageManager): { typecheck: string; lint: string; testUnit: string } {
-  return {
-    typecheck: `${pm} tsc --noEmit`,
-    lint: "",
-    testUnit: `${pm} test`,
-  }
-}
 
 interface OwnerRepo {
   owner: string
@@ -68,10 +52,10 @@ function detectOwnerRepo(cwd: string): OwnerRepo | null {
   return { owner: m[1]!, repo: m[2]! }
 }
 
-function makeConfig(pm: PackageManager, ownerRepo: OwnerRepo | null, defaultBranch: string): Record<string, unknown> {
+function makeConfig(cwd: string, ownerRepo: OwnerRepo | null, defaultBranch: string): Record<string, unknown> {
   return {
     $schema: schemaUrlFromPkg(),
-    quality: qualityCommandsFor(pm),
+    quality: inferQualityCommands(cwd),
     git: { defaultBranch },
     github: {
       owner: ownerRepo?.owner ?? "OWNER",
@@ -116,7 +100,6 @@ export function performInit(cwd: string, force: boolean): InitResult {
   const wrote: string[] = []
   const skipped: string[] = []
 
-  const pm = detectPackageManager(cwd)
   const ownerRepo = detectOwnerRepo(cwd)
   const defaultBranch = defaultBranchFromGit(cwd)
 
@@ -125,7 +108,7 @@ export function performInit(cwd: string, force: boolean): InitResult {
   if (fs.existsSync(configPath) && !force) {
     skipped.push("kody.config.json")
   } else {
-    const cfg = makeConfig(pm, ownerRepo, defaultBranch)
+    const cfg = makeConfig(cwd, ownerRepo, defaultBranch)
     fs.writeFileSync(configPath, `${JSON.stringify(cfg, null, 2)}\n`)
     wrote.push("kody.config.json")
   }

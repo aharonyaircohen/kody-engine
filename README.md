@@ -109,6 +109,12 @@ fans out scheduled capabilities at runtime, so capability schedules never
 generate additional GitHub workflow files. Idempotent — pass `--force` to
 overwrite.
 
+Kody also discovers conventional package scripts (`typecheck`, `lint`,
+`test:unit` or `test`, and non-mutating format-check scripts). This means a
+repository that adds its application after Kody onboarding still receives a
+real verification gate. Explicit `quality` commands in `kody.config.json`
+always override discovery. See [Repository quality gates](docs/quality-gates.md).
+
 Store model provider keys (for example `MINIMAX_API_KEY`) in the connected
 repository's Kody vault. GitHub Actions uses OIDC to request only the selected
 model key at runtime; user secrets are not copied into Actions. `KODY_TOKEN`

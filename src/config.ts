@@ -231,6 +231,39 @@ export const REASONING_BUDGETS: Record<Exclude<ReasoningEffort, "off">, number> 
   high: 32_000,
 }
 
+type QualityCommands = Pick<KodyConfig["quality"], "typecheck" | "lint" | "format" | "testUnit">
+
+function packageManagerFor(projectDir: string): "npm" | "pnpm" | "yarn" | "bun" {
+  if (fs.existsSync(path.join(projectDir, "pnpm-lock.yaml"))) return "pnpm"
+  if (fs.existsSync(path.join(projectDir, "yarn.lock"))) return "yarn"
+  if (fs.existsSync(path.join(projectDir, "bun.lockb")) || fs.existsSync(path.join(projectDir, "bun.lock"))) return "bun"
+  return "npm"
+}
+
+/** Infer only declared, non-mutating package scripts. Explicit config still wins. */
+export function inferQualityCommands(projectDir: string): QualityCommands {
+  const empty: QualityCommands = { typecheck: "", lint: "", format: "", testUnit: "" }
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(projectDir, "package.json"), "utf-8")) as {
+      scripts?: Record<string, unknown>
+    }
+    const scripts = pkg.scripts ?? {}
+    const pm = packageManagerFor(projectDir)
+    const command = (names: string[]): string => {
+      const name = names.find((candidate) => typeof scripts[candidate] === "string")
+      return name ? `${pm} run ${name}` : ""
+    }
+    return {
+      typecheck: command(["typecheck", "type-check", "check:types"]),
+      lint: command(["lint"]),
+      format: command(["format:check", "format-check", "prettier:check"]),
+      testUnit: command(["test:unit", "test"]),
+    }
+  } catch {
+    return empty
+  }
+}
+
 /**
  * Parse a string from the env/CLI into a ReasoningEffort. Returns `null`
  * for unset / unknown — caller should fall through to the next source in
@@ -354,6 +387,7 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
   }
 
   const quality = recordValue(raw.quality) ?? {}
+  const inferredQuality = inferQualityCommands(projectDir)
   const git = recordValue(raw.git) ?? {}
   const github = recordValue(raw.github) ?? {}
   const agent = recordValue(raw.agent) ?? {}
@@ -371,10 +405,10 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
 
   return {
     quality: {
-      typecheck: typeof quality.typecheck === "string" ? quality.typecheck : "",
-      lint: typeof quality.lint === "string" ? quality.lint : "",
-      format: typeof quality.format === "string" ? quality.format : "",
-      testUnit: typeof quality.testUnit === "string" ? quality.testUnit : "",
+      typecheck: typeof quality.typecheck === "string" ? quality.typecheck : inferredQuality.typecheck,
+      lint: typeof quality.lint === "string" ? quality.lint : inferredQuality.lint,
+      format: typeof quality.format === "string" ? quality.format : inferredQuality.format,
+      testUnit: typeof quality.testUnit === "string" ? quality.testUnit : inferredQuality.testUnit,
       coverage: typeof quality.coverage === "string" ? quality.coverage : "",
     },
     git: {

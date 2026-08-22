@@ -11,7 +11,7 @@
     },
     "quality": {
       "type": "object",
-      "description": "Quality gate commands. Empty strings disable individual gates.",
+      "description": "Quality gate commands. Missing commands are inferred from conventional package.json scripts; explicit empty strings disable individual gates.",
       "additionalProperties": false,
       "properties": {
         "typecheck": { "type": "string", "default": "" },

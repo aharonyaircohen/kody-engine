@@ -54,17 +54,21 @@ describe("initFlow: performInit", () => {
 
   it("detects package manager from lockfile", () => {
     dir = mkRepo({ lockFile: "yarn.lock", gitInit: true })
+    fs.writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify({ scripts: { typecheck: "tsc --noEmit", "test:unit": "vitest run" } }),
+    )
     performInit(dir, false)
     const cfg = JSON.parse(fs.readFileSync(path.join(dir, "kody.config.json"), "utf-8"))
-    expect(cfg.quality.typecheck).toBe("yarn tsc --noEmit")
-    expect(cfg.quality.testUnit).toBe("yarn test")
+    expect(cfg.quality.typecheck).toBe("yarn run typecheck")
+    expect(cfg.quality.testUnit).toBe("yarn run test:unit")
   })
 
-  it("falls back to npm when no lockfile", () => {
+  it("leaves quality empty when the repo has no declared scripts", () => {
     dir = mkRepo({ gitInit: true })
     performInit(dir, false)
     const cfg = JSON.parse(fs.readFileSync(path.join(dir, "kody.config.json"), "utf-8"))
-    expect(cfg.quality.typecheck).toBe("npm tsc --noEmit")
+    expect(cfg.quality).toEqual({ typecheck: "", lint: "", format: "", testUnit: "" })
   })
 
   it("detects owner/repo from git remote", () => {

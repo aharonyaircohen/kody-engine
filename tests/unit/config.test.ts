@@ -141,6 +141,41 @@ describe("config: loadConfig", () => {
     expect(cfg.git.defaultBranch).toBe("main")
   })
 
+  it("infers conventional quality scripts when quality config is absent", () => {
+    const dir = tmpDir()
+    fs.writeFileSync(path.join(dir, "package-lock.json"), "{}")
+    fs.writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify({ scripts: { typecheck: "tsc --noEmit", lint: "eslint .", "test:unit": "vitest run" } }),
+    )
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: { model: "minimax/m" },
+    })
+
+    expect(loadConfig(dir).quality).toEqual({
+      typecheck: "npm run typecheck",
+      lint: "npm run lint",
+      format: "",
+      testUnit: "npm run test:unit",
+      coverage: "",
+    })
+  })
+
+  it("preserves explicit quality commands, including disabled checks", () => {
+    const dir = tmpDir()
+    fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ scripts: { lint: "eslint .", test: "vitest" } }))
+    writeConfig(dir, {
+      quality: { lint: "", testUnit: "custom-test" },
+      github: { owner: "o", repo: "r" },
+      agent: { model: "minimax/m" },
+    })
+
+    const quality = loadConfig(dir).quality
+    expect(quality.lint).toBe("")
+    expect(quality.testUnit).toBe("custom-test")
+  })
+
   it("parses scheduled goal preferred runtime", () => {
     const dir = tmpDir()
     writeConfig(dir, {
