@@ -4,9 +4,9 @@
  */
 
 import { anyApi } from "convex/server"
-import { createConvexClientFromEnv } from "./convex-client.js"
 import { createKodyApiBackendClient, hasGitHubActionsIdentity } from "../kody-api-client.js"
 import type { StateBackendClient } from "../state-backend.js"
+import { createConvexClientFromEnv } from "./convex-client.js"
 import type { ChatTurn } from "./session.js"
 
 export interface SessionStore {
