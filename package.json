@@ -2,10 +2,6 @@
   "name": "@kody-ade/kody-engine",
   "version": "0.4.617",
   "description": "kody \u2014 autonomous development engine. Single-session Claude Code agent behind a generic executor + declarative implementation profiles.",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/aharonyaircohen/kody-engine.git"
-  },
   "license": "MIT",
   "type": "module",
   "bin": {
