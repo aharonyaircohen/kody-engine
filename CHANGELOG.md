@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.4.617 — 2026-08-22
+
+### Fixes
+- identify engine package repository (a8674d1)
+- enable trusted npm publishing (6538e43)
+- use workflow identity for live chat storage (76ac32b)
+- preserve npm trusted publishing identity (b7061ad)
+- skip dependency install for config-only consumers (9750d2f)
+
+### Refactoring
+- publish engine through kody workflow (fe98ad5)
+
+### Chores
+- restore release CI lint gate (89b89e4)
+
+### Other
+- organize chat store imports (f75a2a2)
 ## v0.4.615 — 2026-08-22
 
 ### Fixes
