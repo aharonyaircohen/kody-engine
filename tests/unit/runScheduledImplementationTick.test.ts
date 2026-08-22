@@ -66,6 +66,8 @@ describe("runScheduledImplementationTick", () => {
       buildTickChildEnv(
         {
           PATH: "/bin",
+          ACTIONS_ID_TOKEN_REQUEST_URL: "https://token.actions.example/id",
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: "request-token",
           KODY_DRY_RUN: "1",
           KODY_NO_COMMIT: "1",
           JOB_GAP_SCAN_DRY_RUN: "1",
@@ -81,6 +83,8 @@ describe("runScheduledImplementationTick", () => {
       ),
     ).toEqual({
       PATH: "/bin",
+      ACTIONS_ID_TOKEN_REQUEST_URL: "https://token.actions.example/id",
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: "request-token",
       KODY_DRY_RUN: "1",
       KODY_NO_COMMIT: "1",
       KODY_JOB_STATE_JSON: JSON.stringify({ version: 1, rev: 3, cursor: "demo", data: { ok: true }, done: false }),

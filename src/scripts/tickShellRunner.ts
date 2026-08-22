@@ -83,6 +83,8 @@ export function buildTickChildEnv(
     "GITHUB_RUN_ATTEMPT",
     "GITHUB_WORKFLOW",
     "GITHUB_ACTIONS",
+    "ACTIONS_ID_TOKEN_REQUEST_URL",
+    "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
     "CI",
     "KODY_DRY_RUN",
     "KODY_NO_COMMIT",
