@@ -3,9 +3,10 @@
  * authority for every runtime; the engine never creates a parallel transcript.
  */
 
-import type { ConvexHttpClient } from "convex/browser"
 import { anyApi } from "convex/server"
 import { createConvexClientFromEnv } from "./convex-client.js"
+import { createKodyApiBackendClient, hasGitHubActionsIdentity } from "../kody-api-client.js"
+import type { StateBackendClient } from "../state-backend.js"
 import type { ChatTurn } from "./session.js"
 
 export interface SessionStore {
@@ -22,7 +23,8 @@ export interface SessionStoreOptions {
   /** Retained as an ephemeral runner path; never read as transcript storage. */
   sessionFile: string
   tenantId?: string
-  client?: ConvexHttpClient | null
+  client?: StateBackendClient | null
+  env?: NodeJS.ProcessEnv
   logger?: { info: (msg: string) => void; warn: (msg: string) => void }
 }
 
@@ -78,11 +80,17 @@ export function createSessionStore(opts: SessionStoreOptions): SessionStore {
     info: (message) => process.stdout.write(`[kody:chat:store] ${message}\n`),
     warn: (message) => process.stderr.write(`[kody:chat:store] ${message}\n`),
   }
-  const client = opts.client !== undefined ? opts.client : createConvexClientFromEnv()
-  const tenantId = opts.tenantId ?? process.env.GITHUB_REPOSITORY ?? ""
+  const env = opts.env ?? process.env
+  const client =
+    opts.client !== undefined
+      ? opts.client
+      : hasGitHubActionsIdentity(env)
+        ? createKodyApiBackendClient(env)
+        : createConvexClientFromEnv(env)
+  const tenantId = opts.tenantId ?? env.GITHUB_REPOSITORY ?? ""
   if (!client || !tenantId) {
     throw new Error(
-      "Canonical Convex conversation storage is required (CONVEX_URL, KODY_SERVICE_KEY, and GITHUB_REPOSITORY)",
+      "Canonical conversation storage requires GitHub Actions identity or direct Kody backend credentials",
     )
   }
   logger.info(`conversation ${opts.sessionId}: using canonical Convex store (tenant ${tenantId})`)

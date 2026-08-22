@@ -115,6 +115,12 @@ downstream workflows or modify `.github/workflows/*`.
 
 The consumer workflow listens on `issue_comment` for `@kody ...` dispatch and `workflow_dispatch` for manual runs and chat mode. Convex owns scheduled Loop wakeups.
 
+Live chat transcripts remain in Kody's canonical backend. In GitHub Actions,
+the Engine uses the workflow's short-lived OIDC identity to call Dashboard's
+repository-scoped backend endpoint; consumer repositories must not receive
+`CONVEX_URL` or `KODY_SERVICE_KEY`. Local and server runtimes may connect
+directly with those two variables when no GitHub Actions identity exists.
+
 ## Commands
 
 ```

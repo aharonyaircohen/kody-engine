@@ -15,6 +15,47 @@ function mockClient(result: unknown) {
 }
 
 describe("chat/session-store", () => {
+  it("uses the OIDC-backed Kody API in GitHub Actions without database secrets", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ value: "eyJhbGciOiJub25lIn0.eyJleHAiOjk5OTk5OTk5OTl9." }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            result: {
+              conversation: { activeAgent: { slug: "ceo", title: "CEO" } },
+              entries: [],
+            },
+          }),
+          { status: 200 },
+        ),
+      )
+
+    const store = createSessionStore({
+      sessionId: "c1",
+      sessionFile: "/tmp/unused.jsonl",
+      tenantId: "owner/repo",
+      env: {
+        GITHUB_ACTIONS: "true",
+        GITHUB_REPOSITORY: "owner/repo",
+        ACTIONS_ID_TOKEN_REQUEST_URL: "https://token.actions.example/id-token",
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: "request-token",
+        KODY_API_URL: "https://dashboard.example",
+      },
+      logger: silentLogger,
+    })
+
+    await expect(store.readActiveAgent()).resolves.toEqual({ slug: "ceo", title: "CEO" })
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "https://dashboard.example/api/kody/engine/backend",
+      expect.objectContaining({ method: "POST" }),
+    )
+  })
+
   it("fails closed without canonical storage", () => {
     expect(() =>
       createSessionStore({
@@ -24,7 +65,7 @@ describe("chat/session-store", () => {
         tenantId: "owner/repo",
         logger: silentLogger,
       }),
-    ).toThrow("Canonical Convex conversation storage is required")
+    ).toThrow("Canonical conversation storage requires GitHub Actions identity or direct Kody backend credentials")
   })
 
   it("reads only the current agent epoch in exact sequence order", async () => {
