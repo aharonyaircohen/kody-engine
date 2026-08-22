@@ -1,25 +1,18 @@
 import * as fs from "node:fs"
 import { describe, expect, it } from "vitest"
 
-const release = fs.readFileSync(new URL("../../.github/workflows/release.yml", import.meta.url), "utf8")
+const kody = fs.readFileSync(new URL("../../.github/workflows/kody.yml", import.meta.url), "utf8")
+const config = fs.readFileSync(new URL("../../kody.config.json", import.meta.url), "utf8")
 const retry = fs.readFileSync(new URL("../../.github/workflows/live-release-gate.yml", import.meta.url), "utf8")
 
 describe("Engine release workflow", () => {
-  it("publishes before running the shared live release gate", () => {
-    const publishAt = release.indexOf("pnpm publish --access public --no-git-checks")
-    const gateAt = release.indexOf("pnpm verify:live-release")
-    const repeatabilityAt = release.indexOf("ci-repair-live-gate.mjs")
-
-    expect(release).toContain("workflow_dispatch:")
-    expect(release).toContain("concurrency:")
-    expect(release).toContain("id-token: write")
-    expect(release).toContain("secrets.NPM_TOKEN")
-    expect(release).toContain("secrets.KODY_TOKEN")
-    expect(publishAt).toBeGreaterThan(0)
-    expect(gateAt).toBeGreaterThan(publishAt)
-    expect(repeatabilityAt).toBeGreaterThan(gateAt)
-    expect(release).toContain("aharonyaircohen/kody-ai-agency-catalog")
-    expect(release).not.toMatch(/quality/i)
+  it("publishes only through the Kody workflow", () => {
+    expect(fs.existsSync(new URL("../../.github/workflows/release.yml", import.meta.url))).toBe(false)
+    expect(kody).toContain("workflow_dispatch:")
+    expect(kody).toContain("id-token: write")
+    expect(kody).toContain('description: "Capability action to run"')
+    expect(config).toContain('"npm-publish"')
+    expect(config).toContain('"package-release"')
   })
 
   it("uses the same existing token for a gate-only retry", () => {
