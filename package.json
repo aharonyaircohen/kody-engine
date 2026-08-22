@@ -1,6 +1,6 @@
 {
   "name": "@kody-ade/kody-engine",
-  "version": "0.4.621",
+  "version": "0.4.622",
   "description": "kody — autonomous development engine. Single-session Claude Code agent behind a generic executor + declarative implementation profiles.",
   "license": "MIT",
   "repository": {
@@ -14,6 +14,7 @@
   "files": [
     "dist",
     "templates",
+    "docs/delivery-boundary.md",
     "kody.config.schema.json"
   ],
   "scripts": {

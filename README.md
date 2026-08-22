@@ -57,7 +57,9 @@ key. It's built to keep that blast radius small:
   downstream CI.
 - **Write allowlist.** The agent commits through `commitAndPush`, which blocks
   writes to engine runtime or configuration paths — it can't touch your
-  runtime state.
+  runtime state. See [Delivery boundary](docs/delivery-boundary.md) for what is
+  silently discarded, what fails visibly, and how an approved workflow file is
+  delivered.
 - **Locked-toolbox mode.** A job can declare `tools: [...]` to drop `Bash` and
   shell entirely, running only a fixed set of high-level intents.
 - **Review like any contributor.** kody opens PRs; you merge them.
