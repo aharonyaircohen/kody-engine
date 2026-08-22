@@ -235,12 +235,8 @@ export function readCapabilityFolder(root: string, slug: string): CapabilityFold
         ? {
             ...(contract.execution ? { execution: contract.execution } : {}),
             ...(contract.deliveryPolicy ? { deliveryPolicy: contract.deliveryPolicy } : {}),
-            ...(contract.deliveryPathAllowlist
-              ? { deliveryPathAllowlist: contract.deliveryPathAllowlist }
-              : {}),
-            ...(contract.deliveryConfigAllowlist
-              ? { deliveryConfigAllowlist: contract.deliveryConfigAllowlist }
-              : {}),
+            ...(contract.deliveryPathAllowlist ? { deliveryPathAllowlist: contract.deliveryPathAllowlist } : {}),
+            ...(contract.deliveryConfigAllowlist ? { deliveryConfigAllowlist: contract.deliveryConfigAllowlist } : {}),
             input: contract.input,
             output: contract.output,
           }
@@ -357,7 +353,11 @@ function parseDeliveryConfigAllowlist(raw: unknown): Record<string, string[]> | 
     if (filePath !== "kody.config.json" || !Array.isArray(paths) || paths.length === 0 || paths.length > 32) {
       throw new Error("contract.json deliveryConfigAllowlist contains an unsupported config file or path list")
     }
-    if (!paths.every((value) => typeof value === "string" && /^[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)*$/.test(value))) {
+    if (
+      !paths.every(
+        (value) => typeof value === "string" && /^[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)*$/.test(value),
+      )
+    ) {
       throw new Error("contract.json deliveryConfigAllowlist must contain safe dotted config paths")
     }
     parsed[filePath] = [...new Set(paths as string[])]
@@ -424,9 +424,7 @@ function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirement
     raw.qaAccountCredentials !== undefined &&
     (!Array.isArray(raw.qaAccountCredentials) ||
       raw.qaAccountCredentials.length === 0 ||
-      !raw.qaAccountCredentials.every(
-        (name) => typeof name === "string" && /^[A-Z][A-Z0-9_]{0,127}$/.test(name),
-      ))
+      !raw.qaAccountCredentials.every((name) => typeof name === "string" && /^[A-Z][A-Z0-9_]{0,127}$/.test(name)))
   ) {
     throw new Error("contract.json requirements.qaAccountCredentials must contain valid credential names")
   }
@@ -453,9 +451,7 @@ function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirement
     ...(Array.isArray(raw.qaAccountCredentials)
       ? { qaAccountCredentials: [...new Set(raw.qaAccountCredentials as string[])] }
       : {}),
-    ...(isPlainObject(raw.qaAccountModelSettings)
-      ? { qaAccountModelSettings: raw.qaAccountModelSettings }
-      : {}),
+    ...(isPlainObject(raw.qaAccountModelSettings) ? { qaAccountModelSettings: raw.qaAccountModelSettings } : {}),
     ...(raw.browserOnly === true ? { browserOnly: true } : {}),
   }
   return Object.keys(requirements).length > 0 ? requirements : undefined

@@ -160,9 +160,7 @@ export function abortUnfinishedGitOps(cwd?: string): string[] {
 }
 
 function isExplicitlyAllowed(p: string, allowlist: readonly string[]): boolean {
-  return allowlist.some((entry) =>
-    entry.endsWith("/**") ? p.startsWith(entry.slice(0, -2)) : p === entry,
-  )
+  return allowlist.some((entry) => (entry.endsWith("/**") ? p.startsWith(entry.slice(0, -2)) : p === entry))
 }
 
 export function isForbiddenPath(p: string, deliveryPathAllowlist: readonly string[] = []): boolean {
@@ -221,11 +219,7 @@ export function isSafeConfigActivationChange(before: unknown, after: unknown): b
   return isDeepStrictEqual(beforeCompanyRest, afterCompanyRest)
 }
 
-export function isSafeConfigChange(
-  before: unknown,
-  after: unknown,
-  allowedPaths: readonly string[] = [],
-): boolean {
+export function isSafeConfigChange(before: unknown, after: unknown, allowedPaths: readonly string[] = []): boolean {
   if (!isRecord(before) || !isRecord(after)) return false
   const beforeCopy = structuredClone(before)
   const afterCopy = structuredClone(after)

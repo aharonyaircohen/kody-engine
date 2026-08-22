@@ -5,10 +5,7 @@ describe("simple Capability runtime profile", () => {
   it("gives Store capabilities the same multi-step execution budget", () => {
     const readMaxTurns = (runtime: string) => {
       const profile = JSON.parse(
-        fs.readFileSync(
-          new URL(`../../src/runtime-services/${runtime}/profile.json`, import.meta.url),
-          "utf8",
-        ),
+        fs.readFileSync(new URL(`../../src/runtime-services/${runtime}/profile.json`, import.meta.url), "utf8"),
       ) as { claudeCode: { maxTurns: number } }
 
       return profile.claudeCode.maxTurns

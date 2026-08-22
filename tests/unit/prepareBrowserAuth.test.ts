@@ -3,10 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Context, Profile } from "../../src/implementations/types.js"
-import {
-  prepareBrowserAuth,
-  prepareEmailPasswordBrowserAuth,
-} from "../../src/scripts/prepareBrowserAuth.js"
+import { prepareBrowserAuth, prepareEmailPasswordBrowserAuth } from "../../src/scripts/prepareBrowserAuth.js"
 
 function makeCtx(cwd: string): Context {
   return {

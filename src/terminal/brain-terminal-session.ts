@@ -180,11 +180,7 @@ function stateEvent(session: StoredBrainTerminalSession): BrainTerminalEvent {
   }
 }
 
-function failedEvent(
-  session: StoredBrainTerminalSession,
-  code: string,
-  cause: unknown,
-): BrainTerminalEvent {
+function failedEvent(session: StoredBrainTerminalSession, code: string, cause: unknown): BrainTerminalEvent {
   return {
     type: "failed",
     sessionId: session.id,
@@ -223,10 +219,12 @@ export class BrainTerminalSessionAgent {
     const request = parseBrainTerminalOpenRequest(rawRequest)
     let session = await this.dependencies.store.read(request.session.id)
 
-    if (session &&
+    if (
+      session &&
       (session.scope.owner !== request.session.scope.owner ||
         session.scope.repo !== request.session.scope.repo ||
-        session.scope.conversationId !== request.session.scope.conversationId)) {
+        session.scope.conversationId !== request.session.scope.conversationId)
+    ) {
       throw new Error("terminal session scope does not match stored identity")
     }
 
@@ -249,12 +247,7 @@ export class BrainTerminalSessionAgent {
       await this.persist(session)
       let started: { processId: number }
       try {
-        started = await this.dependencies.runtime.start(
-          session.sessionName,
-          session.cwd,
-          session.cols,
-          session.rows,
-        )
+        started = await this.dependencies.runtime.start(session.sessionName, session.cwd, session.cols, session.rows)
       } catch (cause) {
         session = { ...session, state: "failed", updatedAt: this.now() }
         await this.persist(session)
@@ -279,10 +272,7 @@ export class BrainTerminalSessionAgent {
     }
 
     const events: BrainTerminalEvent[] = [stateEvent(session)]
-    if (
-      session.output &&
-      (request.afterRevision === undefined || request.afterRevision < session.revision)
-    ) {
+    if (session.output && (request.afterRevision === undefined || request.afterRevision < session.revision)) {
       events.push({
         type: "output",
         sessionId: session.id,
@@ -318,11 +308,7 @@ export class BrainTerminalSessionAgent {
   async status(): Promise<BrainTerminalStatus> {
     const session = this.requireSession()
     const runtime = await this.dependencies.runtime.inspect(session.sessionName)
-    const nextState = runtime.alive
-      ? session.state
-      : session.state === "failed"
-        ? "failed"
-        : "exited"
+    const nextState = runtime.alive ? session.state : session.state === "failed" ? "failed" : "exited"
     if (nextState !== session.state || runtime.processId !== session.processId) {
       await this.persist({
         ...session,

@@ -40,12 +40,7 @@ describe("postflight failure-safety: which scripts are state-mutating", () => {
 
   it("every name in the mutating set is a real registered postflight", () => {
     // Guard against a typo'd entry that would silently never match.
-    for (const name of [
-      "commitAndPush",
-      "ensurePr",
-      "applyCapabilityReports",
-      "openAgencyModelReviewPr",
-    ]) {
+    for (const name of ["commitAndPush", "ensurePr", "applyCapabilityReports", "openAgencyModelReviewPr"]) {
       expect(Object.keys(postflightScripts)).toContain(name)
     }
   })

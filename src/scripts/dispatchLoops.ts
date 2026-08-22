@@ -111,7 +111,11 @@ export async function dispatchLoopsWith(input: {
       loopId: loop.id,
       decision: {
         kind: "fire",
-        reason: input.scheduledFor ? "Convex scheduled Loop run" : input.force ? "manual Loop run requested" : "local Loop schedule is due",
+        reason: input.scheduledFor
+          ? "Convex scheduled Loop run"
+          : input.force
+            ? "manual Loop run requested"
+            : "local Loop schedule is due",
         scheduledAt: slot,
       },
       leaseUntil: new Date(input.now.getTime() + LOOP_DISPATCH_LEASE_MS).toISOString(),

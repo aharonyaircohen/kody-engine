@@ -116,10 +116,7 @@ function parseSetCookie(value: string, hostname: string) {
   const attributes = new Map<string, string>()
   for (const part of parts) {
     const index = part.indexOf("=")
-    attributes.set(
-      (index < 0 ? part : part.slice(0, index)).toLowerCase(),
-      index < 0 ? "" : part.slice(index + 1),
-    )
+    attributes.set((index < 0 ? part : part.slice(0, index)).toLowerCase(), index < 0 ? "" : part.slice(index + 1))
   }
   const sameSite = attributes.get("samesite")?.toLowerCase()
   return {
@@ -271,11 +268,9 @@ function mergeStorageStates(existingPath: string, nextPath: string): void {
     }
     origins.set(entry.origin, { origin: entry.origin, localStorage: [...localStorage.values()] })
   }
-  fs.writeFileSync(
-    nextPath,
-    JSON.stringify({ cookies: [...cookies.values()], origins: [...origins.values()] }),
-    { mode: 0o600 },
-  )
+  fs.writeFileSync(nextPath, JSON.stringify({ cookies: [...cookies.values()], origins: [...origins.values()] }), {
+    mode: 0o600,
+  })
 }
 
 function configurePlaywright(profile: Profile, storageStatePath: string): void {

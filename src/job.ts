@@ -335,9 +335,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
         await notifyWorkflowCompleted({
           workflowId: workflowIdentity,
           runId: valid.workflowRunId,
-          ...(typeof base.preloadedData?.loopId === "string"
-            ? { loopId: base.preloadedData.loopId }
-            : {}),
+          ...(typeof base.preloadedData?.loopId === "string" ? { loopId: base.preloadedData.loopId } : {}),
           status: result.workflowState?.status === "blocked" ? "blocked" : result.exitCode === 0 ? "success" : "failed",
           ...(result.reason ? { summary: result.reason } : {}),
           ...(Object.keys(facts).length > 0 ? { output: facts } : {}),

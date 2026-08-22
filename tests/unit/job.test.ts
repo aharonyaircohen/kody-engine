@@ -2493,10 +2493,7 @@ describe("runJob (Phase 1 seam)", () => {
           capabilityOutput: { status: "blocked", report: { whyStopped: "repair timed out" } },
         })
 
-      const pending = runJob(
-        { workflow: "ci-repair", cliArgs: {}, flavor: "instant" },
-        { cwd },
-      )
+      const pending = runJob({ workflow: "ci-repair", cliArgs: {}, flavor: "instant" }, { cwd })
       await vi.advanceTimersByTimeAsync(1_000)
       const result = await pending
 

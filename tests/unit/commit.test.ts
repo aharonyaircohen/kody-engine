@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 import {
   FORBIDDEN_PATH_PREFIXES,
   isForbiddenPath,
-  isSafeConfigChange,
   isSafeConfigActivationChange,
+  isSafeConfigChange,
   normalizeCommitMessage,
 } from "../../src/commit.js"
 
@@ -172,9 +172,7 @@ describe("commit: trusted Store config activation", () => {
     }
 
     expect(isSafeConfigChange(before, after, ["release"])).toBe(true)
-    expect(
-      isSafeConfigChange(before, { ...after, agent: { model: "attacker/model" } }, ["release"]),
-    ).toBe(false)
+    expect(isSafeConfigChange(before, { ...after, agent: { model: "attacker/model" } }, ["release"])).toBe(false)
   })
 })
 

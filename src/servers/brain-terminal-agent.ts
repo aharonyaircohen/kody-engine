@@ -1,17 +1,14 @@
 import * as path from "node:path"
 import { createInterface } from "node:readline"
 import { defaultCloneRepo, ensureRepoCwd } from "../repoWorkspace.js"
+import { FileBrainTerminalMetadataStore, TmuxBrainTerminalRuntime } from "../terminal/brain-terminal-adapters.js"
 import {
+  type BrainTerminalEvent,
   BrainTerminalSessionAgent,
   parseBrainTerminalCommand,
   parseBrainTerminalOpenRequest,
   parseBrainTerminalStatusRequest,
-  type BrainTerminalEvent,
 } from "../terminal/brain-terminal-session.js"
-import {
-  FileBrainTerminalMetadataStore,
-  TmuxBrainTerminalRuntime,
-} from "../terminal/brain-terminal-adapters.js"
 
 const DEFAULT_POLL_INTERVAL_MS = 150
 
@@ -73,11 +70,7 @@ export async function brainTerminalAgent(options: {
       if (!line.trim()) continue
       const value: unknown = JSON.parse(line)
       if (!opened) {
-        if (
-          value &&
-          typeof value === "object" &&
-          (value as { type?: unknown }).type === "status"
-        ) {
+        if (value && typeof value === "object" && (value as { type?: unknown }).type === "status") {
           const request = parseBrainTerminalStatusRequest(value)
           const status = await agent.inspectStored(request.sessionId)
           if (status) {
@@ -105,11 +98,7 @@ export async function brainTerminalAgent(options: {
           baseCwd: options.cwd,
           reposRoot,
           repo,
-          repoToken:
-            process.env.KODY_TOKEN ??
-            process.env.GH_TOKEN ??
-            process.env.GITHUB_TOKEN ??
-            process.env.GH_PAT,
+          repoToken: process.env.KODY_TOKEN ?? process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? process.env.GH_PAT,
           cloneRepo: defaultCloneRepo,
         })
         const events = await agent.open({ ...requested, cwd: workspaceCwd })

@@ -98,7 +98,8 @@ function gitProcessEnvironment(baseEnv: NodeJS.ProcessEnv = process.env): NodeJS
   env[`GIT_CONFIG_KEY_${count}`] = "http.https://github.com/.extraHeader"
   env[`GIT_CONFIG_VALUE_${count}`] = ""
   env[`GIT_CONFIG_KEY_${count + 1}`] = "http.https://github.com/.extraHeader"
-  env[`GIT_CONFIG_VALUE_${count + 1}`] = `Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`
+  env[`GIT_CONFIG_VALUE_${count + 1}`] =
+    `Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`
   return env
 }
 

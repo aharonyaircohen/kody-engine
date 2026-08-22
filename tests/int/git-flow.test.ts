@@ -152,9 +152,7 @@ describe("integration: git flow", () => {
       ".kody-engine/definitions/loops/**",
     ])
     expect(withContract.committed).toBe(true)
-    expect(git(repo.workdir, ["show", "--name-only", "--pretty=format:", "HEAD"]).split("\n")).toEqual([
-      loopPath,
-    ])
+    expect(git(repo.workdir, ["show", "--name-only", "--pretty=format:", "HEAD"]).split("\n")).toEqual([loopPath])
   })
 
   it("normalizes commit prefix when missing", () => {

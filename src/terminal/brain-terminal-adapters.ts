@@ -1,7 +1,7 @@
+import { spawn } from "node:child_process"
 import { createHash, randomBytes } from "node:crypto"
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises"
 import * as path from "node:path"
-import { spawn } from "node:child_process"
 import type {
   BrainTerminalMetadataStore,
   BrainTerminalRuntime,
@@ -14,11 +14,7 @@ interface CommandResult {
   stderr: string
 }
 
-export type RunTerminalCommand = (
-  command: string,
-  args: string[],
-  input?: string,
-) => Promise<CommandResult>
+export type RunTerminalCommand = (command: string, args: string[], input?: string) => Promise<CommandResult>
 
 export function runTerminalCommand(command: string, args: string[], input?: string): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
@@ -128,13 +124,7 @@ export class TmuxBrainTerminalRuntime implements BrainTerminalRuntime {
   }
 
   async inspect(sessionName: string): Promise<{ alive: boolean; processId: number | null }> {
-    const result = await this.run("tmux", [
-      "list-panes",
-      "-t",
-      sessionName,
-      "-F",
-      "#{pane_dead}:#{pane_pid}",
-    ])
+    const result = await this.run("tmux", ["list-panes", "-t", sessionName, "-F", "#{pane_dead}:#{pane_pid}"])
     if (result.code !== 0) return { alive: false, processId: null }
     const [dead, pid] = result.stdout.trim().split(":")
     const processId = Number(pid)
@@ -145,17 +135,12 @@ export class TmuxBrainTerminalRuntime implements BrainTerminalRuntime {
   }
 
   async capture(sessionName: string): Promise<string> {
-    const alternate = await this.run("tmux", [
-      "display-message",
-      "-p",
-      "-t",
-      sessionName,
-      "#{alternate_on}",
-    ])
+    const alternate = await this.run("tmux", ["display-message", "-p", "-t", sessionName, "#{alternate_on}"])
     if (alternate.code !== 0) throw commandError("inspect screen", alternate)
-    const args = alternate.stdout.trim() === "1"
-      ? ["capture-pane", "-p", "-e", "-t", sessionName]
-      : ["capture-pane", "-p", "-e", "-J", "-S", "-50000", "-t", sessionName]
+    const args =
+      alternate.stdout.trim() === "1"
+        ? ["capture-pane", "-p", "-e", "-t", sessionName]
+        : ["capture-pane", "-p", "-e", "-J", "-S", "-50000", "-t", sessionName]
     return (await this.tmux("capture", args)).stdout
   }
 
@@ -166,15 +151,7 @@ export class TmuxBrainTerminalRuntime implements BrainTerminalRuntime {
   }
 
   async resize(sessionName: string, cols: number, rows: number): Promise<void> {
-    await this.tmux("resize", [
-      "resize-window",
-      "-t",
-      sessionName,
-      "-x",
-      String(cols),
-      "-y",
-      String(rows),
-    ])
+    await this.tmux("resize", ["resize-window", "-t", sessionName, "-x", String(cols), "-y", String(rows)])
   }
 
   async stop(sessionName: string): Promise<void> {

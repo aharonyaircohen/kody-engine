@@ -20,9 +20,7 @@ describe("createMissingParentWriteGuard", () => {
   it("allows a new file in an existing source directory", async () => {
     const guard = createMissingParentWriteGuard(cwd)
 
-    await expect(
-      guard({ tool_input: { file_path: path.join(cwd, "src", "new-module.ts") } }),
-    ).resolves.toEqual({})
+    await expect(guard({ tool_input: { file_path: path.join(cwd, "src", "new-module.ts") } })).resolves.toEqual({})
   })
 
   it("blocks a write into a made-up directory tree", async () => {

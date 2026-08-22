@@ -62,9 +62,7 @@ describe("loopRunId", () => {
     )
 
     expect(id).toHaveLength(80)
-    expect(id).toMatch(
-      /^loop-agency-request-build-repository-specif-fbe4851e-20c3-4f58-b4a3-458ae473a3ea$/,
-    )
+    expect(id).toMatch(/^loop-agency-request-build-repository-specif-fbe4851e-20c3-4f58-b4a3-458ae473a3ea$/)
   })
 })
 
@@ -119,13 +117,7 @@ describe("mergeLoopDefinitions", () => {
     }
 
     await expect(
-      syncLoopWakeRegistrations(
-        backend,
-        "acme/widgets",
-        [loop],
-        "2026-08-19T12:00:00.000Z",
-        log,
-      ),
+      syncLoopWakeRegistrations(backend, "acme/widgets", [loop], "2026-08-19T12:00:00.000Z", log),
     ).resolves.toBe(false)
     expect(log).toHaveBeenCalledWith(expect.stringContaining("backfill skipped"))
   })
@@ -143,11 +135,13 @@ describe("dispatchLoopsWith", () => {
     }
 
     const results = await dispatchLoopsWith({
-      loops: [{
-        ...loop,
-        target: { kind: "capability", id: "live-agent" },
-        input: { agent: "operations-agent", intent: "agency" },
-      }],
+      loops: [
+        {
+          ...loop,
+          target: { kind: "capability", id: "live-agent" },
+          input: { agent: "operations-agent", intent: "agency" },
+        },
+      ],
       tenantId: "acme/widgets",
       backend,
       now: new Date("2026-08-19T08:00:00.000Z"),
@@ -156,9 +150,7 @@ describe("dispatchLoopsWith", () => {
       nonce: () => "agent",
     })
 
-    expect(results).toEqual([
-      { loopId: "daily-check", status: "dispatched", reason: "agent cycle completed" },
-    ])
+    expect(results).toEqual([{ loopId: "daily-check", status: "dispatched", reason: "agent cycle completed" }])
     expect(results).toHaveLength(1)
     expect(run).toHaveBeenCalledWith(
       {

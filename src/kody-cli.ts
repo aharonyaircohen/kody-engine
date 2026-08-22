@@ -175,9 +175,7 @@ function routeRunRequest(request: RunRequest): RunRequestRoute {
       kind: "action",
       action: "loop-scheduler",
       cliArgs: { loop: target.id },
-      ...(typeof request.input?.scheduledFor === "string"
-        ? { scheduledFor: request.input.scheduledFor }
-        : {}),
+      ...(typeof request.input?.scheduledFor === "string" ? { scheduledFor: request.input.scheduledFor } : {}),
     }
   }
 

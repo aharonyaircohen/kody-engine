@@ -32,7 +32,7 @@ describe("self-management Observer pilot", () => {
     expect(launcher).toContain("capability:")
     expect(launcher).toContain("message:")
     expect(launcher).toContain("runRequest:")
-    expect(launcher).toContain("KODY_RUN_REQUEST_JSON: ${{ inputs.runRequest }}")
+    expect(launcher).toContain("KODY_RUN_REQUEST_JSON: $" + "{{ inputs.runRequest }}")
     expect(launcher).not.toContain("ALL_SECRETS:")
     expect(launcher).not.toContain("kody-engine ci")
   })

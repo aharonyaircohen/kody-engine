@@ -93,10 +93,7 @@ describe("simple Capability folder", () => {
     expect(loaded?.contract?.execution).toBe("script")
     expect(loaded?.contract?.secrets).toEqual(["VERCEL_ACCESS_TOKEN"])
     expect(loaded?.contract?.timeoutMs).toBe(1_800_000)
-    expect(loaded?.contract?.deliveryPathAllowlist).toEqual([
-      "kody.config.json",
-      ".kody-engine/definitions/loops/**",
-    ])
+    expect(loaded?.contract?.deliveryPathAllowlist).toEqual(["kody.config.json", ".kody-engine/definitions/loops/**"])
     expect(loaded?.contract?.deliveryConfigAllowlist).toEqual({
       "kody.config.json": ["company.activeWorkflows"],
     })

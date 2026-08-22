@@ -4,8 +4,8 @@ import * as path from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   FileBrainTerminalMetadataStore,
-  TmuxBrainTerminalRuntime,
   type RunTerminalCommand,
+  TmuxBrainTerminalRuntime,
 } from "../../src/terminal/brain-terminal-adapters.js"
 import type { StoredBrainTerminalSession } from "../../src/terminal/brain-terminal-session.js"
 
@@ -75,11 +75,7 @@ describe("TmuxBrainTerminalRuntime", () => {
     const runtime = new TmuxBrainTerminalRuntime(run)
 
     expect(await runtime.capture("kody_session")).toBe("codex screen")
-    expect(run).toHaveBeenLastCalledWith(
-      "tmux",
-      ["capture-pane", "-p", "-e", "-t", "kody_session"],
-      undefined,
-    )
+    expect(run).toHaveBeenLastCalledWith("tmux", ["capture-pane", "-p", "-e", "-t", "kody_session"], undefined)
   })
 
   it("writes input through a temporary tmux buffer without shell interpolation", async () => {
@@ -90,8 +86,6 @@ describe("TmuxBrainTerminalRuntime", () => {
 
     expect(run.mock.calls[0]?.[1].slice(0, 2)).toEqual(["load-buffer", "-b"])
     expect(run.mock.calls[0]?.[2]).toBe("$(touch /tmp/nope)\r")
-    expect(run.mock.calls[1]?.[1]).toEqual(
-      expect.arrayContaining(["paste-buffer", "-d", "-t", "kody_session"]),
-    )
+    expect(run.mock.calls[1]?.[1]).toEqual(expect.arrayContaining(["paste-buffer", "-d", "-t", "kody_session"]))
   })
 })

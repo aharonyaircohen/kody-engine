@@ -94,7 +94,13 @@ export interface StateBackendClient {
 export interface StateBackend {
   listLoops(tenantId: string): Promise<unknown[]>
   replaceLoopWakeRegistrations(tenantId: string, loops: unknown[], updatedAt: string): Promise<void>
-  markLoopWakeExecution(tenantId: string, wakeId: string, status: "running" | "succeeded" | "failed", detail: string, updatedAt: string): Promise<void>
+  markLoopWakeExecution(
+    tenantId: string,
+    wakeId: string,
+    status: "running" | "succeeded" | "failed",
+    detail: string,
+    updatedAt: string,
+  ): Promise<void>
   get(tenantId: string, taskKey: string, kind: string): Promise<TaskDocument | null>
   save(tenantId: string, taskKey: string, kind: string, doc: unknown, expectedUpdatedAt?: string): Promise<void>
   getAgentState(tenantId: string, agent: string): Promise<AgentStateDocument | null>

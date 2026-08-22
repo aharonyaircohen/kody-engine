@@ -125,8 +125,7 @@ export const postIssueComment: PostflightScript = async (ctx, profile) => {
   })
   postWith(targetType, targetNumber, msg, ctx.cwd)
 
-  const prIsDraft =
-    (prResult?.kind === "created" || prResult?.kind === "updated") && prResult.draft === true
+  const prIsDraft = (prResult?.kind === "created" || prResult?.kind === "updated") && prResult.draft === true
   if (!isFailure && !prIsDraft) {
     markPrReadyForReview(ctx, prResult)
   }

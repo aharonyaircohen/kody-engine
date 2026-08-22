@@ -78,13 +78,7 @@ describe("commitAndPush: gate on agentDone", () => {
       deliveryPathAllowlist: allowlist,
     })
     await commitAndPush(ctx as never, profile, null)
-    expect(doCommitAndPush).toHaveBeenCalledWith(
-      "feat-x",
-      "ci: add healthy checks",
-      "/x",
-      allowlist,
-      {},
-    )
+    expect(doCommitAndPush).toHaveBeenCalledWith("feat-x", "ci: add healthy checks", "/x", allowlist, {})
   })
 
   it("proceeds when agentDone is undefined (legacy profiles without the flag)", async () => {

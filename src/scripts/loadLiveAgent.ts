@@ -1,10 +1,13 @@
 import * as fs from "node:fs"
-import { agentsRoot } from "../definition-paths.js"
 import { loadAgentIdentity, resolveAgentFile } from "../agents.js"
+import { agentsRoot } from "../definition-paths.js"
 import type { PreflightScript } from "../implementations/types.js"
 import { createStateBackendFromEnv } from "../state-backend.js"
 
-interface GuidanceDoc { kind: string; doc?: { body?: unknown } }
+interface GuidanceDoc {
+  kind: string
+  doc?: { body?: unknown }
+}
 
 function tenant(config: { github?: { owner?: string; repo?: string } }): string {
   const [envOwner, envRepo] = (process.env.GITHUB_REPOSITORY ?? "").split("/")
@@ -24,7 +27,11 @@ function frontmatter(raw: string): Record<string, string | string[]> {
     const key = line.slice(0, at).trim()
     const value = line.slice(at + 1).trim()
     result[key] = value.startsWith("[")
-      ? value.slice(1, -1).split(",").map((entry) => entry.trim()).filter(Boolean)
+      ? value
+          .slice(1, -1)
+          .split(",")
+          .map((entry) => entry.trim())
+          .filter(Boolean)
       : value
   }
   return result
@@ -70,7 +77,10 @@ export const loadLiveAgent: PreflightScript = async (ctx, profile) => {
   const selectedIntentBody = intentRow ? intentBody(intentRow as GuidanceDoc) : null
   if (!selectedIntentBody) throw new Error(`Primary Intent '${intent}' is missing`)
   const render = (rows: unknown[]) =>
-    (rows as GuidanceDoc[]).map((row) => guidanceBody(row, agent)).filter(Boolean).join("\n\n") || "None assigned."
+    (rows as GuidanceDoc[])
+      .map((row) => guidanceBody(row, agent))
+      .filter(Boolean)
+      .join("\n\n") || "None assigned."
 
   ctx.data.agentIdentity = loadAgentIdentity(ctx.cwd, agent)
   ctx.data.liveAgentIntent = selectedIntentBody

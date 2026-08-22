@@ -125,11 +125,7 @@ export function shouldSkipPrForPreflight(ctx: {
   output: { exitCode?: number }
   data: Record<string, unknown>
 }): boolean {
-  return (
-    ctx.skipAgent === true &&
-    ctx.output.exitCode !== undefined &&
-    ctx.data.capabilityExecution !== "script"
-  )
+  return ctx.skipAgent === true && ctx.output.exitCode !== undefined && ctx.data.capabilityExecution !== "script"
 }
 
 export function deliveryCheckpointReason(data: Record<string, unknown>): string {

@@ -146,22 +146,14 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
       : {}
 
   try {
-    const result = doCommitAndPush(
-      branch,
-      message,
-      ctx.cwd,
-      deliveryPathAllowlist,
-      deliveryConfigAllowlist,
-    )
+    const result = doCommitAndPush(branch, message, ctx.cwd, deliveryPathAllowlist, deliveryConfigAllowlist)
     ctx.data.commitResult = result
     // After a successful commit the working tree is clean, so listChangedFiles
     // (which reads `git status`) returns []. Use the commit's own file list
     // so downstream postflights (verifyFixAlignment) know what we committed.
     // Fall back to working-tree status only if the commit was skipped.
     const postCommitFiles = result.committed ? listFilesInCommit("HEAD", ctx.cwd) : listChangedFiles(ctx.cwd)
-    ctx.data.changedFiles = postCommitFiles.filter(
-      (f) => !isForbiddenPath(f, deliveryPathAllowlist),
-    )
+    ctx.data.changedFiles = postCommitFiles.filter((f) => !isForbiddenPath(f, deliveryPathAllowlist))
 
     if (result.committed && !result.pushed) {
       // Commit landed locally but push failed (network, auth, branch

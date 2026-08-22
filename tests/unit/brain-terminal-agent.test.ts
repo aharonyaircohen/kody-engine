@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
 import {
-  BrainTerminalSessionAgent,
   type BrainTerminalMetadataStore,
   type BrainTerminalRuntime,
+  BrainTerminalSessionAgent,
   type StoredBrainTerminalSession,
 } from "../../src/terminal/brain-terminal-session.js"
 
@@ -67,7 +67,7 @@ const open = {
   cwd: "/workspace/repos/acme/widgets",
   cols: 120,
   rows: 36,
-};
+}
 
 describe("BrainTerminalSessionAgent", () => {
   it("creates one durable generation and reattaches to the same process", async () => {
@@ -83,12 +83,8 @@ describe("BrainTerminalSessionAgent", () => {
     const secondEvents = await second.open(open)
     const secondStatus = await second.status()
 
-    expect(firstEvents).toContainEqual(
-      expect.objectContaining({ type: "state", state: "ready", generation: 1 }),
-    )
-    expect(secondEvents).toContainEqual(
-      expect.objectContaining({ type: "state", state: "ready", generation: 1 }),
-    )
+    expect(firstEvents).toContainEqual(expect.objectContaining({ type: "state", state: "ready", generation: 1 }))
+    expect(secondEvents).toContainEqual(expect.objectContaining({ type: "state", state: "ready", generation: 1 }))
     expect(secondStatus).toMatchObject({ generation: 1, processId: firstStatus.processId })
   })
 
@@ -130,9 +126,7 @@ describe("BrainTerminalSessionAgent", () => {
     })
 
     expect(runtime.inputs).toEqual(["codex\r"])
-    expect(event).toEqual(
-      expect.objectContaining({ type: "input-accepted", inputId: "input-1", generation: 1 }),
-    )
+    expect(event).toEqual(expect.objectContaining({ type: "input-accepted", inputId: "input-1", generation: 1 }))
   })
 
   it("resizes and detaches without replacing the process", async () => {
@@ -168,12 +162,10 @@ describe("BrainTerminalSessionAgent", () => {
     const agent = new BrainTerminalSessionAgent({ store: new MemoryStore(), runtime: new FakeRuntime() })
     await agent.open(open)
 
-    await expect(
-      agent.command({ type: "detach", sessionId: "another-session" }),
-    ).rejects.toThrow("session identity")
-    await expect(
-      agent.command({ type: "input", sessionId: open.session.id, inputId: "", data: "x" }),
-    ).rejects.toThrow("inputId")
+    await expect(agent.command({ type: "detach", sessionId: "another-session" })).rejects.toThrow("session identity")
+    await expect(agent.command({ type: "input", sessionId: open.session.id, inputId: "", data: "x" })).rejects.toThrow(
+      "inputId",
+    )
   })
 
   it("inspects stored state without creating a missing session", async () => {
@@ -210,8 +202,10 @@ describe("BrainTerminalSessionAgent", () => {
     expect(await agent.status()).toMatchObject({ state: "failed", generation: 1 })
 
     runtime.startError = null
-    await expect(
-      agent.command({ type: "restart", sessionId: open.session.id }),
-    ).resolves.toMatchObject({ type: "state", state: "ready", generation: 2 })
+    await expect(agent.command({ type: "restart", sessionId: open.session.id })).resolves.toMatchObject({
+      type: "state",
+      state: "ready",
+      generation: 2,
+    })
   })
 })

@@ -65,9 +65,7 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
       const step = asRecord(entry)
       return Boolean(step && (step.id !== undefined || step.next !== undefined))
     })
-  const sharedIssues = graphMode
-    ? validateExecutableWorkflow(value, options)
-    : []
+  const sharedIssues = graphMode ? validateExecutableWorkflow(value, options) : []
   const steps: Array<Raw | null> = rawSteps.map((entry) =>
     typeof entry === "string" ? { capability: entry } : asRecord(entry),
   )

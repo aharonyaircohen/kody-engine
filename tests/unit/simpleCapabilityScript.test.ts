@@ -142,7 +142,9 @@ describe("script-backed simple Capability", () => {
     process.env.KODY_TEST_DENIED_SECRET = "denied-value"
     try {
       const { ctx } = scriptedCapability(
-        '#!/bin/sh\nprintf \'{"allowed":"%s","denied":"%s"}\' "${KODY_TEST_ALLOWED_SECRET:-}" "${KODY_TEST_DENIED_SECRET:-}"\n',
+        '#!/bin/sh\nprintf \'{"allowed":"%s","denied":"%s"}\' "$' +
+          '{KODY_TEST_ALLOWED_SECRET:-}" "$' +
+          '{KODY_TEST_DENIED_SECRET:-}"\n',
         {
           secrets: ["KODY_TEST_ALLOWED_SECRET"],
           output: {
