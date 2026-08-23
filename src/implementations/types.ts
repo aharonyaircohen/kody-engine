@@ -550,6 +550,8 @@ export interface ReportPublicationConfig {
   slugFact?: string
   title?: string
   titleFact?: string
+  /** Dotted path in workflow facts containing a ready-to-render Markdown body. */
+  bodyFact?: string
   publishWhenFact?: string
   reviewStatus?: string
   reviewArea?: string

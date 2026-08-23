@@ -281,7 +281,11 @@ export async function publishWorkflowReport(input: WorkflowReportInput): Promise
     input.state.status === "done"
       ? `${input.workflowTitle} completed`
       : `${input.workflowTitle} ${input.state.status}${input.state.blocker ? `: ${input.state.blocker}` : ""}`
-  const markdown = buildRuntimeReportMarkdown({
+  const body = stringValue(resolveDotted(input.state.facts, input.publication.bodyFact))
+  const reportFacts = input.publication.bodyFact
+    ? omitKeys(input.state.facts, [input.publication.bodyFact.split(".")[0]!])
+    : input.state.facts
+  const generatedMarkdown = buildRuntimeReportMarkdown({
     generatedAt,
     reportType: input.publication.type,
     reportTypeVersion: input.publication.version ?? 1,
@@ -295,7 +299,7 @@ export async function publishWorkflowReport(input: WorkflowReportInput): Promise
         status: input.state.status,
         completedStepIds: input.state.completedStepIds,
         transitionCounts: input.state.transitionCounts,
-        facts: input.state.facts,
+        facts: reportFacts,
         evidence: input.state.evidence,
         artifacts: input.state.artifacts,
         ...(input.state.blocker ? { blocker: input.state.blocker } : {}),
@@ -304,6 +308,7 @@ export async function publishWorkflowReport(input: WorkflowReportInput): Promise
     ...(input.publication.reviewStatus ? { reviewStatus: input.publication.reviewStatus } : {}),
     ...(input.publication.reviewArea ? { reviewArea: input.publication.reviewArea } : {}),
   })
+  const markdown = body ? `${generatedMarkdown.trimEnd()}\n\n${body}\n` : generatedMarkdown
   const runId = generatedAt.replace(/\.\d{3}Z$/, "Z").replace(/:/g, "-")
   if (hasStateBackendConfig()) {
     await createStateBackendFromEnv().saveReport(

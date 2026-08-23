@@ -236,4 +236,33 @@ describe("publishReport", () => {
     expect(saveReport.mock.calls[0]![4]).toContain("- Source Health")
     expect(saveReport.mock.calls[0]![4]).not.toContain("```json")
   })
+
+  it("preserves a configured Markdown body from workflow facts", async () => {
+    await publishWorkflowReport({
+      config: { github: { owner: "o", repo: "r" } } as never,
+      publication: {
+        type: "lesson-review",
+        owner: "lesson-review",
+        slug: "lesson-review",
+        title: "Lesson Review",
+        bodyFact: "output.report",
+      },
+      workflowId: "review-lesson",
+      workflowTitle: "Review Lesson",
+      state: {
+        status: "done",
+        completedStepIds: ["review"],
+        transitionCounts: {},
+        facts: {
+          output: { report: "# Lesson\n\n## Exercises\n\n1. First exercise" },
+        },
+        evidence: {},
+        artifacts: [],
+      },
+    })
+
+    const markdown = saveReport.mock.calls[0]![4]
+    expect(markdown).toContain("# Lesson\n\n## Exercises\n\n1. First exercise")
+    expect(markdown).not.toContain("**Output:**")
+  })
 })
