@@ -20,6 +20,7 @@ const {
     releaseWorkflowRunLease: vi.fn(),
     getWorkflowRun: vi.fn(),
     saveWorkflowRun: vi.fn(),
+    saveReport: vi.fn(),
   }
   return {
     gh: vi.fn(),
@@ -69,6 +70,8 @@ describe("runJob (Phase 1 seam)", () => {
     stateBackend.getWorkflowRun.mockResolvedValue(null)
     stateBackend.saveWorkflowRun.mockReset()
     stateBackend.saveWorkflowRun.mockResolvedValue(undefined)
+    stateBackend.saveReport.mockReset()
+    stateBackend.saveReport.mockResolvedValue(undefined)
     gh.mockReset()
     gh.mockImplementation(() => {
       throw new Error("HTTP 404 Not Found")
@@ -755,6 +758,57 @@ describe("runJob (Phase 1 seam)", () => {
       expect(runImplementationChain.mock.calls[0]![1].preloadedData?.reportPublication).toEqual(
         workflow.steps[0]!.report,
       )
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("publishes a workflow report for a completed linear workflow", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-linear-workflow-report-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "review-content", {
+        name: "review-content",
+        action: "review-content",
+        implementation: "review-content",
+        inputs: [],
+      })
+      writeWorkflowDefinition(cwd, "content-review", {
+        version: 1,
+        name: "Content Review",
+        steps: [{ capability: "review-content" }],
+        report: {
+          type: "content-review",
+          owner: "content-review",
+          slug: "content-review",
+          title: "Content Review",
+        },
+      })
+      process.chdir(cwd)
+      hasStateBackendConfig.mockReturnValue(true)
+      runImplementationChain.mockResolvedValueOnce({
+        exitCode: 0,
+        capabilityOutput: { status: "ok", report: "Reviewed content" },
+      })
+
+      await runJob(
+        { workflow: "content-review", cliArgs: {}, flavor: "instant" },
+        {
+          cwd,
+          config: {
+            quality: { typecheck: "", lint: "", testUnit: "", format: "" },
+            git: { defaultBranch: "main" },
+            github: { owner: "o", repo: "r" },
+            agent: { model: "anthropic/claude-haiku-4-5-20251001" },
+          },
+        },
+      )
+
+      expect(stateBackend.saveReport).toHaveBeenCalledOnce()
+      expect(stateBackend.saveReport.mock.calls[0]?.[0]).toBe("o/r")
+      expect(stateBackend.saveReport.mock.calls[0]?.[1]).toBe("content-review")
+      expect(stateBackend.saveReport.mock.calls[0]?.[4]).toContain("Reviewed content")
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })

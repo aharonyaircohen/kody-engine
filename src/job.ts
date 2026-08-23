@@ -541,20 +541,19 @@ async function runCapabilityWorkflow(
     await checkpoint?.(state)
     return { exitCode: 64, reason: resumeBlocker, workflowState: state }
   }
-  if (isGraphWorkflow(workflow)) {
-    const result = await runGraphCapabilityWorkflow(parent, workflow, capability, base, checkpoint)
-    if (workflow.report && result.workflowState) {
-      await publishWorkflowReport({
-        config: base.config ?? loadConfig(base.cwd),
-        publication: workflow.report,
-        workflowId: capability.slug,
-        workflowTitle: capability.title,
-        state: result.workflowState,
-      })
-    }
-    return result
+  const result = isGraphWorkflow(workflow)
+    ? await runGraphCapabilityWorkflow(parent, workflow, capability, base, checkpoint)
+    : await runLinearCapabilityWorkflow(parent, workflow, capability, base, checkpoint)
+  if (workflow.report && result.workflowState) {
+    await publishWorkflowReport({
+      config: base.config ?? loadConfig(base.cwd),
+      publication: workflow.report,
+      workflowId: capability.slug,
+      workflowTitle: capability.title,
+      state: result.workflowState,
+    })
   }
-  return runLinearCapabilityWorkflow(parent, workflow, capability, base, checkpoint)
+  return result
 }
 
 async function runLinearCapabilityWorkflow(
