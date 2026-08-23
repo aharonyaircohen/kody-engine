@@ -692,6 +692,7 @@ function parseReportPublication(value: unknown): ReportPublicationConfig | undef
   const slugFact = stringField(value.slugFact)
   const title = stringField(value.title)
   const titleFact = stringField(value.titleFact)
+  const bodyFact = stringField(value.bodyFact)
   const publishWhenFact = stringField(value.publishWhenFact)
   const reviewStatus = stringField(value.reviewStatus)
   const reviewArea = stringField(value.reviewArea)
@@ -704,6 +705,7 @@ function parseReportPublication(value: unknown): ReportPublicationConfig | undef
     ...(slugFact ? { slugFact } : {}),
     ...(title ? { title } : {}),
     ...(titleFact ? { titleFact } : {}),
+    ...(bodyFact ? { bodyFact } : {}),
     ...(publishWhenFact ? { publishWhenFact } : {}),
     ...(reviewStatus ? { reviewStatus } : {}),
     ...(reviewArea ? { reviewArea } : {}),

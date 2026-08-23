@@ -10,6 +10,7 @@ describe("parseCapabilityWorkflow", () => {
         owner: "agency-observer",
         slug: "agency-observer",
         title: "Agency Observer",
+        bodyFact: "report",
       },
       steps: [
         { id: "healthCheck", capability: "dev-ci-health", next: "inspect" },
@@ -32,6 +33,7 @@ describe("parseCapabilityWorkflow", () => {
       owner: "agency-observer",
       slug: "agency-observer",
       title: "Agency Observer",
+      bodyFact: "report",
     })
     expect(workflow?.steps.map((step) => step.id)).toEqual(["healthCheck", "inspect", "repair", "finish"])
     expect(workflow?.steps[2]?.next?.[0]?.to).toBe("healthCheck")
