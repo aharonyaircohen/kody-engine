@@ -35,7 +35,7 @@ export const postIssueComment: PostflightScript = async (ctx, profile) => {
   const targetNumber = Number(ctx.data.commentTargetNumber ?? 0)
   if (!targetType || !targetNumber) return
 
-  const commitResult = ctx.data.commitResult as { committed: boolean } | undefined
+  const commitResult = ctx.data.commitResult as { committed: boolean; pushed?: boolean; sha?: string } | undefined
   const hasCommits = Boolean(ctx.data.hasCommitsAhead)
   const prResult = readPrOutcome(ctx.data)
 
@@ -106,6 +106,8 @@ export const postIssueComment: PostflightScript = async (ctx, profile) => {
 
   const failureReason = computeFailureReason(ctx)
   const isFailure = failureReason.length > 0
+  const deliveryOmissions = readDeliveryOmissions(ctx.data)
+  const isPartialDelivery = commitResult?.pushed === true && deliveryOmissions.length > 0
   const branch = ctx.data.branch as string | undefined
 
   // Render the user-facing message by exhaustively switching on the typed
@@ -123,6 +125,7 @@ export const postIssueComment: PostflightScript = async (ctx, profile) => {
     githubOwner: ctx.config.github?.owner,
     githubRepo: ctx.config.github?.repo,
     deliveryProof: renderDeliveryProof(ctx),
+    partialDelivery: isPartialDelivery ? { omittedFiles: deliveryOmissions, pushedSha: commitResult.sha } : undefined,
   })
   postWith(targetType, targetNumber, msg, ctx.cwd)
 
@@ -225,8 +228,14 @@ export function renderMessage(input: {
   githubOwner: string | undefined
   githubRepo: string | undefined
   deliveryProof?: string
+  partialDelivery?: { omittedFiles: string[]; pushedSha?: string }
 }): string {
   const suffix = computeFailureSuffix(input)
+  if (input.isFailure && input.partialDelivery) {
+    const destination = renderDeliveryDestination(input)
+    const proof = input.partialDelivery.pushedSha ? ` (${input.partialDelivery.pushedSha.slice(0, 7)})` : ""
+    return `⚠️ kody PARTIAL: pushed allowed changes to ${destination}${proof}; omitted protected files: ${input.partialDelivery.omittedFiles.join(", ")}`
+  }
   if (input.isFailure) {
     return `⚠️ kody FAILED: ${truncate(input.failureReason, 1500)}${suffix}`
   }
@@ -250,6 +259,21 @@ export function renderMessage(input: {
       // success without evidence.
       return `⚠️ kody finished but PR step did not run${suffix}`
   }
+}
+
+function renderDeliveryDestination(input: {
+  prResult: PrOutcome | null
+  branch: string | undefined
+  githubOwner: string | undefined
+  githubRepo: string | undefined
+}): string {
+  if (input.prResult?.kind === "created" || input.prResult?.kind === "updated") {
+    return `PR ${input.prResult.url}`
+  }
+  if (input.branch && input.githubOwner && input.githubRepo) {
+    return `branch https://github.com/${input.githubOwner}/${input.githubRepo}/tree/${input.branch}`
+  }
+  return "the pushed branch"
 }
 
 export function renderDeliveryProof(ctx: Context): string {
@@ -276,9 +300,7 @@ export function renderDeliveryProof(ctx: Context): string {
 }
 
 function computeFailureReason(ctx: { data: Record<string, unknown> }): string {
-  const omissions = Array.isArray(ctx.data.deliveryOmissions)
-    ? ctx.data.deliveryOmissions.filter((file): file is string => typeof file === "string")
-    : []
+  const omissions = readDeliveryOmissions(ctx.data)
   if (omissions.length > 0) {
     return `delivery blocked protected files: ${omissions.join(", ")}`
   }
@@ -297,6 +319,12 @@ function computeFailureReason(ctx: { data: Record<string, unknown> }): string {
   }
   if (ctx.data.verifyOk === false) return (ctx.data.verifyReason as string) || "verify failed"
   return ""
+}
+
+function readDeliveryOmissions(data: Record<string, unknown>): string[] {
+  return Array.isArray(data.deliveryOmissions)
+    ? data.deliveryOmissions.filter((file): file is string => typeof file === "string")
+    : []
 }
 
 function actionFailureReason(action: unknown): string {

@@ -1,7 +1,7 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   runJob: vi.fn(async (..._args: unknown[]) => ({ exitCode: 0 })),
@@ -39,6 +39,13 @@ vi.mock("../../src/workflowDefinitions.js", () => ({
 import { runCi } from "../../src/kody-cli.js"
 
 const previousEnv: Record<string, string | undefined> = {}
+const dispatchEnvKeys = [
+  "GITHUB_EVENT_NAME",
+  "GITHUB_EVENT_PATH",
+  "KODY_RUN_REQUEST_JSON",
+  "KODY_FORCE_ACTION",
+  "KODY_FORCE_MESSAGE",
+] as const
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "kody-cli-goal-"))
@@ -79,6 +86,13 @@ function writeScheduledImplementation(dir: string, name: string): void {
   )
   fs.writeFileSync(path.join(implementationDir, "capability.md"), `# ${name}\n`)
 }
+
+beforeEach(() => {
+  for (const key of dispatchEnvKeys) {
+    previousEnv[key] = process.env[key]
+    delete process.env[key]
+  }
+})
 
 afterEach(() => {
   for (const [key, value] of Object.entries(previousEnv)) {

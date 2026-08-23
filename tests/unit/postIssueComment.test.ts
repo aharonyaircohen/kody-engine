@@ -22,7 +22,7 @@ import { postIssueComment, renderDeliveryProof } from "../../src/scripts/postIss
 const profile = {} as Profile
 
 function makeCtx(overrides: {
-  commitResult?: { committed: boolean }
+  commitResult?: { committed: boolean; pushed?: boolean; sha?: string }
   hasCommitsAhead?: boolean
   prUrl?: string
   prAction?: "created" | "updated"
@@ -258,13 +258,51 @@ describe("postIssueComment message wording", () => {
   it("reports protected files omitted from an otherwise successful commit", async () => {
     const ctx = makeCtx({
       prAction: "updated",
+      commitResult: { committed: true, pushed: true, sha: "abcdef123456" },
       deliveryOmissions: [".github/workflows/ci.yml"],
     })
 
     await postIssueComment(ctx, profile, null)
 
     expect(lastPrBody()).toBe(
-      "⚠️ kody FAILED: delivery blocked protected files: .github/workflows/ci.yml — PR: https://github.com/x/y/pull/42",
+      "⚠️ kody PARTIAL: pushed allowed changes to PR https://github.com/x/y/pull/42 (abcdef1); omitted protected files: .github/workflows/ci.yml",
+    )
+    expect(ctx.output.exitCode).toBe(1)
+    expect(vi.mocked(setKodyLabel)).not.toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.objectContaining({ label: "kody:reviewing" }),
+      expect.any(String),
+    )
+    expect(vi.mocked(setKodyLabel)).toHaveBeenCalledWith(42, expect.objectContaining({ label: "kody:failed" }), "/tmp")
+  })
+
+  it("keeps an omissions-only delivery as a blocked failure", async () => {
+    const ctx = makeCtx({
+      commitResult: { committed: false, pushed: false },
+      hasCommitsAhead: false,
+      deliveryOmissions: [".github/workflows/ci.yml"],
+    })
+
+    await postIssueComment(ctx, profile, null)
+
+    expect(lastPrBody()).toBe("⚠️ kody FAILED: delivery blocked protected files: .github/workflows/ci.yml")
+    expect(lastPrBody()).not.toContain("PARTIAL")
+    expect(ctx.output.exitCode).toBe(3)
+  })
+
+  it("uses the pushed branch as the partial-delivery destination when no PR exists", async () => {
+    const ctx = makeCtx({
+      commitResult: { committed: true, pushed: true, sha: "abcdef123456" },
+      deliveryOmissions: [".github/workflows/ci.yml"],
+    })
+    ctx.data.prResult = { kind: "skipped", reason: "PR not created" }
+    ctx.data.branch = "fix/partial-delivery"
+    ctx.config = { github: { owner: "x", repo: "y" } } as Context["config"]
+
+    await postIssueComment(ctx, profile, null)
+
+    expect(lastPrBody()).toBe(
+      "⚠️ kody PARTIAL: pushed allowed changes to branch https://github.com/x/y/tree/fix/partial-delivery (abcdef1); omitted protected files: .github/workflows/ci.yml",
     )
     expect(ctx.output.exitCode).toBe(1)
   })

@@ -64,6 +64,7 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
       const replay = JSON.parse(fs.readFileSync(sentinel, "utf-8")) as {
         commitResult?: unknown
         changedFiles?: string[]
+        deliveryOmissions?: string[]
         hasCommitsAhead?: boolean
         salvagedFromMissingMarker?: boolean
         commitCrash?: string
@@ -72,6 +73,7 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
       }
       ctx.data.commitResult = replay.commitResult ?? { committed: false, pushed: false }
       if (Array.isArray(replay.changedFiles)) ctx.data.changedFiles = replay.changedFiles
+      if (Array.isArray(replay.deliveryOmissions)) ctx.data.deliveryOmissions = replay.deliveryOmissions
       if (typeof replay.hasCommitsAhead === "boolean") ctx.data.hasCommitsAhead = replay.hasCommitsAhead
       if (replay.salvagedFromMissingMarker) ctx.data.salvagedFromMissingMarker = true
       // A committed-but-unpushed first attempt must replay as the same
@@ -191,6 +193,7 @@ export const commitAndPush: PostflightScript = async (ctx, profile) => {
           {
             commitResult: ctx.data.commitResult,
             changedFiles: ctx.data.changedFiles,
+            deliveryOmissions: ctx.data.deliveryOmissions,
             hasCommitsAhead: ctx.data.hasCommitsAhead,
             salvagedFromMissingMarker: ctx.data.salvagedFromMissingMarker === true,
             commitCrash: typeof ctx.data.commitCrash === "string" ? ctx.data.commitCrash : undefined,

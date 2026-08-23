@@ -278,6 +278,30 @@ describe("commitAndPush: sentinel replay", () => {
     expect(ctx2.data.commitIdempotencyReplay).toBe(true)
   })
 
+  it("replays mixed-delivery omissions without committing again", async () => {
+    __resetRunIdCache()
+    process.env.KODY_RUN_ID = "test-run-partial-delivery"
+    process.env.KODY_COMMIT_IDEMPOTENCY = "1"
+    vi.mocked(doCommitAndPush).mockClear()
+    vi.mocked(doCommitAndPush).mockReturnValueOnce({
+      committed: true,
+      pushed: true,
+      sha: "deadbee",
+      message: "fix: allowed files",
+      omittedFiles: [".github/workflows/ci.yml"],
+    })
+    const ctx1 = makeCtxWithCwd(tmp, { agentDone: true, commitMessage: "fix: allowed files" })
+    await commitAndPush(ctx1 as never, { name: "fix" } as Profile, null)
+
+    vi.mocked(doCommitAndPush).mockClear()
+    const ctx2 = makeCtxWithCwd(tmp, { agentDone: true, commitMessage: "fix: allowed files" })
+    await commitAndPush(ctx2 as never, { name: "fix" } as Profile, null)
+
+    expect(doCommitAndPush).not.toHaveBeenCalled()
+    expect(ctx2.data.deliveryOmissions).toEqual([".github/workflows/ci.yml"])
+    expect(ctx2.data.commitIdempotencyReplay).toBe(true)
+  })
+
   it("replays a committed-but-unpushed result as the SAME failure (exit 4), not success", async () => {
     // Regression: the sentinel was written on committed=true even when the
     // push failed, and the replay restored only commitResult — so a retry
