@@ -1088,7 +1088,7 @@ function workflowStepToJob(
 ): Job {
   const action = step.action ?? step.capability
   const targetNumber = workflowStepTargetNumber(step, parent, chainData)
-  const mappedInputs = resolveWorkflowStepInputs(step, chainData)
+  const mappedInputs = resolveWorkflowStepInputs(step, chainData, cwd)
   const rawArgs = mappedInputs ? { ...mappedInputs } : { ...parent.cliArgs }
   if (step.target === "pr") {
     if (typeof targetNumber !== "number") {
@@ -1135,6 +1135,7 @@ function workflowStepToJob(
 function resolveWorkflowStepInputs(
   step: CapabilityWorkflowStepConfig,
   chainData: Record<string, unknown>,
+  cwd: string,
 ): Record<string, unknown> | undefined {
   if (!step.inputs) return undefined
   const source = {
@@ -1145,15 +1146,23 @@ function resolveWorkflowStepInputs(
     },
     steps: chainData.workflowStepResults ?? {},
   }
+  const folder = resolveCapabilityFolder(step.capability, hydratedCapabilitiesRoot(cwd))
+  const requiredInputs = folder ? capabilityRequiredInputNames(folder) : null
   const input: Record<string, unknown> = {}
   for (const [name, binding] of Object.entries(step.inputs)) {
     const value = resolveDottedPath(source, binding.from)
     if (value === undefined) {
+      if (requiredInputs && !requiredInputs.has(name)) continue
       throw new InvalidJobError(`workflow step ${step.id ?? step.capability} needs missing input ${binding.from}`)
     }
     input[name] = value
   }
   return input
+}
+
+function capabilityRequiredInputNames(folder: CapabilityFolder): Set<string> {
+  const required = folder.config.inputSchema?.required
+  return new Set(Array.isArray(required) ? required.filter((name): name is string => typeof name === "string") : [])
 }
 
 function capabilityInputNames(folder: CapabilityFolder): Set<string> {

@@ -2298,7 +2298,7 @@ describe("runJob (Phase 1 seam)", () => {
           ],
         },
       })
-      writeContractCapability(cwd, "fix", ["pr", "feedback"])
+      writeContractCapability(cwd, "fix", ["pr", "feedback"], [], true, false, ["feedback"])
       process.chdir(cwd)
 
       const result = await runJob(
@@ -2368,6 +2368,40 @@ describe("runJob (Phase 1 seam)", () => {
           repair: { input: { pr: 19, failureLog: "expected Approve, received Approved" }, output: { status: "fixed" } },
         },
       })
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("omits a mapped optional capability input when the source is absent", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-optional-input-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "mapping-pilot", {
+        name: "mapping-pilot",
+        action: "mapping-pilot",
+        workflow: {
+          startAt: "repair",
+          steps: [
+            {
+              id: "repair",
+              capability: "fix",
+              inputs: { note: { from: "workflow.input.note" } },
+            },
+          ],
+        },
+      })
+      writeContractCapability(cwd, "fix", ["note"])
+      process.chdir(cwd)
+
+      const result = await runJob(
+        { action: "mapping-pilot", capability: "mapping-pilot", cliArgs: {}, flavor: "instant" },
+        { cwd },
+      )
+
+      expect(result.exitCode).toBe(0)
+      expect(runImplementationChain).toHaveBeenCalled()
     } finally {
       process.chdir(originalCwd)
       fs.rmSync(cwd, { recursive: true, force: true })
@@ -2561,6 +2595,7 @@ function writeContractCapability(
   outputs: string[] = [],
   additionalOutputProperties = true,
   requireOutputs = false,
+  requiredInputs: string[] = [],
 ): void {
   const dir = path.join(cwd, ".kody-engine", "definitions", "capabilities", slug)
   fs.mkdirSync(dir, { recursive: true })
@@ -2572,6 +2607,7 @@ function writeContractCapability(
       input: {
         type: "object",
         properties: Object.fromEntries(inputs.map((name) => [name, {}])),
+        ...(requiredInputs.length > 0 ? { required: requiredInputs } : {}),
         additionalProperties: false,
       },
       output: {
