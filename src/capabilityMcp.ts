@@ -37,6 +37,7 @@ import { DASHBOARD_CMS_MCP_TOOL_NAMES, dashboardCmsToolDefinitions } from "./das
 import { gh } from "./issue.js"
 import { getProfileInputs, resolveCapabilityAction } from "./registry.js"
 import { parseTrustMode, type TrustMode } from "./trustPolicy.js"
+import { createStateBackendFromEnv } from "./state-backend.js"
 
 export interface CapabilityMcpHandle {
   /** Config object to drop into `mcpServers["kody-capability"]`. */
@@ -751,6 +752,125 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     },
   }
 
+  const readLatestReportTool: CapabilityToolDefinition = {
+    name: "read_latest_report",
+    description:
+      "Read the newest persisted Kody Report for this repository. Optionally restrict to one stable report slug or reports newer than an ISO timestamp. Returns the Report body and metadata; use it as evidence before deciding whether work is needed.",
+    inputSchema: {
+      slug: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,79}$/).optional(),
+      since: z.string().datetime().optional(),
+    },
+    handler: async (args) => {
+      const slug = typeof args.slug === "string" ? args.slug : undefined
+      const since = typeof args.since === "string" ? args.since : undefined
+      const reports = await createStateBackendFromEnv().listReports(opts.repoSlug)
+      const report = reports
+        .filter((candidate) => (!slug || candidate.slug === slug) && (!since || candidate.updatedAt > since))
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              report
+                ? {
+                    found: true,
+                    slug: report.slug,
+                    runId: report.runId,
+                    title: report.title,
+                    body: report.body,
+                    meta: report.meta,
+                    updatedAt: report.updatedAt,
+                  }
+                : { found: false },
+              null,
+              2,
+            ),
+          },
+        ],
+      }
+    },
+  }
+
+  const reconcileTodoTool: CapabilityToolDefinition = {
+    name: "reconcile_todo",
+    description:
+      "Idempotently create, update, close, or reopen one canonical repository Todo for a recurring problem. The stable slug and item id prevent duplicates. Repeating the same state is a no-op; unrelated items in an existing Todo are preserved.",
+    inputSchema: {
+      slug: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/),
+      itemId: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,79}$/).optional(),
+      title: z.string().min(1).max(160),
+      description: z.string().max(20_000).optional(),
+      status: z.enum(["open", "resolved"]),
+      reportSlug: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,79}$/),
+      reportRunId: z.string().max(160).optional(),
+      evidence: z.string().max(20_000).optional(),
+    },
+    handler: async (args) => {
+      const slug = String(args.slug)
+      const itemId = typeof args.itemId === "string" ? args.itemId : "finding"
+      const title = String(args.title).trim()
+      const description = typeof args.description === "string" ? args.description.trim() : ""
+      const status = args.status === "resolved" ? "resolved" : "open"
+      const reportSlug = String(args.reportSlug)
+      const reportRunId = typeof args.reportRunId === "string" ? args.reportRunId : undefined
+      const evidence = typeof args.evidence === "string" ? args.evidence.trim() : ""
+      const backend = createStateBackendFromEnv()
+      const existing = await backend.getRepoDoc(opts.repoSlug, `todo:${slug}`)
+      const now = new Date().toISOString()
+      const current = existing?.doc && typeof existing.doc === "object" && !Array.isArray(existing.doc)
+        ? (existing.doc as Record<string, unknown>)
+        : {}
+      const currentItems = Array.isArray(current.items)
+        ? current.items.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)))
+        : []
+      const previous = currentItems.find((item) => item.id === itemId)
+      const completed = status === "resolved"
+      const previousMeta = previous?.meta && typeof previous.meta === "object" && !Array.isArray(previous.meta)
+        ? (previous.meta as Record<string, unknown>)
+        : {}
+      const unchanged = Boolean(
+        previous &&
+          previous.completed === completed &&
+          previous.title === title &&
+          String(previous.body ?? "") === evidence &&
+          previousMeta.reportSlug === reportSlug,
+      )
+      if (unchanged) {
+        return { content: [{ type: "text", text: JSON.stringify({ changed: false, slug, status }) }] }
+      }
+      const nextItem = {
+        id: itemId,
+        title,
+        body: evidence,
+        assignee: null,
+        completed,
+        createdAt: typeof previous?.createdAt === "string" ? previous.createdAt : now,
+        completedAt: completed ? now : null,
+        meta: {
+          ...previousMeta,
+          source: "live-agent",
+          reportSlug,
+          ...(reportRunId ? { reportRunId } : {}),
+          status,
+        },
+      }
+      const items = previous
+        ? currentItems.map((item) => (item.id === itemId ? nextItem : item))
+        : [...currentItems, nextItem]
+      const doc = {
+        ...current,
+        version: 1,
+        title,
+        description,
+        createdAt: typeof current.createdAt === "string" ? current.createdAt : now,
+        items,
+      }
+      await backend.saveRepoDoc(opts.repoSlug, `todo:${slug}`, doc, existing?.updatedAt)
+      return { content: [{ type: "text", text: JSON.stringify({ changed: true, slug, status }) }] }
+    },
+  }
+
   const cmsTools = dashboardCmsToolDefinitions({
     repoSlug: opts.repoSlug,
     assertWriteAllowed: () => assertCmsWriteAllowed(opts),
@@ -768,6 +888,8 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     ensureIssueTool,
     ensureCommentTool,
     startCapabilityTool,
+    readLatestReportTool,
+    reconcileTodoTool,
     ...cmsTools,
   ]
 }
@@ -808,5 +930,7 @@ export const CAPABILITY_MCP_TOOL_NAMES = [
   "ensure_issue",
   "ensure_comment",
   "start_capability",
+  "read_latest_report",
+  "reconcile_todo",
   ...DASHBOARD_CMS_MCP_TOOL_NAMES,
 ] as const

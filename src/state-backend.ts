@@ -86,6 +86,15 @@ export interface WorkflowDocument {
   updatedAt: string
 }
 
+export interface ReportDocument {
+  slug: string
+  runId?: string
+  title?: string
+  body: string
+  meta: unknown
+  updatedAt: string
+}
+
 export interface StateBackendClient {
   query: (fn: FunctionReference<"query">, args: Record<string, unknown>) => Promise<unknown>
   mutation: (fn: FunctionReference<"mutation">, args: Record<string, unknown>) => Promise<unknown>
@@ -182,6 +191,7 @@ export interface StateBackend {
     meta: unknown,
     updatedAt: string,
   ): Promise<void>
+  listReports(tenantId: string): Promise<ReportDocument[]>
   listIntents(tenantId: string): Promise<Array<{ intentId: string; intent: unknown; updatedAt: string }>>
   getIntent(
     tenantId: string,
@@ -452,6 +462,12 @@ export function createStateBackendFromEnv(
         meta,
         updatedAt,
       })
+    },
+    async listReports(tenantId) {
+      const result = await transport.query(anyApi.reports.list, {
+        tenantId: requireTenant(tenantId),
+      })
+      return Array.isArray(result) ? (result as ReportDocument[]) : []
     },
     async listIntents(tenantId) {
       const result = await transport.query(anyApi.intents.list, { tenantId: requireTenant(tenantId) })

@@ -13,7 +13,12 @@
     "maxThinkingTokens": null,
     "systemPromptAppend": null,
     "enableSubmitTool": true,
-    "tools": ["mcp__kody-capability__start_capability", "mcp__kody-submit__submit_state"],
+    "tools": [
+      "mcp__kody-capability__start_capability",
+      "mcp__kody-capability__read_latest_report",
+      "mcp__kody-capability__reconcile_todo",
+      "mcp__kody-submit__submit_state"
+    ],
     "hooks": [], "skills": [], "commands": [], "subagents": [], "plugins": [], "mcpServers": []
   },
   "cliTools": [],

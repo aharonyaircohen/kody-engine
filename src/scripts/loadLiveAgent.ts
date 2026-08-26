@@ -102,7 +102,7 @@ export const loadLiveAgent: PreflightScript = async (ctx, profile) => {
     },
   }
   ctx.data.jobStateJson = JSON.stringify(state, null, 2)
-  ctx.data.capabilityTools = ["start_capability"]
+  ctx.data.capabilityTools = ["start_capability", "read_latest_report", "reconcile_todo"]
   ctx.data.capabilityToolMode = "lock"
   profile.claudeCode.enableSubmitTool = true
 }
