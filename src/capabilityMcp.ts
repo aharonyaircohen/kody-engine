@@ -816,58 +816,90 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
       const reportRunId = typeof args.reportRunId === "string" ? args.reportRunId : undefined
       const evidence = typeof args.evidence === "string" ? args.evidence.trim() : ""
       const backend = createStateBackendFromEnv()
-      const existing = await backend.getRepoDoc(opts.repoSlug, `todo:${slug}`)
       const now = new Date().toISOString()
-      const current = existing?.doc && typeof existing.doc === "object" && !Array.isArray(existing.doc)
-        ? (existing.doc as Record<string, unknown>)
-        : {}
-      const currentItems = Array.isArray(current.items)
-        ? current.items.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)))
-        : []
-      const previous = currentItems.find((item) => item.id === itemId)
       const completed = status === "resolved"
-      const previousMeta = previous?.meta && typeof previous.meta === "object" && !Array.isArray(previous.meta)
-        ? (previous.meta as Record<string, unknown>)
-        : {}
-      const unchanged = Boolean(
-        previous &&
-          previous.completed === completed &&
-          previous.title === title &&
-          String(previous.body ?? "") === evidence &&
-          previousMeta.reportSlug === reportSlug,
-      )
-      if (unchanged) {
-        return { content: [{ type: "text", text: JSON.stringify({ changed: false, slug, status }) }] }
+      let lastError: unknown = new Error(`Todo ${slug}/${itemId} was not visible after reconciliation`)
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const existing = await backend.getRepoDoc(opts.repoSlug, `todo:${slug}`)
+          const current = existing?.doc && typeof existing.doc === "object" && !Array.isArray(existing.doc)
+            ? (existing.doc as Record<string, unknown>)
+            : {}
+          const currentItems = Array.isArray(current.items)
+            ? current.items.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)))
+            : []
+          const previous = currentItems.find((item) => item.id === itemId)
+          const previousMeta = previous?.meta && typeof previous.meta === "object" && !Array.isArray(previous.meta)
+            ? (previous.meta as Record<string, unknown>)
+            : {}
+          const unchanged = Boolean(
+            previous &&
+              previous.completed === completed &&
+              previous.title === title &&
+              String(previous.body ?? "") === evidence &&
+              previousMeta.reportSlug === reportSlug,
+          )
+          if (unchanged) {
+            return { content: [{ type: "text", text: JSON.stringify({ changed: false, verified: true, slug, status }) }] }
+          }
+          const nextItem = {
+            id: itemId,
+            title,
+            body: evidence,
+            assignee: null,
+            completed,
+            createdAt: typeof previous?.createdAt === "string" ? previous.createdAt : now,
+            completedAt: completed ? now : null,
+            meta: {
+              ...previousMeta,
+              source: "live-agent",
+              reportSlug,
+              ...(reportRunId ? { reportRunId } : {}),
+              status,
+            },
+          }
+          const items = previous
+            ? currentItems.map((item) => (item.id === itemId ? nextItem : item))
+            : [...currentItems, nextItem]
+          const doc = {
+            ...current,
+            version: 1,
+            title,
+            description,
+            createdAt: typeof current.createdAt === "string" ? current.createdAt : now,
+            items,
+          }
+          await backend.saveRepoDoc(opts.repoSlug, `todo:${slug}`, doc, existing?.updatedAt)
+
+          const saved = await backend.getRepoDoc(opts.repoSlug, `todo:${slug}`)
+          const savedItems = saved?.doc && typeof saved.doc === "object" && !Array.isArray(saved.doc)
+            && Array.isArray((saved.doc as Record<string, unknown>).items)
+            ? ((saved.doc as Record<string, unknown>).items as unknown[])
+            : []
+          const savedItem = savedItems.find(
+            (item): item is Record<string, unknown> =>
+              Boolean(item && typeof item === "object" && !Array.isArray(item) && (item as Record<string, unknown>).id === itemId),
+          )
+          const savedMeta = savedItem?.meta && typeof savedItem.meta === "object" && !Array.isArray(savedItem.meta)
+            ? (savedItem.meta as Record<string, unknown>)
+            : {}
+          if (
+            savedItem &&
+            savedItem.completed === completed &&
+            savedItem.title === title &&
+            String(savedItem.body ?? "") === evidence &&
+            savedMeta.reportSlug === reportSlug
+          ) {
+            return { content: [{ type: "text", text: JSON.stringify({ changed: true, verified: true, slug, status }) }] }
+          }
+          lastError = new Error(`Todo ${slug}/${itemId} was not visible after reconciliation attempt ${attempt + 1}`)
+        } catch (error) {
+          lastError = error
+        }
       }
-      const nextItem = {
-        id: itemId,
-        title,
-        body: evidence,
-        assignee: null,
-        completed,
-        createdAt: typeof previous?.createdAt === "string" ? previous.createdAt : now,
-        completedAt: completed ? now : null,
-        meta: {
-          ...previousMeta,
-          source: "live-agent",
-          reportSlug,
-          ...(reportRunId ? { reportRunId } : {}),
-          status,
-        },
-      }
-      const items = previous
-        ? currentItems.map((item) => (item.id === itemId ? nextItem : item))
-        : [...currentItems, nextItem]
-      const doc = {
-        ...current,
-        version: 1,
-        title,
-        description,
-        createdAt: typeof current.createdAt === "string" ? current.createdAt : now,
-        items,
-      }
-      await backend.saveRepoDoc(opts.repoSlug, `todo:${slug}`, doc, existing?.updatedAt)
-      return { content: [{ type: "text", text: JSON.stringify({ changed: true, slug, status }) }] }
+
+      throw lastError
     },
   }
 

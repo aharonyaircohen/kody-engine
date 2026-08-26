@@ -42,7 +42,13 @@ describe("live Agent management tools", () => {
   })
 
   it("creates one stable Todo and reuses it on later cycles", async () => {
-    backend.getRepoDoc.mockResolvedValue(null)
+    let stored: Record<string, unknown> | null = null
+    backend.getRepoDoc.mockImplementation(async () =>
+      stored ? { doc: stored, updatedAt: "revision-1" } : null,
+    )
+    backend.saveRepoDoc.mockImplementation(async (_tenant, _kind, doc) => {
+      stored = doc as Record<string, unknown>
+    })
     const input = {
       slug: "director-repo-ci",
       title: "Restore repository CI",
@@ -64,14 +70,37 @@ describe("live Agent management tools", () => {
       undefined,
     )
 
-    const saved = backend.saveRepoDoc.mock.calls[0]![2]
-    backend.getRepoDoc.mockResolvedValue({ doc: saved, updatedAt: "revision-1" })
     backend.saveRepoDoc.mockClear()
 
     const repeated = await tool("reconcile_todo").handler({ ...input, reportRunId: "run-2" })
 
     expect(JSON.parse(outputText(repeated))).toMatchObject({ changed: false })
     expect(backend.saveRepoDoc).not.toHaveBeenCalled()
+  })
+
+  it("verifies the Todo write and retries when the first write is not visible", async () => {
+    let persisted: Record<string, unknown> | null = null
+    let writes = 0
+    backend.getRepoDoc.mockImplementation(async () =>
+      persisted ? { doc: persisted, updatedAt: "revision-2" } : null,
+    )
+    backend.saveRepoDoc.mockImplementation(async (_tenant, _kind, doc) => {
+      writes += 1
+      if (writes === 2) persisted = doc as Record<string, unknown>
+    })
+
+    const result = await tool("reconcile_todo").handler({
+      slug: "director-repo-ci",
+      itemId: "repo-ci-main",
+      title: "Restore repository CI",
+      status: "open",
+      reportSlug: "director-repo-ci",
+      reportRunId: "run-1",
+      evidence: "CI is failing",
+    })
+
+    expect(JSON.parse(outputText(result))).toMatchObject({ changed: true, verified: true })
+    expect(backend.saveRepoDoc).toHaveBeenCalledTimes(2)
   })
 
   it("closes and later reopens the same Todo item", async () => {
@@ -92,7 +121,11 @@ describe("live Agent management tools", () => {
         },
       ],
     }
-    backend.getRepoDoc.mockResolvedValue({ doc: existing, updatedAt: "revision-1" })
+    let stored: Record<string, unknown> = existing
+    backend.getRepoDoc.mockImplementation(async () => ({ doc: stored, updatedAt: "revision-1" }))
+    backend.saveRepoDoc.mockImplementation(async (_tenant, _kind, doc) => {
+      stored = doc as Record<string, unknown>
+    })
 
     await tool("reconcile_todo").handler({
       slug: "director-repo-ci",
@@ -105,7 +138,6 @@ describe("live Agent management tools", () => {
     const closed = backend.saveRepoDoc.mock.calls[0]![2]
     expect(closed.items).toEqual([expect.objectContaining({ id: "finding", completed: true })])
 
-    backend.getRepoDoc.mockResolvedValue({ doc: closed, updatedAt: "revision-2" })
     backend.saveRepoDoc.mockClear()
     await tool("reconcile_todo").handler({
       slug: "director-repo-ci",
