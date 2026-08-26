@@ -4,11 +4,6 @@ import { query } from "@anthropic-ai/claude-agent-sdk"
 import { ensureStableClaudeBinary } from "./claudeBinary.js"
 import { completionToolCutoffAt, createCompletionToolGuard } from "./completionGuard.js"
 import {
-  createPostSubmitToolGuard,
-  createSubmitStateActivityGuard,
-  createSubmitStateStopHook,
-} from "./submitStateGuard.js"
-import {
   getAnthropicApiKeyOrDummy,
   litellmModelGroup,
   type ProviderModel,
@@ -24,6 +19,11 @@ import {
 } from "./outputContractHooks.js"
 import { agentRunDir } from "./runtimePaths.js"
 import { createSubagentInvocationHook, enforceSubagentModelInheritance } from "./subagents.js"
+import {
+  createPostSubmitToolGuard,
+  createSubmitStateActivityGuard,
+  createSubmitStateStopHook,
+} from "./submitStateGuard.js"
 
 export interface AgentTokenUsage {
   input: number
@@ -198,6 +198,8 @@ export interface AgentOptions {
    * `submit_state`). Default false.
    */
   enableCapabilityTool?: boolean
+  /** Exact capability MCP tools exposed to this run. */
+  capabilityToolNames?: readonly string[]
   /**
    * Operator @-mention prefix the capability MCP uses for `recommend_to_operator`
    * (e.g. "@aguyaharonyair"). Comes from the capability's `mentions:` metadata.
@@ -473,12 +475,8 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     ? createOutputContractPostWriteHook(opts.outputContract)
     : null
   const outputContractStopHook = opts.outputContract ? createOutputContractStopHook(opts.outputContract) : null
-  const submitStateStopHook = opts.enableSubmitTool
-    ? createSubmitStateStopHook(() => getSubmitted?.())
-    : null
-  const postSubmitToolGuard = opts.enableSubmitTool
-    ? createPostSubmitToolGuard(() => getSubmitted?.())
-    : null
+  const submitStateStopHook = opts.enableSubmitTool ? createSubmitStateStopHook(() => getSubmitted?.()) : null
+  const postSubmitToolGuard = opts.enableSubmitTool ? createPostSubmitToolGuard(() => getSubmitted?.()) : null
   const submitStateActivityGuard = opts.enableSubmitTool ? createSubmitStateActivityGuard() : null
 
   let finalSafeToReplay = true
@@ -651,6 +649,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         const capabilityHandle = buildCapabilityMcpServer({
           repoSlug: opts.capabilityRepoSlug,
           operatorMention: opts.capabilityOperatorMention ?? "",
+          ...(opts.capabilityToolNames ? { allowedToolNames: opts.capabilityToolNames } : {}),
           ...(opts.capabilityDefaultBranch ? { defaultBranch: opts.capabilityDefaultBranch } : {}),
           ...(opts.capabilitySlug ? { capabilitySlug: opts.capabilitySlug } : {}),
         })

@@ -9,6 +9,7 @@ import {
   buildCapabilityMcpServer,
   CAPABILITY_MCP_TOOL_NAMES,
   capabilityToolDefinitions,
+  selectCapabilityToolDefinitions,
 } from "../../src/capabilityMcp.js"
 import {
   buildDashboardCmsMcpServer,
@@ -121,6 +122,16 @@ describe("transport parity: capability", () => {
       operatorMention: "@user",
     })
     expect(server.server.name).toBe("kody-capability")
+  })
+
+  it("exposes only the tools assigned to a locked runtime", () => {
+    const definitions = capabilityToolDefinitions({ repoSlug: "owner/repo", operatorMention: "@user" })
+    const selected = selectCapabilityToolDefinitions(definitions, ["start_capability", "read_latest_report"])
+
+    expect(selected.map((definition) => definition.name)).toEqual(["start_capability", "read_latest_report"])
+    expect(() => selectCapabilityToolDefinitions(definitions, ["missing_tool"])).toThrow(
+      "Unknown capability MCP tools: missing_tool",
+    )
   })
 
   it("calls the Dashboard CMS API with repo auth headers", async () => {

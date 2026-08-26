@@ -666,6 +666,9 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
         // to know the palette — it just forwards the flag so agent.ts can spin
         // up the in-process `kody-capability` MCP server with the right context.
         enableCapabilityTool: Array.isArray(ctx.data.capabilityTools) && ctx.data.capabilityTools.length > 0,
+        capabilityToolNames: Array.isArray(ctx.data.capabilityTools)
+          ? ctx.data.capabilityTools.filter((name): name is string => typeof name === "string")
+          : undefined,
         enableDashboardCmsTool: Boolean(
           ctx.data.capabilityRequirements &&
             typeof ctx.data.capabilityRequirements === "object" &&

@@ -64,6 +64,8 @@ interface CapabilityMcpOptions {
    * dashboard then falls back to the agent slug).
    */
   capabilitySlug?: string
+  /** Exact tools to expose from the in-process MCP server. Omitted for HTTP transport. */
+  allowedToolNames?: readonly string[]
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -80,6 +82,18 @@ export interface CapabilityToolDefinition {
   description: string
   inputSchema: ZodRawShape
   handler: ToolHandler
+}
+
+export function selectCapabilityToolDefinitions(
+  definitions: CapabilityToolDefinition[],
+  allowedToolNames?: readonly string[],
+): CapabilityToolDefinition[] {
+  if (!allowedToolNames) return definitions
+  const available = new Set(definitions.map((definition) => definition.name))
+  const unknown = allowedToolNames.filter((name) => !available.has(name))
+  if (unknown.length > 0) throw new Error(`Unknown capability MCP tools: ${unknown.join(", ")}`)
+  const allowed = new Set(allowedToolNames)
+  return definitions.filter((definition) => allowed.has(definition.name))
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -954,7 +968,7 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
  * primitives (gh, http) so the LLM can't compose its way out of the lockdown.
  */
 export function buildCapabilityMcpServer(opts: CapabilityMcpOptions): CapabilityMcpHandle {
-  const definitions = capabilityToolDefinitions(opts)
+  const definitions = selectCapabilityToolDefinitions(capabilityToolDefinitions(opts), opts.allowedToolNames)
 
   const tools = definitions.map((def) =>
     tool(def.name, def.description, def.inputSchema as Parameters<typeof tool>[2], async (args) =>
