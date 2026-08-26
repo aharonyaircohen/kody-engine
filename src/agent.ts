@@ -3,7 +3,11 @@ import * as path from "node:path"
 import { query } from "@anthropic-ai/claude-agent-sdk"
 import { ensureStableClaudeBinary } from "./claudeBinary.js"
 import { completionToolCutoffAt, createCompletionToolGuard } from "./completionGuard.js"
-import { createPostSubmitToolGuard, createSubmitStateStopHook } from "./submitStateGuard.js"
+import {
+  createPostSubmitToolGuard,
+  createSubmitStateActivityGuard,
+  createSubmitStateStopHook,
+} from "./submitStateGuard.js"
 import {
   getAnthropicApiKeyOrDummy,
   litellmModelGroup,
@@ -475,6 +479,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const postSubmitToolGuard = opts.enableSubmitTool
     ? createPostSubmitToolGuard(() => getSubmitted?.())
     : null
+  const submitStateActivityGuard = opts.enableSubmitTool ? createSubmitStateActivityGuard() : null
 
   let finalSafeToReplay = true
   for (let attempt = 0; ; attempt++) {
@@ -551,6 +556,14 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
                   },
                 ]
               : []),
+            ...(submitStateActivityGuard
+              ? [
+                  {
+                    matcher: "mcp__kody-submit__submit_state",
+                    hooks: [submitStateActivityGuard.requireActivity],
+                  },
+                ]
+              : []),
             {
               matcher: "Agent",
               hooks: [enforceSubagentModelInheritance],
@@ -561,6 +574,13 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
             },
           ],
           PostToolUse: [
+            ...(submitStateActivityGuard
+              ? [
+                  {
+                    hooks: [submitStateActivityGuard.recordToolUse],
+                  },
+                ]
+              : []),
             {
               matcher: "Agent",
               hooks: [subagentInvocationHook],

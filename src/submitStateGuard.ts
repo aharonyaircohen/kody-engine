@@ -6,6 +6,36 @@ const FINAL_STATE_CHANCE_REASON =
 const STATE_ALREADY_SUBMITTED_REASON =
   "Continuation state is already submitted for this cycle. Do not call more tools or perform more work; return your final response now."
 
+const ACTIVITY_REQUIRED_REASON =
+  "Do not submit continuation state yet. First use a tool to observe current evidence or perform the next responsibility action for this cycle."
+
+const SUBMIT_STATE_TOOL = "mcp__kody-submit__submit_state"
+
+interface ToolHookInput {
+  tool_name?: unknown
+}
+
+/** Require each stateful cycle to observe or act before it can declare its next state. */
+export function createSubmitStateActivityGuard(): {
+  recordToolUse: (input?: ToolHookInput) => Promise<Record<string, unknown>>
+  requireActivity: (input?: ToolHookInput) => Promise<Record<string, unknown>>
+} {
+  let hasActivity = false
+  return {
+    recordToolUse: async (input) => {
+      if (input?.tool_name !== SUBMIT_STATE_TOOL) hasActivity = true
+      return {}
+    },
+    requireActivity: async () =>
+      hasActivity
+        ? {}
+        : {
+            decision: "block",
+            reason: ACTIVITY_REQUIRED_REASON,
+          },
+  }
+}
+
 /** Make state submission the terminal action of one Live Agent cycle. */
 export function createPostSubmitToolGuard(
   getSubmitted: () => SubmittedState | undefined,

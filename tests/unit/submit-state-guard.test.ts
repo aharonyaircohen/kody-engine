@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { createPostSubmitToolGuard, createSubmitStateStopHook } from "../../src/submitStateGuard.js"
+import {
+  createPostSubmitToolGuard,
+  createSubmitStateActivityGuard,
+  createSubmitStateStopHook,
+} from "../../src/submitStateGuard.js"
 
 describe("submit state completion guard", () => {
   it("allows completion after state was submitted", async () => {
@@ -49,5 +53,33 @@ describe("post-submit tool guard", () => {
     const hook = createPostSubmitToolGuard(() => ({ cursor: "waiting", data: {}, done: false }))
 
     await expect(hook()).resolves.toMatchObject({ decision: "block" })
+  })
+})
+
+describe("submit state activity guard", () => {
+  it("blocks state submission before the cycle observes or acts", async () => {
+    const guard = createSubmitStateActivityGuard()
+
+    await expect(guard.requireActivity({ tool_name: "mcp__kody-submit__submit_state" })).resolves.toMatchObject({
+      decision: "block",
+    })
+  })
+
+  it("allows state submission after another tool completes", async () => {
+    const guard = createSubmitStateActivityGuard()
+
+    await guard.recordToolUse({ tool_name: "mcp__kody-capability__read_latest_report" })
+
+    await expect(guard.requireActivity({ tool_name: "mcp__kody-submit__submit_state" })).resolves.toEqual({})
+  })
+
+  it("does not count state submission itself as cycle activity", async () => {
+    const guard = createSubmitStateActivityGuard()
+
+    await guard.recordToolUse({ tool_name: "mcp__kody-submit__submit_state" })
+
+    await expect(guard.requireActivity({ tool_name: "mcp__kody-submit__submit_state" })).resolves.toMatchObject({
+      decision: "block",
+    })
   })
 })

@@ -105,10 +105,18 @@ describe("runAgent: submit state completion guard", () => {
     await runAgent({ ...baseOpts(), enableSubmitTool: true })
 
     const args = querySpy.mock.calls[0]![0] as {
-      options: { hooks: { PreToolUse: Array<{ matcher?: string }>; Stop?: Array<unknown> } }
+      options: {
+        hooks: {
+          PreToolUse: Array<{ matcher?: string }>
+          PostToolUse: Array<{ matcher?: string }>
+          Stop?: Array<unknown>
+        }
+      }
     }
     expect(args.options.hooks.Stop).toHaveLength(1)
     expect(args.options.hooks.PreToolUse.some((entry) => entry.matcher === undefined)).toBe(true)
+    expect(args.options.hooks.PreToolUse.some((entry) => entry.matcher === "mcp__kody-submit__submit_state")).toBe(true)
+    expect(args.options.hooks.PostToolUse.some((entry) => entry.matcher === undefined)).toBe(true)
   })
 })
 
