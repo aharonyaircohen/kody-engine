@@ -43,9 +43,7 @@ describe("live Agent management tools", () => {
 
   it("creates one stable Todo and reuses it on later cycles", async () => {
     let stored: Record<string, unknown> | null = null
-    backend.getRepoDoc.mockImplementation(async () =>
-      stored ? { doc: stored, updatedAt: "revision-1" } : null,
-    )
+    backend.getRepoDoc.mockImplementation(async () => (stored ? { doc: stored, updatedAt: "revision-1" } : null))
     backend.saveRepoDoc.mockImplementation(async (_tenant, _kind, doc) => {
       stored = doc as Record<string, unknown>
     })
@@ -81,9 +79,7 @@ describe("live Agent management tools", () => {
   it("verifies the Todo write and retries when the first write is not visible", async () => {
     let persisted: Record<string, unknown> | null = null
     let writes = 0
-    backend.getRepoDoc.mockImplementation(async () =>
-      persisted ? { doc: persisted, updatedAt: "revision-2" } : null,
-    )
+    backend.getRepoDoc.mockImplementation(async () => (persisted ? { doc: persisted, updatedAt: "revision-2" } : null))
     backend.saveRepoDoc.mockImplementation(async (_tenant, _kind, doc) => {
       writes += 1
       if (writes === 2) persisted = doc as Record<string, unknown>

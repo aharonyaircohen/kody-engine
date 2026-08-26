@@ -36,8 +36,8 @@ import { z } from "zod"
 import { DASHBOARD_CMS_MCP_TOOL_NAMES, dashboardCmsToolDefinitions } from "./dashboardCmsMcp.js"
 import { gh } from "./issue.js"
 import { getProfileInputs, resolveCapabilityAction } from "./registry.js"
-import { parseTrustMode, type TrustMode } from "./trustPolicy.js"
 import { createStateBackendFromEnv } from "./state-backend.js"
+import { parseTrustMode, type TrustMode } from "./trustPolicy.js"
 
 export interface CapabilityMcpHandle {
   /** Config object to drop into `mcpServers["kody-capability"]`. */
@@ -757,7 +757,10 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     description:
       "Read the newest persisted Kody Report for this repository. Optionally restrict to one stable report slug or reports newer than an ISO timestamp. Returns the Report body and metadata; use it as evidence before deciding whether work is needed.",
     inputSchema: {
-      slug: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,79}$/).optional(),
+      slug: z
+        .string()
+        .regex(/^[a-z0-9][a-z0-9_-]{0,79}$/)
+        .optional(),
       since: z.string().datetime().optional(),
     },
     handler: async (args) => {
@@ -798,7 +801,10 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
       "Idempotently create, update, close, or reopen one canonical repository Todo for a recurring problem. The stable slug and item id prevent duplicates. Repeating the same state is a no-op; unrelated items in an existing Todo are preserved.",
     inputSchema: {
       slug: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/),
-      itemId: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,79}$/).optional(),
+      itemId: z
+        .string()
+        .regex(/^[a-z0-9][a-z0-9_-]{0,79}$/)
+        .optional(),
       title: z.string().min(1).max(160),
       description: z.string().max(20_000).optional(),
       status: z.enum(["open", "resolved"]),
@@ -823,16 +829,20 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
       for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
           const existing = await backend.getRepoDoc(opts.repoSlug, `todo:${slug}`)
-          const current = existing?.doc && typeof existing.doc === "object" && !Array.isArray(existing.doc)
-            ? (existing.doc as Record<string, unknown>)
-            : {}
+          const current =
+            existing?.doc && typeof existing.doc === "object" && !Array.isArray(existing.doc)
+              ? (existing.doc as Record<string, unknown>)
+              : {}
           const currentItems = Array.isArray(current.items)
-            ? current.items.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)))
+            ? current.items.filter((item): item is Record<string, unknown> =>
+                Boolean(item && typeof item === "object" && !Array.isArray(item)),
+              )
             : []
           const previous = currentItems.find((item) => item.id === itemId)
-          const previousMeta = previous?.meta && typeof previous.meta === "object" && !Array.isArray(previous.meta)
-            ? (previous.meta as Record<string, unknown>)
-            : {}
+          const previousMeta =
+            previous?.meta && typeof previous.meta === "object" && !Array.isArray(previous.meta)
+              ? (previous.meta as Record<string, unknown>)
+              : {}
           const unchanged = Boolean(
             previous &&
               previous.completed === completed &&
@@ -841,7 +851,9 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
               previousMeta.reportSlug === reportSlug,
           )
           if (unchanged) {
-            return { content: [{ type: "text", text: JSON.stringify({ changed: false, verified: true, slug, status }) }] }
+            return {
+              content: [{ type: "text", text: JSON.stringify({ changed: false, verified: true, slug, status }) }],
+            }
           }
           const nextItem = {
             id: itemId,
@@ -873,17 +885,25 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
           await backend.saveRepoDoc(opts.repoSlug, `todo:${slug}`, doc, existing?.updatedAt)
 
           const saved = await backend.getRepoDoc(opts.repoSlug, `todo:${slug}`)
-          const savedItems = saved?.doc && typeof saved.doc === "object" && !Array.isArray(saved.doc)
-            && Array.isArray((saved.doc as Record<string, unknown>).items)
-            ? ((saved.doc as Record<string, unknown>).items as unknown[])
-            : []
-          const savedItem = savedItems.find(
-            (item): item is Record<string, unknown> =>
-              Boolean(item && typeof item === "object" && !Array.isArray(item) && (item as Record<string, unknown>).id === itemId),
+          const savedItems =
+            saved?.doc &&
+            typeof saved.doc === "object" &&
+            !Array.isArray(saved.doc) &&
+            Array.isArray((saved.doc as Record<string, unknown>).items)
+              ? ((saved.doc as Record<string, unknown>).items as unknown[])
+              : []
+          const savedItem = savedItems.find((item): item is Record<string, unknown> =>
+            Boolean(
+              item &&
+                typeof item === "object" &&
+                !Array.isArray(item) &&
+                (item as Record<string, unknown>).id === itemId,
+            ),
           )
-          const savedMeta = savedItem?.meta && typeof savedItem.meta === "object" && !Array.isArray(savedItem.meta)
-            ? (savedItem.meta as Record<string, unknown>)
-            : {}
+          const savedMeta =
+            savedItem?.meta && typeof savedItem.meta === "object" && !Array.isArray(savedItem.meta)
+              ? (savedItem.meta as Record<string, unknown>)
+              : {}
           if (
             savedItem &&
             savedItem.completed === completed &&
@@ -891,7 +911,9 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
             String(savedItem.body ?? "") === evidence &&
             savedMeta.reportSlug === reportSlug
           ) {
-            return { content: [{ type: "text", text: JSON.stringify({ changed: true, verified: true, slug, status }) }] }
+            return {
+              content: [{ type: "text", text: JSON.stringify({ changed: true, verified: true, slug, status }) }],
+            }
           }
           lastError = new Error(`Todo ${slug}/${itemId} was not visible after reconciliation attempt ${attempt + 1}`)
         } catch (error) {
