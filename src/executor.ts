@@ -400,7 +400,14 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
     (profileHasThinkingTokens ? undefined : config.agent.reasoningEffort)
   let modelCandidates: ReturnType<typeof parseProviderModel>[]
   try {
-    modelCandidates = modelSpec === "automatic" ? (config.agent.automaticModels ?? []) : [parseProviderModel(modelSpec)]
+    modelCandidates =
+      modelSpec === "automatic"
+        ? (config.agent.automaticModels ?? [])
+        : [
+            modelSpec === config.agent.model && config.agent.modelConfig
+              ? config.agent.modelConfig
+              : parseProviderModel(modelSpec),
+          ]
     if (modelCandidates.length === 0) throw new Error("Automatic has no configured models")
   } catch (err) {
     return finishAndEnd({

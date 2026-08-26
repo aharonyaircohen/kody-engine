@@ -174,4 +174,45 @@ describe("executor: Automatic model fallback", () => {
       }),
     )
   })
+
+  it("uses fixed custom-model runtime details", async () => {
+    writeJson(path.join(dir, "kody.config.json"), {
+      github: { owner: "o", repo: "r" },
+      git: { defaultBranch: "main" },
+      quality: {},
+      agent: {
+        model: "openai/ox-alpha",
+        modelConfig: {
+          spec: "openai/ox-alpha",
+          provider: "custom",
+          protocol: "openai",
+          baseURL: "https://oxalpha.run/api/v1",
+          modelName: "ox-alpha",
+          apiKeyEnvVar: "OXALPHA_API_KEY",
+        },
+      },
+    })
+    runAgentSpy.mockResolvedValue({
+      outcome: "completed",
+      outcomeKind: "ok",
+      safeToReplay: false,
+      finalText: "done",
+    })
+
+    await runImplementation("probe", { cliArgs: {}, cwd: dir })
+
+    expect(startLitellmIfNeededSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "custom",
+        litellmProvider: "openai",
+        model: "ox-alpha",
+        spec: "openai/ox-alpha",
+        baseURL: "https://oxalpha.run/api/v1",
+        apiKeyEnvVar: "OXALPHA_API_KEY",
+      }),
+      dir,
+      undefined,
+      expect.any(Object),
+    )
+  })
 })

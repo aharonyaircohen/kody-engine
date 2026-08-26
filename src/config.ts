@@ -33,6 +33,8 @@ export interface KodyConfig {
   }
   agent: {
     model: string
+    /** Runtime endpoint and credential mapping for the selected fixed model. */
+    modelConfig?: ProviderModel
     /** Ordered candidates used only when model is the explicit `automatic` selection. */
     automaticModels?: ProviderModel[]
     /**
@@ -400,6 +402,9 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     throw new Error(`kody.config.json: github.owner and github.repo are required`)
   }
   const automaticModels = parseAutomaticModels(agent.automaticModels)
+  const modelConfig = agent.modelConfig
+    ? parseModelRuntimeConfig(String(agent.model), JSON.stringify(agent.modelConfig))
+    : undefined
   if (agent.model === "automatic" && (!automaticModels || automaticModels.length < 2)) {
     throw new Error("kody.config.json: Automatic requires at least two agent.automaticModels")
   }
@@ -421,6 +426,7 @@ export function loadConfig(projectDir: string = process.cwd()): KodyConfig {
     },
     agent: {
       model: String(agent.model),
+      ...(modelConfig ? { modelConfig } : {}),
       ...(automaticModels ? { automaticModels } : {}),
       ...parsePerImplementation(agent.perImplementation),
       ...parsePerImplementationReasoningEffort(agent.perImplementationReasoningEffort),

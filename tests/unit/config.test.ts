@@ -97,6 +97,34 @@ describe("config: needsLitellmProxy / providerApiKeyEnvVar", () => {
 })
 
 describe("config: loadConfig", () => {
+  it("loads runtime details for a fixed custom model", () => {
+    const dir = tmpDir()
+    writeConfig(dir, {
+      github: { owner: "o", repo: "r" },
+      agent: {
+        model: "openai/ox-alpha",
+        modelConfig: {
+          spec: "openai/ox-alpha",
+          provider: "custom",
+          protocol: "openai",
+          baseURL: "https://oxalpha.run/api/v1",
+          modelName: "ox-alpha",
+          apiKeyEnvVar: "OXALPHA_API_KEY",
+        },
+      },
+    })
+
+    expect(loadConfig(dir).agent.modelConfig).toEqual({
+      spec: "openai/ox-alpha",
+      provider: "custom",
+      protocol: "openai",
+      baseURL: "https://oxalpha.run/api/v1",
+      model: "ox-alpha",
+      apiKeyEnvVar: "OXALPHA_API_KEY",
+      litellmProvider: "openai",
+    })
+  })
+
   it("loads an ordered Automatic model queue", () => {
     const dir = tmpDir()
     writeConfig(dir, {
