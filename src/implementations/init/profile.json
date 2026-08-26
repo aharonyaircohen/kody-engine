@@ -9,6 +9,13 @@
       "type": "bool",
       "required": false,
       "describe": "Overwrite existing generated files instead of skipping them."
+    },
+    {
+      "name": "workflowOnly",
+      "flag": "--workflow-only",
+      "type": "bool",
+      "required": false,
+      "describe": "Refresh only the generated GitHub Actions launcher and preserve kody.config.json."
     }
   ],
   "claudeCode": {

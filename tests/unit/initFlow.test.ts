@@ -19,6 +19,20 @@ function mkRepo(opts: { lockFile?: "pnpm-lock.yaml" | "yarn.lock" | "bun.lockb";
 
 describe("initFlow: performInit", () => {
   let dir: string
+
+  it("refreshes only the generated launcher while preserving repository config", () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-init-workflow-only-"))
+    fs.mkdirSync(path.join(dir, ".github", "workflows"), { recursive: true })
+    fs.writeFileSync(path.join(dir, "kody.config.json"), "{\"custom\":true}\n")
+    fs.writeFileSync(path.join(dir, ".github", "workflows", "kody.yml"), "old launcher\n")
+
+    const result = performInit(dir, true, true)
+
+    expect(fs.readFileSync(path.join(dir, "kody.config.json"), "utf8")).toBe("{\"custom\":true}\n")
+    expect(fs.readFileSync(path.join(dir, ".github", "workflows", "kody.yml"), "utf8")).toContain("runRequest")
+    expect(result.wrote).toEqual([".github/workflows/kody.yml"])
+    expect(result.skipped).toContain("kody.config.json")
+  })
   afterEach(() => {
     fs.rmSync(dir, { recursive: true, force: true })
   })

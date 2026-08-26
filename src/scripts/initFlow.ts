@@ -96,7 +96,7 @@ export interface InitResult {
   labels?: EnsureLabelsResult
 }
 
-export function performInit(cwd: string, force: boolean): InitResult {
+export function performInit(cwd: string, force: boolean, workflowOnly = false): InitResult {
   const wrote: string[] = []
   const skipped: string[] = []
 
@@ -105,7 +105,9 @@ export function performInit(cwd: string, force: boolean): InitResult {
 
   // 1. kody.config.json
   const configPath = path.join(cwd, "kody.config.json")
-  if (fs.existsSync(configPath) && !force) {
+  if (workflowOnly) {
+    skipped.push("kody.config.json")
+  } else if (fs.existsSync(configPath) && !force) {
     skipped.push("kody.config.json")
   } else {
     const cfg = makeConfig(cwd, ownerRepo, defaultBranch)
@@ -140,9 +142,10 @@ export function performInit(cwd: string, force: boolean): InitResult {
 
 export const initFlow: PreflightScript = async (ctx) => {
   const force = ctx.args.force === true
+  const workflowOnly = ctx.args.workflowOnly === true
   const cwd = ctx.cwd
 
-  const { wrote, skipped, labels } = performInit(cwd, force)
+  const { wrote, skipped, labels } = performInit(cwd, force || workflowOnly, workflowOnly)
 
   process.stdout.write("→ kody-engine init\n")
   for (const f of wrote) process.stdout.write(`  wrote    ${f}\n`)
