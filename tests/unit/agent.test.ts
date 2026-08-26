@@ -98,6 +98,19 @@ describe("runAgent: output contract hooks", () => {
   })
 })
 
+describe("runAgent: submit state completion guard", () => {
+  it("wires one stop guard when structured state submission is enabled", async () => {
+    querySpy.mockClear()
+
+    await runAgent({ ...baseOpts(), enableSubmitTool: true })
+
+    const args = querySpy.mock.calls[0]![0] as {
+      options: { hooks: { Stop?: Array<unknown> } }
+    }
+    expect(args.options.hooks.Stop).toHaveLength(1)
+  })
+})
+
 describe("runAgent: maxThinkingTokens passthrough", () => {
   beforeEach(() => {
     querySpy.mockClear()

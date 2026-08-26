@@ -3,6 +3,7 @@ import * as path from "node:path"
 import { query } from "@anthropic-ai/claude-agent-sdk"
 import { ensureStableClaudeBinary } from "./claudeBinary.js"
 import { completionToolCutoffAt, createCompletionToolGuard } from "./completionGuard.js"
+import { createSubmitStateStopHook } from "./submitStateGuard.js"
 import {
   getAnthropicApiKeyOrDummy,
   litellmModelGroup,
@@ -468,6 +469,9 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     ? createOutputContractPostWriteHook(opts.outputContract)
     : null
   const outputContractStopHook = opts.outputContract ? createOutputContractStopHook(opts.outputContract) : null
+  const submitStateStopHook = opts.enableSubmitTool
+    ? createSubmitStateStopHook(() => getSubmitted?.())
+    : null
 
   let finalSafeToReplay = true
   for (let attempt = 0; ; attempt++) {
@@ -560,11 +564,13 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
                 ]
               : []),
           ],
-          ...(outputContractStopHook
+          ...(outputContractStopHook || submitStateStopHook
             ? {
                 Stop: [
                   {
-                    hooks: [outputContractStopHook],
+                    hooks: [outputContractStopHook, submitStateStopHook].filter(
+                      (hook): hook is NonNullable<typeof hook> => hook !== null,
+                    ),
                   },
                 ],
               }
