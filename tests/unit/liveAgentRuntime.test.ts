@@ -103,5 +103,6 @@ describe("live Agent runtime", () => {
       }),
       4,
     )
+    expect(ctx.data.capabilityOutput).toEqual({ cursor: "checking", data: { run: 4 } })
   })
 })

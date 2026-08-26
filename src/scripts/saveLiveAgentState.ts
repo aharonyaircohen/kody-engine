@@ -13,17 +13,22 @@ export const saveLiveAgentState: PostflightScript = async (ctx, _profile, agentR
   const repo = ctx.config.github?.repo?.trim() || envRepo
   if (!owner || !repo) throw new Error("Repository identity is required for live Agent state")
   const summary = (agentResult?.finalText ?? "").trim().slice(0, 1000)
+  const output = {
+    cursor: next.cursor,
+    data: next.data && typeof next.data === "object" ? next.data : {},
+  }
   await createStateBackendFromEnv().saveAgentState(
     `${owner}/${repo}`,
     {
       version: 1,
       agent,
       revision: previousRevision + 1,
-      cursor: next.cursor,
+      cursor: output.cursor,
       summary,
-      data: next.data && typeof next.data === "object" ? next.data : {},
+      data: output.data,
       updatedAt: new Date().toISOString(),
     },
     previousRevision,
   )
+  ctx.data.capabilityOutput = output
 }
