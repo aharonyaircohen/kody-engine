@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { createSubmitStateStopHook } from "../../src/submitStateGuard.js"
+import { createPostSubmitToolGuard, createSubmitStateStopHook } from "../../src/submitStateGuard.js"
 
 describe("submit state completion guard", () => {
   it("allows completion after state was submitted", async () => {
@@ -35,5 +35,19 @@ describe("submit state completion guard", () => {
     submitted = true
 
     await expect(hook()).resolves.toEqual({})
+  })
+})
+
+describe("post-submit tool guard", () => {
+  it("allows tools before continuation state is submitted", async () => {
+    const hook = createPostSubmitToolGuard(() => undefined)
+
+    await expect(hook()).resolves.toEqual({})
+  })
+
+  it("blocks every further tool after continuation state is submitted", async () => {
+    const hook = createPostSubmitToolGuard(() => ({ cursor: "waiting", data: {}, done: false }))
+
+    await expect(hook()).resolves.toMatchObject({ decision: "block" })
   })
 })
