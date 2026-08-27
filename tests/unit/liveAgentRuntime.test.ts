@@ -11,10 +11,10 @@ const backend = vi.hoisted(() => ({
 }))
 vi.mock("../../src/state-backend.js", () => ({ createStateBackendFromEnv: () => backend }))
 
+import { loadProfile } from "../../src/profile.js"
+import { resolveImplementation } from "../../src/registry.js"
 import { loadLiveAgent } from "../../src/scripts/loadLiveAgent.js"
 import { saveLiveAgentState } from "../../src/scripts/saveLiveAgentState.js"
-import { resolveImplementation } from "../../src/registry.js"
-import { loadProfile } from "../../src/profile.js"
 
 const roots: string[] = []
 afterEach(() => {
