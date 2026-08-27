@@ -13,6 +13,8 @@ vi.mock("../../src/state-backend.js", () => ({ createStateBackendFromEnv: () => 
 
 import { loadLiveAgent } from "../../src/scripts/loadLiveAgent.js"
 import { saveLiveAgentState } from "../../src/scripts/saveLiveAgentState.js"
+import { resolveImplementation } from "../../src/registry.js"
+import { loadProfile } from "../../src/profile.js"
 
 const roots: string[] = []
 afterEach(() => {
@@ -31,6 +33,14 @@ function context(cwd: string) {
 }
 
 describe("live Agent runtime", () => {
+  it("uses a short silence timeout so abandoned decisions release their Loop lease", () => {
+    const profilePath = resolveImplementation("live-agent")
+    expect(profilePath).not.toBeNull()
+    const profile = loadProfile(profilePath!)
+
+    expect(profile.claudeCode.maxTurnTimeoutSec).toBe(180)
+  })
+
   it("loads identity, primary Intent, effective guidance, capabilities, and AgentState", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "live-agent-"))
     roots.push(cwd)

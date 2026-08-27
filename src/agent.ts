@@ -160,7 +160,7 @@ export interface AgentOptions {
   /**
    * Watchdog: abort the agent if no SDK message arrives within this window.
    * Catches stalls (hung tool calls, network deadlock) that maxTurns can't
-   * see. Default: 300_000 (5 min). Override with `KODY_TURN_TIMEOUT_SEC`.
+   * see. Default: 600_000 (10 min). Override with `KODY_TURN_TIMEOUT_SEC`.
    * Pass 0 or a negative number to disable the watchdog.
    */
   maxTurnTimeoutMs?: number | null
@@ -317,7 +317,7 @@ const DEFAULT_TURN_TIMEOUT_MS = 600_000
  * Resolve the inter-message watchdog timeout. Precedence:
  *   1. opts.maxTurnTimeoutMs (per-call override; 0 / negative disables)
  *   2. KODY_TURN_TIMEOUT_SEC env var
- *   3. 300_000 ms (5 min) default
+ *   3. 600_000 ms (10 min) default
  */
 function resolveTurnTimeoutMs(opts: AgentOptions): number {
   if (opts.maxTurnTimeoutMs !== undefined && opts.maxTurnTimeoutMs !== null) {
