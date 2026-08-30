@@ -517,6 +517,23 @@ export function startCapability(
   return dispatchWorkflow(workflowFile, name, forwardedIssue, repoSlug, ref)
 }
 
+export interface WorkflowRunStatus {
+  runId: number
+  status: string
+  conclusion: string | null
+  url: string
+  createdAt: string
+  updatedAt: string
+}
+
+export function readWorkflowRun(repoSlug: string, runId: number): WorkflowRunStatus {
+  const run = JSON.parse(
+    gh(["run", "view", String(runId), "--repo", repoSlug, "--json", "status,conclusion,url,createdAt,updatedAt"]),
+  ) as Omit<WorkflowRunStatus, "runId">
+
+  return { runId, ...run }
+}
+
 function capabilityAcceptsIssue(capability: string): boolean | null {
   const route = resolveCapabilityAction(capability)
   if (!route) return null
@@ -766,6 +783,18 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     },
   }
 
+  const readWorkflowRunTool: CapabilityToolDefinition = {
+    name: "read_workflow_run",
+    description: "Read the current status and conclusion of an asynchronously started GitHub Actions workflow run.",
+    inputSchema: {
+      runId: z.number().int().positive(),
+    },
+    handler: async (args) => {
+      const result = readWorkflowRun(opts.repoSlug, Number(args.runId))
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }
+    },
+  }
+
   const readLatestReportTool: CapabilityToolDefinition = {
     name: "read_latest_report",
     description:
@@ -812,9 +841,13 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
   const reconcileTodoTool: CapabilityToolDefinition = {
     name: "reconcile_todo",
     description:
-      "Idempotently create, update, close, or reopen one canonical repository Todo for a recurring problem. The stable slug and item id prevent duplicates. Repeating the same state is a no-op; unrelated items in an existing Todo are preserved.",
+      "Idempotently create, update, close, or reopen one canonical repository Todo for a recurring problem. The Todo family is derived from reportSlug and the stable item id prevents duplicates. Repeating the same state is a no-op; unrelated items in an existing Todo are preserved.",
     inputSchema: {
-      slug: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/),
+      slug: z
+        .string()
+        .regex(/^[a-z0-9][a-z0-9_-]{0,63}$/)
+        .optional()
+        .describe("Deprecated; the canonical Todo slug is reportSlug."),
       itemId: z
         .string()
         .regex(/^[a-z0-9][a-z0-9_-]{0,79}$/)
@@ -827,12 +860,12 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
       evidence: z.string().max(20_000).optional(),
     },
     handler: async (args) => {
-      const slug = String(args.slug)
+      const reportSlug = String(args.reportSlug)
+      const slug = reportSlug
       const itemId = typeof args.itemId === "string" ? args.itemId : "finding"
       const title = String(args.title).trim()
       const description = typeof args.description === "string" ? args.description.trim() : ""
       const status = args.status === "resolved" ? "resolved" : "open"
-      const reportSlug = String(args.reportSlug)
       const reportRunId = typeof args.reportRunId === "string" ? args.reportRunId : undefined
       const evidence = typeof args.evidence === "string" ? args.evidence.trim() : ""
       const backend = createStateBackendFromEnv()
@@ -956,6 +989,7 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     ensureIssueTool,
     ensureCommentTool,
     startCapabilityTool,
+    readWorkflowRunTool,
     readLatestReportTool,
     reconcileTodoTool,
     ...cmsTools,
@@ -998,6 +1032,7 @@ export const CAPABILITY_MCP_TOOL_NAMES = [
   "ensure_issue",
   "ensure_comment",
   "start_capability",
+  "read_workflow_run",
   "read_latest_report",
   "reconcile_todo",
   ...DASHBOARD_CMS_MCP_TOOL_NAMES,

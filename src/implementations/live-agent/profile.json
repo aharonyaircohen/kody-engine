@@ -16,6 +16,7 @@
     "enableSubmitTool": true,
     "tools": [
       "mcp__kody-capability__start_capability",
+      "mcp__kody-capability__read_workflow_run",
       "mcp__kody-capability__read_latest_report",
       "mcp__kody-capability__reconcile_todo",
       "mcp__kody-submit__submit_state"
