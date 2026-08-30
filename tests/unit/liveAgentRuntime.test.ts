@@ -91,7 +91,12 @@ describe("live Agent runtime", () => {
       liveAgentPreviousRevision: 4,
     })
     expect((data.jobState as { state: unknown }).state).toMatchObject({ rev: 4, cursor: "waiting", data: { run: 3 } })
-    expect(data.capabilityTools).toEqual(["start_capability", "read_latest_report", "reconcile_todo"])
+    expect(data.capabilityTools).toEqual([
+      "start_capability",
+      "read_workflow_run",
+      "read_latest_report",
+      "reconcile_todo",
+    ])
   })
 
   it("persists the submitted continuation with optimistic revision protection", async () => {

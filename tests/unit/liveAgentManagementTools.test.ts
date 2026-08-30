@@ -5,11 +5,13 @@ const backend = vi.hoisted(() => ({
   getRepoDoc: vi.fn(),
   saveRepoDoc: vi.fn(),
 }))
+const gh = vi.hoisted(() => vi.fn())
 
 vi.mock("../../src/state-backend.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../src/state-backend.js")>()
   return { ...actual, createStateBackendFromEnv: () => backend }
 })
+vi.mock("../../src/issue.js", () => ({ gh }))
 
 import { capabilityToolDefinitions } from "../../src/capabilityMcp.js"
 
@@ -28,6 +30,38 @@ function outputText(value: Awaited<ReturnType<ReturnType<typeof tool>["handler"]
 
 describe("live Agent management tools", () => {
   beforeEach(() => vi.clearAllMocks())
+
+  it("reads the real status of an asynchronously started workflow run", async () => {
+    gh.mockReturnValue(
+      JSON.stringify({
+        status: "completed",
+        conclusion: "success",
+        url: "https://github.com/acme/widgets/actions/runs/42",
+        createdAt: "2026-08-30T07:17:31Z",
+        updatedAt: "2026-08-30T07:18:58Z",
+      }),
+    )
+
+    const result = await tool("read_workflow_run").handler({ runId: 42 })
+
+    expect(JSON.parse(outputText(result))).toEqual({
+      runId: 42,
+      status: "completed",
+      conclusion: "success",
+      url: "https://github.com/acme/widgets/actions/runs/42",
+      createdAt: "2026-08-30T07:17:31Z",
+      updatedAt: "2026-08-30T07:18:58Z",
+    })
+    expect(gh).toHaveBeenCalledWith([
+      "run",
+      "view",
+      "42",
+      "--repo",
+      "acme/widgets",
+      "--json",
+      "status,conclusion,url,createdAt,updatedAt",
+    ])
+  })
 
   it("returns the newest matching Report", async () => {
     backend.listReports.mockResolvedValue([
@@ -74,6 +108,35 @@ describe("live Agent management tools", () => {
 
     expect(JSON.parse(outputText(repeated))).toMatchObject({ changed: false })
     expect(backend.saveRepoDoc).not.toHaveBeenCalled()
+  })
+
+  it("derives the canonical Todo from the Report instead of a generated slug", async () => {
+    let stored: Record<string, unknown> | null = null
+    backend.getRepoDoc.mockImplementation(async () => (stored ? { doc: stored, updatedAt: "revision-1" } : null))
+    backend.saveRepoDoc.mockImplementation(async (_tenant, _kind, doc) => {
+      stored = doc as Record<string, unknown>
+    })
+
+    const result = await tool("reconcile_todo").handler({
+      slug: "repo-ci-health",
+      itemId: "repo-ci-main",
+      title: "Repository CI health",
+      status: "open",
+      reportSlug: "director-repo-ci",
+      reportRunId: "run-1",
+      evidence: "CI is failing",
+    })
+
+    expect(JSON.parse(outputText(result))).toMatchObject({
+      changed: true,
+      slug: "director-repo-ci",
+    })
+    expect(backend.saveRepoDoc).toHaveBeenCalledWith(
+      "acme/widgets",
+      "todo:director-repo-ci",
+      expect.any(Object),
+      undefined,
+    )
   })
 
   it("verifies the Todo write and retries when the first write is not visible", async () => {
