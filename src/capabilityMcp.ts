@@ -848,10 +848,7 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
         .regex(/^[a-z0-9][a-z0-9_-]{0,63}$/)
         .optional()
         .describe("Deprecated; the canonical Todo slug is reportSlug."),
-      itemId: z
-        .string()
-        .regex(/^[a-z0-9][a-z0-9_-]{0,79}$/)
-        .optional(),
+      itemId: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,79}$/),
       title: z.string().min(1).max(160),
       description: z.string().max(20_000).optional(),
       status: z.enum(["open", "resolved"]),
@@ -862,7 +859,7 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
     handler: async (args) => {
       const reportSlug = String(args.reportSlug)
       const slug = reportSlug
-      const itemId = typeof args.itemId === "string" ? args.itemId : "finding"
+      const itemId = String(args.itemId)
       const title = String(args.title).trim()
       const description = typeof args.description === "string" ? args.description.trim() : ""
       const status = args.status === "resolved" ? "resolved" : "open"
@@ -885,13 +882,24 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
                 Boolean(item && typeof item === "object" && !Array.isArray(item)),
               )
             : []
-          const previous = currentItems.find((item) => item.id === itemId)
+          const isLegacyFallbackForReport = (item: Record<string, unknown>) => {
+            if (itemId === "finding" || item.id !== "finding") return false
+            const meta =
+              item.meta && typeof item.meta === "object" && !Array.isArray(item.meta)
+                ? (item.meta as Record<string, unknown>)
+                : {}
+            return meta.reportSlug === reportSlug
+          }
+          const removedLegacyFallback = currentItems.some(isLegacyFallbackForReport)
+          const canonicalItems = currentItems.filter((item) => !isLegacyFallbackForReport(item))
+          const previous = canonicalItems.find((item) => item.id === itemId)
           const previousMeta =
             previous?.meta && typeof previous.meta === "object" && !Array.isArray(previous.meta)
               ? (previous.meta as Record<string, unknown>)
               : {}
           const unchanged = Boolean(
             previous &&
+              !removedLegacyFallback &&
               previous.completed === completed &&
               previous.title === title &&
               String(previous.body ?? "") === evidence &&
@@ -919,8 +927,8 @@ export function capabilityToolDefinitions(opts: CapabilityMcpOptions): Capabilit
             },
           }
           const items = previous
-            ? currentItems.map((item) => (item.id === itemId ? nextItem : item))
-            : [...currentItems, nextItem]
+            ? canonicalItems.map((item) => (item.id === itemId ? nextItem : item))
+            : [...canonicalItems, nextItem]
           const doc = {
             ...current,
             version: 1,
