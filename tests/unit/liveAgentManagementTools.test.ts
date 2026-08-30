@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { z } from "zod"
 
 const backend = vi.hoisted(() => ({
   listReports: vi.fn(),
@@ -30,6 +31,12 @@ function outputText(value: Awaited<ReturnType<ReturnType<typeof tool>["handler"]
 
 describe("live Agent management tools", () => {
   beforeEach(() => vi.clearAllMocks())
+
+  it("requires a stable Todo item id", () => {
+    const itemIdSchema = tool("reconcile_todo").inputSchema.itemId
+
+    expect(z.safeParse(itemIdSchema, undefined).success).toBe(false)
+  })
 
   it("reads the real status of an asynchronously started workflow run", async () => {
     gh.mockReturnValue(
@@ -83,6 +90,7 @@ describe("live Agent management tools", () => {
     })
     const input = {
       slug: "director-repo-ci",
+      itemId: "repo-ci-main",
       title: "Restore repository CI",
       status: "open",
       reportSlug: "director-repo-ci",
@@ -97,7 +105,7 @@ describe("live Agent management tools", () => {
       "acme/widgets",
       "todo:director-repo-ci",
       expect.objectContaining({
-        items: [expect.objectContaining({ id: "finding", completed: false })],
+        items: [expect.objectContaining({ id: "repo-ci-main", completed: false })],
       }),
       undefined,
     )
@@ -137,6 +145,45 @@ describe("live Agent management tools", () => {
       expect.any(Object),
       undefined,
     )
+  })
+
+  it("collapses the legacy fallback item for the same Report", async () => {
+    let stored: Record<string, unknown> = {
+      version: 1,
+      title: "Repository CI health",
+      items: [
+        {
+          id: "finding",
+          title: "Legacy CI finding",
+          completed: true,
+          meta: { reportSlug: "director-repo-ci", reportRunId: "old-run" },
+        },
+        {
+          id: "unrelated",
+          title: "Keep me",
+          completed: false,
+          meta: { reportSlug: "another-report" },
+        },
+      ],
+    }
+    backend.getRepoDoc.mockImplementation(async () => ({ doc: stored, updatedAt: "revision-1" }))
+    backend.saveRepoDoc.mockImplementation(async (_tenant, _kind, doc) => {
+      stored = doc as Record<string, unknown>
+    })
+
+    await tool("reconcile_todo").handler({
+      itemId: "repo-ci-main",
+      title: "Repository CI health",
+      status: "resolved",
+      reportSlug: "director-repo-ci",
+      reportRunId: "new-run",
+      evidence: "CI is healthy",
+    })
+
+    expect((stored.items as Array<Record<string, unknown>>).map((item) => item.id)).toEqual([
+      "unrelated",
+      "repo-ci-main",
+    ])
   })
 
   it("verifies the Todo write and retries when the first write is not visible", async () => {
@@ -188,6 +235,7 @@ describe("live Agent management tools", () => {
 
     await tool("reconcile_todo").handler({
       slug: "director-repo-ci",
+      itemId: "repo-ci-main",
       title: "Restore repository CI",
       status: "resolved",
       reportSlug: "director-repo-ci",
@@ -195,11 +243,12 @@ describe("live Agent management tools", () => {
     })
 
     const closed = backend.saveRepoDoc.mock.calls[0]![2]
-    expect(closed.items).toEqual([expect.objectContaining({ id: "finding", completed: true })])
+    expect(closed.items).toEqual([expect.objectContaining({ id: "repo-ci-main", completed: true })])
 
     backend.saveRepoDoc.mockClear()
     await tool("reconcile_todo").handler({
       slug: "director-repo-ci",
+      itemId: "repo-ci-main",
       title: "Restore repository CI",
       status: "open",
       reportSlug: "director-repo-ci",
@@ -207,6 +256,8 @@ describe("live Agent management tools", () => {
     })
 
     const reopened = backend.saveRepoDoc.mock.calls[0]![2]
-    expect(reopened.items).toEqual([expect.objectContaining({ id: "finding", completed: false, completedAt: null })])
+    expect(reopened.items).toEqual([
+      expect.objectContaining({ id: "repo-ci-main", completed: false, completedAt: null }),
+    ])
   })
 })
