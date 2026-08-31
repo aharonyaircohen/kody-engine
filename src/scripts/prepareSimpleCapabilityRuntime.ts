@@ -17,6 +17,7 @@ const PLAYWRIGHT_SERVER = {
 
 interface CapabilityRequirements {
   browser?: boolean
+  browserSession?: "user"
   qaCredentials?: boolean
   githubTestToken?: boolean
   qaAccountCredentials?: string[]
@@ -111,6 +112,9 @@ function appendPrompt(ctx: Context, section: string): void {
 export const prepareSimpleCapabilityRuntime: PreflightScript = async (ctx, profile) => {
   const requirements = requirementsFrom(ctx)
   if (!requirements.browser) return
+  if (requirements.browserSession === "user") {
+    throw new Error("Capability requires the Dashboard user browser session and cannot run in CI")
+  }
 
   configureBrowser(ctx, profile, requirements)
   if (requirements.qaCredentials) {

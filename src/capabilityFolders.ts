@@ -38,7 +38,14 @@ export interface CapabilityRuntimeRequirements {
   qaAccountCredentials?: string[]
   qaAccountModelSettings?: Record<string, unknown>
   browserOnly?: boolean
+  browserSession?: "user"
+  browserActions?: UserBrowserAction[]
+  browserOrigins?: string[]
+  browserFileRoots?: string[]
 }
+
+export const USER_BROWSER_ACTIONS = ["navigate", "click", "fill", "upload", "scroll", "wait"] as const
+export type UserBrowserAction = (typeof USER_BROWSER_ACTIONS)[number]
 
 export interface CapabilityFolderConfig {
   execution?: "agent" | "script"
@@ -261,7 +268,7 @@ function parseCapabilityContract(raw: string): CapabilityContract {
   if (parsed.execution !== undefined && parsed.execution !== "agent" && parsed.execution !== "script") {
     throw new Error('contract.json execution must be "agent" or "script"')
   }
-  const requirements = parseCapabilityRequirements(parsed.requirements)
+  const requirements = parseCapabilityRequirements(parsed.requirements, parsed.execution)
   const secrets =
     parsed.secrets === undefined
       ? undefined
@@ -280,9 +287,7 @@ function parseCapabilityContract(raw: string): CapabilityContract {
       ? undefined
       : Array.isArray(parsed.connections) &&
           parsed.connections.length > 0 &&
-          parsed.connections.every(
-            (id) => typeof id === "string" && /^[a-z0-9][a-z0-9_-]{0,79}$/.test(id),
-          )
+          parsed.connections.every((id) => typeof id === "string" && /^[a-z0-9][a-z0-9_-]{0,79}$/.test(id))
         ? [...new Set(parsed.connections as string[])]
         : null
   if (connections === null) {
@@ -419,7 +424,7 @@ function parseDeliveryPathAllowlist(raw: unknown): string[] | undefined {
   return paths
 }
 
-function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirements | undefined {
+function parseCapabilityRequirements(raw: unknown, execution: unknown): CapabilityRuntimeRequirements | undefined {
   if (raw === undefined) return undefined
   if (!isPlainObject(raw)) throw new Error("contract.json requirements must be an object")
   const unsupported = Object.keys(raw).filter(
@@ -430,7 +435,11 @@ function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirement
       key !== "githubTestToken" &&
       key !== "qaAccountCredentials" &&
       key !== "qaAccountModelSettings" &&
-      key !== "browserOnly",
+      key !== "browserOnly" &&
+      key !== "browserSession" &&
+      key !== "browserActions" &&
+      key !== "browserOrigins" &&
+      key !== "browserFileRoots",
   )
   if (unsupported.length > 0) {
     throw new Error(`contract.json requirements contains unsupported fields: ${unsupported.join(", ")}`)
@@ -461,15 +470,38 @@ function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirement
   if (raw.browserOnly !== undefined && typeof raw.browserOnly !== "boolean") {
     throw new Error("contract.json requirements.browserOnly must be boolean")
   }
+  if (raw.browserSession !== undefined && raw.browserSession !== "user") {
+    throw new Error('contract.json requirements.browserSession must be "user"')
+  }
+  const browserActions = parseUserBrowserActions(raw.browserActions)
+  const browserOrigins = parseUserBrowserOrigins(raw.browserOrigins)
+  const browserFileRoots = parseUserBrowserFileRoots(raw.browserFileRoots)
   if (
     (raw.qaCredentials === true ||
       raw.githubTestToken === true ||
       raw.qaAccountCredentials !== undefined ||
       raw.qaAccountModelSettings !== undefined ||
-      raw.browserOnly === true) &&
+      raw.browserOnly === true ||
+      raw.browserSession === "user") &&
     raw.browser !== true
   ) {
-    throw new Error("contract.json authentication requirements require browser")
+    throw new Error("contract.json protected browser requirement requires browser")
+  }
+  if (raw.browserSession === "user") {
+    if (execution !== "agent") {
+      throw new Error('contract.json requirements.browserSession "user" is supported only when execution is "agent"')
+    }
+    if (!browserActions?.length) {
+      throw new Error("contract.json user browser requirements need browserActions")
+    }
+    if (!browserOrigins?.length) {
+      throw new Error("contract.json user browser requirements need browserOrigins")
+    }
+    if (browserActions.includes("upload") && !browserFileRoots?.length) {
+      throw new Error("contract.json browser upload requires browserFileRoots")
+    }
+  } else if (browserActions !== undefined || browserOrigins !== undefined || browserFileRoots !== undefined) {
+    throw new Error('contract.json browserActions, browserOrigins, and browserFileRoots require browserSession "user"')
   }
   const requirements = {
     ...(raw.cms === true ? { cms: true } : {}),
@@ -481,8 +513,70 @@ function parseCapabilityRequirements(raw: unknown): CapabilityRuntimeRequirement
       : {}),
     ...(isPlainObject(raw.qaAccountModelSettings) ? { qaAccountModelSettings: raw.qaAccountModelSettings } : {}),
     ...(raw.browserOnly === true ? { browserOnly: true } : {}),
+    ...(raw.browserSession === "user" ? { browserSession: "user" as const } : {}),
+    ...(browserActions ? { browserActions } : {}),
+    ...(browserOrigins ? { browserOrigins } : {}),
+    ...(browserFileRoots ? { browserFileRoots } : {}),
   }
   return Object.keys(requirements).length > 0 ? requirements : undefined
+}
+
+function parseUserBrowserActions(value: unknown): UserBrowserAction[] | undefined {
+  if (value === undefined) return undefined
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.length > USER_BROWSER_ACTIONS.length ||
+    !value.every(
+      (action): action is UserBrowserAction =>
+        typeof action === "string" && USER_BROWSER_ACTIONS.includes(action as UserBrowserAction),
+    )
+  ) {
+    throw new Error(`contract.json requirements.browserActions must contain only ${USER_BROWSER_ACTIONS.join(", ")}`)
+  }
+  return [...new Set(value)]
+}
+
+function parseUserBrowserOrigins(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.length === 0 || value.length > 20) {
+    throw new Error("contract.json requirements.browserOrigins must be a non-empty array")
+  }
+  const origins = value.map((raw) => {
+    if (typeof raw !== "string") throw new Error("invalid browser origin")
+    let parsed: URL
+    try {
+      parsed = new URL(raw)
+    } catch {
+      throw new Error("invalid browser origin")
+    }
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.username ||
+      parsed.password ||
+      parsed.origin !== raw.replace(/\/$/, "")
+    ) {
+      throw new Error("contract.json requirements.browserOrigins must contain HTTPS origins only")
+    }
+    return parsed.origin
+  })
+  return [...new Set(origins)]
+}
+
+function parseUserBrowserFileRoots(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.length === 0 || value.length > 20) {
+    throw new Error("contract.json requirements.browserFileRoots must be a non-empty array")
+  }
+  const roots = value.map((raw) => {
+    if (typeof raw !== "string") throw new Error("invalid browser file root")
+    const root = raw.replaceAll("\\", "/").replace(/^\/+|\/+$/g, "")
+    if (!root || root.length > 300 || root.split("/").some((part) => !part || part === "." || part === "..")) {
+      throw new Error("contract.json requirements.browserFileRoots contains an unsafe path")
+    }
+    return root
+  })
+  return [...new Set(roots)]
 }
 
 function isRegularFile(filePath: string): boolean {

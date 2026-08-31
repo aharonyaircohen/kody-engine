@@ -38,6 +38,10 @@ describe("simple Capability folder", () => {
         qaAccountCredentials: ["OPENROUTER_API_KEY"],
         qaAccountModelSettings: { models: [{ id: "minimax/MiniMax-M3" }] },
         browserOnly: true,
+        browserSession: "user" as const,
+        browserActions: ["navigate", "fill", "upload"],
+        browserOrigins: ["https://www.facebook.com"],
+        browserFileRoots: ["content-studio"],
       },
       input: {
         type: "object",
@@ -67,6 +71,10 @@ describe("simple Capability folder", () => {
       qaAccountCredentials: ["OPENROUTER_API_KEY"],
       qaAccountModelSettings: { models: [{ id: "minimax/MiniMax-M3" }] },
       browserOnly: true,
+      browserSession: "user",
+      browserActions: ["navigate", "fill", "upload"],
+      browserOrigins: ["https://www.facebook.com"],
+      browserFileRoots: ["content-studio"],
     })
     expect(loaded?.config.inputSchema).toEqual(contract.input)
     expect(loaded?.config.outputSchema).toEqual(contract.output)

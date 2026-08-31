@@ -57,6 +57,19 @@ function writeLogin(cwd: string, login: string): void {
 }
 
 describe("prepareSimpleCapabilityRuntime", () => {
+  it("rejects Dashboard user-session browser capabilities in CI", async () => {
+    const { ctx, profile } = fixture()
+    ctx.data.capabilityRequirements = {
+      browser: true,
+      browserSession: "user",
+      browserActions: ["navigate", "fill"],
+      browserOrigins: ["https://www.facebook.com"],
+    }
+
+    await expect(prepareSimpleCapabilityRuntime(ctx, profile)).rejects.toThrow("Dashboard user browser session")
+    expect(profile.claudeCode.mcpServers).toEqual([])
+  })
+
   it("adds the browser runtime and explains missing QA credentials", async () => {
     const { ctx, profile } = fixture()
 
