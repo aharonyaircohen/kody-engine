@@ -53,6 +53,7 @@ export const loadSimpleCapability: PreflightScript = async (ctx, profile) => {
   if (requiredSubagents.length > 0) ctx.data.requiredSubagents = requiredSubagents
   if (capability.contract?.execution === "script") {
     ctx.data.capabilityScriptPath = path.join(capability.dir, "tools", "run.sh")
+    ctx.data.capabilityConnectionIds = capability.contract.connections ?? []
     ctx.data.capabilitySecretNames = capability.contract.secrets ?? []
     ctx.data.capabilityScriptTimeoutMs = capability.contract.timeoutMs
   }

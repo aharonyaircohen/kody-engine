@@ -46,6 +46,7 @@ import { resolveSimpleCapabilityRuntime, simpleCapabilityRuntimeArgs } from "./s
 import type { Action } from "./state.js"
 import { createStateBackendFromEnv, hasStateBackendConfig } from "./state-backend.js"
 import { workflowDefinitionHash, workflowResumeBlocker } from "./workflowDefinitionIdentity.js"
+import { requireWorkflowStepApproval } from "./workflowStepApproval.js"
 import {
   isWorkflowDefinitionId,
   readWorkflowDefinition,
@@ -321,7 +322,12 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
       if (base.config && persistRun) {
         await upsertRunIndexRowBestEffortAsync(base.config, base.cwd, {
           ...parentRow,
-          status: result.exitCode === 0 ? "success" : "failed",
+          status:
+            result.workflowState?.status === "waiting-approval"
+              ? "waiting"
+              : result.exitCode === 0
+                ? "success"
+                : "failed",
           summary: result.reason,
           updatedAt: new Date().toISOString(),
         })
@@ -330,7 +336,12 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
         await lease?.checkpoint()
         await writeWorkflowRunState(base.config, base.cwd, workflowIdentity, valid.workflowRunId, result.workflowState)
       }
-      if (valid.workflowRunId && workflowIdentity && hasGitHubActionsIdentity()) {
+      if (
+        valid.workflowRunId &&
+        workflowIdentity &&
+        hasGitHubActionsIdentity() &&
+        result.workflowState?.status !== "waiting-approval"
+      ) {
         const facts = result.workflowState?.facts ?? {}
         await notifyWorkflowCompleted({
           workflowId: workflowIdentity,
@@ -701,6 +712,7 @@ function initialWorkflowState(parent: Job, workflow: CapabilityWorkflowConfig): 
       status: "done",
       completedStepIds: [...prior.completedStepIds],
       transitionCounts: { ...prior.transitionCounts },
+      ...(prior.approval ? { approval: { ...prior.approval } } : {}),
       ...(prior.input ? { input: { ...prior.input } } : {}),
       ...(prior.steps ? { steps: cloneWorkflowSteps(prior.steps) } : {}),
       facts: { ...prior.facts },
@@ -717,6 +729,7 @@ function initialWorkflowState(parent: Job, workflow: CapabilityWorkflowConfig): 
     ...(currentStepId ? { currentStepId } : {}),
     completedStepIds: [...(prior?.completedStepIds ?? [])],
     transitionCounts: { ...(prior?.transitionCounts ?? {}) },
+    ...(prior?.approval ? { approval: { ...prior.approval } } : {}),
     steps: cloneWorkflowSteps(prior?.steps ?? {}),
     facts: {
       ...workflowInputContext(parent.cliArgs),
@@ -794,6 +807,20 @@ async function runGraphCapabilityWorkflow(
     }
 
     const label = step.action ?? step.capability
+    if (step.approval === "required") {
+      const approvalState = requireWorkflowStepApproval(state, step.id!)
+      state.status = approvalState.status
+      state.approval = approvalState.approval
+      await checkpoint?.(state)
+      if (state.status === "waiting-approval") {
+        return {
+          ...result,
+          exitCode: 0,
+          reason: `Approval required before workflow step ${step.id}`,
+          workflowState: state,
+        }
+      }
+    }
     await checkpoint?.(state)
     let child: Job
     try {

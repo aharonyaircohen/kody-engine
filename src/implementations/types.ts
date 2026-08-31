@@ -600,7 +600,7 @@ export interface Job {
 }
 
 export interface WorkflowRunState {
-  status: "running" | "blocked" | "failed" | "done"
+  status: "running" | "waiting-approval" | "blocked" | "failed" | "done"
   /** Immutable input supplied when this workflow run started. */
   input?: Record<string, unknown>
   /** Hash of the workflow definition used by this run. */
@@ -608,6 +608,14 @@ export interface WorkflowRunState {
   currentStepId?: string
   completedStepIds: string[]
   transitionCounts: Record<string, number>
+  approval?: {
+    stepId: string
+    action: string
+    contextHash: string
+    status: "pending" | "approved" | "consumed"
+    approvedAt?: string
+    approvedBy?: string
+  }
   /** Exact per-step handoffs for audit, resume, and debugging. */
   steps?: Record<
     string,

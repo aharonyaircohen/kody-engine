@@ -148,6 +148,23 @@ export async function readRuntimeSecretFromKody(
   return typeof body.value === "string" ? body.value : null
 }
 
+export async function readRuntimeConnectionFromKody(
+  id: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<import("./scripts/runtimeConnections.js").RuntimeConnection | null> {
+  const token = await githubOidcToken(env)
+  const response = await fetch(`${resolveKodyApiUrl(env)}/api/kody/engine/connection`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ id }),
+    signal: AbortSignal.timeout(15_000),
+  })
+  if (response.status === 404) return null
+  if (!response.ok) throw new Error(`Kody Connection request failed (${response.status})`)
+  const body = (await response.json()) as { connection?: unknown }
+  return (body.connection ?? null) as import("./scripts/runtimeConnections.js").RuntimeConnection | null
+}
+
 export async function writeRuntimeSecretsToKody(
   secrets: Record<string, string>,
   env: NodeJS.ProcessEnv = process.env,

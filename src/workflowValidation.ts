@@ -35,6 +35,7 @@ const SUPPORTED_STEP_FIELDS = new Set([
   "targetFact",
   "reason",
   "timeoutSeconds",
+  "approval",
   "next",
   "runWhen",
   "continueOn",
@@ -126,6 +127,22 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
         "invalid_step_timeout",
         `${base}.timeoutSeconds`,
         "workflow step timeoutSeconds must be an integer from 1 to 3600",
+      )
+    }
+    if (step.approval !== undefined && step.approval !== "required") {
+      issue(
+        issues,
+        "invalid_step_approval",
+        `${base}.approval`,
+        'workflow step approval must be "required"',
+      )
+    }
+    if (step.approval === "required" && !text(step.id)) {
+      issue(
+        issues,
+        "approval_requires_step_id",
+        `${base}.approval`,
+        "an approval-gated workflow step must have a stable id",
       )
     }
     validateInputBindings(

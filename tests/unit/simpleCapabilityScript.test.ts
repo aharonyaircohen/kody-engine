@@ -14,7 +14,7 @@ afterEach(() => {
 
 function scriptedCapability(
   script: string,
-  options: { secrets?: string[]; timeoutMs?: number; output?: Record<string, unknown> } = {},
+  options: { connections?: string[]; secrets?: string[]; timeoutMs?: number; output?: Record<string, unknown> } = {},
 ): {
   cwd: string
   ctx: {
@@ -35,6 +35,7 @@ function scriptedCapability(
     path.join(dir, "contract.json"),
     JSON.stringify({
       execution: "script",
+      ...(options.connections ? { connections: options.connections } : {}),
       ...(options.secrets ? { secrets: options.secrets } : {}),
       ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
       input: {
@@ -62,6 +63,17 @@ function scriptedCapability(
 }
 
 describe("script-backed simple Capability", () => {
+  it("loads the exact Connection ids declared by a trusted script", async () => {
+    const { ctx } = scriptedCapability("#!/bin/sh\nprintf '{}\n'\n", {
+      connections: ["facebook-main"],
+      secrets: ["FACEBOOK_PAGE_ACCESS_TOKEN"],
+    })
+
+    await loadSimpleCapability(ctx as never, {} as never)
+
+    expect(ctx.data.capabilityConnectionIds).toEqual(["facebook-main"])
+  })
+
   it("runs without an agent and returns the same validated Capability output shape", async () => {
     const { ctx } = scriptedCapability('#!/bin/sh\nprintf \'{"greeting":"Hello %s"}\' "$KODY_ARG_NAME"\n')
 

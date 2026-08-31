@@ -4,6 +4,7 @@ import * as fs from "node:fs"
 import { parseCapabilityResultsFromText } from "../capabilityResult.js"
 import type { PreflightScript } from "../implementations/types.js"
 import { resolveRuntimeSecrets } from "./runtimeSecrets.js"
+import { resolveRuntimeConnections } from "./runtimeConnections.js"
 import { buildTickChildEnv } from "./tickShellRunner.js"
 
 const DEFAULT_SCRIPT_TIMEOUT_MS = 5 * 60 * 1000
@@ -20,6 +21,17 @@ export const runSimpleCapabilityScript: PreflightScript = async (ctx) => {
   }
 
   const capabilityEnvironment = isStringRecord(ctx.data.capabilityEnvironment) ? ctx.data.capabilityEnvironment : {}
+  let connections
+  try {
+    connections = await resolveRuntimeConnections(
+      ctx.data.capabilityConnectionIds,
+      ctx.data.capabilitySecretNames,
+    )
+  } catch (error) {
+    ctx.output.exitCode = 78
+    ctx.output.reason = error instanceof Error ? error.message : "Capability Connection loading failed"
+    return
+  }
   const capabilitySecrets = await resolveRuntimeSecrets(ctx.data.capabilitySecretNames, ctx)
   for (const warning of capabilitySecrets.warnings) {
     process.stderr.write(`→ kody: WARNING ${warning}\n`)
@@ -34,6 +46,12 @@ export const runSimpleCapabilityScript: PreflightScript = async (ctx) => {
       ...buildTickChildEnv(process.env, false),
       ...capabilitySecrets.environment,
       ...capabilityEnvironment,
+      ...(connections.length > 0
+        ? {
+            KODY_CONNECTIONS_JSON: JSON.stringify(connections),
+            ...(connections.length === 1 ? { KODY_CONNECTION_JSON: JSON.stringify(connections[0]) } : {}),
+          }
+        : {}),
     },
     stdio: ["ignore", "pipe", "pipe"],
     encoding: "utf-8",

@@ -22,6 +22,8 @@ export interface CapabilityContract {
   requiredSubagents?: string[]
   /** Secret names exposed only to this trusted script process. */
   secrets?: string[]
+  /** Connection ids loaded only for this trusted script process. */
+  connections?: string[]
   /** Maximum trusted script runtime. Defaults to five minutes. */
   timeoutMs?: number
   input: Record<string, unknown>
@@ -118,6 +120,8 @@ export interface CapabilityWorkflowStepConfig {
   reason?: string
   /** Hard wall-clock deadline for this step. */
   timeoutSeconds?: number
+  /** Pause the Workflow immediately before this step until an operator approves it. */
+  approval?: "required"
   next?: CapabilityWorkflowTransitionConfig[]
   runWhen?: Record<string, unknown>
   continueOn?: string[]
@@ -271,6 +275,22 @@ function parseCapabilityContract(raw: string): CapabilityContract {
   if (secrets && parsed.execution !== "script") {
     throw new Error('contract.json secrets are supported only when execution is "script"')
   }
+  const connections =
+    parsed.connections === undefined
+      ? undefined
+      : Array.isArray(parsed.connections) &&
+          parsed.connections.length > 0 &&
+          parsed.connections.every(
+            (id) => typeof id === "string" && /^[a-z0-9][a-z0-9_-]{0,79}$/.test(id),
+          )
+        ? [...new Set(parsed.connections as string[])]
+        : null
+  if (connections === null) {
+    throw new Error("contract.json connections must contain valid Connection ids")
+  }
+  if (connections && parsed.execution !== "script") {
+    throw new Error('contract.json connections are supported only when execution is "script"')
+  }
   const timeoutMs =
     parsed.timeoutMs === undefined
       ? undefined
@@ -315,6 +335,7 @@ function parseCapabilityContract(raw: string): CapabilityContract {
       key !== "deliveryPathAllowlist" &&
       key !== "deliveryConfigAllowlist" &&
       key !== "requirements" &&
+      key !== "connections" &&
       key !== "secrets" &&
       key !== "timeoutMs" &&
       key !== "requiredSubagents" &&
@@ -336,6 +357,7 @@ function parseCapabilityContract(raw: string): CapabilityContract {
     ...(deliveryPathAllowlist ? { deliveryPathAllowlist } : {}),
     ...(deliveryConfigAllowlist ? { deliveryConfigAllowlist } : {}),
     ...(requirements ? { requirements } : {}),
+    ...(connections ? { connections } : {}),
     ...(secrets ? { secrets } : {}),
     ...(timeoutMs !== undefined ? { timeoutMs } : {}),
     ...(requiredSubagents ? { requiredSubagents } : {}),
@@ -610,6 +632,7 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
   const target = stringField(raw.target)
   const delivery = stringField(raw.delivery)
   const targetFact = stringField(raw.targetFact ?? raw.target_fact)
+  const approval = stringField(raw.approval)
   const timeoutSeconds =
     typeof raw.timeoutSeconds === "number" &&
     Number.isInteger(raw.timeoutSeconds) &&
@@ -633,6 +656,7 @@ function parseWorkflowStep(value: unknown): CapabilityWorkflowStepConfig | null 
     ...(targetFact ? { targetFact } : {}),
     ...(reason ? { reason } : {}),
     ...(timeoutSeconds ? { timeoutSeconds } : {}),
+    ...(approval === "required" ? { approval: "required" as const } : {}),
     ...(next ? { next } : {}),
     ...(isPlainObject(raw.runWhen) ? { runWhen: raw.runWhen as Record<string, unknown> } : {}),
     ...(stringList(raw.continueOn ?? raw.continue_on).length > 0

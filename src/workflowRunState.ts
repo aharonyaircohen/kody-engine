@@ -16,7 +16,13 @@ export function workflowRunStatePath(workflowId: string, runId: string): string 
 export function parseWorkflowRunState(raw: unknown): WorkflowRunState | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
   const state = raw as Record<string, unknown>
-  if (state.status !== "running" && state.status !== "blocked" && state.status !== "failed" && state.status !== "done")
+  if (
+    state.status !== "running" &&
+    state.status !== "waiting-approval" &&
+    state.status !== "blocked" &&
+    state.status !== "failed" &&
+    state.status !== "done"
+  )
     return null
   const completedStepIds = Array.isArray(state.completedStepIds)
     ? state.completedStepIds.filter((value): value is string => typeof value === "string")
@@ -54,6 +60,7 @@ export function parseWorkflowRunState(raw: unknown): WorkflowRunState | null {
     ...(typeof state.currentStepId === "string" ? { currentStepId: state.currentStepId } : {}),
     completedStepIds,
     transitionCounts,
+    ...(parseWorkflowApproval(state.approval) ? { approval: parseWorkflowApproval(state.approval)! } : {}),
     ...(input ? { input: { ...(input as Record<string, unknown>) } } : {}),
     ...(typeof state.definitionHash === "string" && state.definitionHash.trim()
       ? { definitionHash: state.definitionHash.trim() }
@@ -63,6 +70,25 @@ export function parseWorkflowRunState(raw: unknown): WorkflowRunState | null {
     evidence: Object.fromEntries(evidenceEntries),
     artifacts: artifacts.map((artifact) => ({ ...artifact })),
     ...(typeof state.blocker === "string" ? { blocker: state.blocker } : {}),
+  }
+}
+
+function parseWorkflowApproval(value: unknown): WorkflowRunState["approval"] | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+  const approval = value as Record<string, unknown>
+  if (
+    typeof approval.stepId !== "string" ||
+    typeof approval.action !== "string" ||
+    typeof approval.contextHash !== "string" ||
+    (approval.status !== "pending" && approval.status !== "approved" && approval.status !== "consumed")
+  ) return undefined
+  return {
+    stepId: approval.stepId,
+    action: approval.action,
+    contextHash: approval.contextHash,
+    status: approval.status,
+    ...(typeof approval.approvedAt === "string" ? { approvedAt: approval.approvedAt } : {}),
+    ...(typeof approval.approvedBy === "string" ? { approvedBy: approval.approvedBy } : {}),
   }
 }
 

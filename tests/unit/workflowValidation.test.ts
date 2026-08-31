@@ -6,6 +6,20 @@ function codes(workflow: unknown): string[] {
 }
 
 describe("validateWorkflow", () => {
+  it("accepts only the simple required approval policy on a step", () => {
+    expect(
+      validateWorkflow({
+        startAt: "publish",
+        steps: [{ id: "publish", capability: "publish", approval: "required" }],
+      }),
+    ).toEqual([])
+    expect(
+      codes({
+        startAt: "publish",
+        steps: [{ id: "publish", capability: "publish", approval: "automatic" }],
+      }),
+    ).toContain("invalid_step_approval")
+  })
   it("rejects per-step Agent selection", () => {
     expect(
       validateWorkflow({
