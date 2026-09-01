@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
+  checkLitellmHealth,
   generateAutomaticLitellmConfigYaml,
   generateLitellmConfigYaml,
   litellmModelGroups,
@@ -190,6 +191,21 @@ describe("litellm: model group reuse checks", () => {
     )
 
     await expect(litellmServesModel("http://localhost:4000", "minimax/MiniMax-M3")).resolves.toBe(false)
+  })
+})
+
+describe("litellm: proxy health checks", () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("uses LiteLLM's liveness endpoint without probing configured providers", async () => {
+    const fetchSpy = vi.fn(async () => new Response("I'm alive!", { status: 200 }))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    await expect(checkLitellmHealth("http://localhost:4000/")).resolves.toBe(true)
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "http://localhost:4000/health/liveliness",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
   })
 })
 

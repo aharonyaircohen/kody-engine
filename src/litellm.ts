@@ -18,7 +18,9 @@ export const LITELLM_PIP_PACKAGES = ["litellm[proxy]", "fastapi==0.140.1"] as co
 
 export async function checkLitellmHealth(url: string): Promise<boolean> {
   try {
-    const response = await fetch(`${url}/health`, { signal: AbortSignal.timeout(3000) })
+    const response = await fetch(`${url.replace(/\/+$/, "")}/health/liveliness`, {
+      signal: AbortSignal.timeout(3000),
+    })
     return response.ok
   } catch {
     return false
