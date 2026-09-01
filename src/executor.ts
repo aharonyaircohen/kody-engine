@@ -806,6 +806,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
         model: `${model.provider}/${model.model}`,
         turns: agentResult.turns,
         modelUsage: agentResult.modelUsage,
+        outcome: agentResult.outcome,
       })
       emitEvent(input.cwd, {
         implementation: profileName,

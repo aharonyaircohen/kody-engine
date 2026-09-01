@@ -84,6 +84,7 @@ describe("run index backend", () => {
       output: { verdict: "retry" },
       usage: {
         version: 1,
+        measurement: "reported",
         tokens: { input: 100, output: 20, cacheRead: 30, cacheCreate: 0, total: 150 },
         costUsd: 0.5,
         agentRuns: 1,
@@ -119,6 +120,7 @@ describe("run index backend", () => {
       updatedAt: "2026-07-05T10:01:00.000Z",
       usage: {
         version: 1,
+        measurement: "reported",
         tokens: { input: 100, output: 20, cacheRead: 30, cacheCreate: 0, total: 150 },
         costUsd: 0.5,
         agentRuns: 1,

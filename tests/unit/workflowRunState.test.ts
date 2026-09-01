@@ -58,6 +58,7 @@ describe("workflow run state", () => {
         costUsd: 0.5,
         agentRuns: 1,
         turns: 4,
+        measurement: "reported",
         byModel: {},
       },
     })

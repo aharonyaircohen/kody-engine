@@ -27,12 +27,14 @@ describe("run usage", () => {
       costUsd: 1.25,
       agentRuns: 1,
       turns: 7,
+      measurement: "reported",
       byModel: {
         "minimax/MiniMax-M3": {
           tokens: { input: 100, output: 20, cacheRead: 300, cacheCreate: 40, total: 460 },
           costUsd: 1.25,
           agentRuns: 1,
           turns: 7,
+          measurement: "reported",
         },
       },
     })
@@ -54,6 +56,7 @@ describe("run usage", () => {
       costUsd: 0.7,
       agentRuns: 2,
       turns: 6,
+      measurement: "reported",
       byModel: {
         "minimax/MiniMax-M3": first!.byModel["minimax/MiniMax-M3"],
         "openrouter/deepseek": second!.byModel["openrouter/deepseek"],
@@ -82,6 +85,57 @@ describe("run usage", () => {
           tokens: { input: 120, output: 25, cacheRead: 400, cacheCreate: 10, total: 555 },
           costUsd: 0.42,
         },
+      },
+    })
+  })
+
+  it("marks a failed run with no billable provider usage as unknown", () => {
+    const usage = createRunUsage({ input: 0, output: 0, cacheRead: 0, cacheCreate: 0 }, 0, {
+      model: "minimax/MiniMax-M3",
+      turns: 1,
+      outcome: "failed",
+    })
+
+    expect(usage).toMatchObject({
+      measurement: "unknown",
+      tokens: { total: 0 },
+      byModel: {
+        "minimax/MiniMax-M3": { measurement: "unknown", tokens: { total: 0 } },
+      },
+    })
+  })
+
+  it("keeps failed run usage reported when the provider supplied billable usage", () => {
+    const usage = createRunUsage({ input: 20, output: 5, cacheRead: 0, cacheCreate: 0 }, 0.01, {
+      model: "minimax/MiniMax-M3",
+      turns: 1,
+      outcome: "failed",
+    })
+
+    expect(usage).toMatchObject({
+      measurement: "reported",
+      tokens: { total: 25 },
+      costUsd: 0.01,
+    })
+  })
+
+  it("marks an aggregate as partial when only some child usage is known", () => {
+    const known = createRunUsage({ input: 20, output: 5, cacheRead: 0, cacheCreate: 0 }, 0.01, {
+      model: "openrouter/deepseek",
+      turns: 1,
+    })
+    const unknown = createRunUsage({ input: 0, output: 0, cacheRead: 0, cacheCreate: 0 }, 0, {
+      model: "minimax/MiniMax-M3",
+      turns: 1,
+      outcome: "failed",
+    })
+
+    expect(mergeRunUsage(known, unknown)).toMatchObject({
+      measurement: "partial",
+      tokens: { total: 25 },
+      byModel: {
+        "openrouter/deepseek": { measurement: "reported" },
+        "minimax/MiniMax-M3": { measurement: "unknown" },
       },
     })
   })
@@ -134,6 +188,23 @@ describe("run usage", () => {
     expect(written).toContain("3,000 cache-read")
     expect(written).toContain("200 output")
     expect(written).toContain("8 turns")
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it("does not present unknown failed usage as a measured zero", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kody-usage-summary-"))
+    const summaryPath = path.join(dir, "summary.md")
+    const usage = createRunUsage({ input: 0, output: 0, cacheRead: 0, cacheCreate: 0 }, 0, {
+      model: "minimax/MiniMax-M3",
+      turns: 1,
+      outcome: "failed",
+    })!
+
+    appendRunUsageSummary(summaryPath, "implementation:run", usage)
+
+    const written = fs.readFileSync(summaryPath, "utf8")
+    expect(written).toContain("usage unknown")
+    expect(written).toContain("cost:** unknown")
     fs.rmSync(dir, { recursive: true, force: true })
   })
 })

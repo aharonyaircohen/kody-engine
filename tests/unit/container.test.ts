@@ -258,6 +258,7 @@ describe("container: routing through children", () => {
     })
     const firstUsage: NonNullable<ExecutorOutput["usage"]> = {
       version: 1,
+      measurement: "reported",
       tokens: { input: 100, output: 20, cacheRead: 30, cacheCreate: 0, total: 150 },
       costUsd: 0.5,
       agentRuns: 1,
@@ -266,6 +267,7 @@ describe("container: routing through children", () => {
     }
     const secondUsage: NonNullable<ExecutorOutput["usage"]> = {
       version: 1,
+      measurement: "reported",
       tokens: { input: 40, output: 10, cacheRead: 0, cacheCreate: 5, total: 55 },
       costUsd: 0.2,
       agentRuns: 1,
