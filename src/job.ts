@@ -335,7 +335,8 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
         })
       }
       if (valid.workflowRunId && workflowIdentity && base.config && result.workflowState) {
-        await checkpointTerminalWorkflowState(checkpoint, result.workflowState)
+        await lease?.checkpoint()
+        await writeWorkflowRunState(base.config, base.cwd, workflowIdentity, valid.workflowRunId, result.workflowState)
       }
       if (
         valid.workflowRunId &&
@@ -545,7 +546,7 @@ async function runCapabilityWorkflow(
       const state = initialWorkflowState(parent, workflow)
       state.status = "blocked"
       state.blocker = invalid
-      await checkpointTerminalWorkflowState(checkpoint, state)
+      await checkpoint?.(state)
       return { exitCode: 64, reason: invalid, workflowState: state }
     }
     return { exitCode: 64, reason: invalid }
@@ -555,7 +556,7 @@ async function runCapabilityWorkflow(
     const state = initialWorkflowState(parent, workflow)
     state.status = "blocked"
     state.blocker = resumeBlocker
-    await checkpointTerminalWorkflowState(checkpoint, state)
+    await checkpoint?.(state)
     return { exitCode: 64, reason: resumeBlocker, workflowState: state }
   }
   const result = isGraphWorkflow(workflow)
@@ -667,7 +668,7 @@ async function runLinearCapabilityWorkflow(
       state.status = result.capabilityResults?.at(-1)?.status === "blocked" ? "blocked" : "failed"
       state.blocker =
         result.reason ?? `workflow ${capability.slug} stopped at step ${index + 1}/${workflow.steps.length}: ${label}`
-      await checkpointTerminalWorkflowState(checkpoint, state)
+      await checkpoint?.(state)
       return withWorkflowBoundaryEval(capability, {
         ...result,
         reason: state.blocker,
@@ -678,7 +679,7 @@ async function runLinearCapabilityWorkflow(
 
   state.status = "done"
   delete state.blocker
-  await checkpointTerminalWorkflowState(checkpoint, state)
+  await checkpoint?.(state)
   return withWorkflowBoundaryEval(capability, { ...result, workflowState: state })
 }
 
@@ -801,7 +802,7 @@ async function runGraphCapabilityWorkflow(
       const reason = `workflow ${capability.slug} exceeded ${maxExecutedSteps} executed steps`
       state.status = "blocked"
       state.blocker = reason
-      await checkpointTerminalWorkflowState(checkpoint, state)
+      await checkpoint?.(state)
       return { ...result, exitCode: 64, reason, workflowState: state }
     }
 
@@ -811,7 +812,7 @@ async function runGraphCapabilityWorkflow(
       const reason = `workflow ${capability.slug} current step ${state.currentStepId} is missing`
       state.status = "blocked"
       state.blocker = reason
-      await checkpointTerminalWorkflowState(checkpoint, state)
+      await checkpoint?.(state)
       return { ...result, exitCode: 64, reason, workflowState: state }
     }
 
@@ -845,7 +846,7 @@ async function runGraphCapabilityWorkflow(
         output: { status: "blocked", summary: reason },
         completedAt: new Date().toISOString(),
       }
-      await checkpointTerminalWorkflowState(checkpoint, state)
+      await checkpoint?.(state)
       return { exitCode: 64, reason, workflowState: state }
     }
 
@@ -918,7 +919,7 @@ async function runGraphCapabilityWorkflow(
       const lastResult = result.capabilityResults?.at(-1)
       state.status = lastResult?.status === "blocked" ? "blocked" : "failed"
       state.blocker = result.reason ?? `workflow step ${step.id} failed`
-      await checkpointTerminalWorkflowState(checkpoint, state)
+      await checkpoint?.(state)
       return withWorkflowBoundaryEval(capability, { ...result, workflowState: state })
     }
 
@@ -931,7 +932,7 @@ async function runGraphCapabilityWorkflow(
       const reason = `workflow step ${step.id} did not emit the structured result required by its conditions: ${resultConditionPaths.join(", ")}`
       state.status = "blocked"
       state.blocker = reason
-      await checkpointTerminalWorkflowState(checkpoint, state)
+      await checkpoint?.(state)
       return { ...result, exitCode: 64, reason, workflowState: state }
     }
 
@@ -944,7 +945,7 @@ async function runGraphCapabilityWorkflow(
           : `workflow step ${step.id} has no available connection`
       state.status = "blocked"
       state.blocker = reason
-      await checkpointTerminalWorkflowState(checkpoint, state)
+      await checkpoint?.(state)
       return { ...result, exitCode: 64, reason, workflowState: state }
     }
     if (transition.maxIterations !== undefined) {
@@ -961,7 +962,7 @@ async function runGraphCapabilityWorkflow(
   }
 
   state.status = "done"
-  await checkpointTerminalWorkflowState(checkpoint, state)
+  await checkpoint?.(state)
   return withWorkflowBoundaryEval(capability, { ...result, workflowState: state })
 }
 
@@ -993,7 +994,7 @@ async function completeWorkflowAtTerminal(
         : "Workflow ended without a usable result")
     state.status = terminalFailure
     state.blocker = summary
-    await checkpointTerminalWorkflowState(checkpoint, state)
+    await checkpoint?.(state)
     return withWorkflowBoundaryEval(capability, {
       ...output,
       exitCode: terminalFailure === "failed" ? 1 : 64,
@@ -1004,20 +1005,8 @@ async function completeWorkflowAtTerminal(
   state.status = "done"
   delete state.currentStepId
   delete state.blocker
-  await checkpointTerminalWorkflowState(checkpoint, state)
+  await checkpoint?.(state)
   return withWorkflowBoundaryEval(capability, { ...output, workflowState: state })
-}
-
-async function checkpointTerminalWorkflowState(
-  checkpoint: ((state: WorkflowRunState) => Promise<void>) | undefined,
-  state: WorkflowRunState,
-): Promise<void> {
-  if (!checkpoint) return
-  try {
-    await checkpoint(state)
-  } catch (error) {
-    process.stderr.write(`warning: failed to save terminal Workflow state: ${String(error)}\n`)
-  }
 }
 
 function graphWorkflowExecutionKey(
