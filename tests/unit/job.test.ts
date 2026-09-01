@@ -1383,6 +1383,15 @@ describe("runJob (Phase 1 seam)", () => {
       hasGitHubActionsIdentity.mockReturnValue(true)
       runImplementationChain.mockResolvedValueOnce({
         exitCode: 0,
+        usage: {
+          version: 1,
+          tokens: { input: 100, output: 20, cacheRead: 30, cacheCreate: 0, total: 150 },
+          costUsd: 0.5,
+          agentRuns: 1,
+          turns: 4,
+          measurement: "reported",
+          byModel: {},
+        },
         capabilityOutput: {
           pr: 3947,
           headSha: "abcdef1234567",
@@ -1415,6 +1424,15 @@ describe("runJob (Phase 1 seam)", () => {
           pr: 3947,
           headSha: "abcdef1234567",
           verdict: "pass",
+          usage: {
+            version: 1,
+            tokens: { input: 100, output: 20, cacheRead: 30, cacheCreate: 0, total: 150 },
+            costUsd: 0.5,
+            agentRuns: 1,
+            turns: 4,
+            measurement: "reported",
+            byModel: {},
+          },
         },
       })
     } finally {

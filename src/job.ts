@@ -345,13 +345,17 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
         result.workflowState?.status !== "waiting-approval"
       ) {
         const facts = result.workflowState?.facts ?? {}
+        const completionOutput = {
+          ...facts,
+          ...(result.usage ? { usage: result.usage } : {}),
+        }
         await notifyWorkflowCompleted({
           workflowId: workflowIdentity,
           runId: valid.workflowRunId,
           ...(typeof base.preloadedData?.loopId === "string" ? { loopId: base.preloadedData.loopId } : {}),
           status: result.workflowState?.status === "blocked" ? "blocked" : result.exitCode === 0 ? "success" : "failed",
           ...(result.reason ? { summary: result.reason } : {}),
-          ...(Object.keys(facts).length > 0 ? { output: facts } : {}),
+          ...(Object.keys(completionOutput).length > 0 ? { output: completionOutput } : {}),
         })
       }
       publishRunUsage(`workflow:${workflowIdentity}`, result.usage)
