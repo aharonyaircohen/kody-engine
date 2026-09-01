@@ -15,17 +15,11 @@ const connection = {
 describe("runtime Connections", () => {
   it("loads only declared Connections and returns no credential value", async () => {
     const load = vi.fn(async () => connection)
-    await expect(
-      resolveRuntimeConnections(
-        ["facebook-main"],
-        ["FACEBOOK_PAGE_ACCESS_TOKEN"],
-        load,
-      ),
-    ).resolves.toEqual([connection])
+    await expect(resolveRuntimeConnections(["facebook-main"], ["FACEBOOK_PAGE_ACCESS_TOKEN"], load)).resolves.toEqual([
+      connection,
+    ])
     expect(load).toHaveBeenCalledWith("facebook-main")
-    expect(JSON.stringify((await load.mock.results[0]?.value) ?? null)).not.toContain(
-      "secret-value",
-    )
+    expect(JSON.stringify((await load.mock.results[0]?.value) ?? null)).not.toContain("secret-value")
   })
 
   it("fails closed for missing, unverified, or non-allowlisted credentials", async () => {
@@ -33,14 +27,13 @@ describe("runtime Connections", () => {
       resolveRuntimeConnections(["missing"], ["FACEBOOK_PAGE_ACCESS_TOKEN"], async () => null),
     ).rejects.toThrow(/not found/i)
     await expect(
-      resolveRuntimeConnections(
-        ["facebook-main"],
-        ["FACEBOOK_PAGE_ACCESS_TOKEN"],
-        async () => ({ ...connection, status: "needs_attention" }),
-      ),
+      resolveRuntimeConnections(["facebook-main"], ["FACEBOOK_PAGE_ACCESS_TOKEN"], async () => ({
+        ...connection,
+        status: "needs_attention",
+      })),
     ).rejects.toThrow(/not connected/i)
-    await expect(
-      resolveRuntimeConnections(["facebook-main"], [], async () => connection),
-    ).rejects.toThrow(/not allowlisted/i)
+    await expect(resolveRuntimeConnections(["facebook-main"], [], async () => connection)).rejects.toThrow(
+      /not allowlisted/i,
+    )
   })
 })

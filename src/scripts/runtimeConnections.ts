@@ -20,9 +20,7 @@ export async function resolveRuntimeConnections(
     ? [...new Set(ids.filter((id): id is string => typeof id === "string" && /^[a-z0-9][a-z0-9-]{0,63}$/.test(id)))]
     : []
   const allowedSecrets = new Set(
-    Array.isArray(declaredSecrets)
-      ? declaredSecrets.filter((name): name is string => typeof name === "string")
-      : [],
+    Array.isArray(declaredSecrets) ? declaredSecrets.filter((name): name is string => typeof name === "string") : [],
   )
   const connections: RuntimeConnection[] = []
   for (const id of requested) {

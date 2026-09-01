@@ -3,8 +3,8 @@ import * as fs from "node:fs"
 
 import { parseCapabilityResultsFromText } from "../capabilityResult.js"
 import type { PreflightScript } from "../implementations/types.js"
+import { type RuntimeConnection, resolveRuntimeConnections } from "./runtimeConnections.js"
 import { resolveRuntimeSecrets } from "./runtimeSecrets.js"
-import { resolveRuntimeConnections } from "./runtimeConnections.js"
 import { buildTickChildEnv } from "./tickShellRunner.js"
 
 const DEFAULT_SCRIPT_TIMEOUT_MS = 5 * 60 * 1000
@@ -21,12 +21,9 @@ export const runSimpleCapabilityScript: PreflightScript = async (ctx) => {
   }
 
   const capabilityEnvironment = isStringRecord(ctx.data.capabilityEnvironment) ? ctx.data.capabilityEnvironment : {}
-  let connections
+  let connections: RuntimeConnection[]
   try {
-    connections = await resolveRuntimeConnections(
-      ctx.data.capabilityConnectionIds,
-      ctx.data.capabilitySecretNames,
-    )
+    connections = await resolveRuntimeConnections(ctx.data.capabilityConnectionIds, ctx.data.capabilitySecretNames)
   } catch (error) {
     ctx.output.exitCode = 78
     ctx.output.reason = error instanceof Error ? error.message : "Capability Connection loading failed"

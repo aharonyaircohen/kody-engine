@@ -81,7 +81,8 @@ function parseWorkflowApproval(value: unknown): WorkflowRunState["approval"] | u
     typeof approval.action !== "string" ||
     typeof approval.contextHash !== "string" ||
     (approval.status !== "pending" && approval.status !== "approved" && approval.status !== "consumed")
-  ) return undefined
+  )
+    return undefined
   return {
     stepId: approval.stepId,
     action: approval.action,

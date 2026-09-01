@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest"
-import {
-  approveWorkflowStep,
-  requireWorkflowStepApproval,
-} from "../../src/workflowStepApproval.js"
+import { approveWorkflowStep, requireWorkflowStepApproval } from "../../src/workflowStepApproval.js"
 
 const state = {
   status: "running" as const,
@@ -25,9 +22,7 @@ describe("Workflow step approval", () => {
       action: "workflow-step:publish",
       status: "pending",
     })
-    expect(requireWorkflowStepApproval(state, "publish").approval.contextHash).toBe(
-      paused.approval.contextHash,
-    )
+    expect(requireWorkflowStepApproval(state, "publish").approval.contextHash).toBe(paused.approval.contextHash)
   })
 
   it("executes only once after the matching approval is marked approved", () => {

@@ -130,12 +130,7 @@ export function validateWorkflow(value: unknown, options: WorkflowValidationOpti
       )
     }
     if (step.approval !== undefined && step.approval !== "required") {
-      issue(
-        issues,
-        "invalid_step_approval",
-        `${base}.approval`,
-        'workflow step approval must be "required"',
-      )
+      issue(issues, "invalid_step_approval", `${base}.approval`, 'workflow step approval must be "required"')
     }
     if (step.approval === "required" && !text(step.id)) {
       issue(

@@ -2282,6 +2282,71 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("does not leak workflow-only input into a later capability contract", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-input-boundary-"))
+    const originalCwd = process.cwd()
+    try {
+      writeCapability(cwd, "bug-pilot", {
+        name: "bug-pilot",
+        action: "bug-pilot",
+        workflow: {
+          startAt: "claim",
+          steps: [
+            {
+              id: "claim",
+              capability: "claim",
+              inputs: { requiredLabels: { from: "workflow.input.requiredLabels" } },
+              next: "reproduce",
+            },
+            {
+              id: "reproduce",
+              capability: "reproduce",
+              target: "issue",
+              targetFact: "issue",
+            },
+          ],
+        },
+      })
+      writeContractCapability(cwd, "claim", ["requiredLabels"], ["issue"])
+      writeContractCapability(cwd, "reproduce", ["issue"], ["status"])
+      process.chdir(cwd)
+      runImplementationChain
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: { issue: 127 },
+          capabilityResults: [capabilityResult({ issue: 127 })],
+        })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          capabilityOutput: { status: "reproduced" },
+          capabilityResults: [capabilityResult({ status: "reproduced" })],
+        })
+
+      const result = await runJob(
+        {
+          action: "bug-pilot",
+          capability: "bug-pilot",
+          cliArgs: { input: JSON.stringify({ requiredLabels: ["bug"] }) },
+          flavor: "instant",
+        },
+        { cwd },
+      )
+
+      expect(result.exitCode).toBe(0)
+      expect(runImplementationChain.mock.calls[0]![1].cliArgs).toEqual({
+        capability: "claim",
+        input: JSON.stringify({ requiredLabels: ["bug"] }),
+      })
+      expect(runImplementationChain.mock.calls[1]![1].cliArgs).toEqual({
+        capability: "reproduce",
+        input: JSON.stringify({ issue: 127 }),
+      })
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it("blocks a saved graph workflow when its definition changed", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-stale-resume-"))
     const originalCwd = process.cwd()

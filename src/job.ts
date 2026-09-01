@@ -46,7 +46,6 @@ import { resolveSimpleCapabilityRuntime, simpleCapabilityRuntimeArgs } from "./s
 import type { Action } from "./state.js"
 import { createStateBackendFromEnv, hasStateBackendConfig } from "./state-backend.js"
 import { workflowDefinitionHash, workflowResumeBlocker } from "./workflowDefinitionIdentity.js"
-import { requireWorkflowStepApproval } from "./workflowStepApproval.js"
 import {
   isWorkflowDefinitionId,
   readWorkflowDefinition,
@@ -59,6 +58,7 @@ import {
   workflowRuntimeTenant,
   writeWorkflowRunState,
 } from "./workflowRunState.js"
+import { requireWorkflowStepApproval } from "./workflowStepApproval.js"
 import { formatWorkflowValidationIssues, validateWorkflow } from "./workflowValidation.js"
 
 export { stableJobKey } from "./jobIdentity.js"
@@ -1115,7 +1115,12 @@ function workflowStepToJob(
   const action = step.action ?? step.capability
   const targetNumber = workflowStepTargetNumber(step, parent, chainData)
   const mappedInputs = resolveWorkflowStepInputs(step, chainData, cwd)
-  const rawArgs = mappedInputs ? { ...mappedInputs } : { ...parent.cliArgs }
+  const genericCapability = usesGenericCapabilityInput(action, cwd)
+  const rawArgs = mappedInputs
+    ? { ...mappedInputs }
+    : genericCapability
+      ? inheritedGenericStepInput(step.capability, parent.cliArgs, cwd)
+      : { ...parent.cliArgs }
   if (step.target === "pr") {
     if (typeof targetNumber !== "number") {
       throw new InvalidJobError(`workflow step ${action} needs a PR target but no prior PR URL is available`)
@@ -1125,11 +1130,11 @@ function workflowStepToJob(
     rawArgs.issue = targetNumber
   }
   const genericInput = capabilityStepInput(
-    step.input ?? mappedInputs ?? chainData.workflowInput ?? genericInputFromArgs(rawArgs),
+    step.input ?? mappedInputs ?? genericInputFromArgs(rawArgs),
     step.target,
     targetNumber,
   )
-  const cliArgs = usesGenericCapabilityInput(action, cwd)
+  const cliArgs = genericCapability
     ? genericInput === undefined
       ? {}
       : { input: JSON.stringify(genericInput) }
@@ -1195,6 +1200,22 @@ function capabilityInputNames(folder: CapabilityFolder): Set<string> {
   const properties = folder.config.inputSchema?.properties
   if (!properties || typeof properties !== "object" || Array.isArray(properties)) return new Set()
   return new Set(Object.keys(properties))
+}
+
+function inheritedGenericStepInput(
+  capability: string,
+  parentArgs: Record<string, unknown>,
+  cwd: string,
+): Record<string, unknown> {
+  const input = workflowInputContext(parentArgs)
+  const folder = resolveCapabilityFolder(capability, hydratedCapabilitiesRoot(cwd))
+  if (!folder) return input
+  if (!folder.contractPath) return input
+  if (folder.config.inputSchema?.additionalProperties !== false) return input
+  const accepted = capabilityInputNames(folder)
+  if (accepted.size === 0) return input
+  const routing = new Set(["base"])
+  return Object.fromEntries(Object.entries(input).filter(([name]) => accepted.has(name) || routing.has(name)))
 }
 
 function cloneWorkflowSteps(steps: NonNullable<WorkflowRunState["steps"]>): NonNullable<WorkflowRunState["steps"]> {
