@@ -45,6 +45,7 @@ import { publishWorkflowReport } from "./scripts/publishReport.js"
 import { resolveSimpleCapabilityRuntime, simpleCapabilityRuntimeArgs } from "./simpleCapabilityRuntime.js"
 import type { Action } from "./state.js"
 import { createStateBackendFromEnv, hasStateBackendConfig } from "./state-backend.js"
+import { mergeRunUsage, publishRunUsage } from "./usage.js"
 import { workflowDefinitionHash, workflowResumeBlocker } from "./workflowDefinitionIdentity.js"
 import {
   isWorkflowDefinitionId,
@@ -60,7 +61,6 @@ import {
 } from "./workflowRunState.js"
 import { requireWorkflowStepApproval } from "./workflowStepApproval.js"
 import { formatWorkflowValidationIssues, validateWorkflow } from "./workflowValidation.js"
-import { mergeRunUsage, publishRunUsage } from "./usage.js"
 
 export { stableJobKey } from "./jobIdentity.js"
 
