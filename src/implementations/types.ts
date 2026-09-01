@@ -10,6 +10,7 @@
 import type { AgentResult } from "../agent.js"
 import type { KodyConfig, ReasoningEffort } from "../config.js"
 import type { Phase } from "../state.js"
+import type { RunUsage } from "../usage.js"
 
 // ────────────────────────────────────────────────────────────────────────────
 // Profile shape (mirrors the JSON on disk).
@@ -465,7 +466,7 @@ export interface Context {
     exitCode: number
     prUrl?: string
     reason?: string
-    usage?: { tokens: number; costUsd: number }
+    usage?: RunUsage
     /**
      * In-process hand-off to the next stage. A stage (e.g. `classify`) sets
      * this so the orchestrator runs the chosen sub-orchestrator
@@ -631,5 +632,7 @@ export interface WorkflowRunState {
   facts: Record<string, unknown>
   evidence: Record<string, boolean>
   artifacts: Array<{ label: string; url?: string; path?: string }>
+  /** Aggregate provider usage checkpointed after every completed workflow step. */
+  usage?: RunUsage
   blocker?: string
 }

@@ -60,6 +60,7 @@ import {
 } from "./workflowRunState.js"
 import { requireWorkflowStepApproval } from "./workflowStepApproval.js"
 import { formatWorkflowValidationIssues, validateWorkflow } from "./workflowValidation.js"
+import { mergeRunUsage, publishRunUsage } from "./usage.js"
 
 export { stableJobKey } from "./jobIdentity.js"
 
@@ -329,6 +330,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
                 ? "success"
                 : "failed",
           summary: result.reason,
+          usage: result.usage,
           updatedAt: new Date().toISOString(),
         })
       }
@@ -352,6 +354,7 @@ export async function runJob(job: Job, base: RunJobBase): Promise<ExecutorOutput
           ...(Object.keys(facts).length > 0 ? { output: facts } : {}),
         })
       }
+      publishRunUsage(`workflow:${workflowIdentity}`, result.usage)
       return result
     } finally {
       await lease?.release().catch((error: unknown) => {
@@ -555,16 +558,17 @@ async function runCapabilityWorkflow(
   const result = isGraphWorkflow(workflow)
     ? await runGraphCapabilityWorkflow(parent, workflow, capability, base, checkpoint)
     : await runLinearCapabilityWorkflow(parent, workflow, capability, base, checkpoint)
-  if (workflow.report && result.workflowState) {
+  const resultWithUsage = result.workflowState?.usage ? { ...result, usage: result.workflowState.usage } : result
+  if (workflow.report && resultWithUsage.workflowState) {
     await publishWorkflowReport({
       config: base.config ?? loadConfig(base.cwd),
       publication: workflow.report,
       workflowId: capability.slug,
       workflowTitle: capability.title,
-      state: result.workflowState,
+      state: resultWithUsage.workflowState,
     })
   }
-  return result
+  return resultWithUsage
 }
 
 async function runLinearCapabilityWorkflow(
@@ -718,6 +722,7 @@ function initialWorkflowState(parent: Job, workflow: CapabilityWorkflowConfig): 
       facts: { ...prior.facts },
       evidence: { ...prior.evidence },
       artifacts: prior.artifacts.map((artifact) => ({ ...artifact })),
+      ...(prior.usage ? { usage: structuredClone(prior.usage) } : {}),
     }
   }
   const firstStepId = workflow.startAt ?? workflow.steps[0]?.id
@@ -738,6 +743,7 @@ function initialWorkflowState(parent: Job, workflow: CapabilityWorkflowConfig): 
     },
     evidence: { ...(prior?.evidence ?? {}) },
     artifacts: (prior?.artifacts ?? []).map((artifact) => ({ ...artifact })),
+    ...(prior?.usage ? { usage: structuredClone(prior.usage) } : {}),
   }
 }
 
@@ -1259,6 +1265,7 @@ function finishWorkflowStep(state: WorkflowRunState, step: CapabilityWorkflowSte
     ...(result.capabilityOutput !== undefined ? { output: result.capabilityOutput } : {}),
     completedAt: new Date().toISOString(),
   }
+  state.usage = mergeRunUsage(state.usage, result.usage)
 }
 
 function usesGenericCapabilityInput(action: string, cwd: string): boolean {

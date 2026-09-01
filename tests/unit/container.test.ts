@@ -93,6 +93,7 @@ function makeMockEnvironment(
     implementation: string
     onInvoke?: (state: TaskState) => Action | null
     exitCode?: number
+    usage?: ExecutorOutput["usage"]
   }>,
 ): {
   runChild: NonNullable<ExecutorInput["__runChild"]>
@@ -120,7 +121,7 @@ function makeMockEnvironment(
         action: a.type,
       })
     }
-    return { exitCode: script.exitCode ?? 0 }
+    return { exitCode: script.exitCode ?? 0, usage: script.usage }
   }
 
   const readTaskState: NonNullable<ExecutorInput["__readTaskState"]> = (
@@ -245,6 +246,51 @@ describe("container: routing through children", () => {
     expect(result.exitCode).toBe(0)
     expect(env.calls.map((c) => c.name)).toEqual(["plan", "run"])
     expect(env.calls[0]?.cliArgs).toEqual({ issue: 42 })
+  })
+
+  it("returns aggregate usage across routed children", async () => {
+    const root = makeContainerFixture({
+      containerName: "usage",
+      children: [
+        { implementation: "plan", target: "issue", next: { PLAN_COMPLETED: "run" } },
+        { implementation: "run", target: "issue", next: { RUN_COMPLETED: "done" } },
+      ],
+    })
+    const firstUsage: NonNullable<ExecutorOutput["usage"]> = {
+      version: 1,
+      tokens: { input: 100, output: 20, cacheRead: 30, cacheCreate: 0, total: 150 },
+      costUsd: 0.5,
+      agentRuns: 1,
+      turns: 4,
+      byModel: {},
+    }
+    const secondUsage: NonNullable<ExecutorOutput["usage"]> = {
+      version: 1,
+      tokens: { input: 40, output: 10, cacheRead: 0, cacheCreate: 5, total: 55 },
+      costUsd: 0.2,
+      agentRuns: 1,
+      turns: 2,
+      byModel: {},
+    }
+    const env = makeMockEnvironment([
+      { implementation: "plan", onInvoke: () => action("PLAN_COMPLETED"), usage: firstUsage },
+      { implementation: "run", onInvoke: () => action("RUN_COMPLETED"), usage: secondUsage },
+    ])
+
+    const result = await runImplementation("usage", {
+      cliArgs: { issue: 42 },
+      cwd: root,
+      skipConfig: true,
+      __runChild: env.runChild,
+      __readTaskState: env.readTaskState,
+    })
+
+    expect(result.usage).toMatchObject({
+      tokens: { input: 140, output: 30, cacheRead: 30, cacheCreate: 5, total: 205 },
+      costUsd: 0.7,
+      agentRuns: 2,
+      turns: 6,
+    })
   })
 
   it("aborts when a child action maps to 'abort'", async () => {

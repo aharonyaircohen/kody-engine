@@ -54,6 +54,7 @@ import {
   verifyTaskArtifacts,
 } from "./task-artifacts.js"
 import { firstRequiredFailure, verifyCliTools } from "./tools.js"
+import { createRunUsage, mergeRunUsage, publishRunUsage, type RunUsage } from "./usage.js"
 
 /**
  * Postflights that MUST NOT mutate shared git/PR state on a failed run.
@@ -247,7 +248,7 @@ export interface ExecutorOutput {
   action?: Action
   prUrl?: string
   reason?: string
-  usage?: { tokens: number; costUsd: number }
+  usage?: RunUsage
   /**
    * In-process stage hand-off. When a stage (e.g. `classify`) decides which
    * stage runs next, it sets `ctx.output.nextDispatch` instead of posting an
@@ -314,6 +315,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
     })
     if (out.prUrl) process.stdout.write(`PR_URL=${out.prUrl}\n`)
     else if (out.exitCode !== 0 && out.reason) process.stdout.write(`PR_URL=FAILED: ${out.reason}\n`)
+    publishRunUsage(`implementation:${profileName}`, out.usage)
     return out
   }
 
@@ -475,6 +477,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
           startedAt: runIndexStartedAt,
           updatedAt: finishedAt,
           reason: out.reason,
+          usage: out.usage,
         }),
       )
       await finalizeStagedRunIndexRowsAsync(config, input.cwd, ctx.data, {
@@ -482,6 +485,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
         updatedAt: finishedAt,
         reason: out.reason,
         output: ctx.data.capabilityOutput,
+        usage: out.usage,
       })
     }
   }
@@ -798,15 +802,11 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
           reason: err instanceof Error ? err.message : String(err),
         })
       }
-      ctx.output.usage = {
-        tokens: agentResult.tokens
-          ? agentResult.tokens.input +
-            agentResult.tokens.output +
-            agentResult.tokens.cacheRead +
-            agentResult.tokens.cacheCreate
-          : 0,
-        costUsd: agentResult.costUsd ?? 0,
-      }
+      ctx.output.usage = createRunUsage(agentResult.tokens, agentResult.costUsd, {
+        model: `${model.provider}/${model.model}`,
+        turns: agentResult.turns,
+        modelUsage: agentResult.modelUsage,
+      })
       emitEvent(input.cwd, {
         implementation: profileName,
         kind: "agent_end",
@@ -961,6 +961,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
         return finishAndEnd({
           exitCode: 99,
           reason: error instanceof Error ? error.message : String(error),
+          usage: ctx.output.usage,
         })
       }
     }
@@ -968,6 +969,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
       exitCode: ctx.output.exitCode ?? 0,
       prUrl: ctx.output.prUrl,
       reason: ctx.output.reason,
+      usage: ctx.output.usage,
       action: ctx.data.action as Action | undefined,
       nextDispatch: ctx.output.nextDispatch,
       nextJob: ctx.output.nextJob,
@@ -982,7 +984,7 @@ export async function runImplementation(profileName: string, input: ExecutorInpu
     // run stays "running" forever with no terminal marker. Postflight
     // crashes are handled granularly above; this is the last-resort net.
     const msg = err instanceof Error ? err.message : String(err)
-    return finishAndEnd({ exitCode: 99, reason: ctx.output.reason ?? msg })
+    return finishAndEnd({ exitCode: 99, reason: ctx.output.reason ?? msg, usage: ctx.output.usage })
   } finally {
     runRuntimeCleanup(ctx)
     // Clear any kody:* lifecycle labels stamped by `setLifecycleLabel`
@@ -1062,6 +1064,8 @@ export const MAX_CHAIN_HOPS = 60
  */
 export async function runImplementationChain(profileName: string, input: ExecutorInput): Promise<ExecutorOutput> {
   let result = await runImplementation(profileName, input)
+  let aggregateUsage = result.usage
+  let followedHandoff = false
   let chainConfig = input.config
   const configForHandoff = (): KodyConfig | undefined => {
     if (chainConfig || input.skipConfig) return chainConfig
@@ -1073,6 +1077,7 @@ export async function runImplementationChain(profileName: string, input: Executo
     ...(result.taskState ? { taskState: result.taskState } : {}),
   }
   for (let hops = 1; (result.nextDispatch || result.nextJob) && hops <= MAX_CHAIN_HOPS; hops++) {
+    followedHandoff = true
     if (result.nextJob) {
       const next = result.nextJob
       const after = result.afterNextJob
@@ -1086,6 +1091,7 @@ export async function runImplementationChain(profileName: string, input: Executo
         quiet: input.quiet,
         preloadedData: chainData,
       })
+      aggregateUsage = mergeRunUsage(aggregateUsage, childResult.usage)
       if (
         after &&
         childResult.exitCode === 0 &&
@@ -1115,6 +1121,7 @@ export async function runImplementationChain(profileName: string, input: Executo
           quiet: input.quiet,
           preloadedData: chainData,
         })
+        aggregateUsage = mergeRunUsage(aggregateUsage, result.usage)
         chainData = {
           ...chainData,
           ...(result.taskState ? { taskState: result.taskState } : {}),
@@ -1147,6 +1154,7 @@ export async function runImplementationChain(profileName: string, input: Executo
       quiet: input.quiet,
       preloadedData: chainData,
     })
+    aggregateUsage = mergeRunUsage(aggregateUsage, result.usage)
     chainData = {
       ...chainData,
       ...(result.taskState ? { taskState: result.taskState } : {}),
@@ -1164,7 +1172,9 @@ export async function runImplementationChain(profileName: string, input: Executo
       "unknown"
     process.stderr.write(`[kody] in-process hand-off cap (${MAX_CHAIN_HOPS}) reached; not running ${pending}\n`)
   }
-  return result
+  const output = aggregateUsage ? { ...result, usage: aggregateUsage } : result
+  if (followedHandoff) publishRunUsage(`chain:${profileName}`, output.usage)
+  return output
 }
 
 function handoffToJob(handoff: {

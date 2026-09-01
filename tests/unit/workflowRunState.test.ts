@@ -26,6 +26,14 @@ describe("workflow run state", () => {
         },
         evidence: { releasePrExists: true },
         artifacts: [{ label: "Release PR", url: "https://github.com/o/r/pull/42" }],
+        usage: {
+          version: 1,
+          tokens: { input: 100, output: 20, cacheRead: 30, cacheCreate: 0, total: 150 },
+          costUsd: 0.5,
+          agentRuns: 1,
+          turns: 4,
+          byModel: {},
+        },
       }),
     ).toEqual({
       status: "running",
@@ -44,11 +52,40 @@ describe("workflow run state", () => {
       },
       evidence: { releasePrExists: true },
       artifacts: [{ label: "Release PR", url: "https://github.com/o/r/pull/42" }],
+      usage: {
+        version: 1,
+        tokens: { input: 100, output: 20, cacheRead: 30, cacheCreate: 0, total: 150 },
+        costUsd: 0.5,
+        agentRuns: 1,
+        turns: 4,
+        byModel: {},
+      },
     })
   })
 
   it("rejects corrupt workflow state", () => {
     expect(parseWorkflowRunState({ status: "unknown" })).toBeNull()
+  })
+
+  it("drops corrupt usage without discarding a valid workflow cursor", () => {
+    expect(
+      parseWorkflowRunState({
+        status: "running",
+        completedStepIds: [],
+        transitionCounts: {},
+        facts: {},
+        evidence: {},
+        artifacts: [],
+        usage: { version: 1, tokens: { input: -1 } },
+      }),
+    ).toEqual({
+      status: "running",
+      completedStepIds: [],
+      transitionCounts: {},
+      facts: {},
+      evidence: {},
+      artifacts: [],
+    })
   })
 
   it("preserves the start cursor on current stored workflow definitions", () => {

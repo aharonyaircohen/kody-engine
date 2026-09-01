@@ -18,6 +18,7 @@ import { type ExecutorInput, type ExecutorOutput, resolveProfilePath, runImpleme
 import type { ContainerChild, Context, InputSpec, Profile } from "./implementations/types.js"
 import { loadProfile } from "./profile.js"
 import { type Action, emptyState, readTaskStateAsync, type TaskState, type TaskTarget } from "./state.js"
+import { mergeRunUsage } from "./usage.js"
 
 const CONTAINER_MAX_ITERATIONS = 50
 
@@ -216,6 +217,7 @@ export async function runContainerLoop(profile: Profile, ctx: Context, input: Ex
           // is off, so children fall back to their own loaders.
           preloadedData: preloadedSnapshot,
         })
+        ctx.output.usage = mergeRunUsage(ctx.output.usage, childOut.usage)
         emitEvent(input.cwd, {
           implementation: profile.name,
           kind: "container_child",

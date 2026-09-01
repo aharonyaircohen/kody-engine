@@ -1618,6 +1618,57 @@ describe("runJob (Phase 1 seam)", () => {
     }
   })
 
+  it("returns and checkpoints aggregate usage across workflow steps", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-workflow-usage-"))
+    const originalCwd = process.cwd()
+    try {
+      writeSimpleCapability(cwd, "review")
+      writeSimpleCapability(cwd, "fix")
+      writeWorkflowDefinition(cwd, "review-fix", {
+        name: "Review Fix",
+        agent: "kody",
+        steps: [{ capability: "review" }, { capability: "fix" }],
+      })
+      process.chdir(cwd)
+      runImplementationChain
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          usage: {
+            version: 1,
+            tokens: { input: 100, output: 20, cacheRead: 30, cacheCreate: 0, total: 150 },
+            costUsd: 0.5,
+            agentRuns: 1,
+            turns: 4,
+            byModel: {},
+          },
+        })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          usage: {
+            version: 1,
+            tokens: { input: 40, output: 10, cacheRead: 0, cacheCreate: 5, total: 55 },
+            costUsd: 0.2,
+            agentRuns: 1,
+            turns: 2,
+            byModel: {},
+          },
+        })
+
+      const result = await runJob({ workflow: "review-fix", cliArgs: {}, flavor: "instant" }, { cwd })
+
+      expect(result.usage).toMatchObject({
+        tokens: { input: 140, output: 30, cacheRead: 30, cacheCreate: 5, total: 205 },
+        costUsd: 0.7,
+        agentRuns: 2,
+        turns: 6,
+      })
+      expect(result.workflowState?.usage).toEqual(result.usage)
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it.each([
     { status: "fail", workflowStatus: "failed", exitCode: 1 },
     { status: "blocked", workflowStatus: "blocked", exitCode: 64 },

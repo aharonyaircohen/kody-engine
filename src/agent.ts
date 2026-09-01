@@ -32,6 +32,14 @@ export interface AgentTokenUsage {
   cacheCreate: number
 }
 
+export interface AgentModelUsage {
+  inputTokens: number
+  outputTokens: number
+  cacheReadInputTokens: number
+  cacheCreationInputTokens: number
+  costUSD: number
+}
+
 /**
  * Structured outcome kind for an agent run. Lets the container loop and
  * postflight scripts route on the reason for failure instead of treating
@@ -76,6 +84,10 @@ export interface AgentResult {
   costUsd?: number
   /** Number of SDK messages observed (proxy for turn count). */
   messageCount?: number
+  /** Provider model turns reported by the terminal SDK result. */
+  turns?: number
+  /** Provider-reported usage keyed by the model that actually handled the run. */
+  modelUsage?: Record<string, AgentModelUsage>
   /** Private specialists actually started through the Agent tool. */
   invokedSubagents?: string[]
 }
@@ -466,6 +478,8 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   let tokens: AgentTokenUsage = { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 }
   let costUsd = 0
   let messageCount = 0
+  let turns = 0
+  let modelUsage: Record<string, AgentModelUsage> = {}
   let finalText = ""
   let getSubmitted: (() => { cursor: string; data: Record<string, unknown>; done: boolean } | undefined) | undefined
   const invokedSubagents = new Set<string>()
@@ -502,6 +516,8 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     tokens = { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 }
     costUsd = 0
     messageCount = 0
+    turns = 0
+    modelUsage = {}
     // Flips once the session runs a tool that could change durable state —
     // gates the connection retry so we never replay a mutating turn.
     let sawMutatingTool = false
@@ -904,10 +920,12 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
             }
           }
         }
-        // Accumulate token usage. The SDK attaches `usage` to result messages
-        // (and sometimes to assistant messages); we sum whatever surfaces so
-        // that the per-stage event log captures the real cost regardless of
-        // where the SDK chose to put it.
+        // A terminal result contains the provider's cumulative totals. Reset
+        // before reading it so any earlier message-level usage is not counted
+        // a second time.
+        if (m.type === "result") {
+          tokens = { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 }
+        }
         const usage = (m as { usage?: Record<string, unknown> }).usage
         if (usage && typeof usage === "object") {
           const i = Number(usage.input_tokens ?? 0)
@@ -934,6 +952,12 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
         if (m.type === "result") {
           const reportedCost = Number((m as { total_cost_usd?: unknown }).total_cost_usd ?? 0)
           if (Number.isFinite(reportedCost) && reportedCost >= 0) costUsd = reportedCost
+          const reportedTurns = Number((m as { num_turns?: unknown }).num_turns ?? 0)
+          if (Number.isFinite(reportedTurns) && reportedTurns >= 0) turns = reportedTurns
+          const reportedModelUsage = (m as { modelUsage?: unknown }).modelUsage
+          if (reportedModelUsage && typeof reportedModelUsage === "object" && !Array.isArray(reportedModelUsage)) {
+            modelUsage = structuredClone(reportedModelUsage as Record<string, AgentModelUsage>)
+          }
           if (m.subtype === "success") {
             outcome = "completed"
             outcomeKind = "ok"
@@ -1063,6 +1087,8 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     tokens,
     costUsd,
     messageCount,
+    turns,
+    modelUsage,
     invokedSubagents: [...invokedSubagents],
   }
 }

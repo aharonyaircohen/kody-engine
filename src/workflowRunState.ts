@@ -1,5 +1,6 @@
 import type { WorkflowRunState } from "./implementations/types.js"
 import { createStateBackendFromEnv } from "./state-backend.js"
+import { parseRunUsage } from "./usage.js"
 
 interface WorkflowBackendConfig {
   github?: { owner?: string; repo?: string }
@@ -55,6 +56,7 @@ export function parseWorkflowRunState(raw: unknown): WorkflowRunState | null {
             typeof (artifact as { path?: unknown }).path === "string"),
       )
     : []
+  const usage = parseRunUsage(state.usage)
   return {
     status: state.status,
     ...(typeof state.currentStepId === "string" ? { currentStepId: state.currentStepId } : {}),
@@ -69,6 +71,7 @@ export function parseWorkflowRunState(raw: unknown): WorkflowRunState | null {
     facts: { ...(facts as Record<string, unknown>) },
     evidence: Object.fromEntries(evidenceEntries),
     artifacts: artifacts.map((artifact) => ({ ...artifact })),
+    ...(usage ? { usage } : {}),
     ...(typeof state.blocker === "string" ? { blocker: state.blocker } : {}),
   }
 }

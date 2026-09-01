@@ -1,5 +1,6 @@
 import type { Profile } from "./implementations/types.js"
 import { createStateBackendFromEnv } from "./state-backend.js"
+import type { RunUsage } from "./usage.js"
 
 interface RunBackendConfig {
   github?: { owner?: string; repo?: string }
@@ -47,6 +48,7 @@ export interface RunIndexRow {
   detailUrl?: string
   statePath?: string
   output?: unknown
+  usage?: RunUsage
 }
 
 export interface RunIndexFile {
@@ -60,6 +62,7 @@ interface RunIndexFinalization {
   updatedAt: string
   reason?: string
   output?: unknown
+  usage?: RunUsage
 }
 
 const RUN_INDEX_PATH = "runs/index.json"
@@ -136,6 +139,7 @@ function finalizedRunIndexRow(row: RunIndexRow, result: RunIndexFinalization): R
     updatedAt: result.updatedAt,
     summary: result.reason ?? row.summary,
     ...(result.output === undefined ? {} : { output: result.output }),
+    ...(result.usage === undefined ? {} : { usage: result.usage }),
   }
 }
 
@@ -157,6 +161,7 @@ export function runIndexRowFromJobContext(input: {
   startedAt: string
   updatedAt: string
   reason?: string
+  usage?: RunUsage
 }): RunIndexRow | null {
   const subjectType = runSubjectType(input.data)
   const subjectId = stringValue(input.data.runSubjectId)
@@ -207,6 +212,7 @@ export function runIndexRowFromJobContext(input: {
     target: input.data.jobTarget,
     sourceType: "job" as const,
     output: input.data.capabilityOutput,
+    usage: input.usage,
   })
 }
 

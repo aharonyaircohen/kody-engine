@@ -94,7 +94,7 @@ describe("runAgent: per-turn watchdog", () => {
     expect(res.durationMs!).toBeGreaterThanOrEqual(0)
   })
 
-  it("accumulates token usage across messages with `usage`", async () => {
+  it("uses the terminal provider totals without double-counting earlier messages", async () => {
     queryGenFactory = async function* () {
       yield {
         type: "assistant",
@@ -105,13 +105,33 @@ describe("runAgent: per-turn watchdog", () => {
         type: "result",
         subtype: "success",
         result: "DONE",
+        num_turns: 7,
         usage: { input_tokens: 50, output_tokens: 30, cache_creation_input_tokens: 10 },
+        modelUsage: {
+          "claude-test": {
+            inputTokens: 50,
+            outputTokens: 30,
+            cacheReadInputTokens: 0,
+            cacheCreationInputTokens: 10,
+            costUSD: 0.1,
+          },
+        },
       }
     }
     const res = await runAgent({ ...baseOpts(), maxTurnTimeoutMs: 5000 })
-    expect(res.tokens?.input).toBe(150)
-    expect(res.tokens?.output).toBe(50)
-    expect(res.tokens?.cacheRead).toBe(50)
+    expect(res.tokens?.input).toBe(50)
+    expect(res.tokens?.output).toBe(30)
+    expect(res.tokens?.cacheRead).toBe(0)
     expect(res.tokens?.cacheCreate).toBe(10)
+    expect(res.turns).toBe(7)
+    expect(res.modelUsage).toEqual({
+      "claude-test": {
+        inputTokens: 50,
+        outputTokens: 30,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 10,
+        costUSD: 0.1,
+      },
+    })
   })
 })

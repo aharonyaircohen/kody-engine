@@ -82,6 +82,14 @@ describe("run index backend", () => {
       updatedAt: "2026-07-05T10:05:00.000Z",
       reason: "failed",
       output: { verdict: "retry" },
+      usage: {
+        version: 1,
+        tokens: { input: 100, output: 20, cacheRead: 30, cacheCreate: 0, total: 150 },
+        costUsd: 0.5,
+        agentRuns: 1,
+        turns: 4,
+        byModel: {},
+      },
     })
     expect(backend.saveAgencyRun).toHaveBeenCalledWith(
       "o/r",
@@ -92,6 +100,7 @@ describe("run index backend", () => {
         status: "failed",
         summary: "failed",
         output: { verdict: "retry" },
+        usage: expect.objectContaining({ tokens: expect.objectContaining({ total: 150 }), turns: 4 }),
       }),
       "2026-07-05T10:05:00.000Z",
     )
@@ -108,6 +117,14 @@ describe("run index backend", () => {
       status: "success",
       startedAt: "2026-07-05T10:00:00.000Z",
       updatedAt: "2026-07-05T10:01:00.000Z",
+      usage: {
+        version: 1,
+        tokens: { input: 100, output: 20, cacheRead: 30, cacheCreate: 0, total: 150 },
+        costUsd: 0.5,
+        agentRuns: 1,
+        turns: 4,
+        byModel: {},
+      },
       data: {
         runSubjectType: "capability",
         runSubjectId: "prepare-release",
@@ -126,6 +143,7 @@ describe("run index backend", () => {
       capabilityRevision: "cap-rev",
       implementationRevision: "impl-rev",
       output: { lesson: "Use signed releases." },
+      usage: expect.objectContaining({ tokens: expect.objectContaining({ total: 150 }), turns: 4 }),
     })
   })
 })
