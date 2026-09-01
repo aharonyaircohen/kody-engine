@@ -12,7 +12,10 @@ describe("consumer workflow template", () => {
 
   it("forwards the canonical generic run request to the engine", () => {
     expect(workflow).toContain("runRequest:")
-    expect(workflow).toContain("KODY_RUN_REQUEST_JSON: $" + "{{ inputs.runRequest }}")
+    expect(workflow).toContain("runRequestBase64:")
+    expect(workflow).toContain("KODY_RUN_REQUEST_BASE64: $" + "{{ inputs.runRequestBase64 }}")
+    expect(workflow).toContain('base64 --decode')
+    expect(workflow).toContain('export KODY_RUN_REQUEST_JSON')
     expect(workflow).toContain("npx -y -p @kody-ade/kody-engine@latest kody-engine")
     expect(workflow).not.toContain("kody-engine ci")
   })

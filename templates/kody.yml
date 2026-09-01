@@ -47,6 +47,10 @@ on:
         description: 'Canonical Kody execution request JSON'
         type: string
         default: ''
+      runRequestBase64:
+        description: 'Transport-safe canonical Kody execution request'
+        type: string
+        default: ''
   issue_comment:
     types: [created]
   pull_request:
@@ -88,8 +92,12 @@ jobs:
           MODEL: ${{ inputs.model }}
           DASHBOARD_URL: ${{ inputs.dashboardUrl }}
           KODY_RUN_REQUEST_JSON: ${{ inputs.runRequest }}
+          KODY_RUN_REQUEST_BASE64: ${{ inputs.runRequestBase64 }}
         working-directory: ${{ github.workspace }}
         run: |
+          if [ -n "$KODY_RUN_REQUEST_BASE64" ]; then
+            export KODY_RUN_REQUEST_JSON="$(printf '%s' "$KODY_RUN_REQUEST_BASE64" | base64 --decode)"
+          fi
           npx -y -p @kody-ade/kody-engine@latest kody-engine
 
       - name: Upload Quality Run evidence
