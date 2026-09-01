@@ -10,6 +10,7 @@ const roots: string[] = []
 afterEach(() => {
   delete process.env.LOGIN_PASSWORD
   delete process.env.KODY_TOKEN
+  delete process.env.E2E_GITHUB_TOKEN
   delete process.env.MINIMAX_API_KEY
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true })
 })
@@ -122,7 +123,7 @@ describe("prepareSimpleCapabilityRuntime", () => {
     }
     writeLogin(ctx.cwd, "qa@example.com")
     process.env.LOGIN_PASSWORD = "private-password"
-    process.env.KODY_TOKEN = "protected-github-token"
+    process.env.E2E_GITHUB_TOKEN = "protected-github-token"
     process.env.MINIMAX_API_KEY = "protected-model-key"
     const originalFetch = globalThis.fetch
     let savedRepositoryAuth: unknown
@@ -202,8 +203,40 @@ describe("prepareSimpleCapabilityRuntime", () => {
 
     await prepareSimpleCapabilityRuntime(ctx, profile)
 
-    expect(ctx.data.prompt).toContain("no `KODY_TOKEN` secret was found")
+    expect(ctx.data.prompt).toContain("no `E2E_GITHUB_TOKEN` secret was found")
     expect(ctx.data.prompt).toContain("return a blocked result")
+  })
+
+  it("uses Kody token authentication when email credentials are unavailable", async () => {
+    const { ctx, profile } = fixture()
+    ctx.data.capabilityRequirements = { browser: true, qaCredentials: true, githubTestToken: true }
+    ctx.data.capabilityInput = { previewUrl: "https://dashboard.example.test/repo/acme/shop" }
+    process.env.E2E_GITHUB_TOKEN = "protected-github-token"
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url.endsWith("/user")) {
+        return new Response(JSON.stringify({ login: "qa-user", avatar_url: "https://img.test/qa", id: 42 }), {
+          status: 200,
+        })
+      }
+      if (url.endsWith("/repos/acme/shop")) {
+        return new Response(JSON.stringify({ full_name: "acme/shop" }), { status: 200 })
+      }
+      return new Response("not found", { status: 404 })
+    }
+
+    try {
+      await prepareSimpleCapabilityRuntime(ctx, profile)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+
+    expect(ctx.data.prompt).toContain("already authenticated")
+    expect(ctx.data.prompt).not.toContain("no QA credentials configured")
+    expect(ctx.data.prompt).not.toContain("protected-github-token")
+    expect(profile.claudeCode.mcpServers[0]?.args).toContain("--storage-state")
+    for (const cleanup of (ctx.data.__runtimeCleanup as Array<() => void> | undefined) ?? []) cleanup()
   })
 
   it("restricts an agent-driven Quality browser to the selected deployment", async () => {

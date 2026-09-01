@@ -109,6 +109,29 @@ function appendPrompt(ctx: Context, section: string): void {
   ctx.data.prompt = [prompt, section.trim()].filter(Boolean).join("\n\n")
 }
 
+function capabilityTargetUrl(ctx: Context): string {
+  const input =
+    ctx.data.capabilityInput && typeof ctx.data.capabilityInput === "object" && !Array.isArray(ctx.data.capabilityInput)
+      ? (ctx.data.capabilityInput as Record<string, unknown>)
+      : {}
+  return typeof input.url === "string"
+    ? input.url
+    : typeof input.targetUrl === "string"
+      ? input.targetUrl
+      : typeof input.previewUrl === "string"
+        ? input.previewUrl
+        : ""
+}
+
+async function isolatedAuthAttempt(ctx: Context, attempt: () => Promise<boolean>) {
+  const previous = ctx.data.qaAuthBlock
+  ctx.data.qaAuthBlock = ""
+  const ready = await attempt()
+  const message = String(ctx.data.qaAuthBlock ?? "").trim()
+  ctx.data.qaAuthBlock = previous
+  return { ready, message }
+}
+
 export const prepareSimpleCapabilityRuntime: PreflightScript = async (ctx, profile) => {
   const requirements = requirementsFrom(ctx)
   if (!requirements.browser) return
@@ -117,31 +140,28 @@ export const prepareSimpleCapabilityRuntime: PreflightScript = async (ctx, profi
   }
 
   configureBrowser(ctx, profile, requirements)
+  const targetUrl = capabilityTargetUrl(ctx)
+  const authAttempts: Array<{ ready: boolean; message: string }> = []
   if (requirements.qaCredentials) {
     await loadQaContext(ctx, profile)
-    const capabilityInput =
-      ctx.data.capabilityInput &&
-      typeof ctx.data.capabilityInput === "object" &&
-      !Array.isArray(ctx.data.capabilityInput)
-        ? (ctx.data.capabilityInput as Record<string, unknown>)
-        : {}
-    const targetUrl =
-      typeof capabilityInput.url === "string"
-        ? capabilityInput.url
-        : typeof capabilityInput.targetUrl === "string"
-          ? capabilityInput.targetUrl
-          : ""
-    await prepareEmailPasswordBrowserAuth(ctx, profile, {
-      login: String(ctx.data.qaLogin ?? ""),
-      targetUrl,
+    const missingCredentialsMessage = String(ctx.data.qaAuthBlock ?? "").trim()
+    const emailAuth = await isolatedAuthAttempt(ctx, () =>
+      prepareEmailPasswordBrowserAuth(ctx, profile, {
+        login: String(ctx.data.qaLogin ?? ""),
+        targetUrl,
+      }),
+    )
+    authAttempts.push({
+      ready: emailAuth.ready,
+      message: emailAuth.message || missingCredentialsMessage,
     })
-    if (requirements.qaAccountCredentials?.length) {
+    if (emailAuth.ready && requirements.qaAccountCredentials?.length) {
       await prepareAccountCredentials(ctx, profile, {
         names: requirements.qaAccountCredentials,
         targetUrl,
       })
     }
-    if (requirements.qaAccountModelSettings) {
+    if (emailAuth.ready && requirements.qaAccountModelSettings) {
       await prepareAccountModelSettings(ctx, profile, {
         settings: requirements.qaAccountModelSettings,
         targetUrl,
@@ -150,27 +170,24 @@ export const prepareSimpleCapabilityRuntime: PreflightScript = async (ctx, profi
   }
 
   if (requirements.githubTestToken) {
-    const capabilityInput =
-      ctx.data.capabilityInput &&
-      typeof ctx.data.capabilityInput === "object" &&
-      !Array.isArray(ctx.data.capabilityInput)
-        ? (ctx.data.capabilityInput as Record<string, unknown>)
-        : {}
-    const targetUrl =
-      typeof capabilityInput.url === "string"
-        ? capabilityInput.url
-        : typeof capabilityInput.targetUrl === "string"
-          ? capabilityInput.targetUrl
-          : ""
-    await prepareKodyRepositoryBrowserAuth(ctx, profile, {
-      repositoryUrl: `https://github.com/${ctx.config.github.owner}/${ctx.config.github.repo}`,
-      credentialKey: "KODY_TOKEN",
-      methodName: "Kody repository QA login",
-      targetUrl,
-    })
+    authAttempts.push(
+      await isolatedAuthAttempt(ctx, () =>
+        prepareKodyRepositoryBrowserAuth(ctx, profile, {
+          repositoryUrl: `https://github.com/${ctx.config.github.owner}/${ctx.config.github.repo}`,
+          credentialKey: "E2E_GITHUB_TOKEN",
+          methodName: "Kody repository QA login",
+          targetUrl,
+        }),
+      ),
+    )
   }
 
   if (requirements.qaCredentials || requirements.githubTestToken) {
+    const successful = authAttempts.filter(({ ready }) => ready)
+    ctx.data.qaAuthBlock = (successful.length ? successful : authAttempts)
+      .map(({ message }) => message)
+      .filter(Boolean)
+      .join("\n\n")
     appendPrompt(
       ctx,
       [
