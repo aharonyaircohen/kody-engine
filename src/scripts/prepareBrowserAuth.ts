@@ -417,7 +417,7 @@ export async function prepareEmailPasswordBrowserAuth(
     const response = await fetch(`${origin}/api/auth/sign-in/email`, {
       method: "POST",
       headers: { "content-type": "application/json", origin },
-      body: JSON.stringify({ email: input.login, password: password.value }),
+      body: JSON.stringify({ email: input.login, password: password.value, callbackURL: "/chat" }),
     })
     if (!response.ok) throw new Error(`app login returned ${response.status}`)
     const headers = response.headers as Headers & { getSetCookie?: () => string[] }

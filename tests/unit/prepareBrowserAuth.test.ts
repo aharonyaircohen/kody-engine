@@ -140,8 +140,11 @@ describe("prepareBrowserAuth", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
-        expect(init?.body).toContain("qa@example.com")
-        expect(init?.body).toContain("private-password")
+        expect(JSON.parse(String(init?.body))).toEqual({
+          email: "qa@example.com",
+          password: "private-password",
+          callbackURL: "/chat",
+        })
         const headers = new Headers()
         headers.append(
           "set-cookie",
