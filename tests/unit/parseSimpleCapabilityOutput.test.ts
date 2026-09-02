@@ -94,6 +94,68 @@ describe("parseSimpleCapabilityOutput", () => {
     ])
   })
 
+  it("reports a model-provider failure before validating capability output", async () => {
+    const providerError =
+      'API Error: 500 litellm.InternalServerError - {"error":{"message":"Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage. (2056)"}}'
+    const ctx = {
+      data: {
+        capabilityOutputSchema: {
+          type: "object",
+          properties: { verdict: { enum: ["pass", "fix"] } },
+          required: ["verdict"],
+          additionalProperties: false,
+        },
+      },
+      output: {},
+    } as unknown as Parameters<typeof parseSimpleCapabilityOutput>[0]
+
+    await parseSimpleCapabilityOutput(
+      ctx,
+      {} as Parameters<typeof parseSimpleCapabilityOutput>[1],
+      {
+        outcome: "failed",
+        outcomeKind: "model_error",
+        error: providerError,
+        finalText: providerError,
+      } as Parameters<typeof parseSimpleCapabilityOutput>[2],
+    )
+
+    const reason =
+      "Model provider blocked the run: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage. (2056)"
+    expect(ctx.output.exitCode).toBe(1)
+    expect(ctx.output.reason).toBe(reason)
+    expect(ctx.data.capabilityResults).toEqual([
+      expect.objectContaining({ status: "blocked", summary: reason, blockers: [reason] }),
+    ])
+  })
+
+  it("reports a provider rate limit without treating it as malformed capability output", async () => {
+    const ctx = {
+      data: {
+        capabilityOutputSchema: {
+          type: "object",
+          properties: { verdict: { enum: ["pass", "fix"] } },
+          required: ["verdict"],
+        },
+      },
+      output: {},
+    } as unknown as Parameters<typeof parseSimpleCapabilityOutput>[0]
+
+    await parseSimpleCapabilityOutput(
+      ctx,
+      {} as Parameters<typeof parseSimpleCapabilityOutput>[1],
+      {
+        outcome: "failed",
+        outcomeKind: "rate_limit",
+        error: "429 Too Many Requests",
+        finalText: "429 Too Many Requests",
+      } as Parameters<typeof parseSimpleCapabilityOutput>[2],
+    )
+
+    expect(ctx.output.exitCode).toBe(1)
+    expect(ctx.output.reason).toBe("Model provider rate limit prevented the run from starting")
+  })
+
   it("keeps the capability output and derives Workflow facts and a PR target", async () => {
     const ctx = { data: {}, output: {} } as Parameters<typeof parseSimpleCapabilityOutput>[0]
     await parseSimpleCapabilityOutput(

@@ -4,6 +4,24 @@ import { parseCapabilityResult } from "../capabilityResult.js"
 import type { PostflightScript } from "../implementations/types.js"
 
 export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, profile, agentResult) => {
+  const providerFailure = modelProviderFailureReason(agentResult)
+  if (providerFailure) {
+    ctx.output.exitCode = 1
+    ctx.output.reason = providerFailure
+    ctx.data.capabilityOutput = { status: "blocked", reason: providerFailure, summary: providerFailure }
+    ctx.data.capabilityResults = [
+      {
+        version: 1,
+        status: "blocked",
+        summary: providerFailure,
+        facts: {},
+        artifacts: [],
+        missingEvidence: [],
+        blockers: [providerFailure],
+      },
+    ]
+    return
+  }
   const requiredSubagents = stringList(ctx.data.requiredSubagents)
   const invokedSubagents = new Set(agentResult?.invokedSubagents ?? [])
   const missingSubagents = requiredSubagents.filter((name) => !invokedSubagents.has(name))
@@ -192,6 +210,25 @@ function unwrapSingleOutput(value: unknown): unknown | undefined {
   const wrapped = value.output
   if (typeof wrapped !== "string") return wrapped
   return parseOutput(wrapped)
+}
+
+function modelProviderFailureReason(agentResult: Parameters<PostflightScript>[2]): string | undefined {
+  if (agentResult?.outcome !== "failed") return undefined
+  if (agentResult.outcomeKind === "rate_limit") {
+    return "Model provider rate limit prevented the run from starting"
+  }
+  if (agentResult.outcomeKind !== "model_error") return undefined
+
+  const raw = agentResult.error || agentResult.finalText
+  const encodedMessage = raw.match(/"message"\s*:\s*("(?:\\.|[^"\\])*")/)?.[1]
+  if (encodedMessage) {
+    try {
+      const message = JSON.parse(encodedMessage)
+      if (typeof message === "string" && message.trim()) return `Model provider blocked the run: ${message.trim()}`
+    } catch {
+    }
+  }
+  return "Model provider failed before returning a result"
 }
 
 function blockInvalidContractOutput(
