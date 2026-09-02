@@ -191,11 +191,7 @@ function unwrapSingleOutput(value: unknown): unknown | undefined {
   if (!isObject(value) || Object.keys(value).length !== 1 || !Object.hasOwn(value, "output")) return undefined
   const wrapped = value.output
   if (typeof wrapped !== "string") return wrapped
-  try {
-    return JSON.parse(wrapped)
-  } catch {
-    return undefined
-  }
+  return parseOutput(wrapped)
 }
 
 function blockInvalidContractOutput(

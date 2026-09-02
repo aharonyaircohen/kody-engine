@@ -255,7 +255,9 @@ describe("parseSimpleCapabilityOutput", () => {
       ctx,
       {} as Parameters<typeof parseSimpleCapabilityOutput>[1],
       {
-        finalText: JSON.stringify({ output: JSON.stringify({ verdict: "pass" }) }),
+        finalText: JSON.stringify({
+          output: 'Capability finished.\n```json\n{"verdict":"pass"}\n```',
+        }),
       } as Parameters<typeof parseSimpleCapabilityOutput>[2],
     )
 
