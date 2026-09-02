@@ -29,7 +29,7 @@ export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, profile
   const outputPath = typeof ctx.data.capabilityOutputPath === "string" ? ctx.data.capabilityOutputPath : undefined
   const fileOutput = readOutputFile(outputPath)
   const hasScriptOutput = Object.hasOwn(ctx.data, "capabilityScriptOutput")
-  const output = fileOutput.found
+  let output = fileOutput.found
     ? fileOutput.value
     : hasScriptOutput
       ? ctx.data.capabilityScriptOutput
@@ -65,22 +65,17 @@ export const parseSimpleCapabilityOutput: PostflightScript = async (ctx, profile
     try {
       validateCapabilityContractOutput(outputSchema, output)
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error)
-      ctx.output.exitCode = 64
-      ctx.output.reason = reason
-      ctx.data.capabilityOutput = output
-      ctx.data.capabilityResults = [
-        {
-          version: 1,
-          status: "blocked",
-          summary: reason,
-          facts: {},
-          artifacts: [],
-          missingEvidence: [],
-          blockers: [reason],
-        },
-      ]
-      return
+      const unwrapped = unwrapSingleOutput(output)
+      if (unwrapped !== undefined) {
+        try {
+          validateCapabilityContractOutput(outputSchema, unwrapped)
+          output = unwrapped
+        } catch {
+          return blockInvalidContractOutput(ctx, output, error)
+        }
+      } else {
+        return blockInvalidContractOutput(ctx, output, error)
+      }
     }
   }
   if (fileOutput.found || hasScriptOutput) acceptAuthoritativeCapabilityOutput(ctx, profile, output)
@@ -190,6 +185,39 @@ function parseSingleJsonCandidate(candidates: Array<string | undefined>): { foun
     }
   }
   return parsed.length === 1 ? { found: true, value: parsed[0] } : { found: false }
+}
+
+function unwrapSingleOutput(value: unknown): unknown | undefined {
+  if (!isObject(value) || Object.keys(value).length !== 1 || !Object.hasOwn(value, "output")) return undefined
+  const wrapped = value.output
+  if (typeof wrapped !== "string") return wrapped
+  try {
+    return JSON.parse(wrapped)
+  } catch {
+    return undefined
+  }
+}
+
+function blockInvalidContractOutput(
+  ctx: Parameters<PostflightScript>[0],
+  output: unknown,
+  error: unknown,
+): undefined {
+  const reason = error instanceof Error ? error.message : String(error)
+  ctx.output.exitCode = 64
+  ctx.output.reason = reason
+  ctx.data.capabilityOutput = output
+  ctx.data.capabilityResults = [
+    {
+      version: 1,
+      status: "blocked",
+      summary: reason,
+      facts: {},
+      artifacts: [],
+      missingEvidence: [],
+      blockers: [reason],
+    },
+  ]
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

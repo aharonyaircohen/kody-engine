@@ -238,6 +238,56 @@ describe("parseSimpleCapabilityOutput", () => {
     expect(ctx.data.capabilityOutput).toEqual({ verdict: "pass" })
   })
 
+  it("accepts a single output wrapper when its value matches the capability contract", async () => {
+    const ctx = {
+      data: {
+        capabilityOutputSchema: {
+          type: "object",
+          properties: { verdict: { enum: ["pass", "fix"] } },
+          required: ["verdict"],
+          additionalProperties: false,
+        },
+      },
+      output: {},
+    } as unknown as Parameters<typeof parseSimpleCapabilityOutput>[0]
+
+    await parseSimpleCapabilityOutput(
+      ctx,
+      {} as Parameters<typeof parseSimpleCapabilityOutput>[1],
+      {
+        finalText: JSON.stringify({ output: JSON.stringify({ verdict: "pass" }) }),
+      } as Parameters<typeof parseSimpleCapabilityOutput>[2],
+    )
+
+    expect(ctx.output.exitCode).toBeUndefined()
+    expect(ctx.data.capabilityOutput).toEqual({ verdict: "pass" })
+  })
+
+  it("rejects a single output wrapper when its value still violates the capability contract", async () => {
+    const ctx = {
+      data: {
+        capabilityOutputSchema: {
+          type: "object",
+          properties: { verdict: { enum: ["pass", "fix"] } },
+          required: ["verdict"],
+          additionalProperties: false,
+        },
+      },
+      output: {},
+    } as unknown as Parameters<typeof parseSimpleCapabilityOutput>[0]
+
+    await parseSimpleCapabilityOutput(
+      ctx,
+      {} as Parameters<typeof parseSimpleCapabilityOutput>[1],
+      {
+        finalText: JSON.stringify({ output: JSON.stringify({ summary: "not a verdict" }) }),
+      } as Parameters<typeof parseSimpleCapabilityOutput>[2],
+    )
+
+    expect(ctx.output.exitCode).toBe(64)
+    expect(ctx.data.capabilityOutput).toEqual({ output: JSON.stringify({ summary: "not a verdict" }) })
+  })
+
   it("prefers the dedicated handoff file over a prose final response", async () => {
     const outputPath = path.join(os.tmpdir(), `capability-output-${crypto.randomUUID()}.json`)
     fs.writeFileSync(outputPath, JSON.stringify({ verdict: "pass" }))
