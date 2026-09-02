@@ -249,6 +249,25 @@ describe("runAgent: finalText collection", () => {
     const out = await runAgent(baseOpts())
     expect(out.finalText).toBe("DONE")
   })
+
+  it("classifies a zero-token provider API error as a model failure", async () => {
+    const providerError =
+      'API Error: 500 litellm.InternalServerError: {"error":{"message":"Token Plan usage limit reached. (2056)"}}'
+    queryMessages = [
+      {
+        type: "result",
+        subtype: "success",
+        result: providerError,
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+    ]
+
+    const out = await runAgent(baseOpts())
+
+    expect(out.outcome).toBe("failed")
+    expect(out.outcomeKind).toBe("model_error")
+    expect(out.error).toBe(providerError)
+  })
 })
 
 describe("runAgent: Dashboard CMS MCP wiring", () => {

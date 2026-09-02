@@ -1012,6 +1012,14 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       errorMessage = "Claude Code reported it is not logged in; refusing to mark agent run successful"
     }
 
+    const providerApiError =
+      outcome === "completed" && tokens.output === 0 && /^API Error:\s*\d+\b/i.test(finalText.trim())
+    if (providerApiError) {
+      outcome = "failed"
+      outcomeKind = "model_error"
+      errorMessage = finalText.trim()
+    }
+
     // Detect a hollow "success" — one the SDK reported as subtype "success"
     // but where the model never actually answered (the dead-proxy signature:
     // 1 turn, $0, then ConnectionRefused). Two signals, only checked on a
