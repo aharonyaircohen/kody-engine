@@ -70,6 +70,17 @@ const open = {
 }
 
 describe("BrainTerminalSessionAgent", () => {
+  it("renders captured and replayed lines with carriage returns for a real terminal", async () => {
+    const store = new MemoryStore()
+    const runtime = new FakeRuntime()
+    const agent = new BrainTerminalSessionAgent({ store, runtime })
+    await agent.open(open)
+    runtime.output = "first line\nsecond line\n"
+    expect(await agent.captureOutput()).toMatchObject({ data: "\u001b[2J\u001b[Hfirst line\r\nsecond line\r\n" })
+    await agent.detach()
+    const replay = await new BrainTerminalSessionAgent({ store, runtime }).open({ ...open, afterRevision: 0 })
+    expect(replay).toContainEqual(expect.objectContaining({ data: "\u001b[2J\u001b[Hfirst line\r\nsecond line\r\n" }))
+  })
   it("creates one durable generation and reattaches to the same process", async () => {
     const store = new MemoryStore()
     const runtime = new FakeRuntime()

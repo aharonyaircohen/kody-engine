@@ -214,7 +214,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   const shouldHydrate =
     args.command !== "help" &&
     args.command !== "version" &&
-    !(args.command === "server" && args.serverName === "brain-serve") &&
+    !(args.command === "server" && (args.serverName === "brain-serve" || args.serverName === "brain-terminal-agent")) &&
     !hasExplicitDefinitionsRoot(definitionCwd) &&
     (Boolean(process.env.CONVEX_URL?.trim()) ||
       (process.env.GITHUB_ACTIONS === "true" && Boolean(process.env.GITHUB_EVENT_NAME)))

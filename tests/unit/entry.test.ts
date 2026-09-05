@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import pkg from "../../package.json"
 
 const brainServeMock = vi.hoisted(() => vi.fn(async () => 0))
+const brainTerminalAgentMock = vi.hoisted(() => vi.fn(async () => 0))
+vi.mock("../../src/servers/brain-terminal-agent.js", () => ({ brainTerminalAgent: brainTerminalAgentMock }))
 
 vi.mock("../../src/servers/brain-serve.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/servers/brain-serve.js")>()),
@@ -216,4 +218,12 @@ describe("entry: parseArgs", () => {
     await expect(main(["brain-serve"])).resolves.toBe(0)
     expect(brainServeMock).toHaveBeenCalledTimes(1)
   })
+  it("starts the terminal agent without repository definitions when backend credentials exist", async () => {
+    vi.stubEnv("CONVEX_URL", "https://example.convex.cloud")
+    vi.stubEnv("KODY_SERVICE_KEY", "service-key")
+    vi.stubEnv("GITHUB_REPOSITORY", "")
+    await expect(main(["brain-terminal-agent", "--cwd", "/workspace/repo"])).resolves.toBe(0)
+    expect(brainTerminalAgentMock).toHaveBeenCalledTimes(1)
+  })
+
 })

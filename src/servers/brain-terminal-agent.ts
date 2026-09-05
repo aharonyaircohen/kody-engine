@@ -1,4 +1,5 @@
 import * as path from "node:path"
+import { mkdir } from "node:fs/promises"
 import { createInterface } from "node:readline"
 import { defaultCloneRepo, ensureRepoCwd } from "../repoWorkspace.js"
 import { FileBrainTerminalMetadataStore, TmuxBrainTerminalRuntime } from "../terminal/brain-terminal-adapters.js"
@@ -94,13 +95,18 @@ export async function brainTerminalAgent(options: {
         }
         const requested = parseBrainTerminalOpenRequest(value)
         const repo = `${requested.session.scope.owner}/${requested.session.scope.repo}`
-        const workspaceCwd = await ensureRepoCwd({
-          baseCwd: options.cwd,
-          reposRoot,
-          repo,
-          repoToken: process.env.KODY_TOKEN ?? process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? process.env.GH_PAT,
-          cloneRepo: defaultCloneRepo,
-        })
+        const workspaceCwd =
+          requested.workspace === "machine"
+            ? path.resolve(options.cwd)
+            : await ensureRepoCwd({
+                baseCwd: options.cwd,
+                reposRoot,
+                repo,
+                repoToken:
+                  process.env.KODY_TOKEN ?? process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? process.env.GH_PAT,
+                cloneRepo: defaultCloneRepo,
+              })
+        if (requested.workspace === "machine") await mkdir(workspaceCwd, { recursive: true })
         const events = await agent.open({ ...requested, cwd: workspaceCwd })
         for (const event of events) writeEvent(output, event)
         opened = true

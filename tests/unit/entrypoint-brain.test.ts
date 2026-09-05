@@ -11,6 +11,7 @@
  */
 
 import { readFileSync } from "node:fs"
+import { spawnSync } from "node:child_process"
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
 
@@ -85,5 +86,34 @@ describe("entrypoint-brain.sh: Hermes config sanity", () => {
     expect(entrypoint).toMatch(/unsafe path/)
     expect(entrypoint).toMatch(/may contain only files and directories/)
     expect(entrypoint).toContain("*..*|*\\\\*)")
+  })
+})
+
+describe("personal Brain startup credentials", () => {
+  // Execute the real shell preflight before it touches the host filesystem.
+  const preflight = readFileSync(ENTRYPOINT_PATH, "utf8").split("# Per-message repo clones")[0]
+  function boot(env: Record<string, string>) {
+    return spawnSync("bash", ["-c", preflight + "\nprintf 'startup-accepted'"], {
+      env: { PATH: process.env.PATH, ...env },
+      encoding: "utf8",
+    })
+  }
+
+  it("accepts a personal Brain without a GitHub credential or boot repository", () => {
+    const result = boot({ BRAIN_API_KEY: "test-brain-key" })
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain("startup-accepted")
+  })
+
+  it("still requires GitHub credentials when a boot repository is selected", () => {
+    const result = boot({ BRAIN_API_KEY: "test-brain-key", REPO: "owner/repo" })
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain("GITHUB_TOKEN")
+  })
+
+  it("still requires the Brain API authentication key", () => {
+    const result = boot({})
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain("BRAIN_API_KEY")
   })
 })

@@ -12,6 +12,7 @@ export interface BrainTerminalOpenRequest {
   type: "open"
   session: { id: string; scope: BrainTerminalScope }
   cwd: string
+  workspace?: "machine" | "repository"
   afterRevision?: number
   cols: number
   rows: number
@@ -112,6 +113,9 @@ export function parseBrainTerminalOpenRequest(value: unknown): BrainTerminalOpen
   const session = request.session as Record<string, unknown>
   if (!session.scope || typeof session.scope !== "object") throw new Error("session scope is required")
   const scope = session.scope as Record<string, unknown>
+  if (request.workspace !== undefined && request.workspace !== "machine" && request.workspace !== "repository") {
+    throw new Error("workspace must be machine or repository")
+  }
   return {
     type: "open",
     session: {
@@ -123,6 +127,7 @@ export function parseBrainTerminalOpenRequest(value: unknown): BrainTerminalOpen
       },
     },
     cwd: requiredIdentifier(request.cwd, "cwd", 1_000),
+    workspace: request.workspace,
     afterRevision: revision(request.afterRevision),
     cols: terminalSize(request.cols, "cols"),
     rows: terminalSize(request.rows, "rows"),
@@ -278,7 +283,7 @@ export class BrainTerminalSessionAgent {
         sessionId: session.id,
         generation: session.generation,
         revision: session.revision,
-        data: `\u001b[2J\u001b[H${session.output}`,
+        data: `\u001b[2J\u001b[H${session.output.replace(/\r?\n/g, "\r\n")}`,
       })
     }
     return events
@@ -344,7 +349,7 @@ export class BrainTerminalSessionAgent {
       sessionId: next.id,
       generation: next.generation,
       revision: next.revision,
-      data: `\u001b[2J\u001b[H${output}`,
+      data: `\u001b[2J\u001b[H${output.replace(/\r?\n/g, "\r\n")}`,
     }
   }
 

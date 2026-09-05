@@ -14,9 +14,9 @@ set -euo pipefail
 #                            Hermes as MCP client.
 #
 # Expected env (set on the Fly machine config by the dashboard provisioner):
-#   REPO              owner/name of the repo the brain operates inside (required)
+#   REPO              optional owner/name of a repository to clone at startup
 #   REF               branch to clone (default: main)
-#   GITHUB_TOKEN      PAT with repo + workflow scope (required)
+#   GITHUB_TOKEN      repository credential (required only when REPO is set)
 #   BRAIN_API_KEY     bearer key the dashboard sends as x-api-key (required)
 #   BRAIN_BACKEND      "brain-serve" (default) | "hermes" — env override of
 #                      kody.config.json brain.mode
@@ -37,7 +37,9 @@ export PATH="/opt/venv/bin:${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr
 # REPO is OPTIONAL. A repo-less Brain boots with no work repo and clones
 # each repo on demand per chat message (into $BRAIN_REPOS_ROOT). When REPO
 # is set we still clone it as a convenience boot repo (back-compat).
-: "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
+if [ -n "${REPO:-}" ]; then
+  : "${GITHUB_TOKEN:?GITHUB_TOKEN is required when REPO is set}"
+fi
 : "${BRAIN_API_KEY:?BRAIN_API_KEY is required}"
 
 # Per-message repo clones land here regardless of whether a boot repo exists.
