@@ -67,15 +67,21 @@ describe("TmuxBrainTerminalRuntime", () => {
     )
   })
 
-  it("captures the active alternate screen", async () => {
-    const run = vi.fn<RunTerminalCommand>(async (_command, args) => {
-      if (args[0] === "display-message") return { code: 0, stdout: "1\n", stderr: "" }
-      return { code: 0, stdout: "codex screen", stderr: "" }
-    })
+  it.each([0, 1])("preserves the cursor and wrapped rows on screen %s", async (alternate) => {
+    const run = vi.fn<RunTerminalCommand>(async () => ({
+      code: 0,
+      stdout: `prompt> abc\nwrapped\n\n2:0:1:${alternate}\n`,
+      stderr: "",
+    }))
     const runtime = new TmuxBrainTerminalRuntime(run)
+    expect(await runtime.capture("kody_session")).toBe("prompt> abc\nwrapped\n\u001b[1;3H\u001b[?25h")
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(run.mock.calls[0]?.[1]).not.toContain("-J")
+  })
 
-    expect(await runtime.capture("kody_session")).toBe("codex screen")
-    expect(run).toHaveBeenLastCalledWith("tmux", ["capture-pane", "-p", "-e", "-t", "kody_session"], undefined)
+  it("keeps a hidden cursor hidden in full-screen applications", async () => {
+    const run = vi.fn<RunTerminalCommand>(async () => ({ code: 0, stdout: "screen\n0:0:0:1\n", stderr: "" }))
+    expect(await new TmuxBrainTerminalRuntime(run).capture("session")).toBe("screen\u001b[1;1H\u001b[?25l")
   })
 
   it("writes input through a temporary tmux buffer without shell interpolation", async () => {
@@ -86,6 +92,7 @@ describe("TmuxBrainTerminalRuntime", () => {
 
     expect(run.mock.calls[0]?.[1].slice(0, 2)).toEqual(["load-buffer", "-b"])
     expect(run.mock.calls[0]?.[2]).toBe("$(touch /tmp/nope)\r")
-    expect(run.mock.calls[1]?.[1]).toEqual(expect.arrayContaining(["paste-buffer", "-d", "-t", "kody_session"]))
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(run.mock.calls[0]?.[1]).toEqual(expect.arrayContaining([";", "paste-buffer", "-d", "-t", "kody_session"]))
   })
 })

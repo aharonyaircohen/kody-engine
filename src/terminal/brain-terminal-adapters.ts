@@ -135,19 +135,38 @@ export class TmuxBrainTerminalRuntime implements BrainTerminalRuntime {
   }
 
   async capture(sessionName: string): Promise<string> {
-    const alternate = await this.run("tmux", ["display-message", "-p", "-t", sessionName, "#{alternate_on}"])
-    if (alternate.code !== 0) throw commandError("inspect screen", alternate)
-    const args =
-      alternate.stdout.trim() === "1"
-        ? ["capture-pane", "-p", "-e", "-t", sessionName]
-        : ["capture-pane", "-p", "-e", "-J", "-S", "-50000", "-t", sessionName]
-    return (await this.tmux("capture", args)).stdout
+    // Capture physical rows and cursor together. Joining wrapped lines or
+    // replaying the final newline moves xterm away from the real shell cursor.
+    const result = await this.tmux("capture", [
+      "capture-pane",
+      "-p",
+      "-e",
+      "-S",
+      "-50000",
+      "-t",
+      sessionName,
+      ";",
+      "display-message",
+      "-p",
+      "-t",
+      sessionName,
+      "#{cursor_x}:#{cursor_y}:#{cursor_flag}:#{alternate_on}",
+    ])
+    const metadata = /\n(\d+):(\d+):([01]):([01])\n?$/.exec(result.stdout)
+    if (!metadata) throw new Error("tmux capture did not include cursor position")
+    const screen = result.stdout.slice(0, metadata.index)
+    const col = Number(metadata[1]) + 1
+    const row = Number(metadata[2]) + 1
+    return `${screen}\u001b[${row};${col}H\u001b[?25${metadata[3] === "1" ? "h" : "l"}`
   }
 
   async input(sessionName: string, data: string): Promise<void> {
     const bufferName = `kody_${randomBytes(8).toString("hex")}`
-    await this.tmux("load input", ["load-buffer", "-b", bufferName, "-"], data)
-    await this.tmux("paste input", ["paste-buffer", "-d", "-b", bufferName, "-t", sessionName])
+    await this.tmux(
+      "input",
+      ["load-buffer", "-b", bufferName, "-", ";", "paste-buffer", "-d", "-b", bufferName, "-t", sessionName],
+      data,
+    )
   }
 
   async resize(sessionName: string, cols: number, rows: number): Promise<void> {

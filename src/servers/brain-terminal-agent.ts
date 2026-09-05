@@ -1,5 +1,5 @@
-import * as path from "node:path"
 import { mkdir } from "node:fs/promises"
+import * as path from "node:path"
 import { createInterface } from "node:readline"
 import { defaultCloneRepo, ensureRepoCwd } from "../repoWorkspace.js"
 import { FileBrainTerminalMetadataStore, TmuxBrainTerminalRuntime } from "../terminal/brain-terminal-adapters.js"
@@ -11,7 +11,7 @@ import {
   parseBrainTerminalStatusRequest,
 } from "../terminal/brain-terminal-session.js"
 
-const DEFAULT_POLL_INTERVAL_MS = 150
+const DEFAULT_POLL_INTERVAL_MS = 50
 
 function writeEvent(output: NodeJS.WritableStream, event: BrainTerminalEvent): void {
   output.write(`${JSON.stringify(event)}\n`)
