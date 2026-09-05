@@ -9,12 +9,6 @@ jobs:
     timeout-minutes: 100
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout current Store definitions
-        uses: actions/checkout@v4
-        with:
-          repository: aharonyaircohen/kody-ai-agency-catalog
-          ref: main
-          path: _live/kody-store
       - uses: pnpm/action-setup@v6
         with: { version: 11 }
       - uses: actions/setup-node@v4
@@ -23,6 +17,14 @@ jobs:
       - run: pnpm verify:live-release
         env:
           KODY_RELEASE_GATE_TOKEN: ${{ secrets.KODY_TOKEN }}
+      # This independent repository must not enter the engine's pnpm workspace
+      # during frozen dependency installation.
+      - name: Checkout current Store definitions
+        uses: actions/checkout@v4
+        with:
+          repository: aharonyaircohen/kody-ai-agency-catalog
+          ref: main
+          path: _live/kody-store
       - name: Verify CI Repair twice from failure to green
         run: node _live/kody-store/scripts/ci-repair-live-gate.mjs
         env:
