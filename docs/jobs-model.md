@@ -84,6 +84,16 @@ runner** that executes a job attempt.
 
 ## The workflow
 
+A completed workflow run returns its saved state without executing its
+capabilities again. This terminal-state check applies to both ordered and graph
+workflows, including repeated requests for the same completed run.
+
+Both ordered and graph workflows honor `runWhen` before binding inputs or
+requesting approval. A skipped graph step produces no result and follows its
+available outgoing connection (including a default connection). Conditions on
+that step's result cannot reuse a previous step's output. If no connection is
+available, the workflow stops as blocked.
+
 A workflow is the run shape around capabilities:
 
 ```text

@@ -225,17 +225,12 @@ function modelProviderFailureReason(agentResult: Parameters<PostflightScript>[2]
     try {
       const message = JSON.parse(encodedMessage)
       if (typeof message === "string" && message.trim()) return `Model provider blocked the run: ${message.trim()}`
-    } catch {
-    }
+    } catch {}
   }
   return "Model provider failed before returning a result"
 }
 
-function blockInvalidContractOutput(
-  ctx: Parameters<PostflightScript>[0],
-  output: unknown,
-  error: unknown,
-): undefined {
+function blockInvalidContractOutput(ctx: Parameters<PostflightScript>[0], output: unknown, error: unknown): undefined {
   const reason = error instanceof Error ? error.message : String(error)
   ctx.output.exitCode = 64
   ctx.output.reason = reason

@@ -268,6 +268,12 @@ export function buildServer(opts: BuildRunnerServerOptions): Server {
         sendJson(res, 400, { error: parsed.error })
         return
       }
+      // Reading the body yields to other requests. Claim only after validation,
+      // with no await between this check and the assignment.
+      if (busy) {
+        sendJson(res, 409, { error: "runner busy" })
+        return
+      }
       busy = true
       // Accept now; the job runs detached and streams events to dashboardUrl.
       sendJson(res, 202, { ok: true, jobId: parsed.job.jobId, started: true })

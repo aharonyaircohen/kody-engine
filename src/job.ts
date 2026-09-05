@@ -540,6 +540,10 @@ async function runCapabilityWorkflow(
   base: RunJobBase,
   checkpoint?: (state: WorkflowRunState) => Promise<void>,
 ): Promise<ExecutorOutput> {
+  // A persisted terminal run is a receipt, not a request to execute again.
+  if (parent.workflowState?.status === "done") {
+    return { exitCode: 0, workflowState: structuredClone(parent.workflowState), usage: parent.workflowState.usage }
+  }
   const invalid = workflowError(workflow, base)
   if (invalid) {
     if (isGraphWorkflow(workflow)) {
@@ -817,6 +821,19 @@ async function runGraphCapabilityWorkflow(
     }
 
     const label = step.action ?? step.capability
+    if (!shouldRunWorkflowStep(step, chainData)) {
+      process.stdout.write(
+        `→ kody: workflow ${capability.slug} step ${index + 1}/${workflow.steps.length} → ${label} (skipped)\n\n`,
+      )
+      result = { exitCode: 0 }
+      // A skipped step has no output; never route using the previous step's result.
+      delete chainData.workflowLastResult
+      delete chainData.workflowLastOutput
+      delete chainData.workflowLastOutcome
+      const terminal = await advanceGraphWorkflow(step, capability, state, result, chainData, checkpoint, true)
+      if (terminal) return terminal
+      continue
+    }
     if (step.approval === "required") {
       const approvalState = requireWorkflowStepApproval(state, step.id!)
       state.status = approvalState.status
@@ -923,47 +940,61 @@ async function runGraphCapabilityWorkflow(
       return withWorkflowBoundaryEval(capability, { ...result, workflowState: state })
     }
 
-    if (!step.next || step.next.length === 0) {
-      return completeWorkflowAtTerminal(capability, state, result, checkpoint)
-    }
-
-    const resultConditionPaths = workflowResultConditionPaths(step.next)
-    if (resultConditionPaths.length > 0 && !result.capabilityResults?.at(-1)) {
-      const reason = `workflow step ${step.id} did not emit the structured result required by its conditions: ${resultConditionPaths.join(", ")}`
-      state.status = "blocked"
-      state.blocker = reason
-      await checkpoint?.(state)
-      return { ...result, exitCode: 64, reason, workflowState: state }
-    }
-
-    const transition = selectWorkflowTransition(step, chainData, state.transitionCounts)
-    if (!transition) {
-      const exhausted = exhaustedWorkflowTransitions(step, chainData, state.transitionCounts)
-      const reason =
-        exhausted.length > 0
-          ? `workflow step ${step.id} reached iteration limit: ${exhausted.join(", ")}`
-          : `workflow step ${step.id} has no available connection`
-      state.status = "blocked"
-      state.blocker = reason
-      await checkpoint?.(state)
-      return { ...result, exitCode: 64, reason, workflowState: state }
-    }
-    if (transition.maxIterations !== undefined) {
-      const key = `${step.id}->${transition.to}`
-      state.transitionCounts[key] = (state.transitionCounts[key] ?? 0) + 1
-    }
-    if (transition.to === "$end") {
-      return completeWorkflowAtTerminal(capability, state, result, checkpoint)
-    }
-    state.currentStepId = transition.to
-    state.status = "running"
-    delete state.blocker
-    await checkpoint?.(state)
+    const terminal = await advanceGraphWorkflow(step, capability, state, result, chainData, checkpoint)
+    if (terminal) return terminal
   }
 
   state.status = "done"
   await checkpoint?.(state)
   return withWorkflowBoundaryEval(capability, { ...result, workflowState: state })
+}
+
+async function advanceGraphWorkflow(
+  step: CapabilityWorkflowStepConfig,
+  capability: CapabilityFolder,
+  state: WorkflowRunState,
+  result: ExecutorOutput,
+  chainData: Record<string, unknown>,
+  checkpoint: ((state: WorkflowRunState) => Promise<void>) | undefined,
+  skipped = false,
+): Promise<ExecutorOutput | null> {
+  if (!step.next || step.next.length === 0) {
+    return completeWorkflowAtTerminal(capability, state, result, checkpoint)
+  }
+
+  const resultConditionPaths = workflowResultConditionPaths(step.next)
+  if (!skipped && resultConditionPaths.length > 0 && !result.capabilityResults?.at(-1)) {
+    const reason = `workflow step ${step.id} did not emit the structured result required by its conditions: ${resultConditionPaths.join(", ")}`
+    state.status = "blocked"
+    state.blocker = reason
+    await checkpoint?.(state)
+    return { ...result, exitCode: 64, reason, workflowState: state }
+  }
+
+  const transition = selectWorkflowTransition(step, chainData, state.transitionCounts)
+  if (!transition) {
+    const exhausted = exhaustedWorkflowTransitions(step, chainData, state.transitionCounts)
+    const reason =
+      exhausted.length > 0
+        ? `workflow step ${step.id} reached iteration limit: ${exhausted.join(", ")}`
+        : `workflow step ${step.id} has no available connection`
+    state.status = "blocked"
+    state.blocker = reason
+    await checkpoint?.(state)
+    return { ...result, exitCode: 64, reason, workflowState: state }
+  }
+  if (transition.maxIterations !== undefined) {
+    const key = `${step.id}->${transition.to}`
+    state.transitionCounts[key] = (state.transitionCounts[key] ?? 0) + 1
+  }
+  if (transition.to === "$end") {
+    return completeWorkflowAtTerminal(capability, state, result, checkpoint)
+  }
+  state.currentStepId = transition.to
+  state.status = "running"
+  delete state.blocker
+  await checkpoint?.(state)
+  return null
 }
 
 async function completeWorkflowAtTerminal(

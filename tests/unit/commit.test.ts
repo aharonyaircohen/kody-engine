@@ -100,6 +100,26 @@ describe("commit: FORBIDDEN_PATH_PREFIXES shape", () => {
 })
 
 describe("commit: trusted Store config activation", () => {
+  it.each([
+    "activeAgents",
+    "activeCapabilities",
+    "activeWorkflows",
+    "activePipelines",
+    "activeCommands",
+    "activeFeatures",
+  ])("allows the first addition to %s", (field) => {
+    expect(isSafeConfigActivationChange({ company: {} }, { company: { [field]: ["example"] } })).toBe(true)
+  })
+
+  it.each([null, "invalid", [42]])("rejects malformed previous activation lists: %j", (previous) => {
+    expect(
+      isSafeConfigActivationChange(
+        { company: { activeCapabilities: previous } },
+        { company: { activeCapabilities: ["example"] } },
+      ),
+    ).toBe(false)
+  })
+
   const before = {
     agent: { model: "minimax/MiniMax-M3" },
     access: { allowedAssociations: ["OWNER"] },

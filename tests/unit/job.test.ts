@@ -95,6 +95,61 @@ describe("runJob (Phase 1 seam)", () => {
     expect(input.preloadedData?.jobCapability).toBe("run")
   })
 
+  it("skips a graph step with a false condition before consuming approval or binding inputs", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-conditional-graph-"))
+    const originalCwd = process.cwd()
+    try {
+      writeContractCapability(cwd, "inspect", ["missing"], [], true, false, ["missing"])
+      writeContractCapability(cwd, "finish", [])
+      writeWorkflowDefinition(cwd, "conditional", {
+        version: 1,
+        name: "Conditional",
+        startAt: "inspect",
+        steps: [
+          {
+            id: "inspect",
+            capability: "inspect",
+            runWhen: { "facts.allowed": true },
+            approval: "required",
+            inputs: { missing: { from: "workflow.facts.missing" } },
+            next: [{ to: "finish", default: true }],
+          },
+          { id: "finish", capability: "finish" },
+        ],
+      })
+      process.chdir(cwd)
+      const result = await runJob({ workflow: "conditional", cliArgs: {}, flavor: "instant" }, { cwd })
+      expect(result.exitCode).toBe(0)
+      expect(result.workflowState?.status).toBe("done")
+      expect(result.workflowState?.approval).toBeUndefined()
+      expect(runImplementationChain).toHaveBeenCalledTimes(1)
+      expect(runImplementationChain.mock.calls[0]?.[1].preloadedData?.jobCapability).toBe("finish")
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("does not replay completed linear workflows", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "kody-linear-replay-"))
+    const originalCwd = process.cwd()
+    try {
+      writeContractCapability(cwd, "inspect", [])
+      writeWorkflowDefinition(cwd, "ordered", { version: 1, name: "Ordered", steps: [{ capability: "inspect" }] })
+      process.chdir(cwd)
+      const job = { workflow: "ordered", cliArgs: {}, flavor: "instant" as const }
+      const first = await runJob(job, { cwd })
+      expect(first.workflowState?.status).toBe("done")
+      runImplementationChain.mockClear()
+      const replay = await runJob({ ...job, workflowState: first.workflowState }, { cwd })
+      expect(replay.workflowState).toEqual(first.workflowState)
+      expect(runImplementationChain).not.toHaveBeenCalled()
+    } finally {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   it("seeds result target as internal postflight context, not CLI args", async () => {
     await runJob(
       {

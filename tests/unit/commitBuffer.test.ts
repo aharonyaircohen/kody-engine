@@ -25,4 +25,14 @@ describe("commit: git output buffering", () => {
     const options = execFileSync.mock.calls[0]?.[2] as { maxBuffer?: number }
     expect(options.maxBuffer).toBeGreaterThan(1024 * 1024)
   })
+
+  it.each(["R ", " R", "C "])("consumes bare source paths after %s status records", (status) => {
+    execFileSync.mockReturnValue(`${status} destination.txt\0source.txt\0 M next.txt\0`)
+    expect(listChangedFiles("/repo")).toEqual(["destination.txt", "source.txt", "next.txt"])
+  })
+
+  it("refuses incomplete rename records", () => {
+    execFileSync.mockReturnValue("R  destination.txt\0")
+    expect(() => listChangedFiles("/repo")).toThrow("incomplete rename/copy")
+  })
 })

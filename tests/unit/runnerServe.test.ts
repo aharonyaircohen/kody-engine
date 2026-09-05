@@ -1,4 +1,4 @@
-import type { Server } from "node:http"
+import { request, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { afterEach, describe, expect, it } from "vitest"
 
@@ -246,6 +246,45 @@ describe("runnerServe: buildServer routes", () => {
     expect(first.status).toBe(202)
     const second = await fetch(`${base}/run`, { method: "POST", headers, body: JSON.stringify(validBody) })
     expect(second.status).toBe(409)
+  })
+
+  it("claims only one job when request bodies overlap", async () => {
+    const received: string[] = []
+    const base = await start(async (job) => {
+      received.push(job.jobId)
+    })
+    let arrived = 0
+    let bothArrived!: () => void
+    const ready = new Promise<void>((resolve) => {
+      bothArrived = resolve
+    })
+    server!.on("request", () => {
+      if (++arrived === 2) bothArrived()
+    })
+    const pending = (jobId: string) => {
+      const body = JSON.stringify({ ...validBody, jobId })
+      let req!: ReturnType<typeof request>
+      const response = new Promise<number | undefined>((resolve, reject) => {
+        req = request(
+          `${base}/run`,
+          { method: "POST", headers: { "x-api-key": API_KEY, "content-length": Buffer.byteLength(body) } },
+          (res) => {
+            res.resume()
+            res.on("end", () => resolve(res.statusCode))
+          },
+        )
+        req.on("error", reject)
+        req.write(body.slice(0, 1))
+      })
+      return { finish: () => req.end(body.slice(1)), response }
+    }
+    const first = pending("first")
+    const second = pending("second")
+    await ready
+    first.finish()
+    second.finish()
+    expect((await Promise.all([first.response, second.response])).sort()).toEqual([202, 409])
+    expect(received).toHaveLength(1)
   })
 
   it("POST /run rejects an invalid body (400)", async () => {

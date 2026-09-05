@@ -227,12 +227,12 @@ export function isSafeConfigActivationChange(before: unknown, after: unknown): b
   const beforeCompanyRest = { ...beforeCompany }
   const afterCompanyRest = { ...afterCompany }
   for (const field of ACTIVATION_FIELDS) {
-    const previous = beforeCompany[field]
+    const previous = beforeCompany[field] === undefined ? [] : beforeCompany[field]
     const next = afterCompany[field]
     delete beforeCompanyRest[field]
     delete afterCompanyRest[field]
-    if (previous === undefined && next === undefined) continue
-    if (!Array.isArray(previous ?? []) || !Array.isArray(next)) return false
+    if (beforeCompany[field] === undefined && next === undefined) continue
+    if (!Array.isArray(previous) || !Array.isArray(next)) return false
     if (!(next as unknown[]).every((value) => typeof value === "string")) return false
     if (!(previous as unknown[]).every((value) => typeof value === "string")) return false
     const nextValues = new Set(next as string[])
@@ -280,6 +280,11 @@ function isTrustedConfigActivationChange(
 }
 
 export function listChangedFiles(cwd?: string): string[] {
+  return [...new Set(listChangedPathGroups(cwd).flat())]
+}
+
+/** A rename/copy is one delivery operation: both paths share its safety decision. */
+function listChangedPathGroups(cwd?: string): string[][] {
   // List every untracked file instead of collapsing a new directory to one
   // entry. Path safety is file-specific (for example GitHub YAML), so staging
   // a summarized directory would bypass the guard for forbidden children.
@@ -293,8 +298,20 @@ export function listChangedFiles(cwd?: string): string[] {
     stdio: ["pipe", "pipe", "pipe"],
   })
   if (!raw) return []
-  const entries = raw.split("\0").filter((e) => e.length > 0)
-  return entries.map((e) => e.slice(3)).filter(Boolean)
+  const entries = raw.split("\0")
+  const groups: string[][] = []
+  for (let index = 0; index < entries.length - 1; index++) {
+    const entry = entries[index]!
+    const paths = [entry.slice(3)]
+    // In porcelain -z output only the destination has a status prefix.
+    if (/[RC]/.test(entry.slice(0, 2))) {
+      const source = entries[++index]
+      if (!source) throw new Error("git status returned an incomplete rename/copy record")
+      paths.push(source)
+    }
+    groups.push(paths)
+  }
+  return groups
 }
 
 function listAllowlistedIgnoredFiles(deliveryPathAllowlist: readonly string[], cwd?: string): string[] {
@@ -362,27 +379,23 @@ export function commitAndPush(
   // the merge commit can be created from it).
   const ignoredAllowedFiles = listAllowlistedIgnoredFiles(deliveryPathAllowlist, cwd)
   const ignoredAllowedSet = new Set(ignoredAllowedFiles)
-  const allChanged = [...new Set([...listChangedFiles(cwd), ...ignoredAllowedFiles])]
-  const allowedFiles = allChanged.filter(
-    (f) =>
-      !isForbiddenPath(f, deliveryPathAllowlist) ||
-      isTrustedConfigActivationChange(f, deliveryPathAllowlist, deliveryConfigAllowlist, cwd),
+  const pathGroups = [...listChangedPathGroups(cwd), ...ignoredAllowedFiles.map((file) => [file])]
+  const blockedGroups = pathGroups.filter((group) =>
+    group.some(
+      (f) =>
+        isForbiddenPath(f, deliveryPathAllowlist) &&
+        !isTrustedConfigActivationChange(f, deliveryPathAllowlist, deliveryConfigAllowlist, cwd),
+    ),
   )
-  const forbiddenFiles = allChanged.filter(
-    (f) =>
-      isForbiddenPath(f, deliveryPathAllowlist) &&
-      !isTrustedConfigActivationChange(f, deliveryPathAllowlist, deliveryConfigAllowlist, cwd),
-  )
+  const forbiddenFiles = [...new Set(blockedGroups.flat())]
+  const forbiddenSet = new Set(forbiddenFiles)
+  const allowedFiles = [...new Set(pathGroups.flat())].filter((file) => !forbiddenSet.has(file))
   const omittedFiles = forbiddenFiles.filter(isReportableDeliveryOmission)
 
   // Detect in-progress merge (resolve mode): even if no files changed
   // vs HEAD (agent accepted one side verbatim), we still need to finalize
   // the merge commit with two parents.
   const mergeHeadExists = fs.existsSync(path.join(cwd ?? process.cwd(), ".git", "MERGE_HEAD"))
-
-  if (allowedFiles.length === 0 && !mergeHeadExists) {
-    return { committed: false, pushed: false, sha: "", message: "", omittedFiles }
-  }
 
   // Unstage any forbidden paths an earlier postflight may have staged. In
   // resolve mode `stageMergeConflicts` runs `git add -A`, which stages
@@ -393,16 +406,17 @@ export function commitAndPush(
   // (leaves MERGE_HEAD and resolved-file staging intact) and a harmless no-op
   // in non-resolve modes where nothing pre-staged them.
   for (const f of forbiddenFiles) {
-    try {
-      git(["reset", "-q", "--", f], cwd)
-    } catch {
-      /* not staged — fine */
-    }
+    // A failed unstage is not evidence that the index is safe to deliver.
+    git(["--literal-pathspecs", "reset", "-q", "--", f], cwd)
+  }
+
+  if (allowedFiles.length === 0 && !mergeHeadExists) {
+    return { committed: false, pushed: false, sha: "", message: "", omittedFiles }
   }
 
   for (const f of allowedFiles) {
     try {
-      git(["add", ...(ignoredAllowedSet.has(f) ? ["--force"] : []), "--", f], cwd)
+      git(["--literal-pathspecs", "add", ...(ignoredAllowedSet.has(f) ? ["--force"] : []), "--", f], cwd)
     } catch {
       /* skip individual file errors */
     }
@@ -420,8 +434,6 @@ export function commitAndPush(
     throw err
   }
 
-  const sha = git(["rev-parse", "HEAD"], cwd).slice(0, 7)
-
   // pushWithRetry handles the race: on non-fast-forward rejection it does
   // `git fetch + git rebase origin/<branch>` and retries. This replaces the
   // old plain → force-with-lease retry, which was dangerous (force-with-lease
@@ -429,6 +441,8 @@ export function commitAndPush(
   // didn't actually fix the data-loss bug — when origin moved during the
   // agent's run, retries kept failing because we never rebased.
   const pushResult = pushWithRetry({ cwd, branch, setUpstream: true })
+  // Retry recovery may rebase HEAD; delivery evidence must name the final commit.
+  const sha = git(["rev-parse", "HEAD"], cwd).slice(0, 7)
   if (pushResult.ok) {
     return { committed: true, pushed: true, sha, message, omittedFiles }
   }
