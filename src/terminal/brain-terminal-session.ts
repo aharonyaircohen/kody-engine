@@ -29,6 +29,7 @@ export type BrainTerminalCommand =
   | { type: "resize"; sessionId: string; cols: number; rows: number }
   | { type: "detach"; sessionId: string }
   | { type: "restart"; sessionId: string }
+  | { type: "clear"; sessionId: string }
 
 export type BrainTerminalEvent =
   | {
@@ -70,6 +71,7 @@ export interface BrainTerminalRuntime {
   capture(sessionName: string): Promise<string>
   input(sessionName: string, data: string): Promise<void>
   resize(sessionName: string, cols: number, rows: number): Promise<void>
+  clear(sessionName: string): Promise<void>
   stop(sessionName: string): Promise<void>
 }
 
@@ -164,6 +166,8 @@ export function parseBrainTerminalCommand(value: unknown): BrainTerminalCommand 
       }
     case "detach":
       return { type: "detach", sessionId }
+    case "clear":
+      return { type: "clear", sessionId }
     case "restart":
       return { type: "restart", sessionId }
     default:
@@ -283,7 +287,7 @@ export class BrainTerminalSessionAgent {
         sessionId: session.id,
         generation: session.generation,
         revision: session.revision,
-        data: `\u001b[2J\u001b[H${session.output.replace(/\r?\n/g, "\r\n")}`,
+        data: `\u001b[3J\u001b[2J\u001b[H${session.output.replace(/\r?\n/g, "\r\n")}`,
       })
     }
     return events
@@ -349,7 +353,7 @@ export class BrainTerminalSessionAgent {
       sessionId: next.id,
       generation: next.generation,
       revision: next.revision,
-      data: `\u001b[2J\u001b[H${output.replace(/\r?\n/g, "\r\n")}`,
+      data: `\u001b[3J\u001b[2J\u001b[H${output.replace(/\r?\n/g, "\r\n")}`,
     }
   }
 
@@ -382,6 +386,10 @@ export class BrainTerminalSessionAgent {
         await this.dependencies.runtime.resize(session.sessionName, command.cols, command.rows)
         await this.persist({ ...session, cols: command.cols, rows: command.rows, updatedAt: this.now() })
         return null
+      case "clear":
+        if (session.state !== "ready") throw new Error("clear is not allowed while terminal is not ready")
+        await this.dependencies.runtime.clear(session.sessionName)
+        return this.captureOutput()
       case "detach":
         return this.detach()
       case "restart": {

@@ -38,6 +38,12 @@ export async function brainTerminalAgent(options: {
   let opened = false
   let poll: ReturnType<typeof setInterval> | null = null
   let pollRunning = false
+  let operations: Promise<unknown> = Promise.resolve()
+  const serialize = <T>(operation: () => Promise<T>): Promise<T> => {
+    const next = operations.then(operation)
+    operations = next.catch(() => {})
+    return next
+  }
 
   const stopPoll = () => {
     if (poll) clearInterval(poll)
@@ -48,17 +54,19 @@ export async function brainTerminalAgent(options: {
     if (pollRunning) return
     pollRunning = true
     try {
-      const event = await agent.captureOutput()
-      if (event) writeEvent(output, event)
-      const status = await agent.status()
-      if (status.state === "exited") {
-        writeEvent(output, {
-          type: "exited",
-          sessionId: status.id,
-          generation: status.generation,
-        })
-        stopPoll()
-      }
+      await serialize(async () => {
+        const event = await agent.captureOutput()
+        if (event) writeEvent(output, event)
+        const status = await agent.status()
+        if (status.state === "exited") {
+          writeEvent(output, {
+            type: "exited",
+            sessionId: status.id,
+            generation: status.generation,
+          })
+          stopPoll()
+        }
+      })
     } catch (cause) {
       error.write(`[brain-terminal-agent] capture failed: ${cause instanceof Error ? cause.message : String(cause)}\n`)
     } finally {
@@ -116,8 +124,10 @@ export async function brainTerminalAgent(options: {
       }
 
       const command = parseBrainTerminalCommand(value)
-      const event = await agent.command(command)
-      if (event) writeEvent(output, event)
+      await serialize(async () => {
+        const event = await agent.command(command)
+        if (event) writeEvent(output, event)
+      })
       if (command.type === "detach") stopPoll()
     }
     if (opened) await agent.detach()

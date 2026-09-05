@@ -173,6 +173,24 @@ export class TmuxBrainTerminalRuntime implements BrainTerminalRuntime {
     await this.tmux("resize", ["resize-window", "-t", sessionName, "-x", String(cols), "-y", String(rows)])
   }
 
+  async clear(sessionName: string): Promise<void> {
+    await this.tmux("clear", [
+      "send-keys",
+      "-R",
+      "-t",
+      sessionName,
+      ";",
+      "clear-history",
+      "-t",
+      sessionName,
+      ";",
+      "send-keys",
+      "-t",
+      sessionName,
+      "C-l",
+    ])
+  }
+
   async stop(sessionName: string): Promise<void> {
     const result = await this.run("tmux", ["kill-session", "-t", sessionName])
     if (result.code !== 0 && !/can't find session|no server running/i.test(result.stderr)) {

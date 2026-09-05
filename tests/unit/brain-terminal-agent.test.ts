@@ -49,6 +49,10 @@ class FakeRuntime implements BrainTerminalRuntime {
     this.sizes.push({ cols, rows })
   }
 
+  async clear(): Promise<void> {
+    this.output = "$ "
+  }
+
   async stop(): Promise<void> {
     this.alive = false
   }
@@ -70,16 +74,36 @@ const open = {
 }
 
 describe("BrainTerminalSessionAgent", () => {
+  it("clears server history without restarting the shell and does not replay old output", async () => {
+    const runtime = new FakeRuntime()
+    const agent = new BrainTerminalSessionAgent({ store: new MemoryStore(), runtime })
+    await agent.open(open)
+    runtime.output = "old command\nold result\n$ "
+    await agent.captureOutput()
+    expect(await agent.command({ type: "clear", sessionId: open.session.id })).toMatchObject({
+      data: "\u001b[3J\u001b[2J\u001b[H$ ",
+    })
+    expect(runtime.pid).toBe(1)
+    runtime.output = "$ ls\nfile.txt\n$ "
+    const next = await agent.captureOutput()
+    expect(next).toMatchObject({ data: "\u001b[3J\u001b[2J\u001b[H$ ls\r\nfile.txt\r\n$ " })
+    expect(JSON.stringify(await agent.open(open))).not.toContain("old command")
+  })
+
   it("renders captured and replayed lines with carriage returns for a real terminal", async () => {
     const store = new MemoryStore()
     const runtime = new FakeRuntime()
     const agent = new BrainTerminalSessionAgent({ store, runtime })
     await agent.open(open)
     runtime.output = "first line\nsecond line\n"
-    expect(await agent.captureOutput()).toMatchObject({ data: "\u001b[2J\u001b[Hfirst line\r\nsecond line\r\n" })
+    expect(await agent.captureOutput()).toMatchObject({
+      data: "\u001b[3J\u001b[2J\u001b[Hfirst line\r\nsecond line\r\n",
+    })
     await agent.detach()
     const replay = await new BrainTerminalSessionAgent({ store, runtime }).open({ ...open, afterRevision: 0 })
-    expect(replay).toContainEqual(expect.objectContaining({ data: "\u001b[2J\u001b[Hfirst line\r\nsecond line\r\n" }))
+    expect(replay).toContainEqual(
+      expect.objectContaining({ data: "\u001b[3J\u001b[2J\u001b[Hfirst line\r\nsecond line\r\n" }),
+    )
   })
   it("creates one durable generation and reattaches to the same process", async () => {
     const store = new MemoryStore()
